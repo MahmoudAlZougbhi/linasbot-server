@@ -49,7 +49,6 @@
     "testflight": {
       "extends": "production",
       "distribution": "store",
-      "channel": "testflight",
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://linasaibot.com",
         "EXPO_PUBLIC_APP_ENV": "preview"

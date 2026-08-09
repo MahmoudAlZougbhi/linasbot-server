@@ -1,44 +1,42 @@
-import { Audio } from 'expo-av';
-import { useRef, useState } from 'react';
+import {
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioRecorder,
+} from 'expo-audio';
+import { useState } from 'react';
 
-import { API_BASE } from '../../config';
 import { tokenStore } from '../../auth/tokenStore';
+import { API_BASE } from '../../config';
 
 type VoiceState = 'idle' | 'recording' | 'transcribing';
 
 export function useVoiceDraft(onText: (text: string) => void) {
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
   async function startRecording() {
     setVoiceError(null);
-    const permission = await Audio.requestPermissionsAsync();
+    const permission = await AudioModule.requestRecordingPermissionsAsync();
     if (!permission.granted) {
       setVoiceError('Microphone permission is required for voice messages.');
       return;
     }
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: true,
-      playsInSilentModeIOS: true,
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      allowsRecording: true,
     });
-    const recording = new Audio.Recording();
-    await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-    await recording.startAsync();
-    recordingRef.current = recording;
+    await recorder.prepareToRecordAsync();
+    recorder.record();
     setVoiceState('recording');
   }
 
   async function stopAndTranscribe() {
-    const recording = recordingRef.current;
-    if (!recording) {
-      return;
-    }
     setVoiceState('transcribing');
     try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      recordingRef.current = null;
+      await recorder.stop();
+      const uri = recorder.uri;
       if (!uri) {
         throw new Error('No recording');
       }
@@ -66,11 +64,11 @@ export function useVoiceDraft(onText: (text: string) => void) {
       setVoiceError('Could not transcribe. Try again or type your message.');
     } finally {
       setVoiceState('idle');
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
     }
   }
 
-  async function toggle() {
+  async function toggleVoice() {
     if (voiceState === 'recording') {
       await stopAndTranscribe();
       return;
@@ -80,5 +78,5 @@ export function useVoiceDraft(onText: (text: string) => void) {
     }
   }
 
-  return { voiceState, voiceError, toggleVoice: toggle };
+  return { voiceState, voiceError, toggleVoice };
 }

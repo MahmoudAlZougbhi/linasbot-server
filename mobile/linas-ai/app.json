@@ -7,11 +7,6 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "scheme": "linasai",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0B1220"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.linasai.app",
@@ -23,14 +18,20 @@
     },
     "android": {
       "package": "com.linasai.app",
-      "versionCode": 1,
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#0B1220",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "permissions": ["RECORD_AUDIO"]
+      "permissions": [
+        "RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -38,9 +39,17 @@
     "plugins": [
       "expo-secure-store",
       [
-        "expo-av",
+        "expo-audio",
         {
           "microphonePermission": "Linas AI uses the microphone so you can dictate messages in chat."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0B1220"
         }
       ],
       "expo-status-bar"
@@ -48,8 +57,9 @@
     "extra": {
       "apiBaseUrl": "https://linasaibot.com",
       "eas": {
-        "projectId": "replace-after-eas-init"
+        "projectId": "d15fe78a-09df-4d7c-81a5-2b307956fddf"
       }
-    }
+    },
+    "owner": "mahmoudalzoughbi"
   }
 }
