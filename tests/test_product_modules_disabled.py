@@ -30,10 +30,12 @@ def _session(*, tenant_id: str = "linas", role: str = "admin") -> SessionRecord:
 
 
 def test_disabled_api_path_matcher() -> None:
-    assert is_disabled_api_path("/api/live-chat/unified-chats") is True
+    assert is_disabled_api_path("/api/live-chat/unified-chats") is False
+    assert is_disabled_api_path("/api/flow/events") is False
+    assert is_disabled_api_path("/api/chat-history/foo") is False
+    assert is_disabled_api_path("/api/media/audio") is False
     assert is_disabled_api_path("/api/smart-messaging/campaigns") is True
     assert is_disabled_api_path("/api/test/foo") is True
-    assert is_disabled_api_path("/api/flow/events") is True
     assert is_disabled_api_path("/api/meta/social-posts/publish") is True
     assert is_disabled_api_path("/api/settings/clinic") is True
     assert is_disabled_api_path("/api/stats") is True
@@ -79,10 +81,8 @@ def test_disabled_modules_blocked_for_linas_admin(monkeypatch) -> None:
     client = _client_for(_session(tenant_id="linas"), monkeypatch)
 
     for path in (
-        "/api/live-chat/unified-chats",
         "/api/smart-messaging/status",
         "/api/test/ping",
-        "/api/flow/summary",
     ):
         res = client.get(path)
         assert res.status_code == 403, path
@@ -91,13 +91,25 @@ def test_disabled_modules_blocked_for_linas_admin(monkeypatch) -> None:
         assert body["error"] == DISABLED_PRODUCT_MESSAGE
         assert body.get("reached") is None
 
+    # Live Chat + Interaction Logs are restored.
+    for path in ("/api/live-chat/unified-chats", "/api/flow/summary"):
+        res = client.get(path)
+        assert res.status_code == 200, path
+        assert res.json() == {"reached": True}
+
 
 def test_disabled_modules_blocked_for_saas_tenant(monkeypatch) -> None:
     client = _client_for(_session(tenant_id="acme-gym"), monkeypatch)
 
-    res = client.get("/api/live-chat/unified-chats")
+    res = client.get("/api/smart-messaging/status")
     assert res.status_code == 403
     assert res.json()["code"] == "PRODUCT_MODULE_DISABLED"
+
+    live = client.get("/api/live-chat/unified-chats")
+    # Live Chat is restored for Linas, but still fail-closed for other tenants
+    # until the store has an explicit tenant-aware query path.
+    assert live.status_code == 403
+    assert live.json()["error"] == "Tenant-isolated API unavailable"
 
     # CM still allowed for SaaS (not a disabled module)
     allowed = client.get("/api/cm/meta")

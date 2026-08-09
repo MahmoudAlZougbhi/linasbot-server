@@ -10,11 +10,10 @@ from __future__ import annotations
 from typing import Final
 
 # Human-readable product modules removed from the current SaaS product surface.
+# Live Chat + Interaction Logs remain enabled (restored by product request).
 DISABLED_PRODUCT_MODULES: Final[tuple[str, ...]] = (
     "testing_lab",
     "smart_messaging",
-    "live_chat",
-    "activity_flow",
     "create_post",
     "clinic_calendar",
 )
@@ -25,10 +24,6 @@ DISABLED_API_PREFIXES: Final[tuple[str, ...]] = (
     "/api/switch-provider",
     "/api/debug",
     "/api/smart-messaging",
-    "/api/live-chat",
-    "/api/chat-history",
-    "/api/media",
-    "/api/flow",
     "/api/analytics",
     "/api/meta/social-posts",
     "/api/settings/clinic",
@@ -42,10 +37,7 @@ DISABLED_PRODUCT_MESSAGE: Final[str] = (
 DISABLED_FRONTEND_ROUTES: Final[tuple[str, ...]] = (
     "/testing",
     "/api-debug",
-    "/live-chat",
-    "/mobile/live-chat",
     "/smart-messaging",
-    "/activity-flow",
     "/social-posts",
     "/analytics",
 )

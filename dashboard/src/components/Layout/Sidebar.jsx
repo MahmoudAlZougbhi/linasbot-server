@@ -4,6 +4,9 @@ import { motion } from "framer-motion";
 import {
   HomeIcon,
   FolderIcon,
+  ChatBubbleLeftRightIcon,
+  ArrowDownTrayIcon,
+  ArrowPathRoundedSquareIcon,
   Cog6ToothIcon,
   XMarkIcon,
   SparklesIcon,
@@ -16,8 +19,8 @@ import { hasPermission } from "../../utils/permissions";
 import { buildDisplayLabel } from "../../utils/buildInfo";
 import { authFetch } from "../../utils/authFetch";
 
-// Wave 1: Testing Lab, Smart Messaging, Live Chat, Interaction Logs, Create Post,
-// and Live Chat APK are disabled/hidden for ALL tenants (legacy code retained).
+// Testing Lab, Smart Messaging, Create Post remain disabled/hidden.
+// Live Chat + Interaction Logs restored to the product surface.
 const navigationItems = [
   { name: "Dashboard", href: "/app", icon: HomeIcon, permissionKey: "dashboard" },
   {
@@ -27,12 +30,34 @@ const navigationItems = [
     badge: "New",
     permissionKey: "contentManagers",
   },
+  {
+    name: "Interaction Logs",
+    href: "/activity-flow",
+    icon: ArrowPathRoundedSquareIcon,
+    badge: "New",
+    permissionKey: "activityFlow",
+  },
+  {
+    name: "Live Chat",
+    href: "/live-chat",
+    icon: ChatBubbleLeftRightIcon,
+    badge: "Active",
+    permissionKey: "liveChat",
+  },
   { name: "Settings", href: "/settings", icon: Cog6ToothIcon, permissionKey: "settings" },
   { name: "Token Wallet", href: "/wallet", icon: CurrencyDollarIcon, permissionKey: "settings" },
 ];
 
 /** @type {Array<{ name: string; href: string; icon?: any; permissionKey?: string; badge?: string }>} */
-const downloadItems = [];
+const downloadItems = [
+  {
+    name: "Download Live Chat APK",
+    href: "/downloads/live-chat-android.apk",
+    icon: ArrowDownTrayIcon,
+    badge: "Android",
+    permissionKey: "liveChat",
+  },
+];
 
 /** @param {{ collapsed: boolean; onToggleCollapse: () => void; onClose?: () => void }} props */
 const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
@@ -84,8 +109,18 @@ const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
   const navigation = useMemo(() => {
     if (!user) return [];
 
+    const tenantId = String(user.tenantId || "linas").trim() || "linas";
+    const linasOpsSurface = tenantId === "linas";
+
     /** @param {typeof navigationItems[number]} item */
     const keepItem = (item) => {
+      // Live Chat + Interaction Logs are Linas ops surfaces (not yet tenant-isolated).
+      if (
+        !linasOpsSurface &&
+        (item.href === "/live-chat" || item.href === "/activity-flow")
+      ) {
+        return false;
+      }
       if (!item.permissionKey) return true;
       if (user.role === "admin") return true;
       return hasPermission(user, item.permissionKey);
@@ -96,6 +131,11 @@ const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
 
   const downloads = useMemo(() => {
     if (!user) return [];
+
+    const tenantId = String(user.tenantId || "linas").trim() || "linas";
+    if (tenantId !== "linas") {
+      return [];
+    }
 
     if (user.role === "admin") {
       return downloadItems;

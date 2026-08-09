@@ -344,9 +344,8 @@ class TestSSRFAndPathTraversal:
             params={"url": "http://127.0.0.1:9/"},
             headers={CSRF_HEADER_NAME: csrf},
         )
-        # Wave 1: /api/media is a disabled product module for all tenants.
-        assert response.status_code == 403
-        assert response.json().get("code") == "PRODUCT_MODULE_DISABLED"
+        # Live Chat media is enabled; SSRF guard must still reject loopback.
+        assert response.status_code == 400
 
     def test_training_backup_path_traversal_blocked(self, tmp_path: Path) -> None:
         from services.safe_path import resolve_backup_filename
