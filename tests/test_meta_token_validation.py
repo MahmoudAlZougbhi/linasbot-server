@@ -4,16 +4,21 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.validate_meta_social_token import (
+from scripts.meta_webhook_contract import (
     APP_INSTAGRAM_WEBHOOK_FIELDS,
     APP_PAGE_WEBHOOK_FIELDS,
     COMMENT_FEATURE_SCOPES,
     DM_WEBHOOK_FIELDS,
+    PAGE_SUBSCRIPTION_COMMENT_DELIVERY,
     PUBLISH_FEATURE_SCOPES,
-    MetaTokenValidationError,
     evaluate_feature_readiness,
+)
+from scripts.validate_meta_social_token import (
+    MetaTokenValidationError,
     validate_app_webhook_configuration,
     validate_conversation_payloads,
+    validate_page_subscription_baseline,
+    validate_page_subscription_configuration,
     validate_page_subscription_payload,
     validate_payloads,
 )
@@ -53,6 +58,17 @@ def _valid_payloads() -> tuple[dict[str, object], dict[str, object], dict[str, o
             "instagram_business_account": {"id": "17841413184256533"},
         },
     )
+
+
+def _page_subscription_payload(*, fields: set[str], app_id: str = "999000111222333") -> dict[str, object]:
+    return {
+        "data": [
+            {
+                "id": app_id,
+                "subscribed_fields": sorted(fields),
+            }
+        ]
+    }
 
 
 def _app_webhook_payload(
@@ -140,25 +156,43 @@ def test_malformed_conversation_query_payload_fails_closed(channel: str) -> None
         validate_conversation_payloads(messenger, instagram)
 
 
-def test_exact_dm_only_page_subscription_passes() -> None:
-    checks = validate_page_subscription_payload(
-        {
-            "data": [
-                {
-                    "id": "999000111222333",
-                    "subscribed_fields": sorted(DM_WEBHOOK_FIELDS),
-                }
-            ]
-        },
+def test_exact_dm_only_page_subscription_baseline_passes() -> None:
+    payload = _page_subscription_payload(fields=DM_WEBHOOK_FIELDS)
+    checks = validate_page_subscription_baseline(payload, expected_app_id="999000111222333")
+    config = validate_page_subscription_configuration(
+        payload,
         expected_app_id="999000111222333",
+        expect_facebook_comment_delivery=False,
     )
 
-    assert checks["page_subscribed_fields_exact"] is True
+    assert checks["page_subscribed_dm_fields_present"] is True
+    assert config["facebook_comment_delivery_infrastructure_ready"] is False
+    assert config["facebook_comment_delivery_profile_matches_expectation"] is True
+
+
+def test_page_feed_plus_dm_baseline_passes_and_delivery_ready() -> None:
+    payload = _page_subscription_payload(fields=PAGE_SUBSCRIPTION_COMMENT_DELIVERY)
+    checks = validate_page_subscription_baseline(payload, expected_app_id="999000111222333")
+    config = validate_page_subscription_configuration(
+        payload,
+        expected_app_id="999000111222333",
+        expect_facebook_comment_delivery=True,
+    )
+
+    assert checks["page_subscribed_dm_fields_present"] is True
+    assert config["facebook_comment_delivery_infrastructure_ready"] is True
+
+
+def test_page_subscription_payload_alias_uses_baseline_only() -> None:
+    checks = validate_page_subscription_payload(
+        _page_subscription_payload(fields=PAGE_SUBSCRIPTION_COMMENT_DELIVERY),
+        expected_app_id="999000111222333",
+    )
     assert checks["page_subscribed_dm_fields_present"] is True
 
 
-@pytest.mark.parametrize("failure", ["none", "multiple", "wrong_app", "extra_field", "missing_field"])
-def test_page_subscription_mismatch_fails_closed(failure: str) -> None:
+@pytest.mark.parametrize("failure", ["none", "multiple", "wrong_app", "missing_field"])
+def test_page_subscription_baseline_mismatch_fails_closed(failure: str) -> None:
     app = {
         "id": "999000111222333",
         "subscribed_fields": sorted(DM_WEBHOOK_FIELDS),
@@ -170,16 +204,31 @@ def test_page_subscription_mismatch_fails_closed(failure: str) -> None:
         data.append({"id": "another-app", "subscribed_fields": ["messages"]})
     elif failure == "wrong_app":
         app["id"] = "1784792718776344"
-    elif failure == "extra_field":
-        app["subscribed_fields"] = sorted(DM_WEBHOOK_FIELDS | {"feed"})
     else:
         app["subscribed_fields"] = ["messages"]
 
     with pytest.raises(MetaTokenValidationError):
-        validate_page_subscription_payload(
-            {"data": data},
+        validate_page_subscription_baseline({"data": data}, expected_app_id="999000111222333")
+
+
+def test_page_subscription_extra_field_fails_configuration_not_baseline() -> None:
+    payload = _page_subscription_payload(fields=DM_WEBHOOK_FIELDS | {"mentions"})
+    validate_page_subscription_baseline(payload, expected_app_id="999000111222333")
+    with pytest.raises(MetaTokenValidationError) as exc:
+        validate_page_subscription_configuration(
+            payload,
             expected_app_id="999000111222333",
+            expect_facebook_comment_delivery=False,
         )
+    assert "subscribed_fields_extra=['mentions']" in str(exc.value)
+
+
+def test_page_subscription_feed_present_does_not_fail_baseline() -> None:
+    checks = validate_page_subscription_baseline(
+        _page_subscription_payload(fields=PAGE_SUBSCRIPTION_COMMENT_DELIVERY),
+        expected_app_id="999000111222333",
+    )
+    assert checks["page_subscribed_dm_fields_present"] is True
 
 
 def test_production_app_webhook_configuration_passes() -> None:
@@ -243,22 +292,28 @@ def test_app_webhook_mismatch_fails_closed(failure: str) -> None:
 
 def test_feature_readiness_false_when_comment_and_publish_scopes_missing() -> None:
     readiness = evaluate_feature_readiness(
-        {
+        scopes={
             "pages_messaging",
             "pages_manage_metadata",
             "pages_show_list",
             "pages_read_engagement",
             "instagram_basic",
             "instagram_manage_messages",
-        }
+        },
+        app_page_fields=set(APP_PAGE_WEBHOOK_FIELDS),
+        app_instagram_fields=set(APP_INSTAGRAM_WEBHOOK_FIELDS),
+        page_subscribed_fields=set(PAGE_SUBSCRIPTION_COMMENT_DELIVERY),
+        facebook_comment_switch_enabled=True,
+        instagram_comment_switch_enabled=True,
     )
-    assert readiness["comment_features_ready"] is False
+    assert readiness["facebook_comments_ready"] is False
+    assert readiness["instagram_comments_ready"] is False
     assert readiness["publish_features_ready"] is False
     for scope in COMMENT_FEATURE_SCOPES | PUBLISH_FEATURE_SCOPES:
         assert readiness[f"scope_{scope}_present"] is False
 
 
-def test_feature_readiness_true_when_all_feature_scopes_present() -> None:
+def test_feature_readiness_true_when_all_layers_present() -> None:
     scopes = {
         "pages_messaging",
         "pages_manage_metadata",
@@ -269,8 +324,16 @@ def test_feature_readiness_true_when_all_feature_scopes_present() -> None:
         *COMMENT_FEATURE_SCOPES,
         *PUBLISH_FEATURE_SCOPES,
     }
-    readiness = evaluate_feature_readiness(scopes)
-    assert readiness["comment_features_ready"] is True
+    readiness = evaluate_feature_readiness(
+        scopes=scopes,
+        app_page_fields=set(APP_PAGE_WEBHOOK_FIELDS),
+        app_instagram_fields=set(APP_INSTAGRAM_WEBHOOK_FIELDS),
+        page_subscribed_fields=set(PAGE_SUBSCRIPTION_COMMENT_DELIVERY),
+        facebook_comment_switch_enabled=True,
+        instagram_comment_switch_enabled=True,
+    )
+    assert readiness["facebook_comments_ready"] is True
+    assert readiness["instagram_comments_ready"] is True
     assert readiness["publish_features_ready"] is True
 
 

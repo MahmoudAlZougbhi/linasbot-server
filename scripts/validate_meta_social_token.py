@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Meta App A DM baseline, app webhook configuration, and feature readiness."""
+"""Validate Meta App A DM baseline, webhook configuration, and feature readiness."""
 
 from __future__ import annotations
 
@@ -8,18 +8,48 @@ import os
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass
 from typing import cast
+
+from scripts.meta_webhook_contract import (
+    APP_INSTAGRAM_WEBHOOK_FIELDS,
+    APP_PAGE_WEBHOOK_FIELDS,
+    COMMENT_FEATURE_SCOPES,
+    DM_WEBHOOK_FIELDS,
+    FACEBOOK_COMMENT_SCOPES,
+    INSTAGRAM_COMMENT_SCOPES,
+    PUBLISH_FEATURE_SCOPES,
+    assert_page_subscription_baseline,
+    assert_page_subscription_configuration,
+    check_exact_fields,
+    evaluate_feature_readiness,
+    extract_page_subscribed_fields,
+    parse_bool_env,
+    subscription_field_names,
+)
+
+__all__ = [
+    "APP_INSTAGRAM_WEBHOOK_FIELDS",
+    "APP_PAGE_WEBHOOK_FIELDS",
+    "COMMENT_FEATURE_SCOPES",
+    "DM_WEBHOOK_FIELDS",
+    "FACEBOOK_COMMENT_SCOPES",
+    "INSTAGRAM_COMMENT_SCOPES",
+    "PUBLISH_FEATURE_SCOPES",
+    "MetaTokenValidationError",
+    "evaluate_feature_readiness",
+    "validate_app_webhook_configuration",
+    "validate_conversation_payloads",
+    "validate_page_subscription_baseline",
+    "validate_page_subscription_configuration",
+    "validate_page_subscription_payload",
+    "validate_payloads",
+]
 
 EXPECTED_PAGE_ID = "378696005334409"
 EXPECTED_INSTAGRAM_ID = "17841413184256533"
 RETIRED_APP_ID = "1784792718776344"
 EXPECTED_GRAPH_VERSION = "v24.0"
 EXPECTED_CALLBACK_URL = "https://www.linasaibot.com/webhook/meta-messaging"
-
-DM_WEBHOOK_FIELDS = frozenset({"messages", "messaging_postbacks"})
-APP_PAGE_WEBHOOK_FIELDS = frozenset({"feed", "messages", "messaging_postbacks"})
-APP_INSTAGRAM_WEBHOOK_FIELDS = frozenset({"comments", "messages", "messaging_postbacks"})
 
 REQUIRED_SCOPES = frozenset(
     {
@@ -31,60 +61,14 @@ REQUIRED_SCOPES = frozenset(
         "instagram_manage_messages",
     }
 )
-COMMENT_FEATURE_SCOPES = frozenset(
-    {
-        "pages_read_user_content",
-        "pages_manage_engagement",
-        "instagram_manage_comments",
-    }
-)
-PUBLISH_FEATURE_SCOPES = frozenset(
-    {
-        "pages_manage_posts",
-        "instagram_content_publish",
-    }
-)
 
 
 class MetaTokenValidationError(RuntimeError):
-    """Raised when baseline DM health or app webhook configuration is invalid."""
-
-
-@dataclass(frozen=True)
-class FieldSetCheck:
-    exact: bool
-    dm_fields_present: bool
-    missing_fields: tuple[str, ...]
-    extra_fields: tuple[str, ...]
+    """Raised when baseline DM health or webhook configuration is invalid."""
 
 
 def _mapping(value: object) -> dict[str, object]:
     return cast(dict[str, object], value) if isinstance(value, dict) else {}
-
-
-def _subscription_field_names(value: object) -> set[str]:
-    if not isinstance(value, list):
-        return set()
-    names: set[str] = set()
-    for item in value:
-        if isinstance(item, dict):
-            name = str(item.get("name") or "").strip()
-        else:
-            name = str(item).strip()
-        if name:
-            names.add(name)
-    return names
-
-
-def _check_exact_fields(actual: set[str], expected: frozenset[str]) -> FieldSetCheck:
-    missing = tuple(sorted(expected - actual))
-    extra = tuple(sorted(actual - expected))
-    return FieldSetCheck(
-        exact=not missing and not extra,
-        dm_fields_present=DM_WEBHOOK_FIELDS.issubset(actual),
-        missing_fields=missing,
-        extra_fields=extra,
-    )
 
 
 def _scopes_from_debug_payload(debug_payload: dict[str, object]) -> set[str]:
@@ -172,31 +156,44 @@ def validate_conversation_payloads(
     return checks
 
 
+def validate_page_subscription_baseline(
+    payload: dict[str, object],
+    *,
+    expected_app_id: str,
+) -> dict[str, bool]:
+    """Require Page subscribed_apps to preserve DM fields; feed must not fail baseline."""
+
+    return assert_page_subscription_baseline(
+        payload,
+        expected_app_id=expected_app_id,
+        error_type=MetaTokenValidationError,
+    )
+
+
+def validate_page_subscription_configuration(
+    payload: dict[str, object],
+    *,
+    expected_app_id: str,
+    expect_facebook_comment_delivery: bool,
+) -> dict[str, bool]:
+    """Validate Page subscription profile for the explicit delivery mode."""
+
+    return assert_page_subscription_configuration(
+        payload,
+        expected_app_id=expected_app_id,
+        expect_facebook_comment_delivery=expect_facebook_comment_delivery,
+        error_type=MetaTokenValidationError,
+    )
+
+
 def validate_page_subscription_payload(
     payload: dict[str, object],
     *,
     expected_app_id: str,
 ) -> dict[str, bool]:
-    """Require one installed messaging app with exact page-level DM webhook fields."""
+    """Backward-compatible alias for baseline Page subscription validation."""
 
-    raw_apps = payload.get("data")
-    apps = raw_apps if isinstance(raw_apps, list) else []
-    app = _mapping(apps[0]) if len(apps) == 1 else {}
-    field_check = _check_exact_fields(_subscription_field_names(app.get("subscribed_fields")), DM_WEBHOOK_FIELDS)
-    checks = {
-        "page_has_single_subscribed_app": len(apps) == 1,
-        "page_subscribed_app_id_match": str(app.get("id") or "") == expected_app_id,
-        "page_subscribed_fields_exact": field_check.exact,
-        "page_subscribed_dm_fields_present": field_check.dm_fields_present,
-    }
-    if not all(checks.values()):
-        failed = sorted(key for key, value in checks.items() if not value)
-        raise MetaTokenValidationError(
-            "Meta Page subscription validation failed "
-            f"checks={failed} subscribed_fields_missing={list(field_check.missing_fields)} "
-            f"subscribed_fields_extra={list(field_check.extra_fields)}"
-        )
-    return checks
+    return validate_page_subscription_baseline(payload, expected_app_id=expected_app_id)
 
 
 def validate_app_webhook_configuration(payload: dict[str, object]) -> dict[str, bool]:
@@ -211,10 +208,10 @@ def validate_app_webhook_configuration(payload: dict[str, object]) -> dict[str, 
     }
     page = _mapping(by_object.get("page"))
     instagram = _mapping(by_object.get("instagram"))
-    page_fields = _subscription_field_names(page.get("fields"))
-    instagram_fields = _subscription_field_names(instagram.get("fields"))
-    page_field_check = _check_exact_fields(page_fields, APP_PAGE_WEBHOOK_FIELDS)
-    instagram_field_check = _check_exact_fields(instagram_fields, APP_INSTAGRAM_WEBHOOK_FIELDS)
+    page_fields = subscription_field_names(page.get("fields"))
+    instagram_fields = subscription_field_names(instagram.get("fields"))
+    page_field_check = check_exact_fields(page_fields, APP_PAGE_WEBHOOK_FIELDS)
+    instagram_field_check = check_exact_fields(instagram_fields, APP_INSTAGRAM_WEBHOOK_FIELDS)
     checks = {
         "app_webhook_objects_exact": set(by_object) == {"page", "instagram"},
         "app_page_webhook_active": page.get("active") is True,
@@ -247,20 +244,6 @@ def validate_app_webhook_payload(payload: dict[str, object]) -> dict[str, bool]:
     return validate_app_webhook_configuration(payload)
 
 
-def evaluate_feature_readiness(scopes: set[str]) -> dict[str, bool]:
-    """Informational readiness only; never fails the validator when scopes are missing."""
-
-    comment_ready = COMMENT_FEATURE_SCOPES.issubset(scopes)
-    publish_ready = PUBLISH_FEATURE_SCOPES.issubset(scopes)
-    readiness = {
-        "comment_features_ready": comment_ready,
-        "publish_features_ready": publish_ready,
-    }
-    for scope in sorted(COMMENT_FEATURE_SCOPES | PUBLISH_FEATURE_SCOPES):
-        readiness[f"scope_{scope}_present"] = scope in scopes
-    return readiness
-
-
 def _request_json(
     url: str,
     *,
@@ -288,6 +271,13 @@ def _print_checks(section: str, checks: dict[str, bool]) -> None:
         print(f"[meta-token][{section}] {name}={str(checks[name]).lower()}")
 
 
+def _validation_expectations_from_env() -> tuple[bool, bool, bool]:
+    expect_delivery = parse_bool_env(os.environ.get("META_EXPECT_FACEBOOK_COMMENT_DELIVERY"), default=False)
+    facebook_switch = parse_bool_env(os.environ.get("META_FACEBOOK_COMMENT_SWITCH_ENABLED"), default=False)
+    instagram_switch = parse_bool_env(os.environ.get("META_INSTAGRAM_COMMENT_SWITCH_ENABLED"), default=False)
+    return expect_delivery, facebook_switch, instagram_switch
+
+
 def main() -> None:
     app_id = (os.environ.get("META_APP_ID") or "").strip()
     app_secret = (os.environ.get("META_APP_SECRET") or "").strip()
@@ -297,6 +287,10 @@ def main() -> None:
         raise MetaTokenValidationError("Required Meta credential variables are missing")
     if version != EXPECTED_GRAPH_VERSION:
         raise MetaTokenValidationError("Unexpected Meta Graph API version")
+
+    expect_facebook_comment_delivery, facebook_switch_enabled, instagram_switch_enabled = (
+        _validation_expectations_from_env()
+    )
 
     base = f"https://graph.facebook.com/{version}"
     debug_query = urllib.parse.urlencode(
@@ -335,7 +329,13 @@ def main() -> None:
         bearer=page_token,
         stage="page_subscribed_apps",
     )
-    baseline_checks.update(validate_page_subscription_payload(subscription_payload, expected_app_id=app_id))
+    baseline_checks.update(validate_page_subscription_baseline(subscription_payload, expected_app_id=app_id))
+
+    page_subscription_checks = validate_page_subscription_configuration(
+        subscription_payload,
+        expected_app_id=app_id,
+        expect_facebook_comment_delivery=expect_facebook_comment_delivery,
+    )
 
     app_subscription_query = urllib.parse.urlencode({"fields": "object,callback_url,active,fields"})
     app_subscription_payload = _request_json(
@@ -344,18 +344,39 @@ def main() -> None:
         stage="app_subscriptions",
     )
     app_webhook_checks = validate_app_webhook_configuration(app_subscription_payload)
-    feature_readiness = evaluate_feature_readiness(_scopes_from_debug_payload(debug_payload))
+
+    raw_subscriptions = app_subscription_payload.get("data")
+    subscriptions = raw_subscriptions if isinstance(raw_subscriptions, list) else []
+    by_object = {
+        str(subscription.get("object") or "").strip().lower(): subscription
+        for subscription in subscriptions
+        if isinstance(subscription, dict)
+    }
+    page_fields = subscription_field_names(_mapping(by_object.get("page")).get("fields"))
+    instagram_fields = subscription_field_names(_mapping(by_object.get("instagram")).get("fields"))
+
+    feature_readiness = evaluate_feature_readiness(
+        scopes=_scopes_from_debug_payload(debug_payload),
+        app_page_fields=page_fields,
+        app_instagram_fields=instagram_fields,
+        page_subscribed_fields=extract_page_subscribed_fields(subscription_payload),
+        facebook_comment_switch_enabled=facebook_switch_enabled,
+        instagram_comment_switch_enabled=instagram_switch_enabled,
+    )
 
     _print_checks("baseline-dm", baseline_checks)
+    _print_checks("page-subscription", page_subscription_checks)
     _print_checks("app-webhooks", app_webhook_checks)
     _print_checks("feature-readiness", feature_readiness)
 
     print(f"[meta-token] page_id={EXPECTED_PAGE_ID}")
     print(f"[meta-token] instagram_account_id={EXPECTED_INSTAGRAM_ID}")
+    print("[meta-token] expect_facebook_comment_delivery=" + str(expect_facebook_comment_delivery).lower())
     print("[meta-token] expected_app_page_fields=" + ",".join(sorted(APP_PAGE_WEBHOOK_FIELDS)))
     print("[meta-token] expected_app_instagram_fields=" + ",".join(sorted(APP_INSTAGRAM_WEBHOOK_FIELDS)))
     print("[meta-token] baseline_dm_health=true")
     print("[meta-token] app_webhook_configuration=true")
+    print("[meta-token] page_subscription_configuration=true")
     print("[meta-token] SUCCESS")
 
 

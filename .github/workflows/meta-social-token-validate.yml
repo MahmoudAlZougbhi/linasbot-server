@@ -2,13 +2,29 @@ name: Meta Social Token Validate
 
 on:
   workflow_dispatch:
+    inputs:
+      expect_facebook_comment_delivery:
+        description: "Require Page subscribed_apps feed+DM profile"
+        required: true
+        type: boolean
+        default: false
+      facebook_comment_switch_enabled:
+        description: "Canonical Facebook comment reply switch state"
+        required: true
+        type: boolean
+        default: false
+      instagram_comment_switch_enabled:
+        description: "Canonical Instagram comment reply switch state"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   validate:
-    name: Validate Meta DM baseline and app webhook configuration
+    name: Validate Meta DM baseline and webhook configuration
     environment: meta-social-cutover
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -23,9 +39,13 @@ jobs:
           META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
           META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
           META_GRAPH_API_VERSION: ${{ secrets.META_GRAPH_API_VERSION }}
+          META_EXPECT_FACEBOOK_COMMENT_DELIVERY: ${{ inputs.expect_facebook_comment_delivery }}
+          META_FACEBOOK_COMMENT_SWITCH_ENABLED: ${{ inputs.facebook_comment_switch_enabled }}
+          META_INSTAGRAM_COMMENT_SWITCH_ENABLED: ${{ inputs.instagram_comment_switch_enabled }}
         run: |
           python scripts/validate_meta_social_token.py
           echo "Contract sections:"
-          echo "  [baseline-dm] token, page relationship, conversations, page subscribed_apps (DM-only)"
+          echo "  [baseline-dm] token, page relationship, conversations, page subscribed_apps DM subset"
+          echo "  [page-subscription] explicit delivery profile; feed absence is informational when comments disabled"
           echo "  [app-webhooks] exact app-level fields with DM preserved"
           echo "  [feature-readiness] informational only; false does not fail this workflow"
