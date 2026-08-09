@@ -29,6 +29,9 @@ on:
           - runtime_proof
           - generic_tenant_proof
           - disable_linas_legacy_bridge
+          - preserve_durable_flags
+          - verify_durable_bridge
+          - import_prices
       confirmation:
         description: "Type CM_CUTOVER_CONFIRMED"
         required: true
@@ -124,6 +127,13 @@ jobs:
               sudo bash /opt/linasbot/scripts/prod_cm_generic_tenant_proof.sh
             elif [ "${PHASE}" = "disable_linas_legacy_bridge" ]; then
               sudo bash /opt/linasbot/scripts/prod_cm_set_linas_bridge_flag.sh true
+            elif [ "${PHASE}" = "preserve_durable_flags" ]; then
+              sudo bash /opt/linasbot/scripts/prod_cm_preserve_durable_flags.sh
+            elif [ "${PHASE}" = "verify_durable_bridge" ]; then
+              export VERIFY_RELOAD=1
+              sudo -E bash /opt/linasbot/scripts/prod_cm_verify_durable_bridge.sh
+            elif [ "${PHASE}" = "import_prices" ]; then
+              sudo bash /opt/linasbot/scripts/prod_cm_import_prices.sh
             else
               echo "unknown phase=${PHASE}" >&2
               exit 1

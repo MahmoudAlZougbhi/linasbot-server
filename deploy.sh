@@ -212,6 +212,15 @@ else
     echo ".env file found"
 fi
 
+# Preserve durable CM ops flags (e.g. CM_DISABLE_LINAS_LEGACY_BRIDGE) across dual .env paths.
+# Deploy rewrites the systemd unit EnvironmentFile path; this keeps the kill-switch durable.
+if [ -f "$REPO_ROOT/scripts/prod_cm_preserve_durable_flags.sh" ]; then
+    echo "Preserving durable CM ops flags..."
+    bash "$REPO_ROOT/scripts/prod_cm_preserve_durable_flags.sh" "$APP_DIR"
+else
+    echo -e "${YELLOW}Warning: prod_cm_preserve_durable_flags.sh missing; bridge-disable may not survive dual-.env deploys${NC}"
+fi
+
 if [ ! -f "$APP_DIR/data/firebase_data.json" ] && [ -f "$REPO_ROOT/data/firebase_data.json" ]; then
     mkdir -p "$APP_DIR/data"
     cp "$REPO_ROOT/data/firebase_data.json" "$APP_DIR/data/firebase_data.json"
