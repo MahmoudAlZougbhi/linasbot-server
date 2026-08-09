@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator, Callable
-from typing import Any
+from typing import Any, Literal
 
 from services.model_policy import emit_model_policy_trace, resolve_owner_policy
 from services.owner_ai_context import pack_owner_turn_context
@@ -119,7 +119,7 @@ async def iter_owner_turn_v2_events(
     context["recent_messages_raw"] = list(messages or [])
     stage = str((context.get("account_summary") or {}).get("setup_stage") or "")
     reply_lang = str(context.get("reply_language") or "en")
-    attachment_action = None
+    attachment_action: Literal["none", "analyze", "import"] | None = None
     if attachment_ids:
         # Attachment alone does not force high; import/apply paths set import via extract tool.
         attachment_action = "analyze"
