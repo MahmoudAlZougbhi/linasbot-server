@@ -41,8 +41,7 @@ async def mobile_transcribe(
         raise HTTPException(status_code=503, detail="Speech-to-text provider not configured")
     content_type = (audio.content_type or "").lower()
     if content_type and not (
-        content_type.startswith("audio/")
-        or content_type in {"application/octet-stream", "video/mp4"}
+        content_type.startswith("audio/") or content_type in {"application/octet-stream", "video/mp4"}
     ):
         raise HTTPException(status_code=400, detail="Expected an audio upload")
     raw = await audio.read()

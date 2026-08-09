@@ -73,7 +73,9 @@ def guest_client(tmp_path: Path):
             body += " (continuing our earlier thread)"
         return _FakeResponse(body)
 
-    fake_client = type("C", (), {"chat": type("Ch", (), {"completions": type("Co", (), {"create": staticmethod(_fake_create)})()})()})()
+    fake_client = type(
+        "C", (), {"chat": type("Ch", (), {"completions": type("Co", (), {"create": staticmethod(_fake_create)})()})()}
+    )()
 
     with patch("modules.guest_ai_api.guest_chat_store", store):
         with patch("services.guest_chat_store.guest_chat_store", store):
@@ -149,14 +151,16 @@ async def test_compose_guest_reply_uses_llm_not_canned_pitch():
     async def _create(**kwargs: Any) -> _FakeResponse:
         assert kwargs.get("messages")
         assert kwargs["messages"][0]["role"] == "system"
-        assert "broken record" in kwargs["messages"][0]["content"] or "not a brochure" in kwargs["messages"][0][
-            "content"
-        ]
-        return _FakeResponse(
-            "Content Management lets you teach the AI your services and FAQs before publish."
+        assert (
+            "broken record" in kwargs["messages"][0]["content"] or "not a brochure" in kwargs["messages"][0]["content"]
         )
+        return _FakeResponse("Content Management lets you teach the AI your services and FAQs before publish.")
 
-    fake = type("C", (), {"chat": type("Ch", (), {"completions": type("Co", (), {"create": AsyncMock(side_effect=_create)})()})()})()
+    fake = type(
+        "C",
+        (),
+        {"chat": type("Ch", (), {"completions": type("Co", (), {"create": AsyncMock(side_effect=_create)})()})()},
+    )()
     with patch("services.llm_core_service.client", fake):
         result = await compose_guest_reply("Explain Content Management", language="en")
     assert result["tools_used"] == []
@@ -197,7 +201,9 @@ def test_guest_llm_failure_surfaces_error_no_canned_fallback(guest_client):
         raise RuntimeError("simulated_provider_down")
 
     client.post("/api/guest-ai/session", json={"guest_session_id": sid, "language": "en"})
-    boom = type("C", (), {"chat": type("Ch", (), {"completions": type("Co", (), {"create": staticmethod(_boom)})()})()})()
+    boom = type(
+        "C", (), {"chat": type("Ch", (), {"completions": type("Co", (), {"create": staticmethod(_boom)})()})()}
+    )()
     with patch("services.llm_core_service.client", boom):
         r = client.post(
             "/api/guest-ai/session/messages",

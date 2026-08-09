@@ -111,9 +111,7 @@ class OwnerAlertService:
             user_id=user_id,
             within_seconds=dedupe_seconds,
         ):
-            print(
-                f"[owner_alert] dedupe skip type={atype} conv={conversation_id} user={user_id}"
-            )
+            print(f"[owner_alert] dedupe skip type={atype} conv={conversation_id} user={user_id}")
             return None
 
         channel_key = _channel_key(channel, user_id)
@@ -140,10 +138,7 @@ class OwnerAlertService:
                 },
             },
         )
-        print(
-            f"[owner_alert] created id={record['id']} type={atype} "
-            f"channel={channel_key} conv={conversation_id}"
-        )
+        print(f"[owner_alert] created id={record['id']} type={atype} channel={channel_key} conv={conversation_id}")
         return record
 
     def emit_handoff(

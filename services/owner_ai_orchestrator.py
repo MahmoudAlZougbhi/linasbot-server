@@ -306,10 +306,7 @@ async def run_owner_turn(
                 meta={"intent": intent or "help_fallback", "ok": False, "error": str(exc)},
             )
             return OwnerTurnResult(
-                reply_text=(
-                    "Linas AI is temporarily unavailable to answer that. "
-                    f"Please try again shortly ({exc})."
-                ),
+                reply_text=(f"Linas AI is temporarily unavailable to answer that. Please try again shortly ({exc})."),
                 tool_calls=[{"ok": False, "name": "help", "data": help_data, "requires_confirmation": False}],
                 route=decision_to_dict(route),
                 context_tokens=ctx_tokens,

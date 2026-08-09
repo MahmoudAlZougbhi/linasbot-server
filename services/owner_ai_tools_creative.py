@@ -132,10 +132,7 @@ async def tool_create_creative_draft(
 
     studio_prompt = text
     if compress or requested == "compress":
-        studio_prompt = (
-            "Compress and tighten this social content. Keep the brand voice. "
-            f"Source:\n{text}"
-        )
+        studio_prompt = f"Compress and tighten this social content. Keep the brand voice. Source:\n{text}"
         resolved = "rewrite"
 
     try:

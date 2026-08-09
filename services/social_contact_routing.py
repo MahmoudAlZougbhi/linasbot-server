@@ -630,10 +630,7 @@ def route_social_contact_request(
                     except Exception:
                         social_uid = f"{scope_channel}:{user_data.get('social_sender_id')}"
                 display_name = str(
-                    user_data.get("user_name")
-                    or user_data.get("name")
-                    or user_data.get("profile_name")
-                    or ""
+                    user_data.get("user_name") or user_data.get("name") or user_data.get("profile_name") or ""
                 )
                 if not display_name and social_uid:
                     try:
