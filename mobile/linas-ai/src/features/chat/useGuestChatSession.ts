@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { ApiError } from '../../api/client';
+import { isNetworkFailure } from '../../api/networkError';
 import { ensureGuestSession, sendGuestMessage } from '../../api/guestClient';
 import type { ChatMessage } from '../../api/types';
 import { getOrCreateGuestSessionId } from '../../auth/guestSession';
@@ -48,7 +49,9 @@ export function useGuestChatSession(enabled = true) {
     void bootstrap();
   }, [bootstrap]);
 
-  async function send(content: string): Promise<'done' | 'gated' | 'rejected' | 'error' | 'skipped'> {
+  async function send(
+    content: string,
+  ): Promise<'done' | 'gated' | 'rejected' | 'error' | 'network_error' | 'skipped'> {
     if (!guestId || !content.trim() || gated) {
       return 'skipped';
     }
@@ -100,6 +103,10 @@ export function useGuestChatSession(enabled = true) {
       } else if (err instanceof ApiError && err.status === 503) {
         // Honest model-down signal — do not invent a canned assistant bubble.
         setError('guestModelUnavailable');
+      } else if (isNetworkFailure(err)) {
+        setError(null);
+      } else if (err instanceof ApiError) {
+        setError('messageFailed');
       } else {
         setError('messageFailed');
       }
@@ -115,7 +122,7 @@ export function useGuestChatSession(enabled = true) {
       } catch {
         setMessages((prev) => prev.filter((m) => !String(m.id).startsWith('local-')));
       }
-      return 'error';
+      return isNetworkFailure(err) ? 'network_error' : 'error';
     } finally {
       setSending(false);
     }
