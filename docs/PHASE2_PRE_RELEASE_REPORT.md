@@ -2,6 +2,10 @@
 
 **Verdict:** `NOT LINAS AI APP PRODUCTION READY — EXTERNAL STORE/META/DEVICE GATES ONLY`
 
+**Feature branch HEAD:** `f6f3eee239abe2d41ca35c365dcbd4903482a7a0`  
+**PR:** https://github.com/MahmoudAlZougbhi/linasbot-server/pull/97  
+**CI:** Quality Gates green (backend, frontend, mobile, secret-scan, deploy-readiness)
+
 ## 1) Reconciled production CM / bridge state
 
 | Item | Value |
@@ -12,6 +16,7 @@
 | Uses `cm_runtime_pipeline` | **yes** |
 | Legacy bridge | **disabled** — never re-enable; emergency only `CM_EMERGENCY_FORCE_LEGACY=true` |
 | Phase 2 Redis/mobile/workers on prod | **not activated** until this branch is deployed + `REDIS_URL` + `LINAS_REQUIRE_REDIS=true` |
+| Phase 2-specific flags still disabled on prod | `REDIS_URL` unset / `LINAS_REQUIRE_REDIS` unset / IAP secrets unset / Meta comments+publish `live_verified=false` |
 
 Earlier Phase 2 “flags not flipped” wording referred to **feature-branch code not deployed**, not live CM cutover.
 
