@@ -140,9 +140,7 @@ async def test_tools_and_schemas(tenant: str, monkeypatch: pytest.MonkeyPatch) -
     assert "done_sections" in overview.data
     assert overview.data.get("ai_directive")
 
-    plan_res = await tool_cm_fill_plan(
-        tenant_id=tenant, role="admin", user_id="u1", action="start"
-    )
+    plan_res = await tool_cm_fill_plan(tenant_id=tenant, role="admin", user_id="u1", action="start")
     assert plan_res.ok is True
     assert plan_res.data["plan"]["remaining"]
     focus = plan_res.data["plan"]["focus"]["section"]

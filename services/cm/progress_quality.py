@@ -90,8 +90,7 @@ def assess_section_fill(section: str, payload: dict[str, Any] | None, *, is_defa
     if name == "ai_basics":
         has_name = _nonempty(payload.get("clinic_name")) or _nonempty(payload.get("assistant_name"))
         has_role = any(
-            _nonempty(payload.get(k))
-            for k in ("ai_role", "business_purpose", "short_introduction", "identity_summary")
+            _nonempty(payload.get(k)) for k in ("ai_role", "business_purpose", "short_introduction", "identity_summary")
         )
         if not has_name:
             gaps.append("business_or_assistant_name")
@@ -108,11 +107,7 @@ def assess_section_fill(section: str, payload: dict[str, Any] | None, *, is_defa
             gaps.append("tone_or_style_body")
     elif name == "dynamic_messages":
         items = payload.get("items") if isinstance(payload.get("items"), list) else []
-        ok = any(
-            isinstance(it, dict)
-            and any(_nonempty(it.get(k)) for k in ("ar", "en", "fr", "name"))
-            for it in items
-        )
+        ok = any(isinstance(it, dict) and any(_nonempty(it.get(k)) for k in ("ar", "en", "fr", "name")) for it in items)
         if not ok and not _nonempty(payload.get("notes")):
             gaps.append("greeting_or_message_text")
     elif name == "services":

@@ -89,9 +89,7 @@ async def test_list_and_read_cm_articles_with_chunking(tenant_root: Path) -> Non
     assert ids == {"art_short", "art_long"}
     assert all("body" not in a for a in listed.data["articles"])
 
-    short = await tool_read_cm_article(
-        tenant_id="t1", role="admin", section="knowledge", article_id="art_short"
-    )
+    short = await tool_read_cm_article(tenant_id="t1", role="admin", section="knowledge", article_id="art_short")
     assert short.ok is True
     assert short.data["article"]["body"] == "We open at 9."
     assert short.data["article"]["body_complete"] is True

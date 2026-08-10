@@ -13,11 +13,9 @@ type Props = {
 
 function CloudGlyph({ color }: { color: string }) {
   return (
-    <View style={cloud.wrap} accessibilityElementsHidden>
-      <View style={[cloud.puffL, { backgroundColor: color }]} />
-      <View style={[cloud.puffR, { backgroundColor: color }]} />
-      <View style={[cloud.base, { backgroundColor: color }]} />
-    </View>
+    <Text style={{ color, fontSize: 12, lineHeight: 14 }} accessibilityElementsHidden>
+      ☁
+    </Text>
   );
 }
 
@@ -117,30 +115,3 @@ const styles = StyleSheet.create({
   check: { fontFamily: fonts.bodyMedium, fontSize: 16 },
 });
 
-const cloud = StyleSheet.create({
-  wrap: { width: 18, height: 12, justify: 'relative' },
-  base: {
-    position: 'absolute',
-    left: 1,
-    bottom: 0,
-    width: 16,
-    height: 7,
-    borderRadius: 4,
-  },
-  puffL: {
-    position: 'absolute',
-    left: 2,
-    bottom: 3,
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-  },
-  puffR: {
-    position: 'absolute' as const,
-    right: 1,
-    bottom: 4,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-  },
-});

@@ -27,6 +27,7 @@ from services.owner_copilot_v2.tool_dispatch import dispatch_v2_tool, tool_resul
 CancelCheck = Callable[[], bool]
 MAX_TOOL_ROUNDS = 4
 
+
 async def run_owner_turn_v2(**kwargs: Any) -> OwnerV2TurnResult:
     final: OwnerV2TurnResult | None = None
     async for ev in iter_owner_turn_v2_events(**kwargs):
@@ -57,6 +58,7 @@ async def run_owner_turn_v2(**kwargs: Any) -> OwnerV2TurnResult:
                 model=owner_model_name(),
             )
     return final or OwnerV2TurnResult(reply_text="", model=owner_model_name())
+
 
 async def iter_owner_turn_v2_events(
     *,
@@ -379,4 +381,3 @@ async def iter_owner_turn_v2_events(
                 "retryable": True,
             },
         )
-

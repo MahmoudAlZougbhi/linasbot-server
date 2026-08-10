@@ -41,9 +41,7 @@ async def continue_after_cm_approve(
     bulk = bf.load_bulk_plan(tenant_id, user_id)
     bulk_pending = 0
     if bulk:
-        bulk_pending = sum(
-            1 for r in (bulk.get("queue") or []) if isinstance(r, dict) and r.get("status") == "pending"
-        )
+        bulk_pending = sum(1 for r in (bulk.get("queue") or []) if isinstance(r, dict) and r.get("status") == "pending")
 
     if next_prop and next_prop.ok:
         directive = (
