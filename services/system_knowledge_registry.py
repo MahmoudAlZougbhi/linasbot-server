@@ -211,7 +211,13 @@ CAPABILITIES: tuple[Capability, ...] = (
             "Or ask Owner Copilot: “add this Q&A to FAQ” → proposal card → Approve → Live for customers.",
             "Matching customer questions hit FAQ first and skip LLM cost (see generations_avoided metrics).",
         ),
-        tools=("read_faq_quota", "propose_smart_answer", "approve_smart_answer", "list_cm_faq", "propose_cm_faq_upsert"),
+        tools=(
+            "read_faq_quota",
+            "propose_smart_answer",
+            "approve_smart_answer",
+            "list_cm_faq",
+            "propose_cm_faq_upsert",
+        ),
         blockers=(
             "No paid plan → FAQ disabled. Entry plans ~200 groups; higher ~1000.",
             "Incomplete 4-language groups stay draft until complete.",

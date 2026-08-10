@@ -15,7 +15,6 @@ import { UsageScreen } from './src/features/billing/UsageScreen';
 import { BootSplash } from './src/features/boot/BootSplash';
 import { ChatScreen } from './src/features/chat/ChatScreen';
 import { queueSetupHandoff } from './src/features/chat/pendingSetupHandoff';
-import { FAQ_ASK_LINAS_PROMPT } from './src/features/faq/faqLanguages';
 import { CmScreen } from './src/features/cm/CmScreen';
 import { CmSectionScreen } from './src/features/cm/CmSectionScreen';
 import type { CmProposalReview } from './src/features/cm/cmProposalReview';
@@ -26,7 +25,7 @@ import { IntegrationsScreen } from './src/features/integrations/IntegrationsScre
 import { LiveChatScreen } from './src/features/livechat/LiveChatScreen';
 import { NotificationsScreen } from './src/features/notifications/NotificationsScreen';
 import { tryRegisterOwnerPushScaffold } from './src/features/notifications/pushScaffold';
-import { FaqScreen } from './src/features/faq/FaqScreen';
+import { FaqRoute } from './src/features/faq/FaqRoute';
 import { SettingsScreen } from './src/features/settings/SettingsScreen';
 import { SimpleResourceScreen } from './src/features/shared/SimpleResourceScreen';
 import { UsersScreen } from './src/features/users/UsersScreen';
@@ -382,13 +381,10 @@ function AppBody() {
         />
       ) : null}
       {screen.name === 'faq' ? (
-        <FaqScreen
+        <FaqRoute
           onBack={() => setScreen({ name: 'chat' })}
+          onGoChat={() => setScreen({ name: 'chat' })}
           proposalReview={screen.proposalReview ?? null}
-          onAskLinas={() => {
-            queueSetupHandoff({ text: FAQ_ASK_LINAS_PROMPT, mode: 'work', autoSend: true });
-            setScreen({ name: 'chat' });
-          }}
         />
       ) : null}
       {screen.name === 'resource' ? (

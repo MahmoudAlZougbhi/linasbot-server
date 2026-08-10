@@ -168,9 +168,8 @@ def _summarize(name: str, result_data: dict[str, Any], *, reply_language: str) -
         reason = ((result_data.get("activation") or {}) if isinstance(result_data.get("activation"), dict) else {}).get(
             "reason"
         )
-        return (
-            f"Smart Answer saved as draft (qa_group_id={gid})"
-            + (f"; Live not updated yet ({reason})." if reason else ".")
+        return f"Smart Answer saved as draft (qa_group_id={gid})" + (
+            f"; Live not updated yet ({reason})." if reason else "."
         )
     if name == "read_cm":
         if "sections" in result_data:
