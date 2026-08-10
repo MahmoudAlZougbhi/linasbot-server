@@ -29,6 +29,7 @@ export const fr: Record<StringKey, string> = {
   chatEmptyTitle: 'Je suis Linas AI — votre assistant dans l’app',
   chatEmptyBody:
     'Je peux vous aider pour tout. Cette application est votre community manager IA pour vos pages sur les réseaux sociaux.',
+  chatThinking: 'Réflexion…',
   guestChatEmptyTitle: 'Bienvenue sur Linas AI',
   guestChatEmptyBody:
     'Demandez ce que Linas AI offre à votre entreprise et à vos pages sur les réseaux sociaux. Le chat invité est explicatif seulement.',

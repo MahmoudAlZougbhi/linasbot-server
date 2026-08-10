@@ -31,6 +31,7 @@ type Props = {
   stickToBottomRef: { current: boolean };
   scrollToBottom: (animated?: boolean) => void;
   imagePreviewByContent: { current: Record<string, string[]> };
+  thinking: boolean;
   statusRows: { id: string; text: string }[];
   liveText: string;
   cards: StreamCard[];
@@ -53,6 +54,7 @@ export function ChatMessageList({
   stickToBottomRef,
   scrollToBottom,
   imagePreviewByContent,
+  thinking,
   statusRows,
   liveText,
   cards,
@@ -155,6 +157,7 @@ export function ChatMessageList({
         }}
         ListFooterComponent={
           <ChatStreamFooter
+            thinking={thinking}
             statusRows={statusRows}
             liveText={liveText}
             cards={cards}

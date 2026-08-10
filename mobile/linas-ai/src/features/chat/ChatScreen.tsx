@@ -31,6 +31,7 @@ import {
   savePendingGuestDraft,
 } from './pendingGuestDraft';
 import { sendChatMessage } from './sendChatMessage';
+import { chatErrorLabelKey, retryAssistantMessage } from './chatRetryHandlers';
 import { useChatSession } from './useChatSession';
 import { useGuestChatSession } from './useGuestChatSession';
 import { usePinnedChats } from './usePinnedChats';
@@ -143,6 +144,7 @@ export function ChatScreen({
   const sending = isAuthenticated ? turn.streaming : guest.sending;
   const error = isAuthenticated ? owner.error : guest.error;
   const listKey = isAuthenticated ? owner.conversationId || 'owner' : 'guest';
+  // Greeting-seeded chats: show Chat|Work until first user message.
   const hasUserMessage = messages.some((m) => m.role === 'user');
   const showModeToggle =
     isAuthenticated && !hasUserMessage && !turn.liveText && !turn.streaming;
@@ -157,6 +159,7 @@ export function ChatScreen({
     scrollToBottom(false);
   }, [
     messages.length,
+    turn.thinking,
     turn.liveText,
     turn.statusRows.length,
     turn.cards.length,
@@ -175,11 +178,6 @@ export function ChatScreen({
       turn.send(text, { ...opts, owner_mode: ownerMode }),
     [ownerMode, turn],
   );
-
-  const errorKey =
-    error === 'retry' || error === 'guestWordLimit' || error === 'guestModelUnavailable'
-      ? error
-      : 'messageFailed';
 
   return (
     <GradientBackground>
@@ -213,7 +211,7 @@ export function ChatScreen({
 
         <ChatStatusBanners
           offline={offline}
-          errorLabel={error ? tr(errorKey) : null}
+          errorLabel={error ? tr(chatErrorLabelKey(error)) : null}
           voiceError={voice.voiceError}
           onRetry={() => {
             setOffline(false);
@@ -242,6 +240,7 @@ export function ChatScreen({
             stickToBottomRef={stickToBottomRef}
             scrollToBottom={scrollToBottom}
             imagePreviewByContent={imagePreviewByContent}
+            thinking={turn.thinking}
             statusRows={turn.statusRows}
             liveText={turn.liveText}
             cards={turn.cards}
@@ -251,15 +250,19 @@ export function ChatScreen({
             onLoadOlder={() => {
               if (isAuthenticated) void owner.loadOlder();
             }}
-            onRetryAssistant={(content) => {
-              if (isAuthenticated) {
-                if (!turn.streaming) void ownerSendWithMode(content);
-              } else if (guest.gated) openAuthPreservingDraft(true);
-              else if (!guest.sending) {
-                scrollToBottom();
-                void guest.send(content);
-              }
-            }}
+            onRetryAssistant={(content) =>
+              retryAssistantMessage({
+                isAuthenticated,
+                streaming: turn.streaming,
+                guestSending: guest.sending,
+                guestGated: guest.gated,
+                content,
+                ownerSend: (text) => void ownerSendWithMode(text),
+                guestSend: (text) => void guest.send(text),
+                openAuth: () => openAuthPreservingDraft(true),
+                scrollToBottom,
+              })
+            }
             onApproveDraft={(token) => void ownerSendWithMode('', { confirm_tool: token })}
             onDiscardProposal={() => {
               owner.setProposedPatch(null);
