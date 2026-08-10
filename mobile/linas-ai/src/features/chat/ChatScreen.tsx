@@ -260,8 +260,18 @@ export function ChatScreen({
               if (isAuthenticated) void owner.loadOlder();
             }}
             onRetryAssistant={(content) => {
-              if (turn.streaming) return;
-              void ownerSendWithMode(content);
+              if (isAuthenticated) {
+                if (turn.streaming) return;
+                void ownerSendWithMode(content);
+                return;
+              }
+              if (guest.sending) return;
+              if (guest.gated) {
+                openAuthPreservingDraft(true);
+                return;
+              }
+              scrollToBottom();
+              void guest.send(content);
             }}
             onApproveDraft={(token) => void ownerSendWithMode('', { confirm_tool: token })}
             onDiscardProposal={() => {

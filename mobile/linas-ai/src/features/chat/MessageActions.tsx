@@ -1,33 +1,95 @@
 import * as Clipboard from 'expo-clipboard';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Pressable, StyleSheet, View } from 'react-native';
 
-import { fonts, useTheme } from '../../theme';
+import { AppIcon, feather, type AppIconName } from '../../components/AppIcon';
+import { useTheme } from '../../theme';
 
 type Props = {
   text: string;
   onRetry?: () => void;
 };
 
+type ActionIconProps = {
+  accessibilityLabel: string;
+  icon: AppIconName;
+  color: string;
+  onPress: () => void;
+};
+
+function ActionIconButton({ accessibilityLabel, icon, color, onPress }: ActionIconProps) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+
+  function animateTo(nextScale: number, nextOpacity: number, duration: number) {
+    Animated.parallel([
+      Animated.timing(scale, { toValue: nextScale, duration, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: nextOpacity, duration, useNativeDriver: true }),
+    ]).start();
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={() => animateTo(0.88, 0.55, 90)}
+      onPressOut={() => animateTo(1, 1, 140)}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={10}
+    >
+      <Animated.View style={[styles.iconWrap, { opacity, transform: [{ scale }] }]}>
+        <AppIcon icon={icon} size={16} color={color} />
+      </Animated.View>
+    </Pressable>
+  );
+}
+
 export function MessageActions({ text, onRetry }: Props) {
   const { colors } = useTheme();
+  const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    };
+  }, []);
+
+  async function onCopy() {
+    const body = text?.trim();
+    if (!body) return;
+    await Clipboard.setStringAsync(body);
+    setCopied(true);
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setCopied(false), 900);
+  }
+
   return (
     <View style={styles.row}>
-      <Pressable
-        onPress={() => void Clipboard.setStringAsync(text)}
-        accessibilityLabel="Copy message"
-        hitSlop={8}
-      >
-        <Text style={{ color: colors.textMuted, fontFamily: fonts.body, fontSize: 12 }}>Copy</Text>
-      </Pressable>
+      <ActionIconButton
+        accessibilityLabel={copied ? 'Copied' : 'Copy message'}
+        icon={feather(copied ? 'check' : 'copy')}
+        color={copied ? colors.accent : colors.textMuted}
+        onPress={() => void onCopy()}
+      />
       {onRetry ? (
-        <Pressable onPress={onRetry} accessibilityLabel="Retry" hitSlop={8}>
-          <Text style={{ color: colors.textMuted, fontFamily: fonts.body, fontSize: 12 }}>Retry</Text>
-        </Pressable>
+        <ActionIconButton
+          accessibilityLabel="Retry"
+          icon={feather('refresh-cw')}
+          color={colors.textMuted}
+          onPress={onRetry}
+        />
       ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 16, marginTop: 4, marginLeft: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 6, marginLeft: 8 },
+  iconWrap: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
