@@ -45,13 +45,26 @@ def guest_model_name_v2() -> str:
     return (os.getenv("LINAS_GUEST_MODEL") or "gpt-5.6-luna").strip() or "gpt-5.6-luna"
 
 
-def owner_max_output_tokens() -> int:
-    """Adaptive response budget (replaces universal 360 cap)."""
-    raw = (os.getenv("LINAS_OWNER_MAX_OUTPUT_TOKENS") or "1200").strip()
-    try:
-        return max(256, min(8192, int(raw)))
-    except ValueError:
-        return 1200
+def owner_max_output_tokens(*, reasoning_effort: str | None = None) -> int:
+    """Owner reply completion budget.
+
+    Env ``LINAS_OWNER_MAX_OUTPUT_TOKENS`` overrides when set. Otherwise scale by
+    reasoning effort: High burns invisible reasoning tokens inside
+    ``max_completion_tokens``, so a flat 1200 budget truncates long Work/High
+    replies mid-sentence (seen as CM review stopping at section 12).
+    """
+    raw = (os.getenv("LINAS_OWNER_MAX_OUTPUT_TOKENS") or "").strip()
+    if raw:
+        try:
+            return max(256, min(8192, int(raw)))
+        except ValueError:
+            pass
+    effort = (reasoning_effort or "").strip().lower()
+    if effort == "high":
+        return 4096
+    if effort == "low":
+        return 2048
+    return 3072
 
 
 def owner_context_token_budget() -> int:

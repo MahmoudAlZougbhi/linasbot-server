@@ -36,10 +36,10 @@ OWNER_V2_CORE_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "read_cm",
             "description": (
-                "Read Content Management draft content. Omit section for an inventory "
-                "overview (not full bodies). With section, returns full section bodies "
-                "(paginated via items_offset when payload_complete is false). Never treat "
-                "overview-only as a complete CM read."
+                "Read Content Management draft content for internal analysis. Omit section "
+                "for inventory overview. With section, returns full bodies (paginated via "
+                "items_offset when payload_complete is false). Use freely to gather truth; "
+                "user-facing replies stay concise unless the owner asked for a full dump."
             ),
             "parameters": {
                 "type": "object",

@@ -341,7 +341,12 @@ async def iter_owner_turn_v2_events(
         fin_messages.append(
             {
                 "role": "system",
-                "content": "Write the natural final owner-facing answer now from the tool results. No JSON.",
+                "content": (
+                    "Write the natural final owner-facing answer now from the tool results. No JSON. "
+                    "Default: concise diagnostic CM critique (issues + fixes), not a full CM dump. "
+                    "Only paste full section/article bodies when the owner explicitly asked for them. "
+                    "Finish cleanly — never stop mid-sentence."
+                ),
             }
         )
         fin_policy = resolve_owner_policy(prior=policy)

@@ -52,7 +52,7 @@ async def sol_chat_completion(
     kwargs = build_chat_completion_kwargs(
         model=model,
         messages=[{"role": "user", "content": "placeholder"}],
-        max_tokens=owner_max_output_tokens(),
+        max_tokens=owner_max_output_tokens(reasoning_effort=str(decision.reasoning_effort)),
         temperature=0.4,
         reasoning_effort=str(decision.reasoning_effort),
         has_function_tools=has_tools,
@@ -75,24 +75,73 @@ async def sol_chat_completion(
     return await client.chat.completions.create(**kwargs)
 
 
+_MAX_LENGTH_CONTINUATIONS = 2
+
+
+async def _stream_text_once(
+    *,
+    messages: list[dict[str, Any]],
+    is_cancelled: CancelCheck | None,
+    policy: ModelPolicyDecision | None,
+) -> AsyncIterator[tuple[str, str | None]]:
+    """Yield (delta_text, finish_reason_or_none). finish_reason appears on the last event."""
+    stream = await sol_chat_completion(messages=messages, tools=None, stream=True, policy=policy)
+    async for event in stream:
+        if is_cancelled and is_cancelled():
+            return
+        finish: str | None = None
+        try:
+            choice = event.choices[0]
+            delta = choice.delta
+            piece = getattr(delta, "content", None) or ""
+            finish = getattr(choice, "finish_reason", None)
+        except Exception:
+            piece = ""
+        if piece:
+            yield piece, None
+        if finish:
+            yield "", str(finish)
+
+
 async def iter_sol_text_deltas(
     *,
     messages: list[dict[str, Any]],
     is_cancelled: CancelCheck | None = None,
     policy: ModelPolicyDecision | None = None,
 ) -> AsyncIterator[str]:
-    """Yield real provider text deltas (not a post-hoc typing animation)."""
-    stream = await sol_chat_completion(messages=messages, tools=None, stream=True, policy=policy)
-    async for event in stream:
+    """Yield real provider text deltas; auto-continue when finish_reason=length.
+
+    Prevents abrupt mid-sentence cutoff on long Work/High CM reviews or explicit
+    full-dump requests. At most ``_MAX_LENGTH_CONTINUATIONS`` continuations.
+    """
+    working = list(messages)
+    assembled = ""
+    for cont in range(_MAX_LENGTH_CONTINUATIONS + 1):
+        finish_reason: str | None = None
+        chunk_parts: list[str] = []
+        async for piece, finish in _stream_text_once(messages=working, is_cancelled=is_cancelled, policy=policy):
+            if piece:
+                chunk_parts.append(piece)
+                assembled += piece
+                yield piece
+            if finish:
+                finish_reason = finish
         if is_cancelled and is_cancelled():
             return
-        try:
-            delta = event.choices[0].delta
-            piece = getattr(delta, "content", None) or ""
-        except Exception:
-            piece = ""
-        if piece:
-            yield piece
+        if finish_reason != "length" or cont >= _MAX_LENGTH_CONTINUATIONS:
+            return
+        # Continue exactly from the truncated point without restarting the answer.
+        working = list(working)
+        working.append({"role": "assistant", "content": assembled})
+        working.append(
+            {
+                "role": "user",
+                "content": (
+                    "Continue exactly from where you stopped. Do not restart or repeat "
+                    "prior text. Finish the answer cleanly; never stop mid-sentence."
+                ),
+            }
+        )
 
 
 async def iter_sol_tool_round(
