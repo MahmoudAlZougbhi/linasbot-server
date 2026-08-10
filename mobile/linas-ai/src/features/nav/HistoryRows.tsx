@@ -91,13 +91,7 @@ export function HistoryRows({
                     />
                   ) : (
                     <Text
-                      style={{
-                        color: colors.text,
-                        fontFamily: fonts.body,
-                        flex: 1,
-                        fontSize: 16,
-                        lineHeight: 22,
-                      }}
+                      style={[styles.rowTitle, { color: colors.text }]}
                       numberOfLines={2}
                     >
                       {item.title || 'Untitled'}
@@ -220,6 +214,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     minHeight: 44,
+  },
+  /** Conversation titles: medium weight — slightly heavier than body, not extreme. */
+  rowTitle: {
+    fontFamily: fonts.bodyMedium,
+    fontWeight: '600',
+    flex: 1,
+    fontSize: 16,
+    lineHeight: 22,
   },
   overflow: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   menu: {
