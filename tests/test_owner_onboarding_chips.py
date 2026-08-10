@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from services.entitlements_service import EntitlementsStore, get_tenant_entitlement_public
+from services.entitlements_service import (
+    EntitlementsStore,
+    get_tenant_entitlement_public,
+    is_subscription_exempt_tenant,
+    tenant_has_app_access,
+)
 from services.owner_ai_onboarding import welcome_chips
 
 
@@ -28,9 +33,43 @@ def test_welcome_chips_fully_configured_hides_setup() -> None:
 def test_app_access_requires_active_plan(tmp_path, monkeypatch) -> None:
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", "linas")
     pub = get_tenant_entitlement_public("t-none")
     assert pub["app_access"] is False
+    assert pub["subscription_exempt"] is False
+    assert pub["subscription_required"] is True
     store.set_plan(tenant_id="t1", plan_id="starter", status="active", source="admin")
     pub2 = get_tenant_entitlement_public("t1")
     assert pub2["app_access"] is True
     assert pub2["subscription_required"] is True
+    assert pub2["subscription_exempt"] is False
+
+
+def test_linas_laser_tenant_exempt_from_subscription_without_plan(tmp_path, monkeypatch) -> None:
+    """Linas Laser (tenant_id=linas) gets app_access via explicit allowlist only."""
+    store = EntitlementsStore(root=tmp_path / "ent")
+    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.delenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", raising=False)
+    assert is_subscription_exempt_tenant("linas")
+    assert tenant_has_app_access("linas") is True
+    pub = get_tenant_entitlement_public("linas")
+    assert pub["app_access"] is True
+    assert pub["subscription_exempt"] is True
+    assert pub["subscription_required"] is False
+    assert pub["plan_id"] == "none"
+    # Other tenants stay gated.
+    assert is_subscription_exempt_tenant("acme-co") is False
+    assert tenant_has_app_access("acme-co") is False
+
+
+def test_subscription_exempt_allowlist_is_explicit(tmp_path, monkeypatch) -> None:
+    store = EntitlementsStore(root=tmp_path / "ent")
+    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", "clinic-x")
+    assert is_subscription_exempt_tenant("clinic-x")
+    assert tenant_has_app_access("clinic-x") is True
+    assert is_subscription_exempt_tenant("linas") is False
+    assert tenant_has_app_access("linas") is False
+    pub = get_tenant_entitlement_public("clinic-x")
+    assert pub["subscription_exempt"] is True
+    assert pub["app_access"] is True
