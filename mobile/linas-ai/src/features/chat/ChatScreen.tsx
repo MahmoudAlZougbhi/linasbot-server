@@ -103,8 +103,9 @@ export function ChatScreen({
     if (!isAuthenticated) return;
     stickToBottomRef.current = true;
     setOwnerMode('chat');
+    if (turn.streaming) turn.stop();
     void owner.newChat();
-  }, [isAuthenticated, owner]);
+  }, [isAuthenticated, owner, turn]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -141,8 +142,10 @@ export function ChatScreen({
   const sending = isAuthenticated ? turn.streaming : guest.sending;
   const error = isAuthenticated ? owner.error : guest.error;
   const listKey = isAuthenticated ? owner.conversationId || 'owner' : 'guest';
+  // New owner chats always seed an assistant greeting — gate on first user message, not empty list.
+  const hasUserMessage = messages.some((m) => m.role === 'user');
   const showModeToggle =
-    isAuthenticated && messages.length === 0 && !turn.liveText && !turn.streaming;
+    isAuthenticated && !hasUserMessage && !turn.liveText && !turn.streaming;
 
   useEffect(() => {
     if (loading) return;
