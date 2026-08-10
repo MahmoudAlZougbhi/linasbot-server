@@ -47,9 +47,31 @@ async def tool_propose_cm_patch(
     user_id: str,
     section: str,
     patch: dict[str, Any],
+    force_edit: bool = False,
 ) -> ToolResult:
     _require(role, "contentManagers")
+    from services.cm.progress import progress_summary
     from services.owner_ai_cm_approval import propose_cm_patch
+
+    sec = (section or "").strip().replace("-", "_")
+    if sec and not force_edit:
+        summary = progress_summary(tenant_id, create_missing=False)
+        done = set(summary.get("done_sections") or [])
+        if sec in done:
+            return ToolResult(
+                ok=False,
+                name="propose_cm_patch",
+                data={
+                    "section": sec,
+                    "is_done": True,
+                    "blocked_reason": "section_already_filled",
+                    "hint": (
+                        "This section is DONE/filled. Do not re-propose edits unless the owner "
+                        "explicitly asked to change it — then retry with force_edit=true."
+                    ),
+                },
+                error="section_already_filled",
+            )
 
     data = propose_cm_patch(tenant_id=tenant_id, user_id=user_id, section=section, patch=patch)
     return ToolResult(

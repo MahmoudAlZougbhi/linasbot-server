@@ -25,6 +25,7 @@ from services.owner_ai_tools_faq import (
     tool_propose_smart_answer,
     tool_read_faq_quota,
 )
+from services.owner_ai_tools_cm_guide import tool_cm_fill_plan, tool_inspect_cm_guide
 from services.owner_ai_tools_read import (
     tool_help,
     tool_read_account_summary,
@@ -50,6 +51,8 @@ TOOL_HANDLERS: dict[str, Callable[..., Awaitable[ToolResult]]] = {
     "read_profile": tool_read_profile,
     "read_account_summary": tool_read_account_summary,
     "read_cm": tool_read_cm,
+    "inspect_cm_guide": tool_inspect_cm_guide,
+    "cm_fill_plan": tool_cm_fill_plan,
     "validate_cm": tool_validate_cm,
     "propose_cm_patch": tool_propose_cm_patch,
     "approve_cm_patch": tool_approve_cm_patch,
@@ -110,6 +113,22 @@ async def dispatch_tool(
         return await handler(tenant_id=tenant_id, role=role, user_id=user_id)
     if name == "read_cm":
         return await handler(tenant_id=tenant_id, role=role, section=a.get("section"))
+    if name == "inspect_cm_guide":
+        include_guides = a.get("include_guides")
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            section=str(a["section"]) if a.get("section") else None,
+            include_guides=True if include_guides is None else bool(include_guides),
+        )
+    if name == "cm_fill_plan":
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            user_id=user_id,
+            action=str(a.get("action") or "status"),
+            section=str(a["section"]) if a.get("section") else None,
+        )
     if name == "propose_cm_patch":
         return await handler(
             tenant_id=tenant_id,
@@ -117,6 +136,7 @@ async def dispatch_tool(
             user_id=user_id,
             section=str(a.get("section") or ""),
             patch=dict(a.get("patch") or {}),
+            force_edit=bool(a.get("force_edit")),
         )
     if name == "approve_cm_patch":
         return await handler(

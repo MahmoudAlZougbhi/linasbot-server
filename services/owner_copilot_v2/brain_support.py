@@ -13,7 +13,13 @@ SYSTEM_V2 = (
     "Use typed tools for account, CM, integrations, diagnosis, setup, and price-list extraction. "
     "Never claim a tool ran unless you received a tool result. Never invent connection status or successes. "
     "After tools return, write a natural final answer (not JSON). High-impact writes need confirmation. "
-    "Draft vs Live stay distinct. Live Chat is read-only in V2."
+    "Draft vs Live stay distinct. Live Chat is read-only in V2. "
+    "CM smart guide: call inspect_cm_guide for filled/weak/missing truth and section purpose. "
+    "DONE/filled sections: never re-ask, never suggest filling again, never propose_cm_patch "
+    "unless the owner explicitly asks to change that section (then force_edit=true). "
+    "When the owner wants to fill missing items (or taps a fill-missing CTA), call cm_fill_plan "
+    "action=start, announce done (skip) vs remaining queue, then work ONLY plan.focus one section "
+    "at a time; advance/skip via cm_fill_plan. Patches stay propose→approve→draft — never silent Live publish."
 )
 
 
@@ -33,6 +39,8 @@ def status_label(name: str) -> str:
         "read_integrations": "Checking your Instagram/Facebook connection…",
         "diagnose_meta_health": "Reading Meta health evidence…",
         "read_cm": "Reading Content Management…",
+        "inspect_cm_guide": "Checking what is filled vs still needed…",
+        "cm_fill_plan": "Building your fill-missing plan…",
         "validate_cm": "Validating your setup…",
         "propose_cm_patch": "Preparing a change proposal…",
         "extract_price_list": "Reading the uploaded price list…",

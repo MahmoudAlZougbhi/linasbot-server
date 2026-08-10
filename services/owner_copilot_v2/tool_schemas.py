@@ -47,6 +47,54 @@ OWNER_V2_TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "inspect_cm_guide",
+            "description": (
+                "Inspect real CM completeness (filled/weak/missing) and explain a section: "
+                "purpose, why it matters, what to fill, what is still needed. "
+                "Use before guiding setup. Skip DONE/filled sections unless the owner asks to change them."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "section": {
+                        "type": "string",
+                        "description": "Optional CM section id (e.g. ai_basics, faq). Omit for full overview.",
+                    },
+                    "include_guides": {
+                        "type": "boolean",
+                        "description": "Include compact per-section purpose index (default true on overview).",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "cm_fill_plan",
+            "description": (
+                "Durable fill-missing plan. Prefer action=start when the owner wants to fill missing CM items. "
+                "Skips DONE/filled sections, queues remaining, focuses one section at a time. "
+                "Actions: start|status|advance|skip|cancel."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["start", "status", "advance", "skip", "cancel"],
+                    },
+                    "section": {
+                        "type": "string",
+                        "description": "Optional section id for skip.",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "validate_cm",
             "description": "Validate current CM draft.",
             "parameters": {"type": "object", "properties": {}},
@@ -56,12 +104,19 @@ OWNER_V2_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "propose_cm_patch",
-            "description": "Propose a typed CM section patch for owner confirmation (does not write until approved).",
+            "description": (
+                "Propose a typed CM section patch for owner confirmation (does not write until approved). "
+                "Blocked for DONE/filled sections unless force_edit=true after the owner explicitly asks to change them."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "section": {"type": "string"},
                     "patch": {"type": "object"},
+                    "force_edit": {
+                        "type": "boolean",
+                        "description": "Required true only when editing a DONE/filled section after explicit owner request.",
+                    },
                 },
                 "required": ["section", "patch"],
             },
