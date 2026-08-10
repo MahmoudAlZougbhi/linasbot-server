@@ -90,7 +90,16 @@ export function HistoryRows({
                       style={{ color: colors.text, flex: 1 }}
                     />
                   ) : (
-                    <Text style={{ color: colors.text, fontFamily: fonts.body, flex: 1 }} numberOfLines={2}>
+                    <Text
+                      style={{
+                        color: colors.text,
+                        fontFamily: fonts.body,
+                        flex: 1,
+                        fontSize: 16,
+                        lineHeight: 22,
+                      }}
+                      numberOfLines={2}
+                    >
                       {item.title || 'Untitled'}
                     </Text>
                   )}

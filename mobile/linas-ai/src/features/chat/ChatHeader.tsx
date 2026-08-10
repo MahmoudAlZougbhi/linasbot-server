@@ -4,20 +4,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinasStarMark } from '../../components/LinasStarMark';
 import { useI18n } from '../../i18n/LanguageContext';
 import { HIT, fonts, spacing, useTheme } from '../../theme';
-import { MenuIcon } from './ChatHeaderIcons';
+import { MenuIcon, NewChatIcon } from './ChatHeaderIcons';
 
 type Props = {
   isAuthenticated: boolean;
   workspaceLabel?: string | null;
   onOpenMenu: () => void;
+  onNewChat?: () => void;
   onSignIn?: () => void;
 };
 
-/** Header chrome: menu left, brand center, Sign in right for guests. New chat lives in NavDrawer. */
+/** Header: menu | star+Linas | new-chat (auth) or Sign in (guest). */
 export function ChatHeader({
   isAuthenticated,
   workspaceLabel,
   onOpenMenu,
+  onNewChat,
   onSignIn,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -55,13 +57,17 @@ export function ChatHeader({
         ) : null}
       </View>
 
-      {isAuthenticated ? (
-        <View
-          style={styles.hit}
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-        />
-      ) : (
+      {isAuthenticated && onNewChat ? (
+        <Pressable
+          onPress={onNewChat}
+          style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
+          accessibilityLabel={tr('newChat')}
+          accessibilityRole="button"
+          hitSlop={4}
+        >
+          <NewChatIcon color={iconColor} />
+        </Pressable>
+      ) : !isAuthenticated ? (
         <Pressable
           onPress={onSignIn}
           style={({ pressed }) => [styles.signIn, pressed && styles.pressed]}
@@ -73,6 +79,12 @@ export function ChatHeader({
             {tr('signIn')}
           </Text>
         </Pressable>
+      ) : (
+        <View
+          style={styles.hit}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        />
       )}
     </View>
   );
@@ -84,6 +96,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   hit: {
     width: HIT,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
@@ -23,6 +23,8 @@ class StreamMessageBody(BaseModel):
     choice_id: str | None = None
     choice_set_id: str | None = None
     attachment_ids: list[str] | None = None
+    # UI Chat|Work → OpenAI effort: chat=low, work=high (display name "5.6 LIN").
+    owner_mode: Literal["chat", "work"] | None = None
 
 
 class ChoiceBody(BaseModel):
@@ -144,6 +146,7 @@ async def stream_owner_message(
                 choice_id=body.choice_id,
                 choice_set_id=body.choice_set_id,
                 attachment_ids=body.attachment_ids,
+                owner_mode=body.owner_mode,
                 is_cancelled=lambda: cancel_flag["cancelled"],
             ):
                 if ev.type == "delta":

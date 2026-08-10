@@ -120,6 +120,7 @@ export function useOwnerStream() {
         choice_id?: string;
         choice_set_id?: string;
         attachment_ids?: string[];
+        owner_mode?: 'chat' | 'work';
       },
       handlers: StreamHandlers,
     ): Promise<'done' | 'error' | 'network_error' | 'cancelled'> => {

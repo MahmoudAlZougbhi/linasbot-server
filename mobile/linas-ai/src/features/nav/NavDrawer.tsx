@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,10 +13,9 @@ import {
 import { AppIcon } from '../../components/AppIcon';
 import { LinasStarMark } from '../../components/LinasStarMark';
 import { SideDrawer } from '../../components/SideDrawer';
-import { LEGAL_URLS } from '../../config';
+import { ANDROID_VERSION_CODE, APP_VERSION, IOS_BUILD, LEGAL_URLS } from '../../config';
 import { useI18n } from '../../i18n/LanguageContext';
-import { HIT, fonts, radii, spacing, useTheme } from '../../theme';
-import { NewChatIcon } from '../chat/ChatHeaderIcons';
+import { fonts, radii, spacing, useTheme } from '../../theme';
 import type { ControlArea } from '../control/controlAreas';
 import { visibleDrawerModules } from './drawerModules';
 import { HistoryRows, type HistoryItem } from './HistoryRows';
@@ -43,14 +43,33 @@ type Props = {
   onRegister?: () => void;
 };
 
+const BUILD_LABEL = Platform.OS === 'ios' ? IOS_BUILD : String(ANDROID_VERSION_CODE);
+const VERSION_LABEL = `Linas ${APP_VERSION} · ${BUILD_LABEL}`;
+
 export function NavDrawer(props: Props) {
   const { colors } = useTheme();
   const { tr } = useI18n();
   const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const searchRef = useRef<TextInput>(null);
   const modules = visibleDrawerModules({ showUsers: props.showUsers });
   const queryTrimmed = query.trim();
+
+  useEffect(() => {
+    if (!props.open) {
+      setSearchOpen(false);
+      setQuery('');
+      searchRef.current?.blur();
+    }
+  }, [props.open]);
+
+  useEffect(() => {
+    if (searchOpen && props.open) {
+      const t = setTimeout(() => searchRef.current?.focus(), 40);
+      return () => clearTimeout(t);
+    }
+  }, [searchOpen, props.open]);
 
   const filtered = useMemo(() => {
     const q = queryTrimmed.toLowerCase();
@@ -67,25 +86,73 @@ export function NavDrawer(props: Props) {
       ? tr('noArchivedChats')
       : tr('noConversationsYet');
 
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setQuery('');
+    searchRef.current?.blur();
+  };
+
   return (
     <SideDrawer open={props.open} side="left" onClose={props.onClose} widthRatio={0.88}>
       <View style={styles.header}>
-        <LinasStarMark labeled size={20} />
-        <Pressable
-          onPress={props.onClose}
-          style={[styles.close, { borderColor: colors.border }]}
-          accessibilityLabel={tr('closeMenu')}
-          accessibilityRole="button"
-          hitSlop={4}
-        >
-          <AppIcon icon={DRAWER_TOOL_ICONS.close} size={18} color={colors.textMuted} />
-        </Pressable>
+        {searchOpen ? (
+          <View
+            style={[
+              styles.searchExpanded,
+              { backgroundColor: colors.input, borderColor: colors.border },
+            ]}
+          >
+            <AppIcon icon={DRAWER_TOOL_ICONS.search} size={16} color={colors.textDim} />
+            <TextInput
+              ref={searchRef}
+              value={query}
+              onChangeText={setQuery}
+              placeholder={tr('searchChats')}
+              placeholderTextColor={colors.textDim}
+              style={[styles.searchInput, { color: colors.text }]}
+              accessibilityLabel={tr('searchConversationTitles')}
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            <Pressable
+              onPress={closeSearch}
+              accessibilityRole="button"
+              accessibilityLabel="Close search"
+              hitSlop={8}
+              style={styles.searchClear}
+            >
+              <AppIcon icon={DRAWER_TOOL_ICONS.close} size={16} color={colors.textMuted} />
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            <LinasStarMark labeled size={20} />
+            <View style={styles.headerActions}>
+              <View style={[styles.headerDivider, { backgroundColor: colors.border }]} />
+              <Pressable
+                onPress={() => setSearchOpen(true)}
+                style={[
+                  styles.searchCircle,
+                  { borderColor: colors.border, backgroundColor: colors.surface },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={tr('searchChats')}
+                hitSlop={4}
+              >
+                <AppIcon icon={DRAWER_TOOL_ICONS.search} size={16} color={colors.accentDeep} />
+              </Pressable>
+            </View>
+          </>
+        )}
       </View>
 
       <ScrollView
         style={styles.scrollFlex}
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         <View style={styles.grid}>
           {modules.map((m) => (
@@ -106,28 +173,6 @@ export function NavDrawer(props: Props) {
             </Pressable>
           ))}
         </View>
-
-        <Pressable
-          style={[styles.searchWrap, { backgroundColor: colors.input, borderColor: colors.border }]}
-          onPress={() => searchRef.current?.focus()}
-          accessibilityRole="search"
-          accessibilityLabel={tr('searchChats')}
-        >
-          <AppIcon icon={DRAWER_TOOL_ICONS.search} size={16} color={colors.textDim} />
-          <TextInput
-            ref={searchRef}
-            value={query}
-            onChangeText={setQuery}
-            placeholder={tr('searchChats')}
-            placeholderTextColor={colors.textDim}
-            style={[styles.search, { color: colors.text }]}
-            accessibilityLabel={tr('searchConversationTitles')}
-            returnKeyType="search"
-            clearButtonMode="while-editing"
-            autoCorrect={false}
-            autoCapitalize="none"
-          />
-        </Pressable>
 
         <Pressable
           onPress={() => setShowArchived((v) => !v)}
@@ -182,18 +227,27 @@ export function NavDrawer(props: Props) {
       </ScrollView>
 
       <View style={[styles.bottomDock, { borderTopColor: colors.borderSoft }]}>
-        <Pressable
-          style={[styles.newChatBtn, { backgroundColor: colors.accent }]}
-          onPress={() => {
-            props.onNewChat();
-            props.onClose();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={tr('newChat')}
-        >
-          <NewChatIcon color={colors.onAccent} />
-          <Text style={[styles.newChatText, { color: colors.onAccent }]}>{tr('newChat')}</Text>
-        </Pressable>
+        <View style={styles.bottomRow}>
+          <Pressable
+            style={[styles.newChatBtn, { backgroundColor: colors.accent }]}
+            onPress={() => {
+              props.onNewChat();
+              props.onClose();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={tr('newChat')}
+          >
+            <AppIcon icon={DRAWER_TOOL_ICONS.newChat} size={18} color={colors.onAccent} />
+          </Pressable>
+          <Text
+            style={[styles.version, { color: colors.textDim }]}
+            numberOfLines={1}
+            accessibilityRole="text"
+            accessibilityLabel={VERSION_LABEL}
+          >
+            {VERSION_LABEL}
+          </Text>
+        </View>
 
         {props.isAuthenticated ? (
           <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
@@ -240,21 +294,55 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.md,
+    minHeight: 40,
+    gap: spacing.sm,
   },
-  close: {
-    width: HIT,
-    height: HIT,
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  headerDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 22,
+    borderRadius: 1,
+  },
+  searchCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
+  },
+  searchExpanded: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     borderWidth: 1,
+    borderRadius: radii.pill,
+    minHeight: 40,
+    paddingHorizontal: 12,
+  },
+  searchInput: {
+    flex: 1,
+    minHeight: 36,
+    paddingVertical: 6,
+    fontSize: 15,
+  },
+  searchClear: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollFlex: { flex: 1 },
-  scroll: { paddingBottom: 16, gap: 8 },
+  scroll: { paddingBottom: 12, gap: 8, flexGrow: 1 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tile: {
     width: '47%',
-    minHeight: HIT + 12,
+    minHeight: 52,
     borderRadius: radii.md,
     borderWidth: 1,
     paddingHorizontal: spacing.md,
@@ -263,38 +351,33 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tileText: { fontFamily: fonts.bodyMedium, fontSize: 13 },
-  searchWrap: {
-    borderWidth: 1,
-    borderRadius: radii.md,
-    minHeight: HIT,
-    paddingHorizontal: 12,
-    marginTop: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  search: {
-    flex: 1,
-    minHeight: HIT - 4,
-    paddingVertical: 8,
-  },
-  archiveToggle: { minHeight: 44, justifyContent: 'center' },
+  archiveToggle: { minHeight: 40, justifyContent: 'center' },
   bottomDock: {
     borderTopWidth: 1,
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
+    gap: spacing.xs,
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: spacing.sm,
   },
   newChatBtn: {
-    minHeight: HIT,
-    borderRadius: radii.md,
+    width: 36,
+    height: 36,
+    borderRadius: radii.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
   },
-  newChatText: { fontFamily: fonts.bodyMedium, fontWeight: '700' },
+  version: {
+    fontFamily: fonts.body,
+    fontSize: 11,
+    flexShrink: 1,
+    textAlign: 'right',
+  },
   footerRow: {
-    minHeight: HIT,
+    minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

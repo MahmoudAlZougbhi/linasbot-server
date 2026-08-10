@@ -103,6 +103,7 @@ async def iter_owner_turn_v2_events(
     choice_id: str | None = None,
     choice_set_id: str | None = None,
     attachment_ids: list[str] | None = None,
+    owner_mode: Literal["chat", "work"] | None = None,
     is_cancelled: CancelCheck | None = None,
 ) -> AsyncIterator[StreamEvent]:
     if not owner_copilot_v2_enabled():
@@ -123,12 +124,14 @@ async def iter_owner_turn_v2_events(
     if attachment_ids:
         # Attachment alone does not force high; import/apply paths set import via extract tool.
         attachment_action = "analyze"
+    mode = owner_mode if owner_mode in ("chat", "work") else None
     policy = resolve_owner_policy(
         surface="owner_copilot",
         confirm_tool=confirm_tool,
         user_text=text,
         attachment_action=attachment_action,
         force_high=bool(confirm_tool),
+        owner_mode=mode,
     )
     model = policy.model or owner_model_name()
     emit_model_policy_trace(policy, extra={"conversation_id_hash": conversation_id[:12]})

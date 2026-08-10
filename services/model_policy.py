@@ -176,10 +176,22 @@ def classify_owner_effort(
     mutation_hint: bool | None = None,
     user_text: str | None = None,
     force_high: bool = False,
+    force_low: bool = False,
+    owner_mode: Literal["chat", "work"] | None = None,
 ) -> tuple[OwnerEffort, str]:
-    """Resolve owner reasoning effort for one request (kept for all continuations)."""
+    """Resolve owner reasoning effort for one request (kept for all continuations).
+
+    UI Chat|Work mode is authoritative when provided:
+    - work → high (solo high)
+    - chat → low (solo low / normal)
+    ``force_high`` still wins (e.g. confirm_tool mutations).
+    """
     if force_high:
         return "high", "force_high"
+    if owner_mode == "work":
+        return "high", "owner_mode_work"
+    if owner_mode == "chat" or force_low:
+        return "low", "owner_mode_chat" if owner_mode == "chat" else "force_low"
     confirm_intent = _normalize_confirm_intent(confirm_tool)
     if confirm_intent and confirm_intent in OWNER_MUTATION_INTENTS:
         return "high", f"confirm_tool={confirm_intent}"
@@ -222,6 +234,8 @@ def resolve_owner_policy(
     mutation_hint: bool | None = None,
     user_text: str | None = None,
     force_high: bool = False,
+    force_low: bool = False,
+    owner_mode: Literal["chat", "work"] | None = None,
     request_id: str | None = None,
     prior: ModelPolicyDecision | None = None,
 ) -> ModelPolicyDecision:
@@ -243,6 +257,8 @@ def resolve_owner_policy(
         mutation_hint=mutation_hint,
         user_text=user_text,
         force_high=force_high,
+        force_low=force_low,
+        owner_mode=owner_mode,
     )
     return ModelPolicyDecision(
         surface=surface,
