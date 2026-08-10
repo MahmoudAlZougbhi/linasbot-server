@@ -202,6 +202,8 @@ async def run_customer_reply_v2_dm(
         customer_profile=profile,
         history_messages=[{"role": m["role"], "content": m["content"]} for m in history_for_model],
         channel=channel,
+        response_language=response_language,
+        detected_language=detected_language,
         fixture_reply=fixture_answer,
     )
 
@@ -234,6 +236,8 @@ async def run_customer_reply_v2_dm(
                 customer_profile=profile,
                 history_messages=[{"role": m["role"], "content": m["content"]} for m in history_for_model],
                 channel=channel,
+                response_language=response_language,
+                detected_language=detected_language,
                 fixture_reply=(
                     {**fixture_answer, "reply_text": fixture_answer.get("repair_reply_text", reply_text)}
                     if fixture_answer

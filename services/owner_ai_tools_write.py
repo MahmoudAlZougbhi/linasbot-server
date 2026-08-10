@@ -37,7 +37,14 @@ async def tool_update_profile(
     )
     safe: dict[str, Any] = {k: updates[k] for k in allowed if k in updates}
     profile = update_owner_profile(user_id, safe)
-    return ToolResult(ok=True, name="update_profile", data={"profile": profile})
+    data: dict[str, Any] = {"profile": profile}
+    if "preferred_language" in safe or "preferredLanguage" in safe:
+        data["note"] = (
+            "preferred_language is owner chat/app preference only. "
+            "Customer DM/comment reply language comes from Content Management → Languages "
+            "and cannot be changed via profile or Settings."
+        )
+    return ToolResult(ok=True, name="update_profile", data=data)
 
 
 async def tool_propose_cm_patch(

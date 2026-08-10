@@ -91,6 +91,12 @@ CAPABILITIES: tuple[Capability, ...] = (
             "services",
             "prices",
             "handoff",
+            "languages",
+            "reply language",
+            "customer language",
+            "dm language",
+            "comment language",
+            "franco",
         ),
         tags=("cm", "setup"),
     ),
@@ -236,13 +242,19 @@ CAPABILITIES: tuple[Capability, ...] = (
     ),
     Capability(
         feature="settings",
-        description="App settings, language, legal links, version.",
+        description=(
+            "App settings and owner profile. App language (EN/AR/FR) is UI-only; "
+            "it does not change Instagram/Facebook DM or comment reply language."
+        ),
         route="settings",
         entitlement=None,
         status="available",
-        help_steps=("Open Settings from Control Center.", "Set preferred language and display name."),
+        help_steps=(
+            "Open Settings from Control Center for app UI language and display name.",
+            "Customer reply language for DMs/comments is Content Management → Languages only.",
+        ),
         tools=("read_profile", "update_profile"),
-        keywords=("settings", "language", "profile", "address me"),
+        keywords=("settings", "language", "profile", "address me", "app language", "ui language"),
         tags=("account",),
     ),
     Capability(

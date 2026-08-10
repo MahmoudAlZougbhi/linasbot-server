@@ -23,7 +23,11 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
     },
     "languages": {
         "title": "Languages",
-        "purpose": "Which languages customers can use and how answers are mapped (Franco → Arabic).",
+        "purpose": (
+            "System-standard customer reply language for DMs and comments "
+            "(supported languages + Franco → Arabic map + default). "
+            "App Settings language is UI-only and does not change customer replies."
+        ),
         "why": "Wrong language policy makes the AI reply in the wrong language.",
         "what_to_fill": ["supported_languages", "default_language", "response_language_map"],
         "useful": "mixed_language_behavior, unknown_language_behavior.",

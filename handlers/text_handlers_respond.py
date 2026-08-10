@@ -1187,6 +1187,15 @@ async def _process_and_respond(
     # Update language variables
     current_preferred_lang = lang_result["detected_language"]
     response_language = lang_result["response_language"]
+    # Customer reply language is CM Languages policy only (not app Settings / owner profile).
+    from services.cm.constants import DEFAULT_TENANT_ID as _LANG_DEFAULT_TENANT
+    from services.cm.language_policy import resolve_customer_response_language
+
+    _lang_tenant = str(user_data.get("tenant_id") or _LANG_DEFAULT_TENANT).strip() or _LANG_DEFAULT_TENANT
+    response_language = resolve_customer_response_language(
+        tenant_id=_lang_tenant,
+        detected_language=current_preferred_lang,
+    )
     router_reply_lang = response_language if response_language in ("ar", "en", "fr") else current_preferred_lang
 
     print(f"[_process_and_respond] 🌐 Language detected: {current_preferred_lang} → respond in: {response_language}")

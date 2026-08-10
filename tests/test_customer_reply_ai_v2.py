@@ -382,6 +382,8 @@ async def test_retrieval_round_limit_and_role_separation(v2_env):
         comment_context=None,
         channel="instagram_dm",
         published_revision="v_t_ret",
+        response_language="en",
+        detected_language="en",
     )
     assert answer_context_has_full_basics_and_style(msgs)
     # Answer Luna has no tools in call path — verified by run_answer_luna raising if tools passed
