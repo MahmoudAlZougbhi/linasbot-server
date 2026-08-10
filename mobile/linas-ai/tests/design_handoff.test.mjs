@@ -3,7 +3,7 @@
  * Run: node --test mobile/linas-ai/tests/*.test.mjs
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -93,6 +93,7 @@ test('cold open is branded star splash then chat (no character mash / progress b
   const index = readFileSync(join(root, 'index.ts'), 'utf8');
   const appJson = readFileSync(join(root, 'app.json'), 'utf8');
   const chat = read('features/chat/ChatScreen.tsx');
+  const login = read('features/auth/LoginScreen.tsx');
   assert.match(boot, /splash-icon\.png/);
   assert.match(boot, /isReduceMotionEnabled|reduceMotionChanged/);
   assert.match(boot, /SplashScreen\.hideAsync/);
@@ -104,11 +105,40 @@ test('cold open is branded star splash then chat (no character mash / progress b
   assert.match(appJson, /"bundleIdentifier":\s*"com\.linasai\.app"/);
   assert.match(appJson, /"package":\s*"com\.linasai\.app"/);
   assert.match(appJson, /expo-audio/);
+  assert.match(appJson, /"buildNumber":\s*"18"/);
+  assert.match(appJson, /"versionCode":\s*18/);
   assert.doesNotMatch(
     chat,
     /if \(loading\) \{\s*return \(\s*<GradientBackground>\s*<View style=\{styles\.center\}>/,
   );
   assert.match(chat, /loading \? \(/);
+  assert.match(login, /BrandMark/);
+  assert.doesNotMatch(login, /linasAssets|authHero|LinasAvatar|avatarAssets/);
+});
+
+test('no character/mascot PNG assets remain in the mobile bundle', () => {
+  const assetsDir = join(root, 'assets');
+  const names = readdirSync(assetsDir);
+  for (const banned of [
+    'linas-auth-hero.png',
+    'linas-avatar-chat.png',
+    'linas-avatar-circle.png',
+    'linas-avatar-small.png',
+    'linas-brand-sheet.png',
+    'linas-empty-state.png',
+    'linas-portrait-source.png',
+    'linas-ui-board.jpg',
+  ]) {
+    assert.equal(existsSync(join(assetsDir, banned)), false, banned);
+  }
+  assert.equal(
+    names.some((n) => /^linas-(state|expr)-/.test(n)),
+    false,
+    'no linas-state-* / linas-expr-* character frames',
+  );
+  assert.equal(existsSync(join(root, 'src/features/linas')), false);
+  assert.ok(names.includes('splash-icon.png'));
+  assert.ok(names.includes('icon.png'));
 });
 
 
