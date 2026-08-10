@@ -1,13 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, TextInput, View } from 'react-native';
 
 import { GradientBackground } from '../../components/GradientBackground';
 import { tokenStore } from '../../auth/tokenStore';
@@ -31,12 +23,14 @@ import {
   savePendingGuestDraft,
 } from './pendingGuestDraft';
 import { sendChatMessage } from './sendChatMessage';
+import { useChatListScroll } from './useChatListScroll';
 import { useChatSession } from './useChatSession';
 import { useGuestChatSession } from './useGuestChatSession';
 import { usePinnedChats } from './usePinnedChats';
 import { useVoiceDraft } from './useVoiceDraft';
 import { ChoiceChips } from './v2/ChoiceChips';
 import type { PendingFile } from './v2/pickAttachment';
+import { useSetupHandoff } from './useSetupHandoff';
 import { useStreamingTurn } from './v2/useStreamingTurn';
 
 type Props = {
@@ -79,25 +73,11 @@ export function ChatScreen({
   const imagePreviewByContent = useRef<Record<string, string[]>>({});
   const [choiceBusy, setChoiceBusy] = useState(false);
   const composerInputRef = useRef<TextInput>(null);
-  const listRef = useRef<FlatList>(null);
-  const stickToBottomRef = useRef(true);
+  const { listRef, stickToBottomRef, scrollToBottom, armOpenAtLatest } = useChatListScroll();
   const { voiceState, voiceError, toggleVoice, metering } = useVoiceDraft((text) => {
     setDraft((prev) => (prev ? `${prev} ${text}` : text));
     requestAnimationFrame(() => composerInputRef.current?.focus());
   });
-
-  const scrollToBottom = useCallback((animated = true) => {
-    stickToBottomRef.current = true;
-    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated }));
-  }, []);
-
-  const armOpenAtLatest = useCallback(() => {
-    stickToBottomRef.current = true;
-    const run = (animated: boolean) => listRef.current?.scrollToEnd({ animated });
-    requestAnimationFrame(() => run(false));
-    setTimeout(() => run(false), 50);
-    setTimeout(() => run(false), 180);
-  }, []);
 
   const startNewChat = useCallback(() => {
     if (!isAuthenticated) return;
@@ -105,7 +85,7 @@ export function ChatScreen({
     setOwnerMode('chat');
     if (turn.streaming) turn.stop();
     void owner.newChat();
-  }, [isAuthenticated, owner, turn]);
+  }, [isAuthenticated, owner, stickToBottomRef, turn]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -182,6 +162,18 @@ export function ChatScreen({
     ) => turn.send(text, { ...opts, owner_mode: ownerMode }),
     [ownerMode, turn],
   );
+
+  useSetupHandoff({
+    isAuthenticated,
+    loading: owner.loading,
+    streaming: turn.streaming,
+    setDraft,
+    setOwnerMode,
+    send: (text, mode) => {
+      stickToBottomRef.current = true;
+      void turn.send(text, { owner_mode: mode });
+    },
+  });
 
   // ChatGPT-like open: keep chat chrome up — no second full-screen spinner after boot.
   return (

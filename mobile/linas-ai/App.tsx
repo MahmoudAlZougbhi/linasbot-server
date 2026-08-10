@@ -12,6 +12,7 @@ import { BillingScreen } from './src/features/billing/BillingScreen';
 import { UsageScreen } from './src/features/billing/UsageScreen';
 import { BootSplash } from './src/features/boot/BootSplash';
 import { ChatScreen } from './src/features/chat/ChatScreen';
+import { queueSetupHandoff } from './src/features/chat/pendingSetupHandoff';
 import { CmScreen } from './src/features/cm/CmScreen';
 import { CmSectionScreen } from './src/features/cm/CmSectionScreen';
 import type { CmSectionId } from './src/features/cm/cmSections';
@@ -344,7 +345,10 @@ function AppBody() {
         <CmScreen
           onBack={() => setScreen({ name: 'chat' })}
           onOpenSection={(section) => setScreen({ name: 'cm_section', section, backTo: 'cm' })}
-          onContinueSetup={() => setScreen({ name: 'chat' })}
+          onContinueSetup={(prompt) => {
+            queueSetupHandoff({ text: prompt, mode: 'work', autoSend: true });
+            setScreen({ name: 'chat' });
+          }}
         />
       ) : null}
       {screen.name === 'cm_section' ? (

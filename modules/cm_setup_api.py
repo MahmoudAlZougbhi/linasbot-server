@@ -9,7 +9,8 @@ from pydantic import BaseModel, Field
 
 from modules.api_security import require_permission
 from modules.core import app
-from services.cm.setup_chat import INTRO_MESSAGE, interpret_and_patch, section_progress, start_setup
+from services.cm.progress import progress_summary
+from services.cm.setup_chat import INTRO_MESSAGE, interpret_and_patch, start_setup
 from services.dashboard_session_service import SessionRecord
 from services.token_wallet_service import InsufficientTokenBalance
 
@@ -37,13 +38,24 @@ async def cm_setup_chat_start(request: Request) -> Any:
 
 @app.get("/api/cm/setup-chat/progress")
 async def cm_setup_chat_progress(request: Request) -> Any:
+    """Read-only CM fill progress for mobile readiness + Owner Copilot handoff."""
     session = require_permission(request, "contentManagers")
     tenant_id = _session_tenant(session)
+    # Do not materialize empty drafts on a progress read.
+    summary = progress_summary(tenant_id, create_missing=False)
     return {
         "success": True,
         "tenant_id": tenant_id,
         "intro": INTRO_MESSAGE,
-        "progress": section_progress(tenant_id),
+        "progress": summary["sections"],
+        "summary": {
+            "complete": summary["complete"],
+            "incomplete": summary["incomplete"],
+            "total": summary["total"],
+            "percent": summary["percent"],
+            "published": summary["published"],
+            "missing_sections": summary["missing_sections"],
+        },
     }
 
 

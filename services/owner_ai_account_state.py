@@ -12,33 +12,22 @@ SetupStage = Literal[
 ]
 
 
-def _section_present(item: dict[str, Any] | None) -> bool:
-    if not item:
-        return False
-    return bool(item.get("exists") or item.get("present"))
-
-
 def compute_cm_progress(tenant_id: str) -> dict[str, Any]:
-    from services.cm.constants import CM_SECTIONS, tenant_has_published_cm
-    from services.cm.storage import list_sections
+    """CM readiness from real draft fill (not just file existence)."""
+    from services.cm.progress import progress_summary
 
-    listed = {str(item.get("section")): item for item in list_sections(tenant_id=tenant_id)}
-    present = 0
-    missing: list[str] = []
-    for sec in CM_SECTIONS:
-        item = listed.get(sec)
-        if _section_present(item if isinstance(item, dict) else None):
-            present += 1
-        else:
-            missing.append(sec)
-    total = len(CM_SECTIONS)
-    published = tenant_has_published_cm(tenant_id)
+    summary = progress_summary(tenant_id, create_missing=False)
+    present = int(summary.get("complete") or 0)
+    total = int(summary.get("total") or 0)
+    missing = list(summary.get("missing_sections") or [])
+    published = bool(summary.get("published"))
     return {
         "sections_total": total,
         "sections_present": present,
         "sections_missing": missing,
         "published": published,
         "draft_ratio": (present / total) if total else 0.0,
+        "percent": int(summary.get("percent") or 0),
     }
 
 

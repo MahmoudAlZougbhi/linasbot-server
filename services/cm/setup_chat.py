@@ -120,19 +120,11 @@ def save_setup_state(tenant_id: str, user_id: str, state: dict[str, Any]) -> Non
 
 
 def section_progress(tenant_id: str) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for section in SETUP_SECTION_ORDER:
-        env = get_draft(section, tenant_id=tenant_id, create_default=True)
-        payload = env.payload if isinstance(env.payload, dict) else {}
-        empty = payload == default_section_payload(section)
-        rows.append(
-            {
-                "section": section,
-                "status": "incomplete" if empty else "complete",
-                "revision": env.revision,
-            }
-        )
-    return rows
+    """Setup-chat progress rows (materializes missing drafts for interview continuity)."""
+    from services.cm.progress import list_section_fill_status
+
+    by_name = {str(row.get("section")): row for row in list_section_fill_status(tenant_id, create_missing=True)}
+    return [by_name[name] for name in SETUP_SECTION_ORDER if name in by_name]
 
 
 def _merge_dict(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
