@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Animated,
   Keyboard,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -17,6 +18,10 @@ import { LinEffortSheet } from './LinEffortSheet';
 import { modelChipLabel, type OwnerChatMode } from './ownerChatMode';
 import type { VoiceState } from './useVoiceDraft';
 import { VoiceComposerControls } from './VoiceComposerControls';
+
+/** Single-line start; grows modestly like ChatGPT (≈4 lines). */
+const INPUT_MIN_H = 22;
+const INPUT_MAX_H = 88;
 
 type Props = {
   draft: string;
@@ -71,6 +76,7 @@ export function ChatComposer({
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const [effortOpen, setEffortOpen] = useState(false);
+  const [inputHeight, setInputHeight] = useState(INPUT_MIN_H);
   const pulse = useRef(new Animated.Value(1)).current;
   const ring = useRef(new Animated.Value(0.55)).current;
   const recording = voiceState === 'recording';
@@ -83,6 +89,10 @@ export function ChatComposer({
     Boolean(showMic && onToggleVoice && !streamingStop && (voiceBusy || !canSend));
   const showSend = streamingStop || (canSend && !paused);
   const chipTappable = Boolean(showModelChip && onOwnerModeChange);
+
+  useEffect(() => {
+    if (!draft.trim()) setInputHeight(INPUT_MIN_H);
+  }, [draft]);
 
   useEffect(() => {
     if (!recording) {
@@ -152,15 +162,21 @@ export function ChatComposer({
       >
         <TextInput
           ref={inputRef}
-          style={[styles.input, { color: colors.text }]}
+          style={[styles.input, { color: colors.text, height: inputHeight }]}
           placeholder={placeholder}
           placeholderTextColor={colors.textDim}
           value={draft}
           onChangeText={onChangeDraft}
+          onContentSizeChange={(e) => {
+            const next = Math.ceil(e.nativeEvent.contentSize.height);
+            setInputHeight(Math.min(INPUT_MAX_H, Math.max(INPUT_MIN_H, next)));
+          }}
           multiline
+          scrollEnabled={inputHeight >= INPUT_MAX_H}
           editable={!voiceBusy}
           autoFocus={autoFocus}
           blurOnSubmit={false}
+          textAlignVertical={Platform.OS === 'android' ? 'center' : undefined}
           accessibilityLabel="Message Linas"
         />
         <View style={styles.toolbar}>
@@ -171,7 +187,7 @@ export function ChatComposer({
               accessibilityLabel="More actions"
               hitSlop={6}
             >
-              <Text style={{ color: colors.text, fontSize: 22, fontWeight: '500', lineHeight: 24 }}>
+              <Text style={{ color: colors.text, fontSize: 20, fontWeight: '500', lineHeight: 22 }}>
                 +
               </Text>
             </Pressable>
@@ -276,25 +292,23 @@ const styles = StyleSheet.create({
   pill: {
     borderRadius: radii.xl + 4,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingTop: 10,
-    paddingBottom: 8,
+    paddingTop: 8,
+    paddingBottom: 6,
     paddingHorizontal: 10,
-    minHeight: 56,
   },
   input: {
     fontFamily: fonts.body,
     fontSize: 16,
-    minHeight: 24,
-    maxHeight: 110,
+    lineHeight: 22,
     paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingVertical: 0,
   },
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 4,
-    minHeight: 36,
+    marginTop: 2,
+    minHeight: 32,
   },
   toolbarRight: {
     flexDirection: 'row',
@@ -303,8 +317,8 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   iconHit: {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -313,7 +327,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 4,
     borderRadius: radii.pill,
     maxWidth: 160,
   },
@@ -323,9 +337,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   sendIn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -334,6 +348,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 11,
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 6,
   },
 });
