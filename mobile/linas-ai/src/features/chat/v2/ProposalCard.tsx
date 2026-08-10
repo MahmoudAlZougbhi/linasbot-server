@@ -1,19 +1,27 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { fonts, radii, spacing, useTheme } from '../../../theme';
+import type { CmProposalReview } from '../../cm/cmProposalReview';
 import type { StreamCard } from './useOwnerStream';
 
 type Props = {
   card: StreamCard;
   onApproveDraft?: (token: string) => void;
   onDiscard?: () => void;
-  onOpenCm?: (section?: string) => void;
+  onOpenCm?: (review?: CmProposalReview) => void;
   onRetry?: () => void;
   onRefresh?: () => void;
 };
 
 function str(v: unknown): string {
-  return typeof v === 'string' ? v : v == null ? '' : String(v);
+  if (typeof v === 'string') return v;
+  if (v == null) return '';
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  try {
+    return JSON.stringify(v, null, 2);
+  } catch {
+    return String(v);
+  }
 }
 
 /** Complete V2 Change Proposal card — PDF style + full backend fields/actions. */
@@ -35,10 +43,35 @@ export function ProposalCard({
   const status = str(card.status || 'draft_proposal');
   const section = str(preview.section || preview.cm_section || data.section);
   const field = str(preview.field || preview.cm_field || data.field);
-  const currentValue = str(preview.current_value ?? preview.before ?? data.current_value);
-  const proposedValue = str(
-    preview.proposed_value ?? preview.after ?? preview.proposed_text ?? preview.text ?? card.body,
+  const currentValue = str(
+    preview.current_value ?? preview.before ?? preview.current_sample ?? data.current_value,
   );
+  const proposedValue = str(
+    preview.proposed_value ??
+      preview.after ??
+      preview.proposed_sample ??
+      preview.proposed_text ??
+      preview.text ??
+      card.body,
+  );
+  const reviewTarget: CmProposalReview | undefined = section
+    ? {
+        section,
+        proposalId: proposalId || undefined,
+        patch:
+          preview.patch && typeof preview.patch === 'object' && !Array.isArray(preview.patch)
+            ? (preview.patch as Record<string, unknown>)
+            : undefined,
+        proposedItem:
+          preview.proposed_item &&
+          typeof preview.proposed_item === 'object' &&
+          !Array.isArray(preview.proposed_item)
+            ? (preview.proposed_item as Record<string, unknown>)
+            : undefined,
+        articleId: str(preview.article_id) || undefined,
+        qaGroupId: str(preview.qa_group_id) || undefined,
+      }
+    : undefined;
   const reason = str(preview.reason || data.reason);
   const impact = str(preview.impact || data.impact);
   const channels = Array.isArray(preview.channels)
@@ -128,7 +161,7 @@ export function ProposalCard({
         ) : null}
         <Pressable
           style={[styles.secondary, { borderColor: colors.border }]}
-          onPress={() => onOpenCm?.(section || undefined)}
+          onPress={() => onOpenCm?.(reviewTarget)}
           accessibilityLabel="Review in Content Management"
         >
           <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>

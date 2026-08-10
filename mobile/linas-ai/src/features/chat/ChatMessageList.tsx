@@ -11,6 +11,7 @@ import {
 import type { ChatMessage } from '../../api/types';
 import { useI18n } from '../../i18n/LanguageContext';
 import { useTheme } from '../../theme';
+import type { CmProposalReview } from '../cm/cmProposalReview';
 import { ChatBubble } from './ChatBubble';
 import { chatScreenStyles as styles } from './chatScreenStyles';
 import { ChatStreamFooter } from './ChatStreamFooter';
@@ -43,7 +44,7 @@ type Props = {
   onRetryAssistant: (content: string) => void;
   onApproveDraft: (token: string) => void;
   onDiscardProposal: () => void;
-  onOpenCm: () => void;
+  onOpenCm: (review?: CmProposalReview) => void;
   onGuestPrompt: (prompt: string) => void;
 };
 

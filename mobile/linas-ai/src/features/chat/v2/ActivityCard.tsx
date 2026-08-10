@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { fonts, radii, spacing, useTheme } from '../../../theme';
+import type { CmProposalReview } from '../../cm/cmProposalReview';
 import type { StreamCard } from './useOwnerStream';
 import { ProposalCard } from './ProposalCard';
 
@@ -8,7 +9,7 @@ type Props = {
   card: StreamCard;
   onApproveDraft?: (token: string) => void;
   onDiscard?: () => void;
-  onOpenCm?: (section?: string) => void;
+  onOpenCm?: (review?: CmProposalReview) => void;
   onRetry?: () => void;
 };
 

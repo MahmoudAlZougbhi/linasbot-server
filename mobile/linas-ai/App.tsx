@@ -14,6 +14,8 @@ import { BootSplash } from './src/features/boot/BootSplash';
 import { ChatScreen } from './src/features/chat/ChatScreen';
 import { CmScreen } from './src/features/cm/CmScreen';
 import { CmSectionScreen } from './src/features/cm/CmSectionScreen';
+import type { CmProposalReview } from './src/features/cm/cmProposalReview';
+import { isCmProposalSection } from './src/features/cm/cmProposalReview';
 import type { CmSectionId } from './src/features/cm/cmSections';
 import type { ControlArea } from './src/features/control/controlAreas';
 import { DashboardScreen } from './src/features/dashboard/DashboardScreen';
@@ -44,8 +46,13 @@ type Screen =
   | { name: 'livechat'; open?: LiveChatOpen | null }
   | { name: 'notifications'; backTo?: 'chat' | 'settings' }
   | { name: 'cm' }
-  | { name: 'cm_section'; section: CmSectionId; backTo?: 'cm' | 'settings' }
-  | { name: 'faq' }
+  | {
+      name: 'cm_section';
+      section: CmSectionId;
+      backTo?: 'cm' | 'settings' | 'chat';
+      proposalReview?: CmProposalReview | null;
+    }
+  | { name: 'faq'; proposalReview?: CmProposalReview | null }
   | { name: 'resource'; title: string; path: string };
 
 const RESOURCE_MAP: Partial<Record<ControlArea, { title: string; path: string }>> = {
@@ -210,6 +217,28 @@ function AppBody() {
     setScreen({ name: 'chat' });
   }
 
+  function openCmReview(review: CmProposalReview) {
+    if (!hasAccess) {
+      setResumeArea(review.section === 'faq' ? 'faq' : 'cm');
+      setScreen({ name: 'login' });
+      return;
+    }
+    if (review.section === 'faq') {
+      setScreen({ name: 'faq', proposalReview: review });
+      return;
+    }
+    if (isCmProposalSection(review.section)) {
+      setScreen({
+        name: 'cm_section',
+        section: review.section,
+        backTo: 'chat',
+        proposalReview: review,
+      });
+      return;
+    }
+    setScreen({ name: 'cm' });
+  }
+
   async function logout() {
     try {
       const access = await tokenStore.getAccessToken();
@@ -283,6 +312,7 @@ function AppBody() {
           isAuthenticated={hasAccess}
           isPlatformOwner={isPlatformOwner}
           onOpenArea={openArea}
+          onOpenCmReview={openCmReview}
           onRequestLogin={() => setScreen({ name: 'login' })}
           onRequestRegister={() => setScreen({ name: 'register' })}
         />
@@ -350,9 +380,14 @@ function AppBody() {
       {screen.name === 'cm_section' ? (
         <CmSectionScreen
           section={screen.section}
+          proposalReview={screen.proposalReview ?? null}
           onBack={() => {
             if (screen.backTo === 'settings') {
               setScreen({ name: 'settings' });
+              return;
+            }
+            if (screen.backTo === 'chat') {
+              setScreen({ name: 'chat' });
               return;
             }
             setScreen({ name: 'cm' });
@@ -360,11 +395,15 @@ function AppBody() {
           backLabel={
             screen.backTo === 'settings'
               ? '← Back to Settings'
-              : '← Back to Content Management'
+              : screen.backTo === 'chat'
+                ? '← Back to chat'
+                : '← Back to Content Management'
           }
         />
       ) : null}
-      {screen.name === 'faq' ? <FaqScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
+      {screen.name === 'faq' ? (
+        <FaqScreen onBack={() => setScreen({ name: 'chat' })} proposalReview={screen.proposalReview ?? null} />
+      ) : null}
       {screen.name === 'resource' ? (
         <SimpleResourceScreen
           title={screen.title}
