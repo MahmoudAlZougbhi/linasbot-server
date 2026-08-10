@@ -52,7 +52,8 @@ def _article_meta(item: dict[str, Any], *, section: str) -> dict[str, Any]:
 
 
 def _faq_meta(item: dict[str, Any]) -> dict[str, Any]:
-    variants = item.get("variants") if isinstance(item.get("variants"), list) else []
+    raw_variants = item.get("variants")
+    variants: list[Any] = list(raw_variants) if isinstance(raw_variants, list) else []
     langs = []
     for v in variants:
         if isinstance(v, dict) and v.get("language"):
@@ -418,7 +419,8 @@ def _build_faq_upsert(
         items[existing_idx] = validated
 
     after_meta = _faq_meta(validated)
-    variants = validated.get("variants") if isinstance(validated.get("variants"), list) else []
+    raw_variants = validated.get("variants")
+    variants: list[Any] = list(raw_variants) if isinstance(raw_variants, list) else []
     variant_bits: list[str] = []
     for row in variants:
         if not isinstance(row, dict):
