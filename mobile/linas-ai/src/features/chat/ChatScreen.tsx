@@ -287,6 +287,8 @@ export function ChatScreen({
               scrollToBottom();
               void turn.send(chip.prompt, { owner_mode: chip.mode });
             }}
+            seedTypewriterMessageId={isAuthenticated ? owner.seedTypewriterMessageId : null}
+            onSeedTypewriterDone={owner.clearSeedTypewriter}
           />
         )}
 
