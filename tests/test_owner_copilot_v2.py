@@ -124,6 +124,8 @@ def test_sse_encode_and_tool_schemas() -> None:
     names = tool_names()
     assert "diagnose_meta_health" in names
     assert "extract_price_list" in names
+    assert "inspect_cm_guide" in names
+    assert "cm_fill_plan" in names
     assert "create_creative_draft" not in names
 
 

@@ -18,6 +18,8 @@
     "read_account_summary",
     "read_profile",
     "read_cm",
+    "inspect_cm_guide",
+    "cm_fill_plan",
     "validate_cm",
     "propose_cm_patch",
     "publish_cm",

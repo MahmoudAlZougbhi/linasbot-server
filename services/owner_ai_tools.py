@@ -20,6 +20,8 @@ from services.owner_ai_tools_diagnosis import (
     tool_get_recent_customer_interactions,
     tool_propose_diagnosis_fix,
 )
+from services.owner_ai_tools_cm_bulk import tool_ingest_business_dump
+from services.owner_ai_tools_cm_guide import tool_cm_fill_plan, tool_inspect_cm_guide
 from services.owner_ai_tools_cm_content import (
     tool_list_cm_articles,
     tool_list_cm_faq,
@@ -58,6 +60,9 @@ TOOL_HANDLERS: dict[str, Callable[..., Awaitable[ToolResult]]] = {
     "read_profile": tool_read_profile,
     "read_account_summary": tool_read_account_summary,
     "read_cm": tool_read_cm,
+    "inspect_cm_guide": tool_inspect_cm_guide,
+    "cm_fill_plan": tool_cm_fill_plan,
+    "ingest_business_dump": tool_ingest_business_dump,
     "list_cm_articles": tool_list_cm_articles,
     "read_cm_article": tool_read_cm_article,
     "list_cm_faq": tool_list_cm_faq,
@@ -97,6 +102,7 @@ HIGH_IMPACT_TOOLS: frozenset[str] = frozenset(
         "approve_diagnosis_fix",
         "propose_smart_answer",
         "approve_smart_answer",
+        "ingest_business_dump",
     }
 )
 
@@ -158,6 +164,32 @@ async def dispatch_tool(
             role=role,
             qa_group_id=str(a.get("qa_group_id") or ""),
         )
+    if name == "inspect_cm_guide":
+        include_guides = a.get("include_guides")
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            section=str(a["section"]) if a.get("section") else None,
+            include_guides=True if include_guides is None else bool(include_guides),
+        )
+    if name == "cm_fill_plan":
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            user_id=user_id,
+            action=str(a.get("action") or "status"),
+            section=str(a["section"]) if a.get("section") else None,
+        )
+    if name == "ingest_business_dump":
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            user_id=user_id,
+            text=str(a.get("text") or ""),
+            reply_style=str(a.get("reply_style") or ""),
+            attachment_id=str(a["attachment_id"]) if a.get("attachment_id") else None,
+            propose_first=True if a.get("propose_first") is None else bool(a.get("propose_first")),
+        )
     if name == "propose_cm_patch":
         return await handler(
             tenant_id=tenant_id,
@@ -165,6 +197,7 @@ async def dispatch_tool(
             user_id=user_id,
             section=str(a.get("section") or ""),
             patch=dict(a.get("patch") or {}),
+            force_edit=bool(a.get("force_edit")),
         )
     if name == "propose_cm_article_upsert":
         return await handler(

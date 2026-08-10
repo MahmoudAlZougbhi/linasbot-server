@@ -55,6 +55,11 @@ async def cm_setup_chat_progress(request: Request) -> Any:
             "percent": summary["percent"],
             "published": summary["published"],
             "missing_sections": summary["missing_sections"],
+            "weak_sections": summary["weak_sections"],
+            "filled_sections": summary["filled_sections"],
+            "remaining_sections": summary["remaining_sections"],
+            "done_sections": summary["done_sections"],
+            "fill_missing_prompt": summary["fill_missing_prompt"],
         },
     }
 

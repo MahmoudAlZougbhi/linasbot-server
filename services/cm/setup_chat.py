@@ -123,7 +123,10 @@ def section_progress(tenant_id: str) -> list[dict[str, Any]]:
     """Setup-chat progress rows (materializes missing drafts for interview continuity)."""
     from services.cm.progress import list_section_fill_status
 
-    by_name = {str(row.get("section")): row for row in list_section_fill_status(tenant_id, create_missing=True)}
+    by_name = {
+        str(row.get("section")): row
+        for row in list_section_fill_status(tenant_id, create_missing=True)
+    }
     return [by_name[name] for name in SETUP_SECTION_ORDER if name in by_name]
 
 
