@@ -152,9 +152,9 @@ def assess_section_fill(section: str, payload: dict[str, Any] | None, *, is_defa
         elif not _nonempty(payload.get("notes")):
             gaps.append("topics_or_explicit_none_note")
     elif name == "actions":
-        _raw_items = payload.get("items")
-        items: list[Any] = list(_raw_items) if isinstance(_raw_items, list) else []
-        if not items:
+        _raw_action_items = payload.get("items")
+        action_items: list[Any] = list(_raw_action_items) if isinstance(_raw_action_items, list) else []
+        if not action_items:
             gaps.append("capability_toggles")
     elif name == "ai_limits":
         # Non-default payload already means owner touched limits — treat as filled unless empty junk.
