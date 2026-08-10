@@ -291,6 +291,15 @@ test('drawer search chrome is header circle; New chat is compact bottom dock', (
   assert.match(configSrc, /Constants\.expoConfig\?\.version/);
   assert.match(configSrc, /APP_VERSION_LABEL/);
   assert.match(configSrc, /APP_BUILD_LABEL/);
+  const settings = read('features/settings/SettingsScreen.tsx');
+  assert.match(settings, /APP_VERSION/);
+  assert.match(settings, /APP_BUILD_LABEL/);
+  assert.match(settings, /build \{APP_BUILD_LABEL\}/);
+  // EAS: remote version source + autoIncrement so each TF/store ship bumps build without a commit.
+  const easJson = readFileSync(join(root, 'eas.json'), 'utf8');
+  assert.match(easJson, /"appVersionSource":\s*"remote"/);
+  assert.match(easJson, /"production"[\s\S]*"autoIncrement":\s*true/);
+  assert.match(easJson, /"testflight"[\s\S]*"autoIncrement":\s*true/);
   // Version is pinned bottom-left of the drawer footer (under New Chat row).
   assert.match(nav, /alignSelf:\s*'flex-start'/);
   assert.match(nav, /textAlign:\s*'left'/);
@@ -337,9 +346,11 @@ test('Settings hosts Notifications and Logout; drawer does not', () => {
 
 test('Settings does not duplicate AI Basics CM store', () => {
   const settings = read('features/settings/SettingsScreen.tsx');
-  assert.match(settings, /Content Management → AI Basics/);
+  assert.match(settings, /settingsBusinessProfileNote/);
   assert.doesNotMatch(settings, /MFA/);
   assert.doesNotMatch(settings, /Passkey/);
+  const en = read('i18n/locales/en.ts');
+  assert.match(en, /Open Content Management → AI Basics/);
 });
 
 test('Integrations refresh is customer-facing and IG/FB only', () => {
