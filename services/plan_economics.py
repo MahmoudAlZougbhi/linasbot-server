@@ -35,9 +35,7 @@ PLAN_FAQ_MAX_ENTRIES: Final[dict[str, int]] = {
     **{pid: PLAN_CATALOG[pid].faq_capacity for pid in PUBLIC_PLAN_IDS},
 }
 
-PLAN_INCLUDED_CREDITS: Final[dict[str, int]] = {
-    pid: PLAN_CATALOG[pid].included_credits for pid in PUBLIC_PLAN_IDS
-}
+PLAN_INCLUDED_CREDITS: Final[dict[str, int]] = {pid: PLAN_CATALOG[pid].included_credits for pid in PUBLIC_PLAN_IDS}
 
 PLAN_ADDITIONAL_SEATS: Final[dict[str, int | None]] = {
     pid: PLAN_CATALOG[pid].additional_seats for pid in PUBLIC_PLAN_IDS
@@ -87,9 +85,7 @@ class PlanAllowanceRecommendation:
 
 def _text_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     pricing = MODEL_PRICING.get(model) or MODEL_PRICING["gpt-5.6-luna"]
-    return (input_tokens / 1_000_000) * float(pricing["input"]) + (output_tokens / 1_000_000) * float(
-        pricing["output"]
-    )
+    return (input_tokens / 1_000_000) * float(pricing["input"]) + (output_tokens / 1_000_000) * float(pricing["output"])
 
 
 def _cost_for_mix(
