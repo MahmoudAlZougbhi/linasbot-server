@@ -194,7 +194,9 @@ export function ChatComposer({
                 accessibilityLabel={modelChipLabel(ownerMode)}
                 accessibilityHint={chipTappable ? 'Choose Low or High' : undefined}
               >
-                <Text style={[styles.chipBolt, { color: colors.text }]}>⚡</Text>
+                {ownerMode === 'work' ? (
+                  <Text style={[styles.chipBolt, { color: colors.text }]}>⚡</Text>
+                ) : null}
                 <Text style={[styles.chipText, { color: colors.text }]} numberOfLines={1}>
                   {modelChipLabel(ownerMode)}
                 </Text>
