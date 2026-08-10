@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   rowTitle: {
     color: colors.text,
     fontFamily: fonts.bodyMedium,
-    fontWeight: '600',
+    fontWeight: '500',
     fontSize: 15,
   },
   pin: { color: colors.warning, fontSize: 18, paddingHorizontal: 4 },

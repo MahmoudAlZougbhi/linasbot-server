@@ -215,10 +215,10 @@ const styles = StyleSheet.create({
     gap: 8,
     minHeight: 44,
   },
-  /** Conversation titles: medium weight — slightly heavier than body, not extreme. */
+  /** Conversation titles: medium face at 500 — ~40% lighter than prior 600. */
   rowTitle: {
     fontFamily: fonts.bodyMedium,
-    fontWeight: '600',
+    fontWeight: '500',
     flex: 1,
     fontSize: 16,
     lineHeight: 22,
