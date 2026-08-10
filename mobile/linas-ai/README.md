@@ -6,7 +6,32 @@ Installable beta app for Linas AI. Privileged AI/provider calls go through the L
 
 - Display name: **Linas AI**
 - Bundle / package: `com.linasai.app`
-- Version: `1.0.0` (iOS buildNumber `1`, Android versionCode `1`)
+- EAS project: `d15fe78a-09df-4d7c-81a5-2b307956fddf`
+- App Store Connect: `6799678918`
+- Marketing version: `1.0.0` (`expo.version` — bump manually only for user-facing releases)
+- Developer build: iOS `buildNumber` / Android `versionCode` (auto-bumped; see Versioning)
+
+## Versioning
+
+Store / TestFlight identity that must be unique each ship is the **build number**, not the marketing version.
+
+| Field | Source of truth | Who bumps it |
+| --- | --- | --- |
+| `expo.version` (`1.0.0`) | `app.json` | Manual, only for product releases |
+| iOS `buildNumber` | EAS **remote** | `autoIncrement` on `production` / `testflight` |
+| Android `versionCode` | EAS **remote** | same |
+
+`eas.json` sets `cli.appVersionSource` to `remote` and `autoIncrement: true` on `production` and `testflight`. That way each EAS ship gets a new build without committing `app.json`. Local `app.json` values are a seed / fallback for non-store profiles; remote wins for TF/store builds.
+
+In-app label (NavDrawer + Settings) reads live from `expo-constants` via `APP_VERSION_LABEL` / `APP_BUILD_LABEL` in `src/config.ts`, e.g. `Linas 1.0.0 · 20`. After install, open the side menu or Settings — the build segment must match the new native build.
+
+If App Store Connect / Play already has a higher build than EAS remote remembers, sync once before the next ship:
+
+```bash
+cd mobile/linas-ai
+eas build:version:set -p ios
+eas build:version:set -p android
+```
 
 ## Config
 
@@ -30,9 +55,10 @@ See `eas.json`:
 
 - `development` — dev client / debug
 - `preview` — internal installable **APK** + iOS internal build
-- `production` — future store (AAB / App Store)
+- `testflight` — App Store distribution for TestFlight (`autoIncrement`, ASC `6799678918`)
+- `production` — store (AAB / App Store; `autoIncrement`)
 
-Requires Expo login + `eas init` to replace `extra.eas.projectId`.
+Project id is already set in `app.json` → `extra.eas.projectId`.
 
 ## Local Android preview APK
 
