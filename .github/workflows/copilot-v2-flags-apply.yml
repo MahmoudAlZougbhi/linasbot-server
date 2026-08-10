@@ -38,11 +38,9 @@ jobs:
             set -e
             cd /opt/linasbot
             git fetch origin main
-            # Ensure script exists on server (may predate this deploy)
-            if [ ! -f /opt/linasbot/scripts/prod_apply_copilot_v2_flags.sh ]; then
-              git show origin/main:scripts/prod_apply_copilot_v2_flags.sh > /tmp/prod_apply_copilot_v2_flags.sh
-              sudo install -m 0755 /tmp/prod_apply_copilot_v2_flags.sh /opt/linasbot/scripts/prod_apply_copilot_v2_flags.sh
-            fi
+            # Always refresh apply script from origin/main so flag keys stay current.
+            git show origin/main:scripts/prod_apply_copilot_v2_flags.sh > /tmp/prod_apply_copilot_v2_flags.sh
+            sudo install -m 0755 /tmp/prod_apply_copilot_v2_flags.sh /opt/linasbot/scripts/prod_apply_copilot_v2_flags.sh
             sudo bash /opt/linasbot/scripts/prod_apply_copilot_v2_flags.sh
             curl -fsS https://linasaibot.com/api/ready >/tmp/ready.json
             python3 - <<'PY'
