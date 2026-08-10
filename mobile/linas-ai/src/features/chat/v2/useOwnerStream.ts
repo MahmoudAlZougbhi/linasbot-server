@@ -157,7 +157,7 @@ export function useOwnerStream() {
             );
             xhr.setRequestHeader('Authorization', `Bearer ${access}`);
             xhr.setRequestHeader('Accept', 'text/event-stream');
-            xhr.setRequestHeader('Accept-Language', locale);
+            xhr.setRequestHeader('Accept-Language', getStoredAppLanguage());
             xhr.setRequestHeader('Content-Type', 'application/json');
 
             xhr.onprogress = () => {
