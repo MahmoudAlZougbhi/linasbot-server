@@ -181,7 +181,7 @@ test('owner stream shows Thinking then live bubble in the same footer slot', () 
 test('proposal card exposes complete V2 actions beyond Review/Discard', () => {
   const card = read('features/chat/v2/ProposalCard.tsx');
   for (const needle of [
-    'Approve and apply to Draft',
+    'Approve and go live',
     'Review in Content Management',
     'Discard',
     'CURRENT',

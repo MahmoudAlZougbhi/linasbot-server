@@ -121,18 +121,24 @@ def _summarize(name: str, result_data: dict[str, Any], *, reply_language: str) -
         return "Publish completed successfully."
     if name == "approve_cm_patch":
         activation = result_data.get("activation") or {}
-        act = "activated" if activation.get("activated") else "saved to draft"
+        if activation.get("activated") or result_data.get("live"):
+            return (
+                f"CM patch is Live for customer replies and validated: {result_data.get('validation')}. "
+                "No separate Publish step is required after approval."
+            )
+        reason = activation.get("reason") or "activation_failed"
         return (
-            f"CM patch {act} and validated: {result_data.get('validation')}. "
-            "No separate Publish step is required after approval."
+            f"CM patch saved to draft and validated: {result_data.get('validation')}. "
+            f"Live publish did not complete ({reason}"
+            f"{': ' + str(activation.get('message')) if activation.get('message') else ''}). "
+            "Do not claim customers already see this change."
         )
     if name == "propose_cm_patch":
         preview = result_data.get("preview") or {}
         return (
             "Proposed CM change ready for your review "
             f"(section={preview.get('section')}, keys={preview.get('changed_keys')}). "
-            "Tap Approve or reply ok / موافق / yes to save Draft "
-            "(Publish / Live stays separate)."
+            "Tap Approve or reply ok / موافق / yes to apply it Live for customer replies."
         )
     if name == "get_recent_customer_interactions":
         return (

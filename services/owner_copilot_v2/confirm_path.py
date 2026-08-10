@@ -80,8 +80,15 @@ async def run_confirm_path(
         from services.owner_copilot_v2.cm_approve_continue import continue_after_cm_approve
 
         approved_section = None
+        live = None
         if isinstance(result.data, dict):
             approved_section = str(result.data.get("section") or "") or None
+            if "live" in result.data:
+                live = bool(result.data.get("live"))
+            else:
+                activation = result.data.get("activation")
+                if isinstance(activation, dict) and "activated" in activation:
+                    live = bool(activation.get("activated"))
         yield StreamEvent(type="status", payload={"id": "continue", "text": "Continuing setup…"})
         continue_blob = await continue_after_cm_approve(
             tenant_id=tenant_id,
@@ -89,6 +96,7 @@ async def run_confirm_path(
             role=role,
             approved_ok=True,
             approved_section=approved_section,
+            live=live,
         )
         next_prop = continue_blob.get("next_proposal")
         if isinstance(next_prop, dict) and next_prop.get("ok"):

@@ -1,7 +1,8 @@
 """Natural owner assent for pending high-impact confirmations (CM draft approve, etc.).
 
 Short allowlist only — not an NLP stack. Grounded in booking FSM affirmatives +
-owner product language (ok / موافق / approve). Never treats assent as Live publish.
+owner product language (ok / موافق / approve). Assent confirms Approve, which saves
+Draft then publishes Live for customer replies (same path as the Approve button).
 """
 
 from __future__ import annotations

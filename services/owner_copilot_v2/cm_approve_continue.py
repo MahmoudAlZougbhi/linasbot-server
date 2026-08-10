@@ -1,4 +1,4 @@
-"""After CM draft approve: advance fill plan + auto-propose next bulk section."""
+"""After CM approve: advance fill plan + auto-propose next bulk section."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ async def continue_after_cm_approve(
     role: str,
     approved_ok: bool,
     approved_section: str | None = None,
+    live: bool | None = None,
 ) -> dict[str, Any]:
     """Advance durable plans and optionally propose the next dump section."""
     if not approved_ok:
@@ -43,27 +44,41 @@ async def continue_after_cm_approve(
     if bulk:
         bulk_pending = sum(1 for r in (bulk.get("queue") or []) if isinstance(r, dict) and r.get("status") == "pending")
 
+    live_ok = True if live is None else bool(live)
+    live_prefix = (
+        "Change is Live for customer replies. "
+        if live_ok
+        else "Draft was saved, but Live publish did not complete — do not claim customers already see it. "
+    )
+
     if next_prop and next_prop.ok:
         directive = (
-            "Draft saved. Continuing from the owner's dump — next section proposal is ready. "
+            f"{live_prefix}Continuing from the owner's dump — next section proposal is ready. "
             "Explain which section you are updating and wait for Approve / ok again."
         )
     elif remaining:
         listed = ", ".join(remaining[:10])
         extra = f" (+{len(remaining) - 10} more)" if len(remaining) > 10 else ""
         directive = (
-            f"Draft saved. Dump queue done for now. Still empty/weak: {listed}{extra}. "
+            f"{live_prefix}Dump queue done for now. Still empty/weak: {listed}{extra}. "
             "Ask the owner for each remaining section: fill now, or skip? "
             "Work one at a time via cm_fill_plan focus; never re-open DONE sections."
         )
     else:
-        directive = (
-            "Draft saved. Content Management tracked sections look filled. "
-            "Congratulate briefly; mention Publish/Live is a separate step when they are ready."
-        )
+        if live_ok:
+            directive = (
+                "Change is Live for customer replies. Content Management tracked sections look filled. "
+                "Congratulate briefly — customers will use this Live knowledge."
+            )
+        else:
+            directive = (
+                "Draft saved and sections look filled, but Live publish did not complete. "
+                "Tell the owner clearly; do not claim customers already see the change."
+            )
 
     return {
         "advanced": True,
+        "live": live_ok,
         "fill_plan": {
             "status": fill.get("status"),
             "current_section": focus,
