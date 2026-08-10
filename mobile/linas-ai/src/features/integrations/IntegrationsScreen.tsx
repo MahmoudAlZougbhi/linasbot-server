@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, Linking, ScrollView, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, AppState, ScrollView, StyleSheet, Text } from 'react-native';
 import { z } from 'zod';
 
 import { ApiError, apiFetch } from '../../api/client';
@@ -16,22 +16,28 @@ import {
   defaultToggles,
   type IntegrationRow,
 } from './IntegrationChannelCard';
+import { disconnectMetaBindings, startMetaOAuth } from './integrationsOAuth';
 
 const TogglesSchema = z.object({
   dm: z.boolean(),
   comments: z.boolean(),
 });
 
-const CommentsStateSchema = z
+const CapabilityStateSchema = z
   .object({
     requested_enabled: z.boolean(),
     permission_present: z.boolean(),
     webhook_subscribed: z.boolean(),
+    tenant_action_enabled: z.boolean().optional(),
+    connection_healthy: z.boolean().optional(),
     live_verified: z.boolean(),
     effective_enabled: z.boolean(),
     missing_scopes: z.array(z.string()).optional(),
     blocker: z.string().nullable().optional(),
+    blocker_code: z.string().nullable().optional(),
+    blocker_message: z.string().nullable().optional(),
     status: z.string().optional(),
+    last_checked_at: z.number().optional(),
   })
   .optional();
 
@@ -44,7 +50,8 @@ const RowSchema = z.object({
   binding_ids: z.array(z.string()).optional(),
   toggles: TogglesSchema.optional(),
   comments_blocker: z.string().optional(),
-  comments_state: CommentsStateSchema,
+  comments_state: CapabilityStateSchema,
+  dm_state: CapabilityStateSchema,
   capabilities: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -57,16 +64,8 @@ const ToggleResponseSchema = z.object({
   success: z.literal(true),
   platform: z.string(),
   toggles: TogglesSchema,
-  comments_state: CommentsStateSchema,
-});
-
-const StartSchema = z.object({
-  success: z.literal(true),
-  authorization_url: z.string().url(),
-});
-
-const DisconnectSchema = z.object({
-  success: z.literal(true),
+  comments_state: CapabilityStateSchema,
+  dm_state: CapabilityStateSchema,
 });
 
 type Row = z.infer<typeof RowSchema>;
@@ -132,53 +131,19 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
-        void load();
-      }
+      if (state === 'active') void load();
     });
     return () => sub.remove();
   }, [load]);
 
-  async function manageCommentPermissions(platform: 'instagram' | 'facebook') {
-    await connectPlatform(platform);
-  }
-
-  async function connectPlatform(platform: 'instagram' | 'facebook') {
+  async function manageMetaAccess(platform: 'instagram' | 'facebook') {
     setBusyPlatform(platform);
     setError(null);
     try {
-      const path =
-        platform === 'instagram'
-          ? '/api/meta/connections/instagram-login/start'
-          : '/api/meta/connections/start';
-      const body =
-        platform === 'facebook' ? JSON.stringify({ channel: 'facebook' }) : undefined;
-      try {
-        const started = await apiFetch(path, {
-          method: 'POST',
-          body,
-          schema: StartSchema,
-        });
-        await Linking.openURL(started.authorization_url);
-        return;
-      } catch (firstErr) {
-        if (platform === 'instagram') {
-          const started = await apiFetch('/api/meta/connections/start', {
-            method: 'POST',
-            body: JSON.stringify({ channel: 'instagram' }),
-            schema: StartSchema,
-          });
-          await Linking.openURL(started.authorization_url);
-          return;
-        }
-        throw firstErr;
-      }
+      await startMetaOAuth(platform);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        setAuthGate(true);
-      } else {
-        setError(tr('integrationsActionError'));
-      }
+      if (err instanceof ApiError && err.status === 401) setAuthGate(true);
+      else setError(tr('integrationsActionError'));
     } finally {
       setBusyPlatform(null);
     }
@@ -193,19 +158,47 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
     setBusyPlatform(row.platform);
     setError(null);
     try {
-      for (const bindingId of ids) {
-        await apiFetch(`/api/meta/connections/${encodeURIComponent(bindingId)}/disconnect`, {
-          method: 'POST',
-          schema: DisconnectSchema,
-        });
-      }
+      await disconnectMetaBindings(ids);
       await load();
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        setAuthGate(true);
-      } else {
-        setError(tr('integrationsActionError'));
-      }
+      if (err instanceof ApiError && err.status === 401) setAuthGate(true);
+      else setError(tr('integrationsActionError'));
+    } finally {
+      setBusyPlatform(null);
+    }
+  }
+
+  async function reconcileComments(row: Row) {
+    const platform = row.platform === 'facebook' ? 'facebook' : 'instagram';
+    setBusyPlatform(row.platform);
+    setError(null);
+    try {
+      const res = await apiFetch(
+        `/api/mobile/integrations/${encodeURIComponent(platform)}/reconcile-comments`,
+        { method: 'POST', schema: ToggleResponseSchema },
+      );
+      setRows((curr) =>
+        curr.map((r) =>
+          r.platform === row.platform
+            ? {
+                ...r,
+                toggles: res.toggles,
+                comments_state: res.comments_state ?? r.comments_state,
+                dm_state: res.dm_state ?? r.dm_state,
+                comments_blocker:
+                  res.comments_state?.blocker_code ?? res.comments_state?.blocker ?? undefined,
+              }
+            : r,
+        ),
+      );
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) setAuthGate(true);
+      else if (err instanceof ApiError && err.body && typeof err.body === 'object') {
+        const body = err.body as { message?: unknown; reauthorize_required?: unknown };
+        const msg = body.message;
+        setError(typeof msg === 'string' && msg.trim() ? msg : tr('integrationsActionError'));
+        if (body.reauthorize_required === true) await manageMetaAccess(platform);
+      } else setError(tr('integrationsActionError'));
     } finally {
       setBusyPlatform(null);
     }
@@ -217,19 +210,27 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
 
     if (key === 'comments' && value === true) {
       const blocker = commentsBlocker(row as IntegrationRow);
-      if (blocker === 'missing_comment_permissions') {
+      if (blocker === 'missing_comment_permissions' || blocker === 'reauthorization_required') {
         const missing = row.comments_state?.missing_scopes?.filter(Boolean) ?? [];
         setError(
           missing.length
             ? `${tr('commentsBlockerMissingPermissions')} Missing: ${missing.join(', ')}.`
             : tr('commentsBlockerMissingPermissions'),
         );
-        await manageCommentPermissions(platform);
+        await manageMetaAccess(platform);
+        return;
+      }
+      if (blocker === 'meta_approval_required') {
+        setError(tr('commentsBlockerMetaApproval'));
+        return;
+      }
+      if (blocker === 'missing_comment_webhook') {
+        await reconcileComments(row);
         return;
       }
       if (blocker === 'connect_channel_first') {
         setError(tr('commentsBlockerConnectFirst'));
-        await connectPlatform(platform);
+        await manageMetaAccess(platform);
         return;
       }
     }
@@ -256,7 +257,9 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
                 ...r,
                 toggles: res.toggles,
                 comments_state: res.comments_state ?? r.comments_state,
-                comments_blocker: res.comments_state?.blocker ?? undefined,
+                dm_state: res.dm_state ?? r.dm_state,
+                comments_blocker:
+                  res.comments_state?.blocker_code ?? res.comments_state?.blocker ?? undefined,
               }
             : r,
         ),
@@ -265,9 +268,8 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
       setRows((curr) =>
         curr.map((r) => (r.platform === row.platform ? { ...r, toggles: previous } : r)),
       );
-      if (err instanceof ApiError && err.status === 401) {
-        setAuthGate(true);
-      } else if (err instanceof ApiError && err.body && typeof err.body === 'object') {
+      if (err instanceof ApiError && err.status === 401) setAuthGate(true);
+      else if (err instanceof ApiError && err.body && typeof err.body === 'object') {
         const body = err.body as {
           message?: unknown;
           error?: unknown;
@@ -277,11 +279,9 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
         const code = typeof body.error === 'string' ? body.error : '';
         setError(typeof msg === 'string' && msg.trim() ? msg : tr('integrationsToggleError'));
         if (body.reauthorize_required === true || code === 'COMMENT_SCOPES_MISSING') {
-          await manageCommentPermissions(platform);
+          await manageMetaAccess(platform);
         }
-      } else {
-        setError(tr('integrationsToggleError'));
-      }
+      } else setError(tr('integrationsToggleError'));
     } finally {
       setBusyToggle(null);
     }
@@ -297,13 +297,13 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <PrimaryButton
-        label={tr('testConnectionReadOnly')}
+        label={tr('refreshConnectionStatus')}
         onPress={() => void load()}
         loading={loading}
         variant="ghost"
       />
       <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: spacing.md }}>
-        {tr('testConnectionReadOnlyHint')}
+        {tr('refreshConnectionStatusHint')}
       </Text>
       <ScrollView contentContainerStyle={styles.list}>
         {rows
@@ -319,13 +319,12 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
               actionsDisabled={busyPlatform !== null || busyToggle !== null}
               tr={tr}
               onToggle={(key, value) => void setToggle(row, key, value)}
-              onManageCommentPermissions={() =>
-                void manageCommentPermissions(
-                  row.platform === 'facebook' ? 'facebook' : 'instagram',
-                )
+              onManageMetaAccess={() =>
+                void manageMetaAccess(row.platform === 'facebook' ? 'facebook' : 'instagram')
               }
+              onReconcileComments={() => void reconcileComments(row)}
               onConnect={() =>
-                void connectPlatform(row.platform === 'facebook' ? 'facebook' : 'instagram')
+                void manageMetaAccess(row.platform === 'facebook' ? 'facebook' : 'instagram')
               }
               onDisconnect={() => void disconnectPlatform(row)}
             />

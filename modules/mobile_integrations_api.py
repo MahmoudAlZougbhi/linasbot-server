@@ -13,6 +13,7 @@ from services.channel_capability_toggles import (
     ChannelToggleError,
     attach_channel_toggles,
     clear_invalid_comments_enabled_state_async,
+    reconcile_comment_webhooks_for_platform,
     set_channel_toggle,
     supported_platforms,
 )
@@ -93,6 +94,7 @@ async def mobile_integration_toggles(
                 "success": False,
                 "error": exc.code,
                 "message": exc.message,
+                "blocker_code": exc.code,
                 "reauthorize_required": exc.code == "COMMENT_SCOPES_MISSING",
             },
         )
@@ -102,6 +104,41 @@ async def mobile_integration_toggles(
         "platform": platform_key,
         "toggles": result["toggles"],
         "comments_state": result.get("comments_state"),
+        "dm_state": result.get("dm_state"),
+    }
+
+
+@app.post("/api/mobile/integrations/{platform}/reconcile-comments")
+async def mobile_reconcile_comments(platform: str, request: Request) -> Any:
+    """Reconcile comment webhooks for a connected channel (no disconnect / no revoke)."""
+    session = require_permission(request, "contentManagers")
+    if not user_has_permission(session, "contentPublish"):
+        raise HTTPException(status_code=403, detail="contentPublish permission required")
+    platform_key = (platform or "").strip().lower()
+    if platform_key not in supported_platforms():
+        raise HTTPException(status_code=404, detail="Unknown platform")
+    try:
+        result = await reconcile_comment_webhooks_for_platform(
+            tenant_id=session.tenant_id,
+            platform=platform_key,
+        )
+    except ChannelToggleError as exc:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "success": False,
+                "error": exc.code,
+                "message": exc.message,
+                "blocker_code": exc.code,
+                "reauthorize_required": exc.code == "COMMENT_SCOPES_MISSING",
+            },
+        )
+    return {
+        "success": True,
+        "platform": platform_key,
+        "toggles": result["toggles"],
+        "comments_state": result.get("comments_state"),
+        "dm_state": result.get("dm_state"),
     }
 
 
