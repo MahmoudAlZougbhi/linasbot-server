@@ -136,7 +136,7 @@ const cloud = StyleSheet.create({
     borderRadius: 5,
   },
   puffR: {
-    position: 'absolute',
+    position: 'absolute' as const,
     right: 1,
     bottom: 4,
     width: 7,
