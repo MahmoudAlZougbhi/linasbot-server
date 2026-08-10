@@ -32,6 +32,8 @@ type Props = {
   isAuthenticated: boolean;
   stickToBottomRef: { current: boolean };
   scrollToBottom: (animated?: boolean) => void;
+  /** Stream/layout growth only — must not re-arm stick after user scrolls away. */
+  followBottomIfStuck: (animated?: boolean) => void;
   imagePreviewByContent: { current: Record<string, string[]> };
   thinking: boolean;
   thinkingLabel: string;
@@ -60,6 +62,7 @@ export function ChatMessageList({
   isAuthenticated,
   stickToBottomRef,
   scrollToBottom,
+  followBottomIfStuck,
   imagePreviewByContent,
   thinking,
   thinkingLabel,
@@ -122,10 +125,10 @@ export function ChatMessageList({
         onScroll={onScroll}
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
         onContentSizeChange={() => {
-          if (stickToBottomRef.current) scrollToBottom(false);
+          followBottomIfStuck(false);
         }}
         onLayout={() => {
-          if (stickToBottomRef.current) scrollToBottom(false);
+          followBottomIfStuck(false);
         }}
         onScrollBeginDrag={() => {
           stickToBottomRef.current = false;

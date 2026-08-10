@@ -83,7 +83,7 @@ export function ChatScreen({
   const imagePreviewByContent = useRef<Record<string, string[]>>({});
   const [choiceBusy, setChoiceBusy] = useState(false);
   const composerInputRef = useRef<TextInput>(null);
-  const { listRef, stickToBottomRef, scrollToBottom, armOpenAtLatest } = useChatListScroll();
+  const { listRef, stickToBottomRef, scrollToBottom, followBottomIfStuck, armOpenAtLatest } = useChatListScroll();
   const voice = useVoiceDraft((text) => {
     setDraft((prev) => (prev ? `${prev} ${text}` : text));
     requestAnimationFrame(() => composerInputRef.current?.focus());
@@ -143,8 +143,7 @@ export function ChatScreen({
   }, [armOpenAtLatest, loading, listKey]);
 
   useEffect(() => {
-    if (!stickToBottomRef.current) return;
-    scrollToBottom(false);
+    followBottomIfStuck(false);
   }, [
     messages.length,
     turn.thinking,
@@ -152,7 +151,7 @@ export function ChatScreen({
     turn.statusRows.length,
     turn.cards.length,
     turn.choices.length,
-    scrollToBottom,
+    followBottomIfStuck,
   ]);
 
   function openAuthPreservingDraft(hard = false) {
@@ -240,6 +239,7 @@ export function ChatScreen({
             isAuthenticated={isAuthenticated}
             stickToBottomRef={stickToBottomRef}
             scrollToBottom={scrollToBottom}
+            followBottomIfStuck={followBottomIfStuck}
             imagePreviewByContent={imagePreviewByContent}
             thinking={turn.thinking}
             thinkingLabel={tr('chatThinking')}

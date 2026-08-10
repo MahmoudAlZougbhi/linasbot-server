@@ -4,14 +4,30 @@ import { FlatList, Keyboard, Platform } from 'react-native';
 /**
  * Stick-to-latest helpers for the non-inverted chat FlatList.
  * Re-scrolls on keyboard show so KAV height shrink does not cover the last message.
+ *
+ * Intentional jump (send / FAB) → scrollToBottom (arms stick).
+ * Stream / layout growth → followBottomIfStuck (never re-arms; re-checks after rAF
+ * so a user drag away from bottom is not yanked by a pending delta).
  */
 export function useChatListScroll() {
   const listRef = useRef<FlatList>(null);
   const stickToBottomRef = useRef(true);
 
+  /** Pin to latest and scroll — send, FAB, open chat, etc. */
   const scrollToBottom = useCallback((animated = true) => {
     stickToBottomRef.current = true;
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated }));
+  }, []);
+
+  /**
+   * Follow the growing stream only while still stuck to bottom.
+   * Must not re-arm stick — that would defeat onScrollBeginDrag during liveText.
+   */
+  const followBottomIfStuck = useCallback((animated = false) => {
+    requestAnimationFrame(() => {
+      if (!stickToBottomRef.current) return;
+      listRef.current?.scrollToEnd({ animated });
+    });
   }, []);
 
   const armOpenAtLatest = useCallback(() => {
@@ -25,16 +41,18 @@ export function useChatListScroll() {
   useEffect(() => {
     const event = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const sub = Keyboard.addListener(event, () => {
-      if (!stickToBottomRef.current) return;
-      // KeyboardAvoidingView padding settles across the animation — retry like open-at-latest.
-      const run = () => listRef.current?.scrollToEnd({ animated: false });
-      requestAnimationFrame(run);
-      setTimeout(run, 50);
-      setTimeout(run, 120);
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 220);
+      // Re-check stick on every retry — user may scroll away while KAV settles.
+      const run = (animated: boolean) => {
+        if (!stickToBottomRef.current) return;
+        listRef.current?.scrollToEnd({ animated });
+      };
+      requestAnimationFrame(() => run(false));
+      setTimeout(() => run(false), 50);
+      setTimeout(() => run(false), 120);
+      setTimeout(() => run(true), 220);
     });
     return () => sub.remove();
   }, []);
 
-  return { listRef, stickToBottomRef, scrollToBottom, armOpenAtLatest };
+  return { listRef, stickToBottomRef, scrollToBottom, followBottomIfStuck, armOpenAtLatest };
 }
