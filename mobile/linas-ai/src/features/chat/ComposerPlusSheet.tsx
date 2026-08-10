@@ -3,12 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 
-export type PlusAction =
-  | 'attach_image'
-  | 'attach_document'
-  | 'add_cm'
-  | 'review_setup'
-  | 'check_usage';
+export type PlusAction = 'attach_image' | 'attach_document';
 
 type Props = {
   open: boolean;
@@ -41,15 +36,9 @@ export function ComposerPlusSheet({ open, onClose, onAction }: Props) {
   const { tr } = useI18n();
   const { colors } = useTheme();
 
-  const primary: { id: PlusAction; title: string; Glyph: typeof PhotosGlyph }[] = [
+  const actions: { id: PlusAction; title: string; Glyph: typeof PhotosGlyph }[] = [
     { id: 'attach_image', title: tr('photos'), Glyph: PhotosGlyph },
     { id: 'attach_document', title: tr('files'), Glyph: PaperclipGlyph },
-  ];
-
-  const secondary: { id: PlusAction; title: string; subtitle: string }[] = [
-    { id: 'add_cm', title: tr('addEditCm'), subtitle: 'Content Management' },
-    { id: 'review_setup', title: tr('reviewSetup'), subtitle: 'CM readiness' },
-    { id: 'check_usage', title: tr('checkUsage'), subtitle: 'Credits & wallet' },
   ];
 
   return (
@@ -61,7 +50,7 @@ export function ComposerPlusSheet({ open, onClose, onAction }: Props) {
         >
           <Text style={[styles.title, { color: colors.text }]}>{tr('addToChat')}</Text>
           <View style={styles.iconRow}>
-            {primary.map((a) => (
+            {actions.map((a) => (
               <Pressable
                 key={a.id}
                 style={styles.iconCol}
@@ -79,24 +68,6 @@ export function ComposerPlusSheet({ open, onClose, onAction }: Props) {
               </Pressable>
             ))}
           </View>
-          {secondary.map((a) => (
-            <Pressable
-              key={a.id}
-              style={[
-                styles.row,
-                { backgroundColor: colors.bgElevated, borderColor: colors.borderSoft },
-              ]}
-              onPress={() => {
-                onAction(a.id);
-                onClose();
-              }}
-            >
-              <View style={styles.rowText}>
-                <Text style={[styles.rowTitle, { color: colors.text }]}>{a.title}</Text>
-                <Text style={[styles.rowSub, { color: colors.textMuted }]}>{a.subtitle}</Text>
-              </View>
-            </Pressable>
-          ))}
         </Pressable>
       </Pressable>
     </Modal>
@@ -123,7 +94,7 @@ const styles = StyleSheet.create({
   iconRow: {
     flexDirection: 'row',
     gap: spacing.xl,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     paddingHorizontal: spacing.sm,
   },
   iconCol: {
@@ -141,16 +112,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodyMedium,
     fontSize: 13,
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: radii.md,
-    padding: spacing.lg,
-    borderWidth: 1,
-  },
-  rowText: { flex: 1, paddingRight: 8 },
-  rowTitle: { fontFamily: fonts.bodyMedium, fontSize: 16 },
-  rowSub: { fontFamily: fonts.body, fontSize: 12, marginTop: 2 },
 });
 
 const glyph = StyleSheet.create({

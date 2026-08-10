@@ -1,4 +1,3 @@
-import type { ControlArea } from '../control/controlAreas';
 import type { PlusAction } from './ComposerPlusSheet';
 import {
   MAX_IMAGES,
@@ -12,7 +11,6 @@ type Args = {
   isAuthenticated: boolean;
   pendingFiles: PendingFile[];
   setPendingFiles: (files: PendingFile[] | ((prev: PendingFile[]) => PendingFile[])) => void;
-  onOpenArea: (area: ControlArea) => void;
 };
 
 export async function handlePlusAction({
@@ -20,17 +18,8 @@ export async function handlePlusAction({
   isAuthenticated,
   pendingFiles,
   setPendingFiles,
-  onOpenArea,
 }: Args): Promise<void> {
   if (!isAuthenticated) return;
-  if (action === 'add_cm' || action === 'review_setup') {
-    onOpenArea('cm');
-    return;
-  }
-  if (action === 'check_usage') {
-    onOpenArea('usage');
-    return;
-  }
   if (action === 'attach_image') {
     const picked = await pickImageAttachments(pendingFiles.length);
     if (!picked.length) return;
