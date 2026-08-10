@@ -237,7 +237,7 @@ export function NavDrawer(props: Props) {
             accessibilityRole="button"
             accessibilityLabel={tr('newChat')}
           >
-            <AppIcon icon={DRAWER_TOOL_ICONS.newChat} size={18} color={colors.onAccent} />
+            <AppIcon icon={DRAWER_TOOL_ICONS.newChat} size={20} color={colors.onAccent} />
           </Pressable>
           <Text
             style={[styles.version, { color: colors.textDim }]}

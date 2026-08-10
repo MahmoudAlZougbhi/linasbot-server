@@ -155,6 +155,7 @@ test('Live Chat thread remains read-only', () => {
 test('drawer search chrome is header circle; New chat is compact bottom dock', () => {
   const nav = read('features/nav/NavDrawer.tsx');
   const chat = read('features/chat/ChatScreen.tsx');
+  const overlays = read('features/chat/ChatScreenOverlays.tsx');
   const drawer = read('components/SideDrawer.tsx');
   assert.match(nav, /bottomDock/);
   assert.match(nav, /newChatBtn/);
@@ -168,7 +169,17 @@ test('drawer search chrome is header circle; New chat is compact bottom dock', (
   assert.match(nav, /DRAWER_TOOL_ICONS\.newChat/);
   assert.match(drawer, /Keyboard\.dismiss/);
   assert.match(chat, /Keyboard\.dismiss/);
-  assert.match(chat, /<NavDrawer[\s\S]*onNewChat=/);
+  assert.match(overlays, /<NavDrawer[\s\S]*onNewChat=/);
+
+  const modules = read('features/nav/moduleIcons.ts');
+  const headerIcons = read('features/chat/ChatHeaderIcons.tsx');
+  const header = read('features/chat/ChatHeader.tsx');
+  assert.match(modules, /NEW_CHAT_ICON\s*=\s*ion\('create-outline'\)/);
+  assert.match(modules, /newChat:\s*NEW_CHAT_ICON/);
+  assert.doesNotMatch(modules, /newChat:\s*feather\('plus'\)/);
+  assert.match(headerIcons, /NEW_CHAT_ICON/);
+  assert.match(headerIcons, /AppIcon/);
+  assert.match(header, /NewChatIcon/);
 });
 
 test('Settings hosts Notifications and Logout; drawer does not', () => {

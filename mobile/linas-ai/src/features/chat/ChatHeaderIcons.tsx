@@ -1,5 +1,8 @@
 import { StyleSheet, View } from 'react-native';
 
+import { AppIcon } from '../../components/AppIcon';
+import { NEW_CHAT_ICON } from '../nav/moduleIcons';
+
 /** Clean 3-bar hamburger matching PDF / ChatGPT header (no emoji). */
 export function MenuIcon({ color }: { color: string }) {
   return (
@@ -13,16 +16,10 @@ export function MenuIcon({ color }: { color: string }) {
 
 /**
  * ChatGPT-style “new chat” compose mark: rounded square + pencil.
- * Drawn with Views so we stay dependency-free (no vector-icons / svg).
+ * Same glyph as the drawer New Chat control (Ionicons create-outline).
  */
-export function NewChatIcon({ color }: { color: string }) {
-  return (
-    <View accessible={false} style={styles.compose}>
-      <View style={[styles.composePad, { borderColor: color }]} />
-      <View style={[styles.composePenBody, { backgroundColor: color }]} />
-      <View style={[styles.composePenTip, { borderTopColor: color }]} />
-    </View>
-  );
+export function NewChatIcon({ color, size = 22 }: { color: string; size?: number }) {
+  return <AppIcon icon={NEW_CHAT_ICON} size={size} color={color} />;
 }
 
 const styles = StyleSheet.create({
@@ -35,40 +32,5 @@ const styles = StyleSheet.create({
     height: 2,
     borderRadius: 1,
     width: '100%',
-  },
-  compose: {
-    width: 22,
-    height: 22,
-  },
-  composePad: {
-    position: 'absolute',
-    left: 0,
-    bottom: 0,
-    width: 15,
-    height: 15,
-    borderWidth: 1.85,
-    borderRadius: 3.5,
-  },
-  composePenBody: {
-    position: 'absolute',
-    width: 11,
-    height: 1.85,
-    borderRadius: 1,
-    right: 0.5,
-    top: 5.5,
-    transform: [{ rotate: '-45deg' }],
-  },
-  composePenTip: {
-    position: 'absolute',
-    right: 1,
-    top: 1,
-    width: 0,
-    height: 0,
-    borderLeftWidth: 3.2,
-    borderRightWidth: 3.2,
-    borderTopWidth: 4.2,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    transform: [{ rotate: '45deg' }],
   },
 });
