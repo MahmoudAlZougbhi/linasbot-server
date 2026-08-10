@@ -27,6 +27,4 @@ def assert_comment_automation_allowed(tenant_id: str) -> None:
         )
     features = PLAN_FEATURES.get(ent.plan_id) or ent.features or {}
     if not features.get("comment_automation"):
-        raise CommentAutomationDenied(
-            f"Comment automation is not included on plan={ent.plan_id}. Upgrade required."
-        )
+        raise CommentAutomationDenied(f"Comment automation is not included on plan={ent.plan_id}. Upgrade required.")
