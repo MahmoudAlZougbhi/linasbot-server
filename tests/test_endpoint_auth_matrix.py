@@ -55,6 +55,7 @@ _ROUTE_MODULES = (
     "modules.meta_messaging_webhook",
     "modules.meta_social_posts_api",
     "modules.wallet_api",
+    "modules.plans_api",
 )
 
 _MUTATION_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -183,10 +184,10 @@ class TestRouteInventory:
         # +meta reconnect endpoint for first-party bindings.
         # +guest-ai session/messages (prefix-public, rate-limited).
         # +owner-notifications inbox/read/device-token + mobile STT (protected).
-        # +owner-ai v2 flags/attachment-types/attachments/stream/choices (protected).
-        assert counts["total_api_routes"] == 218
-        assert counts["public"] == 18
-        assert counts["protected"] == 200
+        # +public plans catalog GET /api/public/plans + protected GET /api/billing/catalog.
+        assert counts["total_api_routes"] == 220
+        assert counts["public"] == 19
+        assert counts["protected"] == 201
         assert public_set == {
             ("GET", "/api/health"),
             ("GET", "/api/ready"),
@@ -198,6 +199,7 @@ class TestRouteInventory:
             ("POST", "/api/auth/verify-email"),
             ("POST", "/api/auth/resend-verification"),
             ("GET", "/api/billing/packages"),
+            ("GET", "/api/public/plans"),
             ("POST", "/api/billing/stripe/webhook"),
             ("POST", "/api/auth/mobile/login"),
             ("POST", "/api/auth/mobile/refresh"),

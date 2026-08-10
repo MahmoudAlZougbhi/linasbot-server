@@ -137,8 +137,7 @@ export function useOwnerStream() {
             let carry = '';
             let terminal: StreamResult = 'done';
             let settled = false;
-            const locale = body.reply_language || getStoredAppLanguage();
-            const payload = { ...body, reply_language: locale };
+            const payload = { ...body };
 
             const finish = (result: StreamResult) => {
               if (settled) return;
@@ -158,7 +157,7 @@ export function useOwnerStream() {
             );
             xhr.setRequestHeader('Authorization', `Bearer ${access}`);
             xhr.setRequestHeader('Accept', 'text/event-stream');
-            xhr.setRequestHeader('Accept-Language', locale);
+            xhr.setRequestHeader('Accept-Language', getStoredAppLanguage());
             xhr.setRequestHeader('Content-Type', 'application/json');
 
             xhr.onprogress = () => {

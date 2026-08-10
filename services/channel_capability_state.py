@@ -51,8 +51,11 @@ BLOCKER_MESSAGES: dict[str, str] = {
     "missing_comment_webhook": "Comment webhook subscription is not confirmed yet for this connection.",
     "missing_dm_webhook": "Messaging webhook subscription is not confirmed yet for this connection.",
     "meta_approval_required": (
-        "Meta App Review advanced access is required before Comments can be enabled for customers. "
-        "Confirm App A Advanced Access for comment permissions, then use Manage Meta Access."
+        "Meta App Review Advanced Access is required for comment permissions. "
+        "Manage Meta Access alone cannot grant pages_manage_engagement / "
+        "instagram_manage_comments until Meta approves those permissions. "
+        "Complete App Review for comment scopes, then Manage Meta Access again "
+        "(do not Disconnect Account)."
     ),
     "reauthorization_required": (
         "This connection needs reauthorization. Use Manage Meta Access — do not Disconnect Account."

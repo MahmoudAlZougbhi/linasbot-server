@@ -50,6 +50,7 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
         attachment_ids?: string[];
         confirm_tool?: string | null;
         owner_mode?: 'chat' | 'work';
+        reply_language?: 'en' | 'ar' | 'fr';
       },
     ): Promise<'done' | 'error' | 'network_error' | 'cancelled' | 'skipped'> => {
       if (!conversationId) return 'skipped';
@@ -71,6 +72,7 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
           attachment_ids: opts?.attachment_ids,
           confirm_tool: confirmTool,
           owner_mode: opts?.owner_mode,
+          reply_language: opts?.reply_language,
         },
         {
           onThinking: () => setThinking(true),

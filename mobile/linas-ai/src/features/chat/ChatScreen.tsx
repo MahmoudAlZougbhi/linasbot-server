@@ -57,7 +57,7 @@ export function ChatScreen({
   onRequestLogin,
   onRequestRegister,
 }: Props) {
-  const { tr } = useI18n();
+  const { tr, language } = useI18n();
   const { colors } = useTheme();
   const owner = useChatSession(isAuthenticated);
   const guest = useGuestChatSession(!isAuthenticated);
@@ -285,7 +285,7 @@ export function ChatScreen({
             onOwnerWelcomeChip={(chip) => {
               setOwnerMode(chip.mode);
               scrollToBottom();
-              void turn.send(chip.prompt, { owner_mode: chip.mode });
+              void turn.send(chip.prompt, { owner_mode: chip.mode, reply_language: language });
             }}
             seedTypewriterMessageId={isAuthenticated ? owner.seedTypewriterMessageId : null}
             onSeedTypewriterDone={owner.clearSeedTypewriter}

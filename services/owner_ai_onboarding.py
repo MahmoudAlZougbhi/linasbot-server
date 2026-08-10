@@ -101,6 +101,19 @@ _CHIP_DEFS: dict[str, dict[str, Any]] = {
 }
 
 
+def welcome_chip_prompts() -> frozenset[str]:
+    """English tool prompts used by welcome chips (stable across UI locales)."""
+    return frozenset(str(spec["prompt"]).strip() for spec in _CHIP_DEFS.values())
+
+
+def is_welcome_chip_prompt(text: str) -> bool:
+    """True when the turn is a seeded welcome-chip / UI start prompt (not free typing)."""
+    normalized = (text or "").strip()
+    if not normalized:
+        return False
+    return normalized in welcome_chip_prompts()
+
+
 def welcome_chips(*, setup_stage: str, language: str = "en") -> list[dict[str, Any]]:
     """Tappable welcome chips for a new (or empty) owner chat."""
     lang = language if language in {"en", "ar", "fr"} else "en"

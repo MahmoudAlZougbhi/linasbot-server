@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from services.owner_ai_account_state import build_account_summary
-from services.owner_ai_profile import coerce_language, normalize_language
+from services.owner_ai_onboarding import is_welcome_chip_prompt
+from services.owner_ai_profile import normalize_language, resolve_owner_reply_language
 from services.system_knowledge_retrieval import (
     capabilities_as_prompt_block,
     retrieve_capabilities,
@@ -30,11 +31,12 @@ SYSTEM_PROMPT = (
     "(system policy: supported languages + Franco→Arabic map + default). "
     "Neither the owner nor end customers can change customer reply language via Settings, "
     "profile preferred_language, or chat requests — refuse those and explain the CM rule. "
-    "App Settings language is UI-only for the owner app; it does not change DM/comment replies. "
+    "App Settings language is UI-only for the owner app chrome/welcome; it does not change DM/comment replies. "
     "Do not propose update_profile preferred_language to change how customers are answered. "
-    "Reply in the app/UI language given by reply_language (preferred_language). "
-    "Welcome chips and tool prompts may be English — still answer fully in reply_language. "
-    "Only switch languages if the owner explicitly asks to. "
+    "Reply in reply_language for this turn (detected from the owner's latest message; "
+    "app locale only for welcome-chip/UI prompts or when detection is unclear). "
+    "If the owner writes Arabic, answer in Arabic even when the app UI is English. "
+    "If they write English or French, answer in that language. Franco/Arabizi → Arabic script. "
     "Never infer gender from email or name; use unset/neutral address if gender is unset. "
     "Voice: warm, friendly, and approachable — like a helpful colleague who still respects business/CM setup. "
     "Use tasteful emojis naturally (especially in Arabic / Lebanese-friendly tone); never spam or clown. "
@@ -81,8 +83,8 @@ def pack_owner_turn_context(
 ) -> dict[str, Any]:
     """Build a small, structured context object for the orchestrator / future LLM turns.
 
-    reply_language / preferred_language (app UI locale) is authoritative so English chip
-    prompts still get Arabic/French Owner Copilot replies when the app is AR/FR.
+    Reply language follows the owner's latest message. App / preferred locale is only used
+    for welcome-chip UI prompts (English tool text) and when detection is unclear.
     """
     msgs = list(messages or [])
     account = build_account_summary(tenant_id=tenant_id, user_id=user_id)
@@ -90,8 +92,12 @@ def pack_owner_turn_context(
         (account.get("profile") or {}).get("preferred_language"),
         fallback="en",
     )
-    override = coerce_language(reply_language)
-    reply_lang = override or preferred
+    reply_lang = resolve_owner_reply_language(
+        user_text,
+        reply_language_override=reply_language,
+        preferred_language=preferred,
+        treat_as_ui_prompt=is_welcome_chip_prompt(user_text),
+    )
     caps = retrieve_capabilities(user_text, limit=4)
     recent = []
     for m in msgs[-MAX_RECENT_MESSAGES:]:

@@ -45,17 +45,25 @@ jobs:
               source /opt/linasbot/.env
             fi
             set +a
-            if [ -f "$APP_DIR/venv/bin/activate" ]; then
-              # shellcheck disable=SC1091
-              source "$APP_DIR/venv/bin/activate"
-            elif [ -f /opt/linasbot/venv/bin/activate ]; then
-              # shellcheck disable=SC1091
-              source /opt/linasbot/venv/bin/activate
+            PYTHON_BIN=""
+            if [ -x "$APP_DIR/venv/bin/python" ]; then
+              PYTHON_BIN="$APP_DIR/venv/bin/python"
+            elif [ -x "$APP_DIR/venv/bin/python3" ]; then
+              PYTHON_BIN="$APP_DIR/venv/bin/python3"
+            elif [ -x /opt/linasbot/venv/bin/python ]; then
+              PYTHON_BIN=/opt/linasbot/venv/bin/python
+            elif [ -x /opt/linasbot/venv/bin/python3 ]; then
+              PYTHON_BIN=/opt/linasbot/venv/bin/python3
+            fi
+            if [ -z "$PYTHON_BIN" ]; then
+              echo "App venv python missing" >&2
+              exit 1
             fi
             export PYTHONPATH="$APP_DIR${PYTHONPATH:+:$PYTHONPATH}"
             cd "$APP_DIR"
-            python3 scripts/audit_meta_app_a_scopes.py || python3 /opt/linasbot/scripts/audit_meta_app_a_scopes.py
-            python3 - <<'PY'
+            sudo -E PYTHONPATH="$PYTHONPATH" "$PYTHON_BIN" /opt/linasbot/scripts/audit_meta_app_a_scopes.py \
+              || sudo -E PYTHONPATH="$PYTHONPATH" "$PYTHON_BIN" scripts/audit_meta_app_a_scopes.py
+            sudo -E PYTHONPATH="$PYTHONPATH" "$PYTHON_BIN" - <<'PY'
 from services.channel_capability_state import comment_capability_state, dm_capability_state
 from services.entitlements_service import entitlements_store
 from services.plan_economics import PLAN_PRICES_USD

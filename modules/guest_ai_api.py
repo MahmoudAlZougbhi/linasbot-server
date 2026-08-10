@@ -16,8 +16,8 @@ from services.guest_chat_limits import (
     words_ok,
 )
 from services.guest_chat_store import guest_chat_store
+from services.owner_ai_profile import resolve_owner_reply_language
 from services.rate_limit_service import rate_limit_service
-from services.system_knowledge_retrieval import detect_message_language
 
 
 class GuestSessionBody(BaseModel):
@@ -128,9 +128,11 @@ async def send_guest_message(body: GuestMessageBody, request: Request) -> Any:
 
     session = guest_chat_store.get(body.guest_session_id)
     if session is None:
-        lang0 = (body.language or detect_message_language(content)).strip().lower()
-        if lang0 not in {"en", "ar", "fr"}:
-            lang0 = "en"
+        lang0 = resolve_owner_reply_language(
+            content,
+            reply_language_override=body.language,
+            preferred_language=body.language,
+        )
         session = guest_chat_store.get_or_create(
             body.guest_session_id,
             greeting=build_guest_greeting(language=lang0),
@@ -149,9 +151,11 @@ async def send_guest_message(body: GuestMessageBody, request: Request) -> Any:
             },
         }
 
-    lang = (body.language or detect_message_language(content)).strip().lower()
-    if lang not in {"en", "ar", "fr"}:
-        lang = "en"
+    lang = resolve_owner_reply_language(
+        content,
+        reply_language_override=body.language,
+        preferred_language=body.language,
+    )
 
     history = _history_payload(session)
     try:

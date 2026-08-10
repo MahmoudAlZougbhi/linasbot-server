@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from services.system_knowledge_registry import CAPABILITIES, Capability, get_capability
@@ -72,18 +71,11 @@ def help_payload_for_query(query: str) -> dict[str, Any]:
     }
 
 
-_LANG_HINT = re.compile(r"[\u0600-\u06FF]")
-
-
 def detect_message_language(text: str, *, fallback: str = "en") -> str:
     """Lightweight reply-language hint from the user message (not gender/name inference)."""
-    raw = (text or "").strip()
-    if not raw:
-        return fallback if fallback in {"ar", "en", "fr"} else "en"
-    if _LANG_HINT.search(raw):
-        return "ar"
-    lower = raw.lower()
-    fr_markers = ("bonjour", "merci", "comment", "s'il", "vous", "abonnement", "utilisation")
-    if any(m in lower for m in fr_markers):
-        return "fr"
-    return "en"
+    from services.owner_ai_profile import detect_owner_message_language, normalize_language
+
+    detected = detect_owner_message_language(text)
+    if detected:
+        return detected
+    return normalize_language(fallback, fallback="en")

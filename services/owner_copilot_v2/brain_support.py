@@ -152,8 +152,10 @@ def _build_messages(
         SYSTEM_V2,
         str(context.get("system_prompt") or ""),
         (
-            f"Reply language (app UI): {context.get('reply_language') or 'en'}. "
+            f"Reply language (this turn): {context.get('reply_language') or 'en'}. "
             "Write the entire final answer in that language. "
+            "It follows the owner's latest message language (not app Settings), "
+            "except for welcome-chip/UI start prompts. "
             "Do not answer in English unless reply language is en."
         ),
         f"Account snapshot: {json.dumps(context.get('account_summary') or {}, ensure_ascii=False, default=str)[:2000]}",
