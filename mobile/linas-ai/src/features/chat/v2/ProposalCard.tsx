@@ -144,7 +144,7 @@ export function ProposalCard({
       ) : null}
 
       <Text style={[styles.notApplied, { color: colors.textDim }]}>
-        Not applied yet — approval saves Draft only. Publish stays separate.
+        Not applied yet — approval makes this live for customer replies.
       </Text>
 
       <View style={styles.actions}>
@@ -152,10 +152,10 @@ export function ProposalCard({
           <Pressable
             style={[styles.primary, { backgroundColor: colors.accent }]}
             onPress={() => onApproveDraft?.(token)}
-            accessibilityLabel="Approve and apply to Draft"
+            accessibilityLabel="Approve and go live"
           >
             <Text style={{ color: colors.onAccent, fontFamily: fonts.bodyMedium }}>
-              Approve and apply to Draft
+              Approve and go live
             </Text>
           </Pressable>
         ) : null}

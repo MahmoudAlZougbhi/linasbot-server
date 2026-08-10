@@ -104,7 +104,7 @@ async def tool_approve_cm_patch(
         )
     from services.owner_ai_cm_approval import approve_cm_patch_and_activate
 
-    # Approve → validate → save → activate internally when published base exists.
+    # Approve → validate → save Draft → publish Live (section overlay or first full publish).
     # Never returns a user-facing Publish confirmation after approval.
     try:
         data = await approve_cm_patch_and_activate(
