@@ -43,6 +43,10 @@ def _print_cm_comment_actions() -> None:
     print(f"[scope-audit] cm_disable_linas_legacy_bridge={os.getenv('CM_DISABLE_LINAS_LEGACY_BRIDGE', '')}")
     print(f"[scope-audit] customer_reply_ai_v2={os.getenv('CUSTOMER_REPLY_AI_V2', '')}")
     print(f"[scope-audit] customer_reply_ai_v2_live={os.getenv('CUSTOMER_REPLY_AI_V2_LIVE', '')}")
+    print(
+        f"[scope-audit] meta_app_a_advanced_access_approved="
+        f"{(os.getenv('META_APP_A_ADVANCED_ACCESS_APPROVED') or '').strip().lower() or 'unset'}"
+    )
 
 
 def main() -> None:
@@ -86,6 +90,8 @@ def main() -> None:
         print(f"[scope-audit] comment_features_ready={comment_ready}")
         print(f"[scope-audit] publish_features_ready={publish_ready}")
         print(f"[scope-audit] per_asset_comment_enabled={bool(setting.enabled)}")
+        declined = sorted(set(credential.declined_scopes or ()))
+        print(f"[scope-audit] declined_scopes={','.join(declined) or 'none'}")
         print(
             f"[scope-audit] webhook_subscribed_fields={','.join(sorted(binding.webhook_subscribed_fields)) or 'none'}"
         )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
 GenderValue = Literal["male", "female", "unset"]
@@ -9,6 +10,45 @@ LangValue = Literal["ar", "en", "fr"]
 
 ALLOWED_GENDERS: frozenset[str] = frozenset({"male", "female", "unset"})
 ALLOWED_LANGS: frozenset[str] = frozenset({"ar", "en", "fr"})
+
+_ARABIC_SCRIPT = re.compile(r"[\u0600-\u06FF]")
+# Safer Franco / Arabizi markers (avoid single-digit false positives like "3"/"7").
+_FRANCO_WORD_MARKERS = (
+    "kifak",
+    "kifik",
+    "kif",
+    "shou",
+    "shu",
+    "mish",
+    "mesh",
+    "mafi",
+    "bade",
+    "baddi",
+    "ehke",
+    "a7ke",
+    "mar7aba",
+    "ahla",
+    "yalá",
+    "yalla",
+    "keef",
+    "shu badek",
+    "shou badek",
+)
+_FRENCH_MARKERS = (
+    "bonjour",
+    "bonsoir",
+    "merci",
+    "salut",
+    "s'il",
+    "s’il",
+    "vous",
+    "abonnement",
+    "utilisation",
+    "je veux",
+    "je suis",
+    "comment ça",
+    "comment ca",
+)
 
 
 def normalize_gender(value: Any) -> GenderValue:
@@ -51,6 +91,51 @@ def language_from_accept_header(header: str | None) -> LangValue | None:
         return None
     first = header.split(",", 1)[0].strip().split(";", 1)[0].strip()
     return coerce_language(first)
+
+
+def detect_owner_message_language(text: str) -> LangValue | None:
+    """Detect reply language from the latest owner/guest message.
+
+    Franco / Arabizi → ``ar`` (reply in Arabic script). Returns None when unclear.
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    if _ARABIC_SCRIPT.search(raw):
+        return "ar"
+    lower = raw.lower()
+    if any(marker in lower for marker in _FRANCO_WORD_MARKERS):
+        return "ar"
+    if any(marker in lower for marker in _FRENCH_MARKERS):
+        return "fr"
+    # Substantial Latin text without AR/FR/Franco markers → English.
+    letters = sum(1 for ch in raw if ch.isalpha())
+    if letters >= 3:
+        return "en"
+    return None
+
+
+def resolve_owner_reply_language(
+    user_text: str,
+    *,
+    reply_language_override: str | None = None,
+    preferred_language: str | None = None,
+    treat_as_ui_prompt: bool = False,
+) -> LangValue:
+    """Owner Copilot reply language: follow the user's latest message.
+
+    App / preferred locale is only for welcome-chip / UI prompts and unclear detection.
+    Never used to lock customer DM/comment language (CM Languages owns that).
+    """
+    fallback = coerce_language(reply_language_override) or normalize_language(
+        preferred_language, fallback="en"
+    )
+    if treat_as_ui_prompt:
+        return fallback
+    detected = detect_owner_message_language(user_text)
+    if detected:
+        return detected
+    return fallback
 
 
 def never_infer_gender_from_identity(*, email: str | None = None, name: str | None = None) -> GenderValue:

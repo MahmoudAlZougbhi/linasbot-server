@@ -34,4 +34,12 @@ jobs:
             set -a
             source /opt/linasbot/.env
             set +a
-            sudo -E PYTHONPATH=/opt/linasbot python3 scripts/audit_meta_app_a_scopes.py
+            PYTHON_BIN="/opt/linasbot/venv/bin/python"
+            if [ ! -x "$PYTHON_BIN" ]; then
+              PYTHON_BIN="/opt/linasbot/venv/bin/python3"
+            fi
+            if [ ! -x "$PYTHON_BIN" ]; then
+              echo "App venv python missing" >&2
+              exit 1
+            fi
+            sudo -E PYTHONPATH=/opt/linasbot "$PYTHON_BIN" scripts/audit_meta_app_a_scopes.py

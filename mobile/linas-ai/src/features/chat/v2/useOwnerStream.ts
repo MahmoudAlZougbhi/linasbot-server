@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { API_BASE, apiUpload, ensureAccessToken, refreshAccessToken } from '../../../api/client';
 import { appendLocalFile } from '../../../api/formDataFile';
-import { getStoredAppLanguage } from '../../../i18n/languageStore';
 
 export type StreamStatus = { id: string; text: string };
 export type StreamCard = {
@@ -137,8 +136,7 @@ export function useOwnerStream() {
             let carry = '';
             let terminal: StreamResult = 'done';
             let settled = false;
-            const locale = body.reply_language || getStoredAppLanguage();
-            const payload = { ...body, reply_language: locale };
+            const payload = { ...body };
 
             const finish = (result: StreamResult) => {
               if (settled) return;
