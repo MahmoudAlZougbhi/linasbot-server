@@ -24,8 +24,14 @@ jobs:
             echo "[probe] subject=$(git log -1 --pretty=%s)"
             APP_DIR=/opt/linasbot
             if [ -f /opt/linasbot/linaslaserbot-2.7.22/main.py ]; then APP_DIR=/opt/linasbot/linaslaserbot-2.7.22; fi
+            cd "$APP_DIR"
+            if [ -f venv/bin/activate ]; then
+              # shellcheck disable=SC1091
+              . venv/bin/activate
+            fi
             PYTHON_BIN="$APP_DIR/venv/bin/python3"
             [ -x "$PYTHON_BIN" ] || PYTHON_BIN=$(command -v python3)
+            echo "[probe] python_bin=$PYTHON_BIN"
             "$PYTHON_BIN" - <<'PY'
             from __future__ import annotations
             import os, sys
@@ -70,7 +76,11 @@ jobs:
             except Exception as e:
                 print(f"[probe] linas_public_ERROR type={type(e).__name__} msg={e}")
 
-            ent_root = Path(APP_DIR) / "data" / "entitlements"
+            from storage.persistent_storage import _DATA_ROOT
+            print(f"[probe] data_root={_DATA_ROOT}")
+            ent_root = Path(_DATA_ROOT) / "entitlements"
+            if not ent_root.exists():
+                ent_root = Path(APP_DIR) / "data" / "entitlements"
             if not ent_root.exists():
                 ent_root = Path("/opt/linasbot/data/entitlements")
             files = sorted(p.name for p in ent_root.glob("*.json")) if ent_root.exists() else []
@@ -78,10 +88,16 @@ jobs:
             if (ent_root / "linas.json").exists():
                 print(f"[probe] linas_entitlement_raw={(ent_root / 'linas.json').read_text()[:400]!r}")
 
-            from utils.utils import get_firestore_db
-            db = get_firestore_db()
+            try:
+                from utils.utils import get_firestore_db
+                db = get_firestore_db()
+            except Exception as e:
+                print(f"[probe] firestore_import_error type={type(e).__name__} msg={e}")
+                print("[probe] COMPLETE_OK")
+                raise SystemExit(0)
             if not db:
                 print("[probe] firestore_unavailable")
+                print("[probe] COMPLETE_OK")
                 raise SystemExit(0)
             coll = db.collection("artifacts").document("linas-ai-bot-backend").collection("dashboard_users")
             docs = list(coll.stream())
