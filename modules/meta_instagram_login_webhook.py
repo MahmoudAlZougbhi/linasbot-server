@@ -12,7 +12,12 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 
 from modules.core import app
 from services.meta_app_registry import APP_A_KEY, get_meta_app_configs, meta_multi_app_registry_enabled
-from services.meta_comment_events import ResolvedMetaCommentEvent, resolve_registry_comment_events
+from services.meta_comment_events import (
+    ResolvedMetaCommentEvent,
+    count_raw_comment_changes,
+    resolve_registry_comment_events,
+    summarize_comment_resolve_drops,
+)
 from services.meta_comment_replies import process_meta_comment_event
 from services.meta_cross_flow_dedup import (
     GLOBAL_COMMENT_CLAIM_NAMESPACE,
@@ -144,11 +149,25 @@ async def receive_instagram_login_webhook(request: Request) -> Any:
 
     comment_accepted = 0
     comment_duplicates = 0
+    raw_comment_changes = count_raw_comment_changes(payload)
     resolved_comment_events = resolve_registry_comment_events(
         payload,
         app_config=app_config,
         auth_flow="instagram_login",
     )
+    if raw_comment_changes and not resolved_comment_events:
+        drop = summarize_comment_resolve_drops(
+            payload,
+            app_config=app_config,
+            auth_flow="instagram_login",
+        )
+        _runtime_logger.warning(
+            "[meta-comment] events_dropped object=%s raw=%d resolved=0 bindings=%d reasons=%s auth_flow=instagram_login",
+            payload_object,
+            drop["raw_comment_changes"],
+            drop["active_bindings"],
+            drop["skip_reasons"],
+        )
 
     async def _process_comment_claimed(resolved: ResolvedMetaCommentEvent, *, global_key: str) -> None:
         from services.durable_event_claim import complete_event_claim, release_event_claim

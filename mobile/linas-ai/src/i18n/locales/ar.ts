@@ -75,6 +75,10 @@ export const ar: Record<StringKey, string> = {
   integrationsToggleError: 'تعذر تحديث إعداد القناة. حاول مجدداً.',
   toggleDms: 'الرسائل المباشرة',
   toggleComments: 'التعليقات',
+  commentsBlockerMissingPermissions:
+    'التعليقات تحتاج صلاحيات Meta للتعليقات. أعد التفويض لفيسبوك/إنستغرام مع صلاحية التعليقات (بدون فصل).',
+  commentsBlockerConnectFirst: 'اربط هذه القناة قبل تفعيل التعليقات.',
+  commentsBlockerGeneric: 'التعليقات غير جاهزة على هذا الاتصال بعد.',
   platformInstagram: 'إنستغرام',
   platformFacebook: 'فيسبوك',
   platformTikTok: 'تيك توك',

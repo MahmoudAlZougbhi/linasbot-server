@@ -295,13 +295,14 @@ async def process_meta_comment_event(
     graph_version = settings.graph_api_version or "v24.0"
     token = settings.page_access_token
     owner_id = binding.page_id if binding.channel == "facebook" else (binding.instagram_account_id or binding.asset_id)
+    reply_list_path = f"{comment_id}/comments" if binding.channel == "facebook" else f"{comment_id}/replies"
     async with httpx.AsyncClient(timeout=20.0) as client:
         if await _comment_has_page_reply(
             client,
             comment_id=comment_id,
             owner_id=owner_id,
             token=token,
-            graph_url=graph_api_url(binding, graph_api_version=graph_version, path=f"{comment_id}/comments"),
+            graph_url=graph_api_url(binding, graph_api_version=graph_version, path=reply_list_path),
         ):
             return CommentReplyResult(status="ignored", reason="human_replied")
 

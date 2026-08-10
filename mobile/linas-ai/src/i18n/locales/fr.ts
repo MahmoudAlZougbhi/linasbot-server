@@ -78,6 +78,10 @@ export const fr: Record<StringKey, string> = {
   integrationsToggleError: 'Impossible de mettre à jour le réglage du canal. Réessayez.',
   toggleDms: 'Messages privés',
   toggleComments: 'Commentaires',
+  commentsBlockerMissingPermissions:
+    'Les commentaires nécessitent les permissions Meta. Réautorisez Facebook/Instagram avec l’accès commentaires (sans déconnexion).',
+  commentsBlockerConnectFirst: 'Connectez ce canal avant d’activer les commentaires.',
+  commentsBlockerGeneric: 'Les commentaires ne sont pas encore prêts sur cette connexion.',
   platformInstagram: 'Instagram',
   platformFacebook: 'Facebook',
   platformTikTok: 'TikTok',

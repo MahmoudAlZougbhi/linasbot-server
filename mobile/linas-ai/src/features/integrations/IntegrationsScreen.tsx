@@ -37,6 +37,7 @@ const RowSchema = z.object({
   connectable: z.boolean().optional(),
   binding_ids: z.array(z.string()).optional(),
   toggles: TogglesSchema.optional(),
+  comments_blocker: z.string().optional(),
   capabilities: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -284,12 +285,23 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
               ) : (
                 <>
                   {showToggles ? (
-                    <ChannelCapabilityToggles
-                      toggles={defaultToggles(row)}
-                      busyKey={busyToggle?.platform === row.platform ? busyToggle.key : null}
-                      disabled={busyPlatform !== null || busyToggle !== null}
-                      onToggle={(key, value) => void setToggle(row, key, value)}
-                    />
+                    <>
+                      <ChannelCapabilityToggles
+                        toggles={defaultToggles(row)}
+                        busyKey={busyToggle?.platform === row.platform ? busyToggle.key : null}
+                        disabled={busyPlatform !== null || busyToggle !== null}
+                        onToggle={(key, value) => void setToggle(row, key, value)}
+                      />
+                      {row.comments_blocker ? (
+                        <Text style={styles.soonHint}>
+                          {row.comments_blocker === 'missing_comment_permissions'
+                            ? tr('commentsBlockerMissingPermissions')
+                            : row.comments_blocker === 'connect_channel_first'
+                              ? tr('commentsBlockerConnectFirst')
+                              : tr('commentsBlockerGeneric')}
+                        </Text>
+                      ) : null}
+                    </>
                   ) : null}
                   {row.connected ? (
                     <PrimaryButton

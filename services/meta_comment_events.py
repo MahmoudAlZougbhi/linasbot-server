@@ -155,24 +155,67 @@ def parse_meta_comment_events(
     return _parse_instagram_comment_changes(payload, instagram_account_id=instagram_account_id)
 
 
+def count_raw_comment_changes(payload: dict[str, Any]) -> int:
+    """Count comment-shaped webhook changes without binding resolution (observability)."""
+
+    object_name = str(payload.get("object") or "").strip().lower()
+    count = 0
+    for entry in payload.get("entry") or []:
+        if not isinstance(entry, dict):
+            continue
+        for change in entry.get("changes") or []:
+            if not isinstance(change, dict):
+                continue
+            field = str(change.get("field") or "").strip().lower()
+            value = change.get("value")
+            if not isinstance(value, dict):
+                continue
+            if object_name == "page" and field == "feed":
+                if str(value.get("item") or "").strip().lower() != "comment":
+                    continue
+                verb = str(value.get("verb") or "add").strip().lower()
+                if verb not in {"add", "edited"}:
+                    continue
+                count += 1
+            elif object_name == "instagram" and field == "comments":
+                count += 1
+    return count
+
+
+def comment_binding_skip_reason(
+    binding: MetaAssetBinding,
+    *,
+    app_config: MetaAppConfig,
+    registry: MetaAppRegistry,
+) -> str | None:
+    """Return why a binding cannot handle comments, or None when ready."""
+
+    try:
+        credential = registry.get_credential(binding)
+    except Exception:
+        return "credential_unavailable"
+    if binding.auth_flow == "facebook_login" and credential.token_app_id != app_config.app_id:
+        return "token_app_mismatch"
+    if binding.auth_flow == "instagram_login" and credential.token_app_id != instagram_login_app_id():
+        return "token_app_mismatch"
+    if credential.expires_at and credential.expires_at <= int(time.time()):
+        return "token_expired"
+    if facebook_login_binding_superseded_for_capability(binding, "comments", registry=registry):
+        return "superseded_by_instagram_login"
+    if not binding_ready_for_comments(binding, credential):
+        return "comment_scopes_or_subscription_missing"
+    return None
+
+
 def _prepare_comment_binding(
     binding: MetaAssetBinding,
     *,
     app_config: MetaAppConfig,
     registry: MetaAppRegistry,
 ) -> tuple[MetaAssetBinding, MetaBindingCredential] | None:
-    credential = registry.get_credential(binding)
-    if binding.auth_flow == "facebook_login" and credential.token_app_id != app_config.app_id:
+    if comment_binding_skip_reason(binding, app_config=app_config, registry=registry) is not None:
         return None
-    if binding.auth_flow == "instagram_login" and credential.token_app_id != instagram_login_app_id():
-        return None
-    if credential.expires_at and credential.expires_at <= int(time.time()):
-        return None
-    if facebook_login_binding_superseded_for_capability(binding, "comments", registry=registry):
-        return None
-    if not binding_ready_for_comments(binding, credential):
-        return None
-    return binding, credential
+    return binding, registry.get_credential(binding)
 
 
 def resolve_registry_comment_events(
@@ -254,3 +297,29 @@ def resolve_registry_comment_events(
         )
         resolved.append(ResolvedMetaCommentEvent(event=tagged, settings=settings, binding=binding))
     return resolved
+
+
+def summarize_comment_resolve_drops(
+    payload: dict[str, Any],
+    *,
+    app_config: MetaAppConfig,
+    registry: MetaAppRegistry | None = None,
+    auth_flow: AuthFlow | None = None,
+) -> dict[str, Any]:
+    """Redacted summary when comment-shaped webhooks do not resolve to a binding."""
+
+    current_registry = registry or get_meta_app_registry()
+    bindings = [
+        binding
+        for binding in current_registry.get_active_bindings_for_app(app_config.key)
+        if binding.status == "active" and (auth_flow is None or binding.auth_flow == auth_flow)
+    ]
+    reasons: dict[str, int] = {}
+    for binding in bindings:
+        reason = comment_binding_skip_reason(binding, app_config=app_config, registry=current_registry) or "ready"
+        reasons[reason] = reasons.get(reason, 0) + 1
+    return {
+        "raw_comment_changes": count_raw_comment_changes(payload),
+        "active_bindings": len(bindings),
+        "skip_reasons": reasons,
+    }

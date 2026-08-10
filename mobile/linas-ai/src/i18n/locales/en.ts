@@ -89,6 +89,10 @@ export const en = {
   integrationsToggleError: 'Could not update channel setting. Try again.',
   toggleDms: 'Direct messages',
   toggleComments: 'Comments',
+  commentsBlockerMissingPermissions:
+    'Comments need Meta comment permissions. Reauthorize Facebook/Instagram with comment access (no disconnect required).',
+  commentsBlockerConnectFirst: 'Connect this channel before enabling comments.',
+  commentsBlockerGeneric: 'Comments are not ready on this connection yet.',
   platformInstagram: 'Instagram',
   platformFacebook: 'Facebook',
   platformTikTok: 'TikTok',

@@ -15,6 +15,7 @@ from services.meta_app_registry import (
 )
 from services.meta_comment_events import (
     ResolvedMetaCommentEvent,
+    count_raw_comment_changes,
     parse_meta_comment_events,
     resolve_registry_comment_events,
 )
@@ -134,6 +135,14 @@ class MetaCommentEventParserTests(unittest.TestCase):
         )
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["comment_id"], "igc1")
+
+    def test_count_raw_comment_changes(self):
+        self.assertEqual(count_raw_comment_changes(_facebook_comment_payload()), 1)
+        self.assertEqual(count_raw_comment_changes(_instagram_comment_payload()), 1)
+        self.assertEqual(
+            count_raw_comment_changes({"object": "instagram", "entry": [{"id": "222", "messaging": []}]}),
+            0,
+        )
 
     def test_self_page_comment_ignored_in_processor(self):
         binding = _binding(channel="facebook", asset_id="111", page_id="111")

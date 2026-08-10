@@ -66,6 +66,21 @@ def channel_toggle_states(tenant_id: str, platform: str) -> dict[str, bool]:
     }
 
 
+def comments_enable_blocker(tenant_id: str, platform: str) -> str | None:
+    """Explain why Enable comments cannot succeed yet (scopes / no binding)."""
+
+    platform_key = (platform or "").strip().lower()
+    if platform_key not in _CHANNEL_ACTION_IDS:
+        return None
+    bindings = _active_channel_bindings(tenant_id, platform_key)
+    if not bindings:
+        return "connect_channel_first"
+    registry = get_meta_app_registry()
+    if any(not credential_has_comment_scopes(binding, registry) for binding in bindings):
+        return "missing_comment_permissions"
+    return None
+
+
 def attach_channel_toggles(rows: list[dict[str, Any]], *, tenant_id: str) -> list[dict[str, Any]]:
     """Add ``toggles`` to Instagram/Facebook rows; leave coming-soon rows untouched."""
     out: list[dict[str, Any]] = []
@@ -74,7 +89,11 @@ def attach_channel_toggles(rows: list[dict[str, Any]], *, tenant_id: str) -> lis
         if platform not in _CHANNEL_ACTION_IDS or row.get("coming_soon") is True:
             out.append(row)
             continue
-        out.append({**row, "toggles": channel_toggle_states(tenant_id, platform)})
+        enriched = {**row, "toggles": channel_toggle_states(tenant_id, platform)}
+        blocker = comments_enable_blocker(tenant_id, platform)
+        if blocker:
+            enriched["comments_blocker"] = blocker
+        out.append(enriched)
     return out
 
 
@@ -138,6 +157,18 @@ async def _sync_comment_assets(*, tenant_id: str, platform: str, enabled: bool) 
                 instructions=previous.instructions,
             )
             raise ChannelToggleError(str(exc), status_code=409, code="COMMENT_WEBHOOK_FAILED") from exc
+
+
+async def sync_published_comment_assets_if_enabled(*, tenant_id: str, platform: str) -> None:
+    """After Meta connect/reauth, sync per-asset comment switch when CM comments action is ON."""
+
+    platform_key = (platform or "").strip().lower()
+    if platform_key not in _CHANNEL_ACTION_IDS:
+        return
+    states = channel_toggle_states(tenant_id, platform_key)
+    if not states.get("comments"):
+        return
+    await _sync_comment_assets(tenant_id=tenant_id, platform=platform_key, enabled=True)
 
 
 def _set_action_in_draft(*, tenant_id: str, action_id: str, enabled: bool, actor: str) -> ActionsSection:
@@ -223,7 +254,17 @@ async def set_channel_toggle(
         await _publish_actions(tenant_id=tenant_id, actor=actor)
 
         if toggle == "comments" and enabled:
-            await _sync_comment_assets(tenant_id=tenant_id, platform=platform_key, enabled=True)
+            try:
+                await _sync_comment_assets(tenant_id=tenant_id, platform=platform_key, enabled=True)
+            except ChannelToggleError:
+                _set_action_in_draft(
+                    tenant_id=tenant_id,
+                    action_id=action_id,
+                    enabled=False,
+                    actor=actor,
+                )
+                await _publish_actions(tenant_id=tenant_id, actor=actor)
+                raise
     except ConflictError as exc:
         raise ChannelToggleError(
             "Actions draft changed; reload and retry.",
