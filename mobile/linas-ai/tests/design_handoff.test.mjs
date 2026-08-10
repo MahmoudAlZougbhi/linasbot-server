@@ -81,6 +81,22 @@ test('Chat|Work toggle shows on new owner chat despite greeting seed', () => {
   assert.match(session, /setMessages\(\[\]\)/);
 });
 
+test('New Chat welcome types the greeting seed (no empty-state typewriter kill)', () => {
+  const empty = read('features/chat/OwnerEmptyState.tsx');
+  const typewriter = read('features/chat/useWelcomeTypewriter.ts');
+  const bubble = read('features/chat/ChatBubble.tsx');
+  const session = read('features/chat/useChatSession.ts');
+  const chat = read('features/chat/ChatScreen.tsx');
+  assert.doesNotMatch(empty, /useWelcomeTypewriter|useOnceTypewriter/);
+  assert.match(typewriter, /useOnceTypewriter/);
+  assert.doesNotMatch(typewriter, /holdFull|deleteBody|deleteTitle/);
+  assert.match(bubble, /useOnceTypewriter/);
+  assert.match(bubble, /useReduceMotion/);
+  assert.match(session, /seedTypewriterMessageId/);
+  assert.match(chat, /seedTypewriterMessageId/);
+  assert.match(chat, /clearSeedTypewriter/);
+});
+
 test('App launches chat-first for guest and owner', () => {
   const app = readFileSync(join(root, 'App.tsx'), 'utf8');
   assert.match(app, /setScreen\(\{ name: 'chat' \}\)/);

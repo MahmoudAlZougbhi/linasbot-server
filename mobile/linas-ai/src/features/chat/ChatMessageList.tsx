@@ -49,6 +49,8 @@ type Props = {
   onGuestPrompt: (prompt: string) => void;
   showOwnerWelcomeChips?: boolean;
   onOwnerWelcomeChip?: (chip: OwnerWelcomeChip) => void;
+  seedTypewriterMessageId?: string | null;
+  onSeedTypewriterDone?: () => void;
 };
 
 export function ChatMessageList({
@@ -75,6 +77,8 @@ export function ChatMessageList({
   onGuestPrompt,
   showOwnerWelcomeChips = false,
   onOwnerWelcomeChip,
+  seedTypewriterMessageId = null,
+  onSeedTypewriterDone,
 }: Props) {
   const { tr } = useI18n();
   const { colors } = useTheme();
@@ -152,6 +156,10 @@ export function ChatMessageList({
             <ChatBubble
               message={item}
               imageUris={rematched}
+              typewriter={item.id === seedTypewriterMessageId}
+              onTypewriterDone={
+                item.id === seedTypewriterMessageId ? onSeedTypewriterDone : undefined
+              }
               onRetry={
                 item.role === 'assistant'
                   ? () => {

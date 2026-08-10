@@ -1,30 +1,52 @@
+import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import type { ChatMessage } from '../../api/types';
 import { LinasStarMark } from '../../components/LinasStarMark';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, typography, useTheme } from '../../theme';
 import { MessageActions } from './MessageActions';
 import { MessageImageThumbs } from './MessageImageThumbs';
+import { useOnceTypewriter } from './useWelcomeTypewriter';
 
 type Props = {
   message: ChatMessage;
   onRetry?: () => void;
   showActions?: boolean;
   imageUris?: string[];
+  /** One-shot type the seeded New Chat greeting into this bubble. */
+  typewriter?: boolean;
+  onTypewriterDone?: () => void;
 };
 
 function detectRtl(text: string): boolean {
   return /[\u0600-\u06FF]/.test(text) && !/^[A-Za-z0-9\s.,!?'"()-]+$/.test(text.trim());
 }
 
-export function ChatBubble({ message, onRetry, showActions = true, imageUris }: Props) {
+export function ChatBubble({
+  message,
+  onRetry,
+  showActions = true,
+  imageUris,
+  typewriter = false,
+  onTypewriterDone,
+}: Props) {
   const { isRtl } = useI18n();
   const { colors } = useTheme();
+  const reduceMotion = useReduceMotion();
   const isUser = message.role === 'user';
   const rtl = isRtl || detectRtl(message.content);
   const thumbs = imageUris?.length ? imageUris : message.local_image_uris;
   const hasText = Boolean(message.content?.trim());
+  const animate = Boolean(typewriter && !isUser && hasText && !reduceMotion);
+  const { shown, done, cursorOn } = useOnceTypewriter(message.content, animate);
+  const displayText = animate && !done ? shown : message.content;
+
+  useEffect(() => {
+    if (!typewriter) return;
+    if (reduceMotion || done) onTypewriterDone?.();
+  }, [done, onTypewriterDone, reduceMotion, typewriter]);
 
   return (
     <View style={[styles.row, isUser ? styles.rowUser : styles.rowAi]}>
@@ -51,8 +73,12 @@ export function ChatBubble({ message, onRetry, showActions = true, imageUris }: 
                 { color: isUser ? colors.bubbleUserText : colors.bubbleAiText },
                 rtl && styles.rtl,
               ]}
+              accessibilityLabel={message.content}
             >
-              {message.content}
+              {displayText}
+              {animate && !done && cursorOn ? (
+                <Text style={{ color: colors.accent }}>|</Text>
+              ) : null}
             </Text>
           ) : null}
         </View>

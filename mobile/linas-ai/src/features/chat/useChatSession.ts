@@ -112,6 +112,8 @@ export function useChatSession(enabled = true) {
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
   const [proposedPatch, setProposedPatch] = useState<ProposedPatch | null>(null);
   const [quickActions, setQuickActions] = useState<{ id: string; label: string }[]>([]);
+  /** Message id of a freshly seeded greeting to type into the bubble once. */
+  const [seedTypewriterMessageId, setSeedTypewriterMessageId] = useState<string | null>(null);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
   const hasMoreRef = useRef(hasMore);
@@ -141,6 +143,7 @@ export function useChatSession(enabled = true) {
         setTitle(full.conversation.title);
         setMessages(full.conversation.messages);
         setHasMore(Boolean(full.conversation.has_more));
+        setSeedTypewriterMessageId(null);
       } else {
         const created = await apiFetch('/api/owner-ai/conversations', {
           method: 'POST',
@@ -152,6 +155,10 @@ export function useChatSession(enabled = true) {
         setMessages(created.conversation.messages);
         setHasMore(false);
         setHistory([{ id: created.conversation.id, title: created.conversation.title }]);
+        const seed = created.conversation.messages[0];
+        setSeedTypewriterMessageId(
+          seed?.role === 'assistant' && created.conversation.messages.length === 1 ? seed.id : null,
+        );
       }
     } catch {
       setError('retry');
@@ -234,6 +241,7 @@ export function useChatSession(enabled = true) {
     setHasMore(Boolean(full.conversation.has_more));
     setPendingConfirm(null);
     setProposedPatch(null);
+    setSeedTypewriterMessageId(null);
   }
 
   async function newChat() {
@@ -242,6 +250,7 @@ export function useChatSession(enabled = true) {
     setHasMore(false);
     setPendingConfirm(null);
     setProposedPatch(null);
+    setSeedTypewriterMessageId(null);
     const created = await apiFetch('/api/owner-ai/conversations', {
       method: 'POST',
       body: JSON.stringify({}),
@@ -252,6 +261,10 @@ export function useChatSession(enabled = true) {
     setMessages(created.conversation.messages);
     setHasMore(false);
     setHistory((prev) => [{ id: created.conversation.id, title: created.conversation.title }, ...prev]);
+    const seed = created.conversation.messages[0];
+    setSeedTypewriterMessageId(
+      seed?.role === 'assistant' && created.conversation.messages.length === 1 ? seed.id : null,
+    );
   }
 
   const loadOlder = useCallback(async () => {
@@ -305,6 +318,7 @@ export function useChatSession(enabled = true) {
 
   function appendOptimisticUser(content: string, localImageUris?: string[]) {
     const id = `local-${Date.now()}`;
+    setSeedTypewriterMessageId(null);
     setMessages((prev) => [
       ...prev,
       {
@@ -322,6 +336,10 @@ export function useChatSession(enabled = true) {
     setMessages((prev) => prev.filter((m) => m.id !== id));
   }
 
+  const clearSeedTypewriter = useCallback(() => {
+    setSeedTypewriterMessageId(null);
+  }, []);
+
   return {
     conversationId,
     title,
@@ -335,6 +353,8 @@ export function useChatSession(enabled = true) {
     pendingConfirm,
     proposedPatch,
     quickActions,
+    seedTypewriterMessageId,
+    clearSeedTypewriter,
     bootstrap,
     syncAfterTurn,
     applyConversationTitle,
