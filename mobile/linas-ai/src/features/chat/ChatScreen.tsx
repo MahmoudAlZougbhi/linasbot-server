@@ -39,6 +39,7 @@ import { usePinnedChats } from './usePinnedChats';
 import { useVoiceDraft } from './useVoiceDraft';
 import { ChoiceChips } from './v2/ChoiceChips';
 import type { PendingFile } from './v2/pickAttachment';
+import { useSetupHandoff } from './useSetupHandoff';
 import { useStreamingTurn } from './v2/useStreamingTurn';
 
 type Props = {
@@ -95,7 +96,7 @@ export function ChatScreen({
     setOwnerMode('chat');
     if (turn.streaming) turn.stop();
     void owner.newChat();
-  }, [isAuthenticated, owner, turn]);
+  }, [isAuthenticated, owner, stickToBottomRef, turn]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -148,7 +149,6 @@ export function ChatScreen({
     messages.length,
     turn.thinking,
     turn.liveText,
-    turn.thinking,
     turn.statusRows.length,
     turn.cards.length,
     turn.choices.length,
@@ -167,6 +167,19 @@ export function ChatScreen({
     [ownerMode, turn],
   );
 
+  useSetupHandoff({
+    isAuthenticated,
+    loading: owner.loading,
+    streaming: turn.streaming,
+    setDraft,
+    setOwnerMode,
+    send: (text, mode) => {
+      stickToBottomRef.current = true;
+      void turn.send(text, { owner_mode: mode });
+    },
+  });
+
+  // ChatGPT-like open: keep chat chrome up — no second full-screen spinner after boot.
   return (
     <GradientBackground>
       <KeyboardAvoidingView

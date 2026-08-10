@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -11,45 +11,95 @@ import {
 
 import { AppIcon, feather } from '../../components/AppIcon';
 import { EmptyState } from '../../components/EmptyState';
-import { StatusChip } from '../../components/StatusChip';
 import { HIT, fonts, radii, spacing, useTheme } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
+import { CmReadinessCard } from './CmReadinessCard';
 import { fetchCmMeta, type CmMeta } from './cmApi';
+import {
+  buildFillMissingPrompt,
+  fetchCmSetupProgress,
+  type CmProgressRow,
+} from './cmProgressApi';
 import { CM_SECTION_ICONS } from './cmSectionIcons';
-import { CM_HUB_CARDS, type CmSectionId } from './cmSections';
+import { CM_HUB_CARDS, CM_SECTION_CARDS, type CmSectionId } from './cmSections';
 
 type Props = {
   onBack: () => void;
   onOpenSection: (section: CmSectionId) => void;
-  onContinueSetup?: () => void;
+  onContinueSetup?: (prompt: string) => void;
 };
 
-/** CM-01 overview — PDF list rows with section icons + Draft / Valid / Published lifecycle. */
+function titleMap(): Record<string, string> {
+  return Object.fromEntries(CM_SECTION_CARDS.map((c) => [c.id, c.title]));
+}
+
+/** CM overview — real fill progress + section rows with Filled / Missing. */
 export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
   const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [meta, setMeta] = useState<CmMeta | null>(null);
+  const [rows, setRows] = useState<CmProgressRow[]>([]);
+  const [summary, setSummary] = useState({
+    complete: 0,
+    incomplete: 0,
+    total: 0,
+    percent: 0,
+    published: false,
+    missing_sections: [] as string[],
+  });
   const [query, setQuery] = useState('');
   const [issuesOnly, setIssuesOnly] = useState(false);
 
-  useEffect(() => {
-    void (async () => {
-      setLoading(true);
-      try {
-        setMeta(await fetchCmMeta());
-        setError(null);
-      } catch {
-        setError('Could not load Content Management meta.');
-      } finally {
-        setLoading(false);
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [metaRes, prog] = await Promise.all([fetchCmMeta(), fetchCmSetupProgress()]);
+      setMeta(metaRes);
+      const progressRows = prog.progress ?? [];
+      setRows(progressRows);
+      const s = prog.summary;
+      if (s) {
+        setSummary({
+          complete: s.complete,
+          incomplete: s.incomplete,
+          total: s.total,
+          percent: s.percent,
+          published: Boolean(s.published ?? metaRes.has_published_content),
+          missing_sections: s.missing_sections ?? [],
+        });
+      } else {
+        const complete = progressRows.filter((r) => r.status === 'complete').length;
+        const total = progressRows.length || 1;
+        setSummary({
+          complete,
+          incomplete: total - complete,
+          total,
+          percent: Math.round((complete / total) * 100),
+          published: Boolean(metaRes.has_published_content),
+          missing_sections: progressRows.filter((r) => r.status !== 'complete').map((r) => r.section),
+        });
       }
-    })();
+      setError(null);
+    } catch {
+      setError('Could not load Content Management progress.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const statusBySection = useMemo(() => {
+    const map = new Map<string, 'complete' | 'incomplete'>();
+    for (const row of rows) map.set(row.section, row.status);
+    return map;
+  }, [rows]);
 
   const tiles = useMemo(() => {
     const apiSections = new Set((meta?.sections ?? []).map((s) => s.replace(/-/g, '_')));
-    // Hub shows only mobile CM sections — never Actions/AI Limits/FAQ/web hubs.
     const base =
       apiSections.size === 0
         ? CM_HUB_CARDS
@@ -57,14 +107,21 @@ export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
     const q = query.trim().toLowerCase();
     return base.filter((t) => {
       if (q && !`${t.title} ${t.description}`.toLowerCase().includes(q)) return false;
-      if (issuesOnly && t.mobileSupported !== false) return false;
+      if (issuesOnly) {
+        const st = statusBySection.get(t.id);
+        if (st === 'complete') return false;
+      }
       return true;
     });
-  }, [meta, query, issuesOnly]);
+  }, [meta, query, issuesOnly, statusBySection]);
 
-  const published = Boolean(meta?.has_published_content);
-  const lifecycle = published ? 'Published / Live' : meta ? 'Draft' : 'Unknown';
-  const readyCount = tiles.filter((t) => t.mobileSupported !== false).length;
+  const titles = useMemo(() => titleMap(), []);
+  const missingPreview = useMemo(
+    () => summary.missing_sections.map((id) => titles[id] || id.replace(/_/g, ' ')),
+    [summary.missing_sections, titles],
+  );
+  const ctaLabel =
+    summary.incomplete > 0 ? 'Fill missing with Linas AI' : 'Review setup with Linas AI';
 
   return (
     <ScreenChrome
@@ -75,45 +132,19 @@ export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       {error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
       <ScrollView contentContainerStyle={styles.list}>
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.head}>
-            <View style={styles.headLeft}>
-              <AppIcon icon={feather('check-circle')} size={18} color={colors.accent} />
-              <Text style={[styles.cardTitle, { color: colors.text }]}>Readiness</Text>
-            </View>
-            <StatusChip label={lifecycle} tone={published ? 'ok' : 'warn'} />
-          </View>
-          <Text style={{ color: colors.textMuted, marginTop: 6 }}>
-            {readyCount} configuration sections reachable on mobile
-            {meta?.publish_enabled ? ' · publish enabled' : ' · publish gated'}
-          </Text>
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  backgroundColor: colors.progressFill,
-                  width: `${Math.min(100, Math.round((readyCount / Math.max(tiles.length, 1)) * 100))}%`,
-                },
-              ]}
-            />
-          </View>
-          <Text style={{ color: colors.textDim, fontSize: 12, marginTop: 8 }}>
-            Lifecycle: Draft → Review → Valid → Published / Live
-          </Text>
-        </View>
-
-        <Pressable
-          style={[styles.setupBtn, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}
-          onPress={onContinueSetup}
-          accessibilityRole="button"
-          accessibilityLabel="Continue setup with Linas AI"
-        >
-          <AppIcon icon={feather('star')} size={18} color={colors.accentDeep} />
-          <Text style={{ color: colors.accentDeep, fontFamily: fonts.bodyMedium }}>
-            Continue setup with Linas AI
-          </Text>
-        </Pressable>
+        <CmReadinessCard
+          percent={summary.percent}
+          complete={summary.complete}
+          total={summary.total}
+          published={summary.published}
+          missingPreview={missingPreview}
+          ctaLabel={ctaLabel}
+          onContinueSetup={
+            onContinueSetup
+              ? () => onContinueSetup(buildFillMissingPrompt(summary.missing_sections, titles))
+              : undefined
+          }
+        />
 
         <View style={[styles.searchWrap, { backgroundColor: colors.input, borderColor: colors.border }]}>
           <AppIcon icon={feather('search')} size={16} color={colors.textDim} />
@@ -131,10 +162,10 @@ export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
           onPress={() => setIssuesOnly((v) => !v)}
           style={styles.issueToggle}
           accessibilityRole="button"
-          accessibilityLabel={issuesOnly ? 'Show all sections' : 'View unsupported or issue rows'}
+          accessibilityLabel={issuesOnly ? 'Show all sections' : 'Show missing sections only'}
         >
           <Text style={{ color: colors.accent }}>
-            {issuesOnly ? 'Show all sections' : 'View unsupported / issue rows'}
+            {issuesOnly ? 'Show all sections' : 'Show missing only'}
           </Text>
         </Pressable>
 
@@ -142,17 +173,23 @@ export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
         <View style={[styles.rows, { borderColor: colors.border, backgroundColor: colors.surface }]}>
           {tiles.map((tile, index) => {
             const supported = tile.mobileSupported !== false;
-            const statusLabel = supported
-              ? published
-                ? 'Live'
-                : 'Draft'
-              : tile.disabledReason || 'Unavailable';
+            const fill = statusBySection.get(tile.id);
+            const statusLabel = !supported
+              ? tile.disabledReason || 'Unavailable'
+              : fill === 'complete'
+                ? 'Filled'
+                : 'Missing';
+            const statusColor =
+              fill === 'complete' ? colors.mint : fill === 'incomplete' ? colors.warning : colors.textDim;
             return (
               <Pressable
                 key={tile.id}
                 style={[
                   styles.row,
-                  index < tiles.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+                  index < tiles.length - 1 && {
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                    borderBottomColor: colors.border,
+                  },
                   { opacity: supported ? 1 : 0.55 },
                 ]}
                 disabled={!supported}
@@ -172,17 +209,19 @@ export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
                     {supported ? tile.description : tile.disabledReason || tile.description}
                   </Text>
                 </View>
-                <Text style={{ color: colors.textDim, fontSize: 12, marginRight: 4 }}>{statusLabel}</Text>
+                <Text style={{ color: statusColor, fontSize: 12, marginRight: 4, fontFamily: fonts.bodyMedium }}>
+                  {statusLabel}
+                </Text>
                 <AppIcon icon={feather('chevron-right')} size={18} color={colors.textDim} />
               </Pressable>
             );
           })}
         </View>
 
-        {published ? null : (
+        {summary.published ? null : (
           <View style={[styles.sticky, { backgroundColor: colors.accent }]}>
             <Text style={{ color: colors.onAccent, fontFamily: fonts.bodyMedium, textAlign: 'center' }}>
-              Review & Publish (explicit confirmation in chat / CM publish flow)
+              Review & Publish when ready (explicit confirmation)
             </Text>
           </View>
         )}
@@ -197,27 +236,6 @@ export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
 
 const styles = StyleSheet.create({
   list: { paddingBottom: 48, gap: spacing.md },
-  card: { borderRadius: radii.lg, padding: spacing.lg, borderWidth: 1 },
-  head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  cardTitle: { fontFamily: fonts.bodyMedium, fontSize: 16 },
-  progressTrack: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#D7E5E3',
-    marginTop: 12,
-    overflow: 'hidden',
-  },
-  progressFill: { height: 8 },
-  setupBtn: {
-    minHeight: HIT,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
   searchWrap: {
     minHeight: HIT,
     borderRadius: radii.md,
@@ -235,11 +253,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
-  rows: {
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
+  rows: { borderRadius: radii.lg, borderWidth: 1, overflow: 'hidden' },
   row: {
     minHeight: HIT + 8,
     flexDirection: 'row',
