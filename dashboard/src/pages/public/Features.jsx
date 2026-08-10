@@ -5,7 +5,7 @@ import LinasMark from '../../components/landing/LinasMark';
 const FEATURES = [
   'ChatGPT-style Linas AI owner assistant',
   'Content Management with publish and rollback',
-  'Facebook / Instagram DM automation',
+  'Social media DM and comment automation',
   'Creative Studio (Pro+)',
   'Scheduling (Pro+)',
   'Usage credits and subscription entitlements',

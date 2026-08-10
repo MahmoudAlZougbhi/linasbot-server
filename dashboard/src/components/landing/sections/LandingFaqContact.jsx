@@ -4,11 +4,11 @@ import { PUBLIC_SITE } from '../../../constants/publicSite';
 const FAQS = [
   {
     q: 'What exactly does Linas AI do?',
-    a: 'Linas AI answers customer DMs and comments on Facebook and Instagram using business facts your team approves. Setup and control stay in one chat-first Owner Copilot in the mobile app.',
+    a: 'Linas AI answers customer DMs and comments on your social media pages using business facts your team approves. Setup and control stay in one chat-first Owner Copilot in the mobile app.',
   },
   {
     q: 'Does it create posts, Stories, Reels, or videos?',
-    a: 'No. Linas AI is built for messaging conversations only — Messenger DMs, Instagram DMs, and comments. It does not publish posts, Stories, Reels, or videos.',
+    a: 'No. Linas AI is built for messaging conversations only — social media DMs and comments. It does not publish posts, Stories, Reels, or videos.',
   },
   {
     q: 'Can I try it before creating an account?',

@@ -26,12 +26,12 @@ export const fr: Record<StringKey, string> = {
   registerNeedCredentials: 'Saisissez un e-mail valide et un mot de passe (6+ caractères).',
   registerNeedBusiness: 'Le nom de l’entreprise est requis.',
   registeredVerify: 'Compte créé. Vérifiez votre e-mail, puis connectez-vous.',
-  chatEmptyTitle: 'Copilote système Linas AI',
+  chatEmptyTitle: 'Je suis Linas AI — votre assistant dans l’app',
   chatEmptyBody:
-    'Demandez à configurer Content Management, vérifier l’usage, connecter Meta ou préparer une publication.',
+    'Je peux vous aider pour tout. Cette application est votre community manager IA pour vos pages sur les réseaux sociaux.',
   guestChatEmptyTitle: 'Bienvenue sur Linas AI',
   guestChatEmptyBody:
-    'Demandez ce que Linas AI offre à votre entreprise. Le chat invité est explicatif seulement.',
+    'Demandez ce que Linas AI offre à votre entreprise et à vos pages sur les réseaux sociaux. Le chat invité est explicatif seulement.',
   guestQuestionsLeft: 'Questions invité : {n}/{max} restantes',
   guestLimitReached: 'Limite invité atteinte. Téléchargez l’app Linas AI et abonnez-vous pour continuer.',
   guestWordLimit: 'Chaque question invité est limitée à 50 mots.',

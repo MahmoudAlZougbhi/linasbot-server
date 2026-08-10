@@ -62,7 +62,7 @@ const Register = () => {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="glass rounded-3xl p-8 shadow-2xl">
           <h1 className="font-display text-3xl font-bold text-slate-950">Create Account</h1>
           <p className="mt-2 text-slate-600">
-            Create an isolated {PUBLIC_SITE.productName} company workspace for Facebook Messenger and Instagram private messages.
+            Create an isolated {PUBLIC_SITE.productName} company workspace for social media private messages.
             You will need to verify your email, then buy prepaid AI tokens before AI replies start.
           </p>
 

@@ -3,7 +3,7 @@ import LinasStar from '../LinasStar';
 const GUIDES = [
   {
     n: '01',
-    title: 'Connect Facebook and Instagram',
+    title: 'Connect your social media pages',
     body: 'Verified assets, scopes, and capability checks.',
   },
   {
