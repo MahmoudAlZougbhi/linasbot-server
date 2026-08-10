@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -32,6 +31,7 @@ import {
 } from './pendingGuestDraft';
 import { sendChatMessage } from './sendChatMessage';
 import { chatErrorLabelKey, retryAssistantMessage } from './chatRetryHandlers';
+import { useChatListScroll } from './useChatListScroll';
 import { useChatSession } from './useChatSession';
 import { useGuestChatSession } from './useGuestChatSession';
 import { usePinnedChats } from './usePinnedChats';
@@ -80,26 +80,12 @@ export function ChatScreen({
   const imagePreviewByContent = useRef<Record<string, string[]>>({});
   const [choiceBusy, setChoiceBusy] = useState(false);
   const composerInputRef = useRef<TextInput>(null);
-  const listRef = useRef<FlatList>(null);
-  const stickToBottomRef = useRef(true);
+  const { listRef, stickToBottomRef, scrollToBottom, armOpenAtLatest } = useChatListScroll();
   const voice = useVoiceDraft((text) => {
     setDraft((prev) => (prev ? `${prev} ${text}` : text));
     requestAnimationFrame(() => composerInputRef.current?.focus());
   });
   const authVoice = isAuthenticated ? voice : null;
-
-  const scrollToBottom = useCallback((animated = true) => {
-    stickToBottomRef.current = true;
-    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated }));
-  }, []);
-
-  const armOpenAtLatest = useCallback(() => {
-    stickToBottomRef.current = true;
-    const run = (animated: boolean) => listRef.current?.scrollToEnd({ animated });
-    requestAnimationFrame(() => run(false));
-    setTimeout(() => run(false), 50);
-    setTimeout(() => run(false), 180);
-  }, []);
 
   const startNewChat = useCallback(() => {
     if (!isAuthenticated) return;
