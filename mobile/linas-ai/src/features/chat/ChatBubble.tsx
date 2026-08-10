@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import type { ChatMessage } from '../../api/types';
+import { LinasStarMark } from '../../components/LinasStarMark';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, typography, useTheme } from '../../theme';
 import { MessageActions } from './MessageActions';
@@ -10,7 +11,6 @@ type Props = {
   message: ChatMessage;
   onRetry?: () => void;
   showActions?: boolean;
-  /** Extra local preview URIs (e.g. after bootstrap rematch). */
   imageUris?: string[];
 };
 
@@ -28,19 +28,19 @@ export function ChatBubble({ message, onRetry, showActions = true, imageUris }: 
 
   return (
     <View style={[styles.row, isUser ? styles.rowUser : styles.rowAi]}>
-      {!isUser ? (
-        <Text style={{ color: colors.accent, fontSize: 14, marginBottom: 4 }}>✦</Text>
-      ) : null}
       <View style={[styles.col, isUser && styles.colUser]}>
-        {!isUser ? (
-          <Text style={[styles.aiLabel, { color: colors.textDim }]}>Linas</Text>
-        ) : null}
+        {isUser ? (
+          <Text style={[styles.userLabel, { color: colors.textDim }]}>You</Text>
+        ) : (
+          <View style={styles.aiLabelRow}>
+            <LinasStarMark size={12} labeled label="Linas" />
+          </View>
+        )}
         <View
           style={[
-            styles.bubble,
             isUser
-              ? { backgroundColor: colors.bubbleUser, borderBottomRightRadius: 6 }
-              : { backgroundColor: colors.bubbleAi, borderBottomLeftRadius: 6, borderColor: colors.border, borderWidth: 1 },
+              ? [styles.bubble, { backgroundColor: colors.bubbleUser, borderBottomRightRadius: 6 }]
+              : styles.aiBody,
           ]}
         >
           {thumbs?.length ? <MessageImageThumbs uris={thumbs} /> : null}
@@ -68,24 +68,29 @@ const styles = StyleSheet.create({
   row: {
     marginBottom: spacing.md,
     maxWidth: '94%',
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
   },
   rowUser: { alignSelf: 'flex-end' },
   rowAi: { alignSelf: 'flex-start' },
   col: { flexShrink: 1 },
   colUser: { alignItems: 'flex-end' },
-  aiLabel: {
-    fontFamily: fonts.bodyMedium,
+  userLabel: {
+    fontFamily: fonts.body,
     fontSize: 11,
     marginBottom: 4,
-    marginLeft: 6,
+    marginRight: 6,
+  },
+  aiLabelRow: {
+    marginBottom: 4,
+    marginLeft: 2,
   },
   bubble: {
     borderRadius: radii.bubble,
     paddingHorizontal: spacing.lg - 2,
     paddingVertical: spacing.md,
+  },
+  aiBody: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
   },
   textAi: {
     ...typography.chatAi,

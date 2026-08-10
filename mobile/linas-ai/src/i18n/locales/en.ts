@@ -47,6 +47,8 @@ export const en = {
   createPostStart: 'I want to make a post',
   addEditCm: 'Add / Edit CM',
   attachImage: 'Attach image',
+  photos: 'Photos',
+  files: 'Files',
   attachDocument: 'Attach document',
   attachVideo: 'Attach video',
   attachSoon: 'Not wired for production yet',

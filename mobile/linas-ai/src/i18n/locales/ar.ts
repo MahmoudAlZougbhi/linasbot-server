@@ -50,6 +50,8 @@ export const ar: Record<StringKey, string> = {
   addEditCm: 'إضافة / تعديل CM',
   attachDocument: 'إرفاق مستند',
   attachImage: 'إرفاق صورة',
+  photos: 'الصور',
+  files: 'الملفات',
   attachVideo: 'إرفاق فيديو',
   attachSoon: 'غير مفعّل في الإنتاج بعد',
   addToChat: 'إضافة إلى المحادثة',

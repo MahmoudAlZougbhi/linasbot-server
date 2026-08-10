@@ -53,6 +53,8 @@ export const fr: Record<StringKey, string> = {
   addEditCm: 'Ajouter / modifier CM',
   attachDocument: 'Joindre un document',
   attachImage: 'Joindre une image',
+  photos: 'Photos',
+  files: 'Fichiers',
   attachVideo: 'Joindre une vidéo',
   attachSoon: 'Pas encore branché en production',
   addToChat: 'Ajouter au chat',

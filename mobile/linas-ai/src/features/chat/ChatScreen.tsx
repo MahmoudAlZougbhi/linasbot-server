@@ -2,8 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
+  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -11,17 +14,19 @@ import {
 import { GradientBackground } from '../../components/GradientBackground';
 import { tokenStore } from '../../auth/tokenStore';
 import { useI18n } from '../../i18n/LanguageContext';
-import { useTheme } from '../../theme';
+import { fonts, useTheme } from '../../theme';
 import { AuthGateModal } from '../auth/AuthGateModal';
 import type { ControlArea } from '../control/controlAreas';
 import { NavDrawer } from '../nav/NavDrawer';
 import { ChatComposer } from './ChatComposer';
 import { ChatHeader } from './ChatHeader';
 import { ChatMessageList } from './ChatMessageList';
+import { ChatModeToggle } from './ChatModeToggle';
 import { chatScreenStyles as styles } from './chatScreenStyles';
 import { ChatStatusBanners } from './ChatStatusBanners';
 import { ComposerPlusSheet, type PlusAction } from './ComposerPlusSheet';
 import { GuestBanner } from './GuestBanner';
+import type { OwnerChatMode } from './ownerChatMode';
 import { PendingAttachmentsStrip } from './PendingAttachmentsStrip';
 import {
   clearPendingGuestDraft,
@@ -78,6 +83,7 @@ export function ChatScreen({
   const [offline, setOffline] = useState(false);
   const [draft, setDraft] = useState('');
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [ownerMode, setOwnerMode] = useState<OwnerChatMode>('chat');
   const imagePreviewByContent = useRef<Record<string, string[]>>({});
   const [choiceBusy, setChoiceBusy] = useState(false);
   const composerInputRef = useRef<TextInput>(null);
@@ -93,7 +99,6 @@ export function ChatScreen({
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated }));
   }, []);
 
-  /** Open / switch chat: always land on latest after layout (RN scrollToEnd is flaky on mount). */
   const armOpenAtLatest = useCallback(() => {
     stickToBottomRef.current = true;
     const run = (animated: boolean) => listRef.current?.scrollToEnd({ animated });
@@ -101,6 +106,13 @@ export function ChatScreen({
     setTimeout(() => run(false), 50);
     setTimeout(() => run(false), 180);
   }, []);
+
+  const startNewChat = useCallback(() => {
+    if (!isAuthenticated) return;
+    stickToBottomRef.current = true;
+    setOwnerMode('chat');
+    void owner.newChat();
+  }, [isAuthenticated, owner]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -137,6 +149,8 @@ export function ChatScreen({
   const sending = isAuthenticated ? turn.streaming : guest.sending;
   const error = isAuthenticated ? owner.error : guest.error;
   const listKey = isAuthenticated ? owner.conversationId || 'owner' : 'guest';
+  const showModeToggle =
+    isAuthenticated && messages.length === 0 && !turn.liveText && !turn.streaming;
 
   useEffect(() => {
     if (loading) return;
@@ -184,6 +198,19 @@ export function ChatScreen({
     setAuthGate(true);
   }
 
+  const ownerSendWithMode = useCallback(
+    (
+      text: string,
+      opts?: {
+        attachment_ids?: string[];
+        choice_id?: string;
+        choice_set_id?: string;
+        confirm_tool?: string | null;
+      },
+    ) => turn.send(text, { ...opts, owner_mode: ownerMode }),
+    [ownerMode, turn],
+  );
+
   // ChatGPT-like open: keep chat chrome up — no second full-screen spinner after boot.
   return (
     <GradientBackground>
@@ -194,10 +221,31 @@ export function ChatScreen({
       >
         <ChatHeader
           isAuthenticated={isAuthenticated}
-          workspaceLabel={workspaceLabel}
-          onOpenMenu={() => setDrawerOpen(true)}
+          workspaceLabel={null}
+          onOpenMenu={() => {
+            Keyboard.dismiss();
+            setDrawerOpen(true);
+          }}
+          onNewChat={startNewChat}
           onSignIn={() => openAuthPreservingDraft(false)}
         />
+
+        {showModeToggle ? <ChatModeToggle mode={ownerMode} onChange={setOwnerMode} /> : null}
+
+        {isAuthenticated && workspaceLabel ? (
+          <View style={local.chipWrap}>
+            <View
+              style={[
+                local.chip,
+                { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSoft },
+              ]}
+            >
+              <Text style={{ color: colors.textMuted, fontFamily: fonts.body, fontSize: 12 }}>
+                {workspaceLabel}
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
         {!isAuthenticated ? (
           <GuestBanner
@@ -229,7 +277,6 @@ export function ChatScreen({
             }
             const err = owner.error;
             owner.setError(null);
-            // Send failures already restored the draft — clear banner only so Send works again.
             if (err === 'messageFailed') return;
             void owner.bootstrap();
           }}
@@ -257,8 +304,11 @@ export function ChatScreen({
             onLoadOlder={() => {
               if (isAuthenticated) void owner.loadOlder();
             }}
-            onRetryAssistant={(content) => void turn.send(content)}
-            onApproveDraft={(token) => void turn.send('', { confirm_tool: token })}
+            onRetryAssistant={(content) => {
+              if (turn.streaming) return;
+              void ownerSendWithMode(content);
+            }}
+            onApproveDraft={(token) => void ownerSendWithMode('', { confirm_tool: token })}
             onDiscardProposal={() => {
               owner.setProposedPatch(null);
               owner.setPendingConfirm(null);
@@ -283,9 +333,10 @@ export function ChatScreen({
               if (!turn.choiceSetId || choiceBusy) return;
               setChoiceBusy(true);
               scrollToBottom();
-              void turn
-                .send(c.label, { choice_id: c.id, choice_set_id: turn.choiceSetId })
-                .finally(() => setChoiceBusy(false));
+              void ownerSendWithMode(c.label, {
+                choice_id: c.id,
+                choice_set_id: turn.choiceSetId,
+              }).finally(() => setChoiceBusy(false));
             }}
           />
         ) : null}
@@ -306,6 +357,8 @@ export function ChatScreen({
           autoFocus
           showPlus={isAuthenticated}
           showMic={isAuthenticated}
+          showModelChip={isAuthenticated}
+          ownerMode={ownerMode}
           onPlus={() => setPlusOpen(true)}
           onToggleVoice={() => void toggleVoice()}
           onStop={turn.streaming ? () => turn.stop() : undefined}
@@ -321,7 +374,7 @@ export function ChatScreen({
               guestGated: guest.gated,
               guestQuestionsRemaining: guest.questionsRemaining,
               guestSend: guest.send,
-              ownerSend: turn.send,
+              ownerSend: ownerSendWithMode,
               appendOptimisticUser: owner.appendOptimisticUser,
               removeOptimisticUser: owner.removeOptimisticUser,
               autoTitleFromOutgoing: owner.autoTitleFromOutgoing,
@@ -350,12 +403,8 @@ export function ChatScreen({
         workspaceLabel={workspaceLabel}
         onOpenArea={onOpenArea}
         onNewChat={() => {
-          if (isAuthenticated) {
-            stickToBottomRef.current = true;
-            void owner.newChat();
-          } else {
-            setDrawerOpen(false);
-          }
+          setDrawerOpen(false);
+          startNewChat();
         }}
         onOpenChat={(id) => {
           stickToBottomRef.current = true;
@@ -394,3 +443,13 @@ export function ChatScreen({
     </GradientBackground>
   );
 }
+
+const local = StyleSheet.create({
+  chipWrap: { alignItems: 'center', paddingBottom: 6, paddingTop: 2 },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+});

@@ -60,6 +60,35 @@ def test_owner_continuation_keeps_effort() -> None:
     assert cont.surface == "owner_tool_continuation"
 
 
+def test_owner_ui_mode_chat_low_work_high() -> None:
+    """Mobile Chat|Work maps to Sol effort; UI displays 5.6 LIN (not Sol)."""
+    chat = resolve_owner_policy(
+        surface="owner_copilot",
+        user_text="Please change the laser price to 50",
+        owner_mode="chat",
+    )
+    assert chat.model == MODEL_OWNER_SOL
+    assert chat.reasoning_effort == "low"
+    assert chat.reason == "owner_mode_chat"
+
+    work = resolve_owner_policy(
+        surface="owner_copilot",
+        user_text="How does billing work?",
+        owner_mode="work",
+    )
+    assert work.model == MODEL_OWNER_SOL
+    assert work.reasoning_effort == "high"
+    assert work.reason == "owner_mode_work"
+
+    confirm = resolve_owner_policy(
+        surface="owner_copilot",
+        confirm_tool="approve_cm_patch:abc",
+        owner_mode="chat",
+        force_high=True,
+    )
+    assert confirm.reasoning_effort == "high"
+
+
 @pytest.mark.parametrize(
     "channel",
     [

@@ -137,7 +137,7 @@ export function ChatMessageList({
             <GuestEmptyState onPick={onGuestPrompt} />
           )
         }
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
           const rematched =
             item.role === 'user' && !item.local_image_uris?.length
               ? imagePreviewByContent.current[item.content]
@@ -149,8 +149,10 @@ export function ChatMessageList({
               onRetry={
                 item.role === 'assistant'
                   ? () => {
-                      const lastUser = [...messages].reverse().find((m) => m.role === 'user');
-                      if (lastUser && isAuthenticated) onRetryAssistant(lastUser.content);
+                      const prevUser = [...messages.slice(0, index)]
+                        .reverse()
+                        .find((m) => m.role === 'user');
+                      if (prevUser && isAuthenticated) onRetryAssistant(prevUser.content);
                     }
                   : undefined
               }

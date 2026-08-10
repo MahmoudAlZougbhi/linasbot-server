@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HIT, fonts, radii, spacing, useTheme } from '../../theme';
+import { fonts, radii, spacing, useTheme } from '../../theme';
+import { modelChipLabel, type OwnerChatMode } from './ownerChatMode';
 import type { VoiceState } from './useVoiceDraft';
 
 type Props = {
@@ -26,14 +27,14 @@ type Props = {
   voiceState?: VoiceState;
   metering?: number | null;
   inputRef?: RefObject<TextInput | null>;
-  /** Hide non-working controls (guest Plus/Mic incomplete → hidden). */
   showPlus?: boolean;
   showMic?: boolean;
   showDisclaimer?: boolean;
   autoFocus?: boolean;
+  ownerMode?: OwnerChatMode;
+  showModelChip?: boolean;
 };
 
-/** Clean ChatGPT-style mic glyph (no emoji). */
 function MicGlyph({ color, size = 20 }: { color: string; size?: number }) {
   const headW = size * 0.38;
   const headH = size * 0.52;
@@ -88,17 +89,11 @@ function MicGlyph({ color, size = 20 }: { color: string; size?: number }) {
 
 function StopGlyph({ color }: { color: string }) {
   return (
-    <View
-      style={{
-        width: 12,
-        height: 12,
-        borderRadius: 2.5,
-        backgroundColor: color,
-      }}
-    />
+    <View style={{ width: 12, height: 12, borderRadius: 2.5, backgroundColor: color }} />
   );
 }
 
+/** Pill composer: + / chip / mic / send|stop all inside the bar. */
 export function ChatComposer({
   draft,
   onChangeDraft,
@@ -115,6 +110,8 @@ export function ChatComposer({
   showMic = false,
   showDisclaimer = true,
   autoFocus = false,
+  ownerMode = 'chat',
+  showModelChip = false,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -124,9 +121,9 @@ export function ChatComposer({
   const transcribing = voiceState === 'transcribing';
   const canSend = Boolean(draft.trim() || canSendWithAttachment);
   const streamingStop = Boolean(onStop && sending);
-  // Keep stop/transcribe control visible even if draft/attachments make canSend true.
   const showVoiceControl =
     Boolean(showMic && onToggleVoice && !streamingStop && (recording || transcribing || !canSend));
+  const showSend = streamingStop || canSend;
 
   useEffect(() => {
     if (!recording) {
@@ -173,31 +170,22 @@ export function ChatComposer({
         styles.wrap,
         {
           paddingBottom: Math.max(insets.bottom, 10),
-          borderTopColor: colors.borderSoft,
           backgroundColor: colors.bgElevated,
         },
       ]}
     >
-      <View style={styles.row}>
-        {showPlus && onPlus ? (
-          <Pressable
-            style={[styles.round, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={onPlus}
-            accessibilityLabel="More actions"
-          >
-            <Text style={{ color: colors.accent, fontSize: 18, fontWeight: '700' }}>+</Text>
-          </Pressable>
-        ) : null}
+      <View
+        style={[
+          styles.pill,
+          {
+            backgroundColor: colors.bgElevated,
+            borderColor: colors.border,
+          },
+        ]}
+      >
         <TextInput
           ref={inputRef}
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.input,
-              color: colors.text,
-              borderColor: colors.border,
-            },
-          ]}
+          style={[styles.input, { color: colors.text }]}
           placeholder={recording ? 'Listening…' : transcribing ? 'Transcribing…' : 'Message Linas'}
           placeholderTextColor={colors.textDim}
           value={draft}
@@ -208,80 +196,107 @@ export function ChatComposer({
           blurOnSubmit={false}
           accessibilityLabel="Message Linas"
         />
-        {showVoiceControl ? (
-          <View style={styles.micSlot}>
-            {recording ? (
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.pulseRing,
-                  {
-                    borderColor: colors.danger,
-                    opacity: ring,
-                    transform: [{ scale: pulse }],
-                  },
-                ]}
-              />
-            ) : null}
-            <Animated.View style={{ transform: [{ scale: pulse }] }}>
-              <Pressable
-                style={[
-                  styles.round,
-                  { backgroundColor: colors.surface, borderColor: colors.border },
-                  recording && {
-                    backgroundColor: colors.danger,
-                    borderColor: colors.danger,
-                  },
-                ]}
-                onPress={() => {
-                  if (!recording && !transcribing) {
-                    inputRef?.current?.blur();
-                    Keyboard.dismiss();
-                  }
-                  onToggleVoice?.();
-                }}
-                disabled={transcribing}
-                accessibilityLabel={
-                  recording ? 'Stop recording' : transcribing ? 'Transcribing' : 'Start voice input'
-                }
+        <View style={styles.toolbar}>
+          {showPlus && onPlus ? (
+            <Pressable
+              style={styles.iconHit}
+              onPress={onPlus}
+              accessibilityLabel="More actions"
+              hitSlop={6}
+            >
+              <Text style={{ color: colors.text, fontSize: 22, fontWeight: '500', lineHeight: 24 }}>
+                +
+              </Text>
+            </Pressable>
+          ) : (
+            <View style={styles.iconHit} />
+          )}
+
+          <View style={styles.toolbarRight}>
+            {showModelChip ? (
+              <View
+                style={[styles.chip, { backgroundColor: colors.surfaceAlt }]}
+                accessibilityLabel={modelChipLabel(ownerMode)}
               >
-                {transcribing ? (
-                  <ActivityIndicator color={colors.accent} size="small" />
-                ) : recording ? (
-                  <StopGlyph color="#FFFFFF" />
-                ) : (
-                  <MicGlyph color={colors.accent} />
-                )}
-              </Pressable>
-            </Animated.View>
+                <Text style={[styles.chipBolt, { color: colors.text }]}>⚡</Text>
+                <Text style={[styles.chipText, { color: colors.text }]} numberOfLines={1}>
+                  {modelChipLabel(ownerMode)}
+                </Text>
+              </View>
+            ) : null}
+
+            {showVoiceControl ? (
+              <View style={styles.micSlot}>
+                {recording ? (
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[
+                      styles.pulseRing,
+                      {
+                        borderColor: colors.danger,
+                        opacity: ring,
+                        transform: [{ scale: pulse }],
+                      },
+                    ]}
+                  />
+                ) : null}
+                <Animated.View style={{ transform: [{ scale: pulse }] }}>
+                  <Pressable
+                    style={[styles.roundIn, recording && { backgroundColor: colors.danger }]}
+                    onPress={() => {
+                      if (!recording && !transcribing) {
+                        inputRef?.current?.blur();
+                        Keyboard.dismiss();
+                      }
+                      onToggleVoice?.();
+                    }}
+                    disabled={transcribing}
+                    accessibilityLabel={
+                      recording ? 'Stop recording' : transcribing ? 'Transcribing' : 'Start voice input'
+                    }
+                  >
+                    {transcribing ? (
+                      <ActivityIndicator color={colors.accent} size="small" />
+                    ) : recording ? (
+                      <StopGlyph color="#FFFFFF" />
+                    ) : (
+                      <MicGlyph color={colors.text} />
+                    )}
+                  </Pressable>
+                </Animated.View>
+              </View>
+            ) : null}
+
+            {showSend ? (
+              streamingStop ? (
+                <Pressable
+                  style={[styles.sendIn, { backgroundColor: colors.accent }]}
+                  onPress={onStop}
+                  accessibilityLabel="Stop generating"
+                >
+                  <StopGlyph color={colors.onAccent} />
+                </Pressable>
+              ) : (
+                <Pressable
+                  style={[
+                    styles.sendIn,
+                    { backgroundColor: colors.accent },
+                    (sending || recording || transcribing) && styles.sendDisabled,
+                  ]}
+                  onPress={handleSend}
+                  disabled={sending || !canSend || recording || transcribing}
+                  accessibilityLabel="Send message"
+                >
+                  {sending ? (
+                    <ActivityIndicator color={colors.onAccent} />
+                  ) : (
+                    <Text style={{ color: colors.onAccent, fontSize: 18, fontWeight: '800' }}>↑</Text>
+                  )}
+                </Pressable>
+              )
+            ) : null}
           </View>
-        ) : null}
-        {streamingStop ? (
-          <Pressable
-            style={[styles.send, { backgroundColor: colors.accent }]}
-            onPress={onStop}
-            accessibilityLabel="Stop generating"
-          >
-            <Text style={{ color: colors.onAccent, fontSize: 18, fontWeight: '800' }}>■</Text>
-          </Pressable>
-        ) : (
-          <Pressable
-            style={[
-              styles.send,
-              { backgroundColor: colors.accent },
-              (!canSend || sending || recording || transcribing) && styles.sendDisabled,
-            ]}
-            onPress={handleSend}
-            disabled={sending || !canSend || recording || transcribing}
-            accessibilityLabel="Send message"
-          >
-            {sending ? (
-              <ActivityIndicator color={colors.onAccent} />
-            ) : (
-              <Text style={{ color: colors.onAccent, fontSize: 20, fontWeight: '800' }}>↑</Text>
-            )}
-          </Pressable>
-        )}
+        </View>
       </View>
       {showDisclaimer ? (
         <Text style={[styles.disclaimer, { color: colors.textDim }]}>
@@ -295,46 +310,81 @@ export function ChatComposer({
 const styles = StyleSheet.create({
   wrap: {
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
+    paddingTop: spacing.sm,
   },
-  row: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  pill: {
+    borderRadius: radii.xl + 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingTop: 10,
+    paddingBottom: 8,
+    paddingHorizontal: 10,
+    minHeight: 56,
+  },
+  input: {
+    fontFamily: fonts.body,
+    fontSize: 16,
+    minHeight: 24,
+    maxHeight: 110,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  toolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    minHeight: 36,
+  },
+  toolbarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
+  },
+  iconHit: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
+    maxWidth: 160,
+  },
+  chipBolt: { fontSize: 12 },
+  chipText: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 12,
+  },
   micSlot: {
-    width: HIT,
-    height: HIT,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pulseRing: {
     position: 'absolute',
-    width: HIT + 10,
-    height: HIT + 10,
-    borderRadius: (HIT + 10) / 2,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 2,
   },
-  round: {
-    width: HIT,
-    height: HIT,
-    borderRadius: HIT / 2,
-    borderWidth: 1,
+  roundIn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  input: {
-    flex: 1,
-    minHeight: HIT,
-    maxHeight: 120,
-    borderRadius: radii.lg,
-    fontFamily: fonts.body,
-    fontSize: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-  },
-  send: {
-    width: HIT,
-    height: HIT,
-    borderRadius: HIT / 2,
+  sendIn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },

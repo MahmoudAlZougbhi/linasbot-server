@@ -10,7 +10,13 @@ type GuestSend = (
 
 type OwnerTurnSend = (
   text: string,
-  opts?: { attachment_ids?: string[] },
+  opts?: {
+    attachment_ids?: string[];
+    choice_id?: string;
+    choice_set_id?: string;
+    confirm_tool?: string | null;
+    owner_mode?: 'chat' | 'work';
+  },
 ) => Promise<'done' | 'error' | 'network_error' | 'cancelled' | 'skipped'>;
 
 type Args = {
