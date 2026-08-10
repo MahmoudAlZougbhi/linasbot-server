@@ -161,6 +161,7 @@ export function ChatScreen({
     messages.length,
     turn.thinking,
     turn.liveText,
+    turn.thinking,
     turn.statusRows.length,
     turn.cards.length,
     turn.choices.length,
@@ -244,6 +245,8 @@ export function ChatScreen({
             statusRows={turn.statusRows}
             liveText={turn.liveText}
             cards={turn.cards}
+            thinking={turn.thinking}
+            thinkingLabel={tr('chatThinking')}
             proposedPatch={isAuthenticated ? owner.proposedPatch : null}
             hasMore={isAuthenticated ? owner.hasMore : false}
             loadingMore={isAuthenticated ? owner.loadingMore : false}

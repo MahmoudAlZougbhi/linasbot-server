@@ -92,8 +92,13 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
           },
           onDone: (payload) => {
             applyTitle(payload);
-            resetUi();
-            void hooksRef.current.onTerminal();
+            setThinking(false);
+            setStatusRows([]);
+            const finalText = String(payload.reply_text || '').trim();
+            if (finalText) setLiveText(finalText);
+            void Promise.resolve(hooksRef.current.onTerminal()).finally(() => {
+              setLiveText('');
+            });
           },
         },
       );

@@ -21,13 +21,11 @@ from services.owner_copilot_v2.creative_policy import creative_refusal_message, 
 from services.owner_copilot_v2.flags import owner_copilot_v2_enabled, owner_model_name, owner_recent_history_tokens
 from services.owner_copilot_v2.memory import pack_recent_messages
 from services.owner_copilot_v2.models import ChatChoice, OwnerV2TurnResult, StreamEvent
-from services.owner_copilot_v2.provider import iter_sol_text_deltas, sol_chat_completion
+from services.owner_copilot_v2.provider import iter_sol_text_deltas, iter_sol_tool_round
 from services.owner_copilot_v2.tool_dispatch import dispatch_v2_tool, tool_result_for_model
-from services.owner_copilot_v2.tool_schemas import OWNER_V2_TOOL_SCHEMAS
 
 CancelCheck = Callable[[], bool]
 MAX_TOOL_ROUNDS = 4
-
 
 def _build_messages(
     *,
@@ -56,7 +54,6 @@ def _build_messages(
         out.append({"role": m["role"], "content": m["content"]})
     out.append({"role": "user", "content": user_text})
     return out
-
 
 async def run_owner_turn_v2(**kwargs: Any) -> OwnerV2TurnResult:
     final: OwnerV2TurnResult | None = None
@@ -88,7 +85,6 @@ async def run_owner_turn_v2(**kwargs: Any) -> OwnerV2TurnResult:
                 model=owner_model_name(),
             )
     return final or OwnerV2TurnResult(reply_text="", model=owner_model_name())
-
 
 async def iter_owner_turn_v2_events(
     *,
@@ -233,21 +229,30 @@ async def iter_owner_turn_v2_events(
                 return
 
             turn_policy = resolve_owner_policy(prior=policy)
-            response = await sol_chat_completion(
+            # Stream the tool-aware round so text-only answers write token-by-token (ChatGPT-like).
+            streamed_parts: list[str] = []
+            round_result = None
+            async for kind, payload in iter_sol_tool_round(
                 messages=chat_messages,
-                tools=OWNER_V2_TOOL_SCHEMAS,
-                stream=False,
+                is_cancelled=is_cancelled,
                 policy=turn_policy,
-            )
-            msg = response.choices[0].message
-            tcalls = getattr(msg, "tool_calls", None) or []
+            ):
+                if kind == "delta":
+                    streamed_parts.append(str(payload))
+                    yield StreamEvent(type="delta", payload={"text": str(payload)})
+                else:
+                    round_result = payload
+
+            if is_cancelled and is_cancelled():
+                yield StreamEvent(type="cancelled", payload={"reply_text": "".join(streamed_parts)})
+                return
+
+            tcalls = list(getattr(round_result, "tool_calls", None) or [])
+            round_content = str(getattr(round_result, "content", None) or "").strip()
 
             if not tcalls:
-                reply_text = (getattr(msg, "content", None) or "").strip()
-                if reply_text:
-                    async for ev in emit_as_deltas(reply_text):
-                        yield ev
-                else:
+                reply_text = round_content or "".join(streamed_parts).strip()
+                if not reply_text:
                     reply_parts: list[str] = []
                     async for delta_text in iter_sol_text_deltas(
                         messages=chat_messages,
@@ -296,7 +301,7 @@ async def iter_owner_turn_v2_events(
             chat_messages.append(
                 {
                     "role": "assistant",
-                    "content": getattr(msg, "content", None),
+                    "content": round_content or None,
                     "tool_calls": [
                         {
                             "id": tc.id,
@@ -390,3 +395,4 @@ async def iter_owner_turn_v2_events(
                 "retryable": True,
             },
         )
+
