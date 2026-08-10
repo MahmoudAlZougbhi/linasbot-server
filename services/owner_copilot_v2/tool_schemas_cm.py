@@ -66,8 +66,11 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "read_cm_article",
-            "description": "Read one knowledge/care CM article including full body (chunk via "
-            "body_offset/body_limit when body_complete is false).",
+            "description": (
+                "Read one knowledge/care CM article including full body (chunk via "
+                "body_offset/body_limit when body_complete is false). Do not stop at a "
+                "partial body when the owner asked for a full read."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
