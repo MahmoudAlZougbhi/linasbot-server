@@ -19,8 +19,8 @@ import { modelChipLabel, type OwnerChatMode } from './ownerChatMode';
 import type { VoiceState } from './useVoiceDraft';
 import { VoiceComposerControls } from './VoiceComposerControls';
 
-/** Single-line start; grows modestly like ChatGPT (≈4 lines). */
-const INPUT_MIN_H = 22;
+/** Keep a real tap target; grow modestly like ChatGPT (≈4 lines). */
+const INPUT_MIN_H = 36;
 const INPUT_MAX_H = 88;
 
 type Props = {
@@ -48,7 +48,11 @@ type Props = {
   showModelChip?: boolean;
 };
 
-/** Pill composer: + / chip / mic / send|stop all inside the bar. */
+/**
+ * ChatGPT-style pill: + | TextInput | chip | mic/send in one row.
+ * Stacking the field above the toolbar let an empty multiline TextInput collapse
+ * to a near-zero hit target (blank bar / “blocked” composer next to the Ok bubble).
+ */
 export function ChatComposer({
   draft,
   onChangeDraft,
@@ -160,6 +164,21 @@ export function ChatComposer({
           },
         ]}
       >
+        {showPlus && onPlus ? (
+          <Pressable
+            style={styles.iconHit}
+            onPress={onPlus}
+            accessibilityLabel="More actions"
+            hitSlop={6}
+          >
+            <Text style={{ color: colors.text, fontSize: 20, fontWeight: '500', lineHeight: 22 }}>
+              +
+            </Text>
+          </Pressable>
+        ) : (
+          <View style={styles.iconHit} />
+        )}
+
         <TextInput
           ref={inputRef}
           style={[styles.input, { color: colors.text, height: inputHeight }]}
@@ -179,92 +198,76 @@ export function ChatComposer({
           textAlignVertical={Platform.OS === 'android' ? 'center' : undefined}
           accessibilityLabel="Message Linas"
         />
-        <View style={styles.toolbar}>
-          {showPlus && onPlus ? (
+
+        <View style={styles.trailing}>
+          {showModelChip ? (
             <Pressable
-              style={styles.iconHit}
-              onPress={onPlus}
-              accessibilityLabel="More actions"
-              hitSlop={6}
+              style={[styles.chip, { backgroundColor: colors.surfaceAlt }]}
+              onPress={() => {
+                if (!chipTappable) return;
+                inputRef?.current?.blur();
+                Keyboard.dismiss();
+                setEffortOpen(true);
+              }}
+              disabled={!chipTappable}
+              accessibilityRole="button"
+              accessibilityLabel={modelChipLabel(ownerMode)}
+              accessibilityHint={chipTappable ? 'Choose Low or High' : undefined}
             >
-              <Text style={{ color: colors.text, fontSize: 20, fontWeight: '500', lineHeight: 22 }}>
-                +
+              {ownerMode === 'work' ? (
+                <Text style={[styles.chipBolt, { color: colors.text }]}>⚡</Text>
+              ) : null}
+              <Text style={[styles.chipText, { color: colors.text }]} numberOfLines={1}>
+                {modelChipLabel(ownerMode)}
               </Text>
             </Pressable>
-          ) : (
-            <View style={styles.iconHit} />
-          )}
+          ) : null}
 
-          <View style={styles.toolbarRight}>
-            {showModelChip ? (
+          {showVoiceControl ? (
+            <VoiceComposerControls
+              voiceState={voiceState}
+              elapsedMs={elapsedMs}
+              pulse={pulse}
+              ring={ring}
+              onToggleVoice={onToggleVoice}
+              onResumeVoice={onResumeVoice}
+              onConfirmVoice={onConfirmVoice}
+              onDiscardVoice={onDiscardVoice}
+              onBeforeStart={() => {
+                inputRef?.current?.blur();
+                Keyboard.dismiss();
+              }}
+            />
+          ) : null}
+
+          {showSend ? (
+            streamingStop ? (
               <Pressable
-                style={[styles.chip, { backgroundColor: colors.surfaceAlt }]}
-                onPress={() => {
-                  if (!chipTappable) return;
-                  inputRef?.current?.blur();
-                  Keyboard.dismiss();
-                  setEffortOpen(true);
-                }}
-                disabled={!chipTappable}
-                accessibilityRole="button"
-                accessibilityLabel={modelChipLabel(ownerMode)}
-                accessibilityHint={chipTappable ? 'Choose Low or High' : undefined}
+                style={[styles.sendIn, { backgroundColor: colors.accent }]}
+                onPress={onStop}
+                accessibilityLabel="Stop generating"
               >
-                {ownerMode === 'work' ? (
-                  <Text style={[styles.chipBolt, { color: colors.text }]}>⚡</Text>
-                ) : null}
-                <Text style={[styles.chipText, { color: colors.text }]} numberOfLines={1}>
-                  {modelChipLabel(ownerMode)}
-                </Text>
+                <StopGlyph color={colors.onAccent} />
               </Pressable>
-            ) : null}
-
-            {showVoiceControl ? (
-              <VoiceComposerControls
-                voiceState={voiceState}
-                elapsedMs={elapsedMs}
-                pulse={pulse}
-                ring={ring}
-                onToggleVoice={onToggleVoice}
-                onResumeVoice={onResumeVoice}
-                onConfirmVoice={onConfirmVoice}
-                onDiscardVoice={onDiscardVoice}
-                onBeforeStart={() => {
-                  inputRef?.current?.blur();
-                  Keyboard.dismiss();
-                }}
-              />
-            ) : null}
-
-            {showSend ? (
-              streamingStop ? (
-                <Pressable
-                  style={[styles.sendIn, { backgroundColor: colors.accent }]}
-                  onPress={onStop}
-                  accessibilityLabel="Stop generating"
-                >
-                  <StopGlyph color={colors.onAccent} />
-                </Pressable>
-              ) : (
-                <Pressable
-                  style={[
-                    styles.sendIn,
-                    { backgroundColor: colors.accent },
-                    (sending || voiceBusy) && styles.sendDisabled,
-                  ]}
-                  onPress={handleSend}
-                  disabled={sending || !canSend || voiceBusy}
-                  accessibilityLabel="Send message"
-                >
-                  {sending ? (
-                    <ActivityIndicator color={colors.onAccent} />
-                  ) : (
-                    <Text style={{ color: colors.onAccent, fontSize: 18, fontWeight: '800' }}>↑</Text>
-                  )}
-                </Pressable>
-              )
-            ) : null}
-          </View>
+            ) : (
+              <Pressable
+                style={[
+                  styles.sendIn,
+                  { backgroundColor: colors.accent },
+                  (sending || voiceBusy) && styles.sendDisabled,
+                ]}
+                onPress={handleSend}
+                disabled={sending || !canSend || voiceBusy}
+                accessibilityLabel="Send message"
+              >
+                {sending ? (
+                  <ActivityIndicator color={colors.onAccent} />
+                ) : (
+                  <Text style={{ color: colors.onAccent, fontSize: 18, fontWeight: '800' }}>↑</Text>
+                )}
+              </Pressable>
+            )
+          ) : null}
         </View>
       </View>
       {showDisclaimer ? (
@@ -290,37 +293,34 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
   pill: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     borderRadius: radii.xl + 4,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingTop: 8,
-    paddingBottom: 6,
-    paddingHorizontal: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    minHeight: 48,
   },
   input: {
+    flex: 1,
     fontFamily: fonts.body,
     fontSize: 16,
     lineHeight: 22,
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     paddingVertical: 0,
   },
-  toolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 2,
-    minHeight: 32,
-  },
-  toolbarRight: {
+  trailing: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flexShrink: 1,
+    flexShrink: 0,
   },
   iconHit: {
     width: 32,
     height: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   chip: {
     flexDirection: 'row',
