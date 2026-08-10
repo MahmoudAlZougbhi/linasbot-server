@@ -362,7 +362,7 @@ test.describe("Content Management browser smoke", () => {
   test("draft load failure shows truthful error state", async ({ page }) => {
     await installCmApiMocks(page, { draftLoadFail: true });
     await page.goto("/content-managers/faq");
-    await expect(page.getByRole("heading", { name: "FAQ", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /FAQ/, level: 1 })).toBeVisible();
     // Professional FAQ UI: list endpoint failure surfaces honestly; publish stays on Publish page.
     await expect(page.getByText("No FAQ groups yet.")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("link", { name: /Preview \/ Validate \/ Publish/i })).toBeVisible();
@@ -371,7 +371,7 @@ test.describe("Content Management browser smoke", () => {
   test("FAQ visual editor loads without JSON textarea", async ({ page }) => {
     await installCmApiMocks(page);
     await page.goto("/content-managers/faq");
-    await expect(page.getByRole("heading", { name: "FAQ", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /FAQ/, level: 1 })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Add Q&A group" })).toBeVisible();
     await expect(page.getByPlaceholder("Question").first()).toBeVisible();
     await expect(page.getByPlaceholder("Answer").first()).toBeVisible();
