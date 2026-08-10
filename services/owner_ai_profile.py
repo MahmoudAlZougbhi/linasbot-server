@@ -127,9 +127,7 @@ def resolve_owner_reply_language(
     App / preferred locale is only for welcome-chip / UI prompts and unclear detection.
     Never used to lock customer DM/comment language (CM Languages owns that).
     """
-    fallback = coerce_language(reply_language_override) or normalize_language(
-        preferred_language, fallback="en"
-    )
+    fallback = coerce_language(reply_language_override) or normalize_language(preferred_language, fallback="en")
     if treat_as_ui_prompt:
         return fallback
     detected = detect_owner_message_language(user_text)

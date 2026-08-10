@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { API_BASE, apiUpload, ensureAccessToken, refreshAccessToken } from '../../../api/client';
 import { appendLocalFile } from '../../../api/formDataFile';
+import { getStoredAppLanguage } from '../../../i18n/languageStore';
 
 export type StreamStatus = { id: string; text: string };
 export type StreamCard = {
