@@ -35,10 +35,10 @@ export function HistoryDrawer({
     <SideDrawer open={open} side={isRtl ? 'right' : 'left'} onClose={onClose}>
       <Text style={styles.heading}>{tr('history')}</Text>
       <Pressable style={styles.newBtn} onPress={onNewChat}>
-        <Text style={styles.newText}>+ New chat</Text>
+        <Text style={styles.newText}>+ {tr('newChat')}</Text>
       </Pressable>
       <ScrollView contentContainerStyle={styles.list}>
-        {pinned.length > 0 ? <Text style={styles.section}>Pinned</Text> : null}
+        {pinned.length > 0 ? <Text style={styles.section}>{tr('pinnedChats')}</Text> : null}
         {pinned.map((item) => (
           <HistoryRow
             key={item.id}
@@ -49,7 +49,7 @@ export function HistoryDrawer({
             onTogglePin={onTogglePin}
           />
         ))}
-        <Text style={styles.section}>Recent</Text>
+        <Text style={styles.section}>{tr('recentChats')}</Text>
         {rest.map((item) => (
           <HistoryRow
             key={item.id}
@@ -61,7 +61,7 @@ export function HistoryDrawer({
           />
         ))}
         {history.length === 0 ? (
-          <Text style={styles.empty}>No conversations yet.</Text>
+          <Text style={styles.empty}>{tr('noConversationsYet')}</Text>
         ) : null}
       </ScrollView>
     </SideDrawer>
@@ -81,11 +81,12 @@ function HistoryRow({
   onOpen: (id: string) => void;
   onTogglePin: (id: string) => void;
 }) {
+  const { tr } = useI18n();
   return (
     <View style={[styles.row, active && styles.rowActive]}>
       <Pressable style={styles.rowMain} onPress={() => onOpen(item.id)}>
         <Text style={styles.rowTitle} numberOfLines={2}>
-          {item.title || 'Untitled'}
+          {item.title || tr('untitledChat')}
         </Text>
       </Pressable>
       <Pressable onPress={() => onTogglePin(item.id)} hitSlop={8}>
@@ -135,7 +136,7 @@ const styles = StyleSheet.create({
   rowTitle: {
     color: colors.text,
     fontFamily: fonts.bodyMedium,
-    fontWeight: '600',
+    fontWeight: '500',
     fontSize: 15,
   },
   pin: { color: colors.warning, fontSize: 18, paddingHorizontal: 4 },
