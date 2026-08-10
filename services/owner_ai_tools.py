@@ -10,6 +10,16 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from services.owner_ai_tools_base import ToolResult
+from services.owner_ai_tools_cm_bulk import tool_ingest_business_dump
+from services.owner_ai_tools_cm_content import (
+    tool_list_cm_articles,
+    tool_list_cm_faq,
+    tool_propose_cm_article_upsert,
+    tool_propose_cm_faq_upsert,
+    tool_read_cm_article,
+    tool_read_cm_faq,
+)
+from services.owner_ai_tools_cm_guide import tool_cm_fill_plan, tool_inspect_cm_guide
 from services.owner_ai_tools_creative import (
     tool_create_creative_draft,
     tool_schedule_creative_draft,
@@ -19,16 +29,6 @@ from services.owner_ai_tools_diagnosis import (
     tool_get_interaction_trace,
     tool_get_recent_customer_interactions,
     tool_propose_diagnosis_fix,
-)
-from services.owner_ai_tools_cm_bulk import tool_ingest_business_dump
-from services.owner_ai_tools_cm_guide import tool_cm_fill_plan, tool_inspect_cm_guide
-from services.owner_ai_tools_cm_content import (
-    tool_list_cm_articles,
-    tool_list_cm_faq,
-    tool_propose_cm_article_upsert,
-    tool_propose_cm_faq_upsert,
-    tool_read_cm_article,
-    tool_read_cm_faq,
 )
 from services.owner_ai_tools_faq import (
     tool_approve_smart_answer,

@@ -60,7 +60,6 @@ def progress_summary(tenant_id: str, *, create_missing: bool = False) -> dict[st
     filled = [str(r["section"]) for r in rows if r.get("fill") == "filled"]
     weak = [str(r["section"]) for r in rows if r.get("fill") == "weak"]
     missing = [str(r["section"]) for r in rows if r.get("fill") == "missing"]
-    remaining = weak + missing
     # Keep interview order for remaining (CM_SECTIONS order already applied).
     remaining_ordered = [str(r["section"]) for r in rows if not r.get("is_done")]
     total = len(rows)
