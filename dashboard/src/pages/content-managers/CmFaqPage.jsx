@@ -46,6 +46,8 @@ const CmFaqPage = () => {
   const [newLanguage, setNewLanguage] = useState("ar");
   const [runtimeMode, setRuntimeMode] = useState("legacy");
   const [publishEnabled, setPublishEnabled] = useState(false);
+  const [quotaDisplay, setQuotaDisplay] = useState(/** @type {string | null} */ (null));
+  const [entitlement, setEntitlement] = useState(/** @type {Record<string, unknown> | null} */ (null));
 
   const selected = useMemo(
     () => items.find((item) => String(item.qa_group_id) === selectedId) || null,
@@ -83,6 +85,18 @@ const CmFaqPage = () => {
     setPublishEnabled(Boolean(metaRes?.publish_enabled));
     if (faqRes?.success && Array.isArray(faqRes.data)) {
       setItems(/** @type {Array<Record<string, unknown>>} */ (faqRes.data));
+      const ent =
+        faqRes.entitlement && typeof faqRes.entitlement === "object"
+          ? /** @type {Record<string, unknown>} */ (faqRes.entitlement)
+          : null;
+      setEntitlement(ent);
+      setQuotaDisplay(
+        typeof faqRes.quota_display === "string"
+          ? faqRes.quota_display
+          : ent && typeof ent.quota_display === "string"
+            ? String(ent.quota_display)
+            : null
+      );
       if (!selectedId && faqRes.data[0]?.qa_group_id) {
         setSelectedId(String(faqRes.data[0].qa_group_id));
       }
@@ -164,15 +178,28 @@ const CmFaqPage = () => {
           <Link to="/content-managers" className="inline-flex items-center text-sm text-slate-500 hover:text-slate-800 mb-2">
             <ArrowLeftIcon className="w-4 h-4 mr-1" /> Content Managers
           </Link>
-          <h1 className="text-2xl font-semibold text-slate-900">FAQ</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">FAQ / Smart Answers</h1>
           <p className="text-slate-600 mt-1 max-w-3xl">
-            Teach the AI with linked Arabic / English / French / Franco questions. Franco questions keep Latin script;
-            answers for Arabic and Franco are always Arabic script. This is FAQ authoring — not model retraining.
+            Ready-made Q&A in linked Arabic / English / French / Franco. When a customer asks the same question
+            (or same meaning), the bot replies from FAQ instead of a full AI generation — that saves AI credits.
+            Franco questions keep Latin script; answers for Arabic and Franco are always Arabic script.
+            Ask Linas (Owner Copilot in the mobile app) to propose a Smart Answer — Approve goes Live.
           </p>
         </div>
         <div className="text-xs text-slate-500 space-y-1 text-right">
           <div>Runtime: {runtimeMode}</div>
           <div>Publish: {publishEnabled ? "enabled" : "drafts only"}</div>
+          {quotaDisplay ? (
+            <div className="text-slate-700 font-medium">
+              Smart Answers quota: {quotaDisplay}
+              {entitlement && typeof entitlement.faq_remaining_entries === "number"
+                ? ` · ${entitlement.faq_remaining_entries} remaining`
+                : null}
+            </div>
+          ) : null}
+          {entitlement && typeof entitlement.upgrade_message === "string" && entitlement.upgrade_message ? (
+            <div className="text-amber-700 max-w-xs ml-auto">{String(entitlement.upgrade_message)}</div>
+          ) : null}
           <Link to="/content-managers/learning-inbox" className="text-slate-700 hover:underline block">
             Learning Inbox →
           </Link>

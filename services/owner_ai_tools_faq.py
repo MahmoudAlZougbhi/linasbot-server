@@ -137,12 +137,26 @@ async def tool_propose_smart_answer(
             created_at=time.time(),
         )
     )
+    lang = prop.language
+    proposed_text = f"Q ({lang}): {q}\nA: {a}"
     data = {
         "proposal_id": prop.id,
         "confirmation_token": f"approve_smart_answer:{prop.id}",
-        "preview": {"question": q, "answer": a, "language": prop.language},
+        "preview": {
+            "section": "faq",
+            "kind": "smart_answer",
+            "question": q,
+            "answer": a,
+            "language": lang,
+            "proposed_value": proposed_text,
+            "impact": (
+                "Smart Answers / FAQ: when a customer asks the same question (or same meaning), "
+                "the bot replies from this ready-made Q&A instead of a full AI generation — saving credits."
+            ),
+        },
         "requires_confirmation": True,
         "status": "pending",
+        "section": "faq",
     }
     return ToolResult(
         ok=True,
@@ -195,14 +209,27 @@ async def tool_approve_smart_answer(
         updated_by=user_id,
         tags=["smart_answer", "owner_copilot"],
     )
-    smart_answer_proposal_store.mark(prop, status="approved", result=created)
+    from services.owner_ai_cm_approval import activate_cm_after_save
+
+    # Same Approve→Live path as CM patches (#171): draft mirror is already in faq section.
+    activation = await activate_cm_after_save(
+        tenant_id=tenant_id,
+        section="faq",
+        actor_id=user_id,
+    )
+    result_payload = {
+        "proposal_id": prop.id,
+        "status": "approved",
+        "qa_group_id": created.get("qa_group_id"),
+        "publish_prompt": False,
+        "activation": activation,
+        "live": bool(activation.get("activated")),
+        "detected_language": created.get("detected_language"),
+        "count_created": created.get("count_created"),
+    }
+    smart_answer_proposal_store.mark(prop, status="approved", result=result_payload)
     return ToolResult(
         ok=True,
         name="approve_smart_answer",
-        data={
-            "proposal_id": prop.id,
-            "status": "approved",
-            "qa_group_id": created.get("qa_group_id"),
-            "publish_prompt": False,
-        },
+        data=result_payload,
     )

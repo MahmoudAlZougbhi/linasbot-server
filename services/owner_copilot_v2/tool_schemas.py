@@ -129,7 +129,11 @@ OWNER_V2_CORE_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "read_faq_quota",
-            "description": "Read Smart Answers / FAQ quota.",
+            "description": (
+                "Read Smart Answers / FAQ entitlement: plan enabled flag, used/max/remaining "
+                "entry counts, quota_display, and hit metrics (generations_avoided). "
+                "Call before proposing a new Smart Answer when quota may be tight."
+            ),
             "parameters": {"type": "object", "properties": {}},
         },
     },
@@ -137,13 +141,22 @@ OWNER_V2_CORE_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "propose_smart_answer",
-            "description": "Propose a Smart Answer FAQ entry for approval.",
+            "description": (
+                "Propose a new Smart Answers / FAQ Q&A for owner Approve. "
+                "Use when the owner asks to add a ready-made answer for repeated customer questions. "
+                "On Approve the pair auto-translates to ar/en/fr/franco and goes Live (same as CM Approve→Live). "
+                "Explain savings: matching customer questions skip a full AI generation. "
+                "Does not write until the owner Approves or assents (ok / موافق)."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "question": {"type": "string"},
                     "answer": {"type": "string"},
-                    "language": {"type": "string"},
+                    "language": {
+                        "type": "string",
+                        "description": "Source language code: ar, en, fr, or franco.",
+                    },
                 },
                 "required": ["question", "answer"],
             },

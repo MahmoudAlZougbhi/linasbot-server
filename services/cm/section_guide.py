@@ -99,11 +99,14 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
     },
     "faq": {
         "title": "FAQ",
-        "purpose": "Canonical linked Q&A (up to 4 languages) for exact customer questions.",
-        "why": "Highest-precision answers; production FAQ lives here (not legacy training).",
+        "purpose": "Smart Answers — ready-made linked Q&A (ar/en/fr/franco) for repeated customer questions.",
+        "why": (
+            "Matching questions (same text or meaning) reply from FAQ before a full AI generation — "
+            "saves AI credits. Highest-precision answers; production FAQ lives here."
+        ),
         "what_to_fill": ["items[] with at least one language question + answer"],
-        "useful": "Full four-language variants, tags, review status.",
-        "app_path": "Content Management → FAQ",
+        "useful": "Full four-language variants, tags, review status, plan quota.",
+        "app_path": "Smart Answers / FAQ (or Content Management → FAQ)",
     },
     "handoff": {
         "title": "Human Handoff",

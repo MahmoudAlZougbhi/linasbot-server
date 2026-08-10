@@ -15,6 +15,7 @@ import { UsageScreen } from './src/features/billing/UsageScreen';
 import { BootSplash } from './src/features/boot/BootSplash';
 import { ChatScreen } from './src/features/chat/ChatScreen';
 import { queueSetupHandoff } from './src/features/chat/pendingSetupHandoff';
+import { FAQ_ASK_LINAS_PROMPT } from './src/features/faq/faqLanguages';
 import { CmScreen } from './src/features/cm/CmScreen';
 import { CmSectionScreen } from './src/features/cm/CmSectionScreen';
 import type { CmProposalReview } from './src/features/cm/cmProposalReview';
@@ -381,7 +382,14 @@ function AppBody() {
         />
       ) : null}
       {screen.name === 'faq' ? (
-        <FaqScreen onBack={() => setScreen({ name: 'chat' })} proposalReview={screen.proposalReview ?? null} />
+        <FaqScreen
+          onBack={() => setScreen({ name: 'chat' })}
+          proposalReview={screen.proposalReview ?? null}
+          onAskLinas={() => {
+            queueSetupHandoff({ text: FAQ_ASK_LINAS_PROMPT, mode: 'work', autoSend: true });
+            setScreen({ name: 'chat' });
+          }}
+        />
       ) : null}
       {screen.name === 'resource' ? (
         <SimpleResourceScreen

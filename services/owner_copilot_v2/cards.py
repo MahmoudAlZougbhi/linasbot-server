@@ -156,6 +156,22 @@ def card_from_tool(name: str, data: dict[str, Any], *, ok: bool) -> ChatCard | N
             preview=preview,
             confirmation_token=str(payload.get("confirmation_token") or "") or None,
         )
+    if name == "propose_smart_answer" and payload.get("proposal_id"):
+        preview = payload.get("preview") if isinstance(payload.get("preview"), dict) else {}
+        assert isinstance(preview, dict)
+        body = _proposal_body(preview)
+        if not body or body.startswith("Proposed"):
+            q = str(preview.get("question") or "").strip()
+            a = str(preview.get("answer") or "").strip()
+            lang = str(preview.get("language") or "").strip()
+            body = f"Q ({lang}): {q}\nA: {a}".strip() if (q or a) else "Review this Smart Answer, then Approve."
+        return proposal_card(
+            title="Smart Answer / FAQ",
+            body=body[:1200],
+            proposal_id=str(payload["proposal_id"]),
+            preview=preview,
+            confirmation_token=str(payload.get("confirmation_token") or "") or None,
+        )
     if name == "diagnose_meta_health" and ok:
         return diagnosis_card(
             title="Instagram / Facebook health",
