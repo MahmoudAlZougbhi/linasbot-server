@@ -4,6 +4,7 @@ import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { colors } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
+import type { CmProposalReview } from './cmProposalReview';
 import { cmFormStyles } from './cmFormStyles';
 import { getCmSection, type CmSectionId } from './cmSections';
 import { AiBasicsEditor } from './editors/AiBasicsEditor';
@@ -24,6 +25,8 @@ type Props = {
   section: CmSectionId;
   onBack: () => void;
   backLabel?: string;
+  /** Local overlay of a chat proposal — shown dirty, not auto-saved. */
+  proposalReview?: CmProposalReview | null;
 };
 
 function SectionBody({
@@ -71,9 +74,9 @@ function SectionBody({
   }
 }
 
-export function CmSectionScreen({ section, onBack, backLabel }: Props) {
+export function CmSectionScreen({ section, onBack, backLabel, proposalReview }: Props) {
   const meta = getCmSection(section);
-  const draft = useCmDraft(section);
+  const draft = useCmDraft(section, proposalReview);
   const [savedFlash, setSavedFlash] = useState(false);
 
   async function handleSave() {
@@ -94,6 +97,11 @@ export function CmSectionScreen({ section, onBack, backLabel }: Props) {
       {draft.loading ? <ActivityIndicator color={colors.accent} /> : null}
       {draft.error ? <Text style={cmFormStyles.error}>{draft.error}</Text> : null}
       {draft.conflict ? <Text style={cmFormStyles.warn}>{draft.conflict}</Text> : null}
+      {draft.proposalActive ? (
+        <Text style={cmFormStyles.warn}>
+          AI proposal preview — not saved yet. Approve in chat, or tap Save draft here.
+        </Text>
+      ) : null}
       {savedFlash ? <Text style={cmFormStyles.ok}>Draft saved.</Text> : null}
       {!draft.loading ? (
         <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>

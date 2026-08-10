@@ -14,6 +14,7 @@ import { tokenStore } from '../../auth/tokenStore';
 import { useI18n } from '../../i18n/LanguageContext';
 import { useTheme } from '../../theme';
 import type { ControlArea } from '../control/controlAreas';
+import type { CmProposalReview } from '../cm/cmProposalReview';
 import { ChatComposer } from './ChatComposer';
 import { ChatHeader } from './ChatHeader';
 import { ChatMessageList } from './ChatMessageList';
@@ -43,13 +44,14 @@ type Props = {
   isAuthenticated: boolean;
   isPlatformOwner: boolean;
   onOpenArea: (area: ControlArea) => void;
+  onOpenCmReview?: (review: CmProposalReview) => void;
   onRequestLogin: () => void;
   onRequestRegister: () => void;
 };
-
 export function ChatScreen({
   isAuthenticated,
   onOpenArea,
+  onOpenCmReview,
   onRequestLogin,
   onRequestRegister,
 }: Props) {
@@ -142,10 +144,8 @@ export function ChatScreen({
   const sending = isAuthenticated ? turn.streaming : guest.sending;
   const error = isAuthenticated ? owner.error : guest.error;
   const listKey = isAuthenticated ? owner.conversationId || 'owner' : 'guest';
-  // New owner chats always seed an assistant greeting — gate on first user message, not empty list.
   const hasUserMessage = messages.some((m) => m.role === 'user');
-  const showModeToggle =
-    isAuthenticated && !hasUserMessage && !turn.liveText && !turn.streaming;
+  const showModeToggle = isAuthenticated && !hasUserMessage && !turn.liveText && !turn.streaming;
 
   useEffect(() => {
     if (loading) return;
@@ -276,7 +276,7 @@ export function ChatScreen({
               owner.setProposedPatch(null);
               owner.setPendingConfirm(null);
             }}
-            onOpenCm={() => onOpenArea('cm')}
+            onOpenCm={(r) => (r && onOpenCmReview ? onOpenCmReview(r) : onOpenArea('cm'))}
             onGuestPrompt={(prompt) => {
               if (guest.gated) {
                 openAuthPreservingDraft(true);

@@ -1,5 +1,6 @@
 import { Text, View } from 'react-native';
 
+import type { CmProposalReview } from '../cm/cmProposalReview';
 import { ChatBubble } from './ChatBubble';
 import { chatScreenStyles as styles } from './chatScreenStyles';
 import type { ProposedPatch } from './useChatSession';
@@ -14,7 +15,7 @@ type Props = {
   proposedCmPatchLabel: string;
   onApproveDraft: (token: string) => void;
   onDiscardProposal: () => void;
-  onOpenCm: () => void;
+  onOpenCm: (review?: CmProposalReview) => void;
   onRetryLast: () => void;
 };
 
