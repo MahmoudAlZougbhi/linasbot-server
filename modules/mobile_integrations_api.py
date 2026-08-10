@@ -12,6 +12,7 @@ from modules.core import app
 from services.channel_capability_toggles import (
     ChannelToggleError,
     attach_channel_toggles,
+    clear_invalid_comments_enabled_state_async,
     set_channel_toggle,
     supported_platforms,
 )
@@ -35,6 +36,16 @@ def _without_comment_capabilities(integrations: list[dict[str, Any]]) -> list[di
 @app.get("/api/mobile/integrations")
 async def mobile_integrations(request: Request) -> Any:
     session = require_session(request)
+    # Best-effort: clear false Comments enabled when Meta comment scopes are missing.
+    for platform in supported_platforms():
+        try:
+            await clear_invalid_comments_enabled_state_async(
+                tenant_id=session.tenant_id,
+                platform=platform,
+                actor=session.user_id or session.email or "comments_state_reconcile",
+            )
+        except Exception:
+            pass
     rows = list_tenant_integration_status(session.tenant_id)
     rows = _without_comment_capabilities(rows)
     rows = attach_channel_toggles(rows, tenant_id=session.tenant_id)
@@ -68,7 +79,7 @@ async def mobile_integration_toggles(
         raise HTTPException(status_code=400, detail="Body must include dm or comments boolean")
 
     try:
-        toggles = await set_channel_toggle(
+        result = await set_channel_toggle(
             tenant_id=session.tenant_id,
             platform=platform_key,
             toggle=toggle,
@@ -78,10 +89,20 @@ async def mobile_integration_toggles(
     except ChannelToggleError as exc:
         return JSONResponse(
             status_code=exc.status_code,
-            content={"success": False, "error": exc.code, "message": exc.message},
+            content={
+                "success": False,
+                "error": exc.code,
+                "message": exc.message,
+                "reauthorize_required": exc.code == "COMMENT_SCOPES_MISSING",
+            },
         )
 
-    return {"success": True, "platform": platform_key, "toggles": toggles}
+    return {
+        "success": True,
+        "platform": platform_key,
+        "toggles": result["toggles"],
+        "comments_state": result.get("comments_state"),
+    }
 
 
 @app.get("/api/mobile/usage")
