@@ -84,9 +84,21 @@ export const fr: Record<StringKey, string> = {
   toggleDms: 'Messages privés',
   toggleComments: 'Commentaires',
   commentsBlockerMissingPermissions:
-    'Les commentaires nécessitent les permissions Meta. Réautorisez Facebook/Instagram avec l’accès commentaires (sans déconnexion).',
+    'Les commentaires nécessitent les permissions Meta. Utilisez Gérer les permissions / Réautoriser avec l’accès commentaires (ne pas déconnecter).',
   commentsBlockerConnectFirst: 'Connectez ce canal avant d’activer les commentaires.',
+  commentsBlockerMissingWebhook:
+    'L’abonnement webhook commentaires n’est pas encore confirmé pour cette connexion.',
   commentsBlockerGeneric: 'Les commentaires ne sont pas encore prêts sur cette connexion.',
+  manageCommentPermissions: 'Gérer les permissions',
+  reconnectWithCommentAccess: 'Reconnecter avec accès commentaires',
+  commentsStatusReady: 'Statut commentaires : Prêt (pas vérifié en direct)',
+  commentsStatusLiveVerified: 'Statut commentaires : Vérifié en direct',
+  commentsStatusReadyToEnable: 'Statut commentaires : permissions prêtes — activez le bouton',
+  commentsStatusNeedsWebhook: 'Statut commentaires : abonnement webhook requis',
+  commentsStatusNeedsPermission: 'Statut commentaires : permissions Meta commentaires manquantes',
+  testConnectionReadOnly: 'Tester la connexion (rafraîchissement lecture seule)',
+  testConnectionReadOnlyHint:
+    'App A uniquement. Tester la connexion recharge l’état depuis le backend — cela n’accorde pas de permissions et ne modifie pas les webhooks, abonnements ou identifiants.',
   platformInstagram: 'Instagram',
   platformFacebook: 'Facebook',
   platformTikTok: 'TikTok',
