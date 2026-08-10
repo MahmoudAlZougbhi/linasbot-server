@@ -81,10 +81,11 @@ export function ChatScreen({
   const composerInputRef = useRef<TextInput>(null);
   const listRef = useRef<FlatList>(null);
   const stickToBottomRef = useRef(true);
-  const { voiceState, voiceError, toggleVoice, metering } = useVoiceDraft((text) => {
+  const voice = useVoiceDraft((text) => {
     setDraft((prev) => (prev ? `${prev} ${text}` : text));
     requestAnimationFrame(() => composerInputRef.current?.focus());
   });
+  const authVoice = isAuthenticated ? voice : null;
 
   const scrollToBottom = useCallback((animated = true) => {
     stickToBottomRef.current = true;
@@ -142,7 +143,6 @@ export function ChatScreen({
   const sending = isAuthenticated ? turn.streaming : guest.sending;
   const error = isAuthenticated ? owner.error : guest.error;
   const listKey = isAuthenticated ? owner.conversationId || 'owner' : 'guest';
-  // New owner chats always seed an assistant greeting — gate on first user message, not empty list.
   const hasUserMessage = messages.some((m) => m.role === 'user');
   const showModeToggle =
     isAuthenticated && !hasUserMessage && !turn.liveText && !turn.streaming;
@@ -171,19 +171,16 @@ export function ChatScreen({
   }
 
   const ownerSendWithMode = useCallback(
-    (
-      text: string,
-      opts?: {
-        attachment_ids?: string[];
-        choice_id?: string;
-        choice_set_id?: string;
-        confirm_tool?: string | null;
-      },
-    ) => turn.send(text, { ...opts, owner_mode: ownerMode }),
+    (text: string, opts?: Parameters<typeof turn.send>[1]) =>
+      turn.send(text, { ...opts, owner_mode: ownerMode }),
     [ownerMode, turn],
   );
 
-  // ChatGPT-like open: keep chat chrome up — no second full-screen spinner after boot.
+  const errorKey =
+    error === 'retry' || error === 'guestWordLimit' || error === 'guestModelUnavailable'
+      ? error
+      : 'messageFailed';
+
   return (
     <GradientBackground>
       <KeyboardAvoidingView
@@ -216,16 +213,8 @@ export function ChatScreen({
 
         <ChatStatusBanners
           offline={offline}
-          errorLabel={
-            error
-              ? tr(
-                  error === 'retry' || error === 'guestWordLimit' || error === 'guestModelUnavailable'
-                    ? error
-                    : 'messageFailed',
-                )
-              : null
-          }
-          voiceError={voiceError}
+          errorLabel={error ? tr(errorKey) : null}
+          voiceError={voice.voiceError}
           onRetry={() => {
             setOffline(false);
             if (!isAuthenticated) {
@@ -319,8 +308,9 @@ export function ChatScreen({
           onChangeDraft={setDraft}
           sending={sending || (!isAuthenticated && guest.gated)}
           canSendWithAttachment={pendingFiles.length > 0}
-          voiceState={isAuthenticated ? voiceState : 'idle'}
-          metering={isAuthenticated ? metering : null}
+          voiceState={authVoice?.voiceState ?? 'idle'}
+          elapsedMs={authVoice?.elapsedMs ?? 0}
+          metering={authVoice?.metering ?? null}
           inputRef={composerInputRef}
           autoFocus
           showPlus={isAuthenticated}
@@ -328,7 +318,10 @@ export function ChatScreen({
           showModelChip={isAuthenticated}
           ownerMode={ownerMode}
           onPlus={() => setPlusOpen(true)}
-          onToggleVoice={() => void toggleVoice()}
+          onToggleVoice={() => void voice.toggleVoice()}
+          onResumeVoice={() => void voice.resumeVoice()}
+          onConfirmVoice={() => void voice.confirmVoice()}
+          onDiscardVoice={() => void voice.discardVoice()}
           onStop={turn.streaming ? () => turn.stop() : undefined}
           onSend={() =>
             void sendChatMessage({
@@ -337,7 +330,7 @@ export function ChatScreen({
               setDraft,
               pendingFiles,
               setPendingFiles,
-              voiceState,
+              voiceState: voice.voiceState,
               conversationId: owner.conversationId,
               guestGated: guest.gated,
               guestQuestionsRemaining: guest.questionsRemaining,
@@ -348,10 +341,7 @@ export function ChatScreen({
               autoTitleFromOutgoing: owner.autoTitleFromOutgoing,
               openAuthPreservingDraft,
               setOffline,
-              setSendError: (v) => {
-                if (isAuthenticated) owner.setError(v);
-                else guest.setError(v);
-              },
+              setSendError: (v) => (isAuthenticated ? owner.setError(v) : guest.setError(v)),
               scrollToBottom,
               imagePreviewByContent,
             })
