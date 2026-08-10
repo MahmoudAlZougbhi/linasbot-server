@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { API_BASE } from '../../../api/client';
+import { API_BASE, apiUpload, ensureAccessToken, refreshAccessToken } from '../../../api/client';
 import { appendLocalFile } from '../../../api/formDataFile';
-import { tokenStore } from '../../../auth/tokenStore';
 
 export type StreamStatus = { id: string; text: string };
 export type StreamCard = {
@@ -32,6 +31,8 @@ type StreamHandlers = {
   onCancelled?: () => void;
 };
 
+type StreamResult = 'done' | 'error' | 'network_error' | 'cancelled' | 'auth_error';
+
 function dispatchEvent(raw: string, handlers: StreamHandlers) {
   let ev: Record<string, unknown>;
   try {
@@ -57,9 +58,39 @@ function dispatchEvent(raw: string, handlers: StreamHandlers) {
   else if (type === 'done') handlers.onDone?.(ev);
 }
 
+function drainSseBuffer(
+  carry: string,
+  chunk: string,
+  handlers: StreamHandlers,
+  terminal: StreamResult,
+): { carry: string; terminal: StreamResult } {
+  let nextCarry = carry + chunk;
+  let nextTerminal = terminal;
+  const parts = nextCarry.split('\n\n');
+  nextCarry = parts.pop() || '';
+  for (const part of parts) {
+    const line = part
+      .split('\n')
+      .map((l) => l.trim())
+      .find((l) => l.startsWith('data:'));
+    if (!line) continue;
+    const raw = line.slice(5).trim();
+    try {
+      const evType = String((JSON.parse(raw) as { type?: string }).type || '');
+      if (evType === 'error') nextTerminal = 'error';
+      else if (evType === 'cancelled') nextTerminal = 'cancelled';
+      else if (evType === 'done') nextTerminal = 'done';
+    } catch {
+      /* ignore parse for terminal tracking */
+    }
+    dispatchEvent(raw, handlers);
+  }
+  return { carry: nextCarry, terminal: nextTerminal };
+}
+
 /**
  * True SSE consumer for Owner Copilot V2 (XHR progressive — works on React Native).
- * Does not animate a completed response; applies server deltas as the buffer grows.
+ * Auth: ensureAccessToken + one 401→refresh→retry (stream previously bypassed apiFetch refresh).
  */
 export function useOwnerStream() {
   const xhrRef = useRef<XMLHttpRequest | null>(null);
@@ -92,109 +123,105 @@ export function useOwnerStream() {
       },
       handlers: StreamHandlers,
     ): Promise<'done' | 'error' | 'network_error' | 'cancelled'> => {
-      // Replace any in-flight stream quietly (do not fire onCancelled for the new turn).
       abortActive(false);
       return (async () => {
-        const access = await tokenStore.getAccessToken();
+        const runOnce = (access: string): Promise<StreamResult> =>
+          new Promise((resolve) => {
+            setStreaming(true);
+            const xhr = new XMLHttpRequest();
+            xhrRef.current = xhr;
+            let seen = 0;
+            let carry = '';
+            let terminal: StreamResult = 'done';
+            let settled = false;
+
+            const finish = (result: StreamResult) => {
+              if (settled) return;
+              settled = true;
+              if (xhrRef.current === xhr) {
+                xhrRef.current = null;
+                setStreaming(false);
+              } else {
+                setStreaming(false);
+              }
+              resolve(result);
+            };
+
+            xhr.open(
+              'POST',
+              `${API_BASE}/api/owner-ai/conversations/${conversationId}/messages/stream`,
+            );
+            xhr.setRequestHeader('Authorization', `Bearer ${access}`);
+            xhr.setRequestHeader('Accept', 'text/event-stream');
+            xhr.setRequestHeader('Content-Type', 'application/json');
+
+            xhr.onprogress = () => {
+              const chunk = xhr.responseText.slice(seen);
+              seen = xhr.responseText.length;
+              const drained = drainSseBuffer(carry, chunk, handlers, terminal);
+              carry = drained.carry;
+              terminal = drained.terminal;
+            };
+
+            xhr.onerror = () => {
+              handlers.onError?.('stream_network_error');
+              finish('network_error');
+            };
+
+            xhr.onabort = () => {
+              if (notifyCancelRef.current) {
+                notifyCancelRef.current = false;
+                handlers.onCancelled?.();
+              }
+              finish('cancelled');
+            };
+
+            xhr.onload = () => {
+              if (carry.trim()) {
+                const drained = drainSseBuffer(carry, '\n\n', handlers, terminal);
+                carry = drained.carry;
+                terminal = drained.terminal;
+              }
+              if (xhr.status === 401) {
+                // Silent — caller may refresh + retry once (no banner yet).
+                finish('auth_error');
+                return;
+              }
+              if (xhr.status >= 400) {
+                handlers.onError?.(`stream_http_${xhr.status}`);
+                finish('error');
+                return;
+              }
+              finish(terminal);
+            };
+
+            xhr.send(JSON.stringify(body));
+          });
+
+        const access = await ensureAccessToken();
         if (!access) {
           handlers.onError?.('Not authenticated');
+          setStreaming(false);
           return 'error' as const;
         }
 
-        setStreaming(true);
-        const xhr = new XMLHttpRequest();
-        xhrRef.current = xhr;
-        let seen = 0;
-        let carry = '';
-        let terminal: 'done' | 'error' | 'network_error' | 'cancelled' = 'done';
-        let settled = false;
+        let result = await runOnce(access);
+        if (result === 'auth_error') {
+          const refreshed = await refreshAccessToken();
+          if (!refreshed) {
+            handlers.onError?.('Not authenticated');
+            setStreaming(false);
+            return 'error';
+          }
+          result = await runOnce(refreshed);
+          if (result === 'auth_error') {
+            handlers.onError?.('stream_http_401');
+            setStreaming(false);
+            return 'error';
+          }
+        }
 
-        return await new Promise<'done' | 'error' | 'network_error' | 'cancelled'>((resolve) => {
-          const finish = (result: 'done' | 'error' | 'network_error' | 'cancelled') => {
-            if (settled) return;
-            settled = true;
-            if (xhrRef.current === xhr) {
-              xhrRef.current = null;
-              setStreaming(false);
-            }
-            resolve(result);
-          };
-
-          xhr.open(
-            'POST',
-            `${API_BASE}/api/owner-ai/conversations/${conversationId}/messages/stream`,
-          );
-          xhr.setRequestHeader('Authorization', `Bearer ${access}`);
-          xhr.setRequestHeader('Accept', 'text/event-stream');
-          xhr.setRequestHeader('Content-Type', 'application/json');
-
-          xhr.onprogress = () => {
-            const chunk = xhr.responseText.slice(seen);
-            seen = xhr.responseText.length;
-            carry += chunk;
-            const parts = carry.split('\n\n');
-            carry = parts.pop() || '';
-            for (const part of parts) {
-              const line = part
-                .split('\n')
-                .map((l) => l.trim())
-                .find((l) => l.startsWith('data:'));
-              if (!line) continue;
-              const raw = line.slice(5).trim();
-              try {
-                const evType = String((JSON.parse(raw) as { type?: string }).type || '');
-                if (evType === 'error') terminal = 'error';
-                else if (evType === 'cancelled') terminal = 'cancelled';
-                else if (evType === 'done') terminal = 'done';
-              } catch {
-                /* ignore parse for terminal tracking */
-              }
-              dispatchEvent(raw, handlers);
-            }
-          };
-
-          xhr.onerror = () => {
-            handlers.onError?.('stream_network_error');
-            finish('network_error');
-          };
-
-          xhr.onabort = () => {
-            if (notifyCancelRef.current) {
-              notifyCancelRef.current = false;
-              handlers.onCancelled?.();
-            }
-            finish('cancelled');
-          };
-
-          xhr.onload = () => {
-            if (carry.trim()) {
-              const line = carry
-                .split('\n')
-                .map((l) => l.trim())
-                .find((l) => l.startsWith('data:'));
-              if (line) {
-                const raw = line.slice(5).trim();
-                try {
-                  const evType = String((JSON.parse(raw) as { type?: string }).type || '');
-                  if (evType === 'error') terminal = 'error';
-                  else if (evType === 'cancelled') terminal = 'cancelled';
-                  else if (evType === 'done') terminal = 'done';
-                } catch {
-                  /* ignore */
-                }
-                dispatchEvent(raw, handlers);
-              }
-            }
-            if (xhr.status >= 400) {
-              handlers.onError?.(`stream_http_${xhr.status}`);
-              finish('error');
-              return;
-            }
-            finish(terminal);
-          };
-
-          xhr.send(JSON.stringify(body));
-        });
+        return result;
       })();
     },
     [abortActive],
@@ -210,15 +237,11 @@ export async function uploadOwnerAttachment(file: {
   name: string;
   mimeType: string;
 }): Promise<{ attachment_id: string; filename: string; mime: string; size: number }> {
-  const access = await tokenStore.getAccessToken();
-  if (!access) throw new Error('Not authenticated');
-  const form = new FormData();
-  // Expo SDK 57 fetch rejects RN { uri, name, type } FormData parts.
-  appendLocalFile(form, 'file', file.uri, { name: file.name });
-  const res = await fetch(`${API_BASE}/api/owner-ai/v2/attachments`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${access}`, Accept: 'application/json' },
-    body: form,
+  const res = await apiUpload('/api/owner-ai/v2/attachments', () => {
+    const form = new FormData();
+    // Expo SDK 57 fetch rejects RN { uri, name, type } FormData parts.
+    appendLocalFile(form, 'file', file.uri, { name: file.name });
+    return form;
   });
   const data = (await res.json()) as Record<string, unknown>;
   if (!res.ok || !data.success) {

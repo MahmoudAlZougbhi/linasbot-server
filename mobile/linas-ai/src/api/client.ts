@@ -2,9 +2,11 @@ import { z } from 'zod';
 
 import { API_BASE } from '../config';
 import { tokenStore } from '../auth/tokenStore';
+import { ensureAccessToken, refreshAccessToken } from './accessToken';
 import { MobileLoginResponseSchema } from './types';
 
 export { API_BASE };
+export { ensureAccessToken, onAuthCleared, refreshAccessToken } from './accessToken';
 
 async function parseJson(response: Response): Promise<unknown> {
   const text = await response.text();
@@ -25,31 +27,8 @@ export class ApiError extends Error {
   }
 }
 
-async function refreshAccessToken(): Promise<string | null> {
-  const refresh = await tokenStore.getRefreshToken();
-  if (!refresh) {
-    return null;
-  }
-  const response = await fetch(`${API_BASE}/api/auth/mobile/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh_token: refresh }),
-  });
-  const body = await parseJson(response);
-  if (!response.ok) {
-    await tokenStore.clear();
-    return null;
-  }
-  const parsed = MobileLoginResponseSchema.parse(body);
-  await tokenStore.setTokens(parsed.access_token, parsed.refresh_token);
-  return parsed.access_token;
-}
-
 async function authorizeHeaders(headers: Headers): Promise<void> {
-  let access = await tokenStore.getAccessToken();
-  if (!access) {
-    access = await refreshAccessToken();
-  }
+  const access = await ensureAccessToken();
   if (!access) {
     throw new ApiError('Not authenticated', 401, null);
   }
