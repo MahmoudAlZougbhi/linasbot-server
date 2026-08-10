@@ -44,7 +44,8 @@ export function LanguagesEditor({ payload, onChange }: Props) {
         <Text style={cmFormStyles.label}>Languages the AI uses</Text>
         <Text style={cmFormStyles.hint}>
           Toggle off a language so the AI does not reply in it. Customers are answered only in enabled
-          languages.
+          languages. This is the only control for Instagram/Facebook DM and comment reply language —
+          app Settings language does not change customer replies.
         </Text>
         <View style={cmFormStyles.chipRow}>
           {LANGS.map((lang) => {

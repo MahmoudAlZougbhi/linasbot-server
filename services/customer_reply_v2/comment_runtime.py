@@ -117,6 +117,8 @@ async def run_customer_reply_v2_comment(
         customer_profile=profile,
         comment_context=comment_ctx,
         channel=channel,
+        response_language=response_language,
+        detected_language=detected_language,
         fixture_reply=fixture_answer,
     )
     reply = (answer.reply_text or "")[:900]

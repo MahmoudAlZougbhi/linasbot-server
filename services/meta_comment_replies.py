@@ -171,6 +171,16 @@ async def _generate_comment_reply_text(
     )
 
     from services.cm.constants import tenant_uses_cm_runtime
+    from services.cm.language_policy import detect_and_resolve_customer_languages
+
+    # Reply language from CM Languages only (not hardcoded, not app Settings).
+    _lang = detect_and_resolve_customer_languages(
+        tenant_id=tenant_id,
+        message=comment_text,
+        conversation_id=f"comment:{tenant_id}:{channel}",
+    )
+    detected_language = _lang["detected_language"]
+    response_language = _lang["response_language"]
 
     if tenant_uses_cm_runtime(tenant_id):
         try:
@@ -186,6 +196,8 @@ async def _generate_comment_reply_text(
                 v2_outcome = await run_customer_reply_v2_comment(
                     tenant_id=tenant_id,
                     comment_text=comment_text,
+                    detected_language=detected_language,
+                    response_language=response_language,
                     channel=social_channel,
                     comments_enabled=True,
                 )
@@ -204,8 +216,8 @@ async def _generate_comment_reply_text(
         outcome = await prepare_response(
             tenant_id=tenant_id,
             message=comment_text,
-            detected_language="ar",
-            response_language="ar",
+            detected_language=detected_language,
+            response_language=response_language,
         )
         if outcome.stop:
             reply = (outcome.reply or "").strip()

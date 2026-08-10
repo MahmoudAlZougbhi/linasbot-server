@@ -1,6 +1,7 @@
 """Canonical published-mode runtime pipeline (plan §12). Exact order, no silent fallback.
 
-Order implemented here: load published version → (language is caller-provided) → platform
+Order implemented here: load published version → (response language from CM Languages
+policy, caller-provided) → platform
 rules → restricted → handoff (only if not restricted) → exact FAQ → semantic FAQ → (hit:
 return, skip Interpreter/generative) → Query Interpreter (FAQ miss only) → structured facts →
 bounded semantic chunks → answer packet → (CALLER runs the existing large-AI pipeline) →
