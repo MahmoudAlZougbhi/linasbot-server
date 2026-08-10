@@ -231,8 +231,16 @@ export function ChatScreen({
           voiceError={voiceError}
           onRetry={() => {
             setOffline(false);
-            if (isAuthenticated) { owner.setError(null); void owner.bootstrap(); }
-            else { guest.setError(null); void guest.bootstrap(); }
+            if (!isAuthenticated) {
+              guest.setError(null);
+              void guest.bootstrap();
+              return;
+            }
+            const err = owner.error;
+            owner.setError(null);
+            // Send failures already restored the draft — clear banner only so Send works again.
+            if (err === 'messageFailed') return;
+            void owner.bootstrap();
           }}
         />
 

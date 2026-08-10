@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Linking } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { onAuthCleared } from './src/api/client';
 import { API_BASE } from './src/config';
 import { tokenStore } from './src/auth/tokenStore';
 import { LoginScreen } from './src/features/auth/LoginScreen';
@@ -106,6 +107,13 @@ function AppBody() {
         void tryRegisterOwnerPushScaffold();
       }
     })();
+  }, []);
+
+  useEffect(() => {
+    return onAuthCleared(() => {
+      setHasAccess(false);
+      setIsPlatformOwner(false);
+    });
   }, []);
 
   useEffect(() => {
