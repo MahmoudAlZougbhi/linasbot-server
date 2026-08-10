@@ -100,7 +100,44 @@ def main() -> None:
         Path("/opt/linasbot/data/meta_comment_settings"),
     ):
         print(f"[scope-audit] comment_settings_dir path={root} exists={root.is_dir()}")
+    _print_capability_probe(tenant_id=(os.getenv("META_COMMENT_AUDIT_TENANT") or "linas").strip() or "linas")
     print("[scope-audit] SUCCESS")
+
+
+def _print_capability_probe(*, tenant_id: str) -> None:
+    try:
+        from services.channel_capability_state import comment_capability_state, dm_capability_state
+        from services.entitlements_service import entitlements_store
+        from services.plan_economics import PLAN_PRICES_USD
+    except Exception as exc:  # pragma: no cover - prod-only enrichment
+        print(f"[scope-audit] capability_probe_skipped={type(exc).__name__}")
+        return
+    try:
+        ent = entitlements_store.get(tenant_id)
+        print(f"[scope-audit] entitlement_plan={ent.plan_id} status={ent.status}")
+    except Exception as exc:  # pragma: no cover
+        print(f"[scope-audit] entitlement_probe_failed={type(exc).__name__}")
+    print(f"[scope-audit] catalog_plans={','.join(PLAN_PRICES_USD.keys())}")
+    for platform in ("facebook", "instagram"):
+        st = comment_capability_state(tenant_id, platform)
+        missing = ",".join(st.get("missing_scopes") or []) or "none"
+        print(
+            f"[scope-audit] comments platform={platform} "
+            f"permission_present={st.get('permission_present')} "
+            f"webhook_subscribed={st.get('webhook_subscribed')} "
+            f"effective_enabled={st.get('effective_enabled')} "
+            f"blocker_code={st.get('blocker_code')} "
+            f"missing_scopes={missing} "
+            f"advanced={st.get('app_review', {}).get('advanced_access_approved')}"
+        )
+        dm = dm_capability_state(tenant_id, platform)
+        print(
+            f"[scope-audit] dm platform={platform} "
+            f"permission_present={dm.get('permission_present')} "
+            f"effective_enabled={dm.get('effective_enabled')} "
+            f"blocker_code={dm.get('blocker_code')}"
+        )
+    print("[scope-audit] capability_probe_done")
 
 
 if __name__ == "__main__":
