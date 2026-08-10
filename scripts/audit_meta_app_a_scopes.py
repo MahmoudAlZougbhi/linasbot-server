@@ -38,14 +38,8 @@ def _print_cm_comment_actions() -> None:
     tenant_id = (os.getenv("META_COMMENT_AUDIT_TENANT") or "linas").strip() or "linas"
     actions = load_actions_section(tenant_id)
     print(f"[scope-audit] tenant={tenant_id}")
-    print(
-        f"[scope-audit] cm_action_{ACTION_FACEBOOK_COMMENTS}="
-        f"{action_enabled(actions, ACTION_FACEBOOK_COMMENTS)}"
-    )
-    print(
-        f"[scope-audit] cm_action_{ACTION_INSTAGRAM_COMMENTS}="
-        f"{action_enabled(actions, ACTION_INSTAGRAM_COMMENTS)}"
-    )
+    print(f"[scope-audit] cm_action_{ACTION_FACEBOOK_COMMENTS}={action_enabled(actions, ACTION_FACEBOOK_COMMENTS)}")
+    print(f"[scope-audit] cm_action_{ACTION_INSTAGRAM_COMMENTS}={action_enabled(actions, ACTION_INSTAGRAM_COMMENTS)}")
     print(f"[scope-audit] cm_disable_linas_legacy_bridge={os.getenv('CM_DISABLE_LINAS_LEGACY_BRIDGE', '')}")
     print(f"[scope-audit] customer_reply_ai_v2={os.getenv('CUSTOMER_REPLY_AI_V2', '')}")
     print(f"[scope-audit] customer_reply_ai_v2_live={os.getenv('CUSTOMER_REPLY_AI_V2_LIVE', '')}")
@@ -93,8 +87,7 @@ def main() -> None:
         print(f"[scope-audit] publish_features_ready={publish_ready}")
         print(f"[scope-audit] per_asset_comment_enabled={bool(setting.enabled)}")
         print(
-            f"[scope-audit] webhook_subscribed_fields="
-            f"{','.join(sorted(binding.webhook_subscribed_fields)) or 'none'}"
+            f"[scope-audit] webhook_subscribed_fields={','.join(sorted(binding.webhook_subscribed_fields)) or 'none'}"
         )
     for root in (
         Path("/opt/linasbot_data/meta_comment_settings"),
