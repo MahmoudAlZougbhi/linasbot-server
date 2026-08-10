@@ -37,10 +37,80 @@ OWNER_V2_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "read_cm",
-            "description": "Read Content Management draft/live snapshot for a section or overview.",
+            "description": (
+                "Read a Content Management draft section or overview. Small sections return full "
+                "payload; large knowledge/care/faq item lists return metadata — use list/read "
+                "article or FAQ tools for full bodies."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {"section": {"type": "string"}},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_cm_articles",
+            "description": (
+                "List knowledge or care CM articles (legacy knowledge “files”) with metadata only "
+                "(id, title, status, body_chars). Paginated."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "section": {"type": "string", "enum": ["knowledge", "care"]},
+                    "status": {"type": "string"},
+                    "offset": {"type": "integer"},
+                    "limit": {"type": "integer"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_cm_article",
+            "description": (
+                "Read one knowledge/care CM article including full body (chunk via body_offset/"
+                "body_limit when body_complete is false)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "section": {"type": "string", "enum": ["knowledge", "care"]},
+                    "article_id": {"type": "string"},
+                    "body_offset": {"type": "integer"},
+                    "body_limit": {"type": "integer"},
+                },
+                "required": ["section", "article_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_cm_faq",
+            "description": "List FAQ / Smart Answer groups in CM (metadata only). Paginated.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string"},
+                    "offset": {"type": "integer"},
+                    "limit": {"type": "integer"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_cm_faq",
+            "description": "Read one FAQ / Smart Answer group with all language variants.",
+            "parameters": {
+                "type": "object",
+                "properties": {"qa_group_id": {"type": "string"}},
+                "required": ["qa_group_id"],
             },
         },
     },
@@ -64,6 +134,65 @@ OWNER_V2_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "patch": {"type": "object"},
                 },
                 "required": ["section", "patch"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_cm_article_upsert",
+            "description": (
+                "Propose create/update of one knowledge or care article (CM “file”). "
+                "Does not write until the owner confirms via approve_cm_patch."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "section": {"type": "string", "enum": ["knowledge", "care"]},
+                    "article": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "title": {"type": "string"},
+                            "body": {"type": "string"},
+                            "status": {"type": "string"},
+                            "tags": {"type": "array", "items": {"type": "string"}},
+                            "language": {"type": "string"},
+                            "audience": {"type": "string"},
+                            "category": {"type": "string"},
+                            "notes": {"type": "string"},
+                        },
+                    },
+                },
+                "required": ["section", "article"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_cm_faq_upsert",
+            "description": (
+                "Propose create/update of one FAQ group in CM. Does not write until owner confirms "
+                "via approve_cm_patch. For simple new Q&A pairs, propose_smart_answer is also fine."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "faq": {
+                        "type": "object",
+                        "properties": {
+                            "qa_group_id": {"type": "string"},
+                            "variants": {"type": "array"},
+                            "status": {"type": "string"},
+                            "tags": {"type": "array", "items": {"type": "string"}},
+                            "notes": {"type": "string"},
+                            "source_language": {"type": "string"},
+                            "reviewed": {"type": "boolean"},
+                        },
+                    },
+                },
+                "required": ["faq"],
             },
         },
     },

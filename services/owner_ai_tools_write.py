@@ -84,12 +84,34 @@ async def tool_approve_cm_patch(
 
     # Approve → validate → save → activate internally when published base exists.
     # Never returns a user-facing Publish confirmation after approval.
-    data = await approve_cm_patch_and_activate(
-        tenant_id=tenant_id,
-        user_id=user_id,
-        proposal_id=proposal_id,
-        actor_id=user_id,
-    )
+    try:
+        data = await approve_cm_patch_and_activate(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            proposal_id=proposal_id,
+            actor_id=user_id,
+        )
+    except PermissionError as exc:
+        return ToolResult(
+            ok=False,
+            name="approve_cm_patch",
+            data={"proposal_id": proposal_id},
+            error=str(exc) or "Permission denied",
+        )
+    except ValueError as exc:
+        return ToolResult(
+            ok=False,
+            name="approve_cm_patch",
+            data={"proposal_id": proposal_id},
+            error=str(exc) or "Invalid proposal",
+        )
+    except Exception as exc:  # noqa: BLE001 — surface apply/validate failures to the card
+        return ToolResult(
+            ok=False,
+            name="approve_cm_patch",
+            data={"proposal_id": proposal_id},
+            error=f"{type(exc).__name__}: {exc}",
+        )
     return ToolResult(ok=True, name="approve_cm_patch", data=data)
 
 

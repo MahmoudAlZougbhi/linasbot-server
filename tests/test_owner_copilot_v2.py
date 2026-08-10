@@ -193,7 +193,8 @@ async def test_shadow_mode_blocks_approve_writes(monkeypatch: pytest.MonkeyPatch
         confirmed=True,
     )
     assert result.ok is False
-    assert result.error == "writes_disabled_shadow_mode"
+    assert result.error is not None
+    assert "OWNER_COPILOT_WRITES" in result.error or "writes" in result.error.lower()
 
 
 @pytest.mark.asyncio

@@ -337,7 +337,11 @@ async def iter_owner_turn_v2_events(
                     yield StreamEvent(type="card", payload={"card": card.to_dict()})
                 for ch in choices_from_tool_result(result.name, result.data if isinstance(result.data, dict) else {}):
                     choices_acc.append(ch.to_dict())
-                if result.name == "propose_cm_patch" and result.ok and isinstance(result.data, dict):
+                if (
+                    result.name in {"propose_cm_patch", "propose_cm_article_upsert", "propose_cm_faq_upsert"}
+                    and result.ok
+                    and isinstance(result.data, dict)
+                ):
                     proposed_patch = {
                         "proposal_id": result.data.get("proposal_id"),
                         "confirmation_token": result.data.get("confirmation_token"),
