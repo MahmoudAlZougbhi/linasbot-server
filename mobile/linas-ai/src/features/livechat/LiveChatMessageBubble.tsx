@@ -4,6 +4,7 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'rea
 import { tokenStore } from '../../auth/tokenStore';
 import { API_BASE } from '../../config';
 import { useI18n } from '../../i18n/LanguageContext';
+import { textDirectionStyle } from '../../lib/textDirection';
 import { colors, fonts, radii, spacing } from '../../theme';
 import type { LiveChatMessage } from './liveChatTypes';
 import { formatBubbleTime, isLikeableAiReply, messageBody } from './liveChatTypes';
@@ -70,6 +71,7 @@ export function LiveChatMessageBubble({ message, onLike }: Props) {
   const type = String(message.type || 'text').toLowerCase();
   const imageUrl = resolveMediaUrl(message.image_url || (type === 'image' ? message.media_url : null));
   const body = messageBody(message);
+  const dirStyle = textDirectionStyle(body);
   const time = formatBubbleTime(message.timestamp || undefined);
   const showLike = Boolean(onLike) && isLikeableAiReply(message);
 
@@ -85,9 +87,9 @@ export function LiveChatMessageBubble({ message, onLike }: Props) {
       >
         {imageUrl ? <AuthImage url={imageUrl} /> : null}
         {type === 'voice' || type === 'audio' ? (
-          <Text style={[styles.text, isOperator && styles.opText]}>🎤 {body}</Text>
+          <Text style={[styles.text, isOperator && styles.opText, dirStyle]}>🎤 {body}</Text>
         ) : (
-          <Text style={[styles.text, isOperator && styles.opText]}>{body}</Text>
+          <Text style={[styles.text, isOperator && styles.opText, dirStyle]}>{body}</Text>
         )}
         <Text style={[styles.meta, isOperator && styles.opMeta]}>
           {isCustomer ? 'Customer' : isOperator ? 'You' : 'AI'}
