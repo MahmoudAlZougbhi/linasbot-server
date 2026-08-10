@@ -221,13 +221,16 @@ test('voice STT wires transcript into composer draft (no auto-send)', () => {
   assert.match(formData, /expo-file-system/);
   assert.match(formData, /Unsupported FormDataPart/);
   assert.match(chat, /useVoiceDraft\(\(text\) =>/);
+  assert.match(chat, /appendVoiceTranscript\(prev, text\)/);
   assert.match(chat, /setDraft/);
   assert.match(chat, /showMic=\{isAuthenticated\}/);
   assert.match(chat, /onResumeVoice/);
   assert.match(chat, /onConfirmVoice/);
   assert.match(chat, /onDiscardVoice/);
   assert.match(composer, /showVoiceControl/);
-  assert.match(composer, /voiceBusy \|\| !canSend/);
+  // Mic stays available with typed draft so confirm can append, not replace.
+  assert.match(composer, /showMic && onToggleVoice && !streamingStop/);
+  assert.doesNotMatch(composer, /voiceBusy \|\| !canSend/);
   assert.match(composer, /Listening…/);
   assert.match(composer, /Paused ·/);
   assert.match(composer, /Transcribing…/);

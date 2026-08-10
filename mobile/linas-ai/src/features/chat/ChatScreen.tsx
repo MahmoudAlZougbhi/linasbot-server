@@ -36,7 +36,7 @@ import { useChatListScroll } from './useChatListScroll';
 import { useChatSession } from './useChatSession';
 import { useGuestChatSession } from './useGuestChatSession';
 import { usePinnedChats } from './usePinnedChats';
-import { useVoiceDraft } from './useVoiceDraft';
+import { appendVoiceTranscript, useVoiceDraft } from './useVoiceDraft';
 import { ChoiceChips } from './v2/ChoiceChips';
 import type { PendingFile } from './v2/pickAttachment';
 import { useSetupHandoff } from './useSetupHandoff';
@@ -85,7 +85,7 @@ export function ChatScreen({
   const composerInputRef = useRef<TextInput>(null);
   const { listRef, stickToBottomRef, scrollToBottom, followBottomIfStuck, armOpenAtLatest } = useChatListScroll();
   const voice = useVoiceDraft((text) => {
-    setDraft((prev) => (prev ? `${prev} ${text}` : text));
+    setDraft((prev) => appendVoiceTranscript(prev, text));
     requestAnimationFrame(() => composerInputRef.current?.focus());
   });
   const authVoice = isAuthenticated ? voice : null;

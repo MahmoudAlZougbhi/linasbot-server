@@ -271,3 +271,5 @@ export function useVoiceDraft(onText: (text: string) => void) {
     isRecording: voiceState === 'recording' || recorderState.isRecording,
   };
 }
+
+export { appendVoiceTranscript } from './appendVoiceTranscript';
