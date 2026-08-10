@@ -73,3 +73,19 @@ def test_subscription_exempt_allowlist_is_explicit(tmp_path, monkeypatch) -> Non
     pub = get_tenant_entitlement_public("clinic-x")
     assert pub["subscription_exempt"] is True
     assert pub["app_access"] is True
+
+
+def test_entitlements_public_survives_faq_errors(tmp_path, monkeypatch) -> None:
+    """FAQ enrichment failure must not 500 entitlements/me (mobile fail-closes)."""
+    store = EntitlementsStore(root=tmp_path / "ent")
+    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.delenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", raising=False)
+
+    def _boom(_tenant_id: str):
+        raise RuntimeError("faq store unavailable")
+
+    monkeypatch.setattr("services.faq_entitlements.get_faq_entitlement", _boom)
+    pub = get_tenant_entitlement_public("linas")
+    assert pub["app_access"] is True
+    assert pub["subscription_exempt"] is True
+    assert pub["faq_enabled"] is False
