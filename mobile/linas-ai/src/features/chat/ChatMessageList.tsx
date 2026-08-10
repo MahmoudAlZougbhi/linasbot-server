@@ -15,6 +15,7 @@ import { ChatBubble } from './ChatBubble';
 import { chatScreenStyles as styles } from './chatScreenStyles';
 import { ChatStreamFooter } from './ChatStreamFooter';
 import { GuestEmptyState } from './GuestEmptyState';
+import { OwnerEmptyState } from './OwnerEmptyState';
 import { ScrollToLatestFab } from './ScrollToLatestFab';
 import type { ProposedPatch } from './useChatSession';
 import type { StreamCard } from './v2/useOwnerStream';
@@ -125,14 +126,7 @@ export function ChatMessageList({
         }
         ListEmptyComponent={
           isAuthenticated ? (
-            <View style={{ padding: 24 }}>
-              <Text style={{ color: colors.text, fontSize: 22, textAlign: 'center' }}>
-                {tr('chatEmptyTitle')}
-              </Text>
-              <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 8 }}>
-                {tr('chatEmptyBody')}
-              </Text>
-            </View>
+            <OwnerEmptyState />
           ) : (
             <GuestEmptyState onPick={onGuestPrompt} />
           )
