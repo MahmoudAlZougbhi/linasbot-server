@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { API_BASE, apiUpload, ensureAccessToken, refreshAccessToken } from '../../../api/client';
 import { appendLocalFile } from '../../../api/formDataFile';
+import { getStoredAppLanguage } from '../../../i18n/languageStore';
 
 export type StreamStatus = { id: string; text: string };
 export type StreamCard = {
@@ -121,6 +122,7 @@ export function useOwnerStream() {
         choice_set_id?: string;
         attachment_ids?: string[];
         owner_mode?: 'chat' | 'work';
+        reply_language?: 'en' | 'ar' | 'fr';
       },
       handlers: StreamHandlers,
     ): Promise<'done' | 'error' | 'network_error' | 'cancelled'> => {
@@ -135,6 +137,8 @@ export function useOwnerStream() {
             let carry = '';
             let terminal: StreamResult = 'done';
             let settled = false;
+            const locale = body.reply_language || getStoredAppLanguage();
+            const payload = { ...body, reply_language: locale };
 
             const finish = (result: StreamResult) => {
               if (settled) return;
@@ -154,6 +158,7 @@ export function useOwnerStream() {
             );
             xhr.setRequestHeader('Authorization', `Bearer ${access}`);
             xhr.setRequestHeader('Accept', 'text/event-stream');
+            xhr.setRequestHeader('Accept-Language', locale);
             xhr.setRequestHeader('Content-Type', 'application/json');
 
             xhr.onprogress = () => {
@@ -196,7 +201,7 @@ export function useOwnerStream() {
               finish(terminal);
             };
 
-            xhr.send(JSON.stringify(body));
+            xhr.send(JSON.stringify(payload));
           });
 
         const access = await ensureAccessToken();

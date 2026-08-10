@@ -1,9 +1,15 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../theme';
-import { OWNER_WELCOME_CHIPS, type OwnerWelcomeChip } from './ownerWelcomeChipData';
+import { OWNER_WELCOME_CHIPS } from './ownerWelcomeChipData';
 
-export type { OwnerWelcomeChip };
+export type OwnerWelcomeChip = {
+  id: string;
+  label: string;
+  mode: 'chat' | 'work';
+  prompt: string;
+};
 
 type Props = {
   disabled?: boolean;
@@ -12,30 +18,36 @@ type Props = {
 
 /** Tappable questions under the seeded owner welcome message. */
 export function OwnerWelcomeChips({ disabled, onPick }: Props) {
+  const { tr } = useI18n();
   const { colors } = useTheme();
   return (
     <View style={styles.wrap} accessibilityRole="menu">
-      <Text style={[styles.hint, { color: colors.textDim }]}>Quick start</Text>
-      {OWNER_WELCOME_CHIPS.map((chip) => (
-        <Pressable
-          key={chip.id}
-          disabled={disabled}
-          accessibilityRole="button"
-          accessibilityLabel={chip.label}
-          onPress={() => onPick(chip)}
-          style={[
-            styles.chip,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              opacity: disabled ? 0.5 : 1,
-            },
-          ]}
-        >
-          <Text style={[styles.label, { color: colors.text }]}>{chip.label}</Text>
-          <Text style={{ color: colors.textDim }}>{chip.mode === 'work' ? 'Work · High' : 'Chat · Low'}</Text>
-        </Pressable>
-      ))}
+      <Text style={[styles.hint, { color: colors.textDim }]}>{tr('welcomeQuickStart')}</Text>
+      {OWNER_WELCOME_CHIPS.map((chip) => {
+        const label = tr(chip.labelKey);
+        return (
+          <Pressable
+            key={chip.id}
+            disabled={disabled}
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            onPress={() => onPick({ id: chip.id, label, mode: chip.mode, prompt: chip.prompt })}
+            style={[
+              styles.chip,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                opacity: disabled ? 0.5 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
+            <Text style={{ color: colors.textDim }}>
+              {chip.mode === 'work' ? tr('welcomeChipModeWork') : tr('welcomeChipModeChat')}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

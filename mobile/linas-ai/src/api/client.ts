@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { API_BASE } from '../config';
 import { tokenStore } from '../auth/tokenStore';
+import { getStoredAppLanguage } from '../i18n/languageStore';
 import { ensureAccessToken, refreshAccessToken } from './accessToken';
 import { MobileLoginResponseSchema } from './types';
 
@@ -42,6 +43,7 @@ export async function apiFetch<T>(
   const headers = new Headers(options.headers);
   headers.set('Content-Type', 'application/json');
   headers.set('Accept', 'application/json');
+  headers.set('Accept-Language', getStoredAppLanguage());
 
   if (options.auth !== false) {
     await authorizeHeaders(headers);
@@ -69,7 +71,10 @@ export async function apiUpload(
   formOrFactory: FormData | (() => FormData),
 ): Promise<Response> {
   const build = typeof formOrFactory === 'function' ? formOrFactory : () => formOrFactory;
-  const headers = new Headers({ Accept: 'application/json' });
+  const headers = new Headers({
+    Accept: 'application/json',
+    'Accept-Language': getStoredAppLanguage(),
+  });
   await authorizeHeaders(headers);
 
   let response = await fetch(`${API_BASE}${path}`, {

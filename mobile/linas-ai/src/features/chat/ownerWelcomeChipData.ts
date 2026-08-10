@@ -1,17 +1,18 @@
+import type { StringKey } from '../../i18n/locales/en';
 import type { OwnerChatMode } from './ownerChatMode';
 
-export type OwnerWelcomeChip = {
+export type OwnerWelcomeChipDef = {
   id: string;
-  label: string;
+  labelKey: StringKey;
   mode: OwnerChatMode;
   prompt: string;
 };
 
-/** Mirrors server `services/owner_ai_onboarding.py` welcome chips. */
-export const OWNER_WELCOME_CHIPS: OwnerWelcomeChip[] = [
+/** Mirrors server `services/owner_ai_onboarding.py` welcome chips (labels via i18n). */
+export const OWNER_WELCOME_CHIPS: OwnerWelcomeChipDef[] = [
   {
     id: 'learn_app',
-    label: 'Want to learn more about the app?',
+    labelKey: 'welcomeChipLearnApp',
     mode: 'chat',
     prompt:
       'Give me a clear tour of what Linas AI can do for my business: ' +
@@ -20,7 +21,7 @@ export const OWNER_WELCOME_CHIPS: OwnerWelcomeChip[] = [
   },
   {
     id: 'setup_guided',
-    label: 'Set up my reply AI step by step',
+    labelKey: 'welcomeChipSetupGuided',
     mode: 'work',
     prompt:
       'I want to set up the AI that replies to my customers (Content Management) ' +
@@ -31,7 +32,7 @@ export const OWNER_WELCOME_CHIPS: OwnerWelcomeChip[] = [
   },
   {
     id: 'setup_bulk',
-    label: 'Set up from a full business description',
+    labelKey: 'welcomeChipSetupBulk',
     mode: 'work',
     prompt:
       'I want bulk CM setup. Ask me for a complete business description and how I want ' +
@@ -41,7 +42,7 @@ export const OWNER_WELCOME_CHIPS: OwnerWelcomeChip[] = [
   },
   {
     id: 'connect_meta',
-    label: 'Connect Instagram / Facebook',
+    labelKey: 'welcomeChipConnectMeta',
     mode: 'work',
     prompt:
       'Help me connect Instagram/Facebook for customer DMs and comments. ' +
@@ -49,7 +50,7 @@ export const OWNER_WELCOME_CHIPS: OwnerWelcomeChip[] = [
   },
   {
     id: 'check_plan',
-    label: 'Check my subscription / plan',
+    labelKey: 'welcomeChipCheckPlan',
     mode: 'chat',
     prompt:
       'Check my subscription and plan entitlements with read_subscription. Explain clearly what I have.',

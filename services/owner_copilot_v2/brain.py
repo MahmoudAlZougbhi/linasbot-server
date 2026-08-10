@@ -74,6 +74,7 @@ async def iter_owner_turn_v2_events(
     choice_set_id: str | None = None,
     attachment_ids: list[str] | None = None,
     owner_mode: Literal["chat", "work"] | None = None,
+    reply_language: str | None = None,
     is_cancelled: CancelCheck | None = None,
 ) -> AsyncIterator[StreamEvent]:
     if not owner_copilot_v2_enabled():
@@ -94,6 +95,7 @@ async def iter_owner_turn_v2_events(
         user_id=user_id,
         user_text=text or (confirm_tool or choice_id or ""),
         messages=messages,
+        reply_language=reply_language,
     )
     context["recent_messages_raw"] = list(messages or [])
     stage = str((context.get("account_summary") or {}).get("setup_stage") or "")

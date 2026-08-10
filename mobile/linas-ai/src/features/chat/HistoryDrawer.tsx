@@ -35,33 +35,35 @@ export function HistoryDrawer({
     <SideDrawer open={open} side={isRtl ? 'right' : 'left'} onClose={onClose}>
       <Text style={styles.heading}>{tr('history')}</Text>
       <Pressable style={styles.newBtn} onPress={onNewChat}>
-        <Text style={styles.newText}>+ New chat</Text>
+        <Text style={styles.newText}>+ {tr('newChat')}</Text>
       </Pressable>
       <ScrollView contentContainerStyle={styles.list}>
-        {pinned.length > 0 ? <Text style={styles.section}>Pinned</Text> : null}
+        {pinned.length > 0 ? <Text style={styles.section}>{tr('pinnedChats')}</Text> : null}
         {pinned.map((item) => (
           <HistoryRow
             key={item.id}
             item={item}
             active={item.id === activeId}
             pinned
+            untitledLabel={tr('untitledChat')}
             onOpen={onOpen}
             onTogglePin={onTogglePin}
           />
         ))}
-        <Text style={styles.section}>Recent</Text>
+        <Text style={styles.section}>{tr('recentChats')}</Text>
         {rest.map((item) => (
           <HistoryRow
             key={item.id}
             item={item}
             active={item.id === activeId}
             pinned={false}
+            untitledLabel={tr('untitledChat')}
             onOpen={onOpen}
             onTogglePin={onTogglePin}
           />
         ))}
         {history.length === 0 ? (
-          <Text style={styles.empty}>No conversations yet.</Text>
+          <Text style={styles.empty}>{tr('noConversationsYet')}</Text>
         ) : null}
       </ScrollView>
     </SideDrawer>
@@ -72,12 +74,14 @@ function HistoryRow({
   item,
   active,
   pinned,
+  untitledLabel,
   onOpen,
   onTogglePin,
 }: {
   item: Item;
   active: boolean;
   pinned: boolean;
+  untitledLabel: string;
   onOpen: (id: string) => void;
   onTogglePin: (id: string) => void;
 }) {
@@ -85,7 +89,7 @@ function HistoryRow({
     <View style={[styles.row, active && styles.rowActive]}>
       <Pressable style={styles.rowMain} onPress={() => onOpen(item.id)}>
         <Text style={styles.rowTitle} numberOfLines={2}>
-          {item.title || 'Untitled'}
+          {item.title || untitledLabel}
         </Text>
       </Pressable>
       <Pressable onPress={() => onTogglePin(item.id)} hitSlop={8}>

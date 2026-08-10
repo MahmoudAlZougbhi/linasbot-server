@@ -49,7 +49,11 @@ async function parseJson(response: Response): Promise<unknown> {
 export async function ensureGuestSession(guestSessionId: string, language?: string) {
   const response = await fetch(`${API_BASE}/api/guest-ai/session`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...(language ? { 'Accept-Language': language } : {}),
+    },
     body: JSON.stringify({ guest_session_id: guestSessionId, language }),
   });
   const body = await parseJson(response);
@@ -70,7 +74,11 @@ export async function sendGuestMessage(
 }> {
   const response = await fetch(`${API_BASE}/api/guest-ai/session/messages`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...(language ? { 'Accept-Language': language } : {}),
+    },
     body: JSON.stringify({ guest_session_id: guestSessionId, content, language }),
   });
   const body = await parseJson(response);

@@ -25,6 +25,8 @@ class StreamMessageBody(BaseModel):
     attachment_ids: list[str] | None = None
     # UI Chat|Work → OpenAI effort: chat=low, work=high (display name "5.6 LIN").
     owner_mode: Literal["chat", "work"] | None = None
+    # App UI locale (ar|en|fr). Prefer over message-language detection for Owner replies.
+    reply_language: str | None = Field(default=None, max_length=16)
 
 
 class ChoiceBody(BaseModel):
@@ -122,6 +124,11 @@ async def stream_owner_message(
         for m in ((conv.messages if conv else None) or [])
     ]
     cancel_flag = {"cancelled": False}
+    from services.owner_ai_profile import coerce_language, language_from_accept_header
+
+    reply_language = coerce_language(body.reply_language) or language_from_accept_header(
+        request.headers.get("accept-language")
+    )
 
     async def event_gen() -> AsyncIterator[str]:
         from services.owner_copilot_v2.brain import iter_owner_turn_v2_events
@@ -154,6 +161,7 @@ async def stream_owner_message(
                 choice_set_id=body.choice_set_id,
                 attachment_ids=body.attachment_ids,
                 owner_mode=body.owner_mode,
+                reply_language=reply_language,
                 is_cancelled=lambda: cancel_flag["cancelled"],
             ):
                 if ev.type == "delta":

@@ -17,6 +17,7 @@ import { GradientBackground } from '../../components/GradientBackground';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { TextField } from '../../components/TextField';
 import { LEGAL_URLS } from '../../config';
+import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, spacing, typography } from '../../theme';
 import { SocialAuthButtons } from './SocialAuthButtons';
 
@@ -28,6 +29,7 @@ type Props = {
 
 export function LoginScreen({ onLoggedIn, onGoRegister, onBack }: Props) {
   const insets = useSafeAreaInsets();
+  const { tr } = useI18n();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -43,11 +45,11 @@ export function LoginScreen({ onLoggedIn, onGoRegister, onBack }: Props) {
       if (err instanceof ApiError) {
         setError(
           err.status === 401 || err.status === 403
-            ? 'Login failed. Check your email and password.'
-            : 'Something went wrong. Please try again.',
+            ? tr('loginFailed')
+            : tr('loginGenericError'),
         );
       } else {
-        setError('Unable to reach Linas AI. Check your network and try again.');
+        setError(tr('loginNetworkError'));
       }
     } finally {
       setLoading(false);
@@ -69,42 +71,40 @@ export function LoginScreen({ onLoggedIn, onGoRegister, onBack }: Props) {
         >
           {onBack ? (
             <Pressable onPress={onBack}>
-              <Text style={styles.back}>← Continue as guest</Text>
+              <Text style={styles.back}>{tr('continueAsGuestBack')}</Text>
             </Pressable>
           ) : null}
           <BrandMark size="lg" style={styles.hero} />
-          <Text style={styles.welcome}>Welcome to Linas AI</Text>
-          <Text style={styles.sub}>Think it. Ask it. Linas has it.</Text>
+          <Text style={styles.welcome}>{tr('loginWelcome')}</Text>
+          <Text style={styles.sub}>{tr('loginTagline')}</Text>
 
           <TextField
             autoCapitalize="none"
             keyboardType="email-address"
             autoComplete="email"
-            placeholder="Email"
+            placeholder={tr('email')}
             value={email}
             onChangeText={setEmail}
           />
           <TextField
             secureTextEntry
             autoComplete="password"
-            placeholder="Password"
+            placeholder={tr('password')}
             value={password}
             onChangeText={setPassword}
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <PrimaryButton label="Log in" onPress={() => void onSubmit()} loading={loading} />
-          <PrimaryButton label="Create Account" onPress={onGoRegister} variant="ghost" />
+          <PrimaryButton label={tr('login')} onPress={() => void onSubmit()} loading={loading} />
+          <PrimaryButton label={tr('createAccount')} onPress={onGoRegister} variant="ghost" />
 
           <Pressable onPress={() => void Linking.openURL(LEGAL_URLS.forgotPassword)}>
-            <Text style={styles.link}>Forgot password</Text>
+            <Text style={styles.link}>{tr('forgotPassword')}</Text>
           </Pressable>
 
           <SocialAuthButtons />
           <View style={styles.legal}>
-            <Text style={styles.legalText}>
-              By continuing you agree to our Terms of Service and Privacy Policy.
-            </Text>
+<Text style={styles.legalText}>{tr('loginLegalAgree')}</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

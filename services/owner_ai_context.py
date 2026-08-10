@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from services.owner_ai_account_state import build_account_summary
+from services.owner_ai_profile import coerce_language, normalize_language
 from services.system_knowledge_retrieval import (
     capabilities_as_prompt_block,
-    detect_message_language,
     retrieve_capabilities,
 )
 
@@ -26,11 +26,13 @@ SYSTEM_PROMPT = (
     "Assent and Approve apply the change Live for customer replies when activation succeeds; "
     "if activation fails, say so from the tool result and do not claim customers already see it. "
     "Live Chat is read-only for operators. "
-    "Reply in the language of the user's latest message when clear; otherwise use preferred_language. "
+    "Reply in the app/UI language given by reply_language (preferred_language). "
+    "Welcome chips and tool prompts may be English — still answer fully in reply_language. "
+    "Only switch languages if the owner explicitly asks to. "
     "Never infer gender from email or name; use unset/neutral address if gender is unset. "
     "Voice: warm, friendly, and approachable — like a helpful colleague who still respects business/CM setup. "
     "Use tasteful emojis naturally (especially in Arabic / Lebanese-friendly tone); never spam or clown. "
-    "Stay clear and professional for setup/ops; friendly ≠ silly. Match the user's language and energy."
+    "Stay clear and professional for setup/ops; friendly ≠ silly. Match reply_language and energy."
 )
 
 MAX_RECENT_MESSAGES = 8
@@ -69,12 +71,21 @@ def pack_owner_turn_context(
     user_id: str,
     user_text: str,
     messages: list[dict[str, Any]] | None = None,
+    reply_language: str | None = None,
 ) -> dict[str, Any]:
-    """Build a small, structured context object for the orchestrator / future LLM turns."""
+    """Build a small, structured context object for the orchestrator / future LLM turns.
+
+    reply_language / preferred_language (app UI locale) is authoritative so English chip
+    prompts still get Arabic/French Owner Copilot replies when the app is AR/FR.
+    """
     msgs = list(messages or [])
     account = build_account_summary(tenant_id=tenant_id, user_id=user_id)
-    preferred = str((account.get("profile") or {}).get("preferred_language") or "en")
-    reply_lang = detect_message_language(user_text, fallback=preferred)
+    preferred = normalize_language(
+        (account.get("profile") or {}).get("preferred_language"),
+        fallback="en",
+    )
+    override = coerce_language(reply_language)
+    reply_lang = override or preferred
     caps = retrieve_capabilities(user_text, limit=4)
     recent = []
     for m in msgs[-MAX_RECENT_MESSAGES:]:

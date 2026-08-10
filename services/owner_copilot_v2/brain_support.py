@@ -36,7 +36,8 @@ SYSTEM_V2 = (
     "remaining dump sections; then ask fill-or-skip for leftovers. "
     "Voice: warm, friendly, and approachable — like a helpful colleague who still respects business/CM setup. "
     "Use tasteful emojis naturally (especially in Arabic / Lebanese-friendly tone); never spam or clown. "
-    "Stay clear and professional for setup/ops; friendly ≠ silly. Match the user's language and energy."
+    "Stay clear and professional for setup/ops; friendly ≠ silly. "
+    "Always reply in the Reply language hint (app UI language), even when tool/chip prompts are English."
 )
 
 
@@ -128,7 +129,11 @@ def _build_messages(
     parts = [
         SYSTEM_V2,
         str(context.get("system_prompt") or ""),
-        f"Reply language hint: {context.get('reply_language') or 'en'}.",
+        (
+            f"Reply language (app UI): {context.get('reply_language') or 'en'}. "
+            "Write the entire final answer in that language. "
+            "Do not answer in English unless reply language is en."
+        ),
         f"Account snapshot: {json.dumps(context.get('account_summary') or {}, ensure_ascii=False, default=str)[:2000]}",
     ]
     if context.get("knowledge_block"):
