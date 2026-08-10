@@ -171,7 +171,17 @@ async def stream_owner_message(
                     tool_calls=(done_payload or {}).get("tool_calls"),
                 )
 
-    return StreamingResponse(event_gen(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Connection": "keep-alive",
+            # Disable nginx proxy buffering so mobile XHR onprogress sees deltas live.
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.post("/api/owner-ai/conversations/{conversation_id}/choices")

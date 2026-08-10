@@ -23,21 +23,32 @@ async def sol_chat_completion(
 
     decision = policy or resolve_owner_policy(surface="owner_copilot")
     model = decision.model or owner_model_name()
+    # Every owner turn offers tools; Sol chat.completions forbids tools+low/high.
+    # Keep policy effort for text-only (final answer) streams; clamp tool rounds to none.
+    has_tools = tools is not None
     kwargs = build_chat_completion_kwargs(
         model=model,
         messages=[{"role": "user", "content": "placeholder"}],
         max_tokens=owner_max_output_tokens(),
         temperature=0.4,
         reasoning_effort=str(decision.reasoning_effort),
+        has_function_tools=has_tools,
     )
     kwargs["messages"] = messages
     kwargs["model"] = model
-    if tools is not None:
+    if has_tools:
         kwargs["tools"] = tools or OWNER_V2_TOOL_SCHEMAS
         kwargs["tool_choice"] = "auto"
     if stream:
         kwargs["stream"] = True
-    emit_model_policy_trace(decision, extra={"stream": stream, "has_tools": tools is not None})
+    emit_model_policy_trace(
+        decision,
+        extra={
+            "stream": stream,
+            "has_tools": has_tools,
+            "chat_completions_effort": kwargs.get("reasoning_effort"),
+        },
+    )
     return await client.chat.completions.create(**kwargs)
 
 

@@ -56,6 +56,29 @@ def reasoning_effort_for_model(model: str) -> str | None:
     return None
 
 
+def chat_completions_allows_tools_with_effort(model: str) -> bool:
+    """gpt-5.6-sol rejects function tools + reasoning_effort on /v1/chat/completions.
+
+    OpenAI requires either /v1/responses or reasoning_effort='none' for Sol tool calls.
+    Text-only Sol rounds may keep policy low|high. Terra tool calls are unaffected.
+    """
+    return "sol" not in _model_family(model)
+
+
+def effective_chat_completions_reasoning_effort(
+    *,
+    model: str,
+    reasoning_effort: str | None,
+    has_function_tools: bool = False,
+) -> str | None:
+    """Resolve effort for chat.completions, clamping Sol+tools to none."""
+    if has_function_tools and not chat_completions_allows_tools_with_effort(model):
+        return "none"
+    if reasoning_effort is not None:
+        return reasoning_effort
+    return reasoning_effort_for_model(model)
+
+
 def build_chat_completion_kwargs(
     *,
     model: str,
@@ -63,11 +86,13 @@ def build_chat_completion_kwargs(
     max_tokens: int,
     temperature: float | None = None,
     reasoning_effort: str | None = None,
+    has_function_tools: bool = False,
 ) -> dict[str, Any]:
     """Build OpenAI chat.completions.create kwargs compatible with GPT-5 param rules.
 
     When ``reasoning_effort`` is provided (model policy), it is written into the
-    payload as-is. Otherwise a model-name heuristic is used for non-policy callers.
+    payload as-is — except Sol + function tools, which must use ``none`` on
+    chat.completions (provider constraint). Otherwise a model-name heuristic is used.
     """
     kwargs: dict[str, Any] = {
         "model": model,
@@ -77,7 +102,11 @@ def build_chat_completion_kwargs(
         # Floor budget so reasoning tokens don't consume the entire cap before text.
         budget = max(int(max_tokens), _REASONING_MIN_COMPLETION_TOKENS)
         kwargs["max_completion_tokens"] = budget
-        effort = reasoning_effort if reasoning_effort is not None else reasoning_effort_for_model(model)
+        effort = effective_chat_completions_reasoning_effort(
+            model=model,
+            reasoning_effort=reasoning_effort,
+            has_function_tools=has_function_tools,
+        )
         if effort:
             kwargs["reasoning_effort"] = effort
     else:

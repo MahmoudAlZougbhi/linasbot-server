@@ -201,6 +201,61 @@ async def test_owner_provider_openai_payload_sol_effort(
     assert captured["model"] == MODEL_OWNER_SOL
     assert captured["reasoning_effort"] == "high"
 
+    # Regression: Sol + function tools on chat.completions must force effort=none
+    # (OpenAI 400: tools with reasoning_effort unsupported for gpt-5.6-sol).
+    captured.clear()
+    await prov.sol_chat_completion(
+        messages=[{"role": "user", "content": "How does usage work?"}],
+        tools=[{"type": "function", "function": {"name": "help", "parameters": {}}}],
+        stream=False,
+        policy=low,
+    )
+    assert captured["model"] == MODEL_OWNER_SOL
+    assert captured["reasoning_effort"] == "none"
+    assert captured.get("tools")
+    assert captured.get("tool_choice") == "auto"
+
+
+def test_sol_chat_completions_tools_force_none_effort() -> None:
+    from services.llm_core_service import (
+        build_chat_completion_kwargs,
+        effective_chat_completions_reasoning_effort,
+    )
+
+    assert (
+        effective_chat_completions_reasoning_effort(
+            model=MODEL_OWNER_SOL,
+            reasoning_effort="high",
+            has_function_tools=True,
+        )
+        == "none"
+    )
+    assert (
+        effective_chat_completions_reasoning_effort(
+            model=MODEL_OWNER_SOL,
+            reasoning_effort="low",
+            has_function_tools=False,
+        )
+        == "low"
+    )
+    # Terra keeps medium even with tools on chat.completions.
+    assert (
+        effective_chat_completions_reasoning_effort(
+            model=MODEL_CUSTOMER_TERRA,
+            reasoning_effort="medium",
+            has_function_tools=True,
+        )
+        == "medium"
+    )
+    kwargs = build_chat_completion_kwargs(
+        model=MODEL_OWNER_SOL,
+        messages=[{"role": "user", "content": "x"}],
+        max_tokens=500,
+        reasoning_effort="high",
+        has_function_tools=True,
+    )
+    assert kwargs["reasoning_effort"] == "none"
+
 
 @pytest.mark.asyncio
 async def test_customer_v2_answer_payload_terra_medium(monkeypatch: pytest.MonkeyPatch) -> None:
