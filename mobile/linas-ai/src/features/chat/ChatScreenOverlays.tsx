@@ -73,7 +73,6 @@ export function ChatScreenOverlays(props: Props) {
               isAuthenticated: props.isAuthenticated,
               pendingFiles: props.pendingFiles,
               setPendingFiles: props.setPendingFiles,
-              onOpenArea: props.onOpenArea,
             })
           }
         />
