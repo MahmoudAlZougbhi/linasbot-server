@@ -24,10 +24,12 @@ export const en = {
   registerNeedCredentials: 'Enter a valid email and a password (6+ characters).',
   registerNeedBusiness: 'Business name is required.',
   registeredVerify: 'Registered. Verify your email, then log in.',
-  chatEmptyTitle: 'Linas AI System Copilot',
-  chatEmptyBody: 'Ask to configure Content Management, check usage, connect Meta, or diagnose replies.',
+  chatEmptyTitle: "I'm Linas AI — your assistant in the app",
+  chatEmptyBody:
+    'I can help with everything. This app is your AI community manager for your social media pages.',
   guestChatEmptyTitle: 'Welcome to Linas AI',
-  guestChatEmptyBody: 'Ask what Linas AI offers for your business. Guest chat is explanatory only.',
+  guestChatEmptyBody:
+    'Ask what Linas AI offers for your business and social media pages. Guest chat is explanatory only.',
   guestQuestionsLeft: 'Guest questions: {n}/{max} remaining',
   guestLimitReached: 'Guest limit reached. Download the Linas AI app and subscribe to continue.',
   guestWordLimit: 'That question is too long. Please shorten it and try again.',

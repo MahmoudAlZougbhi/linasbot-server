@@ -14,7 +14,7 @@ export const GUEST_STARTERS = [
     id: 'dm',
     title: 'How are DMs and comments handled?',
     subtitle: 'See the safe reply and audit workflow.',
-    prompt: 'How does Linas handle Instagram and Facebook DMs and comments?',
+    prompt: 'How does Linas handle social media DMs and comments?',
   },
   {
     id: 'connect',

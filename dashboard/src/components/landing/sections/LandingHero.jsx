@@ -17,7 +17,7 @@ export default function LandingHero({ onOpenGuest }) {
         <div>
           <p className="flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[#06715F]">
             <span className="inline-block h-px w-5 bg-[#06715F]" aria-hidden="true" />
-            AI messaging for Facebook &amp; Instagram
+            AI messaging for social media
           </p>
           <h1 className="mt-4 max-w-xl text-4xl font-semibold tracking-tight text-[#171A19] sm:text-5xl lg:text-[3.25rem] lg:leading-[1.08]">
             Turn every DM and comment into a helpful answer.
@@ -97,7 +97,7 @@ export default function LandingHero({ onOpenGuest }) {
             One system for the conversations that matter
           </p>
           <div className="flex flex-wrap gap-2">
-            {['Messenger DMs', 'Instagram DMs', 'Facebook comments', 'Instagram comments'].map((label) => (
+            {['Social media DMs', 'Comments', 'Approved facts', 'Owner Copilot'].map((label) => (
               <span
                 key={label}
                 className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-white/90"

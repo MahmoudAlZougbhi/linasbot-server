@@ -14,7 +14,7 @@ const PublicSiteFooter = () => {
             <p className="text-lg font-semibold text-white">{PUBLIC_SITE.productName}</p>
           </div>
           <p className="mt-3 max-w-sm text-sm leading-relaxed text-[#9AA39F]">
-            AI messaging for Facebook & Instagram DMs and comments — operated from the Linas AI app.
+            AI messaging for social media DMs and comments — operated from the Linas AI app.
           </p>
           <div className="mt-5">
             <StoreBadges compact />

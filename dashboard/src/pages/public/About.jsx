@@ -11,7 +11,7 @@ const About = () => {
         <h1 className="font-display text-4xl font-bold text-slate-950">About {PUBLIC_SITE.productName}</h1>
         <p className="mt-4 text-lg leading-relaxed text-slate-700">
           {PUBLIC_SITE.productName} is a business messaging platform that helps companies answer private customer
-          messages on Facebook Messenger and Instagram using information approved and controlled by each business.
+          messages and comments on social media using information approved and controlled by each business.
         </p>
         <p className="mt-4 leading-relaxed text-slate-700">
           The public website is available at{' '}
@@ -22,8 +22,8 @@ const About = () => {
           connection management, and day-to-day operations.
         </p>
         <p className="mt-4 leading-relaxed text-slate-700">
-          Scope is private messages only. {PUBLIC_SITE.productName} does not automate Facebook or Instagram comment
-          replies, and inbound WhatsApp messages are not processed by the AI.
+          Scope is messaging conversations — social media DMs and comments. {PUBLIC_SITE.productName} does not
+          publish posts, Stories, Reels, or videos, and inbound WhatsApp messages are not processed by the AI.
         </p>
         <p className="mt-6 text-slate-700">
           Contact:{' '}

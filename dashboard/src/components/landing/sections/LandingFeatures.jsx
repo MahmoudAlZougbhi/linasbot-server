@@ -6,7 +6,7 @@ const FEATURES = [
   },
   {
     title: 'DMs and comments, covered',
-    body: 'Handle Facebook Messenger, Instagram DMs, and comments with approved business knowledge.',
+    body: 'Handle social media DMs and comments with approved business knowledge.',
     dark: false,
   },
   {
