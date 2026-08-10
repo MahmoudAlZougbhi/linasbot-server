@@ -1,7 +1,7 @@
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '../../components/PrimaryButton';
-import { APP_ENV, APP_VERSION, IOS_BUILD, LEGAL_URLS } from '../../config';
+import { APP_BUILD_LABEL, APP_ENV, APP_VERSION, LEGAL_URLS } from '../../config';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { AppLanguage } from '../../i18n';
 import { fonts, radii, spacing, useTheme } from '../../theme';
@@ -33,7 +33,7 @@ export function SettingsScreen({
   return (
     <ScreenChrome title={tr('settings')} subtitle={tr('settingsSub')} onBack={onBack}>
       <Text style={[styles.meta, { color: colors.textMuted }]}>
-        Linas AI {APP_VERSION} ({APP_ENV}) · iOS build {IOS_BUILD}
+        Linas AI {APP_VERSION} ({APP_ENV}) · build {APP_BUILD_LABEL}
       </Text>
 
       <Text style={[styles.group, { color: colors.textDim }]}>{tr('groupAccount')}</Text>

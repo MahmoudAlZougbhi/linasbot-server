@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,7 +12,7 @@ import {
 import { AppIcon } from '../../components/AppIcon';
 import { LinasStarMark } from '../../components/LinasStarMark';
 import { SideDrawer } from '../../components/SideDrawer';
-import { ANDROID_VERSION_CODE, APP_VERSION, IOS_BUILD, LEGAL_URLS } from '../../config';
+import { APP_VERSION_LABEL, LEGAL_URLS } from '../../config';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import type { ControlArea } from '../control/controlAreas';
@@ -44,8 +43,8 @@ type Props = {
   onRegister?: () => void;
 };
 
-const BUILD_LABEL = Platform.OS === 'ios' ? IOS_BUILD : String(ANDROID_VERSION_CODE);
-const VERSION_LABEL = `Linas ${APP_VERSION} · ${BUILD_LABEL}`;
+/** Live expo-constants label — shared with Settings via config.ts (bottom-left layout stays in NavDrawer styles). */
+const VERSION_LABEL = APP_VERSION_LABEL;
 
 export function NavDrawer(props: Props) {
   const { colors } = useTheme();
