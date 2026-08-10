@@ -56,7 +56,7 @@ async def _vision_dump_text(*, tenant_id: str, attachment_id: str) -> str | None
                 "role": "system",
                 "content": (
                     "Extract ALL readable business information as plain text for Content Management. "
-                    "Return JSON {\"text\": \"...\"}. Never invent unread facts."
+                    'Return JSON {"text": "..."}. Never invent unread facts.'
                 ),
             },
             {
@@ -190,9 +190,7 @@ async def tool_ingest_business_dump(
         },
         requires_confirmation=bool(proposed and proposed.get("requires_confirmation")),
         confirmation_token=(
-            str(proposed.get("confirmation_token"))
-            if proposed and proposed.get("confirmation_token")
-            else None
+            str(proposed.get("confirmation_token")) if proposed and proposed.get("confirmation_token") else None
         ),
         error=(
             "Owner confirmation required before CM draft is saved (Approve button or short assent)"

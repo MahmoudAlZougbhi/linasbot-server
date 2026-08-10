@@ -161,8 +161,8 @@ async def extract_sections_from_dump(*, text: str, reply_style: str = "") -> dic
     }
     system = (
         "You distribute a business owner's dump into Linas Content Management section patches. "
-        "Return JSON: {\"sections\":[{\"section\":\"ai_basics\",\"patch\":{...},\"note\":\"...\"}],"
-        "\"missing_notes\":[\"...\"]}. "
+        'Return JSON: {"sections":[{"section":"ai_basics","patch":{...},"note":"..."}],'
+        '"missing_notes":["..."]}. '
         "Only include sections you can fill from the dump. Never invent phones, prices, URLs, "
         "medical claims, or hours that were not provided. Prefer professional structure. "
         "For style/reply voice, honor reply_style when present. Patches are partial field updates."

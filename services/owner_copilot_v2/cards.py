@@ -144,9 +144,8 @@ def card_from_tool(name: str, data: dict[str, Any], *, ok: bool) -> ChatCard | N
         nested = payload.get("first_proposal")
         if isinstance(nested, dict) and isinstance(nested.get("data"), dict):
             return card_from_tool("propose_cm_patch", nested["data"], ok=True)
-    if (
-        name in {"propose_cm_patch", "propose_cm_article_upsert", "propose_cm_faq_upsert"}
-        and payload.get("proposal_id")
+    if name in {"propose_cm_patch", "propose_cm_article_upsert", "propose_cm_faq_upsert"} and payload.get(
+        "proposal_id"
     ):
         preview = payload.get("preview") if isinstance(payload.get("preview"), dict) else {}
         assert isinstance(preview, dict)

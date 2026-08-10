@@ -137,9 +137,7 @@ async def tool_list_cm_articles(
         )
     items, _payload, env = _load_section_items(tenant_id, name)
     status_f = (status or "").strip().lower() or None
-    filtered = [
-        row for row in items if not status_f or str(row.get("status") or "").lower() == status_f
-    ]
+    filtered = [row for row in items if not status_f or str(row.get("status") or "").lower() == status_f]
     off = max(0, int(offset or 0))
     lim = min(MAX_LIST_LIMIT, max(1, int(limit or DEFAULT_LIST_LIMIT)))
     page = filtered[off : off + lim]
@@ -224,9 +222,7 @@ async def tool_list_cm_faq(
     _require(role, "contentManagers")
     items, _payload, env = _load_section_items(tenant_id, "faq")
     status_f = (status or "").strip().lower() or None
-    filtered = [
-        row for row in items if not status_f or str(row.get("status") or "").lower() == status_f
-    ]
+    filtered = [row for row in items if not status_f or str(row.get("status") or "").lower() == status_f]
     off = max(0, int(offset or 0))
     lim = min(MAX_LIST_LIMIT, max(1, int(limit or DEFAULT_LIST_LIMIT)))
     page = filtered[off : off + lim]
