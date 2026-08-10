@@ -272,7 +272,6 @@ function AppBody() {
       {showSubGate ? (
         <SubscriptionGateScreen
           loading={subGate.loading}
-          note={subGate.access?.note}
           onOpenSubscription={() => setScreen({ name: 'billing' })}
           onRefresh={() => void subGate.refresh()}
           onLogout={() => void logout()}

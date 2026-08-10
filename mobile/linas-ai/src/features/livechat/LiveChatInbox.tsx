@@ -67,7 +67,7 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
     return (
       <EmptyState
         title="Live Chat permission required"
-        body="Your account needs the liveChat permission (operator/admin). Ask an owner to grant access."
+        body="Your account needs Live Chat access. Ask a workspace owner to grant permission."
       />
     );
   }

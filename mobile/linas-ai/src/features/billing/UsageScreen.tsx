@@ -28,7 +28,7 @@ export function UsageScreen({ onBack }: Props) {
         setData(res as Record<string, unknown>);
         setError(null);
       } catch {
-        setError('Could not load usage.');
+        setError('Could not load usage. Please try again.');
         setData(null);
       } finally {
         setLoading(false);
@@ -80,10 +80,10 @@ export function UsageScreen({ onBack }: Props) {
             </View>
           );
         })}
-        {data ? (
+        {__DEV__ && data ? (
           <Text style={styles.mono}>{JSON.stringify(data, null, 2)}</Text>
-        ) : !loading ? (
-          <EmptyState title="No usage data" />
+        ) : !loading && bars.length === 0 ? (
+          <EmptyState title="No usage data yet" body="Check back after you start using Linas AI." />
         ) : null}
       </ScrollView>
     </ScreenChrome>

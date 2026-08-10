@@ -39,7 +39,7 @@ export const en = {
   authGateTitle: 'Sign in to continue',
   authGateBody: 'Control Center, Content Management, integrations, and billing need an account.',
   authGateCreatePost:
-    'Social post creation is not part of Linas AI right now. Sign in for System Copilot (DMs & comments automation).',
+    'Create posts from chat with your brand AI. Sign in to write captions and schedule when available.',
   continueAsGuest: 'Continue chatting as guest',
   confirmAction: 'Confirm',
   rejectAction: 'Reject',
@@ -54,7 +54,7 @@ export const en = {
   files: 'Files',
   attachDocument: 'Attach document',
   attachVideo: 'Attach video',
-  attachSoon: 'Not wired for production yet',
+  attachSoon: 'Coming soon',
   addToChat: 'Add to chat',
   linEffortTitle: '5.6 LIN',
   linEffortLow: 'Low',
@@ -97,7 +97,7 @@ export const en = {
   toggleDms: 'Direct messages',
   toggleComments: 'Comments',
   commentsBlockerMissingPermissions:
-    'Comments need Meta comment permissions. Reauthorize Facebook/Instagram with comment access (no disconnect required).',
+    'Comments need Facebook/Instagram comment access. Please reconnect with comment permissions enabled.',
   commentsBlockerConnectFirst: 'Connect this channel before enabling comments.',
   commentsBlockerGeneric: 'Comments are not ready on this connection yet.',
   platformInstagram: 'Instagram',
@@ -117,7 +117,7 @@ export const en = {
   likeFaqAction: 'Like',
   likeFaqTitle: 'Save to FAQ (4 languages)',
   likeFaqHint:
-    'Saves into FAQ as one linked group (Arabic, English, French, Franco). Draft until published — does not retrain an AI model.',
+    'Saves into FAQ as one linked group (Arabic, English, French, Franco). Draft until published.',
   likeFaqQuestion: 'Customer question',
   likeFaqAnswer: 'AI answer',
   likeFaqQuestionPlaceholder: 'Edit the question…',
@@ -125,7 +125,7 @@ export const en = {
   likeFaqNeedBoth: 'Please provide both question and answer.',
   likeFaqSave: 'Save',
   likeFaqSavedTitle: 'Saved to FAQ',
-  likeFaqSavedBody: 'Saved in 4 languages. Publish when ready from the web dashboard.',
+  likeFaqSavedBody: 'Saved in 4 languages. Publish when ready from Content Management.',
   likeFaqSaveError: 'Could not save to FAQ.',
   diagnoseBadReply: 'Diagnose a bad reply',
   usersTitle: 'Users',
@@ -164,7 +164,7 @@ export const en = {
   usersDeleteError: 'Could not delete user.',
   usersForbiddenTitle: 'User management permission required',
   usersForbiddenBody:
-    'Your account needs the userManagement permission (admin). Ask an owner to grant access.',
+    'Your account needs permission to manage users. Ask a workspace owner to grant access.',
   usersAuthBody: 'Sign in to manage team members and permissions.',
   usersCountOne: '1 member',
   usersCountMany: '{n} members',
@@ -177,7 +177,7 @@ export const en = {
   statusSuspended: 'Suspended',
   permDashboard: 'Dashboard',
   permLiveChat: 'Live Chat',
-  permTraining: 'Training (legacy)',
+  permTraining: 'Training',
   permTesting: 'Testing Lab',
   permAnalytics: 'Analytics',
   permSmartMessaging: 'Smart Messaging',
@@ -214,6 +214,12 @@ export const en = {
   deleteConversation: 'Delete conversation',
   deleteConversationConfirm: 'Delete “{title}”? This cannot be undone.',
   untitledChat: 'Untitled',
+  subscribeGateTitle: 'Subscribe to continue',
+  subscribeGateBody:
+    'Choose a plan to unlock your AI assistant, Content Management, and social media integrations. Guest mode remains available without a subscription.',
+  subscribeGateViewPlans: 'View plans',
+  subscribeGateRefresh: 'I already subscribed — refresh',
+  subscribeGateSignOut: 'Sign out',
 } as const;
 
 export type StringKey = keyof typeof en;

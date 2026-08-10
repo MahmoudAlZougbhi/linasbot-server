@@ -26,6 +26,8 @@ type Props = { onBack: () => void; isPlatformOwner: boolean };
 export function DashboardScreen({ onBack, isPlatformOwner }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasUsage, setHasUsage] = useState(false);
+  const [hasMetrics, setHasMetrics] = useState(false);
   const [usageText, setUsageText] = useState<string | null>(null);
   const [metricsText, setMetricsText] = useState<string | null>(null);
 
@@ -35,17 +37,29 @@ export function DashboardScreen({ onBack, isPlatformOwner }: Props) {
       setError(null);
       try {
         const usage = await apiFetch('/api/mobile/usage', { schema: UsageSchema });
-        setUsageText(JSON.stringify(usage.credit_balance ?? usage, null, 2));
+        setHasUsage(true);
+        if (__DEV__) {
+          setUsageText(JSON.stringify(usage.credit_balance ?? usage, null, 2));
+        } else {
+          setUsageText(null);
+        }
         if (isPlatformOwner) {
           try {
             const metrics = await apiFetch('/api/platform/metrics', { schema: MetricsSchema });
-            setMetricsText(JSON.stringify(metrics, null, 2));
+            setHasMetrics(true);
+            if (__DEV__) {
+              setMetricsText(JSON.stringify(metrics, null, 2));
+            } else {
+              setMetricsText(null);
+            }
           } catch {
+            setHasMetrics(false);
             setMetricsText(null);
           }
         }
       } catch {
-        setError('Dashboard data unavailable. APIs may not be deployed yet.');
+        setError('Something went wrong loading the dashboard. Please try again.');
+        setHasUsage(false);
       } finally {
         setLoading(false);
       }
@@ -53,41 +67,48 @@ export function DashboardScreen({ onBack, isPlatformOwner }: Props) {
   }, [isPlatformOwner]);
 
   return (
-    <ScreenChrome
-      title="Dashboard"
-      subtitle="Truthful metrics from usage and platform APIs"
-      onBack={onBack}
-    >
+    <ScreenChrome title="Dashboard" subtitle="Usage and workspace health" onBack={onBack}>
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <ScrollView contentContainerStyle={styles.list}>
         <View style={styles.card}>
           <View style={styles.cardHead}>
             <Text style={styles.cardTitle}>Usage & credits</Text>
-            <StatusChip label={usageText ? 'Loaded' : 'Empty'} tone={usageText ? 'ok' : 'soon'} />
+            <StatusChip label={hasUsage ? 'Ready' : 'Empty'} tone={hasUsage ? 'ok' : 'soon'} />
           </View>
-          {usageText ? (
-            <Text style={styles.mono}>{usageText}</Text>
+          {hasUsage ? (
+            <Text style={styles.body}>
+              Your usage summary is available. Open Usage & Credits for details.
+            </Text>
           ) : (
-            <EmptyState title="No usage payload" body="Try again after entitlements APIs are live." />
+            <EmptyState
+              title="No usage data yet"
+              body="Check back after you start using Linas AI, or try again later."
+            />
           )}
+          {__DEV__ && usageText ? <Text style={styles.mono}>{usageText}</Text> : null}
         </View>
         <View style={styles.card}>
           <View style={styles.cardHead}>
             <Text style={styles.cardTitle}>Platform metrics</Text>
             <StatusChip
-              label={isPlatformOwner ? (metricsText ? 'Owner' : 'Unavailable') : 'Owner only'}
-              tone={metricsText ? 'ok' : 'soon'}
+              label={isPlatformOwner ? (hasMetrics ? 'Ready' : 'Unavailable') : 'Owner only'}
+              tone={hasMetrics ? 'ok' : 'soon'}
             />
           </View>
-          {metricsText ? (
-            <Text style={styles.mono}>{metricsText}</Text>
+          {hasMetrics ? (
+            <Text style={styles.body}>Platform metrics loaded for your owner workspace.</Text>
           ) : (
             <EmptyState
-              title={isPlatformOwner ? 'Metrics unavailable' : 'Platform owner only'}
-              body="Owner Control Center metrics require platform_owner role."
+              title={isPlatformOwner ? 'Metrics unavailable' : 'Owner access only'}
+              body={
+                isPlatformOwner
+                  ? 'Something went wrong loading metrics. Please try again.'
+                  : 'Platform metrics are only available to workspace owners.'
+              }
             />
           )}
+          {__DEV__ && metricsText ? <Text style={styles.mono}>{metricsText}</Text> : null}
         </View>
       </ScrollView>
     </ScreenChrome>
@@ -110,6 +131,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   cardTitle: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 16 },
-  mono: { color: colors.textMuted, fontFamily: 'Courier', fontSize: 12, lineHeight: 18 },
+  body: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 14, lineHeight: 20 },
+  mono: { color: colors.textMuted, fontFamily: 'Courier', fontSize: 12, lineHeight: 18, marginTop: 8 },
   error: { color: colors.danger, marginBottom: spacing.md, fontFamily: fonts.body },
 });

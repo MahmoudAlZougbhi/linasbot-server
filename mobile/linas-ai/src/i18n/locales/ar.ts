@@ -55,7 +55,7 @@ export const ar: Record<StringKey, string> = {
   photos: 'الصور',
   files: 'الملفات',
   attachVideo: 'إرفاق فيديو',
-  attachSoon: 'غير مفعّل في الإنتاج بعد',
+  attachSoon: 'قريباً',
   addToChat: 'إضافة إلى المحادثة',
   linEffortTitle: '5.6 LIN',
   linEffortLow: 'Low',
@@ -82,7 +82,7 @@ export const ar: Record<StringKey, string> = {
   toggleDms: 'الرسائل المباشرة',
   toggleComments: 'التعليقات',
   commentsBlockerMissingPermissions:
-    'التعليقات تحتاج صلاحيات Meta للتعليقات. أعد التفويض لفيسبوك/إنستغرام مع صلاحية التعليقات (بدون فصل).',
+    'التعليقات تحتاج صلاحية تعليقات Facebook/Instagram. أعد الربط مع تفعيل صلاحيات التعليقات.',
   commentsBlockerConnectFirst: 'اربط هذه القناة قبل تفعيل التعليقات.',
   commentsBlockerGeneric: 'التعليقات غير جاهزة على هذا الاتصال بعد.',
   platformInstagram: 'إنستغرام',
@@ -102,7 +102,7 @@ export const ar: Record<StringKey, string> = {
   likeFaqAction: 'إعجاب',
   likeFaqTitle: 'حفظ في الأسئلة الشائعة (4 لغات)',
   likeFaqHint:
-    'يُحفظ في إدارة المحتوى ← الأسئلة الشائعة كمجموعة مرتبطة (عربي، إنجليزي، فرنسي، فرانكو). مسودة حتى النشر — لا يعيد تدريب نموذج الذكاء الاصطناعي.',
+    'يُحفظ في الأسئلة الشائعة كمجموعة مرتبطة (عربي، إنجليزي، فرنسي، فرانكو). مسودة حتى النشر.',
   likeFaqQuestion: 'سؤال الزبون',
   likeFaqAnswer: 'رد الذكاء الاصطناعي',
   likeFaqQuestionPlaceholder: 'عدّل السؤال…',
@@ -149,7 +149,7 @@ export const ar: Record<StringKey, string> = {
   usersDeleteError: 'تعذر حذف المستخدم.',
   usersForbiddenTitle: 'صلاحية إدارة المستخدمين مطلوبة',
   usersForbiddenBody:
-    'حسابك يحتاج صلاحية userManagement (مسؤول). اطلب من المالك منح الوصول.',
+    'حسابك يحتاج صلاحية إدارة المستخدمين. اطلب من مالك مساحة العمل منح الوصول.',
   usersAuthBody: 'سجّل الدخول لإدارة أعضاء الفريق والصلاحيات.',
   usersCountOne: 'عضو واحد',
   usersCountMany: '{n} أعضاء',
@@ -162,7 +162,7 @@ export const ar: Record<StringKey, string> = {
   statusSuspended: 'موقوف',
   permDashboard: 'لوحة التحكم',
   permLiveChat: 'الدردشة المباشرة',
-  permTraining: 'التدريب (قديم)',
+  permTraining: 'التدريب',
   permTesting: 'مختبر الاختبار',
   permAnalytics: 'التحليلات',
   permSmartMessaging: 'الرسائل الذكية',
@@ -215,4 +215,10 @@ export const ar: Record<StringKey, string> = {
   faqSaved: 'تم الحفظ بأربع لغات.',
   faqLoadError: 'تعذر تحميل الأسئلة الشائعة.',
   faqCreateError: 'تعذر إنشاء السؤال.',
+  subscribeGateTitle: 'اشترك للمتابعة',
+  subscribeGateBody:
+    'اختر خطة لفتح مساعدك الذكي وإدارة المحتوى وتكاملات السوشال ميديا. وضع الضيف يبقى متاحاً بدون اشتراك.',
+  subscribeGateViewPlans: 'عرض الخطط',
+  subscribeGateRefresh: 'اشتركت بالفعل — تحديث',
+  subscribeGateSignOut: 'تسجيل الخروج',
 };

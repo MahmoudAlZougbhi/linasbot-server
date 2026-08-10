@@ -1,7 +1,7 @@
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '../../components/PrimaryButton';
-import { APP_BUILD_LABEL, APP_ENV, APP_VERSION, LEGAL_URLS } from '../../config';
+import { APP_BUILD_LABEL, APP_VERSION, LEGAL_URLS } from '../../config';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { AppLanguage } from '../../i18n';
 import { fonts, radii, spacing, useTheme } from '../../theme';
@@ -19,7 +19,7 @@ async function open(url: string) {
   await Linking.openURL(url);
 }
 
-/** ST-01 — grouped Settings; Actions / AI Limits hosted here (not in CM hub). */
+/** Grouped Settings; Actions / AI Limits hosted here (not in CM hub). */
 export function SettingsScreen({
   onBack,
   onLogout,
@@ -33,22 +33,21 @@ export function SettingsScreen({
   return (
     <ScreenChrome title={tr('settings')} subtitle={tr('settingsSub')} onBack={onBack}>
       <Text style={[styles.meta, { color: colors.textMuted }]}>
-        Linas AI {APP_VERSION} ({APP_ENV}) · build {APP_BUILD_LABEL}
+        Linas AI {APP_VERSION} · build {APP_BUILD_LABEL}
       </Text>
 
       <Text style={[styles.group, { color: colors.textDim }]}>{tr('groupAccount')}</Text>
       <Row
         title="Signed-in profile"
-        subtitle="Account email and workspace membership"
+        subtitle="Your account email and workspace"
         onPress={() => undefined}
         disabled
-        note="Managed via login session"
       />
       <Row
         title="Business profile"
-        subtitle="Workspace metadata only — customer AI facts live in Content Management"
+        subtitle="Update business facts in Content Management"
         onPress={onBack}
-        note="Open Content Management for AI Basics"
+        note="Open Content Management → AI Basics"
       />
       {onOpenNotifications ? (
         <Row
@@ -59,7 +58,7 @@ export function SettingsScreen({
       ) : null}
 
       <Text style={[styles.group, { color: colors.textDim }]}>Preferences</Text>
-      <Text style={[styles.label, { color: colors.textMuted }]}>{tr('language')} (app UI)</Text>
+      <Text style={[styles.label, { color: colors.textMuted }]}>{tr('language')}</Text>
       <View style={styles.chips}>
         {(['en', 'ar', 'fr'] as AppLanguage[]).map((lang) => (
           <Pressable

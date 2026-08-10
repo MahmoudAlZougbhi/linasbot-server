@@ -17,7 +17,7 @@ function errorMessage(err: unknown, fallback: string): string {
     if (body?.error) return String(body.error);
     if (body?.detail) return String(body.detail);
     if (body?.message) return String(body.message);
-    if (err.status === 403) return 'Forbidden — liveChat permission required.';
+    if (err.status === 403) return 'You do not have permission for Live Chat.';
     if (err.status === 401) return 'Not authenticated.';
   }
   if (err instanceof Error && err.message) return err.message;

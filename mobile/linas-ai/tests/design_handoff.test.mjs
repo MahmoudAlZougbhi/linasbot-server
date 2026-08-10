@@ -105,8 +105,8 @@ test('cold open is branded star splash then chat (no character mash / progress b
   assert.match(appJson, /"bundleIdentifier":\s*"com\.linasai\.app"/);
   assert.match(appJson, /"package":\s*"com\.linasai\.app"/);
   assert.match(appJson, /expo-audio/);
-  assert.match(appJson, /"buildNumber":\s*"18"/);
-  assert.match(appJson, /"versionCode":\s*18/);
+  assert.match(appJson, /"buildNumber":\s*"19"/);
+  assert.match(appJson, /"versionCode":\s*19/);
   assert.doesNotMatch(
     chat,
     /if \(loading\) \{\s*return \(\s*<GradientBackground>\s*<View style=\{styles\.center\}>/,
@@ -318,15 +318,16 @@ test('Settings hosts Notifications and Logout; drawer does not', () => {
 
 test('Settings does not duplicate AI Basics CM store', () => {
   const settings = read('features/settings/SettingsScreen.tsx');
-  assert.match(settings, /Content Management for AI Basics/);
+  assert.match(settings, /Content Management → AI Basics/);
   assert.doesNotMatch(settings, /MFA/);
   assert.doesNotMatch(settings, /Passkey/);
 });
 
-test('Integrations Test Connection is read-only refresh + App A filter', () => {
+test('Integrations refresh is customer-facing and IG/FB only', () => {
   const integ = read('features/integrations/IntegrationsScreen.tsx');
-  assert.match(integ, /Test connection \(read-only refresh\)/);
-  assert.match(integ, /does not reconnect/);
+  assert.match(integ, /Refresh connections/);
+  assert.doesNotMatch(integ, /App A only/);
+  assert.doesNotMatch(integ, /webhooks/);
   assert.match(integ, /platform === 'instagram' \|\| row\.platform === 'facebook'/);
 });
 

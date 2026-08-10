@@ -23,7 +23,7 @@ export function useSubscriptionGate(isAuthenticated: boolean) {
         planId: null,
         status: null,
         iapPurchaseInApp: false,
-        note: 'Could not verify subscription. Pull refresh after API is reachable.',
+        note: null,
       });
     } finally {
       setLoading(false);

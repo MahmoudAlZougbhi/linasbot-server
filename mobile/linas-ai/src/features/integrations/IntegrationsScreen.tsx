@@ -251,14 +251,13 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <PrimaryButton
-        label="Test connection (read-only refresh)"
+        label="Refresh connections"
         onPress={() => void load()}
         loading={loading}
         variant="ghost"
       />
       <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: spacing.md }}>
-        App A only. Test connection reloads verified state — it does not reconnect, change webhooks,
-        subscriptions, or credentials.
+        Refresh checks your Instagram and Facebook connection status without changing anything.
       </Text>
       <ScrollView contentContainerStyle={styles.list}>
         {rows

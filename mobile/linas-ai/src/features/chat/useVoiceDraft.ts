@@ -35,7 +35,7 @@ function errorMessage(err: unknown): string {
   }
   if (err instanceof Error && err.message) {
     if (/unsupported form data part/i.test(err.message)) {
-      return 'Voice upload failed (FormData). Rebuild the app and try again.';
+      return 'Could not send voice message. Please try again or type instead.';
     }
     return err.message;
   }

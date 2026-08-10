@@ -59,7 +59,7 @@ export function useLiveChatInbox() {
           setErrorKind(kind);
           setError(
             kind === 'forbidden'
-              ? 'Forbidden — liveChat permission required.'
+              ? 'You do not have permission for Live Chat.'
               : err instanceof Error
                 ? err.message
                 : 'Could not load conversations.',

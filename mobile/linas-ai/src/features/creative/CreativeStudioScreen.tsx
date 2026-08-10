@@ -21,8 +21,8 @@ const KINDS = [
   { id: 'post', label: 'Post' },
   { id: 'rewrite', label: 'Rewrite' },
   { id: 'campaign_ideas', label: 'Campaign ideas' },
-  { id: 'image', label: 'Image', note: 'Queued when provider available' },
-  { id: 'video', label: 'Video', disabled: true, note: 'Coming later — no production video provider' },
+  { id: 'image', label: 'Image', note: 'Image generation may take a moment' },
+  { id: 'video', label: 'Video', disabled: true, note: 'Video generation is coming soon' },
 ] as const;
 
 const ResultSchema = z.object({
@@ -53,9 +53,13 @@ export function CreativeStudioScreen({ onBack }: Props) {
         body: JSON.stringify({ kind, prompt: prompt.trim() }),
         schema: ResultSchema,
       });
-      setOutput(JSON.stringify(data.result, null, 2));
+      const result = data.result;
+      const textBits = Object.values(result).filter((v): v is string => typeof v === 'string');
+      setOutput(
+        textBits.join('\n\n') || (__DEV__ ? JSON.stringify(result, null, 2) : 'Done.'),
+      );
     } catch (err) {
-      setError(err instanceof ApiError ? `Failed (${err.status})` : 'Network error');
+      setError(err instanceof ApiError ? 'Something went wrong. Please try again.' : 'Network error. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -77,7 +81,7 @@ export function CreativeStudioScreen({ onBack }: Props) {
           );
         })}
       </ScrollView>
-      {kind === 'video' ? <StatusChip label="Coming later" tone="soon" /> : null}
+      {kind === 'video' ? <StatusChip label="Coming soon" tone="soon" /> : null}
       <TextField
         multiline
         placeholder="Describe what you want to create"

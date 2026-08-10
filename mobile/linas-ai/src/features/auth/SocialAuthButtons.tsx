@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { StatusChip } from '../../components/StatusChip';
 import { colors, fonts, radii, spacing } from '../../theme';
 
-/** Truthful placeholders — Google/Apple not wired in mobile auth API. */
+/** Google / Apple sign-in buttons — available when mobile social auth ships. */
 export function SocialAuthButtons() {
   return (
     <View style={styles.wrap}>

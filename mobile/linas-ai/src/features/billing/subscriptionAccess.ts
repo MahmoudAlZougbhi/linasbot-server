@@ -43,6 +43,7 @@ export async function fetchSubscriptionAccess(): Promise<SubscriptionAccess> {
     planId: ent.plan_id ?? null,
     status: ent.status ?? null,
     iapPurchaseInApp: Boolean(ent.iap_purchase_in_app),
-    note: ent.iap_note ?? null,
+    // Never surface server engineering notes (iap_note) in production UI.
+    note: null,
   };
 }
