@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  Image,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -13,12 +12,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ApiError, mobileLogin } from '../../api/client';
+import { BrandMark } from '../../components/BrandMark';
 import { GradientBackground } from '../../components/GradientBackground';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { TextField } from '../../components/TextField';
 import { LEGAL_URLS } from '../../config';
 import { colors, fonts, spacing, typography } from '../../theme';
-import { linasAssets } from '../linas/avatarAssets';
 import { SocialAuthButtons } from './SocialAuthButtons';
 
 type Props = {
@@ -73,9 +72,9 @@ export function LoginScreen({ onLoggedIn, onGoRegister, onBack }: Props) {
               <Text style={styles.back}>← Continue as guest</Text>
             </Pressable>
           ) : null}
+          <BrandMark size="lg" style={styles.hero} />
           <Text style={styles.welcome}>Welcome to Linas AI</Text>
           <Text style={styles.sub}>Think it. Ask it. Linas has it.</Text>
-          <Image source={linasAssets.authHero} style={styles.hero} resizeMode="contain" />
 
           <TextField
             autoCapitalize="none"
@@ -130,7 +129,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     textAlign: 'center',
   },
-  hero: { width: '100%', height: 180, marginBottom: spacing.lg },
+  hero: { marginBottom: spacing.lg },
   error: { color: colors.danger, fontFamily: fonts.body, marginBottom: spacing.sm },
   link: { color: colors.accent, fontFamily: fonts.body, marginTop: spacing.lg, fontSize: 15 },
   legal: { marginTop: spacing.xl },
