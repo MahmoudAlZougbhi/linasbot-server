@@ -1,8 +1,9 @@
+import type { StringKey } from '../../i18n/locales/en';
 import type { ControlArea } from '../control/controlAreas';
 
 export type DrawerModule = {
   id: ControlArea;
-  title: string;
+  titleKey: StringKey;
   /** Guests see the tile but taps open auth gate. */
   guestVisible: boolean;
   /** Hide unless entitled (Users). */
@@ -14,15 +15,15 @@ export type DrawerModule = {
  * Notifications and Logout live in Settings, not this grid or the drawer footer.
  */
 export const DRAWER_MODULES: DrawerModule[] = [
-  { id: 'dashboard', title: 'Dashboard', guestVisible: true },
-  { id: 'cm', title: 'Content Management', guestVisible: true },
-  { id: 'faq', title: 'Smart Answers / FAQ', guestVisible: true },
-  { id: 'livechat', title: 'Live Chat', guestVisible: true },
-  { id: 'integrations', title: 'Integrations', guestVisible: true },
-  { id: 'users', title: 'Users', guestVisible: true, entitlement: 'users' },
-  { id: 'subscription', title: 'Subscription', guestVisible: true },
-  { id: 'usage', title: 'Usage & Credits', guestVisible: true },
-  { id: 'settings', title: 'Settings', guestVisible: true },
+  { id: 'dashboard', titleKey: 'navDashboard', guestVisible: true },
+  { id: 'cm', titleKey: 'navContentManagement', guestVisible: true },
+  { id: 'faq', titleKey: 'faqTitle', guestVisible: true },
+  { id: 'livechat', titleKey: 'navLiveChat', guestVisible: true },
+  { id: 'integrations', titleKey: 'integrations', guestVisible: true },
+  { id: 'users', titleKey: 'usersTitle', guestVisible: true, entitlement: 'users' },
+  { id: 'subscription', titleKey: 'navSubscription', guestVisible: true },
+  { id: 'usage', titleKey: 'navUsage', guestVisible: true },
+  { id: 'settings', titleKey: 'settings', guestVisible: true },
 ];
 
 export function visibleDrawerModules(opts: {

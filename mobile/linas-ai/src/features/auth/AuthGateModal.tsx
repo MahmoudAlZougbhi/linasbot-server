@@ -49,23 +49,20 @@ export function AuthGateModal({
             <View style={{ width: 24 }} />
           </View>
           <Text style={[styles.title, { color: colors.accentDeep }]}>
-            {hardLimit ? 'Keep chatting with Linas AI' : tr('authGateTitle')}
+            {hardLimit ? tr('authGateHardTitle') : tr('authGateTitle')}
           </Text>
           <Text style={[styles.body, { color: colors.textMuted }]}>
-            {reason ||
-              (hardLimit
-                ? 'You’ve used 10 guest prompts. Sign in to continue with this draft preserved. Guest history stays separate from Owner Copilot memory.'
-                : tr('authGateBody'))}
+{reason || (hardLimit ? tr('authGateHardBody') : tr('authGateBody'))}
           </Text>
-          <PrimaryButton label="Log in with email" onPress={onLogin} />
-          <PrimaryButton label="Create account with email" onPress={onRegister} variant="ghost" />
+          <PrimaryButton label={tr('authGateLoginEmail')} onPress={onLogin} />
+          <PrimaryButton label={tr('authGateRegisterEmail')} onPress={onRegister} variant="ghost" />
           <View style={styles.legal}>
             <Pressable onPress={() => void Linking.openURL(LEGAL_URLS.privacy)}>
-              <Text style={{ color: colors.accent }}>Privacy</Text>
+              <Text style={{ color: colors.accent }}>{tr('privacy')}</Text>
             </Pressable>
             <Text style={{ color: colors.textDim }}> · </Text>
             <Pressable onPress={() => void Linking.openURL(LEGAL_URLS.terms)}>
-              <Text style={{ color: colors.accent }}>Terms</Text>
+              <Text style={{ color: colors.accent }}>{tr('terms')}</Text>
             </Pressable>
           </View>
           {!hardLimit ? (
@@ -76,9 +73,7 @@ export function AuthGateModal({
             </Pressable>
           ) : (
             <Pressable onPress={onClose} style={styles.later}>
-              <Text style={{ color: colors.textMuted }}>
-                Close without sending — draft stays in the composer
-              </Text>
+<Text style={{ color: colors.textMuted }}>{tr('authGateCloseDraft')}</Text>
             </Pressable>
           )}
         </Pressable>

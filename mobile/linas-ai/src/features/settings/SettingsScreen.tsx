@@ -38,16 +38,16 @@ export function SettingsScreen({
 
       <Text style={[styles.group, { color: colors.textDim }]}>{tr('groupAccount')}</Text>
       <Row
-        title="Signed-in profile"
-        subtitle="Your account email and workspace"
+        title={tr('settingsSignedInProfile')}
+        subtitle={tr('settingsSignedInProfileSub')}
         onPress={() => undefined}
         disabled
       />
       <Row
-        title="Business profile"
-        subtitle="Update business facts in Content Management"
+        title={tr('settingsBusinessProfile')}
+        subtitle={tr('settingsBusinessProfileSub')}
         onPress={onBack}
-        note="Open Content Management → AI Basics"
+        note={tr('settingsBusinessProfileNote')}
       />
       {onOpenNotifications ? (
         <Row
@@ -57,7 +57,7 @@ export function SettingsScreen({
         />
       ) : null}
 
-      <Text style={[styles.group, { color: colors.textDim }]}>Preferences</Text>
+      <Text style={[styles.group, { color: colors.textDim }]}>{tr('settingsPreferences')}</Text>
       <Text style={[styles.label, { color: colors.textMuted }]}>{tr('language')}</Text>
       <View style={styles.chips}>
         {(['en', 'ar', 'fr'] as AppLanguage[]).map((lang) => (
@@ -69,13 +69,13 @@ export function SettingsScreen({
               language === lang && { borderColor: colors.accent, backgroundColor: colors.surfaceAlt },
             ]}
             onPress={() => setLanguage(lang)}
-            accessibilityLabel={`App language ${lang}`}
+            accessibilityLabel={`${tr('language')} ${lang}`}
           >
             <Text style={{ color: colors.text, fontFamily: fonts.bodyMedium }}>{lang.toUpperCase()}</Text>
           </Pressable>
         ))}
       </View>
-      <Text style={[styles.label, { color: colors.textMuted }]}>Appearance</Text>
+      <Text style={[styles.label, { color: colors.textMuted }]}>{tr('settingsAppearance')}</Text>
       <View style={styles.chips}>
         {(['system', 'light', 'dark'] as const).map((m) => (
           <Pressable
@@ -86,7 +86,7 @@ export function SettingsScreen({
               mode === m && { borderColor: colors.accent, backgroundColor: colors.surfaceAlt },
             ]}
             onPress={() => setMode(m)}
-            accessibilityLabel={`Theme ${m}`}
+            accessibilityLabel={`${tr('settingsAppearance')} ${m}`}
           >
             <Text style={{ color: colors.text, fontFamily: fonts.bodyMedium }}>{m}</Text>
           </Pressable>
@@ -113,10 +113,14 @@ export function SettingsScreen({
         </>
       ) : null}
 
-      <Text style={[styles.group, { color: colors.textDim }]}>Security & Support</Text>
-      <Row title="Privacy & Data" onPress={() => void open(LEGAL_URLS.privacy)} />
-      <Row title="Help & Support" onPress={() => void open(LEGAL_URLS.terms)} note="Use in-app chat for product help" />
-      <Row title="About & Legal" onPress={() => void open(LEGAL_URLS.terms)} />
+      <Text style={[styles.group, { color: colors.textDim }]}>{tr('settingsSecuritySupport')}</Text>
+      <Row title={tr('settingsPrivacyData')} onPress={() => void open(LEGAL_URLS.privacy)} />
+      <Row
+        title={tr('settingsHelpSupport')}
+        onPress={() => void open(LEGAL_URLS.terms)}
+        note={tr('settingsHelpSupportNote')}
+      />
+      <Row title={tr('settingsAboutLegal')} onPress={() => void open(LEGAL_URLS.terms)} />
       <Row title={tr('terms')} onPress={() => void open(LEGAL_URLS.terms)} />
       <Row title={tr('privacy')} onPress={() => void open(LEGAL_URLS.privacy)} />
       <Row title={tr('dataDeletion')} onPress={() => void open(LEGAL_URLS.dataDeletion)} />

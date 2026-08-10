@@ -19,6 +19,8 @@ MAX_MESSAGE_PAGE = 100
 
 class CreateConversationBody(BaseModel):
     title: str | None = None
+    # App UI locale for seeded greeting + welcome chips (ar|en|fr).
+    language: str | None = Field(default=None, max_length=16)
 
 
 class SendMessageBody(BaseModel):
@@ -64,13 +66,22 @@ async def list_owner_conversations(request: Request) -> Any:
 async def create_owner_conversation(body: CreateConversationBody, request: Request) -> Any:
     session = require_session(request)
     from services.owner_ai_greeting import build_greeting
+    from services.owner_ai_profile import coerce_language, language_from_accept_header, update_owner_profile
 
-    greeting = build_greeting(tenant_id=session.tenant_id, user_id=session.user_id)
+    lang = coerce_language(body.language) or language_from_accept_header(request.headers.get("accept-language"))
+    if lang:
+        try:
+            update_owner_profile(session.user_id, {"preferred_language": lang})
+        except Exception:
+            pass
+    greeting = build_greeting(
+        tenant_id=session.tenant_id,
+        user_id=session.user_id,
+        language=lang,
+    )
     # Optional one-time address prompt: mark asked after first greeting that includes it.
     if greeting.get("address_prompt_included"):
         try:
-            from services.owner_ai_profile import update_owner_profile
-
             update_owner_profile(session.user_id, {"address_prompt_asked": True})
         except Exception:
             pass
@@ -90,6 +101,7 @@ async def create_owner_conversation(body: CreateConversationBody, request: Reque
             "messages": [m.__dict__ for m in (conv.messages or [])],
             "setup_stage": greeting.get("setup_stage"),
             "greeting_language": greeting.get("language"),
+            "welcome_chips": greeting.get("chips") or [],
         },
     }
 
@@ -234,8 +246,17 @@ async def delete_owner_conversation(conversation_id: str, request: Request) -> A
 async def owner_ai_greeting(request: Request) -> Any:
     session = require_session(request)
     from services.owner_ai_greeting import build_greeting
+    from services.owner_ai_profile import language_from_accept_header
 
-    return {"success": True, "greeting": build_greeting(tenant_id=session.tenant_id, user_id=session.user_id)}
+    lang = language_from_accept_header(request.headers.get("accept-language"))
+    return {
+        "success": True,
+        "greeting": build_greeting(
+            tenant_id=session.tenant_id,
+            user_id=session.user_id,
+            language=lang,
+        ),
+    }
 
 
 @app.get("/api/owner-ai/profile")

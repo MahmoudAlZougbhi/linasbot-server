@@ -13,10 +13,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { textDirectionStyle } from '../../lib/textDirection';
+import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import { formatVoiceElapsed, StopGlyph } from './ComposerGlyphs';
 import { LinEffortSheet } from './LinEffortSheet';
-import { modelChipLabel, type OwnerChatMode } from './ownerChatMode';
+import { OWNER_LIN_DISPLAY, type OwnerChatMode } from './ownerChatMode';
 import type { VoiceState } from './useVoiceDraft';
 import { VoiceComposerControls } from './VoiceComposerControls';
 
@@ -80,6 +81,7 @@ export function ChatComposer({
 }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { tr } = useI18n();
   const [effortOpen, setEffortOpen] = useState(false);
   const [inputHeight, setInputHeight] = useState(INPUT_MIN_H);
   const pulse = useRef(new Animated.Value(1)).current;
@@ -96,6 +98,9 @@ export function ChatComposer({
   const showVoiceControl = Boolean(showMic && onToggleVoice && !streamingStop);
   const showSend = streamingStop || (canSend && !voiceBusy);
   const chipTappable = Boolean(showModelChip && onOwnerModeChange);
+  const chipLabel = `${OWNER_LIN_DISPLAY} ${
+    ownerMode === 'work' ? tr('linEffortHigh') : tr('linEffortLow')
+  }`;
   const draftDir = textDirectionStyle(draft);
 
   function dismissKeyboard() {
@@ -155,12 +160,12 @@ export function ChatComposer({
   }
 
   const placeholder = recording
-    ? `Listening… ${formatVoiceElapsed(elapsedMs)}`
+    ? `${tr('composerListening')} ${formatVoiceElapsed(elapsedMs)}`
     : paused
-      ? `Paused · ${formatVoiceElapsed(elapsedMs)}`
+      ? `${tr('composerPaused')} · ${formatVoiceElapsed(elapsedMs)}`
       : transcribing
-        ? 'Transcribing…'
-        : 'Message Linas';
+        ? tr('composerTranscribing')
+        : tr('composerPlaceholder');
 
   return (
     <View
@@ -185,7 +190,7 @@ export function ChatComposer({
           <Pressable
             style={styles.iconHit}
             onPress={onPlus}
-            accessibilityLabel="More actions"
+            accessibilityLabel={tr('composerMoreActions')}
             hitSlop={6}
           >
             <Text style={{ color: colors.text, fontSize: 20, fontWeight: '500', lineHeight: 22 }}>
@@ -214,7 +219,7 @@ export function ChatComposer({
           blurOnSubmit={false}
           textAlign={draftDir.textAlign}
           textAlignVertical={Platform.OS === 'android' ? 'center' : undefined}
-          accessibilityLabel="Message Linas"
+          accessibilityLabel={tr('composerPlaceholder')}
         />
 
         <View style={styles.trailing}>
@@ -228,14 +233,14 @@ export function ChatComposer({
               }}
               disabled={!chipTappable}
               accessibilityRole="button"
-              accessibilityLabel={modelChipLabel(ownerMode)}
-              accessibilityHint={chipTappable ? 'Choose Low or High' : undefined}
+              accessibilityLabel={chipLabel}
+              accessibilityHint={chipTappable ? tr('composerChooseEffort') : undefined}
             >
               {ownerMode === 'work' ? (
                 <Text style={[styles.chipBolt, { color: colors.text }]}>⚡</Text>
               ) : null}
               <Text style={[styles.chipText, { color: colors.text }]} numberOfLines={1}>
-                {modelChipLabel(ownerMode)}
+                {chipLabel}
               </Text>
             </Pressable>
           ) : null}
@@ -259,7 +264,7 @@ export function ChatComposer({
               <Pressable
                 style={[styles.sendIn, { backgroundColor: colors.accent }]}
                 onPress={onStop}
-                accessibilityLabel="Stop generating"
+                accessibilityLabel={tr('composerStop')}
               >
                 <StopGlyph color={colors.onAccent} />
               </Pressable>
@@ -272,7 +277,7 @@ export function ChatComposer({
                 ]}
                 onPress={handleSend}
                 disabled={sending || !canSend || voiceBusy}
-                accessibilityLabel="Send message"
+                accessibilityLabel={tr('composerSend')}
               >
                 {sending ? (
                   <ActivityIndicator color={colors.onAccent} />
@@ -286,7 +291,7 @@ export function ChatComposer({
       </View>
       {showDisclaimer ? (
         <Text style={[styles.disclaimer, { color: colors.textDim }]}>
-          Linas can make mistakes. Check important details.
+          {tr('composerDisclaimer')}
         </Text>
       ) : null}
       {chipTappable ? (

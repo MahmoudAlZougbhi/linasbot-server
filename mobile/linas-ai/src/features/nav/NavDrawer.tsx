@@ -169,11 +169,11 @@ export function NavDrawer(props: Props) {
                     props.onOpenArea(m.id);
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel={m.title}
+                  accessibilityLabel={tr(m.titleKey)}
                 >
                   <AppIcon icon={MODULE_ICONS[m.id]} size={20} color={colors.accentDeep} />
                   <Text style={[styles.tileText, { color: colors.text }]} numberOfLines={2}>
-                    {m.title}
+                    {tr(m.titleKey)}
                   </Text>
                 </Pressable>
               ))}

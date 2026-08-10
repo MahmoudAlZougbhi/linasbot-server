@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 
 import { apiFetch } from '../../api/client';
+import { getStoredAppLanguage } from '../../i18n/languageStore';
 import { ChatMessageSchema, ConversationSummarySchema, type ChatMessage } from '../../api/types';
 import {
   OWNER_MESSAGE_PAGE,
@@ -17,6 +18,17 @@ const CreateConvSchema = z.object({
     title: z.string(),
     messages: z.array(ChatMessageSchema),
     setup_stage: z.string().optional(),
+    greeting_language: z.string().optional(),
+    welcome_chips: z
+      .array(
+        z.object({
+          id: z.string(),
+          label: z.string(),
+          mode: z.enum(['chat', 'work']),
+          prompt: z.string(),
+        }),
+      )
+      .optional(),
   }),
 });
 
@@ -147,7 +159,7 @@ export function useChatSession(enabled = true) {
       } else {
         const created = await apiFetch('/api/owner-ai/conversations', {
           method: 'POST',
-          body: JSON.stringify({}),
+          body: JSON.stringify({ language: getStoredAppLanguage() }),
           schema: CreateConvSchema,
         });
         setConversationId(created.conversation.id);
@@ -253,7 +265,7 @@ export function useChatSession(enabled = true) {
     setSeedTypewriterMessageId(null);
     const created = await apiFetch('/api/owner-ai/conversations', {
       method: 'POST',
-      body: JSON.stringify({}),
+      body: JSON.stringify({ language: getStoredAppLanguage() }),
       schema: CreateConvSchema,
     });
     setConversationId(created.conversation.id);

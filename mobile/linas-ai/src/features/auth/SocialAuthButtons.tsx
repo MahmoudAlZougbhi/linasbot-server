@@ -1,24 +1,26 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { StatusChip } from '../../components/StatusChip';
+import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
 
 /** Google / Apple sign-in buttons — available when mobile social auth ships. */
 export function SocialAuthButtons() {
+  const { tr } = useI18n();
   return (
     <View style={styles.wrap}>
       <View style={styles.dividerRow}>
         <View style={styles.line} />
-        <Text style={styles.or}>or continue with</Text>
+        <Text style={styles.or}>{tr('socialContinueWith')}</Text>
         <View style={styles.line} />
       </View>
       <Pressable style={styles.btn} disabled>
-        <Text style={styles.btnText}>Continue with Google</Text>
-        <StatusChip label="Coming soon" tone="soon" />
+        <Text style={styles.btnText}>{tr('socialContinueGoogle')}</Text>
+        <StatusChip label={tr('comingSoon')} tone="soon" />
       </Pressable>
       <Pressable style={styles.btn} disabled>
-        <Text style={styles.btnText}>Continue with Apple</Text>
-        <StatusChip label="Coming soon" tone="soon" />
+        <Text style={styles.btnText}>{tr('socialContinueApple')}</Text>
+        <StatusChip label={tr('comingSoon')} tone="soon" />
       </Pressable>
     </View>
   );

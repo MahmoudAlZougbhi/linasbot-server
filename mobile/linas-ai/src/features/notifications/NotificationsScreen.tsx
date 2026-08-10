@@ -41,7 +41,9 @@ type Gate = 'none' | 'auth' | 'forbidden';
 function formatWhen(ts: number | null | undefined, locale: string): string {
   if (!ts) return '';
   try {
-    return new Date(ts * 1000).toLocaleString(locale.startsWith('ar') ? 'ar' : 'en', {
+    return new Date(ts * 1000).toLocaleString(
+      locale.startsWith('ar') ? 'ar' : locale.startsWith('fr') ? 'fr' : 'en',
+      {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',

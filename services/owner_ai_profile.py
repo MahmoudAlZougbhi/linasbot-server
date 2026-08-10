@@ -31,6 +31,28 @@ def normalize_language(value: Any, *, fallback: LangValue = "en") -> LangValue:
     return fallback
 
 
+def coerce_language(value: Any) -> LangValue | None:
+    """Return ar/en/fr when recognizable; otherwise None (no fallback)."""
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return None
+    if raw.startswith("ar"):
+        return "ar"
+    if raw.startswith("fr"):
+        return "fr"
+    if raw.startswith("en"):
+        return "en"
+    return None
+
+
+def language_from_accept_header(header: str | None) -> LangValue | None:
+    """Parse first tag from Accept-Language (e.g. 'ar-LB,ar;q=0.9')."""
+    if not header:
+        return None
+    first = header.split(",", 1)[0].strip().split(";", 1)[0].strip()
+    return coerce_language(first)
+
+
 def never_infer_gender_from_identity(*, email: str | None = None, name: str | None = None) -> GenderValue:
     """Explicit contract: identity strings must not produce a gender guess."""
     del email, name
