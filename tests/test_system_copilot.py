@@ -236,5 +236,20 @@ def test_greeting_stages(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("services.owner_ai_greeting.resolve_setup_stage", lambda _tid: "new")
     g = build_greeting(tenant_id="t1", user_id="u1", language="en")
     assert "System Copilot" in g["text"]
+    assert "👋" in g["text"]
     assert g["address_prompt_included"] is True
     assert g["gender"] == "unset"
+
+
+def test_owner_and_guest_prompts_share_friendly_emoji_voice() -> None:
+    from services.guest_ai_service import build_guest_greeting, build_guest_system_prompt
+    from services.owner_ai_context import SYSTEM_PROMPT
+
+    assert "tasteful emojis" in SYSTEM_PROMPT
+    assert "warm, friendly" in SYSTEM_PROMPT
+    guest = build_guest_system_prompt(language="ar", knowledge_block="")
+    assert "tasteful emojis" in guest
+    assert "warm, friendly" in guest
+    assert "👋" in build_guest_greeting(language="ar")
+    assert "👋" in build_guest_greeting(language="en")
+

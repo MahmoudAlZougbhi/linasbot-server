@@ -40,6 +40,7 @@ async def generate_owner_conversational_reply(
     system_parts = [
         system,
         "For this turn: answer naturally and specifically. Do not repeat a generic pitch.",
+        "Keep the warm friendly voice with tasteful emojis from the system prompt; do not get clownish.",
         "Do not claim you ran tools or changed CM/integrations unless the user already confirmed a tool result.",
         f"Reply language hint: {reply_lang}.",
         f"Account snapshot (compact): {json.dumps(account, ensure_ascii=False, default=str)[:1200]}",
