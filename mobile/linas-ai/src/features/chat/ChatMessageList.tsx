@@ -84,7 +84,9 @@ export function ChatMessageList({
       const distanceFromBottom =
         contentSize.height - layoutMeasurement.height - contentOffset.y;
       const nearBottom = distanceFromBottom <= NEAR_BOTTOM_PX;
-      stickToBottomRef.current = nearBottom;
+      // Only latch true here. Clearing on distance alone is wrong when the keyboard
+      // dismisses and the viewport grows (distanceFromBottom jumps without a user drag).
+      if (nearBottom) stickToBottomRef.current = true;
       setShowJump(!nearBottom && contentSize.height > layoutMeasurement.height + 8);
 
       if (contentOffset.y <= NEAR_TOP_PX && hasMore && !loadingMore && !loadGateRef.current) {
