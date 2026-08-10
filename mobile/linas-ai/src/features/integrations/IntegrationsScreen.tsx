@@ -1,28 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  AppState,
-  Linking,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, AppState, Linking, ScrollView, StyleSheet, Text } from 'react-native';
 import { z } from 'zod';
 
 import { ApiError, apiFetch } from '../../api/client';
 import { tokenStore } from '../../auth/tokenStore';
 import { PrimaryButton } from '../../components/PrimaryButton';
-import { StatusChip } from '../../components/StatusChip';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { StringKey } from '../../i18n/locales/en';
-import { colors, fonts, radii, spacing } from '../../theme';
+import { colors, fonts, spacing } from '../../theme';
 import { AuthGateModal } from '../auth/AuthGateModal';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import {
-  ChannelCapabilityToggles,
-  type ChannelToggles,
-} from './ChannelCapabilityToggles';
+  IntegrationChannelCard,
+  commentsBlocker,
+  defaultToggles,
+  type IntegrationRow,
+} from './IntegrationChannelCard';
 
 const TogglesSchema = z.object({
   dm: z.boolean(),
@@ -97,27 +90,6 @@ function isComingSoon(row: Row): boolean {
   return row.platform === 'tiktok' || row.platform === 'snapchat';
 }
 
-function defaultToggles(row: Row): ChannelToggles {
-  return row.toggles ?? { dm: false, comments: false };
-}
-
-function commentsBlocker(row: Row): string | null {
-  return row.comments_blocker ?? row.comments_state?.blocker ?? null;
-}
-
-function commentsStatusLabel(row: Row, tr: (key: StringKey) => string): string | null {
-  const state = row.comments_state;
-  if (!state) return null;
-  if (state.live_verified) return tr('commentsStatusLiveVerified');
-  if (state.effective_enabled) return tr('commentsStatusReady');
-  if (state.status === 'ready_to_enable') return tr('commentsStatusReadyToEnable');
-  if (state.status === 'needs_webhook') return tr('commentsStatusNeedsWebhook');
-  if (state.status === 'needs_permission' || commentsBlocker(row) === 'missing_comment_permissions') {
-    return tr('commentsStatusNeedsPermission');
-  }
-  return null;
-}
-
 export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }: Props) {
   const { tr } = useI18n();
   const [loading, setLoading] = useState(true);
@@ -168,7 +140,6 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
   }, [load]);
 
   async function manageCommentPermissions(platform: 'instagram' | 'facebook') {
-    // Safe Add/Manage reauth for the same assets — never Disconnect.
     await connectPlatform(platform);
   }
 
@@ -191,7 +162,6 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
         await Linking.openURL(started.authorization_url);
         return;
       } catch (firstErr) {
-        // Instagram Login may be unconfigured; use Meta Business Login for the same channel.
         if (platform === 'instagram') {
           const started = await apiFetch('/api/meta/connections/start', {
             method: 'POST',
@@ -242,11 +212,11 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
   }
 
   async function setToggle(row: Row, key: 'dm' | 'comments', value: boolean) {
-    const previous = defaultToggles(row);
+    const previous = defaultToggles(row as IntegrationRow);
     const platform = row.platform === 'facebook' ? 'facebook' : 'instagram';
 
     if (key === 'comments' && value === true) {
-      const blocker = commentsBlocker(row);
+      const blocker = commentsBlocker(row as IntegrationRow);
       if (blocker === 'missing_comment_permissions') {
         const missing = row.comments_state?.missing_scopes?.filter(Boolean) ?? [];
         setError(
@@ -269,7 +239,7 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
     setRows((curr) =>
       curr.map((r) =>
         r.platform === row.platform
-          ? { ...r, toggles: { ...defaultToggles(r), [key]: value } }
+          ? { ...r, toggles: { ...defaultToggles(r as IntegrationRow), [key]: value } }
           : r,
       ),
     );
@@ -338,92 +308,28 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
       <ScrollView contentContainerStyle={styles.list}>
         {rows
           .filter((row) => row.platform === 'instagram' || row.platform === 'facebook')
-          .map((row) => {
-            const soon = isComingSoon(row);
-            const busy = busyPlatform === row.platform;
-            const showToggles = !soon && (row.platform === 'instagram' || row.platform === 'facebook');
-            const blocker = commentsBlocker(row);
-            const statusLabel = commentsStatusLabel(row, tr);
-            const needsCommentPerms = blocker === 'missing_comment_permissions';
-            return (
-              <View key={row.platform} style={styles.card}>
-                <View style={styles.head}>
-                  <Text style={styles.cardTitle}>{platformTitle(row)}</Text>
-                  {soon ? (
-                    <StatusChip label={tr('comingSoon')} tone="soon" />
-                  ) : (
-                    <StatusChip
-                      label={row.connected ? tr('connected') : tr('notConnected')}
-                      tone={row.connected ? 'ok' : 'neutral'}
-                    />
-                  )}
-                </View>
-                {soon ? (
-                  <Text style={styles.soonHint}>{tr('comingSoon')}</Text>
-                ) : (
-                  <>
-                    {showToggles ? (
-                      <>
-                        <ChannelCapabilityToggles
-                          toggles={defaultToggles(row)}
-                          busyKey={busyToggle?.platform === row.platform ? busyToggle.key : null}
-                          disabled={busyPlatform !== null || busyToggle !== null}
-                          onToggle={(key, value) => void setToggle(row, key, value)}
-                        />
-                        {statusLabel ? <Text style={styles.statusHint}>{statusLabel}</Text> : null}
-                        {blocker ? (
-                          <Text style={styles.blocker}>
-                            {blocker === 'missing_comment_permissions'
-                              ? tr('commentsBlockerMissingPermissions')
-                              : blocker === 'connect_channel_first'
-                                ? tr('commentsBlockerConnectFirst')
-                                : blocker === 'missing_comment_webhook'
-                                  ? tr('commentsBlockerMissingWebhook')
-                                  : tr('commentsBlockerGeneric')}
-                          </Text>
-                        ) : null}
-                        {needsCommentPerms || (row.comments_state?.missing_scopes?.length ?? 0) > 0 ? (
-                          <PrimaryButton
-                            label={
-                              row.connected
-                                ? tr('manageCommentPermissions')
-                                : tr('reconnectWithCommentAccess')
-                            }
-                            onPress={() =>
-                              void manageCommentPermissions(
-                                row.platform === 'facebook' ? 'facebook' : 'instagram',
-                              )
-                            }
-                            loading={busy}
-                            disabled={busyPlatform !== null || busyToggle !== null}
-                            variant="ghost"
-                          />
-                        ) : null}
-                      </>
-                    ) : null}
-                    {row.connected ? (
-                      <PrimaryButton
-                        label={tr('disconnect')}
-                        onPress={() => void disconnectPlatform(row)}
-                        loading={busy}
-                        disabled={busyPlatform !== null || busyToggle !== null}
-                        variant="danger"
-                      />
-                    ) : (
-                      <PrimaryButton
-                        label={tr('connect')}
-                        onPress={() =>
-                          void connectPlatform(row.platform === 'facebook' ? 'facebook' : 'instagram')
-                        }
-                        loading={busy}
-                        disabled={busyPlatform !== null || busyToggle !== null}
-                      />
-                    )}
-                  </>
-                )}
-              </View>
-            );
-          })}
+          .map((row) => (
+            <IntegrationChannelCard
+              key={row.platform}
+              row={row as IntegrationRow}
+              title={platformTitle(row)}
+              soon={isComingSoon(row)}
+              busy={busyPlatform === row.platform}
+              busyToggleKey={busyToggle?.platform === row.platform ? busyToggle.key : null}
+              actionsDisabled={busyPlatform !== null || busyToggle !== null}
+              tr={tr}
+              onToggle={(key, value) => void setToggle(row, key, value)}
+              onManageCommentPermissions={() =>
+                void manageCommentPermissions(
+                  row.platform === 'facebook' ? 'facebook' : 'instagram',
+                )
+              }
+              onConnect={() =>
+                void connectPlatform(row.platform === 'facebook' ? 'facebook' : 'instagram')
+              }
+              onDisconnect={() => void disconnectPlatform(row)}
+            />
+          ))}
       </ScrollView>
 
       <AuthGateModal
@@ -447,22 +353,5 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
 
 const styles = StyleSheet.create({
   list: { paddingBottom: 40, gap: spacing.md },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-    borderColor: colors.border,
-    borderWidth: 1,
-    gap: spacing.md,
-  },
-  head: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  cardTitle: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 17 },
-  soonHint: { color: colors.textDim, fontFamily: fonts.body, fontSize: 13 },
-  statusHint: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 12 },
-  blocker: { color: colors.danger, fontFamily: fonts.body, fontSize: 13 },
   error: { color: colors.danger, marginBottom: spacing.md, fontFamily: fonts.body },
 });
