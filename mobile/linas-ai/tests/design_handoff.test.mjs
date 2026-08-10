@@ -152,20 +152,22 @@ test('Live Chat thread remains read-only', () => {
   assert.doesNotMatch(thread, /function\s+takeover|pauseAi|humanTakeover/i);
 });
 
-test('drawer search filters chats; New chat is bottom-left not header-right', () => {
+test('drawer search chrome is header circle; New chat is compact bottom dock', () => {
   const nav = read('features/nav/NavDrawer.tsx');
-  const header = read('features/chat/ChatHeader.tsx');
   const chat = read('features/chat/ChatScreen.tsx');
-  const headerCall = chat.match(/<ChatHeader[\s\S]*?\/>/)?.[0] || '';
+  const drawer = read('components/SideDrawer.tsx');
   assert.match(nav, /bottomDock/);
   assert.match(nav, /newChatBtn/);
+  assert.match(nav, /searchCircle/);
+  assert.match(nav, /headerDivider/);
   assert.match(nav, /searchConversationTitles/);
   assert.match(nav, /noChatsMatch/);
   assert.match(nav, /emptyLabel/);
-  assert.doesNotMatch(header, /onNewChat/);
-  assert.doesNotMatch(header, /NewChatIcon/);
-  assert.match(headerCall, /<ChatHeader/);
-  assert.doesNotMatch(headerCall, /onNewChat/);
+  assert.match(nav, /VERSION_LABEL/);
+  assert.doesNotMatch(nav, /NewChatIcon/);
+  assert.match(nav, /DRAWER_TOOL_ICONS\.newChat/);
+  assert.match(drawer, /Keyboard\.dismiss/);
+  assert.match(chat, /Keyboard\.dismiss/);
   assert.match(chat, /<NavDrawer[\s\S]*onNewChat=/);
 });
 
