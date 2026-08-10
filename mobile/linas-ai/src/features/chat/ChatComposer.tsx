@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { textDirectionStyle } from '../../lib/textDirection';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import { formatVoiceElapsed, StopGlyph } from './ComposerGlyphs';
 import { LinEffortSheet } from './LinEffortSheet';
@@ -93,6 +94,7 @@ export function ChatComposer({
     Boolean(showMic && onToggleVoice && !streamingStop && (voiceBusy || !canSend));
   const showSend = streamingStop || (canSend && !paused);
   const chipTappable = Boolean(showModelChip && onOwnerModeChange);
+  const draftDir = textDirectionStyle(draft);
 
   useEffect(() => {
     if (!draft.trim()) setInputHeight(INPUT_MIN_H);
@@ -181,7 +183,7 @@ export function ChatComposer({
 
         <TextInput
           ref={inputRef}
-          style={[styles.input, { color: colors.text, height: inputHeight }]}
+          style={[styles.input, { color: colors.text, height: inputHeight }, draftDir]}
           placeholder={placeholder}
           placeholderTextColor={colors.textDim}
           value={draft}
@@ -195,6 +197,7 @@ export function ChatComposer({
           editable={!voiceBusy}
           autoFocus={autoFocus}
           blurOnSubmit={false}
+          textAlign={draftDir.textAlign}
           textAlignVertical={Platform.OS === 'android' ? 'center' : undefined}
           accessibilityLabel="Message Linas"
         />

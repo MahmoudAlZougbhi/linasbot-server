@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-native';
 
 import { LinasStarMark } from '../../components/LinasStarMark';
-import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, spacing, typography, useTheme } from '../../theme';
+import { textDirectionStyle } from '../../lib/textDirection';
 
 type Props = {
   label: string;
@@ -15,7 +15,7 @@ type Props = {
  */
 export function ThinkingRow({ label }: Props) {
   const { colors } = useTheme();
-  const { isRtl } = useI18n();
+  const dirStyle = textDirectionStyle(label);
   const opacity = useRef(new Animated.Value(1)).current;
   const [reduceMotion, setReduceMotion] = useState(false);
 
@@ -59,7 +59,7 @@ export function ThinkingRow({ label }: Props) {
 
   return (
     <View
-      style={[styles.row, isRtl && styles.rtlRow]}
+      style={styles.row}
       accessibilityLiveRegion="polite"
       accessibilityRole="text"
       accessibilityLabel={label}
@@ -67,9 +67,7 @@ export function ThinkingRow({ label }: Props) {
       <View style={styles.aiLabelRow}>
         <LinasStarMark size={12} labeled label="Linas" />
       </View>
-      <Animated.Text
-        style={[styles.text, { color: colors.textMuted, opacity }, isRtl && styles.rtlText]}
-      >
+      <Animated.Text style={[styles.text, { color: colors.textMuted, opacity }, dirStyle]}>
         {label}
       </Animated.Text>
     </View>
@@ -82,7 +80,6 @@ const styles = StyleSheet.create({
     maxWidth: '94%',
     alignSelf: 'flex-start',
   },
-  rtlRow: { alignSelf: 'flex-start' },
   aiLabelRow: {
     marginBottom: 4,
     marginLeft: 2,
@@ -93,5 +90,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 2,
   },
-  rtlText: { textAlign: 'right', writingDirection: 'rtl' },
 });

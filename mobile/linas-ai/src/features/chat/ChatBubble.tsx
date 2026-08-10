@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { ChatMessage } from '../../api/types';
 import { LinasStarMark } from '../../components/LinasStarMark';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
-import { useI18n } from '../../i18n/LanguageContext';
+import { textDirectionStyle } from '../../lib/textDirection';
 import { fonts, radii, spacing, typography, useTheme } from '../../theme';
 import { MessageActions } from './MessageActions';
 import { MessageImageThumbs } from './MessageImageThumbs';
@@ -20,10 +20,6 @@ type Props = {
   onTypewriterDone?: () => void;
 };
 
-function detectRtl(text: string): boolean {
-  return /[\u0600-\u06FF]/.test(text) && !/^[A-Za-z0-9\s.,!?'"()-]+$/.test(text.trim());
-}
-
 export function ChatBubble({
   message,
   onRetry,
@@ -32,13 +28,12 @@ export function ChatBubble({
   typewriter = false,
   onTypewriterDone,
 }: Props) {
-  const { isRtl } = useI18n();
   const { colors } = useTheme();
   const reduceMotion = useReduceMotion();
   const isUser = message.role === 'user';
-  const rtl = isRtl || detectRtl(message.content);
   const thumbs = imageUris?.length ? imageUris : message.local_image_uris;
   const hasText = Boolean(message.content?.trim());
+  const dirStyle = hasText ? textDirectionStyle(message.content) : null;
   const animate = Boolean(typewriter && !isUser && hasText && !reduceMotion);
   const { shown, done, cursorOn } = useOnceTypewriter(message.content, animate);
   const displayText = animate && !done ? shown : message.content;
@@ -71,7 +66,7 @@ export function ChatBubble({
               style={[
                 isUser ? styles.textUser : styles.textAi,
                 { color: isUser ? colors.bubbleUserText : colors.bubbleAiText },
-                rtl && styles.rtl,
+                dirStyle,
               ]}
               accessibilityLabel={message.content}
             >
@@ -124,5 +119,4 @@ const styles = StyleSheet.create({
   textUser: {
     ...typography.chatUser,
   },
-  rtl: { textAlign: 'right', writingDirection: 'rtl' },
 });
