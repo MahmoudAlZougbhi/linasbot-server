@@ -93,7 +93,8 @@ async def run_confirm_path(
         next_prop = continue_blob.get("next_proposal")
         if isinstance(next_prop, dict) and next_prop.get("ok"):
             tool_calls.append(next_prop)
-            ndata = next_prop.get("data") if isinstance(next_prop.get("data"), dict) else {}
+            raw_data = next_prop.get("data")
+            ndata: dict[str, Any] = raw_data if isinstance(raw_data, dict) else {}
             nc = card_from_tool(str(next_prop.get("name") or "propose_cm_patch"), ndata, ok=True)
             if nc:
                 cards.append(nc.to_dict())

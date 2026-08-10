@@ -53,7 +53,8 @@ def _hours_schedule_ok(item: dict[str, Any]) -> bool:
 
 
 def _faq_item_ok(item: dict[str, Any]) -> bool:
-    variants = item.get("variants") if isinstance(item.get("variants"), list) else []
+    raw_variants = item.get("variants")
+    variants: list[Any] = list(raw_variants) if isinstance(raw_variants, list) else []
     for v in variants:
         if not isinstance(v, dict):
             continue
@@ -106,7 +107,8 @@ def assess_section_fill(section: str, payload: dict[str, Any] | None, *, is_defa
         if not any(_nonempty(payload.get(k)) for k in ("tone", "formality", "style_body", "response_length")):
             gaps.append("tone_or_style_body")
     elif name == "dynamic_messages":
-        items = payload.get("items") if isinstance(payload.get("items"), list) else []
+        raw_items = payload.get("items")
+        items: list[Any] = list(raw_items) if isinstance(raw_items, list) else []
         ok = any(isinstance(it, dict) and any(_nonempty(it.get(k)) for k in ("ar", "en", "fr", "name")) for it in items)
         if not ok and not _nonempty(payload.get("notes")):
             gaps.append("greeting_or_message_text")
