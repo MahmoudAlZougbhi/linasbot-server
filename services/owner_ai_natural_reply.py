@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Any
 
 DEFAULT_OWNER_MODEL = "gpt-5.6-sol"
@@ -69,12 +68,13 @@ async def generate_owner_conversational_reply(
     model = owner_help_model_name()
     try:
         from services.llm_core_service import create_chat_completion, sanitize_llm_error
+        from services.owner_copilot_v2.flags import owner_max_output_tokens
 
         emit_model_policy_trace(policy)
         response = await create_chat_completion(
             model=model,
             messages=messages,
-            max_tokens=int(os.getenv("LINAS_OWNER_MAX_OUTPUT_TOKENS") or "1200"),
+            max_tokens=owner_max_output_tokens(reasoning_effort=str(policy.reasoning_effort)),
             temperature=0.65,
             reasoning_effort=str(policy.reasoning_effort),
         )

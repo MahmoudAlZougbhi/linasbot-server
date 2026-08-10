@@ -27,6 +27,60 @@ def test_owner_model_is_sol() -> None:
     assert snap["LINAS_OWNER_RECENT_HISTORY_TOKENS"] == 4000
 
 
+def test_owner_max_output_tokens_scales_with_effort(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.owner_copilot_v2.flags import owner_max_output_tokens
+
+    monkeypatch.delenv("LINAS_OWNER_MAX_OUTPUT_TOKENS", raising=False)
+    assert owner_max_output_tokens(reasoning_effort="high") == 4096
+    assert owner_max_output_tokens(reasoning_effort="low") == 2048
+    assert owner_max_output_tokens() == 3072
+    monkeypatch.setenv("LINAS_OWNER_MAX_OUTPUT_TOKENS", "1500")
+    assert owner_max_output_tokens(reasoning_effort="high") == 1500
+
+
+@pytest.mark.asyncio
+async def test_sol_text_deltas_auto_continue_on_length(monkeypatch: pytest.MonkeyPatch) -> None:
+    """finish_reason=length must continue instead of leaving a mid-sentence stump."""
+    from services.owner_copilot_v2 import provider as provider_mod
+
+    calls = {"n": 0}
+
+    class _Delta:
+        def __init__(self, content: str | None) -> None:
+            self.content = content
+
+    class _Choice:
+        def __init__(self, content: str | None, finish: str | None) -> None:
+            self.delta = _Delta(content)
+            self.finish_reason = finish
+
+    class _Event:
+        def __init__(self, content: str | None, finish: str | None) -> None:
+            self.choices = [_Choice(content, finish)]
+
+    async def fake_once(*, messages, is_cancelled, policy):  # noqa: ANN001
+        del is_cancelled, policy
+        calls["n"] += 1
+        if calls["n"] == 1:
+            yield "قسم الأسعار معبّى وفيه", None
+            yield "", "length"
+            return
+        # Continuation sees prior assistant text in messages.
+        assert any(m.get("role") == "assistant" for m in messages)
+        yield " قائمة كاملة وأسعار واضحة.", None
+        yield "", "stop"
+
+    monkeypatch.setattr(provider_mod, "_stream_text_once", fake_once)
+
+    parts: list[str] = []
+    async for piece in provider_mod.iter_sol_text_deltas(messages=[{"role": "user", "content": "review"}]):
+        parts.append(piece)
+    text = "".join(parts)
+    assert calls["n"] == 2
+    assert "قسم الأسعار معبّى وفيه" in text
+    assert "قائمة كاملة وأسعار واضحة." in text
+
+
 def test_owner_recent_history_tokens_default_4000(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LINAS_OWNER_RECENT_HISTORY_TOKENS", raising=False)
     assert owner_recent_history_tokens() == 4000
