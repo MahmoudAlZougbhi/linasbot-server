@@ -143,7 +143,8 @@ def assess_section_fill(section: str, payload: dict[str, Any] | None, *, is_defa
             gaps.append("handoff_contact_destination")
     elif name == "restricted":
         # Empty topics + notes, or configured topics, both count as intentional.
-        topics = payload.get("topics") if isinstance(payload.get("topics"), list) else []
+        _raw_topics = payload.get("topics")
+        topics: list[Any] = list(_raw_topics) if isinstance(_raw_topics, list) else []
         if topics:
             labeled = any(_nonempty(_label_text(it.get("labels"))) for it in topics if isinstance(it, dict))
             if not labeled:
@@ -151,14 +152,16 @@ def assess_section_fill(section: str, payload: dict[str, Any] | None, *, is_defa
         elif not _nonempty(payload.get("notes")):
             gaps.append("topics_or_explicit_none_note")
     elif name == "actions":
-        items = payload.get("items") if isinstance(payload.get("items"), list) else []
-        if not items:
+        _raw_action_items = payload.get("items")
+        action_items: list[Any] = list(_raw_action_items) if isinstance(_raw_action_items, list) else []
+        if not action_items:
             gaps.append("capability_toggles")
     elif name == "ai_limits":
         # Non-default payload already means owner touched limits — treat as filled unless empty junk.
         pass
     elif name == "off_days":
-        rules = payload.get("rules") if isinstance(payload.get("rules"), list) else []
+        _raw_rules = payload.get("rules")
+        rules: list[Any] = list(_raw_rules) if isinstance(_raw_rules, list) else []
         if not rules and not _nonempty(payload.get("notes")):
             gaps.append("off_day_rules_or_note")
     else:
