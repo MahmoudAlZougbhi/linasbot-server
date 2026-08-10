@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.linasai.app",
-      "buildNumber": "19",
+      "buildNumber": "20",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Linas AI uses the microphone so you can dictate messages in chat. Audio is sent to Linas servers for speech-to-text only.",
         "ITSAppUsesNonExemptEncryption": false
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.linasai.app",
-      "versionCode": 19,
+      "versionCode": 20,
       "adaptiveIcon": {
         "backgroundColor": "#0B3D34",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -54,12 +54,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/splash-icon.png",
+          "image": "./assets/splash-native.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#0B3D34",
           "dark": {
-            "image": "./assets/splash-icon.png",
+            "image": "./assets/splash-native.png",
             "backgroundColor": "#0B3D34"
           }
         }
