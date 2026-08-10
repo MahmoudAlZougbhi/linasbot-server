@@ -96,6 +96,41 @@ class CmPatchProposalStore:
 
 cm_patch_proposal_store = CmPatchProposalStore()
 
+# Keep card / chat preview readable; full patch still stored on the proposal.
+_PREVIEW_VALUE_CHARS = 4000
+
+
+def format_preview_value(value: Any, *, limit: int = _PREVIEW_VALUE_CHARS) -> str:
+    """Human-readable value for in-chat CM proposal cards (not a save path)."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        text = value
+    elif isinstance(value, (int, float, bool)):
+        text = str(value)
+    else:
+        try:
+            text = json.dumps(value, ensure_ascii=False, indent=2, default=str)
+        except TypeError:
+            text = str(value)
+    text = text.strip()
+    if len(text) > limit:
+        return text[: limit - 1].rstrip() + "…"
+    return text
+
+
+def format_sample_map(sample: dict[str, Any], *, limit: int = _PREVIEW_VALUE_CHARS) -> str:
+    if not sample:
+        return ""
+    parts: list[str] = []
+    for key in sample:
+        rendered = format_preview_value(sample.get(key), limit=max(400, limit // max(1, len(sample))))
+        parts.append(f"{key}:\n{rendered}" if rendered else f"{key}:")
+    joined = "\n\n".join(parts)
+    if len(joined) > limit:
+        return joined[: limit - 1].rstrip() + "…"
+    return joined
+
 
 def build_patch_preview(*, tenant_id: str, section: str, patch: dict[str, Any]) -> dict[str, Any]:
     """Show current vs proposed merge without saving."""
@@ -117,11 +152,18 @@ def build_patch_preview(*, tenant_id: str, section: str, patch: dict[str, Any]) 
     current = dict(env.payload) if isinstance(env.payload, dict) else {}
     merged = _merge_dict(current, patch)
     changed_keys = sorted(k for k in patch.keys() if current.get(k) != merged.get(k))
+    current_sample = {k: current.get(k) for k in changed_keys[:12]}
+    proposed_sample = {k: merged.get(k) for k in changed_keys[:12]}
+    field = ", ".join(changed_keys[:8]) if changed_keys else ""
     return {
         "section": name,
+        "field": field,
         "changed_keys": changed_keys,
-        "current_sample": {k: current.get(k) for k in changed_keys[:12]},
-        "proposed_sample": {k: merged.get(k) for k in changed_keys[:12]},
+        "current_sample": current_sample,
+        "proposed_sample": proposed_sample,
+        # Card UI reads these string fields (not proposed_sample objects).
+        "current_value": format_sample_map(current_sample),
+        "proposed_value": format_sample_map(proposed_sample),
         "patch": patch,
         "revision": getattr(env, "revision", None),
     }

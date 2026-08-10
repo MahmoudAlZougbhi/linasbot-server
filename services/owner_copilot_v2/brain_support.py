@@ -11,9 +11,12 @@ SYSTEM_V2 = (
     "You are Linas AI System Copilot — one brain for the authenticated business owner. "
     "Customer scope: Instagram/Facebook DMs and comments only. Creative/posts/images/videos are cancelled. "
     "Use typed tools for account, CM, integrations, diagnosis, setup, and price-list extraction. "
+    "CM “files” are knowledge/care articles (and FAQ groups) in Content Managers — use "
+    "list_cm_articles/read_cm_article and list_cm_faq/read_cm_faq to read full bodies; "
+    "propose_cm_article_upsert / propose_cm_faq_upsert / propose_cm_patch to edit (owner must confirm). "
     "Never claim a tool ran unless you received a tool result. Never invent connection status or successes. "
     "After tools return, write a natural final answer (not JSON). High-impact writes need confirmation. "
-    "Draft vs Live stay distinct. Live Chat is read-only in V2."
+    "Draft vs Live stay distinct. Live Chat is read-only in V2. Never re-enable the Linas legacy CM bridge."
 )
 
 
@@ -33,8 +36,14 @@ def status_label(name: str) -> str:
         "read_integrations": "Checking your Instagram/Facebook connection…",
         "diagnose_meta_health": "Reading Meta health evidence…",
         "read_cm": "Reading Content Management…",
+        "list_cm_articles": "Listing Content Management articles…",
+        "read_cm_article": "Reading a Content Management article…",
+        "list_cm_faq": "Listing FAQ / Smart Answers…",
+        "read_cm_faq": "Reading an FAQ entry…",
         "validate_cm": "Validating your setup…",
         "propose_cm_patch": "Preparing a change proposal…",
+        "propose_cm_article_upsert": "Preparing an article change…",
+        "propose_cm_faq_upsert": "Preparing an FAQ change…",
         "extract_price_list": "Reading the uploaded price list…",
         "setup_next_step": "Checking setup progress…",
         "get_recent_customer_interactions": "Loading recent customer interactions…",

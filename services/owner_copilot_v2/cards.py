@@ -106,12 +106,49 @@ def setup_card(*, stage: str, section: str, body: str) -> ChatCard:
     )
 
 
+def _proposal_body(preview: dict[str, Any]) -> str:
+    """Prefer the filled proposed text; never leave the card on a useless placeholder alone."""
+    for key in ("proposed_value", "after", "proposed_text", "text"):
+        raw = preview.get(key)
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()[:1200]
+        if isinstance(raw, dict) and raw:
+            # Article/FAQ upserts may put structured after blobs here.
+            title = str(raw.get("title") or raw.get("qa_group_id") or "").strip()
+            body = str(raw.get("body_preview") or raw.get("body") or "").strip()
+            if title and body:
+                return f"{title}\n\n{body}"[:1200]
+            if body:
+                return body[:1200]
+            if title:
+                return title[:1200]
+    sample = preview.get("proposed_sample")
+    if isinstance(sample, dict) and sample:
+        from services.owner_ai_cm_approval import format_sample_map
+
+        rendered = format_sample_map(sample, limit=1200)
+        if rendered:
+            return rendered
+    section = str(preview.get("section") or "").strip()
+    field = str(preview.get("field") or "").strip()
+    if section and field:
+        return f"Proposed {section} · {field}"
+    if section:
+        return f"Proposed change in {section}"
+    return "Review the proposed change, then approve to save."
+
+
 def card_from_tool(name: str, data: dict[str, Any], *, ok: bool) -> ChatCard | None:
-    if name == "propose_cm_patch" and isinstance(data, dict) and data.get("proposal_id"):
+    if (
+        name in {"propose_cm_patch", "propose_cm_article_upsert", "propose_cm_faq_upsert"}
+        and isinstance(data, dict)
+        and data.get("proposal_id")
+    ):
         preview = data.get("preview") if isinstance(data.get("preview"), dict) else {}
+        assert isinstance(preview, dict)
         return proposal_card(
             title="Content Management change",
-            body="Review the proposed change, then approve to save.",
+            body=_proposal_body(preview),
             proposal_id=str(data["proposal_id"]),
             preview=preview,
             confirmation_token=str(data.get("confirmation_token") or "") or None,
@@ -134,7 +171,10 @@ def card_from_tool(name: str, data: dict[str, Any], *, ok: bool) -> ChatCard | N
             body=str((data or {}).get("prompt") or "Continue setup in this chat."),
         )
     if not ok:
+        err = str(data.get("error") or name).strip()
         return failure_card(
-            title=f"Tool failed: {name}", body="No changes were applied.", error=str(data.get("error") or name)
+            title=f"Tool failed: {name}",
+            body=err or "No changes were applied.",
+            error=err or name,
         )
     return None

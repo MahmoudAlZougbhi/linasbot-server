@@ -42,6 +42,7 @@ async def tool_read_cm(*, tenant_id: str, role: str, section: str | None = None)
     _require(role, "contentManagers")
     from services.cm.constants import CM_SECTIONS, tenant_has_published_cm
     from services.cm.storage import UnknownSectionError, get_draft, list_sections
+    from services.owner_ai_tools_cm_content import compact_read_cm_draft
 
     published = tenant_has_published_cm(tenant_id)
     if section:
@@ -50,16 +51,15 @@ async def tool_read_cm(*, tenant_id: str, role: str, section: str | None = None)
         except UnknownSectionError:
             return ToolResult(ok=False, name="read_cm", data={}, error=f"Unknown section: {section}")
         payload = env.model_dump(mode="json") if env is not None else None
-        # Compact: section metadata + keys only when large
+        # Small sections: full payload. Large item lists: metadata + hint to item tools.
         draft_out: dict[str, Any] | None
         if isinstance(payload, dict) and isinstance(payload.get("payload"), dict):
-            keys = sorted(payload["payload"].keys())
+            compact = compact_read_cm_draft(payload["payload"], section=str(section))
             draft_out = {
                 "section": section,
                 "revision": payload.get("revision"),
                 "etag": payload.get("etag"),
-                "payload_keys": keys,
-                "payload_preview": {k: payload["payload"].get(k) for k in keys[:8]},
+                **compact,
             }
         else:
             draft_out = payload

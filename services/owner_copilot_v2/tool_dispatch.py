@@ -17,6 +17,8 @@ from services.owner_copilot_v2.flags import (
 WRITE_TOOLS = frozenset(
     {
         "propose_cm_patch",
+        "propose_cm_article_upsert",
+        "propose_cm_faq_upsert",
         "approve_cm_patch",
         "publish_cm",
         "propose_diagnosis_fix",
@@ -111,7 +113,11 @@ async def dispatch_v2_tool(
             ok=False,
             name=name,
             data={"shadow": True, "writes_enabled": False},
-            error="writes_disabled_shadow_mode",
+            error=(
+                "Content Management Draft writes are disabled on the server "
+                "(OWNER_COPILOT_WRITES / shadow mode). Proposals can be reviewed, "
+                "but Approve cannot save until writes are enabled."
+            ),
         )
 
     # High-impact still requires confirmed flag from client
@@ -138,4 +144,14 @@ def tool_result_for_model(result: ToolResult) -> str:
         "requires_confirmation": result.requires_confirmation,
         "confirmation_token": result.confirmation_token,
     }
-    return json.dumps(payload, ensure_ascii=False, default=str)[:8000]
+    # Article/FAQ reads are already chunked/bounded; allow a larger JSON envelope so
+    # one full body chunk is not clipped mid-string by the default 8k cut.
+    expanded = {
+        "read_cm_article",
+        "read_cm_faq",
+        "list_cm_articles",
+        "list_cm_faq",
+        "read_cm",
+    }
+    limit = 24000 if result.name in expanded else 8000
+    return json.dumps(payload, ensure_ascii=False, default=str)[:limit]
