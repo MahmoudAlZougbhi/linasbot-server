@@ -158,7 +158,8 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
     # (mobile fail-closes the subscription gate on any entitlements error).
     exempt = is_subscription_exempt_tenant(tenant_id)
     app_access = tenant_has_app_access(tenant_id)
-    features = dict(ent.features)
+    # Catalog features are SoT for known plan_ids; do not trust stale stored blobs.
+    features = dict(PLAN_FEATURES.get(ent.plan_id) or ent.features or {})
     faq: dict[str, Any]
     try:
         from services.faq_entitlements import get_faq_entitlement
@@ -200,7 +201,8 @@ def assert_feature(tenant_id: str, feature: str) -> None:
     ent = entitlements_store.get(tenant_id)
     if ent.status not in {"active", "trial", "grace"}:
         raise PermissionError("Active subscription required")
-    if not ent.features.get(feature):
+    features = PLAN_FEATURES.get(ent.plan_id) or ent.features or {}
+    if not features.get(feature):
         raise PermissionError(f"Plan does not include feature: {feature}")
 
 

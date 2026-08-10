@@ -117,7 +117,7 @@ export const en = {
   toggleDms: 'Direct messages',
   toggleComments: 'Comments',
   commentsBlockerMissingPermissions:
-    'Comments need Meta comment permissions. Use Manage Meta Access (do not Disconnect Account).',
+    'Comments need Meta comment permissions on App A Login Config (pages_read_user_content, pages_manage_engagement, instagram_manage_comments). Use Manage Meta Access after those are added — do not Disconnect.',
   commentsBlockerConnectFirst: 'Connect this channel before enabling comments.',
   commentsBlockerMissingWebhook: 'Comment webhook subscription is not confirmed yet for this connection.',
   commentsBlockerMetaApproval:
