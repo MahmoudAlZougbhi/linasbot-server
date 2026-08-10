@@ -5,8 +5,6 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
-  StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -14,17 +12,16 @@ import {
 import { GradientBackground } from '../../components/GradientBackground';
 import { tokenStore } from '../../auth/tokenStore';
 import { useI18n } from '../../i18n/LanguageContext';
-import { fonts, useTheme } from '../../theme';
-import { AuthGateModal } from '../auth/AuthGateModal';
+import { useTheme } from '../../theme';
 import type { ControlArea } from '../control/controlAreas';
-import { NavDrawer } from '../nav/NavDrawer';
 import { ChatComposer } from './ChatComposer';
 import { ChatHeader } from './ChatHeader';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatModeToggle } from './ChatModeToggle';
+import { ChatScreenOverlays } from './ChatScreenOverlays';
 import { chatScreenStyles as styles } from './chatScreenStyles';
 import { ChatStatusBanners } from './ChatStatusBanners';
-import { ComposerPlusSheet, type PlusAction } from './ComposerPlusSheet';
+import { ChatWorkspaceChip } from './ChatWorkspaceChip';
 import { GuestBanner } from './GuestBanner';
 import type { OwnerChatMode } from './ownerChatMode';
 import { PendingAttachmentsStrip } from './PendingAttachmentsStrip';
@@ -39,12 +36,7 @@ import { useGuestChatSession } from './useGuestChatSession';
 import { usePinnedChats } from './usePinnedChats';
 import { useVoiceDraft } from './useVoiceDraft';
 import { ChoiceChips } from './v2/ChoiceChips';
-import {
-  MAX_IMAGES,
-  pickDocumentAttachment,
-  pickImageAttachments,
-  type PendingFile,
-} from './v2/pickAttachment';
+import type { PendingFile } from './v2/pickAttachment';
 import { useStreamingTurn } from './v2/useStreamingTurn';
 
 type Props = {
@@ -169,29 +161,6 @@ export function ChatScreen({
     scrollToBottom,
   ]);
 
-  async function handlePlus(action: PlusAction) {
-    if (!isAuthenticated) return;
-    if (action === 'add_cm' || action === 'review_setup') {
-      onOpenArea('cm');
-      return;
-    }
-    if (action === 'check_usage') {
-      onOpenArea('usage');
-      return;
-    }
-    if (action === 'attach_image') {
-      const picked = await pickImageAttachments(pendingFiles.length);
-      if (!picked.length) return;
-      setPendingFiles((prev) => [...prev, ...picked].slice(0, MAX_IMAGES));
-      return;
-    }
-    if (action === 'attach_document') {
-      if (pendingFiles.length >= MAX_IMAGES) return;
-      const doc = await pickDocumentAttachment();
-      if (doc) setPendingFiles((prev) => [...prev, doc].slice(0, MAX_IMAGES));
-    }
-  }
-
   function openAuthPreservingDraft(hard = false) {
     void savePendingGuestDraft({ text: draft, createdAt: Date.now() });
     setHardLimit(hard);
@@ -231,21 +200,7 @@ export function ChatScreen({
         />
 
         {showModeToggle ? <ChatModeToggle mode={ownerMode} onChange={setOwnerMode} /> : null}
-
-        {isAuthenticated && workspaceLabel ? (
-          <View style={local.chipWrap}>
-            <View
-              style={[
-                local.chip,
-                { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSoft },
-              ]}
-            >
-              <Text style={{ color: colors.textMuted, fontFamily: fonts.body, fontSize: 12 }}>
-                {workspaceLabel}
-              </Text>
-            </View>
-          </View>
-        ) : null}
+        {isAuthenticated && workspaceLabel ? <ChatWorkspaceChip label={workspaceLabel} /> : null}
 
         {!isAuthenticated ? (
           <GuestBanner
@@ -391,11 +346,10 @@ export function ChatScreen({
         />
       </KeyboardAvoidingView>
 
-      <NavDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+      <ChatScreenOverlays
+        drawerOpen={drawerOpen}
+        onCloseDrawer={() => setDrawerOpen(false)}
         isAuthenticated={isAuthenticated}
-        showUsers={isAuthenticated}
         history={owner.history}
         archivedIds={archivedIds}
         pinnedIds={pinnedIds}
@@ -417,39 +371,21 @@ export function ChatScreen({
         onDelete={(id) => void owner.deleteConversation(id)}
         onLogin={() => openAuthPreservingDraft(false)}
         onRegister={onRequestRegister}
-      />
-
-      {isAuthenticated ? (
-        <ComposerPlusSheet open={plusOpen} onClose={() => setPlusOpen(false)} onAction={(a) => void handlePlus(a)} />
-      ) : null}
-
-      <AuthGateModal
-        visible={authGate}
-        hardLimit={hardLimit || guest.gated}
-        reason={guest.gateText ?? undefined}
-        onClose={() => {
+        plusOpen={plusOpen}
+        onClosePlus={() => setPlusOpen(false)}
+        pendingFiles={pendingFiles}
+        setPendingFiles={setPendingFiles}
+        authGate={authGate}
+        hardLimit={hardLimit}
+        guestGated={guest.gated}
+        gateText={guest.gateText}
+        onCloseAuth={() => {
           setAuthGate(false);
           setHardLimit(false);
         }}
-        onLogin={() => {
-          setAuthGate(false);
-          onRequestLogin();
-        }}
-        onRegister={() => {
-          setAuthGate(false);
-          onRequestRegister();
-        }}
+        onRequestLogin={onRequestLogin}
+        onRequestRegister={onRequestRegister}
       />
     </GradientBackground>
   );
 }
-
-const local = StyleSheet.create({
-  chipWrap: { alignItems: 'center', paddingBottom: 6, paddingTop: 2 },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-});
