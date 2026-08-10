@@ -132,7 +132,12 @@ const styles = StyleSheet.create({
   },
   rowActive: { backgroundColor: colors.surfaceAlt },
   rowMain: { flex: 1, paddingRight: 8 },
-  rowTitle: { color: colors.text, fontFamily: fonts.body, fontSize: 15 },
+  rowTitle: {
+    color: colors.text,
+    fontFamily: fonts.bodyMedium,
+    fontWeight: '600',
+    fontSize: 15,
+  },
   pin: { color: colors.warning, fontSize: 18, paddingHorizontal: 4 },
   empty: { color: colors.textMuted, marginTop: spacing.lg },
 });
