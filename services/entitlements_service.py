@@ -191,8 +191,8 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
         "subscription_required": not exempt,
         "subscription_exempt": exempt,
         "iap_purchase_in_app": False,
-        # Never surface engineering notes in mobile/client UI.
-        "iap_note": None,
+        # Omit iap_note entirely — JSON null previously broke mobile Zod
+        # (z.string().optional rejects null) and fail-closed the subscription gate.
     }
 
 

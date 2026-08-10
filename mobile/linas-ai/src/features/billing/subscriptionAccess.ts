@@ -12,7 +12,9 @@ const EntitlementMeSchema = z
         app_access: z.boolean().optional(),
         subscription_exempt: z.boolean().optional(),
         iap_purchase_in_app: z.boolean().optional(),
-        iap_note: z.string().optional(),
+        // Server may send JSON null after #161 stripped the engineering string.
+        // z.string().optional() rejects null and fail-closed the whole gate.
+        iap_note: z.string().nullable().optional(),
       })
       .passthrough()
       .optional(),
