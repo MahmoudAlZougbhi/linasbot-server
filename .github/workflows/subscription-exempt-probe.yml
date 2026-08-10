@@ -122,6 +122,28 @@ jobs:
             print(f"[probe] role_tenant_top={dict(role_tenant.most_common(40))}")
             print(f"[probe] non_linas_admin_or_owner_active={non_linas_admins}")
 
+            biz_by_tenant = {}
+            for doc in docs:
+                data = doc.to_dict() or {}
+                tid = str(data.get("tenantId") or data.get("tenant_id") or "(unset)").strip().lower() or "(unset)"
+                biz = str(data.get("businessName") or data.get("business_name") or data.get("name") or "").strip()[:80]
+                role = str(data.get("role") or "").strip().lower()
+                status = str(data.get("status") or "").strip().lower()
+                has_tid_field = ("tenantId" in data) or ("tenant_id" in data)
+                # No emails. Show only tenant + role + status + display-ish name.
+                print(f"[probe] user_row tenant={tid!r} role={role!r} status={status!r} has_tenant_field={has_tid_field} display={biz!r}")
+                if tid not in biz_by_tenant:
+                    biz_by_tenant[tid] = biz
+            print(f"[probe] biz_by_tenant={biz_by_tenant}")
+            # Evaluate app_access for every observed tenant id
+            for tid in sorted(tenant_counts):
+                if tid in {"missing", "MISSING"}:
+                    continue
+                try:
+                    print(f"[probe] access_for tenant={tid!r} exempt={is_subscription_exempt_tenant(tid)} app_access={tenant_has_app_access(tid)}")
+                except Exception as e:
+                    print(f"[probe] access_for_error tenant={tid!r} type={type(e).__name__}")
+
             # CM clinic_name for linas if present
             try:
                 from services.cm.version_store import load_published_content
