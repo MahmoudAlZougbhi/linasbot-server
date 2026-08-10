@@ -86,6 +86,8 @@ def build_greeting(
     language: str | None = None,
     include_address_prompt: bool = True,
 ) -> dict[str, Any]:
+    from services.owner_ai_onboarding import welcome_chips
+
     profile = read_owner_profile(user_id)
     lang = normalize_language(language or profile.get("preferred_language"), fallback="en")
     stage = resolve_setup_stage(tenant_id)
@@ -102,4 +104,5 @@ def build_greeting(
         "language": lang,
         "address_prompt_included": include_address_prompt and not asked and not has_name,
         "gender": profile.get("gender") or "unset",
+        "chips": welcome_chips(setup_stage=stage, language=lang),
     }

@@ -54,7 +54,13 @@ export async function pickDocumentAttachment(): Promise<PendingFile | null> {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const DocumentPicker = require('expo-document-picker') as typeof import('expo-document-picker');
     const picked = await DocumentPicker.getDocumentAsync({
-      type: ['application/pdf', 'image/*'],
+      type: [
+        'application/pdf',
+        'image/*',
+        'text/plain',
+        'text/markdown',
+        'application/json',
+      ],
       copyToCacheDirectory: true,
     });
     if (picked.canceled || !picked.assets?.[0]) return null;

@@ -139,19 +139,23 @@ def _proposal_body(preview: dict[str, Any]) -> str:
 
 
 def card_from_tool(name: str, data: dict[str, Any], *, ok: bool) -> ChatCard | None:
+    payload = data if isinstance(data, dict) else {}
+    if name == "ingest_business_dump" and ok:
+        nested = payload.get("first_proposal")
+        if isinstance(nested, dict) and isinstance(nested.get("data"), dict):
+            return card_from_tool("propose_cm_patch", nested["data"], ok=True)
     if (
         name in {"propose_cm_patch", "propose_cm_article_upsert", "propose_cm_faq_upsert"}
-        and isinstance(data, dict)
-        and data.get("proposal_id")
+        and payload.get("proposal_id")
     ):
-        preview = data.get("preview") if isinstance(data.get("preview"), dict) else {}
+        preview = payload.get("preview") if isinstance(payload.get("preview"), dict) else {}
         assert isinstance(preview, dict)
         return proposal_card(
             title="Content Management change",
             body=_proposal_body(preview),
-            proposal_id=str(data["proposal_id"]),
+            proposal_id=str(payload["proposal_id"]),
             preview=preview,
-            confirmation_token=str(data.get("confirmation_token") or "") or None,
+            confirmation_token=str(payload.get("confirmation_token") or "") or None,
         )
     if name == "diagnose_meta_health" and ok:
         return diagnosis_card(
@@ -171,7 +175,7 @@ def card_from_tool(name: str, data: dict[str, Any], *, ok: bool) -> ChatCard | N
             body=str((data or {}).get("prompt") or "Continue setup in this chat."),
         )
     if not ok:
-        err = str(data.get("error") or name).strip()
+        err = str(payload.get("error") or name).strip()
         return failure_card(
             title=f"Tool failed: {name}",
             body=err or "No changes were applied.",

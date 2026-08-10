@@ -17,6 +17,8 @@ import { chatScreenStyles as styles } from './chatScreenStyles';
 import { ChatStreamFooter } from './ChatStreamFooter';
 import { GuestEmptyState } from './GuestEmptyState';
 import { OwnerEmptyState } from './OwnerEmptyState';
+import { OwnerWelcomeChips } from './OwnerWelcomeChips';
+import type { OwnerWelcomeChip } from './ownerWelcomeChips';
 import { ScrollToLatestFab } from './ScrollToLatestFab';
 import type { ProposedPatch } from './useChatSession';
 import type { StreamCard } from './v2/useOwnerStream';
@@ -46,6 +48,8 @@ type Props = {
   onDiscardProposal: () => void;
   onOpenCm: (review?: CmProposalReview) => void;
   onGuestPrompt: (prompt: string) => void;
+  showOwnerWelcomeChips?: boolean;
+  onOwnerWelcomeChip?: (chip: OwnerWelcomeChip) => void;
 };
 
 export function ChatMessageList({
@@ -70,6 +74,8 @@ export function ChatMessageList({
   onDiscardProposal,
   onOpenCm,
   onGuestPrompt,
+  showOwnerWelcomeChips = false,
+  onOwnerWelcomeChip,
 }: Props) {
   const { tr } = useI18n();
   const { colors } = useTheme();
@@ -161,22 +167,27 @@ export function ChatMessageList({
           );
         }}
         ListFooterComponent={
-          <ChatStreamFooter
-            thinking={thinking}
-            thinkingLabel={thinkingLabel}
-            statusRows={statusRows}
-            liveText={liveText}
-            cards={cards}
-            proposedPatch={proposedPatch}
-            proposedCmPatchLabel={tr('proposedCmPatch')}
-            onApproveDraft={onApproveDraft}
-            onDiscardProposal={onDiscardProposal}
-            onOpenCm={onOpenCm}
-            onRetryLast={() => {
-              const lastUser = [...messages].reverse().find((m) => m.role === 'user');
-              if (lastUser) onRetryAssistant(lastUser.content);
-            }}
-          />
+          <>
+            <ChatStreamFooter
+              thinking={thinking}
+              thinkingLabel={thinkingLabel}
+              statusRows={statusRows}
+              liveText={liveText}
+              cards={cards}
+              proposedPatch={proposedPatch}
+              proposedCmPatchLabel={tr('proposedCmPatch')}
+              onApproveDraft={onApproveDraft}
+              onDiscardProposal={onDiscardProposal}
+              onOpenCm={onOpenCm}
+              onRetryLast={() => {
+                const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+                if (lastUser) onRetryAssistant(lastUser.content);
+              }}
+            />
+            {showOwnerWelcomeChips && onOwnerWelcomeChip ? (
+              <OwnerWelcomeChips onPick={onOwnerWelcomeChip} />
+            ) : null}
+          </>
         }
       />
       <ScrollToLatestFab

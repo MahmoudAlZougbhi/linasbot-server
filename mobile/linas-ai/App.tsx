@@ -9,6 +9,8 @@ import { tokenStore } from './src/auth/tokenStore';
 import { LoginScreen } from './src/features/auth/LoginScreen';
 import { RegisterScreen } from './src/features/auth/RegisterScreen';
 import { BillingScreen } from './src/features/billing/BillingScreen';
+import { SubscriptionGateScreen } from './src/features/billing/SubscriptionGateScreen';
+import { useSubscriptionGate } from './src/features/billing/useSubscriptionGate';
 import { UsageScreen } from './src/features/billing/UsageScreen';
 import { BootSplash } from './src/features/boot/BootSplash';
 import { ChatScreen } from './src/features/chat/ChatScreen';
@@ -103,6 +105,13 @@ function AppBody() {
   const [hasAccess, setHasAccess] = useState(false);
   const [isPlatformOwner, setIsPlatformOwner] = useState(false);
   const [resumeArea, setResumeArea] = useState<ControlArea | null>(null);
+  const subGate = useSubscriptionGate(hasAccess);
+  const showSubGate =
+    hasAccess &&
+    subGate.blocked &&
+    screen.name !== 'billing' &&
+    screen.name !== 'login' &&
+    screen.name !== 'register';
 
   useEffect(() => {
     void (async () => {
@@ -160,6 +169,7 @@ function AppBody() {
     setIsPlatformOwner(user?.role === 'platform_owner');
     setHasAccess(true);
     void tryRegisterOwnerPushScaffold();
+    await subGate.refresh();
     const pending = resumeArea;
     setResumeArea(null);
     if (pending && pending !== 'integrations') {
@@ -170,6 +180,10 @@ function AppBody() {
   }
 
   function openAreaAuthed(area: ControlArea) {
+    if (subGate.blocked && area !== 'subscription') {
+      setScreen({ name: 'chat' });
+      return;
+    }
     if (area === 'settings') {
       setScreen({ name: 'settings' });
       return;
@@ -308,7 +322,16 @@ function AppBody() {
           onDone={() => setScreen({ name: 'login' })}
         />
       ) : null}
-      {screen.name === 'chat' ? (
+      {showSubGate ? (
+        <SubscriptionGateScreen
+          loading={subGate.loading}
+          note={subGate.access?.note}
+          onOpenSubscription={() => setScreen({ name: 'billing' })}
+          onRefresh={() => void subGate.refresh()}
+          onLogout={() => void logout()}
+        />
+      ) : null}
+      {!showSubGate && screen.name === 'chat' ? (
         <ChatScreen
           isAuthenticated={hasAccess}
           isPlatformOwner={isPlatformOwner}
@@ -351,7 +374,13 @@ function AppBody() {
       {screen.name === 'dashboard' ? (
         <DashboardScreen onBack={() => setScreen({ name: 'chat' })} isPlatformOwner={isPlatformOwner} />
       ) : null}
-      {screen.name === 'billing' ? <BillingScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
+      {screen.name === 'billing' ? (
+        <BillingScreen
+          onBack={() => {
+            void subGate.refresh().then(() => setScreen({ name: 'chat' }));
+          }}
+        />
+      ) : null}
       {screen.name === 'usage' ? <UsageScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
       {screen.name === 'livechat' ? (
         <LiveChatScreen onBack={() => setScreen({ name: 'chat' })} initialOpen={screen.open ?? null} />

@@ -280,6 +280,14 @@ export function ChatScreen({
               scrollToBottom();
               void guest.send(prompt);
             }}
+            showOwnerWelcomeChips={
+              isAuthenticated && !hasUserMessage && !turn.liveText && !turn.streaming
+            }
+            onOwnerWelcomeChip={(chip) => {
+              setOwnerMode(chip.mode);
+              scrollToBottom();
+              void turn.send(chip.prompt, { owner_mode: chip.mode });
+            }}
           />
         )}
 
