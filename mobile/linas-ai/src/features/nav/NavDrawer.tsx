@@ -239,14 +239,6 @@ export function NavDrawer(props: Props) {
           >
             <NewChatIcon color={colors.onAccent} size={20} />
           </Pressable>
-          <Text
-            style={[styles.version, { color: colors.textDim }]}
-            numberOfLines={1}
-            accessibilityRole="text"
-            accessibilityLabel={VERSION_LABEL}
-          >
-            {VERSION_LABEL}
-          </Text>
         </View>
 
         {props.isAuthenticated ? (
@@ -283,6 +275,15 @@ export function NavDrawer(props: Props) {
             </Text>
           </>
         )}
+
+        <Text
+          style={[styles.version, { color: colors.textDim }]}
+          numberOfLines={1}
+          accessibilityRole="text"
+          accessibilityLabel={VERSION_LABEL}
+        >
+          {VERSION_LABEL}
+        </Text>
       </View>
     </SideDrawer>
   );
@@ -360,8 +361,7 @@ const styles = StyleSheet.create({
   bottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
+    justifyContent: 'flex-end',
   },
   newChatBtn: {
     width: 36,
@@ -373,8 +373,8 @@ const styles = StyleSheet.create({
   version: {
     fontFamily: fonts.body,
     fontSize: 11,
-    flexShrink: 1,
-    textAlign: 'right',
+    alignSelf: 'flex-start',
+    textAlign: 'left',
   },
   footerRow: {
     minHeight: 40,

@@ -233,6 +233,11 @@ test('drawer search chrome is header circle; New chat is compact bottom dock', (
   assert.match(configSrc, /Constants\.expoConfig\?\.version/);
   assert.match(configSrc, /APP_VERSION_LABEL/);
   assert.match(configSrc, /APP_BUILD_LABEL/);
+  // Version is pinned bottom-left of the drawer footer (under New Chat row).
+  assert.match(nav, /alignSelf:\s*'flex-start'/);
+  assert.match(nav, /textAlign:\s*'left'/);
+  assert.match(nav, /justifyContent:\s*'flex-end'/);
+  assert.ok(nav.lastIndexOf('{VERSION_LABEL}') > nav.indexOf('newChatBtn'));
   // Same NewChatIcon component as chat header (compose square+pencil), smaller size only.
   assert.match(nav, /NewChatIcon/);
   assert.match(nav, /<NewChatIcon color=\{colors\.onAccent\} size=\{20\}/);
