@@ -55,6 +55,8 @@ export function NavDrawer(props: Props) {
   const searchRef = useRef<TextInput>(null);
   const modules = visibleDrawerModules({ showUsers: props.showUsers });
   const queryTrimmed = query.trim();
+  /** Search mode: hide Dashboard/Settings/module grid; show only matching chats. */
+  const searching = searchOpen || queryTrimmed.length > 0;
 
   useEffect(() => {
     if (!props.open) {
@@ -76,6 +78,7 @@ export function NavDrawer(props: Props) {
     const base = props.history.filter((h) =>
       showArchived ? props.archivedIds.includes(h.id) : !props.archivedIds.includes(h.id),
     );
+    // Live filter from the first typed character (no min-length gate).
     if (!q) return base;
     return base.filter((h) => (h.title || '').toLowerCase().includes(q));
   }, [props.history, props.archivedIds, queryTrimmed, showArchived]);
@@ -154,36 +157,40 @@ export function NavDrawer(props: Props) {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        <View style={styles.grid}>
-          {modules.map((m) => (
+        {!searching ? (
+          <>
+            <View style={styles.grid}>
+              {modules.map((m) => (
+                <Pressable
+                  key={m.id}
+                  style={[styles.tile, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  onPress={() => {
+                    props.onClose();
+                    props.onOpenArea(m.id);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={m.title}
+                >
+                  <AppIcon icon={MODULE_ICONS[m.id]} size={20} color={colors.accentDeep} />
+                  <Text style={[styles.tileText, { color: colors.text }]} numberOfLines={2}>
+                    {m.title}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
             <Pressable
-              key={m.id}
-              style={[styles.tile, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              onPress={() => {
-                props.onClose();
-                props.onOpenArea(m.id);
-              }}
+              onPress={() => setShowArchived((v) => !v)}
+              style={styles.archiveToggle}
               accessibilityRole="button"
-              accessibilityLabel={m.title}
+              accessibilityLabel={showArchived ? tr('showRecent') : tr('archivedChats')}
             >
-              <AppIcon icon={MODULE_ICONS[m.id]} size={20} color={colors.accentDeep} />
-              <Text style={[styles.tileText, { color: colors.text }]} numberOfLines={2}>
-                {m.title}
+              <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>
+                {showArchived ? tr('showRecent') : tr('archivedChats')}
               </Text>
             </Pressable>
-          ))}
-        </View>
-
-        <Pressable
-          onPress={() => setShowArchived((v) => !v)}
-          style={styles.archiveToggle}
-          accessibilityRole="button"
-          accessibilityLabel={showArchived ? tr('showRecent') : tr('archivedChats')}
-        >
-          <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>
-            {showArchived ? tr('showRecent') : tr('archivedChats')}
-          </Text>
-        </Pressable>
+          </>
+        ) : null}
 
         {props.isAuthenticated ? (
           <HistoryRows
