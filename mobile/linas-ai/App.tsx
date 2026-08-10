@@ -116,7 +116,6 @@ function AppBody() {
     setIsPlatformOwner(user?.role === 'platform_owner');
     setHasAccess(true);
     void tryRegisterOwnerPushScaffold();
-    await subGate.refresh();
     const pending = resumeArea;
     setResumeArea(null);
     if (pending && pending !== 'integrations') {

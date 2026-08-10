@@ -152,14 +152,26 @@ def tenant_has_app_access(tenant_id: str) -> bool:
 def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
     ent = entitlements_store.get(tenant_id)
     price = PLAN_PRICES_USD.get(ent.plan_id)
-    from services.faq_entitlements import get_faq_entitlement
     from services.plan_economics import PLAN_FAQ_MAX_ENTRIES
 
-    faq = get_faq_entitlement(tenant_id)
-    features = dict(ent.features)
-    features.setdefault("faq_enabled", bool(faq.get("faq_enabled")))
+    # Compute gate fields first — FAQ enrichment must never 500 /api/entitlements/me
+    # (mobile fail-closes the subscription gate on any entitlements error).
     exempt = is_subscription_exempt_tenant(tenant_id)
     app_access = tenant_has_app_access(tenant_id)
+    features = dict(ent.features)
+    faq: dict[str, Any]
+    try:
+        from services.faq_entitlements import get_faq_entitlement
+
+        faq = get_faq_entitlement(tenant_id)
+    except Exception:
+        faq = {
+            "faq_enabled": False,
+            "faq_max_entries": PLAN_FAQ_MAX_ENTRIES.get(ent.plan_id, 0),
+            "faq_used_entries": 0,
+            "quota_display": "0 / 0",
+        }
+    features.setdefault("faq_enabled", bool(faq.get("faq_enabled")))
     return {
         "tenant_id": ent.tenant_id,
         "plan_id": ent.plan_id,
