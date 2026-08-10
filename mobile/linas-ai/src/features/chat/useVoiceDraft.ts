@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { apiUpload, ApiError } from '../../api/client';
 import { appendLocalFile } from '../../api/formDataFile';
 
-export type VoiceState = 'idle' | 'recording' | 'transcribing';
+export type VoiceState = 'idle' | 'recording' | 'paused' | 'transcribing';
 
 const VOICE_PRESET = {
   ...RecordingPresets.HIGH_QUALITY,
@@ -46,6 +46,22 @@ function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
+async function resetAudioMode() {
+  try {
+    await setAudioModeAsync({
+      allowsRecording: false,
+      playsInSilentMode: true,
+      interruptionMode: 'mixWithOthers',
+    });
+  } catch {
+    // ignore mode reset failures
+  }
+}
+
+/**
+ * Voice draft via expo-audio. Stop uses native pause() so Continue resumes the
+ * same take (record() after pause) — no concatenate / fake resume.
+ */
 export function useVoiceDraft(onText: (text: string) => void) {
   const recorder = useAudioRecorder(VOICE_PRESET);
   const recorderState = useAudioRecorderState(recorder, 120);
@@ -53,7 +69,6 @@ export function useVoiceDraft(onText: (text: string) => void) {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const stateRef = useRef<VoiceState>('idle');
   const busyRef = useRef(false);
-  const startedAtRef = useRef(0);
   const onTextRef = useRef(onText);
 
   useEffect(() => {
@@ -100,23 +115,41 @@ export function useVoiceDraft(onText: (text: string) => void) {
     });
     await recorder.prepareToRecordAsync();
     recorder.record();
-    // Native isRecording can lag a tick after record().
     for (let i = 0; i < 10 && !recorder.isRecording; i++) {
       await sleep(30);
     }
     if (!recorder.isRecording) {
       throw new Error('Could not start microphone. Check permission and try again.');
     }
-    startedAtRef.current = Date.now();
+    setState('recording');
+  }
+
+  function pauseRecording() {
+    if (stateRef.current !== 'recording') return;
+    recorder.pause();
+    setState('paused');
+  }
+
+  async function resumeRecording() {
+    if (stateRef.current !== 'paused') return;
+    setVoiceError(null);
+    // Native pause → record() appends to the same file (iOS/Android/web).
+    recorder.record();
+    for (let i = 0; i < 10 && !recorder.isRecording; i++) {
+      await sleep(30);
+    }
+    if (!recorder.isRecording) {
+      throw new Error('Could not continue recording. Try again.');
+    }
     setState('recording');
   }
 
   async function stopAndTranscribe() {
     setState('transcribing');
     try {
-      const elapsed = Date.now() - startedAtRef.current;
-      if (elapsed < 500) {
-        await sleep(500 - elapsed);
+      const duration = recorder.getStatus().durationMillis;
+      if (duration < 500) {
+        await sleep(500 - duration);
       }
       await recorder.stop();
       const uri = await resolveRecordingUri();
@@ -146,55 +179,94 @@ export function useVoiceDraft(onText: (text: string) => void) {
       if (!text) {
         throw new Error('No speech detected. Try again.');
       }
-      // Insert into composer only — never auto-send.
       setVoiceError(null);
       onTextRef.current(text);
     } finally {
       setState('idle');
-      try {
-        await setAudioModeAsync({
-          allowsRecording: false,
-          playsInSilentMode: true,
-          interruptionMode: 'mixWithOthers',
-        });
-      } catch {
-        // ignore mode reset failures
-      }
+      await resetAudioMode();
     }
   }
 
-  async function toggleVoice() {
-    if (busyRef.current || stateRef.current === 'transcribing') {
-      return;
+  async function discardRecording() {
+    if (stateRef.current !== 'recording' && stateRef.current !== 'paused') return;
+    try {
+      await recorder.stop();
+    } catch {
+      // ignore — discard should always return to idle
     }
+    setVoiceError(null);
+    setState('idle');
+    await resetAudioMode();
+  }
+
+  async function runGuarded(fn: () => void | Promise<void>) {
+    if (busyRef.current || stateRef.current === 'transcribing') return;
     busyRef.current = true;
     try {
-      if (stateRef.current === 'recording') {
-        await stopAndTranscribe();
-        return;
-      }
-      if (stateRef.current === 'idle') {
-        await startRecording();
-      }
+      await fn();
     } catch (err) {
+      const wasActive =
+        stateRef.current === 'recording' ||
+        stateRef.current === 'paused' ||
+        recorder.isRecording;
       setState('idle');
       setVoiceError(errorMessage(err));
-      try {
-        if (recorder.isRecording) {
+      if (wasActive) {
+        try {
           await recorder.stop();
+        } catch {
+          // ignore cleanup
         }
-      } catch {
-        // ignore cleanup
       }
+      await resetAudioMode();
     } finally {
       busyRef.current = false;
     }
   }
 
+  /** Idle → start; recording → pause (preview). Confirm/discard/resume are separate. */
+  async function toggleVoice() {
+    await runGuarded(async () => {
+      if (stateRef.current === 'recording') {
+        pauseRecording();
+        return;
+      }
+      if (stateRef.current === 'idle') {
+        await startRecording();
+      }
+    });
+  }
+
+  async function resumeVoice() {
+    await runGuarded(async () => {
+      await resumeRecording();
+    });
+  }
+
+  async function confirmVoice() {
+    await runGuarded(async () => {
+      if (stateRef.current !== 'paused' && stateRef.current !== 'recording') return;
+      await stopAndTranscribe();
+    });
+  }
+
+  async function discardVoice() {
+    await runGuarded(async () => {
+      await discardRecording();
+    });
+  }
+
+  const active = voiceState === 'recording' || voiceState === 'paused';
+  const elapsedMs = active ? recorderState.durationMillis : 0;
+
   return {
     voiceState,
     voiceError,
+    elapsedMs,
     toggleVoice,
+    resumeVoice,
+    confirmVoice,
+    discardVoice,
     metering: voiceState === 'recording' ? (recorderState.metering ?? null) : null,
     isRecording: voiceState === 'recording' || recorderState.isRecording,
   };

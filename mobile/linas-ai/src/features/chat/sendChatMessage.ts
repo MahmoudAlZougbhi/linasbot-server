@@ -102,7 +102,7 @@ export async function sendChatMessage(args: Args): Promise<void> {
     return;
   }
 
-  if (voiceState === 'recording' || voiceState === 'transcribing') return;
+  if (voiceState === 'recording' || voiceState === 'paused' || voiceState === 'transcribing') return;
   if (!conversationId) {
     // Session not ready — not a connectivity claim.
     setOffline(false);

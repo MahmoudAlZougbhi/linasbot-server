@@ -12,8 +12,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fonts, radii, spacing, useTheme } from '../../theme';
+import { formatVoiceElapsed, StopGlyph } from './ComposerGlyphs';
 import { modelChipLabel, type OwnerChatMode } from './ownerChatMode';
 import type { VoiceState } from './useVoiceDraft';
+import { VoiceComposerControls } from './VoiceComposerControls';
 
 type Props = {
   draft: string;
@@ -21,10 +23,14 @@ type Props = {
   onSend: () => void;
   onPlus?: () => void;
   onToggleVoice?: () => void;
+  onResumeVoice?: () => void;
+  onConfirmVoice?: () => void;
+  onDiscardVoice?: () => void;
   onStop?: () => void;
   sending: boolean;
   canSendWithAttachment?: boolean;
   voiceState?: VoiceState;
+  elapsedMs?: number;
   metering?: number | null;
   inputRef?: RefObject<TextInput | null>;
   showPlus?: boolean;
@@ -35,64 +41,6 @@ type Props = {
   showModelChip?: boolean;
 };
 
-function MicGlyph({ color, size = 20 }: { color: string; size?: number }) {
-  const headW = size * 0.38;
-  const headH = size * 0.52;
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View
-        style={{
-          width: headW,
-          height: headH,
-          borderRadius: headW / 2,
-          borderWidth: 2,
-          borderColor: color,
-          backgroundColor: 'transparent',
-        }}
-      />
-      <View
-        style={{
-          position: 'absolute',
-          bottom: size * 0.18,
-          width: size * 0.55,
-          height: size * 0.28,
-          borderWidth: 2,
-          borderTopWidth: 0,
-          borderColor: color,
-          borderBottomLeftRadius: size * 0.28,
-          borderBottomRightRadius: size * 0.28,
-        }}
-      />
-      <View
-        style={{
-          position: 'absolute',
-          bottom: size * 0.08,
-          width: 2,
-          height: size * 0.14,
-          backgroundColor: color,
-          borderRadius: 1,
-        }}
-      />
-      <View
-        style={{
-          position: 'absolute',
-          bottom: size * 0.06,
-          width: size * 0.28,
-          height: 2,
-          backgroundColor: color,
-          borderRadius: 1,
-        }}
-      />
-    </View>
-  );
-}
-
-function StopGlyph({ color }: { color: string }) {
-  return (
-    <View style={{ width: 12, height: 12, borderRadius: 2.5, backgroundColor: color }} />
-  );
-}
-
 /** Pill composer: + / chip / mic / send|stop all inside the bar. */
 export function ChatComposer({
   draft,
@@ -100,10 +48,14 @@ export function ChatComposer({
   onSend,
   onPlus,
   onToggleVoice,
+  onResumeVoice,
+  onConfirmVoice,
+  onDiscardVoice,
   onStop,
   sending,
   canSendWithAttachment = false,
   voiceState = 'idle',
+  elapsedMs = 0,
   metering: _metering,
   inputRef,
   showPlus = false,
@@ -118,12 +70,14 @@ export function ChatComposer({
   const pulse = useRef(new Animated.Value(1)).current;
   const ring = useRef(new Animated.Value(0.55)).current;
   const recording = voiceState === 'recording';
+  const paused = voiceState === 'paused';
   const transcribing = voiceState === 'transcribing';
+  const voiceBusy = recording || paused || transcribing;
   const canSend = Boolean(draft.trim() || canSendWithAttachment);
   const streamingStop = Boolean(onStop && sending);
   const showVoiceControl =
-    Boolean(showMic && onToggleVoice && !streamingStop && (recording || transcribing || !canSend));
-  const showSend = streamingStop || canSend;
+    Boolean(showMic && onToggleVoice && !streamingStop && (voiceBusy || !canSend));
+  const showSend = streamingStop || (canSend && !paused);
 
   useEffect(() => {
     if (!recording) {
@@ -158,11 +112,19 @@ export function ChatComposer({
   }, [autoFocus, inputRef]);
 
   function handleSend() {
-    if (sending || !canSend || recording || transcribing) return;
+    if (sending || !canSend || voiceBusy) return;
     inputRef?.current?.blur();
     Keyboard.dismiss();
     onSend();
   }
+
+  const placeholder = recording
+    ? `Listening… ${formatVoiceElapsed(elapsedMs)}`
+    : paused
+      ? `Paused · ${formatVoiceElapsed(elapsedMs)}`
+      : transcribing
+        ? 'Transcribing…'
+        : 'Message Linas';
 
   return (
     <View
@@ -186,12 +148,12 @@ export function ChatComposer({
         <TextInput
           ref={inputRef}
           style={[styles.input, { color: colors.text }]}
-          placeholder={recording ? 'Listening…' : transcribing ? 'Transcribing…' : 'Message Linas'}
+          placeholder={placeholder}
           placeholderTextColor={colors.textDim}
           value={draft}
           onChangeText={onChangeDraft}
           multiline
-          editable={!recording && !transcribing}
+          editable={!voiceBusy}
           autoFocus={autoFocus}
           blurOnSubmit={false}
           accessibilityLabel="Message Linas"
@@ -226,45 +188,20 @@ export function ChatComposer({
             ) : null}
 
             {showVoiceControl ? (
-              <View style={styles.micSlot}>
-                {recording ? (
-                  <Animated.View
-                    pointerEvents="none"
-                    style={[
-                      styles.pulseRing,
-                      {
-                        borderColor: colors.danger,
-                        opacity: ring,
-                        transform: [{ scale: pulse }],
-                      },
-                    ]}
-                  />
-                ) : null}
-                <Animated.View style={{ transform: [{ scale: pulse }] }}>
-                  <Pressable
-                    style={[styles.roundIn, recording && { backgroundColor: colors.danger }]}
-                    onPress={() => {
-                      if (!recording && !transcribing) {
-                        inputRef?.current?.blur();
-                        Keyboard.dismiss();
-                      }
-                      onToggleVoice?.();
-                    }}
-                    disabled={transcribing}
-                    accessibilityLabel={
-                      recording ? 'Stop recording' : transcribing ? 'Transcribing' : 'Start voice input'
-                    }
-                  >
-                    {transcribing ? (
-                      <ActivityIndicator color={colors.accent} size="small" />
-                    ) : recording ? (
-                      <StopGlyph color="#FFFFFF" />
-                    ) : (
-                      <MicGlyph color={colors.text} />
-                    )}
-                  </Pressable>
-                </Animated.View>
-              </View>
+              <VoiceComposerControls
+                voiceState={voiceState}
+                elapsedMs={elapsedMs}
+                pulse={pulse}
+                ring={ring}
+                onToggleVoice={onToggleVoice}
+                onResumeVoice={onResumeVoice}
+                onConfirmVoice={onConfirmVoice}
+                onDiscardVoice={onDiscardVoice}
+                onBeforeStart={() => {
+                  inputRef?.current?.blur();
+                  Keyboard.dismiss();
+                }}
+              />
             ) : null}
 
             {showSend ? (
@@ -281,10 +218,10 @@ export function ChatComposer({
                   style={[
                     styles.sendIn,
                     { backgroundColor: colors.accent },
-                    (sending || recording || transcribing) && styles.sendDisabled,
+                    (sending || voiceBusy) && styles.sendDisabled,
                   ]}
                   onPress={handleSend}
-                  disabled={sending || !canSend || recording || transcribing}
+                  disabled={sending || !canSend || voiceBusy}
                   accessibilityLabel="Send message"
                 >
                   {sending ? (
@@ -360,26 +297,6 @@ const styles = StyleSheet.create({
   chipText: {
     fontFamily: fonts.bodyMedium,
     fontSize: 12,
-  },
-  micSlot: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pulseRing: {
-    position: 'absolute',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 2,
-  },
-  roundIn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   sendIn: {
     width: 34,
