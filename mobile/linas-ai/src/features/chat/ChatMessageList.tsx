@@ -152,7 +152,7 @@ export function ChatMessageList({
                       const prevUser = [...messages.slice(0, index)]
                         .reverse()
                         .find((m) => m.role === 'user');
-                      if (prevUser && isAuthenticated) onRetryAssistant(prevUser.content);
+                      if (prevUser) onRetryAssistant(prevUser.content);
                     }
                   : undefined
               }
