@@ -35,10 +35,10 @@ export function HistoryDrawer({
     <SideDrawer open={open} side={isRtl ? 'right' : 'left'} onClose={onClose}>
       <Text style={styles.heading}>{tr('history')}</Text>
       <Pressable style={styles.newBtn} onPress={onNewChat}>
-        <Text style={styles.newText}>+ {tr('newChat')}</Text>
+        <Text style={styles.newText}>+ New chat</Text>
       </Pressable>
       <ScrollView contentContainerStyle={styles.list}>
-        {pinned.length > 0 ? <Text style={styles.section}>{tr('pinnedChats')}</Text> : null}
+        {pinned.length > 0 ? <Text style={styles.section}>Pinned</Text> : null}
         {pinned.map((item) => (
           <HistoryRow
             key={item.id}
@@ -49,7 +49,7 @@ export function HistoryDrawer({
             onTogglePin={onTogglePin}
           />
         ))}
-        <Text style={styles.section}>{tr('recentChats')}</Text>
+        <Text style={styles.section}>Recent</Text>
         {rest.map((item) => (
           <HistoryRow
             key={item.id}
@@ -61,7 +61,7 @@ export function HistoryDrawer({
           />
         ))}
         {history.length === 0 ? (
-          <Text style={styles.empty}>{tr('noConversationsYet')}</Text>
+          <Text style={styles.empty}>No conversations yet.</Text>
         ) : null}
       </ScrollView>
     </SideDrawer>
@@ -81,12 +81,11 @@ function HistoryRow({
   onOpen: (id: string) => void;
   onTogglePin: (id: string) => void;
 }) {
-  const { tr } = useI18n();
   return (
     <View style={[styles.row, active && styles.rowActive]}>
       <Pressable style={styles.rowMain} onPress={() => onOpen(item.id)}>
         <Text style={styles.rowTitle} numberOfLines={2}>
-          {item.title || tr('untitledChat')}
+          {item.title || 'Untitled'}
         </Text>
       </Pressable>
       <Pressable onPress={() => onTogglePin(item.id)} hitSlop={8}>
