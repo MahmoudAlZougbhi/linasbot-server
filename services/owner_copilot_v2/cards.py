@@ -135,7 +135,7 @@ def _proposal_body(preview: dict[str, Any]) -> str:
         return f"Proposed {section} · {field}"
     if section:
         return f"Proposed change in {section}"
-    return "Review the proposed change, then approve to save."
+    return "Review the proposed change, then Approve or reply ok / موافق to save Draft."
 
 
 def card_from_tool(name: str, data: dict[str, Any], *, ok: bool) -> ChatCard | None:
