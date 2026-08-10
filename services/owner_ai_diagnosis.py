@@ -69,6 +69,21 @@ class DiagnosisProposalStore:
             )
         return prop
 
+    def latest_pending(self, *, tenant_id: str, user_id: str) -> DiagnosisProposal | None:
+        best: DiagnosisProposal | None = None
+        d = self._root / tenant_id
+        if not d.is_dir():
+            return None
+        with self._lock:
+            paths = list(d.glob("*.json"))
+        for path in paths:
+            prop = self.get(tenant_id=tenant_id, proposal_id=path.stem)
+            if prop is None or prop.user_id != user_id or prop.status != "pending":
+                continue
+            if best is None or prop.created_at >= best.created_at:
+                best = prop
+        return best
+
 
 diagnosis_proposal_store = DiagnosisProposalStore()
 

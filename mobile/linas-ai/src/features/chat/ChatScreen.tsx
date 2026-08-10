@@ -13,6 +13,7 @@ import { tokenStore } from '../../auth/tokenStore';
 import { useI18n } from '../../i18n/LanguageContext';
 import { useTheme } from '../../theme';
 import type { ControlArea } from '../control/controlAreas';
+import type { CmProposalReview } from '../cm/cmProposalReview';
 import { ChatComposer } from './ChatComposer';
 import { ChatHeader } from './ChatHeader';
 import { ChatMessageList } from './ChatMessageList';
@@ -38,19 +39,21 @@ import { usePinnedChats } from './usePinnedChats';
 import { useVoiceDraft } from './useVoiceDraft';
 import { ChoiceChips } from './v2/ChoiceChips';
 import type { PendingFile } from './v2/pickAttachment';
+import { useSetupHandoff } from './useSetupHandoff';
 import { useStreamingTurn } from './v2/useStreamingTurn';
 
 type Props = {
   isAuthenticated: boolean;
   isPlatformOwner: boolean;
   onOpenArea: (area: ControlArea) => void;
+  onOpenCmReview?: (review: CmProposalReview) => void;
   onRequestLogin: () => void;
   onRequestRegister: () => void;
 };
-
 export function ChatScreen({
   isAuthenticated,
   onOpenArea,
+  onOpenCmReview,
   onRequestLogin,
   onRequestRegister,
 }: Props) {
@@ -93,7 +96,7 @@ export function ChatScreen({
     setOwnerMode('chat');
     if (turn.streaming) turn.stop();
     void owner.newChat();
-  }, [isAuthenticated, owner, turn]);
+  }, [isAuthenticated, owner, stickToBottomRef, turn]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -132,8 +135,7 @@ export function ChatScreen({
   const listKey = isAuthenticated ? owner.conversationId || 'owner' : 'guest';
   // Greeting-seeded chats: show Chat|Work until first user message.
   const hasUserMessage = messages.some((m) => m.role === 'user');
-  const showModeToggle =
-    isAuthenticated && !hasUserMessage && !turn.liveText && !turn.streaming;
+  const showModeToggle = isAuthenticated && !hasUserMessage && !turn.liveText && !turn.streaming;
 
   useEffect(() => {
     if (loading) return;
@@ -147,7 +149,6 @@ export function ChatScreen({
     messages.length,
     turn.thinking,
     turn.liveText,
-    turn.thinking,
     turn.statusRows.length,
     turn.cards.length,
     turn.choices.length,
@@ -166,6 +167,19 @@ export function ChatScreen({
     [ownerMode, turn],
   );
 
+  useSetupHandoff({
+    isAuthenticated,
+    loading: owner.loading,
+    streaming: turn.streaming,
+    setDraft,
+    setOwnerMode,
+    send: (text, mode) => {
+      stickToBottomRef.current = true;
+      void turn.send(text, { owner_mode: mode });
+    },
+  });
+
+  // ChatGPT-like open: keep chat chrome up — no second full-screen spinner after boot.
   return (
     <GradientBackground>
       <KeyboardAvoidingView
@@ -257,7 +271,7 @@ export function ChatScreen({
               owner.setProposedPatch(null);
               owner.setPendingConfirm(null);
             }}
-            onOpenCm={() => onOpenArea('cm')}
+            onOpenCm={(r) => (r && onOpenCmReview ? onOpenCmReview(r) : onOpenArea('cm'))}
             onGuestPrompt={(prompt) => {
               if (guest.gated) {
                 openAuthPreservingDraft(true);
@@ -265,6 +279,14 @@ export function ChatScreen({
               }
               scrollToBottom();
               void guest.send(prompt);
+            }}
+            showOwnerWelcomeChips={
+              isAuthenticated && !hasUserMessage && !turn.liveText && !turn.streaming
+            }
+            onOwnerWelcomeChip={(chip) => {
+              setOwnerMode(chip.mode);
+              scrollToBottom();
+              void turn.send(chip.prompt, { owner_mode: chip.mode });
             }}
           />
         )}

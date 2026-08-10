@@ -131,7 +131,8 @@ def _summarize(name: str, result_data: dict[str, Any], *, reply_language: str) -
         return (
             "Proposed CM change ready for your review "
             f"(section={preview.get('section')}, keys={preview.get('changed_keys')}). "
-            "Approve in the app to validate and save; if already live, it activates safely."
+            "Tap Approve or reply ok / موافق / yes to save Draft "
+            "(Publish / Live stays separate)."
         )
     if name == "get_recent_customer_interactions":
         return (

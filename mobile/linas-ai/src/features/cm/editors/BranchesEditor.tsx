@@ -126,6 +126,13 @@ export function BranchesEditor({ payload, onChange }: Props) {
       ) : (
         <Text style={cmFormStyles.hint}>No locations yet — tap Add Location.</Text>
       )}
+      <View style={{ height: 16 }} />
+      <Field
+        label="Locations policy / notes (shown to AI)"
+        value={String(payload.policy_text || '')}
+        onChange={(v) => onChange({ ...payload, policy_text: v })}
+        multiline
+      />
     </View>
   );
 }

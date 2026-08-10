@@ -9,12 +9,16 @@ import { tokenStore } from './src/auth/tokenStore';
 import { LoginScreen } from './src/features/auth/LoginScreen';
 import { RegisterScreen } from './src/features/auth/RegisterScreen';
 import { BillingScreen } from './src/features/billing/BillingScreen';
+import { SubscriptionGateScreen } from './src/features/billing/SubscriptionGateScreen';
+import { useSubscriptionGate } from './src/features/billing/useSubscriptionGate';
 import { UsageScreen } from './src/features/billing/UsageScreen';
 import { BootSplash } from './src/features/boot/BootSplash';
 import { ChatScreen } from './src/features/chat/ChatScreen';
+import { queueSetupHandoff } from './src/features/chat/pendingSetupHandoff';
 import { CmScreen } from './src/features/cm/CmScreen';
 import { CmSectionScreen } from './src/features/cm/CmSectionScreen';
-import type { CmSectionId } from './src/features/cm/cmSections';
+import type { CmProposalReview } from './src/features/cm/cmProposalReview';
+import { isCmProposalSection } from './src/features/cm/cmProposalReview';
 import type { ControlArea } from './src/features/control/controlAreas';
 import { DashboardScreen } from './src/features/dashboard/DashboardScreen';
 import { IntegrationsScreen } from './src/features/integrations/IntegrationsScreen';
@@ -28,54 +32,7 @@ import { UsersScreen } from './src/features/users/UsersScreen';
 import { LanguageProvider } from './src/i18n/LanguageContext';
 import { ThemeProvider, useTheme } from './src/theme';
 
-type LiveChatOpen = { userId: string; conversationId: string };
-
-type Screen =
-  | { name: 'boot' }
-  | { name: 'login' }
-  | { name: 'register' }
-  | { name: 'chat' }
-  | { name: 'settings' }
-  | { name: 'integrations' }
-  | { name: 'users' }
-  | { name: 'dashboard' }
-  | { name: 'billing' }
-  | { name: 'usage' }
-  | { name: 'livechat'; open?: LiveChatOpen | null }
-  | { name: 'notifications'; backTo?: 'chat' | 'settings' }
-  | { name: 'cm' }
-  | { name: 'cm_section'; section: CmSectionId; backTo?: 'cm' | 'settings' }
-  | { name: 'faq' }
-  | { name: 'resource'; title: string; path: string };
-
-const RESOURCE_MAP: Partial<Record<ControlArea, { title: string; path: string }>> = {
-  owner: { title: 'Owner Control Center', path: '/api/platform/metrics' },
-};
-
-function parseLiveChatDeepLink(url: string | null): LiveChatOpen | null {
-  if (!url) return null;
-  try {
-    const normalized = url.replace(/^linasai:\/\//i, 'https://linasai.app/');
-    const parsed = new URL(normalized);
-    const path = parsed.pathname.replace(/^\//, '');
-    if (path !== 'livechat' && !path.startsWith('livechat/')) {
-      return null;
-    }
-    const userId = parsed.searchParams.get('userId') || parsed.searchParams.get('user_id');
-    const conversationId =
-      parsed.searchParams.get('conversationId') || parsed.searchParams.get('conversation_id');
-    if (userId && conversationId) {
-      return { userId, conversationId };
-    }
-    const parts = path.split('/').filter(Boolean);
-    if (parts.length >= 3 && parts[0] === 'livechat') {
-      return { userId: decodeURIComponent(parts[1]), conversationId: decodeURIComponent(parts[2]) };
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
+import { parseLiveChatDeepLink, RESOURCE_MAP, type Screen } from './src/app/navigation';
 
 export default function App() {
   return (
@@ -95,6 +52,13 @@ function AppBody() {
   const [hasAccess, setHasAccess] = useState(false);
   const [isPlatformOwner, setIsPlatformOwner] = useState(false);
   const [resumeArea, setResumeArea] = useState<ControlArea | null>(null);
+  const subGate = useSubscriptionGate(hasAccess);
+  const showSubGate =
+    hasAccess &&
+    subGate.blocked &&
+    screen.name !== 'billing' &&
+    screen.name !== 'login' &&
+    screen.name !== 'register';
 
   useEffect(() => {
     void (async () => {
@@ -152,6 +116,7 @@ function AppBody() {
     setIsPlatformOwner(user?.role === 'platform_owner');
     setHasAccess(true);
     void tryRegisterOwnerPushScaffold();
+    await subGate.refresh();
     const pending = resumeArea;
     setResumeArea(null);
     if (pending && pending !== 'integrations') {
@@ -162,6 +127,10 @@ function AppBody() {
   }
 
   function openAreaAuthed(area: ControlArea) {
+    if (subGate.blocked && area !== 'subscription') {
+      setScreen({ name: 'chat' });
+      return;
+    }
     if (area === 'settings') {
       setScreen({ name: 'settings' });
       return;
@@ -208,6 +177,28 @@ function AppBody() {
       return;
     }
     setScreen({ name: 'chat' });
+  }
+
+  function openCmReview(review: CmProposalReview) {
+    if (!hasAccess) {
+      setResumeArea(review.section === 'faq' ? 'faq' : 'cm');
+      setScreen({ name: 'login' });
+      return;
+    }
+    if (review.section === 'faq') {
+      setScreen({ name: 'faq', proposalReview: review });
+      return;
+    }
+    if (isCmProposalSection(review.section)) {
+      setScreen({
+        name: 'cm_section',
+        section: review.section,
+        backTo: 'chat',
+        proposalReview: review,
+      });
+      return;
+    }
+    setScreen({ name: 'cm' });
   }
 
   async function logout() {
@@ -278,11 +269,21 @@ function AppBody() {
           onDone={() => setScreen({ name: 'login' })}
         />
       ) : null}
-      {screen.name === 'chat' ? (
+      {showSubGate ? (
+        <SubscriptionGateScreen
+          loading={subGate.loading}
+          note={subGate.access?.note}
+          onOpenSubscription={() => setScreen({ name: 'billing' })}
+          onRefresh={() => void subGate.refresh()}
+          onLogout={() => void logout()}
+        />
+      ) : null}
+      {!showSubGate && screen.name === 'chat' ? (
         <ChatScreen
           isAuthenticated={hasAccess}
           isPlatformOwner={isPlatformOwner}
           onOpenArea={openArea}
+          onOpenCmReview={openCmReview}
           onRequestLogin={() => setScreen({ name: 'login' })}
           onRequestRegister={() => setScreen({ name: 'register' })}
         />
@@ -320,7 +321,13 @@ function AppBody() {
       {screen.name === 'dashboard' ? (
         <DashboardScreen onBack={() => setScreen({ name: 'chat' })} isPlatformOwner={isPlatformOwner} />
       ) : null}
-      {screen.name === 'billing' ? <BillingScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
+      {screen.name === 'billing' ? (
+        <BillingScreen
+          onBack={() => {
+            void subGate.refresh().then(() => setScreen({ name: 'chat' }));
+          }}
+        />
+      ) : null}
       {screen.name === 'usage' ? <UsageScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
       {screen.name === 'livechat' ? (
         <LiveChatScreen onBack={() => setScreen({ name: 'chat' })} initialOpen={screen.open ?? null} />
@@ -344,15 +351,23 @@ function AppBody() {
         <CmScreen
           onBack={() => setScreen({ name: 'chat' })}
           onOpenSection={(section) => setScreen({ name: 'cm_section', section, backTo: 'cm' })}
-          onContinueSetup={() => setScreen({ name: 'chat' })}
+          onContinueSetup={(prompt) => {
+            queueSetupHandoff({ text: prompt, mode: 'work', autoSend: true });
+            setScreen({ name: 'chat' });
+          }}
         />
       ) : null}
       {screen.name === 'cm_section' ? (
         <CmSectionScreen
           section={screen.section}
+          proposalReview={screen.proposalReview ?? null}
           onBack={() => {
             if (screen.backTo === 'settings') {
               setScreen({ name: 'settings' });
+              return;
+            }
+            if (screen.backTo === 'chat') {
+              setScreen({ name: 'chat' });
               return;
             }
             setScreen({ name: 'cm' });
@@ -360,11 +375,15 @@ function AppBody() {
           backLabel={
             screen.backTo === 'settings'
               ? '← Back to Settings'
-              : '← Back to Content Management'
+              : screen.backTo === 'chat'
+                ? '← Back to chat'
+                : '← Back to Content Management'
           }
         />
       ) : null}
-      {screen.name === 'faq' ? <FaqScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
+      {screen.name === 'faq' ? (
+        <FaqScreen onBack={() => setScreen({ name: 'chat' })} proposalReview={screen.proposalReview ?? null} />
+      ) : null}
       {screen.name === 'resource' ? (
         <SimpleResourceScreen
           title={screen.title}

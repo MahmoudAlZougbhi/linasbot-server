@@ -113,7 +113,14 @@ async def stream_owner_message(
         )
         conversation_title = conv.title if conv else conversation_title
 
-    history = [{"role": m.role, "content": m.content} for m in ((conv.messages if conv else None) or [])]
+    history = [
+        {
+            "role": m.role,
+            "content": m.content,
+            **({"tool_calls": m.tool_calls} if m.tool_calls else {}),
+        }
+        for m in ((conv.messages if conv else None) or [])
+    ]
     cancel_flag = {"cancelled": False}
 
     async def event_gen() -> AsyncIterator[str]:
@@ -214,7 +221,14 @@ async def submit_owner_choice(conversation_id: str, body: ChoiceBody, request: R
         user_id=session.user_id,
         conversation_id=conversation_id,
     )
-    history = [{"role": m.role, "content": m.content} for m in ((conv.messages if conv else None) or [])]
+    history = [
+        {
+            "role": m.role,
+            "content": m.content,
+            **({"tool_calls": m.tool_calls} if m.tool_calls else {}),
+        }
+        for m in ((conv.messages if conv else None) or [])
+    ]
     result = await run_owner_turn(
         tenant_id=session.tenant_id,
         user_id=session.user_id,

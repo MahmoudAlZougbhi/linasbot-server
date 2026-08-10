@@ -20,6 +20,16 @@ from services.owner_ai_tools_diagnosis import (
     tool_get_recent_customer_interactions,
     tool_propose_diagnosis_fix,
 )
+from services.owner_ai_tools_cm_bulk import tool_ingest_business_dump
+from services.owner_ai_tools_cm_guide import tool_cm_fill_plan, tool_inspect_cm_guide
+from services.owner_ai_tools_cm_content import (
+    tool_list_cm_articles,
+    tool_list_cm_faq,
+    tool_propose_cm_article_upsert,
+    tool_propose_cm_faq_upsert,
+    tool_read_cm_article,
+    tool_read_cm_faq,
+)
 from services.owner_ai_tools_faq import (
     tool_approve_smart_answer,
     tool_propose_smart_answer,
@@ -50,8 +60,17 @@ TOOL_HANDLERS: dict[str, Callable[..., Awaitable[ToolResult]]] = {
     "read_profile": tool_read_profile,
     "read_account_summary": tool_read_account_summary,
     "read_cm": tool_read_cm,
+    "inspect_cm_guide": tool_inspect_cm_guide,
+    "cm_fill_plan": tool_cm_fill_plan,
+    "ingest_business_dump": tool_ingest_business_dump,
+    "list_cm_articles": tool_list_cm_articles,
+    "read_cm_article": tool_read_cm_article,
+    "list_cm_faq": tool_list_cm_faq,
+    "read_cm_faq": tool_read_cm_faq,
     "validate_cm": tool_validate_cm,
     "propose_cm_patch": tool_propose_cm_patch,
+    "propose_cm_article_upsert": tool_propose_cm_article_upsert,
+    "propose_cm_faq_upsert": tool_propose_cm_faq_upsert,
     "approve_cm_patch": tool_approve_cm_patch,
     "publish_cm": tool_publish_cm,
     "read_usage": tool_read_usage,
@@ -77,10 +96,13 @@ HIGH_IMPACT_TOOLS: frozenset[str] = frozenset(
         "publish_cm",
         "approve_cm_patch",
         "propose_cm_patch",
+        "propose_cm_article_upsert",
+        "propose_cm_faq_upsert",
         "propose_diagnosis_fix",
         "approve_diagnosis_fix",
         "propose_smart_answer",
         "approve_smart_answer",
+        "ingest_business_dump",
     }
 )
 
@@ -110,6 +132,64 @@ async def dispatch_tool(
         return await handler(tenant_id=tenant_id, role=role, user_id=user_id)
     if name == "read_cm":
         return await handler(tenant_id=tenant_id, role=role, section=a.get("section"))
+    if name == "list_cm_articles":
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            section=str(a.get("section") or "knowledge"),
+            status=str(a["status"]) if a.get("status") else None,
+            offset=int(a.get("offset") or 0),
+            limit=int(a.get("limit") or 50),
+        )
+    if name == "read_cm_article":
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            section=str(a.get("section") or ""),
+            article_id=str(a.get("article_id") or a.get("id") or ""),
+            body_offset=int(a.get("body_offset") or 0),
+            body_limit=int(a.get("body_limit") or 6000),
+        )
+    if name == "list_cm_faq":
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            status=str(a["status"]) if a.get("status") else None,
+            offset=int(a.get("offset") or 0),
+            limit=int(a.get("limit") or 50),
+        )
+    if name == "read_cm_faq":
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            qa_group_id=str(a.get("qa_group_id") or ""),
+        )
+    if name == "inspect_cm_guide":
+        include_guides = a.get("include_guides")
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            section=str(a["section"]) if a.get("section") else None,
+            include_guides=True if include_guides is None else bool(include_guides),
+        )
+    if name == "cm_fill_plan":
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            user_id=user_id,
+            action=str(a.get("action") or "status"),
+            section=str(a["section"]) if a.get("section") else None,
+        )
+    if name == "ingest_business_dump":
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            user_id=user_id,
+            text=str(a.get("text") or ""),
+            reply_style=str(a.get("reply_style") or ""),
+            attachment_id=str(a["attachment_id"]) if a.get("attachment_id") else None,
+            propose_first=True if a.get("propose_first") is None else bool(a.get("propose_first")),
+        )
     if name == "propose_cm_patch":
         return await handler(
             tenant_id=tenant_id,
@@ -117,6 +197,22 @@ async def dispatch_tool(
             user_id=user_id,
             section=str(a.get("section") or ""),
             patch=dict(a.get("patch") or {}),
+            force_edit=bool(a.get("force_edit")),
+        )
+    if name == "propose_cm_article_upsert":
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            user_id=user_id,
+            section=str(a.get("section") or "knowledge"),
+            article=dict(a.get("article") or {}),
+        )
+    if name == "propose_cm_faq_upsert":
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            user_id=user_id,
+            faq=dict(a.get("faq") or {}),
         )
     if name == "approve_cm_patch":
         return await handler(

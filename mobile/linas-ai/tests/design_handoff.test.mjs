@@ -153,7 +153,8 @@ test('owner stream shows Thinking then live bubble in the same footer slot', () 
   assert.match(turn, /onError:[\s\S]*resetUi\(\)/);
   assert.match(footer, /thinking && !liveText/);
   assert.match(footer, /ThinkingRow/);
-  assert.match(footer, /tr\('chatThinking'\)/);
+  assert.match(footer, /thinkingLabel/);
+  assert.match(chat, /thinkingLabel=\{tr\('chatThinking'\)\}/);
   assert.match(footer, /id: 'live-stream'/);
   assert.match(list, /thinking=\{thinking\}/);
   assert.match(chat, /thinking=\{turn\.thinking\}/);

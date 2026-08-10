@@ -1,0 +1,546 @@
+"""Owner Copilot tools for full CM article/FAQ read + surgical upsert proposals.
+
+Content Manager “files” in this product are CM draft section records — especially
+knowledge/care ``ArticleRecord`` rows (migrated from legacy knowledge JSON files)
+and FAQ ``FaqRecord`` rows. Full bodies live in draft JSON; inventory APIs are
+metadata-only. These tools give the model bounded list/read access and reuse the
+existing propose → approve → ``apply_section_patch`` write spine.
+"""
+
+from __future__ import annotations
+
+import json
+import uuid
+from typing import Any
+
+from modules.api_security import resolve_permissions
+from services.owner_ai_tools_base import ToolResult
+
+ARTICLE_SECTIONS = frozenset({"knowledge", "care"})
+# Keep one body chunk comfortably under the model tool-result budget.
+DEFAULT_BODY_CHUNK = 6000
+MAX_BODY_CHUNK = 20000
+DEFAULT_LIST_LIMIT = 50
+MAX_LIST_LIMIT = 100
+# When a whole section JSON fits, read_cm may return the full payload.
+FULL_SECTION_JSON_BUDGET = 5500
+
+
+def _require(role: str, permission: str) -> None:
+    if not resolve_permissions(role, None).get(permission):
+        raise PermissionError(f"Missing permission: {permission}")
+
+
+def _normalize_section(section: str) -> str:
+    return (section or "").strip().replace("-", "_")
+
+
+def _article_meta(item: dict[str, Any], *, section: str) -> dict[str, Any]:
+    body = str(item.get("body") or "")
+    return {
+        "section": section,
+        "id": str(item.get("id") or ""),
+        "title": str(item.get("title") or ""),
+        "status": str(item.get("status") or ""),
+        "source_filename": item.get("source_filename"),
+        "tags": list(item.get("tags") or []) if isinstance(item.get("tags"), list) else [],
+        "language": str(item.get("language") or ""),
+        "audience": str(item.get("audience") or ""),
+        "category": str(item.get("category") or ""),
+        "body_chars": len(body),
+    }
+
+
+def _faq_meta(item: dict[str, Any]) -> dict[str, Any]:
+    variants = item.get("variants") if isinstance(item.get("variants"), list) else []
+    langs = []
+    for v in variants:
+        if isinstance(v, dict) and v.get("language"):
+            langs.append(str(v["language"]))
+    return {
+        "qa_group_id": str(item.get("qa_group_id") or ""),
+        "status": str(item.get("status") or ""),
+        "tags": list(item.get("tags") or []) if isinstance(item.get("tags"), list) else [],
+        "source_language": item.get("source_language"),
+        "reviewed": bool(item.get("reviewed")),
+        "variant_languages": langs,
+        "variant_count": len(variants),
+    }
+
+
+def _load_section_items(tenant_id: str, section: str) -> tuple[list[dict[str, Any]], dict[str, Any], Any]:
+    from services.cm.storage import get_draft
+
+    env = get_draft(section, tenant_id=tenant_id, create_default=True)
+    payload = dict(env.payload) if isinstance(env.payload, dict) else {}
+    raw = payload.get("items")
+    items: list[dict[str, Any]] = []
+    if isinstance(raw, list):
+        for row in raw:
+            if isinstance(row, dict):
+                items.append(dict(row))
+    return items, payload, env
+
+
+def compact_read_cm_draft(payload: dict[str, Any], *, section: str) -> dict[str, Any]:
+    """Return full section payload when small; otherwise keys + bounded preview.
+
+    Large ``items`` lists (knowledge/care/faq) stay metadata-oriented here — use
+    list_cm_articles / read_cm_article / list_cm_faq / read_cm_faq for full bodies.
+    """
+    keys = sorted(payload.keys())
+    encoded = json.dumps(payload, ensure_ascii=False, default=str)
+    if len(encoded) <= FULL_SECTION_JSON_BUDGET:
+        return {
+            "section": section,
+            "payload_keys": keys,
+            "payload": payload,
+            "payload_complete": True,
+        }
+    preview: dict[str, Any] = {}
+    for k in keys[:8]:
+        val = payload.get(k)
+        if k == "items" and isinstance(val, list):
+            preview[k] = {
+                "item_count": len(val),
+                "hint": "Use list_cm_articles/read_cm_article or list_cm_faq/read_cm_faq for full bodies",
+            }
+        else:
+            preview[k] = val
+    return {
+        "section": section,
+        "payload_keys": keys,
+        "payload_preview": preview,
+        "payload_complete": False,
+        "payload_chars": len(encoded),
+        "hint": "Section too large for one read_cm call; use list/read item tools for full content",
+    }
+
+
+async def tool_list_cm_articles(
+    *,
+    tenant_id: str,
+    role: str,
+    section: str = "knowledge",
+    status: str | None = None,
+    offset: int = 0,
+    limit: int = DEFAULT_LIST_LIMIT,
+) -> ToolResult:
+    _require(role, "contentManagers")
+    name = _normalize_section(section) or "knowledge"
+    if name not in ARTICLE_SECTIONS:
+        return ToolResult(
+            ok=False,
+            name="list_cm_articles",
+            data={},
+            error=f"section must be one of {sorted(ARTICLE_SECTIONS)}",
+        )
+    items, _payload, env = _load_section_items(tenant_id, name)
+    status_f = (status or "").strip().lower() or None
+    filtered = [
+        row for row in items if not status_f or str(row.get("status") or "").lower() == status_f
+    ]
+    off = max(0, int(offset or 0))
+    lim = min(MAX_LIST_LIMIT, max(1, int(limit or DEFAULT_LIST_LIMIT)))
+    page = filtered[off : off + lim]
+    return ToolResult(
+        ok=True,
+        name="list_cm_articles",
+        data={
+            "section": name,
+            "revision": getattr(env, "revision", None),
+            "total": len(filtered),
+            "offset": off,
+            "limit": lim,
+            "has_more": off + lim < len(filtered),
+            "articles": [_article_meta(row, section=name) for row in page],
+        },
+    )
+
+
+async def tool_read_cm_article(
+    *,
+    tenant_id: str,
+    role: str,
+    section: str,
+    article_id: str,
+    body_offset: int = 0,
+    body_limit: int = DEFAULT_BODY_CHUNK,
+) -> ToolResult:
+    _require(role, "contentManagers")
+    name = _normalize_section(section)
+    if name not in ARTICLE_SECTIONS:
+        return ToolResult(
+            ok=False,
+            name="read_cm_article",
+            data={},
+            error=f"section must be one of {sorted(ARTICLE_SECTIONS)}",
+        )
+    aid = (article_id or "").strip()
+    if not aid:
+        return ToolResult(ok=False, name="read_cm_article", data={}, error="article_id required")
+
+    items, _payload, env = _load_section_items(tenant_id, name)
+    match = next((row for row in items if str(row.get("id") or "") == aid), None)
+    if match is None:
+        return ToolResult(
+            ok=False,
+            name="read_cm_article",
+            data={"section": name, "article_id": aid},
+            error="article_not_found",
+        )
+
+    body = str(match.get("body") or "")
+    off = max(0, int(body_offset or 0))
+    lim = min(MAX_BODY_CHUNK, max(1, int(body_limit or DEFAULT_BODY_CHUNK)))
+    chunk = body[off : off + lim]
+    article_out = {k: v for k, v in match.items() if k != "body"}
+    article_out["body"] = chunk
+    article_out["body_chars"] = len(body)
+    article_out["body_offset"] = off
+    article_out["body_limit"] = lim
+    article_out["body_complete"] = off + len(chunk) >= len(body)
+    article_out["body_next_offset"] = off + len(chunk) if off + len(chunk) < len(body) else None
+
+    return ToolResult(
+        ok=True,
+        name="read_cm_article",
+        data={
+            "section": name,
+            "revision": getattr(env, "revision", None),
+            "article": article_out,
+        },
+    )
+
+
+async def tool_list_cm_faq(
+    *,
+    tenant_id: str,
+    role: str,
+    status: str | None = None,
+    offset: int = 0,
+    limit: int = DEFAULT_LIST_LIMIT,
+) -> ToolResult:
+    _require(role, "contentManagers")
+    items, _payload, env = _load_section_items(tenant_id, "faq")
+    status_f = (status or "").strip().lower() or None
+    filtered = [
+        row for row in items if not status_f or str(row.get("status") or "").lower() == status_f
+    ]
+    off = max(0, int(offset or 0))
+    lim = min(MAX_LIST_LIMIT, max(1, int(limit or DEFAULT_LIST_LIMIT)))
+    page = filtered[off : off + lim]
+    return ToolResult(
+        ok=True,
+        name="list_cm_faq",
+        data={
+            "section": "faq",
+            "revision": getattr(env, "revision", None),
+            "total": len(filtered),
+            "offset": off,
+            "limit": lim,
+            "has_more": off + lim < len(filtered),
+            "items": [_faq_meta(row) for row in page],
+        },
+    )
+
+
+async def tool_read_cm_faq(
+    *,
+    tenant_id: str,
+    role: str,
+    qa_group_id: str,
+) -> ToolResult:
+    _require(role, "contentManagers")
+    gid = (qa_group_id or "").strip()
+    if not gid:
+        return ToolResult(ok=False, name="read_cm_faq", data={}, error="qa_group_id required")
+    items, _payload, env = _load_section_items(tenant_id, "faq")
+    match = next((row for row in items if str(row.get("qa_group_id") or "") == gid), None)
+    if match is None:
+        return ToolResult(
+            ok=False,
+            name="read_cm_faq",
+            data={"qa_group_id": gid},
+            error="faq_not_found",
+        )
+    return ToolResult(
+        ok=True,
+        name="read_cm_faq",
+        data={
+            "section": "faq",
+            "revision": getattr(env, "revision", None),
+            "item": match,
+        },
+    )
+
+
+def _build_article_upsert(
+    *,
+    tenant_id: str,
+    section: str,
+    article: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return (patch, focused_preview) for a single article upsert."""
+    from services.cm.schemas import ArticleRecord
+
+    name = _normalize_section(section)
+    if name not in ARTICLE_SECTIONS:
+        raise ValueError(f"section must be one of {sorted(ARTICLE_SECTIONS)}")
+    if not isinstance(article, dict):
+        raise ValueError("article must be an object")
+
+    items, payload, env = _load_section_items(tenant_id, name)
+    del payload
+    aid = str(article.get("id") or "").strip()
+    existing_idx = next((i for i, row in enumerate(items) if str(row.get("id") or "") == aid), None) if aid else None
+    action = "update" if existing_idx is not None else "create"
+
+    if action == "create":
+        if not aid:
+            aid = f"art_{uuid.uuid4().hex[:12]}"
+        base: dict[str, Any] = {
+            "id": aid,
+            "title": "",
+            "body": "",
+            "tags": [],
+            "language": "",
+            "audience": "general",
+            "category": "",
+            "status": "active",
+            "source_filename": None,
+            "source_checksum": None,
+            "linked_service_ids": [],
+            "linked_branch_ids": [],
+            "notes": None,
+        }
+        before: dict[str, Any] | None = None
+    else:
+        assert existing_idx is not None
+        base = dict(items[existing_idx])
+        before = _article_meta(base, section=name)
+        before["body_preview"] = str(base.get("body") or "")[:240]
+
+    allowed = (
+        "title",
+        "body",
+        "tags",
+        "language",
+        "audience",
+        "category",
+        "status",
+        "source_filename",
+        "notes",
+        "linked_service_ids",
+        "linked_branch_ids",
+    )
+    for key in allowed:
+        if key in article:
+            base[key] = article[key]
+    base["id"] = aid
+    validated = ArticleRecord.model_validate(base).model_dump(mode="json")
+
+    if action == "create":
+        items.append(validated)
+    else:
+        assert existing_idx is not None
+        items[existing_idx] = validated
+
+    patch = {"items": items}
+    after = _article_meta(validated, section=name)
+    body_text = str(validated.get("body") or "")
+    after["body_preview"] = body_text[:240]
+    title = str(validated.get("title") or aid)
+    before_body = ""
+    if isinstance(before, dict):
+        before_body = str(before.get("body_preview") or "")
+    preview = {
+        "section": name,
+        "kind": "article_upsert",
+        "action": action,
+        "article_id": aid,
+        "field": title,
+        "changed_keys": ["items"],
+        "before": before,
+        "after": after,
+        # Focused item for Review-in-CM local overlay (not the full items list).
+        "proposed_item": validated,
+        "current_value": before_body,
+        "proposed_value": f"{title}\n\n{body_text}".strip()[:4000],
+        "revision": getattr(env, "revision", None),
+        "item_count_after": len(items),
+    }
+    return patch, preview
+
+
+def _build_faq_upsert(
+    *,
+    tenant_id: str,
+    faq: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    from services.cm.schemas import FaqRecord
+
+    if not isinstance(faq, dict):
+        raise ValueError("faq must be an object")
+    items, _payload, env = _load_section_items(tenant_id, "faq")
+    gid = str(faq.get("qa_group_id") or "").strip()
+    existing_idx = (
+        next((i for i, row in enumerate(items) if str(row.get("qa_group_id") or "") == gid), None) if gid else None
+    )
+    action = "update" if existing_idx is not None else "create"
+
+    if action == "create":
+        if not gid:
+            gid = f"qa_{uuid.uuid4().hex[:10]}"
+        base: dict[str, Any] = {
+            "qa_group_id": gid,
+            "variants": [],
+            "tags": [],
+            "notes": None,
+            "status": "draft",
+            "source_language": None,
+            "reviewed": False,
+            "provenance": "owner_copilot",
+            "revision": 1,
+        }
+        before = None
+    else:
+        assert existing_idx is not None
+        base = dict(items[existing_idx])
+        before = _faq_meta(base)
+
+    for key in ("variants", "tags", "notes", "status", "source_language", "reviewed", "provenance", "revision"):
+        if key in faq:
+            base[key] = faq[key]
+    base["qa_group_id"] = gid
+    validated = FaqRecord.model_validate(base).model_dump(mode="json")
+
+    if action == "create":
+        items.append(validated)
+    else:
+        assert existing_idx is not None
+        items[existing_idx] = validated
+
+    after_meta = _faq_meta(validated)
+    variants = validated.get("variants") if isinstance(validated.get("variants"), list) else []
+    variant_bits: list[str] = []
+    for row in variants:
+        if not isinstance(row, dict):
+            continue
+        lang = str(row.get("language") or "")
+        q = str(row.get("question") or "").strip()
+        a = str(row.get("answer") or "").strip()
+        if q or a:
+            variant_bits.append(f"[{lang}] Q: {q}\nA: {a}".strip())
+    proposed_text = "\n\n".join(variant_bits).strip() or f"FAQ {gid}"
+    preview = {
+        "section": "faq",
+        "kind": "faq_upsert",
+        "action": action,
+        "qa_group_id": gid,
+        "field": gid,
+        "changed_keys": ["items"],
+        "before": before,
+        "after": after_meta,
+        "proposed_item": validated,
+        "current_value": "",
+        "proposed_value": proposed_text[:4000],
+        "revision": getattr(env, "revision", None),
+        "item_count_after": len(items),
+    }
+    return {"items": items}, preview
+
+
+async def tool_propose_cm_article_upsert(
+    *,
+    tenant_id: str,
+    role: str,
+    user_id: str,
+    section: str,
+    article: dict[str, Any],
+) -> ToolResult:
+    _require(role, "contentManagers")
+    from services.owner_ai_cm_approval import cm_patch_proposal_store
+
+    try:
+        patch, preview = _build_article_upsert(tenant_id=tenant_id, section=section, article=article)
+    except Exception as exc:
+        return ToolResult(
+            ok=False,
+            name="propose_cm_article_upsert",
+            data={},
+            error=f"{type(exc).__name__}: {exc}",
+        )
+
+    prop = cm_patch_proposal_store.create(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        section=preview["section"],
+        patch=patch,
+        preview=preview,
+    )
+    data = {
+        "proposal_id": prop.id,
+        "confirmation_token": f"approve_cm_patch:{prop.id}",
+        "preview": preview,
+        "status": prop.status,
+        "requires_confirmation": True,
+        "section": preview["section"],
+        "article_id": preview.get("article_id"),
+        "action": preview.get("action"),
+    }
+    return ToolResult(
+        ok=True,
+        name="propose_cm_article_upsert",
+        data=data,
+        requires_confirmation=True,
+        confirmation_token=str(data["confirmation_token"]),
+        error="Confirmation required before CM draft is saved",
+    )
+
+
+async def tool_propose_cm_faq_upsert(
+    *,
+    tenant_id: str,
+    role: str,
+    user_id: str,
+    faq: dict[str, Any],
+) -> ToolResult:
+    _require(role, "contentManagers")
+    from services.owner_ai_cm_approval import cm_patch_proposal_store
+
+    try:
+        patch, preview = _build_faq_upsert(tenant_id=tenant_id, faq=faq)
+    except Exception as exc:
+        return ToolResult(
+            ok=False,
+            name="propose_cm_faq_upsert",
+            data={},
+            error=f"{type(exc).__name__}: {exc}",
+        )
+
+    prop = cm_patch_proposal_store.create(
+        tenant_id=tenant_id,
+        user_id=user_id,
+        section="faq",
+        patch=patch,
+        preview=preview,
+    )
+    data = {
+        "proposal_id": prop.id,
+        "confirmation_token": f"approve_cm_patch:{prop.id}",
+        "preview": preview,
+        "status": prop.status,
+        "requires_confirmation": True,
+        "section": "faq",
+        "qa_group_id": preview.get("qa_group_id"),
+        "action": preview.get("action"),
+    }
+    return ToolResult(
+        ok=True,
+        name="propose_cm_faq_upsert",
+        data=data,
+        requires_confirmation=True,
+        confirmation_token=str(data["confirmation_token"]),
+        error="Confirmation required before CM draft is saved",
+    )

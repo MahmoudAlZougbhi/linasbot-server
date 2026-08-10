@@ -67,6 +67,8 @@ OWNER_MUTATION_TOOLS = frozenset(
         "update_profile",
         "extract_price_list",
         "setup_next_step",
+        "ingest_business_dump",
+        "cm_fill_plan",
     }
 )
 OWNER_MUTATION_INTENTS = frozenset(
@@ -81,6 +83,8 @@ OWNER_MUTATION_INTENTS = frozenset(
         "update_profile",
         "extract_price_list",
         "setup_next_step",
+        "ingest_business_dump",
+        "cm_fill_plan",
         "create_creative_draft",
         "schedule_creative_draft",
     }

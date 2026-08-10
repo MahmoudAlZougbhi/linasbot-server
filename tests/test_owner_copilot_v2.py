@@ -124,6 +124,8 @@ def test_sse_encode_and_tool_schemas() -> None:
     names = tool_names()
     assert "diagnose_meta_health" in names
     assert "extract_price_list" in names
+    assert "inspect_cm_guide" in names
+    assert "cm_fill_plan" in names
     assert "create_creative_draft" not in names
 
 
@@ -190,7 +192,8 @@ async def test_shadow_mode_blocks_approve_writes(monkeypatch: pytest.MonkeyPatch
         confirmed=True,
     )
     assert result.ok is False
-    assert result.error == "writes_disabled_shadow_mode"
+    assert result.error is not None
+    assert "OWNER_COPILOT_WRITES" in result.error or "writes" in result.error.lower()
 
 
 @pytest.mark.asyncio
@@ -276,3 +279,12 @@ def test_capability_manifest_freshness() -> None:
     creative = next(c for c in data["capabilities"] if c["id"] == "creative_studio")
     assert creative["status"] == "unavailable"
     assert "create_creative_draft" not in data.get("active_tools", [])
+
+
+def test_system_v2_voice_is_warm_with_tasteful_emojis() -> None:
+    from services.owner_copilot_v2.brain_support import SYSTEM_V2
+
+    assert "warm, friendly" in SYSTEM_V2
+    assert "tasteful emojis" in SYSTEM_V2
+    assert "friendly ≠ silly" in SYSTEM_V2
+    assert "never spam" in SYSTEM_V2

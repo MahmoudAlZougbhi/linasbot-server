@@ -110,6 +110,12 @@ class EntitlementsStore:
 entitlements_store = EntitlementsStore()
 
 
+def tenant_has_app_access(tenant_id: str) -> bool:
+    """True when the tenant may use the authenticated app (active/trial/grace)."""
+    ent = entitlements_store.get(tenant_id)
+    return ent.status in {"active", "trial", "grace"} and ent.plan_id not in {"", "none"}
+
+
 def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
     ent = entitlements_store.get(tenant_id)
     price = PLAN_PRICES_USD.get(ent.plan_id)
@@ -119,6 +125,7 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
     faq = get_faq_entitlement(tenant_id)
     features = dict(ent.features)
     features.setdefault("faq_enabled", bool(faq.get("faq_enabled")))
+    app_access = tenant_has_app_access(tenant_id)
     return {
         "tenant_id": ent.tenant_id,
         "plan_id": ent.plan_id,
@@ -134,6 +141,13 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
         "faq_used_entries": faq.get("faq_used_entries"),
         "faq_quota_display": faq.get("quota_display"),
         "updated_at": ent.updated_at,
+        "app_access": app_access,
+        "subscription_required": True,
+        "iap_purchase_in_app": False,
+        "iap_note": (
+            "App Store / Play purchase notifications map to entitlements; "
+            "in-app buy buttons are not wired yet — use admin set-plan for test tenants."
+        ),
     }
 
 

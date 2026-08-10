@@ -47,9 +47,31 @@ async def tool_propose_cm_patch(
     user_id: str,
     section: str,
     patch: dict[str, Any],
+    force_edit: bool = False,
 ) -> ToolResult:
     _require(role, "contentManagers")
+    from services.cm.progress import progress_summary
     from services.owner_ai_cm_approval import propose_cm_patch
+
+    sec = (section or "").strip().replace("-", "_")
+    if sec and not force_edit:
+        summary = progress_summary(tenant_id, create_missing=False)
+        done = set(summary.get("done_sections") or [])
+        if sec in done:
+            return ToolResult(
+                ok=False,
+                name="propose_cm_patch",
+                data={
+                    "section": sec,
+                    "is_done": True,
+                    "blocked_reason": "section_already_filled",
+                    "hint": (
+                        "This section is DONE/filled. Do not re-propose edits unless the owner "
+                        "explicitly asked to change it — then retry with force_edit=true."
+                    ),
+                },
+                error="section_already_filled",
+            )
 
     data = propose_cm_patch(tenant_id=tenant_id, user_id=user_id, section=section, patch=patch)
     return ToolResult(
@@ -58,7 +80,7 @@ async def tool_propose_cm_patch(
         data=data,
         requires_confirmation=True,
         confirmation_token=str(data.get("confirmation_token")),
-        error="Confirmation required before CM draft is saved",
+        error="Owner confirmation required before CM draft is saved (Approve button or short assent: ok / موافق / yes)",
     )
 
 
@@ -84,12 +106,34 @@ async def tool_approve_cm_patch(
 
     # Approve → validate → save → activate internally when published base exists.
     # Never returns a user-facing Publish confirmation after approval.
-    data = await approve_cm_patch_and_activate(
-        tenant_id=tenant_id,
-        user_id=user_id,
-        proposal_id=proposal_id,
-        actor_id=user_id,
-    )
+    try:
+        data = await approve_cm_patch_and_activate(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            proposal_id=proposal_id,
+            actor_id=user_id,
+        )
+    except PermissionError as exc:
+        return ToolResult(
+            ok=False,
+            name="approve_cm_patch",
+            data={"proposal_id": proposal_id},
+            error=str(exc) or "Permission denied",
+        )
+    except ValueError as exc:
+        return ToolResult(
+            ok=False,
+            name="approve_cm_patch",
+            data={"proposal_id": proposal_id},
+            error=str(exc) or "Invalid proposal",
+        )
+    except Exception as exc:  # noqa: BLE001 — surface apply/validate failures to the card
+        return ToolResult(
+            ok=False,
+            name="approve_cm_patch",
+            data={"proposal_id": proposal_id},
+            error=f"{type(exc).__name__}: {exc}",
+        )
     return ToolResult(ok=True, name="approve_cm_patch", data=data)
 
 

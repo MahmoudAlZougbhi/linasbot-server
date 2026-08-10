@@ -18,6 +18,9 @@ ALLOWED_MIME = frozenset(
         "image/heic",
         "image/heif",
         "application/pdf",
+        "text/plain",
+        "text/markdown",
+        "application/json",
     }
 )
 MAX_BYTES = 12 * 1024 * 1024  # 12 MiB
@@ -53,6 +56,10 @@ def validate_upload(*, filename: str, content_type: str | None, size: int) -> di
             mime = "image/png"
         elif ext == ".pdf" and mime in {"", "application/octet-stream"}:
             mime = "application/pdf"
+        elif ext in {".txt", ".md"} and mime in {"", "application/octet-stream", "text/plain"}:
+            mime = "text/plain"
+        elif ext == ".json" and mime in {"", "application/octet-stream", "application/json"}:
+            mime = "application/json"
         else:
             return {"ok": False, "error": "unsupported_mime", "mime": mime}
     return {"ok": True, "mime": mime}

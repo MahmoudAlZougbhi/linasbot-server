@@ -5,15 +5,17 @@ import { ApiError } from '../../api/client';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
+import type { CmProposalReview } from '../cm/cmProposalReview';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import { createFaq, listFaq, type FaqGroup } from './faqApi';
 import { Field } from '../cm/editors/Field';
 
 type Props = {
   onBack: () => void;
+  proposalReview?: CmProposalReview | null;
 };
 
-export function FaqScreen({ onBack }: Props) {
+export function FaqScreen({ onBack, proposalReview }: Props) {
   const { tr } = useI18n();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -81,11 +83,30 @@ export function FaqScreen({ onBack }: Props) {
     return any ? String(any.question) : String(group.qa_group_id || 'FAQ');
   }
 
+  const proposalItem = proposalReview?.proposedItem;
+  const proposalVariants = Array.isArray(proposalItem?.variants) ? proposalItem?.variants : [];
+  const proposalBits = proposalVariants
+    .filter((v): v is Record<string, unknown> => Boolean(v) && typeof v === 'object')
+    .map((v) => {
+      const lang = String(v.language || '');
+      const q = String(v.question || '').trim();
+      const a = String(v.answer || '').trim();
+      return q || a ? `[${lang}] Q: ${q}\nA: ${a}` : '';
+    })
+    .filter(Boolean)
+    .join('\n\n');
+
   return (
     <ScreenChrome title={tr('faqTitle')} subtitle={tr('faqSub')} onBack={onBack}>
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {savedFlash ? <Text style={styles.ok}>{tr('faqSaved')}</Text> : null}
+      {proposalBits ? (
+        <View style={[styles.card, { borderColor: colors.accent, marginBottom: spacing.sm }]}>
+          <Text style={styles.section}>AI proposal preview — not saved</Text>
+          <Text style={styles.hint}>{proposalBits}</Text>
+        </View>
+      ) : null}
 
       {mode === 'list' ? (
         <ScrollView contentContainerStyle={styles.list}>
