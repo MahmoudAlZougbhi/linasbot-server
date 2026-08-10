@@ -237,6 +237,11 @@ export function useChatSession(enabled = true) {
   }
 
   async function newChat() {
+    // Clear prior transcript immediately so Chat|Work can show under the logo while create resolves.
+    setMessages([]);
+    setHasMore(false);
+    setPendingConfirm(null);
+    setProposedPatch(null);
     const created = await apiFetch('/api/owner-ai/conversations', {
       method: 'POST',
       body: JSON.stringify({}),
@@ -247,8 +252,6 @@ export function useChatSession(enabled = true) {
     setMessages(created.conversation.messages);
     setHasMore(false);
     setHistory((prev) => [{ id: created.conversation.id, title: created.conversation.title }, ...prev]);
-    setPendingConfirm(null);
-    setProposedPatch(null);
   }
 
   const loadOlder = useCallback(async () => {
