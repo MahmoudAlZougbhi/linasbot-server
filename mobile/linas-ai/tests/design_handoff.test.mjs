@@ -238,6 +238,10 @@ test('drawer search chrome is header circle; New chat is compact bottom dock', (
   assert.match(nav, /textAlign:\s*'left'/);
   assert.match(nav, /justifyContent:\s*'flex-end'/);
   assert.ok(nav.lastIndexOf('{VERSION_LABEL}') > nav.indexOf('newChatBtn'));
+  // Search mode hides Dashboard/Settings/module grid; filter starts at first character.
+  assert.match(nav, /const searching = searchOpen \|\| queryTrimmed\.length > 0/);
+  assert.match(nav, /\{\!searching \? \(/);
+  assert.match(nav, /onChangeText=\{setQuery\}/);
   // Same NewChatIcon component as chat header (compose square+pencil), smaller size only.
   assert.match(nav, /NewChatIcon/);
   assert.match(nav, /<NewChatIcon color=\{colors\.onAccent\} size=\{20\}/);
