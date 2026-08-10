@@ -32,6 +32,7 @@ type Props = {
   scrollToBottom: (animated?: boolean) => void;
   imagePreviewByContent: { current: Record<string, string[]> };
   thinking: boolean;
+  thinkingLabel: string;
   statusRows: { id: string; text: string }[];
   liveText: string;
   cards: StreamCard[];
@@ -55,6 +56,7 @@ export function ChatMessageList({
   scrollToBottom,
   imagePreviewByContent,
   thinking,
+  thinkingLabel,
   statusRows,
   liveText,
   cards,
@@ -158,6 +160,7 @@ export function ChatMessageList({
         ListFooterComponent={
           <ChatStreamFooter
             thinking={thinking}
+            thinkingLabel={thinkingLabel}
             statusRows={statusRows}
             liveText={liveText}
             cards={cards}

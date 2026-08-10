@@ -148,23 +148,17 @@ async def test_stream_events_thinking_then_deltas(monkeypatch: pytest.MonkeyPatc
         },
     )
 
-    class _Msg:
-        content = "Hello from Sol."
-        tool_calls = None
+    async def _fake_tool_round(**kwargs: Any):
+        yield ("delta", "Hello ")
+        yield ("delta", "from Sol.")
+        from services.owner_copilot_v2.provider import ToolRoundResult
 
-    class _Choice:
-        message = _Msg()
+        yield ("result", ToolRoundResult(content="Hello from Sol.", tool_calls=[]))
 
-    class _Resp:
-        choices = [_Choice()]
-
-    async def _fake_completion(**kwargs: Any) -> Any:
-        assert kwargs.get("stream") is False or "tools" in kwargs or True
-        return _Resp()
-
-    monkeypatch.setattr("services.owner_copilot_v2.brain.sol_chat_completion", _fake_completion)
+    monkeypatch.setattr("services.owner_copilot_v2.brain.iter_sol_tool_round", _fake_tool_round)
 
     events = []
+    texts: list[str] = []
     async for ev in iter_owner_turn_v2_events(
         tenant_id="t1",
         user_id="u1",
@@ -173,9 +167,12 @@ async def test_stream_events_thinking_then_deltas(monkeypatch: pytest.MonkeyPatc
         user_text="hi",
     ):
         events.append(ev.type)
+        if ev.type == "delta":
+            texts.append(str(ev.payload.get("text") or ""))
 
     assert events[0] == "thinking"
-    assert "delta" in events
+    assert events.count("delta") >= 2
+    assert "".join(texts) == "Hello from Sol."
     assert events[-1] == "done"
 
 

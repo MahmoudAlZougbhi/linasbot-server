@@ -79,5 +79,9 @@ def done_payload(
 
 
 async def emit_as_deltas(text: str, size: int = 28) -> AsyncIterator[StreamEvent]:
+    """Pace canned replies so SSE/UI can paint chunk-by-chunk (not one dump)."""
+    import asyncio
+
     for i in range(0, len(text or ""), size):
         yield StreamEvent(type="delta", payload={"text": text[i : i + size]})
+        await asyncio.sleep(0.012)
