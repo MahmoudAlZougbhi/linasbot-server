@@ -17,6 +17,7 @@ import { ANDROID_VERSION_CODE, APP_VERSION, IOS_BUILD, LEGAL_URLS } from '../../
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import type { ControlArea } from '../control/controlAreas';
+import { NewChatIcon } from '../chat/ChatHeaderIcons';
 import { visibleDrawerModules } from './drawerModules';
 import { HistoryRows, type HistoryItem } from './HistoryRows';
 import { DRAWER_TOOL_ICONS, MODULE_ICONS } from './moduleIcons';
@@ -237,7 +238,7 @@ export function NavDrawer(props: Props) {
             accessibilityRole="button"
             accessibilityLabel={tr('newChat')}
           >
-            <AppIcon icon={DRAWER_TOOL_ICONS.newChat} size={18} color={colors.onAccent} />
+            <NewChatIcon color={colors.onAccent} size={20} />
           </Pressable>
           <Text
             style={[styles.version, { color: colors.textDim }]}

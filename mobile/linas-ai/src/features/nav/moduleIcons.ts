@@ -1,4 +1,4 @@
-import { feather, mci, type AppIconName } from '../../components/AppIcon';
+import { feather, ion, mci, type AppIconName } from '../../components/AppIcon';
 import type { ControlArea } from '../control/controlAreas';
 
 /**
@@ -20,11 +20,13 @@ export const MODULE_ICONS: Record<ControlArea, AppIconName> = {
   owner: feather('shield'),
 };
 
+/** ChatGPT-style compose mark (rounded square + pencil). Used by shared NewChatIcon. */
+export const NEW_CHAT_ICON = ion('create-outline');
+
 export const DRAWER_TOOL_ICONS = {
   search: feather('search'),
   logout: feather('log-out'),
   close: feather('x'),
   pin: feather('bookmark'),
   overflow: feather('more-horizontal'),
-  newChat: feather('plus'),
 } as const;

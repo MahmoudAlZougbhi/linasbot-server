@@ -59,12 +59,26 @@ test('NavDrawer is physical-left only', () => {
 
 test('ChatScreen has no right Control Center drawer and no mascot avatar state', () => {
   const chat = read('features/chat/ChatScreen.tsx');
+  const overlays = read('features/chat/ChatScreenOverlays.tsx');
   assert.doesNotMatch(chat, /ControlCenterDrawer/);
   assert.doesNotMatch(chat, /LinasAvatar/);
   assert.doesNotMatch(chat, /avatarState/);
-  assert.match(chat, /NavDrawer/);
+  assert.match(overlays, /NavDrawer/);
   assert.match(chat, /showPlus=\{isAuthenticated\}/);
   assert.match(chat, /showMic=\{isAuthenticated\}/);
+});
+
+test('Chat|Work toggle shows on new owner chat despite greeting seed', () => {
+  const chat = read('features/chat/ChatScreen.tsx');
+  const mode = read('features/chat/ChatModeToggle.tsx');
+  const session = read('features/chat/useChatSession.ts');
+  assert.match(mode, /Segmented Chat \| Work/);
+  assert.match(chat, /ChatModeToggle/);
+  assert.match(chat, /hasUserMessage/);
+  assert.match(chat, /showModeToggle/);
+  assert.match(chat, /isAuthenticated && !hasUserMessage/);
+  assert.doesNotMatch(chat, /messages\.length === 0 && !turn\.liveText/);
+  assert.match(session, /setMessages\(\[\]\)/);
 });
 
 test('App launches chat-first for guest and owner', () => {
@@ -155,6 +169,7 @@ test('Live Chat thread remains read-only', () => {
 test('drawer search chrome is header circle; New chat is compact bottom dock', () => {
   const nav = read('features/nav/NavDrawer.tsx');
   const chat = read('features/chat/ChatScreen.tsx');
+  const overlays = read('features/chat/ChatScreenOverlays.tsx');
   const drawer = read('components/SideDrawer.tsx');
   assert.match(nav, /bottomDock/);
   assert.match(nav, /newChatBtn/);
@@ -164,11 +179,23 @@ test('drawer search chrome is header circle; New chat is compact bottom dock', (
   assert.match(nav, /noChatsMatch/);
   assert.match(nav, /emptyLabel/);
   assert.match(nav, /VERSION_LABEL/);
-  assert.doesNotMatch(nav, /NewChatIcon/);
-  assert.match(nav, /DRAWER_TOOL_ICONS\.newChat/);
+  // Same NewChatIcon component as chat header (compose square+pencil), smaller size only.
+  assert.match(nav, /NewChatIcon/);
+  assert.match(nav, /<NewChatIcon color=\{colors\.onAccent\} size=\{20\}/);
+  assert.doesNotMatch(nav, /DRAWER_TOOL_ICONS\.newChat/);
   assert.match(drawer, /Keyboard\.dismiss/);
   assert.match(chat, /Keyboard\.dismiss/);
-  assert.match(chat, /<NavDrawer[\s\S]*onNewChat=/);
+  assert.match(overlays, /<NavDrawer[\s\S]*onNewChat=/);
+
+  const modules = read('features/nav/moduleIcons.ts');
+  const headerIcons = read('features/chat/ChatHeaderIcons.tsx');
+  const header = read('features/chat/ChatHeader.tsx');
+  assert.match(modules, /NEW_CHAT_ICON\s*=\s*ion\('create-outline'\)/);
+  assert.doesNotMatch(modules, /newChat:\s*feather\('plus'\)/);
+  assert.match(headerIcons, /export function NewChatIcon/);
+  assert.match(headerIcons, /NEW_CHAT_ICON/);
+  assert.match(headerIcons, /AppIcon/);
+  assert.match(header, /<NewChatIcon color=\{iconColor\}/);
 });
 
 test('Settings hosts Notifications and Logout; drawer does not', () => {
