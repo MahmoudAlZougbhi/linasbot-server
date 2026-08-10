@@ -131,7 +131,14 @@ async def dispatch_tool(
     if name == "read_account_summary":
         return await handler(tenant_id=tenant_id, role=role, user_id=user_id)
     if name == "read_cm":
-        return await handler(tenant_id=tenant_id, role=role, section=a.get("section"))
+        items_limit = a.get("items_limit")
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            section=a.get("section"),
+            items_offset=int(a.get("items_offset") or 0),
+            items_limit=int(items_limit) if items_limit is not None else None,
+        )
     if name == "list_cm_articles":
         return await handler(
             tenant_id=tenant_id,
@@ -148,7 +155,7 @@ async def dispatch_tool(
             section=str(a.get("section") or ""),
             article_id=str(a.get("article_id") or a.get("id") or ""),
             body_offset=int(a.get("body_offset") or 0),
-            body_limit=int(a.get("body_limit") or 6000),
+            body_limit=int(a.get("body_limit") or 12000),
         )
     if name == "list_cm_faq":
         return await handler(

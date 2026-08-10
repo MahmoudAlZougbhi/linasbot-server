@@ -17,13 +17,15 @@ from modules.api_security import resolve_permissions
 from services.owner_ai_tools_base import ToolResult
 
 ARTICLE_SECTIONS = frozenset({"knowledge", "care"})
-# Keep one body chunk comfortably under the model tool-result budget.
-DEFAULT_BODY_CHUNK = 6000
+# Keep one body chunk comfortably under the model tool-result budget (24k envelope).
+DEFAULT_BODY_CHUNK = 12000
 MAX_BODY_CHUNK = 20000
 DEFAULT_LIST_LIMIT = 50
 MAX_LIST_LIMIT = 100
-# When a whole section JSON fits, read_cm may return the full payload.
-FULL_SECTION_JSON_BUDGET = 5500
+# When a whole section JSON fits, read_cm returns the full payload.
+FULL_SECTION_JSON_BUDGET = 18000
+DEFAULT_ITEMS_PAGE = 25
+MAX_ITEMS_PAGE = 50
 
 
 def _require(role: str, permission: str) -> None:
@@ -83,38 +85,105 @@ def _load_section_items(tenant_id: str, section: str) -> tuple[list[dict[str, An
     return items, payload, env
 
 
-def compact_read_cm_draft(payload: dict[str, Any], *, section: str) -> dict[str, Any]:
-    """Return full section payload when small; otherwise keys + bounded preview.
+def _fit_items_page(
+    base_fields: dict[str, Any],
+    page: list[Any],
+    *,
+    budget: int = FULL_SECTION_JSON_BUDGET,
+) -> list[Any]:
+    """Shrink an items page until the JSON envelope fits the tool-result budget."""
+    fitted = list(page)
+    while fitted:
+        candidate = {**base_fields, "items": fitted}
+        enc = json.dumps(candidate, ensure_ascii=False, default=str)
+        if len(enc) <= budget or len(fitted) == 1:
+            return fitted
+        fitted = fitted[: max(1, len(fitted) // 2)]
+    return fitted
 
-    Large ``items`` lists (knowledge/care/faq) stay metadata-oriented here — use
-    list_cm_articles / read_cm_article / list_cm_faq / read_cm_faq for full bodies.
+
+def compact_read_cm_draft(
+    payload: dict[str, Any],
+    *,
+    section: str,
+    items_offset: int = 0,
+    items_limit: int | None = None,
+) -> dict[str, Any]:
+    """Return full section bodies — never summary-only stubs for items.
+
+    Small sections return the complete payload. Large ``items`` lists return a
+    page of **full** item bodies and ``items_next_offset`` until complete.
+    knowledge/care/faq may also use list/read item tools for per-entry chunking
+    of very long article bodies.
     """
     keys = sorted(payload.keys())
     encoded = json.dumps(payload, ensure_ascii=False, default=str)
-    if len(encoded) <= FULL_SECTION_JSON_BUDGET:
+    off = max(0, int(items_offset or 0))
+    if len(encoded) <= FULL_SECTION_JSON_BUDGET and off == 0 and items_limit is None:
         return {
             "section": section,
             "payload_keys": keys,
             "payload": payload,
             "payload_complete": True,
         }
-    preview: dict[str, Any] = {}
-    for k in keys[:8]:
-        val = payload.get(k)
-        if k == "items" and isinstance(val, list):
-            preview[k] = {
-                "item_count": len(val),
-                "hint": "Use list_cm_articles/read_cm_article or list_cm_faq/read_cm_faq for full bodies",
-            }
-        else:
-            preview[k] = val
+
+    raw_items = payload.get("items")
+    items: list[Any] = list(raw_items) if isinstance(raw_items, list) else []
+    base_fields = {k: v for k, v in payload.items() if k != "items"}
+
+    if items:
+        lim = min(MAX_ITEMS_PAGE, max(1, int(items_limit or DEFAULT_ITEMS_PAGE)))
+        page = _fit_items_page(base_fields, items[off : off + lim])
+        lim = max(1, len(page))
+        next_off = off + len(page)
+        complete = next_off >= len(items)
+        out_payload = {**base_fields, "items": page}
+        hint = (
+            "Paginated full section items. Continue read_cm with the same section and "
+            "items_offset=items_next_offset until payload_complete is true."
+        )
+        if section in ARTICLE_SECTIONS:
+            hint = (
+                "Paginated full article bodies. Continue with items_offset when "
+                "payload_complete is false, or use list_cm_articles/read_cm_article "
+                "for per-article body_offset chunking of very long bodies."
+            )
+        elif section == "faq":
+            hint = (
+                "Paginated full FAQ groups. Continue with items_offset when "
+                "payload_complete is false, or use list_cm_faq/read_cm_faq."
+            )
+        return {
+            "section": section,
+            "payload_keys": keys,
+            "payload": out_payload,
+            "payload_complete": complete,
+            "items_total": len(items),
+            "items_offset": off,
+            "items_limit": lim,
+            "items_returned": len(page),
+            "items_next_offset": None if complete else next_off,
+            "payload_chars": len(encoded),
+            "hint": hint,
+        }
+
+    # Rare: no items list but still over budget (huge string fields). Chunk JSON text.
+    lim = FULL_SECTION_JSON_BUDGET
+    chunk = encoded[off : off + lim]
+    complete = off + len(chunk) >= len(encoded)
     return {
         "section": section,
         "payload_keys": keys,
-        "payload_preview": preview,
-        "payload_complete": False,
+        "payload_json_chunk": chunk,
+        "payload_complete": complete,
         "payload_chars": len(encoded),
-        "hint": "Section too large for one read_cm call; use list/read item tools for full content",
+        "payload_offset": off,
+        "payload_limit": lim,
+        "payload_next_offset": None if complete else off + len(chunk),
+        "hint": (
+            "Section JSON chunked. Continue read_cm with items_offset=payload_next_offset "
+            "until payload_complete is true, then parse the concatenated JSON."
+        ),
     }
 
 

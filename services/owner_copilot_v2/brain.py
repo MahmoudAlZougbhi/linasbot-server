@@ -25,7 +25,8 @@ from services.owner_copilot_v2.provider import iter_sol_text_deltas, iter_sol_to
 from services.owner_copilot_v2.tool_dispatch import dispatch_v2_tool, tool_result_for_model
 
 CancelCheck = Callable[[], bool]
-MAX_TOOL_ROUNDS = 4
+# Full CM walks need enough rounds to cover every section + article/FAQ chunk continuation.
+MAX_TOOL_ROUNDS = 10
 
 
 async def run_owner_turn_v2(**kwargs: Any) -> OwnerV2TurnResult:

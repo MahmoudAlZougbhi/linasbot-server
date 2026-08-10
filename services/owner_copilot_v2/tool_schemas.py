@@ -35,8 +35,23 @@ OWNER_V2_CORE_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "read_cm",
-            "description": "Read Content Management draft/live snapshot for a section or overview.",
-            "parameters": {"type": "object", "properties": {"section": {"type": "string"}}},
+            "description": (
+                "Read Content Management draft content. Omit section for an inventory "
+                "overview (not full bodies). With section, returns full section bodies "
+                "(paginated via items_offset when payload_complete is false). Never treat "
+                "overview-only as a complete CM read."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "section": {"type": "string"},
+                    "items_offset": {
+                        "type": "integer",
+                        "description": "Continue a large section from items_next_offset.",
+                    },
+                    "items_limit": {"type": "integer"},
+                },
+            },
         },
     },
     {

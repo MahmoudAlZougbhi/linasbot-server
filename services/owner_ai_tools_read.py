@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from modules.api_security import resolve_permissions
@@ -38,7 +39,14 @@ async def tool_read_account_summary(*, tenant_id: str, role: str, user_id: str) 
     )
 
 
-async def tool_read_cm(*, tenant_id: str, role: str, section: str | None = None) -> ToolResult:
+async def tool_read_cm(
+    *,
+    tenant_id: str,
+    role: str,
+    section: str | None = None,
+    items_offset: int = 0,
+    items_limit: int | None = None,
+) -> ToolResult:
     _require(role, "contentManagers")
     from services.cm.constants import CM_SECTIONS, tenant_has_published_cm
     from services.cm.storage import UnknownSectionError, get_draft, list_sections
@@ -51,10 +59,15 @@ async def tool_read_cm(*, tenant_id: str, role: str, section: str | None = None)
         except UnknownSectionError:
             return ToolResult(ok=False, name="read_cm", data={}, error=f"Unknown section: {section}")
         payload = env.model_dump(mode="json") if env is not None else None
-        # Small sections: full payload. Large item lists: metadata + hint to item tools.
+        # Full bodies when they fit; otherwise paginated full items (never summary-only stubs).
         draft_out: dict[str, Any] | None
         if isinstance(payload, dict) and isinstance(payload.get("payload"), dict):
-            compact = compact_read_cm_draft(payload["payload"], section=str(section))
+            compact = compact_read_cm_draft(
+                payload["payload"],
+                section=str(section),
+                items_offset=int(items_offset or 0),
+                items_limit=items_limit,
+            )
             draft_out = {
                 "section": section,
                 "revision": payload.get("revision"),
@@ -73,10 +86,22 @@ async def tool_read_cm(*, tenant_id: str, role: str, section: str | None = None)
     overview: dict[str, Any] = {}
     for sec in CM_SECTIONS:
         item = listed.get(sec)
-        overview[sec] = {
+        row: dict[str, Any] = {
             "present": bool(item and item.get("exists")),
             "revision": item.get("revision") if item else None,
         }
+        if row["present"]:
+            try:
+                env = get_draft(sec, tenant_id=tenant_id, create_default=False)
+                sec_payload = env.payload if env is not None else None
+                if isinstance(sec_payload, dict):
+                    raw_items = sec_payload.get("items")
+                    if isinstance(raw_items, list):
+                        row["item_count"] = len(raw_items)
+                    row["payload_chars"] = len(json.dumps(sec_payload, ensure_ascii=False, default=str))
+            except Exception:
+                pass
+        overview[sec] = row
     present = sum(1 for v in overview.values() if v.get("present"))
     return ToolResult(
         ok=True,
@@ -86,6 +111,12 @@ async def tool_read_cm(*, tenant_id: str, role: str, section: str | None = None)
             "sections_present": present,
             "sections_total": len(CM_SECTIONS),
             "published": published,
+            "hint": (
+                "Overview only. For a full detailed read, call read_cm for each present "
+                "section and continue with items_offset until payload_complete is true. "
+                "For knowledge/care/faq, also list_cm_articles/read_cm_article or "
+                "list_cm_faq/read_cm_faq and continue body_offset until body_complete."
+            ),
         },
     )
 
