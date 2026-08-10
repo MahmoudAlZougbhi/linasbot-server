@@ -27,6 +27,7 @@ export const en = {
   chatEmptyTitle: "I'm Linas AI — your assistant in the app",
   chatEmptyBody:
     'I can help with everything. This app is your AI community manager for your social media pages.',
+  chatThinking: 'Thinking…',
   guestChatEmptyTitle: 'Welcome to Linas AI',
   guestChatEmptyBody:
     'Ask what Linas AI offers for your business and social media pages. Guest chat is explanatory only.',

@@ -142,6 +142,25 @@ test('no character/mascot PNG assets remain in the mobile bundle', () => {
 });
 
 
+test('owner stream shows Thinking then live bubble in the same footer slot', () => {
+  const turn = read('features/chat/v2/useStreamingTurn.ts');
+  const footer = read('features/chat/ChatStreamFooter.tsx');
+  const list = read('features/chat/ChatMessageList.tsx');
+  const chat = read('features/chat/ChatScreen.tsx');
+  const thinking = read('features/chat/ThinkingRow.tsx');
+  assert.match(turn, /setThinking\(true\)/);
+  assert.match(turn, /onDelta:[\s\S]*setThinking\(false\)/);
+  assert.match(turn, /onError:[\s\S]*resetUi\(\)/);
+  assert.match(footer, /thinking && !liveText/);
+  assert.match(footer, /ThinkingRow/);
+  assert.match(footer, /tr\('chatThinking'\)/);
+  assert.match(footer, /id: 'live-stream'/);
+  assert.match(list, /thinking=\{thinking\}/);
+  assert.match(chat, /thinking=\{turn\.thinking\}/);
+  assert.match(thinking, /isReduceMotionEnabled|reduceMotionChanged/);
+  assert.match(thinking, /LinasStarMark/);
+});
+
 test('proposal card exposes complete V2 actions beyond Review/Discard', () => {
   const card = read('features/chat/v2/ProposalCard.tsx');
   for (const needle of [

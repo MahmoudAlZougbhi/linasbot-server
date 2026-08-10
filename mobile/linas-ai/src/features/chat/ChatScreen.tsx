@@ -157,6 +157,7 @@ export function ChatScreen({
     scrollToBottom(false);
   }, [
     messages.length,
+    turn.thinking,
     turn.liveText,
     turn.statusRows.length,
     turn.cards.length,
@@ -242,6 +243,7 @@ export function ChatScreen({
             stickToBottomRef={stickToBottomRef}
             scrollToBottom={scrollToBottom}
             imagePreviewByContent={imagePreviewByContent}
+            thinking={turn.thinking}
             statusRows={turn.statusRows}
             liveText={turn.liveText}
             cards={turn.cards}

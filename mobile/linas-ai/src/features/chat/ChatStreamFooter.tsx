@@ -1,12 +1,15 @@
 import { Text, View } from 'react-native';
 
+import { useI18n } from '../../i18n/LanguageContext';
 import { ChatBubble } from './ChatBubble';
 import { chatScreenStyles as styles } from './chatScreenStyles';
+import { ThinkingRow } from './ThinkingRow';
 import type { ProposedPatch } from './useChatSession';
 import { ActivityCard } from './v2/ActivityCard';
 import type { StreamCard } from './v2/useOwnerStream';
 
 type Props = {
+  thinking: boolean;
   statusRows: { id: string; text: string }[];
   liveText: string;
   cards: StreamCard[];
@@ -19,6 +22,7 @@ type Props = {
 };
 
 export function ChatStreamFooter({
+  thinking,
   statusRows,
   liveText,
   cards,
@@ -29,6 +33,10 @@ export function ChatStreamFooter({
   onOpenCm,
   onRetryLast,
 }: Props) {
+  const { tr } = useI18n();
+  // Same live turn slot: Thinking… until first delta, then one accumulating bubble.
+  const showThinking = thinking && !liveText;
+
   return (
     <View>
       {statusRows.map((s) => (
@@ -36,6 +44,7 @@ export function ChatStreamFooter({
           {s.text}
         </Text>
       ))}
+      {showThinking ? <ThinkingRow label={tr('chatThinking')} /> : null}
       {liveText ? (
         <ChatBubble
           message={{

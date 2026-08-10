@@ -29,6 +29,7 @@ export const ar: Record<StringKey, string> = {
   chatEmptyTitle: 'أنا Linas AI — مساعدك داخل التطبيق',
   chatEmptyBody:
     'بقدر ساعدك بكل شي. هالتطبيق هو مدير مجتمعك بالذكاء الاصطناعي لصفحات السوشال ميديا تبعك.',
+  chatThinking: 'جارٍ التفكير…',
   guestChatEmptyTitle: 'أهلاً بك في Linas AI',
   guestChatEmptyBody: 'اسأل ماذا نقدّم لنشاطك ولصفحات السوشال ميديا. محادثة الضيف للتوضيح فقط.',
   guestQuestionsLeft: 'أسئلة الضيف المتبقية: {n}/{max}',
