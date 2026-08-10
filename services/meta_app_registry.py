@@ -645,6 +645,24 @@ class MetaAppRegistry:
                 binding_id = canonical.binding_id
                 generation = canonical.generation + 1
                 created_at = canonical.created_at
+                # Safe reauth: preserve existing webhook subscription metadata unless caller
+                # explicitly supplies a new non-empty field set (avoid wiping feed/comments).
+                preserved_fields = webhook_subscribed_fields or canonical.webhook_subscribed_fields
+                preserved_status = (
+                    webhook_subscription_status
+                    if webhook_subscription_status != "unknown" or not canonical.webhook_subscription_status
+                    else canonical.webhook_subscription_status
+                )
+                preserved_error = (
+                    webhook_subscription_error
+                    if webhook_subscription_error or not canonical.webhook_subscription_error
+                    else canonical.webhook_subscription_error
+                )
+                preserved_checked_at = (
+                    webhook_subscription_checked_at
+                    if webhook_subscription_checked_at > 0
+                    else canonical.webhook_subscription_checked_at
+                )
                 credential_id = self._write_credential_unlocked(
                     state,
                     binding_id=binding_id,
@@ -675,10 +693,10 @@ class MetaAppRegistry:
                     authorized_meta_user_id_hash=auth_hash,
                     superseded_by_binding_id="",
                     auth_flow=resolved_auth_flow,
-                    webhook_subscription_status=webhook_subscription_status,
-                    webhook_subscribed_fields=webhook_subscribed_fields,
-                    webhook_subscription_error=webhook_subscription_error,
-                    webhook_subscription_checked_at=webhook_subscription_checked_at,
+                    webhook_subscription_status=preserved_status,
+                    webhook_subscribed_fields=tuple(preserved_fields),
+                    webhook_subscription_error=preserved_error,
+                    webhook_subscription_checked_at=preserved_checked_at,
                 )
                 state["bindings"][binding_id] = asdict(updated)
                 for duplicate in same_key:

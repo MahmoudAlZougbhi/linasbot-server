@@ -1,11 +1,20 @@
 """Central entitlement service — backend is source of truth for plan access.
 
 Purchase events may arrive from Apple, Google, or (optionally) Stripe.
+
+Subscription gate exemption (explicit allowlist only — not a hidden fallback):
+  Env ``SUBSCRIPTION_EXEMPT_TENANT_IDS`` (comma-separated tenant ids).
+  Default: ``linas`` — the reserved Linas Laser founder clinic tenant
+  (``DEFAULT_TENANT_ID`` / ``LINASBOT_TENANT_ID``). Everyone else remains
+  gated on an active/trial/grace paid plan. Set the env to a different
+  comma-separated id list to replace the default; do not broaden the gate
+  globally.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 import uuid
@@ -18,6 +27,24 @@ from storage.persistent_storage import _DATA_ROOT as _DEFAULT_DATA_ROOT
 
 # Overridable in tests
 _DATA_ROOT = _DEFAULT_DATA_ROOT
+
+# Linas Laser founder clinic — reserved tenant_id (see services/cm/constants.DEFAULT_TENANT_ID).
+DEFAULT_SUBSCRIPTION_EXEMPT_TENANTS = frozenset({"linas"})
+
+
+def subscription_exempt_tenant_ids() -> frozenset[str]:
+    """Explicit tenant ids that receive app_access without a paid plan."""
+    raw = (os.getenv("SUBSCRIPTION_EXEMPT_TENANT_IDS") or "linas").strip()
+    ids = {part.strip().lower() for part in raw.split(",") if part.strip()}
+    return frozenset(ids or DEFAULT_SUBSCRIPTION_EXEMPT_TENANTS)
+
+
+def is_subscription_exempt_tenant(tenant_id: str | None) -> bool:
+    tid = (tenant_id or "").strip().lower()
+    if not tid:
+        return False
+    return tid in subscription_exempt_tenant_ids()
+
 
 EntitlementStatus = Literal[
     "none",
@@ -111,7 +138,13 @@ entitlements_store = EntitlementsStore()
 
 
 def tenant_has_app_access(tenant_id: str) -> bool:
-    """True when the tenant may use the authenticated app (active/trial/grace)."""
+    """True when the tenant may use the authenticated app (active/trial/grace).
+
+    Explicit subscription-exempt tenants (``SUBSCRIPTION_EXEMPT_TENANT_IDS``,
+    default ``linas`` / Linas Laser) also receive app_access without a plan.
+    """
+    if is_subscription_exempt_tenant(tenant_id):
+        return True
     ent = entitlements_store.get(tenant_id)
     return ent.status in {"active", "trial", "grace"} and ent.plan_id not in {"", "none"}
 
@@ -125,6 +158,7 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
     faq = get_faq_entitlement(tenant_id)
     features = dict(ent.features)
     features.setdefault("faq_enabled", bool(faq.get("faq_enabled")))
+    exempt = is_subscription_exempt_tenant(tenant_id)
     app_access = tenant_has_app_access(tenant_id)
     return {
         "tenant_id": ent.tenant_id,
@@ -142,7 +176,8 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
         "faq_quota_display": faq.get("quota_display"),
         "updated_at": ent.updated_at,
         "app_access": app_access,
-        "subscription_required": True,
+        "subscription_required": not exempt,
+        "subscription_exempt": exempt,
         "iap_purchase_in_app": False,
         # Never surface engineering notes in mobile/client UI.
         "iap_note": None,

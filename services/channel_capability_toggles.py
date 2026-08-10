@@ -1,43 +1,59 @@
 """Per-channel DM/comment enable flags for Linas AI Integrations.
 
-Mirrors the web Content Management → Actions switches
-(``respond_{facebook|instagram}_{dm|comments}``) and, for comments, also syncs
-the per-asset Meta comment-reply setting used at runtime.
+Mirrors Content Management → Actions switches and, for comments, syncs the
+per-asset Meta comment-reply setting used at runtime.
+
+Mobile UI reads ``effective_enabled`` from the canonical capability matrix only.
 """
 
 from __future__ import annotations
 
+import time
 from typing import Any, Literal
 
-from services.cm.actions import (
-    ACTION_FACEBOOK_COMMENTS,
-    ACTION_FACEBOOK_DM,
-    ACTION_INSTAGRAM_COMMENTS,
-    ACTION_INSTAGRAM_DM,
-    action_enabled,
-    load_actions_section,
+from services.channel_capability_state import (
+    action_id_for,
+    active_channel_bindings,
+    comment_capability_state,
+    dm_capability_state,
+    supported_platforms,
 )
 from services.cm.publish import PublishBlockedError, publish_draft_sections
 from services.cm.publish_gate import PublishDisabledError, ensure_publish_enabled
 from services.cm.schemas import ActionCapability, ActionsSection
 from services.cm.storage import ConflictError, get_draft, put_draft
 from services.cm.version_store import read_published_pointer
-from services.meta_app_registry import APP_A_KEY, get_meta_app_registry
+from services.meta_app_registry import get_meta_app_registry
 from services.meta_comment_reply_settings import get_comment_reply_setting, set_comment_reply_setting
 from services.meta_comment_webhooks import (
     ensure_instagram_comment_app_webhook,
     ensure_page_comment_webhook_subscription,
 )
-from services.meta_graph_routing import credential_has_comment_scopes
+from services.meta_graph_routing import credential_has_comment_scopes, required_comment_scopes_for_binding
+from services.meta_instagram_login_subscription import COMMENTS_SUBSCRIPTION_FIELD
 from services.meta_oauth import MetaOAuthError
 
 ChannelPlatform = Literal["instagram", "facebook"]
 ToggleKey = Literal["dm", "comments"]
 
-_CHANNEL_ACTION_IDS: dict[str, dict[str, str]] = {
-    "instagram": {"dm": ACTION_INSTAGRAM_DM, "comments": ACTION_INSTAGRAM_COMMENTS},
-    "facebook": {"dm": ACTION_FACEBOOK_DM, "comments": ACTION_FACEBOOK_COMMENTS},
-}
+_COMMENT_SCOPES_MISSING_MESSAGE = (
+    "Missing Meta comment permissions. Use Manage Meta Access / Reconnect with Comment Access "
+    "for the same Facebook Page / Instagram account (do not Disconnect Account)."
+)
+
+__all__ = [
+    "ChannelToggleError",
+    "action_id_for",
+    "attach_channel_toggles",
+    "channel_toggle_states",
+    "clear_invalid_comments_enabled_state_async",
+    "comment_capability_state",
+    "comments_enable_blocker",
+    "reconcile_comment_webhooks_for_platform",
+    "set_channel_toggle",
+    "supported_platforms",
+    "sync_published_comment_assets_if_enabled",
+]
 
 
 class ChannelToggleError(Exception):
@@ -48,79 +64,154 @@ class ChannelToggleError(Exception):
         self.code = code
 
 
-def supported_platforms() -> tuple[str, ...]:
-    return ("instagram", "facebook")
-
-
-def action_id_for(platform: str, toggle: ToggleKey) -> str | None:
-    return _CHANNEL_ACTION_IDS.get(platform, {}).get(toggle)
+def _missing_comment_scopes(bindings: list[Any], *, registry: Any) -> list[str]:
+    missing: set[str] = set()
+    for binding in bindings:
+        try:
+            credential = registry.get_credential(binding)
+            granted = set(credential.scopes)
+        except Exception:
+            missing |= set(required_comment_scopes_for_binding(binding))
+            continue
+        missing |= set(required_comment_scopes_for_binding(binding)) - granted
+    return sorted(missing)
 
 
 def channel_toggle_states(tenant_id: str, platform: str) -> dict[str, bool]:
-    """Return published CM action state for DM + comments on one channel."""
-    actions = load_actions_section(tenant_id)
-    ids = _CHANNEL_ACTION_IDS.get(platform) or {}
+    """Return DM requested + Comments *effective* (never false Comments ON)."""
+
+    comments_state = comment_capability_state(tenant_id, platform)
+    dm_state = dm_capability_state(tenant_id, platform)
     return {
-        "dm": action_enabled(actions, ids["dm"]) if "dm" in ids else False,
-        "comments": action_enabled(actions, ids["comments"]) if "comments" in ids else False,
+        # DMs: preserve existing CM toggle semantics (no false-OFF on empty field records).
+        "dm": bool(dm_state["requested_enabled"]),
+        "comments": bool(comments_state["effective_enabled"]),
     }
 
 
 def comments_enable_blocker(tenant_id: str, platform: str) -> str | None:
-    """Explain why Enable comments cannot succeed yet (scopes / no binding)."""
+    state = comment_capability_state(tenant_id, platform)
+    blocker = state.get("blocker_code") or state.get("blocker")
+    return str(blocker) if blocker else None
+
+
+async def clear_invalid_comments_enabled_state_async(
+    *,
+    tenant_id: str,
+    platform: str,
+    actor: str = "comments_state_reconcile",
+) -> bool:
+    """Turn off CM comments + per-asset when permissions/health gates fail."""
 
     platform_key = (platform or "").strip().lower()
-    if platform_key not in _CHANNEL_ACTION_IDS:
-        return None
-    bindings = _active_channel_bindings(tenant_id, platform_key)
-    if not bindings:
-        return "connect_channel_first"
-    registry = get_meta_app_registry()
-    if any(not credential_has_comment_scopes(binding, registry) for binding in bindings):
-        return "missing_comment_permissions"
-    return None
+    if platform_key not in supported_platforms():
+        return False
+    state = comment_capability_state(tenant_id, platform_key)
+    if not state["requested_enabled"]:
+        return False
+    if state["permission_present"] and state["connection_healthy"]:
+        return False
+    action_id = action_id_for(platform_key, "comments")
+    if not action_id:
+        return False
+    try:
+        await _sync_comment_assets(tenant_id=tenant_id, platform=platform_key, enabled=False)
+        _set_action_in_draft(tenant_id=tenant_id, action_id=action_id, enabled=False, actor=actor)
+        await _publish_actions(tenant_id=tenant_id, actor=actor)
+    except (ConflictError, ChannelToggleError, PublishBlockedError, PublishDisabledError):
+        return False
+    return True
 
 
 def attach_channel_toggles(rows: list[dict[str, Any]], *, tenant_id: str) -> list[dict[str, Any]]:
-    """Add ``toggles`` to Instagram/Facebook rows; leave coming-soon rows untouched."""
+    """Add ``toggles`` + canonical ``comments_state`` / ``dm_state`` to Meta rows."""
+
     out: list[dict[str, Any]] = []
     for row in rows:
         platform = str(row.get("platform") or "")
-        if platform not in _CHANNEL_ACTION_IDS or row.get("coming_soon") is True:
+        if platform not in supported_platforms() or row.get("coming_soon") is True:
             out.append(row)
             continue
-        enriched = {**row, "toggles": channel_toggle_states(tenant_id, platform)}
-        blocker = comments_enable_blocker(tenant_id, platform)
+        state = comment_capability_state(tenant_id, platform)
+        if state["requested_enabled"] and (not state["permission_present"] or not state["connection_healthy"]):
+            action_id = action_id_for(platform, "comments")
+            if action_id:
+                try:
+                    _set_action_in_draft(
+                        tenant_id=tenant_id,
+                        action_id=action_id,
+                        enabled=False,
+                        actor="comments_state_reconcile",
+                    )
+                except ConflictError:
+                    pass
+            state = comment_capability_state(tenant_id, platform)
+            state = {
+                **state,
+                "requested_enabled": False,
+                "tenant_action_enabled": False,
+                "effective_enabled": False,
+                "status": "permission_required"
+                if state.get("blocker_code") == "missing_comment_permissions"
+                else state.get("status") or "disabled",
+            }
+        dm_state = dm_capability_state(tenant_id, platform)
+        enriched = {
+            **row,
+            "toggles": {
+                "dm": bool(dm_state["requested_enabled"]),
+                "comments": bool(state["effective_enabled"]),
+            },
+            "comments_state": state,
+            "dm_state": dm_state,
+        }
+        blocker = state.get("blocker_code") or state.get("blocker")
         if blocker:
             enriched["comments_blocker"] = blocker
         out.append(enriched)
     return out
 
 
-def _active_channel_bindings(tenant_id: str, platform: str) -> list[Any]:
-    registry = get_meta_app_registry()
-    return [
-        b
-        for b in registry.list_bindings(include_inactive=False, include_superseded=False)
-        if getattr(b, "tenant_id", None) == tenant_id
-        and str(getattr(b, "channel", "") or "") == platform
-        and str(getattr(b, "status", "") or "") == "active"
-        and str(getattr(b, "app_key", "") or "") == APP_A_KEY
-    ]
+def _record_comment_webhook_fields(binding: Any, *, registry: Any, extra_fields: tuple[str, ...]) -> None:
+    """Merge comment webhook fields onto the binding record without disconnecting assets."""
+
+    try:
+        with registry._locked():
+            state = registry._read_unlocked()
+            raw = state["bindings"].get(binding.binding_id)
+            if not isinstance(raw, dict):
+                return
+            changed = dict(raw)
+            existing = [str(item) for item in (changed.get("webhook_subscribed_fields") or [])]
+            changed["webhook_subscribed_fields"] = sorted(
+                {*existing, *[str(f) for f in extra_fields if str(f).strip()]}
+            )
+            changed["webhook_subscription_checked_at"] = time.time()
+            changed["updated_at"] = time.time()
+            state["bindings"][binding.binding_id] = changed
+            registry._write_unlocked(state)
+    except Exception:
+        return
 
 
 async def _sync_comment_assets(*, tenant_id: str, platform: str, enabled: bool) -> None:
     """Align per-asset comment_replies with the CM comments action for this channel."""
+
     registry = get_meta_app_registry()
-    bindings = _active_channel_bindings(tenant_id, platform)
+    bindings = active_channel_bindings(tenant_id, platform)
     if enabled and not bindings:
-        # CM action can still be on; per-asset applies once a page/account is connected.
-        return
+        raise ChannelToggleError(
+            "Connect this channel before enabling comments.",
+            status_code=409,
+            code="COMMENT_CONNECT_REQUIRED",
+        )
     if enabled:
         for binding in bindings:
             if not credential_has_comment_scopes(binding, registry):
+                missing = _missing_comment_scopes([binding], registry=registry)
+                detail = f" Missing: {', '.join(missing)}." if missing else ""
                 raise ChannelToggleError(
-                    "Missing Meta comment permissions. Reconnect Instagram/Facebook with comment access.",
+                    _COMMENT_SCOPES_MISSING_MESSAGE + detail,
                     status_code=409,
                     code="COMMENT_SCOPES_MISSING",
                 )
@@ -145,8 +236,16 @@ async def _sync_comment_assets(*, tenant_id: str, platform: str, enabled: bool) 
         try:
             if binding.channel == "facebook":
                 await ensure_page_comment_webhook_subscription(binding, registry=registry)
+                _record_comment_webhook_fields(
+                    binding, registry=registry, extra_fields=("feed", "messages", "messaging_postbacks")
+                )
             else:
                 await ensure_instagram_comment_app_webhook(app_key=binding.app_key)
+                _record_comment_webhook_fields(
+                    binding,
+                    registry=registry,
+                    extra_fields=(COMMENTS_SUBSCRIPTION_FIELD, "messages", "messaging_postbacks"),
+                )
         except MetaOAuthError as exc:
             set_comment_reply_setting(
                 tenant_id=tenant_id,
@@ -159,14 +258,58 @@ async def _sync_comment_assets(*, tenant_id: str, platform: str, enabled: bool) 
             raise ChannelToggleError(str(exc), status_code=409, code="COMMENT_WEBHOOK_FAILED") from exc
 
 
+async def reconcile_comment_webhooks_for_platform(*, tenant_id: str, platform: str) -> dict[str, Any]:
+    """Best-effort comment webhook reconcile without disconnecting or revoking tokens."""
+
+    platform_key = (platform or "").strip().lower()
+    if platform_key not in supported_platforms():
+        raise ChannelToggleError("Unsupported platform", status_code=404, code="UNKNOWN_PLATFORM")
+    state = comment_capability_state(tenant_id, platform_key)
+    if not state["permission_present"]:
+        raise ChannelToggleError(
+            state.get("blocker_message") or _COMMENT_SCOPES_MISSING_MESSAGE,
+            status_code=409,
+            code="COMMENT_SCOPES_MISSING",
+        )
+    if state["requested_enabled"]:
+        await _sync_comment_assets(tenant_id=tenant_id, platform=platform_key, enabled=True)
+    else:
+        # Permissions present but Comments off — still ensure Meta fields when ops/UI asks.
+        registry = get_meta_app_registry()
+        for binding in active_channel_bindings(tenant_id, platform_key):
+            try:
+                if binding.channel == "facebook":
+                    await ensure_page_comment_webhook_subscription(binding, registry=registry)
+                    _record_comment_webhook_fields(
+                        binding, registry=registry, extra_fields=("feed", "messages", "messaging_postbacks")
+                    )
+                else:
+                    await ensure_instagram_comment_app_webhook(app_key=binding.app_key)
+                    _record_comment_webhook_fields(
+                        binding,
+                        registry=registry,
+                        extra_fields=(COMMENTS_SUBSCRIPTION_FIELD, "messages", "messaging_postbacks"),
+                    )
+            except MetaOAuthError as exc:
+                raise ChannelToggleError(str(exc), status_code=409, code="COMMENT_WEBHOOK_FAILED") from exc
+    return {
+        "toggles": channel_toggle_states(tenant_id, platform_key),
+        "comments_state": comment_capability_state(tenant_id, platform_key),
+        "dm_state": dm_capability_state(tenant_id, platform_key),
+    }
+
+
 async def sync_published_comment_assets_if_enabled(*, tenant_id: str, platform: str) -> None:
     """After Meta connect/reauth, sync per-asset comment switch when CM comments action is ON."""
 
     platform_key = (platform or "").strip().lower()
-    if platform_key not in _CHANNEL_ACTION_IDS:
+    if platform_key not in supported_platforms():
         return
-    states = channel_toggle_states(tenant_id, platform_key)
-    if not states.get("comments"):
+    state = comment_capability_state(tenant_id, platform_key)
+    if not state["requested_enabled"]:
+        return
+    if not state["permission_present"] or not state["connection_healthy"]:
+        await clear_invalid_comments_enabled_state_async(tenant_id=tenant_id, platform=platform_key)
         return
     await _sync_comment_assets(tenant_id=tenant_id, platform=platform_key, enabled=True)
 
@@ -232,39 +375,28 @@ async def set_channel_toggle(
     toggle: ToggleKey,
     enabled: bool,
     actor: str,
-) -> dict[str, bool]:
+) -> dict[str, Any]:
     """Persist one channel capability toggle via CM Actions (+ comment assets when needed)."""
+
     platform_key = (platform or "").strip().lower()
-    if platform_key not in _CHANNEL_ACTION_IDS:
+    if platform_key not in supported_platforms():
         raise ChannelToggleError("Unsupported platform", status_code=404, code="UNKNOWN_PLATFORM")
     action_id = action_id_for(platform_key, toggle)
     if not action_id:
         raise ChannelToggleError("Unsupported toggle", status_code=400, code="UNKNOWN_TOGGLE")
 
     try:
-        if toggle == "comments" and not enabled:
-            await _sync_comment_assets(tenant_id=tenant_id, platform=platform_key, enabled=False)
-
-        _set_action_in_draft(
-            tenant_id=tenant_id,
-            action_id=action_id,
-            enabled=enabled,
-            actor=actor,
-        )
-        await _publish_actions(tenant_id=tenant_id, actor=actor)
-
         if toggle == "comments" and enabled:
-            try:
-                await _sync_comment_assets(tenant_id=tenant_id, platform=platform_key, enabled=True)
-            except ChannelToggleError:
-                _set_action_in_draft(
-                    tenant_id=tenant_id,
-                    action_id=action_id,
-                    enabled=False,
-                    actor=actor,
-                )
-                await _publish_actions(tenant_id=tenant_id, actor=actor)
-                raise
+            await _sync_comment_assets(tenant_id=tenant_id, platform=platform_key, enabled=True)
+            _set_action_in_draft(tenant_id=tenant_id, action_id=action_id, enabled=True, actor=actor)
+            await _publish_actions(tenant_id=tenant_id, actor=actor)
+        elif toggle == "comments" and not enabled:
+            await _sync_comment_assets(tenant_id=tenant_id, platform=platform_key, enabled=False)
+            _set_action_in_draft(tenant_id=tenant_id, action_id=action_id, enabled=False, actor=actor)
+            await _publish_actions(tenant_id=tenant_id, actor=actor)
+        else:
+            _set_action_in_draft(tenant_id=tenant_id, action_id=action_id, enabled=enabled, actor=actor)
+            await _publish_actions(tenant_id=tenant_id, actor=actor)
     except ConflictError as exc:
         raise ChannelToggleError(
             "Actions draft changed; reload and retry.",
@@ -272,4 +404,8 @@ async def set_channel_toggle(
             code="DRAFT_CONFLICT",
         ) from exc
 
-    return channel_toggle_states(tenant_id, platform_key)
+    return {
+        "toggles": channel_toggle_states(tenant_id, platform_key),
+        "comments_state": comment_capability_state(tenant_id, platform_key),
+        "dm_state": dm_capability_state(tenant_id, platform_key),
+    }

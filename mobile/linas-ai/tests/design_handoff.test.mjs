@@ -325,7 +325,8 @@ test('Settings does not duplicate AI Basics CM store', () => {
 
 test('Integrations refresh is customer-facing and IG/FB only', () => {
   const integ = read('features/integrations/IntegrationsScreen.tsx');
-  assert.match(integ, /Refresh connections/);
+  assert.match(integ, /tr\('refreshConnectionStatus'\)/);
+  assert.match(integ, /tr\('refreshConnectionStatusHint'\)/);
   assert.doesNotMatch(integ, /App A only/);
   assert.doesNotMatch(integ, /webhooks/);
   assert.match(integ, /platform === 'instagram' \|\| row\.platform === 'facebook'/);
