@@ -89,9 +89,9 @@ export function ChatComposer({
   const voiceBusy = recording || paused || transcribing;
   const canSend = Boolean(draft.trim() || canSendWithAttachment);
   const streamingStop = Boolean(onStop && sending);
-  const showVoiceControl =
-    Boolean(showMic && onToggleVoice && !streamingStop && (voiceBusy || !canSend));
-  const showSend = streamingStop || (canSend && !paused);
+  // Keep mic available with typed draft so voice can append (not replace).
+  const showVoiceControl = Boolean(showMic && onToggleVoice && !streamingStop);
+  const showSend = streamingStop || (canSend && !voiceBusy);
   const chipTappable = Boolean(showModelChip && onOwnerModeChange);
 
   useEffect(() => {
