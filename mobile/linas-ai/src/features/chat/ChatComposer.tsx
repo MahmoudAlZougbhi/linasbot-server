@@ -84,6 +84,8 @@ export function ChatComposer({
   const [inputHeight, setInputHeight] = useState(INPUT_MIN_H);
   const pulse = useRef(new Animated.Value(1)).current;
   const ring = useRef(new Animated.Value(0.55)).current;
+  /** After Send, block one-shot autofocus / remount races from reopening the keyboard. */
+  const suppressFocusRef = useRef(false);
   const recording = voiceState === 'recording';
   const paused = voiceState === 'paused';
   const transcribing = voiceState === 'transcribing';
@@ -95,6 +97,11 @@ export function ChatComposer({
   const showSend = streamingStop || (canSend && !paused);
   const chipTappable = Boolean(showModelChip && onOwnerModeChange);
   const draftDir = textDirectionStyle(draft);
+
+  function dismissKeyboard() {
+    inputRef?.current?.blur();
+    Keyboard.dismiss();
+  }
 
   useEffect(() => {
     if (!draft.trim()) setInputHeight(INPUT_MIN_H);
@@ -126,17 +133,25 @@ export function ChatComposer({
     };
   }, [recording, pulse, ring]);
 
+  // One-shot open focus (ChatGPT-style). Avoid native autoFocus — draft-clear
+  // height shrink on Send can re-open the keyboard if the field stays focused.
   useEffect(() => {
-    if (!autoFocus) return;
-    const t = setTimeout(() => inputRef?.current?.focus(), 120);
+    if (!autoFocus || suppressFocusRef.current) return;
+    const t = setTimeout(() => {
+      if (suppressFocusRef.current) return;
+      inputRef?.current?.focus();
+    }, 120);
     return () => clearTimeout(t);
   }, [autoFocus, inputRef]);
 
   function handleSend() {
     if (sending || !canSend || voiceBusy) return;
-    inputRef?.current?.blur();
-    Keyboard.dismiss();
+    suppressFocusRef.current = true;
+    dismissKeyboard();
     onSend();
+    // Draft clear + inputHeight shrink re-layout can leave the field focused.
+    requestAnimationFrame(dismissKeyboard);
+    setTimeout(dismissKeyboard, 80);
   }
 
   const placeholder = recording
@@ -195,7 +210,7 @@ export function ChatComposer({
           multiline
           scrollEnabled={inputHeight >= INPUT_MAX_H}
           editable={!voiceBusy}
-          autoFocus={autoFocus}
+          autoFocus={false}
           blurOnSubmit={false}
           textAlign={draftDir.textAlign}
           textAlignVertical={Platform.OS === 'android' ? 'center' : undefined}
@@ -208,8 +223,7 @@ export function ChatComposer({
               style={[styles.chip, { backgroundColor: colors.surfaceAlt }]}
               onPress={() => {
                 if (!chipTappable) return;
-                inputRef?.current?.blur();
-                Keyboard.dismiss();
+                dismissKeyboard();
                 setEffortOpen(true);
               }}
               disabled={!chipTappable}
@@ -236,10 +250,7 @@ export function ChatComposer({
               onResumeVoice={onResumeVoice}
               onConfirmVoice={onConfirmVoice}
               onDiscardVoice={onDiscardVoice}
-              onBeforeStart={() => {
-                inputRef?.current?.blur();
-                Keyboard.dismiss();
-              }}
+              onBeforeStart={dismissKeyboard}
             />
           ) : null}
 
