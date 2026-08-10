@@ -116,13 +116,22 @@ test('cold open is branded star splash then chat (no character mash / progress b
   assert.doesNotMatch(boot, /LinasAvatar/);
   assert.doesNotMatch(boot, /Opening Linas AI/);
   assert.doesNotMatch(boot, /progressTrack|styles\.track/);
+  // Native splash must stay logo-free (solid emerald) so Android 12+ does not
+  // circular-mask splash-icon into a different first shape before BootSplash.
+  assert.match(boot, /splash-native|solid emerald|no logo/i);
   assert.match(index, /preventAutoHideAsync/);
   assert.match(appJson, /"backgroundColor":\s*"#0B3D34"/);
+  assert.match(appJson, /splash-native\.png/);
+  assert.doesNotMatch(
+    appJson,
+    /expo-splash-screen[\s\S]*"image":\s*"\.\/assets\/splash-icon\.png"/,
+  );
   assert.match(appJson, /"bundleIdentifier":\s*"com\.linasai\.app"/);
   assert.match(appJson, /"package":\s*"com\.linasai\.app"/);
   assert.match(appJson, /expo-audio/);
-  assert.match(appJson, /"buildNumber":\s*"19"/);
-  assert.match(appJson, /"versionCode":\s*19/);
+  assert.match(appJson, /"buildNumber":\s*"20"/);
+  assert.match(appJson, /"versionCode":\s*20/);
+  assert.ok(existsSync(join(root, 'assets/splash-native.png')));
   assert.doesNotMatch(
     chat,
     /if \(loading\) \{\s*return \(\s*<GradientBackground>\s*<View style=\{styles\.center\}>/,
