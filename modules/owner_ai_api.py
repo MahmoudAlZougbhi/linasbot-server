@@ -68,9 +68,7 @@ async def create_owner_conversation(body: CreateConversationBody, request: Reque
     from services.owner_ai_greeting import build_greeting
     from services.owner_ai_profile import coerce_language, language_from_accept_header, update_owner_profile
 
-    lang = coerce_language(body.language) or language_from_accept_header(
-        request.headers.get("accept-language")
-    )
+    lang = coerce_language(body.language) or language_from_accept_header(request.headers.get("accept-language"))
     if lang:
         try:
             update_owner_profile(session.user_id, {"preferred_language": lang})
