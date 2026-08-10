@@ -1,0 +1,118 @@
+name: Subscription Exempt Probe
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Read-only subscription exempt probe
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: false
+          command_timeout: 8m
+          script: |
+            set -e
+            cd /opt/linasbot
+            echo "[probe] sha=$(git rev-parse HEAD)"
+            echo "[probe] subject=$(git log -1 --pretty=%s)"
+            APP_DIR=/opt/linasbot
+            if [ -f /opt/linasbot/linaslaserbot-2.7.22/main.py ]; then APP_DIR=/opt/linasbot/linaslaserbot-2.7.22; fi
+            PYTHON_BIN="$APP_DIR/venv/bin/python3"
+            [ -x "$PYTHON_BIN" ] || PYTHON_BIN=$(command -v python3)
+            "$PYTHON_BIN" - <<'PY'
+            from __future__ import annotations
+            import os, sys
+            from pathlib import Path
+            from collections import Counter
+
+            APP_DIR = "/opt/linasbot"
+            if Path("/opt/linasbot/linaslaserbot-2.7.22/main.py").exists():
+                APP_DIR = "/opt/linasbot/linaslaserbot-2.7.22"
+            sys.path.insert(0, APP_DIR)
+            os.chdir(APP_DIR)
+            for env_path in (Path("/opt/linasbot/.env"), Path(APP_DIR) / ".env"):
+                if not env_path.exists():
+                    continue
+                for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
+                    if not line or line.lstrip().startswith("#") or "=" not in line:
+                        continue
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip().strip("'").strip('"'))
+
+            raw = os.environ.get("SUBSCRIPTION_EXEMPT_TENANT_IDS")
+            print(f"[probe] SUBSCRIPTION_EXEMPT_TENANT_IDS_set={raw is not None}")
+            if raw is not None:
+                print(f"[probe] SUBSCRIPTION_EXEMPT_TENANT_IDS_len={len(raw.strip())} empty={not bool(raw.strip())} value={raw.strip()!r}")
+            tw = os.environ.get("TOKEN_WALLET_UNLIMITED_TENANT_IDS")
+            print(f"[probe] TOKEN_WALLET_UNLIMITED_set={tw is not None} value={(tw or '').strip()!r}")
+            print(f"[probe] LINASBOT_TENANT_ID={(os.environ.get('LINASBOT_TENANT_ID') or '').strip()!r}")
+
+            from services.entitlements_service import (
+                is_subscription_exempt_tenant,
+                subscription_exempt_tenant_ids,
+                tenant_has_app_access,
+                get_tenant_entitlement_public,
+                entitlements_store,
+            )
+            print(f"[probe] exempt_ids={sorted(subscription_exempt_tenant_ids())}")
+            print(f"[probe] linas_exempt={is_subscription_exempt_tenant('linas')}")
+            print(f"[probe] linas_app_access={tenant_has_app_access('linas')}")
+            try:
+                pub = get_tenant_entitlement_public("linas")
+                print(f"[probe] linas_public app_access={pub.get('app_access')} exempt={pub.get('subscription_exempt')} plan={pub.get('plan_id')} status={pub.get('status')}")
+            except Exception as e:
+                print(f"[probe] linas_public_ERROR type={type(e).__name__} msg={e}")
+
+            ent_root = Path(APP_DIR) / "data" / "entitlements"
+            if not ent_root.exists():
+                ent_root = Path("/opt/linasbot/data/entitlements")
+            files = sorted(p.name for p in ent_root.glob("*.json")) if ent_root.exists() else []
+            print(f"[probe] entitlement_files={files[:40]} count={len(files)}")
+            if (ent_root / "linas.json").exists():
+                print(f"[probe] linas_entitlement_raw={(ent_root / 'linas.json').read_text()[:400]!r}")
+
+            from utils.utils import get_firestore_db
+            db = get_firestore_db()
+            if not db:
+                print("[probe] firestore_unavailable")
+                raise SystemExit(0)
+            coll = db.collection("artifacts").document("linas-ai-bot-backend").collection("dashboard_users")
+            docs = list(coll.stream())
+            tenant_counts = Counter()
+            role_tenant = Counter()
+            linas_roles = Counter()
+            non_linas_admins = 0
+            for doc in docs:
+                data = doc.to_dict() or {}
+                tid = str(data.get("tenantId") or data.get("tenant_id") or "MISSING").strip().lower() or "MISSING"
+                role = str(data.get("role") or "unknown").strip().lower()
+                status = str(data.get("status") or "").lower()
+                tenant_counts[tid] += 1
+                role_tenant[f"{role}|{tid}"] += 1
+                if tid == "linas":
+                    linas_roles[role] += 1
+                if role in {"admin", "owner", "platform_owner"} and tid != "linas" and status in {"", "active"}:
+                    non_linas_admins += 1
+            print(f"[probe] users_total={len(docs)}")
+            print(f"[probe] tenant_id_counts={dict(tenant_counts.most_common(30))}")
+            print(f"[probe] linas_role_counts={dict(linas_roles)}")
+            print(f"[probe] role_tenant_top={dict(role_tenant.most_common(40))}")
+            print(f"[probe] non_linas_admin_or_owner_active={non_linas_admins}")
+
+            # CM clinic_name for linas if present
+            try:
+                from services.cm.version_store import load_published_content
+                _p, sections = load_published_content("linas")
+                basics = sections.get("ai_basics") or {}
+                print(f"[probe] linas_clinic_name={basics.get('clinic_name')!r}")
+            except Exception as e:
+                print(f"[probe] cm_clinic_name_error type={type(e).__name__}")
+            print("[probe] COMPLETE_OK")
+            PY
