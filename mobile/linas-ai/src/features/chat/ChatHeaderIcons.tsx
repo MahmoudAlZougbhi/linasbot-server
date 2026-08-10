@@ -15,8 +15,8 @@ export function MenuIcon({ color }: { color: string }) {
 }
 
 /**
- * ChatGPT-style “new chat” compose mark: rounded square + pencil.
- * Same glyph as the drawer New Chat control (Ionicons create-outline).
+ * Shared ChatGPT-style “new chat” compose mark (square + pencil).
+ * Used by chat header and drawer bottom New Chat — same artwork, optional size.
  */
 export function NewChatIcon({ color, size = 22 }: { color: string; size?: number }) {
   return <AppIcon icon={NEW_CHAT_ICON} size={size} color={color} />;
