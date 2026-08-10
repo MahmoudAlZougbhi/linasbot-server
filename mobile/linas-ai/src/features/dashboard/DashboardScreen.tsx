@@ -18,15 +18,23 @@ const UsageSchema = z
   .object({
     success: z.literal(true),
     credit_balance: z.unknown().optional(),
+    credits_used: z.number().optional(),
+    credits_limit: z.number().optional(),
+    credits: z.number().optional(),
+    plan_id: z.string().optional(),
   })
   .passthrough();
 
 type Props = { onBack: () => void; isPlatformOwner: boolean };
 
+function num(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+}
+
 export function DashboardScreen({ onBack, isPlatformOwner }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hasUsage, setHasUsage] = useState(false);
+  const [usageSummary, setUsageSummary] = useState<string | null>(null);
   const [hasMetrics, setHasMetrics] = useState(false);
   const [usageText, setUsageText] = useState<string | null>(null);
   const [metricsText, setMetricsText] = useState<string | null>(null);
@@ -37,9 +45,21 @@ export function DashboardScreen({ onBack, isPlatformOwner }: Props) {
       setError(null);
       try {
         const usage = await apiFetch('/api/mobile/usage', { schema: UsageSchema });
-        setHasUsage(true);
+        const used = num(usage.credits_used);
+        const limit = num(usage.credits_limit) ?? num(usage.credits);
+        const plan = typeof usage.plan_id === 'string' ? usage.plan_id : null;
+        if (used != null || limit != null) {
+          const usedLabel = (used ?? 0).toLocaleString();
+          const limitLabel = limit != null && limit > 0 ? limit.toLocaleString() : '—';
+          const planLabel = plan && plan !== 'none' ? ` · ${plan}` : '';
+          setUsageSummary(`${usedLabel} / ${limitLabel} credits used${planLabel}`);
+        } else if (usage.credit_balance != null) {
+          setUsageSummary(`Available balance: ${String(usage.credit_balance)}`);
+        } else {
+          setUsageSummary(null);
+        }
         if (__DEV__) {
-          setUsageText(JSON.stringify(usage.credit_balance ?? usage, null, 2));
+          setUsageText(JSON.stringify(usage, null, 2));
         } else {
           setUsageText(null);
         }
@@ -59,7 +79,7 @@ export function DashboardScreen({ onBack, isPlatformOwner }: Props) {
         }
       } catch {
         setError('Something went wrong loading the dashboard. Please try again.');
-        setHasUsage(false);
+        setUsageSummary(null);
       } finally {
         setLoading(false);
       }
@@ -74,12 +94,10 @@ export function DashboardScreen({ onBack, isPlatformOwner }: Props) {
         <View style={styles.card}>
           <View style={styles.cardHead}>
             <Text style={styles.cardTitle}>Usage & credits</Text>
-            <StatusChip label={hasUsage ? 'Ready' : 'Empty'} tone={hasUsage ? 'ok' : 'soon'} />
+            <StatusChip label={usageSummary ? 'Ready' : 'Empty'} tone={usageSummary ? 'ok' : 'soon'} />
           </View>
-          {hasUsage ? (
-            <Text style={styles.body}>
-              Your usage summary is available. Open Usage & Credits for details.
-            </Text>
+          {usageSummary ? (
+            <Text style={styles.body}>{usageSummary}</Text>
           ) : (
             <EmptyState
               title="No usage data yet"

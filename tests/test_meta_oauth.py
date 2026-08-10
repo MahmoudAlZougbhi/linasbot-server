@@ -127,7 +127,7 @@ def test_legacy_instagram_start_aliases_to_unified_flow() -> None:
     assert normalize_oauth_flow_channel("unified") == "unified"
 
 
-def test_business_login_url_uses_config_id_and_never_scope_or_secret(registry: MetaAppRegistry) -> None:
+def test_business_login_url_uses_config_id_rerequests_comment_scopes(registry: MetaAppRegistry) -> None:
     url = begin_meta_business_login(
         tenant_id="tenant-a",
         channel="facebook",
@@ -142,8 +142,13 @@ def test_business_login_url_uses_config_id_and_never_scope_or_secret(registry: M
     assert query["redirect_uri"] == ["https://www.linasaibot.com/oauth/meta/callback"]
     assert query["response_type"] == ["code"]
     assert query["override_default_response_type"] == ["true"]
+    assert query["auth_type"] == ["rerequest"]
     assert query["state"]
-    assert "scope" not in query
+    scopes = set((query.get("scope") or [""])[0].split(","))
+    assert "pages_messaging" in scopes
+    assert "pages_read_user_content" in scopes
+    assert "pages_manage_engagement" in scopes
+    assert "instagram_manage_comments" in scopes
     assert "app-b-secret-tests" not in url
     assert "business_management" not in url
     assert "owner-a" not in registry.store_path.read_text(encoding="utf-8")

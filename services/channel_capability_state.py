@@ -42,8 +42,10 @@ _DM_WEBHOOK_FIELDS = frozenset({"messages", "messaging_postbacks"})
 BLOCKER_MESSAGES: dict[str, str] = {
     "connect_channel_first": "Connect this channel before enabling the capability.",
     "missing_comment_permissions": (
-        "Missing Meta comment permissions. Use Manage Meta Access / Reconnect with Comment Access "
-        "for the same Facebook Page / Instagram account (do not Disconnect Account)."
+        "Missing Meta comment permissions on this token. Manage Meta Access re-requests them, but "
+        "App A's Facebook Login Configuration must include pages_read_user_content, "
+        "pages_manage_engagement, and instagram_manage_comments (plus Advanced Access if required). "
+        "Do not Disconnect Account."
     ),
     "missing_dm_permissions": "Missing Meta messaging permissions. Use Manage Meta Access to refresh access.",
     "missing_comment_webhook": "Comment webhook subscription is not confirmed yet for this connection.",
@@ -62,6 +64,9 @@ BLOCKER_MESSAGES: dict[str, str] = {
         "Connection is not healthy (token missing or expired). Use Manage Meta Access to refresh."
     ),
     "asset_action_off": "Channel action is on but the per-asset reply switch is still off.",
+    "plan_comments_disabled": (
+        "Comment automation is not included on your current plan. Upgrade from Lite to Starter or higher."
+    ),
 }
 
 

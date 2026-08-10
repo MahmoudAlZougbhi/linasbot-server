@@ -116,6 +116,7 @@ _PUBLIC_EXACT: set[tuple[str, str]] = {
     ("POST", "/api/auth/verify-email"),
     ("POST", "/api/auth/resend-verification"),
     ("GET", "/api/billing/packages"),
+    ("GET", "/api/public/plans"),
     ("POST", "/api/billing/stripe/webhook"),
     ("POST", "/api/auth/mobile/login"),
     ("POST", "/api/auth/mobile/refresh"),
