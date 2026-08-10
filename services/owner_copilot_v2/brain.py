@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 from services.model_policy import emit_model_policy_trace, resolve_owner_policy
 from services.owner_ai_context import pack_owner_turn_context
+from services.owner_copilot_v2.assent import looks_like_owner_assent, resolve_pending_confirm_token
 from services.owner_copilot_v2.brain_support import (
     SYSTEM_V2,
     done_payload,
@@ -111,6 +112,14 @@ async def iter_owner_turn_v2_events(
         return
 
     text = (user_text or "").strip()
+    # Natural assent (ok / موافق / yes / …) on a pending Draft proposal → confirm path.
+    # Never invent a token; only resolve an existing pending confirmation.
+    if not confirm_tool and looks_like_owner_assent(text):
+        confirm_tool = resolve_pending_confirm_token(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            messages=messages,
+        )
     context = pack_owner_turn_context(
         tenant_id=tenant_id,
         user_id=user_id,

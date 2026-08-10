@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { looksLikeOwnerAssent, pendingTokenFromDonePayload } from './ownerAssent';
 import type { StreamCard, StreamChoice } from './useOwnerStream';
 import { useOwnerStream } from './useOwnerStream';
 
@@ -24,6 +25,7 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
   const [cards, setCards] = useState<StreamCard[]>([]);
   const [choices, setChoices] = useState<StreamChoice[]>([]);
   const [choiceSetId, setChoiceSetId] = useState<string | null>(null);
+  const pendingConfirmRef = useRef<string | null>(null);
 
   const resetUi = useCallback(() => {
     setThinking(false);
@@ -56,6 +58,10 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
       setChoices([]);
       setChoiceSetId(null);
       setThinking(true);
+      let confirmTool = opts?.confirm_tool ?? null;
+      if (!confirmTool && looksLikeOwnerAssent(text) && pendingConfirmRef.current) {
+        confirmTool = pendingConfirmRef.current;
+      }
       const result = await stream.sendStream(
         conversationId,
         {
@@ -63,7 +69,7 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
           choice_id: opts?.choice_id,
           choice_set_id: opts?.choice_set_id,
           attachment_ids: opts?.attachment_ids,
-          confirm_tool: opts?.confirm_tool,
+          confirm_tool: confirmTool,
           owner_mode: opts?.owner_mode,
         },
         {
@@ -76,7 +82,15 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
             setThinking(false);
             setLiveText((prev) => prev + t);
           },
-          onCard: (c) => setCards((prev) => [...prev.filter((x) => x.id !== c.id), c]),
+          onCard: (c) => {
+            setCards((prev) => [...prev.filter((x) => x.id !== c.id), c]);
+            if (c.kind === 'proposal') {
+              const token = c.data?.confirmation_token;
+              if (typeof token === 'string' && token.trim()) {
+                pendingConfirmRef.current = token.trim();
+              }
+            }
+          },
           onChoices: (p) => {
             setChoiceSetId(p.choice_set_id);
             setChoices(p.choices || []);
@@ -92,6 +106,12 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
           },
           onDone: (payload) => {
             applyTitle(payload);
+            const nextPending = pendingTokenFromDonePayload(payload);
+            if (confirmTool && !nextPending) {
+              pendingConfirmRef.current = null;
+            } else if (nextPending) {
+              pendingConfirmRef.current = nextPending;
+            }
             resetUi();
             void hooksRef.current.onTerminal();
           },

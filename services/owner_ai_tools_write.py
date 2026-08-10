@@ -58,7 +58,7 @@ async def tool_propose_cm_patch(
         data=data,
         requires_confirmation=True,
         confirmation_token=str(data.get("confirmation_token")),
-        error="Confirmation required before CM draft is saved",
+        error="Owner confirmation required before CM draft is saved (Approve button or short assent: ok / موافق / yes)",
     )
 
 
