@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from services.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
 from services.membership.plan_catalog import (
     CATALOG_VERSION,
     PUBLIC_PLAN_IDS,
     plan_features,
     public_plan_matrix,
 )
-from services.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
 from services.plan_economics import PLAN_FEATURES, PLAN_PRICES_USD, recommend_allowance
 
 
