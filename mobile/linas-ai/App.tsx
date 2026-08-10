@@ -19,7 +19,6 @@ import { CmScreen } from './src/features/cm/CmScreen';
 import { CmSectionScreen } from './src/features/cm/CmSectionScreen';
 import type { CmProposalReview } from './src/features/cm/cmProposalReview';
 import { isCmProposalSection } from './src/features/cm/cmProposalReview';
-import type { CmSectionId } from './src/features/cm/cmSections';
 import type { ControlArea } from './src/features/control/controlAreas';
 import { DashboardScreen } from './src/features/dashboard/DashboardScreen';
 import { IntegrationsScreen } from './src/features/integrations/IntegrationsScreen';
@@ -33,59 +32,7 @@ import { UsersScreen } from './src/features/users/UsersScreen';
 import { LanguageProvider } from './src/i18n/LanguageContext';
 import { ThemeProvider, useTheme } from './src/theme';
 
-type LiveChatOpen = { userId: string; conversationId: string };
-
-type Screen =
-  | { name: 'boot' }
-  | { name: 'login' }
-  | { name: 'register' }
-  | { name: 'chat' }
-  | { name: 'settings' }
-  | { name: 'integrations' }
-  | { name: 'users' }
-  | { name: 'dashboard' }
-  | { name: 'billing' }
-  | { name: 'usage' }
-  | { name: 'livechat'; open?: LiveChatOpen | null }
-  | { name: 'notifications'; backTo?: 'chat' | 'settings' }
-  | { name: 'cm' }
-  | {
-      name: 'cm_section';
-      section: CmSectionId;
-      backTo?: 'cm' | 'settings' | 'chat';
-      proposalReview?: CmProposalReview | null;
-    }
-  | { name: 'faq'; proposalReview?: CmProposalReview | null }
-  | { name: 'resource'; title: string; path: string };
-
-const RESOURCE_MAP: Partial<Record<ControlArea, { title: string; path: string }>> = {
-  owner: { title: 'Owner Control Center', path: '/api/platform/metrics' },
-};
-
-function parseLiveChatDeepLink(url: string | null): LiveChatOpen | null {
-  if (!url) return null;
-  try {
-    const normalized = url.replace(/^linasai:\/\//i, 'https://linasai.app/');
-    const parsed = new URL(normalized);
-    const path = parsed.pathname.replace(/^\//, '');
-    if (path !== 'livechat' && !path.startsWith('livechat/')) {
-      return null;
-    }
-    const userId = parsed.searchParams.get('userId') || parsed.searchParams.get('user_id');
-    const conversationId =
-      parsed.searchParams.get('conversationId') || parsed.searchParams.get('conversation_id');
-    if (userId && conversationId) {
-      return { userId, conversationId };
-    }
-    const parts = path.split('/').filter(Boolean);
-    if (parts.length >= 3 && parts[0] === 'livechat') {
-      return { userId: decodeURIComponent(parts[1]), conversationId: decodeURIComponent(parts[2]) };
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
+import { parseLiveChatDeepLink, RESOURCE_MAP, type Screen } from './src/app/navigation';
 
 export default function App() {
   return (

@@ -10,7 +10,7 @@ from services.model_policy import emit_model_policy_trace, resolve_owner_policy
 from services.owner_ai_context import pack_owner_turn_context
 from services.owner_copilot_v2.assent import looks_like_owner_assent, resolve_pending_confirm_token
 from services.owner_copilot_v2.brain_support import (
-    SYSTEM_V2,
+    _build_messages,
     done_payload,
     emit_as_deltas,
     status_label,
@@ -19,42 +19,13 @@ from services.owner_copilot_v2.cards import card_from_tool
 from services.owner_copilot_v2.choices import choices_from_tool_result, make_choice_set
 from services.owner_copilot_v2.confirm_path import run_confirm_path
 from services.owner_copilot_v2.creative_policy import creative_refusal_message, looks_like_creative_request
-from services.owner_copilot_v2.flags import owner_copilot_v2_enabled, owner_model_name, owner_recent_history_tokens
-from services.owner_copilot_v2.memory import pack_recent_messages
+from services.owner_copilot_v2.flags import owner_copilot_v2_enabled, owner_model_name
 from services.owner_copilot_v2.models import ChatChoice, OwnerV2TurnResult, StreamEvent
 from services.owner_copilot_v2.provider import iter_sol_text_deltas, iter_sol_tool_round
 from services.owner_copilot_v2.tool_dispatch import dispatch_v2_tool, tool_result_for_model
 
 CancelCheck = Callable[[], bool]
 MAX_TOOL_ROUNDS = 4
-
-def _build_messages(
-    *,
-    context: dict[str, Any],
-    user_text: str,
-    attachment_ids: list[str] | None = None,
-) -> list[dict[str, Any]]:
-    recent, summary = pack_recent_messages(
-        context.get("recent_messages_raw") or context.get("recent_messages"),
-        token_budget=owner_recent_history_tokens(),
-    )
-    parts = [
-        SYSTEM_V2,
-        str(context.get("system_prompt") or ""),
-        f"Reply language hint: {context.get('reply_language') or 'en'}.",
-        f"Account snapshot: {json.dumps(context.get('account_summary') or {}, ensure_ascii=False, default=str)[:2000]}",
-    ]
-    if context.get("knowledge_block"):
-        parts.append(str(context["knowledge_block"]))
-    if summary:
-        parts.append(summary)
-    if attachment_ids:
-        parts.append(f"User attached files: {attachment_ids}. Use extract_price_list when appropriate.")
-    out: list[dict[str, Any]] = [{"role": "system", "content": "\n".join(p for p in parts if p)}]
-    for m in recent:
-        out.append({"role": m["role"], "content": m["content"]})
-    out.append({"role": "user", "content": user_text})
-    return out
 
 async def run_owner_turn_v2(**kwargs: Any) -> OwnerV2TurnResult:
     final: OwnerV2TurnResult | None = None

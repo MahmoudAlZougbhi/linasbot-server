@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 from typing import Any
 
+from services.owner_copilot_v2.flags import owner_recent_history_tokens
+from services.owner_copilot_v2.memory import pack_recent_messages
 from services.owner_copilot_v2.models import StreamEvent
 
 SYSTEM_V2 = (
@@ -105,3 +108,32 @@ def done_payload(
 async def emit_as_deltas(text: str, size: int = 28) -> AsyncIterator[StreamEvent]:
     for i in range(0, len(text or ""), size):
         yield StreamEvent(type="delta", payload={"text": text[i : i + size]})
+
+
+def _build_messages(
+    *,
+    context: dict[str, Any],
+    user_text: str,
+    attachment_ids: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    recent, summary = pack_recent_messages(
+        context.get("recent_messages_raw") or context.get("recent_messages"),
+        token_budget=owner_recent_history_tokens(),
+    )
+    parts = [
+        SYSTEM_V2,
+        str(context.get("system_prompt") or ""),
+        f"Reply language hint: {context.get('reply_language') or 'en'}.",
+        f"Account snapshot: {json.dumps(context.get('account_summary') or {}, ensure_ascii=False, default=str)[:2000]}",
+    ]
+    if context.get("knowledge_block"):
+        parts.append(str(context["knowledge_block"]))
+    if summary:
+        parts.append(summary)
+    if attachment_ids:
+        parts.append(f"User attached files: {attachment_ids}. Use extract_price_list when appropriate.")
+    out: list[dict[str, Any]] = [{"role": "system", "content": "\n".join(p for p in parts if p)}]
+    for m in recent:
+        out.append({"role": m["role"], "content": m["content"]})
+    out.append({"role": "user", "content": user_text})
+    return out
