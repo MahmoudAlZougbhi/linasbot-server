@@ -315,6 +315,7 @@ export function ChatScreen({
           showMic={isAuthenticated}
           showModelChip={isAuthenticated}
           ownerMode={ownerMode}
+          onOwnerModeChange={setOwnerMode}
           onPlus={() => setPlusOpen(true)}
           onToggleVoice={() => void voice.toggleVoice()}
           onResumeVoice={() => void voice.resumeVoice()}
@@ -357,10 +358,7 @@ export function ChatScreen({
         activeId={owner.conversationId}
         workspaceLabel={workspaceLabel}
         onOpenArea={onOpenArea}
-        onNewChat={() => {
-          setDrawerOpen(false);
-          startNewChat();
-        }}
+        onNewChat={() => { setDrawerOpen(false); startNewChat(); }}
         onOpenChat={(id) => {
           stickToBottomRef.current = true;
           void owner.openConversation(id).then(() => armOpenAtLatest());
@@ -380,10 +378,7 @@ export function ChatScreen({
         hardLimit={hardLimit}
         guestGated={guest.gated}
         gateText={guest.gateText}
-        onCloseAuth={() => {
-          setAuthGate(false);
-          setHardLimit(false);
-        }}
+        onCloseAuth={() => { setAuthGate(false); setHardLimit(false); }}
         onRequestLogin={onRequestLogin}
         onRequestRegister={onRequestRegister}
       />

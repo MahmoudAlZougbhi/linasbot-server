@@ -215,6 +215,7 @@ test('voice STT wires transcript into composer draft (no auto-send)', () => {
   assert.match(composer, /Paused ·/);
   assert.match(composer, /Transcribing…/);
   assert.match(composer, /formatVoiceElapsed/);
+  assert.match(composer, /StopGlyph/);
   assert.match(controls, /Continue recording/);
   assert.match(controls, /Use recording/);
   assert.match(controls, /Discard recording/);
@@ -223,6 +224,24 @@ test('voice STT wires transcript into composer draft (no auto-send)', () => {
   assert.match(glyphs, /export function formatVoiceElapsed/);
   assert.match(send, /voiceState === 'paused'/);
   assert.doesNotMatch(composer, /🎙/);
+});
+
+test('LIN effort chip opens Low/High picker synced with Chat|Work', () => {
+  const composer = read('features/chat/ChatComposer.tsx');
+  const sheet = read('features/chat/LinEffortSheet.tsx');
+  const chat = read('features/chat/ChatScreen.tsx');
+  const mode = read('features/chat/ownerChatMode.ts');
+  assert.match(composer, /onOwnerModeChange/);
+  assert.match(composer, /LinEffortSheet/);
+  assert.match(composer, /accessibilityRole="button"/);
+  assert.match(sheet, /linEffortLow/);
+  assert.match(sheet, /linEffortHigh/);
+  assert.match(sheet, /linEffortCostsMore/);
+  assert.match(sheet, /CloudGlyph/);
+  assert.match(sheet, /id: 'chat'/);
+  assert.match(sheet, /id: 'work'/);
+  assert.match(chat, /onOwnerModeChange=\{setOwnerMode\}/);
+  assert.match(mode, /effortLabelForMode/);
 });
 
 test('Live Chat thread remains read-only', () => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import { formatVoiceElapsed, StopGlyph } from './ComposerGlyphs';
+import { LinEffortSheet } from './LinEffortSheet';
 import { modelChipLabel, type OwnerChatMode } from './ownerChatMode';
 import type { VoiceState } from './useVoiceDraft';
 import { VoiceComposerControls } from './VoiceComposerControls';
@@ -38,6 +39,7 @@ type Props = {
   showDisclaimer?: boolean;
   autoFocus?: boolean;
   ownerMode?: OwnerChatMode;
+  onOwnerModeChange?: (mode: OwnerChatMode) => void;
   showModelChip?: boolean;
 };
 
@@ -63,10 +65,12 @@ export function ChatComposer({
   showDisclaimer = true,
   autoFocus = false,
   ownerMode = 'chat',
+  onOwnerModeChange,
   showModelChip = false,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const [effortOpen, setEffortOpen] = useState(false);
   const pulse = useRef(new Animated.Value(1)).current;
   const ring = useRef(new Animated.Value(0.55)).current;
   const recording = voiceState === 'recording';
@@ -78,6 +82,7 @@ export function ChatComposer({
   const showVoiceControl =
     Boolean(showMic && onToggleVoice && !streamingStop && (voiceBusy || !canSend));
   const showSend = streamingStop || (canSend && !paused);
+  const chipTappable = Boolean(showModelChip && onOwnerModeChange);
 
   useEffect(() => {
     if (!recording) {
@@ -176,15 +181,24 @@ export function ChatComposer({
 
           <View style={styles.toolbarRight}>
             {showModelChip ? (
-              <View
+              <Pressable
                 style={[styles.chip, { backgroundColor: colors.surfaceAlt }]}
+                onPress={() => {
+                  if (!chipTappable) return;
+                  inputRef?.current?.blur();
+                  Keyboard.dismiss();
+                  setEffortOpen(true);
+                }}
+                disabled={!chipTappable}
+                accessibilityRole="button"
                 accessibilityLabel={modelChipLabel(ownerMode)}
+                accessibilityHint={chipTappable ? 'Choose Low or High' : undefined}
               >
                 <Text style={[styles.chipBolt, { color: colors.text }]}>⚡</Text>
                 <Text style={[styles.chipText, { color: colors.text }]} numberOfLines={1}>
                   {modelChipLabel(ownerMode)}
                 </Text>
-              </View>
+              </Pressable>
             ) : null}
 
             {showVoiceControl ? (
@@ -239,6 +253,14 @@ export function ChatComposer({
         <Text style={[styles.disclaimer, { color: colors.textDim }]}>
           Linas can make mistakes. Check important details.
         </Text>
+      ) : null}
+      {chipTappable ? (
+        <LinEffortSheet
+          open={effortOpen}
+          mode={ownerMode}
+          onClose={() => setEffortOpen(false)}
+          onSelect={onOwnerModeChange!}
+        />
       ) : null}
     </View>
   );
