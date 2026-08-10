@@ -444,7 +444,7 @@ async def subscribe_binding_webhook(
     registry: MetaAppRegistry | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> None:
-    """Subscribe only private-message webhook fields for an active binding."""
+    """Subscribe private-message webhook fields without dropping an existing Page feed field."""
 
     if not binding.active:
         raise MetaOAuthError("Only an active binding may subscribe webhooks")
@@ -453,13 +453,33 @@ async def subscribe_binding_webhook(
     app = get_meta_app_configs()[binding.app_key]
     owns_client = client is None
     http_client = client or httpx.AsyncClient(base_url=f"{META_GRAPH_BASE_URL}/{app.graph_api_version}", timeout=20.0)
+    # Meta replaces subscribed_fields on POST — preserve feed when Comments already subscribed.
+    existing = {str(item).strip().lower() for item in (binding.webhook_subscribed_fields or ())}
+    fields = ["messages", "messaging_postbacks"]
+    if "feed" in existing:
+        fields.append("feed")
     try:
         response = await http_client.post(
             f"{binding.page_id}/subscribed_apps",
-            data={"subscribed_fields": "messages,messaging_postbacks"},
+            data={"subscribed_fields": ",".join(fields)},
             headers={"Authorization": f"Bearer {credential.access_token}"},
         )
         _safe_json(response, step="webhook subscription")
+        # Persist DM (+ preserved feed) fields on the binding without disconnecting.
+        try:
+            with current_registry._locked():
+                state = current_registry._read_unlocked()
+                raw = state["bindings"].get(binding.binding_id)
+                if isinstance(raw, dict):
+                    changed = dict(raw)
+                    prior = [str(item) for item in (changed.get("webhook_subscribed_fields") or [])]
+                    changed["webhook_subscribed_fields"] = sorted({*prior, *fields})
+                    changed["webhook_subscription_checked_at"] = time.time()
+                    changed["updated_at"] = time.time()
+                    state["bindings"][binding.binding_id] = changed
+                    current_registry._write_unlocked(state)
+        except Exception:
+            pass
     except httpx.HTTPError as exc:
         raise MetaOAuthError("Meta webhook subscription request failed") from exc
     finally:

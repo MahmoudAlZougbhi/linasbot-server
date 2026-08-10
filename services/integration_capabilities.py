@@ -121,7 +121,11 @@ def _apply_connection_to_caps(
         # live_verified remains true only for existing DM path that is already in production.
         meta_caps[key]["live_verified"] = True
 
-    comment_scopes = {"instagram_manage_comments"} if channel == "instagram" else {"pages_manage_engagement"}
+    comment_scopes = (
+        {"instagram_manage_comments", "instagram_business_manage_comments"}
+        if channel == "instagram"
+        else {"pages_manage_engagement", "pages_read_user_content"}
+    )
     publish_scopes = {"instagram_content_publish"} if channel == "instagram" else {"pages_manage_posts"}
 
     if granted_scopes & comment_scopes:

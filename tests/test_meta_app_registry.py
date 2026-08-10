@@ -485,6 +485,44 @@ def test_registry_readiness_requires_both_lina_channels_on_app_a(registry: MetaA
     assert all(checks.values())
 
 
+def test_authorize_oauth_asset_preserves_comment_webhook_fields_on_reauth(
+    registry: MetaAppRegistry,
+) -> None:
+    """Safe reauth must not wipe feed/comments fields already recorded on the binding."""
+
+    configs = get_meta_app_configs()
+    app_a_id = configs[APP_A_KEY].app_id
+    first = registry.authorize_oauth_asset(
+        tenant_id="linas",
+        channel="facebook",
+        asset_id=LINAS_PAGE_ID,
+        page_id=LINAS_PAGE_ID,
+        instagram_account_id=LINAS_INSTAGRAM_ACCOUNT_ID,
+        app_key=APP_A_KEY,
+        credential=_credential(app_a_id, LINAS_PAGE_ID),
+        actor_id="owner",
+        webhook_subscribed_fields=("messages", "messaging_postbacks", "feed"),
+        webhook_subscription_status="active",
+        webhook_subscription_checked_at=123.0,
+    )
+    assert "feed" in first.webhook_subscribed_fields
+    refreshed = registry.authorize_oauth_asset(
+        tenant_id="linas",
+        channel="facebook",
+        asset_id=LINAS_PAGE_ID,
+        page_id=LINAS_PAGE_ID,
+        instagram_account_id=LINAS_INSTAGRAM_ACCOUNT_ID,
+        app_key=APP_A_KEY,
+        credential=_credential(app_a_id, LINAS_PAGE_ID),
+        actor_id="owner-reauth",
+        # Defaults would previously wipe feed — must preserve.
+    )
+    assert refreshed.binding_id == first.binding_id
+    assert "feed" in refreshed.webhook_subscribed_fields
+    assert "messages" in refreshed.webhook_subscribed_fields
+    assert refreshed.webhook_subscription_status == "active"
+
+
 def test_external_tenant_never_inherits_lina_whatsapp_matrix(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

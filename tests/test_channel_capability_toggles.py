@@ -1,14 +1,19 @@
-"""Channel capability toggles for mobile Integrations (CM Actions)."""
+"""Canonical channel capability matrix (DMs + Comments)."""
 
 from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
+from services.channel_capability_state import (
+    comment_capability_state,
+    dm_capability_state,
+)
 from services.channel_capability_toggles import (
     action_id_for,
     attach_channel_toggles,
     channel_toggle_states,
-    comment_capability_state,
 )
 from services.cm.actions import (
     ACTION_FACEBOOK_COMMENTS,
@@ -16,6 +21,7 @@ from services.cm.actions import (
     ACTION_INSTAGRAM_COMMENTS,
     ACTION_INSTAGRAM_DM,
 )
+from services.meta_app_registry import APP_A_KEY
 
 
 def test_action_ids_match_cm_schema() -> None:
@@ -28,8 +34,20 @@ def test_action_ids_match_cm_schema() -> None:
 
 def test_attach_toggles_only_on_meta_channels(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.channel_capability_toggles.channel_toggle_states",
-        lambda _tenant, platform: {"dm": platform == "instagram", "comments": False},
+        "services.channel_capability_toggles.dm_capability_state",
+        lambda _tenant, platform: {
+            "requested_enabled": platform == "instagram",
+            "permission_present": True,
+            "webhook_subscribed": True,
+            "tenant_action_enabled": platform == "instagram",
+            "connection_healthy": True,
+            "live_verified": platform == "instagram",
+            "effective_enabled": platform == "instagram",
+            "missing_scopes": [],
+            "blocker_code": None,
+            "blocker": None,
+            "status": "enabled" if platform == "instagram" else "ready",
+        },
     )
     monkeypatch.setattr(
         "services.channel_capability_toggles.comment_capability_state",
@@ -37,11 +55,14 @@ def test_attach_toggles_only_on_meta_channels(monkeypatch) -> None:
             "requested_enabled": False,
             "permission_present": platform != "instagram",
             "webhook_subscribed": False,
+            "tenant_action_enabled": False,
+            "connection_healthy": True,
             "live_verified": False,
             "effective_enabled": False,
             "missing_scopes": ["instagram_manage_comments"] if platform == "instagram" else [],
+            "blocker_code": "missing_comment_permissions" if platform == "instagram" else "connect_channel_first",
             "blocker": "missing_comment_permissions" if platform == "instagram" else "connect_channel_first",
-            "status": "needs_permission" if platform == "instagram" else "off",
+            "status": "permission_required" if platform == "instagram" else "disabled",
         },
     )
     rows = [
@@ -54,108 +75,351 @@ def test_attach_toggles_only_on_meta_channels(monkeypatch) -> None:
     assert out[0]["comments_blocker"] == "missing_comment_permissions"
     assert out[0]["comments_state"]["permission_present"] is False
     assert out[0]["comments_state"]["effective_enabled"] is False
+    assert "dm_state" in out[0]
     assert out[1]["toggles"] == {"dm": False, "comments": False}
     assert out[1]["comments_blocker"] == "connect_channel_first"
     assert "toggles" not in out[2]
 
 
 def test_channel_toggle_states_defaults_when_unpublished(monkeypatch) -> None:
-    monkeypatch.setattr("services.channel_capability_toggles.load_actions_section", lambda _tid: None)
     monkeypatch.setattr(
         "services.channel_capability_toggles.comment_capability_state",
         lambda *_a, **_k: {
             "requested_enabled": False,
             "permission_present": False,
             "webhook_subscribed": False,
+            "tenant_action_enabled": False,
+            "connection_healthy": False,
             "live_verified": False,
             "effective_enabled": False,
             "missing_scopes": [],
+            "blocker_code": "connect_channel_first",
             "blocker": "connect_channel_first",
-            "status": "off",
+            "status": "disabled",
+        },
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.dm_capability_state",
+        lambda *_a, **_k: {
+            "requested_enabled": False,
+            "permission_present": False,
+            "webhook_subscribed": False,
+            "tenant_action_enabled": False,
+            "connection_healthy": False,
+            "live_verified": False,
+            "effective_enabled": False,
+            "missing_scopes": [],
+            "blocker_code": "connect_channel_first",
+            "blocker": "connect_channel_first",
+            "status": "disabled",
         },
     )
     assert channel_toggle_states("linas", "facebook") == {"dm": False, "comments": False}
 
 
-def test_comment_capability_state_never_effective_without_permissions(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "services.channel_capability_toggles._comments_action_requested",
-        lambda *_a, **_k: True,
+def _fb_binding(**kwargs):
+    base = dict(
+        tenant_id="linas",
+        channel="facebook",
+        status="active",
+        app_key=APP_A_KEY,
+        auth_flow="facebook_login",
+        webhook_subscribed_fields=("messages", "messaging_postbacks", "feed"),
+        asset_id="page1",
+        binding_id="b2",
+        page_id="page1",
     )
-    binding = SimpleNamespace(
+    base.update(kwargs)
+    return SimpleNamespace(**base)
+
+
+def _ig_binding(**kwargs):
+    base = dict(
         tenant_id="linas",
         channel="instagram",
         status="active",
-        app_key="app_a",
+        app_key=APP_A_KEY,
         auth_flow="facebook_login",
-        webhook_subscribed_fields=("messages", "messaging_postbacks"),
+        webhook_subscribed_fields=("messages", "messaging_postbacks", "comments"),
         asset_id="ig1",
         binding_id="b1",
+        page_id="page1",
+    )
+    base.update(kwargs)
+    return SimpleNamespace(**base)
+
+
+class _Cred:
+    def __init__(self, scopes, *, token="tok", expires_at=None):
+        self.scopes = scopes
+        self.access_token = token
+        self.expires_at = expires_at
+
+
+class _Registry:
+    def __init__(self, cred: _Cred):
+        self._cred = cred
+
+    def get_credential(self, _binding):
+        return self._cred
+
+
+def test_comment_capability_false_toggle_never_effective_without_permissions(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "services.channel_capability_state._action_requested",
+        lambda *_a, **_k: True,
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles._active_channel_bindings",
-        lambda *_a, **_k: [binding],
+        "services.channel_capability_state.active_channel_bindings",
+        lambda *_a, **_k: [_ig_binding(webhook_subscribed_fields=("messages", "messaging_postbacks"))],
     )
-
-    class _Cred:
-        scopes = ("instagram_basic", "instagram_manage_messages")
-
-    class _Registry:
-        def get_credential(self, _binding):
-            return _Cred()
-
     monkeypatch.setattr(
-        "services.channel_capability_toggles.get_meta_app_registry",
-        lambda: _Registry(),
+        "services.channel_capability_state.get_meta_app_registry",
+        lambda: _Registry(_Cred(("instagram_basic", "instagram_manage_messages"))),
     )
+    monkeypatch.setattr(
+        "services.channel_capability_state._tenant_comment_assets_enabled",
+        lambda *_a, **_k: True,
+    )
+    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: True)
     state = comment_capability_state("linas", "instagram")
     assert state["requested_enabled"] is True
     assert state["permission_present"] is False
     assert state["live_verified"] is False
     assert state["effective_enabled"] is False
-    assert state["blocker"] == "missing_comment_permissions"
+    assert state["blocker_code"] == "missing_comment_permissions"
     assert "instagram_manage_comments" in state["missing_scopes"]
+    assert state["last_checked_at"] > 0
 
 
-def test_comment_capability_state_effective_only_when_all_gates_pass(monkeypatch) -> None:
+def test_comment_capability_meta_approval_when_advanced_access_missing(monkeypatch) -> None:
     monkeypatch.setattr(
-        "services.channel_capability_toggles._comments_action_requested",
-        lambda *_a, **_k: True,
-    )
-    binding = SimpleNamespace(
-        tenant_id="linas",
-        channel="facebook",
-        status="active",
-        app_key="app_a",
-        auth_flow="facebook_login",
-        webhook_subscribed_fields=("messages", "messaging_postbacks", "feed"),
-        asset_id="page1",
-        binding_id="b2",
+        "services.channel_capability_state._action_requested",
+        lambda *_a, **_k: False,
     )
     monkeypatch.setattr(
-        "services.channel_capability_toggles._active_channel_bindings",
-        lambda *_a, **_k: [binding],
+        "services.channel_capability_state.active_channel_bindings",
+        lambda *_a, **_k: [_fb_binding(webhook_subscribed_fields=("messages", "messaging_postbacks"))],
     )
-
-    class _Cred:
-        scopes = (
-            "pages_messaging",
-            "pages_read_user_content",
-            "pages_manage_engagement",
-        )
-
-    class _Registry:
-        def get_credential(self, _binding):
-            return _Cred()
-
     monkeypatch.setattr(
-        "services.channel_capability_toggles.get_meta_app_registry",
-        lambda: _Registry(),
+        "services.channel_capability_state.get_meta_app_registry",
+        lambda: _Registry(_Cred(("pages_messaging",))),
+    )
+    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: False)
+    monkeypatch.setattr(
+        "services.channel_capability_state._tenant_comment_assets_enabled",
+        lambda *_a, **_k: False,
     )
     state = comment_capability_state("linas", "facebook")
+    assert state["permission_present"] is False
+    assert state["status"] == "meta_approval_required"
+    assert state["blocker_code"] == "meta_approval_required"
+    assert state["effective_enabled"] is False
+    assert state["live_verified"] is False
+
+
+def test_comment_capability_effective_only_when_all_gates_pass(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "services.channel_capability_state._action_requested",
+        lambda *_a, **_k: True,
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state.active_channel_bindings",
+        lambda *_a, **_k: [_fb_binding()],
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state.get_meta_app_registry",
+        lambda: _Registry(
+            _Cred(
+                (
+                    "pages_messaging",
+                    "pages_read_user_content",
+                    "pages_manage_engagement",
+                )
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state._tenant_comment_assets_enabled",
+        lambda *_a, **_k: True,
+    )
+    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: True)
+    state = comment_capability_state("linas", "facebook")
+    assert state["connection_healthy"] is True
     assert state["permission_present"] is True
     assert state["webhook_subscribed"] is True
+    assert state["tenant_action_enabled"] is True
     assert state["live_verified"] is False
     assert state["effective_enabled"] is True
+    assert state["status"] == "enabled"
+    assert state["blocker_code"] is None
+
+
+def test_comment_capability_ready_when_gates_pass_but_not_requested(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "services.channel_capability_state._action_requested",
+        lambda *_a, **_k: False,
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state.active_channel_bindings",
+        lambda *_a, **_k: [_fb_binding()],
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state.get_meta_app_registry",
+        lambda: _Registry(_Cred(("pages_messaging", "pages_read_user_content", "pages_manage_engagement"))),
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state._tenant_comment_assets_enabled",
+        lambda *_a, **_k: False,
+    )
+    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: True)
+    state = comment_capability_state("linas", "facebook")
     assert state["status"] == "ready"
-    assert state["blocker"] is None
+    assert state["effective_enabled"] is False
+
+
+def test_comment_capability_webhook_setup_required(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "services.channel_capability_state._action_requested",
+        lambda *_a, **_k: False,
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state.active_channel_bindings",
+        lambda *_a, **_k: [_fb_binding(webhook_subscribed_fields=("messages", "messaging_postbacks"))],
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state.get_meta_app_registry",
+        lambda: _Registry(_Cred(("pages_messaging", "pages_read_user_content", "pages_manage_engagement"))),
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state._tenant_comment_assets_enabled",
+        lambda *_a, **_k: False,
+    )
+    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: True)
+    state = comment_capability_state("linas", "facebook")
+    assert state["status"] == "webhook_setup_required"
+    assert state["blocker_code"] == "missing_comment_webhook"
+
+
+def test_comment_capability_unhealthy_token(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "services.channel_capability_state._action_requested",
+        lambda *_a, **_k: True,
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state.active_channel_bindings",
+        lambda *_a, **_k: [_fb_binding()],
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state.get_meta_app_registry",
+        lambda: _Registry(
+            _Cred(
+                ("pages_messaging", "pages_read_user_content", "pages_manage_engagement"),
+                expires_at=1,
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state._tenant_comment_assets_enabled",
+        lambda *_a, **_k: True,
+    )
+    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: True)
+    state = comment_capability_state("linas", "facebook")
+    assert state["connection_healthy"] is False
+    assert state["effective_enabled"] is False
+    assert state["status"] == "reauthorization_required"
+
+
+def test_dm_capability_effective_when_requested_and_healthy(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "services.channel_capability_state._action_requested",
+        lambda *_a, **_k: True,
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state.active_channel_bindings",
+        lambda *_a, **_k: [_fb_binding(webhook_subscribed_fields=("messages", "messaging_postbacks"))],
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state.get_meta_app_registry",
+        lambda: _Registry(
+            _Cred(
+                (
+                    "pages_show_list",
+                    "pages_manage_metadata",
+                    "pages_read_engagement",
+                    "pages_messaging",
+                )
+            )
+        ),
+    )
+    state = dm_capability_state("linas", "facebook")
+    assert state["effective_enabled"] is True
+    assert state["live_verified"] is True
+    assert state["status"] == "live_verified"
+
+
+def test_tenant_isolation_bindings(monkeypatch) -> None:
+    other = _fb_binding(tenant_id="other", asset_id="page-other")
+    monkeypatch.setattr(
+        "services.channel_capability_state._action_requested",
+        lambda *_a, **_k: True,
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state.active_channel_bindings",
+        lambda tenant_id, platform: [] if tenant_id == "linas" else [other],
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state.get_meta_app_registry",
+        lambda: _Registry(_Cred(("pages_messaging",))),
+    )
+    state = comment_capability_state("linas", "facebook")
+    assert state["status"] == "disabled"
+    assert state["blocker_code"] == "connect_channel_first"
+
+
+@pytest.mark.asyncio
+async def test_disable_comments_keeps_dm_requested(monkeypatch) -> None:
+    """Disable Comments path must not clear DM CM action (regression guard via unit stubs)."""
+
+    calls: list[tuple[str, bool]] = []
+
+    async def _sync(**kwargs):
+        calls.append(("sync", kwargs["enabled"]))
+
+    def _set_action(**kwargs):
+        calls.append((kwargs["action_id"], kwargs["enabled"]))
+        return SimpleNamespace()
+
+    async def _publish(**_k):
+        calls.append(("publish", True))
+
+    monkeypatch.setattr("services.channel_capability_toggles._sync_comment_assets", _sync)
+    monkeypatch.setattr("services.channel_capability_toggles._set_action_in_draft", _set_action)
+    monkeypatch.setattr("services.channel_capability_toggles._publish_actions", _publish)
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.channel_toggle_states",
+        lambda *_a, **_k: {"dm": True, "comments": False},
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.comment_capability_state",
+        lambda *_a, **_k: {"effective_enabled": False, "requested_enabled": False},
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.dm_capability_state",
+        lambda *_a, **_k: {"effective_enabled": True, "requested_enabled": True},
+    )
+
+    from services.channel_capability_toggles import set_channel_toggle
+
+    result = await set_channel_toggle(
+        tenant_id="linas",
+        platform="facebook",
+        toggle="comments",
+        enabled=False,
+        actor="test",
+    )
+    assert ("sync", False) in calls
+    assert (ACTION_FACEBOOK_COMMENTS, False) in calls
+    assert all(c[0] != ACTION_FACEBOOK_DM for c in calls if isinstance(c[0], str))
+    assert result["toggles"]["dm"] is True
+    assert result["toggles"]["comments"] is False
