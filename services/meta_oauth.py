@@ -21,6 +21,7 @@ import httpx
 from services.meta_app_registry import (
     APP_A_KEY,
     META_CHANNEL_SCOPES,
+    META_COMMENT_SCOPES,
     META_FORBIDDEN_SCOPES,
     MetaAppRegistry,
     MetaAssetBinding,
@@ -101,6 +102,24 @@ def _channels_for_authorization(
     return tuple(channels)
 
 
+def _business_login_request_scopes() -> str:
+    """Scopes requested alongside Login Config (rerequest).
+
+    Facebook Login for Business primarily uses ``config_id`` permissions. Passing
+    ``scope`` + ``auth_type=rerequest`` asks Meta to also present comment/publish
+    permissions when the Login Configuration (or Advanced Access) allows them.
+    Without those permissions in App A's Login Config / App Review, Manage Access
+    cannot grant comments — that remains an external Meta console step.
+    """
+
+    scopes = set()
+    for channel_scopes in META_CHANNEL_SCOPES.values():
+        scopes |= set(channel_scopes)
+    for comment_scopes in META_COMMENT_SCOPES.values():
+        scopes |= set(comment_scopes)
+    return ",".join(sorted(scopes))
+
+
 def begin_meta_business_login(
     *,
     tenant_id: str,
@@ -141,6 +160,9 @@ def begin_meta_business_login(
             "response_type": "code",
             "config_id": app.oauth_config_id,
             "override_default_response_type": "true",
+            # Ask Meta to re-present permissions (including comments) for the same assets.
+            "auth_type": "rerequest",
+            "scope": _business_login_request_scopes(),
         }
     )
     return f"https://www.facebook.com/{app.graph_api_version}/dialog/oauth?{query}"

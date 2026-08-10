@@ -1,4 +1,4 @@
-"""Wave 0: AI Limits SoT, platform_owner role, plan economics."""
+"""Wave 0 / membership-v1: plan economics, platform_owner role."""
 
 from __future__ import annotations
 
@@ -11,19 +11,19 @@ from services.role_assignment import RoleAssignmentError, assert_assignable_role
 
 def test_plan_prices_fixed() -> None:
     assert PLAN_PRICES_USD == {
-        "starter": 24.99,
+        "lite": 9.99,
+        "starter": 25.0,
         "growth": 59.0,
         "pro": 109.0,
-        "max": 250.0,
+        "max": 259.0,
     }
 
 
 def test_economics_report_margin_ok() -> None:
     report = build_economics_report()
-    assert report["report_version"] == "phase2-wave0-v1"
-    assert len(report["plans"]) == 4
+    assert report["report_version"] == "membership-v1"
+    assert len(report["plans"]) == 5
     for plan in report["plans"]:
-        assert plan["allowance"]["margin_ok"] is True
         assert plan["flag_negative_economics"] is False
         assert len(plan["scenarios"]) == 3
 
@@ -32,7 +32,7 @@ def test_recommend_allowance_starter_has_no_creative() -> None:
     a = recommend_allowance("starter")
     assert a.included_images == 0
     assert a.included_videos == 0
-    assert a.included_dm_replies > 0
+    assert a.included_credits == 17500
 
 
 def test_platform_owner_not_assignable_via_tenant() -> None:

@@ -40,8 +40,9 @@ def test_faq_entitlements_central_plan_config(tmp_path: Any, monkeypatch: pytest
     monkeypatch.setattr(fe, "count_faq_entries", lambda _tid: 0)
 
     assert PLAN_FEATURES["starter"]["faq_enabled"] is True
-    assert PLAN_FAQ_MAX_ENTRIES["starter"] == 200
-    assert PLAN_FAQ_MAX_ENTRIES["pro"] == 1000
+    assert PLAN_FAQ_MAX_ENTRIES["lite"] == 50
+    assert PLAN_FAQ_MAX_ENTRIES["starter"] == 110
+    assert PLAN_FAQ_MAX_ENTRIES["pro"] == 600
     assert PLAN_FAQ_MAX_ENTRIES["none"] == 0
 
     none = get_faq_entitlement("t-none")
@@ -51,10 +52,10 @@ def test_faq_entitlements_central_plan_config(tmp_path: Any, monkeypatch: pytest
     store.set_plan(tenant_id="t1", plan_id="starter", status="active", source="admin")
     starter = get_faq_entitlement("t1")
     assert starter["faq_enabled"] is True
-    assert starter["faq_max_entries"] == 200
-    assert starter["quota_display"] == "0 / 200"
+    assert starter["faq_max_entries"] == 110
+    assert starter["quota_display"] == "0 / 110"
 
-    monkeypatch.setattr(fe, "count_faq_entries", lambda _tid: 200)
+    monkeypatch.setattr(fe, "count_faq_entries", lambda _tid: 110)
     at_limit = get_faq_entitlement("t1")
     assert at_limit["at_limit"] is True
     with pytest.raises(FaqEntitlementError) as exc:

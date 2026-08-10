@@ -53,6 +53,14 @@ class CreditLedgerService:
                 return int(data.get("available") or 0)
         return int(ent.included_credits + ent.extra_credits)
 
+    def get_reserved(self, tenant_id: str) -> int:
+        path = self._balance_path(tenant_id)
+        with self._lock:
+            if not path.is_file():
+                return 0
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return int(data.get("reserved") or 0)
+
     def _set_balance(self, tenant_id: str, available: int, reserved: int) -> None:
         self._balance_path(tenant_id).write_text(
             json.dumps({"available": available, "reserved": reserved, "updated_at": time.time()}),

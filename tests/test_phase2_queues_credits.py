@@ -251,7 +251,9 @@ def test_iap_config_not_purchase_ready() -> None:
     status = iap_config_status()
     assert status["code_ready"] is True
     assert status["purchase_ready"] is False
-    assert status["plans"]["starter"] == 24.99
+    assert status["plans"]["starter"] == 25.0
+    assert status["plans"]["lite"] == 9.99
+    assert status["plans"]["max"] == 259.0
     checklist = external_store_checklist()
     assert "apple" in checklist and "google" in checklist
 

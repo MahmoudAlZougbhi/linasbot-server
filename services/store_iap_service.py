@@ -22,10 +22,12 @@ def _product_map() -> dict[str, str]:
             return {str(k): str(v) for k, v in data.items()}
     # Defaults — placeholders until store products exist (not secrets).
     return {
+        "com.linasai.app.lite.monthly": "lite",
         "com.linasai.app.starter.monthly": "starter",
         "com.linasai.app.growth.monthly": "growth",
         "com.linasai.app.pro.monthly": "pro",
         "com.linasai.app.max.monthly": "max",
+        "linas_ai_lite_monthly": "lite",
         "linas_ai_starter_monthly": "starter",
         "linas_ai_growth_monthly": "growth",
         "linas_ai_pro_monthly": "pro",

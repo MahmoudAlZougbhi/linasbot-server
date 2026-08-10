@@ -20,7 +20,7 @@ from services.plan_economics import PLAN_FAQ_MAX_ENTRIES, PLAN_FEATURES, PLAN_PR
 
 class StoreNotificationBody(BaseModel):
     tenant_id: str
-    plan_id: Literal["starter", "growth", "pro", "max"]
+    plan_id: Literal["lite", "starter", "growth", "pro", "max"]
     status: EntitlementStatus
     source: Literal["apple", "google"]
     original_transaction_id: str = Field(min_length=4)
@@ -35,23 +35,30 @@ async def get_my_entitlement(request: Request) -> Any:
 
 @app.get("/api/entitlements/plans")
 async def list_plans() -> Any:
+    """Authenticated mirror of the frozen five-plan catalog (same public fields)."""
+    from services.membership.plan_catalog import CATALOG_VERSION
+    from services.plan_economics import PLAN_ADDITIONAL_SEATS
+
     plans = []
     for plan_id, price in PLAN_PRICES_USD.items():
         allowance = recommend_allowance(plan_id)
+        features = PLAN_FEATURES[plan_id]
         plans.append(
             {
                 "plan_id": plan_id,
                 "price_usd": price,
-                "features": PLAN_FEATURES[plan_id],
-                "faq_enabled": bool(PLAN_FEATURES[plan_id].get("faq_enabled")),
+                "features": features,
+                "faq_enabled": bool(features.get("faq_enabled")),
                 "faq_max_entries": int(PLAN_FAQ_MAX_ENTRIES.get(plan_id, 0)),
                 "included_credits": allowance.included_credits,
                 "included_dm_replies": allowance.included_dm_replies,
                 "included_images": allowance.included_images,
                 "included_videos": allowance.included_videos,
+                "comment_automation": bool(features.get("comment_automation")),
+                "additional_seats": PLAN_ADDITIONAL_SEATS.get(plan_id),
             }
         )
-    return {"success": True, "plans": plans}
+    return {"success": True, "catalog_version": CATALOG_VERSION, "plans": plans}
 
 
 @app.post("/api/entitlements/store/notification")

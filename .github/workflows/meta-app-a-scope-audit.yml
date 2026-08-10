@@ -28,10 +28,58 @@ jobs:
           command_timeout: 5m
           script: |
             set -euo pipefail
+            APP_DIR=/opt/linasbot
+            if [ -f /opt/linasbot/linaslaserbot-2.7.22/main.py ]; then
+              APP_DIR=/opt/linasbot/linaslaserbot-2.7.22
+            fi
             cd /opt/linasbot
             git fetch origin main
             git checkout origin/main -- scripts/audit_meta_app_a_scopes.py
             set -a
-            source /opt/linasbot/.env
+            # Prefer app-dir env, then repo root env
+            if [ -f "$APP_DIR/.env" ]; then
+              # shellcheck disable=SC1090
+              source "$APP_DIR/.env"
+            elif [ -f /opt/linasbot/.env ]; then
+              # shellcheck disable=SC1091
+              source /opt/linasbot/.env
+            fi
             set +a
-            sudo -E PYTHONPATH=/opt/linasbot python3 scripts/audit_meta_app_a_scopes.py
+            if [ -f "$APP_DIR/venv/bin/activate" ]; then
+              # shellcheck disable=SC1091
+              source "$APP_DIR/venv/bin/activate"
+            elif [ -f /opt/linasbot/venv/bin/activate ]; then
+              # shellcheck disable=SC1091
+              source /opt/linasbot/venv/bin/activate
+            fi
+            export PYTHONPATH="$APP_DIR${PYTHONPATH:+:$PYTHONPATH}"
+            cd "$APP_DIR"
+            python3 scripts/audit_meta_app_a_scopes.py || python3 /opt/linasbot/scripts/audit_meta_app_a_scopes.py
+            python3 - <<'PY'
+from services.channel_capability_state import comment_capability_state, dm_capability_state
+from services.entitlements_service import entitlements_store
+from services.plan_economics import PLAN_PRICES_USD
+
+ent = entitlements_store.get("linas")
+print(f"[scope-audit] entitlement_plan={ent.plan_id} status={ent.status}")
+print(f"[scope-audit] catalog_plans={','.join(PLAN_PRICES_USD.keys())}")
+for platform in ("facebook", "instagram"):
+    st = comment_capability_state("linas", platform)
+    print(
+        f"[scope-audit] comments platform={platform} "
+        f"permission_present={st.get('permission_present')} "
+        f"webhook_subscribed={st.get('webhook_subscribed')} "
+        f"effective_enabled={st.get('effective_enabled')} "
+        f"blocker_code={st.get('blocker_code')} "
+        f"missing_scopes={','.join(st.get('missing_scopes') or []) or 'none'} "
+        f"advanced={st.get('app_review', {}).get('advanced_access_approved')}"
+    )
+    dm = dm_capability_state("linas", platform)
+    print(
+        f"[scope-audit] dm platform={platform} "
+        f"permission_present={dm.get('permission_present')} "
+        f"effective_enabled={dm.get('effective_enabled')} "
+        f"blocker_code={dm.get('blocker_code')}"
+    )
+print("[scope-audit] capability_probe_done")
+PY

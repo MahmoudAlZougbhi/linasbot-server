@@ -144,9 +144,44 @@ async def mobile_reconcile_comments(platform: str, request: Request) -> Any:
 
 @app.get("/api/mobile/usage")
 async def mobile_usage(request: Request) -> Any:
+    """Usage summary for mobile Dashboard / Usage screens.
+
+    Exposes used/limit fields the mobile UI already knows how to render.
+    Does not claim a full analytics portal — credits from the file ledger only.
+    """
+
     session = require_session(request)
     credit_ledger_service.ensure_period_grant(session.tenant_id)
+    from services.entitlements_service import entitlements_store
+    from services.plan_economics import PLAN_PRICES_USD, recommend_allowance
+
+    ent = entitlements_store.get(session.tenant_id)
+    available = int(credit_ledger_service.get_balance(session.tenant_id))
+    reserved = 0
+    try:
+        reserved = int(credit_ledger_service.get_reserved(session.tenant_id))
+    except Exception:
+        reserved = 0
+    limit = int(ent.included_credits + ent.extra_credits)
+    if limit <= 0 and ent.plan_id in PLAN_PRICES_USD:
+        limit = int(recommend_allowance(ent.plan_id).included_credits)
+    if limit <= 0:
+        limit = available + reserved
+    used = max(0, limit - available - reserved)
+    allowance = recommend_allowance(ent.plan_id) if ent.plan_id in PLAN_PRICES_USD else None
     return {
         "success": True,
-        "credit_balance": credit_ledger_service.get_balance(session.tenant_id),
+        "plan_id": ent.plan_id,
+        "status": ent.status,
+        "credit_balance": available,
+        "credits": limit,
+        "credits_limit": limit,
+        "credits_used": used,
+        "reserved_credits": reserved,
+        "included_credits": int(ent.included_credits),
+        "extra_credits": int(ent.extra_credits),
+        "included_dm_replies": int(allowance.included_dm_replies) if allowance else None,
+        "included_owner_messages": int(allowance.included_owner_messages) if allowance else None,
+        "included_images": int(allowance.included_images) if allowance else None,
+        "included_videos": int(allowance.included_videos) if allowance else None,
     }

@@ -1,6 +1,6 @@
 """FAQ / Smart Answers entitlements from central plan config.
 
-Source of truth: ``services.plan_economics`` (PLAN_FEATURES.faq_enabled + PLAN_FAQ_MAX_ENTRIES).
+Source of truth: ``services.membership.plan_catalog`` via ``services.plan_economics``.
 Quota counts CM FAQ *groups* (not language variants).
 """
 

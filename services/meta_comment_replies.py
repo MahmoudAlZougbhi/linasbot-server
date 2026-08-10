@@ -276,6 +276,13 @@ async def process_meta_comment_event(
     if _already_sent_reply(binding, comment_id):
         return CommentReplyResult(status="ignored", reason="already_replied")
 
+    from services.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
+
+    try:
+        assert_comment_automation_allowed(binding.tenant_id)
+    except CommentAutomationDenied:
+        return CommentReplyResult(status="ignored", reason="comment_automation_plan_denied")
+
     reply_setting = get_comment_reply_setting(
         tenant_id=binding.tenant_id,
         app_key=binding.app_key,
