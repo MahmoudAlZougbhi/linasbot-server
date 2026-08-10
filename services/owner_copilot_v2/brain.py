@@ -328,7 +328,13 @@ async def iter_owner_turn_v2_events(
                 for ch in choices_from_tool_result(result.name, result.data if isinstance(result.data, dict) else {}):
                     choices_acc.append(ch.to_dict())
                 if (
-                    result.name in {"propose_cm_patch", "propose_cm_article_upsert", "propose_cm_faq_upsert"}
+                    result.name
+                    in {
+                        "propose_cm_patch",
+                        "propose_cm_article_upsert",
+                        "propose_cm_faq_upsert",
+                        "propose_smart_answer",
+                    }
                     and result.ok
                     and isinstance(result.data, dict)
                 ):

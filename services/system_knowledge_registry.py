@@ -195,18 +195,34 @@ CAPABILITIES: tuple[Capability, ...] = (
     ),
     Capability(
         feature="smart_answers_faq",
-        description="FAQ Smart Answers — semantic Q→A fast path with plan entitlements/quota.",
+        description=(
+            "Smart Answers / FAQ — ready-made multilingual Q&A. When a customer asks the same "
+            "question or same meaning, the bot answers from FAQ (automated reply) instead of a full "
+            "AI generation, saving AI credits. Entries auto-translate to Arabic, English, French, "
+            "and Franco (code: franco). Plan entitlements cap how many FAQ groups you can store."
+        ),
         route="cm",
         entitlement="faq_enabled",
         status="available",
         help_steps=(
-            "Open Content Management → FAQ / Smart Answers.",
-            "Quota is plan-based (e.g. 143 / 200); upgrade when at limit.",
-            "Ask the copilot to save a Smart Answer (approval required).",
+            "Open Smart Answers / FAQ (mobile Control Center) or Content Management → FAQ (web).",
+            "Check quota (e.g. 143 / 200); upgrade when at limit. Starter/Growth ~200; Pro/Max ~1000.",
+            "Add in one language — the system creates the linked 4-language group (ar/en/fr/franco).",
+            "Or ask Owner Copilot: “add this Q&A to FAQ” → proposal card → Approve → Live for customers.",
+            "Matching customer questions hit FAQ first and skip LLM cost (see generations_avoided metrics).",
         ),
-        tools=("read_faq_quota", "propose_smart_answer", "approve_smart_answer"),
-        blockers=("No paid plan → FAQ disabled. Entry plans ~200; higher ~1000.",),
-        keywords=("faq", "smart answer", "quota", "smart answers"),
+        tools=(
+            "read_faq_quota",
+            "propose_smart_answer",
+            "approve_smart_answer",
+            "list_cm_faq",
+            "propose_cm_faq_upsert",
+        ),
+        blockers=(
+            "No paid plan → FAQ disabled. Entry plans ~200 groups; higher ~1000.",
+            "Incomplete 4-language groups stay draft until complete.",
+        ),
+        keywords=("faq", "smart answer", "quota", "smart answers", "franco", "auto-translate", "save credits"),
         tags=("cm", "faq"),
     ),
     Capability(

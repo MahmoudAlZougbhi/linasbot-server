@@ -25,7 +25,7 @@ import { IntegrationsScreen } from './src/features/integrations/IntegrationsScre
 import { LiveChatScreen } from './src/features/livechat/LiveChatScreen';
 import { NotificationsScreen } from './src/features/notifications/NotificationsScreen';
 import { tryRegisterOwnerPushScaffold } from './src/features/notifications/pushScaffold';
-import { FaqScreen } from './src/features/faq/FaqScreen';
+import { FaqRoute } from './src/features/faq/FaqRoute';
 import { SettingsScreen } from './src/features/settings/SettingsScreen';
 import { SimpleResourceScreen } from './src/features/shared/SimpleResourceScreen';
 import { UsersScreen } from './src/features/users/UsersScreen';
@@ -381,7 +381,11 @@ function AppBody() {
         />
       ) : null}
       {screen.name === 'faq' ? (
-        <FaqScreen onBack={() => setScreen({ name: 'chat' })} proposalReview={screen.proposalReview ?? null} />
+        <FaqRoute
+          onBack={() => setScreen({ name: 'chat' })}
+          onGoChat={() => setScreen({ name: 'chat' })}
+          proposalReview={screen.proposalReview ?? null}
+        />
       ) : null}
       {screen.name === 'resource' ? (
         <SimpleResourceScreen

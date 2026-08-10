@@ -26,7 +26,7 @@ export const CONTROL_ITEMS: ControlItem[] = [
   {
     id: 'faq',
     title: 'Smart Answers / FAQ',
-    subtitle: 'Saved Q&A with auto-translate',
+    subtitle: 'Ready-made Q&A — saves AI cost',
     group: 'operate',
   },
   { id: 'livechat', title: 'Live Chat', subtitle: 'Read-only IG/FB inbox', group: 'operate' },

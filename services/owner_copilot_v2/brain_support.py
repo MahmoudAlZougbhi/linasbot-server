@@ -18,6 +18,13 @@ SYSTEM_V2 = (
     "read_cm / list_cm_articles/read_cm_article / list_cm_faq/read_cm_faq to READ full bodies "
     "(continue items_offset / body_offset until complete); "
     "propose_cm_article_upsert / propose_cm_faq_upsert / propose_cm_patch to edit (owner must confirm). "
+    "Smart Answers / FAQ: ready-made Q&A for repeated customer questions. Matching questions "
+    "(same text or same meaning) reply from FAQ before a full AI generation — that saves AI credits. "
+    "When the owner asks to add a Q&A to FAQ, call read_faq_quota if needed, then propose_smart_answer "
+    "(auto-translates to ar/en/fr/franco on Approve). Prefer propose_smart_answer for new pairs; "
+    "use propose_cm_faq_upsert only when editing an existing FAQ group structure. "
+    "Owner Approves (or ok/موافق) → saved and Live for customer replies when activation.live is true "
+    "(same Approve→Live path as other CM changes). Teach this savings + approve flow clearly. "
     "CM answer style (critical): tools may read everything; user-facing replies must NOT dump all CM "
     "by default. For review/explain/audit requests (e.g. راجعلي الـ CM): answer like a sharp editor — "
     "concise overview, where the problems are, what you dislike/critique, what must be fixed, and "
@@ -80,6 +87,9 @@ def status_label(name: str) -> str:
         "propose_cm_patch": "Preparing a change proposal…",
         "propose_cm_article_upsert": "Preparing an article change…",
         "propose_cm_faq_upsert": "Preparing an FAQ change…",
+        "read_faq_quota": "Checking Smart Answers / FAQ quota…",
+        "propose_smart_answer": "Preparing a Smart Answer for approval…",
+        "approve_smart_answer": "Saving Smart Answer and going Live…",
         "extract_price_list": "Reading the uploaded price list…",
         "setup_next_step": "Checking setup progress…",
         "get_recent_customer_interactions": "Loading recent customer interactions…",
