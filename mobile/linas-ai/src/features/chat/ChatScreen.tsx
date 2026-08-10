@@ -184,16 +184,7 @@ export function ChatScreen({
     setAuthGate(true);
   }
 
-  if (loading) {
-    return (
-      <GradientBackground>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.accent} />
-        </View>
-      </GradientBackground>
-    );
-  }
-
+  // ChatGPT-like open: keep chat chrome up — no second full-screen spinner after boot.
   return (
     <GradientBackground>
       <KeyboardAvoidingView
@@ -244,39 +235,45 @@ export function ChatScreen({
           }}
         />
 
-        <ChatMessageList
-          listRef={listRef}
-          listKey={listKey}
-          messages={messages}
-          isAuthenticated={isAuthenticated}
-          stickToBottomRef={stickToBottomRef}
-          scrollToBottom={scrollToBottom}
-          imagePreviewByContent={imagePreviewByContent}
-          statusRows={turn.statusRows}
-          liveText={turn.liveText}
-          cards={turn.cards}
-          proposedPatch={isAuthenticated ? owner.proposedPatch : null}
-          hasMore={isAuthenticated ? owner.hasMore : false}
-          loadingMore={isAuthenticated ? owner.loadingMore : false}
-          onLoadOlder={() => {
-            if (isAuthenticated) void owner.loadOlder();
-          }}
-          onRetryAssistant={(content) => void turn.send(content)}
-          onApproveDraft={(token) => void turn.send('', { confirm_tool: token })}
-          onDiscardProposal={() => {
-            owner.setProposedPatch(null);
-            owner.setPendingConfirm(null);
-          }}
-          onOpenCm={() => onOpenArea('cm')}
-          onGuestPrompt={(prompt) => {
-            if (guest.gated) {
-              openAuthPreservingDraft(true);
-              return;
-            }
-            scrollToBottom();
-            void guest.send(prompt);
-          }}
-        />
+        {loading ? (
+          <View style={styles.center} accessibilityLabel="Loading conversation">
+            <ActivityIndicator color={colors.accent} />
+          </View>
+        ) : (
+          <ChatMessageList
+            listRef={listRef}
+            listKey={listKey}
+            messages={messages}
+            isAuthenticated={isAuthenticated}
+            stickToBottomRef={stickToBottomRef}
+            scrollToBottom={scrollToBottom}
+            imagePreviewByContent={imagePreviewByContent}
+            statusRows={turn.statusRows}
+            liveText={turn.liveText}
+            cards={turn.cards}
+            proposedPatch={isAuthenticated ? owner.proposedPatch : null}
+            hasMore={isAuthenticated ? owner.hasMore : false}
+            loadingMore={isAuthenticated ? owner.loadingMore : false}
+            onLoadOlder={() => {
+              if (isAuthenticated) void owner.loadOlder();
+            }}
+            onRetryAssistant={(content) => void turn.send(content)}
+            onApproveDraft={(token) => void turn.send('', { confirm_tool: token })}
+            onDiscardProposal={() => {
+              owner.setProposedPatch(null);
+              owner.setPendingConfirm(null);
+            }}
+            onOpenCm={() => onOpenArea('cm')}
+            onGuestPrompt={(prompt) => {
+              if (guest.gated) {
+                openAuthPreservingDraft(true);
+                return;
+              }
+              scrollToBottom();
+              void guest.send(prompt);
+            }}
+          />
+        )}
 
         {isAuthenticated ? (
           <ChoiceChips

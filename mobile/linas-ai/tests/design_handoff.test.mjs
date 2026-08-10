@@ -74,6 +74,30 @@ test('App launches chat-first for guest and owner', () => {
   assert.doesNotMatch(app, /CreativeStudio/);
 });
 
+test('cold open is branded star splash then chat (no character mash / progress boot)', () => {
+  const boot = read('features/boot/BootSplash.tsx');
+  const index = readFileSync(join(root, 'index.ts'), 'utf8');
+  const appJson = readFileSync(join(root, 'app.json'), 'utf8');
+  const chat = read('features/chat/ChatScreen.tsx');
+  assert.match(boot, /splash-icon\.png/);
+  assert.match(boot, /isReduceMotionEnabled|reduceMotionChanged/);
+  assert.match(boot, /SplashScreen\.hideAsync/);
+  assert.doesNotMatch(boot, /LinasAvatar/);
+  assert.doesNotMatch(boot, /Opening Linas AI/);
+  assert.doesNotMatch(boot, /progressTrack|styles\.track/);
+  assert.match(index, /preventAutoHideAsync/);
+  assert.match(appJson, /"backgroundColor":\s*"#0B3D34"/);
+  assert.match(appJson, /"bundleIdentifier":\s*"com\.linasai\.app"/);
+  assert.match(appJson, /"package":\s*"com\.linasai\.app"/);
+  assert.match(appJson, /expo-audio/);
+  assert.doesNotMatch(
+    chat,
+    /if \(loading\) \{\s*return \(\s*<GradientBackground>\s*<View style=\{styles\.center\}>/,
+  );
+  assert.match(chat, /loading \? \(/);
+});
+
+
 test('proposal card exposes complete V2 actions beyond Review/Discard', () => {
   const card = read('features/chat/v2/ProposalCard.tsx');
   for (const needle of [

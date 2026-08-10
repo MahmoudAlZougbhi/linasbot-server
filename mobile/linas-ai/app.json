@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "scheme": "linasai",
     "ios": {
       "supportsTablet": true,
@@ -55,8 +55,13 @@
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#FFFFFF"
+          "backgroundColor": "#0B3D34",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#0B3D34"
+          }
         }
       ],
       "expo-status-bar"
