@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import {
   Animated,
   Dimensions,
+  Keyboard,
   Pressable,
   StyleSheet,
   View,
@@ -38,6 +39,9 @@ export function SideDrawer({
   const fade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (open) {
+      Keyboard.dismiss();
+    }
     Animated.parallel([
       Animated.timing(anim, {
         toValue: open ? 0 : closedX,

@@ -26,4 +26,5 @@ export const DRAWER_TOOL_ICONS = {
   close: feather('x'),
   pin: feather('bookmark'),
   overflow: feather('more-horizontal'),
+  newChat: feather('plus'),
 } as const;
