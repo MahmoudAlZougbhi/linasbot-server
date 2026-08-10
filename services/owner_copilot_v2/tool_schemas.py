@@ -156,3 +156,7 @@ OWNER_V2_TOOL_SCHEMAS: list[dict[str, Any]] = [
     *OWNER_V2_CORE_TOOL_SCHEMAS,
     *OWNER_V2_CM_TOOL_SCHEMAS,
 ]
+
+
+def tool_names() -> list[str]:
+    return [str(t["function"]["name"]) for t in OWNER_V2_TOOL_SCHEMAS]
