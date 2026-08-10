@@ -30,6 +30,7 @@ _ROUTE_MODULES = (
     "modules.owner_notifications_api",
     "modules.guest_ai_api",
     "modules.entitlements_api",
+    "modules.plans_api",
     "modules.creative_api",
     "modules.schedule_api",
     "modules.platform_api",
@@ -184,9 +185,9 @@ class TestRouteInventory:
         # +guest-ai session/messages (prefix-public, rate-limited).
         # +owner-notifications inbox/read/device-token + mobile STT (protected).
         # +owner-ai v2 flags/attachment-types/attachments/stream/choices (protected).
-        assert counts["total_api_routes"] == 218
-        assert counts["public"] == 18
-        assert counts["protected"] == 200
+        assert counts["total_api_routes"] == 220
+        assert counts["public"] == 19
+        assert counts["protected"] == 201
         assert public_set == {
             ("GET", "/api/health"),
             ("GET", "/api/ready"),
@@ -198,6 +199,7 @@ class TestRouteInventory:
             ("POST", "/api/auth/verify-email"),
             ("POST", "/api/auth/resend-verification"),
             ("GET", "/api/billing/packages"),
+            ("GET", "/api/public/plans"),
             ("POST", "/api/billing/stripe/webhook"),
             ("POST", "/api/auth/mobile/login"),
             ("POST", "/api/auth/mobile/refresh"),
