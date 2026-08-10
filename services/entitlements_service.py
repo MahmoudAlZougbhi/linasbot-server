@@ -179,10 +179,8 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
         "subscription_required": not exempt,
         "subscription_exempt": exempt,
         "iap_purchase_in_app": False,
-        "iap_note": (
-            "App Store / Play purchase notifications map to entitlements; "
-            "in-app buy buttons are not wired yet — use admin set-plan for test tenants."
-        ),
+        # Never surface engineering notes in mobile/client UI.
+        "iap_note": None,
     }
 
 

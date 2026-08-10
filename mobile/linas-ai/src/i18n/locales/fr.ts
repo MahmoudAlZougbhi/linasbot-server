@@ -57,7 +57,7 @@ export const fr: Record<StringKey, string> = {
   photos: 'Photos',
   files: 'Fichiers',
   attachVideo: 'Joindre une vidéo',
-  attachSoon: 'Pas encore branché en production',
+  attachSoon: 'Bientôt',
   addToChat: 'Ajouter au chat',
   linEffortTitle: '5.6 LIN',
   linEffortLow: 'Low',
@@ -111,12 +111,12 @@ export const fr: Record<StringKey, string> = {
   commentsStatusReadyToEnable: 'Commentaires : Prêts — activez le bouton',
   commentsStatusNeedsWebhook: 'Commentaires : Configuration webhook requise',
   commentsStatusNeedsPermission: 'Commentaires : Permission requise',
-  refreshConnectionStatus: 'Actualiser l’état de la connexion',
+  refreshConnectionStatus: 'Actualiser les connexions',
   refreshConnectionStatusHint:
-    'Actualisation en lecture seule depuis le serveur. N’accorde pas de permissions et ne modifie pas les webhooks.',
-  testConnectionReadOnly: 'Actualiser l’état de la connexion',
+    'Actualise l’état de vos connexions Instagram et Facebook sans rien modifier.',
+  testConnectionReadOnly: 'Actualiser les connexions',
   testConnectionReadOnlyHint:
-    'Actualisation en lecture seule depuis le serveur. N’accorde pas de permissions et ne modifie pas les webhooks.',
+    'Actualise l’état de vos connexions Instagram et Facebook sans rien modifier.',
   platformInstagram: 'Instagram',
   platformFacebook: 'Facebook',
   platformTikTok: 'TikTok',
@@ -134,7 +134,7 @@ export const fr: Record<StringKey, string> = {
   likeFaqAction: 'J’aime',
   likeFaqTitle: 'Enregistrer dans la FAQ (4 langues)',
   likeFaqHint:
-    'Enregistre dans Gestion de contenu → FAQ comme un groupe lié (arabe, anglais, français, franco). Brouillon jusqu’à publication — ne réentraîne pas un modèle IA.',
+    'Enregistre dans la FAQ comme un groupe lié (arabe, anglais, français, franco). Brouillon jusqu’à publication.',
   likeFaqQuestion: 'Question client',
   likeFaqAnswer: 'Réponse IA',
   likeFaqQuestionPlaceholder: 'Modifier la question…',
@@ -182,7 +182,7 @@ export const fr: Record<StringKey, string> = {
   usersDeleteError: 'Impossible de supprimer l’utilisateur.',
   usersForbiddenTitle: 'Permission de gestion des utilisateurs requise',
   usersForbiddenBody:
-    'Votre compte nécessite la permission userManagement (admin). Demandez l’accès au propriétaire.',
+    'Votre compte nécessite la permission de gérer les utilisateurs. Demandez l’accès au propriétaire de l’espace.',
   usersAuthBody: 'Connectez-vous pour gérer les membres et les permissions.',
   usersCountOne: '1 membre',
   usersCountMany: '{n} membres',
@@ -195,7 +195,7 @@ export const fr: Record<StringKey, string> = {
   statusSuspended: 'Suspendu',
   permDashboard: 'Tableau de bord',
   permLiveChat: 'Live Chat',
-  permTraining: 'Formation (legacy)',
+  permTraining: 'Formation',
   permTesting: 'Labo de test',
   permAnalytics: 'Analytique',
   permSmartMessaging: 'Messagerie intelligente',
@@ -248,4 +248,10 @@ export const fr: Record<StringKey, string> = {
   faqSaved: 'Enregistré en 4 langues.',
   faqLoadError: 'Impossible de charger la FAQ.',
   faqCreateError: 'Impossible de créer la FAQ.',
+  subscribeGateTitle: 'Abonnez-vous pour continuer',
+  subscribeGateBody:
+    'Choisissez une offre pour débloquer votre assistant IA, la gestion de contenu et les intégrations réseaux sociaux. Le mode invité reste disponible sans abonnement.',
+  subscribeGateViewPlans: 'Voir les offres',
+  subscribeGateRefresh: 'Je suis déjà abonné — actualiser',
+  subscribeGateSignOut: 'Se déconnecter',
 };

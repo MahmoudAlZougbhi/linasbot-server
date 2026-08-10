@@ -19,6 +19,7 @@ export function SimpleResourceScreen({ title, path, onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState('');
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,11 +29,13 @@ export function SimpleResourceScreen({ title, path, onBack }: Props) {
       try {
         const data = await apiFetch(path, { schema: LooseSchema });
         if (!cancelled) {
-          setPayload(JSON.stringify(data, null, 2));
+          setLoaded(true);
+          setPayload(__DEV__ ? JSON.stringify(data, null, 2) : '');
         }
       } catch {
         if (!cancelled) {
-          setError('Failed to load. Go back and open again to retry.');
+          setLoaded(false);
+          setError('Something went wrong. Please go back and try again.');
         }
       } finally {
         if (!cancelled) {
@@ -50,10 +53,12 @@ export function SimpleResourceScreen({ title, path, onBack }: Props) {
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <ScrollView>
-        {payload ? (
+        {__DEV__ && payload ? (
           <Text style={styles.mono}>{payload}</Text>
+        ) : !loading && !error && loaded ? (
+          <EmptyState title="Ready" body="This section loaded successfully." />
         ) : !loading && !error ? (
-          <EmptyState title="No data" />
+          <EmptyState title="Nothing to show" body="Please try again later." />
         ) : null}
       </ScrollView>
     </ScreenChrome>

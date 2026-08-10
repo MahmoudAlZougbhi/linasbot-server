@@ -44,7 +44,7 @@ export function LoginScreen({ onLoggedIn, onGoRegister, onBack }: Props) {
         setError(
           err.status === 401 || err.status === 403
             ? 'Login failed. Check your email and password.'
-            : 'Linas API is not ready for mobile login yet. Try again after the beta backend is live.',
+            : 'Something went wrong. Please try again.',
         );
       } else {
         setError('Unable to reach Linas AI. Check your network and try again.');

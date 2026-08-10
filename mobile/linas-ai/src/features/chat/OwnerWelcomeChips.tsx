@@ -1,7 +1,9 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { fonts, radii, spacing, useTheme } from '../../theme';
-import { OWNER_WELCOME_CHIPS, type OwnerWelcomeChip } from './ownerWelcomeChips';
+import { OWNER_WELCOME_CHIPS, type OwnerWelcomeChip } from './ownerWelcomeChipData';
+
+export type { OwnerWelcomeChip };
 
 type Props = {
   disabled?: boolean;

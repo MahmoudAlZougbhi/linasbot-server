@@ -30,9 +30,9 @@ export const CONTROL_ITEMS: ControlItem[] = [
     group: 'operate',
   },
   { id: 'livechat', title: 'Live Chat', subtitle: 'Read-only IG/FB inbox', group: 'operate' },
-  { id: 'integrations', title: 'Integrations', subtitle: 'Instagram & Facebook (App A)', group: 'operate' },
+  { id: 'integrations', title: 'Integrations', subtitle: 'Instagram & Facebook', group: 'operate' },
   { id: 'users', title: 'Users', subtitle: 'Members & permissions', group: 'account' },
-  { id: 'subscription', title: 'Subscription', subtitle: 'Plans & entitlements', group: 'account' },
+  { id: 'subscription', title: 'Subscription', subtitle: 'Plans & billing', group: 'account' },
   { id: 'usage', title: 'Usage & Credits', subtitle: 'Included usage balance', group: 'account' },
   { id: 'settings', title: 'Settings', subtitle: 'Preferences & legal', group: 'account' },
   {

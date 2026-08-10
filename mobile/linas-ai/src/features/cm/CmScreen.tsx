@@ -126,7 +126,7 @@ export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
   return (
     <ScreenChrome
       title="Content Management"
-      subtitle="Configure the AI that answers DMs and comments — not social publishing"
+      subtitle="Configure the AI that answers customer DMs and comments"
       onBack={onBack}
     >
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
@@ -221,13 +221,16 @@ export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
         {summary.published ? null : (
           <View style={[styles.sticky, { backgroundColor: colors.accent }]}>
             <Text style={{ color: colors.onAccent, fontFamily: fonts.bodyMedium, textAlign: 'center' }}>
-              Review & Publish when ready (explicit confirmation)
+              Review & publish when ready
             </Text>
           </View>
         )}
 
         {!loading && !meta && !error ? (
-          <EmptyState title="CM unavailable" body="Retry after API deploy." />
+          <EmptyState
+            title="Content Management unavailable"
+            body="Something went wrong. Please try again."
+          />
         ) : null}
       </ScrollView>
     </ScreenChrome>

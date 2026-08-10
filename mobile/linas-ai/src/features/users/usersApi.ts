@@ -83,7 +83,7 @@ export function usersErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof ApiError) {
     const fromBody = bodyError(err.body);
     if (fromBody) return fromBody;
-    if (err.status === 403) return 'Forbidden — userManagement permission required.';
+    if (err.status === 403) return 'You do not have permission to manage users.';
     if (err.status === 401) return 'Not authenticated.';
   }
   if (err instanceof Error && err.message) return err.message;

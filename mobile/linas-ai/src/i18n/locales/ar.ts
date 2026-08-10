@@ -55,7 +55,7 @@ export const ar: Record<StringKey, string> = {
   photos: 'الصور',
   files: 'الملفات',
   attachVideo: 'إرفاق فيديو',
-  attachSoon: 'غير مفعّل في الإنتاج بعد',
+  attachSoon: 'قريباً',
   addToChat: 'إضافة إلى المحادثة',
   linEffortTitle: '5.6 LIN',
   linEffortLow: 'Low',
@@ -106,12 +106,12 @@ export const ar: Record<StringKey, string> = {
   commentsStatusReadyToEnable: 'التعليقات: جاهزة — فعّل المفتاح',
   commentsStatusNeedsWebhook: 'التعليقات: إعداد ويبهوك مطلوب',
   commentsStatusNeedsPermission: 'التعليقات: صلاحية مطلوبة',
-  refreshConnectionStatus: 'تحديث حالة الاتصال',
+  refreshConnectionStatus: 'تحديث الاتصالات',
   refreshConnectionStatusHint:
-    'تحديث للقراءة فقط من الخادم. لا يمنح صلاحيات ولا يغيّر الاشتراكات.',
-  testConnectionReadOnly: 'تحديث حالة الاتصال',
+    'يتحقق من حالة اتصال إنستغرام وفيسبوك دون تغيير أي شيء.',
+  testConnectionReadOnly: 'تحديث الاتصالات',
   testConnectionReadOnlyHint:
-    'تحديث للقراءة فقط من الخادم. لا يمنح صلاحيات ولا يغيّر الاشتراكات.',
+    'يتحقق من حالة اتصال إنستغرام وفيسبوك دون تغيير أي شيء.',
   platformInstagram: 'إنستغرام',
   platformFacebook: 'فيسبوك',
   platformTikTok: 'تيك توك',
@@ -129,7 +129,7 @@ export const ar: Record<StringKey, string> = {
   likeFaqAction: 'إعجاب',
   likeFaqTitle: 'حفظ في الأسئلة الشائعة (4 لغات)',
   likeFaqHint:
-    'يُحفظ في إدارة المحتوى ← الأسئلة الشائعة كمجموعة مرتبطة (عربي، إنجليزي، فرنسي، فرانكو). مسودة حتى النشر — لا يعيد تدريب نموذج الذكاء الاصطناعي.',
+    'يُحفظ في الأسئلة الشائعة كمجموعة مرتبطة (عربي، إنجليزي، فرنسي، فرانكو). مسودة حتى النشر.',
   likeFaqQuestion: 'سؤال الزبون',
   likeFaqAnswer: 'رد الذكاء الاصطناعي',
   likeFaqQuestionPlaceholder: 'عدّل السؤال…',
@@ -176,7 +176,7 @@ export const ar: Record<StringKey, string> = {
   usersDeleteError: 'تعذر حذف المستخدم.',
   usersForbiddenTitle: 'صلاحية إدارة المستخدمين مطلوبة',
   usersForbiddenBody:
-    'حسابك يحتاج صلاحية userManagement (مسؤول). اطلب من المالك منح الوصول.',
+    'حسابك يحتاج صلاحية إدارة المستخدمين. اطلب من مالك مساحة العمل منح الوصول.',
   usersAuthBody: 'سجّل الدخول لإدارة أعضاء الفريق والصلاحيات.',
   usersCountOne: 'عضو واحد',
   usersCountMany: '{n} أعضاء',
@@ -189,7 +189,7 @@ export const ar: Record<StringKey, string> = {
   statusSuspended: 'موقوف',
   permDashboard: 'لوحة التحكم',
   permLiveChat: 'الدردشة المباشرة',
-  permTraining: 'التدريب (قديم)',
+  permTraining: 'التدريب',
   permTesting: 'مختبر الاختبار',
   permAnalytics: 'التحليلات',
   permSmartMessaging: 'الرسائل الذكية',
@@ -242,4 +242,10 @@ export const ar: Record<StringKey, string> = {
   faqSaved: 'تم الحفظ بأربع لغات.',
   faqLoadError: 'تعذر تحميل الأسئلة الشائعة.',
   faqCreateError: 'تعذر إنشاء السؤال.',
+  subscribeGateTitle: 'اشترك للمتابعة',
+  subscribeGateBody:
+    'اختر خطة لفتح مساعدك الذكي وإدارة المحتوى وتكاملات السوشال ميديا. وضع الضيف يبقى متاحاً بدون اشتراك.',
+  subscribeGateViewPlans: 'عرض الخطط',
+  subscribeGateRefresh: 'اشتركت بالفعل — تحديث',
+  subscribeGateSignOut: 'تسجيل الخروج',
 };

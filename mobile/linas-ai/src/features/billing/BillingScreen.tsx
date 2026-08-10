@@ -33,16 +33,26 @@ export function BillingScreen({ onBack }: Props) {
       try {
         const data = await apiFetch('/api/entitlements/me', { schema: EntitlementsSchema });
         const record = data as Record<string, unknown>;
+        const entitlement =
+          record.entitlement && typeof record.entitlement === 'object'
+            ? (record.entitlement as Record<string, unknown>)
+            : record;
         const p =
+          (typeof entitlement.plan_id === 'string' && entitlement.plan_id) ||
+          (typeof entitlement.plan === 'string' && entitlement.plan) ||
           (typeof record.plan === 'string' && record.plan) ||
           (typeof record.plan_id === 'string' && record.plan_id) ||
           (typeof record.tier === 'string' && record.tier) ||
           null;
-        setPlan(p);
-        setRaw(JSON.stringify(data, null, 2));
+        setPlan(p && p !== 'none' ? p : null);
+        if (__DEV__) {
+          setRaw(JSON.stringify(data, null, 2));
+        } else {
+          setRaw('');
+        }
         setError(null);
       } catch {
-        setError('Entitlements unavailable. Store IAP may still be pending.');
+        setError('Something went wrong loading your plan. Please try again.');
         setRaw('');
         setPlan(null);
       } finally {
@@ -52,11 +62,7 @@ export function BillingScreen({ onBack }: Props) {
   }, []);
 
   return (
-    <ScreenChrome
-      title="Subscription"
-      subtitle="List prices + server entitlements (no fake IAP)"
-      onBack={onBack}
-    >
+    <ScreenChrome title="Subscription" subtitle="Choose the plan that fits your business" onBack={onBack}>
       <View style={styles.toggleRow}>
         <Pressable
           style={[styles.toggle, !yearly && styles.toggleOn]}
@@ -73,12 +79,10 @@ export function BillingScreen({ onBack }: Props) {
       </View>
 
       <View style={styles.banner}>
-        <StatusChip label="IAP external" tone="soon" />
         <Text style={styles.bannerText}>
-          Prices match product catalog. Purchase happens in App Store / Play — this screen shows
-          entitlements only.
+          Browse plans below. Purchases are completed through the App Store or Google Play.
         </Text>
-        {plan ? <Text style={styles.current}>Current entitlement plan: {plan}</Text> : null}
+        {plan ? <Text style={styles.current}>Current plan: {plan}</Text> : null}
       </View>
 
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
@@ -109,13 +113,17 @@ export function BillingScreen({ onBack }: Props) {
             </View>
           );
         })}
-        {raw ? (
+        {__DEV__ && raw ? (
           <View style={styles.rawBox}>
-            <Text style={styles.rawLabel}>Entitlements payload</Text>
+            <Text style={styles.rawLabel}>Dev: entitlements response</Text>
             <Text style={styles.mono}>{raw}</Text>
           </View>
-        ) : !loading && !error ? (
-          <EmptyState title="No entitlement data" body="Sign in after API deploy." />
+        ) : null}
+        {!loading && !error && !plan ? (
+          <EmptyState
+            title="No active plan yet"
+            body="Choose a plan above, or refresh after purchasing."
+          />
         ) : null}
       </ScrollView>
     </ScreenChrome>
