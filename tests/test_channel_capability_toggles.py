@@ -28,6 +28,10 @@ def test_attach_toggles_only_on_meta_channels(monkeypatch) -> None:
         "services.channel_capability_toggles.channel_toggle_states",
         lambda _tenant, platform: {"dm": platform == "instagram", "comments": False},
     )
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.comments_enable_blocker",
+        lambda _tenant, platform: "missing_comment_permissions" if platform == "instagram" else None,
+    )
     rows = [
         {"platform": "instagram", "label": "Instagram", "connected": True, "coming_soon": False},
         {"platform": "facebook", "label": "Facebook", "connected": False, "coming_soon": False},
@@ -35,7 +39,9 @@ def test_attach_toggles_only_on_meta_channels(monkeypatch) -> None:
     ]
     out = attach_channel_toggles(rows, tenant_id="linas")
     assert out[0]["toggles"] == {"dm": True, "comments": False}
+    assert out[0]["comments_blocker"] == "missing_comment_permissions"
     assert out[1]["toggles"] == {"dm": False, "comments": False}
+    assert "comments_blocker" not in out[1]
     assert "toggles" not in out[2]
 
 

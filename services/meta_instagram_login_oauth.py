@@ -315,6 +315,12 @@ async def complete_instagram_login(
             if item.binding_id == binding.binding_id
         )
         current_registry.archive_superseded_duplicate_bindings(actor_id=actor_id)
+        from services.channel_capability_toggles import sync_published_comment_assets_if_enabled
+
+        try:
+            await sync_published_comment_assets_if_enabled(tenant_id=tenant_id, platform="instagram")
+        except Exception:
+            pass
         return InstagramLoginOAuthResult(
             binding=binding,
             instagram_username=instagram_username,

@@ -19,7 +19,12 @@ from services.meta_app_registry import (
     meta_multi_app_registry_enabled,
     verify_any_meta_challenge_token,
 )
-from services.meta_comment_events import ResolvedMetaCommentEvent, resolve_registry_comment_events
+from services.meta_comment_events import (
+    ResolvedMetaCommentEvent,
+    count_raw_comment_changes,
+    resolve_registry_comment_events,
+    summarize_comment_resolve_drops,
+)
 from services.meta_comment_replies import process_meta_comment_event
 from services.meta_cross_flow_dedup import (
     GLOBAL_COMMENT_CLAIM_NAMESPACE,
@@ -235,12 +240,26 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
     comment_accepted = 0
     comment_duplicates = 0
     resolved_comment_events: list[ResolvedMetaCommentEvent] = []
+    raw_comment_changes = count_raw_comment_changes(payload)
     if registry_enabled and signed_app is not None and signed_app.key == APP_A_KEY:
         resolved_comment_events = resolve_registry_comment_events(
             payload,
             app_config=signed_app,
             auth_flow="facebook_login",
         )
+        if raw_comment_changes and not resolved_comment_events:
+            drop = summarize_comment_resolve_drops(
+                payload,
+                app_config=signed_app,
+                auth_flow="facebook_login",
+            )
+            _runtime_logger.warning(
+                "[meta-comment] events_dropped object=%s raw=%d resolved=0 bindings=%d reasons=%s",
+                payload_object,
+                drop["raw_comment_changes"],
+                drop["active_bindings"],
+                drop["skip_reasons"],
+            )
 
     async def _process_comment_claimed(resolved: ResolvedMetaCommentEvent) -> None:
         from services.durable_event_claim import complete_event_claim, release_event_claim
@@ -311,10 +330,11 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
         channel_counts["facebook"],
         channel_counts["instagram"],
     )
-    if resolved_comment_events:
+    if resolved_comment_events or raw_comment_changes:
         _runtime_logger.info(
-            "[meta-comment] webhook_authenticated object=%s parsed=%d accepted=%d duplicates=%d",
+            "[meta-comment] webhook_authenticated object=%s raw=%d parsed=%d accepted=%d duplicates=%d",
             payload_object,
+            raw_comment_changes,
             len(resolved_comment_events),
             comment_accepted,
             comment_duplicates,
