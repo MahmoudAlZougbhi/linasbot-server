@@ -12,8 +12,8 @@ from services.entitlements_service import (
 )
 from services.membership.plan_catalog import PLAN_CATALOG
 from services.owner_ai_account_state import compute_cm_progress
-from services.platform_owner_service import PlatformOwnerService
 from services.plan_economics import PLAN_PRICES_USD, recommend_allowance
+from services.platform_owner_service import PlatformOwnerService
 from services.tenant_mobile_dashboard.channels import build_channel_breakdown
 from services.tenant_mobile_dashboard.periods import (
     PeriodValidationError,
@@ -182,9 +182,7 @@ def _team_capacity(tenant_id: str, plan_id: str | None) -> dict[str, Any]:
         from services.user_service import user_service
 
         users = [
-            u
-            for u in user_service.get_all_users()
-            if str(u.get("tenantId") or "linas").strip().lower() == tenant_id
+            u for u in user_service.get_all_users() if str(u.get("tenantId") or "linas").strip().lower() == tenant_id
         ]
     except Exception as exc:
         return _section_error("users_unavailable", str(exc))
@@ -201,7 +199,9 @@ def _team_capacity(tenant_id: str, plan_id: str | None) -> dict[str, Any]:
     active_additional = len(additional)
     # Invitation system is not implemented — report honestly.
     pending_invitations = 0
-    remaining = None if unlimited else (None if seats is None else max(0, int(seats) - active_additional - pending_invitations))
+    remaining = (
+        None if unlimited else (None if seats is None else max(0, int(seats) - active_additional - pending_invitations))
+    )
     return _section_ok(
         {
             "owner": {
@@ -248,10 +248,14 @@ def build_tenant_mobile_dashboard(
 
     try:
         usage = aggregate_tenant_usage(tid, start_ts=float(window["start_ts"]), end_ts=float(window["end_ts"]))
-        usage_section = _section_ok(usage) if usage.get("status") == "ok" else {
-            "availability": "empty",
-            **usage,
-        }
+        usage_section = (
+            _section_ok(usage)
+            if usage.get("status") == "ok"
+            else {
+                "availability": "empty",
+                **usage,
+            }
+        )
     except Exception as exc:
         usage_section = _section_error("usage_unavailable", str(exc))
         usage = {
@@ -263,7 +267,11 @@ def build_tenant_mobile_dashboard(
 
     features = dict(plan.get("features") or {}) if plan.get("availability") == "ok" else {}
     try:
-        channels = build_channel_breakdown(tid, features=features, usage=usage_section if usage_section.get("availability") in {"ok", "empty"} else usage)
+        channels = build_channel_breakdown(
+            tid,
+            features=features,
+            usage=usage_section if usage_section.get("availability") in {"ok", "empty"} else usage,
+        )
         channels_section = _section_ok(channels)
     except Exception as exc:
         channels_section = _section_error("channels_unavailable", str(exc))
@@ -337,7 +345,9 @@ def build_tenant_mobile_dashboard(
             "total_interactions": usage_section.get("total_interactions"),
         }
     else:
-        distribution = _section_unavailable("usage_distribution_unavailable", "Usage distribution depends on interaction logs.")
+        distribution = _section_unavailable(
+            "usage_distribution_unavailable", "Usage distribution depends on interaction logs."
+        )
 
     partial_failures = [
         key

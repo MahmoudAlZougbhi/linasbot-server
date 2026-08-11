@@ -14,7 +14,12 @@ from fastapi.testclient import TestClient
 from services.credit_ledger_service import CreditLedgerService
 from services.entitlements_service import EntitlementsStore
 from services.tenant_mobile_dashboard.compose import build_tenant_mobile_dashboard
-from services.tenant_mobile_dashboard.periods import parse_period, parse_timezone, resolve_period_window
+from services.tenant_mobile_dashboard.periods import (
+    PeriodValidationError,
+    TimezoneValidationError,
+    parse_period,
+    parse_timezone,
+), resolve_period_window
 from services.tenant_mobile_dashboard.status import derive_workspace_status
 from services.tenant_mobile_dashboard.usage import aggregate_tenant_usage
 
@@ -326,7 +331,12 @@ def test_mobile_dashboard_api_auth_and_tenant_scope(monkeypatch: pytest.MonkeyPa
     token = session_service.cookie_value_for(session)
 
     def _fake_dashboard(**kwargs):
-        from services.tenant_mobile_dashboard.periods import parse_period, parse_timezone
+        from services.tenant_mobile_dashboard.periods import (
+    PeriodValidationError,
+    TimezoneValidationError,
+    parse_period,
+    parse_timezone,
+)
 
         parse_period(kwargs.get("period_raw"))
         parse_timezone(kwargs.get("timezone_raw"))
