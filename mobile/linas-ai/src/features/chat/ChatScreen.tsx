@@ -20,7 +20,6 @@ import { ChatModeToggle } from './ChatModeToggle';
 import { ChatScreenOverlays } from './ChatScreenOverlays';
 import { chatScreenStyles as styles } from './chatScreenStyles';
 import { ChatStatusBanners } from './ChatStatusBanners';
-import { ChatWorkspaceChip } from './ChatWorkspaceChip';
 import { GuestBanner } from './GuestBanner';
 import type { OwnerChatMode } from './ownerChatMode';
 import { resolveOwnerModeForOutgoing } from './ownerChatMode';
@@ -196,7 +195,6 @@ export function ChatScreen({
         />
 
         {showModeToggle ? <ChatModeToggle mode={ownerMode} onChange={setOwnerMode} /> : null}
-        {isAuthenticated && workspaceLabel ? <ChatWorkspaceChip label={workspaceLabel} /> : null}
 
         {!isAuthenticated ? (
           <GuestBanner
