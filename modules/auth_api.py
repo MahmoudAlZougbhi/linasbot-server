@@ -591,15 +591,12 @@ async def create_user(body: CreateUserRequest, request: Request) -> Any:
     ent = entitlements_store.get(session.tenant_id)
     if ent.plan_id in {"lite", "starter", "growth", "pro", "max"}:
         tenant_users = [
-            user
-            for user in user_service.get_all_users()
-            if str(user.get("tenantId") or "linas") == session.tenant_id
+            user for user in user_service.get_all_users() if str(user.get("tenantId") or "linas") == session.tenant_id
         ]
         non_owners = [
             u
             for u in tenant_users
-            if str(u.get("role") or "").lower() != "owner"
-            and str(u.get("status") or "active").lower() == "active"
+            if str(u.get("role") or "").lower() != "owner" and str(u.get("status") or "active").lower() == "active"
         ]
         # No invitation subsystem on this spine yet — count active non-owners only.
         try:
