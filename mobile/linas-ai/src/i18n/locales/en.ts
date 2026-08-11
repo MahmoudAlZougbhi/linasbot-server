@@ -326,7 +326,7 @@ export const en = {
   settingsSecuritySupport: 'Security & Support',
   settingsPrivacyData: 'Privacy & Data',
   settingsHelpSupport: 'Help & Support',
-  settingsHelpSupportNote: 'Email Mahmoudalzougbhi@gmail.com or use Owner chat',
+  settingsHelpSupportNote: 'Email support@linasai.com or use Owner chat',
   settingsAboutLegal: 'About & Legal',
   navDashboard: 'Dashboard',
   navContentManagement: 'AI Setup',

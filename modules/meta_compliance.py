@@ -34,7 +34,7 @@ from services.meta_data_deletion import (
 )
 from services.rate_limit_service import rate_limit_service
 
-_CONTACT_EMAIL = "Mahmoudalzougbhi@gmail.com"
+_CONTACT_EMAIL = "support@linasai.com"
 _PUBLIC_BASE_URL = "https://www.linasaibot.com"
 _SECURITY_HEADERS = {
     "Cache-Control": "no-store",
