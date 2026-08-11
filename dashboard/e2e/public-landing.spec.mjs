@@ -52,10 +52,10 @@ test.describe("public marketing landing smoke", () => {
     await expect(page.getByRole("main")).toContainText(/TikTok/i);
     await expect(page.getByRole("main")).toContainText(/AI Setup/i);
     await expect(page.getByRole("main")).toContainText(/Owner chat/i);
-    await expect(page.getByRole("main").getByRole("link", { name: /support@linasai.com/i })).toBeVisible();
+    await expect(page.getByRole("main").getByRole("link", { name: /Mahmoudalzougbhi@gmail.com/i })).toBeVisible();
     await page.goto("/contact");
     await expect(page.getByRole("heading", { name: "Contact" })).toBeVisible();
-    await expect(page.getByRole("main").getByRole("link", { name: /support@linasai.com/i })).toBeVisible();
+    await expect(page.getByRole("main").getByRole("link", { name: /Mahmoudalzougbhi@gmail.com/i })).toBeVisible();
   });
 
   test("register redirects to marketing; ops login remains", async ({ page }) => {

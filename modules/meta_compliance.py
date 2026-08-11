@@ -13,17 +13,17 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from modules.api_security import _client_ip
 from modules.core import app
+from services.compliance_page_content import (
+    data_deletion_body,
+    privacy_policy_body,
+    terms_of_service_body,
+)
 from services.meta_app_registry import (
     APP_A_KEY,
     MetaAppConfig,
     MetaRegistryError,
     get_meta_app_configs,
     get_meta_app_registry,
-)
-from services.compliance_page_content import (
-    data_deletion_body,
-    privacy_policy_body,
-    terms_of_service_body,
 )
 from services.meta_data_deletion import (
     MetaSignedRequestError,
@@ -34,7 +34,7 @@ from services.meta_data_deletion import (
 )
 from services.rate_limit_service import rate_limit_service
 
-_CONTACT_EMAIL = "support@linasai.com"
+_CONTACT_EMAIL = "Mahmoudalzougbhi@gmail.com"
 _PUBLIC_BASE_URL = "https://www.linasaibot.com"
 _SECURITY_HEADERS = {
     "Cache-Control": "no-store",

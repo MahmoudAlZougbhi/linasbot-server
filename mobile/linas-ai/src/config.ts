@@ -25,7 +25,7 @@ export const APP_VERSION_LABEL = `Linas ${APP_VERSION} · ${APP_BUILD_LABEL}`;
 export const LEGAL_PUBLIC_BASE = 'https://www.linasaibot.com';
 
 /** Public support / legal contact — keep in sync with compliance pages + PUBLIC_SITE. */
-export const SUPPORT_EMAIL = 'support@linasai.com';
+export const SUPPORT_EMAIL = 'Mahmoudalzougbhi@gmail.com';
 
 export const LEGAL_URLS = {
   privacy: `${LEGAL_PUBLIC_BASE}/privacy-policy`,

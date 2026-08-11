@@ -324,7 +324,7 @@ export const ar = {
   settingsSecuritySupport: 'الأمان والدعم',
   settingsPrivacyData: 'الخصوصية والبيانات',
   settingsHelpSupport: 'المساعدة والدعم',
-  settingsHelpSupportNote: 'راسل support@linasai.com أو استخدم دردشة المالك',
+  settingsHelpSupportNote: 'راسل Mahmoudalzougbhi@gmail.com أو استخدم دردشة المالك',
   settingsAboutLegal: 'حول والتراخيص',
   navDashboard: 'لوحة التحكم',
   navContentManagement: 'إعداد الذكاء الاصطناعي',
