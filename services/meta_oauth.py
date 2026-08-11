@@ -98,8 +98,7 @@ def resolve_business_login_config_id(flow_mode: MetaOAuthFlowMode) -> str:
     config_id = facebook_login_config_id()
     if not config_id:
         raise MetaOAuthError(
-            "Facebook Business Login is not configured. "
-            "Ask ops to set META_APP_A_FACEBOOK_LOGIN_CONFIG_ID for App A."
+            "Facebook Business Login is not configured. Ask ops to set META_APP_A_FACEBOOK_LOGIN_CONFIG_ID for App A."
         )
     return config_id
 

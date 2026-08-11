@@ -203,8 +203,7 @@ async def start_meta_connection(
         raise HTTPException(
             status_code=400,
             detail=(
-                "Instagram Connect uses Instagram Login. "
-                "POST /api/meta/connections/instagram-login/start instead."
+                "Instagram Connect uses Instagram Login. POST /api/meta/connections/instagram-login/start instead."
             ),
         )
     if channel not in {"facebook", "unified", "meta", ""}:
