@@ -6,6 +6,7 @@ import json
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
+from services.model_policy import owner_stream_route_payload
 from services.owner_copilot_v2.cards import card_from_tool
 from services.owner_copilot_v2.models import StreamEvent
 from services.owner_copilot_v2.provider import collect_sol_text, iter_sol_text_deltas
@@ -143,11 +144,6 @@ async def run_confirm_path(
             stage=stage,
             pending_confirmation=pending_confirmation,
             reason="confirm_tool",
-            route={
-                "model": turn_policy.model,
-                "reasoning_mode": turn_policy.reasoning_mode,
-                "reasoning_effort": turn_policy.reasoning_effort,
-                "reason": turn_policy.reason,
-            },
+            route=owner_stream_route_payload(turn_policy),
         ),
     )
