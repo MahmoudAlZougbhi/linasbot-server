@@ -1,3 +1,5 @@
+import { subscriptionEn } from './subscriptionEn';
+
 export const en = {
   appName: 'Linas AI',
   login: 'Log in',
@@ -336,6 +338,7 @@ export const en = {
   socialContinueWith: 'or continue with',
   socialContinueGoogle: 'Continue with Google',
   socialContinueApple: 'Continue with Apple',
+  ...subscriptionEn,
   proposalChangeTitle: 'AI Setup change',
   proposalDeleteTitle: 'Delete from AI Setup',
   proposalDeleteBadge: 'Delete',

@@ -153,7 +153,7 @@ def external_store_checklist() -> dict[str, Any]:
     return {
         "apple": [
             "Create App ID com.linasai.app in App Store Connect",
-            "Create auto-renewable subscriptions: starter/growth/pro/max monthly at $24.99/$59/$109/$250",
+            "Create auto-renewable subscriptions: lite/starter/growth/pro/max monthly at $9.99/$25/$59/$109/$259",
             "Configure App Store Server Notifications V2 URL: https://linasaibot.com/api/entitlements/apple/notifications",
             "Create API key (Issuer ID, Key ID, .p8) and set server env APPLE_APP_STORE_*",
             "Run sandbox purchase for each SKU; confirm entitlement active + renewal + cancel",

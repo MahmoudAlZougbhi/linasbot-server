@@ -1,77 +1,94 @@
-/** Plan cards mirror server catalog — prefer /api/public/plans at runtime. */
+/**
+ * Frozen membership-v1 plan matrix — must match services.membership.plan_catalog.
+ * Baseline USD is catalog reference only; checkout must use store-localized price.
+ */
 export type PlanId = 'lite' | 'starter' | 'growth' | 'pro' | 'max';
 
-export type PlanCard = {
+export type PlanDefinition = {
   id: PlanId;
-  name: string;
-  priceMonthly: number;
-  blurb: string;
-  features: string[];
+  /** Catalog baseline USD/month (never used as active checkout fallback). */
+  catalogPriceUsd: number;
   includedCredits: number;
   faqCapacity: number;
+  /** null = unlimited additional members (owner excluded). */
   additionalSeats: number | null;
   commentAutomation: boolean;
+  recommended?: boolean;
+  /** Store product id stubs — server map is authoritative. */
+  appleProductId: string;
+  googleProductId: string;
 };
 
-/** Frozen membership-v1 matrix (must match services.membership.plan_catalog). */
-export const PLAN_CARDS: PlanCard[] = [
-  {
+export const PLAN_ORDER: PlanId[] = ['lite', 'starter', 'growth', 'pro', 'max'];
+
+export const PLAN_CATALOG: Record<PlanId, PlanDefinition> = {
+  lite: {
     id: 'lite',
-    name: 'Lite',
-    priceMonthly: 9.99,
-    blurb: 'Owner assistant, AI Setup, DM automation — comments disabled',
-    features: ['Owner assistant', 'AI Setup', 'Customer DM automation', 'FAQ (50)'],
+    catalogPriceUsd: 9.99,
     includedCredits: 7000,
     faqCapacity: 50,
     additionalSeats: 0,
     commentAutomation: false,
+    appleProductId: 'com.linasai.app.lite.monthly',
+    googleProductId: 'linas_ai_lite_monthly',
   },
-  {
+  starter: {
     id: 'starter',
-    name: 'Starter',
-    priceMonthly: 25,
-    blurb: 'Lite + comment automation + 2 seats',
-    features: ['Everything in Lite', 'Comment automation', '2 additional seats', 'FAQ (110)'],
+    catalogPriceUsd: 25,
     includedCredits: 17500,
     faqCapacity: 110,
     additionalSeats: 2,
     commentAutomation: true,
+    appleProductId: 'com.linasai.app.starter.monthly',
+    googleProductId: 'linas_ai_starter_monthly',
   },
-  {
+  growth: {
     id: 'growth',
-    name: 'Growth',
-    priceMonthly: 59,
-    blurb: 'Higher credits, 5 seats, FAQ 250',
-    features: ['Everything in Starter', '5 additional seats', 'FAQ (250)'],
+    catalogPriceUsd: 59,
     includedCredits: 41300,
     faqCapacity: 250,
     additionalSeats: 5,
     commentAutomation: true,
+    recommended: true,
+    appleProductId: 'com.linasai.app.growth.monthly',
+    googleProductId: 'linas_ai_growth_monthly',
   },
-  {
+  pro: {
     id: 'pro',
-    name: 'Pro',
-    priceMonthly: 109,
-    blurb: 'Creative Studio, scheduling, unlimited seats',
-    features: ['Everything in Growth', 'Creative Studio', 'Scheduling', 'Unlimited seats', 'FAQ (600)'],
+    catalogPriceUsd: 109,
     includedCredits: 76300,
     faqCapacity: 600,
     additionalSeats: null,
     commentAutomation: true,
+    appleProductId: 'com.linasai.app.pro.monthly',
+    googleProductId: 'linas_ai_pro_monthly',
   },
-  {
+  max: {
     id: 'max',
-    name: 'Max',
-    priceMonthly: 259,
-    blurb: 'Highest included credits + advanced capabilities',
-    features: ['Everything in Pro', 'Advanced capabilities', 'FAQ (1500)'],
+    catalogPriceUsd: 259,
     includedCredits: 181300,
     faqCapacity: 1500,
     additionalSeats: null,
     commentAutomation: true,
+    appleProductId: 'com.linasai.app.max.monthly',
+    googleProductId: 'linas_ai_max_monthly',
   },
-];
+};
 
-export function formatUsd(amount: number): string {
-  return amount % 1 === 0 ? `$${amount}` : `$${amount.toFixed(2)}`;
+export const COMMON_FEATURE_KEYS = [
+  'subCommonOwnerCopilot',
+  'subCommonContentManagement',
+  'subCommonAiReplies',
+  'subCommonIgDm',
+  'subCommonFbDm',
+  'subCommonAnalytics',
+  'subCommonIntegrations',
+] as const;
+
+export function isPlanId(value: string | null | undefined): value is PlanId {
+  return Boolean(value && value in PLAN_CATALOG);
+}
+
+export function planRank(id: PlanId): number {
+  return PLAN_ORDER.indexOf(id);
 }
