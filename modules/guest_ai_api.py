@@ -24,14 +24,8 @@ from services.owner_ai_profile import resolve_owner_reply_language
 from services.rate_limit_service import rate_limit_service
 
 _INPUT_TOO_LARGE_MESSAGE = {
-    "en": (
-        "What you sent is too large (over 500 tokens). "
-        "Subscribe to Linas AI to continue with larger messages."
-    ),
-    "ar": (
-        "اللي بعثتو كبير زيادة (أكثر من 500 توكن). "
-        "اشترك بـ Linas AI لتقدر تبعت رسائل أطول."
-    ),
+    "en": ("What you sent is too large (over 500 tokens). Subscribe to Linas AI to continue with larger messages."),
+    "ar": ("اللي بعثتو كبير زيادة (أكثر من 500 توكن). اشترك بـ Linas AI لتقدر تبعت رسائل أطول."),
     "fr": (
         "Votre message est trop volumineux (plus de 500 jetons). "
         "Abonnez-vous à Linas AI pour envoyer des messages plus longs."

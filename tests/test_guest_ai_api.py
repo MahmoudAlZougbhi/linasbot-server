@@ -305,7 +305,6 @@ def test_guest_routes_are_public():
     assert not is_public_api("POST", "/api/owner-ai/conversations")
 
 
-
 def test_guest_input_token_limit_requires_subscription(guest_client):
     client, store = guest_client
     sid = "guest-test-session-tokens"
