@@ -9,10 +9,12 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "inspect_cm_guide",
-            "description": "Inspect real CM completeness (filled/weak/missing) and explain a "
-            "section: purpose, why it matters, what to fill, what is still "
-            "needed. Use before guiding setup. Skip DONE/filled sections unless "
-            "the owner asks to change them.",
+            "description": "Inspect CM completeness (filled/weak/missing) + section purpose, and "
+            "run a proactive quality_pass (duplicates, contradictions, unclear "
+            "wording, suspicious/placeholder content, improvement/halwse ideas). "
+            "Required for CM review/check/problem/verify intents — answer the "
+            "owner's specific ask AND report quality findings. Skip DONE sections "
+            "only for fill-missing walks unless the owner asks to change them.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -23,6 +25,11 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "include_guides": {
                         "type": "boolean",
                         "description": "Include compact per-section purpose index (default true on overview).",
+                    },
+                    "quality_pass": {
+                        "type": "boolean",
+                        "description": "Run proactive CM quality audit (default true). Keep true for "
+                        "review/check/problem/verify; set false only for pure fill-plan navigation.",
                     },
                 },
             },

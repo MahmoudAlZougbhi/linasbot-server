@@ -351,7 +351,11 @@ async def iter_owner_turn_v2_events(
                 "role": "system",
                 "content": (
                     "Write the natural final owner-facing answer now from the tool results. No JSON. "
-                    "Default: concise diagnostic CM critique (issues + fixes), not a full CM dump. "
+                    "If this was a CM review/check/problem/verify turn: (1) answer the specific ask, "
+                    "(2) include a proactive quality critique from quality_audit findings "
+                    "(duplicates, contradictions, unclear, suspicious, improvements/halwse) — "
+                    "not only the asked topic. Concise editor style; not a full CM dump. "
+                    "Offer propose→Approve→Live fixes when useful. "
                     "Only paste full section/article bodies when the owner explicitly asked for them. "
                     "Finish cleanly — never stop mid-sentence."
                 ),

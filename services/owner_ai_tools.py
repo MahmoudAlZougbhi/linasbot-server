@@ -173,11 +173,13 @@ async def dispatch_tool(
         )
     if name == "inspect_cm_guide":
         include_guides = a.get("include_guides")
+        quality_pass = a.get("quality_pass")
         return await handler(
             tenant_id=tenant_id,
             role=role,
             section=str(a["section"]) if a.get("section") else None,
             include_guides=True if include_guides is None else bool(include_guides),
+            quality_pass=True if quality_pass is None else bool(quality_pass),
         )
     if name == "cm_fill_plan":
         return await handler(

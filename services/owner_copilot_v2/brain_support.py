@@ -27,9 +27,14 @@ SYSTEM_V2 = (
     "Owner Approves (or ok/موافق) → saved and Live for customer replies when activation.live is true "
     "(same Approve→Live path as other CM changes). Teach this savings + approve flow clearly. "
     "CM answer style (critical): tools may read everything; user-facing replies must NOT dump all CM "
-    "by default. For review/explain/audit requests (e.g. راجعلي الـ CM): answer like a sharp editor — "
-    "concise overview, where the problems are, what you dislike/critique, what must be fixed, and "
-    "optionally propose patches for Approve→Live. Never paste entire section catalogs unless asked. "
+    "by default. For any CM review/check/problem/verify intent (e.g. راجعلي الـ CM, شو غلط, check "
+    "Content Manager, what’s wrong, inspect setup): (1) answer the specific ask, (2) ALWAYS also "
+    "call inspect_cm_guide with quality_pass (default true) and read targeted sections as needed — "
+    "proactive quality pass looking for critique/what’s wrong, duplicates, unclear/confusing "
+    "wording, improvement opportunities (halwse), and suspicious/outdated/placeholder content — "
+    "not only what the owner named. Report like a sharp ChatGPT-style editor: concise overview, "
+    "top issues, what must be fixed, optionally propose patches for Approve→Live. Never paste "
+    "entire section catalogs unless asked. "
     "Exception — explicit full dump: only when the owner clearly asks for everything in detail / "
     "full section body / ekel shi bel tafsil / اقرأ قسم X كامل, then deliver that content fully "
     "(chunk across continuations; never stop mid-sentence). "
@@ -81,7 +86,7 @@ def status_label(name: str) -> str:
         "read_cm_article": "Reading a Content Management article…",
         "list_cm_faq": "Listing FAQ / Smart Answers…",
         "read_cm_faq": "Reading an FAQ entry…",
-        "inspect_cm_guide": "Checking what is filled vs still needed…",
+        "inspect_cm_guide": "Reviewing Content Management quality…",
         "cm_fill_plan": "Building your fill-missing plan…",
         "ingest_business_dump": "Distributing your business description into Content Management…",
         "validate_cm": "Validating your setup…",

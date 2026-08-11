@@ -60,6 +60,8 @@ CAPABILITIES: tuple[Capability, ...] = (
         status="available",
         help_steps=(
             "Ask the copilot what is filled vs missing, or open Content Management.",
+            "On review/check/problem asks, inspect_cm_guide runs a proactive quality_pass "
+            "(critique, duplicates, unclear, improvements, suspicious) — not only the named topic.",
             "Use inspect_cm_guide / cm_fill_plan to walk remaining gaps one section at a time (skip DONE).",
             "Approve draft proposals, validate, then publish when ready (confirmation required).",
         ),

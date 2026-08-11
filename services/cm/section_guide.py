@@ -158,6 +158,13 @@ def guide_for_section(section: str) -> dict[str, Any] | None:
     base = dict(SECTION_GUIDE.get(name) or {})
     base["section"] = name
     base["interview_prompt"] = SECTION_PROMPTS.get(name, "")
+    base["quality_checklist"] = [
+        "critique / what’s wrong",
+        "duplicates",
+        "unclear / confusing",
+        "improvements (halwse)",
+        "suspicious / placeholder",
+    ]
     return base
 
 
