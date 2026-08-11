@@ -49,6 +49,8 @@ def test_period_and_timezone_validation() -> None:
     with pytest.raises(PeriodValidationError):
         parse_period("year")
     tz = parse_timezone("UTC")
+    with pytest.raises(TimezoneValidationError):
+        parse_timezone("Not/AZone")
     window = resolve_period_window(period="7d", tz=tz, current_period_end=None)
     assert window["period"] == "7d"
     assert window["start_ts"] < window["end_ts"]
@@ -332,12 +334,7 @@ def test_mobile_dashboard_api_auth_and_tenant_scope(monkeypatch: pytest.MonkeyPa
     token = session_service.cookie_value_for(session)
 
     def _fake_dashboard(**kwargs):
-        from services.tenant_mobile_dashboard.periods import (
-    PeriodValidationError,
-    TimezoneValidationError,
-    parse_period,
-    parse_timezone,
-)
+        from services.tenant_mobile_dashboard.periods import parse_period, parse_timezone
 
         parse_period(kwargs.get("period_raw"))
         parse_timezone(kwargs.get("timezone_raw"))
