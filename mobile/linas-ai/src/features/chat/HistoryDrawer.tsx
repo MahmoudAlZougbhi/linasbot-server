@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
   section: {
     color: colors.textDim,
     fontFamily: fonts.bodyMedium,
-    fontSize: 12,
+    fontSize: 10,
     letterSpacing: 0.8,
     marginTop: spacing.md,
     marginBottom: spacing.sm,
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontFamily: fonts.bodyMedium,
     fontWeight: '500',
-    fontSize: 15,
+    fontSize: 14,
   },
   pin: { color: colors.warning, fontSize: 18, paddingHorizontal: 4 },
   empty: { color: colors.textMuted, marginTop: spacing.lg },
