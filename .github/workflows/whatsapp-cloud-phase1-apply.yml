@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       CONFIRM:
-        description: "APPLY_WHATSAPP_CLOUD_PHASE1 (migrate+flags) or APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY"
+        description: "APPLY_WHATSAPP_CLOUD_PHASE1 | APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY | PROBE_WHATSAPP_DB"
         required: true
         type: string
 
@@ -22,7 +22,8 @@ jobs:
     timeout-minutes: 25
     if: >-
       github.event.inputs.CONFIRM == 'APPLY_WHATSAPP_CLOUD_PHASE1' ||
-      github.event.inputs.CONFIRM == 'APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY'
+      github.event.inputs.CONFIRM == 'APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY' ||
+      github.event.inputs.CONFIRM == 'PROBE_WHATSAPP_DB'
     steps:
       - name: Ops via SSH
         uses: appleboy/ssh-action@v1.2.0
@@ -37,7 +38,14 @@ jobs:
             set -e
             cd /opt/linasbot
             git fetch origin main
-            git reset --hard origin/main
-            git show origin/main:scripts/prod_whatsapp_cloud_phase1_ops.sh > /tmp/prod_whatsapp_cloud_phase1_ops.sh
-            sudo install -m 0755 /tmp/prod_whatsapp_cloud_phase1_ops.sh /opt/linasbot/scripts/prod_whatsapp_cloud_phase1_ops.sh
-            sudo MODE='${{ github.event.inputs.CONFIRM }}' bash /opt/linasbot/scripts/prod_whatsapp_cloud_phase1_ops.sh
+            git fetch origin ops/whatsapp-db-probe || true
+            if [ '${{ github.event.inputs.CONFIRM }}' = 'PROBE_WHATSAPP_DB' ]; then
+              git show origin/ops/whatsapp-db-probe:scripts/prod_whatsapp_db_probe.sh > /tmp/prod_whatsapp_db_probe.sh
+              sudo install -m 0755 /tmp/prod_whatsapp_db_probe.sh /opt/linasbot/scripts/prod_whatsapp_db_probe.sh
+              sudo bash /opt/linasbot/scripts/prod_whatsapp_db_probe.sh
+            else
+              git reset --hard origin/main
+              git show origin/main:scripts/prod_whatsapp_cloud_phase1_ops.sh > /tmp/prod_whatsapp_cloud_phase1_ops.sh
+              sudo install -m 0755 /tmp/prod_whatsapp_cloud_phase1_ops.sh /opt/linasbot/scripts/prod_whatsapp_cloud_phase1_ops.sh
+              sudo MODE='${{ github.event.inputs.CONFIRM }}' bash /opt/linasbot/scripts/prod_whatsapp_cloud_phase1_ops.sh
+            fi

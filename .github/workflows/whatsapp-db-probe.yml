@@ -1,0 +1,34 @@
+name: WhatsApp DB Probe Readonly
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: whatsapp-db-probe
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Probe WhatsApp Postgres (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Probe via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 10m
+          script: |
+            set -e
+            cd /opt/linasbot
+            git fetch origin main
+            git show origin/ops/whatsapp-db-probe:scripts/prod_whatsapp_db_probe.sh > /tmp/prod_whatsapp_db_probe.sh || git show origin/main:scripts/prod_whatsapp_db_probe.sh > /tmp/prod_whatsapp_db_probe.sh
+            sudo install -m 0755 /tmp/prod_whatsapp_db_probe.sh /opt/linasbot/scripts/prod_whatsapp_db_probe.sh
+            sudo bash /opt/linasbot/scripts/prod_whatsapp_db_probe.sh
