@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from services.cm.quality_audit import run_cm_quality_audit
-from services.cm.schemas import default_section_payload
 from services.cm.storage import put_draft
 
 

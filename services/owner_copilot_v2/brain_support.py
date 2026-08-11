@@ -65,6 +65,17 @@ SYSTEM_V2 = (
     "Always reply in the Reply language hint (app UI language), even when tool/chip prompts are English."
 )
 
+FINAL_ANSWER_NUDGE = (
+    "Write the natural final owner-facing answer now from the tool results. No JSON. "
+    "If this was a CM review/check/problem/verify turn: (1) answer the specific ask, "
+    "(2) include a proactive quality critique from quality_audit findings "
+    "(duplicates, contradictions, unclear, suspicious, improvements/halwse) — "
+    "not only the asked topic. Concise editor style; not a full CM dump. "
+    "Offer propose→Approve→Live fixes when useful. "
+    "Only paste full section/article bodies when the owner explicitly asked for them. "
+    "Finish cleanly — never stop mid-sentence."
+)
+
 
 def quick_actions(stage: str | None) -> list[dict[str, str]]:
     base = [
