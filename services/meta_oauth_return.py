@@ -13,7 +13,6 @@ import hashlib
 import html
 import json
 from typing import Any, Literal
-
 from urllib.parse import urlencode
 
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -145,7 +144,7 @@ def attach_return_surface(exc: BaseException, return_surface: ReturnSurface | st
     """Preserve OAuth return_surface on errors after one-time state was consumed."""
 
     try:
-        setattr(exc, "return_surface", normalize_return_surface(return_surface))
+        exc.return_surface = normalize_return_surface(return_surface)
     except Exception:
         return
 
