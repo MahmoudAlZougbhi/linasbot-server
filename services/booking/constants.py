@@ -28,3 +28,15 @@ MACHINE_OPTIONAL_SERVICE_IDS: frozenset[int] = frozenset(
 DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS: frozenset[int] = frozenset({1, 2, 4, 5, 11, 12, 13, 14})
 
 BOOKING_TIMEZONE_LABEL = "Asia/Beirut"
+
+
+def service_requires_machine(service_id: int | None) -> bool:
+    """Only laser hair removal services use customer-selected machines."""
+    if service_id is None:
+        return False
+    return int(service_id) in LASER_HAIR_REMOVAL_SERVICE_IDS
+
+
+# Backward-compatible alias used by booking_fsm / intent_pipeline.
+_service_requires_machine = service_requires_machine
+
