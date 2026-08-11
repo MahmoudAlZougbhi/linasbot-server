@@ -18,6 +18,12 @@ describe('whatsapp cloud mobile return + card', () => {
     assert.doesNotMatch(nav, /access_token/);
   });
 
+  it('Integrations deep link ignores bridge subpaths', () => {
+    const nav = read('app/navigation.ts');
+    assert.match(nav, /path !== 'integrations'/);
+    assert.match(nav, /never bridge URLs/);
+  });
+
   it('IntegrationsScreen wires WhatsApp card and deep-link refetch', () => {
     const screen = read('features/integrations/IntegrationsScreen.tsx');
     assert.match(screen, /WhatsAppCloudCard/);
@@ -30,6 +36,24 @@ describe('whatsapp cloud mobile return + card', () => {
     assert.match(card, /startWhatsAppCloudConnect|fetchWhatsAppCloudStatus/);
     assert.match(card, /waStateAwaitingMetaApproval|awaitingMeta/);
     assert.doesNotMatch(card, /paste.*(token|waba|phone)/i);
+  });
+
+  it('Connect uses expo-web-browser auth session, not dynamic Linking import', () => {
+    const connect = read('features/integrations/whatsappCloudConnect.ts');
+    assert.match(connect, /expo-web-browser/);
+    assert.match(connect, /openAuthSessionAsync/);
+    assert.match(connect, /connectInFlight|connect_in_progress/);
+    assert.doesNotMatch(connect, /await import\(['"]react-native['"]\)/);
+    assert.doesNotMatch(connect, /Linking\.openURL/);
+    assert.match(connect, /WhatsAppConnectError/);
+  });
+
+  it('hook guards double-tap and maps recoverable connect errors', () => {
+    const hook = read('features/integrations/useWhatsAppIntegrations.ts');
+    assert.match(hook, /if \(waBusy\) return/);
+    assert.match(hook, /WhatsAppConnectError/);
+    assert.match(hook, /waOAuthCancelled/);
+    assert.match(hook, /waConnectBrowserUnavailable|waConnectConfigMissing/);
   });
 
   it('ops panel exposes App Review surfaces', () => {
@@ -45,5 +69,11 @@ describe('whatsapp cloud mobile return + card', () => {
     assert.match(portal, /pilot\/grant/);
     assert.match(portal, /tenant_id/);
     assert.doesNotMatch(portal, /tenant_id:\s*['"]linas['"]|@gmail\.com|mahmoud@/i);
+  });
+
+  it('Meta OAuth path unchanged (Linking) and separate from WA connect', () => {
+    const oauth = read('features/integrations/integrationsOAuth.ts');
+    assert.match(oauth, /Linking\.openURL/);
+    assert.doesNotMatch(oauth, /whatsappCloudConnect|openAuthSessionAsync/);
   });
 });

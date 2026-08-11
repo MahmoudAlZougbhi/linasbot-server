@@ -50,6 +50,26 @@ def start_embedded_signup(
     return_surface: str,
 ) -> dict[str, Any]:
     flags = get_whatsapp_cloud_flags()
+    config_id = (os.getenv("META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID") or "").strip()
+    if not config_id:
+        raise WhatsAppSignupError(
+            "embedded_signup_config_missing",
+            "WhatsApp Embedded Signup is not configured on the server",
+            http_status=503,
+        )
+    bridge_url = (flags.bridge_base_url or "").strip()
+    if not bridge_url.lower().startswith("https://"):
+        raise WhatsAppSignupError(
+            "bridge_url_misconfigured",
+            "WhatsApp Embedded Signup bridge URL is missing or not HTTPS",
+            http_status=503,
+        )
+    if not flags.meta_app_id:
+        raise WhatsAppSignupError(
+            "meta_app_unavailable",
+            "Meta App A is not configured for WhatsApp Embedded Signup",
+            http_status=503,
+        )
     with whatsapp_session() as session:
         assert_whatsapp_connection_allowed(session, tenant_id)
         if return_surface not in {"mobile", "web", "bridge"}:
@@ -67,8 +87,6 @@ def start_embedded_signup(
             event_type="connection_start",
             detail={"correlation_id": attempt.correlation_id, "return_surface": return_surface},
         )
-        config_id = (os.getenv("META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID") or "").strip()
-        bridge_url = flags.bridge_base_url
         query = urlencode(
             {
                 "state": nonce,

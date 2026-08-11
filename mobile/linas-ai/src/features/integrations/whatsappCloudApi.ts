@@ -2,6 +2,9 @@ import { z } from 'zod';
 
 import { apiFetch } from '../../api/client';
 
+export { startWhatsAppCloudConnect, WhatsAppConnectError } from './whatsappCloudConnect';
+export type { WhatsAppConnectErrorCode } from './whatsappCloudConnect';
+
 export const WhatsAppStatusSchema = z.object({
   success: z.literal(true),
   platform: z.literal('whatsapp').optional(),
@@ -41,12 +44,6 @@ export const WhatsAppStatusSchema = z.object({
 
 export type WhatsAppCloudStatus = z.infer<typeof WhatsAppStatusSchema>;
 
-const StartSchema = z.object({
-  success: z.literal(true),
-  authorization_url: z.string().url(),
-  correlation_id: z.string().optional(),
-});
-
 const OkSchema = z.object({ success: z.literal(true) }).passthrough();
 
 const ConversationSchema = z.object({
@@ -63,16 +60,6 @@ export type WhatsAppConversationRow = z.infer<typeof ConversationSchema>;
 
 export async function fetchWhatsAppCloudStatus(): Promise<WhatsAppCloudStatus> {
   return apiFetch('/api/whatsapp/cloud/status', { schema: WhatsAppStatusSchema });
-}
-
-export async function startWhatsAppCloudConnect(): Promise<void> {
-  const { Linking } = await import('react-native');
-  const started = await apiFetch('/api/whatsapp/cloud/connect/start', {
-    method: 'POST',
-    body: JSON.stringify({ return_surface: 'mobile' }),
-    schema: StartSchema,
-  });
-  await Linking.openURL(started.authorization_url);
 }
 
 export async function setWhatsAppAiEnabled(connectionId: string, enabled: boolean): Promise<void> {
