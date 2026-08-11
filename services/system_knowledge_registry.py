@@ -222,6 +222,8 @@ CAPABILITIES: tuple[Capability, ...] = (
             "approve_smart_answer",
             "list_cm_faq",
             "propose_cm_faq_upsert",
+            "list_cm_faq",
+            "propose_cm_delete",
         ),
         blockers=(
             "No paid plan → FAQ disabled. Entry plans ~200 groups; higher ~1000.",

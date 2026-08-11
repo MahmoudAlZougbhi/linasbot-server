@@ -248,6 +248,42 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "propose_cm_delete",
+            "description": "Propose soft-delete/archive of FAQ groups, knowledge/care articles, "
+            "or other CM section items/fields. Shows the in-chat confirmation bar immediately "
+            "(Approve | Cancel | Edit) — do NOT ask the owner to type موافق/ok first. "
+            "Does not write until Approve (or natural assent). Use delete_all for wipe-section "
+            "requests; otherwise pass item_ids (or field_keys for field-shaped sections).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "section": {"type": "string"},
+                    "item_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "FAQ qa_group_id / article id / row id to delete.",
+                    },
+                    "field_keys": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Field keys to clear on field-shaped sections (ai_basics, etc.).",
+                    },
+                    "delete_all": {
+                        "type": "boolean",
+                        "description": "When true, target all active items (or clearable fields) in the section.",
+                    },
+                    "replace_proposal_id": {
+                        "type": "string",
+                        "description": "When revising an Edit-mode pending proposal, pass its id to supersede it.",
+                    },
+                },
+                "required": ["section"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "publish_cm",
             "description": "Request publish of validated CM (high-impact; requires confirmation).",
             "parameters": {"type": "object", "properties": {}},

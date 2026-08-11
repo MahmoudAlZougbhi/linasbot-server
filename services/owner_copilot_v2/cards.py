@@ -36,6 +36,21 @@ def proposal_card(
     )
 
 
+def _delete_body(preview: dict[str, Any]) -> str:
+    targets = preview.get("targets")
+    if isinstance(targets, list) and targets:
+        lines: list[str] = []
+        for row in targets[:40]:
+            if not isinstance(row, dict):
+                continue
+            title = str(row.get("title") or row.get("id") or "").strip()
+            if title:
+                lines.append(f"• {title}")
+        if lines:
+            return "\n".join(lines)[:1200]
+    return _proposal_body(preview)
+
+
 def diagnosis_card(*, title: str, body: str, diagnosis: dict[str, Any]) -> ChatCard:
     return ChatCard(
         id=_id("card"),
@@ -135,7 +150,7 @@ def _proposal_body(preview: dict[str, Any]) -> str:
         return f"Proposed {section} · {field}"
     if section:
         return f"Proposed change in {section}"
-    return "Review the proposed change, then Approve or reply ok / موافق to save Draft."
+    return "Review the change on the bar — Approve, Cancel, or Edit. Assent (ok / موافق) also Approves."
 
 
 def card_from_tool(name: str, data: dict[str, Any], *, ok: bool) -> ChatCard | None:
@@ -144,14 +159,18 @@ def card_from_tool(name: str, data: dict[str, Any], *, ok: bool) -> ChatCard | N
         nested = payload.get("first_proposal")
         if isinstance(nested, dict) and isinstance(nested.get("data"), dict):
             return card_from_tool("propose_cm_patch", nested["data"], ok=True)
-    if name in {"propose_cm_patch", "propose_cm_article_upsert", "propose_cm_faq_upsert"} and payload.get(
-        "proposal_id"
-    ):
+    if name in {
+        "propose_cm_patch",
+        "propose_cm_article_upsert",
+        "propose_cm_faq_upsert",
+        "propose_cm_delete",
+    } and payload.get("proposal_id"):
         preview = payload.get("preview") if isinstance(payload.get("preview"), dict) else {}
         assert isinstance(preview, dict)
+        is_delete = name == "propose_cm_delete" or str(preview.get("kind") or "") == "cm_delete"
         return proposal_card(
-            title="AI Setup change",
-            body=_proposal_body(preview),
+            title="Delete from AI Setup" if is_delete else "AI Setup change",
+            body=_delete_body(preview) if is_delete else _proposal_body(preview),
             proposal_id=str(payload["proposal_id"]),
             preview=preview,
             confirmation_token=str(payload.get("confirmation_token") or "") or None,

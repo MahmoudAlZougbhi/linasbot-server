@@ -16,8 +16,9 @@ type Props = {
   cards: StreamCard[];
   proposedPatch: ProposedPatch | null;
   proposedCmPatchLabel: string;
-  onApproveDraft: (token: string) => void;
-  onDiscardProposal: () => void;
+  onApproveDraft: (token: string, opts?: { delete_ids?: string[] }) => void;
+  onDiscardProposal: (token?: string) => void;
+  onEditProposal?: (proposalId: string) => void;
   onOpenCm: (review?: CmProposalReview) => void;
   onRetryLast: () => void;
 };
@@ -32,6 +33,7 @@ export function ChatStreamFooter({
   proposedCmPatchLabel,
   onApproveDraft,
   onDiscardProposal,
+  onEditProposal,
   onOpenCm,
   onRetryLast,
 }: Props) {
@@ -63,6 +65,7 @@ export function ChatStreamFooter({
           card={c}
           onApproveDraft={onApproveDraft}
           onDiscard={onDiscardProposal}
+          onEditProposal={onEditProposal}
           onOpenCm={onOpenCm}
           onRetry={onRetryLast}
         />
@@ -79,6 +82,7 @@ export function ChatStreamFooter({
           }}
           onApproveDraft={onApproveDraft}
           onDiscard={onDiscardProposal}
+          onEditProposal={onEditProposal}
           onOpenCm={onOpenCm}
         />
       ) : null}

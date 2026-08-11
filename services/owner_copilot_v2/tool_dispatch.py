@@ -19,6 +19,7 @@ WRITE_TOOLS = frozenset(
         "propose_cm_patch",
         "propose_cm_article_upsert",
         "propose_cm_faq_upsert",
+        "propose_cm_delete",
         "approve_cm_patch",
         "publish_cm",
         "propose_diagnosis_fix",

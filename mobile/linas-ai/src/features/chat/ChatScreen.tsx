@@ -25,6 +25,7 @@ import type { OwnerChatMode } from './ownerChatMode';
 import { resolveOwnerModeForOutgoing } from './ownerChatMode';
 import { PendingAttachmentsStrip } from './PendingAttachmentsStrip';
 import { savePendingGuestDraft } from './pendingGuestDraft';
+import { buildApproveSendOpts, buildDiscardSendOpts } from './proposalBarActions';
 import { sendChatMessage } from './sendChatMessage';
 import { chatErrorLabelKey, retryAssistantMessage } from './chatRetryHandlers';
 import { useChatIdentity } from './useChatIdentity';
@@ -37,6 +38,7 @@ import { appendVoiceTranscript, useVoiceDraft } from './useVoiceDraft';
 import { ChoiceChips } from './v2/ChoiceChips';
 import type { PendingFile } from './v2/pickAttachment';
 import { useSetupHandoff } from './useSetupHandoff';
+import { useProposalEditMode } from './useProposalEditMode';
 import { useStreamingTurn } from './v2/useStreamingTurn';
 
 type Props = {
@@ -80,6 +82,11 @@ export function ChatScreen({
     },
     onOwnerModeHint: promoteOwnerMode,
   });
+  const { reviseProposalId, setReviseProposalId, ownerSendWithMode } = useProposalEditMode(
+    ownerMode,
+    setOwnerMode,
+    turn.send,
+  );
   const imagePreviewByContent = useRef<Record<string, string[]>>({});
   const [choiceBusy, setChoiceBusy] = useState(false);
   const composerInputRef = useRef<TextInput>(null);
@@ -94,6 +101,7 @@ export function ChatScreen({
     if (!isAuthenticated) return;
     stickToBottomRef.current = true;
     setOwnerMode('chat');
+    setReviseProposalId(null);
     if (turn.streaming) turn.stop();
     void owner.newChat();
   }, [isAuthenticated, owner, stickToBottomRef, turn]);
@@ -142,16 +150,6 @@ export function ChatScreen({
     setAuthGate(true);
   }
 
-  const ownerSendWithMode = useCallback(
-    (text: string, opts?: Parameters<typeof turn.send>[1]) => {
-      const base = opts?.owner_mode ?? ownerMode;
-      const mode = resolveOwnerModeForOutgoing(base, text);
-      if (mode === 'work' && ownerMode !== 'work') setOwnerMode('work');
-      return turn.send(text, { ...opts, owner_mode: mode });
-    },
-    [ownerMode, turn],
-  );
-
   useSetupHandoff({
     isAuthenticated,
     loading: owner.loading,
@@ -175,7 +173,6 @@ export function ChatScreen({
     afterOpen: () => armOpenAtLatest(),
   });
 
-  // ChatGPT-like open: keep chat chrome up — no second full-screen spinner after boot.
   return (
     <GradientBackground>
       <KeyboardAvoidingView
@@ -261,10 +258,20 @@ export function ChatScreen({
                 scrollToBottom,
               })
             }
-            onApproveDraft={(token) => void ownerSendWithMode('', { confirm_tool: token })}
-            onDiscardProposal={() => {
+            onApproveDraft={(token, approveOpts) => {
+              setReviseProposalId(null);
+              void ownerSendWithMode('', buildApproveSendOpts(token, approveOpts));
+            }}
+            onDiscardProposal={(token) => {
               owner.setProposedPatch(null);
               owner.setPendingConfirm(null);
+              setReviseProposalId(null);
+              const d = buildDiscardSendOpts(token);
+              if (d) void ownerSendWithMode('', d);
+            }}
+            onEditProposal={(id) => {
+              setReviseProposalId(id);
+              composerInputRef.current?.focus();
             }}
             onOpenCm={(r) => (r && onOpenCmReview ? onOpenCmReview(r) : onOpenArea('cm'))}
             onGuestPrompt={(prompt) => {
@@ -325,6 +332,8 @@ export function ChatScreen({
           showModelChip={isAuthenticated}
           ownerMode={ownerMode}
           onOwnerModeChange={setOwnerMode}
+          editChipActive={Boolean(reviseProposalId)}
+          onClearEditChip={() => setReviseProposalId(null)}
           onPlus={() => setPlusOpen(true)}
           onToggleVoice={() => void voice.toggleVoice()}
           onResumeVoice={() => void voice.resumeVoice()}

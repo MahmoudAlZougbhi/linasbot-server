@@ -77,6 +77,7 @@ async def iter_owner_turn_v2_events(
     attachment_ids: list[str] | None = None,
     owner_mode: Literal["chat", "work"] | None = None,
     reply_language: str | None = None,
+    revise_proposal_id: str | None = None,
     is_cancelled: CancelCheck | None = None,
 ) -> AsyncIterator[StreamEvent]:
     if not owner_copilot_v2_enabled():
@@ -86,7 +87,8 @@ async def iter_owner_turn_v2_events(
     text = (user_text or "").strip()
     # Natural assent (ok / موافق / yes / …) on a pending Draft proposal → confirm path.
     # Never invent a token; only resolve an existing pending confirmation.
-    if not confirm_tool and looks_like_owner_assent(text):
+    # Edit-chip revision must not be treated as Approve assent.
+    if not confirm_tool and not revise_proposal_id and looks_like_owner_assent(text):
         confirm_tool = resolve_pending_confirm_token(
             tenant_id=tenant_id,
             user_id=user_id,
@@ -100,6 +102,19 @@ async def iter_owner_turn_v2_events(
         reply_language=reply_language,
     )
     context["recent_messages_raw"] = list(messages or [])
+    if revise_proposal_id and not confirm_tool:
+        from services.owner_ai_cm_approval import cm_patch_proposal_store
+
+        prop = cm_patch_proposal_store.get(tenant_id=tenant_id, proposal_id=str(revise_proposal_id))
+        if prop is not None and prop.user_id == user_id and prop.status == "pending":
+            context["proposal_revise"] = {
+                "proposal_id": prop.id,
+                "section": prop.section,
+                "preview": prop.preview,
+                "kind": str((prop.preview or {}).get("kind") or ""),
+            }
+            # Seed replace id into tool_args so delete/upsert tools can supersede.
+            tool_args = {**(tool_args or {}), "replace_proposal_id": prop.id}
     stage = str((context.get("account_summary") or {}).get("setup_stage") or "")
     reply_lang = str(context.get("reply_language") or "en")
     attachment_action: Literal["none", "analyze", "import"] | None = None
@@ -112,7 +127,7 @@ async def iter_owner_turn_v2_events(
         confirm_tool=confirm_tool,
         user_text=text,
         attachment_action=attachment_action,
-        force_high=bool(confirm_tool),
+        force_high=bool(confirm_tool or revise_proposal_id),
         owner_mode=mode,
     )
     model = policy.model or owner_model_name()
@@ -329,6 +344,7 @@ async def iter_owner_turn_v2_events(
                         "propose_cm_patch",
                         "propose_cm_article_upsert",
                         "propose_cm_faq_upsert",
+                        "propose_cm_delete",
                         "propose_smart_answer",
                     }
                     and result.ok
@@ -340,6 +356,21 @@ async def iter_owner_turn_v2_events(
                         "preview": result.data.get("preview"),
                     }
                     pending_confirmation = result.confirmation_token
+                    revise = context.get("proposal_revise")
+                    if isinstance(revise, dict):
+                        old_id = str(revise.get("proposal_id") or "")
+                        new_id = str(result.data.get("proposal_id") or "")
+                        if old_id and new_id and old_id != new_id:
+                            from services.owner_ai_cm_approval import reject_cm_patch
+
+                            try:
+                                reject_cm_patch(tenant_id=tenant_id, user_id=user_id, proposal_id=old_id)
+                            except Exception:
+                                pass
+                            context["proposal_revise"] = {
+                                **revise,
+                                "proposal_id": new_id,
+                            }
 
         fin_messages = list(chat_messages)
         fin_messages.append({"role": "system", "content": FINAL_ANSWER_NUDGE})

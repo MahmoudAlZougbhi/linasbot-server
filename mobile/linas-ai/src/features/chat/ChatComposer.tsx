@@ -20,6 +20,7 @@ import { LinEffortSheet } from './LinEffortSheet';
 import { OWNER_LIN_DISPLAY, type OwnerChatMode } from './ownerChatMode';
 import { useComposerInputAutoGrow } from './useComposerInputAutoGrow';
 import type { VoiceState } from './useVoiceDraft';
+import { ComposerEditChip } from './ComposerEditChip';
 import { VoiceComposerControls } from './VoiceComposerControls';
 
 type Props = {
@@ -45,6 +46,9 @@ type Props = {
   ownerMode?: OwnerChatMode;
   onOwnerModeChange?: (mode: OwnerChatMode) => void;
   showModelChip?: boolean;
+  /** Multitask-style Edit chip while revising a pending proposal bar. */
+  editChipActive?: boolean;
+  onClearEditChip?: () => void;
 };
 
 /**
@@ -75,6 +79,8 @@ export function ChatComposer({
   ownerMode = 'chat',
   onOwnerModeChange,
   showModelChip = false,
+  editChipActive = false,
+  onClearEditChip,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -180,6 +186,7 @@ export function ChatComposer({
         },
       ]}
     >
+      <ComposerEditChip active={Boolean(editChipActive)} onClear={onClearEditChip} />
       <View
         style={[
           styles.pill,
@@ -313,6 +320,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
   },
+  editChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  editChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  editChipText: { fontFamily: fonts.bodyMedium, fontSize: 13 },
+  editHint: { flex: 1, fontFamily: fonts.body, fontSize: 12 },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',

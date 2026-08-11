@@ -45,8 +45,9 @@ type Props = {
   loadingMore: boolean;
   onLoadOlder: () => void;
   onRetryAssistant: (content: string) => void;
-  onApproveDraft: (token: string) => void;
-  onDiscardProposal: () => void;
+  onApproveDraft: (token: string, opts?: { delete_ids?: string[] }) => void;
+  onDiscardProposal: (token?: string) => void;
+  onEditProposal?: (proposalId: string) => void;
   onOpenCm: (review?: CmProposalReview) => void;
   onGuestPrompt: (prompt: string) => void;
   showOwnerWelcomeChips?: boolean;
@@ -76,6 +77,7 @@ export function ChatMessageList({
   onRetryAssistant,
   onApproveDraft,
   onDiscardProposal,
+  onEditProposal,
   onOpenCm,
   onGuestPrompt,
   showOwnerWelcomeChips = false,
@@ -251,6 +253,7 @@ export function ChatMessageList({
               proposedCmPatchLabel={tr('proposedCmPatch')}
               onApproveDraft={onApproveDraft}
               onDiscardProposal={onDiscardProposal}
+              onEditProposal={onEditProposal}
               onOpenCm={onOpenCm}
               onRetryLast={() => {
                 const lastUser = [...messages].reverse().find((m) => m.role === 'user');

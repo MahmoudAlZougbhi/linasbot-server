@@ -55,10 +55,11 @@ async def tool_propose_cm_patch(
     section: str,
     patch: dict[str, Any],
     force_edit: bool = False,
+    replace_proposal_id: str | None = None,
 ) -> ToolResult:
     _require(role, "contentManagers")
     from services.cm.progress import progress_summary
-    from services.owner_ai_cm_approval import propose_cm_patch
+    from services.owner_ai_cm_approval import propose_cm_patch, reject_cm_patch
 
     sec = (section or "").strip().replace("-", "_")
     safe_patch = dict(patch) if isinstance(patch, dict) else {}
@@ -101,6 +102,12 @@ async def tool_propose_cm_patch(
                 error="section_already_filled",
             )
 
+    if replace_proposal_id:
+        try:
+            reject_cm_patch(tenant_id=tenant_id, user_id=user_id, proposal_id=str(replace_proposal_id))
+        except Exception:
+            pass
+
     data = propose_cm_patch(tenant_id=tenant_id, user_id=user_id, section=section, patch=safe_patch)
     if map_locked_note:
         data = {**data, "note": map_locked_note, "stripped_fields": ["response_language_map"]}
@@ -121,6 +128,7 @@ async def tool_approve_cm_patch(
     user_id: str,
     proposal_id: str,
     confirmed: bool,
+    delete_ids: list[str] | None = None,
 ) -> ToolResult:
     _require(role, "contentManagers")
     if not confirmed:
@@ -141,6 +149,7 @@ async def tool_approve_cm_patch(
             tenant_id=tenant_id,
             user_id=user_id,
             proposal_id=proposal_id,
+            delete_ids=delete_ids,
             actor_id=user_id,
         )
     except PermissionError as exc:

@@ -55,6 +55,8 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
         choice_set_id?: string;
         attachment_ids?: string[];
         confirm_tool?: string | null;
+        tool_args?: Record<string, unknown>;
+        revise_proposal_id?: string | null;
         owner_mode?: 'chat' | 'work';
         reply_language?: 'en' | 'ar' | 'fr';
       },
@@ -66,7 +68,9 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
       setChoiceSetId(null);
       setThinking(true);
       let confirmTool = opts?.confirm_tool ?? null;
-      if (!confirmTool && looksLikeOwnerAssent(text) && pendingConfirmRef.current) {
+      const reviseId = opts?.revise_proposal_id?.trim() || null;
+      // Edit-chip revision must not auto-approve via assent shortcut.
+      if (!confirmTool && !reviseId && looksLikeOwnerAssent(text) && pendingConfirmRef.current) {
         confirmTool = pendingConfirmRef.current;
       }
       const result = await stream.sendStream(
@@ -77,6 +81,8 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
           choice_set_id: opts?.choice_set_id,
           attachment_ids: opts?.attachment_ids,
           confirm_tool: confirmTool,
+          tool_args: opts?.tool_args,
+          revise_proposal_id: reviseId,
           owner_mode: opts?.owner_mode,
           reply_language: opts?.reply_language,
         },
