@@ -2,7 +2,7 @@
 export const PUBLIC_SITE = {
   productName: 'Linas AI',
   publicBaseUrl: 'https://www.linasaibot.com',
-  contactEmail: 'Mahmoudalzougbhi@gmail.com',
+  contactEmail: 'support@linasai.com',
   heroTitle: 'Linas AI',
   heroHeadline: 'Turn every DM and comment into a helpful answer.',
   heroSupport:

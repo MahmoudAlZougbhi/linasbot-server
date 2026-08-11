@@ -21,9 +21,17 @@ export const APP_BUILD_LABEL = Platform.OS === 'ios' ? IOS_BUILD : String(ANDROI
 /** Side-menu / About — shows marketing version · platform build so each TF is visible. */
 export const APP_VERSION_LABEL = `Linas ${APP_VERSION} · ${APP_BUILD_LABEL}`;
 
+/** Canonical public legal origin (Meta App Review / store listings). */
+export const LEGAL_PUBLIC_BASE = 'https://www.linasaibot.com';
+
+/** Public support / legal contact — keep in sync with compliance pages + PUBLIC_SITE. */
+export const SUPPORT_EMAIL = 'support@linasai.com';
+
 export const LEGAL_URLS = {
-  privacy: `${API_BASE}/privacy-policy`,
-  terms: `${API_BASE}/terms`,
-  dataDeletion: `${API_BASE}/data-deletion`,
+  privacy: `${LEGAL_PUBLIC_BASE}/privacy-policy`,
+  terms: `${LEGAL_PUBLIC_BASE}/terms`,
+  dataDeletion: `${LEGAL_PUBLIC_BASE}/data-deletion`,
+  contact: `${LEGAL_PUBLIC_BASE}/contact`,
   forgotPassword: `${API_BASE}/forgot-password`,
+  supportMailto: `mailto:${SUPPORT_EMAIL}`,
 } as const;
