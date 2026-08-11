@@ -24,10 +24,13 @@ def tenant_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def test_progress_marks_default_incomplete(tenant_root: Path) -> None:
     del tenant_root
     summary = progress_summary("progress-tenant", create_missing=False)
-    assert summary["complete"] == 0
-    assert summary["incomplete"] == summary["total"]
-    assert summary["percent"] == 0
+    # Optional Comments policy defaults count as filled (no owner content required).
+    optional_done = 1  # comments
+    assert summary["complete"] == optional_done
+    assert summary["incomplete"] == summary["total"] - optional_done
+    assert summary["percent"] == int(round((optional_done / summary["total"]) * 100))
     assert "ai_basics" in summary["missing_sections"]
+    assert "comments" in summary["complete_sections"]
 
 
 def test_progress_marks_filled_complete(tenant_root: Path) -> None:
