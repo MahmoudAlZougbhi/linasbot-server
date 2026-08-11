@@ -1,6 +1,6 @@
 """
 WhatsApp Adapter Factory
-Creates and manages WhatsApp adapters (Meta, 360Dialog, ThirdProvider, etc.)
+Creates and manages WhatsApp adapters (Meta, 360Dialog, Qiscus, MontyMobile, etc.)
 In local/development mode or when ENABLE_SENDING=false, wraps the real adapter
 with SafeSendAdapter so outbound messaging is dry-run or sandbox-only.
 """
