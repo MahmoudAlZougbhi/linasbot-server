@@ -8,6 +8,7 @@ from pathlib import Path
 LIMIT = 500
 BINARY_EXT = {'.png','.jpg','.jpeg','.gif','.webp','.pdf','.apk','.zip','.ico','.woff','.woff2','.ttf','.eot','.mp4','.mov','.bin'}
 GENERATED_NAMES = {'package-lock.json'}
+DATA_DUMP_EXT = {'.jsonl'}
 
 def is_generated(rel: str) -> bool:
     name = Path(rel).name
@@ -23,7 +24,7 @@ def main() -> int:
         if is_generated(rel):
             continue
         ext = Path(rel).suffix.lower()
-        if ext in BINARY_EXT:
+        if ext in BINARY_EXT or ext in DATA_DUMP_EXT:
             continue
         p = Path(rel)
         if not p.is_file():
