@@ -208,9 +208,8 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
             credit_ledger_service.capture(
                 tenant_id=tenant_id,
                 reservation_id=reservation_id,
-                credits=1,
-                operation_type="whatsapp_customer_reply",
-                request_id=f"wa:{provider_mid}",
+                provider_cost_usd=None,
+                model_provider="whatsapp_cloud",
             )
         except Exception as exc:
             emit_wa_event("credit_capture_failed", error=type(exc).__name__)

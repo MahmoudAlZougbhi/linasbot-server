@@ -68,7 +68,10 @@ async def debug_token(*, input_token: str, app_id: str, app_secret: str) -> dict
     data = resp.json() if resp.content else {}
     if resp.status_code >= 400:
         raise WhatsAppGraphError("debug_token_failed", "debug_token failed", http_status=resp.status_code)
-    return data.get("data") if isinstance(data.get("data"), dict) else data
+    nested = data.get("data") if isinstance(data, dict) else None
+    if isinstance(nested, dict):
+        return dict(nested)
+    return data if isinstance(data, dict) else {}
 
 
 async def discover_shared_whatsapp_assets(*, access_token: str) -> list[dict[str, Any]]:
