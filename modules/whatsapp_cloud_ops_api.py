@@ -349,3 +349,72 @@ async def whatsapp_pilot_revoke(request: Request, body: dict[str, Any] = Body(de
             detail={},
         )
         return {"success": True, "tenant_id": row.tenant_id, "status": row.status}
+
+
+@app.get("/api/whatsapp/cloud/app-review/status")
+async def whatsapp_app_review_status(request: Request) -> Any:
+    session = require_session(request)
+    if not is_platform_owner(session):
+        raise HTTPException(status_code=403, detail="platform_owner_required")
+    from services.whatsapp_cloud.app_review_bind import AppReviewBindError, status_app_review_bind
+
+    try:
+        return status_app_review_bind()
+    except AppReviewBindError as exc:
+        return JSONResponse(status_code=400, content={"success": False, "error": exc.code, "message": exc.message})
+    except WhatsAppDatabaseUnavailable:
+        return JSONResponse(status_code=503, content={"success": False, "error": "WHATSAPP_DB_UNAVAILABLE"})
+
+
+@app.post("/api/whatsapp/cloud/app-review/bind")
+async def whatsapp_app_review_bind(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
+    session = require_session(request)
+    if not is_platform_owner(session):
+        raise HTTPException(status_code=403, detail="platform_owner_required")
+    from services.whatsapp_cloud.app_review_bind import AppReviewBindError, bind_app_review_test_number
+
+    tenant_id = str(body.get("tenant_id") or "linas").strip().lower()
+    waba_id = str(body.get("waba_id") or "").strip()
+    phone_number_id = str(body.get("phone_number_id") or "").strip()
+    dry_run = bool(body.get("dry_run"))
+    idempotency_key = str(body.get("idempotency_key") or "").strip() or None
+    # Token must come from env META_WHATSAPP_APP_REVIEW_BIND_TOKEN — never from body logs.
+    try:
+        result = await bind_app_review_test_number(
+            tenant_id=tenant_id,
+            waba_id=waba_id,
+            phone_number_id=phone_number_id,
+            access_token=None,
+            actor_user_id=_actor_id(session),
+            idempotency_key=idempotency_key,
+            dry_run=dry_run,
+        )
+        return result.public_dict()
+    except AppReviewBindError as exc:
+        return JSONResponse(status_code=400, content={"success": False, "error": exc.code, "message": exc.message})
+    except WhatsAppDatabaseUnavailable:
+        return JSONResponse(status_code=503, content={"success": False, "error": "WHATSAPP_DB_UNAVAILABLE"})
+
+
+@app.post("/api/whatsapp/cloud/app-review/unbind")
+async def whatsapp_app_review_unbind(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
+    session = require_session(request)
+    if not is_platform_owner(session):
+        raise HTTPException(status_code=403, detail="platform_owner_required")
+    from services.whatsapp_cloud.app_review_bind import AppReviewBindError, unbind_app_review_test_number
+
+    tenant_id = str(body.get("tenant_id") or "linas").strip().lower()
+    connection_id = str(body.get("connection_id") or "").strip() or None
+    idempotency_key = str(body.get("idempotency_key") or "").strip() or None
+    try:
+        result = unbind_app_review_test_number(
+            tenant_id=tenant_id,
+            actor_user_id=_actor_id(session),
+            connection_id=connection_id,
+            idempotency_key=idempotency_key,
+        )
+        return result.public_dict()
+    except AppReviewBindError as exc:
+        return JSONResponse(status_code=400, content={"success": False, "error": exc.code, "message": exc.message})
+    except WhatsAppDatabaseUnavailable:
+        return JSONResponse(status_code=503, content={"success": False, "error": "WHATSAPP_DB_UNAVAILABLE"})

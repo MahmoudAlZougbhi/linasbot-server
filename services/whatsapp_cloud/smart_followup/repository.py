@@ -270,6 +270,25 @@ class SmartFollowUpRepository:
             )
         return total
 
+    def cancel_active_for_connection(self, *, tenant_id: str, connection_id: str, reason: str) -> int:
+        sequences = list(
+            self.session.scalars(
+                select(WhatsAppSmartFollowUpSequence).where(
+                    WhatsAppSmartFollowUpSequence.tenant_id == tenant_id,
+                    WhatsAppSmartFollowUpSequence.connection_id == connection_id,
+                    WhatsAppSmartFollowUpSequence.status == "active",
+                )
+            ).all()
+        )
+        total = 0
+        for seq in sequences:
+            total += self.cancel_active_for_conversation(
+                tenant_id=tenant_id,
+                conversation_id=seq.conversation_id,
+                reason=reason,
+            )
+        return total
+
     def supersede_active_for_conversation(
         self,
         *,

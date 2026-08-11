@@ -125,14 +125,16 @@ class WhatsAppCloudRepository:
         ).all()
         return rows[0] if rows else None
 
-    def list_tenant_connections(self, tenant_id: str) -> list[WhatsAppConnection]:
-        return list(
-            self.session.scalars(
-                select(WhatsAppConnection)
-                .where(WhatsAppConnection.tenant_id == tenant_id)
-                .order_by(WhatsAppConnection.created_at.desc())
-            ).all()
-        )
+    def list_tenant_connections(
+        self,
+        tenant_id: str,
+        *,
+        include_revoked: bool = True,
+    ) -> list[WhatsAppConnection]:
+        stmt = select(WhatsAppConnection).where(WhatsAppConnection.tenant_id == tenant_id)
+        if not include_revoked:
+            stmt = stmt.where(WhatsAppConnection.lifecycle_status != "revoked")
+        return list(self.session.scalars(stmt.order_by(WhatsAppConnection.created_at.desc())).all())
 
     def get_connection(self, connection_id: str) -> WhatsAppConnection | None:
         return self.session.get(WhatsAppConnection, connection_id)
@@ -157,7 +159,11 @@ class WhatsAppCloudRepository:
         access_token: str,
         scopes: list[str],
         previous_connection_id: str | None = None,
+        connection_source: str = "embedded_signup",
     ) -> WhatsAppConnection:
+        source = str(connection_source or "embedded_signup").strip() or "embedded_signup"
+        if source not in {"embedded_signup", "meta_app_review_test"}:
+            raise ValueError("invalid_connection_source")
         existing = self.find_active_by_phone_number_id(phone_number_id)
         if existing is not None and existing.tenant_id != tenant_id:
             raise PermissionError("phone_number_owned_by_other_tenant")
@@ -178,6 +184,7 @@ class WhatsAppCloudRepository:
             display_phone_last4=last4,
             verified_name=verified_name or "",
             coexistence_mode="whatsapp_business_app_onboarding",
+            connection_source=source,
             lifecycle_status="provisioning",
             granted_scopes=list(scopes),
             previous_connection_id=previous_connection_id,
@@ -253,6 +260,28 @@ class WhatsAppCloudRepository:
                 cred.revoked_at = _utcnow()
         self.session.flush()
         return conn
+
+    def suppress_pending_outbound_for_connection(
+        self,
+        *,
+        connection_id: str,
+        tenant_id: str,
+        reason: str,
+    ) -> int:
+        rows = list(
+            self.session.scalars(
+                select(WhatsAppOutboundIntent).where(
+                    WhatsAppOutboundIntent.connection_id == connection_id,
+                    WhatsAppOutboundIntent.tenant_id == tenant_id,
+                    WhatsAppOutboundIntent.dispatch_state.in_(("pending", "sending")),
+                )
+            ).all()
+        )
+        for intent in rows:
+            intent.dispatch_state = "suppressed"
+            intent.error_code = reason[:64]
+        self.session.flush()
+        return len(rows)
 
     def load_access_token(self, conn: WhatsAppConnection) -> str:
         if not conn.credential_id:
