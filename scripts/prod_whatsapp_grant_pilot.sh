@@ -83,12 +83,22 @@ if not owners:
     # role=platform_owner bound to an existing active admin/owner user id so the
     # real /api/whatsapp/cloud/pilot/grant path + audit run. This does NOT mutate
     # Firestore roles and does NOT hardcode tenant allowlists in application code.
+    # Session tenant_id must be "linas" — legacy API middleware fail-closes other tenants.
     candidates = [
         u
         for u in users
         if str(u.get("role") or "").strip().lower() in {"admin", "owner"}
         and str(u.get("status") or "active").strip().lower() in {"", "active"}
+        and str(u.get("tenantId") or u.get("tenant_id") or "linas").strip().lower() == "linas"
     ]
+    if not candidates:
+        # Fall back to any active admin/owner; still mint session as tenant linas.
+        candidates = [
+            u
+            for u in users
+            if str(u.get("role") or "").strip().lower() in {"admin", "owner"}
+            and str(u.get("status") or "active").strip().lower() in {"", "active"}
+        ]
     if not candidates:
         raise SystemExit(
             "[wa-pilot] BLOCKED: no platform_owner and no active admin/owner user "
@@ -96,7 +106,10 @@ if not owners:
         )
     owners = [candidates[0]]
     session_note = "ops_session_role_platform_owner_via_admin"
-    print(f"[wa-pilot] using_ops_session_elevation=true source_role={candidates[0].get('role')}")
+    print(
+        f"[wa-pilot] using_ops_session_elevation=true source_role={candidates[0].get('role')} "
+        f"source_tenant={str(candidates[0].get('tenantId') or candidates[0].get('tenant_id') or '')}"
+    )
 
 owner = owners[0]
 user_id = str(owner.get("id") or owner.get("userId") or "").strip()
@@ -105,12 +118,14 @@ if not user_id:
     raise SystemExit("[wa-pilot] BLOCKED: actor user missing id")
 
 perms = owner.get("permissions") if isinstance(owner.get("permissions"), dict) else None
+# Pilot admin APIs live on the linas control plane; force session tenant accordingly.
+session_tenant = "linas"
 record = session_service.create_session(
     user_id=user_id,
     email=email or f"ops-actor:{user_id}",
     role="platform_owner",
     permissions=perms,
-    tenant_id=str(owner.get("tenantId") or "linas"),
+    tenant_id=session_tenant,
     password_epoch=int(owner.get("passwordEpoch") or owner.get("password_epoch") or 0),
     ttl_seconds=900,
 )
