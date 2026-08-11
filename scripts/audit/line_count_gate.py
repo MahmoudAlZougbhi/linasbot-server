@@ -14,6 +14,9 @@ def is_generated(rel: str) -> bool:
     name = Path(rel).name
     if name in GENERATED_NAMES or name.endswith('.lock'):
         return True
+    # Phase-0 inventory artifacts are regenerated, not hand-maintained source.
+    if rel.startswith('docs/audit/') and name.endswith('.csv'):
+        return True
     return False
 
 def main() -> int:
