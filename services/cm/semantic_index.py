@@ -76,7 +76,14 @@ def _faq_entries(payload: dict[str, Any] | None) -> list[_RawEntry]:
     return out
 
 
-def _article_entries(payload: dict[str, Any] | None, kind: str) -> list[_RawEntry]:
+def _article_entries(
+    payload: dict[str, Any] | None,
+    kind: str,
+    *,
+    tenant_id: str | None = None,
+) -> list[_RawEntry]:
+    from services.cm.article_media import format_attachments_block
+
     out: list[_RawEntry] = []
     if not payload:
         return out
@@ -85,11 +92,27 @@ def _article_entries(payload: dict[str, Any] | None, kind: str) -> list[_RawEntr
     for item in section.items:
         if item.status in {"archived", "restricted"}:
             continue
-        text = f"{item.title}\n{item.body}".strip()
+        parts = [f"{item.title}\n{item.body}".strip()]
+        att_block = format_attachments_block(list(item.attachments), tenant_id=tenant_id)
+        if att_block:
+            parts.append(att_block)
+        text = "\n\n".join(p for p in parts if p).strip()
         if not text:
             continue
         source_id = f"{kind}:{item.id}"
-        out.append((source_id, kind, item.language or "", text, {"title": item.title, "tags": list(item.tags)}))
+        out.append(
+            (
+                source_id,
+                kind,
+                item.language or "",
+                text,
+                {
+                    "title": item.title,
+                    "tags": list(item.tags),
+                    "attachment_count": len(item.attachments),
+                },
+            )
+        )
     return out
 
 
@@ -124,8 +147,8 @@ async def build_index(
     """Build and persist a semantic index over FAQ + Knowledge + Care + redistributed notes."""
     entries: list[_RawEntry] = [
         *_faq_entries(sections.get("faq")),
-        *_article_entries(sections.get("knowledge"), "knowledge"),
-        *_article_entries(sections.get("care"), "care"),
+        *_article_entries(sections.get("knowledge"), "knowledge", tenant_id=tenant_id),
+        *_article_entries(sections.get("care"), "care", tenant_id=tenant_id),
         *_section_notes_entries("branches", sections.get("branches")),
         *_section_notes_entries("handoff", sections.get("handoff")),
         *_section_notes_entries("prices", sections.get("prices")),

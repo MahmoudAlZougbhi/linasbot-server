@@ -140,6 +140,20 @@ class PriceRecord(CmBaseModel):
         return value
 
 
+class ArticleAttachment(CmBaseModel):
+    """Case/example media on a knowledge or care article (bytes live in CM media store).
+
+    ``caption`` tells the AI when this image/file applies (e.g. filled form vs blank template).
+    """
+
+    id: str
+    kind: Literal["image", "file"] = "file"
+    caption: str = ""
+    mime: str = ""
+    filename: str = ""
+    size: int = Field(default=0, ge=0)
+
+
 class ArticleRecord(CmBaseModel):
     id: str
     title: str = ""
@@ -154,6 +168,7 @@ class ArticleRecord(CmBaseModel):
     linked_service_ids: list[str] = Field(default_factory=list)
     linked_branch_ids: list[str] = Field(default_factory=list)
     notes: str | None = None
+    attachments: list[ArticleAttachment] = Field(default_factory=list)
 
 
 class HandoffContact(CmBaseModel):

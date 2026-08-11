@@ -1611,6 +1611,22 @@ export const useApi = () => {
     }
   }, []);
 
+  const uploadCmMedia = useCallback(async (/** @type {File | Blob} */ file) => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await api.post("/api/cm/media", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return response.data;
+    } catch (error) {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline" };
+      }
+      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
+    }
+  }, []);
+
   const putCmDraft = useCallback(
     async (
       /** @type {string} */ section,
@@ -1906,6 +1922,7 @@ export const useApi = () => {
     // Content Management control plane
     getCmMeta,
     getCmDraft,
+    uploadCmMedia,
     putCmDraft,
     validateCmDraft,
     quoteCmPricing,
