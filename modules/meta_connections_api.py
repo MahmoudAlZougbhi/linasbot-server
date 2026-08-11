@@ -6,7 +6,6 @@ import time
 from typing import Any
 
 from fastapi import Body, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse
 
 from modules.api_security import require_permission
 from modules.core import app
@@ -43,7 +42,8 @@ from services.meta_oauth import (
 from services.meta_oauth_return import (
     consume_return_surface_from_state,
     normalize_return_surface,
-    oauth_completion_redirect_url,
+    oauth_completion_response,
+    peek_return_surface_from_state,
 )
 
 
@@ -245,42 +245,36 @@ async def instagram_login_oauth_callback(
     code: str = Query(default=""),
     state: str = Query(default=""),
     error: str = Query(default=""),
-) -> RedirectResponse:
+) -> Any:
     from services.meta_app_registry import MetaOAuthStateError
+    from services.meta_oauth_return import resolve_error_return_surface
 
+    state_text = _query_text(state)
+    peeked = peek_return_surface_from_state(state_text)
     if _query_text(error):
-        surface = consume_return_surface_from_state(_query_text(state))
-        return RedirectResponse(
-            url=oauth_completion_redirect_url(
-                return_surface=surface,
-                meta_connection="cancelled",
-                extra_query={"meta_flow": "instagram_login"},
-            ),
-            status_code=303,
+        surface = consume_return_surface_from_state(state_text) if state_text else peeked
+        return oauth_completion_response(
+            return_surface=surface,
+            meta_connection="cancelled",
+            extra_query={"meta_flow": "instagram_login"},
         )
     try:
-        result = await complete_instagram_login(code=_query_text(code), state=_query_text(state))
-        return RedirectResponse(
-            url=oauth_completion_redirect_url(
-                return_surface=result.return_surface,
-                meta_connection="connected",
-                extra_query={
-                    "meta_flow": "instagram_login",
-                    "channel": result.binding.channel,
-                    "status": result.binding.status,
-                },
-            ),
-            status_code=303,
+        result = await complete_instagram_login(code=_query_text(code), state=state_text)
+        return oauth_completion_response(
+            return_surface=result.return_surface,
+            meta_connection="connected",
+            extra_query={
+                "meta_flow": "instagram_login",
+                "channel": result.binding.channel,
+                "status": result.binding.status,
+            },
         )
-    except (MetaOAuthError, MetaOAuthStateError, MetaRegistryError):
-        surface = consume_return_surface_from_state(_query_text(state))
-        return RedirectResponse(
-            url=oauth_completion_redirect_url(
-                return_surface=surface,
-                meta_connection="failed",
-                extra_query={"meta_flow": "instagram_login"},
-            ),
-            status_code=303,
+    except (MetaOAuthError, MetaOAuthStateError, MetaRegistryError) as exc:
+        surface = resolve_error_return_surface(exc, state_text, peeked=peeked)
+        return oauth_completion_response(
+            return_surface=surface,
+            meta_connection="failed",
+            extra_query={"meta_flow": "instagram_login"},
         )
 
 
@@ -289,40 +283,35 @@ async def meta_oauth_callback(
     code: str = Query(default=""),
     state: str = Query(default=""),
     error: str = Query(default=""),
-) -> RedirectResponse:
+) -> Any:
     """Public Meta redirect; one-time state is the authorization boundary."""
 
+    from services.meta_oauth_return import resolve_error_return_surface
+
+    state_text = _query_text(state)
+    peeked = peek_return_surface_from_state(state_text)
     if _query_text(error):
-        surface = consume_return_surface_from_state(_query_text(state))
-        return RedirectResponse(
-            url=oauth_completion_redirect_url(
-                return_surface=surface,
-                meta_connection="cancelled",
-            ),
-            status_code=303,
+        surface = consume_return_surface_from_state(state_text) if state_text else peeked
+        return oauth_completion_response(
+            return_surface=surface,
+            meta_connection="cancelled",
         )
     try:
-        result = await complete_meta_business_login(code=_query_text(code), state=_query_text(state))
-        return RedirectResponse(
-            url=oauth_completion_redirect_url(
-                return_surface=result.return_surface,
-                meta_connection="connected",
-                extra_query={
-                    "channel": result.binding.channel,
-                    "status": result.binding.status,
-                    "connected_count": str(len(result.bindings)),
-                },
-            ),
-            status_code=303,
+        result = await complete_meta_business_login(code=_query_text(code), state=state_text)
+        return oauth_completion_response(
+            return_surface=result.return_surface,
+            meta_connection="connected",
+            extra_query={
+                "channel": result.binding.channel,
+                "status": result.binding.status,
+                "connected_count": str(len(result.bindings)),
+            },
         )
-    except (MetaOAuthError, MetaRegistryError):
-        surface = consume_return_surface_from_state(_query_text(state))
-        return RedirectResponse(
-            url=oauth_completion_redirect_url(
-                return_surface=surface,
-                meta_connection="failed",
-            ),
-            status_code=303,
+    except (MetaOAuthError, MetaRegistryError) as exc:
+        surface = resolve_error_return_surface(exc, state_text, peeked=peeked)
+        return oauth_completion_response(
+            return_surface=surface,
+            meta_connection="failed",
         )
 
 

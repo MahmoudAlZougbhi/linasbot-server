@@ -1296,6 +1296,16 @@ class MetaAppRegistry:
         )
         return updated
 
+    def peek_oauth_state(self, nonce_hash: str) -> dict[str, Any]:
+        """Read OAuth state without consuming it (for return_surface on error paths)."""
+
+        with self._locked():
+            state = self._read_unlocked()
+            raw = state["oauth_states"].get(nonce_hash)
+        if not isinstance(raw, dict) or float(raw.get("expires_at") or 0) < time.time():
+            raise MetaOAuthStateError("OAuth state is invalid, expired, or already used")
+        return cast(dict[str, Any], dict(raw))
+
     def consume_oauth_state(self, nonce_hash: str) -> dict[str, Any]:
         with self._locked():
             state = self._read_unlocked()
