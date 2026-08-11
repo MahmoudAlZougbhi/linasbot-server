@@ -11,7 +11,6 @@ import { RegisterScreen } from './src/features/auth/RegisterScreen';
 import { BillingScreen } from './src/features/billing/BillingScreen';
 import { SubscriptionGateScreen } from './src/features/billing/SubscriptionGateScreen';
 import { useSubscriptionGate } from './src/features/billing/useSubscriptionGate';
-import { UsageScreen } from './src/features/billing/UsageScreen';
 import { BootSplash } from './src/features/boot/BootSplash';
 import { ChatScreen } from './src/features/chat/ChatScreen';
 import { queueSetupHandoff } from './src/features/chat/pendingSetupHandoff';
@@ -21,6 +20,7 @@ import type { CmProposalReview } from './src/features/cm/cmProposalReview';
 import { isCmProposalSection } from './src/features/cm/cmProposalReview';
 import type { ControlArea } from './src/features/control/controlAreas';
 import { DashboardScreen } from './src/features/dashboard/DashboardScreen';
+import { screenForDashboardTarget } from './src/features/dashboard/dashboardNavigation';
 import { IntegrationsScreen } from './src/features/integrations/IntegrationsScreen';
 import { LiveChatScreen } from './src/features/livechat/LiveChatScreen';
 import { NotificationsScreen } from './src/features/notifications/NotificationsScreen';
@@ -142,16 +142,12 @@ function AppBody() {
       setScreen({ name: 'users' });
       return;
     }
-    if (area === 'dashboard') {
+    if (area === 'dashboard' || area === 'usage') {
       setScreen({ name: 'dashboard' });
       return;
     }
     if (area === 'subscription') {
       setScreen({ name: 'billing' });
-      return;
-    }
-    if (area === 'usage') {
-      setScreen({ name: 'usage' });
       return;
     }
     if (area === 'livechat') {
@@ -317,7 +313,10 @@ function AppBody() {
         />
       ) : null}
       {screen.name === 'dashboard' ? (
-        <DashboardScreen onBack={() => setScreen({ name: 'chat' })} isPlatformOwner={isPlatformOwner} />
+        <DashboardScreen
+          onBack={() => setScreen({ name: 'chat' })}
+          onNavigate={(target) => setScreen(screenForDashboardTarget(target))}
+        />
       ) : null}
       {screen.name === 'billing' ? (
         <BillingScreen
@@ -326,7 +325,6 @@ function AppBody() {
           }}
         />
       ) : null}
-      {screen.name === 'usage' ? <UsageScreen onBack={() => setScreen({ name: 'chat' })} /> : null}
       {screen.name === 'livechat' ? (
         <LiveChatScreen onBack={() => setScreen({ name: 'chat' })} initialOpen={screen.open ?? null} />
       ) : null}

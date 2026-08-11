@@ -60,6 +60,7 @@ import modules.meta_instagram_login_webhook  # noqa: E402, F401
 import modules.meta_messaging_webhook  # noqa: E402, F401
 import modules.meta_social_posts_api  # noqa: E402, F401
 import modules.mobile_auth_api  # noqa: E402, F401
+import modules.mobile_dashboard_api  # noqa: E402, F401
 import modules.mobile_integrations_api  # noqa: E402, F401
 import modules.mobile_stt_api  # noqa: E402, F401
 import modules.owner_ai_api  # noqa: E402, F401
