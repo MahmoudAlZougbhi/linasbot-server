@@ -20,7 +20,6 @@ import { ChatModeToggle } from './ChatModeToggle';
 import { ChatScreenOverlays } from './ChatScreenOverlays';
 import { chatScreenStyles as styles } from './chatScreenStyles';
 import { ChatStatusBanners } from './ChatStatusBanners';
-import { GuestBanner } from './GuestBanner';
 import type { OwnerChatMode } from './ownerChatMode';
 import { resolveOwnerModeForOutgoing } from './ownerChatMode';
 import { PendingAttachmentsStrip } from './PendingAttachmentsStrip';
@@ -185,15 +184,6 @@ export function ChatScreen({
 
         {showModeToggle ? <ChatModeToggle mode={ownerMode} onChange={setOwnerMode} /> : null}
 
-        {!isAuthenticated ? (
-          <GuestBanner
-            remaining={guest.questionsRemaining}
-            max={guest.maxQuestions}
-            gated={guest.gated}
-            onLogin={() => openAuthPreservingDraft(true)}
-          />
-        ) : null}
-
         <ChatStatusBanners
           offline={offline}
           errorLabel={error ? tr(chatErrorLabelKey(error)) : null}
@@ -226,7 +216,7 @@ export function ChatScreen({
             scrollToBottom={scrollToBottom}
             followBottomIfStuck={followBottomIfStuck}
             imagePreviewByContent={imagePreviewByContent}
-            thinking={turn.thinking}
+            thinking={turn.thinking || (!isAuthenticated && guest.sending)}
             thinkingLabel={tr('chatThinking')}
             statusRows={turn.statusRows}
             liveText={turn.liveText}
@@ -342,7 +332,6 @@ export function ChatScreen({
               voiceState: voice.voiceState,
               conversationId: owner.conversationId,
               guestGated: guest.gated,
-              guestQuestionsRemaining: guest.questionsRemaining,
               guestSend: guest.send,
               ownerSend: ownerSendWithMode,
               appendOptimisticUser: owner.appendOptimisticUser,

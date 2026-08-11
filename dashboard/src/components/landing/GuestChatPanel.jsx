@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  countWords,
   ensureGuestSession,
   getOrCreateGuestSessionId,
   sendGuestMessage,
@@ -10,67 +9,61 @@ import LinasStar from './LinasStar';
 import { usePublicLandingLocale } from '../../contexts/PublicLandingLocaleContext';
 
 const GATE_FALLBACK = {
-  en: 'You’ve reached the guest limit (10 questions). Download the Linas AI app and subscribe to continue.',
-  ar: 'وصلت إلى حد الضيف (10 أسئلة). حمّل تطبيق Linas AI واشترك للمتابعة.',
-  fr: 'Limite invité atteinte (10 questions). Téléchargez l’app Linas AI et abonnez-vous pour continuer.',
+  en: 'You’ve reached the guest limit. Download the Linas AI app and subscribe to continue.',
+  ar: 'وصلت إلى حد الضيف. حمّل تطبيق Linas AI واشترك للمتابعة.',
+  fr: 'Limite invité atteinte. Téléchargez l’app Linas AI et abonnez-vous pour continuer.',
 };
 
 const COPY = {
   en: {
     title: 'Talk to Linas',
-    subtitle: 'Guest preview — 10 questions, 50 words each.',
+    subtitle: 'Ask about Linas AI — product help only.',
     placeholder: 'Message Linas',
     send: 'Send',
-    /** @param {number} n */
-    remaining: (n) => `${n} of 10 prompts left`,
-    /** @param {number} used */
-    usedBar: (used) => `${used} of 10 prompts used`,
-    wordLimit: 'Each guest question can be at most 50 words.',
+    inputTooLarge: 'What you sent is too large. Subscribe to Linas AI to continue with larger messages.',
+    mediaBlocked: 'Guests can’t send photos or files. Subscribe to use attachments.',
     retry: 'Couldn’t start guest chat. Try again.',
     failed: 'Message failed. Please try again.',
     unavailable: 'Linas AI is temporarily unavailable. Please try again in a moment.',
     continueInApp: 'Continue in the app',
-    greeting: 'Hi — I’m the public Linas guide. Ask how the product handles DMs, comments, setup, or account access.',
+    greeting: 'Hi — I’m Linas AI. Ask how the product handles DMs, comments, setup, or account access.',
     chips: ['What can Linas answer?', 'How are replies controlled?', 'How does Meta setup work?'],
+    thinking: 'Thinking…',
   },
   ar: {
     title: 'تحدّث مع Linas',
-    subtitle: 'معاينة ضيف — 10 أسئلة، 50 كلمة لكل سؤال.',
+    subtitle: 'اسأل عن Linas AI — شرح المنتج فقط.',
     placeholder: 'راسل Linas',
     send: 'إرسال',
-    /** @param {number} n */
-    remaining: (n) => `متبقي ${n} من 10`,
-    /** @param {number} used */
-    usedBar: (used) => `${used} من 10`,
-    wordLimit: 'كل سؤال ضيف بحد أقصى 50 كلمة.',
+    inputTooLarge: 'اللي بعثتو كبير زيادة. اشترك بـ Linas AI لتقدر تبعت رسائل أطول.',
+    mediaBlocked: 'الضيوف ما بيقدروا يبعتوا صور أو ملفات. اشترك لاستخدام المرفقات.',
     retry: 'تعذّر بدء الدردشة. حاول مجدداً.',
     failed: 'فشل الإرسال. حاول مجدداً.',
     unavailable: 'Linas AI غير متاح مؤقتاً. حاول مرة أخرى بعد لحظات.',
     continueInApp: 'تابع في التطبيق',
-    greeting: 'مرحباً — أنا دليل Linas العام. اسأل عن الرسائل والتعليقات والإعداد.',
+    greeting: 'مرحباً — أنا Linas AI. اسأل عن الرسائل والتعليقات والإعداد.',
     chips: ['ماذا يجيب Linas؟', 'كيف تُضبط الردود؟', 'كيف يعمل إعداد Meta؟'],
+    thinking: 'يفكّر…',
   },
   fr: {
     title: 'Parler à Linas',
-    subtitle: 'Aperçu invité — 10 questions, 50 mots max.',
+    subtitle: 'Questions sur Linas AI — produit uniquement.',
     placeholder: 'Message Linas',
     send: 'Envoyer',
-    /** @param {number} n */
-    remaining: (n) => `${n} / 10 restantes`,
-    /** @param {number} used */
-    usedBar: (used) => `${used} / 10 utilisées`,
-    wordLimit: 'Chaque question invité fait au plus 50 mots.',
+    inputTooLarge: 'Votre message est trop volumineux. Abonnez-vous à Linas AI pour envoyer des messages plus longs.',
+    mediaBlocked: 'Les invités ne peuvent pas envoyer de photos ou de fichiers. Abonnez-vous pour les pièces jointes.',
     retry: 'Impossible de démarrer le chat. Réessayez.',
     failed: 'Échec de l’envoi. Réessayez.',
     unavailable: 'Linas AI est temporairement indisponible. Réessayez dans un instant.',
     continueInApp: 'Continuer dans l’app',
-    greeting: 'Bonjour — je suis le guide public Linas. Demandez pour les DMs, commentaires ou configuration.',
+    greeting: 'Bonjour — je suis Linas AI. Demandez pour les DMs, commentaires ou configuration.',
     chips: ['Que peut répondre Linas ?', 'Comment sont contrôlées les réponses ?', 'Comment marche Meta ?'],
+    thinking: 'Réflexion…',
   },
 };
 
 /**
- * Guest AI floating widget matching linas-landing-09-guest-ai.jpg.
+ * Guest AI floating widget — same product chat feel as the app, without limit meters.
  * @param {{ open: boolean, onOpen: () => void, onClose: () => void }} props
  */
 export default function GuestChatPanel({ open = false, onOpen = () => {}, onClose = () => {} }) {
@@ -84,8 +77,6 @@ export default function GuestChatPanel({ open = false, onOpen = () => {}, onClos
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(/** @type {string | null} */ (null));
-  const [questionsRemaining, setQuestionsRemaining] = useState(10);
-  const [maxWords, setMaxWords] = useState(50);
   const [gated, setGated] = useState(false);
   const [gateText, setGateText] = useState(/** @type {string | null} */ (null));
   const listRef = useRef(/** @type {HTMLDivElement | null} */ (null));
@@ -98,10 +89,8 @@ export default function GuestChatPanel({ open = false, onOpen = () => {}, onClos
       setGuestId(id);
       const session = await ensureGuestSession(id, locale);
       setMessages(session.messages || []);
-      setQuestionsRemaining(session.questions_remaining ?? 10);
-      setMaxWords(session.max_words ?? 50);
-      setGated((session.questions_remaining ?? 0) <= 0);
-      if ((session.questions_remaining ?? 0) <= 0) {
+      setGated(Boolean(session.limit_reached));
+      if (session.limit_reached) {
         setGateText(GATE_FALLBACK[locale] || GATE_FALLBACK.en);
       }
     } catch {
@@ -127,18 +116,12 @@ export default function GuestChatPanel({ open = false, onOpen = () => {}, onClos
     if (!guestId || gated || sending) return;
     const trimmed = content.trim();
     if (!trimmed) return;
-    if (countWords(trimmed) > maxWords) {
-      setError(copy.wordLimit);
-      return;
-    }
     setSending(true);
     setError(null);
     setDraft('');
     setMessages((prev) => [...prev, { id: `local-${Date.now()}`, role: 'user', content: trimmed }]);
     try {
       const result = await sendGuestMessage(guestId, trimmed, locale);
-      setQuestionsRemaining(result.session.questions_remaining);
-      setMaxWords(result.session.max_words ?? maxWords);
       if (!result.ok) {
         setGated(true);
         setGateText(
@@ -148,16 +131,23 @@ export default function GuestChatPanel({ open = false, onOpen = () => {}, onClos
         return;
       }
       setMessages(result.session.messages || []);
-      if ((result.session.questions_remaining ?? 0) <= 0) {
+      if (result.session.limit_reached) {
         setGated(true);
         setGateText(GATE_FALLBACK[locale] || GATE_FALLBACK.en);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : '';
+      const code =
+        err && typeof err === 'object' && 'code' in err
+          ? String(/** @type {{code?: string}} */ (err).code || '')
+          : err instanceof Error
+            ? err.message
+            : '';
       const status =
         err && typeof err === 'object' && 'status' in err ? Number(/** @type {{status?: number}} */ (err).status) : 0;
-      if (message === 'word_limit') {
-        setError(copy.wordLimit);
+      if (code === 'GUEST_INPUT_TOO_LARGE' || code === 'input_token_limit') {
+        setError(copy.inputTooLarge);
+      } else if (code === 'GUEST_MEDIA_BLOCKED' || code === 'guest_media_blocked') {
+        setError(copy.mediaBlocked);
       } else if (status === 503) {
         setError(copy.unavailable);
       } else {
@@ -166,8 +156,7 @@ export default function GuestChatPanel({ open = false, onOpen = () => {}, onClos
       try {
         const session = await ensureGuestSession(guestId, locale);
         setMessages(session.messages || []);
-        setQuestionsRemaining(session.questions_remaining ?? 10);
-        setGated((session.questions_remaining ?? 0) <= 0);
+        setGated(Boolean(session.limit_reached));
       } catch {
         setMessages((prev) => prev.filter((m) => !String(m.id).startsWith('local-')));
       }
@@ -181,8 +170,6 @@ export default function GuestChatPanel({ open = false, onOpen = () => {}, onClos
     event.preventDefault();
     await sendContent(draft);
   };
-
-  const used = Math.max(0, 10 - questionsRemaining);
 
   return (
     <div id="talk-to-linas" className="scroll-mt-24">
@@ -209,10 +196,6 @@ export default function GuestChatPanel({ open = false, onOpen = () => {}, onClos
             >
               ×
             </button>
-          </div>
-
-          <div className="bg-[#E8F5F1] px-4 py-2 text-xs font-medium text-[#0B3D34]">
-            {loading ? '…' : copy.usedBar(used)}
           </div>
 
           <div
@@ -242,7 +225,12 @@ export default function GuestChatPanel({ open = false, onOpen = () => {}, onClos
                   </div>
                 );
               })}
-            {!loading && !gated && messages.length <= 1 && (
+            {!loading && sending && (
+              <div className="flex justify-start">
+                <div className="rounded-2xl bg-[#F0F3F1] px-3.5 py-2.5 text-sm text-[#5C6663]">{copy.thinking}</div>
+              </div>
+            )}
+            {!loading && !gated && messages.length <= 1 && !sending && (
               <div className="flex flex-col gap-2">
                 {copy.chips.map((chip) => (
                   <button

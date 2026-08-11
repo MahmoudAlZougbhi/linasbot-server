@@ -6,10 +6,8 @@ import { ApiError } from './client';
 
 const GuestSessionSchema = z.object({
   id: z.string(),
-  questions_used: z.number(),
-  questions_remaining: z.number(),
-  max_questions: z.number(),
-  max_words: z.number(),
+  limit_reached: z.boolean(),
+  max_input_tokens: z.number().optional(),
   messages: z.array(ChatMessageSchema),
 });
 
@@ -44,6 +42,17 @@ async function parseJson(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text) return {};
   return JSON.parse(text) as unknown;
+}
+
+function detailCode(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null;
+  const detail = (body as { detail?: unknown }).detail;
+  if (!detail || typeof detail !== 'object') return null;
+  const code = (detail as { code?: unknown; error?: unknown }).code;
+  const error = (detail as { error?: unknown }).error;
+  if (typeof code === 'string') return code;
+  if (typeof error === 'string') return error;
+  return null;
 }
 
 export async function ensureGuestSession(guestSessionId: string, language?: string) {
@@ -83,7 +92,8 @@ export async function sendGuestMessage(
   });
   const body = await parseJson(response);
   if (response.status === 400) {
-    throw new ApiError('Guest message rejected', 400, body);
+    const code = detailCode(body);
+    throw new ApiError(code || 'Guest message rejected', 400, body);
   }
   if (!response.ok) {
     throw new ApiError('Guest message failed', response.status, body);

@@ -4,8 +4,20 @@
 
 export function chatErrorLabelKey(
   error: string,
-): 'retry' | 'guestWordLimit' | 'guestModelUnavailable' | 'messageFailed' {
-  if (error === 'retry' || error === 'guestWordLimit' || error === 'guestModelUnavailable') {
+):
+  | 'retry'
+  | 'guestWordLimit'
+  | 'guestInputTooLarge'
+  | 'guestMediaBlocked'
+  | 'guestModelUnavailable'
+  | 'messageFailed' {
+  if (
+    error === 'retry' ||
+    error === 'guestWordLimit' ||
+    error === 'guestInputTooLarge' ||
+    error === 'guestMediaBlocked' ||
+    error === 'guestModelUnavailable'
+  ) {
     return error;
   }
   return 'messageFailed';

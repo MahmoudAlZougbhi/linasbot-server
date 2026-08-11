@@ -4,22 +4,18 @@ import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
 
 type Props = {
-  remaining: number;
-  max: number;
   gated?: boolean;
   onLogin?: () => void;
 };
 
-export function GuestBanner({ remaining, max, gated, onLogin }: Props) {
+/** Shown only after the hard guest gate — never as a remaining-count meter. */
+export function GuestBanner({ gated, onLogin }: Props) {
   const { tr } = useI18n();
+  if (!gated) return null;
   return (
-    <View style={[styles.wrap, gated && styles.gated]}>
-      <Text style={styles.text}>
-        {gated
-          ? tr('guestLimitReached')
-          : tr('guestQuestionsLeft').replace('{n}', String(remaining)).replace('{max}', String(max))}
-      </Text>
-      {gated && onLogin ? (
+    <View style={[styles.wrap, styles.gated]}>
+      <Text style={styles.text}>{tr('guestLimitReached')}</Text>
+      {onLogin ? (
         <Pressable onPress={onLogin} style={styles.cta}>
           <Text style={styles.ctaText}>{tr('loginOrRegister')}</Text>
         </Pressable>

@@ -5,7 +5,12 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from services.guest_chat_limits import GUEST_MAX_QUESTIONS, GUEST_MAX_WORDS, count_words
+from services.guest_chat_limits import (
+    GUEST_MAX_INPUT_TOKENS,
+    GUEST_MAX_QUESTIONS,
+    GUEST_MAX_WORDS,
+    count_words,
+)
 from services.system_knowledge_retrieval import (
     capabilities_as_prompt_block,
     detect_message_language,
@@ -97,6 +102,13 @@ def build_guest_system_prompt(*, language: str, knowledge_block: str) -> str:
         "Stay professional enough for business questions; friendly ≠ silly.\n"
         "Answer THIS user's question directly; vary wording every turn; use conversation history for follow-ups.\n"
         "Do not force a download/subscribe pitch into every answer. Mention signup only when relevant.\n"
+        "SCOPE (hard): explain ONLY Linas AI the product — features, setup flow, Meta channels, "
+        "AI Setup / Content Manager concepts, billing/subscribe high-level, and how the app works.\n"
+        "You are NOT a general-purpose chatbot and NOT a tenant business support bot "
+        "(no clinic/salon/shop hours, prices, bookings, or pretending you know a customer's business).\n"
+        "You have NO tenant Content Manager knowledge and must not invent business-specific facts.\n"
+        "If asked for a specific business's services/prices/hours, say that lives in their own "
+        "AI Setup after they subscribe — you only explain the product.\n"
         "Guest constraints (hard): no tools, no CM writes, no tenant mutation, no claiming you changed anything.\n"
         "Do not invent live Meta comment automation, verified publish, or store IAP if knowledge marks them gated/partial.\n"
         "Creative posts/images/videos are out of scope — say so briefly if asked.\n"
@@ -194,7 +206,11 @@ async def compose_guest_reply(
         "tools_used": [],
         "forbidden_tools_blocked": sorted(FORBIDDEN_GUEST_TOOLS),
         "word_count": count_words(text),
-        "limits": {"max_questions": GUEST_MAX_QUESTIONS, "max_words": GUEST_MAX_WORDS},
+        "limits": {
+            "max_questions": GUEST_MAX_QUESTIONS,
+            "max_words": GUEST_MAX_WORDS,
+            "max_input_tokens": GUEST_MAX_INPUT_TOKENS,
+        },
         "model": model,
         "prompt_tokens": getattr(usage, "prompt_tokens", None),
         "completion_tokens": getattr(usage, "completion_tokens", None),

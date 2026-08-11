@@ -5,7 +5,7 @@
 const STORAGE_KEY = 'linas_guest_session_id';
 
 /**
- * @typedef {Error & { status?: number; body?: unknown }} GuestApiError
+ * @typedef {Error & { status?: number; body?: unknown; code?: string }} GuestApiError
  */
 
 function randomId() {
@@ -40,14 +40,29 @@ async function parseJson(response) {
  * @param {string} message
  * @param {number} [status]
  * @param {unknown} [body]
+ * @param {string} [code]
  * @returns {GuestApiError}
  */
-function guestApiError(message, status, body) {
+function guestApiError(message, status, body, code) {
   /** @type {GuestApiError} */
   const err = new Error(message);
   if (status != null) err.status = status;
   if (body !== undefined) err.body = body;
+  if (code) err.code = code;
   return err;
+}
+
+/**
+ * @param {unknown} body
+ */
+function detailCode(body) {
+  if (!body || typeof body !== 'object') return null;
+  const detail = /** @type {{ detail?: unknown }} */ (body).detail;
+  if (!detail || typeof detail !== 'object') return null;
+  const row = /** @type {{ code?: unknown; error?: unknown }} */ (detail);
+  if (typeof row.code === 'string') return row.code;
+  if (typeof row.error === 'string') return row.error;
+  return null;
 }
 
 /**
@@ -80,7 +95,8 @@ export async function sendGuestMessage(guestSessionId, content, language = 'en')
   });
   const body = await parseJson(response);
   if (response.status === 400) {
-    throw guestApiError('word_limit', 400, body);
+    const code = detailCode(body) || 'rejected';
+    throw guestApiError(code, 400, body, code);
   }
   if (!response.ok) {
     throw guestApiError('Guest message failed', response.status, body);
@@ -89,11 +105,4 @@ export async function sendGuestMessage(guestSessionId, content, language = 'en')
     return { ok: false, session: body.session, gateMessages: body.message };
   }
   return { ok: true, session: body.session, message: body.message };
-}
-
-/**
- * @param {string} text
- */
-export function countWords(text) {
-  return (text || '').trim().split(/\s+/).filter(Boolean).length;
 }

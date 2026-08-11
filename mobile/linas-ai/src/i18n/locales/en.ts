@@ -33,9 +33,10 @@ export const en = {
   guestChatEmptyTitle: 'Welcome to Linas AI',
   guestChatEmptyBody:
     'Ask what Linas AI offers for your business and social media pages. Guest chat is explanatory only.',
-  guestQuestionsLeft: 'Guest questions: {n}/{max} remaining',
-  guestLimitReached: 'Guest limit reached. Download the Linas AI app and subscribe to continue.',
+    guestLimitReached: 'Guest limit reached. Download the Linas AI app and subscribe to continue.',
   guestWordLimit: 'That question is too long. Please shorten it and try again.',
+  guestInputTooLarge: 'What you sent is too large. Subscribe to Linas AI to continue with larger messages.',
+  guestMediaBlocked: 'Guests can’t send photos or files. Subscribe to use attachments.',
   guestModelUnavailable: 'Linas AI is temporarily unavailable. Please try again in a moment.',
   loginOrRegister: 'Log in / Create account',
   authGateTitle: 'Sign in to continue',
