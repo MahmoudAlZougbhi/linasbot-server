@@ -87,17 +87,11 @@ def aggregate_tenant_usage(
 ) -> dict[str, Any]:
     """Count interactions for a tenant window. Never invents zeros for missing credit attribution."""
     tid = (tenant_id or "").strip().lower()
-    scoped = [
-        e
-        for e in (entries if entries is not None else _load_entries(log_path))
-        if _entry_matches_tenant(e, tid)
-    ]
+    scoped = [e for e in (entries if entries is not None else _load_entries(log_path)) if _entry_matches_tenant(e, tid)]
     start = datetime.fromtimestamp(start_ts, tz=UTC)
     end = datetime.fromtimestamp(end_ts, tz=UTC)
 
-    by_bucket: dict[str, dict[str, int]] = {
-        key: {"interactions": 0, "failed": 0} for key in USAGE_BUCKETS
-    }
+    by_bucket: dict[str, dict[str, int]] = {key: {"interactions": 0, "failed": 0} for key in USAGE_BUCKETS}
     daily: dict[str, int] = defaultdict(int)
     total = 0
     failed = 0
@@ -133,11 +127,7 @@ def aggregate_tenant_usage(
         if by_bucket[key]["interactions"] > 0 or key != "other"
     ]
     # Keep stable order; drop empty "other" only.
-    distribution = [
-        row
-        for row in distribution
-        if row["bucket"] != "other" or int(row["interactions"]) > 0
-    ]
+    distribution = [row for row in distribution if row["bucket"] != "other" or int(row["interactions"]) > 0]
 
     return {
         "status": "ok" if total > 0 else "empty",

@@ -39,8 +39,7 @@ def derive_workspace_status(
         }
 
     if not subscription_exempt and (
-        subscription_status in {"none", "expired", "canceled", "refunded", "revoked"}
-        or plan_id in {"", "none"}
+        subscription_status in {"none", "expired", "canceled", "refunded", "revoked"} or plan_id in {"", "none"}
     ):
         return {
             "state": "subscription_issue",
@@ -69,7 +68,11 @@ def derive_workspace_status(
         }
 
     if credits_known and available_credits is not None:
-        threshold = max(LOW_CREDIT_ABSOLUTE, int(included_credits * LOW_CREDIT_RATIO)) if included_credits else LOW_CREDIT_ABSOLUTE
+        threshold = (
+            max(LOW_CREDIT_ABSOLUTE, int(included_credits * LOW_CREDIT_RATIO))
+            if included_credits
+            else LOW_CREDIT_ABSOLUTE
+        )
         if available_credits <= threshold:
             return {
                 "state": "credits_low",
@@ -145,11 +148,7 @@ def build_alerts(
                 "title": title,
                 "explanation": explanation,
                 "timestamp": generated_at,
-                "action": (
-                    {"code": action_code, "label": action_label}
-                    if action_code and action_label
-                    else None
-                ),
+                "action": ({"code": action_code, "label": action_label} if action_code and action_label else None),
             }
         )
 
@@ -198,8 +197,12 @@ def build_alerts(
                 reason_code=f"{platform}_dms_ok_comments_blocked",
                 title=f"{platform.title()} comments need attention",
                 explanation=str(comments.get("blocker_message") or "DMs work but comments are not ready."),
-                action_code="review_permissions" if "permission" in blocker or "scope" in blocker else "manage_integrations",
-                action_label="Review permissions" if "permission" in blocker or "scope" in blocker else "Manage integrations",
+                action_code="review_permissions"
+                if "permission" in blocker or "scope" in blocker
+                else "manage_integrations",
+                action_label="Review permissions"
+                if "permission" in blocker or "scope" in blocker
+                else "Manage integrations",
             )
         if connected and not bool(dm.get("connection_healthy", True)):
             add(
