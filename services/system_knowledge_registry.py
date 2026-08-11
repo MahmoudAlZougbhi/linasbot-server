@@ -59,7 +59,7 @@ CAPABILITIES: tuple[Capability, ...] = (
         entitlement="contentManagers",
         status="available",
         help_steps=(
-            "Ask the copilot what is filled vs missing, or open Content Management.",
+            "Ask the copilot what is filled vs missing, or open AI Setup.",
             "On review/check/problem asks, inspect_cm_guide runs a proactive quality_pass "
             "(critique, duplicates, unclear, improvements, suspicious) — not only the named topic.",
             "Use inspect_cm_guide / cm_fill_plan to walk remaining gaps one section at a time (skip DONE).",
@@ -77,6 +77,7 @@ CAPABILITIES: tuple[Capability, ...] = (
         keywords=(
             "cm",
             "content management",
+            "ai setup",
             "setup",
             "draft",
             "configure",
@@ -150,7 +151,7 @@ CAPABILITIES: tuple[Capability, ...] = (
         help_steps=(
             "Creative Studio is cancelled for the current product.",
             "Linas AI focuses on Instagram/Facebook DMs and comments.",
-            "Use Content Management, Integrations, and diagnosis instead.",
+            "Use AI Setup, Integrations, and diagnosis instead.",
         ),
         tools=(),
         blockers=("Creative product cancelled in System Copilot V2.",),
@@ -207,7 +208,7 @@ CAPABILITIES: tuple[Capability, ...] = (
         entitlement="faq_enabled",
         status="available",
         help_steps=(
-            "Open Smart Answers / FAQ (mobile Control Center) or Content Management → FAQ (web).",
+            "Open Smart Answers / FAQ (mobile Control Center) or AI Setup → FAQ (web).",
             "Check quota (e.g. 143 / 200); upgrade when at limit. Starter/Growth ~200; Pro/Max ~1000.",
             "Add in one language — the system creates the linked 4-language group (ar/en/fr/franco).",
             "Or ask Owner Copilot: “add this Q&A to FAQ” → proposal card → Approve → Live for customers.",
@@ -269,7 +270,7 @@ CAPABILITIES: tuple[Capability, ...] = (
         status="available",
         help_steps=(
             "Open Settings from Control Center for app UI language and display name.",
-            "Customer reply language for DMs/comments is Content Management → Languages only.",
+            "Customer reply language for DMs/comments is AI Setup → Languages only.",
         ),
         tools=("read_profile", "update_profile"),
         keywords=("settings", "language", "profile", "address me", "app language", "ui language"),

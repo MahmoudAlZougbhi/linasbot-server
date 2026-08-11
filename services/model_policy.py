@@ -131,15 +131,15 @@ _DESIGN_MUTATION = re.compile(
     r"\b(app|web|landing)\b.{0,40}\b(design|ui|ux)\b|\b(design|ui|ux)\b.{0,40}\b(change|update)\b",
     re.I,
 )
-# Content Manager / CM sections (EN + common AR). Auto-upgrades Work/High even in Chat mode.
+# AI Setup / CM sections (EN + common AR). Auto-upgrades Work/High even in Chat mode.
 # Keep aligned with mobile detectCmWorkIntent.ts.
 _CM_WORK_INTENT = re.compile(
-    r"\b(content\s*management|content\s*manager|content-manager|\bcm\b)\b|"
+    r"\b(content\s*management|content\s*manager|content-manager|ai\s*setup|\bcm\b)\b|"
     r"\b(faq|smart\s*answers?|knowledge|handoff|publish|draft|validate)\b|"
     r"\b(opening\s*hours?|business\s*hours?|working\s*hours?|off\s*days?)\b|"
     r"\b(ai\s*basics|ai\s*limits|dynamic\s*messages|care\s*instructions|response\s*style|ai\s*style)\b|"
     r"\b(prices?|branches?|services?|languages?|restricted|sections?)\b|"
-    r"(إدارة\s*المحتوى|كونتنت|محتوى)|"
+    r"(إدارة\s*المحتوى|إعداد\s*الذكاء\s*الاصطناعي|كونتنت|محتوى)|"
     r"(\bFAQ\b|أسئلة\s*شائعة|سؤال\s*وجواب)|"
     r"(ساعات\s*(العمل|الدوام)?|مواعيد\s*(العمل|الدوام)?|دوام)|"
     r"(معرفة|انشر|نشر|أسعار|فروع|خدمات|أسئلة)",
@@ -148,7 +148,7 @@ _CM_WORK_INTENT = re.compile(
 
 
 def looks_like_cm_work_intent(user_text: str | None) -> bool:
-    """True when owner text is about Content Manager / CM sections (EN/AR)."""
+    """True when owner text is about AI Setup / CM sections (EN/AR)."""
     text = (user_text or "").strip()
     if not text:
         return False
@@ -227,7 +227,7 @@ def classify_owner_effort(
 
     UI Chat|Work mode:
     - work → high
-    - Content Manager intent → high (even if UI still shows Chat/Low; client syncs chip)
+    - AI Setup intent → high (even if UI still shows Chat/Low; client syncs chip)
     - chat → low (ordinary non-CM turns)
     ``force_high`` still wins (e.g. confirm_tool mutations).
     ``force_low`` still forces low (tests / explicit clamp).

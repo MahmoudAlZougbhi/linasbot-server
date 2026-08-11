@@ -122,7 +122,7 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "ingest_business_dump",
             "description": "Bulk CM setup: distribute a complete business description (and "
-            "optional attachment) into Content Management section patches, start "
+            "optional attachment) into AI Setup section patches, start "
             "cm_fill_plan, and propose the first section for owner approval "
             "(draft only).",
             "parameters": {

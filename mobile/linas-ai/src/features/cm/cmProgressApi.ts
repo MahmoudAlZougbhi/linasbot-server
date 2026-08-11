@@ -37,14 +37,14 @@ export function buildFillMissingPrompt(missing: string[], titles: Record<string,
   const labels = missing.map((id) => titles[id] || id.replace(/_/g, ' '));
   if (!labels.length) {
     return (
-      'Review my Content Management setup. Confirm what is already filled, ' +
+      'Review my AI Setup. Confirm what is already filled, ' +
       'what still needs polish, and help me publish when ready. Use read_cm and setup_next_step.'
     );
   }
   const listed = labels.slice(0, 8).join(', ');
   const extra = labels.length > 8 ? ` (+${labels.length - 8} more)` : '';
   return (
-    `Help me finish Content Management setup. These sections are still incomplete: ${listed}${extra}. ` +
+    `Help me finish AI Setup. These sections are still incomplete: ${listed}${extra}. ` +
     'Use read_account_summary, read_cm, and setup_next_step. ' +
     'Fill the missing pieces with me one section at a time — start with the first incomplete section now.'
   );

@@ -45,7 +45,7 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
 
   // V2: Live Chat is strictly read-only — no composer, takeover, release, or end.
   const readOnlyReason =
-    'Live Chat is read-only. Use System Copilot for diagnosis and Content Management fixes.';
+    'Live Chat is read-only. Use System Copilot for diagnosis and AI Setup fixes.';
 
   const listData = useMemo(() => [...thread.messages].reverse(), [thread.messages]);
 

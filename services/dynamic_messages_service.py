@@ -2,7 +2,7 @@
 Dynamic Messages Service
 
 Stores editable bot dynamic messages (with usage conditions) in persistent settings.
-Used by Content Manager to let operators inspect/edit runtime wording.
+Used by AI Setup to let operators inspect/edit runtime wording.
 """
 
 from __future__ import annotations

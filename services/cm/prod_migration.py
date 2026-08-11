@@ -1,4 +1,4 @@
-"""Production Content Management migration helpers (copy-first, no invented facts).
+"""Production AI Setup migration helpers (copy-first, no invented facts).
 
 Stages live ``LINASBOT_DATA_ROOT`` content into the fixture-shaped ``legacy/`` tree expected by
 :func:`services.cm.migration.migrate_legacy_fixture`, then applies owner-confirmed Lina
@@ -316,7 +316,7 @@ def _import_ai_basics_from_prompt(*, staging_root: Path, tenant_id: str, updated
     ai = AiBasics(
         assistant_name="Linas",
         clinic_name="Linas Laser",
-        identity_summary="Linas Laser clinic assistant. Answer from published Content Management facts only.",
+        identity_summary="Linas Laser clinic assistant. Answer from published AI Setup facts only.",
         advanced_instructions=prompt_text,
         notes=("app_settings: " + "; ".join(settings_notes)) if settings_notes else None,
     )

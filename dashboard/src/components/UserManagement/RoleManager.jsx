@@ -29,7 +29,7 @@ const PERMISSION_LABELS = {
   smartMessaging: 'Smart Messaging',
   settings: 'Settings',
   userManagement: 'User Management',
-  contentManagers: 'Content Managers',
+  contentManagers: 'AI Setup',
   contentPublish: 'Content Publish',
   activityFlow: 'Interaction Logs',
 };

@@ -14,7 +14,7 @@ SYSTEM_V2 = (
     "You are Linas AI System Copilot — one brain for the authenticated business owner. "
     "Customer scope: Instagram/Facebook DMs and comments only. Creative/posts/images/videos are cancelled. "
     "Use typed tools for account, CM, integrations, diagnosis, setup, and price-list extraction. "
-    "CM “files” are knowledge/care articles (and FAQ groups) in Content Managers — use "
+    "CM “files” are knowledge/care articles (and FAQ groups) in AI Setup — use "
     "read_cm / list_cm_articles/read_cm_article / list_cm_faq/read_cm_faq to READ full bodies "
     "(continue items_offset / body_offset until complete); articles may include attachments "
     "(case example images/files + captions describing when each applies); "
@@ -28,7 +28,7 @@ SYSTEM_V2 = (
     "(same Approve→Live path as other CM changes). Teach this savings + approve flow clearly. "
     "CM answer style (critical): tools may read everything; user-facing replies must NOT dump all CM "
     "by default. For any CM review/check/problem/verify intent (e.g. راجعلي الـ CM, شو غلط, check "
-    "Content Manager, what’s wrong, inspect setup): (1) answer the specific ask, (2) ALWAYS also "
+    "AI Setup, what’s wrong, inspect setup): (1) answer the specific ask, (2) ALWAYS also "
     "call inspect_cm_guide with quality_pass (default true) and read targeted sections as needed — "
     "proactive quality pass looking for critique/what’s wrong, duplicates, unclear/confusing "
     "wording, improvement opportunities (halwse), and suspicious/outdated/placeholder content — "
@@ -46,7 +46,7 @@ SYSTEM_V2 = (
     "is true in the tool result. If activation.activated is false, say the draft saved but Live did not "
     "update yet (use activation.reason/message) — never claim customers already see it. "
     "Never re-enable the Linas legacy CM bridge. "
-    "Customer DM/comment reply language is locked to Content Management → Languages (system standard). "
+    "Customer DM/comment reply language is locked to AI Setup → Languages (system standard). "
     "Owners and end customers cannot change customer reply language via Settings, profile, or chat — "
     "refuse those requests and explain: app Settings language is UI-only; customer replies follow CM. "
     "Do not use update_profile preferred_language to change how DMs/comments are answered. "
@@ -92,14 +92,14 @@ def status_label(name: str) -> str:
     return {
         "read_integrations": "Checking your Instagram/Facebook connection…",
         "diagnose_meta_health": "Reading Meta health evidence…",
-        "read_cm": "Reading Content Management…",
-        "list_cm_articles": "Listing Content Management articles…",
-        "read_cm_article": "Reading a Content Management article…",
+        "read_cm": "Reading AI Setup…",
+        "list_cm_articles": "Listing AI Setup articles…",
+        "read_cm_article": "Reading an AI Setup article…",
         "list_cm_faq": "Listing FAQ / Smart Answers…",
         "read_cm_faq": "Reading an FAQ entry…",
-        "inspect_cm_guide": "Reviewing Content Management quality…",
+        "inspect_cm_guide": "Reviewing AI Setup quality…",
         "cm_fill_plan": "Building your fill-missing plan…",
-        "ingest_business_dump": "Distributing your business description into Content Management…",
+        "ingest_business_dump": "Distributing your business description into AI Setup…",
         "validate_cm": "Validating your setup…",
         "propose_cm_patch": "Preparing a change proposal…",
         "propose_cm_article_upsert": "Preparing an article change…",

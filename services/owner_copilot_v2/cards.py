@@ -150,7 +150,7 @@ def card_from_tool(name: str, data: dict[str, Any], *, ok: bool) -> ChatCard | N
         preview = payload.get("preview") if isinstance(payload.get("preview"), dict) else {}
         assert isinstance(preview, dict)
         return proposal_card(
-            title="Content Management change",
+            title="AI Setup change",
             body=_proposal_body(preview),
             proposal_id=str(payload["proposal_id"]),
             preview=preview,

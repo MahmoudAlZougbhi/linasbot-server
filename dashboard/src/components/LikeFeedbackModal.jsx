@@ -65,7 +65,7 @@ const LikeFeedbackModal = ({ message, userQuestion, onClose, onSubmit }) => {
           </div>
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
-            <strong>Tip:</strong> Saves into Content Management → FAQ as one linked 4-language group
+            <strong>Tip:</strong> Saves into AI Setup → FAQ as one linked 4-language group
             (Arabic, English, French, Franco). Franco questions stay Latin; Arabic/Franco answers stay Arabic script.
             Draft until published — this does not retrain an OpenAI model.
           </div>

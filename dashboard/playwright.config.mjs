@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * Real Chromium browser smoke for Content Management screens.
+ * Real Chromium browser smoke for AI Setup screens.
  * Serves a dedicated e2e Vite build (`base: "/"`) via `vite preview` and mocks CM/auth APIs.
  *
  * Browser selection:

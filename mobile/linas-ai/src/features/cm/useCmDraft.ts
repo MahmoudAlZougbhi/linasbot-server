@@ -44,7 +44,7 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
       const message =
         err instanceof ApiError
           ? err.status === 401
-            ? 'Sign in required to edit Content Management.'
+            ? 'Sign in required to edit AI Setup.'
             : err.status === 403
               ? 'Your account needs contentManagers permission.'
               : err.message

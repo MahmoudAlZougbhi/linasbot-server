@@ -194,7 +194,7 @@ test('proposal card exposes complete V2 actions beyond Review/Discard', () => {
   const card = read('features/chat/v2/ProposalCard.tsx');
   for (const needle of [
     'Approve and go live',
-    'Review in Content Management',
+    'Review in AI Setup',
     'Discard',
     'CURRENT',
     'PROPOSED',
@@ -367,7 +367,7 @@ test('Settings does not duplicate AI Basics CM store', () => {
   assert.doesNotMatch(settings, /MFA/);
   assert.doesNotMatch(settings, /Passkey/);
   const en = read('i18n/locales/en.ts');
-  assert.match(en, /Open Content Management → AI Basics/);
+  assert.match(en, /Open AI Setup → AI Basics/);
 });
 
 test('Integrations refresh is customer-facing and IG/FB only', () => {

@@ -96,7 +96,7 @@ def setup_continue_choices(*, section: str) -> list[ChatChoice]:
     return [
         ChatChoice(id="setup_continue", label="Continue", action="setup_continue", payload={"section": section}),
         ChatChoice(id="setup_skip", label="Skip for now", action="setup_skip", payload={"section": section}),
-        ChatChoice(id="setup_open_cm", label="Open Content Management", action="open_route", payload={"route": "cm"}),
+        ChatChoice(id="setup_open_cm", label="Open AI Setup", action="open_route", payload={"route": "cm"}),
     ]
 
 

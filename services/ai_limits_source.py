@@ -1,4 +1,4 @@
-"""Published Content Management is the sole business source of truth for AI limits.
+"""Published AI Setup is the sole business source of truth for AI limits.
 
 The enforcement JSON cache may be refreshed only by CM publish sync.
 Settings UI must not write limits.
@@ -61,5 +61,5 @@ def get_ai_limits_for_api(tenant_id: str) -> dict[str, Any]:
         "source": "unpublished_cache",
         "published": False,
         "limits": cached.to_public_dict(),
-        "message": "Publish Content Management → AI Limits to make these active.",
+        "message": "Publish AI Setup → AI Limits to make these active.",
     }

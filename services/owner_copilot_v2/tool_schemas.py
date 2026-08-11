@@ -36,7 +36,7 @@ OWNER_V2_CORE_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "read_cm",
             "description": (
-                "Read Content Management draft content for internal analysis. Omit section "
+                "Read AI Setup draft content for internal analysis. Omit section "
                 "for inventory overview. With section, returns full bodies (paginated via "
                 "items_offset when payload_complete is false). Use freely to gather truth; "
                 "user-facing replies stay concise unless the owner asked for a full dump."
@@ -169,7 +169,7 @@ OWNER_V2_CORE_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "description": (
                 "Update owner profile fields (display_name, preferred_language, gender, form_of_address). "
                 "preferred_language is owner chat/app preference only — it does NOT change "
-                "customer DM/comment reply language (that is Content Management → Languages)."
+                "customer DM/comment reply language (that is AI Setup → Languages)."
             ),
             "parameters": {
                 "type": "object",

@@ -26,7 +26,7 @@ export type CmSectionCard = {
   /** false = show row but disabled with reason. */
   mobileSupported: boolean;
   disabledReason?: string;
-  /** When false, hide from Content Management hub (still editable elsewhere). */
+  /** When false, hide from AI Setup hub (still editable elsewhere). */
   showInCmHub?: boolean;
 };
 

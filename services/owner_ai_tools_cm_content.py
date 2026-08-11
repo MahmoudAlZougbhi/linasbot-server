@@ -1,6 +1,6 @@
 """Owner Copilot tools for full CM article/FAQ read + surgical upsert proposals.
 
-Content Manager “files” in this product are CM draft section records — especially
+AI Setup “files” in this product are CM draft section records — especially
 knowledge/care ``ArticleRecord`` rows (migrated from legacy knowledge JSON files)
 and FAQ ``FaqRecord`` rows. Full bodies live in draft JSON; inventory APIs are
 metadata-only. These tools give the model bounded list/read access and reuse the

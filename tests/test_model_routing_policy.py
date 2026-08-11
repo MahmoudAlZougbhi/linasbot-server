@@ -29,7 +29,7 @@ def _assert_payload(kwargs: dict[str, Any], *, model: str, effort: str) -> None:
     ("text", "effort"),
     [
         ("How does billing work in Linas AI?", "low"),
-        ("What is available in Content Management?", "high"),
+        ("What is available in AI Setup?", "high"),
         ("Please change the laser price to 50", "high"),
         ("Delete the downtown branch", "high"),
         ("Change the AI response style to warmer", "high"),

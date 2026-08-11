@@ -24,7 +24,7 @@ import { authFetch } from "../../utils/authFetch";
 const navigationItems = [
   { name: "Dashboard", href: "/app", icon: HomeIcon, permissionKey: "dashboard" },
   {
-    name: "Content Managers",
+    name: "AI Setup",
     href: "/content-managers",
     icon: FolderIcon,
     badge: "New",
