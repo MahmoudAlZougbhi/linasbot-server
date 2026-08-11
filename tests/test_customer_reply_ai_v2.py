@@ -13,11 +13,11 @@ from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test
 @pytest.fixture
 def v2_env(tmp_path, monkeypatch):
     monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path))
-    monkeypatch.setenv("CUSTOMER_REPLY_AI_V2", "true")
-    monkeypatch.setenv("CUSTOMER_REPLY_AI_V2_LIVE", "true")
     monkeypatch.setenv("CUSTOMER_SEMANTIC_RETRIEVAL_ENABLED", "true")
     monkeypatch.setenv("CUSTOMER_MEDIA_CONTEXT_ENABLED", "true")
     monkeypatch.setenv("LINAS_CUSTOMER_MODEL", "gpt-5.6-terra")
+    monkeypatch.setenv("LINAS_CUSTOMER_ANSWER_MODEL", "gpt-5.6-terra")
+    monkeypatch.setenv("LINAS_CUSTOMER_RETRIEVAL_MODEL", "gpt-5.6-luna")
     monkeypatch.setenv("MAX_CUSTOMER_RETRIEVAL_ROUNDS", "2")
     monkeypatch.setenv("CUSTOMER_DM_CONTEXT_WINDOW_HOURS", "3")
     install_mocked_openai_embeddings(monkeypatch)
@@ -342,8 +342,8 @@ async def test_retrieval_round_limit_and_role_separation(v2_env):
             },
         ],
     )
-    assert result.requested_model == "gpt-5.6-terra"
-    assert result.returned_model == "gpt-5.6-terra"
+    assert result.requested_model == "gpt-5.6-luna"
+    assert result.returned_model == "gpt-5.6-luna"
     assert result.evidence_status == "sufficient"
     assert len(result.evidence) >= 1
     # Not fixed top-2 knowledge/care — Luna selected services/prices/branches
@@ -450,7 +450,7 @@ async def test_multi_intent_and_insufficient_and_languages(v2_env):
         )
         assert out.reply
         assert out.metadata.get("authoritative_selector") == "retrieval_luna"
-        assert out.metadata.get("requested_model_retrieval") == "gpt-5.6-terra"
+        assert out.metadata.get("requested_model_retrieval") == "gpt-5.6-luna"
         assert out.metadata.get("requested_model_answer") == "gpt-5.6-terra"
 
     # Insufficient final — honest answer
@@ -594,15 +594,18 @@ async def test_tenant_isolation_draft_and_path_rejection(v2_env):
         dispatch_retrieval_tool("list_published_cm_items", {"section_ids": ["services"]}, stale)
 
 
-def test_flags_shadow_default(monkeypatch):
-    monkeypatch.setenv("CUSTOMER_REPLY_AI_V2", "true")
-    monkeypatch.delenv("CUSTOMER_REPLY_AI_V2_LIVE", raising=False)
+def test_flags_production_defaults(monkeypatch):
+    monkeypatch.delenv("CUSTOMER_SEMANTIC_RETRIEVAL_ENABLED", raising=False)
+    monkeypatch.delenv("CUSTOMER_MEDIA_CONTEXT_ENABLED", raising=False)
     from services.customer_reply_v2.flags import flags_snapshot
 
     snap = flags_snapshot()
-    assert snap["CUSTOMER_REPLY_AI_V2"] is True
-    assert snap["shadow_mode"] is True
-    assert snap["LINAS_CUSTOMER_MODEL"] == "gpt-5.6-terra"
+    assert snap["engine"] == "customer_reply_v2"
+    assert snap["classic_generative_fallback"] is False
+    assert snap["CUSTOMER_SEMANTIC_RETRIEVAL_ENABLED"] is True
+    assert snap["CUSTOMER_MEDIA_CONTEXT_ENABLED"] is True
+    assert snap["LINAS_CUSTOMER_ANSWER_MODEL"] == "gpt-5.6-terra"
+    assert snap["LINAS_CUSTOMER_RETRIEVAL_MODEL"] == "gpt-5.6-luna"
 
 
 def test_app_a_whatsapp_invariants_still_hold():

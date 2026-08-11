@@ -65,15 +65,24 @@ def build_comment_media_context(
     media_id: str = "",
     media_revision: str = "",
     injected_cache: dict[str, Any] | None = None,
+    media_status: str = "",
+    permalink: str = "",
+    post_id: str = "",
+    carousel_truncated: bool = False,
+    image_inputs: list[dict[str, str]] | None = None,
+    saw_visuals: bool = False,
 ) -> CommentMediaContext:
     """Assemble bounded comment/post context. Never downloads unbounded media collections."""
-    if not customer_media_context_enabled() and injected_cache is None:
+    if not customer_media_context_enabled() and injected_cache is None and not image_inputs:
         return CommentMediaContext(
             media_type=media_type or "unknown",
             caption=caption or "",
             parent_comment=parent_comment or "",
             nearby_replies=list(nearby_replies or [])[:5],
             uncertainty_required=False,
+            media_status=media_status or "disabled",
+            permalink=permalink,
+            post_id=post_id or media_id,
         )
 
     revision = media_revision or media_id or hashlib.sha256((caption + media_type).encode()).hexdigest()[:24]
@@ -84,10 +93,11 @@ def build_comment_media_context(
     summary = str((cached or {}).get("visual_summary") or "")
     frames = int((cached or {}).get("frame_count") or 0)
     uncertainty = False
+    inputs = list(image_inputs or [])
 
     if mtype in {"video", "reel"}:
-        # Never send raw video. Use caption + cached summary/frames.
-        if _visual_reference(comment_text) and frames <= 0 and not summary:
+        # Never send raw video. Use caption + thumbnail/cached frames.
+        if _visual_reference(comment_text) and frames <= 0 and not summary and not inputs:
             uncertainty = True
         urls = list((cached or {}).get("frame_urls") or urls)[:MAX_VIDEO_FRAMES]
     elif mtype == "carousel":
@@ -95,7 +105,18 @@ def build_comment_media_context(
     elif mtype == "image":
         urls = urls[:1]
 
-    if not caption and not summary and not urls:
+    status = (media_status or "").strip() or "unknown"
+    if not status or status == "unknown":
+        if inputs or urls:
+            status = "partial" if carousel_truncated else "available"
+        elif caption or summary:
+            status = "caption_only"
+        else:
+            status = "missing"
+
+    if status in {"missing", "failed", "caption_only"} and _visual_reference(comment_text):
+        uncertainty = True
+    if not caption and not summary and not urls and not inputs:
         uncertainty = True
 
     return CommentMediaContext(
@@ -104,10 +125,16 @@ def build_comment_media_context(
         parent_comment=parent_comment or "",
         nearby_replies=list(nearby_replies or [])[:5],
         image_urls=urls,
+        image_inputs=inputs[: MAX_CAROUSEL_THUMBS + 1],
         cached_visual_summary=summary,
-        frame_count=frames,
+        frame_count=frames or len(inputs),
         uncertainty_required=uncertainty,
         media_revision=revision,
+        media_status=status,
+        permalink=permalink,
+        post_id=post_id or media_id,
+        carousel_truncated=carousel_truncated,
+        saw_visuals=bool(saw_visuals or inputs),
     )
 
 
@@ -133,16 +160,25 @@ def seed_video_cache_for_tests(
     )
 
 
-def media_context_to_dict(ctx: CommentMediaContext) -> dict[str, Any]:
-    return {
+def media_context_to_dict(ctx: CommentMediaContext, *, for_model: bool = False) -> dict[str, Any]:
+    out: dict[str, Any] = {
         "media_type": ctx.media_type,
         "caption": ctx.caption,
         "parent_comment": ctx.parent_comment,
         "nearby_replies": ctx.nearby_replies,
         "image_url_count": len(ctx.image_urls),
+        "image_input_count": len(ctx.image_inputs),
         "cached_visual_summary": ctx.cached_visual_summary,
         "frame_count": ctx.frame_count,
         "uncertainty_required": ctx.uncertainty_required,
         "media_revision": ctx.media_revision,
-        # Do not dump full URLs into traces by default — count only in observability.
+        "media_status": ctx.media_status,
+        "permalink": ctx.permalink,
+        "post_id": ctx.post_id,
+        "carousel_truncated": ctx.carousel_truncated,
+        "saw_visuals": ctx.saw_visuals,
     }
+    if for_model:
+        # Pass multimodal inputs to Answer Tera; never dump raw secrets.
+        out["image_inputs"] = list(ctx.image_inputs)[: MAX_CAROUSEL_THUMBS + 1]
+    return out

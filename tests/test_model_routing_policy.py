@@ -9,6 +9,7 @@ import pytest
 
 from services.llm_core_service import build_chat_completion_kwargs
 from services.model_policy import (
+    MODEL_CUSTOMER_LUNA,
     MODEL_CUSTOMER_TERRA,
     MODEL_OWNER_SOL,
     assert_customer_social_model,
@@ -22,7 +23,7 @@ def _assert_payload(kwargs: dict[str, Any], *, model: str, effort: str) -> None:
     assert kwargs["model"] == model
     assert kwargs.get("reasoning_effort") == effort
     assert "gpt-5.6" != model  # never generic alias
-    assert model in {MODEL_OWNER_SOL, MODEL_CUSTOMER_TERRA}
+    assert model in {MODEL_OWNER_SOL, MODEL_CUSTOMER_TERRA, MODEL_CUSTOMER_LUNA}
 
 
 @pytest.mark.parametrize(
@@ -336,14 +337,15 @@ async def test_customer_v2_answer_payload_terra_medium(monkeypatch: pytest.Monke
                     return resp
 
     monkeypatch.setattr("services.llm_core_service.client", _FakeClient)
-    await al._default_llm([{"role": "user", "content": "{}"}])
+    await al._default_llm([{"role": "user", "content": "{}"}], channel="instagram_dm")
     assert captured["model"] == MODEL_CUSTOMER_TERRA
     assert captured["reasoning_effort"] == "medium"
 
 
 @pytest.mark.asyncio
-async def test_customer_v2_retrieval_continuation_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_customer_v2_retrieval_payload_luna(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.customer_reply_v2 import retrieval_luna as rl
+    from services.model_policy import MODEL_CUSTOMER_LUNA
 
     captured: dict[str, Any] = {}
 
@@ -360,13 +362,13 @@ async def test_customer_v2_retrieval_continuation_payload(monkeypatch: pytest.Mo
                     choice.message = msg
                     resp = MagicMock()
                     resp.choices = [choice]
-                    resp.model = MODEL_CUSTOMER_TERRA
+                    resp.model = MODEL_CUSTOMER_LUNA
                     return resp
 
     monkeypatch.setattr("services.llm_core_service.client", _FakeClient)
     await rl._default_llm([{"role": "user", "content": "{}"}], tools=[{"type": "function"}])
-    assert captured["model"] == MODEL_CUSTOMER_TERRA
-    assert captured["reasoning_effort"] == "medium"
+    assert captured["model"] == MODEL_CUSTOMER_LUNA
+    assert captured["reasoning_effort"] == "none"
 
 
 def test_model_router_and_provider_defaults_are_sol_terra(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -381,12 +383,15 @@ def test_model_router_and_provider_defaults_are_sol_terra(monkeypatch: pytest.Mo
         "LINAS_CUSTOMER_HV_MODEL",
         "LINAS_CM_ANSWER_MODEL",
         "LINAS_CUSTOMER_MODEL",
+        "LINAS_CUSTOMER_ANSWER_MODEL",
+        "LINAS_CUSTOMER_RETRIEVAL_MODEL",
         "LINAS_OWNER_MODEL",
     ):
         monkeypatch.delenv(key, raising=False)
 
     from services.cm.answer_generation import DEFAULT_CM_ANSWER_MODEL, cm_answer_model
-    from services.customer_reply_v2.flags import customer_model_name
+    from services.customer_reply_v2.flags import customer_answer_model_name, customer_retrieval_model_name
+    from services.model_policy import MODEL_CUSTOMER_LUNA
     from services.owner_ai_model_router import router_config
     from services.providers.base import provider_config
 
@@ -397,15 +402,19 @@ def test_model_router_and_provider_defaults_are_sol_terra(monkeypatch: pytest.Mo
     assert router_config()["owner_help"]["model"] == MODEL_OWNER_SOL
     assert DEFAULT_CM_ANSWER_MODEL == MODEL_CUSTOMER_TERRA
     assert cm_answer_model() == MODEL_CUSTOMER_TERRA
-    assert customer_model_name() == MODEL_CUSTOMER_TERRA
+    assert customer_answer_model_name() == MODEL_CUSTOMER_TERRA
+    assert customer_retrieval_model_name() == MODEL_CUSTOMER_LUNA
 
 
 def test_no_active_social_getter_returns_forbidden_models(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LINAS_CUSTOMER_MODEL", "gpt-5.6-luna")
     monkeypatch.setenv("LINAS_CM_ANSWER_MODEL", "gpt-5.6-sol")
     from services.cm.answer_generation import cm_answer_model
-    from services.customer_reply_v2.flags import customer_model_name
+    from services.customer_reply_v2.flags import customer_answer_model_name, customer_retrieval_model_name
+    from services.model_policy import MODEL_CUSTOMER_LUNA
 
-    # Policy hardcodes Terra; getters must not honor luna/sol env overrides.
-    assert customer_model_name() == MODEL_CUSTOMER_TERRA
+    # Answer getters must not honor luna/sol env overrides (hardcoded Terra).
+    assert customer_answer_model_name() == MODEL_CUSTOMER_TERRA
     assert cm_answer_model() == MODEL_CUSTOMER_TERRA
+    # Retrieval is Luna regardless of answer env override.
+    assert customer_retrieval_model_name() == MODEL_CUSTOMER_LUNA

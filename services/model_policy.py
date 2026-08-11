@@ -2,7 +2,9 @@
 
 Binding rules:
 - Owner surfaces → gpt-5.6-sol + reasoning mode standard + effort low|high
-- Customer IG/FB DMs + comments → gpt-5.6-terra + standard + medium
+- Customer social retrieval (evidence selection) → gpt-5.6-luna
+- Customer social final answer + repair → gpt-5.6-terra + standard + medium
+- Never Luna for final customer replies; never silent model substitutes.
 - No Pro mode. No silent model/effort overrides from env.
 """
 
@@ -18,7 +20,7 @@ from typing import Any, Literal
 OwnerEffort = Literal["low", "high"]
 CustomerEffort = Literal["medium"]
 ReasoningMode = Literal["standard"]
-ReasoningEffort = Literal["low", "medium", "high"]
+ReasoningEffort = Literal["none", "low", "medium", "high"]
 ModelSurface = Literal[
     "owner_copilot",
     "owner_cm_ai",
@@ -31,9 +33,11 @@ ModelSurface = Literal[
     "customer_fb_comment",
     "customer_social_retry",
     "customer_social_continuation",
+    "customer_social_retrieval",
 ]
 
 MODEL_OWNER_SOL = "gpt-5.6-sol"
+MODEL_CUSTOMER_LUNA = "gpt-5.6-luna"
 MODEL_CUSTOMER_TERRA = "gpt-5.6-terra"
 REASONING_MODE_STANDARD: ReasoningMode = "standard"
 
@@ -47,12 +51,19 @@ _OWNER_MODEL_ENV_KEYS = (
     "LINAS_MODEL_CREATIVE",
     "LINAS_CREATIVE_MODEL",
 )
-_CUSTOMER_MODEL_ENV_KEYS = (
+_CUSTOMER_ANSWER_MODEL_ENV_KEYS = (
     "LINAS_CUSTOMER_MODEL",
     "LINAS_CM_ANSWER_MODEL",
     "LINAS_MODEL_CUSTOMER_DM",
     "LINAS_CUSTOMER_HV_MODEL",
+    "LINAS_CUSTOMER_ANSWER_MODEL",
 )
+_CUSTOMER_RETRIEVAL_MODEL_ENV_KEYS = (
+    "LINAS_CUSTOMER_RETRIEVAL_MODEL",
+    "LINAS_CUSTOMER_RETRIEVAL_LUNA_MODEL",
+)
+# Legacy alias kept for validate_model_policy_config callers / docs.
+_CUSTOMER_MODEL_ENV_KEYS = _CUSTOMER_ANSWER_MODEL_ENV_KEYS
 
 # Trusted mutation / write metadata (tools + intents). Prefer these over free-text keywords.
 OWNER_MUTATION_TOOLS = frozenset(
@@ -326,7 +337,7 @@ def resolve_customer_social_policy(
     regeneration: bool = False,
     request_id: str | None = None,
 ) -> ModelPolicyDecision:
-    """All Instagram/Facebook conversational LLM calls → Terra + medium."""
+    """Customer final answer + repair LLM calls → Terra + medium. Never Luna."""
     ch = (channel or "").strip().lower()
     if surface is None:
         if regeneration or continuation:
@@ -352,6 +363,23 @@ def resolve_customer_social_policy(
     )
 
 
+def resolve_customer_retrieval_policy(
+    *,
+    channel: str = "instagram_dm",
+    request_id: str | None = None,
+) -> ModelPolicyDecision:
+    """Customer evidence retrieval only → Luna. Never writes the customer reply."""
+    _ = channel  # channel reserved for telemetry callers
+    return ModelPolicyDecision(
+        surface="customer_social_retrieval",
+        model=MODEL_CUSTOMER_LUNA,
+        reasoning_mode=REASONING_MODE_STANDARD,
+        reasoning_effort="none",
+        reason="customer_social_retrieval_luna",
+        request_id=request_id or _new_request_id("customer_social_retrieval"),
+    )
+
+
 def owner_model_id() -> str:
     return MODEL_OWNER_SOL
 
@@ -360,11 +388,28 @@ def customer_social_model_id() -> str:
     return MODEL_CUSTOMER_TERRA
 
 
+def customer_retrieval_model_id() -> str:
+    return MODEL_CUSTOMER_LUNA
+
+
 def assert_customer_social_model(model: str) -> str:
-    """Fail closed: never allow Sol/Luna/legacy on customer social reply paths."""
+    """Fail closed: never allow Sol/Luna/legacy on customer social final-reply paths."""
     m = (model or "").strip()
     if m != MODEL_CUSTOMER_TERRA:
-        raise RuntimeError(f"customer_social_model_violation: expected {MODEL_CUSTOMER_TERRA}, got {m or '<empty>'}")
+        raise RuntimeError(
+            f"customer_social_model_violation: expected {MODEL_CUSTOMER_TERRA} for final answer/repair, "
+            f"got {m or '<empty>'}"
+        )
+    return m
+
+
+def assert_customer_retrieval_model(model: str) -> str:
+    """Fail closed: retrieval must be Luna — never Terra/Sol/silent substitute."""
+    m = (model or "").strip()
+    if m != MODEL_CUSTOMER_LUNA:
+        raise RuntimeError(
+            f"customer_retrieval_model_violation: expected {MODEL_CUSTOMER_LUNA} for retrieval, got {m or '<empty>'}"
+        )
     return m
 
 
@@ -410,23 +455,33 @@ def validate_model_policy_config() -> dict[str, Any]:
         seen[key] = value
         if value != MODEL_OWNER_SOL:
             errors.append(f"{key}={value!r} conflicts with owner policy model {MODEL_OWNER_SOL}")
-    for key in _CUSTOMER_MODEL_ENV_KEYS:
+    for key in _CUSTOMER_ANSWER_MODEL_ENV_KEYS:
         raw = os.getenv(key)
         if raw is None or not str(raw).strip():
             continue
         value = str(raw).strip()
         seen[key] = value
         if value != MODEL_CUSTOMER_TERRA:
-            errors.append(f"{key}={value!r} conflicts with customer social policy model {MODEL_CUSTOMER_TERRA}")
+            errors.append(f"{key}={value!r} conflicts with customer answer policy model {MODEL_CUSTOMER_TERRA}")
+    for key in _CUSTOMER_RETRIEVAL_MODEL_ENV_KEYS:
+        raw = os.getenv(key)
+        if raw is None or not str(raw).strip():
+            continue
+        value = str(raw).strip()
+        seen[key] = value
+        if value != MODEL_CUSTOMER_LUNA:
+            errors.append(f"{key}={value!r} conflicts with customer retrieval policy model {MODEL_CUSTOMER_LUNA}")
     if errors:
         joined = "; ".join(errors)
         raise RuntimeError(
             "LINAS_MODEL_POLICY_INVALID: "
             f"{joined}. Unset these vars or set them to the policy models. "
-            "Env cannot silently override Sol/Terra routing."
+            "Env cannot silently override Sol/Luna/Terra routing."
         )
     return {
         "owner_model": MODEL_OWNER_SOL,
+        "customer_answer_model": MODEL_CUSTOMER_TERRA,
+        "customer_retrieval_model": MODEL_CUSTOMER_LUNA,
         "customer_model": MODEL_CUSTOMER_TERRA,
         "reasoning_mode": REASONING_MODE_STANDARD,
         "env_checked": sorted(seen.keys()),

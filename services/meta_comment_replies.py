@@ -14,7 +14,6 @@ from services.meta_app_registry import APP_A_KEY, MetaAssetBinding
 from services.meta_comment_events import ResolvedMetaCommentEvent
 from services.meta_comment_reply_settings import get_comment_reply_setting
 from services.meta_graph_routing import graph_api_url
-from services.response_formatting import RESPONSE_FORMATTING_RULES
 
 _runtime_logger = logging.getLogger("uvicorn.error")
 
@@ -23,18 +22,6 @@ _COMMENT_RATE_LIMIT_PER_ASSET = 30
 _RATE_BUCKETS: dict[str, deque[float]] = {}
 _SENT_REPLY_IDS: dict[str, float] = {}
 _SENT_REPLY_TTL_SECONDS = 86400.0
-
-_COMMENT_SYSTEM_RULES = (
-    "You are replying publicly to a social media comment for a business. "
-    "Keep the reply short (1-3 sentences), friendly, and suitable for a public thread. "
-    "Do not provide medical diagnosis or guaranteed results. "
-    "Do not invent prices, discounts, appointments, or promotions. "
-    "Do not reveal private customer data. "
-    "Do not ask for personal information in public. "
-    "If booking or personal details are needed, briefly invite the person to send a private message. "
-    "If you are not confident from approved business content, give a brief honest response and invite private contact.\n"
-    f"{RESPONSE_FORMATTING_RULES}"
-)
 
 
 @dataclass(frozen=True)
@@ -165,19 +152,19 @@ async def _generate_comment_reply_text(
     instructions: str,
     channel: str,
     policy_text: str = "",
+    comment_context: dict[str, Any] | None = None,
+    asset_id: str = "",
+    provider_sender_id: str = "",
+    provider_display_name: str = "",
 ) -> str | None:
-    owner_hint = f"\nOwner instructions: {instructions.strip()}" if instructions else ""
-    policy_hint = f"\nOWNER COMMENT POLICY:\n{policy_text.strip()}" if (policy_text or "").strip() else ""
-    comment_context = (
-        f"{_COMMENT_SYSTEM_RULES}{policy_hint}{owner_hint}\n"
-        f"Channel: {channel} public comment.\n"
-        f"Customer comment: {comment_text.strip()}\n"
-    )
+    """Generate a public comment reply via Customer Reply AI V2 only (CM tenants).
 
+    Never falls back to Classic ``generate_answer_with_usage``. Non-CM tenants keep
+    the pre-existing local FAQ matcher (not Classic CM generative).
+    """
     from services.cm.constants import tenant_uses_cm_runtime
     from services.cm.language_policy import detect_and_resolve_customer_languages
 
-    # Reply language from CM Languages only (not hardcoded, not app Settings).
     _lang = detect_and_resolve_customer_languages(
         tenant_id=tenant_id,
         message=comment_text,
@@ -187,68 +174,36 @@ async def _generate_comment_reply_text(
     response_language = _lang["response_language"]
 
     if tenant_uses_cm_runtime(tenant_id):
+        from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
+
+        social_channel = "facebook_comment" if channel == "facebook" else "instagram_comment"
+        enriched = dict(comment_context or {})
+        if instructions and "asset_instructions" not in enriched:
+            enriched["asset_instructions"] = instructions.strip()[:800]
+        if policy_text and "comments_policy" not in enriched:
+            enriched["comments_policy"] = {"policy_text": policy_text.strip()[:1200]}
         try:
-            from services.customer_reply_v2.flags import (
-                customer_reply_ai_v2_enabled,
-                customer_reply_ai_v2_live_send,
+            v2_outcome = await run_customer_reply_v2_comment(
+                tenant_id=tenant_id,
+                comment_text=comment_text,
+                detected_language=detected_language,
+                response_language=response_language,
+                channel=social_channel,
+                asset_id=asset_id,
+                provider_sender_id=provider_sender_id,
+                provider_display_name=provider_display_name,
+                comments_enabled=True,
+                comment_context=enriched or None,
             )
-
-            if customer_reply_ai_v2_enabled():
-                from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
-
-                social_channel = "facebook_comment" if channel == "facebook" else "instagram_comment"
-                v2_outcome = await run_customer_reply_v2_comment(
-                    tenant_id=tenant_id,
-                    comment_text=comment_text,
-                    detected_language=detected_language,
-                    response_language=response_language,
-                    channel=social_channel,
-                    comments_enabled=True,
-                )
-                if customer_reply_ai_v2_live_send() and v2_outcome.reply:
-                    return str(v2_outcome.reply).strip()[:900]
         except Exception as v2_exc:
-            _runtime_logger.warning("customer_reply_v2 comment path failed: %s", v2_exc)
-
-        from services.cm.answer_generation import (
-            UsageAccumulator,
-            generate_answer_with_usage,
-            make_regenerate_fn_with_usage,
-        )
-        from services.cm.runtime_pipeline import finalize_response, prepare_response
-
-        outcome = await prepare_response(
-            tenant_id=tenant_id,
-            message=comment_text,
-            detected_language=detected_language,
-            response_language=response_language,
-        )
-        if outcome.stop:
-            reply = (outcome.reply or "").strip()
-            return reply[:900] if reply else None
-        packet = outcome.packet
-        if packet is None:
+            _runtime_logger.warning(
+                "customer_reply_v2 comment path failed closed: %s",
+                type(v2_exc).__name__,
+            )
             return None
-        usage_acc = UsageAccumulator()
-        try:
-            gen_result = await generate_answer_with_usage(f"{comment_context}\n{comment_text}", packet)
-            candidate_text = gen_result.text
-            if gen_result.prompt_tokens is not None or gen_result.completion_tokens is not None:
-                usage_acc.prompt_tokens += int(gen_result.prompt_tokens or 0)
-                usage_acc.completion_tokens += int(gen_result.completion_tokens or 0)
-                usage_acc.calls += max(int(gen_result.call_count or 1), 1)
-                usage_acc.models.append(gen_result.model)
-        except Exception:
-            return None
-        restricted_ids = set(outcome.metadata.get("restricted_topic_active_ids") or [])
-        result = await finalize_response(
-            candidate_text=candidate_text,
-            packet=packet,
-            restricted_topic_active_ids=restricted_ids,
-            regenerate_fn=make_regenerate_fn_with_usage(comment_text, packet, usage_acc),
-        )
-        text = str(result.text or "").strip()
-        return text[:900] if text and result.ok else None
+        if v2_outcome.reply:
+            return str(v2_outcome.reply).strip()[:900]
+        return None
 
     from services.local_qa_service import local_qa_service
 
@@ -393,12 +348,38 @@ async def process_meta_comment_event(
         ):
             reply_text: str | None = rule_decision.reply_text.strip()[:900]
         else:
+            from services.cm.constants import tenant_uses_cm_runtime
+            from services.customer_reply_v2.comment_context_builder import build_production_comment_context
+
+            comment_ctx: dict[str, Any] | None = None
+            if tenant_uses_cm_runtime(binding.tenant_id):
+                comment_ctx = await build_production_comment_context(
+                    client=client,
+                    binding=binding,
+                    token=token,
+                    graph_api_version=graph_version,
+                    tenant_id=binding.tenant_id,
+                    comment_text=comment_text,
+                    comment_id=comment_id,
+                    media_id=str(event.get("media_id") or "").strip(),
+                    post_id=str(event.get("post_id") or "").strip(),
+                    parent_id=str(event.get("parent_id") or "").strip(),
+                    comments_policy={
+                        "policy_text": (rule_decision.policy_text if rule_decision else "") or "",
+                        "rule_id": (rule_decision.rule_id if rule_decision else "") or "",
+                    },
+                    asset_instructions=reply_setting.instructions or "",
+                )
             reply_text = await _generate_comment_reply_text(
                 tenant_id=binding.tenant_id,
                 comment_text=comment_text,
                 instructions=reply_setting.instructions,
                 channel=binding.channel,
                 policy_text=(rule_decision.policy_text if rule_decision else ""),
+                comment_context=comment_ctx,
+                asset_id=binding.asset_id,
+                provider_sender_id=str(event.get("author_id") or "").strip(),
+                provider_display_name=str(event.get("author_name") or "").strip(),
             )
         if not reply_text:
             return CommentReplyResult(status="skipped", reason="no_confident_reply")

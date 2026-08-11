@@ -31,9 +31,12 @@ updates = {
     "OWNER_COPILOT_V2": "true",
     # Required for CM Approve / propose→approve write path in production
     "OWNER_COPILOT_WRITES": "true",
-    # Customer Reply V2 live path (tests green on merge)
-    "CUSTOMER_REPLY_AI_V2": "true",
-    "CUSTOMER_REPLY_AI_V2_LIVE": "true",
+    # Customer Reply V2 is unconditional in code; keep semantic retrieval + media on
+    "CUSTOMER_SEMANTIC_RETRIEVAL_ENABLED": "true",
+    "CUSTOMER_MEDIA_CONTEXT_ENABLED": "true",
+    "LINAS_CUSTOMER_RETRIEVAL_MODEL": "gpt-5.6-luna",
+    "LINAS_CUSTOMER_ANSWER_MODEL": "gpt-5.6-terra",
+    "LINAS_CUSTOMER_MODEL": "gpt-5.6-terra",
     # Preserve required production constraints
     "CM_DISABLE_LINAS_LEGACY_BRIDGE": "true",
 }
@@ -94,8 +97,10 @@ paths = default_production_env_paths(app_dir=app_dir)
 keys = [
     "OWNER_COPILOT_V2",
     "OWNER_COPILOT_WRITES",
-    "CUSTOMER_REPLY_AI_V2",
-    "CUSTOMER_REPLY_AI_V2_LIVE",
+    "CUSTOMER_SEMANTIC_RETRIEVAL_ENABLED",
+    "CUSTOMER_MEDIA_CONTEXT_ENABLED",
+    "LINAS_CUSTOMER_RETRIEVAL_MODEL",
+    "LINAS_CUSTOMER_ANSWER_MODEL",
     "CM_DISABLE_LINAS_LEGACY_BRIDGE",
     "LINAS_REQUIRE_REDIS",
 ]

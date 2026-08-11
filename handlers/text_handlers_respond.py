@@ -982,149 +982,73 @@ async def _handle_published_cm_runtime(
     asset_id: str | None = None,
     provider_display_name: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
-    """Run the CM published-mode pipeline end-to-end and return ``(reply_text, metadata)``.
+    """Run Customer Reply AI V2 end-to-end and return ``(reply_text, metadata)``.
 
-    Never raises for expected "no published version" cases — returns an honest clarify/contact
-    message instead (no silent fallback to the legacy pipeline, per plan §12).
-
-    When ``CUSTOMER_REPLY_AI_V2`` is enabled, runs Retrieval Luna + Answer Luna. Shadow mode
-    (``CUSTOMER_REPLY_AI_V2_LIVE=false``) records V2 metadata but still returns the classic
-    published CM reply so customer-visible behavior is unchanged until live send is approved.
+    V2 is the sole generative engine for customer IG/FB DMs after existing gates.
+    Never falls back to Classic ``generate_answer_with_usage``. On model/config
+    failure, returns a safe closed failure reply with an explicit blocker.
     """
-    from services.cm.answer_generation import (
-        UsageAccumulator,
-        generate_answer_with_usage,
-        make_regenerate_fn_with_usage,
-    )
     from services.cm.constants import ANSWER_VALIDATION_FAILED_MESSAGE_KEY
-    from services.cm.runtime_pipeline import finalize_response, prepare_response
+    from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
     from services.dynamic_messages_service import get_dynamic_message
 
-    v2_meta: dict[str, Any] = {}
+    social_channel = "instagram_dm"
+    ch = (channel or "").strip().lower()
+    if "facebook" in ch or ch in {"messenger", "page"}:
+        social_channel = "facebook_dm"
+    elif "instagram" in ch:
+        social_channel = "instagram_dm"
+
     try:
-        from services.customer_reply_v2.flags import (
-            customer_reply_ai_v2_enabled,
-            customer_reply_ai_v2_live_send,
+        v2_outcome = await run_customer_reply_v2_dm(
+            tenant_id=tenant_id,
+            message=message,
+            detected_language=detected_language,
+            response_language=response_language,
+            channel=social_channel,
+            asset_id=asset_id or "",
+            provider_sender_id=user_id or "",
+            provider_display_name=provider_display_name or "",
+            user_id=user_id or "",
+            conversation_id=conversation_id or "",
         )
-
-        if customer_reply_ai_v2_enabled():
-            from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
-
-            social_channel = "instagram_dm"
-            ch = (channel or "").strip().lower()
-            if "facebook" in ch or ch in {"messenger", "page"}:
-                social_channel = "facebook_dm"
-            elif "instagram" in ch:
-                social_channel = "instagram_dm"
-
-            v2_outcome = await run_customer_reply_v2_dm(
-                tenant_id=tenant_id,
-                message=message,
-                detected_language=detected_language,
-                response_language=response_language,
-                channel=social_channel,
-                asset_id=asset_id or "",
-                provider_sender_id=user_id or "",
-                provider_display_name=provider_display_name or "",
-                user_id=user_id or "",
-                conversation_id=conversation_id or "",
-            )
-            v2_meta = {
-                "customer_reply_ai_v2": True,
-                "v2_reason": v2_outcome.reason,
-                "v2_shadow_only": v2_outcome.shadow_only,
-                "v2_evidence_status": v2_outcome.evidence_status,
-                **(v2_outcome.metadata or {}),
-            }
-            if customer_reply_ai_v2_live_send() and v2_outcome.reply:
-                return v2_outcome.reply, {
-                    "reason": v2_outcome.reason,
-                    "ai_called": True,
-                    "cost_status": "estimated",
-                    **v2_meta,
-                    "pipeline_decisions": [
-                        {"step": "customer_reply_v2", "decision": v2_outcome.reason, "ai_called": True},
-                    ],
-                }
     except Exception as v2_exc:
-        v2_meta = {"customer_reply_ai_v2": True, "v2_error": str(v2_exc)[:200]}
-        print(f"[_handle_published_cm_runtime] ⚠️ customer_reply_v2 shadow/live failed: {v2_exc}")
-
-    outcome = await prepare_response(
-        tenant_id=tenant_id,
-        message=message,
-        detected_language=detected_language,
-        response_language=response_language,
-    )
-
-    if outcome.stop:
-        reply = outcome.reply or get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, response_language)
-        return reply, {
-            "reason": outcome.reason,
-            **outcome.metadata,
-            **v2_meta,
+        print(f"[_handle_published_cm_runtime] ⚠️ customer_reply_v2 failed closed: {v2_exc}")
+        safe = get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, response_language)
+        return safe, {
+            "reason": "v2_failed_closed",
+            "customer_reply_ai_v2": True,
+            "classic_fallback": False,
+            "blocker": str(v2_exc)[:200],
             "ai_called": False,
             "cost_status": "none",
             "pipeline_decisions": [
-                {"step": "cm_prepare", "decision": outcome.reason, "ai_called": False},
+                {"step": "customer_reply_v2", "decision": "failed_closed", "ai_called": False},
             ],
         }
 
-    packet = outcome.packet
-    assert packet is not None  # stop=False always carries a packet (prepare_response contract)
-    usage_acc = UsageAccumulator()
-    try:
-        gen_result = await generate_answer_with_usage(message, packet)
-        candidate_text = gen_result.text
-        if gen_result.prompt_tokens is not None or gen_result.completion_tokens is not None:
-            usage_acc.prompt_tokens += int(gen_result.prompt_tokens or 0)
-            usage_acc.completion_tokens += int(gen_result.completion_tokens or 0)
-            usage_acc.calls += max(int(gen_result.call_count or 1), 1)
-            usage_acc.models.append(gen_result.model)
-    except Exception as gen_error:
-        print(f"[_handle_published_cm_runtime] ⚠️ generate_answer failed: {gen_error}")
-        candidate_text = ""
-
-    restricted_ids = set(outcome.metadata.get("restricted_topic_active_ids") or [])
-    result = await finalize_response(
-        candidate_text=candidate_text,
-        packet=packet,
-        restricted_topic_active_ids=restricted_ids,
-        regenerate_fn=make_regenerate_fn_with_usage(message, packet, usage_acc),
-    )
-    source_titles = [
-        {"source_id": chunk.source_id, "title": (chunk.text or "")[:120]} for chunk in (packet.chunks or [])[:20]
-    ]
-    usage_summary = usage_acc.to_result(result.text, usage_acc.models[-1] if usage_acc.models else "gpt-5.6-terra")
-    return result.text, {
-        "reason": "packet_ready" if result.ok else "answer_validation_failed",
-        "content_version_id": packet.content_version_id,
-        "index_version_id": packet.index_version_id,
-        "validated": result.ok,
-        "regenerated": result.regenerated,
-        "failed_rules": result.failed_rules,
-        "source_ids": list(packet.source_ids or []),
-        "retrieved_sources": source_titles,
+    reply = (v2_outcome.reply or "").strip()
+    if not reply:
+        reply = get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, response_language)
+    meta = {
+        "reason": v2_outcome.reason or "v2_generated",
+        "customer_reply_ai_v2": True,
+        "classic_fallback": False,
+        "v2_evidence_status": v2_outcome.evidence_status,
         "ai_called": True,
-        "model": usage_summary.model,
-        "prompt_tokens": usage_summary.prompt_tokens,
-        "completion_tokens": usage_summary.completion_tokens,
-        "tokens": usage_summary.total_tokens,
-        "cost_usd": usage_summary.cost_usd,
-        "input_cost_usd": usage_summary.input_cost_usd,
-        "output_cost_usd": usage_summary.output_cost_usd,
-        "cost_status": usage_summary.cost_status,
-        "cost_basis": usage_summary.cost_basis,
-        **v2_meta,
+        "cost_status": "estimated",
+        **(v2_outcome.metadata or {}),
         "pipeline_decisions": [
-            {"step": "cm_prepare", "decision": "packet_ready", "ai_called": True},
             {
-                "step": "cm_finalize",
-                "decision": "validated" if result.ok else "validation_failed",
-                "regenerated": result.regenerated,
+                "step": "customer_reply_v2",
+                "decision": v2_outcome.reason or "v2_generated",
+                "ai_called": True,
             },
         ],
     }
+    if v2_outcome.error:
+        meta["blocker"] = str(v2_outcome.error)[:200]
+    return reply, meta
 
 
 async def _process_and_respond(

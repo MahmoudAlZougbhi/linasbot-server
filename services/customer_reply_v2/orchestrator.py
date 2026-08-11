@@ -1,4 +1,4 @@
-"""Customer Reply AI V2 orchestrator — DM and comment runtimes."""
+"""Customer Reply AI V2 orchestrator — DM and comment runtimes (production sole engine)."""
 
 from __future__ import annotations
 
@@ -8,15 +8,14 @@ from typing import Any
 from services.cm.answer_packet import build_answer_packet
 from services.cm.response_validator import validate_response
 from services.cm.schemas import AnswerChunk, AnswerFact
-from services.cm.version_store import load_published_content
+from services.cm.version_store import PublishedVersionError, load_published_content
 from services.customer_reply_v2.answer_luna import run_answer_luna
 from services.customer_reply_v2.conversation_window import filter_rolling_window, load_dm_conversation_window
 from services.customer_reply_v2.customer_facts import apply_message_fact_updates, load_customer_facts
 from services.customer_reply_v2.faq_fast_path import try_faq_fast_path
 from services.customer_reply_v2.flags import (
-    customer_model_name,
-    customer_reply_ai_v2_enabled,
-    customer_reply_ai_v2_live_send,
+    customer_answer_model_name,
+    customer_retrieval_model_name,
     customer_semantic_retrieval_enabled,
     flags_snapshot,
 )
@@ -62,6 +61,31 @@ def _validate_candidate(
     return result.ok, list(result.failed_rules or [])
 
 
+def _safe_failure_reply(response_language: str, *, kind: str = "validation") -> str:
+    if kind == "model":
+        messages = {
+            "ar": "الخدمة الذكية غير متاحة حالياً. تواصل معنا مباشرة وسنساعدك.",
+            "en": "Our AI reply service is temporarily unavailable. Please contact us directly.",
+            "fr": "Le service de réponse IA est temporairement indisponible. Contactez-nous directement.",
+            "franco": "El AI reply mesh available halla2. Contactuna mubasharan.",
+        }
+    elif kind == "insufficient":
+        messages = {
+            "ar": "ما قدرت أكد المعلومة من المحتوى المنشور حالياً. بقدر وجهك لفريقنا إذا حابب.",
+            "en": "I couldn't confirm that from our published content. I can connect you with our team if you'd like.",
+            "fr": "Je n'ai pas pu confirmer cela dans notre contenu publié. Je peux vous mettre en relation avec notre équipe.",
+            "franco": "Ma ederet akked el maaloome men el content. Fini a3teek el team iza baddak.",
+        }
+    else:
+        messages = {
+            "ar": "خليني تأكدلك المعلومة صح — راسلنا على واتساب لنساعدك بدقة.",
+            "en": "Let me make sure this is accurate — please reach us on WhatsApp for a precise answer.",
+            "fr": "Laissez-moi vérifier — contactez-nous sur WhatsApp pour une réponse précise.",
+            "franco": "Khallini akked el maaloome — rasilna 3a WhatsApp la jawab sahih.",
+        }
+    return messages.get(response_language, messages["en"])
+
+
 async def run_customer_reply_v2_dm(
     *,
     tenant_id: str,
@@ -79,14 +103,20 @@ async def run_customer_reply_v2_dm(
     fixture_answer: dict[str, Any] | None = None,
     now_ts: float | None = None,
 ) -> CustomerReplyOutcome:
-    """Canonical DM flow for Customer Reply AI V2."""
+    """Canonical DM flow for Customer Reply AI V2 (sole production engine)."""
     started = time.perf_counter()
-    shadow = not customer_reply_ai_v2_live_send()
 
-    if not customer_reply_ai_v2_enabled():
-        return CustomerReplyOutcome(stop=True, reason="v2_disabled", error="CUSTOMER_REPLY_AI_V2=false")
-
-    revision, _manifest = get_cached_manifest(tenant_id)
+    try:
+        revision, _manifest = get_cached_manifest(tenant_id)
+    except PublishedVersionError:
+        return CustomerReplyOutcome(
+            stop=True,
+            reply=_safe_failure_reply(response_language, kind="insufficient"),
+            reason="no_published_version",
+            evidence_status="insufficient_final",
+            metadata={"classic_fallback": False, "flags": flags_snapshot()},
+            error="no_published_version",
+        )
 
     facts = load_customer_facts(
         tenant_id=tenant_id,
@@ -121,7 +151,7 @@ async def run_customer_reply_v2_dm(
             context_compacted=False,
             delivery_result="policy_reply",
             latency_ms=(time.perf_counter() - started) * 1000,
-            shadow_only=shadow,
+            stage="policy",
         )
         return CustomerReplyOutcome(
             stop=True,
@@ -129,7 +159,6 @@ async def run_customer_reply_v2_dm(
             reason=policy["reason"],
             evidence_status="policy_stop",
             metadata={**policy.get("metadata", {}), "trace": trace, "flags": flags_snapshot()},
-            shadow_only=shadow,
         )
 
     window = await load_dm_conversation_window(
@@ -168,7 +197,7 @@ async def run_customer_reply_v2_dm(
             context_compacted=window.context_compacted,
             delivery_result="faq_reply",
             latency_ms=(time.perf_counter() - started) * 1000,
-            shadow_only=shadow,
+            stage="faq",
         )
         return CustomerReplyOutcome(
             stop=True,
@@ -176,15 +205,29 @@ async def run_customer_reply_v2_dm(
             reason=faq.reason,
             evidence_status="faq_hit",
             metadata={"faq": faq.metadata or {}, "trace": trace, "flags": flags_snapshot()},
-            shadow_only=shadow,
         )
 
     if not customer_semantic_retrieval_enabled():
         return CustomerReplyOutcome(
             stop=True,
+            reply=_safe_failure_reply(response_language, kind="model"),
             reason="semantic_retrieval_disabled",
             error="CUSTOMER_SEMANTIC_RETRIEVAL_ENABLED=false",
-            shadow_only=shadow,
+            evidence_status="insufficient_final",
+            metadata={"flags": flags_snapshot(), "blocker": "semantic_retrieval_disabled"},
+        )
+
+    try:
+        retrieval_model = customer_retrieval_model_name()
+        answer_model = customer_answer_model_name()
+    except Exception as exc:
+        return CustomerReplyOutcome(
+            stop=True,
+            reply=_safe_failure_reply(response_language, kind="model"),
+            reason="model_misconfigured",
+            error=str(exc),
+            evidence_status="insufficient_final",
+            metadata={"flags": flags_snapshot(), "blocker": str(exc)},
         )
 
     retrieval = await run_retrieval_luna(
@@ -194,6 +237,15 @@ async def run_customer_reply_v2_dm(
         dm_window=[{"role": m["role"], "content": m["content"]} for m in history_for_model],
         scripted_tool_calls=scripted_retrieval,
     )
+    if retrieval.error and retrieval.error.startswith("retrieval_model_blocker:"):
+        return CustomerReplyOutcome(
+            stop=True,
+            reply=_safe_failure_reply(response_language, kind="model"),
+            reason="retrieval_model_blocker",
+            error=retrieval.error,
+            evidence_status="insufficient_final",
+            metadata={"flags": flags_snapshot(), "blocker": retrieval.error},
+        )
 
     answer = await run_answer_luna(
         tenant_id=tenant_id,
@@ -211,15 +263,18 @@ async def run_customer_reply_v2_dm(
     validation_ok = True
     failed_rules: list[str] = []
     reply_text = answer.reply_text
+    prompt_tokens = int(answer.prompt_tokens or 0)
+    completion_tokens = int(answer.completion_tokens or 0)
+
+    if answer.safe_failure_category == "model_unavailable" and not reply_text:
+        reply_text = _safe_failure_reply(response_language, kind="model")
+        validation_ok = True
+        failed_rules = ["answer_model_unavailable"]
 
     if retrieval.evidence_status == "insufficient_final" and not reply_text:
-        reply_text = {
-            "ar": "ما قدرت أكد المعلومة من المحتوى المنشور حالياً. بقدر وجهك لفريقنا إذا حابب.",
-            "en": "I couldn't confirm that from our published content. I can connect you with our team if you'd like.",
-            "fr": "Je n'ai pas pu confirmer cela dans notre contenu publié. Je peux vous mettre en relation avec notre équipe.",
-        }.get(response_language, "I couldn't confirm that from our published content.")
+        reply_text = _safe_failure_reply(response_language, kind="insufficient")
 
-    if reply_text and retrieval.evidence:
+    if reply_text and retrieval.evidence and "answer_model_unavailable" not in failed_rules:
         validation_ok, failed_rules = _validate_candidate(
             tenant_id=tenant_id,
             candidate=reply_text,
@@ -246,6 +301,9 @@ async def run_customer_reply_v2_dm(
                 repair_failures=failed_rules,
             )
             reply_text = repaired.reply_text
+            prompt_tokens += int(repaired.prompt_tokens or 0)
+            completion_tokens += int(repaired.completion_tokens or 0)
+            answer = repaired
             validation_ok, failed_rules = _validate_candidate(
                 tenant_id=tenant_id,
                 candidate=reply_text,
@@ -254,19 +312,16 @@ async def run_customer_reply_v2_dm(
                 response_language=response_language,
             )
             if not validation_ok:
-                reply_text = {
-                    "ar": "خليني تأكدلك المعلومة صح — راسلنا على واتساب لنساعدك بدقة.",
-                    "en": "Let me make sure this is accurate — please reach us on WhatsApp for a precise answer.",
-                    "fr": "Laissez-moi vérifier — contactez-nous sur WhatsApp pour une réponse précise.",
-                }.get(response_language, "Please reach us on WhatsApp for an accurate answer.")
-                # Safe failure — never send the invalid candidate.
-                validation_ok = True  # safe fallback is allowed to send
+                reply_text = _safe_failure_reply(response_language, kind="validation")
+                # Safe failure — never send the invalid candidate; never Classic.
+                validation_ok = True
                 failed_rules = failed_rules + ["safe_failure_fallback"]
 
     # Prove fixed answer context was loaded for generated path
     fixed = load_fixed_answer_context(tenant_id)
     assert "ai_basics" in fixed and "style" in fixed
 
+    total_tokens = prompt_tokens + completion_tokens
     trace = build_safe_trace(
         tenant_id=tenant_id,
         channel=channel,
@@ -278,8 +333,8 @@ async def run_customer_reply_v2_dm(
         validation_ok=validation_ok,
         repair_attempts=repair_attempts,
         requested_models={
-            "retrieval": retrieval.requested_model or customer_model_name(),
-            "answer": answer.requested_model or customer_model_name(),
+            "retrieval": retrieval.requested_model or retrieval_model,
+            "answer": answer.requested_model or answer_model,
         },
         returned_models={
             "retrieval": retrieval.returned_model,
@@ -287,9 +342,13 @@ async def run_customer_reply_v2_dm(
         },
         context_message_count=len(window.messages),
         context_compacted=window.context_compacted,
-        delivery_result="shadow_skip" if shadow else "ready_to_send",
+        delivery_result="ready_to_send",
         latency_ms=(time.perf_counter() - started) * 1000,
-        shadow_only=shadow,
+        stage="repair" if repair_attempts else "answer",
+        reasoning_effort={"retrieval": "none", "answer": "medium"},
+        prompt_tokens=prompt_tokens or None,
+        completion_tokens=completion_tokens or None,
+        total_tokens=total_tokens or None,
     )
 
     return CustomerReplyOutcome(
@@ -310,17 +369,21 @@ async def run_customer_reply_v2_dm(
             "name_source": facts.name_source,
             "gender": facts.gender,
             "ai_called": True,
-            "model": answer.returned_model or customer_model_name(),
+            "model": answer.returned_model or answer_model,
             "requested_model_retrieval": retrieval.requested_model,
             "requested_model_answer": answer.requested_model,
+            "reasoning_effort_answer": "medium",
+            "reasoning_effort_retrieval": "none",
+            "prompt_tokens": prompt_tokens or None,
+            "completion_tokens": completion_tokens or None,
+            "tokens": total_tokens or None,
             "validated": validation_ok,
             "failed_rules": failed_rules,
             "trace": trace,
             "flags": flags_snapshot(),
-            # No fixed top-2 authoritative path
             "authoritative_selector": "retrieval_luna",
+            "classic_fallback": False,
         },
-        shadow_only=shadow,
         error=retrieval.error,
     )
 

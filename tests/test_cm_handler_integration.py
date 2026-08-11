@@ -1,9 +1,4 @@
-"""CM Phase 6: minimal handler integration (`handlers.text_handlers_respond`).
-
-Verifies the ``CM_RUNTIME_MODE=published`` hook: FAQ/restricted short-circuits skip the large-AI
-call entirely, a FAQ-miss packet routes through ``generate_answer_with_usage`` + validator, and a
-missing published pointer produces an honest failure message (never a silent legacy fallback).
-"""
+"""CM handler integration: Customer Reply AI V2 is the sole generative engine."""
 
 from __future__ import annotations
 
@@ -12,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from handlers.text_handlers_respond import _handle_published_cm_runtime
-from services.cm.answer_generation import AnswerGenerationResult
+from services.customer_reply_v2.models import CustomerReplyOutcome
 from services.local_qa_service import local_qa_service
 from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test_content
 
@@ -32,10 +27,11 @@ async def test_no_published_version_returns_honest_failure_not_exception() -> No
     )
     assert reply
     assert metadata["reason"] == "no_published_version"
+    assert metadata.get("classic_fallback") is False
 
 
 @pytest.mark.asyncio
-async def test_restricted_topic_short_circuits_without_calling_generate_answer() -> None:
+async def test_restricted_topic_short_circuits_without_classic_generate() -> None:
     from services.cm.schemas import initial_restricted_policy
 
     tenant_id = "cm_handler_test_restricted"
@@ -54,12 +50,11 @@ async def test_restricted_topic_short_circuits_without_calling_generate_answer()
     mock_gen.assert_not_awaited()
     assert metadata["reason"] == "restricted"
     assert reply
-    assert metadata.get("ai_called") is False
-    assert metadata.get("cost_status") == "none"
+    assert metadata.get("classic_fallback") is False
 
 
 @pytest.mark.asyncio
-async def test_faq_hit_short_circuits_without_calling_generate_answer() -> None:
+async def test_faq_hit_short_circuits_without_classic_generate() -> None:
     tenant_id = "cm_handler_test_faq"
     await publish_test_content(tenant_id)
 
@@ -86,31 +81,40 @@ async def test_faq_hit_short_circuits_without_calling_generate_answer() -> None:
         mock_gen.assert_not_awaited()
         assert metadata["reason"] in ("faq_exact", "faq_direct")
         assert "9am" in reply or "6pm" in reply
+        assert metadata.get("classic_fallback") is False
     finally:
         local_qa_service.qa_pairs[:] = original_pairs
 
 
 @pytest.mark.asyncio
-async def test_packet_ready_calls_generate_answer_and_validates() -> None:
+async def test_v2_generated_reply_never_calls_classic_generate() -> None:
     tenant_id = "cm_handler_test_packet"
     await publish_test_content(tenant_id)
 
-    gen = AnswerGenerationResult(
-        text="A friendly, on-language answer with no invented facts.",
-        model="gpt-4o-mini",
-        prompt_tokens=100,
-        completion_tokens=40,
-        total_tokens=140,
-        cost_usd=0.000039,
-        input_cost_usd=0.000015,
-        output_cost_usd=0.000024,
-        cost_status="estimated",
-        cost_basis="openai_usage_tokens_x_configured_rates",
+    outcome = CustomerReplyOutcome(
+        stop=True,
+        reply="A friendly, on-language answer with no invented facts.",
+        reason="v2_generated",
+        evidence_status="sufficient",
+        metadata={
+            "validated": True,
+            "classic_fallback": False,
+            "prompt_tokens": 100,
+            "completion_tokens": 40,
+            "tokens": 140,
+            "model": "gpt-5.6-terra",
+            "requested_model_retrieval": "gpt-5.6-luna",
+            "requested_model_answer": "gpt-5.6-terra",
+            "reasoning_effort_answer": "medium",
+        },
     )
 
-    with patch(
-        "services.cm.answer_generation.generate_answer_with_usage",
-        new=AsyncMock(return_value=gen),
+    with (
+        patch(
+            "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
+            new=AsyncMock(return_value=outcome),
+        ),
+        patch("services.cm.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen,
     ):
         reply, metadata = await _handle_published_cm_runtime(
             tenant_id=tenant_id,
@@ -118,37 +122,26 @@ async def test_packet_ready_calls_generate_answer_and_validates() -> None:
             detected_language="en",
             response_language="en",
         )
-    assert metadata["reason"] == "packet_ready"
-    assert metadata["validated"] is True
+    mock_gen.assert_not_awaited()
+    assert metadata["reason"] == "v2_generated"
+    assert metadata["customer_reply_ai_v2"] is True
+    assert metadata["classic_fallback"] is False
     assert reply == "A friendly, on-language answer with no invented facts."
-    assert metadata["ai_called"] is True
-    assert metadata["prompt_tokens"] == 100
-    assert metadata["cost_status"] == "estimated"
-    assert metadata["cost_usd"] == 0.000039
+    assert metadata["requested_model_retrieval"] == "gpt-5.6-luna"
+    assert metadata["requested_model_answer"] == "gpt-5.6-terra"
 
 
 @pytest.mark.asyncio
-async def test_packet_ready_validation_failure_returns_dynamic_message_and_no_regen_success() -> None:
+async def test_v2_exception_fails_closed_without_classic() -> None:
     tenant_id = "cm_handler_test_packet_invalid"
     await publish_test_content(tenant_id)
 
-    bad_reply = "Our price is $999 for that."
-
-    async def _always_bad(_message, _packet):
-        return AnswerGenerationResult(text=bad_reply, cost_status="unavailable")
-
-    async def _regen_bad(_prev, _rules):
-        return bad_reply
-
-    def _fake_make_regenerate_fn_with_usage(_message, _packet, _acc):
-        return _regen_bad
-
     with (
-        patch("services.cm.answer_generation.generate_answer_with_usage", new=_always_bad),
         patch(
-            "services.cm.answer_generation.make_regenerate_fn_with_usage",
-            new=_fake_make_regenerate_fn_with_usage,
+            "services.customer_reply_v2.orchestrator.run_customer_reply_v2_dm",
+            new=AsyncMock(side_effect=RuntimeError("boom")),
         ),
+        patch("services.cm.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen,
     ):
         reply, metadata = await _handle_published_cm_runtime(
             tenant_id=tenant_id,
@@ -156,7 +149,7 @@ async def test_packet_ready_validation_failure_returns_dynamic_message_and_no_re
             detected_language="en",
             response_language="en",
         )
-    assert metadata["reason"] == "answer_validation_failed"
-    assert metadata["validated"] is False
-    assert "UNSUPPORTED_PRICE_CLAIM" in metadata["failed_rules"]
-    assert reply != bad_reply
+    mock_gen.assert_not_awaited()
+    assert metadata["reason"] == "v2_failed_closed"
+    assert metadata["classic_fallback"] is False
+    assert reply
