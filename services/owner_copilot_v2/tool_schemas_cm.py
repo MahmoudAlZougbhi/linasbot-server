@@ -184,6 +184,23 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
                             "audience": {"type": "string"},
                             "category": {"type": "string"},
                             "notes": {"type": "string"},
+                            "attachments": {
+                                "type": "array",
+                                "description": "Case example images/files already uploaded via "
+                                "POST /api/cm/media. Each item needs id, kind, caption "
+                                "(when to use), mime, filename.",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {"type": "string"},
+                                        "kind": {"type": "string", "enum": ["image", "file"]},
+                                        "caption": {"type": "string"},
+                                        "mime": {"type": "string"},
+                                        "filename": {"type": "string"},
+                                        "size": {"type": "integer"},
+                                    },
+                                },
+                            },
                         },
                     },
                 },

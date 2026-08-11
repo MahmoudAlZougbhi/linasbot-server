@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { CmArticleAttachments } from "./CmArticleAttachments";
 import CmSectionShell from "./CmSectionShell";
 import { asRecordList, newId, primaryLabel, statusBadgeClass } from "./cmDraftHelpers";
 import { useCmSectionDraft } from "./useCmSectionDraft";
@@ -54,6 +55,7 @@ export const CmArticlesPage = ({ section, title, description }) => {
         linked_service_ids: [],
         linked_branch_ids: [],
         notes: null,
+        attachments: [],
       },
       ...items,
     ];
@@ -228,6 +230,10 @@ export const CmArticlesPage = ({ section, title, description }) => {
                 onChange={(e) => patchItem(String(selected.id), { notes: e.target.value })}
               />
             </label>
+            <CmArticleAttachments
+              attachments={asRecordList(selected.attachments)}
+              onChange={(next) => patchItem(String(selected.id), { attachments: next })}
+            />
             <button
               type="button"
               onClick={() => archiveItem(String(selected.id))}

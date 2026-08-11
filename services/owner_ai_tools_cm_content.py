@@ -39,6 +39,16 @@ def _normalize_section(section: str) -> str:
 
 def _article_meta(item: dict[str, Any], *, section: str) -> dict[str, Any]:
     body = str(item.get("body") or "")
+    raw_atts = item.get("attachments")
+    attachments: list[Any] = list(raw_atts) if isinstance(raw_atts, list) else []
+    captions: list[str] = []
+    for row in attachments:
+        if not isinstance(row, dict):
+            continue
+        cap = str(row.get("caption") or "").strip()
+        name = str(row.get("filename") or row.get("id") or "").strip()
+        if cap or name:
+            captions.append(f"{name}: {cap}" if cap else name)
     return {
         "section": section,
         "id": str(item.get("id") or ""),
@@ -50,6 +60,8 @@ def _article_meta(item: dict[str, Any], *, section: str) -> dict[str, Any]:
         "audience": str(item.get("audience") or ""),
         "category": str(item.get("category") or ""),
         "body_chars": len(body),
+        "attachment_count": len(attachments),
+        "attachment_captions": captions[:12],
     }
 
 
@@ -379,6 +391,7 @@ def _build_article_upsert(
             "linked_service_ids": [],
             "linked_branch_ids": [],
             "notes": None,
+            "attachments": [],
         }
         before: dict[str, Any] | None = None
     else:
@@ -399,6 +412,7 @@ def _build_article_upsert(
         "notes",
         "linked_service_ids",
         "linked_branch_ids",
+        "attachments",
     )
     for key in allowed:
         if key in article:
