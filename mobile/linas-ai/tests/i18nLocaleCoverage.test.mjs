@@ -30,6 +30,8 @@ const CRITICAL_KEYS = [
   'welcomeChipModeWork',
   'welcomeChipModeChat',
   'composerPlaceholder',
+  'composerPlaceholderChat',
+  'composerPlaceholderWork',
   'guestHowCanHelp',
   'guestStarterWhatTitle',
   'loginWelcome',
