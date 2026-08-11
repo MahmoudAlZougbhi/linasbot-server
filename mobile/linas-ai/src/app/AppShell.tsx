@@ -16,7 +16,7 @@ import { ModuleNavProvider } from '../features/nav/ModuleNavContext';
 import { useTheme } from '../theme';
 import { AppScreenTree } from './AppScreenTree';
 import { buildModuleNavValue, makeChatNavActions, useAreaFocusNonce } from './moduleNav';
-import { parseLiveChatDeepLink, RESOURCE_MAP, type Screen } from './navigation';
+import { parseIntegrationsDeepLink, parseLiveChatDeepLink, RESOURCE_MAP, type Screen } from './navigation';
 
 /**
  * Root navigation shell. Module screens stay mounted after first visit so
@@ -67,6 +67,12 @@ export function AppShell() {
 
   useEffect(() => {
     const applyUrl = (url: string | null) => {
+      const integrations = parseIntegrationsDeepLink(url);
+      if (integrations) {
+        bumpAreaFocus();
+        setScreen({ name: 'integrations' });
+        return;
+      }
       const target = parseLiveChatDeepLink(url);
       if (!target) return;
       if (!hasAccess) {
@@ -79,7 +85,7 @@ export function AppShell() {
     void Linking.getInitialURL().then(applyUrl);
     const sub = Linking.addEventListener('url', (event) => applyUrl(event.url));
     return () => sub.remove();
-  }, [hasAccess]);
+  }, [hasAccess, bumpAreaFocus]);
 
   const finishBoot = useCallback(() => {
     setBootDone(true);
@@ -155,7 +161,12 @@ export function AppShell() {
     void tryRegisterOwnerPushScaffold();
     const pending = resumeArea;
     setResumeArea(null);
-    if (pending && pending !== 'integrations') {
+    if (pending === 'integrations') {
+      bumpAreaFocus();
+      setScreen({ name: 'integrations' });
+      return;
+    }
+    if (pending) {
       openAreaAuthed(pending);
       return;
     }

@@ -3,7 +3,7 @@
 Truth fields (never claim live_verified for Comments without full E2E proof):
 
 ``effective_enabled = connection_healthy AND requested_enabled AND permission_present
-                      AND webhook_subscribed AND tenant_action_enabled``
+                      AND webhook_subscribed AND tenant_action_enabled AND comments_policy_ok``
 """
 
 from __future__ import annotations
@@ -31,6 +31,9 @@ from services.meta_instagram_login_subscription import COMMENTS_SUBSCRIPTION_FIE
 
 ChannelPlatform = Literal["instagram", "facebook"]
 CapabilityKey = Literal["dm", "comments"]
+
+# Internal App Role / Standard Access testing only — never a global Advanced Access bypass.
+INTERNAL_STANDARD_ACCESS_TENANTS = frozenset({"linas"})
 
 _CHANNEL_ACTION_IDS: dict[str, dict[str, str]] = {
     "instagram": {"dm": ACTION_INSTAGRAM_DM, "comments": ACTION_INSTAGRAM_COMMENTS},
@@ -78,7 +81,23 @@ def action_id_for(platform: str, toggle: CapabilityKey) -> str | None:
     return _CHANNEL_ACTION_IDS.get(platform, {}).get(toggle)
 
 
+def uses_internal_standard_access(tenant_id: str) -> bool:
+    """True only for allowlisted internal tenants (App Role / Standard Access testing)."""
+
+    return str(tenant_id or "").strip().lower() in INTERNAL_STANDARD_ACCESS_TENANTS
+
+
+def comments_policy_allows(tenant_id: str, *, advanced_access: bool) -> bool:
+    """Public customers stay blocked until Advanced Access; linas may use Standard Access."""
+
+    if advanced_access:
+        return True
+    return uses_internal_standard_access(tenant_id)
+
+
 def active_channel_bindings(tenant_id: str, platform: str) -> list[Any]:
+    """All active App A bindings for this tenant+platform (may include legacy siblings)."""
+
     registry = get_meta_app_registry()
     return [
         b
@@ -88,6 +107,55 @@ def active_channel_bindings(tenant_id: str, platform: str) -> list[Any]:
         and str(getattr(b, "status", "") or "") == "active"
         and str(getattr(b, "app_key", "") or "") == APP_A_KEY
     ]
+
+
+def _binding_sort_key(binding: Any) -> tuple[float, float, str]:
+    updated = float(getattr(binding, "updated_at", 0) or 0)
+    created = float(getattr(binding, "created_at", 0) or 0)
+    binding_id = str(getattr(binding, "binding_id", "") or "")
+    return (updated, created, binding_id)
+
+
+def _pick_preferred_binding(candidates: list[Any]) -> Any:
+    return sorted(candidates, key=_binding_sort_key, reverse=True)[0]
+
+
+def canonical_channel_bindings(tenant_id: str, platform: str) -> list[Any]:
+    """Select one canonical binding per asset for capability evaluation.
+
+    Instagram: prefer an active ``instagram_login`` binding for the same asset when
+    present; do not AND permissions with a legacy ``facebook_login`` sibling.
+    Facebook: use the active Page binding for that asset.
+    Never combine different tenants, assets, or Meta apps. Does not delete legacy rows.
+    """
+
+    platform_key = (platform or "").strip().lower()
+    tenant = str(tenant_id or "").strip()
+    bindings = active_channel_bindings(tenant, platform_key)
+    by_asset: dict[str, list[Any]] = {}
+    for binding in bindings:
+        # Defense in depth — never mix tenants/apps even if a caller bypasses filters.
+        if str(getattr(binding, "tenant_id", "") or "") != tenant:
+            continue
+        if str(getattr(binding, "app_key", "") or "") != APP_A_KEY:
+            continue
+        if str(getattr(binding, "channel", "") or "") != platform_key:
+            continue
+        asset_id = str(getattr(binding, "asset_id", "") or "").strip()
+        if not asset_id:
+            continue
+        by_asset.setdefault(asset_id, []).append(binding)
+
+    selected: list[Any] = []
+    for asset_id in sorted(by_asset.keys()):
+        group = by_asset[asset_id]
+        if platform_key == "instagram":
+            ig_login = [b for b in group if str(getattr(b, "auth_flow", "") or "") == "instagram_login"]
+            chosen = _pick_preferred_binding(ig_login) if ig_login else _pick_preferred_binding(group)
+        else:
+            chosen = _pick_preferred_binding(group)
+        selected.append(chosen)
+    return selected
 
 
 def _action_requested(tenant_id: str, platform: str, toggle: CapabilityKey) -> bool:
@@ -196,7 +264,7 @@ def _status_and_blocker(
     connection_healthy: bool,
     effective_enabled: bool,
     live_verified: bool,
-    advanced_access: bool,
+    comments_policy_ok: bool,
     missing_scopes: list[str],
 ) -> tuple[str, str | None, str | None]:
     """Return (status, blocker_code, blocker_message)."""
@@ -211,10 +279,13 @@ def _status_and_blocker(
     if not connection_healthy:
         code = "connection_unhealthy"
         return "reauthorization_required", code, BLOCKER_MESSAGES[code]
+    if capability == "comments" and not comments_policy_ok:
+        # Public / non–App-Role tenants stay blocked until Meta Advanced Access.
+        code = "meta_approval_required"
+        return "meta_approval_required", code, BLOCKER_MESSAGES[code]
     if not permission_present:
-        if capability == "comments" and not advanced_access and missing_scopes:
-            code = "meta_approval_required"
-            return "meta_approval_required", code, BLOCKER_MESSAGES[code]
+        # Internal Standard Access (linas) with real missing scopes — never pretend Meta approval
+        # is the issue, and never fabricate permissions.
         code = "missing_comment_permissions" if capability == "comments" else "missing_dm_permissions"
         status = "permission_required" if capability == "comments" else "reauthorization_required"
         return status, code, BLOCKER_MESSAGES[code]
@@ -225,6 +296,9 @@ def _status_and_blocker(
         code = "asset_action_off"
         return "configuring", code, BLOCKER_MESSAGES[code]
     if permission_present and webhook_subscribed and connection_healthy and not requested_enabled:
+        if capability == "comments" and not comments_policy_ok:
+            code = "meta_approval_required"
+            return "meta_approval_required", code, BLOCKER_MESSAGES[code]
         return "ready", None, None
     if requested_enabled and not effective_enabled:
         return "error", "capability_incomplete", "Capability is requested but not fully ready yet."
@@ -261,7 +335,7 @@ def capability_state(tenant_id: str, platform: str, capability: CapabilityKey) -
             },
         }
 
-    bindings = active_channel_bindings(tenant_id, platform_key)
+    bindings = canonical_channel_bindings(tenant_id, platform_key)
     registry = get_meta_app_registry()
     requested_enabled = _action_requested(tenant_id, platform_key, capability)
     missing_scopes = (
@@ -270,6 +344,9 @@ def capability_state(tenant_id: str, platform: str, capability: CapabilityKey) -
     permission_present = bool(bindings) and not missing_scopes
     connection_healthy = bool(bindings) and all(_binding_connection_healthy(b, registry=registry) for b in bindings)
     advanced_access = _advanced_access_approved()
+    comments_policy_ok = (
+        True if capability != "comments" else comments_policy_allows(tenant_id, advanced_access=advanced_access)
+    )
 
     if capability == "comments":
         webhook_subscribed = bool(bindings) and all(_comment_webhook_subscribed(b) for b in bindings)
@@ -301,8 +378,9 @@ def capability_state(tenant_id: str, platform: str, capability: CapabilityKey) -
             }
         )
 
+    usable_permissions = bool(permission_present and comments_policy_ok)
     effective_enabled = bool(
-        connection_healthy and requested_enabled and permission_present and webhook_subscribed and tenant_action_enabled
+        connection_healthy and requested_enabled and usable_permissions and webhook_subscribed and tenant_action_enabled
     )
 
     status, blocker_code, blocker_message = _status_and_blocker(
@@ -315,7 +393,7 @@ def capability_state(tenant_id: str, platform: str, capability: CapabilityKey) -
         connection_healthy=connection_healthy,
         effective_enabled=effective_enabled,
         live_verified=live_verified,
-        advanced_access=advanced_access,
+        comments_policy_ok=comments_policy_ok,
         missing_scopes=missing_scopes,
     )
 
