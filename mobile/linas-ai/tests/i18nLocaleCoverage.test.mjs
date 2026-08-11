@@ -18,6 +18,19 @@ function extractKeys(source) {
   return keys;
 }
 
+function localeBundle(lang) {
+  const cap = lang.charAt(0).toUpperCase() + lang.slice(1);
+  const main = readFileSync(join(root, `src/i18n/locales/${lang}.ts`), 'utf8');
+  const subPath = join(root, `src/i18n/locales/subscription${cap}.ts`);
+  let sub = '';
+  try {
+    sub = readFileSync(subPath, 'utf8');
+  } catch {
+    sub = '';
+  }
+  return `${main}\n${sub}`;
+}
+
 const CRITICAL_KEYS = [
   'chatEmptyTitle',
   'chatEmptyBody',
@@ -41,12 +54,9 @@ const CRITICAL_KEYS = [
 ];
 
 test('ar and fr locale tables include every English key', () => {
-  const en = readFileSync(join(root, 'src/i18n/locales/en.ts'), 'utf8');
-  const ar = readFileSync(join(root, 'src/i18n/locales/ar.ts'), 'utf8');
-  const fr = readFileSync(join(root, 'src/i18n/locales/fr.ts'), 'utf8');
-  const enKeys = extractKeys(en);
-  const arKeys = extractKeys(ar);
-  const frKeys = extractKeys(fr);
+  const enKeys = extractKeys(localeBundle('en'));
+  const arKeys = extractKeys(localeBundle('ar'));
+  const frKeys = extractKeys(localeBundle('fr'));
   assert.ok(enKeys.size > 50, 'expected substantial English key set');
   const missingAr = [...enKeys].filter((k) => !arKeys.has(k)).sort();
   const missingFr = [...enKeys].filter((k) => !frKeys.has(k)).sort();
@@ -55,9 +65,9 @@ test('ar and fr locale tables include every English key', () => {
 });
 
 test('critical welcome/composer/auth keys exist in en/ar/fr', () => {
-  const en = extractKeys(readFileSync(join(root, 'src/i18n/locales/en.ts'), 'utf8'));
-  const ar = extractKeys(readFileSync(join(root, 'src/i18n/locales/ar.ts'), 'utf8'));
-  const fr = extractKeys(readFileSync(join(root, 'src/i18n/locales/fr.ts'), 'utf8'));
+  const en = extractKeys(localeBundle('en'));
+  const ar = extractKeys(localeBundle('ar'));
+  const fr = extractKeys(localeBundle('fr'));
   for (const key of CRITICAL_KEYS) {
     assert.ok(en.has(key), `en missing ${key}`);
     assert.ok(ar.has(key), `ar missing ${key}`);

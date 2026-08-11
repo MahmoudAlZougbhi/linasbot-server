@@ -537,6 +537,13 @@ async def update_meta_comment_replies(
 
     enabled = bool(body.get("enabled"))
     instructions = str(body.get("instructions") or "").strip()
+    if enabled:
+        from services.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
+
+        try:
+            assert_comment_automation_allowed(binding.tenant_id)
+        except CommentAutomationDenied as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
     if enabled and not credential_has_comment_scopes(binding):
         raise HTTPException(
             status_code=409,

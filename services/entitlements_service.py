@@ -152,7 +152,7 @@ def tenant_has_app_access(tenant_id: str) -> bool:
 def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
     ent = entitlements_store.get(tenant_id)
     price = PLAN_PRICES_USD.get(ent.plan_id)
-    from services.plan_economics import PLAN_FAQ_MAX_ENTRIES
+    from services.plan_economics import PLAN_ADDITIONAL_SEATS, PLAN_FAQ_MAX_ENTRIES
 
     # Compute gate fields first — FAQ enrichment must never 500 /api/entitlements/me
     # (mobile fail-closes the subscription gate on any entitlements error).
@@ -173,15 +173,27 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
             "quota_display": "0 / 0",
         }
     features.setdefault("faq_enabled", bool(faq.get("faq_enabled")))
+    display_name = None
+    additional_seats = PLAN_ADDITIONAL_SEATS.get(ent.plan_id)
+    comment_automation = bool(features.get("comment_automation"))
+    if ent.plan_id in PLAN_PRICES_USD:
+        from services.membership.plan_catalog import require_plan
+
+        display_name = require_plan(ent.plan_id).display_name
     return {
         "tenant_id": ent.tenant_id,
         "plan_id": ent.plan_id,
+        "display_name": display_name,
         "status": ent.status,
         "source": ent.source,
         "price_usd": price,
         "current_period_end": ent.current_period_end,
         "included_credits": ent.included_credits,
         "extra_credits": ent.extra_credits,
+        "purchased_credits": ent.extra_credits,
+        "additional_seats": additional_seats,
+        "additional_seats_unlimited": additional_seats is None if ent.plan_id in PLAN_PRICES_USD else False,
+        "comment_automation": comment_automation,
         "features": features,
         "faq_enabled": faq.get("faq_enabled"),
         "faq_max_entries": faq.get("faq_max_entries", PLAN_FAQ_MAX_ENTRIES.get(ent.plan_id, 0)),

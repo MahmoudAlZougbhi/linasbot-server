@@ -36,29 +36,50 @@ async def get_my_entitlement(request: Request) -> Any:
 @app.get("/api/entitlements/plans")
 async def list_plans() -> Any:
     """Authenticated mirror of the frozen five-plan catalog (same public fields)."""
-    from services.membership.plan_catalog import CATALOG_VERSION
+    from services.membership.plan_catalog import CATALOG_VERSION, PLAN_CATALOG
     from services.plan_economics import PLAN_ADDITIONAL_SEATS
 
     plans = []
     for plan_id, price in PLAN_PRICES_USD.items():
         allowance = recommend_allowance(plan_id)
         features = PLAN_FEATURES[plan_id]
+        plan = PLAN_CATALOG[plan_id]
+        public_features = {
+            k: v
+            for k, v in features.items()
+            if k
+            in {
+                "owner_assistant",
+                "content_management",
+                "customer_dm_automation",
+                "faq_enabled",
+                "comment_automation",
+                "tenant_analytics",
+                "instagram_dm",
+                "facebook_dm",
+            }
+        }
         plans.append(
             {
                 "plan_id": plan_id,
+                "display_name": plan.display_name,
                 "price_usd": price,
-                "features": features,
+                "features": public_features,
                 "faq_enabled": bool(features.get("faq_enabled")),
                 "faq_max_entries": int(PLAN_FAQ_MAX_ENTRIES.get(plan_id, 0)),
+                "faq_capacity": plan.faq_capacity,
                 "included_credits": allowance.included_credits,
-                "included_dm_replies": allowance.included_dm_replies,
-                "included_images": allowance.included_images,
-                "included_videos": allowance.included_videos,
                 "comment_automation": bool(features.get("comment_automation")),
                 "additional_seats": PLAN_ADDITIONAL_SEATS.get(plan_id),
+                "additional_seats_unlimited": PLAN_ADDITIONAL_SEATS.get(plan_id) is None,
             }
         )
-    return {"success": True, "catalog_version": CATALOG_VERSION, "plans": plans}
+    return {
+        "success": True,
+        "catalog_version": CATALOG_VERSION,
+        "billing_period": "monthly",
+        "plans": plans,
+    }
 
 
 @app.post("/api/entitlements/store/notification")

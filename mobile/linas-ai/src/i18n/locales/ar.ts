@@ -1,6 +1,7 @@
+import { subscriptionAr } from './subscriptionAr';
 import type { StringKey } from './en';
 
-export const ar: Record<StringKey, string> = {
+export const ar = {
   appName: 'Linas AI',
   login: 'تسجيل الدخول',
   register: 'إنشاء حساب',
@@ -335,6 +336,7 @@ export const ar: Record<StringKey, string> = {
   socialContinueWith: 'أو تابع عبر',
   socialContinueGoogle: 'المتابعة مع Google',
   socialContinueApple: 'المتابعة مع Apple',
+  ...subscriptionAr,
   proposalChangeTitle: 'تعديل إعداد الذكاء الاصطناعي',
   proposalDeleteTitle: 'حذف من إعداد الذكاء الاصطناعي',
   proposalDeleteBadge: 'حذف',

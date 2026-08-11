@@ -396,6 +396,14 @@ async def set_channel_toggle(
     if not action_id:
         raise ChannelToggleError("Unsupported toggle", status_code=400, code="UNKNOWN_TOGGLE")
 
+    if toggle == "comments" and enabled:
+        from services.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
+
+        try:
+            assert_comment_automation_allowed(tenant_id)
+        except CommentAutomationDenied as exc:
+            raise ChannelToggleError(str(exc), status_code=403, code=exc.code) from exc
+
     try:
         if toggle == "comments" and enabled:
             blocker = comments_enable_blocker(tenant_id, platform_key)

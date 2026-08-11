@@ -585,6 +585,30 @@ async def create_user(body: CreateUserRequest, request: Request) -> Any:
     requested_tenant = (body.tenant_id or session.tenant_id).strip()
     if requested_tenant != session.tenant_id:
         raise HTTPException(status_code=403, detail="Cross-tenant user provisioning is forbidden")
+    from services.entitlements_service import entitlements_store
+    from services.membership.seats import SeatLimitExceeded, assert_can_add_seat
+
+    ent = entitlements_store.get(session.tenant_id)
+    if ent.plan_id in {"lite", "starter", "growth", "pro", "max"}:
+        tenant_users = [
+            user for user in user_service.get_all_users() if str(user.get("tenantId") or "linas") == session.tenant_id
+        ]
+        non_owners = [
+            u
+            for u in tenant_users
+            if str(u.get("role") or "").lower() != "owner" and str(u.get("status") or "active").lower() == "active"
+        ]
+        # No invitation subsystem on this spine yet — count active non-owners only.
+        try:
+            assert_can_add_seat(
+                ent.plan_id,
+                active_non_owner_members=len(non_owners),
+                pending_invitations=0,
+            )
+        except SeatLimitExceeded as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except KeyError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:
         user = user_service.create_user(
             {

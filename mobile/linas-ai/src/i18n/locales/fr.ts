@@ -1,6 +1,7 @@
+import { subscriptionFr } from './subscriptionFr';
 import type { StringKey } from './en';
 
-export const fr: Record<StringKey, string> = {
+export const fr = {
   appName: 'Linas AI',
   login: 'Connexion',
   register: 'Créer un compte',
@@ -341,6 +342,7 @@ export const fr: Record<StringKey, string> = {
   socialContinueWith: 'ou continuer avec',
   socialContinueGoogle: 'Continuer avec Google',
   socialContinueApple: 'Continuer avec Apple',
+  ...subscriptionFr,
   proposalChangeTitle: 'Modification Configuration IA',
   proposalDeleteTitle: 'Supprimer de la Configuration IA',
   proposalDeleteBadge: 'Supprimer',
