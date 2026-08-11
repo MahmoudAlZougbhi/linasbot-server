@@ -27,13 +27,20 @@ def assert_can_add_seat(
         pending_invitations=pending_invitations,
     )
     limit = plan.additional_seats
-    unlimited = limit is None
-    if not unlimited and used >= int(limit):
+    if limit is None:
+        return {
+            "plan_id": plan_id,
+            "used": used,
+            "limit": None,
+            "unlimited": True,
+            "remaining": None,
+        }
+    if used >= limit:
         raise SeatLimitExceeded(f"Additional seat limit reached for plan={plan_id}: {used}/{limit}")
     return {
         "plan_id": plan_id,
         "used": used,
         "limit": limit,
-        "unlimited": unlimited,
-        "remaining": None if unlimited else max(0, int(limit) - used),
+        "unlimited": False,
+        "remaining": max(0, limit - used),
     }
