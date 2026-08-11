@@ -799,7 +799,6 @@ const LiveChat = ({ mobile = false }) => {
 
   const {
     getUnifiedChats,
-    getSmartMessagingTemplates,
     getChatsByTemplateSendLog,
     getLiveConversations,
     getWaitingQueue,
@@ -813,18 +812,7 @@ const LiveChat = ({ mobile = false }) => {
     submitFeedback,
   } = useApi();
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const r = await getSmartMessagingTemplates();
-      if (cancelled || !r?.success || !r.templates) return;
-      setMessagingTemplates(/** @type {Record<string, SmartMessageTemplate | undefined>} */ (r.templates));
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [getSmartMessagingTemplates]);
-
+  // Smart Messaging HTTP API is product-disabled (403); do not fetch templates.
   const applyTemplateSendFilter = useCallback(async () => {
     if (!templateSendFilterId) {
       toast.error("Choose a template");
