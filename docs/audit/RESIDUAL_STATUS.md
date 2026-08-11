@@ -10,8 +10,8 @@
 - W02/W03: trusted client IP (`X-Real-IP`) + mobile/auth rate limits
 - Admin-credit: cross-tenant only `platform_owner`; prod CORS HTTPS-only
 - CSRF / webhook verify: `hmac.compare_digest`
-- Proven deletes: `live_chat_archive/`, `cleanup_reports/`, `third_provider_adapter.py`, unwired `CreativeStudioScreen`, local `logs/*.out` + `.tmp_8010_*`
-- LOC splits: `conversation_router`, `language_resolver`, `token_wallet_service`, `datetime_utils`, `sentiment_escalation_service`, `cm/faq_integration`, `auth_api`, `live_chat_api`, `user_service`, `local_qa_api`, `meta_connections_api`, `meta_oauth`, `whatsapp_cloud/repository`, `app_review_bind`, `owner_ai_tools_cm_content`, `qa_database_service`, `local_qa_service`, `useLiveChatSSE`, `AuthContext`, `domain.d.ts`
+- Proven deletes: `live_chat_archive/`, `cleanup_reports/`, `third_provider_adapter.py`, unwired `CreativeStudioScreen`, local `logs/*.out` + `.tmp_8010_*`, `docs/bot-chat.md` (runtime log dump)
+- LOC splits: `conversation_router`, `language_resolver`, `token_wallet_service`, `datetime_utils`, `sentiment_escalation_service`, `cm/faq_integration`, `auth_api`, `live_chat_api`, `user_service`, `local_qa_api`, `meta_connections_api`, `meta_oauth`, `whatsapp_cloud/repository`, `app_review_bind`, `owner_ai_tools_cm_content`, `qa_database_service`, `local_qa_service`, `useLiveChatSSE`, `AuthContext`, `domain.d.ts`, `social_contact_routing`, `event_handlers`, `appointment_scheduler`, `booking_fsm`, `intent_pipeline`
 - PII: sensitive `data/*.jsonl` / `content_violations.jsonl` reported in `docs/audit/PII_EXPOSURE_REPORT.md` (still tracked until explicit decision)
 
 ## Residual (must clear before Done)

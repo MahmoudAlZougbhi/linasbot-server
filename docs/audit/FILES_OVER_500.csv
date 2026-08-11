@@ -21,17 +21,11 @@ line_count,path,file_type,kind
 1412,services/meta_app_registry.py,python,hand_written
 1291,modules/dashboard_api.py,python,hand_written
 1251,services/smart_messaging.py,python,hand_written
-1160,services/booking/intent_pipeline.py,python,hand_written
 1110,tests/test_meta_social_messaging.py,python,hand_written
 1105,data/conversation_log.jsonl,json,data_or_binary
-953,services/booking/booking_fsm.py,python,hand_written
 943,dashboard/src/pages/content-managers/CmPricesPage.jsx,javascript,hand_written
 936,cleanup_reports/cleanup_manifest_2026-03-01.json,json,hand_written
 935,cleanup_reports/cleanup_manifest_2026-03-01.md,docs,hand_written
-897,services/appointment_scheduler.py,python,hand_written
-815,docs/bot-chat.md,docs,hand_written
-802,services/social_contact_routing.py,python,hand_written
-792,modules/event_handlers.py,python,hand_written
 780,services/whatsapp_adapters/montymobile_adapter.py,python,hand_written
 740,services/sentiment_escalation_service.py,python,hand_written
 737,dashboard/src/components/LiveChat/MobileLiveChatView.jsx,javascript,hand_written
