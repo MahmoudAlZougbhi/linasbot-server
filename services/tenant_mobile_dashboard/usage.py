@@ -127,7 +127,7 @@ def aggregate_tenant_usage(
         if by_bucket[key]["interactions"] > 0 or key != "other"
     ]
     # Keep stable order; drop empty "other" only.
-    distribution = [row for row in distribution if row["bucket"] != "other" or int(row["interactions"]) > 0]
+    distribution = [row for row in distribution if row["bucket"] != "other" or int(row["interactions"] or 0) > 0]
 
     return {
         "status": "ok" if total > 0 else "empty",

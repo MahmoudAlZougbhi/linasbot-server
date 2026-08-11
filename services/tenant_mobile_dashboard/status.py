@@ -188,8 +188,10 @@ def build_alerts(
         connected = bool(ch.get("connected"))
         if not connected:
             continue
-        dm = ch.get("dm") if isinstance(ch.get("dm"), dict) else {}
-        comments = ch.get("comments") if isinstance(ch.get("comments"), dict) else {}
+        dm_raw = ch.get("dm")
+        comments_raw = ch.get("comments")
+        dm: dict[str, Any] = dm_raw if isinstance(dm_raw, dict) else {}
+        comments: dict[str, Any] = comments_raw if isinstance(comments_raw, dict) else {}
         if dm.get("operational") and not comments.get("operational"):
             blocker = str(comments.get("blocker_code") or "comments_unavailable")
             add(
