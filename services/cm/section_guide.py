@@ -24,14 +24,21 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
     "languages": {
         "title": "Languages",
         "purpose": (
-            "System-standard customer reply language for DMs and comments "
-            "(supported languages + Franco → Arabic map + default). "
+            "Customer reply language for DMs and comments. "
+            "Owners may enable/disable supported languages and set the default. "
+            "The answer language map is FIXED (sabtin) and cannot be changed: "
+            "English→English, Arabic→Arabic, French→French, Franco→Arabic. "
             "App Settings language is UI-only and does not change customer replies."
         ),
-        "why": "Wrong language policy makes the AI reply in the wrong language.",
-        "what_to_fill": ["supported_languages", "default_language", "response_language_map"],
-        "useful": "mixed_language_behavior, unknown_language_behavior.",
+        "why": "Wrong enabled languages / default makes the AI reply in the wrong language.",
+        "what_to_fill": ["supported_languages", "default_language"],
+        "useful": (
+            "mixed_language_behavior, unknown_language_behavior. "
+            "response_language_map is product-fixed — refuse edit requests; explain sabtin rules."
+        ),
         "app_path": "AI Setup → Languages",
+        "fixed_fields": ["response_language_map"],
+        "editable_fields": ["supported_languages", "default_language"],
     },
     "style": {
         "title": "Style & Tone",

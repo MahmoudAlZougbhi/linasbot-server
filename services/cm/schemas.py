@@ -48,6 +48,7 @@ class AiBasics(CmBaseModel):
 
 class LanguagePolicy(CmBaseModel):
     supported_languages: tuple[str, ...] = Field(default_factory=lambda: SUPPORTED_LANGUAGES)
+    # Product-fixed map (EN→EN, AR→AR, FR→FR, Franco→AR). Tenant payloads are coerced.
     response_language_map: dict[str, str] = Field(default_factory=lambda: dict(RESPONSE_LANGUAGE_MAP))
     default_language: str = "ar"
     mixed_language_behavior: str = ""
@@ -62,6 +63,12 @@ class LanguagePolicy(CmBaseModel):
         if unknown:
             raise ValueError(f"unsupported languages: {unknown}")
         return value
+
+    @field_validator("response_language_map", mode="before")
+    @classmethod
+    def _freeze_response_language_map(cls, _value: object) -> dict[str, str]:
+        """Ignore tenant edits — reply map is system-fixed (sabtin)."""
+        return dict(RESPONSE_LANGUAGE_MAP)
 
 
 class StylePolicy(CmBaseModel):
