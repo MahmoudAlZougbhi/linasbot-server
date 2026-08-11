@@ -245,6 +245,7 @@ async def whatsapp_embedded_signup_bridge(request: Request) -> HTMLResponse:
 
     document.getElementById('start').addEventListener('click', function() {
       statusEl.textContent = 'Opening Meta…';
+      if (!configId) { statusEl.textContent = 'Embedded Signup config is missing. Return to Linas AI and try again later.'; return; }
       if (!window.FB) { statusEl.textContent = 'Meta SDK failed to load.'; return; }
       FB.login(function(response) {
         if (!response || response.error) {

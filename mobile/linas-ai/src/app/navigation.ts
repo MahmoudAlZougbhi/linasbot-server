@@ -66,7 +66,8 @@ export function parseIntegrationsDeepLink(url: string | null): IntegrationsDeepL
     const normalized = url.replace(/^linasai:\/\//i, 'https://linasai.app/');
     const parsed = new URL(normalized);
     const path = parsed.pathname.replace(/^\//, '');
-    if (path !== 'integrations' && !path.startsWith('integrations/')) {
+    // Exact OAuth return path only — never bridge URLs like integrations/whatsapp/...
+    if (path !== 'integrations') {
       return null;
     }
     const rawMeta = (parsed.searchParams.get('meta_connection') || '').trim().toLowerCase();

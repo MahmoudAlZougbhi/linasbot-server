@@ -8,11 +8,12 @@ import { WhatsAppCloudOpsPanel } from './WhatsAppCloudOpsPanel';
 import {
   fetchWhatsAppCloudStatus,
   startWhatsAppCloudConnect,
+  WhatsAppConnectError,
   type WhatsAppCloudStatus,
 } from './whatsappCloudApi';
 
 export type { WhatsAppCloudStatus };
-export { fetchWhatsAppCloudStatus, startWhatsAppCloudConnect };
+export { fetchWhatsAppCloudStatus, startWhatsAppCloudConnect, WhatsAppConnectError };
 
 type Props = {
   status: WhatsAppCloudStatus | null;

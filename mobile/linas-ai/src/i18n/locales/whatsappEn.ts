@@ -3,6 +3,10 @@ export const whatsappEn = {
   waOAuthCancelled: 'WhatsApp authorization was cancelled.',
   waOAuthFailed: 'WhatsApp authorization failed. Try Connect WhatsApp again.',
   waConnect: 'Connect WhatsApp',
+  waConnectConfigMissing:
+    'WhatsApp Embedded Signup is not configured on the server. Try again later or contact support.',
+  waConnectBrowserUnavailable: 'Could not open Meta WhatsApp signup. Check your connection and try again.',
+  waConnectInProgress: 'WhatsApp connect is already in progress.',
   waCoexistenceHint: 'Link your existing WhatsApp Business app number. Linas AI uses your published knowledge only.',
   waCoexistenceOn: 'Business App coexistence enabled',
   waNumberLabel: 'Number',
