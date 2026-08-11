@@ -122,7 +122,7 @@ export function SettingsScreen({
         <Row title={tr('settingsPrivacyData')} onPress={() => void open(LEGAL_URLS.privacy)} />
         <Row
           title={tr('settingsHelpSupport')}
-          onPress={() => void open(LEGAL_URLS.terms)}
+          onPress={() => void open(LEGAL_URLS.supportMailto)}
           note={tr('settingsHelpSupportNote')}
         />
         <Row title={tr('settingsAboutLegal')} onPress={() => void open(LEGAL_URLS.terms)} />

@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { APP_VERSION_LABEL, LEGAL_URLS } from '../../config';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -59,10 +59,23 @@ export function NavDrawerFooter(props: Props) {
           >
             <Text style={{ color: colors.text }}>{tr('createAccount')}</Text>
           </Pressable>
-          <Text style={{ color: colors.textDim, fontSize: 11 }}>
-            {tr('privacy')} · {tr('terms')}
-            {LEGAL_URLS.privacy ? '' : ''}
-          </Text>
+          <View style={styles.legalRow}>
+            <Pressable
+              onPress={() => void Linking.openURL(LEGAL_URLS.privacy)}
+              accessibilityRole="link"
+              accessibilityLabel={tr('privacy')}
+            >
+              <Text style={{ color: colors.accent, fontSize: 11 }}>{tr('privacy')}</Text>
+            </Pressable>
+            <Text style={{ color: colors.textDim, fontSize: 11 }}> · </Text>
+            <Pressable
+              onPress={() => void Linking.openURL(LEGAL_URLS.terms)}
+              accessibilityRole="link"
+              accessibilityLabel={tr('terms')}
+            >
+              <Text style={{ color: colors.accent, fontSize: 11 }}>{tr('terms')}</Text>
+            </Pressable>
+          </View>
         </>
       )}
 
@@ -127,5 +140,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  legalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
   },
 });

@@ -20,6 +20,11 @@ from services.meta_app_registry import (
     get_meta_app_configs,
     get_meta_app_registry,
 )
+from services.compliance_page_content import (
+    data_deletion_body,
+    privacy_policy_body,
+    terms_of_service_body,
+)
 from services.meta_data_deletion import (
     MetaSignedRequestError,
     VerifiedMetaDeletionRequest,
@@ -29,7 +34,7 @@ from services.meta_data_deletion import (
 )
 from services.rate_limit_service import rate_limit_service
 
-_CONTACT_EMAIL = "Mahmoudalzougbhi@gmail.com"
+_CONTACT_EMAIL = "support@linasai.com"
 _PUBLIC_BASE_URL = "https://www.linasaibot.com"
 _SECURITY_HEADERS = {
     "Cache-Control": "no-store",
@@ -215,89 +220,7 @@ async def _handle_meta_deauthorization(request: Request) -> JSONResponse:
 async def privacy_policy() -> HTMLResponse:
     return _page(
         "Privacy Policy",
-        f"""
-<h1>Privacy Policy</h1>
-<p class="meta">Effective 11 August 2026</p>
-<p>Linas AI is a business customer-support and tenant-knowledge AI platform—not a general-purpose
-chatbot. Each business (tenant) configures approved facts, policies, and reply behavior through
-AI Setup (Content Manager). Linas AI uses that tenant-controlled knowledge to help the business
-owner in Owner chat and to answer customers who voluntarily message or comment on channels the
-business owner connects.</p>
-
-<h2>Channels</h2>
-<p>When a business owner connects accounts through official platform integrations, Linas AI may
-process customer direct messages and, where the business enables it, public comments on:</p>
-<ul>
-  <li>Facebook (Messenger and Page comments)</li>
-  <li>Instagram (professional account DMs and comments)</li>
-  <li>WhatsApp (when connected via Meta WhatsApp / Cloud API integrations as available)</li>
-  <li>TikTok (when connected via official TikTok APIs as that integration becomes available)</li>
-</ul>
-<p>Facebook and Instagram are the primary live Meta connections today. WhatsApp may also be used
-as an outbound human-contact or booking handoff (for example a public <code>https://wa.me/...</code>
-link) even before inbound WhatsApp AI is connected for that tenant. We do not process messaging
-data for accounts the business has not authorized.</p>
-
-<h2>Data we receive</h2>
-<p>For Meta-connected Facebook and Instagram assets, Meta may send us a platform-scoped sender
-identifier, the destination Page or Instagram account identifier, message text, message and
-timestamp identifiers, postback selections, and attachment notifications or metadata. When a
-tenant connects WhatsApp or TikTok through official APIs, the relevant platform may send similar
-identifiers, destination account details, message or comment text, and delivery metadata needed
-to operate the connection. The current social messaging path does not fetch attachment files by
-default; it asks the sender to describe what help they need in text when a file cannot be used.</p>
-
-<h2>How we use it</h2>
-<p>We use this information only to authenticate and deduplicate inbound events, bind the message
-to the business and assets that authorized the connection, preserve tenant-isolated conversation
-context, answer that business's configured service questions from approved tenant knowledge,
-support Owner chat and AI Setup operations for the same tenant, maintain service security, and
-provide an explicit booking or human-support handoff when requested. When a business enables
-optional AI comment replies in Settings, we may also receive public Facebook Page or Instagram
-comment text and reply publicly under that comment using the business's approved content.
-When a business user explicitly creates a post in the dashboard, we publish only after that user
-reviews the caption, previews it, and confirms publishing. We do not publish posts automatically,
-run ads, send unsolicited marketing DMs, hide or delete comments, or create appointments inside
-Facebook, Instagram, WhatsApp, or TikTok on the customer's behalf.</p>
-
-<h2>Service providers</h2>
-<p>Connected platforms (for example Meta for Facebook, Instagram, and WhatsApp integrations, and
-TikTok for TikTok integrations when enabled) deliver and send the messages. OpenAI processes
-message text and relevant conversation context to generate an answer. Google Cloud/Firebase
-stores operational conversation records, and DigitalOcean hosts the application. These providers
-process data under their applicable contracts, security controls, and privacy terms.</p>
-
-<h2>Storage, retention, and security</h2>
-<p>Conversation records can include tenant and asset bindings, platform-scoped identifiers,
-message text, AI replies, timestamps, language, and routing state. OAuth credentials and Page
-or channel tokens are encrypted server-side and are never entered or displayed to normal
-dashboard users. Operational logs may contain pseudonymous identifiers,
-status codes, and errors. The service does not currently apply a fixed automatic deletion date
-to conversation records; they remain while needed for continuity, security, troubleshooting,
-and the business's legitimate service records, unless a valid deletion request is completed or
-the records are no longer needed. Access is restricted; data is transmitted over HTTPS; Meta
-webhook bodies require HMAC signature validation; and production credentials are kept outside
-the source repository.</p>
-
-<h2>WhatsApp and human handoff</h2>
-<p>Until a tenant connects inbound WhatsApp AI through an official WhatsApp Business / Cloud API
-integration, WhatsApp is primarily an outbound booking or human-agent destination. When a sender
-explicitly asks to book or reach a person, Linas AI may ask for the minimum routing information
-needed to provide the correct public contact link configured by that business. No appointment is
-created inside Facebook, Instagram, WhatsApp, TikTok, or a business CRM solely by the automated
-reply.</p>
-
-<h2>Sharing and choices</h2>
-<p>We do not sell social-message data or use it for third-party advertising. A person can stop
-messaging at any time and can request access, correction, or deletion by following our
-<a href="/data-deletion">Data Deletion instructions</a> or emailing
-<a href="mailto:{_CONTACT_EMAIL}">{_CONTACT_EMAIL}</a>. We may ask for enough information to
-verify the relevant Facebook, Instagram, WhatsApp, or TikTok conversation before acting.</p>
-
-<h2>Contact</h2>
-<p>Questions about this policy can be sent to
-<a href="mailto:{_CONTACT_EMAIL}">{_CONTACT_EMAIL}</a>.</p>
-""",
+        privacy_policy_body(contact_email=_CONTACT_EMAIL, public_base_url=_PUBLIC_BASE_URL),
     )
 
 
@@ -305,44 +228,7 @@ verify the relevant Facebook, Instagram, WhatsApp, or TikTok conversation before
 async def terms_of_service() -> HTMLResponse:
     return _page(
         "Terms of Service",
-        f"""
-<h1>Terms of Service</h1>
-<p class="meta">Effective 11 August 2026</p>
-<p>These terms cover Linas AI, a business customer-support and tenant-knowledge AI used by
-businesses that connect their Facebook, Instagram, WhatsApp, and/or TikTok accounts through
-official platform integrations when those connections are available. Replies use knowledge the
-business configures in AI Setup (Content Manager). Owner chat is for the business owner's
-setup and operations; customer replies apply only on channels the business has authorized.</p>
-
-<h2>Permitted use</h2>
-<p>You may voluntarily message a connected business account to ask about services, prices,
-preparation, locations, and policies. Do not use the service unlawfully, attempt to bypass
-security, or send content that infringes another person's rights.</p>
-
-<h2>Automated information</h2>
-<p>Replies are generated automatically from that business's approved knowledge and may be
-incomplete. They are general business information, not medical diagnosis, emergency care, or a
-substitute for advice from a qualified professional. Confirm important treatment, eligibility,
-pricing, and preparation details with the business's staff when those topics apply.</p>
-
-<h2>Appointments and human contact</h2>
-<p>Linas AI does not create, edit, reschedule, cancel, or confirm appointments inside
-Facebook, Instagram, WhatsApp, TikTok, or a business CRM solely through an automated social
-reply. When you explicitly request booking or a person, it may provide the appropriate public
-contact channel configured by that business after collecting only required routing information.
-An appointment exists only after staff confirm it through the applicable booking process.</p>
-
-<h2>Messaging limits</h2>
-<p>The service responds to customer-initiated direct messages within each platform's permitted
-messaging window. Optional AI comment replies are off by default and only run when enabled per
-connected Page or Instagram account in Settings. Availability may
-be interrupted for maintenance, platform limits, or security reasons.</p>
-
-<h2>Privacy and changes</h2>
-<p>Use of the service is also governed by our <a href="/privacy-policy">Privacy Policy</a>.
-We may update these terms when the service or legal requirements change. Questions may be sent
-to <a href="mailto:{_CONTACT_EMAIL}">{_CONTACT_EMAIL}</a>.</p>
-""",
+        terms_of_service_body(contact_email=_CONTACT_EMAIL, public_base_url=_PUBLIC_BASE_URL),
     )
 
 
@@ -350,42 +236,7 @@ to <a href="mailto:{_CONTACT_EMAIL}">{_CONTACT_EMAIL}</a>.</p>
 async def data_deletion_page() -> HTMLResponse:
     return _page(
         "User Data Deletion",
-        f"""
-<h1>User Data Deletion</h1>
-<p>You may request deletion of information associated with your Facebook Messenger or Instagram
-DM interaction with Linas AI, and—when a business enabled optional AI comment replies—public
-comment text we processed to generate a public reply. Social posts published through the
-dashboard are created only after explicit business-user confirmation; we do not retain separate
-public-post copies beyond what Meta stores on the connected Page or Instagram account.</p>
-
-<h2>Request through Meta</h2>
-<p>Remove the app or request deletion through the applicable Facebook or Instagram app settings.
-Meta sends our server an authenticated, signed deletion request. Valid requests remove the
-namespaced Facebook/Instagram user record, its stored conversations, and matching social chat
-index entries. Invalid signatures are rejected.</p>
-<p>After Meta accepts the request, use the confirmation code returned by Meta to check status at
-<code>{_PUBLIC_BASE_URL}/data-deletion/status/&lt;confirmation-code&gt;</code>.</p>
-
-<h2>Request by email</h2>
-<p>Email <a href="mailto:{_CONTACT_EMAIL}?subject=Social%20message%20data%20deletion">
-{_CONTACT_EMAIL}</a> with the subject “Social message data deletion”. State whether the request
-concerns Facebook Messenger or Instagram and provide the public account handle used to contact
-the clinic. Do not send a password, access token, 2FA code, government ID, or unrelated medical
-information. We may reply with a minimal verification step so we delete the correct record.</p>
-
-<h2>What deletion covers</h2>
-<p>Deletion covers the social bot's platform-scoped identifier, stored DM text and AI replies,
-optional comment-derived processing records, conversation state, timestamps, and matching
-social-chat index entries under our control. It
-does not delete records held independently by Meta, OpenAI, or another provider under its own
-legal obligations, nor records the clinic must retain to meet a legal obligation. We will explain
-any narrow exception that applies to a manual request.</p>
-
-<h2>Deauthorization</h2>
-<p>Removing the app from your Meta account settings may also revoke the business connection and
-stop future message processing for the affected authorization. This does not delete the entire
-Linas AI business account.</p>
-""",
+        data_deletion_body(contact_email=_CONTACT_EMAIL, public_base_url=_PUBLIC_BASE_URL),
     )
 
 

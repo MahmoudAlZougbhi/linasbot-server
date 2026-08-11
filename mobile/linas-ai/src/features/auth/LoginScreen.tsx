@@ -104,7 +104,16 @@ export function LoginScreen({ onLoggedIn, onGoRegister, onBack }: Props) {
 
           <SocialAuthButtons />
           <View style={styles.legal}>
-<Text style={styles.legalText}>{tr('loginLegalAgree')}</Text>
+            <Text style={styles.legalText}>
+              {tr('loginLegalAgree')}{' '}
+              <Text style={styles.legalLink} onPress={() => void Linking.openURL(LEGAL_URLS.terms)}>
+                {tr('terms')}
+              </Text>
+              {' · '}
+              <Text style={styles.legalLink} onPress={() => void Linking.openURL(LEGAL_URLS.privacy)}>
+                {tr('privacy')}
+              </Text>
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -134,4 +143,5 @@ const styles = StyleSheet.create({
   link: { color: colors.accent, fontFamily: fonts.body, marginTop: spacing.lg, fontSize: 15 },
   legal: { marginTop: spacing.xl },
   legalText: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12, lineHeight: 17 },
+  legalLink: { color: colors.accent, fontFamily: fonts.bodyMedium, fontSize: 12 },
 });
