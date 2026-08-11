@@ -5,10 +5,10 @@ import { APP_BUILD_LABEL, APP_VERSION, LEGAL_URLS } from '../../config';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { AppLanguage } from '../../i18n';
 import { fonts, radii, spacing, useTheme } from '../../theme';
+import { useModuleNav } from '../nav/ModuleNavContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
 
 type Props = {
-  onBack: () => void;
   onLogout: () => void;
   onOpenNotifications?: () => void;
   onOpenActions?: () => void;
@@ -21,7 +21,6 @@ async function open(url: string) {
 
 /** Grouped Settings; Actions / AI Limits hosted here (not in CM hub). */
 export function SettingsScreen({
-  onBack,
   onLogout,
   onOpenNotifications,
   onOpenActions,
@@ -29,9 +28,10 @@ export function SettingsScreen({
 }: Props) {
   const { tr, language, setLanguage } = useI18n();
   const { colors, mode, setMode } = useTheme();
+  const nav = useModuleNav();
 
   return (
-    <ScreenChrome title={tr('settings')} subtitle={tr('settingsSub')} onBack={onBack}>
+    <ScreenChrome title={tr('settings')} subtitle={tr('settingsSub')}>
       <Text style={[styles.meta, { color: colors.textMuted }]}>
         Linas AI {APP_VERSION} · build {APP_BUILD_LABEL}
       </Text>
@@ -46,7 +46,7 @@ export function SettingsScreen({
       <Row
         title={tr('settingsBusinessProfile')}
         subtitle={tr('settingsBusinessProfileSub')}
-        onPress={onBack}
+        onPress={nav.goChat}
         note={tr('settingsBusinessProfileNote')}
       />
       {onOpenNotifications ? (

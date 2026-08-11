@@ -18,6 +18,7 @@ import { useI18n } from '../../i18n/LanguageContext';
 import type { StringKey } from '../../i18n/locales/en';
 import { colors, fonts, radii, spacing } from '../../theme';
 import { AuthGateModal } from '../auth/AuthGateModal';
+import { useModuleNav } from '../nav/ModuleNavContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import { UserFormModal } from './UserFormModal';
 import {
@@ -34,7 +35,6 @@ import {
 import { canManageUsers, isAssignableRole } from './usersPermissions';
 
 type Props = {
-  onBack: () => void;
   onRequestLogin?: () => void;
   onRequestRegister?: () => void;
 };
@@ -60,8 +60,9 @@ function statusLabelKey(status: string | null | undefined): StringKey {
   return 'statusInactive';
 }
 
-export function UsersScreen({ onBack, onRequestLogin, onRequestRegister }: Props) {
+export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
   const { tr } = useI18n();
+  const nav = useModuleNav();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [users, setUsers] = useState<TeamUser[]>([]);
@@ -191,7 +192,7 @@ export function UsersScreen({ onBack, onRequestLogin, onRequestRegister }: Props
   const showList = gate === 'none' && !authGate;
 
   return (
-    <ScreenChrome title={tr('usersTitle')} subtitle={tr('usersSub')} onBack={onBack}>
+    <ScreenChrome title={tr('usersTitle')} subtitle={tr('usersSub')}>
       {loading ? <ActivityIndicator color={colors.accent} style={styles.spinner} /> : null}
 
       {!loading && authGate ? (
@@ -283,7 +284,7 @@ export function UsersScreen({ onBack, onRequestLogin, onRequestRegister }: Props
       <AuthGateModal
         visible={authGate}
         reason={tr('usersAuthBody')}
-        onClose={onBack}
+        onClose={nav.goChat}
         onLogin={() => {
           setAuthGate(false);
           onRequestLogin?.();

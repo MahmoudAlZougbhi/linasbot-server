@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 
 import { GradientBackground } from '../../components/GradientBackground';
-import { tokenStore } from '../../auth/tokenStore';
 import { useI18n } from '../../i18n/LanguageContext';
 import { useTheme } from '../../theme';
 import type { ControlArea } from '../control/controlAreas';
@@ -25,16 +24,14 @@ import { ChatWorkspaceChip } from './ChatWorkspaceChip';
 import { GuestBanner } from './GuestBanner';
 import type { OwnerChatMode } from './ownerChatMode';
 import { PendingAttachmentsStrip } from './PendingAttachmentsStrip';
-import {
-  clearPendingGuestDraft,
-  loadPendingGuestDraft,
-  savePendingGuestDraft,
-} from './pendingGuestDraft';
+import { savePendingGuestDraft } from './pendingGuestDraft';
 import { sendChatMessage } from './sendChatMessage';
 import { chatErrorLabelKey, retryAssistantMessage } from './chatRetryHandlers';
+import { useChatIdentity } from './useChatIdentity';
 import { useChatListScroll } from './useChatListScroll';
 import { useChatSession } from './useChatSession';
 import { useGuestChatSession } from './useGuestChatSession';
+import { usePendingChatNavHandoff } from './usePendingChatNavHandoff';
 import { usePinnedChats } from './usePinnedChats';
 import { appendVoiceTranscript, useVoiceDraft } from './useVoiceDraft';
 import { ChoiceChips } from './v2/ChoiceChips';
@@ -69,15 +66,14 @@ export function ChatScreen({
       }
     },
   });
-  const [userId, setUserId] = useState<string | null>(null);
-  const [workspaceLabel, setWorkspaceLabel] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const { userId, workspaceLabel } = useChatIdentity(isAuthenticated, setDraft);
   const { pinnedIds, togglePin } = usePinnedChats(userId);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [authGate, setAuthGate] = useState(false);
   const [hardLimit, setHardLimit] = useState(false);
   const [offline, setOffline] = useState(false);
-  const [draft, setDraft] = useState('');
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [ownerMode, setOwnerMode] = useState<OwnerChatMode>('chat');
   const imagePreviewByContent = useRef<Record<string, string[]>>({});
@@ -97,24 +93,6 @@ export function ChatScreen({
     if (turn.streaming) turn.stop();
     void owner.newChat();
   }, [isAuthenticated, owner, stickToBottomRef, turn]);
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setUserId(null);
-      setWorkspaceLabel(null);
-      return;
-    }
-    void tokenStore.getUser().then((u) => {
-      setUserId(u?.id ?? null);
-      setWorkspaceLabel(u?.tenantId || u?.tenant_id || u?.email || null);
-    });
-    void loadPendingGuestDraft().then((pending) => {
-      if (pending?.text) {
-        setDraft(pending.text);
-        void clearPendingGuestDraft();
-      }
-    });
-  }, [isAuthenticated]);
 
   useEffect(() => {
     if (guest.gated) {
@@ -176,6 +154,17 @@ export function ChatScreen({
       stickToBottomRef.current = true;
       void turn.send(text, { owner_mode: mode });
     },
+  });
+
+  usePendingChatNavHandoff({
+    isAuthenticated,
+    owner,
+    turn,
+    setOwnerMode,
+    stickToBottom: () => {
+      stickToBottomRef.current = true;
+    },
+    afterOpen: () => armOpenAtLatest(),
   });
 
   // ChatGPT-like open: keep chat chrome up — no second full-screen spinner after boot.

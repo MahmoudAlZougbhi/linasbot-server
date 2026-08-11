@@ -18,9 +18,9 @@ import { formatUsd, PLAN_CARDS } from './planCatalog';
 
 const EntitlementsSchema = z.object({ success: z.boolean() }).passthrough();
 
-type Props = { onBack: () => void };
+type Props = Record<string, never>;
 
-export function BillingScreen({ onBack }: Props) {
+export function BillingScreen(_props: Props = {}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [plan, setPlan] = useState<string | null>(null);
@@ -62,7 +62,7 @@ export function BillingScreen({ onBack }: Props) {
   }, []);
 
   return (
-    <ScreenChrome title="Subscription" subtitle="Choose the plan that fits your business" onBack={onBack}>
+    <ScreenChrome title="Subscription" subtitle="Choose the plan that fits your business">
       <View style={styles.toggleRow}>
         <Pressable
           style={[styles.toggle, !yearly && styles.toggleOn]}

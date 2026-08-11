@@ -10,12 +10,11 @@ import { ScreenChrome } from './ScreenChrome';
 type Props = {
   title: string;
   path: string;
-  onBack: () => void;
 };
 
 const LooseSchema = z.object({ success: z.boolean() }).passthrough();
 
-export function SimpleResourceScreen({ title, path, onBack }: Props) {
+export function SimpleResourceScreen({ title, path }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState('');
@@ -49,7 +48,7 @@ export function SimpleResourceScreen({ title, path, onBack }: Props) {
   }, [path]);
 
   return (
-    <ScreenChrome title={title} onBack={onBack}>
+    <ScreenChrome title={title}>
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <ScrollView>

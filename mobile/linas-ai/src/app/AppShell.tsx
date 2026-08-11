@@ -12,8 +12,10 @@ import type { CmProposalReview } from '../features/cm/cmProposalReview';
 import { isCmProposalSection } from '../features/cm/cmProposalReview';
 import type { ControlArea } from '../features/control/controlAreas';
 import { tryRegisterOwnerPushScaffold } from '../features/notifications/pushScaffold';
+import { ModuleNavProvider } from '../features/nav/ModuleNavContext';
 import { useTheme } from '../theme';
 import { AppScreenTree } from './AppScreenTree';
+import { buildModuleNavValue, makeChatNavActions, useAreaFocusNonce } from './moduleNav';
 import { parseLiveChatDeepLink, RESOURCE_MAP, type Screen } from './navigation';
 
 /**
@@ -29,6 +31,7 @@ export function AppShell() {
   const [isPlatformOwner, setIsPlatformOwner] = useState(false);
   const [resumeArea, setResumeArea] = useState<ControlArea | null>(null);
   const [authEpoch, setAuthEpoch] = useState(0);
+  const [areaFocusNonce, bumpAreaFocus] = useAreaFocusNonce();
   const subGate = useSubscriptionGate(hasAccess);
   const showSubGate =
     hasAccess &&
@@ -91,6 +94,7 @@ export function AppShell() {
   }, [bootDone, authReady]);
 
   function openAreaAuthed(area: ControlArea) {
+    bumpAreaFocus();
     if (subGate.blocked && area !== 'subscription') {
       setScreen({ name: 'chat' });
       return;
@@ -202,14 +206,17 @@ export function AppShell() {
 
   function openArea(area: ControlArea) {
     if (area === 'integrations') {
+      bumpAreaFocus();
       setScreen({ name: 'integrations' });
       return;
     }
     if (area === 'users') {
+      bumpAreaFocus();
       setScreen({ name: 'users' });
       return;
     }
     if (area === 'notifications') {
+      bumpAreaFocus();
       setScreen({ name: 'notifications', backTo: 'chat' });
       return;
     }
@@ -220,6 +227,25 @@ export function AppShell() {
     }
     openAreaAuthed(area);
   }
+
+  const goChat = useCallback(() => {
+    if (screen.name === 'billing') {
+      void subGate.refresh();
+    }
+    setScreen({ name: 'chat' });
+  }, [screen.name, subGate]);
+
+  const { startNewChat, openChat } = makeChatNavActions(goChat);
+  const moduleNav = buildModuleNavValue({
+    hasAccess,
+    openArea,
+    goChat,
+    startNewChat,
+    openChat,
+    setScreen,
+    areaFocusNonce,
+    screen,
+  });
 
   if (!bootDone || !authReady || screen.name === 'boot') {
     return (
@@ -233,21 +259,23 @@ export function AppShell() {
   return (
     <SafeAreaProvider>
       <StatusBar style={resolved === 'dark' ? 'light' : 'dark'} />
-      <AppScreenTree
-        screen={screen}
-        authEpoch={authEpoch}
-        hasAccess={hasAccess}
-        isPlatformOwner={isPlatformOwner}
-        showSubGate={showSubGate}
-        subGateLoading={subGate.loading}
-        onOpenArea={openArea}
-        onOpenCmReview={openCmReview}
-        setScreen={setScreen}
-        setResumeArea={setResumeArea}
-        afterLogin={() => void afterLogin()}
-        logout={() => void logout()}
-        refreshSubGate={() => subGate.refresh()}
-      />
+      <ModuleNavProvider value={moduleNav}>
+        <AppScreenTree
+          screen={screen}
+          authEpoch={authEpoch}
+          hasAccess={hasAccess}
+          isPlatformOwner={isPlatformOwner}
+          showSubGate={showSubGate}
+          subGateLoading={subGate.loading}
+          onOpenArea={openArea}
+          onOpenCmReview={openCmReview}
+          setScreen={setScreen}
+          setResumeArea={setResumeArea}
+          afterLogin={() => void afterLogin()}
+          logout={() => void logout()}
+          refreshSubGate={() => subGate.refresh()}
+        />
+      </ModuleNavProvider>
     </SafeAreaProvider>
   );
 }

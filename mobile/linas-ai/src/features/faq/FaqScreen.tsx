@@ -24,12 +24,11 @@ import { variantForLang } from './faqPreview';
 type Mode = 'list' | 'create' | 'detail';
 
 type Props = {
-  onBack: () => void;
   onAskLinas?: () => void;
   proposalReview?: CmProposalReview | null;
 };
 
-export function FaqScreen({ onBack, onAskLinas, proposalReview }: Props) {
+export function FaqScreen({ onAskLinas, proposalReview }: Props) {
   const { tr } = useI18n();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -170,7 +169,7 @@ export function FaqScreen({ onBack, onAskLinas, proposalReview }: Props) {
     .join('\n\n');
 
   return (
-    <ScreenChrome title={tr('faqTitle')} subtitle={tr('faqSub')} onBack={onBack}>
+    <ScreenChrome title={tr('faqTitle')} subtitle={tr('faqSub')}>
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {savedFlash ? <Text style={styles.ok}>{tr('faqSaved')}</Text> : null}

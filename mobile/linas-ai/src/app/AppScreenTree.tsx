@@ -93,7 +93,6 @@ export function AppScreenTree({
       </KeepMountedPane>
       <KeepMountedPane key={`settings-${authEpoch}`} active={name === 'settings'}>
         <SettingsScreen
-          onBack={() => setScreen({ name: 'chat' })}
           onLogout={() => void logout()}
           onOpenNotifications={() => setScreen({ name: 'notifications', backTo: 'settings' })}
           onOpenActions={() =>
@@ -106,14 +105,12 @@ export function AppScreenTree({
       </KeepMountedPane>
       <KeepMountedPane key={`integrations-${authEpoch}`} active={name === 'integrations'}>
         <IntegrationsScreen
-          onBack={() => setScreen({ name: 'chat' })}
           onRequestLogin={() => setScreen({ name: 'login' })}
           onRequestRegister={() => setScreen({ name: 'register' })}
         />
       </KeepMountedPane>
       <KeepMountedPane key={`users-${authEpoch}`} active={name === 'users'}>
         <UsersScreen
-          onBack={() => setScreen({ name: 'chat' })}
           onRequestLogin={() => {
             setResumeArea('users');
             setScreen({ name: 'login' });
@@ -122,28 +119,21 @@ export function AppScreenTree({
         />
       </KeepMountedPane>
       <KeepMountedPane key={`dashboard-${authEpoch}`} active={name === 'dashboard'}>
-        <DashboardScreen onBack={() => setScreen({ name: 'chat' })} isPlatformOwner={isPlatformOwner} />
+        <DashboardScreen isPlatformOwner={isPlatformOwner} />
       </KeepMountedPane>
       <KeepMountedPane key={`billing-${authEpoch}`} active={name === 'billing'}>
-        <BillingScreen
-          onBack={() => {
-            void refreshSubGate().then(() => setScreen({ name: 'chat' }));
-          }}
-        />
+        <BillingScreen />
       </KeepMountedPane>
       <KeepMountedPane key={`usage-${authEpoch}`} active={name === 'usage'}>
-        <UsageScreen onBack={() => setScreen({ name: 'chat' })} />
+        <UsageScreen />
       </KeepMountedPane>
       <KeepMountedPane key={`livechat-${authEpoch}`} active={name === 'livechat'}>
-        <LiveChatScreen
-          onBack={() => setScreen({ name: 'chat' })}
-          initialOpen={name === 'livechat' ? (screen.open ?? null) : null}
-        />
+        <LiveChatScreen initialOpen={name === 'livechat' ? (screen.open ?? null) : null} />
       </KeepMountedPane>
       <KeepMountedPane key={`notifications-${authEpoch}`} active={name === 'notifications'}>
         <NotificationsScreen
           isAuthenticated={hasAccess}
-          onBack={() => {
+          onDismissGate={() => {
             if (name === 'notifications' && screen.backTo === 'settings') {
               setScreen({ name: 'settings' });
             } else {
@@ -160,7 +150,6 @@ export function AppScreenTree({
       </KeepMountedPane>
       <KeepMountedPane key={`cm-${authEpoch}`} active={name === 'cm'}>
         <CmScreen
-          onBack={() => setScreen({ name: 'chat' })}
           onOpenSection={(section) => setScreen({ name: 'cm_section', section, backTo: 'cm' })}
           onContinueSetup={(prompt) => {
             queueSetupHandoff({ text: prompt, mode: 'work', autoSend: true });
@@ -170,42 +159,16 @@ export function AppScreenTree({
       </KeepMountedPane>
       <KeepMountedPane key={`faq-${authEpoch}`} active={name === 'faq'}>
         <FaqRoute
-          onBack={() => setScreen({ name: 'chat' })}
           onGoChat={() => setScreen({ name: 'chat' })}
           proposalReview={name === 'faq' ? (screen.proposalReview ?? null) : null}
         />
       </KeepMountedPane>
 
       {name === 'cm_section' ? (
-        <CmSectionScreen
-          section={screen.section}
-          proposalReview={screen.proposalReview ?? null}
-          onBack={() => {
-            if (screen.backTo === 'settings') {
-              setScreen({ name: 'settings' });
-              return;
-            }
-            if (screen.backTo === 'chat') {
-              setScreen({ name: 'chat' });
-              return;
-            }
-            setScreen({ name: 'cm' });
-          }}
-          backLabel={
-            screen.backTo === 'settings'
-              ? '← Back to Settings'
-              : screen.backTo === 'chat'
-                ? '← Back to chat'
-                : '← Back to Content Management'
-          }
-        />
+        <CmSectionScreen section={screen.section} proposalReview={screen.proposalReview ?? null} />
       ) : null}
       {name === 'resource' ? (
-        <SimpleResourceScreen
-          title={screen.title}
-          path={screen.path}
-          onBack={() => setScreen({ name: 'chat' })}
-        />
+        <SimpleResourceScreen title={screen.title} path={screen.path} />
       ) : null}
     </View>
   );

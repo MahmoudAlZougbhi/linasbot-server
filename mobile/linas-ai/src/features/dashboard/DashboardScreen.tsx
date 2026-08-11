@@ -25,13 +25,13 @@ const UsageSchema = z
   })
   .passthrough();
 
-type Props = { onBack: () => void; isPlatformOwner: boolean };
+type Props = { isPlatformOwner: boolean };
 
 function num(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }
 
-export function DashboardScreen({ onBack, isPlatformOwner }: Props) {
+export function DashboardScreen({ isPlatformOwner }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [usageSummary, setUsageSummary] = useState<string | null>(null);
@@ -87,7 +87,7 @@ export function DashboardScreen({ onBack, isPlatformOwner }: Props) {
   }, [isPlatformOwner]);
 
   return (
-    <ScreenChrome title="Dashboard" subtitle="Usage and workspace health" onBack={onBack}>
+    <ScreenChrome title="Dashboard" subtitle="Usage and workspace health">
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <ScrollView contentContainerStyle={styles.list}>
