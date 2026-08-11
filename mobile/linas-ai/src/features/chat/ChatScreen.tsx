@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 
 import { GradientBackground } from '../../components/GradientBackground';
-import { tokenStore } from '../../auth/tokenStore';
 import { useI18n } from '../../i18n/LanguageContext';
 import { useTheme } from '../../theme';
 import type { ControlArea } from '../control/controlAreas';
@@ -21,25 +20,25 @@ import { ChatModeToggle } from './ChatModeToggle';
 import { ChatScreenOverlays } from './ChatScreenOverlays';
 import { chatScreenStyles as styles } from './chatScreenStyles';
 import { ChatStatusBanners } from './ChatStatusBanners';
-import { ChatWorkspaceChip } from './ChatWorkspaceChip';
 import { GuestBanner } from './GuestBanner';
 import type { OwnerChatMode } from './ownerChatMode';
+import { resolveOwnerModeForOutgoing } from './ownerChatMode';
 import { PendingAttachmentsStrip } from './PendingAttachmentsStrip';
-import {
-  clearPendingGuestDraft,
-  loadPendingGuestDraft,
-  savePendingGuestDraft,
-} from './pendingGuestDraft';
+import { savePendingGuestDraft } from './pendingGuestDraft';
+import { buildApproveSendOpts, buildDiscardSendOpts } from './proposalBarActions';
 import { sendChatMessage } from './sendChatMessage';
 import { chatErrorLabelKey, retryAssistantMessage } from './chatRetryHandlers';
+import { useChatIdentity } from './useChatIdentity';
 import { useChatListScroll } from './useChatListScroll';
 import { useChatSession } from './useChatSession';
 import { useGuestChatSession } from './useGuestChatSession';
+import { usePendingChatNavHandoff } from './usePendingChatNavHandoff';
 import { usePinnedChats } from './usePinnedChats';
 import { appendVoiceTranscript, useVoiceDraft } from './useVoiceDraft';
 import { ChoiceChips } from './v2/ChoiceChips';
 import type { PendingFile } from './v2/pickAttachment';
 import { useSetupHandoff } from './useSetupHandoff';
+import { useProposalEditMode } from './useProposalEditMode';
 import { useStreamingTurn } from './v2/useStreamingTurn';
 
 type Props = {
@@ -61,6 +60,17 @@ export function ChatScreen({
   const { colors } = useTheme();
   const owner = useChatSession(isAuthenticated);
   const guest = useGuestChatSession(!isAuthenticated);
+  const [draft, setDraft] = useState('');
+  const { userId, workspaceLabel } = useChatIdentity(isAuthenticated, setDraft);
+  const { pinnedIds, togglePin } = usePinnedChats(userId);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [plusOpen, setPlusOpen] = useState(false);
+  const [authGate, setAuthGate] = useState(false);
+  const [hardLimit, setHardLimit] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [ownerMode, setOwnerMode] = useState<OwnerChatMode>('chat');
+  const promoteOwnerMode = useCallback((mode: OwnerChatMode) => { if (mode === 'work') setOwnerMode('work'); }, []);
   const turn = useStreamingTurn(owner.conversationId, {
     onTerminal: () => owner.syncAfterTurn(),
     onTitleUpdated: (title) => {
@@ -68,18 +78,9 @@ export function ChatScreen({
         owner.applyConversationTitle(owner.conversationId, title, { onlyIfDefault: true });
       }
     },
+    onOwnerModeHint: promoteOwnerMode,
   });
-  const [userId, setUserId] = useState<string | null>(null);
-  const [workspaceLabel, setWorkspaceLabel] = useState<string | null>(null);
-  const { pinnedIds, togglePin } = usePinnedChats(userId);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [plusOpen, setPlusOpen] = useState(false);
-  const [authGate, setAuthGate] = useState(false);
-  const [hardLimit, setHardLimit] = useState(false);
-  const [offline, setOffline] = useState(false);
-  const [draft, setDraft] = useState('');
-  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
-  const [ownerMode, setOwnerMode] = useState<OwnerChatMode>('chat');
+  const { reviseProposalId, setReviseProposalId, ownerSendWithMode } = useProposalEditMode(ownerMode, setOwnerMode, turn.send);
   const imagePreviewByContent = useRef<Record<string, string[]>>({});
   const [choiceBusy, setChoiceBusy] = useState(false);
   const composerInputRef = useRef<TextInput>(null);
@@ -93,28 +94,10 @@ export function ChatScreen({
   const startNewChat = useCallback(() => {
     if (!isAuthenticated) return;
     stickToBottomRef.current = true;
-    setOwnerMode('chat');
+    setOwnerMode('chat'); setReviseProposalId(null);
     if (turn.streaming) turn.stop();
     void owner.newChat();
   }, [isAuthenticated, owner, stickToBottomRef, turn]);
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setUserId(null);
-      setWorkspaceLabel(null);
-      return;
-    }
-    void tokenStore.getUser().then((u) => {
-      setUserId(u?.id ?? null);
-      setWorkspaceLabel(u?.tenantId || u?.tenant_id || u?.email || null);
-    });
-    void loadPendingGuestDraft().then((pending) => {
-      if (pending?.text) {
-        setDraft(pending.text);
-        void clearPendingGuestDraft();
-      }
-    });
-  }, [isAuthenticated]);
 
   useEffect(() => {
     if (guest.gated) {
@@ -156,15 +139,8 @@ export function ChatScreen({
 
   function openAuthPreservingDraft(hard = false) {
     void savePendingGuestDraft({ text: draft, createdAt: Date.now() });
-    setHardLimit(hard);
-    setAuthGate(true);
+    setHardLimit(hard); setAuthGate(true);
   }
-
-  const ownerSendWithMode = useCallback(
-    (text: string, opts?: Parameters<typeof turn.send>[1]) =>
-      turn.send(text, { ...opts, owner_mode: ownerMode }),
-    [ownerMode, turn],
-  );
 
   useSetupHandoff({
     isAuthenticated,
@@ -178,7 +154,17 @@ export function ChatScreen({
     },
   });
 
-  // ChatGPT-like open: keep chat chrome up — no second full-screen spinner after boot.
+  usePendingChatNavHandoff({
+    isAuthenticated,
+    owner,
+    turn,
+    setOwnerMode,
+    stickToBottom: () => {
+      stickToBottomRef.current = true;
+    },
+    afterOpen: () => armOpenAtLatest(),
+  });
+
   return (
     <GradientBackground>
       <KeyboardAvoidingView
@@ -198,7 +184,6 @@ export function ChatScreen({
         />
 
         {showModeToggle ? <ChatModeToggle mode={ownerMode} onChange={setOwnerMode} /> : null}
-        {isAuthenticated && workspaceLabel ? <ChatWorkspaceChip label={workspaceLabel} /> : null}
 
         {!isAuthenticated ? (
           <GuestBanner
@@ -265,10 +250,20 @@ export function ChatScreen({
                 scrollToBottom,
               })
             }
-            onApproveDraft={(token) => void ownerSendWithMode('', { confirm_tool: token })}
-            onDiscardProposal={() => {
+            onApproveDraft={(token, approveOpts) => {
+              setReviseProposalId(null);
+              void ownerSendWithMode('', buildApproveSendOpts(token, approveOpts));
+            }}
+            onDiscardProposal={(token) => {
               owner.setProposedPatch(null);
               owner.setPendingConfirm(null);
+              setReviseProposalId(null);
+              const d = buildDiscardSendOpts(token);
+              if (d) void ownerSendWithMode('', d);
+            }}
+            onEditProposal={(id) => {
+              setReviseProposalId(id);
+              composerInputRef.current?.focus();
             }}
             onOpenCm={(r) => (r && onOpenCmReview ? onOpenCmReview(r) : onOpenArea('cm'))}
             onGuestPrompt={(prompt) => {
@@ -283,9 +278,10 @@ export function ChatScreen({
               isAuthenticated && !hasUserMessage && !turn.liveText && !turn.streaming
             }
             onOwnerWelcomeChip={(chip) => {
-              setOwnerMode(chip.mode);
+              const mode = resolveOwnerModeForOutgoing(chip.mode, chip.prompt);
+              setOwnerMode(mode);
               scrollToBottom();
-              void turn.send(chip.prompt, { owner_mode: chip.mode, reply_language: language });
+              void turn.send(chip.prompt, { owner_mode: mode, reply_language: language });
             }}
             seedTypewriterMessageId={isAuthenticated ? owner.seedTypewriterMessageId : null}
             onSeedTypewriterDone={owner.clearSeedTypewriter}
@@ -328,6 +324,8 @@ export function ChatScreen({
           showModelChip={isAuthenticated}
           ownerMode={ownerMode}
           onOwnerModeChange={setOwnerMode}
+          editChipActive={Boolean(reviseProposalId)}
+          onClearEditChip={() => setReviseProposalId(null)}
           onPlus={() => setPlusOpen(true)}
           onToggleVoice={() => void voice.toggleVoice()}
           onResumeVoice={() => void voice.resumeVoice()}

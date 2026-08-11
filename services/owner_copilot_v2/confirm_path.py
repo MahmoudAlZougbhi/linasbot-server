@@ -6,6 +6,7 @@ import json
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
+from services.model_policy import owner_stream_route_payload
 from services.owner_copilot_v2.cards import card_from_tool
 from services.owner_copilot_v2.models import StreamEvent
 from services.owner_copilot_v2.provider import collect_sol_text, iter_sol_text_deltas
@@ -39,6 +40,9 @@ async def run_confirm_path(
     if confirm_tool.startswith("approve_cm_patch:"):
         intent = "approve_cm_patch"
         args["proposal_id"] = confirm_tool.split(":", 1)[1]
+    elif confirm_tool.startswith("reject_cm_patch:"):
+        intent = "reject_cm_patch"
+        args["proposal_id"] = confirm_tool.split(":", 1)[1]
     elif confirm_tool.startswith("approve_diagnosis_fix:"):
         intent = "approve_diagnosis_fix"
         args["proposal_id"] = confirm_tool.split(":", 1)[1]
@@ -53,9 +57,44 @@ async def run_confirm_path(
         turn_policy = resolve_owner_policy(
             surface="owner_copilot",
             confirm_tool=confirm_tool,
-            intent=intent,
-            force_high=True,
+            intent=intent if intent != "reject_cm_patch" else "approve_cm_patch",
+            force_high=intent != "reject_cm_patch",
         )
+
+    if intent == "reject_cm_patch":
+        from services.owner_ai_cm_approval import reject_cm_patch
+
+        yield StreamEvent(type="status", payload={"id": "tool", "text": "Discarding proposal…"})
+        try:
+            data = reject_cm_patch(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                proposal_id=str(args.get("proposal_id") or ""),
+            )
+            ok = True
+            err = None
+        except Exception as exc:  # noqa: BLE001
+            data = {"proposal_id": args.get("proposal_id")}
+            ok = False
+            err = f"{type(exc).__name__}: {exc}"
+        reply = "Cancelled — nothing was applied." if ok else (err or "Could not cancel proposal.")
+        yield StreamEvent(type="delta", payload={"text": reply})
+        yield StreamEvent(
+            type="done",
+            payload=done_payload(
+                reply_text=reply,
+                tool_calls=[{"name": "reject_cm_patch", "ok": ok, "data": data, "error": err}],
+                cards=[],
+                choices=[],
+                model=model,
+                ctx_tokens=ctx_tokens,
+                stage=stage,
+                pending_confirmation=None,
+                reason="reject_tool",
+                route=owner_stream_route_payload(turn_policy),
+            ),
+        )
+        return
 
     yield StreamEvent(type="status", payload={"id": "tool", "text": f"Running {intent}…"})
     result = await dispatch_v2_tool(
@@ -143,11 +182,6 @@ async def run_confirm_path(
             stage=stage,
             pending_confirmation=pending_confirmation,
             reason="confirm_tool",
-            route={
-                "model": turn_policy.model,
-                "reasoning_mode": turn_policy.reasoning_mode,
-                "reasoning_effort": turn_policy.reasoning_effort,
-                "reason": turn_policy.reason,
-            },
+            route=owner_stream_route_payload(turn_policy),
         ),
     )

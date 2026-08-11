@@ -118,6 +118,7 @@ export function useOwnerStream() {
         content?: string;
         confirm_tool?: string | null;
         tool_args?: Record<string, unknown>;
+        revise_proposal_id?: string | null;
         choice_id?: string;
         choice_set_id?: string;
         attachment_ids?: string[];

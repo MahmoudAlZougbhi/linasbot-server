@@ -192,7 +192,7 @@ function MenuAction({
 const styles = StyleSheet.create({
   section: {
     fontFamily: fonts.bodyMedium,
-    fontSize: 11,
+    fontSize: 10,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginTop: spacing.md,
@@ -215,13 +215,13 @@ const styles = StyleSheet.create({
     gap: 8,
     minHeight: 44,
   },
-  /** Conversation titles: medium face at 500 — ~40% lighter than prior 600. */
+  /** Conversation titles: medium face at 500; size stepped down for denser drawer list. */
   rowTitle: {
     fontFamily: fonts.bodyMedium,
     fontWeight: '500',
     flex: 1,
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20,
   },
   overflow: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   menu: {

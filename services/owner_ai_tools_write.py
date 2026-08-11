@@ -41,7 +41,7 @@ async def tool_update_profile(
     if "preferred_language" in safe or "preferredLanguage" in safe:
         data["note"] = (
             "preferred_language is owner chat/app preference only. "
-            "Customer DM/comment reply language comes from Content Management → Languages "
+            "Customer DM/comment reply language comes from AI Setup → Languages "
             "and cannot be changed via profile or Settings."
         )
     return ToolResult(ok=True, name="update_profile", data=data)
@@ -55,12 +55,34 @@ async def tool_propose_cm_patch(
     section: str,
     patch: dict[str, Any],
     force_edit: bool = False,
+    replace_proposal_id: str | None = None,
 ) -> ToolResult:
     _require(role, "contentManagers")
     from services.cm.progress import progress_summary
-    from services.owner_ai_cm_approval import propose_cm_patch
+    from services.owner_ai_cm_approval import propose_cm_patch, reject_cm_patch
 
     sec = (section or "").strip().replace("-", "_")
+    safe_patch = dict(patch) if isinstance(patch, dict) else {}
+    map_locked_note: str | None = None
+    if sec == "languages" and "response_language_map" in safe_patch:
+        safe_patch.pop("response_language_map", None)
+        map_locked_note = (
+            "response_language_map is FIXED (sabtin) and cannot be changed: "
+            "English→English, Arabic→Arabic, French→French, Franco→Arabic. "
+            "Owners may still enable/disable supported_languages and set default_language."
+        )
+        if not safe_patch:
+            return ToolResult(
+                ok=False,
+                name="propose_cm_patch",
+                data={
+                    "section": sec,
+                    "blocked_reason": "response_language_map_locked",
+                    "hint": map_locked_note,
+                },
+                error="response_language_map_locked",
+            )
+
     if sec and not force_edit:
         summary = progress_summary(tenant_id, create_missing=False)
         done = set(summary.get("done_sections") or [])
@@ -80,7 +102,15 @@ async def tool_propose_cm_patch(
                 error="section_already_filled",
             )
 
-    data = propose_cm_patch(tenant_id=tenant_id, user_id=user_id, section=section, patch=patch)
+    if replace_proposal_id:
+        try:
+            reject_cm_patch(tenant_id=tenant_id, user_id=user_id, proposal_id=str(replace_proposal_id))
+        except Exception:
+            pass
+
+    data = propose_cm_patch(tenant_id=tenant_id, user_id=user_id, section=section, patch=safe_patch)
+    if map_locked_note:
+        data = {**data, "note": map_locked_note, "stripped_fields": ["response_language_map"]}
     return ToolResult(
         ok=True,
         name="propose_cm_patch",
@@ -98,6 +128,7 @@ async def tool_approve_cm_patch(
     user_id: str,
     proposal_id: str,
     confirmed: bool,
+    delete_ids: list[str] | None = None,
 ) -> ToolResult:
     _require(role, "contentManagers")
     if not confirmed:
@@ -118,6 +149,7 @@ async def tool_approve_cm_patch(
             tenant_id=tenant_id,
             user_id=user_id,
             proposal_id=proposal_id,
+            delete_ids=delete_ids,
             actor_id=user_id,
         )
     except PermissionError as exc:

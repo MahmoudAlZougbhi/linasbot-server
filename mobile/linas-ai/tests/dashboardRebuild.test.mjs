@@ -37,7 +37,6 @@ test('Dashboard rebuild uses typed mobile dashboard API', () => {
   assert.match(screen, /ContentReadinessCard/);
   assert.match(screen, /TeamCapacityCard/);
   assert.match(screen, /AlertsCard/);
-  assert.match(screen, /Back to Chat/);
   assert.doesNotMatch(screen, /isPlatformOwner|Platform metrics|Owner only|Owner access only/);
   assert.doesNotMatch(screen, /JSON\.stringify/);
   assert.doesNotMatch(types, /\bany\b|@ts-ignore|@ts-nocheck/);
@@ -45,7 +44,8 @@ test('Dashboard rebuild uses typed mobile dashboard API', () => {
 
 test('Dashboard navigation targets real destinations', () => {
   const api = read('features/dashboard/dashboardApi.ts');
-  const app = readFileSync(join(root, 'App.tsx'), 'utf8');
+  const tree = read('app/AppScreenTree.tsx');
+  const nav = read('features/dashboard/dashboardNavigation.ts');
   for (const code of [
     'complete_setup',
     'publish_cm',
@@ -58,19 +58,21 @@ test('Dashboard navigation targets real destinations', () => {
   ]) {
     assert.match(api, new RegExp(code));
   }
-  assert.match(app, /onNavigate/);
-  assert.match(app, /name: 'billing'/);
-  assert.match(app, /name: 'integrations'/);
-  assert.match(app, /name: 'cm'/);
-  assert.match(app, /name: 'users'/);
-  assert.doesNotMatch(app, /UsageScreen/);
-  assert.doesNotMatch(app, /name: 'usage'/);
+  assert.match(tree, /onNavigate/);
+  assert.match(nav, /name: 'billing'/);
+  assert.match(nav, /name: 'integrations'/);
+  assert.match(nav, /name: 'cm'/);
+  assert.match(nav, /name: 'users'/);
+  assert.doesNotMatch(tree, /UsageScreen/);
+  assert.doesNotMatch(tree, /name: 'usage'/);
 });
 
 test('obsolete Usage screen removed; usage nav redirects to dashboard', () => {
   const drawers = read('features/nav/drawerModules.ts');
+  const shell = read('app/AppShell.tsx');
   assert.doesNotMatch(drawers, /id: 'usage'/);
-  assert.match(readFileSync(join(root, 'App.tsx'), 'utf8'), /area === 'dashboard' \|\| area === 'usage'/);
+  assert.match(shell, /area === 'usage'/);
+  assert.match(shell, /name: 'dashboard'/);
   assert.equal(
     readdirSync(join(src, 'features/billing')).includes('UsageScreen.tsx'),
     false,

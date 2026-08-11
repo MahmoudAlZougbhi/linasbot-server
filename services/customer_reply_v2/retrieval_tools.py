@@ -198,7 +198,14 @@ def _record_content(section_id: str, raw: dict[str, Any]) -> str:
         )
     body = raw.get("body") or raw.get("notes") or ""
     title = raw.get("title") or _label(raw.get("labels"))
-    return f"{title}\n{body}".strip()
+    text = f"{title}\n{body}".strip()
+    if section_id in {"knowledge", "care"}:
+        from services.cm.article_media import format_attachments_block
+
+        att_block = format_attachments_block(list(raw.get("attachments") or []))
+        if att_block:
+            text = f"{text}\n\n{att_block}".strip() if text else att_block
+    return text
 
 
 def dispatch_retrieval_tool(name: str, args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:

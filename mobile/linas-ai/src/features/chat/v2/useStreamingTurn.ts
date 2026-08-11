@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import {
+  ownerModeFromStreamRoute,
+  ownerModeFromStreamStatus,
+} from '../ownerModeFromStream';
 import { looksLikeOwnerAssent, pendingTokenFromDonePayload } from './ownerAssent';
 import type { StreamCard, StreamChoice } from './useOwnerStream';
 import { useOwnerStream } from './useOwnerStream';
@@ -7,6 +11,8 @@ import { useOwnerStream } from './useOwnerStream';
 type TurnHooks = {
   onTerminal: () => Promise<void> | void;
   onTitleUpdated?: (title: string) => void;
+  /** Sync LIN chip when stream reports High / CM tools (never auto-downgrades). */
+  onOwnerModeHint?: (mode: 'chat' | 'work') => void;
 };
 
 /**
@@ -49,6 +55,8 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
         choice_set_id?: string;
         attachment_ids?: string[];
         confirm_tool?: string | null;
+        tool_args?: Record<string, unknown>;
+        revise_proposal_id?: string | null;
         owner_mode?: 'chat' | 'work';
         reply_language?: 'en' | 'ar' | 'fr';
       },
@@ -60,7 +68,9 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
       setChoiceSetId(null);
       setThinking(true);
       let confirmTool = opts?.confirm_tool ?? null;
-      if (!confirmTool && looksLikeOwnerAssent(text) && pendingConfirmRef.current) {
+      const reviseId = opts?.revise_proposal_id?.trim() || null;
+      // Edit-chip revision must not auto-approve via assent shortcut.
+      if (!confirmTool && !reviseId && looksLikeOwnerAssent(text) && pendingConfirmRef.current) {
         confirmTool = pendingConfirmRef.current;
       }
       const result = await stream.sendStream(
@@ -71,6 +81,8 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
           choice_set_id: opts?.choice_set_id,
           attachment_ids: opts?.attachment_ids,
           confirm_tool: confirmTool,
+          tool_args: opts?.tool_args,
+          revise_proposal_id: reviseId,
           owner_mode: opts?.owner_mode,
           reply_language: opts?.reply_language,
         },
@@ -79,6 +91,8 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
           onStatus: (s) => {
             setThinking(false);
             setStatusRows((prev) => [...prev.filter((p) => p.id !== s.id), s]);
+            const hinted = ownerModeFromStreamStatus('chat', s.id);
+            if (hinted === 'work') hooksRef.current.onOwnerModeHint?.('work');
           },
           onDelta: (t) => {
             setThinking(false);
@@ -114,6 +128,8 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
             } else if (nextPending) {
               pendingConfirmRef.current = nextPending;
             }
+            const hinted = ownerModeFromStreamRoute('chat', payload.route);
+            if (hinted === 'work') hooksRef.current.onOwnerModeHint?.('work');
             setThinking(false);
             setStatusRows([]);
             const finalText = String(payload.reply_text || '').trim();

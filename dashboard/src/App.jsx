@@ -43,6 +43,7 @@ const CmHandoffPage = lazy(() => import('./pages/content-managers/CmHandoffPage'
 const CmRestrictedPage = lazy(() => import('./pages/content-managers/CmRestrictedPage'));
 const CmSourcesPage = lazy(() => import('./pages/content-managers/CmSourcesPage'));
 const CmActionsPage = lazy(() => import('./pages/content-managers/CmActionsPage'));
+const CmCommentsPage = lazy(() => import('./pages/content-managers/CmCommentsPage'));
 const CmAiLimitsPage = lazy(() => import('./pages/content-managers/CmAiLimitsPage'));
 const CmOffDaysPage = lazy(() => import('./pages/content-managers/CmOffDaysPage'));
 const CmOpeningHoursPage = lazy(() => import('./pages/content-managers/CmOpeningHoursPage'));
@@ -129,6 +130,7 @@ function AppContent() {
                     <Route path="/content-managers/handoff" element={<CmHandoffPage />} />
                     <Route path="/content-managers/restricted" element={<CmRestrictedPage />} />
                     <Route path="/content-managers/actions" element={<CmActionsPage />} />
+                    <Route path="/content-managers/comments" element={<CmCommentsPage />} />
                     <Route path="/content-managers/ai-limits" element={<CmAiLimitsPage />} />
                     <Route path="/content-managers/off-days" element={<CmOffDaysPage />} />
                     <Route path="/content-managers/opening-hours" element={<CmOpeningHoursPage />} />

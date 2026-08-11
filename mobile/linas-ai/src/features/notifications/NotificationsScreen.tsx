@@ -14,6 +14,7 @@ import { PrimaryButton } from '../../components/PrimaryButton';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
 import { AuthGateModal } from '../auth/AuthGateModal';
+import { useModuleNav } from '../nav/ModuleNavContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import {
   classifyNotificationsError,
@@ -29,7 +30,8 @@ export type LiveChatDeepLink = {
 };
 
 type Props = {
-  onBack: () => void;
+  /** Leave the screen when dismissing the auth gate (settings vs chat). */
+  onDismissGate?: () => void;
   onOpenLiveChat: (target: LiveChatDeepLink) => void;
   onRequestLogin?: () => void;
   onRequestRegister?: () => void;
@@ -61,13 +63,15 @@ function titleFor(n: OwnerNotification, lang: string): string {
 }
 
 export function NotificationsScreen({
-  onBack,
+  onDismissGate,
   onOpenLiveChat,
   onRequestLogin,
   onRequestRegister,
   isAuthenticated,
 }: Props) {
   const { tr, language } = useI18n();
+  const nav = useModuleNav();
+  const dismissGate = onDismissGate ?? nav.goChat;
   const [items, setItems] = useState<OwnerNotification[]>([]);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -139,11 +143,11 @@ export function NotificationsScreen({
 
   if (gate === 'auth') {
     return (
-      <ScreenChrome title={tr('notificationsTitle')} subtitle={tr('notificationsSub')} onBack={onBack}>
+      <ScreenChrome title={tr('notificationsTitle')} subtitle={tr('notificationsSub')}>
         <AuthGateModal
           visible
           reason={tr('notificationsAuthBody')}
-          onClose={onBack}
+          onClose={dismissGate}
           onLogin={() => onRequestLogin?.()}
           onRegister={() => onRequestRegister?.()}
         />
@@ -153,14 +157,14 @@ export function NotificationsScreen({
 
   if (gate === 'forbidden') {
     return (
-      <ScreenChrome title={tr('notificationsTitle')} subtitle={tr('notificationsSub')} onBack={onBack}>
+      <ScreenChrome title={tr('notificationsTitle')} subtitle={tr('notificationsSub')}>
         <EmptyState title={tr('notificationsForbiddenTitle')} body={tr('notificationsForbiddenBody')} />
       </ScreenChrome>
     );
   }
 
   return (
-    <ScreenChrome title={tr('notificationsTitle')} subtitle={tr('notificationsSub')} onBack={onBack}>
+    <ScreenChrome title={tr('notificationsTitle')} subtitle={tr('notificationsSub')}>
       {loading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
       ) : (

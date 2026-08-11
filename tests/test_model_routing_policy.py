@@ -29,13 +29,15 @@ def _assert_payload(kwargs: dict[str, Any], *, model: str, effort: str) -> None:
     ("text", "effort"),
     [
         ("How does billing work in Linas AI?", "low"),
-        ("What is available in Content Management?", "low"),
+        ("What is available in AI Setup?", "high"),
         ("Please change the laser price to 50", "high"),
         ("Delete the downtown branch", "high"),
         ("Change the AI response style to warmer", "high"),
         ("Update the app UI design for the landing page", "high"),
         ("What is my FAQ quota and also publish the CM draft", "high"),
         ("Maybe update something in the prices section?", "high"),
+        ("Ask about our FAQ answers", "high"),
+        ("شو ساعات الدوام؟", "high"),
     ],
 )
 def test_owner_policy_effort_matrix(text: str, effort: str) -> None:
@@ -64,12 +66,20 @@ def test_owner_ui_mode_chat_low_work_high() -> None:
     """Mobile Chat|Work maps to Sol effort; UI displays 5.6 LIN (not Sol)."""
     chat = resolve_owner_policy(
         surface="owner_copilot",
-        user_text="Please change the laser price to 50",
+        user_text="How does billing work in Linas AI?",
         owner_mode="chat",
     )
     assert chat.model == MODEL_OWNER_SOL
     assert chat.reasoning_effort == "low"
     assert chat.reason == "owner_mode_chat"
+
+    cm_while_chat = resolve_owner_policy(
+        surface="owner_copilot",
+        user_text="Please change the laser price to 50",
+        owner_mode="chat",
+    )
+    assert cm_while_chat.reasoning_effort == "high"
+    assert cm_while_chat.reason == "cm_work_intent"
 
     work = resolve_owner_policy(
         surface="owner_copilot",
@@ -87,6 +97,24 @@ def test_owner_ui_mode_chat_low_work_high() -> None:
         force_high=True,
     )
     assert confirm.reasoning_effort == "high"
+
+
+def test_owner_stream_route_suggests_work_for_high() -> None:
+    from services.model_policy import owner_stream_route_payload
+
+    high = resolve_owner_policy(surface="owner_copilot", user_text="Update FAQ answers")
+    route = owner_stream_route_payload(high)
+    assert route["reasoning_effort"] == "high"
+    assert route["suggested_owner_mode"] == "work"
+
+    low = resolve_owner_policy(
+        surface="owner_copilot",
+        user_text="How does billing work in Linas AI?",
+        owner_mode="chat",
+    )
+    low_route = owner_stream_route_payload(low)
+    assert low_route["reasoning_effort"] == "low"
+    assert "suggested_owner_mode" not in low_route
 
 
 @pytest.mark.parametrize(

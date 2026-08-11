@@ -69,15 +69,17 @@ def progress_summary(tenant_id: str, *, create_missing: bool = False) -> dict[st
         listed = ", ".join(remaining_ordered[:8])
         extra = f" (+{len(remaining_ordered) - 8} more)" if len(remaining_ordered) > 8 else ""
         fill_missing_prompt = (
-            f"Help me finish Content Management setup. Remaining (not done): {listed}{extra}. "
+            f"Help me finish AI Setup. Remaining (not done): {listed}{extra}. "
             "Call cm_fill_plan action=start, skip all done/filled sections, "
             "then walk remaining one section at a time using inspect_cm_guide and propose_cm_patch."
         )
     else:
         fill_missing_prompt = (
-            "Review my Content Management setup. Confirm what is already filled/DONE, "
-            "what still needs polish, and help me publish when ready. "
-            "Use inspect_cm_guide; do not re-ask done sections."
+            "Review my AI Setup. Confirm what is already filled/DONE, "
+            "run a proactive quality pass (duplicates, contradictions, unclear wording, "
+            "suspicious content, improvements), and help me publish when ready. "
+            "Use inspect_cm_guide with quality_pass; do not re-ask done sections for fill walks; "
+            "do not dump full CM unless I ask."
         )
 
     return {

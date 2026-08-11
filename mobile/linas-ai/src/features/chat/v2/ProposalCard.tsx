@@ -1,13 +1,16 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { useI18n } from '../../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../../theme';
 import type { CmProposalReview } from '../../cm/cmProposalReview';
 import type { StreamCard } from './useOwnerStream';
 
 type Props = {
   card: StreamCard;
-  onApproveDraft?: (token: string) => void;
-  onDiscard?: () => void;
+  onApproveDraft?: (token: string, opts?: { delete_ids?: string[] }) => void;
+  onDiscard?: (token?: string, proposalId?: string) => void;
+  onEditProposal?: (proposalId: string) => void;
   onOpenCm?: (review?: CmProposalReview) => void;
   onRetry?: () => void;
   onRefresh?: () => void;
@@ -24,16 +27,20 @@ function str(v: unknown): string {
   }
 }
 
-/** Complete V2 Change Proposal card — PDF style + full backend fields/actions. */
+type DeleteTarget = { id: string; title: string };
+
+/** Unified CM proposal / delete bar — Approve | Cancel | Edit (+ per-item X). */
 export function ProposalCard({
   card,
   onApproveDraft,
   onDiscard,
+  onEditProposal,
   onOpenCm,
   onRetry,
   onRefresh,
 }: Props) {
   const { colors } = useTheme();
+  const { tr } = useI18n();
   const data = (card.data || {}) as Record<string, unknown>;
   const preview = (data.preview && typeof data.preview === 'object'
     ? (data.preview as Record<string, unknown>)
@@ -43,6 +50,23 @@ export function ProposalCard({
   const status = str(card.status || 'draft_proposal');
   const section = str(preview.section || preview.cm_section || data.section);
   const field = str(preview.field || preview.cm_field || data.field);
+  const isDelete = str(preview.kind) === 'cm_delete' || str(preview.action) === 'delete';
+  const targets = useMemo(() => {
+    const raw = preview.targets;
+    if (!Array.isArray(raw)) return [] as DeleteTarget[];
+    return raw
+      .filter((row): row is Record<string, unknown> => !!row && typeof row === 'object')
+      .map((row) => ({
+        id: str(row.id),
+        title: str(row.title || row.id) || 'item',
+      }))
+      .filter((t) => t.id);
+  }, [preview.targets]);
+  const [keptIds, setKeptIds] = useState<string[]>(() => targets.map((t) => t.id));
+  useEffect(() => {
+    setKeptIds(targets.map((t) => t.id));
+  }, [targets]);
+
   const currentValue = str(
     preview.current_value ?? preview.before ?? preview.current_sample ?? data.current_value,
   );
@@ -74,14 +98,8 @@ export function ProposalCard({
     : undefined;
   const reason = str(preview.reason || data.reason);
   const impact = str(preview.impact || data.impact);
-  const channels = Array.isArray(preview.channels)
-    ? (preview.channels as unknown[]).map(str).filter(Boolean)
-    : Array.isArray(data.channels)
-      ? (data.channels as unknown[]).map(str).filter(Boolean)
-      : [];
-  const target = str(preview.target || data.target || 'Draft');
-  const validation = str(preview.validation || data.validation);
-  const conflict = str(preview.conflict || data.conflict);
+  const visibleTargets = targets.filter((t) => keptIds.includes(t.id));
+  const canApprove = Boolean(token) && (!isDelete || visibleTargets.length > 0);
 
   return (
     <View
@@ -92,8 +110,8 @@ export function ProposalCard({
         <Text style={[styles.title, { color: colors.text }]}>{card.title}</Text>
         <View style={styles.badges}>
           <Badge label={status.replace(/_/g, ' ')} tone="muted" />
-          <Badge label={target === 'Live' || target === 'Published' ? 'Live target' : 'Draft'} tone="accent" />
-          {channels.length ? <Badge label={`${channels.length} channels`} tone="accent" /> : null}
+          {isDelete ? <Badge label={tr('proposalDeleteBadge')} tone="danger" /> : null}
+          <Badge label={tr('proposalDraftBadge')} tone="accent" />
         </View>
       </View>
 
@@ -106,108 +124,132 @@ export function ProposalCard({
         </Text>
       ) : null}
 
-      {channels.length ? (
-        <View style={styles.chips}>
-          <Text style={[styles.label, { color: colors.textDim }]}>WILL APPLY TO</Text>
-          <View style={styles.chipRow}>
-            {channels.map((c) => (
-              <View key={c} style={[styles.chip, { backgroundColor: colors.surfaceAlt }]}>
-                <Text style={{ color: colors.text, fontSize: 12 }}>{c}</Text>
-              </View>
-            ))}
-          </View>
+      {isDelete && visibleTargets.length ? (
+        <View style={styles.targetList}>
+          <Text style={[styles.label, { color: colors.textDim }]}>{tr('proposalWillDelete')}</Text>
+          {visibleTargets.map((t) => (
+            <View
+              key={t.id}
+              style={[styles.targetRow, { backgroundColor: colors.input, borderColor: colors.border }]}
+            >
+              <Text style={[styles.targetTitle, { color: colors.text }]} numberOfLines={2}>
+                {t.title}
+              </Text>
+              <Pressable
+                onPress={() => setKeptIds((prev) => prev.filter((id) => id !== t.id))}
+                accessibilityLabel={tr('proposalRemoveFromSet')}
+                hitSlop={8}
+                style={styles.xHit}
+              >
+                <Text style={{ color: colors.danger, fontSize: 16, fontWeight: '700' }}>×</Text>
+              </Pressable>
+            </View>
+          ))}
         </View>
       ) : null}
 
-      {(currentValue || proposedValue) && (
+      {!isDelete && (currentValue || proposedValue) ? (
         <View style={styles.diff}>
           {currentValue ? (
             <>
-              <Text style={[styles.label, { color: colors.textDim }]}>CURRENT</Text>
+              <Text style={[styles.label, { color: colors.textDim }]}>{tr('proposalCurrent')}</Text>
               <Text style={{ color: colors.textMuted }}>{currentValue}</Text>
             </>
           ) : null}
-          <Text style={[styles.label, { color: colors.textDim, marginTop: 8 }]}>PROPOSED</Text>
+          <Text style={[styles.label, { color: colors.textDim, marginTop: 8 }]}>
+            {tr('proposalProposed')}
+          </Text>
           <View style={[styles.proposedBox, { backgroundColor: colors.input }]}>
             <Text style={{ color: colors.text }}>{proposedValue || '—'}</Text>
           </View>
         </View>
-      )}
-
-      {reason ? <Text style={[styles.meta, { color: colors.textMuted }]}>Reason: {reason}</Text> : null}
-      {impact ? <Text style={[styles.meta, { color: colors.textMuted }]}>Impact: {impact}</Text> : null}
-      {validation ? (
-        <Text style={[styles.meta, { color: colors.textMuted }]}>Validation: {validation}</Text>
-      ) : null}
-      {conflict ? (
-        <Text style={[styles.meta, { color: colors.warning }]}>Conflict: {conflict}</Text>
       ) : null}
 
-      <Text style={[styles.notApplied, { color: colors.textDim }]}>
-        Not applied yet — approval makes this live for customer replies.
-      </Text>
+      {reason ? (
+        <Text style={[styles.meta, { color: colors.textMuted }]}>
+          {tr('proposalReason')}: {reason}
+        </Text>
+      ) : null}
+      {impact ? (
+        <Text style={[styles.meta, { color: colors.textMuted }]}>
+          {tr('proposalImpact')}: {impact}
+        </Text>
+      ) : null}
+
+      <Text style={[styles.notApplied, { color: colors.textDim }]}>{tr('proposalNotAppliedYet')}</Text>
 
       <View style={styles.actions}>
-        {token ? (
+        {canApprove ? (
           <Pressable
             style={[styles.primary, { backgroundColor: colors.accent }]}
-            onPress={() => onApproveDraft?.(token)}
-            accessibilityLabel="Approve and go live"
+            onPress={() =>
+              onApproveDraft?.(
+                token,
+                isDelete ? { delete_ids: visibleTargets.map((t) => t.id) } : undefined,
+              )
+            }
+            accessibilityLabel={tr('proposalApprove')}
           >
             <Text style={{ color: colors.onAccent, fontFamily: fonts.bodyMedium }}>
-              Approve and go live
+              {tr('proposalApprove')}
             </Text>
           </Pressable>
         ) : null}
+        <View style={styles.rowActions}>
+          <Pressable
+            style={[styles.secondary, { borderColor: colors.border, flex: 1 }]}
+            onPress={() => onDiscard?.(token, proposalId)}
+            accessibilityLabel={tr('proposalCancel')}
+          >
+            <Text style={{ color: colors.text, fontFamily: fonts.bodyMedium }}>
+              {tr('proposalCancel')}
+            </Text>
+          </Pressable>
+          {proposalId ? (
+            <Pressable
+              style={[styles.secondary, { borderColor: colors.accent, flex: 1 }]}
+              onPress={() => onEditProposal?.(proposalId)}
+              accessibilityLabel={tr('proposalEdit')}
+            >
+              <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>
+                {tr('proposalEdit')}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
         <Pressable
           style={[styles.secondary, { borderColor: colors.border }]}
           onPress={() => onOpenCm?.(reviewTarget)}
-          accessibilityLabel="Review in Content Management"
+          accessibilityLabel={tr('proposalReviewInSetup')}
         >
           <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>
-            Review in Content Management
+            {tr('proposalReviewInSetup')}
           </Text>
         </Pressable>
         <View style={styles.rowActions}>
           {onRefresh ? (
-            <Pressable onPress={onRefresh} accessibilityLabel="Refresh proposal">
-              <Text style={{ color: colors.textMuted }}>Refresh</Text>
+            <Pressable onPress={onRefresh} accessibilityLabel={tr('proposalRefresh')}>
+              <Text style={{ color: colors.textMuted }}>{tr('proposalRefresh')}</Text>
             </Pressable>
           ) : null}
           {onRetry ? (
-            <Pressable onPress={onRetry} accessibilityLabel="Retry">
-              <Text style={{ color: colors.textMuted }}>Retry</Text>
+            <Pressable onPress={onRetry} accessibilityLabel={tr('proposalRetry')}>
+              <Text style={{ color: colors.textMuted }}>{tr('proposalRetry')}</Text>
             </Pressable>
           ) : null}
-          <Pressable onPress={onDiscard} accessibilityLabel="Discard proposal">
-            <Text style={{ color: colors.danger }}>Discard</Text>
-          </Pressable>
         </View>
       </View>
     </View>
   );
 }
 
-function Badge({ label, tone }: { label: string; tone: 'accent' | 'muted' }) {
+function Badge({ label, tone }: { label: string; tone: 'accent' | 'muted' | 'danger' }) {
   const { colors } = useTheme();
+  const bg = tone === 'accent' ? colors.accentSoft : colors.surfaceAlt;
+  const fg = tone === 'accent' ? colors.accentDeep : tone === 'danger' ? colors.danger : colors.textMuted;
   return (
-    <View
-      style={[
-        styles.badge,
-        {
-          backgroundColor: tone === 'accent' ? colors.accentSoft : colors.surfaceAlt,
-        },
-      ]}
-    >
-      <Text
-        style={{
-          color: tone === 'accent' ? colors.accentDeep : colors.textMuted,
-          fontSize: 11,
-          textTransform: 'capitalize',
-        }}
-      >
-        {label}
-      </Text>
+    <View style={[styles.badge, { backgroundColor: bg }]}>
+      <Text style={{ color: fg, fontSize: 11, textTransform: 'capitalize' }}>{label}</Text>
     </View>
   );
 }
@@ -233,9 +275,18 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 4,
   },
-  chips: { marginTop: 4 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 4 },
+  targetList: { gap: 6, marginTop: 4 },
+  targetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: radii.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  targetTitle: { flex: 1, fontFamily: fonts.body, fontSize: 14 },
+  xHit: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   diff: { marginTop: 4 },
   proposedBox: { borderRadius: radii.md, padding: spacing.md },
   notApplied: { fontFamily: fonts.body, fontSize: 12, marginTop: 4 },
@@ -248,12 +299,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   secondary: {
-    minHeight: 48,
+    minHeight: 44,
     borderRadius: radii.md,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
   },
-  rowActions: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 },
+  rowActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
 });

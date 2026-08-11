@@ -113,7 +113,7 @@ def test_settings_wallet_removed_and_ai_limits_in_cm() -> None:
     assert "id: 'api'" not in text
     assert "Human Takeover" not in text
     assert "System language" in text
-    # AI Limits live in Content Managers (not Settings tabs) for SaaS self-service.
+    # AI Limits live in AI Setup (not Settings tabs) for SaaS self-service.
     assert "ai-limits" not in text
     assert "AiLimitsPanel" not in text
     assert cm_limits.is_file()

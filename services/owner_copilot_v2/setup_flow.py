@@ -47,7 +47,7 @@ def _section_prompt(section: str, *, language: str = "en") -> str:
     }
     text = prompts.get(section, f"Continue setup: {section}")
     if language == "ar":
-        return f"إعداد — {section}: أكمل هذه الخطوة في نفس المحادثة (نفس مسودة Content Management)."
+        return f"إعداد — {section}: أكمل هذه الخطوة في نفس المحادثة (نفس مسودة إعداد الذكاء الاصطناعي)."
     return text
 
 

@@ -1,6 +1,6 @@
 """Owner Copilot tools for full CM article/FAQ read + surgical upsert proposals.
 
-Content Manager “files” in this product are CM draft section records — especially
+AI Setup “files” in this product are CM draft section records — especially
 knowledge/care ``ArticleRecord`` rows (migrated from legacy knowledge JSON files)
 and FAQ ``FaqRecord`` rows. Full bodies live in draft JSON; inventory APIs are
 metadata-only. These tools give the model bounded list/read access and reuse the
@@ -39,6 +39,16 @@ def _normalize_section(section: str) -> str:
 
 def _article_meta(item: dict[str, Any], *, section: str) -> dict[str, Any]:
     body = str(item.get("body") or "")
+    raw_atts = item.get("attachments")
+    attachments: list[Any] = list(raw_atts) if isinstance(raw_atts, list) else []
+    captions: list[str] = []
+    for row in attachments:
+        if not isinstance(row, dict):
+            continue
+        cap = str(row.get("caption") or "").strip()
+        name = str(row.get("filename") or row.get("id") or "").strip()
+        if cap or name:
+            captions.append(f"{name}: {cap}" if cap else name)
     return {
         "section": section,
         "id": str(item.get("id") or ""),
@@ -50,6 +60,8 @@ def _article_meta(item: dict[str, Any], *, section: str) -> dict[str, Any]:
         "audience": str(item.get("audience") or ""),
         "category": str(item.get("category") or ""),
         "body_chars": len(body),
+        "attachment_count": len(attachments),
+        "attachment_captions": captions[:12],
     }
 
 
@@ -379,6 +391,7 @@ def _build_article_upsert(
             "linked_service_ids": [],
             "linked_branch_ids": [],
             "notes": None,
+            "attachments": [],
         }
         before: dict[str, Any] | None = None
     else:
@@ -399,6 +412,7 @@ def _build_article_upsert(
         "notes",
         "linked_service_ids",
         "linked_branch_ids",
+        "attachments",
     )
     for key in allowed:
         if key in article:
@@ -525,9 +539,10 @@ async def tool_propose_cm_article_upsert(
     user_id: str,
     section: str,
     article: dict[str, Any],
+    replace_proposal_id: str | None = None,
 ) -> ToolResult:
     _require(role, "contentManagers")
-    from services.owner_ai_cm_approval import cm_patch_proposal_store
+    from services.owner_ai_cm_approval import cm_patch_proposal_store, reject_cm_patch
 
     try:
         patch, preview = _build_article_upsert(tenant_id=tenant_id, section=section, article=article)
@@ -538,6 +553,12 @@ async def tool_propose_cm_article_upsert(
             data={},
             error=f"{type(exc).__name__}: {exc}",
         )
+
+    if replace_proposal_id:
+        try:
+            reject_cm_patch(tenant_id=tenant_id, user_id=user_id, proposal_id=str(replace_proposal_id))
+        except Exception:
+            pass
 
     prop = cm_patch_proposal_store.create(
         tenant_id=tenant_id,
@@ -572,9 +593,10 @@ async def tool_propose_cm_faq_upsert(
     role: str,
     user_id: str,
     faq: dict[str, Any],
+    replace_proposal_id: str | None = None,
 ) -> ToolResult:
     _require(role, "contentManagers")
-    from services.owner_ai_cm_approval import cm_patch_proposal_store
+    from services.owner_ai_cm_approval import cm_patch_proposal_store, reject_cm_patch
 
     try:
         patch, preview = _build_faq_upsert(tenant_id=tenant_id, faq=faq)
@@ -585,6 +607,12 @@ async def tool_propose_cm_faq_upsert(
             data={},
             error=f"{type(exc).__name__}: {exc}",
         )
+
+    if replace_proposal_id:
+        try:
+            reject_cm_patch(tenant_id=tenant_id, user_id=user_id, proposal_id=str(replace_proposal_id))
+        except Exception:
+            pass
 
     prop = cm_patch_proposal_store.create(
         tenant_id=tenant_id,

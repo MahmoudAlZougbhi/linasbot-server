@@ -3,8 +3,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LinasStarMark } from '../../components/LinasStarMark';
 import { useI18n } from '../../i18n/LanguageContext';
-import { HIT, fonts, spacing, useTheme } from '../../theme';
+import { fonts, spacing, useTheme } from '../../theme';
 import { MenuIcon, NewChatIcon } from './ChatHeaderIcons';
+
+/** Compact header row; 44pt meets Apple HIG while shrinking chrome. */
+const HEADER_HIT = 44;
+/** Extra space below status bar / notch (on top of safe-area inset). */
+const HEADER_TOP_GAP = 2;
 
 type Props = {
   isAuthenticated: boolean;
@@ -32,7 +37,7 @@ export function ChatHeader({
       style={[
         styles.bar,
         {
-          paddingTop: insets.top + 8,
+          paddingTop: insets.top + HEADER_TOP_GAP,
           borderBottomColor: colors.borderSoft,
           backgroundColor: colors.bgElevated,
         },
@@ -93,14 +98,14 @@ export function ChatHeader({
 const styles = StyleSheet.create({
   bar: {
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.xs,
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   hit: {
-    width: HIT,
-    height: HIT,
+    width: HEADER_HIT,
+    height: HEADER_HIT,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -120,8 +125,8 @@ const styles = StyleSheet.create({
     maxWidth: 180,
   },
   signIn: {
-    minWidth: HIT,
-    minHeight: HIT,
+    minWidth: HEADER_HIT,
+    minHeight: HEADER_HIT,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 8,

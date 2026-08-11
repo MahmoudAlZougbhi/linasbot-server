@@ -84,7 +84,7 @@ class OwnerChatStore:
             except Exception:
                 greeting_text = (
                     "Hello. I’m Linas AI — your System Copilot for the whole app. "
-                    "Content Management is one capability; ask about integrations, usage, or creative work too."
+                    "AI Setup is one capability; ask about integrations, usage, or creative work too."
                 )
         conv = OwnerConversation(
             id=uuid.uuid4().hex,

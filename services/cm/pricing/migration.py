@@ -332,7 +332,7 @@ def extract_price_rows_from_json_obj(
 
     def walk(node: Any, path: str) -> None:
         if isinstance(node, dict):
-            # Content-file selector shape used by Content Managers price section.
+            # Content-file selector shape used by AI Setup price section.
             content = node.get("content")
             if isinstance(content, str) and content.strip():
                 text_rows, ambiguous = extract_price_rows_from_text(

@@ -115,7 +115,11 @@ def _build_system_prompt(packet: AnswerPacket) -> str:
         lines.append("KNOWN FACTS: none provided — do not invent any business fact.")
 
     if packet.chunks:
-        lines.append("REFERENCE CONTENT (for context, paraphrase, do not contradict):")
+        lines.append(
+            "REFERENCE CONTENT (for context, paraphrase, do not contradict). "
+            "CASE EXAMPLES describe when an image/file applies — use that guidance; "
+            "do not invent forms or documents not listed:"
+        )
         for chunk in packet.chunks:
             lines.append(f"- ({chunk.source_id}) {chunk.text}")
 

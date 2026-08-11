@@ -18,12 +18,10 @@ import { fonts, radii, spacing, useTheme } from '../../theme';
 import { COMPOSER_ACTION_SIZE, formatVoiceElapsed, StopGlyph } from './ComposerGlyphs';
 import { LinEffortSheet } from './LinEffortSheet';
 import { OWNER_LIN_DISPLAY, type OwnerChatMode } from './ownerChatMode';
+import { useComposerInputAutoGrow } from './useComposerInputAutoGrow';
 import type { VoiceState } from './useVoiceDraft';
+import { ComposerEditChip } from './ComposerEditChip';
 import { VoiceComposerControls } from './VoiceComposerControls';
-
-/** Keep a real tap target; grow modestly like ChatGPT (≈4 lines). */
-const INPUT_MIN_H = 36;
-const INPUT_MAX_H = 88;
 
 type Props = {
   draft: string;
@@ -48,6 +46,9 @@ type Props = {
   ownerMode?: OwnerChatMode;
   onOwnerModeChange?: (mode: OwnerChatMode) => void;
   showModelChip?: boolean;
+  /** Multitask-style Edit chip while revising a pending proposal bar. */
+  editChipActive?: boolean;
+  onClearEditChip?: () => void;
 };
 
 /**
@@ -78,16 +79,25 @@ export function ChatComposer({
   ownerMode = 'chat',
   onOwnerModeChange,
   showModelChip = false,
+  editChipActive = false,
+  onClearEditChip,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { tr } = useI18n();
   const [effortOpen, setEffortOpen] = useState(false);
-  const [inputHeight, setInputHeight] = useState(INPUT_MIN_H);
   const pulse = useRef(new Animated.Value(1)).current;
   const ring = useRef(new Animated.Value(0.55)).current;
   /** After Send, block one-shot autofocus / remount races from reopening the keyboard. */
   const suppressFocusRef = useRef(false);
+  const {
+    inputHeight,
+    atMaxHeight,
+    localInputRef,
+    assignInputRef,
+    handleContentSizeChange,
+    handleChangeText,
+  } = useComposerInputAutoGrow(draft, inputRef);
   const recording = voiceState === 'recording';
   const paused = voiceState === 'paused';
   const transcribing = voiceState === 'transcribing';
@@ -104,13 +114,9 @@ export function ChatComposer({
   const draftDir = textDirectionStyle(draft);
 
   function dismissKeyboard() {
-    inputRef?.current?.blur();
+    localInputRef.current?.blur();
     Keyboard.dismiss();
   }
-
-  useEffect(() => {
-    if (!draft.trim()) setInputHeight(INPUT_MIN_H);
-  }, [draft]);
 
   useEffect(() => {
     if (!recording) {
@@ -144,10 +150,10 @@ export function ChatComposer({
     if (!autoFocus || suppressFocusRef.current) return;
     const t = setTimeout(() => {
       if (suppressFocusRef.current) return;
-      inputRef?.current?.focus();
+      localInputRef.current?.focus();
     }, 120);
     return () => clearTimeout(t);
-  }, [autoFocus, inputRef]);
+  }, [autoFocus]);
 
   function handleSend() {
     if (sending || !canSend || voiceBusy) return;
@@ -159,13 +165,15 @@ export function ChatComposer({
     setTimeout(dismissKeyboard, 80);
   }
 
+  const idlePlaceholder =
+    ownerMode === 'work' ? tr('composerPlaceholderWork') : tr('composerPlaceholderChat');
   const placeholder = recording
     ? `${tr('composerListening')} ${formatVoiceElapsed(elapsedMs)}`
     : paused
       ? `${tr('composerPaused')} · ${formatVoiceElapsed(elapsedMs)}`
       : transcribing
         ? tr('composerTranscribing')
-        : tr('composerPlaceholder');
+        : idlePlaceholder;
 
   return (
     <View
@@ -178,6 +186,7 @@ export function ChatComposer({
         },
       ]}
     >
+      <ComposerEditChip active={Boolean(editChipActive)} onClear={onClearEditChip} />
       <View
         style={[
           styles.pill,
@@ -203,24 +212,23 @@ export function ChatComposer({
         )}
 
         <TextInput
-          ref={inputRef}
+          ref={assignInputRef}
           style={[styles.input, { color: colors.text, height: inputHeight }, draftDir]}
           placeholder={placeholder}
           placeholderTextColor={colors.textDim}
           value={draft}
-          onChangeText={onChangeDraft}
+          onChangeText={(v) => handleChangeText(v, onChangeDraft)}
           onContentSizeChange={(e) => {
-            const next = Math.ceil(e.nativeEvent.contentSize.height);
-            setInputHeight(Math.min(INPUT_MAX_H, Math.max(INPUT_MIN_H, next)));
+            handleContentSizeChange(e.nativeEvent.contentSize.height);
           }}
           multiline
-          scrollEnabled={inputHeight >= INPUT_MAX_H}
+          scrollEnabled={atMaxHeight}
           editable={!voiceBusy}
           autoFocus={false}
           blurOnSubmit={false}
           textAlign={draftDir.textAlign}
           textAlignVertical={Platform.OS === 'android' ? 'center' : undefined}
-          accessibilityLabel={tr('composerPlaceholder')}
+          accessibilityLabel={idlePlaceholder}
         />
 
         <View style={styles.trailing}>
@@ -312,6 +320,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
   },
+  editChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  editChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  editChipText: { fontFamily: fonts.bodyMedium, fontSize: 13 },
+  editHint: { flex: 1, fontFamily: fonts.body, fontSize: 12 },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',

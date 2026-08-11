@@ -15,6 +15,7 @@ export const CM_SECTION_ICONS: Record<CmSectionId, AppIconName> = {
   knowledge: feather('book'),
   handoff: feather('user-plus'),
   restricted: feather('slash'),
+  comments: feather('message-circle'),
   off_days: feather('calendar'),
   actions: feather('zap'),
   ai_limits: feather('sliders'),

@@ -136,7 +136,7 @@ def _summarize(name: str, result_data: dict[str, Any], *, reply_language: str) -
     if name == "propose_cm_patch":
         preview = result_data.get("preview") or {}
         return (
-            "Proposed CM change ready for your review "
+            "Proposed AI Setup change ready for your review "
             f"(section={preview.get('section')}, keys={preview.get('changed_keys')}). "
             "Tap Approve or reply ok / موافق / yes to apply it Live for customer replies."
         )
@@ -174,7 +174,7 @@ def _summarize(name: str, result_data: dict[str, Any], *, reply_language: str) -
     if name == "read_cm":
         if "sections" in result_data:
             return (
-                f"Content Management: {result_data.get('sections_present')}/"
+                f"AI Setup: {result_data.get('sections_present')}/"
                 f"{result_data.get('sections_total')} sections present; "
                 f"published={result_data.get('published')}."
             )

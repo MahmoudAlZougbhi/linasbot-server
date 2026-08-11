@@ -74,6 +74,7 @@ function productionUiCorpus() {
     ...walk(join(srcRoot, 'i18n')),
     ...walk(join(srcRoot, 'features')),
     ...walk(join(srcRoot, 'components')),
+    ...walk(join(srcRoot, 'app')),
     join(root, 'App.tsx'),
   ].filter((p) => {
     // Keep API/helpers out of the user-copy scan when they are not screens.
@@ -116,7 +117,7 @@ test('subscription gate uses customer-facing title and description', () => {
   assert.match(en, /subscribeGateTitle:\s*'Subscribe to continue'/);
   assert.match(
     en,
-    /Choose a plan to unlock your AI assistant, Content Management, and social media integrations\. Guest mode remains available without a subscription\./,
+    /Choose a plan to unlock your AI assistant, AI Setup, and social media integrations\. Guest mode remains available without a subscription\./,
   );
   assert.match(gate, /tr\('subscribeGateTitle'\)/);
   assert.match(gate, /tr\('subscribeGateBody'\)/);

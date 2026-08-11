@@ -16,6 +16,7 @@ import { LanguagesEditor } from './editors/LanguagesEditor';
 import { OffDaysEditor } from './editors/OffDaysEditor';
 import { OpeningHoursEditor } from './editors/OpeningHoursEditor';
 import { ActionsEditor, AiLimitsEditor, RestrictedEditor } from './editors/PolicyEditors';
+import { CommentsEditor } from './editors/CommentsEditor';
 import { PricesEditor } from './editors/PricesEditor';
 import { ServicesEditor } from './editors/ServicesEditor';
 import { StyleEditor } from './editors/StyleEditor';
@@ -23,8 +24,6 @@ import { useCmDraft } from './useCmDraft';
 
 type Props = {
   section: CmSectionId;
-  onBack: () => void;
-  backLabel?: string;
   /** Local overlay of a chat proposal — shown dirty, not auto-saved. */
   proposalReview?: CmProposalReview | null;
 };
@@ -63,6 +62,8 @@ function SectionBody({
       return <OpeningHoursEditor payload={payload} onChange={onChange} />;
     case 'restricted':
       return <RestrictedEditor payload={payload} onChange={onChange} />;
+    case 'comments':
+      return <CommentsEditor payload={payload} onChange={onChange} />;
     case 'actions':
       return <ActionsEditor payload={payload} onChange={onChange} />;
     case 'ai_limits':
@@ -74,7 +75,7 @@ function SectionBody({
   }
 }
 
-export function CmSectionScreen({ section, onBack, backLabel, proposalReview }: Props) {
+export function CmSectionScreen({ section, proposalReview }: Props) {
   const meta = getCmSection(section);
   const draft = useCmDraft(section, proposalReview);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -88,12 +89,7 @@ export function CmSectionScreen({ section, onBack, backLabel, proposalReview }: 
   }
 
   return (
-    <ScreenChrome
-      title={meta?.title ?? section}
-      subtitle={meta?.description}
-      onBack={onBack}
-      backLabel={backLabel ?? '← Back to Content Management'}
-    >
+    <ScreenChrome title={meta?.title ?? section} subtitle={meta?.description}>
       {draft.loading ? <ActivityIndicator color={colors.accent} /> : null}
       {draft.error ? <Text style={cmFormStyles.error}>{draft.error}</Text> : null}
       {draft.conflict ? <Text style={cmFormStyles.warn}>{draft.conflict}</Text> : null}

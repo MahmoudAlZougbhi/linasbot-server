@@ -24,7 +24,7 @@ describe("ContentManagers", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole("heading", { name: "Content Managers" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^AI Setup$/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Dynamic Messages/i })).toHaveAttribute(
       "href",
       "/content-managers/dynamic-messages"

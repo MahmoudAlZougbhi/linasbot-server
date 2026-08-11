@@ -13,6 +13,16 @@ from services.cm.constants import CM_SECTIONS, DEFAULT_TENANT_ID
 from services.cm.paths import draft_dir, ensure_cm_dirs, tenant_cm_root
 from services.cm.schemas import SectionDraftEnvelope, default_section_payload, utc_now
 
+
+def _sanitize_section_payload(section: str, payload: dict[str, object]) -> dict[str, object]:
+    """Apply section-specific product locks before draft write."""
+    if section == "languages":
+        from services.cm.language_policy import sanitize_languages_payload
+
+        return sanitize_languages_payload(payload)  # type: ignore[arg-type]
+    return payload
+
+
 _fcntl: ModuleType | None
 try:
     import fcntl as _fcntl
@@ -162,14 +172,15 @@ def put_draft(
                 )
             revision = 0
 
+        safe_payload = _sanitize_section_payload(name, payload)
         envelope = SectionDraftEnvelope(
             tenant_id=tid,
             section=name,
             revision=revision,
-            etag=make_etag(revision, payload),
+            etag=make_etag(revision, safe_payload),
             updated_at=utc_now(),
             updated_by=updated_by,
-            payload=payload,
+            payload=safe_payload,
         )
         _write_envelope(path, envelope)
         return envelope

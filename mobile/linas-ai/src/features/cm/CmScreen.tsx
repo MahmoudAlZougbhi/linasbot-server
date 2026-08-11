@@ -24,7 +24,6 @@ import { CM_SECTION_ICONS } from './cmSectionIcons';
 import { CM_HUB_CARDS, CM_SECTION_CARDS, type CmSectionId } from './cmSections';
 
 type Props = {
-  onBack: () => void;
   onOpenSection: (section: CmSectionId) => void;
   onContinueSetup?: (prompt: string) => void;
 };
@@ -34,7 +33,7 @@ function titleMap(): Record<string, string> {
 }
 
 /** CM overview — real fill progress + section rows with Filled / Missing. */
-export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
+export function CmScreen({ onOpenSection, onContinueSetup }: Props) {
   const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +81,7 @@ export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
       }
       setError(null);
     } catch {
-      setError('Could not load Content Management progress.');
+      setError('Could not load AI Setup progress.');
     } finally {
       setLoading(false);
     }
@@ -125,9 +124,9 @@ export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
 
   return (
     <ScreenChrome
-      title="Content Management"
+      title="AI Setup"
       subtitle="Configure the AI that answers customer DMs and comments"
-      onBack={onBack}
+     
     >
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       {error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
@@ -154,7 +153,7 @@ export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
             placeholder="Search sections"
             placeholderTextColor={colors.textDim}
             style={[styles.search, { color: colors.text }]}
-            accessibilityLabel="Search Content Management sections"
+            accessibilityLabel="Search AI Setup sections"
           />
         </View>
 
@@ -228,7 +227,7 @@ export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
 
         {!loading && !meta && !error ? (
           <EmptyState
-            title="Content Management unavailable"
+            title="AI Setup unavailable"
             body="Something went wrong. Please try again."
           />
         ) : null}

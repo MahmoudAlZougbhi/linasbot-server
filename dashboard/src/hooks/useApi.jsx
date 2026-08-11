@@ -1582,7 +1582,7 @@ export const useApi = () => {
     }
   }, []);
 
-  // Content Management control-plane APIs
+  // AI Setup control-plane APIs
   const getCmMeta = useCallback(async () => {
     try {
       const response = await api.get("/api/cm/meta");
@@ -1603,6 +1603,22 @@ export const useApi = () => {
         ...response.data,
         etag: typeof etagHeader === "string" ? etagHeader : response.data?.data?.etag,
       };
+    } catch (error) {
+      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
+        return { success: false, error: "Backend offline" };
+      }
+      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
+    }
+  }, []);
+
+  const uploadCmMedia = useCallback(async (/** @type {File | Blob} */ file) => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await api.post("/api/cm/media", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return response.data;
     } catch (error) {
       if (getAxiosErrorCode(error) === "ERR_NETWORK") {
         return { success: false, error: "Backend offline" };
@@ -1903,9 +1919,10 @@ export const useApi = () => {
     deleteContentFile,
     getDynamicMessages,
     updateDynamicMessages,
-    // Content Management control plane
+    // AI Setup control plane
     getCmMeta,
     getCmDraft,
+    uploadCmMedia,
     putCmDraft,
     validateCmDraft,
     quoteCmPricing,

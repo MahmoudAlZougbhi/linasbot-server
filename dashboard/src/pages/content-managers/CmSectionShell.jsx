@@ -49,7 +49,7 @@ const CmSectionShell = ({
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <Link to="/content-managers" className="inline-flex items-center text-sm text-slate-500 hover:text-slate-800 mb-2">
-            <ArrowLeftIcon className="w-4 h-4 mr-1" /> Content Managers
+            <ArrowLeftIcon className="w-4 h-4 mr-1" /> AI Setup
           </Link>
           <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
           <p className="text-slate-600 mt-1 max-w-3xl">{description}</p>

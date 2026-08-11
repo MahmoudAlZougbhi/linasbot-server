@@ -1,14 +1,14 @@
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { APP_BUILD_LABEL, APP_VERSION, LEGAL_URLS } from '../../config';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { AppLanguage } from '../../i18n';
 import { fonts, radii, spacing, useTheme } from '../../theme';
+import { useModuleNav } from '../nav/ModuleNavContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
 
 type Props = {
-  onBack: () => void;
   onLogout: () => void;
   onOpenNotifications?: () => void;
   onOpenActions?: () => void;
@@ -21,7 +21,6 @@ async function open(url: string) {
 
 /** Grouped Settings; Actions / AI Limits hosted here (not in CM hub). */
 export function SettingsScreen({
-  onBack,
   onLogout,
   onOpenNotifications,
   onOpenActions,
@@ -29,105 +28,112 @@ export function SettingsScreen({
 }: Props) {
   const { tr, language, setLanguage } = useI18n();
   const { colors, mode, setMode } = useTheme();
+  const nav = useModuleNav();
 
   return (
-    <ScreenChrome title={tr('settings')} subtitle={tr('settingsSub')} onBack={onBack}>
-      <Text style={[styles.meta, { color: colors.textMuted }]}>
-        Linas AI {APP_VERSION} · build {APP_BUILD_LABEL}
-      </Text>
+    <ScreenChrome title={tr('settings')} subtitle={tr('settingsSub')}>
+      <ScrollView
+        contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={[styles.meta, { color: colors.textMuted }]}>
+          Linas AI {APP_VERSION} · build {APP_BUILD_LABEL}
+        </Text>
 
-      <Text style={[styles.group, { color: colors.textDim }]}>{tr('groupAccount')}</Text>
-      <Row
-        title={tr('settingsSignedInProfile')}
-        subtitle={tr('settingsSignedInProfileSub')}
-        onPress={() => undefined}
-        disabled
-      />
-      <Row
-        title={tr('settingsBusinessProfile')}
-        subtitle={tr('settingsBusinessProfileSub')}
-        onPress={onBack}
-        note={tr('settingsBusinessProfileNote')}
-      />
-      {onOpenNotifications ? (
+        <Text style={[styles.group, { color: colors.textDim }]}>{tr('groupAccount')}</Text>
         <Row
-          title={tr('notificationsTitle')}
-          subtitle={tr('notificationsSub')}
-          onPress={onOpenNotifications}
+          title={tr('settingsSignedInProfile')}
+          subtitle={tr('settingsSignedInProfileSub')}
+          onPress={() => undefined}
+          disabled
         />
-      ) : null}
+        <Row
+          title={tr('settingsBusinessProfile')}
+          subtitle={tr('settingsBusinessProfileSub')}
+          onPress={nav.goChat}
+          note={tr('settingsBusinessProfileNote')}
+        />
+        {onOpenNotifications ? (
+          <Row
+            title={tr('notificationsTitle')}
+            subtitle={tr('notificationsSub')}
+            onPress={onOpenNotifications}
+          />
+        ) : null}
 
-      <Text style={[styles.group, { color: colors.textDim }]}>{tr('settingsPreferences')}</Text>
-      <Text style={[styles.label, { color: colors.textMuted }]}>{tr('language')}</Text>
-      <View style={styles.chips}>
-        {(['en', 'ar', 'fr'] as AppLanguage[]).map((lang) => (
-          <Pressable
-            key={lang}
-            style={[
-              styles.chip,
-              { borderColor: colors.border, backgroundColor: colors.bgElevated },
-              language === lang && { borderColor: colors.accent, backgroundColor: colors.surfaceAlt },
-            ]}
-            onPress={() => setLanguage(lang)}
-            accessibilityLabel={`${tr('language')} ${lang}`}
-          >
-            <Text style={{ color: colors.text, fontFamily: fonts.bodyMedium }}>{lang.toUpperCase()}</Text>
-          </Pressable>
-        ))}
-      </View>
-      <Text style={[styles.label, { color: colors.textMuted }]}>{tr('settingsAppearance')}</Text>
-      <View style={styles.chips}>
-        {(['system', 'light', 'dark'] as const).map((m) => (
-          <Pressable
-            key={m}
-            style={[
-              styles.chip,
-              { borderColor: colors.border, backgroundColor: colors.bgElevated },
-              mode === m && { borderColor: colors.accent, backgroundColor: colors.surfaceAlt },
-            ]}
-            onPress={() => setMode(m)}
-            accessibilityLabel={`${tr('settingsAppearance')} ${m}`}
-          >
-            <Text style={{ color: colors.text, fontFamily: fonts.bodyMedium }}>{m}</Text>
-          </Pressable>
-        ))}
-      </View>
+        <Text style={[styles.group, { color: colors.textDim }]}>{tr('settingsPreferences')}</Text>
+        <Text style={[styles.label, { color: colors.textMuted }]}>{tr('language')}</Text>
+        <View style={styles.chips}>
+          {(['en', 'ar', 'fr'] as AppLanguage[]).map((lang) => (
+            <Pressable
+              key={lang}
+              style={[
+                styles.chip,
+                { borderColor: colors.border, backgroundColor: colors.bgElevated },
+                language === lang && { borderColor: colors.accent, backgroundColor: colors.surfaceAlt },
+              ]}
+              onPress={() => setLanguage(lang)}
+              accessibilityLabel={`${tr('language')} ${lang}`}
+            >
+              <Text style={{ color: colors.text, fontFamily: fonts.bodyMedium }}>{lang.toUpperCase()}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={[styles.label, { color: colors.textMuted }]}>{tr('settingsAppearance')}</Text>
+        <View style={styles.chips}>
+          {(['system', 'light', 'dark'] as const).map((m) => (
+            <Pressable
+              key={m}
+              style={[
+                styles.chip,
+                { borderColor: colors.border, backgroundColor: colors.bgElevated },
+                mode === m && { borderColor: colors.accent, backgroundColor: colors.surfaceAlt },
+              ]}
+              onPress={() => setMode(m)}
+              accessibilityLabel={`${tr('settingsAppearance')} ${m}`}
+            >
+              <Text style={{ color: colors.text, fontFamily: fonts.bodyMedium }}>{m}</Text>
+            </Pressable>
+          ))}
+        </View>
 
-      {onOpenActions || onOpenAiLimits ? (
-        <>
-          <Text style={[styles.group, { color: colors.textDim }]}>{tr('settingsAiSection')}</Text>
-          {onOpenActions ? (
-            <Row
-              title={tr('settingsActions')}
-              subtitle={tr('settingsActionsSub')}
-              onPress={onOpenActions}
-            />
-          ) : null}
-          {onOpenAiLimits ? (
-            <Row
-              title={tr('settingsAiLimits')}
-              subtitle={tr('settingsAiLimitsSub')}
-              onPress={onOpenAiLimits}
-            />
-          ) : null}
-        </>
-      ) : null}
+        {onOpenActions || onOpenAiLimits ? (
+          <>
+            <Text style={[styles.group, { color: colors.textDim }]}>{tr('settingsAiSection')}</Text>
+            {onOpenActions ? (
+              <Row
+                title={tr('settingsActions')}
+                subtitle={tr('settingsActionsSub')}
+                onPress={onOpenActions}
+              />
+            ) : null}
+            {onOpenAiLimits ? (
+              <Row
+                title={tr('settingsAiLimits')}
+                subtitle={tr('settingsAiLimitsSub')}
+                onPress={onOpenAiLimits}
+              />
+            ) : null}
+          </>
+        ) : null}
 
-      <Text style={[styles.group, { color: colors.textDim }]}>{tr('settingsSecuritySupport')}</Text>
-      <Row title={tr('settingsPrivacyData')} onPress={() => void open(LEGAL_URLS.privacy)} />
-      <Row
-        title={tr('settingsHelpSupport')}
-        onPress={() => void open(LEGAL_URLS.terms)}
-        note={tr('settingsHelpSupportNote')}
-      />
-      <Row title={tr('settingsAboutLegal')} onPress={() => void open(LEGAL_URLS.terms)} />
-      <Row title={tr('terms')} onPress={() => void open(LEGAL_URLS.terms)} />
-      <Row title={tr('privacy')} onPress={() => void open(LEGAL_URLS.privacy)} />
-      <Row title={tr('dataDeletion')} onPress={() => void open(LEGAL_URLS.dataDeletion)} />
+        <Text style={[styles.group, { color: colors.textDim }]}>{tr('settingsSecuritySupport')}</Text>
+        <Row title={tr('settingsPrivacyData')} onPress={() => void open(LEGAL_URLS.privacy)} />
+        <Row
+          title={tr('settingsHelpSupport')}
+          onPress={() => void open(LEGAL_URLS.terms)}
+          note={tr('settingsHelpSupportNote')}
+        />
+        <Row title={tr('settingsAboutLegal')} onPress={() => void open(LEGAL_URLS.terms)} />
+        <Row title={tr('terms')} onPress={() => void open(LEGAL_URLS.terms)} />
+        <Row title={tr('privacy')} onPress={() => void open(LEGAL_URLS.privacy)} />
+        <Row title={tr('dataDeletion')} onPress={() => void open(LEGAL_URLS.dataDeletion)} />
 
-      <View style={styles.logout}>
-        <PrimaryButton label={tr('logout')} variant="danger" onPress={onLogout} />
-      </View>
+        <View style={styles.logout}>
+          <PrimaryButton label={tr('logout')} variant="danger" onPress={onLogout} />
+        </View>
+      </ScrollView>
     </ScreenChrome>
   );
 }
@@ -166,6 +172,7 @@ function Row({
 }
 
 const styles = StyleSheet.create({
+  list: { paddingBottom: spacing.lg },
   meta: { fontFamily: fonts.body, marginBottom: spacing.lg },
   group: {
     fontFamily: fonts.bodyMedium,

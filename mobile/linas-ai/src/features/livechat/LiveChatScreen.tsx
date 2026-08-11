@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import { useModuleNav } from '../nav/ModuleNavContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import { LiveChatInbox } from './LiveChatInbox';
 import { LiveChatThread } from './LiveChatThread';
@@ -8,7 +9,6 @@ import { channelLabel, chatTitle } from './liveChatTypes';
 import { useLiveChatInbox } from './useLiveChatInbox';
 
 type Props = {
-  onBack: () => void;
   /** Open a specific conversation (from owner notification deep link). */
   initialOpen?: { userId: string; conversationId: string } | null;
 };
@@ -16,11 +16,24 @@ type Props = {
 /**
  * Operator Live Chat inbox — same `/api/live-chat/*` APIs as the dashboard.
  * Completely separate from owner/guest Linas AI chat.
+ * Thread → inbox: re-open Live Chat from the side menu (no Back chevron).
  */
-export function LiveChatScreen({ onBack, initialOpen = null }: Props) {
+export function LiveChatScreen({ initialOpen = null }: Props) {
   const inbox = useLiveChatInbox();
+  const nav = useModuleNav();
   const [selected, setSelected] = useState<LiveChatItem | null>(null);
   const [deepLinkTried, setDeepLinkTried] = useState(false);
+  const focusNonceSeen = useRef(nav.areaFocusNonce);
+
+  useEffect(() => {
+    if (nav.activeArea !== 'livechat') return;
+    if (focusNonceSeen.current === nav.areaFocusNonce) return;
+    focusNonceSeen.current = nav.areaFocusNonce;
+    // Re-tapping Live Chat in the drawer returns to inbox (keep-mounted safe).
+    setSelected(null);
+    inbox.reloadQuiet();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reloadQuiet is stable enough; avoid inbox object churn
+  }, [nav.areaFocusNonce, nav.activeArea]);
 
   useEffect(() => {
     if (!initialOpen || deepLinkTried || inbox.loading) {
@@ -49,22 +62,14 @@ export function LiveChatScreen({ onBack, initialOpen = null }: Props) {
 
   if (selected) {
     return (
-      <ScreenChrome
-        title={chatTitle(selected)}
-        subtitle={channelLabel(selected)}
-        backLabel="← Inbox"
-        onBack={() => {
-          setSelected(null);
-          inbox.reloadQuiet();
-        }}
-      >
+      <ScreenChrome title={chatTitle(selected)} subtitle={channelLabel(selected)}>
         <LiveChatThread chat={selected} onChatUpdated={inbox.reloadQuiet} />
       </ScreenChrome>
     );
   }
 
   return (
-    <ScreenChrome title="Live Chat" subtitle="Inbox — WhatsApp, Instagram, Facebook" onBack={onBack}>
+    <ScreenChrome title="Live Chat" subtitle="Inbox — WhatsApp, Instagram, Facebook">
       <LiveChatInbox
         inbox={inbox}
         onOpenChat={(chat) => {

@@ -54,7 +54,7 @@ def creative_refusal_message(*, language: str = "en") -> str:
     return (
         "Linas AI currently focuses on automating Instagram and Facebook DMs and comments — "
         "not creating posts, stories, images, or videos. "
-        "I can help with Content Management, integrations, diagnosis, and usage."
+        "I can help with AI Setup, integrations, diagnosis, and usage."
     )
 
 

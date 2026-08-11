@@ -17,11 +17,10 @@ import { WorkspaceStatusCard } from './sections/WorkspaceStatusCard';
 import { useTenantDashboard } from './useTenantDashboard';
 
 type Props = {
-  onBack: () => void;
   onNavigate: (target: DashboardNavigateTarget) => void;
 };
 
-export function DashboardScreen({ onBack, onNavigate }: Props) {
+export function DashboardScreen({ onNavigate }: Props) {
   const { colors } = useTheme();
   const { period, setPeriod, state, refreshing, refresh, reload } = useTenantDashboard('billing');
 
@@ -31,12 +30,7 @@ export function DashboardScreen({ onBack, onNavigate }: Props) {
   }
 
   return (
-    <ScreenChrome
-      title="Dashboard"
-      subtitle="Your AI workspace at a glance"
-      onBack={onBack}
-      backLabel="← Back to Chat"
-    >
+    <ScreenChrome title="Dashboard" subtitle="Your AI workspace at a glance">
       {state.kind === 'loading' ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.accent} accessibilityLabel="Loading dashboard" />

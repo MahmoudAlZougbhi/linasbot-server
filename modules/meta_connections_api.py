@@ -497,7 +497,7 @@ async def update_meta_comment_replies(
             raise HTTPException(
                 status_code=409,
                 detail=(
-                    "Enable the matching Comments action in Content Management → Actions "
+                    "Enable the matching Comments action in AI Setup → Actions "
                     "and publish before turning on per-asset comment replies."
                 ),
             )

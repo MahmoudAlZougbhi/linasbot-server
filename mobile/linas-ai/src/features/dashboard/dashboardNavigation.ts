@@ -1,4 +1,4 @@
-import type { DashboardNavigateTarget } from '../dashboard/dashboardTypes';
+import type { DashboardNavigateTarget } from './dashboardTypes';
 import type { Screen } from '../../app/navigation';
 
 /** Map Dashboard card actions onto existing app screens (no dead buttons). */

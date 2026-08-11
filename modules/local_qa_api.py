@@ -21,7 +21,7 @@ QA_FILE_PATH = str(QA_PAIRS_FILE)
 _LEGACY_FAQ_WRITE_BLOCKED = {
     "success": False,
     "error": "CM_FAQ_CANONICAL",
-    "message": "Legacy Bot Training FAQ writes are disabled. Use Content Management → FAQ.",
+    "message": "Legacy Bot Training FAQ writes are disabled. Use AI Setup → FAQ.",
     "redirect": "/content-managers/faq",
 }
 

@@ -128,7 +128,7 @@ const Wallet = () => {
           Each AI call uses input tokens for what the model reads and output tokens for what it writes.
           Detailed per-message spend and reasons are in{' '}
           <Link to="/content-managers" className="font-medium text-primary-700 underline">
-            Content Managers
+            AI Setup
           </Link>
           .
         </p>
@@ -230,7 +230,7 @@ const Wallet = () => {
             </p>
           </div>
           <Link to="/content-managers" className="text-sm font-medium text-primary-700 underline">
-            Open Content Managers
+            Open AI Setup
           </Link>
         </div>
 
