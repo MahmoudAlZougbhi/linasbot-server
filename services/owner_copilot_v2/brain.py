@@ -6,7 +6,7 @@ import json
 from collections.abc import AsyncIterator, Callable
 from typing import Any, Literal
 
-from services.model_policy import emit_model_policy_trace, resolve_owner_policy
+from services.model_policy import emit_model_policy_trace, owner_stream_route_payload, resolve_owner_policy
 from services.owner_ai_context import pack_owner_turn_context
 from services.owner_copilot_v2.assent import looks_like_owner_assent, resolve_pending_confirm_token
 from services.owner_copilot_v2.brain_support import (
@@ -273,12 +273,7 @@ async def iter_owner_turn_v2_events(
                         pending_confirmation=pending_confirmation,
                         proposed_patch=proposed_patch,
                         choice_set_id=choice_set_id_out,
-                        route={
-                            "model": turn_policy.model,
-                            "reasoning_mode": turn_policy.reasoning_mode,
-                            "reasoning_effort": turn_policy.reasoning_effort,
-                            "reason": turn_policy.reason,
-                        },
+                        route=owner_stream_route_payload(turn_policy),
                     ),
                 )
                 return
@@ -377,12 +372,7 @@ async def iter_owner_turn_v2_events(
                 pending_confirmation=pending_confirmation,
                 proposed_patch=proposed_patch,
                 reason="max_tool_rounds",
-                route={
-                    "model": fin_policy.model,
-                    "reasoning_mode": fin_policy.reasoning_mode,
-                    "reasoning_effort": fin_policy.reasoning_effort,
-                    "reason": fin_policy.reason,
-                },
+                route=owner_stream_route_payload(fin_policy),
             ),
         )
     except Exception as exc:  # noqa: BLE001

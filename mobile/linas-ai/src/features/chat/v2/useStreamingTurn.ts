@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import {
+  ownerModeFromStreamRoute,
+  ownerModeFromStreamStatus,
+} from '../ownerModeFromStream';
 import { looksLikeOwnerAssent, pendingTokenFromDonePayload } from './ownerAssent';
 import type { StreamCard, StreamChoice } from './useOwnerStream';
 import { useOwnerStream } from './useOwnerStream';
@@ -7,6 +11,8 @@ import { useOwnerStream } from './useOwnerStream';
 type TurnHooks = {
   onTerminal: () => Promise<void> | void;
   onTitleUpdated?: (title: string) => void;
+  /** Sync LIN chip when stream reports High / CM tools (never auto-downgrades). */
+  onOwnerModeHint?: (mode: 'chat' | 'work') => void;
 };
 
 /**
@@ -79,6 +85,8 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
           onStatus: (s) => {
             setThinking(false);
             setStatusRows((prev) => [...prev.filter((p) => p.id !== s.id), s]);
+            const hinted = ownerModeFromStreamStatus('chat', s.id);
+            if (hinted === 'work') hooksRef.current.onOwnerModeHint?.('work');
           },
           onDelta: (t) => {
             setThinking(false);
@@ -114,6 +122,8 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
             } else if (nextPending) {
               pendingConfirmRef.current = nextPending;
             }
+            const hinted = ownerModeFromStreamRoute('chat', payload.route);
+            if (hinted === 'work') hooksRef.current.onOwnerModeHint?.('work');
             setThinking(false);
             setStatusRows([]);
             const finalText = String(payload.reply_text || '').trim();

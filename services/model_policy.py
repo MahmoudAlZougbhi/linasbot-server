@@ -131,6 +131,33 @@ _DESIGN_MUTATION = re.compile(
     r"\b(app|web|landing)\b.{0,40}\b(design|ui|ux)\b|\b(design|ui|ux)\b.{0,40}\b(change|update)\b",
     re.I,
 )
+# Content Manager / CM sections (EN + common AR). Auto-upgrades Work/High even in Chat mode.
+# Keep aligned with mobile detectCmWorkIntent.ts.
+_CM_WORK_INTENT = re.compile(
+    r"\b(content\s*management|content\s*manager|content-manager|\bcm\b)\b|"
+    r"\b(faq|smart\s*answers?|knowledge|handoff|publish|draft|validate)\b|"
+    r"\b(opening\s*hours?|business\s*hours?|working\s*hours?|off\s*days?)\b|"
+    r"\b(ai\s*basics|ai\s*limits|dynamic\s*messages|care\s*instructions|response\s*style|ai\s*style)\b|"
+    r"\b(prices?|branches?|services?|languages?|restricted|sections?)\b|"
+    r"(إدارة\s*المحتوى|كونتنت|محتوى)|"
+    r"(\bFAQ\b|أسئلة\s*شائعة|سؤال\s*وجواب)|"
+    r"(ساعات\s*(العمل|الدوام)?|مواعيد\s*(العمل|الدوام)?|دوام)|"
+    r"(معرفة|انشر|نشر|أسعار|فروع|خدمات|أسئلة)",
+    re.I,
+)
+
+
+def looks_like_cm_work_intent(user_text: str | None) -> bool:
+    """True when owner text is about Content Manager / CM sections (EN/AR)."""
+    text = (user_text or "").strip()
+    if not text:
+        return False
+    return bool(_CM_WORK_INTENT.search(text))
+
+
+def suggested_owner_mode_for_effort(effort: OwnerEffort) -> Literal["work"] | None:
+    """Tell the mobile chip to show High when this turn ran Work/High (never suggest Low)."""
+    return "work" if effort == "high" else None
 
 
 @dataclass(frozen=True)
@@ -152,6 +179,19 @@ class ModelPolicyDecision:
             "reason": self.reason,
             "request_id": self.request_id,
         }
+
+
+def owner_stream_route_payload(policy: ModelPolicyDecision) -> dict[str, Any]:
+    """Privacy-safe route block for SSE done events (includes chip sync hint)."""
+    payload: dict[str, Any] = {
+        "model": policy.model,
+        "reasoning_mode": policy.reasoning_mode,
+        "reasoning_effort": policy.reasoning_effort,
+        "reason": policy.reason,
+    }
+    if str(policy.reasoning_effort) == "high":
+        payload["suggested_owner_mode"] = "work"
+    return payload
 
 
 def _new_request_id(surface: str) -> str:
@@ -185,15 +225,19 @@ def classify_owner_effort(
 ) -> tuple[OwnerEffort, str]:
     """Resolve owner reasoning effort for one request (kept for all continuations).
 
-    UI Chat|Work mode is authoritative when provided:
-    - work → high (solo high)
-    - chat → low (solo low / normal)
+    UI Chat|Work mode:
+    - work → high
+    - Content Manager intent → high (even if UI still shows Chat/Low; client syncs chip)
+    - chat → low (ordinary non-CM turns)
     ``force_high`` still wins (e.g. confirm_tool mutations).
+    ``force_low`` still forces low (tests / explicit clamp).
     """
     if force_high:
         return "high", "force_high"
     if owner_mode == "work":
         return "high", "owner_mode_work"
+    if looks_like_cm_work_intent(user_text):
+        return "high", "cm_work_intent"
     if owner_mode == "chat" or force_low:
         return "low", "owner_mode_chat" if owner_mode == "chat" else "force_low"
     confirm_intent = _normalize_confirm_intent(confirm_tool)

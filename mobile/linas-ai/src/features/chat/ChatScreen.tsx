@@ -23,6 +23,7 @@ import { ChatStatusBanners } from './ChatStatusBanners';
 import { ChatWorkspaceChip } from './ChatWorkspaceChip';
 import { GuestBanner } from './GuestBanner';
 import type { OwnerChatMode } from './ownerChatMode';
+import { resolveOwnerModeForOutgoing } from './ownerChatMode';
 import { PendingAttachmentsStrip } from './PendingAttachmentsStrip';
 import { savePendingGuestDraft } from './pendingGuestDraft';
 import { sendChatMessage } from './sendChatMessage';
@@ -58,14 +59,6 @@ export function ChatScreen({
   const { colors } = useTheme();
   const owner = useChatSession(isAuthenticated);
   const guest = useGuestChatSession(!isAuthenticated);
-  const turn = useStreamingTurn(owner.conversationId, {
-    onTerminal: () => owner.syncAfterTurn(),
-    onTitleUpdated: (title) => {
-      if (owner.conversationId) {
-        owner.applyConversationTitle(owner.conversationId, title, { onlyIfDefault: true });
-      }
-    },
-  });
   const [draft, setDraft] = useState('');
   const { userId, workspaceLabel } = useChatIdentity(isAuthenticated, setDraft);
   const { pinnedIds, togglePin } = usePinnedChats(userId);
@@ -76,6 +69,18 @@ export function ChatScreen({
   const [offline, setOffline] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [ownerMode, setOwnerMode] = useState<OwnerChatMode>('chat');
+  const promoteOwnerMode = useCallback((mode: OwnerChatMode) => {
+    if (mode === 'work') setOwnerMode('work');
+  }, []);
+  const turn = useStreamingTurn(owner.conversationId, {
+    onTerminal: () => owner.syncAfterTurn(),
+    onTitleUpdated: (title) => {
+      if (owner.conversationId) {
+        owner.applyConversationTitle(owner.conversationId, title, { onlyIfDefault: true });
+      }
+    },
+    onOwnerModeHint: promoteOwnerMode,
+  });
   const imagePreviewByContent = useRef<Record<string, string[]>>({});
   const [choiceBusy, setChoiceBusy] = useState(false);
   const composerInputRef = useRef<TextInput>(null);
@@ -139,8 +144,12 @@ export function ChatScreen({
   }
 
   const ownerSendWithMode = useCallback(
-    (text: string, opts?: Parameters<typeof turn.send>[1]) =>
-      turn.send(text, { ...opts, owner_mode: ownerMode }),
+    (text: string, opts?: Parameters<typeof turn.send>[1]) => {
+      const base = opts?.owner_mode ?? ownerMode;
+      const mode = resolveOwnerModeForOutgoing(base, text);
+      if (mode === 'work' && ownerMode !== 'work') setOwnerMode('work');
+      return turn.send(text, { ...opts, owner_mode: mode });
+    },
     [ownerMode, turn],
   );
 
@@ -272,9 +281,10 @@ export function ChatScreen({
               isAuthenticated && !hasUserMessage && !turn.liveText && !turn.streaming
             }
             onOwnerWelcomeChip={(chip) => {
-              setOwnerMode(chip.mode);
+              const mode = resolveOwnerModeForOutgoing(chip.mode, chip.prompt);
+              setOwnerMode(mode);
               scrollToBottom();
-              void turn.send(chip.prompt, { owner_mode: chip.mode, reply_language: language });
+              void turn.send(chip.prompt, { owner_mode: mode, reply_language: language });
             }}
             seedTypewriterMessageId={isAuthenticated ? owner.seedTypewriterMessageId : null}
             onSeedTypewriterDone={owner.clearSeedTypewriter}
