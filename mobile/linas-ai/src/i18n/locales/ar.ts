@@ -1,4 +1,5 @@
 import { subscriptionAr } from './subscriptionAr';
+import { smartFollowUpAr } from './smartFollowUpAr';
 import { whatsappAr } from './whatsappAr';
 import type { StringKey } from './en';
 
@@ -342,6 +343,7 @@ export const ar = {
   socialContinueApple: 'المتابعة مع Apple',
   ...subscriptionAr,
   ...whatsappAr,
+  ...smartFollowUpAr,
 
   proposalChangeTitle: 'تعديل إعداد الذكاء الاصطناعي',
   proposalDeleteTitle: 'حذف من إعداد الذكاء الاصطناعي',

@@ -221,6 +221,22 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
             source="ai_reply",
         )
         emit_wa_event("ai_reply_sent", connection_id=connection_id, conversation_id=conversation_id)
+        # Smart Follow-Up: absolute-delay sequence after qualifying AI customer-support reply.
+        try:
+            from services.whatsapp_cloud.smart_followup.hooks import schedule_after_ai_reply
+
+            schedule_after_ai_reply(
+                session,
+                tenant_id=tenant_id,
+                connection_id=connection_id,
+                conversation_id=conversation_id,
+                trigger_outbound_intent_id=intent.id,
+                control_epoch=int(conv.control_epoch),
+                trigger_ai_sent_at=conv.last_ai_outbound_at,
+                conversation=conv,
+            )
+        except Exception as exc:
+            emit_wa_event("smart_followup_schedule_failed", error=type(exc).__name__)
 
 
 def _release_reservation(tenant_id: str, reservation_id: str | None) -> None:

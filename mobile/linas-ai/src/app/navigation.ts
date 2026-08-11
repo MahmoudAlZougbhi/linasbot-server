@@ -24,6 +24,7 @@ export type Screen =
       proposalReview?: CmProposalReview | null;
     }
   | { name: 'faq'; proposalReview?: CmProposalReview | null }
+  | { name: 'smartFollowUp' }
   | { name: 'owner' }
   | { name: 'resource'; title: string; path: string };
 

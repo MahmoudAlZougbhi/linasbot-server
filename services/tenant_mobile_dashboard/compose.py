@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 from services.credit_ledger_service import credit_ledger_service
@@ -349,6 +350,31 @@ def build_tenant_mobile_dashboard(
             "usage_distribution_unavailable", "Usage distribution depends on interaction logs."
         )
 
+    smart_followup_section: dict[str, Any]
+    try:
+        from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+        from services.whatsapp_cloud.smart_followup.analytics import build_smart_followup_analytics
+
+        start_dt = datetime.fromtimestamp(float(window["start_ts"]), tz=UTC)
+        end_dt = datetime.fromtimestamp(float(window["end_ts"]), tz=UTC)
+        with whatsapp_session() as wa_db:
+            analytics = build_smart_followup_analytics(
+                wa_db,
+                tenant_id=tid,
+                start=start_dt,
+                end=end_dt,
+                timezone_name=str(window["timezone"]),
+            )
+        smart_followup_section = _section_ok(analytics.get("metrics") or {})
+    except WhatsAppDatabaseUnavailable:
+        smart_followup_section = _section_unavailable(
+            "WHATSAPP_DB_UNAVAILABLE",
+            "WhatsApp Cloud database is not configured",
+        )
+    except Exception as exc:
+        # Honest error — never invent zero metrics when the API fails.
+        smart_followup_section = _section_error("smart_followup_unavailable", str(exc))
+
     partial_failures = [
         key
         for key, section in {
@@ -357,6 +383,7 @@ def build_tenant_mobile_dashboard(
             "channels": channels_section,
             "content_readiness": content,
             "team_capacity": team,
+            "smart_followup": smart_followup_section,
         }.items()
         if section.get("availability") == "error"
     ]
@@ -379,6 +406,7 @@ def build_tenant_mobile_dashboard(
         "channels": channels_section,
         "content_readiness": content,
         "team_capacity": team,
+        "smart_followup": smart_followup_section,
         "alerts": alerts,
         "partial_failures": partial_failures,
         "privacy": {

@@ -57,6 +57,7 @@ _ROUTE_MODULES = (
     "modules.meta_social_posts_api",
     "modules.wallet_api",
     "modules.plans_api",
+    "modules.whatsapp_smart_followup_api",
 )
 
 _MUTATION_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -186,9 +187,9 @@ class TestRouteInventory:
         # +guest-ai session/messages (prefix-public, rate-limited).
         # +owner-notifications inbox/read/device-token + mobile STT (protected).
         # +public plans catalog GET /api/public/plans + protected GET /api/billing/catalog.
-        assert counts["total_api_routes"] == 221
+        assert counts["total_api_routes"] == 225
         assert counts["public"] == 19
-        assert counts["protected"] == 202
+        assert counts["protected"] == 206
         assert public_set == {
             ("GET", "/api/health"),
             ("GET", "/api/ready"),

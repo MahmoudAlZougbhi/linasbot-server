@@ -69,6 +69,9 @@ async def whatsapp_disable_ai(connection_id: str, request: Request) -> Any:
             event_type="ai_default_disabled",
             detail={},
         )
+        from services.whatsapp_cloud.smart_followup.hooks import cancel_tenant_followups
+
+        cancel_tenant_followups(db, tenant_id=session.tenant_id, reason="ai_disabled")
         return {"success": True, "connection": connection_status_payload(db, conn)}
 
 
@@ -93,6 +96,14 @@ async def whatsapp_pause_conversation(conversation_id: str, request: Request) ->
         if conv is None:
             raise HTTPException(status_code=404, detail="conversation_not_found")
         repo.pause_conversation(conv, reason="operator_pause", actor_user_id=_actor_id(session))
+        from services.whatsapp_cloud.smart_followup.hooks import cancel_conversation_followups
+
+        cancel_conversation_followups(
+            db,
+            tenant_id=session.tenant_id,
+            conversation_id=conv.id,
+            reason="conversation_paused",
+        )
         return {"success": True, "conversation": conversation_public_view(conv)}
 
 
@@ -184,6 +195,9 @@ async def whatsapp_disconnect(connection_id: str, request: Request, body: dict[s
             event_type="connection_revoked",
             detail={"reason": "owner_disconnect"},
         )
+        from services.whatsapp_cloud.smart_followup.hooks import cancel_tenant_followups
+
+        cancel_tenant_followups(db, tenant_id=session.tenant_id, reason="whatsapp_disconnected")
         return {"success": True, "lifecycle_status": "revoked"}
 
 

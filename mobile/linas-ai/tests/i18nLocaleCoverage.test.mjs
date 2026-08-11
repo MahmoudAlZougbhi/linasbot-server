@@ -21,14 +21,14 @@ function extractKeys(source) {
 function localeBundle(lang) {
   const cap = lang.charAt(0).toUpperCase() + lang.slice(1);
   const main = readFileSync(join(root, `src/i18n/locales/${lang}.ts`), 'utf8');
-  const subPath = join(root, `src/i18n/locales/subscription${cap}.ts`);
-  let sub = '';
-  try {
-    sub = readFileSync(subPath, 'utf8');
-  } catch {
-    sub = '';
-  }
-  return `${main}\n${sub}`;
+  const extras = ['subscription', 'whatsapp', 'smartFollowUp'].map((prefix) => {
+    try {
+      return readFileSync(join(root, `src/i18n/locales/${prefix}${cap}.ts`), 'utf8');
+    } catch {
+      return '';
+    }
+  });
+  return [main, ...extras].join('\n');
 }
 
 const CRITICAL_KEYS = [

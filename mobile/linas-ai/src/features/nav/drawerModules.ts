@@ -10,13 +10,20 @@ export type DrawerModule = {
   entitlement?: 'users';
 };
 
+/** Featured full-width tile above the module grid (not in DRAWER_MODULES). */
+export const FEATURED_AI_SETUP: DrawerModule = {
+  id: 'cm',
+  titleKey: 'navContentManagement',
+  guestVisible: true,
+};
+
 /**
- * Binding product-module order (Mahmoud prompt §6).
- * Notifications and Logout live in Settings, not this grid or the drawer footer.
+ * Binding product-module order.
+ * AI Setup is featured separately (full width). Notifications and Logout live in Settings.
  */
 export const DRAWER_MODULES: DrawerModule[] = [
   { id: 'dashboard', titleKey: 'navDashboard', guestVisible: true },
-  { id: 'cm', titleKey: 'navContentManagement', guestVisible: true },
+  { id: 'smartFollowUp', titleKey: 'navSmartFollowUp', guestVisible: true },
   { id: 'faq', titleKey: 'faqTitle', guestVisible: true },
   { id: 'livechat', titleKey: 'navLiveChat', guestVisible: true },
   { id: 'integrations', titleKey: 'integrations', guestVisible: true },

@@ -1,4 +1,5 @@
 import { subscriptionFr } from './subscriptionFr';
+import { smartFollowUpFr } from './smartFollowUpFr';
 import { whatsappFr } from './whatsappFr';
 import type { StringKey } from './en';
 
@@ -348,6 +349,7 @@ export const fr = {
   socialContinueApple: 'Continuer avec Apple',
   ...subscriptionFr,
   ...whatsappFr,
+  ...smartFollowUpFr,
 
   proposalChangeTitle: 'Modification Configuration IA',
   proposalDeleteTitle: 'Supprimer de la Configuration IA',

@@ -15,9 +15,10 @@ import { SideDrawer } from '../../components/SideDrawer';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import type { ControlArea } from '../control/controlAreas';
-import { visibleDrawerModules } from './drawerModules';
+import { FEATURED_AI_SETUP, visibleDrawerModules } from './drawerModules';
 import { HistoryRows, type HistoryItem } from './HistoryRows';
 import { DRAWER_TOOL_ICONS, MODULE_ICONS } from './moduleIcons';
+import { NavDrawerAiSetupTile } from './NavDrawerAiSetupTile';
 import { NavDrawerFooter } from './NavDrawerFooter';
 
 type Props = {
@@ -155,6 +156,12 @@ export function NavDrawer(props: Props) {
       >
         {!searching ? (
           <>
+            <NavDrawerAiSetupTile
+              onPress={() => {
+                props.onClose();
+                props.onOpenArea(FEATURED_AI_SETUP.id);
+              }}
+            />
             <View style={styles.grid}>
               {modules.map((m) => (
                 <Pressable
