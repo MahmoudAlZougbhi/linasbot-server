@@ -74,6 +74,7 @@ function productionUiCorpus() {
     ...walk(join(srcRoot, 'i18n')),
     ...walk(join(srcRoot, 'features')),
     ...walk(join(srcRoot, 'components')),
+    ...walk(join(srcRoot, 'app')),
     join(root, 'App.tsx'),
   ].filter((p) => {
     // Keep API/helpers out of the user-copy scan when they are not screens.

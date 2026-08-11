@@ -99,9 +99,12 @@ test('New Chat welcome types the greeting seed (no empty-state typewriter kill)'
 
 test('App launches chat-first for guest and owner', () => {
   const app = readFileSync(join(root, 'App.tsx'), 'utf8');
-  assert.match(app, /setScreen\(\{ name: 'chat' \}\)/);
+  const shell = read('app/AppShell.tsx');
+  assert.match(app, /AppShell/);
+  assert.match(shell, /setScreen\(\{ name: 'chat' \}\)/);
   assert.doesNotMatch(app, /name: 'creative'/);
   assert.doesNotMatch(app, /CreativeStudio/);
+  assert.doesNotMatch(shell, /CreativeStudio/);
 });
 
 test('cold open is branded star splash then chat (no character mash / progress boot)', () => {
@@ -341,7 +344,7 @@ test('Settings hosts Notifications and Logout; drawer does not', () => {
   const settings = read('features/settings/SettingsScreen.tsx');
   const nav = read('features/nav/NavDrawer.tsx');
   const chat = read('features/chat/ChatScreen.tsx');
-  const app = readFileSync(join(root, 'App.tsx'), 'utf8');
+  const tree = read('app/AppScreenTree.tsx');
   assert.match(settings, /onOpenNotifications/);
   assert.match(settings, /notificationsTitle/);
   assert.match(settings, /tr\('logout'\)/);
@@ -350,7 +353,7 @@ test('Settings hosts Notifications and Logout; drawer does not', () => {
   assert.doesNotMatch(nav, /Notifications/);
   assert.doesNotMatch(nav, /Log out/);
   assert.doesNotMatch(chat, /onLogout/);
-  assert.match(app, /onOpenNotifications=\{\(\) => setScreen\(\{ name: 'notifications', backTo: 'settings' \}\)\}/);
+  assert.match(tree, /onOpenNotifications=\{\(\) => setScreen\(\{ name: 'notifications', backTo: 'settings' \}\)\}/);
 });
 
 test('Settings does not duplicate AI Basics CM store', () => {
@@ -380,5 +383,9 @@ test('theme tokens include light and dark parity keys', () => {
 
 test('no bottom tab navigator wiring', () => {
   const app = readFileSync(join(root, 'App.tsx'), 'utf8');
+  const shell = read('app/AppShell.tsx');
+  const tree = read('app/AppScreenTree.tsx');
   assert.doesNotMatch(app, /createBottomTabNavigator|BottomTab|Tab\.Navigator/);
+  assert.doesNotMatch(shell, /createBottomTabNavigator|BottomTab|Tab\.Navigator/);
+  assert.doesNotMatch(tree, /createBottomTabNavigator|BottomTab|Tab\.Navigator/);
 });
