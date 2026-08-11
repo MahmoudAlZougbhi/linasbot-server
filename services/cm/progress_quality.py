@@ -77,6 +77,47 @@ def _prices_ok(payload: dict[str, Any]) -> bool:
 
 def assess_section_fill(section: str, payload: dict[str, Any] | None, *, is_default: bool) -> dict[str, Any]:
     """Return fill level + gaps for one CM section (never invents sections)."""
+    name = section.strip().replace("-", "_")
+
+    # Comments policy is optional advanced control — empty defaults are intentional.
+    if name == "comments":
+        if is_default or not isinstance(payload, dict):
+            return {
+                "fill": "filled",
+                "is_done": True,
+                "gaps": [],
+                "summary": "Optional — default AI comment behavior until you add keyword rules.",
+            }
+        gaps: list[str] = []
+        rules = [it for it in (payload.get("rules") or []) if isinstance(it, dict)]
+        for rule in rules:
+            if rule.get("enabled") is False:
+                continue
+            has_match = bool(
+                any(str(k).strip() for k in (rule.get("keywords") or []) if k is not None)
+                or str(rule.get("pattern") or "").strip()
+            )
+            if not has_match:
+                gaps.append("comment_rule_keywords_or_pattern")
+                break
+            action = str(rule.get("action") or "")
+            if action == "reply_dm" and not str(rule.get("reply_template") or "").strip():
+                gaps.append("comment_rule_dm_template")
+                break
+        if gaps:
+            return {
+                "fill": "weak",
+                "is_done": False,
+                "gaps": gaps,
+                "summary": "Comment rules need match keywords/pattern (and DM template for reply_dm).",
+            }
+        return {
+            "fill": "filled",
+            "is_done": True,
+            "gaps": [],
+            "summary": "Filled enough to use — do not re-ask unless the owner explicitly wants changes.",
+        }
+
     if is_default or not isinstance(payload, dict):
         return {
             "fill": "missing",
@@ -85,8 +126,7 @@ def assess_section_fill(section: str, payload: dict[str, Any] | None, *, is_defa
             "summary": "Still at factory default — not filled by the owner yet.",
         }
 
-    gaps: list[str] = []
-    name = section.strip().replace("-", "_")
+    gaps = []
 
     if name == "ai_basics":
         has_name = _nonempty(payload.get("clinic_name")) or _nonempty(payload.get("assistant_name"))

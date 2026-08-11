@@ -100,6 +100,12 @@ export const CM_SECTION_CARDS = [
     description: "Enable or disable what the AI is allowed to do (DMs, comments, handoff, photo).",
   },
   {
+    slug: "comments",
+    section: "comments",
+    name: "Comments Policy",
+    description: "Keyword rules for comments: reply publicly, reply via DM, or ignore (optional post id).",
+  },
+  {
     slug: "ai-limits",
     section: "ai_limits",
     name: "AI Limits",

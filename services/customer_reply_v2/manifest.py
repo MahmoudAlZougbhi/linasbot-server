@@ -11,6 +11,7 @@ from services.customer_reply_v2.models import ManifestSection
 
 # Full AI Basics / Style are Answer-only; never selectable by Retrieval Luna.
 FIXED_ANSWER_SECTIONS = frozenset({"ai_basics", "style"})
+NON_SELECTABLE_SECTIONS = frozenset({"comments"})
 
 SECTION_DESCRIPTIONS: dict[str, str] = {
     "ai_basics": "Business identity and assistant personality (fixed Answer context).",
@@ -26,8 +27,10 @@ SECTION_DESCRIPTIONS: dict[str, str] = {
     "handoff": "Human/WhatsApp handoff destinations (server-enforced).",
     "restricted": "Restricted topics that must be refused (server-enforced).",
     "actions": "Allowed AI actions / capability gates.",
+    "comments": "Comment keyword rules: reply publicly, reply via DM, or ignore (server-enforced).",
     "ai_limits": "AI usage and behavior limits.",
     "off_days": "Closed days and holiday schedules.",
+    "opening_hours": "Named opening-hour calendars.",
 }
 
 _CACHE: dict[str, tuple[float, str, list[ManifestSection]]] = {}
@@ -75,6 +78,7 @@ def build_published_manifest(tenant_id: str) -> tuple[str, list[ManifestSection]
     for section_id in ordered_ids:
         payload = sections.get(section_id) or {}
         fixed = section_id in FIXED_ANSWER_SECTIONS
+        selectable = not fixed and section_id not in NON_SELECTABLE_SECTIONS
         manifest.append(
             ManifestSection(
                 section_id=section_id,
@@ -83,7 +87,7 @@ def build_published_manifest(tenant_id: str) -> tuple[str, list[ManifestSection]
                 published_revision=revision,
                 item_count=_item_count(section_id, payload if isinstance(payload, dict) else {}),
                 fixed_answer_context=fixed,
-                selectable=not fixed,
+                selectable=selectable,
             )
         )
     return revision, manifest

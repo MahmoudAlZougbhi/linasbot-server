@@ -16,6 +16,7 @@ import { LanguagesEditor } from './editors/LanguagesEditor';
 import { OffDaysEditor } from './editors/OffDaysEditor';
 import { OpeningHoursEditor } from './editors/OpeningHoursEditor';
 import { ActionsEditor, AiLimitsEditor, RestrictedEditor } from './editors/PolicyEditors';
+import { CommentsEditor } from './editors/CommentsEditor';
 import { PricesEditor } from './editors/PricesEditor';
 import { ServicesEditor } from './editors/ServicesEditor';
 import { StyleEditor } from './editors/StyleEditor';
@@ -61,6 +62,8 @@ function SectionBody({
       return <OpeningHoursEditor payload={payload} onChange={onChange} />;
     case 'restricted':
       return <RestrictedEditor payload={payload} onChange={onChange} />;
+    case 'comments':
+      return <CommentsEditor payload={payload} onChange={onChange} />;
     case 'actions':
       return <ActionsEditor payload={payload} onChange={onChange} />;
     case 'ai_limits':

@@ -135,6 +135,7 @@ CM_SECTIONS: Final[tuple[str, ...]] = (
     "handoff",
     "restricted",
     "actions",
+    "comments",
     "ai_limits",
     "off_days",
 )
