@@ -105,6 +105,7 @@ def configured_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Meta
         actor_id="owner",
     )
     monkeypatch.setattr("services.meta_multi_app_router.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.meta_comment_events.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(
         meta_messaging_webhook,
         "get_meta_messaging_settings",
@@ -241,9 +242,153 @@ async def test_instagram_object_routes_only_linked_instagram_binding(
 
 
 @pytest.mark.asyncio
-async def test_wrong_or_missing_multi_app_signature_is_401(
+async def test_instagram_comment_on_app_a_callback_uses_instagram_login_binding(
     configured_registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Regression: Meta may deliver IG comments to App A /webhook/meta-messaging.
+
+    When the page-linked facebook_login IG row lacks comment scopes but Direct
+    Instagram Login is comments-ready for the same asset, the webhook must accept
+    and process via the instagram_login binding (not drop with facebook_login-only).
+    """
+    from services.meta_app_registry import MetaBindingCredential
+    from services.meta_comment_replies import CommentReplyResult
+    from services.meta_instagram_login_subscription import COMMENTS_SUBSCRIPTION_FIELD
+
+    ig_id = "17841413184256533"
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_APP_ID", "1035856539045307")
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_APP_SECRET", "instagram-app-secret-tests")
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN", "verify-ig-login-tests")
+
+    # Fixture already has facebook_login IG without comment scopes. Add Direct Login.
+    configured_registry.authorize_oauth_asset(
+        tenant_id="linas",
+        channel="instagram",
+        asset_id=ig_id,
+        page_id="",
+        instagram_account_id=ig_id,
+        app_key=APP_A_KEY,
+        credential=MetaBindingCredential(
+            access_token="ig-login-token",
+            token_app_id="1035856539045307",
+            token_profile_id=ig_id,
+            scopes=(
+                "instagram_business_basic",
+                "instagram_business_manage_messages",
+                "instagram_business_manage_comments",
+            ),
+            auth_flow="instagram_login",
+        ),
+        actor_id="owner",
+        auth_flow="instagram_login",
+        webhook_subscription_status="ready",
+        webhook_subscribed_fields=("messages", "messaging_postbacks", COMMENTS_SUBSCRIPTION_FIELD),
+    )
+
+    processed: list[str] = []
+
+    async def claim(*_args: Any, **_kwargs: Any) -> bool:
+        return True
+
+    async def finish(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def process_comment(resolved: Any) -> CommentReplyResult:
+        processed.append(str(resolved.binding.auth_flow))
+        return CommentReplyResult(status="sent", reply_id="r1")
+
+    monkeypatch.setattr("services.durable_event_claim.try_claim_event", claim)
+    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", finish)
+    monkeypatch.setattr("services.durable_event_claim.release_event_claim", finish)
+    monkeypatch.setattr(meta_messaging_webhook, "process_meta_comment_event", process_comment)
+
+    payload = {
+        "object": "instagram",
+        "entry": [
+            {
+                "id": ig_id,
+                "time": 1700000000,
+                "changes": [
+                    {
+                        "field": "comments",
+                        "value": {
+                            "id": "igc-prod-regression-1",
+                            "text": "Hours?",
+                            "from": {"id": "tester-igsid", "username": "tester"},
+                            "media": {"id": "media-9"},
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+    body = json.dumps(payload, separators=(",", ":")).encode()
+    response = await meta_messaging_webhook.receive_meta_messaging_webhook(
+        _request(body, _sign("multi-app-a-secret", body))
+    )
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    data = json.loads(response.body)
+    assert data["accepted"] == 0
+    assert data["comments_accepted"] == 1
+    assert processed == ["instagram_login"]
+
+
+@pytest.mark.asyncio
+async def test_instagram_comment_dropped_when_only_facebook_login_lacks_comment_scopes(
+    configured_registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without a comments-ready IG Login binding, App A comment webhooks must not invent readiness."""
+
+    processed: list[str] = []
+
+    async def claim(*_args: Any, **_kwargs: Any) -> bool:
+        return True
+
+    async def finish(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def process_comment(resolved: Any) -> Any:
+        processed.append("ran")
+        return SimpleNamespace(status="sent", reason="")
+
+    monkeypatch.setattr("services.durable_event_claim.try_claim_event", claim)
+    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", finish)
+    monkeypatch.setattr("services.durable_event_claim.release_event_claim", finish)
+    monkeypatch.setattr(meta_messaging_webhook, "process_meta_comment_event", process_comment)
+
+    # configured_registry already has facebook_login IG without comment scopes.
+    payload = {
+        "object": "instagram",
+        "entry": [
+            {
+                "id": "17841413184256533",
+                "time": 1700000000,
+                "changes": [
+                    {
+                        "field": "comments",
+                        "value": {
+                            "id": "igc-no-login",
+                            "text": "Hello",
+                            "from": {"id": "tester-2", "username": "t2"},
+                            "media": {"id": "media-1"},
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+    body = json.dumps(payload, separators=(",", ":")).encode()
+    response = await meta_messaging_webhook.receive_meta_messaging_webhook(
+        _request(body, _sign("multi-app-a-secret", body))
+    )
+    await asyncio.sleep(0)
+    data = json.loads(response.body)
+    assert data["comments_accepted"] == 0
+    assert processed == []
+
     from fastapi import HTTPException
 
     body = b'{"object":"page","entry":[]}'

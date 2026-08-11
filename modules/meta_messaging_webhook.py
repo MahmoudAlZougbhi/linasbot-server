@@ -242,16 +242,23 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
     resolved_comment_events: list[ResolvedMetaCommentEvent] = []
     raw_comment_changes = count_raw_comment_changes(payload)
     if registry_enabled and signed_app is not None and signed_app.key == APP_A_KEY:
+        # App A Instagram object webhooks (including comments) land here.
+        # Do not restrict to facebook_login: a Direct Instagram Login binding for the
+        # same IG professional account must be eligible when Meta delivers comments
+        # on this callback. Selection still prefers a comments-ready instagram_login row.
+        from services.meta_instagram_login_config import AuthFlow
+
+        comment_auth_flow: AuthFlow | None = None if payload_object == "instagram" else "facebook_login"
         resolved_comment_events = resolve_registry_comment_events(
             payload,
             app_config=signed_app,
-            auth_flow="facebook_login",
+            auth_flow=comment_auth_flow,
         )
         if raw_comment_changes and not resolved_comment_events:
             drop = summarize_comment_resolve_drops(
                 payload,
                 app_config=signed_app,
-                auth_flow="facebook_login",
+                auth_flow=comment_auth_flow,
             )
             _runtime_logger.warning(
                 "[meta-comment] events_dropped object=%s raw=%d resolved=0 bindings=%d reasons=%s",
@@ -266,9 +273,10 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
 
         global_key = global_comment_claim_key(resolved.event)
         _runtime_logger.info(
-            "[meta-comment] event_processing_started channel=%s tenant=%s",
+            "[meta-comment] event_processing_started channel=%s tenant=%s auth_flow=%s",
             resolved.binding.channel,
             resolved.binding.tenant_id,
+            resolved.binding.auth_flow,
         )
         try:
             result = await process_meta_comment_event(resolved)
@@ -278,10 +286,11 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
                 firestore_collection="meta_social_comment_global_claims",
             )
             _runtime_logger.info(
-                "[meta-comment] event_processing_completed channel=%s status=%s reason=%s",
+                "[meta-comment] event_processing_completed channel=%s status=%s reason=%s auth_flow=%s",
                 resolved.binding.channel,
                 result.status,
                 result.reason,
+                resolved.binding.auth_flow,
             )
         except Exception as exc:
             _runtime_logger.error(
@@ -331,13 +340,15 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
         channel_counts["instagram"],
     )
     if resolved_comment_events or raw_comment_changes:
+        auth_flows = sorted({str(item.binding.auth_flow) for item in resolved_comment_events})
         _runtime_logger.info(
-            "[meta-comment] webhook_authenticated object=%s raw=%d parsed=%d accepted=%d duplicates=%d",
+            "[meta-comment] webhook_authenticated object=%s raw=%d parsed=%d accepted=%d duplicates=%d auth_flows=%s",
             payload_object,
             raw_comment_changes,
             len(resolved_comment_events),
             comment_accepted,
             comment_duplicates,
+            ",".join(auth_flows) or "none",
         )
     return JSONResponse(
         {

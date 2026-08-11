@@ -96,6 +96,7 @@ def main() -> None:
         print(
             f"[scope-audit] webhook_subscribed_fields={','.join(sorted(binding.webhook_subscribed_fields)) or 'none'}"
         )
+        _print_debug_permission_statuses(credential)
     for root in (
         Path("/opt/linasbot_data/meta_comment_settings"),
         Path("/opt/linasbot/data/meta_comment_settings"),
@@ -103,6 +104,63 @@ def main() -> None:
         print(f"[scope-audit] comment_settings_dir path={root} exists={root.is_dir()}")
     _print_capability_probe(tenant_id=(os.getenv("META_COMMENT_AUDIT_TENANT") or "linas").strip() or "linas")
     print("[scope-audit] SUCCESS")
+
+
+def _print_debug_permission_statuses(credential: object) -> None:
+    """Print Meta debug_token permission names + status only (never tokens)."""
+
+    try:
+        import json
+        import urllib.parse
+        import urllib.request
+
+        token = str(getattr(credential, "access_token", "") or "").strip()
+        app_id = (os.getenv("META_APP_ID") or os.getenv("META_APP_A_ID") or "").strip()
+        app_secret = (os.getenv("META_APP_SECRET") or os.getenv("META_APP_A_SECRET") or "").strip()
+        if not token or not app_id or not app_secret:
+            print("[scope-audit] permission_debug=skipped_missing_inputs")
+            return
+        app_token = f"{app_id}|{app_secret}"
+        query = urllib.parse.urlencode({"input_token": token, "access_token": app_token})
+        url = f"https://graph.facebook.com/v24.0/debug_token?{query}"
+        with urllib.request.urlopen(url, timeout=20) as response:
+            payload = json.loads(response.read(500_000))
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, dict):
+            print("[scope-audit] permission_debug=invalid_response")
+            return
+        scopes_raw = data.get("scopes")
+        scopes_list: list[object] = list(scopes_raw) if isinstance(scopes_raw, list) else []
+        granular_raw = data.get("granular_scopes")
+        granular_list: list[object] = list(granular_raw) if isinstance(granular_raw, list) else []
+        print(f"[scope-audit] debug_token_is_valid={bool(data.get('is_valid'))}")
+        print(f"[scope-audit] debug_token_scopes={','.join(str(s) for s in scopes_list) or 'none'}")
+        for row in granular_list:
+            if not isinstance(row, dict):
+                continue
+            scope = str(row.get("scope") or "").strip()
+            if scope:
+                print(f"[scope-audit] debug_granular_scope={scope}")
+        # Page tokens do not expose /me/permissions; report declined from credential only.
+        declined = sorted(set(getattr(credential, "declined_scopes", ()) or ()))
+        for scope in declined:
+            print(f"[scope-audit] permission_status name={scope} status=declined")
+        comment_targets = (
+            "pages_read_user_content",
+            "pages_manage_engagement",
+            "instagram_manage_comments",
+            "instagram_business_manage_comments",
+        )
+        granted = {str(s) for s in scopes_list}
+        for scope in comment_targets:
+            if scope in granted:
+                print(f"[scope-audit] permission_status name={scope} status=granted")
+            elif scope in declined:
+                continue
+            else:
+                print(f"[scope-audit] permission_status name={scope} status=absent")
+    except Exception as exc:  # pragma: no cover - prod enrichment
+        print(f"[scope-audit] permission_debug_failed={type(exc).__name__}")
 
 
 def _print_capability_probe(*, tenant_id: str) -> None:

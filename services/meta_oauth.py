@@ -70,10 +70,12 @@ def meta_oauth_app_key() -> str:
 
 
 def normalize_oauth_flow_channel(channel: str) -> MetaOAuthFlowMode:
-    """Map dashboard connect requests to the unified Business Login flow."""
+    """Normalize Connect / Manage Meta Access channel without forcing FB+IG together."""
 
     normalized = (channel or "unified").strip().lower()
-    if normalized in {"unified", "meta", "facebook", "instagram", ""}:
+    if normalized in {"facebook", "instagram", "unified"}:
+        return cast(MetaOAuthFlowMode, normalized)
+    if normalized in {"meta", ""}:
         return "unified"
     raise MetaOAuthError("Unsupported Meta channel")
 
@@ -103,21 +105,21 @@ def _channels_for_authorization(
     return tuple(channels)
 
 
-def _business_login_request_scopes() -> str:
+def _business_login_request_scopes(flow_mode: MetaOAuthFlowMode) -> str:
     """Scopes requested alongside Login Config (rerequest).
 
-    Facebook Login for Business primarily uses ``config_id`` permissions. Passing
-    ``scope`` + ``auth_type=rerequest`` asks Meta to also present comment/publish
-    permissions when the Login Configuration (or Advanced Access) allows them.
-    Without those permissions in App A's Login Config / App Review, Manage Access
-    cannot grant comments — that remains an external Meta console step.
+    Facebook Manage Meta Access must request only Page/DM + FB comment scopes.
+    Do not bundle ``instagram_manage_comments`` into Facebook Page OAuth — IG Login
+    uses ``instagram_business_manage_comments`` on the separate Instagram Login flow.
     """
 
-    scopes = set()
-    for channel_scopes in META_CHANNEL_SCOPES.values():
-        scopes |= set(channel_scopes)
-    for comment_scopes in META_COMMENT_SCOPES.values():
-        scopes |= set(comment_scopes)
+    scopes: set[str] = set()
+    if flow_mode in {"facebook", "unified"}:
+        scopes |= set(META_CHANNEL_SCOPES["facebook"])
+        scopes |= set(META_COMMENT_SCOPES["facebook"])
+    if flow_mode in {"instagram", "unified"}:
+        scopes |= set(META_CHANNEL_SCOPES["instagram"])
+        scopes |= set(META_COMMENT_SCOPES["instagram"])
     return ",".join(sorted(scopes))
 
 
@@ -168,7 +170,7 @@ def begin_meta_business_login(
             "override_default_response_type": "true",
             # Ask Meta to re-present permissions (including comments) for the same assets.
             "auth_type": "rerequest",
-            "scope": _business_login_request_scopes(),
+            "scope": _business_login_request_scopes(flow_mode),
         }
     )
     return f"https://www.facebook.com/{app.graph_api_version}/dialog/oauth?{query}"

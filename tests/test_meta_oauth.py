@@ -121,10 +121,12 @@ def _transport(
     return httpx.MockTransport(handler)
 
 
-def test_legacy_instagram_start_aliases_to_unified_flow() -> None:
-    assert normalize_oauth_flow_channel("instagram") == "unified"
-    assert normalize_oauth_flow_channel("facebook") == "unified"
+def test_oauth_flow_channel_keeps_facebook_and_instagram_separate() -> None:
+    assert normalize_oauth_flow_channel("instagram") == "instagram"
+    assert normalize_oauth_flow_channel("facebook") == "facebook"
     assert normalize_oauth_flow_channel("unified") == "unified"
+    assert normalize_oauth_flow_channel("meta") == "unified"
+    assert normalize_oauth_flow_channel("") == "unified"
 
 
 def test_business_login_url_uses_config_id_rerequests_comment_scopes(registry: MetaAppRegistry) -> None:
@@ -148,10 +150,24 @@ def test_business_login_url_uses_config_id_rerequests_comment_scopes(registry: M
     assert "pages_messaging" in scopes
     assert "pages_read_user_content" in scopes
     assert "pages_manage_engagement" in scopes
-    assert "instagram_manage_comments" in scopes
+    # Facebook Manage Meta Access must not bundle Instagram comment scopes.
+    assert "instagram_manage_comments" not in scopes
     assert "app-b-secret-tests" not in url
     assert "business_management" not in url
     assert "owner-a" not in registry.store_path.read_text(encoding="utf-8")
+
+
+def test_instagram_business_login_url_can_request_instagram_comment_scope(registry: MetaAppRegistry) -> None:
+    url = begin_meta_business_login(
+        tenant_id="tenant-a",
+        channel="instagram",
+        actor_id="owner-a",
+        registry=registry,
+    )
+    scopes = set((parse_qs(urlparse(url).query).get("scope") or [""])[0].split(","))
+    assert "instagram_manage_comments" in scopes
+    assert "pages_manage_engagement" not in scopes
+    assert "pages_read_user_content" not in scopes
 
 
 @pytest.mark.asyncio
@@ -176,7 +192,8 @@ async def test_external_page_login_inspects_encrypts_and_activates_with_subscrip
     facebook_bindings = [item for item in result.bindings if item.channel == "facebook"]
     instagram_bindings = [item for item in result.bindings if item.channel == "instagram"]
     assert len(facebook_bindings) == 1
-    assert len(instagram_bindings) == 1
+    # Facebook-only Manage Meta Access must not auto-bind Instagram (IG Login is separate).
+    assert len(instagram_bindings) == 0
     stored = registry.store_path.read_text(encoding="utf-8")
     assert "page-token-private" not in stored
     assert "single-use-code" not in stored
