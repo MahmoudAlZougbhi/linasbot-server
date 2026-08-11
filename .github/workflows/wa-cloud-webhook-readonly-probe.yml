@@ -1,4 +1,3 @@
-# Read-only WhatsApp Cloud webhook evidence probe.
 name: WA Cloud Webhook Readonly Probe
 on:
   workflow_dispatch:
@@ -10,9 +9,9 @@ concurrency:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 8
     steps:
-      - name: Read-only WA webhook evidence
+      - name: PG + journal final
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -20,84 +19,85 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script_stop: false
-          command_timeout: 8m
+          command_timeout: 6m
           script: |
             set -euo pipefail
-            echo "[wa-probe] host=$(hostname)"
-            echo "[wa-probe] utc_now=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            echo "[wa-probe] local_now=$(date +%Y-%m-%dT%H:%M:%S%z)"
-            echo -n "[wa-probe] linasbot_active="; systemctl is-active linasbot || true
-            systemctl show linasbot -p ActiveEnterTimestamp --no-pager || true
-
-            ENV_FILE=""
-            APP_DIR=/opt/linasbot
-            if [ -f /opt/linasbot/linaslaserbot-2.7.22/main.py ]; then APP_DIR=/opt/linasbot/linaslaserbot-2.7.22; fi
-            if [ -f "$APP_DIR/.env" ]; then ENV_FILE="$APP_DIR/.env"; elif [ -f /opt/linasbot/.env ]; then ENV_FILE=/opt/linasbot/.env; fi
-            echo "[wa-probe] app_dir=$APP_DIR"
-            if [ -n "$ENV_FILE" ]; then
-              val=$(grep -E '^WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED=' "$ENV_FILE" | tail -n1 | cut -d= -f2- | tr -d '\r' | tr '[:upper:]' '[:lower:]' || true)
-              case "$val" in
-                1|true|yes|on) echo "[wa-probe] WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED=true" ;;
-                0|false|no|off|"") echo "[wa-probe] WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED=false_or_empty" ;;
-                *) echo "[wa-probe] WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED=present_other" ;;
-              esac
-            fi
-
-            echo "[wa-probe] === journal since 22:30 local / 19:30 UTC ==="
-            journalctl -u linasbot --since "2026-08-11 19:30:00 UTC" --no-pager -o short-iso 2>/dev/null \
-              | grep -E 'whatsapp_cloud|whatsapp-cloud|WhatsApp webhook|WEBHOOK_VERIFIED|signature_|unknown_asset|webhook_side_effects|POST /webhook|Invalid signature|app_a_unavailable' \
-              | sed -E 's/(sha256=)[A-Fa-f0-9]+/\1[REDACTED]/g' \
-              | tail -100 || echo "[wa-probe] no_special_matches=true"
-
-            echo "[wa-probe] === raw journal lines 19:44:50-19:45:20 UTC (redacted query) ==="
-            journalctl -u linasbot --since "2026-08-11 19:44:50 UTC" --until "2026-08-11 19:45:20 UTC" --no-pager -o short-iso 2>/dev/null \
-              | sed -E 's/\?[^ ]+/?[REDACTED]/g; s/(sha256=)[A-Fa-f0-9]+/\1[REDACTED]/g; s/(Bearer )[A-Za-z0-9._-]+/\1[REDACTED]/g' \
-              | tail -80 || echo "[wa-probe] empty_second_window=true"
-
-            echo "[wa-probe] === counts today ==="
-            for pat in 'whatsapp_cloud' 'whatsapp-cloud' 'WhatsApp webhook POST' 'unknown_asset' 'signature_rejection' '123456123' 'WEBHOOK_VERIFIED'; do
-              c=$(journalctl -u linasbot --since "2026-08-11 00:00:00 UTC" --no-pager -o cat 2>/dev/null | grep -c "$pat" || true)
-              echo "[wa-probe] count pat=$pat value=$c"
-            done
-
-            echo "[wa-probe] === route presence on disk ==="
-            if grep -n 'webhook/whatsapp-cloud' "$APP_DIR/modules/whatsapp_cloud_webhook.py" >/dev/null 2>&1; then
-              echo "[wa-probe] route_file_contains_whatsapp_cloud=true"
-            else
-              echo "[wa-probe] route_file_contains_whatsapp_cloud=false"
-            fi
-            echo -n "[wa-probe] deployed_sha="; git -C /opt/linasbot rev-parse --short HEAD 2>/dev/null || true
-
-            echo "[wa-probe] === local challenge shape check (no secrets) ==="
-            # Wrong token => expect 403; proves route is mounted. Does not print tokens.
-            code=$(curl -s -o /tmp/wa_chal.txt -w '%{http_code}' "http://127.0.0.1:8003/webhook/whatsapp-cloud?hub.mode=subscribe&hub.verify_token=wrong-token-probe&hub.challenge=12345" || true)
-            echo "[wa-probe] local_get_wrong_token_http=$code"
-            code2=$(curl -s -o /tmp/wa_post.txt -w '%{http_code}' -X POST "http://127.0.0.1:8003/webhook/whatsapp-cloud" -H 'Content-Type: application/json' -H 'X-Hub-Signature-256: sha256=deadbeef' --data '{"object":"whatsapp_business_account"}' || true)
-            echo "[wa-probe] local_post_badsig_http=$code2"
-
-            echo "[wa-probe] === PostgreSQL via psql ==="
-            if [ -z "$ENV_FILE" ]; then
-              echo "[wa-probe] skip_pg=no_env"
-            else
-              set -a
-              # shellcheck disable=SC1090
-              . "$ENV_FILE"
-              set +a
-              if [ -z "${LINAS_WHATSAPP_DATABASE_URL:-}" ]; then
-                echo "[wa-probe] LINAS_WHATSAPP_DATABASE_URL=unset"
-              else
-                echo "[wa-probe] LINAS_WHATSAPP_DATABASE_URL=present"
-                # Never echo DSN. Use psql ON_ERROR_STOP.
-                psql "$LINAS_WHATSAPP_DATABASE_URL" -v ON_ERROR_STOP=1 -At -F '|' -c \
-                  "SELECT id::text, event_kind, processing_state, attempt_count::text, created_at::text, processed_at::text, (tenant_id IS NOT NULL)::text, (connection_id IS NOT NULL)::text, left(event_key,48), left(coalesce(payload_hash,''),12) FROM whatsapp_webhook_events WHERE created_at >= TIMESTAMPTZ '2026-08-11 00:00:00+00' AND created_at <= TIMESTAMPTZ '2026-08-12 00:00:00+00' ORDER BY created_at DESC LIMIT 50;" \
-                  | while IFS= read -r line; do echo "[wa-probe] event_row=$line"; done || echo "[wa-probe] psql_events_failed=true"
-                echo -n "[wa-probe] events_today_count="; psql "$LINAS_WHATSAPP_DATABASE_URL" -At -c "SELECT count(*) FROM whatsapp_webhook_events WHERE created_at >= TIMESTAMPTZ '2026-08-11 00:00:00+00' AND created_at < TIMESTAMPTZ '2026-08-12 00:00:00+00';" || echo err
-                echo -n "[wa-probe] events_test_window_count="; psql "$LINAS_WHATSAPP_DATABASE_URL" -At -c "SELECT count(*) FROM whatsapp_webhook_events WHERE created_at >= TIMESTAMPTZ '2026-08-11 19:40:00+00' AND created_at <= TIMESTAMPTZ '2026-08-11 19:55:00+00';" || echo err
-                echo -n "[wa-probe] active_conn_sample_phone="; psql "$LINAS_WHATSAPP_DATABASE_URL" -At -c "SELECT count(*) FROM whatsapp_connections WHERE phone_number_id='123456123' AND lifecycle_status='connected' AND revoked_at IS NULL;" || echo err
-                echo -n "[wa-probe] active_connections_total="; psql "$LINAS_WHATSAPP_DATABASE_URL" -At -c "SELECT count(*) FROM whatsapp_connections WHERE lifecycle_status='connected' AND revoked_at IS NULL;" || echo err
-                echo -n "[wa-probe] messages_test_window="; psql "$LINAS_WHATSAPP_DATABASE_URL" -At -c "SELECT count(*) FROM whatsapp_messages WHERE created_at >= TIMESTAMPTZ '2026-08-11 19:30:00+00' AND created_at <= TIMESTAMPTZ '2026-08-11 20:15:00+00';" || echo err
-                echo -n "[wa-probe] outbound_test_window="; psql "$LINAS_WHATSAPP_DATABASE_URL" -At -c "SELECT count(*) FROM whatsapp_outbound_intents WHERE created_at >= TIMESTAMPTZ '2026-08-11 19:30:00+00' AND created_at <= TIMESTAMPTZ '2026-08-11 20:15:00+00';" || echo err
-                echo -n "[wa-probe] sfu_jobs_test_window="; psql "$LINAS_WHATSAPP_DATABASE_URL" -At -c "SELECT count(*) FROM whatsapp_smart_followup_jobs WHERE created_at >= TIMESTAMPTZ '2026-08-11 19:30:00+00' AND created_at <= TIMESTAMPTZ '2026-08-11 20:15:00+00';" 2>/dev/null || echo na
-              fi
-            fi
+            echo "[wa-probe] start"
+            ENV_FILE=/opt/linasbot/.env
+            set -a; . "$ENV_FILE"; set +a
+            echo "[wa-probe] dsn_scheme=$(python3 - <<'P'
+            import os
+            from urllib.parse import urlparse
+            u=os.environ.get('LINAS_WHATSAPP_DATABASE_URL','')
+            print(urlparse(u).scheme or 'empty')
+            P
+            )"
+            echo "[wa-probe] which_psql=$(command -v psql || echo missing)"
+            /opt/linasbot/venv/bin/python - <<'PY'
+            import os, re, sys
+            from urllib.parse import urlparse, urlunparse
+            raw = os.environ["LINAS_WHATSAPP_DATABASE_URL"]
+            # Normalize SQLAlchemy-style URLs for psycopg
+            dsn = raw.replace("postgresql+psycopg2://", "postgresql://").replace("postgresql+psycopg://", "postgresql://")
+            scheme = urlparse(dsn).scheme
+            print(f"[wa-probe] normalized_scheme={scheme}")
+            try:
+                import psycopg
+                conn = psycopg.connect(dsn)
+            except Exception as e1:
+                print(f"[wa-probe] psycopg_fail={type(e1).__name__}")
+                try:
+                    import sqlalchemy
+                    from sqlalchemy import create_engine, text
+                    eng = create_engine(raw)
+                    with eng.connect() as c:
+                        rows = c.execute(text("""
+                            SELECT id::text, event_kind, processing_state, attempt_count,
+                                   created_at, processed_at,
+                                   (tenant_id IS NOT NULL), (connection_id IS NOT NULL),
+                                   left(event_key,48), left(coalesce(payload_hash,''),12)
+                            FROM whatsapp_webhook_events
+                            WHERE created_at >= TIMESTAMPTZ '2026-08-11 00:00:00+00'
+                              AND created_at < TIMESTAMPTZ '2026-08-12 00:00:00+00'
+                            ORDER BY created_at DESC LIMIT 50
+                        """)).fetchall()
+                        print(f"[wa-probe] webhook_events_today={len(rows)}")
+                        for r in rows:
+                            prefix=re.sub(r"(\\d{7,})", "[DIGITS]", r[8] or "")
+                            print("[wa-probe] event", {
+                                "id": (r[0][:8]+"…") if r[0] else None,
+                                "event_kind": r[1],
+                                "processing_state": r[2],
+                                "attempt_count": int(r[3] or 0),
+                                "created_at": r[4].isoformat() if r[4] else None,
+                                "processed_at": r[5].isoformat() if r[5] else None,
+                                "has_tenant": bool(r[6]),
+                                "has_connection": bool(r[7]),
+                                "event_key_prefix": prefix,
+                                "payload_hash_prefix": r[9],
+                            })
+                        n = c.execute(text("SELECT count(*) FROM whatsapp_webhook_events WHERE created_at >= TIMESTAMPTZ '2026-08-11 19:40:00+00' AND created_at <= TIMESTAMPTZ '2026-08-11 19:55:00+00'")).scalar()
+                        print(f"[wa-probe] events_test_window_count={n}")
+                        n = c.execute(text("SELECT count(*) FROM whatsapp_connections WHERE phone_number_id='123456123' AND lifecycle_status='connected' AND revoked_at IS NULL")).scalar()
+                        print(f"[wa-probe] active_conn_sample_phone={n}")
+                        n = c.execute(text("SELECT count(*) FROM whatsapp_connections WHERE lifecycle_status='connected' AND revoked_at IS NULL")).scalar()
+                        print(f"[wa-probe] active_connections_total={n}")
+                        n = c.execute(text("SELECT count(*) FROM whatsapp_messages WHERE created_at >= TIMESTAMPTZ '2026-08-11 19:30:00+00' AND created_at <= TIMESTAMPTZ '2026-08-11 20:15:00+00'")).scalar()
+                        print(f"[wa-probe] messages_test_window={n}")
+                        n = c.execute(text("SELECT count(*) FROM whatsapp_outbound_intents WHERE created_at >= TIMESTAMPTZ '2026-08-11 19:30:00+00' AND created_at <= TIMESTAMPTZ '2026-08-11 20:15:00+00'")).scalar()
+                        print(f"[wa-probe] outbound_test_window={n}")
+                        try:
+                            n = c.execute(text("SELECT count(*) FROM whatsapp_smart_followup_jobs WHERE created_at >= TIMESTAMPTZ '2026-08-11 19:30:00+00' AND created_at <= TIMESTAMPTZ '2026-08-11 20:15:00+00'")).scalar()
+                            print(f"[wa-probe] sfu_jobs_test_window={n}")
+                        except Exception as e:
+                            print(f"[wa-probe] sfu_jobs_test_window=na:{type(e).__name__}")
+                    print("[wa-probe] pg_done=true")
+                    sys.exit(0)
+                except Exception as e2:
+                    print(f"[wa-probe] sqlalchemy_fail={type(e2).__name__}:{e2}")
+                    sys.exit(0)
+            else:
+                print("[wa-probe] unexpected_psycopg_ok")
+            PY
+            echo "[wa-probe] SIDE_EFFECTS=$(grep -E '^WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED=' /opt/linasbot/.env | cut -d= -f2- | tr -d '\\r')"
             echo "[wa-probe] SUCCESS"
