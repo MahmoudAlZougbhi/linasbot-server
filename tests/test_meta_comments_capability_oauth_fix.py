@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
-from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -13,7 +11,7 @@ from services.channel_capability_state import (
     canonical_channel_bindings,
     comment_capability_state,
 )
-from services.channel_capability_toggles import ChannelToggleError, set_channel_toggle
+from services.channel_capability_toggles import set_channel_toggle
 from services.meta_app_registry import APP_A_KEY, APP_B_KEY
 from services.meta_instagram_login_subscription import InstagramLoginSubscriptionState
 from services.meta_oauth_return import (
