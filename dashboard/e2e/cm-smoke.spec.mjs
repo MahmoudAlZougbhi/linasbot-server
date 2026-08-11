@@ -284,14 +284,14 @@ test.describe("AI Setup browser smoke", () => {
     // Seed knowledge draft with one article via default empty items — Add creates one.
     await page.goto("/content-managers");
 
-    await expect(page.getByRole("heading", { name: "AI Setup" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "AI Setup", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: /^Restricted \/ Unsupported/i })).toBeVisible();
     await expect(page.getByRole("link", { name: /Dynamic Messages/i })).toBeVisible();
     await expect(page.getByRole("link", { name: /Sources & Archive/i })).toBeVisible();
     await expect(page.getByRole("link", { name: /Preview \/ Validate \/ Publish/i })).toBeVisible();
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(page.getByRole("heading", { name: "AI Setup" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "AI Setup", exact: true })).toBeVisible();
     await expect(page.getByRole("main").locator('a[href="/content-managers/faq"]')).toBeVisible();
     await page.setViewportSize({ width: 1280, height: 800 });
 
@@ -382,7 +382,7 @@ test.describe("AI Setup browser smoke", () => {
     await installCmApiMocks(page, { user: VIEWER_USER });
     await page.goto("/content-managers");
     // ProtectedRoute redirects away from unauthorized paths.
-    await expect(page.getByRole("heading", { name: "AI Setup" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "AI Setup", exact: true })).toHaveCount(0);
     await expect(page).not.toHaveURL(/\/content-managers\/?$/);
   });
 });

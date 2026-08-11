@@ -100,10 +100,7 @@ PUBLISH_DISABLED_MESSAGE: Final[str] = (
 )
 
 UNPUBLISHED_AI_MESSAGE: Final[dict[str, str]] = {
-    "en": (
-        "This AI is not published yet. Please finish AI Setup "
-        "and publish before customers can get answers."
-    ),
+    "en": ("This AI is not published yet. Please finish AI Setup and publish before customers can get answers."),
     "ar": (
         "الذكاء الاصطناعي غير منشور بعد. أكمل إعداد الذكاء الاصطناعي وانشر المحتوى "
         "قبل أن يتمكن العملاء من الحصول على إجابات."
