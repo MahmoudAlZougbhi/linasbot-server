@@ -12,12 +12,17 @@ export const DisconnectSchema = z.object({
   success: z.literal(true),
 });
 
+const MOBILE_RETURN_SURFACE = 'mobile' as const;
+
 export async function startMetaOAuth(platform: 'instagram' | 'facebook'): Promise<void> {
   const path =
     platform === 'instagram'
       ? '/api/meta/connections/instagram-login/start'
       : '/api/meta/connections/start';
-  const body = platform === 'facebook' ? JSON.stringify({ channel: 'facebook' }) : undefined;
+  const body =
+    platform === 'facebook'
+      ? JSON.stringify({ channel: 'facebook', return_surface: MOBILE_RETURN_SURFACE })
+      : JSON.stringify({ return_surface: MOBILE_RETURN_SURFACE });
   try {
     const started = await apiFetch(path, {
       method: 'POST',
@@ -30,7 +35,7 @@ export async function startMetaOAuth(platform: 'instagram' | 'facebook'): Promis
     if (platform === 'instagram') {
       const started = await apiFetch('/api/meta/connections/start', {
         method: 'POST',
-        body: JSON.stringify({ channel: 'instagram' }),
+        body: JSON.stringify({ channel: 'instagram', return_surface: MOBILE_RETURN_SURFACE }),
         schema: StartSchema,
       });
       await Linking.openURL(started.authorization_url);

@@ -46,14 +46,18 @@ class InstagramLoginOAuthResult:
     instagram_username: str
     granted_scopes: tuple[str, ...]
     declined_scopes: tuple[str, ...]
+    return_surface: str = "web"
 
 
 def begin_instagram_login(
     *,
     tenant_id: str,
     actor_id: str,
+    return_surface: str = "web",
     registry: MetaAppRegistry | None = None,
 ) -> str:
+    from services.meta_oauth_return import normalize_return_surface
+
     status = instagram_login_config_status()
     if not status.configured:
         missing = ", ".join(status.missing)
@@ -66,6 +70,7 @@ def begin_instagram_login(
     nonce = secrets.token_urlsafe(32)
     nonce_hash = hashlib.sha256(nonce.encode("utf-8")).hexdigest()
     actor_reference = hashlib.sha256(str(actor_id or "oauth").encode("utf-8")).hexdigest()[:16]
+    surface = normalize_return_surface(return_surface)
     current_registry = registry or get_meta_app_registry()
     current_registry.store_oauth_state(
         nonce_hash,
@@ -76,6 +81,7 @@ def begin_instagram_login(
             "app_key": APP_A_KEY,
             "redirect_uri": instagram_login_redirect_uri(),
             "requested_scopes": sorted(META_INSTAGRAM_LOGIN_REQUEST_SCOPES),
+            "return_surface": surface,
             "expires_at": time.time() + META_OAUTH_STATE_TTL_SECONDS,
         },
     )
@@ -248,6 +254,9 @@ async def complete_instagram_login(
         raise MetaOAuthStateError("OAuth redirect does not match")
     tenant_id = str(state_data.get("tenant_id") or "").strip()
     actor_id = str(state_data.get("actor_id") or "oauth")
+    from services.meta_oauth_return import normalize_return_surface
+
+    return_surface = normalize_return_surface(state_data.get("return_surface"))
     requested = frozenset(
         str(scope) for scope in state_data.get("requested_scopes") or META_INSTAGRAM_LOGIN_REQUEST_SCOPES
     )
@@ -326,6 +335,7 @@ async def complete_instagram_login(
             instagram_username=instagram_username,
             granted_scopes=scopes,
             declined_scopes=declined,
+            return_surface=return_surface,
         )
     finally:
         if owns_client:

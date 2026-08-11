@@ -82,6 +82,9 @@ export const fr: Record<StringKey, string> = {
   integrationsLoadError: 'Impossible de charger les intégrations.',
   integrationsActionError: 'Impossible de mettre à jour la connexion. Réessayez.',
   integrationsToggleError: 'Impossible de mettre à jour le réglage du canal. Réessayez.',
+  metaOAuthSuccess: 'Accès Meta mis à jour. Actualisation du statut…',
+  metaOAuthCancelled: 'Autorisation Meta annulée.',
+  metaOAuthFailed: 'Échec de l’autorisation Meta. Réessayez via Gérer l’accès Meta.',
   toggleDms: 'Messages privés',
   toggleComments: 'Commentaires',
   commentsBlockerMissingPermissions:
