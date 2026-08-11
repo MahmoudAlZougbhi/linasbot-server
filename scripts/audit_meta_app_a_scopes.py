@@ -129,11 +129,13 @@ def _print_debug_permission_statuses(credential: object) -> None:
         if not isinstance(data, dict):
             print("[scope-audit] permission_debug=invalid_response")
             return
-        scopes = data.get("scopes") if isinstance(data.get("scopes"), list) else []
-        granular = data.get("granular_scopes") if isinstance(data.get("granular_scopes"), list) else []
+        scopes_raw = data.get("scopes")
+        scopes_list: list[object] = list(scopes_raw) if isinstance(scopes_raw, list) else []
+        granular_raw = data.get("granular_scopes")
+        granular_list: list[object] = list(granular_raw) if isinstance(granular_raw, list) else []
         print(f"[scope-audit] debug_token_is_valid={bool(data.get('is_valid'))}")
-        print(f"[scope-audit] debug_token_scopes={','.join(str(s) for s in scopes) or 'none'}")
-        for row in granular:
+        print(f"[scope-audit] debug_token_scopes={','.join(str(s) for s in scopes_list) or 'none'}")
+        for row in granular_list:
             if not isinstance(row, dict):
                 continue
             scope = str(row.get("scope") or "").strip()
@@ -149,7 +151,7 @@ def _print_debug_permission_statuses(credential: object) -> None:
             "instagram_manage_comments",
             "instagram_business_manage_comments",
         )
-        granted = {str(s) for s in scopes}
+        granted = {str(s) for s in scopes_list}
         for scope in comment_targets:
             if scope in granted:
                 print(f"[scope-audit] permission_status name={scope} status=granted")

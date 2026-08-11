@@ -246,7 +246,9 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
         # Do not restrict to facebook_login: a Direct Instagram Login binding for the
         # same IG professional account must be eligible when Meta delivers comments
         # on this callback. Selection still prefers a comments-ready instagram_login row.
-        comment_auth_flow = None if payload_object == "instagram" else "facebook_login"
+        from services.meta_instagram_login_config import AuthFlow
+
+        comment_auth_flow: AuthFlow | None = None if payload_object == "instagram" else "facebook_login"
         resolved_comment_events = resolve_registry_comment_events(
             payload,
             app_config=signed_app,
