@@ -20,8 +20,10 @@ import httpx
 
 from services.meta_app_registry import (
     APP_A_KEY,
+    FACEBOOK_ONLY_LOGIN_CONFIG_ID_DEFAULT,
     META_CHANNEL_SCOPES,
     META_COMMENT_SCOPES,
+    META_FACEBOOK_LOGIN_EXTRA_SCOPES,
     META_FORBIDDEN_SCOPES,
     MetaAppRegistry,
     MetaAssetBinding,
@@ -64,9 +66,41 @@ def meta_oauth_app_key() -> str:
     """Return the configured Meta app used for dashboard Connect (App A only)."""
 
     app = get_meta_app_configs()[APP_A_KEY]
-    if app.enabled and app.oauth_config_id:
+    if app.enabled and (app.app_id and app.app_secret):
         return APP_A_KEY
-    raise MetaOAuthError("Meta Business Login is not configured. Ask ops to set META_APP_A_LOGIN_CONFIG_ID for App A.")
+    raise MetaOAuthError("Meta App A is not configured for Business Login")
+
+
+def facebook_login_config_id() -> str:
+    """Facebook Connect / Manage Meta Access uses the Facebook-Pages-only config."""
+
+    configured = (os.getenv("META_APP_A_FACEBOOK_LOGIN_CONFIG_ID") or "").strip()
+    if configured:
+        return configured
+    return FACEBOOK_ONLY_LOGIN_CONFIG_ID_DEFAULT
+
+
+def resolve_business_login_config_id(flow_mode: MetaOAuthFlowMode) -> str:
+    """Pick the Login Configuration for Facebook Business Login.
+
+    Facebook Connect and Manage Meta Access use the Facebook-Pages-only config.
+    Instagram Connect must use Instagram Login (``/instagram-login/start``), not
+    Facebook Login for Business.
+    """
+
+    if flow_mode == "instagram":
+        raise MetaOAuthError(
+            "Instagram Connect uses Instagram Login, not Facebook Login for Business. "
+            "Start via /api/meta/connections/instagram-login/start."
+        )
+
+    # ``facebook`` and legacy ``unified``/``meta`` starts both use the Pages-only config.
+    config_id = facebook_login_config_id()
+    if not config_id:
+        raise MetaOAuthError(
+            "Facebook Business Login is not configured. Ask ops to set META_APP_A_FACEBOOK_LOGIN_CONFIG_ID for App A."
+        )
+    return config_id
 
 
 def normalize_oauth_flow_channel(channel: str) -> MetaOAuthFlowMode:
@@ -108,18 +142,21 @@ def _channels_for_authorization(
 def _business_login_request_scopes(flow_mode: MetaOAuthFlowMode) -> str:
     """Scopes requested alongside Login Config (rerequest).
 
-    Facebook Manage Meta Access must request only Page/DM + FB comment scopes.
-    Do not bundle ``instagram_manage_comments`` into Facebook Page OAuth — IG Login
-    uses ``instagram_business_manage_comments`` on the separate Instagram Login flow.
+    Facebook Connect / Manage Meta Access must request only Page/DM + FB comment
+    scopes (+ ``business_management``). Do not bundle any ``instagram_*``
+    permissions — Instagram Connect uses the independent Instagram Login flow.
     """
 
     scopes: set[str] = set()
-    if flow_mode in {"facebook", "unified"}:
-        scopes |= set(META_CHANNEL_SCOPES["facebook"])
-        scopes |= set(META_COMMENT_SCOPES["facebook"])
-    if flow_mode in {"instagram", "unified"}:
+    if flow_mode == "instagram":
+        # Business Login must not start Instagram Connect; scopes unused when rejected above.
         scopes |= set(META_CHANNEL_SCOPES["instagram"])
         scopes |= set(META_COMMENT_SCOPES["instagram"])
+    else:
+        # Facebook Connect and legacy unified starts: Pages only (no instagram_*).
+        scopes |= set(META_CHANNEL_SCOPES["facebook"])
+        scopes |= set(META_COMMENT_SCOPES["facebook"])
+        scopes |= set(META_FACEBOOK_LOGIN_EXTRA_SCOPES)
     return ",".join(sorted(scopes))
 
 
@@ -138,6 +175,7 @@ def begin_meta_business_login(
     flow_mode = normalize_oauth_flow_channel(channel)
     app_key = meta_oauth_app_key()
     app = get_meta_app_configs()[app_key]
+    config_id = resolve_business_login_config_id(flow_mode)
     try:
         tenant = normalize_meta_tenant_id(tenant_id)
     except MetaBindingConflictError as exc:
@@ -157,6 +195,7 @@ def begin_meta_business_login(
             "app_key": app_key,
             "redirect_uri": meta_oauth_redirect_uri(),
             "return_surface": surface,
+            "login_config_id": config_id,
             "expires_at": time.time() + META_OAUTH_STATE_TTL_SECONDS,
         },
     )
@@ -166,7 +205,7 @@ def begin_meta_business_login(
             "redirect_uri": meta_oauth_redirect_uri(),
             "state": nonce,
             "response_type": "code",
-            "config_id": app.oauth_config_id,
+            "config_id": config_id,
             "override_default_response_type": "true",
             # Ask Meta to re-present permissions (including comments) for the same assets.
             "auth_type": "rerequest",

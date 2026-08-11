@@ -109,29 +109,24 @@ async def test_connection_status_is_tenant_isolated_and_secret_free(
 
 
 @pytest.mark.asyncio
-async def test_connect_start_derives_tenant_from_session_not_request_body(
+async def test_connect_start_rejects_instagram_business_login_channel(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    captured: dict[str, Any] = {}
+    from fastapi import HTTPException
 
-    def begin(**kwargs: Any) -> str:
-        captured.update(kwargs)
-        return "https://www.facebook.com/v24.0/dialog/oauth?state=opaque"
-
+    begin = lambda **kwargs: "https://www.facebook.com/v24.0/dialog/oauth?state=opaque"  # noqa: E731
     monkeypatch.setattr(meta_connections_api, "begin_meta_business_login", begin)
-    response = await meta_connections_api.start_meta_connection(
-        _request("tenant-a"),
-        {"channel": "instagram", "tenant_id": "tenant-b", "app_id": "untrusted"},
-    )
-    assert response["success"] is True
-    assert captured["tenant_id"] == "tenant-a"
-    # Instagram Connect stays on the Instagram flow (not forced into unified FB+IG).
-    assert captured["channel"] == "instagram"
-    assert "app_id" not in captured
+    with pytest.raises(HTTPException) as exc:
+        await meta_connections_api.start_meta_connection(
+            _request("tenant-a"),
+            {"channel": "instagram", "tenant_id": "tenant-b", "app_id": "untrusted"},
+        )
+    assert exc.value.status_code == 400
+    assert "Instagram Login" in str(exc.value.detail)
 
 
 @pytest.mark.asyncio
-async def test_connect_start_defaults_to_unified_flow(
+async def test_connect_start_defaults_to_facebook_flow(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, Any] = {}
@@ -143,7 +138,8 @@ async def test_connect_start_defaults_to_unified_flow(
     monkeypatch.setattr(meta_connections_api, "begin_meta_business_login", begin)
     response = await meta_connections_api.start_meta_connection(_request("tenant-a"), {})
     assert response["success"] is True
-    assert captured["channel"] == "unified"
+    assert captured["channel"] == "facebook"
+    assert captured["tenant_id"] == "tenant-a"
 
 
 @pytest.mark.asyncio

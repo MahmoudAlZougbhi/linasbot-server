@@ -47,8 +47,11 @@ def test_facebook_oauth_scopes_exclude_instagram_manage_comments() -> None:
     scopes = set(_business_login_request_scopes("facebook").split(","))
     assert "pages_read_user_content" in scopes
     assert "pages_manage_engagement" in scopes
+    assert "business_management" in scopes
     assert "instagram_manage_comments" not in scopes
     assert "instagram_business_manage_comments" not in scopes
+    assert "instagram_basic" not in scopes
+    assert "instagram_manage_messages" not in scopes
 
 
 def test_facebook_comment_blocker_message_excludes_instagram_scope(monkeypatch) -> None:

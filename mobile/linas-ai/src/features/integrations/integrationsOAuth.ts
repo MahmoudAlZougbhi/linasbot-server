@@ -23,26 +23,13 @@ export async function startMetaOAuth(platform: 'instagram' | 'facebook'): Promis
     platform === 'facebook'
       ? JSON.stringify({ channel: 'facebook', return_surface: MOBILE_RETURN_SURFACE })
       : JSON.stringify({ return_surface: MOBILE_RETURN_SURFACE });
-  try {
-    const started = await apiFetch(path, {
-      method: 'POST',
-      body,
-      schema: StartSchema,
-    });
-    await Linking.openURL(started.authorization_url);
-    return;
-  } catch (firstErr) {
-    if (platform === 'instagram') {
-      const started = await apiFetch('/api/meta/connections/start', {
-        method: 'POST',
-        body: JSON.stringify({ channel: 'instagram', return_surface: MOBILE_RETURN_SURFACE }),
-        schema: StartSchema,
-      });
-      await Linking.openURL(started.authorization_url);
-      return;
-    }
-    throw firstErr;
-  }
+  // Instagram Connect must use Instagram Login only — never Facebook Login for Business.
+  const started = await apiFetch(path, {
+    method: 'POST',
+    body,
+    schema: StartSchema,
+  });
+  await Linking.openURL(started.authorization_url);
 }
 
 export async function disconnectMetaBindings(bindingIds: string[]): Promise<void> {

@@ -33,6 +33,8 @@ APP_A_KEY = "linas_first_party"
 APP_B_KEY = "saas_tech_provider"
 APP_A_EXPECTED_ID = "2963733803971681"
 RETIRED_APP_ID = "1784792718776344"
+# Facebook Connect / Manage Meta Access — Pages-only Login Configuration.
+FACEBOOK_ONLY_LOGIN_CONFIG_ID_DEFAULT = "1369663304545819"
 LINAS_PAGE_ID = "378696005334409"
 LINAS_INSTAGRAM_ACCOUNT_ID = "17841413184256533"
 REGISTRY_SCHEMA_VERSION = 1
@@ -57,13 +59,15 @@ META_COMMENT_SCOPES: dict[MetaChannel, frozenset[str]] = {
     "facebook": frozenset({"pages_read_user_content", "pages_manage_engagement"}),
     "instagram": frozenset({"instagram_manage_comments"}),
 }
+# Extra scopes requested on Facebook-only Business Login (Pages). Not required for
+# legacy Page messaging activation checks, but allowed on stored credentials.
+META_FACEBOOK_LOGIN_EXTRA_SCOPES = frozenset({"business_management"})
 META_PUBLISH_SCOPES: dict[MetaChannel, frozenset[str]] = {
     "facebook": frozenset({"pages_manage_posts"}),
     "instagram": frozenset({"instagram_content_publish"}),
 }
 META_FORBIDDEN_SCOPES = frozenset(
     {
-        "business_management",
         "pages_manage_ads",
         "ads_management",
         "ads_read",
@@ -206,7 +210,9 @@ def get_meta_app_configs() -> dict[str, MetaAppConfig]:
         verify_token=app_a_verify,
         graph_api_version=graph_version,
         classification="own_business",
-        oauth_config_id=(os.getenv("META_APP_A_LOGIN_CONFIG_ID") or "").strip(),
+        oauth_config_id=(
+            os.getenv("META_APP_A_FACEBOOK_LOGIN_CONFIG_ID") or FACEBOOK_ONLY_LOGIN_CONFIG_ID_DEFAULT
+        ).strip(),
         advanced_access_approved=_truthy(os.getenv("META_APP_A_ADVANCED_ACCESS_APPROVED")),
         enabled=bool(
             app_a_id and app_a_id == APP_A_EXPECTED_ID and app_a_id != RETIRED_APP_ID and app_a_secret and app_a_verify

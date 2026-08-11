@@ -1,4 +1,5 @@
-# Apply App A Facebook Login for Business config only (no token rotation / disconnect).
+# Apply App A Facebook-only Login for Business config (no token rotation / disconnect).
+# Also strips obsolete META_APP_A_LOGIN_CONFIG_ID from production env if present.
 name: Meta App A Login Config Apply
 
 on:
@@ -13,7 +14,7 @@ permissions:
 
 jobs:
   apply:
-    name: Apply App A login configuration
+    name: Apply App A Facebook login configuration
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: meta-social-cutover
@@ -31,10 +32,10 @@ jobs:
           source: scripts/prod_apply_meta_app_a_login_config.sh
           target: /tmp/linasbot-meta-login-config
 
-      - name: Set META_APP_A_LOGIN_CONFIG_ID on production
+      - name: Set META_APP_A_FACEBOOK_LOGIN_CONFIG_ID on production
         uses: appleboy/ssh-action@v1.2.0
         env:
-          META_APP_A_LOGIN_CONFIG_ID: ${{ secrets.META_APP_A_LOGIN_CONFIG_ID }}
+          META_APP_A_FACEBOOK_LOGIN_CONFIG_ID: ${{ secrets.META_APP_A_FACEBOOK_LOGIN_CONFIG_ID }}
           META_OAUTH_REDIRECT_URI: https://www.linasaibot.com/oauth/meta/callback
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -43,11 +44,11 @@ jobs:
           port: 22
           script_stop: true
           command_timeout: 10m
-          envs: META_APP_A_LOGIN_CONFIG_ID,META_OAUTH_REDIRECT_URI
+          envs: META_APP_A_FACEBOOK_LOGIN_CONFIG_ID,META_OAUTH_REDIRECT_URI
           script: |
             set -euo pipefail
-            if [ -z "${META_APP_A_LOGIN_CONFIG_ID:-}" ]; then
-              echo "[meta-login-config] missing GitHub secret META_APP_A_LOGIN_CONFIG_ID" >&2
+            if [ -z "${META_APP_A_FACEBOOK_LOGIN_CONFIG_ID:-}" ]; then
+              echo "[meta-login-config] missing GitHub secret META_APP_A_FACEBOOK_LOGIN_CONFIG_ID" >&2
               exit 1
             fi
             APPLY_SCRIPT="/tmp/linasbot-meta-login-config/scripts/prod_apply_meta_app_a_login_config.sh"
