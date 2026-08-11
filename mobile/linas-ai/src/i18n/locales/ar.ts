@@ -1,4 +1,5 @@
 import { subscriptionAr } from './subscriptionAr';
+import { whatsappAr } from './whatsappAr';
 import type { StringKey } from './en';
 
 export const ar = {
@@ -84,6 +85,7 @@ export const ar = {
   integrationsToggleError: 'تعذر تحديث إعداد القناة. حاول مجدداً.',
   metaOAuthSuccess: 'تم تحديث وصول Meta. جاري تحديث حالة الاتصال…',
   metaOAuthCancelled: 'تم إلغاء تفويض Meta.',
+  
   metaOAuthFailed: 'فشل تفويض Meta. حاول إدارة وصول Meta مجدداً.',
   toggleDms: 'الرسائل المباشرة',
   toggleComments: 'التعليقات',
@@ -119,6 +121,7 @@ export const ar = {
     'يتحقق من حالة اتصال إنستغرام وفيسبوك دون تغيير أي شيء.',
   platformInstagram: 'إنستغرام',
   platformFacebook: 'فيسبوك',
+  platformWhatsApp: 'WhatsApp',
   platformTikTok: 'تيك توك',
   platformSnapchat: 'سناب شات',
   retry: 'تعذر تحميل المحادثة. اضغط لإعادة المحاولة.',
@@ -338,6 +341,8 @@ export const ar = {
   socialContinueGoogle: 'المتابعة مع Google',
   socialContinueApple: 'المتابعة مع Apple',
   ...subscriptionAr,
+  ...whatsappAr,
+
   proposalChangeTitle: 'تعديل إعداد الذكاء الاصطناعي',
   proposalDeleteTitle: 'حذف من إعداد الذكاء الاصطناعي',
   proposalDeleteBadge: 'حذف',

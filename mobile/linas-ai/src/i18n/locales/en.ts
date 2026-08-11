@@ -1,4 +1,5 @@
 import { subscriptionEn } from './subscriptionEn';
+import { whatsappEn } from './whatsappEn';
 
 export const en = {
   appName: 'Linas AI',
@@ -119,6 +120,7 @@ export const en = {
   integrationsToggleError: 'Could not update channel setting. Try again.',
   metaOAuthSuccess: 'Meta access updated. Refreshing connection status…',
   metaOAuthCancelled: 'Meta authorization was cancelled.',
+
   metaOAuthFailed: 'Meta authorization failed. Try Manage Meta Access again.',
   toggleDms: 'Direct messages',
   toggleComments: 'Comments',
@@ -156,6 +158,7 @@ export const en = {
     'Refresh checks your Instagram and Facebook connection status without changing anything.',
   platformInstagram: 'Instagram',
   platformFacebook: 'Facebook',
+  platformWhatsApp: 'WhatsApp',
   platformTikTok: 'TikTok',
   platformSnapchat: 'Snapchat',
   retry: 'Could not load chat. Tap Retry.',
@@ -340,6 +343,8 @@ export const en = {
   socialContinueGoogle: 'Continue with Google',
   socialContinueApple: 'Continue with Apple',
   ...subscriptionEn,
+  ...whatsappEn,
+
   proposalChangeTitle: 'AI Setup change',
   proposalDeleteTitle: 'Delete from AI Setup',
   proposalDeleteBadge: 'Delete',

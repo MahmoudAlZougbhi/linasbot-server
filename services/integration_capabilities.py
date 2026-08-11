@@ -210,6 +210,65 @@ def list_tenant_integration_status(tenant_id: str) -> list[dict[str, Any]]:
             }
         )
 
+    # WhatsApp Cloud coexistence — server-proven status only (never client-simulated Connected).
+    wa_row: dict[str, Any] = {
+        "platform": "whatsapp",
+        "label": "WhatsApp",
+        "connected": False,
+        "coming_soon": False,
+        "awaiting_meta_approval": True,
+        "connectable": False,
+        "binding_ids": [],
+        "capabilities": {
+            "dm_read": _cap(level="unavailable", supported_in_code=True, notes="Cloud coexistence"),
+            "dm_reply": _cap(level="unavailable", supported_in_code=True, notes="Cloud coexistence"),
+        },
+        "lifecycle_status": "disconnected",
+        "whatsapp": None,
+    }
+    try:
+        from db.session import whatsapp_db_configured, whatsapp_session
+        from services.whatsapp_cloud.config import get_whatsapp_cloud_flags
+        from services.whatsapp_cloud.entitlement import assert_whatsapp_connection_allowed, connection_status_payload
+        from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+
+        flags = get_whatsapp_cloud_flags()
+        ui_open = bool(flags.connection_ui_enabled or flags.public_availability)
+        wa_row["awaiting_meta_approval"] = not flags.public_availability
+        wa_row["coming_soon"] = False
+        if whatsapp_db_configured():
+            with whatsapp_session() as session:
+                repo = WhatsAppCloudRepository(session)
+                try:
+                    assert_whatsapp_connection_allowed(session, tenant_id)
+                    wa_row["connectable"] = bool(ui_open)
+                    wa_row["awaiting_meta_approval"] = False
+                except Exception:
+                    wa_row["connectable"] = False
+                    wa_row["awaiting_meta_approval"] = not flags.public_availability
+                connections = [
+                    c
+                    for c in repo.list_tenant_connections(tenant_id)
+                    if c.lifecycle_status not in {"revoked", "disconnected", "failed"}
+                ]
+                if connections:
+                    primary = connections[0]
+                    payload = connection_status_payload(session, primary)
+                    wa_row["connected"] = primary.lifecycle_status == "connected"
+                    wa_row["lifecycle_status"] = primary.lifecycle_status
+                    wa_row["binding_ids"] = [primary.id]
+                    wa_row["whatsapp"] = payload
+                    wa_row["coming_soon"] = False
+                    wa_row["connectable"] = True
+                    wa_row["awaiting_meta_approval"] = False
+                    for key in ("dm_read", "dm_reply"):
+                        wa_row["capabilities"][key]["level"] = "connected" if wa_row["connected"] else "available"
+                        wa_row["capabilities"][key]["permission_present"] = wa_row["connected"]
+                        wa_row["capabilities"][key]["supported_in_code"] = True
+    except Exception:
+        pass
+    rows.insert(2, wa_row)
+
     rows.extend(
         [
             {

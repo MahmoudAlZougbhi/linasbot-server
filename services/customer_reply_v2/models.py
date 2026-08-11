@@ -6,7 +6,13 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 EvidenceStatus = Literal["sufficient", "insufficient_can_retry", "insufficient_final", "faq_hit", "policy_stop"]
-ChannelKind = Literal["instagram_dm", "facebook_dm", "instagram_comment", "facebook_comment"]
+ChannelKind = Literal[
+    "instagram_dm",
+    "facebook_dm",
+    "instagram_comment",
+    "facebook_comment",
+    "whatsapp_dm",
+]
 
 
 @dataclass

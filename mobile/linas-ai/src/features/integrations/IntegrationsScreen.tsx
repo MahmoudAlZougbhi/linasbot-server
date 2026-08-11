@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, AppState, Linking, ScrollView, StyleSheet, Text } from 'react-native';
-import { z } from 'zod';
 
 import { ApiError, apiFetch } from '../../api/client';
 import { parseIntegrationsDeepLink } from '../../app/navigation';
@@ -19,58 +18,15 @@ import {
   type IntegrationRow,
 } from './IntegrationChannelCard';
 import { disconnectMetaBindings, startMetaOAuth } from './integrationsOAuth';
+import {
+  ListSchema,
+  ToggleResponseSchema,
+  type IntegrationListRow,
+} from './integrationsSchemas';
+import { WhatsAppCloudCard } from './WhatsAppCloudCard';
+import { useWhatsAppIntegrations } from './useWhatsAppIntegrations';
 
-const TogglesSchema = z.object({
-  dm: z.boolean(),
-  comments: z.boolean(),
-});
-
-const CapabilityStateSchema = z
-  .object({
-    requested_enabled: z.boolean(),
-    permission_present: z.boolean(),
-    webhook_subscribed: z.boolean(),
-    tenant_action_enabled: z.boolean().optional(),
-    connection_healthy: z.boolean().optional(),
-    live_verified: z.boolean(),
-    effective_enabled: z.boolean(),
-    missing_scopes: z.array(z.string()).optional(),
-    blocker: z.string().nullable().optional(),
-    blocker_code: z.string().nullable().optional(),
-    blocker_message: z.string().nullable().optional(),
-    status: z.string().optional(),
-    last_checked_at: z.number().optional(),
-  })
-  .optional();
-
-const RowSchema = z.object({
-  platform: z.string(),
-  label: z.string(),
-  connected: z.boolean(),
-  coming_soon: z.boolean().optional(),
-  connectable: z.boolean().optional(),
-  binding_ids: z.array(z.string()).optional(),
-  toggles: TogglesSchema.optional(),
-  comments_blocker: z.string().optional(),
-  comments_state: CapabilityStateSchema,
-  dm_state: CapabilityStateSchema,
-  capabilities: z.record(z.string(), z.unknown()).optional(),
-});
-
-const ListSchema = z.object({
-  success: z.literal(true),
-  integrations: z.array(RowSchema),
-});
-
-const ToggleResponseSchema = z.object({
-  success: z.literal(true),
-  platform: z.string(),
-  toggles: TogglesSchema,
-  comments_state: CapabilityStateSchema,
-  dm_state: CapabilityStateSchema,
-});
-
-type Row = z.infer<typeof RowSchema>;
+type Row = IntegrationListRow;
 
 type Props = {
   onRequestLogin?: () => void;
@@ -102,6 +58,10 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
   const [notice, setNotice] = useState<string | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [authGate, setAuthGate] = useState(false);
+  const wa = useWhatsAppIntegrations({
+    onAuthGate: () => setAuthGate(true),
+    onError: setError,
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -115,6 +75,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
       }
       const data = await apiFetch('/api/mobile/integrations', { schema: ListSchema });
       setRows(data.integrations);
+      await wa.refreshWhatsApp();
       setError(null);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -126,7 +87,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     } finally {
       setLoading(false);
     }
-  }, [tr]);
+  }, [tr, wa.refreshWhatsApp]);
 
   useEffect(() => {
     void load();
@@ -149,15 +110,15 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     const applyMetaResult = (url: string | null) => {
       const parsed = parseIntegrationsDeepLink(url);
       if (!parsed) return;
-      if (parsed.metaConnection === 'success') {
-        setNotice(tr('metaOAuthSuccess'));
+      if (parsed.waConnection === 'success' || parsed.metaConnection === 'success') {
+        setNotice(parsed.waConnection === 'success' ? tr('waOAuthSuccess') : tr('metaOAuthSuccess'));
         setError(null);
-      } else if (parsed.metaConnection === 'cancelled') {
+      } else if (parsed.waConnection === 'cancelled' || parsed.metaConnection === 'cancelled') {
         setNotice(null);
-        setError(tr('metaOAuthCancelled'));
-      } else if (parsed.metaConnection === 'failed') {
+        setError(parsed.waConnection === 'cancelled' ? tr('waOAuthCancelled') : tr('metaOAuthCancelled'));
+      } else if (parsed.waConnection === 'failed' || parsed.metaConnection === 'failed') {
         setNotice(null);
-        setError(tr('metaOAuthFailed'));
+        setError(parsed.waConnection === 'failed' ? tr('waOAuthFailed') : tr('metaOAuthFailed'));
       }
       void load();
     };
@@ -337,6 +298,18 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
         {tr('refreshConnectionStatusHint')}
       </Text>
       <ScrollView contentContainerStyle={styles.list}>
+        <WhatsAppCloudCard
+          status={wa.waStatus}
+          loading={loading}
+          busy={wa.waBusy}
+          onRefresh={() => void load()}
+          onConnect={() => void wa.connectWhatsApp()}
+          onEnableAi={(id) => void wa.setWhatsAppAi(id, true, load)}
+          onDisableAi={(id) => void wa.setWhatsAppAi(id, false, load)}
+          onBusyChange={wa.setWaBusy}
+          onError={setError}
+          onNotice={setNotice}
+        />
         {rows
           .filter((row) => row.platform === 'instagram' || row.platform === 'facebook')
           .map((row) => (

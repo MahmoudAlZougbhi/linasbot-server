@@ -27,6 +27,17 @@ from utils.utils import save_conversation_message_to_firestore
 async def startup_event() -> None:
     """Initialize MontyMobile as the default WhatsApp provider on startup"""
     try:
+        from services.whatsapp_cloud.legacy_isolation import assert_no_monty_cloud_dual_bind
+
+        assert_no_monty_cloud_dual_bind()
+    except RuntimeError as exc:
+        # Fail closed when dual-bind detected.
+        print(f"❌ WHATSAPP LEGACY/CLOUD CONFLICT: {exc}")
+        raise
+    except Exception as exc:
+        print(f"⚠️ WhatsApp legacy isolation check skipped: {type(exc).__name__}")
+
+    try:
         print("=" * 60)
         print("🚀 INITIALIZING WHATSAPP PROVIDER")
         print("=" * 60)

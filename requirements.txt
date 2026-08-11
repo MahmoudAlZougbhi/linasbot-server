@@ -65,3 +65,8 @@ langdetect>=1.0.9
 
 # Durable job queues (production workers). Connection via REDIS_URL / LINAS_REDIS_URL.
 redis>=5.0.0,<6.0.0
+
+# WhatsApp Cloud coexistence PostgreSQL SoT
+sqlalchemy==2.0.36
+alembic==1.14.0
+psycopg2-binary==2.9.9

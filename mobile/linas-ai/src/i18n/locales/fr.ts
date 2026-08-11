@@ -1,4 +1,5 @@
 import { subscriptionFr } from './subscriptionFr';
+import { whatsappFr } from './whatsappFr';
 import type { StringKey } from './en';
 
 export const fr = {
@@ -86,6 +87,7 @@ export const fr = {
   integrationsToggleError: 'Impossible de mettre à jour le réglage du canal. Réessayez.',
   metaOAuthSuccess: 'Accès Meta mis à jour. Actualisation du statut…',
   metaOAuthCancelled: 'Autorisation Meta annulée.',
+  
   metaOAuthFailed: 'Échec de l’autorisation Meta. Réessayez via Gérer l’accès Meta.',
   toggleDms: 'Messages privés',
   toggleComments: 'Commentaires',
@@ -124,6 +126,7 @@ export const fr = {
     'Actualise l’état de vos connexions Instagram et Facebook sans rien modifier.',
   platformInstagram: 'Instagram',
   platformFacebook: 'Facebook',
+  platformWhatsApp: 'WhatsApp',
   platformTikTok: 'TikTok',
   platformSnapchat: 'Snapchat',
   retry: 'Impossible de charger le chat. Appuyez pour réessayer.',
@@ -344,6 +347,8 @@ export const fr = {
   socialContinueGoogle: 'Continuer avec Google',
   socialContinueApple: 'Continuer avec Apple',
   ...subscriptionFr,
+  ...whatsappFr,
+
   proposalChangeTitle: 'Modification Configuration IA',
   proposalDeleteTitle: 'Supprimer de la Configuration IA',
   proposalDeleteBadge: 'Supprimer',
