@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, AppState, Linking, ScrollView, StyleSheet, Text } from 'react-native';
-import { z } from 'zod';
 
 import { ApiError, apiFetch } from '../../api/client';
 import { parseIntegrationsDeepLink } from '../../app/navigation';
@@ -20,66 +19,14 @@ import {
 } from './IntegrationChannelCard';
 import { disconnectMetaBindings, startMetaOAuth } from './integrationsOAuth';
 import {
-  WhatsAppCloudCard,
-  fetchWhatsAppCloudStatus,
-  startWhatsAppCloudConnect,
-  type WhatsAppCloudStatus,
-} from './WhatsAppCloudCard';
-import { setWhatsAppAiEnabled } from './whatsappCloudApi';
+  ListSchema,
+  ToggleResponseSchema,
+  type IntegrationListRow,
+} from './integrationsSchemas';
+import { WhatsAppCloudCard } from './WhatsAppCloudCard';
+import { useWhatsAppIntegrations } from './useWhatsAppIntegrations';
 
-type WaStatus = WhatsAppCloudStatus;
-
-const TogglesSchema = z.object({
-  dm: z.boolean(),
-  comments: z.boolean(),
-});
-
-const CapabilityStateSchema = z
-  .object({
-    requested_enabled: z.boolean(),
-    permission_present: z.boolean(),
-    webhook_subscribed: z.boolean(),
-    tenant_action_enabled: z.boolean().optional(),
-    connection_healthy: z.boolean().optional(),
-    live_verified: z.boolean(),
-    effective_enabled: z.boolean(),
-    missing_scopes: z.array(z.string()).optional(),
-    blocker: z.string().nullable().optional(),
-    blocker_code: z.string().nullable().optional(),
-    blocker_message: z.string().nullable().optional(),
-    status: z.string().optional(),
-    last_checked_at: z.number().optional(),
-  })
-  .optional();
-
-const RowSchema = z.object({
-  platform: z.string(),
-  label: z.string(),
-  connected: z.boolean(),
-  coming_soon: z.boolean().optional(),
-  connectable: z.boolean().optional(),
-  binding_ids: z.array(z.string()).optional(),
-  toggles: TogglesSchema.optional(),
-  comments_blocker: z.string().optional(),
-  comments_state: CapabilityStateSchema,
-  dm_state: CapabilityStateSchema,
-  capabilities: z.record(z.string(), z.unknown()).optional(),
-});
-
-const ListSchema = z.object({
-  success: z.literal(true),
-  integrations: z.array(RowSchema),
-});
-
-const ToggleResponseSchema = z.object({
-  success: z.literal(true),
-  platform: z.string(),
-  toggles: TogglesSchema,
-  comments_state: CapabilityStateSchema,
-  dm_state: CapabilityStateSchema,
-});
-
-type Row = z.infer<typeof RowSchema>;
+type Row = IntegrationListRow;
 
 type Props = {
   onRequestLogin?: () => void;
@@ -111,8 +58,10 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
   const [notice, setNotice] = useState<string | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [authGate, setAuthGate] = useState(false);
-  const [waStatus, setWaStatus] = useState<WaStatus | null>(null);
-  const [waBusy, setWaBusy] = useState(false);
+  const wa = useWhatsAppIntegrations({
+    onAuthGate: () => setAuthGate(true),
+    onError: setError,
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -126,12 +75,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
       }
       const data = await apiFetch('/api/mobile/integrations', { schema: ListSchema });
       setRows(data.integrations);
-      try {
-        const wa = await fetchWhatsAppCloudStatus();
-        setWaStatus(wa);
-      } catch {
-        setWaStatus(null);
-      }
+      await wa.refreshWhatsApp();
       setError(null);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -143,7 +87,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     } finally {
       setLoading(false);
     }
-  }, [tr]);
+  }, [tr, wa.refreshWhatsApp]);
 
   useEffect(() => {
     void load();
@@ -182,36 +126,6 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     const sub = Linking.addEventListener('url', (event) => applyMetaResult(event.url));
     return () => sub.remove();
   }, [load, tr]);
-
-  async function connectWhatsApp() {
-    setWaBusy(true);
-    setError(null);
-    try {
-      await startWhatsAppCloudConnect();
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) setAuthGate(true);
-      else if (err instanceof ApiError && err.body && typeof err.body === 'object') {
-        const body = err.body as { message?: unknown; error?: unknown };
-        const msg = body.message;
-        setError(typeof msg === 'string' && msg.trim() ? msg : tr('integrationsActionError'));
-      } else setError(tr('integrationsActionError'));
-    } finally {
-      setWaBusy(false);
-    }
-  }
-
-  async function setWhatsAppAi(connectionId: string, enabled: boolean) {
-    setWaBusy(true);
-    try {
-      await setWhatsAppAiEnabled(connectionId, enabled);
-      await load();
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) setAuthGate(true);
-      else setError(tr('integrationsActionError'));
-    } finally {
-      setWaBusy(false);
-    }
-  }
 
   async function manageMetaAccess(platform: 'instagram' | 'facebook') {
     setBusyPlatform(platform);
@@ -385,14 +299,14 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
       </Text>
       <ScrollView contentContainerStyle={styles.list}>
         <WhatsAppCloudCard
-          status={waStatus}
+          status={wa.waStatus}
           loading={loading}
-          busy={waBusy}
+          busy={wa.waBusy}
           onRefresh={() => void load()}
-          onConnect={() => void connectWhatsApp()}
-          onEnableAi={(id) => void setWhatsAppAi(id, true)}
-          onDisableAi={(id) => void setWhatsAppAi(id, false)}
-          onBusyChange={setWaBusy}
+          onConnect={() => void wa.connectWhatsApp()}
+          onEnableAi={(id) => void wa.setWhatsAppAi(id, true, load)}
+          onDisableAi={(id) => void wa.setWhatsAppAi(id, false, load)}
+          onBusyChange={wa.setWaBusy}
           onError={setError}
           onNotice={setNotice}
         />

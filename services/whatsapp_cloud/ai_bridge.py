@@ -67,10 +67,7 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
             conversation_id=conversation_id,
         )
         reply_text = str(
-            getattr(outcome, "reply", None)
-            or getattr(outcome, "answer", None)
-            or getattr(outcome, "text", None)
-            or ""
+            getattr(outcome, "reply", None) or getattr(outcome, "answer", None) or getattr(outcome, "text", None) or ""
         ).strip()
         if not reply_text and isinstance(outcome, dict):
             reply_text = str(outcome.get("reply") or outcome.get("answer") or outcome.get("text") or "").strip()

@@ -71,9 +71,7 @@ def test_cross_tenant_conversation_idor(tmp_path, monkeypatch):
         access_token="t",
         scopes=["whatsapp_business_management", "whatsapp_business_messaging"],
     )
-    conv = repo.get_or_create_conversation(
-        tenant_id="tenant_a", connection_id=conn.id, customer_wa_id="96171111111"
-    )
+    conv = repo.get_or_create_conversation(tenant_id="tenant_a", connection_id=conn.id, customer_wa_id="96171111111")
     s.commit()
     assert repo.get_tenant_conversation(tenant_id="tenant_b", conversation_id=conv.id) is None
     assert repo.get_tenant_connection(tenant_id="tenant_b", connection_id=conn.id) is None

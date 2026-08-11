@@ -21,7 +21,7 @@ describe('whatsapp cloud mobile return + card', () => {
   it('IntegrationsScreen wires WhatsApp card and deep-link refetch', () => {
     const screen = read('features/integrations/IntegrationsScreen.tsx');
     assert.match(screen, /WhatsAppCloudCard/);
-    assert.match(screen, /startWhatsAppCloudConnect/);
+    assert.match(screen, /useWhatsAppIntegrations/);
     assert.match(screen, /wa_connection|waConnection|waOAuthSuccess/);
   });
 

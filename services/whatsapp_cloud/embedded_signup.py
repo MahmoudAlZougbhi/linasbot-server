@@ -122,7 +122,9 @@ async def complete_embedded_signup(
                     attempt,
                     outcome_code=str(error or "cancelled"),
                     outcome_detail=(error_reason or "")[:255] or None,
-                    status="cancelled" if (error or "").lower() in {"access_denied", "user_cancelled", "cancelled"} else "failed",
+                    status="cancelled"
+                    if (error or "").lower() in {"access_denied", "user_cancelled", "cancelled"}
+                    else "failed",
                 )
             except ValueError as exc:
                 raise WhatsAppSignupError(str(exc), "state not consumable") from exc
@@ -134,14 +136,20 @@ async def complete_embedded_signup(
             )
             redirect = oauth_completion_redirect_url(
                 return_surface="mobile" if return_surface == "mobile" else "web",
-                meta_connection="cancelled" if (error or "").lower() in {"access_denied", "user_cancelled", "cancelled"} else "failed",
+                meta_connection="cancelled"
+                if (error or "").lower() in {"access_denied", "user_cancelled", "cancelled"}
+                else "failed",
                 extra_query={"wa_connection": "cancelled" if error else "failed", "correlation_id": correlation_id},
             )
             # Mobile deep-link uses meta_connection; also include wa_connection for WA card.
             if return_surface == "mobile":
                 from urllib.parse import urlencode as _ue
 
-                status = "cancelled" if (error or "").lower() in {"access_denied", "user_cancelled", "cancelled"} else "failed"
+                status = (
+                    "cancelled"
+                    if (error or "").lower() in {"access_denied", "user_cancelled", "cancelled"}
+                    else "failed"
+                )
                 redirect = f"linasai://integrations?{_ue({'wa_connection': status, 'correlation_id': correlation_id})}"
             return {"success": False, "redirect_url": redirect, "correlation_id": correlation_id}
 
@@ -240,7 +248,9 @@ async def complete_embedded_signup(
             if return_surface == "mobile":
                 from urllib.parse import urlencode as _ue
 
-                redirect = f"linasai://integrations?{_ue({'wa_connection': 'success', 'correlation_id': correlation_id})}"
+                redirect = (
+                    f"linasai://integrations?{_ue({'wa_connection': 'success', 'correlation_id': correlation_id})}"
+                )
             else:
                 redirect = oauth_completion_redirect_url(
                     return_surface="web",
@@ -270,7 +280,9 @@ async def complete_embedded_signup(
             if return_surface == "mobile":
                 from urllib.parse import urlencode as _ue
 
-                redirect = f"linasai://integrations?{_ue({'wa_connection': 'failed', 'correlation_id': correlation_id})}"
+                redirect = (
+                    f"linasai://integrations?{_ue({'wa_connection': 'failed', 'correlation_id': correlation_id})}"
+                )
             else:
                 redirect = oauth_completion_redirect_url(
                     return_surface="web",

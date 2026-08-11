@@ -168,7 +168,9 @@ def test_parse_inbound_echo_history_status():
 
     history = {
         "object": "whatsapp_business_account",
-        "entry": [{"id": "waba1", "changes": [{"field": "history", "value": {"metadata": {"phone_number_id": "pn1"}}}]}],
+        "entry": [
+            {"id": "waba1", "changes": [{"field": "history", "value": {"metadata": {"phone_number_id": "pn1"}}}]}
+        ],
     }
     hist = parse_whatsapp_cloud_payload(history)
     assert hist[0].event_kind == "history"
@@ -237,9 +239,7 @@ async def test_echo_pauses_and_inbound_ai_once(wa_db, monkeypatch):
     r1 = await wp.process_whatsapp_cloud_webhook(raw_body=json.dumps(echo_payload).encode(), payload=echo_payload)
     assert r1["accepted"] >= 1
     assert calls == []
-    conv = repo.get_or_create_conversation(
-        tenant_id="tenant_a", connection_id=conn.id, customer_wa_id="96170000001"
-    )
+    conv = repo.get_or_create_conversation(tenant_id="tenant_a", connection_id=conn.id, customer_wa_id="96170000001")
     assert conv.control_state == "HUMAN_PAUSED"
 
     inbound = {

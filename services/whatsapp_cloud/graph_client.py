@@ -33,7 +33,9 @@ def assert_graph_url_safe(url: str) -> None:
         raise WhatsAppGraphError("ssrf_blocked", "Refusing non-Graph host for WhatsApp media/API fetch")
 
 
-async def exchange_embedded_signup_code(*, code: str, redirect_uri: str, app_id: str, app_secret: str) -> dict[str, Any]:
+async def exchange_embedded_signup_code(
+    *, code: str, redirect_uri: str, app_id: str, app_secret: str
+) -> dict[str, Any]:
     if not code.strip():
         raise WhatsAppGraphError("missing_code", "authorization code missing")
     url = f"{_graph_base()}/oauth/access_token"

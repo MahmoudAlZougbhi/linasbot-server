@@ -123,7 +123,9 @@ async def whatsapp_cloud_connect_start(request: Request, body: dict[str, Any] = 
     except WhatsAppEntitlementError as exc:
         return JSONResponse(status_code=403, content={"success": False, "error": exc.code, "message": exc.message})
     except WhatsAppSignupError as exc:
-        return JSONResponse(status_code=exc.http_status, content={"success": False, "error": exc.code, "message": exc.message})
+        return JSONResponse(
+            status_code=exc.http_status, content={"success": False, "error": exc.code, "message": exc.message}
+        )
     except WhatsAppDatabaseUnavailable:
         return JSONResponse(status_code=503, content={"success": False, "error": "WHATSAPP_DB_UNAVAILABLE"})
 
@@ -181,7 +183,9 @@ async def whatsapp_cloud_connect_complete(request: Request, body: dict[str, Any]
         )
         return result
     except WhatsAppSignupError as exc:
-        return JSONResponse(status_code=exc.http_status, content={"success": False, "error": exc.code, "message": exc.message})
+        return JSONResponse(
+            status_code=exc.http_status, content={"success": False, "error": exc.code, "message": exc.message}
+        )
 
 
 @app.get("/integrations/whatsapp/embedded-signup")
@@ -281,6 +285,7 @@ async def whatsapp_embedded_signup_bridge(request: Request) -> HTMLResponse:
 </body>
 </html>"""
     import json as _json
+
     html = (
         html.replace("__APP_ID__", _json.dumps(str(app_id)))
         .replace("__STATE__", _json.dumps(str(state)))
@@ -289,4 +294,3 @@ async def whatsapp_embedded_signup_bridge(request: Request) -> HTMLResponse:
         .replace("__REDIRECT__", _json.dumps(str(redirect_uri)))
     )
     return HTMLResponse(content=html, headers={"X-Robots-Tag": "noindex, nofollow"})
-

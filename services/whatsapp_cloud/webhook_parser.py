@@ -60,7 +60,10 @@ def parse_whatsapp_cloud_payload(payload: object) -> list[ParsedCloudEvent]:
                     mid = str(echo_d.get("id") or "").strip()
                     to = str(echo_d.get("to") or echo_d.get("recipient_id") or "").strip()
                     if not mid:
-                        mid = "echo_" + hashlib.sha256(json.dumps(echo_d, sort_keys=True, default=str).encode()).hexdigest()[:32]
+                        mid = (
+                            "echo_"
+                            + hashlib.sha256(json.dumps(echo_d, sort_keys=True, default=str).encode()).hexdigest()[:32]
+                        )
                     events.append(
                         ParsedCloudEvent(
                             event_kind="smb_message_echoes",
@@ -80,7 +83,9 @@ def parse_whatsapp_cloud_payload(payload: object) -> list[ParsedCloudEvent]:
 
             if field in {"history", "smb_app_state_sync"}:
                 kind: EventKind = "history" if field == "history" else "smb_app_state_sync"
-                basis = json.dumps({"waba": waba_id, "field": field, "value_keys": sorted(value.keys())}, sort_keys=True)
+                basis = json.dumps(
+                    {"waba": waba_id, "field": field, "value_keys": sorted(value.keys())}, sort_keys=True
+                )
                 events.append(
                     ParsedCloudEvent(
                         event_kind=kind,
