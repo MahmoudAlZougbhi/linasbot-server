@@ -368,10 +368,19 @@ else
   echo -e "${YELLOW}API-only deploy continues; in-process queue remains non-production.${NC}"
 fi
 
-# API readiness (boolean checks only)
-if ! curl -fsS "http://127.0.0.1:8003/api/ready" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
-  echo -e "${RED}/api/ready failed — failing deploy${NC}"
+# API readiness (boolean checks only) — poll until gunicorn binds (cold start race).
+READY_OK=0
+for i in $(seq 1 45); do
+  if curl -fsS "http://127.0.0.1:8003/api/ready" 2>/dev/null | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
+    READY_OK=1
+    break
+  fi
+  sleep 1
+done
+if [ "$READY_OK" != "1" ]; then
+  echo -e "${RED}/api/ready failed after wait — failing deploy${NC}"
   curl -sS "http://127.0.0.1:8003/api/ready" || true
+  journalctl -u ${SERVICE_NAME} -n 40 --no-pager || true
   exit 1
 fi
 echo -e "${GREEN}/api/ready OK${NC}"
