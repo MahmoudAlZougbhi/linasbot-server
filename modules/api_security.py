@@ -16,6 +16,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from services.auth_rate_limits import auth_rate_limit_rules, check_rate_limit, client_ip
 from services.dashboard_session_service import (
     CSRF_COOKIE_NAME,
     CSRF_HEADER_NAME,
@@ -24,7 +25,29 @@ from services.dashboard_session_service import (
     session_service,
 )
 from services.product_features import DISABLED_PRODUCT_MESSAGE, is_disabled_api_path
-from services.rate_limit_service import rate_limit_service
+
+# Re-export for callers that historically imported from this module.
+_client_ip = client_ip
+
+__all__ = (
+    "DashboardAuthMiddleware",
+    "_client_ip",
+    "auth_rate_limit_rules",
+    "check_rate_limit",
+    "client_ip",
+    "get_request_session",
+    "is_platform_owner",
+    "is_production_env",
+    "is_public_api",
+    "is_social_user_id",
+    "reject_social_operator_mutation",
+    "require_permission",
+    "require_platform_owner",
+    "require_session",
+    "required_permission_for",
+    "resolve_permissions",
+    "user_has_permission",
+)
 
 # Frontend-aligned permission keys
 PERMISSION_KEYS = {
@@ -204,60 +227,6 @@ def required_permission_for(method: str, path: str) -> str | None:
     return "settings"
 
 
-_SENSITIVE_MUTATION_PREFIXES = (
-    "/api/smart-messaging/send",
-    "/api/smart-messaging/campaigns",
-    "/api/smart-messaging/toggle",
-    "/api/live-chat/send-message",
-    "/api/live-chat/takeover",
-    "/api/debug/",
-    "/api/auth/login",
-    "/api/auth/register",
-    "/api/auth/change-password",
-)
-
-
-def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for") or ""
-    if forwarded:
-        return forwarded.split(",")[0].strip() or "unknown"
-    if request.client:
-        return request.client.host or "unknown"
-    return "unknown"
-
-
-def check_rate_limit(request: Request, path: str) -> JSONResponse | None:
-    ip = _client_ip(request)
-    rules = []
-    if path == "/api/auth/login":
-        rules.append((f"login:{ip}", 10, 300))
-    if path == "/api/auth/register":
-        rules.append((f"register:{ip}", 5, 300))
-    if path == "/api/auth/forgot-password":
-        rules.append((f"forgot:{ip}", 5, 300))
-    if path == "/api/auth/reset-password":
-        rules.append((f"reset:{ip}", 10, 300))
-    if path == "/api/auth/verify-email":
-        rules.append((f"verify:{ip}", 20, 300))
-    if path == "/api/auth/resend-verification":
-        rules.append((f"resend-verify:{ip}", 5, 300))
-    if path == "/api/auth/change-password":
-        rules.append((f"pw:{ip}", 10, 300))
-    if path.startswith("/api/guest-ai/"):
-        rules.append((f"guest-ai:{ip}", 60, 300))
-    if any(path.startswith(p) for p in _SENSITIVE_MUTATION_PREFIXES):
-        rules.append((f"mut:{ip}:{path.split('?')[0]}", 60, 60))
-    for key, limit, window in rules:
-        allowed, retry = rate_limit_service.hit(key, limit=limit, window_seconds=window)
-        if not allowed:
-            return JSONResponse(
-                status_code=429,
-                content={"success": False, "error": "Rate limit exceeded", "retry_after": retry},
-                headers={"Retry-After": str(retry)},
-            )
-    return None
-
-
 def get_request_session(request: Request) -> SessionRecord | None:
     return getattr(request.state, "dashboard_session", None)
 
@@ -304,7 +273,7 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
         request.state.dashboard_session = session
         request.state.auth_via_bearer = used_bearer
 
-        limited = check_rate_limit(request, path)
+        limited = await check_rate_limit(request, path)
         if limited is not None:
             return limited
 
