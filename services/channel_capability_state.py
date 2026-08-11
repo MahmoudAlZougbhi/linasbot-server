@@ -57,8 +57,7 @@ BLOCKER_MESSAGES: dict[str, str] = {
         "do not Disconnect Account."
     ),
     "missing_comment_permissions": (
-        "Missing Meta comment permissions on this token. Use Manage Meta Access — "
-        "do not Disconnect Account."
+        "Missing Meta comment permissions on this token. Use Manage Meta Access — do not Disconnect Account."
     ),
     "missing_dm_permissions": "Missing Meta messaging permissions. Use Manage Meta Access to refresh access.",
     "missing_comment_webhook": "Comment webhook subscription is not confirmed yet for this connection.",
@@ -306,11 +305,7 @@ def _status_and_blocker(
         # is the issue, and never fabricate permissions.
         code = "missing_comment_permissions" if capability == "comments" else "missing_dm_permissions"
         status = "permission_required" if capability == "comments" else "reauthorization_required"
-        message = (
-            _missing_comment_permissions_message(platform)
-            if capability == "comments"
-            else BLOCKER_MESSAGES[code]
-        )
+        message = _missing_comment_permissions_message(platform) if capability == "comments" else BLOCKER_MESSAGES[code]
         return status, code, message
     if not webhook_subscribed:
         code = "missing_comment_webhook" if capability == "comments" else "missing_dm_webhook"

@@ -121,10 +121,12 @@ def _transport(
     return httpx.MockTransport(handler)
 
 
-def test_legacy_instagram_start_aliases_to_unified_flow() -> None:
-    assert normalize_oauth_flow_channel("instagram") == "unified"
-    assert normalize_oauth_flow_channel("facebook") == "unified"
+def test_oauth_flow_channel_keeps_facebook_and_instagram_separate() -> None:
+    assert normalize_oauth_flow_channel("instagram") == "instagram"
+    assert normalize_oauth_flow_channel("facebook") == "facebook"
     assert normalize_oauth_flow_channel("unified") == "unified"
+    assert normalize_oauth_flow_channel("meta") == "unified"
+    assert normalize_oauth_flow_channel("") == "unified"
 
 
 def test_business_login_url_uses_config_id_rerequests_comment_scopes(registry: MetaAppRegistry) -> None:
@@ -190,7 +192,8 @@ async def test_external_page_login_inspects_encrypts_and_activates_with_subscrip
     facebook_bindings = [item for item in result.bindings if item.channel == "facebook"]
     instagram_bindings = [item for item in result.bindings if item.channel == "instagram"]
     assert len(facebook_bindings) == 1
-    assert len(instagram_bindings) == 1
+    # Facebook-only Manage Meta Access must not auto-bind Instagram (IG Login is separate).
+    assert len(instagram_bindings) == 0
     stored = registry.store_path.read_text(encoding="utf-8")
     assert "page-token-private" not in stored
     assert "single-use-code" not in stored
