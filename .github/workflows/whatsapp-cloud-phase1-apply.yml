@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       CONFIRM:
-        description: "APPLY_WHATSAPP_CLOUD_PHASE1 | APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY | PROBE_WHATSAPP_DB"
+        description: "PROVISION_WHATSAPP_POSTGRES_AND_PHASE1 | APPLY_WHATSAPP_CLOUD_PHASE1 | APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY | PROBE_WHATSAPP_DB"
         required: true
         type: string
 
@@ -17,10 +17,11 @@ permissions:
 
 jobs:
   apply:
-    name: Migrate WhatsApp Cloud + Phase 1 flags
+    name: WhatsApp Cloud Postgres / Phase 1 ops
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     if: >-
+      github.event.inputs.CONFIRM == 'PROVISION_WHATSAPP_POSTGRES_AND_PHASE1' ||
       github.event.inputs.CONFIRM == 'APPLY_WHATSAPP_CLOUD_PHASE1' ||
       github.event.inputs.CONFIRM == 'APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY' ||
       github.event.inputs.CONFIRM == 'PROBE_WHATSAPP_DB'
@@ -33,19 +34,44 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script_stop: true
-          command_timeout: 20m
+          command_timeout: 40m
           script: |
             set -e
             cd /opt/linasbot
             git fetch origin main
-            git fetch origin ops/whatsapp-db-probe || true
-            if [ '${{ github.event.inputs.CONFIRM }}' = 'PROBE_WHATSAPP_DB' ]; then
-              git show origin/ops/whatsapp-db-probe:scripts/prod_whatsapp_db_probe.sh > /tmp/prod_whatsapp_db_probe.sh
+            git fetch origin ops/whatsapp-postgres-provision || true
+            CONFIRM='${{ github.event.inputs.CONFIRM }}'
+            OPS_REF=origin/ops/whatsapp-postgres-provision
+            if ! git rev-parse --verify "$OPS_REF" >/dev/null 2>&1; then
+              OPS_REF=origin/main
+            fi
+            if [ "$CONFIRM" = 'PROBE_WHATSAPP_DB' ]; then
+              git show "$OPS_REF:scripts/prod_whatsapp_db_probe.sh" > /tmp/prod_whatsapp_db_probe.sh
               sudo install -m 0755 /tmp/prod_whatsapp_db_probe.sh /opt/linasbot/scripts/prod_whatsapp_db_probe.sh
               sudo bash /opt/linasbot/scripts/prod_whatsapp_db_probe.sh
+            elif [ "$CONFIRM" = 'PROVISION_WHATSAPP_POSTGRES_AND_PHASE1' ]; then
+              git reset --hard origin/main
+              for f in \
+                prod_provision_whatsapp_postgres.sh \
+                prod_whatsapp_pg_backup.sh \
+                prod_whatsapp_cloud_postgres_bootstrap.sh \
+                prod_whatsapp_grant_pilot.sh \
+                prod_whatsapp_db_probe.sh \
+                prod_whatsapp_cloud_migrate.sh \
+                prod_apply_whatsapp_cloud_phase1_flags.sh \
+                prod_whatsapp_cloud_phase1_ops.sh
+              do
+                if git cat-file -e "$OPS_REF:scripts/$f" 2>/dev/null; then
+                  git show "$OPS_REF:scripts/$f" > "/tmp/$f"
+                  sudo install -m 0755 "/tmp/$f" "/opt/linasbot/scripts/$f"
+                elif [ -f "/opt/linasbot/scripts/$f" ]; then
+                  sudo chmod 0755 "/opt/linasbot/scripts/$f"
+                fi
+              done
+              sudo MODE='PROVISION_WHATSAPP_POSTGRES_AND_PHASE1' bash /opt/linasbot/scripts/prod_whatsapp_cloud_postgres_bootstrap.sh
             else
               git reset --hard origin/main
               git show origin/main:scripts/prod_whatsapp_cloud_phase1_ops.sh > /tmp/prod_whatsapp_cloud_phase1_ops.sh
               sudo install -m 0755 /tmp/prod_whatsapp_cloud_phase1_ops.sh /opt/linasbot/scripts/prod_whatsapp_cloud_phase1_ops.sh
-              sudo MODE='${{ github.event.inputs.CONFIRM }}' bash /opt/linasbot/scripts/prod_whatsapp_cloud_phase1_ops.sh
+              sudo MODE="$CONFIRM" bash /opt/linasbot/scripts/prod_whatsapp_cloud_phase1_ops.sh
             fi
