@@ -8,6 +8,8 @@ import { useTheme } from '../../theme';
 type Props = {
   text: string;
   onRetry?: () => void;
+  /** Pack copy/retry toward the AI message's script edge. */
+  edgeRtl?: boolean;
 };
 
 type ActionIconProps = {
@@ -44,7 +46,7 @@ function ActionIconButton({ accessibilityLabel, icon, color, onPress }: ActionIc
   );
 }
 
-export function MessageActions({ text, onRetry }: Props) {
+export function MessageActions({ text, onRetry, edgeRtl = false }: Props) {
   const { colors } = useTheme();
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -65,7 +67,7 @@ export function MessageActions({ text, onRetry }: Props) {
   }
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, edgeRtl ? styles.rowRtl : styles.rowLtr]}>
       <ActionIconButton
         accessibilityLabel={copied ? 'Copied' : 'Copy message'}
         icon={feather(copied ? 'check' : 'copy')}
@@ -85,7 +87,9 @@ export function MessageActions({ text, onRetry }: Props) {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 6, marginLeft: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 6 },
+  rowLtr: { marginLeft: 2 },
+  rowRtl: { marginRight: 2, flexDirection: 'row-reverse' },
   iconWrap: {
     width: 28,
     height: 28,

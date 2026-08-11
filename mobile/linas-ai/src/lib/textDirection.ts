@@ -4,6 +4,11 @@
  * so English stays LTR even when I18nManager.forceRTL is on for Arabic UI chrome.
  */
 
+import { I18nManager, type FlexAlignType, type ViewStyle } from 'react-native';
+
+/** Pull AI rows into list padding so LTR hugs left / RTL hugs right harder. */
+export const AI_MESSAGE_EDGE_HUG = 10;
+
 function isNeutralOrWeak(cp: number): boolean {
   // ASCII controls, space, digits, most punctuation
   if (cp <= 0x40) return true;
@@ -60,4 +65,32 @@ export function textDirectionStyle(text: string | null | undefined): TextDirecti
     return { textAlign: 'right', writingDirection: 'rtl' };
   }
   return { textAlign: 'left', writingDirection: 'ltr' };
+}
+
+/**
+ * flex-start/end toward the message script's physical start edge.
+ * Compensates for I18nManager.forceRTL flipping start/end.
+ */
+export function contentStartAlign(text: string | null | undefined): FlexAlignType {
+  const rtl = isRtlText(text);
+  return I18nManager.isRTL === rtl ? 'flex-start' : 'flex-end';
+}
+
+/**
+ * AI row layout: stretch across the list so short EN sits left and short AR sits right,
+ * then hug the matching screen edge (stronger than textAlign alone).
+ */
+export function aiMessageRowStyle(text: string | null | undefined): ViewStyle {
+  const rtl = isRtlText(text);
+  return {
+    alignSelf: 'stretch',
+    maxWidth: '100%',
+    marginLeft: rtl ? 0 : -AI_MESSAGE_EDGE_HUG,
+    marginRight: rtl ? -AI_MESSAGE_EDGE_HUG : 0,
+  };
+}
+
+/** Label / actions / text column: pack toward the script's physical start edge. */
+export function aiMessageColStyle(text: string | null | undefined): ViewStyle {
+  return { alignItems: contentStartAlign(text) };
 }

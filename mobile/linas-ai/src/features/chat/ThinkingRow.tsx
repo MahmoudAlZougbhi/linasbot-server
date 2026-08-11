@@ -2,8 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-native';
 
 import { LinasStarMark } from '../../components/LinasStarMark';
+import {
+  aiMessageColStyle,
+  aiMessageRowStyle,
+  textDirectionStyle,
+} from '../../lib/textDirection';
 import { fonts, spacing, typography, useTheme } from '../../theme';
-import { textDirectionStyle } from '../../lib/textDirection';
 
 type Props = {
   label: string;
@@ -59,17 +63,19 @@ export function ThinkingRow({ label }: Props) {
 
   return (
     <View
-      style={styles.row}
+      style={[styles.row, aiMessageRowStyle(label)]}
       accessibilityLiveRegion="polite"
       accessibilityRole="text"
       accessibilityLabel={label}
     >
-      <View style={styles.aiLabelRow}>
-        <LinasStarMark size={12} labeled label="Linas" />
+      <View style={[styles.col, aiMessageColStyle(label)]}>
+        <View style={styles.aiLabelRow}>
+          <LinasStarMark size={12} labeled label="Linas" />
+        </View>
+        <Animated.Text style={[styles.text, { color: colors.textMuted, opacity }, dirStyle]}>
+          {label}
+        </Animated.Text>
       </View>
-      <Animated.Text style={[styles.text, { color: colors.textMuted, opacity }, dirStyle]}>
-        {label}
-      </Animated.Text>
     </View>
   );
 }
@@ -77,17 +83,15 @@ export function ThinkingRow({ label }: Props) {
 const styles = StyleSheet.create({
   row: {
     marginBottom: spacing.md,
-    maxWidth: '94%',
-    alignSelf: 'flex-start',
   },
+  col: { flexShrink: 1 },
   aiLabelRow: {
     marginBottom: 4,
-    marginLeft: 2,
   },
   text: {
     ...typography.chatAi,
     fontFamily: fonts.body,
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
     paddingVertical: 2,
   },
 });

@@ -4,7 +4,12 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { ChatMessage } from '../../api/types';
 import { LinasStarMark } from '../../components/LinasStarMark';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
-import { textDirectionStyle } from '../../lib/textDirection';
+import {
+  aiMessageColStyle,
+  aiMessageRowStyle,
+  isRtlText,
+  textDirectionStyle,
+} from '../../lib/textDirection';
 import { fonts, radii, spacing, typography, useTheme } from '../../theme';
 import { MessageActions } from './MessageActions';
 import { MessageImageThumbs } from './MessageImageThumbs';
@@ -34,6 +39,7 @@ export function ChatBubble({
   const thumbs = imageUris?.length ? imageUris : message.local_image_uris;
   const hasText = Boolean(message.content?.trim());
   const dirStyle = hasText ? textDirectionStyle(message.content) : null;
+  const aiRtl = !isUser && isRtlText(message.content);
   const animate = Boolean(typewriter && !isUser && hasText && !reduceMotion);
   const { shown, done, cursorOn } = useOnceTypewriter(message.content, animate);
   const displayText = animate && !done ? shown : message.content;
@@ -44,8 +50,18 @@ export function ChatBubble({
   }, [done, onTypewriterDone, reduceMotion, typewriter]);
 
   return (
-    <View style={[styles.row, isUser ? styles.rowUser : styles.rowAi]}>
-      <View style={[styles.col, isUser && styles.colUser]}>
+    <View
+      style={[
+        styles.row,
+        isUser ? styles.rowUser : aiMessageRowStyle(message.content),
+      ]}
+    >
+      <View
+        style={[
+          styles.col,
+          isUser ? styles.colUser : aiMessageColStyle(message.content),
+        ]}
+      >
         {isUser ? (
           <Text style={[styles.userLabel, { color: colors.textDim }]}>You</Text>
         ) : (
@@ -78,7 +94,7 @@ export function ChatBubble({
           ) : null}
         </View>
         {!isUser && showActions ? (
-          <MessageActions text={message.content} onRetry={onRetry} />
+          <MessageActions text={message.content} onRetry={onRetry} edgeRtl={aiRtl} />
         ) : null}
       </View>
     </View>
@@ -88,10 +104,8 @@ export function ChatBubble({
 const styles = StyleSheet.create({
   row: {
     marginBottom: spacing.md,
-    maxWidth: '94%',
   },
-  rowUser: { alignSelf: 'flex-end' },
-  rowAi: { alignSelf: 'flex-start' },
+  rowUser: { alignSelf: 'flex-end', maxWidth: '94%' },
   col: { flexShrink: 1 },
   colUser: { alignItems: 'flex-end' },
   userLabel: {
@@ -102,7 +116,6 @@ const styles = StyleSheet.create({
   },
   aiLabelRow: {
     marginBottom: 4,
-    marginLeft: 2,
   },
   bubble: {
     borderRadius: radii.bubble,
@@ -110,7 +123,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   aiBody: {
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
     paddingVertical: 2,
   },
   textAi: {
