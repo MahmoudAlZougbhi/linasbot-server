@@ -1,0 +1,201 @@
+# Ephemeral read-only probe — do not merge as permanent ops unless wanted.
+name: WA Cloud Webhook Readonly Probe
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: wa-cloud-webhook-readonly-probe
+  cancel-in-progress: false
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Read-only WA webhook evidence
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 8m
+          script: |
+            set -euo pipefail
+            echo "[wa-probe] host=$(hostname)"
+            echo "[wa-probe] utc_now=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "[wa-probe] local_now=$(date +%Y-%m-%dT%H:%M:%S%z)"
+
+            ENV_FILE=""
+            for candidate in /opt/linasbot/linaslaserbot-2.7.22/.env /opt/linasbot/.env; do
+              if [ -f "$candidate" ]; then ENV_FILE="$candidate"; break; fi
+            done
+            echo "[wa-probe] env_file_present=$([ -n \"$ENV_FILE\" ] && echo true || echo false)"
+            if [ -n "$ENV_FILE" ]; then
+              # Presence + boolean only — never dump env.
+              if grep -E '^WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED=' "$ENV_FILE" >/dev/null 2>&1; then
+                val=$(grep -E '^WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED=' "$ENV_FILE" | tail -n1 | cut -d= -f2- | tr -d '\r' | tr '[:upper:]' '[:lower:]')
+                case "$val" in
+                  1|true|yes|on) echo "[wa-probe] WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED=true" ;;
+                  0|false|no|off|"") echo "[wa-probe] WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED=false" ;;
+                  *) echo "[wa-probe] WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED=nonboolean_present" ;;
+                esac
+              else
+                echo "[wa-probe] WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED=unset"
+              fi
+            fi
+
+            echo "[wa-probe] === journalctl linasbot (UTC window around Meta test) ==="
+            # Meta test ~22:44:59 Asia/Beirut (UTC+3) => ~19:44:59 UTC on 2026-08-11
+            journalctl -u linasbot --since "2026-08-11 19:40:00 UTC" --until "2026-08-11 19:55:00 UTC" --no-pager -o short-iso 2>/dev/null \
+              | grep -E 'whatsapp_cloud|/webhook/whatsapp-cloud|signature_|unknown_asset|webhook_side_effects|Invalid signature|POST /webhook/whatsapp' \
+              | sed -E 's/(sha256=)[A-Fa-f0-9]+/\1[REDACTED]/g; s/(access_token|token|secret|authorization)(=|":?\s*")[^"&, }]+/\1\2[REDACTED]/gi' \
+              || true
+
+            echo "[wa-probe] === journalctl broader since 19:30 UTC (counts) ==="
+            journalctl -u linasbot --since "2026-08-11 19:30:00 UTC" --until "2026-08-11 20:10:00 UTC" --no-pager -o cat 2>/dev/null \
+              | grep -c 'whatsapp_cloud' || true
+            journalctl -u linasbot --since "2026-08-11 19:30:00 UTC" --until "2026-08-11 20:10:00 UTC" --no-pager -o cat 2>/dev/null \
+              | grep -E 'unknown_asset|signature_reject|signature_rejection|webhook_side_effects_disabled|ai_suppressed|analytics_usage|maybe_generate|outbound' \
+              | sed -E 's/(sha256=)[A-Fa-f0-9]+/\1[REDACTED]/g' \
+              || true
+
+            echo "[wa-probe] === nginx sensitive error log (crit-only; may be empty) ==="
+            if [ -f /var/log/nginx/linasaibot-sensitive.error.log ]; then
+              # access_log is off for /webhook; only crit errors may appear
+              sudo grep -E 'whatsapp-cloud|19:4[0-9]:|22:4[0-9]:' /var/log/nginx/linasaibot-sensitive.error.log 2>/dev/null | tail -20 \
+                | sed -E 's/(hub\.verify_token=)[^ &]+/\1[REDACTED]/g; s/(sha256=)[A-Fa-f0-9]+/\1[REDACTED]/g' || true
+            else
+              echo "[wa-probe] sensitive_error_log_absent=true"
+            fi
+
+            echo "[wa-probe] === uvicorn/access if any ==="
+            # Some setups log access via journal despite nginx access_log off
+            journalctl -u linasbot --since "2026-08-11 19:40:00 UTC" --until "2026-08-11 19:55:00 UTC" --no-pager -o short-iso 2>/dev/null \
+              | grep -E 'HTTP/1\.[01]"|whatsapp-cloud' \
+              | sed -E 's/\?[^ ]+/?[REDACTED]/g' \
+              | tail -50 || true
+
+            echo "[wa-probe] === PostgreSQL whatsapp_webhook_events (redacted) ==="
+            set +e
+            APP_DIR=/opt/linasbot
+            if [ -f /opt/linasbot/linaslaserbot-2.7.22/main.py ]; then APP_DIR=/opt/linasbot/linaslaserbot-2.7.22; fi
+            if [ -n "$ENV_FILE" ]; then
+              # shellcheck disable=SC1090
+              set -a
+              # Source only the WhatsApp DB URL line without echoing secrets.
+              # shellcheck disable=SC1090
+              . "$ENV_FILE"
+              set +a
+            fi
+            if [ -z "${LINAS_WHATSAPP_DATABASE_URL:-}" ]; then
+              echo "[wa-probe] LINAS_WHATSAPP_DATABASE_URL=unset"
+            else
+              echo "[wa-probe] LINAS_WHATSAPP_DATABASE_URL=present"
+              python3 - <<'PY'
+            import os
+            import re
+            from datetime import datetime, timezone
+            try:
+                import psycopg
+            except ImportError:
+                import psycopg2 as psycopg  # type: ignore
+
+            dsn = os.environ.get("LINAS_WHATSAPP_DATABASE_URL") or ""
+            # Never print DSN.
+            print("[wa-probe] connecting_pg=true")
+            conn = psycopg.connect(dsn)
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT
+                  id::text,
+                  event_kind,
+                  processing_state,
+                  attempt_count,
+                  created_at,
+                  processed_at,
+                  (tenant_id IS NOT NULL) AS has_tenant,
+                  (connection_id IS NOT NULL) AS has_connection,
+                  left(event_key, 48) AS event_key_prefix,
+                  left(coalesce(payload_hash,''), 12) AS payload_hash_prefix
+                FROM whatsapp_webhook_events
+                WHERE created_at >= TIMESTAMPTZ '2026-08-11 19:30:00+00'
+                  AND created_at <= TIMESTAMPTZ '2026-08-11 20:15:00+00'
+                ORDER BY created_at ASC
+                LIMIT 50
+                """
+            )
+            rows = cur.fetchall()
+            print(f"[wa-probe] webhook_events_in_window={len(rows)}")
+            for r in rows:
+                # Redact obvious phone-like digits longer than 6 in event_key prefix beyond known fake sample marker.
+                prefix = r[8] or ""
+                prefix = re.sub(r"(?<!123456)(\d{7,})", "[DIGITS]", prefix)
+                print(
+                    "[wa-probe] event",
+                    {
+                        "id": r[0][:8] + "…",
+                        "event_kind": r[1],
+                        "processing_state": r[2],
+                        "attempt_count": r[3],
+                        "created_at": r[4].isoformat() if r[4] else None,
+                        "processed_at": r[5].isoformat() if r[5] else None,
+                        "has_tenant": bool(r[6]),
+                        "has_connection": bool(r[7]),
+                        "event_key_prefix": prefix,
+                        "payload_hash_prefix": r[9],
+                    },
+                )
+
+            # Active connection for the Meta sample phone_number_id (fake)
+            cur.execute(
+                """
+                SELECT count(*) FROM whatsapp_connections
+                WHERE phone_number_id = %s
+                  AND lifecycle_status = 'connected'
+                  AND revoked_at IS NULL
+                """,
+                ("123456123",),
+            )
+            print(f"[wa-probe] active_connection_for_sample_phone_number_id={cur.fetchone()[0]}")
+
+            # Side-effect tables in window (counts only)
+            for table, ts_col in [
+                ("whatsapp_messages", "created_at"),
+                ("whatsapp_outbound_intents", "created_at"),
+            ]:
+                try:
+                    cur.execute(
+                        f"""
+                        SELECT count(*) FROM {table}
+                        WHERE {ts_col} >= TIMESTAMPTZ '2026-08-11 19:30:00+00'
+                          AND {ts_col} <= TIMESTAMPTZ '2026-08-11 20:15:00+00'
+                        """
+                    )
+                    print(f"[wa-probe] {table}_rows_in_window={cur.fetchone()[0]}")
+                except Exception as exc:
+                    print(f"[wa-probe] {table}_query_error={type(exc).__name__}")
+                    conn.rollback()
+
+            # Smart follow-up jobs if table exists
+            try:
+                cur.execute(
+                    """
+                    SELECT count(*) FROM whatsapp_smart_followup_jobs
+                    WHERE created_at >= TIMESTAMPTZ '2026-08-11 19:30:00+00'
+                      AND created_at <= TIMESTAMPTZ '2026-08-11 20:15:00+00'
+                    """
+                )
+                print(f"[wa-probe] smart_followup_jobs_in_window={cur.fetchone()[0]}")
+            except Exception as exc:
+                print(f"[wa-probe] smart_followup_jobs_query={type(exc).__name__}")
+                conn.rollback()
+
+            cur.close()
+            conn.close()
+            print("[wa-probe] pg_done=true")
+            PY
+            fi
+            echo "[wa-probe] SUCCESS"
