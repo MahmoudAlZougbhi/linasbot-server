@@ -121,8 +121,8 @@ def test_public_compliance_pages_are_real_html(compliance_client: TestClient) ->
         assert response.headers["x-frame-options"] == "DENY"
         assert marker in response.text
         assert "Linas AI" in response.text
-        assert "Mahmoudalzougbhi@gmail.com" in response.text
-        assert "support@linasai.com" not in response.text
+        assert "support@linasai.com" in response.text
+        assert "Mahmoudalzougbhi@" not in response.text
 
     privacy = compliance_client.get("/privacy-policy")
     assert "WhatsApp" in privacy.text
