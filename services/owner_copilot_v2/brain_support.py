@@ -18,7 +18,17 @@ SYSTEM_V2 = (
     "read_cm / list_cm_articles/read_cm_article / list_cm_faq/read_cm_faq to READ full bodies "
     "(continue items_offset / body_offset until complete); articles may include attachments "
     "(case example images/files + captions describing when each applies); "
-    "propose_cm_article_upsert / propose_cm_faq_upsert / propose_cm_patch to edit (owner must confirm). "
+    "propose_cm_article_upsert / propose_cm_faq_upsert / propose_cm_patch / propose_cm_delete to change "
+    "(owner must Approve on the bar — never silent write). "
+    "CRITICAL UX: when the owner asks to add, edit, or delete CM/FAQ content, call the propose_* tool "
+    "immediately so the confirmation bar appears with Approve | Cancel | Edit. Do NOT ask them to type "
+    "موافق / ok / agree just to show the bar. Natural assent (ok/موافق/yes) is only an Approve shortcut "
+    "AFTER the bar is visible — never a gate to display it. "
+    "Edit mode: if proposal_revise context is present, the owner's message revises that pending proposal — "
+    "call propose_* again (pass replace_proposal_id when deleting) and return an updated bar; do not "
+    "treat it as an unrelated new topic. "
+    "Deletes: call propose_cm_delete with item_ids or delete_all; list titles on the bar; per-item X is "
+    "handled by the app before Approve. "
     "Smart Answers / FAQ: ready-made Q&A for repeated customer questions. Matching questions "
     "(same text or same meaning) reply from FAQ before a full AI generation — that saves AI credits. "
     "When the owner asks to add a Q&A to FAQ, call read_faq_quota if needed, then propose_smart_answer "
@@ -39,9 +49,11 @@ SYSTEM_V2 = (
     "full section body / ekel shi bel tafsil / اقرأ قسم X كامل, then deliver that content fully "
     "(chunk across continuations; never stop mid-sentence). "
     "Never claim a tool ran unless you received a tool result. Never invent connection status or successes. "
-    "After tools return, write a natural final answer (not JSON). High-impact writes need confirmation. "
-    "When a Draft proposal is pending, tell the owner they can tap Approve OR reply with a short natural "
-    "assent such as ok / okay / موافق / نعم / yes / approve / تمام / يلا — never insist on one magic word. "
+    "After tools return, write a natural final answer (not JSON). High-impact writes need confirmation via "
+    "the bar (never ask for موافق before showing it). "
+    "When a Draft proposal bar is showing, the owner can tap Approve, Cancel, or Edit — or reply with a "
+    "short natural assent such as ok / okay / موافق / نعم / yes / approve / تمام / يلا to Approve "
+    "(never insist on one magic word). "
     "Natural assent and Approve save the change and make it Live for customer replies when activation.live "
     "is true in the tool result. If activation.activated is false, say the draft saved but Live did not "
     "update yet (use activation.reason/message) — never claim customers already see it. "
@@ -110,6 +122,7 @@ def status_label(name: str) -> str:
         "propose_cm_patch": "Preparing a change proposal…",
         "propose_cm_article_upsert": "Preparing an article change…",
         "propose_cm_faq_upsert": "Preparing an FAQ change…",
+        "propose_cm_delete": "Preparing delete confirmation…",
         "read_faq_quota": "Checking Smart Answers / FAQ quota…",
         "propose_smart_answer": "Preparing a Smart Answer for approval…",
         "approve_smart_answer": "Saving Smart Answer and going Live…",
@@ -189,6 +202,16 @@ def _build_messages(
         parts.append(summary)
     if attachment_ids:
         parts.append(f"User attached files: {attachment_ids}. Use extract_price_list when appropriate.")
+    revise = context.get("proposal_revise")
+    if isinstance(revise, dict) and revise:
+        parts.append(
+            "PROPOSAL EDIT MODE: The owner tapped Edit on a pending confirmation bar. "
+            "Their next message revises THAT pending proposal — call the matching propose_* tool "
+            "and return an updated bar. Pass replace_proposal_id="
+            f"{revise.get('proposal_id')!s} when using propose_cm_delete. "
+            "Do not ask for موافق. Do not start an unrelated new topic. "
+            f"Pending proposal snapshot: {json.dumps(revise, ensure_ascii=False, default=str)[:4000]}"
+        )
     out: list[dict[str, Any]] = [{"role": "system", "content": "\n".join(p for p in parts if p)}]
     for m in recent:
         out.append({"role": m["role"], "content": m["content"]})

@@ -7,8 +7,9 @@ import { ProposalCard } from './ProposalCard';
 
 type Props = {
   card: StreamCard;
-  onApproveDraft?: (token: string) => void;
-  onDiscard?: () => void;
+  onApproveDraft?: (token: string, opts?: { delete_ids?: string[] }) => void;
+  onDiscard?: (token?: string, proposalId?: string) => void;
+  onEditProposal?: (proposalId: string) => void;
   onOpenCm?: (review?: CmProposalReview) => void;
   onRetry?: () => void;
 };

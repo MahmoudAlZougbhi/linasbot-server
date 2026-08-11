@@ -19,6 +19,7 @@ from services.owner_ai_tools_cm_content import (
     tool_read_cm_article,
     tool_read_cm_faq,
 )
+from services.owner_ai_tools_cm_delete import tool_propose_cm_delete
 from services.owner_ai_tools_cm_guide import tool_cm_fill_plan, tool_inspect_cm_guide
 from services.owner_ai_tools_creative import (
     tool_create_creative_draft,
@@ -71,6 +72,7 @@ TOOL_HANDLERS: dict[str, Callable[..., Awaitable[ToolResult]]] = {
     "propose_cm_patch": tool_propose_cm_patch,
     "propose_cm_article_upsert": tool_propose_cm_article_upsert,
     "propose_cm_faq_upsert": tool_propose_cm_faq_upsert,
+    "propose_cm_delete": tool_propose_cm_delete,
     "approve_cm_patch": tool_approve_cm_patch,
     "publish_cm": tool_publish_cm,
     "read_usage": tool_read_usage,
@@ -98,6 +100,7 @@ HIGH_IMPACT_TOOLS: frozenset[str] = frozenset(
         "propose_cm_patch",
         "propose_cm_article_upsert",
         "propose_cm_faq_upsert",
+        "propose_cm_delete",
         "propose_diagnosis_fix",
         "approve_diagnosis_fix",
         "propose_smart_answer",
@@ -207,6 +210,7 @@ async def dispatch_tool(
             section=str(a.get("section") or ""),
             patch=dict(a.get("patch") or {}),
             force_edit=bool(a.get("force_edit")),
+            replace_proposal_id=str(a["replace_proposal_id"]) if a.get("replace_proposal_id") else None,
         )
     if name == "propose_cm_article_upsert":
         return await handler(
@@ -215,6 +219,7 @@ async def dispatch_tool(
             user_id=user_id,
             section=str(a.get("section") or "knowledge"),
             article=dict(a.get("article") or {}),
+            replace_proposal_id=str(a["replace_proposal_id"]) if a.get("replace_proposal_id") else None,
         )
     if name == "propose_cm_faq_upsert":
         return await handler(
@@ -222,14 +227,32 @@ async def dispatch_tool(
             role=role,
             user_id=user_id,
             faq=dict(a.get("faq") or {}),
+            replace_proposal_id=str(a["replace_proposal_id"]) if a.get("replace_proposal_id") else None,
+        )
+    if name == "propose_cm_delete":
+        raw_ids = a.get("item_ids") or a.get("ids") or []
+        raw_fields = a.get("field_keys") or []
+        return await handler(
+            tenant_id=tenant_id,
+            role=role,
+            user_id=user_id,
+            section=str(a.get("section") or ""),
+            item_ids=[str(x) for x in raw_ids] if isinstance(raw_ids, list) else None,
+            field_keys=[str(x) for x in raw_fields] if isinstance(raw_fields, list) else None,
+            delete_all=bool(a.get("delete_all")),
+            replace_proposal_id=str(a["replace_proposal_id"])
+            if a.get("replace_proposal_id")
+            else (str(a["proposal_edit_id"]) if a.get("proposal_edit_id") else None),
         )
     if name == "approve_cm_patch":
+        raw_delete = a.get("delete_ids")
         return await handler(
             tenant_id=tenant_id,
             role=role,
             user_id=user_id,
             proposal_id=str(a.get("proposal_id") or ""),
             confirmed=confirmed,
+            delete_ids=[str(x) for x in raw_delete] if isinstance(raw_delete, list) else None,
         )
     if name == "publish_cm":
         return await handler(tenant_id=tenant_id, role=role, confirmed=confirmed)

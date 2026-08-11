@@ -27,6 +27,8 @@ class StreamMessageBody(BaseModel):
     owner_mode: Literal["chat", "work"] | None = None
     # App UI locale (ar|en|fr). Prefer over message-language detection for Owner replies.
     reply_language: str | None = Field(default=None, max_length=16)
+    # Composer Edit chip: revise this pending proposal (not a new unrelated turn).
+    revise_proposal_id: str | None = Field(default=None, max_length=64)
 
 
 class ChoiceBody(BaseModel):
@@ -162,6 +164,7 @@ async def stream_owner_message(
                 attachment_ids=body.attachment_ids,
                 owner_mode=body.owner_mode,
                 reply_language=reply_language,
+                revise_proposal_id=body.revise_proposal_id,
                 is_cancelled=lambda: cancel_flag["cancelled"],
             ):
                 if ev.type == "delta":

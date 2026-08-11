@@ -276,6 +276,7 @@ def approve_cm_patch(
     user_id: str,
     proposal_id: str,
     actor_id: str | None = None,
+    delete_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     prop = cm_patch_proposal_store.get(tenant_id=tenant_id, proposal_id=proposal_id)
     if prop is None:
@@ -289,10 +290,26 @@ def approve_cm_patch(
     from services.cm.validation import validate_cm
     from services.faq_cm_invalidation import invalidate_faq_for_cm_patch
 
+    patch = prop.patch
+    # Per-item X on delete bar: only apply remaining ids.
+    if delete_ids is not None and str((prop.preview or {}).get("kind") or "") == "cm_delete":
+        from services.owner_ai_tools_cm_delete import filter_delete_targets
+
+        targets = list((prop.preview or {}).get("targets") or [])
+        patch, preview = filter_delete_targets(
+            tenant_id=tenant_id,
+            section=prop.section,
+            targets=targets,
+            keep_ids=list(delete_ids),
+        )
+        prop.patch = patch
+        prop.preview = preview
+        cm_patch_proposal_store.mark(prop, status="pending", result=None)
+
     saved = apply_section_patch(
         tenant_id=tenant_id,
         section=prop.section,
-        patch=prop.patch,
+        patch=patch,
         actor_id=actor_id or user_id,
     )
     report = validate_cm(tenant_id=tenant_id, section=prop.section)
@@ -330,6 +347,7 @@ async def approve_cm_patch_and_activate(
     user_id: str,
     proposal_id: str,
     actor_id: str | None = None,
+    delete_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     """Approve → validate → save Draft → publish Live (section overlay or first full publish)."""
     base = approve_cm_patch(
@@ -337,6 +355,7 @@ async def approve_cm_patch_and_activate(
         user_id=user_id,
         proposal_id=proposal_id,
         actor_id=actor_id,
+        delete_ids=delete_ids,
     )
     activation = await activate_cm_after_save(
         tenant_id=tenant_id,
