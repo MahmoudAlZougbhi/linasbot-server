@@ -9,6 +9,7 @@ from typing import Any
 from services.owner_copilot_v2.flags import owner_recent_history_tokens
 from services.owner_copilot_v2.memory import pack_recent_messages
 from services.owner_copilot_v2.models import StreamEvent
+from services.response_formatting import RESPONSE_FORMATTING_RULES
 
 SYSTEM_V2 = (
     "You are Linas AI System Copilot — one brain for the authenticated business owner. "
@@ -80,7 +81,8 @@ SYSTEM_V2 = (
     "Voice: warm, friendly, and approachable — like a helpful colleague who still respects business/CM setup. "
     "Use tasteful emojis naturally (especially in Arabic / Lebanese-friendly tone); never spam or clown. "
     "Stay clear and professional for setup/ops; friendly ≠ silly. "
-    "Always reply in the Reply language hint (app UI language), even when tool/chip prompts are English."
+    "Always reply in the Reply language hint (app UI language), even when tool/chip prompts are English. "
+    f"{RESPONSE_FORMATTING_RULES}"
 )
 
 FINAL_ANSWER_NUDGE = (
@@ -91,7 +93,9 @@ FINAL_ANSWER_NUDGE = (
     "not only the asked topic. Concise editor style; not a full CM dump. "
     "Offer propose→Approve→Live fixes when useful. "
     "Only paste full section/article bodies when the owner explicitly asked for them. "
-    "Finish cleanly — never stop mid-sentence."
+    "Finish cleanly — never stop mid-sentence. "
+    "Follow OUTPUT FORMAT: short intro + numbered/bulleted structure when listing; "
+    "no dense walls of text; keep English product names intact."
 )
 
 

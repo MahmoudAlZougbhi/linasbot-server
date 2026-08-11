@@ -14,6 +14,7 @@ from services.meta_app_registry import APP_A_KEY, MetaAssetBinding
 from services.meta_comment_events import ResolvedMetaCommentEvent
 from services.meta_comment_reply_settings import get_comment_reply_setting
 from services.meta_graph_routing import graph_api_url
+from services.response_formatting import RESPONSE_FORMATTING_RULES
 
 _runtime_logger = logging.getLogger("uvicorn.error")
 
@@ -31,7 +32,8 @@ _COMMENT_SYSTEM_RULES = (
     "Do not reveal private customer data. "
     "Do not ask for personal information in public. "
     "If booking or personal details are needed, briefly invite the person to send a private message. "
-    "If you are not confident from approved business content, give a brief honest response and invite private contact."
+    "If you are not confident from approved business content, give a brief honest response and invite private contact.\n"
+    f"{RESPONSE_FORMATTING_RULES}"
 )
 
 

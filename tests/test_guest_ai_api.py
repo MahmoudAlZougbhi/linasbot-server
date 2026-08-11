@@ -350,12 +350,16 @@ def test_guest_rejects_image_attachments(guest_client):
 
 def test_guest_system_prompt_is_product_only():
     from services.guest_ai_service import build_guest_system_prompt
+    from services.response_formatting import RESPONSE_FORMATTING_RULES
 
     prompt = build_guest_system_prompt(language="en", knowledge_block="")
     assert "ONLY Linas AI the product" in prompt or "explain ONLY Linas AI" in prompt
     assert "NOT a general-purpose chatbot" in prompt
     assert "NO tenant Content Manager knowledge" in prompt
     assert "clinic" in prompt.lower() or "tenant business support" in prompt.lower()
+    assert "OUTPUT FORMAT" in prompt
+    assert "numbered 1 / 2 / 3" in prompt
+    assert RESPONSE_FORMATTING_RULES in prompt
 
 
 def test_estimate_guest_tokens_helper():

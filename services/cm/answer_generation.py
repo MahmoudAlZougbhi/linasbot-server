@@ -17,6 +17,7 @@ from typing import Any
 from services.cm.schemas import AnswerPacket
 from services.llm_core_service import create_chat_completion
 from services.model_pricing import COST_BASIS_TOKEN_RATES, compute_cost_from_usage
+from services.response_formatting import RESPONSE_FORMATTING_RULES
 
 # Customer-facing IG/FB DMs/comments — OpenAI API id gpt-5.6-terra (policy; no weak fallback).
 DEFAULT_CM_ANSWER_MODEL = "gpt-5.6-terra"
@@ -127,6 +128,7 @@ def _build_system_prompt(packet: AnswerPacket) -> str:
         lines.append(f"Conversation so far: {packet.history_summary}")
 
     lines.append(f"Respond ONLY in language code '{packet.response_language}'.")
+    lines.append(RESPONSE_FORMATTING_RULES)
     return "\n".join(lines)
 
 

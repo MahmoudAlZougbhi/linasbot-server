@@ -336,9 +336,13 @@ def test_capability_manifest_freshness() -> None:
 
 
 def test_system_v2_voice_is_warm_with_tasteful_emojis() -> None:
-    from services.owner_copilot_v2.brain_support import SYSTEM_V2
+    from services.owner_copilot_v2.brain_support import FINAL_ANSWER_NUDGE, SYSTEM_V2
+    from services.response_formatting import RESPONSE_FORMATTING_RULES
 
     assert "warm, friendly" in SYSTEM_V2
     assert "tasteful emojis" in SYSTEM_V2
     assert "friendly ≠ silly" in SYSTEM_V2
     assert "never spam" in SYSTEM_V2
+    assert RESPONSE_FORMATTING_RULES in SYSTEM_V2
+    assert "OUTPUT FORMAT" in FINAL_ANSWER_NUDGE
+    assert "no dense walls" in FINAL_ANSWER_NUDGE

@@ -244,12 +244,15 @@ def test_greeting_stages(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_owner_and_guest_prompts_share_friendly_emoji_voice() -> None:
     from services.guest_ai_service import build_guest_greeting, build_guest_system_prompt
     from services.owner_ai_context import SYSTEM_PROMPT
+    from services.response_formatting import RESPONSE_FORMATTING_RULES
 
     assert "tasteful emojis" in SYSTEM_PROMPT
     assert "warm, friendly" in SYSTEM_PROMPT
+    assert RESPONSE_FORMATTING_RULES in SYSTEM_PROMPT
     guest = build_guest_system_prompt(language="ar", knowledge_block="")
     assert "tasteful emojis" in guest
     assert "warm, friendly" in guest
+    assert RESPONSE_FORMATTING_RULES in guest
     assert "NOT a general-purpose chatbot" in guest
     assert "NO tenant Content Manager knowledge" in guest
     assert "👋" in build_guest_greeting(language="ar")
