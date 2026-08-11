@@ -59,19 +59,36 @@ app = FastAPI(
     openapi_url=None if _disable_docs else "/openapi.json",
 )
 
-# Configure CORS middleware to allow frontend access
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+
+def cors_allow_origins(*, environment: str | None = None) -> list[str]:
+    """CORS origins: localhost always; linasaibot.com is HTTPS-only in production."""
+    env = (
+        environment
+        if environment is not None
+        else (os.getenv("ENVIRONMENT") or os.getenv("ENV") or "")
+    ).strip().lower()
+    origins = [
         "http://localhost:3000",  # React development server
         "http://127.0.0.1:3000",
         "http://localhost:8003",  # Backend (for dashboard serving)
         "http://127.0.0.1:8003",
-        "https://linasaibot.com",  # Production domain
-        "http://linasaibot.com",
+        "https://linasaibot.com",
         "https://www.linasaibot.com",
-        "http://www.linasaibot.com",
-    ],
+    ]
+    if env not in {"prod", "production"}:
+        origins.extend(
+            [
+                "http://linasaibot.com",
+                "http://www.linasaibot.com",
+            ]
+        )
+    return origins
+
+
+# Configure CORS middleware to allow frontend access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_allow_origins(environment=_env_name),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["Authorization", "Content-Type", "X-CSRF-Token", "X-Requested-With"],

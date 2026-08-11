@@ -340,8 +340,10 @@ class TokenWalletService:
 
         with self._lock:
             data = self._read(tid)
-            data["input_remaining"] = int(data.get("input_remaining") or 0) + add_in
-            data["output_remaining"] = int(data.get("output_remaining") or 0) + add_out
+            before_in = int(data.get("input_remaining") or 0)
+            before_out = int(data.get("output_remaining") or 0)
+            data["input_remaining"] = before_in + add_in
+            data["output_remaining"] = before_out + add_out
             data["lifetime_input_credited"] = int(data.get("lifetime_input_credited") or 0) + add_in
             data["lifetime_output_credited"] = int(data.get("lifetime_output_credited") or 0) + add_out
             if amount_usd and amount_usd > 0:
@@ -361,6 +363,9 @@ class TokenWalletService:
                     "reference": reference,
                     "package_id": package_id,
                     "actor": actor,
+                    "input_remaining_before": before_in,
+                    "output_remaining_before": before_out,
+                    "balance_before": before_in + before_out,
                     "input_remaining_after": data["input_remaining"],
                     "output_remaining_after": data["output_remaining"],
                     "balance_after": data["input_remaining"] + data["output_remaining"],
