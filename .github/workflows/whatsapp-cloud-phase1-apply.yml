@@ -24,7 +24,7 @@ jobs:
       github.event.inputs.CONFIRM == 'APPLY_WHATSAPP_CLOUD_PHASE1' ||
       github.event.inputs.CONFIRM == 'APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY'
     steps:
-      - name: Migrate + flags via SSH
+      - name: Ops via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -34,35 +34,10 @@ jobs:
           script_stop: true
           command_timeout: 20m
           script: |
-            set -euxo pipefail
+            set -e
             cd /opt/linasbot
             git fetch origin main
             git reset --hard origin/main
-            MODE='${{ github.event.inputs.CONFIRM }}'
-            echo "[wa-ops] deployed_sha=$(git rev-parse HEAD)"
-            echo "[wa-ops] mode=${MODE}"
-            chmod +x scripts/prod_whatsapp_cloud_migrate.sh scripts/prod_apply_whatsapp_cloud_phase1_flags.sh
-            case "${MODE}" in
-              APPLY_WHATSAPP_CLOUD_PHASE1)
-                echo "[wa-ops] running migrate"
-                sudo bash scripts/prod_whatsapp_cloud_migrate.sh
-                ;;
-              APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY)
-                echo "[wa-ops] skipping migrate (FLAGS_ONLY)"
-                ;;
-              *)
-                echo "[wa-ops] BLOCKED: unknown mode"
-                exit 2
-                ;;
-            esac
-            echo "[wa-ops] applying phase1 flags"
-            sudo bash scripts/prod_apply_whatsapp_cloud_phase1_flags.sh
-            curl -fsS https://linasaibot.com/api/ready >/tmp/ready.json
-            python3 - <<'PY'
-            import json
-            d=json.load(open("/tmp/ready.json"))
-            assert d.get("ok") is True, d
-            jq=d.get("checks",{}).get("job_queue",{})
-            assert jq.get("redis_required") is not True, jq
-            print("[wa-ops] ready ok; redis_required=", jq.get("redis_required"))
-            PY
+            git show origin/main:scripts/prod_whatsapp_cloud_phase1_ops.sh > /tmp/prod_whatsapp_cloud_phase1_ops.sh
+            sudo install -m 0755 /tmp/prod_whatsapp_cloud_phase1_ops.sh /opt/linasbot/scripts/prod_whatsapp_cloud_phase1_ops.sh
+            sudo MODE='${{ github.event.inputs.CONFIRM }}' bash /opt/linasbot/scripts/prod_whatsapp_cloud_phase1_ops.sh
