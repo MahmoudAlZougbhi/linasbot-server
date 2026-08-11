@@ -18,12 +18,9 @@ import { fonts, radii, spacing, useTheme } from '../../theme';
 import { COMPOSER_ACTION_SIZE, formatVoiceElapsed, StopGlyph } from './ComposerGlyphs';
 import { LinEffortSheet } from './LinEffortSheet';
 import { OWNER_LIN_DISPLAY, type OwnerChatMode } from './ownerChatMode';
+import { useComposerInputAutoGrow } from './useComposerInputAutoGrow';
 import type { VoiceState } from './useVoiceDraft';
 import { VoiceComposerControls } from './VoiceComposerControls';
-
-/** Keep a real tap target; grow modestly like ChatGPT (≈4 lines). */
-const INPUT_MIN_H = 36;
-const INPUT_MAX_H = 88;
 
 type Props = {
   draft: string;
@@ -83,11 +80,18 @@ export function ChatComposer({
   const { colors } = useTheme();
   const { tr } = useI18n();
   const [effortOpen, setEffortOpen] = useState(false);
-  const [inputHeight, setInputHeight] = useState(INPUT_MIN_H);
   const pulse = useRef(new Animated.Value(1)).current;
   const ring = useRef(new Animated.Value(0.55)).current;
   /** After Send, block one-shot autofocus / remount races from reopening the keyboard. */
   const suppressFocusRef = useRef(false);
+  const {
+    inputHeight,
+    atMaxHeight,
+    localInputRef,
+    assignInputRef,
+    handleContentSizeChange,
+    handleChangeText,
+  } = useComposerInputAutoGrow(draft, inputRef);
   const recording = voiceState === 'recording';
   const paused = voiceState === 'paused';
   const transcribing = voiceState === 'transcribing';
@@ -104,13 +108,9 @@ export function ChatComposer({
   const draftDir = textDirectionStyle(draft);
 
   function dismissKeyboard() {
-    inputRef?.current?.blur();
+    localInputRef.current?.blur();
     Keyboard.dismiss();
   }
-
-  useEffect(() => {
-    if (!draft.trim()) setInputHeight(INPUT_MIN_H);
-  }, [draft]);
 
   useEffect(() => {
     if (!recording) {
@@ -144,10 +144,10 @@ export function ChatComposer({
     if (!autoFocus || suppressFocusRef.current) return;
     const t = setTimeout(() => {
       if (suppressFocusRef.current) return;
-      inputRef?.current?.focus();
+      localInputRef.current?.focus();
     }, 120);
     return () => clearTimeout(t);
-  }, [autoFocus, inputRef]);
+  }, [autoFocus]);
 
   function handleSend() {
     if (sending || !canSend || voiceBusy) return;
@@ -203,18 +203,17 @@ export function ChatComposer({
         )}
 
         <TextInput
-          ref={inputRef}
+          ref={assignInputRef}
           style={[styles.input, { color: colors.text, height: inputHeight }, draftDir]}
           placeholder={placeholder}
           placeholderTextColor={colors.textDim}
           value={draft}
-          onChangeText={onChangeDraft}
+          onChangeText={(v) => handleChangeText(v, onChangeDraft)}
           onContentSizeChange={(e) => {
-            const next = Math.ceil(e.nativeEvent.contentSize.height);
-            setInputHeight(Math.min(INPUT_MAX_H, Math.max(INPUT_MIN_H, next)));
+            handleContentSizeChange(e.nativeEvent.contentSize.height);
           }}
           multiline
-          scrollEnabled={inputHeight >= INPUT_MAX_H}
+          scrollEnabled={atMaxHeight}
           editable={!voiceBusy}
           autoFocus={false}
           blurOnSubmit={false}
