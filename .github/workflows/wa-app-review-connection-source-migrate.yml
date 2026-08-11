@@ -1,0 +1,271 @@
+# One-shot WhatsApp App Review additive migration (no bind, no flag/token changes).
+# Safe order: migrate before new app code serves traffic (old ORM tolerates the column).
+name: WA App Review Connection Source Migrate
+
+on:
+  workflow_dispatch:
+    inputs:
+      PHASE:
+        description: "PREFLIGHT_ONLY or MIGRATE_APPLY"
+        required: true
+        type: choice
+        options:
+          - PREFLIGHT_ONLY
+          - MIGRATE_APPLY
+      CONFIRM:
+        description: "For MIGRATE_APPLY type APPLY_WA_CONNECTION_SOURCE_MIGRATION"
+        required: true
+        type: string
+      SOURCE_REF:
+        description: "Git ref containing the approved migration file"
+        required: true
+        default: "578c8600698a312d0706cd5c7e07a488f81ff30a"
+        type: string
+
+concurrency:
+  group: wa-connection-source-migrate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    name: Preflight or migrate connection_source
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: SSH ops
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: false
+          command_timeout: 20m
+          script: |
+            set -euo pipefail
+            PHASE='${{ github.event.inputs.PHASE }}'
+            CONFIRM='${{ github.event.inputs.CONFIRM }}'
+            SOURCE_REF='${{ github.event.inputs.SOURCE_REF }}'
+            echo "[wa-src] host=$(hostname)"
+            echo "[wa-src] phase=$PHASE"
+            echo "[wa-src] source_ref=$SOURCE_REF"
+            echo "[wa-src] deployed_sha_before=$(git -C /opt/linasbot rev-parse HEAD)"
+
+            if [ "$PHASE" = "MIGRATE_APPLY" ] && [ "$CONFIRM" != "APPLY_WA_CONNECTION_SOURCE_MIGRATION" ]; then
+              echo "[wa-src] BLOCKED: CONFIRM mismatch"
+              exit 2
+            fi
+
+            cd /opt/linasbot
+            set -a
+            # shellcheck disable=SC1091
+            source /opt/linasbot/.env
+            set +a
+
+            pub="${WHATSAPP_CLOUD_PUBLIC_AVAILABILITY:-}"
+            echo "[wa-src] WHATSAPP_CLOUD_PUBLIC_AVAILABILITY=${pub}"
+            case "${pub}" in
+              false|False|0|no|off|"") ;;
+              *)
+                echo "[wa-src] BLOCKED: public availability is not false"
+                exit 2
+                ;;
+            esac
+            # empty default is treated as false for presence check above; require explicit false if set
+            if [ -n "${pub}" ] && [ "${pub}" != "false" ] && [ "${pub}" != "False" ] && [ "${pub}" != "0" ]; then
+              echo "[wa-src] BLOCKED: public availability must remain false"
+              exit 2
+            fi
+            if [ -n "${META_WHATSAPP_APP_REVIEW_BIND_TOKEN:-}" ]; then
+              echo "[wa-src] BLOCKED: META_WHATSAPP_APP_REVIEW_BIND_TOKEN is set"
+              exit 2
+            fi
+            echo "[wa-src] bind_token_present=false"
+
+            LOCK=/tmp/wa_connection_source_migrate.lock
+            exec 9>"$LOCK"
+            if ! flock -n 9; then
+              echo "[wa-src] BLOCKED: another migration runner holds $LOCK"
+              exit 2
+            fi
+            echo "[wa-src] migration_lock=acquired"
+
+            PYTHON=/opt/linasbot/venv/bin/python
+            test -x "$PYTHON"
+
+            SNAP_DIR=/opt/linasbot_backups/wa_schema
+            sudo mkdir -p "$SNAP_DIR"
+            TS=$(date -u +%Y%m%dT%H%M%SZ)
+            echo "[wa-src] snapshot_ts=$TS"
+            ls -lt /opt/linasbot_backups 2>/dev/null | head -8 || echo "[wa-src] backups_root_listing=empty"
+            if command -v pg_dump >/dev/null 2>&1; then
+              echo "[wa-src] pg_dump_available=true"
+            else
+              echo "[wa-src] pg_dump_available=false"
+            fi
+
+            "$PYTHON" - <<'PY'
+            import json, os, urllib.parse
+            from sqlalchemy import create_engine, text, inspect
+
+            raw = (os.environ.get("LINAS_WHATSAPP_DATABASE_URL") or os.environ.get("DATABASE_URL") or "").strip()
+            if not raw:
+                print("[wa-src] BLOCKED: no WA database URL")
+                raise SystemExit(2)
+            u = urllib.parse.urlparse(raw.replace("postgresql+psycopg2://", "postgresql://"))
+            print("[wa-src] db_scheme=", u.scheme)
+            print("[wa-src] db_host=", u.hostname)
+            print("[wa-src] db_name=", (u.path or "/").lstrip("/"))
+            print("[wa-src] db_user_present=", bool(u.username))
+
+            eng = create_engine(raw)
+            out = {
+                "alembic_current": None,
+                "has_connection_source": False,
+                "counts": {},
+                "lifecycle": {},
+                "tenants": {},
+            }
+            with eng.connect() as c:
+                out["alembic_current"] = c.execute(text("select version_num from alembic_version")).scalar()
+                cols = {col["name"] for col in inspect(eng).get_columns("whatsapp_connections")}
+                out["has_connection_source"] = "connection_source" in cols
+                out["counts"]["connections"] = c.execute(text("select count(*) from whatsapp_connections")).scalar()
+                out["counts"]["credentials"] = c.execute(text("select count(*) from whatsapp_credentials")).scalar()
+                out["counts"]["active"] = c.execute(
+                    text(
+                        """
+                  select count(*) from whatsapp_connections
+                  where lifecycle_status in ('connected','provisioning','syncing_history','needs_attention','starting','awaiting_meta')
+                """
+                    )
+                ).scalar()
+                rows = c.execute(text("select lifecycle_status, count(*) from whatsapp_connections group by 1 order by 1")).all()
+                out["lifecycle"] = {r[0]: r[1] for r in rows}
+                rows = c.execute(text("select tenant_id, count(*) from whatsapp_connections group by 1 order by 1")).all()
+                out["tenants"] = {r[0]: r[1] for r in rows}
+                if out["has_connection_source"]:
+                    rows = c.execute(text("select connection_source, count(*) from whatsapp_connections group by 1")).all()
+                    out["sources"] = {r[0]: r[1] for r in rows}
+                    out["meta_app_review_test"] = c.execute(
+                        text("select count(*) from whatsapp_connections where connection_source='meta_app_review_test'")
+                    ).scalar()
+                try:
+                    out["audit_app_review_2d"] = c.execute(
+                        text(
+                            """
+                      select count(*) from whatsapp_audit_events
+                      where event_type in ('app_review_bind','app_review_unbind','app_review_bind_idempotent')
+                        and created_at > now() - interval '2 days'
+                    """
+                        )
+                    ).scalar()
+                except Exception as exc:  # noqa: BLE001
+                    out["audit_error"] = type(exc).__name__
+                # PITR / recovery settings when available
+                try:
+                    out["pg_is_in_recovery"] = c.execute(text("select pg_is_in_recovery()")).scalar()
+                    out["wal_level"] = c.execute(text("show wal_level")).scalar()
+                    out["archive_mode"] = c.execute(text("show archive_mode")).scalar()
+                except Exception as exc:  # noqa: BLE001
+                    out["recovery_probe_error"] = type(exc).__name__
+                rows = c.execute(
+                    text(
+                        """
+                  select column_name, data_type, column_default, is_nullable
+                  from information_schema.columns
+                  where table_name='whatsapp_connections'
+                  order by ordinal_position
+                """
+                    )
+                ).mappings().all()
+            open("/tmp/wa_src_invariants_before.json", "w").write(json.dumps(out, indent=2, sort_keys=True))
+            open("/tmp/wa_src_columns_before.json", "w").write(json.dumps([dict(r) for r in rows], indent=2))
+            print("[wa-src] invariants=" + json.dumps(out, sort_keys=True))
+            print("[wa-src] columns_count=", len(rows))
+            PY
+            sudo cp /tmp/wa_src_invariants_before.json "$SNAP_DIR/pre_connection_source_${TS}.json"
+            sudo cp /tmp/wa_src_columns_before.json "$SNAP_DIR/pre_connection_source_${TS}_columns.json"
+            echo "[wa-src] recoverable_snapshot_json=$SNAP_DIR/pre_connection_source_${TS}.json"
+
+            "$PYTHON" - <<'PY'
+            import json
+            d = json.load(open("/tmp/wa_src_invariants_before.json"))
+            cur = d.get("alembic_current")
+            print("[wa-src] alembic_current=", cur)
+            if d.get("has_connection_source"):
+                print("[wa-src] column_already_present=true")
+            if cur not in (None, "20260811_whatsapp_smart_followup", "20260811_wa_app_review_source"):
+                print("[wa-src] BLOCKED: unexpected alembic revision", cur)
+                raise SystemExit(2)
+            PY
+
+            if [ "$PHASE" = "PREFLIGHT_ONLY" ]; then
+              echo "[wa-src] PREFLIGHT_COMPLETE"
+              exit 0
+            fi
+
+            git fetch --depth 1 origin "$SOURCE_REF"
+            git show "${SOURCE_REF}:alembic/versions/20260811_wa_app_review_source.py" > /tmp/20260811_wa_app_review_source.py
+            grep -q 'revision: str = "20260811_wa_app_review_source"' /tmp/20260811_wa_app_review_source.py
+            sudo install -m 0644 /tmp/20260811_wa_app_review_source.py /opt/linasbot/alembic/versions/20260811_wa_app_review_source.py
+            echo "[wa-src] migration_file_installed=true"
+
+            BEFORE=$("$PYTHON" -c "import json;print(json.load(open('/tmp/wa_src_invariants_before.json'))['alembic_current'])")
+            echo "[wa-src] alembic_before=$BEFORE"
+            if [ "$BEFORE" = "20260811_wa_app_review_source" ]; then
+              echo "[wa-src] already_at_target=true"
+            else
+              echo "[wa-src] running_alembic_upgrade_target"
+              cd /opt/linasbot
+              "$PYTHON" -m alembic upgrade 20260811_wa_app_review_source
+            fi
+
+            "$PYTHON" - <<'PY'
+            import json, os
+            from sqlalchemy import create_engine, text, inspect
+
+            url = (os.environ.get("LINAS_WHATSAPP_DATABASE_URL") or os.environ.get("DATABASE_URL") or "").strip()
+            eng = create_engine(url)
+            before = json.load(open("/tmp/wa_src_invariants_before.json"))
+            with eng.connect() as c:
+                cur = c.execute(text("select version_num from alembic_version")).scalar()
+                assert cur == "20260811_wa_app_review_source", cur
+                cols = {col["name"] for col in inspect(eng).get_columns("whatsapp_connections")}
+                assert "connection_source" in cols
+                default = c.execute(
+                    text(
+                        """
+                  select column_default from information_schema.columns
+                  where table_name='whatsapp_connections' and column_name='connection_source'
+                """
+                    )
+                ).scalar()
+                print("[wa-src] column_default=", default)
+                meta = c.execute(
+                    text("select count(*) from whatsapp_connections where connection_source='meta_app_review_test'")
+                ).scalar()
+                assert meta == 0, meta
+                bad = c.execute(
+                    text("select count(*) from whatsapp_connections where connection_source<>'embedded_signup'")
+                ).scalar()
+                assert bad == 0, bad
+                after_counts = c.execute(text("select count(*) from whatsapp_connections")).scalar()
+                after_cred = c.execute(text("select count(*) from whatsapp_credentials")).scalar()
+                assert after_counts == before["counts"]["connections"], (after_counts, before)
+                assert after_cred == before["counts"]["credentials"], (after_cred, before)
+                ck = c.execute(text("select conname from pg_constraint where conname='ck_wa_connection_source'")).scalar()
+                assert ck == "ck_wa_connection_source"
+                idx = c.execute(text("select indexname from pg_indexes where indexname='ix_wa_connection_source'")).scalar()
+                assert idx == "ix_wa_connection_source"
+                print("[wa-src] after_ok alembic=", cur, "connections=", after_counts, "meta_rows=", meta)
+            open("/tmp/wa_src_invariants_after.json", "w").write(
+                json.dumps({"alembic_current": "20260811_wa_app_review_source", "meta_rows": 0}, indent=2)
+            )
+            print("[wa-src] MIGRATE_COMPLETE_OK")
+            PY
+            sudo cp /tmp/wa_src_invariants_after.json "$SNAP_DIR/post_connection_source_${TS}.json"
+            echo "[wa-src] COMPLETE"
