@@ -1,0 +1,52 @@
+path,category,size_bytes,note,review_status
+docs/audit/FILES_OVER_500.csv,untracked,3436,not in git ls-files,UNREVIEWED
+docs/audit/TRACKED_FILE_INVENTORY.csv,untracked,197932,not in git ls-files,UNREVIEWED
+docs/audit/UNTRACKED_IGNORED_ARTIFACTS.csv,untracked,0,not in git ls-files,UNREVIEWED
+scripts/audit/line_count_gate.py,untracked,1593,not in git ls-files,UNREVIEWED
+.mypy_cache/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+.pytest_cache/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+.ruff_cache/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+.venv-meta-test/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+.venv-py311/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+.venv/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+alembic/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+alembic/versions/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+dashboard/build/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+dashboard/node_modules/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+db/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+db/models/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+handlers/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+linasbot_data/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+mobile/linas-ai/.claude/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+mobile/linas-ai/.expo/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+mobile/linas-ai/android/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+mobile/linas-ai/data/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+mobile/linas-ai/dist/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+mobile/linas-ai/docs/.DS_Store,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+mobile/linas-ai/node_modules/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+mobile/live-chat-android/.android-sdk/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+mobile/live-chat-android/.build-tools/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+mobile/live-chat-android/.gradle/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+mobile/live-chat-android/.jdk/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+mobile/live-chat-android/app/build/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+modules/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+scripts/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+services/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+services/booking/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+services/cm/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+services/cm/pricing/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+services/customer_reply_v2/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+services/membership/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+services/owner_copilot_v2/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+services/providers/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+services/queues/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+services/tenant_mobile_dashboard/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+services/whatsapp_adapters/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+services/whatsapp_cloud/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+services/whatsapp_cloud/smart_followup/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+storage/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+tests/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+tests/membership/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+tests/whatsapp_cloud/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
+utils/__pycache__/,ignored_collapsed,0,git status --ignored collapsed entry; expand only if suspicious,UNREVIEWED
