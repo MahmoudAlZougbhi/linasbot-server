@@ -1,155 +1,136 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { z } from 'zod';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { apiFetch } from '../../api/client';
 import { EmptyState } from '../../components/EmptyState';
-import { StatusChip } from '../../components/StatusChip';
-import { colors, fonts, radii, spacing } from '../../theme';
+import { fonts, spacing, useTheme } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
+import { resolveDashboardAction } from './dashboardApi';
+import type { DashboardAction, DashboardNavigateTarget } from './dashboardTypes';
+import { AlertsCard } from './sections/AlertsCard';
+import { ChannelBreakdownCard } from './sections/ChannelBreakdownCard';
+import { ContentReadinessCard } from './sections/ContentReadinessCard';
+import { DashboardHeaderBar } from './sections/DashboardHeaderBar';
+import { PlanCreditsCard } from './sections/PlanCreditsCard';
+import { TeamCapacityCard } from './sections/TeamCapacityCard';
+import { UsageDistributionCard } from './sections/UsageDistributionCard';
+import { UsageSummaryCard } from './sections/UsageSummaryCard';
+import { WorkspaceStatusCard } from './sections/WorkspaceStatusCard';
+import { useTenantDashboard } from './useTenantDashboard';
 
-const MetricsSchema = z
-  .object({
-    success: z.boolean(),
-  })
-  .passthrough();
+type Props = {
+  onNavigate: (target: DashboardNavigateTarget) => void;
+};
 
-const UsageSchema = z
-  .object({
-    success: z.literal(true),
-    credit_balance: z.unknown().optional(),
-    credits_used: z.number().optional(),
-    credits_limit: z.number().optional(),
-    credits: z.number().optional(),
-    plan_id: z.string().optional(),
-  })
-  .passthrough();
+export function DashboardScreen({ onNavigate }: Props) {
+  const { colors } = useTheme();
+  const { period, setPeriod, state, refreshing, refresh, reload } = useTenantDashboard('billing');
 
-type Props = { isPlatformOwner: boolean };
-
-function num(v: unknown): number | null {
-  return typeof v === 'number' && Number.isFinite(v) ? v : null;
-}
-
-export function DashboardScreen({ isPlatformOwner }: Props) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [usageSummary, setUsageSummary] = useState<string | null>(null);
-  const [hasMetrics, setHasMetrics] = useState(false);
-  const [usageText, setUsageText] = useState<string | null>(null);
-  const [metricsText, setMetricsText] = useState<string | null>(null);
-
-  useEffect(() => {
-    void (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const usage = await apiFetch('/api/mobile/usage', { schema: UsageSchema });
-        const used = num(usage.credits_used);
-        const limit = num(usage.credits_limit) ?? num(usage.credits);
-        const plan = typeof usage.plan_id === 'string' ? usage.plan_id : null;
-        if (used != null || limit != null) {
-          const usedLabel = (used ?? 0).toLocaleString();
-          const limitLabel = limit != null && limit > 0 ? limit.toLocaleString() : '—';
-          const planLabel = plan && plan !== 'none' ? ` · ${plan}` : '';
-          setUsageSummary(`${usedLabel} / ${limitLabel} credits used${planLabel}`);
-        } else if (usage.credit_balance != null) {
-          setUsageSummary(`Available balance: ${String(usage.credit_balance)}`);
-        } else {
-          setUsageSummary(null);
-        }
-        if (__DEV__) {
-          setUsageText(JSON.stringify(usage, null, 2));
-        } else {
-          setUsageText(null);
-        }
-        if (isPlatformOwner) {
-          try {
-            const metrics = await apiFetch('/api/platform/metrics', { schema: MetricsSchema });
-            setHasMetrics(true);
-            if (__DEV__) {
-              setMetricsText(JSON.stringify(metrics, null, 2));
-            } else {
-              setMetricsText(null);
-            }
-          } catch {
-            setHasMetrics(false);
-            setMetricsText(null);
-          }
-        }
-      } catch {
-        setError('Something went wrong loading the dashboard. Please try again.');
-        setUsageSummary(null);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [isPlatformOwner]);
+  function handleAction(action: DashboardAction) {
+    const target = resolveDashboardAction(action.code);
+    if (target) onNavigate(target);
+  }
 
   return (
-    <ScreenChrome title="Dashboard" subtitle="Usage and workspace health">
-      {loading ? <ActivityIndicator color={colors.accent} /> : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <ScrollView contentContainerStyle={styles.list}>
-        <View style={styles.card}>
-          <View style={styles.cardHead}>
-            <Text style={styles.cardTitle}>Usage & credits</Text>
-            <StatusChip label={usageSummary ? 'Ready' : 'Empty'} tone={usageSummary ? 'ok' : 'soon'} />
-          </View>
-          {usageSummary ? (
-            <Text style={styles.body}>{usageSummary}</Text>
-          ) : (
-            <EmptyState
-              title="No usage data yet"
-              body="Check back after you start using Linas AI, or try again later."
-            />
-          )}
-          {__DEV__ && usageText ? <Text style={styles.mono}>{usageText}</Text> : null}
+    <ScreenChrome title="Dashboard" subtitle="Your AI workspace at a glance">
+      {state.kind === 'loading' ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={colors.accent} accessibilityLabel="Loading dashboard" />
         </View>
-        <View style={styles.card}>
-          <View style={styles.cardHead}>
-            <Text style={styles.cardTitle}>Platform metrics</Text>
-            <StatusChip
-              label={isPlatformOwner ? (hasMetrics ? 'Ready' : 'Unavailable') : 'Owner only'}
-              tone={hasMetrics ? 'ok' : 'soon'}
-            />
-          </View>
-          {hasMetrics ? (
-            <Text style={styles.body}>Platform metrics loaded for your owner workspace.</Text>
-          ) : (
-            <EmptyState
-              title={isPlatformOwner ? 'Metrics unavailable' : 'Owner access only'}
-              body={
-                isPlatformOwner
-                  ? 'Something went wrong loading metrics. Please try again.'
-                  : 'Platform metrics are only available to workspace owners.'
-              }
-            />
-          )}
-          {__DEV__ && metricsText ? <Text style={styles.mono}>{metricsText}</Text> : null}
+      ) : null}
+
+      {state.kind === 'forbidden' ? (
+        <EmptyState title="Permission denied" body={state.message} />
+      ) : null}
+
+      {state.kind === 'error' ? (
+        <View style={styles.center}>
+          <EmptyState
+            title={state.code === 'offline' ? 'Offline' : 'Dashboard unavailable'}
+            body={state.message}
+          />
+          <Pressable onPress={reload} accessibilityRole="button" style={{ marginTop: spacing.md }}>
+            <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>Try again</Text>
+          </Pressable>
         </View>
-      </ScrollView>
+      ) : null}
+
+      {state.kind === 'ready' ? (
+        <ScrollView
+          contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
+        >
+          {state.stale || state.refreshError ? (
+            <View
+              style={[styles.banner, { backgroundColor: colors.banner, borderColor: colors.bannerBorder }]}
+            >
+              <Text style={{ color: colors.textMuted, fontFamily: fonts.body, fontSize: 13 }}>
+                {state.refreshError
+                  ? `Could not refresh (${state.refreshError}). Showing last successful snapshot.`
+                  : 'Showing stale snapshot.'}
+              </Text>
+            </View>
+          ) : null}
+          {(state.data.partial_failures?.length ?? 0) > 0 ? (
+            <View
+              style={[styles.banner, { backgroundColor: colors.banner, borderColor: colors.bannerBorder }]}
+            >
+              <Text style={{ color: colors.textMuted, fontFamily: fonts.body, fontSize: 13 }}>
+                Some sections failed to load: {state.data.partial_failures?.join(', ')}
+              </Text>
+            </View>
+          ) : null}
+
+          <DashboardHeaderBar
+            workspaceName={state.data.workspace.workspace_name}
+            lastUpdated={state.data.generated_at}
+            period={period}
+            onPeriodChange={setPeriod}
+            onRefresh={refresh}
+            refreshing={refreshing}
+            stale={state.stale}
+          />
+
+          <WorkspaceStatusCard
+            title={state.data.workspace_status.title}
+            explanation={state.data.workspace_status.explanation}
+            state={state.data.workspace_status.state}
+            action={state.data.workspace_status.primary_action}
+            onAction={handleAction}
+          />
+
+          <PlanCreditsCard
+            plan={state.data.plan_and_credits}
+            onManageSubscription={() => onNavigate('subscription')}
+            onBuyCredits={() => onNavigate('buy_credits')}
+            onUpgrade={() => onNavigate('subscription')}
+          />
+
+          <UsageSummaryCard usage={state.data.usage_summary} periodLabel={state.data.period.label} />
+
+          <ChannelBreakdownCard channels={state.data.channels} onAction={handleAction} />
+
+          <UsageDistributionCard distribution={state.data.usage_distribution} />
+
+          <ContentReadinessCard
+            content={state.data.content_readiness}
+            onOpenCm={() => onNavigate('cm')}
+            onReviewFaq={() => onNavigate('faq')}
+          />
+
+          <TeamCapacityCard team={state.data.team_capacity} onManageUsers={() => onNavigate('users')} />
+
+          <AlertsCard alerts={state.data.alerts} onAction={handleAction} />
+        </ScrollView>
+      ) : null}
     </ScreenChrome>
   );
 }
 
 const styles = StyleSheet.create({
-  list: { paddingBottom: 40, gap: spacing.md },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    padding: spacing.lg,
+  list: { paddingBottom: 48, gap: spacing.md },
+  center: { paddingVertical: spacing.xl, alignItems: 'center' },
+  banner: {
     borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 12,
+    padding: spacing.md,
   },
-  cardHead: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  cardTitle: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 16 },
-  body: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 14, lineHeight: 20 },
-  mono: { color: colors.textMuted, fontFamily: 'Courier', fontSize: 12, lineHeight: 18, marginTop: 8 },
-  error: { color: colors.danger, marginBottom: spacing.md, fontFamily: fonts.body },
 });

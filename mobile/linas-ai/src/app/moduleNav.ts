@@ -19,8 +19,6 @@ export function activeAreaFromScreen(screen: Screen): ControlArea | 'chat' | nul
       return 'dashboard';
     case 'billing':
       return 'subscription';
-    case 'usage':
-      return 'usage';
     case 'livechat':
       return 'livechat';
     case 'notifications':

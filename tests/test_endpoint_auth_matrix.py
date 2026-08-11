@@ -34,6 +34,7 @@ _ROUTE_MODULES = (
     "modules.schedule_api",
     "modules.platform_api",
     "modules.mobile_integrations_api",
+    "modules.mobile_dashboard_api",
     "modules.mobile_stt_api",
     "modules.store_iap_api",
     "modules.queue_api",
@@ -185,9 +186,9 @@ class TestRouteInventory:
         # +guest-ai session/messages (prefix-public, rate-limited).
         # +owner-notifications inbox/read/device-token + mobile STT (protected).
         # +public plans catalog GET /api/public/plans + protected GET /api/billing/catalog.
-        assert counts["total_api_routes"] == 220
+        assert counts["total_api_routes"] == 221
         assert counts["public"] == 19
-        assert counts["protected"] == 201
+        assert counts["protected"] == 202
         assert public_set == {
             ("GET", "/api/health"),
             ("GET", "/api/ready"),

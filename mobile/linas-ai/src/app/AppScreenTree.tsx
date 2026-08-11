@@ -4,7 +4,6 @@ import { LoginScreen } from '../features/auth/LoginScreen';
 import { RegisterScreen } from '../features/auth/RegisterScreen';
 import { BillingScreen } from '../features/billing/BillingScreen';
 import { SubscriptionGateScreen } from '../features/billing/SubscriptionGateScreen';
-import { UsageScreen } from '../features/billing/UsageScreen';
 import { ChatScreen } from '../features/chat/ChatScreen';
 import { queueSetupHandoff } from '../features/chat/pendingSetupHandoff';
 import { CmScreen } from '../features/cm/CmScreen';
@@ -12,6 +11,7 @@ import { CmSectionScreen } from '../features/cm/CmSectionScreen';
 import type { CmProposalReview } from '../features/cm/cmProposalReview';
 import type { ControlArea } from '../features/control/controlAreas';
 import { DashboardScreen } from '../features/dashboard/DashboardScreen';
+import { screenForDashboardTarget } from '../features/dashboard/dashboardNavigation';
 import { FaqRoute } from '../features/faq/FaqRoute';
 import { IntegrationsScreen } from '../features/integrations/IntegrationsScreen';
 import { LiveChatScreen } from '../features/livechat/LiveChatScreen';
@@ -119,13 +119,12 @@ export function AppScreenTree({
         />
       </KeepMountedPane>
       <KeepMountedPane key={`dashboard-${authEpoch}`} active={name === 'dashboard'}>
-        <DashboardScreen isPlatformOwner={isPlatformOwner} />
+        <DashboardScreen
+          onNavigate={(target) => setScreen(screenForDashboardTarget(target))}
+        />
       </KeepMountedPane>
       <KeepMountedPane key={`billing-${authEpoch}`} active={name === 'billing'}>
         <BillingScreen />
-      </KeepMountedPane>
-      <KeepMountedPane key={`usage-${authEpoch}`} active={name === 'usage'}>
-        <UsageScreen />
       </KeepMountedPane>
       <KeepMountedPane key={`livechat-${authEpoch}`} active={name === 'livechat'}>
         <LiveChatScreen initialOpen={name === 'livechat' ? (screen.open ?? null) : null} />

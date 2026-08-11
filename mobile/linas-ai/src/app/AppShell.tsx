@@ -126,7 +126,7 @@ export function AppShell() {
       return;
     }
     if (area === 'usage') {
-      setScreen({ name: 'usage' });
+      setScreen({ name: 'dashboard' });
       return;
     }
     if (area === 'livechat') {

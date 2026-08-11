@@ -22,7 +22,6 @@ export const DRAWER_MODULES: DrawerModule[] = [
   { id: 'integrations', titleKey: 'integrations', guestVisible: true },
   { id: 'users', titleKey: 'usersTitle', guestVisible: true, entitlement: 'users' },
   { id: 'subscription', titleKey: 'navSubscription', guestVisible: true },
-  { id: 'usage', titleKey: 'navUsage', guestVisible: true },
   { id: 'settings', titleKey: 'settings', guestVisible: true },
 ];
 

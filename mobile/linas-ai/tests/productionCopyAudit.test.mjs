@@ -137,12 +137,10 @@ test('AR and FR subscription gate strings exist', () => {
 
 test('raw entitlement/usage JSON dumps are __DEV__ gated', () => {
   const billing = readFileSync(join(srcRoot, 'features/billing/BillingScreen.tsx'), 'utf8');
-  const usage = readFileSync(join(srcRoot, 'features/billing/UsageScreen.tsx'), 'utf8');
   const dashboard = readFileSync(join(srcRoot, 'features/dashboard/DashboardScreen.tsx'), 'utf8');
   const simple = readFileSync(join(srcRoot, 'features/shared/SimpleResourceScreen.tsx'), 'utf8');
   for (const [name, text] of [
     ['BillingScreen', billing],
-    ['UsageScreen', usage],
     ['DashboardScreen', dashboard],
     ['SimpleResourceScreen', simple],
   ]) {
@@ -150,4 +148,12 @@ test('raw entitlement/usage JSON dumps are __DEV__ gated', () => {
       assert.match(text, /__DEV__/, `${name} must gate JSON.stringify behind __DEV__`);
     }
   }
+});
+
+test('tenant Dashboard has no Platform Owner metrics stub', () => {
+  const dashboard = readFileSync(join(srcRoot, 'features/dashboard/DashboardScreen.tsx'), 'utf8');
+  assert.doesNotMatch(dashboard, /Platform metrics|Owner only|Owner access only|isPlatformOwner|\/api\/platform\/metrics/);
+  assert.doesNotMatch(dashboard, /\bReady\b/);
+  assert.doesNotMatch(dashboard, /0 \/ —/);
+  assert.match(dashboard, /\/api\/mobile\/dashboard|useTenantDashboard|WorkspaceStatusCard/);
 });

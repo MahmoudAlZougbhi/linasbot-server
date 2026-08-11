@@ -21,7 +21,7 @@ export type ControlItem = {
 
 /** Product module order matches drawerModules (no Creative / Team alias). */
 export const CONTROL_ITEMS: ControlItem[] = [
-  { id: 'dashboard', title: 'Dashboard / Status', subtitle: 'Metrics & health', group: 'operate' },
+  { id: 'dashboard', title: 'Dashboard / Status', subtitle: 'Workspace health & usage', group: 'operate' },
   { id: 'cm', title: 'AI Setup', subtitle: 'What your customer AI knows', group: 'operate' },
   {
     id: 'faq',
@@ -33,7 +33,6 @@ export const CONTROL_ITEMS: ControlItem[] = [
   { id: 'integrations', title: 'Integrations', subtitle: 'Instagram & Facebook', group: 'operate' },
   { id: 'users', title: 'Users', subtitle: 'Members & permissions', group: 'account' },
   { id: 'subscription', title: 'Subscription', subtitle: 'Plans & billing', group: 'account' },
-  { id: 'usage', title: 'Usage & Credits', subtitle: 'Included usage balance', group: 'account' },
   { id: 'settings', title: 'Settings', subtitle: 'Preferences & legal', group: 'account' },
   {
     id: 'owner',
