@@ -19,7 +19,8 @@ from services.tenant_mobile_dashboard.periods import (
     TimezoneValidationError,
     parse_period,
     parse_timezone,
-), resolve_period_window
+    resolve_period_window,
+)
 from services.tenant_mobile_dashboard.status import derive_workspace_status
 from services.tenant_mobile_dashboard.usage import aggregate_tenant_usage
 
@@ -45,7 +46,7 @@ def ledger_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> EntitlementsS
 
 def test_period_and_timezone_validation() -> None:
     assert parse_period("7d") == "7d"
-    with pytest.raises(Exception):
+    with pytest.raises(PeriodValidationError):
         parse_period("year")
     tz = parse_timezone("UTC")
     window = resolve_period_window(period="7d", tz=tz, current_period_end=None)
