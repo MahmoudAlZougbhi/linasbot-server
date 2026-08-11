@@ -1,5 +1,8 @@
 import { View } from 'react-native';
 
+/** Shared + / mic / send touch target in the chat composer bar. */
+export const COMPOSER_ACTION_SIZE = 36;
+
 export function MicGlyph({ color, size = 20 }: { color: string; size?: number }) {
   const headW = size * 0.38;
   const headH = size * 0.52;

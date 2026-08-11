@@ -3,6 +3,7 @@ import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, View } from '
 import { fonts, useTheme } from '../../theme';
 import {
   CheckGlyph,
+  COMPOSER_ACTION_SIZE,
   DiscardGlyph,
   formatVoiceElapsed,
   MicGlyph,
@@ -121,10 +122,12 @@ export function VoiceComposerControls({
   );
 }
 
+const PULSE_RING = COMPOSER_ACTION_SIZE + 8;
+
 const styles = StyleSheet.create({
   micSlot: {
-    minWidth: 36,
-    height: 36,
+    minWidth: COMPOSER_ACTION_SIZE,
+    height: COMPOSER_ACTION_SIZE,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -153,15 +156,15 @@ const styles = StyleSheet.create({
   pulseRing: {
     position: 'absolute',
     right: -4,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: PULSE_RING,
+    height: PULSE_RING,
+    borderRadius: PULSE_RING / 2,
     borderWidth: 2,
   },
   roundIn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: COMPOSER_ACTION_SIZE,
+    height: COMPOSER_ACTION_SIZE,
+    borderRadius: COMPOSER_ACTION_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
