@@ -125,7 +125,8 @@ async def test_connect_start_derives_tenant_from_session_not_request_body(
     )
     assert response["success"] is True
     assert captured["tenant_id"] == "tenant-a"
-    assert captured["channel"] == "unified"
+    # Instagram Connect stays on the Instagram flow (not forced into unified FB+IG).
+    assert captured["channel"] == "instagram"
     assert "app_id" not in captured
 
 
