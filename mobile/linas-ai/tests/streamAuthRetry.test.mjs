@@ -83,9 +83,9 @@ describe('owner stream auth contracts', () => {
   });
 
   it('App drops hasAccess when refresh clears tokens', () => {
-    const app = readFileSync(join(root, 'App.tsx'), 'utf8');
-    assert.match(app, /onAuthCleared/);
-    assert.match(app, /setHasAccess\(false\)/);
+    const shell = readFileSync(join(root, 'src/app/AppShell.tsx'), 'utf8');
+    assert.match(shell, /onAuthCleared/);
+    assert.match(shell, /setHasAccess\(false\)/);
   });
 
   it('i18n still exposes retry + messageFailed copy users see', () => {
