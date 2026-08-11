@@ -287,18 +287,20 @@ test('Live Chat thread remains read-only', () => {
 
 test('drawer search chrome is header circle; New chat is compact bottom dock', () => {
   const nav = read('features/nav/NavDrawer.tsx');
+  const footer = read('features/nav/NavDrawerFooter.tsx');
   const chat = read('features/chat/ChatScreen.tsx');
   const overlays = read('features/chat/ChatScreenOverlays.tsx');
   const drawer = read('components/SideDrawer.tsx');
-  assert.match(nav, /bottomDock/);
-  assert.match(nav, /newChatBtn/);
+  assert.match(nav, /NavDrawerFooter/);
+  assert.match(footer, /bottomDock/);
+  assert.match(footer, /newChatBtn/);
   assert.match(nav, /searchCircle/);
   assert.match(nav, /headerDivider/);
   assert.match(nav, /searchConversationTitles/);
   assert.match(nav, /noChatsMatch/);
   assert.match(nav, /emptyLabel/);
-  assert.match(nav, /VERSION_LABEL/);
-  assert.match(nav, /APP_VERSION_LABEL/);
+  assert.match(footer, /VERSION_LABEL/);
+  assert.match(footer, /APP_VERSION_LABEL/);
   const configSrc = read('config.ts');
   assert.match(configSrc, /Constants\.expoConfig\?\.version/);
   assert.match(configSrc, /APP_VERSION_LABEL/);
@@ -312,19 +314,22 @@ test('drawer search chrome is header circle; New chat is compact bottom dock', (
   assert.match(easJson, /"appVersionSource":\s*"remote"/);
   assert.match(easJson, /"production"[\s\S]*"autoIncrement":\s*true/);
   assert.match(easJson, /"testflight"[\s\S]*"autoIncrement":\s*true/);
-  // Version is pinned bottom-left of the drawer footer (under New Chat row).
-  assert.match(nav, /alignSelf:\s*'flex-start'/);
-  assert.match(nav, /textAlign:\s*'left'/);
-  assert.match(nav, /justifyContent:\s*'flex-end'/);
-  assert.ok(nav.lastIndexOf('{VERSION_LABEL}') > nav.indexOf('newChatBtn'));
+  // Version + New Chat share one compact footer row (version left, New Chat right).
+  assert.match(footer, /justifyContent:\s*'space-between'/);
+  assert.match(footer, /textAlign:\s*'left'/);
+  assert.match(footer, /styles\.bottomRow[\s\S]*\{VERSION_LABEL\}[\s\S]*NewChatIcon/);
+  // Header keeps branded mark; bare tenant "Linas" must not duplicate VERSION_LABEL in the dock.
+  assert.match(nav, /<LinasStarMark labeled size=\{20\} \/>/);
+  assert.match(footer, /isBareLinasBrand/);
   // Search mode hides Dashboard/Settings/module grid; filter starts at first character.
   assert.match(nav, /const searching = searchOpen \|\| queryTrimmed\.length > 0/);
   assert.match(nav, /\{\!searching \? \(/);
   assert.match(nav, /onChangeText=\{setQuery\}/);
   // Same NewChatIcon component as chat header (compose square+pencil), smaller size only.
-  assert.match(nav, /NewChatIcon/);
-  assert.match(nav, /<NewChatIcon color=\{colors\.onAccent\} size=\{20\}/);
+  assert.match(footer, /NewChatIcon/);
+  assert.match(footer, /<NewChatIcon color=\{colors\.onAccent\} size=\{18\}/);
   assert.doesNotMatch(nav, /DRAWER_TOOL_ICONS\.newChat/);
+  assert.doesNotMatch(footer, /DRAWER_TOOL_ICONS\.newChat/);
   assert.match(drawer, /Keyboard\.dismiss/);
   assert.match(chat, /Keyboard\.dismiss/);
   assert.match(overlays, /<NavDrawer[\s\S]*onNewChat=/);
