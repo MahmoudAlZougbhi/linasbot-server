@@ -144,7 +144,8 @@ def attach_return_surface(exc: BaseException, return_surface: ReturnSurface | st
     """Preserve OAuth return_surface on errors after one-time state was consumed."""
 
     try:
-        exc.return_surface = normalize_return_surface(return_surface)
+        target: Any = exc
+        target.return_surface = normalize_return_surface(return_surface)
     except Exception:
         return
 
