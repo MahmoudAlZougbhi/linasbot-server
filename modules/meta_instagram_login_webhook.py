@@ -172,12 +172,25 @@ async def receive_instagram_login_webhook(request: Request) -> Any:
     async def _process_comment_claimed(resolved: ResolvedMetaCommentEvent, *, global_key: str) -> None:
         from services.durable_event_claim import complete_event_claim, release_event_claim
 
+        _runtime_logger.info(
+            "[meta-comment] event_processing_started channel=%s tenant=%s auth_flow=%s",
+            resolved.binding.channel,
+            resolved.binding.tenant_id,
+            resolved.binding.auth_flow,
+        )
         try:
-            await process_meta_comment_event(resolved)
+            result = await process_meta_comment_event(resolved)
             await complete_event_claim(
                 GLOBAL_COMMENT_CLAIM_NAMESPACE,
                 global_key,
                 firestore_collection="meta_social_comment_global_claims",
+            )
+            _runtime_logger.info(
+                "[meta-comment] event_processing_completed channel=%s status=%s reason=%s auth_flow=%s",
+                resolved.binding.channel,
+                result.status,
+                result.reason,
+                resolved.binding.auth_flow,
             )
         except Exception:
             await release_event_claim(
