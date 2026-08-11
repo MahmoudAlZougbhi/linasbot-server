@@ -82,7 +82,6 @@ updates.update(
     }
 )
 for key in (
-    "META_APP_A_LOGIN_CONFIG_ID",
     "META_APP_A_FACEBOOK_LOGIN_CONFIG_ID",
     "META_APP_B_ID",
     "META_APP_B_SECRET",

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Apply App A Facebook-only Login for Business configuration.
 # Does not re-seed bindings, disconnect accounts, or rotate Page tokens.
-# Does not delete or overwrite the legacy mixed config id (META_APP_A_LOGIN_CONFIG_ID).
+# Removes obsolete META_APP_A_LOGIN_CONFIG_ID from production env if present.
 set -euo pipefail
 
 FACEBOOK_LOGIN_CONFIG_ID="${META_APP_A_FACEBOOK_LOGIN_CONFIG_ID:-}"
@@ -11,10 +11,6 @@ if [ -z "$FACEBOOK_LOGIN_CONFIG_ID" ]; then
 fi
 if ! [[ "$FACEBOOK_LOGIN_CONFIG_ID" =~ ^[0-9]{8,32}$ ]]; then
   echo "[meta-login-config] META_APP_A_FACEBOOK_LOGIN_CONFIG_ID format is invalid" >&2
-  exit 1
-fi
-if [ "$FACEBOOK_LOGIN_CONFIG_ID" = "1057282070324984" ]; then
-  echo "[meta-login-config] refusing legacy mixed FB+IG config for Facebook Connect" >&2
   exit 1
 fi
 
@@ -35,6 +31,8 @@ updates = {
     "META_APP_A_FACEBOOK_LOGIN_CONFIG_ID": facebook_login_config_id,
     "META_OAUTH_REDIRECT_URI": redirect_uri,
 }
+# Obsolete mixed Business Login env — strip from active production env.
+REMOVE_KEYS = {"META_APP_A_LOGIN_CONFIG_ID"}
 
 def upsert(path: Path) -> None:
     if not path.parent.exists():
@@ -45,6 +43,9 @@ def upsert(path: Path) -> None:
     for line in lines:
         if "=" in line and not line.lstrip().startswith("#"):
             key = line.split("=", 1)[0].strip()
+            if key in REMOVE_KEYS:
+                print(f"[meta-login-config] removed_obsolete_key={key} path={path}")
+                continue
             if key in updates:
                 output.append(f"{key}={updates[key]}")
                 found.add(key)
@@ -74,6 +75,11 @@ set -a
 source "$APP_ENV"
 set +a
 
+if [ -n "${META_APP_A_LOGIN_CONFIG_ID:-}" ]; then
+  echo "[meta-login-config] META_APP_A_LOGIN_CONFIG_ID still present after apply" >&2
+  exit 1
+fi
+
 APP_DIR="/opt/linasbot"
 if [ -f /opt/linasbot/linaslaserbot-2.7.22/main.py ]; then
   APP_DIR="/opt/linasbot/linaslaserbot-2.7.22"
@@ -89,19 +95,15 @@ import os
 
 from urllib.parse import parse_qs, urlparse
 
-from services.meta_app_registry import APP_A_KEY, get_meta_app_configs
-from services.meta_oauth import (
-    LEGACY_MIXED_LOGIN_CONFIG_ID,
-    begin_meta_business_login,
-    meta_oauth_redirect_uri,
-)
+from services.meta_app_registry import APP_A_KEY, FACEBOOK_ONLY_LOGIN_CONFIG_ID_DEFAULT, get_meta_app_configs
+from services.meta_oauth import begin_meta_business_login, meta_oauth_redirect_uri
 
 app = get_meta_app_configs()[APP_A_KEY]
 if not app.enabled:
     raise SystemExit("App A is not enabled")
 expected = os.environ["META_APP_A_FACEBOOK_LOGIN_CONFIG_ID"].strip()
-if expected == LEGACY_MIXED_LOGIN_CONFIG_ID:
-    raise SystemExit("Facebook Connect cannot use the legacy mixed config id")
+if app.oauth_config_id != expected:
+    raise SystemExit("App A oauth_config_id mismatch after apply")
 redirect = meta_oauth_redirect_uri()
 if redirect != "https://www.linasaibot.com/oauth/meta/callback":
     raise SystemExit("redirect URI mismatch")
@@ -139,6 +141,7 @@ for forbidden in (
         raise SystemExit(f"OAuth URL must not request Instagram scope: {forbidden}")
 print("[meta-login-config] oauth_url_shape_ok=true")
 print(f"[meta-login-config] facebook_login_config_id={expected}")
+print(f"[meta-login-config] default_matches={expected == FACEBOOK_ONLY_LOGIN_CONFIG_ID_DEFAULT}")
 print(f"[meta-login-config] redirect_uri={redirect}")
 print("[meta-login-config] SUCCESS")
 PY

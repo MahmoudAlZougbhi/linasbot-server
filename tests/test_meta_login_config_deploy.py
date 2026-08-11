@@ -10,7 +10,8 @@ def test_prod_apply_meta_app_a_login_config_script_exists() -> None:
     assert script.is_file()
     text = script.read_text(encoding="utf-8")
     assert "META_APP_A_FACEBOOK_LOGIN_CONFIG_ID" in text
-    assert "1057282070324984" in text  # refused for Facebook Connect
+    assert "META_APP_A_LOGIN_CONFIG_ID" in text  # stripped as obsolete
+    assert "REMOVE_KEYS" in text
     assert "seed_meta_app_a_registry" not in text
     assert "systemctl restart linasbot" in text
     workflow = Path(".github/workflows/meta-app-a-login-config-apply.yml")

@@ -1,5 +1,5 @@
 # Apply App A Facebook-only Login for Business config (no token rotation / disconnect).
-# Does not delete the legacy mixed config id META_APP_A_LOGIN_CONFIG_ID.
+# Also strips obsolete META_APP_A_LOGIN_CONFIG_ID from production env if present.
 name: Meta App A Login Config Apply
 
 on:
@@ -49,10 +49,6 @@ jobs:
             set -euo pipefail
             if [ -z "${META_APP_A_FACEBOOK_LOGIN_CONFIG_ID:-}" ]; then
               echo "[meta-login-config] missing GitHub secret META_APP_A_FACEBOOK_LOGIN_CONFIG_ID" >&2
-              exit 1
-            fi
-            if [ "${META_APP_A_FACEBOOK_LOGIN_CONFIG_ID}" = "1057282070324984" ]; then
-              echo "[meta-login-config] refusing legacy mixed FB+IG config for Facebook Connect" >&2
               exit 1
             fi
             APPLY_SCRIPT="/tmp/linasbot-meta-login-config/scripts/prod_apply_meta_app_a_login_config.sh"

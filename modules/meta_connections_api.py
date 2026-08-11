@@ -197,14 +197,24 @@ async def start_meta_connection(
     body: dict[str, Any] = Body(default={}),
 ) -> Any:
     session = require_permission(request, "settings")
-    channel = str(body.get("channel") or "unified").strip().lower()
-    if channel not in {"facebook", "instagram", "unified", "meta", ""}:
-        raise HTTPException(status_code=400, detail="channel must be facebook, instagram, or unified")
+    # Default to Facebook Pages Connect. Instagram must use /instagram-login/start.
+    channel = str(body.get("channel") or "facebook").strip().lower()
+    if channel in {"instagram"}:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Instagram Connect uses Instagram Login. "
+                "POST /api/meta/connections/instagram-login/start instead."
+            ),
+        )
+    if channel not in {"facebook", "unified", "meta", ""}:
+        raise HTTPException(status_code=400, detail="channel must be facebook for Business Login")
     return_surface = normalize_return_surface(body.get("return_surface"))
     try:
+        flow_channel = "facebook" if channel in {"", "meta", "unified"} else channel
         login_url = begin_meta_business_login(
             tenant_id=session.tenant_id,
-            channel=normalize_oauth_flow_channel(channel),
+            channel=normalize_oauth_flow_channel(flow_channel),
             actor_id=session.user_id or session.email,
             return_surface=return_surface,
         )

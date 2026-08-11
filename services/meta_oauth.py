@@ -20,6 +20,7 @@ import httpx
 
 from services.meta_app_registry import (
     APP_A_KEY,
+    FACEBOOK_ONLY_LOGIN_CONFIG_ID_DEFAULT,
     META_CHANNEL_SCOPES,
     META_COMMENT_SCOPES,
     META_FACEBOOK_LOGIN_EXTRA_SCOPES,
@@ -34,11 +35,6 @@ from services.meta_app_registry import (
     get_meta_app_registry,
     normalize_meta_tenant_id,
 )
-
-# Legacy mixed FB+IG Business Login config (not used for new Facebook Connect).
-LEGACY_MIXED_LOGIN_CONFIG_ID = "1057282070324984"
-# Facebook Pages-only Business Login configuration.
-FACEBOOK_ONLY_LOGIN_CONFIG_ID_DEFAULT = "1369663304545819"
 
 MetaOAuthFlowMode = Literal["facebook", "instagram", "unified"]
 
@@ -81,45 +77,31 @@ def facebook_login_config_id() -> str:
     configured = (os.getenv("META_APP_A_FACEBOOK_LOGIN_CONFIG_ID") or "").strip()
     if configured:
         return configured
-    # Safe default matches the dedicated Facebook-only Meta configuration.
     return FACEBOOK_ONLY_LOGIN_CONFIG_ID_DEFAULT
 
 
-def legacy_mixed_login_config_id() -> str:
-    """Legacy mixed FB+IG config — never used for new Facebook Connect starts."""
-
-    return (os.getenv("META_APP_A_LOGIN_CONFIG_ID") or "").strip()
-
-
 def resolve_business_login_config_id(flow_mode: MetaOAuthFlowMode) -> str:
-    """Pick the Login Configuration for Facebook Business Login by channel.
+    """Pick the Login Configuration for Facebook Business Login.
 
-    - ``facebook`` → Facebook-only config (Pages; no Instagram assets).
-    - ``instagram`` / ``unified`` Business Login fallback → legacy mixed config only
-      (Connect Instagram itself uses Instagram Login, not this path).
+    Facebook Connect and Manage Meta Access use the Facebook-Pages-only config.
+    Instagram Connect must use Instagram Login (``/instagram-login/start``), not
+    Facebook Login for Business.
     """
 
-    if flow_mode == "facebook":
-        config_id = facebook_login_config_id()
-        if not config_id:
-            raise MetaOAuthError(
-                "Facebook Business Login is not configured. "
-                "Ask ops to set META_APP_A_FACEBOOK_LOGIN_CONFIG_ID for App A."
-            )
-        if config_id == LEGACY_MIXED_LOGIN_CONFIG_ID:
-            raise MetaOAuthError(
-                "Facebook Connect cannot use the legacy mixed FB+IG Login Configuration. "
-                "Set META_APP_A_FACEBOOK_LOGIN_CONFIG_ID to the Facebook-only configuration."
-            )
-        return config_id
+    if flow_mode == "instagram":
+        raise MetaOAuthError(
+            "Instagram Connect uses Instagram Login, not Facebook Login for Business. "
+            "Start via /api/meta/connections/instagram-login/start."
+        )
 
-    legacy = legacy_mixed_login_config_id()
-    if legacy:
-        return legacy
-    raise MetaOAuthError(
-        "Legacy Meta Business Login is not configured. "
-        "Ask ops to set META_APP_A_LOGIN_CONFIG_ID (mixed config; not for Facebook Connect)."
-    )
+    # ``facebook`` and legacy ``unified``/``meta`` starts both use the Pages-only config.
+    config_id = facebook_login_config_id()
+    if not config_id:
+        raise MetaOAuthError(
+            "Facebook Business Login is not configured. "
+            "Ask ops to set META_APP_A_FACEBOOK_LOGIN_CONFIG_ID for App A."
+        )
+    return config_id
 
 
 def normalize_oauth_flow_channel(channel: str) -> MetaOAuthFlowMode:
@@ -167,20 +149,15 @@ def _business_login_request_scopes(flow_mode: MetaOAuthFlowMode) -> str:
     """
 
     scopes: set[str] = set()
-    if flow_mode == "facebook":
-        scopes |= set(META_CHANNEL_SCOPES["facebook"])
-        scopes |= set(META_COMMENT_SCOPES["facebook"])
-        scopes |= set(META_FACEBOOK_LOGIN_EXTRA_SCOPES)
-    elif flow_mode == "instagram":
+    if flow_mode == "instagram":
+        # Business Login must not start Instagram Connect; scopes unused when rejected above.
         scopes |= set(META_CHANNEL_SCOPES["instagram"])
         scopes |= set(META_COMMENT_SCOPES["instagram"])
     else:
-        # Unified Business Login is legacy-only (mixed config). Prefer separate
-        # Facebook Connect + Instagram Login starts for new connections.
+        # Facebook Connect and legacy unified starts: Pages only (no instagram_*).
         scopes |= set(META_CHANNEL_SCOPES["facebook"])
         scopes |= set(META_COMMENT_SCOPES["facebook"])
-        scopes |= set(META_CHANNEL_SCOPES["instagram"])
-        scopes |= set(META_COMMENT_SCOPES["instagram"])
+        scopes |= set(META_FACEBOOK_LOGIN_EXTRA_SCOPES)
     return ",".join(sorted(scopes))
 
 

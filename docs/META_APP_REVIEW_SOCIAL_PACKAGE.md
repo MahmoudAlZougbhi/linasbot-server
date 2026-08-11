@@ -2,7 +2,6 @@
 
 **App:** `2963733803971681` (App A only)  
 **Facebook Connect Login Configuration (Pages only):** `1369663304545819`  
-**Legacy mixed FB+IG Login Configuration (do not delete yet; not used for new Facebook Connect):** `1057282070324984`  
 **WhatsApp Embedded Signup Configuration (unchanged):** `1430599348520127`  
 **Callback:** `https://www.linasaibot.com/webhook/meta-messaging`  
 **Instagram Login callback:** `https://www.linasaibot.com/webhook/instagram-login`  
@@ -26,7 +25,7 @@ Forbidden: App B disconnect, token reset, bundling Instagram into Facebook Conne
    - `pages_read_user_content`
    - `pages_manage_engagement`
 3. Do **not** add `instagram_*` or `instagram_business_*` permissions to this configuration.
-4. Save configuration. Do **not** delete `1057282070324984` yet.
+4. Save configuration.
 
 ### 2) Instagram Connect (independent Instagram Login)
 
@@ -35,7 +34,7 @@ Connect Instagram uses `/api/meta/connections/instagram-login/start` with:
 - `instagram_business_manage_messages`
 - `instagram_business_manage_comments`
 
-Do **not** route Instagram Connect through either Facebook Login for Business configuration.
+Do **not** route Instagram Connect through Facebook Login for Business.
 
 ### 3) App-level webhooks (idempotent)
 
@@ -92,7 +91,7 @@ Existing assets remain; tokens refresh in place. No duplicate bindings when reau
 | `instagram_business_manage_messages` | Instagram DMs |
 | `instagram_business_manage_comments` | Instagram comments |
 
-Linas AI does **not** request content publishing (`pages_manage_posts` / `instagram_content_publish` / `instagram_business_content_publish`) for this Connect Facebook switch.
+Linas AI does **not** request content publishing for Connect Facebook.
 
 ---
 
@@ -114,16 +113,6 @@ Dashboard / Mobile
 | Variable | Role |
 |---|---|
 | `META_APP_A_FACEBOOK_LOGIN_CONFIG_ID` | Active Facebook Connect config (`1369663304545819`) |
-| `META_APP_A_LOGIN_CONFIG_ID` | Legacy mixed config (`1057282070324984`) — keep; not used for new FB Connect |
 | `META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID` | WhatsApp only (`1430599348520127`) |
 
----
-
-## Retiring the legacy mixed configuration
-
-Do **not** delete `1057282070324984` until:
-1. Production Facebook Connect has used `1369663304545819` successfully.
-2. No in-flight OAuth states reference the mixed config.
-3. Ops confirms no Meta console dependency remains.
-
-It is **not** safe to retire yet solely because this code change landed.
+`META_APP_A_LOGIN_CONFIG_ID` is obsolete and must not be set in production.
