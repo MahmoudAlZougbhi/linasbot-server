@@ -28,6 +28,8 @@ export function activeAreaFromScreen(screen: Screen): ControlArea | 'chat' | nul
       return 'cm';
     case 'faq':
       return 'faq';
+    case 'smartFollowUp':
+      return 'smartFollowUp';
     case 'owner':
       return 'owner';
     default:

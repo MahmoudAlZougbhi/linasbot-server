@@ -7,6 +7,7 @@ export type ControlArea =
   | 'users'
   | 'settings'
   | 'dashboard'
+  | 'smartFollowUp'
   | 'livechat'
   | 'notifications'
   | 'owner';
@@ -23,6 +24,12 @@ export type ControlItem = {
 export const CONTROL_ITEMS: ControlItem[] = [
   { id: 'dashboard', title: 'Dashboard / Status', subtitle: 'Workspace health & usage', group: 'operate' },
   { id: 'cm', title: 'AI Setup', subtitle: 'What your customer AI knows', group: 'operate' },
+  {
+    id: 'smartFollowUp',
+    title: 'Smart Follow-Up',
+    subtitle: 'Auto follow-up when WhatsApp customers go quiet',
+    group: 'operate',
+  },
   {
     id: 'faq',
     title: 'Smart Answers / FAQ',

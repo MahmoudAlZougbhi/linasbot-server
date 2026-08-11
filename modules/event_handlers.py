@@ -715,17 +715,48 @@ async def startup_event() -> None:
             replace_existing=True,
         )
 
+        async def run_smart_followup_worker_job() -> None:
+            from services.durable_event_claim import release_job_lock, try_acquire_job_lock
+
+            if not try_acquire_job_lock("whatsapp_smart_followup_worker", ttl_seconds=55):
+                return
+            try:
+                from services.whatsapp_cloud.smart_followup.worker import process_due_followup_jobs
+
+                result = await process_due_followup_jobs(limit=25)
+                processed = int(result.get("processed") or 0)
+                if processed:
+                    print(f"[smart_followup] processed {processed} due job(s)")
+            except Exception as e:
+                print(f"❌ Error in Smart Follow-Up worker: {e}")
+                import traceback
+
+                traceback.print_exc()
+            finally:
+                release_job_lock("whatsapp_smart_followup_worker")
+
+        scheduler.add_job(
+            run_smart_followup_worker_job,
+            "interval",
+            minutes=1,
+            id="whatsapp_smart_followup_worker",
+            name="WhatsApp Smart Follow-Up Worker",
+            replace_existing=True,
+        )
+
         scheduler.start()
 
         print("\n🚀 Running initial daily template dispatcher check...")
         asyncio.create_task(run_daily_template_dispatcher_job())
         print("✅ Initial dispatcher check queued")
+        asyncio.create_task(run_smart_followup_worker_job())
 
         print("✅ Smart Messaging Scheduler started successfully")
         print("📅 Scheduled jobs:")
         print("   - Daily refresh: Daily at 00:01")
         print(f"   - Template dispatcher: Every {dispatcher_interval_minutes} minute(s)")
         print(f"   - Queue monitor/sender: Every {monitor_interval_minutes} minute(s)")
+        print("   - Smart Follow-Up worker: Every 1 minute")
         print("=" * 60)
 
         app.state.scheduler = scheduler

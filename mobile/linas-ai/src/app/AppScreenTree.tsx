@@ -18,6 +18,7 @@ import { LiveChatScreen } from '../features/livechat/LiveChatScreen';
 import { NotificationsScreen } from '../features/notifications/NotificationsScreen';
 import { OwnerPortalScreen } from '../features/control/OwnerPortalScreen';
 import { SettingsScreen } from '../features/settings/SettingsScreen';
+import { SmartFollowUpScreen } from '../features/smartFollowUp/SmartFollowUpScreen';
 import { SimpleResourceScreen } from '../features/shared/SimpleResourceScreen';
 import { UsersScreen } from '../features/users/UsersScreen';
 import { KeepMountedPane } from './KeepMountedPane';
@@ -162,6 +163,9 @@ export function AppScreenTree({
           onGoChat={() => setScreen({ name: 'chat' })}
           proposalReview={name === 'faq' ? (screen.proposalReview ?? null) : null}
         />
+      </KeepMountedPane>
+      <KeepMountedPane key={`smartFollowUp-${authEpoch}`} active={name === 'smartFollowUp'}>
+        <SmartFollowUpScreen />
       </KeepMountedPane>
       <KeepMountedPane key={`owner-${authEpoch}`} active={name === 'owner'}>
         <OwnerPortalScreen />

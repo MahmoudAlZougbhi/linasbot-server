@@ -1,4 +1,5 @@
 import { subscriptionEn } from './subscriptionEn';
+import { smartFollowUpEn } from './smartFollowUpEn';
 import { whatsappEn } from './whatsappEn';
 
 export const en = {
@@ -344,6 +345,7 @@ export const en = {
   socialContinueApple: 'Continue with Apple',
   ...subscriptionEn,
   ...whatsappEn,
+  ...smartFollowUpEn,
 
   proposalChangeTitle: 'AI Setup change',
   proposalDeleteTitle: 'Delete from AI Setup',

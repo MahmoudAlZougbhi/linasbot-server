@@ -82,6 +82,7 @@ import modules.whatsapp_adapters  # noqa: E402, F401
 import modules.whatsapp_cloud_api  # noqa: E402, F401
 import modules.whatsapp_cloud_ops_api  # noqa: E402, F401
 import modules.whatsapp_cloud_webhook  # noqa: E402, F401
+import modules.whatsapp_smart_followup_api  # noqa: E402, F401
 
 
 @app.get("/downloads/live-chat-android.apk")

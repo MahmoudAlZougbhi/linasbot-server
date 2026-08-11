@@ -9,6 +9,7 @@ import type { ControlArea } from '../control/controlAreas';
 export const MODULE_ICONS: Record<ControlArea, AppIconName> = {
   dashboard: feather('grid'),
   cm: feather('book-open'),
+  smartFollowUp: ion('timer-outline'),
   faq: feather('help-circle'),
   livechat: feather('message-square'),
   integrations: mci('power-plug-outline'),

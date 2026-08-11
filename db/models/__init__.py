@@ -14,6 +14,13 @@ from db.models.whatsapp_cloud import (
     WhatsAppPilotEntitlement,
     WhatsAppWebhookEvent,
 )
+from db.models.whatsapp_smart_followup import (
+    WhatsAppSmartFollowUpEvent,
+    WhatsAppSmartFollowUpJob,
+    WhatsAppSmartFollowUpSequence,
+    WhatsAppSmartFollowUpSettings,
+    WhatsAppSmartFollowUpStep,
+)
 
 __all__ = [
     "Base",
@@ -25,5 +32,10 @@ __all__ = [
     "WhatsAppMessage",
     "WhatsAppOutboundIntent",
     "WhatsAppPilotEntitlement",
+    "WhatsAppSmartFollowUpEvent",
+    "WhatsAppSmartFollowUpJob",
+    "WhatsAppSmartFollowUpSequence",
+    "WhatsAppSmartFollowUpSettings",
+    "WhatsAppSmartFollowUpStep",
     "WhatsAppWebhookEvent",
 ]

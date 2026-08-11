@@ -145,6 +145,10 @@ export function AppShell() {
       setScreen({ name: 'faq' });
       return;
     }
+    if (area === 'smartFollowUp') {
+      setScreen({ name: 'smartFollowUp' });
+      return;
+    }
     if (area === 'owner') {
       setScreen({ name: 'owner' });
       return;

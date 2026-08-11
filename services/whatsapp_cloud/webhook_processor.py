@@ -118,6 +118,17 @@ async def _process_one_event(event: ParsedCloudEvent, *, body_fp: str) -> str:
                 status="echoed",
             )
             repo.pause_conversation(conv, reason="business_app_echo", actor_user_id=None)
+            try:
+                from services.whatsapp_cloud.smart_followup.hooks import cancel_conversation_followups
+
+                cancel_conversation_followups(
+                    session,
+                    tenant_id=conn.tenant_id,
+                    conversation_id=conv.id,
+                    reason="business_app_echo",
+                )
+            except Exception as exc:
+                emit_wa_event("smart_followup_cancel_failed", error=type(exc).__name__)
             conn.webhook_last_success_at = _utcnow()
             repo.complete_webhook_event(claim, state="processed")
             emit_wa_event("manual_takeover", connection_id=conn.id, conversation_id=conv.id)
@@ -149,6 +160,20 @@ async def _process_one_event(event: ParsedCloudEvent, *, body_fp: str) -> str:
             conv.last_inbound_at = _utcnow()
             conv.service_window_opens_at = _utcnow()
             conn.webhook_last_success_at = _utcnow()
+            # Customer reply / opt-out cancels remaining Smart Follow-Up jobs.
+            try:
+                from services.whatsapp_cloud.smart_followup.hooks import cancel_conversation_followups
+                from services.whatsapp_cloud.smart_followup.opt_out import looks_like_opt_out
+
+                cancel_reason = "opt_out" if looks_like_opt_out(event.text_body) else "customer_reply"
+                cancel_conversation_followups(
+                    session,
+                    tenant_id=conn.tenant_id,
+                    conversation_id=conv.id,
+                    reason=cancel_reason,
+                )
+            except Exception as exc:
+                emit_wa_event("smart_followup_cancel_failed", error=type(exc).__name__)
             ai_eligible, ai_reason = evaluate_ai_eligibility(session, conn)
             ai_snapshot = {
                 "tenant_id": conn.tenant_id,
