@@ -141,12 +141,13 @@ def manifest_for_retrieval_luna(tenant_id: str) -> dict[str, Any]:
 
 
 def load_fixed_answer_context(tenant_id: str) -> dict[str, Any]:
-    """Full Published AI Basics + Style for Answer Luna only."""
+    """Full Published AI Basics + Style + Languages for Answer Tera only."""
     pointer, sections = load_published_content(tenant_id)
     return {
         "published_revision": pointer.content_version_id,
         "ai_basics": sections.get("ai_basics") or {},
         "style": sections.get("style") or {},
+        "languages": sections.get("languages") or {},
     }
 
 

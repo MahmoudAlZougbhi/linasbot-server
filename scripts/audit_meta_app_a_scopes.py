@@ -41,8 +41,9 @@ def _print_cm_comment_actions() -> None:
     print(f"[scope-audit] cm_action_{ACTION_FACEBOOK_COMMENTS}={action_enabled(actions, ACTION_FACEBOOK_COMMENTS)}")
     print(f"[scope-audit] cm_action_{ACTION_INSTAGRAM_COMMENTS}={action_enabled(actions, ACTION_INSTAGRAM_COMMENTS)}")
     print(f"[scope-audit] cm_disable_linas_legacy_bridge={os.getenv('CM_DISABLE_LINAS_LEGACY_BRIDGE', '')}")
-    print(f"[scope-audit] customer_reply_ai_v2={os.getenv('CUSTOMER_REPLY_AI_V2', '')}")
-    print(f"[scope-audit] customer_reply_ai_v2_live={os.getenv('CUSTOMER_REPLY_AI_V2_LIVE', '')}")
+    print(f"[scope-audit] customer_retrieval_model={os.getenv('LINAS_CUSTOMER_RETRIEVAL_MODEL', 'gpt-5.6-luna')}")
+    print(f"[scope-audit] customer_answer_model={os.getenv('LINAS_CUSTOMER_ANSWER_MODEL', 'gpt-5.6-terra')}")
+    print(f"[scope-audit] customer_media_context={os.getenv('CUSTOMER_MEDIA_CONTEXT_ENABLED', 'true')}")
     print(
         f"[scope-audit] meta_app_a_advanced_access_approved="
         f"{(os.getenv('META_APP_A_ADVANCED_ACCESS_APPROVED') or '').strip().lower() or 'unset'}"

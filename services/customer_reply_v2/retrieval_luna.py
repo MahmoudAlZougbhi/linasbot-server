@@ -1,4 +1,7 @@
-"""Retrieval Luna — selects Published CM evidence; never writes customer replies."""
+"""Retrieval Luna — selects Published CM evidence; never writes customer replies.
+
+Uses GPT-5.6 Luna only. Final answers are written by Answer Tera separately.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +9,7 @@ import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from services.customer_reply_v2.flags import customer_model_name, max_retrieval_rounds
+from services.customer_reply_v2.flags import customer_retrieval_model_name, max_retrieval_rounds
 from services.customer_reply_v2.manifest import FIXED_ANSWER_SECTIONS, manifest_for_retrieval_luna
 from services.customer_reply_v2.models import RetrievalResult
 from services.customer_reply_v2.retrieval_tools import RETRIEVAL_TOOL_SCHEMAS, ToolContext, dispatch_retrieval_tool
@@ -44,26 +47,28 @@ def _strip_fixed_from_prompt(text: str) -> str:
 
 async def _default_llm(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None) -> Any:
     from services.llm_core_service import build_chat_completion_kwargs, client
-    from services.model_policy import emit_model_policy_trace, resolve_customer_social_policy
+    from services.model_policy import emit_model_policy_trace, resolve_customer_retrieval_policy
 
-    policy = resolve_customer_social_policy(
-        channel="instagram_dm",
-        continuation=bool(tools),
-    )
-    model = customer_model_name()
+    policy = resolve_customer_retrieval_policy()
+    model = customer_retrieval_model_name()
+    if model != policy.model:
+        raise RuntimeError(
+            f"customer_retrieval_model_misconfigured: retrieval model {model!r} != policy {policy.model!r}"
+        )
     kwargs = build_chat_completion_kwargs(
         model=model,
         messages=[{"role": "user", "content": "placeholder"}],
         max_tokens=1200,
         temperature=0.2,
         reasoning_effort=str(policy.reasoning_effort),
+        has_function_tools=bool(tools),
     )
     kwargs["messages"] = messages
     kwargs["model"] = model
     if tools is not None:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"
-    emit_model_policy_trace(policy, extra={"role": "retrieval", "has_tools": tools is not None})
+    emit_model_policy_trace(policy, extra={"role": "retrieval", "stage": "retrieval", "has_tools": tools is not None})
     return await client.chat.completions.create(**kwargs)
 
 
@@ -109,7 +114,17 @@ async def run_retrieval_luna(
     {name, arguments} tool calls, then a final JSON plan as the last scripted message
     via a trailing dict with key ``final_plan``.
     """
-    model = customer_model_name()
+    try:
+        model = customer_retrieval_model_name()
+    except Exception as exc:
+        return RetrievalResult(
+            evidence=[],
+            evidence_status="insufficient_final",
+            rounds_used=0,
+            requested_model="",
+            returned_model="",
+            error=f"retrieval_model_blocker:{exc}",
+        )
     try:
         manifest = manifest_for_retrieval_luna(tenant_id)
         revision = str(manifest["published_revision"])
@@ -145,6 +160,19 @@ async def run_retrieval_luna(
     user_payload = {
         "current_message": _strip_fixed_from_prompt(message),
         "manifest": manifest,
+        "customer_facts": customer_profile,
+        "dm_window_preview": list(dm_window or [])[-6:],
+        "comment_context_preview": {
+            k: comment_context.get(k)
+            for k in (
+                "media_type",
+                "caption",
+                "parent_comment",
+                "media_status",
+                "permalink",
+            )
+            if comment_context and k in comment_context
+        },
         "note": "Use tools to list/read selectable sections only. Do not write the reply.",
     }
     messages: list[dict[str, Any]] = [

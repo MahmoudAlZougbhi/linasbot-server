@@ -132,6 +132,11 @@ class AnswerLunaResult:
     safe_failure_category: str | None = None
     requested_model: str = ""
     returned_model: str = ""
+    reasoning_effort: str = "medium"
+    stage: str = "answer"
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_tokens: int | None = None
     raw_structured: dict[str, Any] = field(default_factory=dict)
 
 
@@ -141,11 +146,17 @@ class CommentMediaContext:
     caption: str = ""
     parent_comment: str = ""
     nearby_replies: list[str] = field(default_factory=list)
-    image_urls: list[str] = field(default_factory=list)  # bounded
+    image_urls: list[str] = field(default_factory=list)  # bounded remote URLs
+    image_inputs: list[dict[str, str]] = field(default_factory=list)  # multimodal {url, kind}
     cached_visual_summary: str = ""
     frame_count: int = 0
     uncertainty_required: bool = False
     media_revision: str = ""
+    media_status: str = "unknown"  # available|partial|caption_only|missing|failed|disabled|not_applicable
+    permalink: str = ""
+    post_id: str = ""
+    carousel_truncated: bool = False
+    saw_visuals: bool = False
 
 
 @dataclass

@@ -150,6 +150,8 @@ def test_answer_luna_messages_include_cm_response_language() -> None:
         detected_language="fr",
     )
     blob = msgs[1]["content"]
+    if isinstance(blob, list):
+        blob = " ".join(str(part.get("text") or "") for part in blob if isinstance(part, dict))
     assert "response_language" in blob
     assert "fr" in blob
     assert "AI Setup" in blob or "Languages" in blob
