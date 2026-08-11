@@ -1,4 +1,4 @@
-"""Content Management AI Control Plane package."""
+"""AI Setup AI Control Plane package."""
 
 from __future__ import annotations
 

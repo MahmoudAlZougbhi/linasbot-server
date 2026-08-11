@@ -22,7 +22,7 @@ export type ControlItem = {
 /** Product module order matches drawerModules (no Creative / Team alias). */
 export const CONTROL_ITEMS: ControlItem[] = [
   { id: 'dashboard', title: 'Dashboard / Status', subtitle: 'Metrics & health', group: 'operate' },
-  { id: 'cm', title: 'Content Management', subtitle: 'What your customer AI knows', group: 'operate' },
+  { id: 'cm', title: 'AI Setup', subtitle: 'What your customer AI knows', group: 'operate' },
   {
     id: 'faq',
     title: 'Smart Answers / FAQ',

@@ -18,7 +18,7 @@ vi.mock("../../utils/authFetch", () => ({
 }));
 
 describe("Sidebar FAQ single entry", () => {
-  it("shows Content Managers and no Bot Training / Legacy FAQ nav writers", () => {
+  it("shows AI Setup and no Bot Training / Legacy FAQ nav writers", () => {
     mockUseAuth.mockReturnValue({ user: makeAuthUser({ role: "admin" }) });
 
     render(
@@ -27,7 +27,7 @@ describe("Sidebar FAQ single entry", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole("link", { name: /Content Managers/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /AI Setup/i })).toHaveAttribute(
       "href",
       "/content-managers"
     );
@@ -39,7 +39,7 @@ describe("Sidebar FAQ single entry", () => {
 });
 
 describe("Training legacy redirect", () => {
-  it("redirects /training to Content Managers FAQ", () => {
+  it("redirects /training to AI Setup FAQ", () => {
     render(
       <MemoryRouter initialEntries={["/training"]}>
         <Routes>

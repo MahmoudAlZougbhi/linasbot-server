@@ -24,7 +24,7 @@ def tenant_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 @pytest.mark.asyncio
 async def test_setup_chat_patch_updates_same_draft(tenant_root: Path) -> None:
     start = start_setup("setup-tenant", "user-1")
-    assert "إعداد" in start["intro"] or "Content Management" in start["intro"]
+    assert "إعداد" in start["intro"] or "AI Setup" in start["intro"]
 
     result = await interpret_and_patch(
         tenant_id="setup-tenant",

@@ -1,5 +1,5 @@
 /**
- * Content Managers hub section cards (plan screen map).
+ * AI Setup hub section cards (plan screen map).
  * @typedef {object} CmSectionCard
  * @property {string} slug
  * @property {string | null} section API section id (null for publish hub)
@@ -98,6 +98,12 @@ export const CM_SECTION_CARDS = [
     section: "actions",
     name: "Actions / Capabilities",
     description: "Enable or disable what the AI is allowed to do (DMs, comments, handoff, photo).",
+  },
+  {
+    slug: "comments",
+    section: "comments",
+    name: "Comments Policy",
+    description: "Keyword rules for comments: reply publicly, reply via DM, or ignore (optional post id).",
   },
   {
     slug: "ai-limits",

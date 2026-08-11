@@ -276,7 +276,7 @@ async function installCmApiMocks(page, options = {}) {
   });
 }
 
-test.describe("Content Management browser smoke", () => {
+test.describe("AI Setup browser smoke", () => {
   test("landing navigation, owner forms without JSON, save/validate, responsive", async ({ page }) => {
     await installCmApiMocks(page, {
       draftEtag: 'W/"etag-1"',
@@ -284,14 +284,14 @@ test.describe("Content Management browser smoke", () => {
     // Seed knowledge draft with one article via default empty items — Add creates one.
     await page.goto("/content-managers");
 
-    await expect(page.getByRole("heading", { name: "Content Managers" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "AI Setup", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: /^Restricted \/ Unsupported/i })).toBeVisible();
     await expect(page.getByRole("link", { name: /Dynamic Messages/i })).toBeVisible();
     await expect(page.getByRole("link", { name: /Sources & Archive/i })).toBeVisible();
     await expect(page.getByRole("link", { name: /Preview \/ Validate \/ Publish/i })).toBeVisible();
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(page.getByRole("heading", { name: "Content Managers" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "AI Setup", exact: true })).toBeVisible();
     await expect(page.getByRole("main").locator('a[href="/content-managers/faq"]')).toBeVisible();
     await page.setViewportSize({ width: 1280, height: 800 });
 
@@ -382,7 +382,7 @@ test.describe("Content Management browser smoke", () => {
     await installCmApiMocks(page, { user: VIEWER_USER });
     await page.goto("/content-managers");
     // ProtectedRoute redirects away from unauthorized paths.
-    await expect(page.getByRole("heading", { name: "Content Managers" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "AI Setup", exact: true })).toHaveCount(0);
     await expect(page).not.toHaveURL(/\/content-managers\/?$/);
   });
 });

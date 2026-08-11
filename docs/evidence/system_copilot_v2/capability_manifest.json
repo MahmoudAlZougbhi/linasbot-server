@@ -54,7 +54,7 @@
     },
     {
       "id": "content_management",
-      "feature": "Content Management",
+      "feature": "AI Setup",
       "status": "available",
       "route": "cm",
       "source_files": ["services/cm/", "services/owner_ai_tools_write.py"]

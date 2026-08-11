@@ -1,6 +1,6 @@
 """Per-channel DM/comment enable flags for Linas AI Integrations.
 
-Mirrors Content Management → Actions switches and, for comments, syncs the
+Mirrors AI Setup → Actions switches and, for comments, syncs the
 per-asset Meta comment-reply setting used at runtime.
 
 Mobile UI reads ``effective_enabled`` from the canonical capability matrix only.
@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from services.channel_capability_state import (
     action_id_for,
-    active_channel_bindings,
+    canonical_channel_bindings,
     comment_capability_state,
     dm_capability_state,
     supported_platforms,
@@ -23,14 +23,17 @@ from services.cm.publish_gate import PublishDisabledError, ensure_publish_enable
 from services.cm.schemas import ActionCapability, ActionsSection
 from services.cm.storage import ConflictError, get_draft, put_draft
 from services.cm.version_store import read_published_pointer
-from services.meta_app_registry import get_meta_app_registry
+from services.meta_app_registry import get_meta_app_configs, get_meta_app_registry
 from services.meta_comment_reply_settings import get_comment_reply_setting, set_comment_reply_setting
 from services.meta_comment_webhooks import (
     ensure_instagram_comment_app_webhook,
     ensure_page_comment_webhook_subscription,
 )
 from services.meta_graph_routing import credential_has_comment_scopes, required_comment_scopes_for_binding
-from services.meta_instagram_login_subscription import COMMENTS_SUBSCRIPTION_FIELD
+from services.meta_instagram_login_subscription import (
+    COMMENTS_SUBSCRIPTION_FIELD,
+    ensure_instagram_login_webhook_subscription,
+)
 from services.meta_oauth import MetaOAuthError
 
 ChannelPlatform = Literal["instagram", "facebook"]
@@ -194,11 +197,41 @@ def _record_comment_webhook_fields(binding: Any, *, registry: Any, extra_fields:
         return
 
 
+async def _ensure_comment_webhook_for_binding(binding: Any, *, registry: Any) -> None:
+    """Subscribe/verify comment webhooks for the canonical binding (idempotent)."""
+
+    auth_flow = str(getattr(binding, "auth_flow", "") or "")
+    if binding.channel == "facebook":
+        await ensure_page_comment_webhook_subscription(binding, registry=registry)
+        _record_comment_webhook_fields(
+            binding, registry=registry, extra_fields=("feed", "messages", "messaging_postbacks")
+        )
+        return
+    if auth_flow == "instagram_login":
+        credential = registry.get_credential(binding)
+        app = get_meta_app_configs()[binding.app_key]
+        state = await ensure_instagram_login_webhook_subscription(
+            binding,
+            credential,
+            registry=registry,
+            graph_api_version=app.graph_api_version,
+        )
+        if not state.ready_for_comments:
+            raise MetaOAuthError("Instagram comment webhook subscription is not confirmed")
+        return
+    await ensure_instagram_comment_app_webhook(app_key=binding.app_key)
+    _record_comment_webhook_fields(
+        binding,
+        registry=registry,
+        extra_fields=(COMMENTS_SUBSCRIPTION_FIELD, "messages", "messaging_postbacks"),
+    )
+
+
 async def _sync_comment_assets(*, tenant_id: str, platform: str, enabled: bool) -> None:
     """Align per-asset comment_replies with the CM comments action for this channel."""
 
     registry = get_meta_app_registry()
-    bindings = active_channel_bindings(tenant_id, platform)
+    bindings = canonical_channel_bindings(tenant_id, platform)
     if enabled and not bindings:
         raise ChannelToggleError(
             "Connect this channel before enabling comments.",
@@ -234,18 +267,7 @@ async def _sync_comment_assets(*, tenant_id: str, platform: str, enabled: bool) 
         if not enabled:
             continue
         try:
-            if binding.channel == "facebook":
-                await ensure_page_comment_webhook_subscription(binding, registry=registry)
-                _record_comment_webhook_fields(
-                    binding, registry=registry, extra_fields=("feed", "messages", "messaging_postbacks")
-                )
-            else:
-                await ensure_instagram_comment_app_webhook(app_key=binding.app_key)
-                _record_comment_webhook_fields(
-                    binding,
-                    registry=registry,
-                    extra_fields=(COMMENTS_SUBSCRIPTION_FIELD, "messages", "messaging_postbacks"),
-                )
+            await _ensure_comment_webhook_for_binding(binding, registry=registry)
         except MetaOAuthError as exc:
             set_comment_reply_setting(
                 tenant_id=tenant_id,
@@ -276,20 +298,9 @@ async def reconcile_comment_webhooks_for_platform(*, tenant_id: str, platform: s
     else:
         # Permissions present but Comments off — still ensure Meta fields when ops/UI asks.
         registry = get_meta_app_registry()
-        for binding in active_channel_bindings(tenant_id, platform_key):
+        for binding in canonical_channel_bindings(tenant_id, platform_key):
             try:
-                if binding.channel == "facebook":
-                    await ensure_page_comment_webhook_subscription(binding, registry=registry)
-                    _record_comment_webhook_fields(
-                        binding, registry=registry, extra_fields=("feed", "messages", "messaging_postbacks")
-                    )
-                else:
-                    await ensure_instagram_comment_app_webhook(app_key=binding.app_key)
-                    _record_comment_webhook_fields(
-                        binding,
-                        registry=registry,
-                        extra_fields=(COMMENTS_SUBSCRIPTION_FIELD, "messages", "messaging_postbacks"),
-                    )
+                await _ensure_comment_webhook_for_binding(binding, registry=registry)
             except MetaOAuthError as exc:
                 raise ChannelToggleError(str(exc), status_code=409, code="COMMENT_WEBHOOK_FAILED") from exc
     return {
@@ -395,6 +406,14 @@ async def set_channel_toggle(
 
     try:
         if toggle == "comments" and enabled:
+            blocker = comments_enable_blocker(tenant_id, platform_key)
+            if blocker == "meta_approval_required":
+                raise ChannelToggleError(
+                    comment_capability_state(tenant_id, platform_key).get("blocker_message")
+                    or "Meta App Review Advanced Access is required for comment permissions.",
+                    status_code=409,
+                    code="META_APPROVAL_REQUIRED",
+                )
             await _sync_comment_assets(tenant_id=tenant_id, platform=platform_key, enabled=True)
             _set_action_in_draft(tenant_id=tenant_id, action_id=action_id, enabled=True, actor=actor)
             await _publish_actions(tenant_id=tenant_id, actor=actor)

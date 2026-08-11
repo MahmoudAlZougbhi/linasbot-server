@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 from typing import Any
-from urllib.parse import urlencode
 
 from fastapi import Body, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
@@ -41,6 +40,24 @@ from services.meta_oauth import (
     subscribe_binding_webhook,
     unsubscribe_binding_webhook,
 )
+from services.meta_oauth_return import (
+    consume_return_surface_from_state,
+    normalize_return_surface,
+    oauth_completion_redirect_url,
+)
+
+
+def _query_text(value: Any) -> str:
+    """Normalize FastAPI Query defaults when handlers are awaited directly in tests."""
+
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    # Query()/Path() objects are truthy but should behave as empty defaults.
+    if hasattr(value, "default") and not isinstance(value, (bytes, bytearray)):
+        return ""
+    return str(value).strip()
 
 
 def _tenant_binding(binding_id: str, tenant_id: str) -> MetaAssetBinding:
@@ -183,11 +200,13 @@ async def start_meta_connection(
     channel = str(body.get("channel") or "unified").strip().lower()
     if channel not in {"facebook", "instagram", "unified", "meta", ""}:
         raise HTTPException(status_code=400, detail="channel must be facebook, instagram, or unified")
+    return_surface = normalize_return_surface(body.get("return_surface"))
     try:
         login_url = begin_meta_business_login(
             tenant_id=session.tenant_id,
             channel=normalize_oauth_flow_channel(channel),
             actor_id=session.user_id or session.email,
+            return_surface=return_surface,
         )
     except (MetaOAuthError, MetaRegistryError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -195,12 +214,17 @@ async def start_meta_connection(
 
 
 @app.post("/api/meta/connections/instagram-login/start")
-async def start_instagram_login_connection(request: Request) -> Any:
+async def start_instagram_login_connection(
+    request: Request,
+    body: dict[str, Any] = Body(default={}),
+) -> Any:
     session = require_permission(request, "settings")
+    return_surface = normalize_return_surface(body.get("return_surface"))
     try:
         login_url = begin_instagram_login(
             tenant_id=session.tenant_id,
             actor_id=session.user_id or session.email,
+            return_surface=return_surface,
         )
     except (MetaOAuthError, MetaRegistryError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -215,22 +239,40 @@ async def instagram_login_oauth_callback(
 ) -> RedirectResponse:
     from services.meta_app_registry import MetaOAuthStateError
 
-    if error:
-        query = urlencode({"meta_connection": "cancelled", "meta_flow": "instagram_login"})
-        return RedirectResponse(url=f"/settings?{query}", status_code=303)
+    if _query_text(error):
+        surface = consume_return_surface_from_state(_query_text(state))
+        return RedirectResponse(
+            url=oauth_completion_redirect_url(
+                return_surface=surface,
+                meta_connection="cancelled",
+                extra_query={"meta_flow": "instagram_login"},
+            ),
+            status_code=303,
+        )
     try:
-        result = await complete_instagram_login(code=code, state=state)
-        query = urlencode(
-            {
-                "meta_connection": "connected",
-                "meta_flow": "instagram_login",
-                "channel": result.binding.channel,
-                "status": result.binding.status,
-            }
+        result = await complete_instagram_login(code=_query_text(code), state=_query_text(state))
+        return RedirectResponse(
+            url=oauth_completion_redirect_url(
+                return_surface=result.return_surface,
+                meta_connection="connected",
+                extra_query={
+                    "meta_flow": "instagram_login",
+                    "channel": result.binding.channel,
+                    "status": result.binding.status,
+                },
+            ),
+            status_code=303,
         )
     except (MetaOAuthError, MetaOAuthStateError, MetaRegistryError):
-        query = urlencode({"meta_connection": "failed", "meta_flow": "instagram_login"})
-    return RedirectResponse(url=f"/settings?{query}", status_code=303)
+        surface = consume_return_surface_from_state(_query_text(state))
+        return RedirectResponse(
+            url=oauth_completion_redirect_url(
+                return_surface=surface,
+                meta_connection="failed",
+                extra_query={"meta_flow": "instagram_login"},
+            ),
+            status_code=303,
+        )
 
 
 @app.get("/oauth/meta/callback")
@@ -241,22 +283,38 @@ async def meta_oauth_callback(
 ) -> RedirectResponse:
     """Public Meta redirect; one-time state is the authorization boundary."""
 
-    if error:
-        query = urlencode({"meta_connection": "cancelled"})
-        return RedirectResponse(url=f"/settings?{query}", status_code=303)
+    if _query_text(error):
+        surface = consume_return_surface_from_state(_query_text(state))
+        return RedirectResponse(
+            url=oauth_completion_redirect_url(
+                return_surface=surface,
+                meta_connection="cancelled",
+            ),
+            status_code=303,
+        )
     try:
-        result = await complete_meta_business_login(code=code, state=state)
-        query = urlencode(
-            {
-                "meta_connection": "connected",
-                "channel": result.binding.channel,
-                "status": result.binding.status,
-                "connected_count": str(len(result.bindings)),
-            }
+        result = await complete_meta_business_login(code=_query_text(code), state=_query_text(state))
+        return RedirectResponse(
+            url=oauth_completion_redirect_url(
+                return_surface=result.return_surface,
+                meta_connection="connected",
+                extra_query={
+                    "channel": result.binding.channel,
+                    "status": result.binding.status,
+                    "connected_count": str(len(result.bindings)),
+                },
+            ),
+            status_code=303,
         )
     except (MetaOAuthError, MetaRegistryError):
-        query = urlencode({"meta_connection": "failed"})
-    return RedirectResponse(url=f"/settings?{query}", status_code=303)
+        surface = consume_return_surface_from_state(_query_text(state))
+        return RedirectResponse(
+            url=oauth_completion_redirect_url(
+                return_surface=surface,
+                meta_connection="failed",
+            ),
+            status_code=303,
+        )
 
 
 @app.post("/api/meta/connections/{binding_id}/disconnect")
@@ -504,7 +562,7 @@ async def update_meta_comment_replies(
             raise HTTPException(
                 status_code=409,
                 detail=(
-                    "Enable the matching Comments action in Content Management → Actions "
+                    "Enable the matching Comments action in AI Setup → Actions "
                     "and publish before turning on per-asset comment replies."
                 ),
             )

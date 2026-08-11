@@ -71,7 +71,7 @@ const PERMISSION_CONFIG = [
   },
   {
     key: 'contentManagers',
-    name: 'Content Managers',
+    name: 'AI Setup',
     description: 'Manage content manager screens',
     icon: AcademicCapIcon,
     color: 'amber'

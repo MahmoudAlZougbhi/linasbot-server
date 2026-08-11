@@ -1582,7 +1582,7 @@ export const useApi = () => {
     }
   }, []);
 
-  // Content Management control-plane APIs
+  // AI Setup control-plane APIs
   const getCmMeta = useCallback(async () => {
     try {
       const response = await api.get("/api/cm/meta");
@@ -1919,7 +1919,7 @@ export const useApi = () => {
     deleteContentFile,
     getDynamicMessages,
     updateDynamicMessages,
-    // Content Management control plane
+    // AI Setup control plane
     getCmMeta,
     getCmDraft,
     uploadCmMedia,

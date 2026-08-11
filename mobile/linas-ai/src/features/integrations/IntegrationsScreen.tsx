@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, ScrollView, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, AppState, Linking, ScrollView, StyleSheet, Text } from 'react-native';
 import { z } from 'zod';
 
 import { ApiError, apiFetch } from '../../api/client';
+import { parseIntegrationsDeepLink } from '../../app/navigation';
 import { tokenStore } from '../../auth/tokenStore';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -98,6 +99,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [authGate, setAuthGate] = useState(false);
 
@@ -131,11 +133,38 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
   }, [load]);
 
   useEffect(() => {
+    if (nav.activeArea === 'integrations') {
+      void load();
+    }
+  }, [nav.areaFocusNonce, nav.activeArea, load]);
+
+  useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') void load();
     });
     return () => sub.remove();
   }, [load]);
+
+  useEffect(() => {
+    const applyMetaResult = (url: string | null) => {
+      const parsed = parseIntegrationsDeepLink(url);
+      if (!parsed) return;
+      if (parsed.metaConnection === 'success') {
+        setNotice(tr('metaOAuthSuccess'));
+        setError(null);
+      } else if (parsed.metaConnection === 'cancelled') {
+        setNotice(null);
+        setError(tr('metaOAuthCancelled'));
+      } else if (parsed.metaConnection === 'failed') {
+        setNotice(null);
+        setError(tr('metaOAuthFailed'));
+      }
+      void load();
+    };
+    void Linking.getInitialURL().then(applyMetaResult);
+    const sub = Linking.addEventListener('url', (event) => applyMetaResult(event.url));
+    return () => sub.remove();
+  }, [load, tr]);
 
   async function manageMetaAccess(platform: 'instagram' | 'facebook') {
     setBusyPlatform(platform);
@@ -296,6 +325,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
   return (
     <ScreenChrome title={tr('integrations')} subtitle={tr('integrationsSub')}>
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
+      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <PrimaryButton
         label={tr('refreshConnectionStatus')}
@@ -353,5 +383,6 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
 
 const styles = StyleSheet.create({
   list: { paddingBottom: 40, gap: spacing.md },
+  notice: { color: colors.accent, marginBottom: spacing.md, fontFamily: fonts.body },
   error: { color: colors.danger, marginBottom: spacing.md, fontFamily: fonts.body },
 });

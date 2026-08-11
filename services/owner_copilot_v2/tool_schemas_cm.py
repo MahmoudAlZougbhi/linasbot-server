@@ -9,10 +9,12 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "inspect_cm_guide",
-            "description": "Inspect real CM completeness (filled/weak/missing) and explain a "
-            "section: purpose, why it matters, what to fill, what is still "
-            "needed. Use before guiding setup. Skip DONE/filled sections unless "
-            "the owner asks to change them.",
+            "description": "Inspect CM completeness (filled/weak/missing) + section purpose, and "
+            "run a proactive quality_pass (duplicates, contradictions, unclear "
+            "wording, suspicious/placeholder content, improvement/halwse ideas). "
+            "Required for CM review/check/problem/verify intents — answer the "
+            "owner's specific ask AND report quality findings. Skip DONE sections "
+            "only for fill-missing walks unless the owner asks to change them.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -23,6 +25,11 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "include_guides": {
                         "type": "boolean",
                         "description": "Include compact per-section purpose index (default true on overview).",
+                    },
+                    "quality_pass": {
+                        "type": "boolean",
+                        "description": "Run proactive CM quality audit (default true). Keep true for "
+                        "review/check/problem/verify; set false only for pure fill-plan navigation.",
                     },
                 },
             },
@@ -115,7 +122,7 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "ingest_business_dump",
             "description": "Bulk CM setup: distribute a complete business description (and "
-            "optional attachment) into Content Management section patches, start "
+            "optional attachment) into AI Setup section patches, start "
             "cm_fill_plan, and propose the first section for owner approval "
             "(draft only).",
             "parameters": {
@@ -143,7 +150,10 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "propose_cm_patch",
             "description": "Propose a typed CM section patch for owner confirmation (does not "
             "write until approved). Blocked for DONE/filled sections unless "
-            "force_edit=true after the owner explicitly asks to change them.",
+            "force_edit=true after the owner explicitly asks to change them. "
+            "For languages: never patch response_language_map (fixed sabtin map: "
+            "EN→EN, AR→AR, FR→FR, Franco→AR); only supported_languages / default_language "
+            "and behavior notes are editable.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -232,6 +242,42 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
                     }
                 },
                 "required": ["faq"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_cm_delete",
+            "description": "Propose soft-delete/archive of FAQ groups, knowledge/care articles, "
+            "or other CM section items/fields. Shows the in-chat confirmation bar immediately "
+            "(Approve | Cancel | Edit) — do NOT ask the owner to type موافق/ok first. "
+            "Does not write until Approve (or natural assent). Use delete_all for wipe-section "
+            "requests; otherwise pass item_ids (or field_keys for field-shaped sections).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "section": {"type": "string"},
+                    "item_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "FAQ qa_group_id / article id / row id to delete.",
+                    },
+                    "field_keys": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Field keys to clear on field-shaped sections (ai_basics, etc.).",
+                    },
+                    "delete_all": {
+                        "type": "boolean",
+                        "description": "When true, target all active items (or clearable fields) in the section.",
+                    },
+                    "replace_proposal_id": {
+                        "type": "string",
+                        "description": "When revising an Edit-mode pending proposal, pass its id to supersede it.",
+                    },
+                },
+                "required": ["section"],
             },
         },
     },

@@ -19,8 +19,9 @@ async def tool_inspect_cm_guide(
     role: str,
     section: str | None = None,
     include_guides: bool = True,
+    quality_pass: bool = True,
 ) -> ToolResult:
-    """Inspect real CM fill state and explain section product knowledge."""
+    """Inspect real CM fill state, section guide, and optional proactive quality audit."""
     _require(role, "contentManagers")
     from services.cm.progress import progress_summary
     from services.cm.section_guide import guide_for_section, list_section_guides
@@ -39,8 +40,16 @@ async def tool_inspect_cm_guide(
             "Weak sections have some content but are incomplete for correct business understanding.",
             "Missing sections are still factory default / empty.",
             "Edits use propose_cm_patch → approval → draft only (no silent Live publish).",
+            "On CM review/check/problem/verify intents: answer the specific ask AND report "
+            "quality_pass findings (critique, duplicates, unclear, improve/halwse, suspicious) "
+            "— never dump full CM unless explicitly requested.",
         ],
     }
+
+    if quality_pass:
+        from services.cm.quality_audit import run_cm_quality_audit
+
+        data["quality_audit"] = run_cm_quality_audit(tenant_id, section=section)
 
     if section:
         name = section.strip().replace("-", "_")
@@ -50,7 +59,7 @@ async def tool_inspect_cm_guide(
                 ok=False,
                 name="inspect_cm_guide",
                 data={},
-                error=f"Unknown CM section: {section}. Valid: {summary.get('remaining_sections')}",
+                error=f"Unknown CM section: {section}. Valid: {list(summary.get('done_sections') or []) + list(summary.get('remaining_sections') or [])}",
             )
         guide = guide_for_section(name)
         data["section"] = {
@@ -60,12 +69,16 @@ async def tool_inspect_cm_guide(
         }
         if row.get("is_done"):
             data["ai_directive"] = (
-                f"`{name}` is DONE/filled. Do not ask about it or propose changes "
-                "unless the owner explicitly requests an edit (then propose_cm_patch with force_edit=true)."
+                f"`{name}` is DONE/filled for setup walks. Still run the proactive quality_pass "
+                "critique for review/check intents. Do not propose changes unless the owner "
+                "explicitly requests an edit (then propose_cm_patch with force_edit=true), "
+                "or they approve a fix you offered from quality findings."
             )
         else:
             data["ai_directive"] = (
-                f"Focus on `{name}` only. Explain why it matters, what to fill, then propose a draft patch when ready."
+                f"Answer the owner's ask about `{name}`, then include quality_pass findings "
+                "(not only this section). Explain why it matters, what to fill/fix, then "
+                "propose a draft patch when ready."
             )
     else:
         data["sections"] = summary["sections"]
@@ -81,8 +94,11 @@ async def tool_inspect_cm_guide(
                 for g in list_section_guides()
             ]
         data["ai_directive"] = (
-            "Skip done_sections entirely. Help with remaining_sections in order. "
-            "For fill-missing walks, call cm_fill_plan action=start."
+            "For setup/fill-missing: skip done_sections; help remaining_sections "
+            "(cm_fill_plan action=start). For review/check/problem/verify: answer the "
+            "specific ask, then report quality_audit findings as a sharp editor critique "
+            "(duplicates, contradictions, unclear, suspicious, improvements). "
+            "Do not dump full CM. Offer propose→Approve→Live fixes."
         )
 
     return ToolResult(ok=True, name="inspect_cm_guide", data=data)

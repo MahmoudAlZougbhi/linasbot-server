@@ -162,10 +162,12 @@ async def _generate_comment_reply_text(
     comment_text: str,
     instructions: str,
     channel: str,
+    policy_text: str = "",
 ) -> str | None:
     owner_hint = f"\nOwner instructions: {instructions.strip()}" if instructions else ""
+    policy_hint = f"\nOWNER COMMENT POLICY:\n{policy_text.strip()}" if (policy_text or "").strip() else ""
     comment_context = (
-        f"{_COMMENT_SYSTEM_RULES}{owner_hint}\n"
+        f"{_COMMENT_SYSTEM_RULES}{policy_hint}{owner_hint}\n"
         f"Channel: {channel} public comment.\n"
         f"Customer comment: {comment_text.strip()}\n"
     )
@@ -311,6 +313,22 @@ async def process_meta_comment_event(
     if not comment_text:
         return CommentReplyResult(status="ignored", reason="empty_comment")
 
+    post_id = str(event.get("post_id") or event.get("media_id") or "").strip()
+    from services.cm.comment_rules import evaluate_published_comment_rules
+    from services.cm.constants import tenant_uses_cm_runtime
+
+    rule_decision = None
+    if tenant_uses_cm_runtime(binding.tenant_id):
+        rule_decision = evaluate_published_comment_rules(
+            binding.tenant_id,
+            comment_text=comment_text,
+            channel=binding.channel,
+            post_id=post_id,
+        )
+        if rule_decision.action == "ignore":
+            _mark_sent_reply(binding, comment_id)
+            return CommentReplyResult(status="ignored", reason=rule_decision.reason or "comment_rule_ignore")
+
     graph_version = settings.graph_api_version or "v24.0"
     token = settings.page_access_token
     owner_id = binding.page_id if binding.channel == "facebook" else (binding.instagram_account_id or binding.asset_id)
@@ -325,12 +343,61 @@ async def process_meta_comment_event(
         ):
             return CommentReplyResult(status="ignored", reason="human_replied")
 
-        reply_text = await _generate_comment_reply_text(
-            tenant_id=binding.tenant_id,
-            comment_text=comment_text,
-            instructions=reply_setting.instructions,
-            channel=binding.channel,
-        )
+        # CM rule: reply via private DM — never fall back to a public comment reply.
+        if rule_decision is not None and rule_decision.action == "reply_dm":
+            dm_text = (rule_decision.reply_text or "").strip()
+            if not dm_text:
+                return CommentReplyResult(status="skipped", reason="comment_rule_dm_template_required")
+            if simulation:
+                payload = {
+                    "comment_id": comment_id,
+                    "channel": binding.channel,
+                    "message": dm_text,
+                    "delivery": "private_reply",
+                    "rule_id": rule_decision.rule_id,
+                }
+                if capture_send is not None:
+                    capture_send.append(payload)
+                _mark_sent_reply(binding, comment_id)
+                return CommentReplyResult(status="simulated", reply_id="simulated_dm")
+            from services.meta_comment_private_reply import send_comment_private_reply
+
+            ok, reason, response = await send_comment_private_reply(
+                client,
+                binding=binding,
+                comment_id=comment_id,
+                message=dm_text,
+                token=token,
+                graph_api_version=graph_version,
+            )
+            if not ok:
+                return CommentReplyResult(status="failed", reason=f"private_reply:{reason}")
+            reply_id = str(response.get("id") or response.get("message_id") or "").strip()
+            _mark_sent_reply(binding, comment_id)
+            _runtime_logger.info(
+                "[meta-comment] private_reply_sent channel=%s tenant=%s comment=%s rule=%s",
+                binding.channel,
+                binding.tenant_id,
+                comment_id[-8:],
+                rule_decision.rule_id or "-",
+            )
+            return CommentReplyResult(status="sent_dm", reply_id=reply_id)
+
+        if (
+            rule_decision is not None
+            and rule_decision.action == "reply_comment"
+            and rule_decision.matched
+            and (rule_decision.reply_text or "").strip()
+        ):
+            reply_text: str | None = rule_decision.reply_text.strip()[:900]
+        else:
+            reply_text = await _generate_comment_reply_text(
+                tenant_id=binding.tenant_id,
+                comment_text=comment_text,
+                instructions=reply_setting.instructions,
+                channel=binding.channel,
+                policy_text=(rule_decision.policy_text if rule_decision else ""),
+            )
         if not reply_text:
             return CommentReplyResult(status="skipped", reason="no_confident_reply")
 
@@ -339,6 +406,8 @@ async def process_meta_comment_event(
                 "comment_id": comment_id,
                 "channel": binding.channel,
                 "message": reply_text,
+                "delivery": "public_reply",
+                "rule_id": (rule_decision.rule_id if rule_decision else ""),
             }
             if capture_send is not None:
                 capture_send.append(payload)

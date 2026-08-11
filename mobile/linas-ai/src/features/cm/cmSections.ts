@@ -13,6 +13,7 @@ export type CmSectionId =
   | 'knowledge'
   | 'handoff'
   | 'restricted'
+  | 'comments'
   | 'off_days'
   /** Settings-hosted (not listed in CM hub). */
   | 'actions'
@@ -25,7 +26,7 @@ export type CmSectionCard = {
   /** false = show row but disabled with reason. */
   mobileSupported: boolean;
   disabledReason?: string;
-  /** When false, hide from Content Management hub (still editable elsewhere). */
+  /** When false, hide from AI Setup hub (still editable elsewhere). */
   showInCmHub?: boolean;
 };
 
@@ -100,6 +101,12 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
     id: 'restricted',
     title: 'Restricted',
     description: 'Topics the AI must refuse.',
+    mobileSupported: true,
+  },
+  {
+    id: 'comments',
+    title: 'Comments',
+    description: 'Rules: reply on comment, reply via DM, or ignore.',
     mobileSupported: true,
   },
   {

@@ -102,7 +102,7 @@ const Settings = () => {
   const handleSaveSettings = async () => {
     try {
       const lang = ['en', 'ar', 'fr'].includes(settings.defaultLanguage) ? settings.defaultLanguage : 'en';
-      // System language only — bot identity / features live in Content Management.
+      // System language only — bot identity / features live in AI Setup.
       const generalResponse = await authFetch('/api/settings/general', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -240,7 +240,7 @@ const Settings = () => {
                   System language
                 </label>
                 <p className="text-sm text-slate-600 mb-3">
-                  Choose the dashboard system language (English, Arabic, or French). Bot content languages are managed in Content Management.
+                  Choose the dashboard system language (English, Arabic, or French). Bot content languages are managed in AI Setup.
                 </p>
                 <select
                   value={settings.defaultLanguage}

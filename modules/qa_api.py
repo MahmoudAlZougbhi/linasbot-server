@@ -53,7 +53,7 @@ async def create_qa_pair(qa_data: dict) -> Any:
             return {
                 "success": False,
                 "error": "CM_FAQ_CANONICAL",
-                "message": "Legacy Bot Training FAQ writes are disabled. Use Content Management → FAQ.",
+                "message": "Legacy Bot Training FAQ writes are disabled. Use AI Setup → FAQ.",
                 "redirect": "/content-managers/faq",
             }
         print("\n" + "=" * 80)

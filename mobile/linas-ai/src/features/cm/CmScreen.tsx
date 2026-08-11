@@ -81,7 +81,7 @@ export function CmScreen({ onOpenSection, onContinueSetup }: Props) {
       }
       setError(null);
     } catch {
-      setError('Could not load Content Management progress.');
+      setError('Could not load AI Setup progress.');
     } finally {
       setLoading(false);
     }
@@ -124,7 +124,7 @@ export function CmScreen({ onOpenSection, onContinueSetup }: Props) {
 
   return (
     <ScreenChrome
-      title="Content Management"
+      title="AI Setup"
       subtitle="Configure the AI that answers customer DMs and comments"
      
     >
@@ -153,7 +153,7 @@ export function CmScreen({ onOpenSection, onContinueSetup }: Props) {
             placeholder="Search sections"
             placeholderTextColor={colors.textDim}
             style={[styles.search, { color: colors.text }]}
-            accessibilityLabel="Search Content Management sections"
+            accessibilityLabel="Search AI Setup sections"
           />
         </View>
 
@@ -227,7 +227,7 @@ export function CmScreen({ onOpenSection, onContinueSetup }: Props) {
 
         {!loading && !meta && !error ? (
           <EmptyState
-            title="Content Management unavailable"
+            title="AI Setup unavailable"
             body="Something went wrong. Please try again."
           />
         ) : null}

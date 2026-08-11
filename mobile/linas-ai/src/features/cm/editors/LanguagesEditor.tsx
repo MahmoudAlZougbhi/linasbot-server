@@ -10,7 +10,14 @@ const LANGS = [
   { id: 'franco', label: 'French-Arabic (Franco)' },
 ] as const;
 
-/** Frozen answer map (matches backend RESPONSE_LANGUAGE_MAP). */
+/** Frozen answer map (matches backend RESPONSE_LANGUAGE_MAP) — not editable. */
+const RESPONSE_LANGUAGE_MAP = {
+  ar: 'ar',
+  en: 'en',
+  fr: 'fr',
+  franco: 'ar',
+} as const;
+
 const RESPONSE_ROWS = [
   { fromLabel: 'Arabic', toLabel: 'Arabic' },
   { fromLabel: 'English', toLabel: 'English' },
@@ -35,7 +42,12 @@ export function LanguagesEditor({ payload, onChange }: Props) {
       : [...supported, lang];
     // Keep at least one language enabled.
     if (next.length === 0) return;
-    onChange({ ...payload, supported_languages: next });
+    onChange({
+      ...payload,
+      supported_languages: next,
+      // Always persist the fixed product map — never editable in UI.
+      response_language_map: { ...RESPONSE_LANGUAGE_MAP },
+    });
   };
 
   return (
@@ -43,9 +55,9 @@ export function LanguagesEditor({ payload, onChange }: Props) {
       <View style={cmFormStyles.card}>
         <Text style={cmFormStyles.label}>Languages the AI uses</Text>
         <Text style={cmFormStyles.hint}>
-          Toggle off a language so the AI does not reply in it. Customers are answered only in enabled
-          languages. This is the only control for Instagram/Facebook DM and comment reply language —
-          app Settings language does not change customer replies.
+          Toggle which languages are on. Customers are answered only in enabled languages. This is the
+          only control for Instagram/Facebook DM and comment reply language — app Settings language does
+          not change customer replies.
         </Text>
         <View style={cmFormStyles.chipRow}>
           {LANGS.map((lang) => {
@@ -64,7 +76,11 @@ export function LanguagesEditor({ payload, onChange }: Props) {
       </View>
 
       <View style={cmFormStyles.card}>
-        <Text style={cmFormStyles.label}>Answer language map</Text>
+        <Text style={cmFormStyles.label}>Answer language map (fixed)</Text>
+        <Text style={cmFormStyles.hint}>
+          These mapping rules are fixed by the product and cannot be changed. French-Arabic (Franco)
+          questions always get Arabic-script answers.
+        </Text>
         {RESPONSE_ROWS.map((row) => (
           <View key={row.fromLabel} style={cmFormStyles.row}>
             <Text style={cmFormStyles.rowTitle}>
@@ -72,7 +88,6 @@ export function LanguagesEditor({ payload, onChange }: Props) {
             </Text>
           </View>
         ))}
-        <Text style={cmFormStyles.hint}>French-Arabic (Franco) questions always get Arabic-script answers.</Text>
       </View>
     </View>
   );

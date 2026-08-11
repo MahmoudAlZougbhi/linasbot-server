@@ -1,6 +1,6 @@
 """Owner Copilot tools for full CM article/FAQ read + surgical upsert proposals.
 
-Content Manager “files” in this product are CM draft section records — especially
+AI Setup “files” in this product are CM draft section records — especially
 knowledge/care ``ArticleRecord`` rows (migrated from legacy knowledge JSON files)
 and FAQ ``FaqRecord`` rows. Full bodies live in draft JSON; inventory APIs are
 metadata-only. These tools give the model bounded list/read access and reuse the
@@ -539,9 +539,10 @@ async def tool_propose_cm_article_upsert(
     user_id: str,
     section: str,
     article: dict[str, Any],
+    replace_proposal_id: str | None = None,
 ) -> ToolResult:
     _require(role, "contentManagers")
-    from services.owner_ai_cm_approval import cm_patch_proposal_store
+    from services.owner_ai_cm_approval import cm_patch_proposal_store, reject_cm_patch
 
     try:
         patch, preview = _build_article_upsert(tenant_id=tenant_id, section=section, article=article)
@@ -552,6 +553,12 @@ async def tool_propose_cm_article_upsert(
             data={},
             error=f"{type(exc).__name__}: {exc}",
         )
+
+    if replace_proposal_id:
+        try:
+            reject_cm_patch(tenant_id=tenant_id, user_id=user_id, proposal_id=str(replace_proposal_id))
+        except Exception:
+            pass
 
     prop = cm_patch_proposal_store.create(
         tenant_id=tenant_id,
@@ -586,9 +593,10 @@ async def tool_propose_cm_faq_upsert(
     role: str,
     user_id: str,
     faq: dict[str, Any],
+    replace_proposal_id: str | None = None,
 ) -> ToolResult:
     _require(role, "contentManagers")
-    from services.owner_ai_cm_approval import cm_patch_proposal_store
+    from services.owner_ai_cm_approval import cm_patch_proposal_store, reject_cm_patch
 
     try:
         patch, preview = _build_faq_upsert(tenant_id=tenant_id, faq=faq)
@@ -599,6 +607,12 @@ async def tool_propose_cm_faq_upsert(
             data={},
             error=f"{type(exc).__name__}: {exc}",
         )
+
+    if replace_proposal_id:
+        try:
+            reject_cm_patch(tenant_id=tenant_id, user_id=user_id, proposal_id=str(replace_proposal_id))
+        except Exception:
+            pass
 
     prop = cm_patch_proposal_store.create(
         tenant_id=tenant_id,

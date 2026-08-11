@@ -60,7 +60,7 @@ def _extract_greeting_from_style_content(style_content: str) -> str:
 
 def _get_session_greeting_message(user_lang: str = "ar") -> str:
     """
-    Load greeting from Content Manager style files (title contains 'greeting').
+    Load greeting from AI Setup style files (title contains 'greeting').
     Falls back to router greeting templates when no suitable content is found.
     """
     try:

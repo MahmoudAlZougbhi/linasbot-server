@@ -71,8 +71,10 @@ def test_quality_missing_weak_filled() -> None:
 def test_progress_summary_and_fill_plan(tenant: str) -> None:
     summary = progress_summary(tenant, create_missing=False)
     assert summary["total"] == len(CM_SECTIONS)
-    assert summary["complete"] == 0
-    assert set(summary["remaining_sections"]) == set(CM_SECTIONS)
+    # Optional Comments policy defaults count as filled (no owner content required).
+    optional_done = {"comments"}
+    assert summary["complete"] == len(optional_done)
+    assert set(summary["remaining_sections"]) == set(CM_SECTIONS) - optional_done
     assert "cm_fill_plan" in summary["fill_missing_prompt"] or "inspect_cm_guide" in summary["fill_missing_prompt"]
 
     put_draft(
@@ -139,6 +141,8 @@ async def test_tools_and_schemas(tenant: str, monkeypatch: pytest.MonkeyPatch) -
     assert overview.ok is True
     assert "done_sections" in overview.data
     assert overview.data.get("ai_directive")
+    assert overview.data.get("quality_audit", {}).get("quality_pass") is True
+    assert "findings" in overview.data["quality_audit"]
 
     plan_res = await tool_cm_fill_plan(tenant_id=tenant, role="admin", user_id="u1", action="start")
     assert plan_res.ok is True
@@ -148,6 +152,11 @@ async def test_tools_and_schemas(tenant: str, monkeypatch: pytest.MonkeyPatch) -
     one = await tool_inspect_cm_guide(tenant_id=tenant, role="admin", section=focus)
     assert one.ok is True
     assert one.data["section"]["skip_as_done"] is False
+    assert one.data.get("quality_audit", {}).get("quality_pass") is True
+
+    no_pass = await tool_inspect_cm_guide(tenant_id=tenant, role="admin", quality_pass=False)
+    assert no_pass.ok is True
+    assert "quality_audit" not in no_pass.data
 
 
 @pytest.mark.asyncio

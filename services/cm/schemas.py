@@ -1,4 +1,4 @@
-"""Pydantic v2 schemas for the Content Management AI Control Plane."""
+"""Pydantic v2 schemas for the AI Setup AI Control Plane."""
 
 from __future__ import annotations
 
@@ -48,6 +48,7 @@ class AiBasics(CmBaseModel):
 
 class LanguagePolicy(CmBaseModel):
     supported_languages: tuple[str, ...] = Field(default_factory=lambda: SUPPORTED_LANGUAGES)
+    # Product-fixed map (EN→EN, AR→AR, FR→FR, Franco→AR). Tenant payloads are coerced.
     response_language_map: dict[str, str] = Field(default_factory=lambda: dict(RESPONSE_LANGUAGE_MAP))
     default_language: str = "ar"
     mixed_language_behavior: str = ""
@@ -62,6 +63,12 @@ class LanguagePolicy(CmBaseModel):
         if unknown:
             raise ValueError(f"unsupported languages: {unknown}")
         return value
+
+    @field_validator("response_language_map", mode="before")
+    @classmethod
+    def _freeze_response_language_map(cls, _value: object) -> dict[str, str]:
+        """Ignore tenant edits — reply map is system-fixed (sabtin)."""
+        return dict(RESPONSE_LANGUAGE_MAP)
 
 
 class StylePolicy(CmBaseModel):
@@ -250,11 +257,40 @@ class ActionsSection(CmBaseModel):
     notes: str | None = None
 
 
+class CommentRule(CmBaseModel):
+    """Structured comment behavior: match customer text → public reply, DM, or ignore.
+
+    Optional ``post_id`` targets a Meta post/media id when known. Full Meta post picker
+    is a follow-up; owners can paste ids today.
+    """
+
+    id: str
+    enabled: bool = True
+    name: str = ""
+    match_mode: Literal["contains", "any_keyword", "regex"] = "any_keyword"
+    keywords: list[str] = Field(default_factory=list)
+    pattern: str = ""
+    post_id: str = ""
+    channel: Literal["any", "facebook", "instagram"] = "any"
+    action: Literal["reply_comment", "reply_dm", "ignore"] = "reply_comment"
+    reply_template: str = ""
+    notes: str | None = None
+
+
+class CommentsSection(CmBaseModel):
+    """Comment-specific CM policy evaluated by the Meta comment runtime before AI reply."""
+
+    default_action: Literal["reply_comment", "ignore"] = "reply_comment"
+    policy_text: str = ""
+    rules: list[CommentRule] = Field(default_factory=list)
+    notes: str | None = None
+
+
 class AiLimitsSection(CmBaseModel):
     """Tenant-configurable AI usage limits (enforced from published CM)."""
 
     unlimited: bool = False
-    # Capability switches (moved from Settings Features into Content Management).
+    # Capability switches (moved from Settings Features into AI Setup).
     voice_processing_enabled: bool = True
     image_analysis_enabled: bool = True
     image_per_day: int = Field(default=20, ge=0)
@@ -550,6 +586,7 @@ def default_section_payload(section: str) -> dict[str, object]:
         # Empty by default — Restricted Topics are owner-configured, not auto-seeded.
         "restricted": RestrictedPolicy(),
         "actions": ActionsSection(),
+        "comments": CommentsSection(),
         "ai_limits": AiLimitsSection(),
         "off_days": OffDaysSection(),
         "opening_hours": OpeningHoursSection(),

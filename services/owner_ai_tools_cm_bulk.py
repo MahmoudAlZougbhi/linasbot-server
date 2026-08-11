@@ -55,7 +55,7 @@ async def _vision_dump_text(*, tenant_id: str, attachment_id: str) -> str | None
             {
                 "role": "system",
                 "content": (
-                    "Extract ALL readable business information as plain text for Content Management. "
+                    "Extract ALL readable business information as plain text for AI Setup. "
                     'Return JSON {"text": "..."}. Never invent unread facts.'
                 ),
             },

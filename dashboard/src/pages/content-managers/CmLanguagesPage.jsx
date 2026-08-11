@@ -10,8 +10,12 @@ const LANGS = [
   { id: "franco", label: "Franco / Arabizi" },
 ];
 
+const FIXED_RESPONSE_MAP = { ar: "ar", en: "en", fr: "fr", franco: "ar" };
+
 /**
  * Language policy screen — no JSON.
+ * Editable: supported languages, default, behavior notes.
+ * Fixed: answer language map (EN→EN, AR→AR, FR→FR, Franco→AR).
  */
 const CmLanguagesPage = () => {
   const draft = useCmSectionDraft("languages");
@@ -25,13 +29,18 @@ const CmLanguagesPage = () => {
    */
   const toggleLang = (lang) => {
     const next = supported.includes(lang) ? supported.filter((x) => x !== lang) : [...supported, lang];
-    draft.setPayload({ ...p, supported_languages: next });
+    if (next.length === 0) return;
+    draft.setPayload({
+      ...p,
+      supported_languages: next,
+      response_language_map: { ...FIXED_RESPONSE_MAP },
+    });
   };
 
   return (
     <CmSectionShell
       title="Languages"
-      description="Which languages the AI understands, and how answers are returned. Franco questions always get Arabic-script answers."
+      description="Enable or disable languages and set the default. The answer map (including Franco → Arabic) is fixed and cannot be edited."
       loading={draft.loading}
       dirty={draft.dirty}
       saving={draft.saving}
@@ -46,6 +55,10 @@ const CmLanguagesPage = () => {
       <div className="space-y-4 max-w-3xl">
         <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
           <h2 className="text-sm font-semibold text-slate-900">Supported languages</h2>
+          <p className="text-xs text-slate-500">
+            You control which languages are on. Customers are answered only in enabled languages. App Settings
+            language does not change customer DM/comment replies.
+          </p>
           <div className="grid sm:grid-cols-2 gap-2">
             {LANGS.map((lang) => (
               <label key={lang.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm">
@@ -57,7 +70,7 @@ const CmLanguagesPage = () => {
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
-          <h2 className="text-sm font-semibold text-slate-900">Answer language map</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Answer language map (fixed)</h2>
           <ul className="space-y-2 text-sm text-slate-700">
             {RESPONSE_ROWS.map((row) => (
               <li key={row.from} className="rounded-xl bg-slate-50 px-3 py-2">
@@ -67,7 +80,8 @@ const CmLanguagesPage = () => {
             ))}
           </ul>
           <p className="text-xs text-slate-500">
-            This map is product policy (Franco → Arabic script). FAQ translation status is managed on the FAQ page.
+            Fixed product policy — cannot be changed. Franco / Arabizi questions always get Arabic-script
+            answers. FAQ translation status is managed on the FAQ page.
           </p>
         </section>
 
@@ -77,7 +91,13 @@ const CmLanguagesPage = () => {
             <select
               className={FIELD_CLASS}
               value={String(p.default_language || "ar")}
-              onChange={(e) => draft.setPayload({ ...p, default_language: e.target.value })}
+              onChange={(e) =>
+                draft.setPayload({
+                  ...p,
+                  default_language: e.target.value,
+                  response_language_map: { ...FIXED_RESPONSE_MAP },
+                })
+              }
             >
               {LANGS.map((lang) => (
                 <option key={lang.id} value={lang.id}>

@@ -8,6 +8,9 @@ import { FlatList, Keyboard, Platform } from 'react-native';
  * Intentional jump (send / FAB) → scrollToBottom (arms stick).
  * Stream / layout growth → followBottomIfStuck (never re-arms; re-checks after rAF
  * so a user drag away from bottom is not yanked by a pending delta).
+ * ChatMessageList must not re-arm stick from onScroll while the finger/momentum
+ * gesture is active — otherwise near-bottom samples during the first pixels of
+ * an upward drag re-enable follow and yank back to the live stream.
  */
 export function useChatListScroll() {
   const listRef = useRef<FlatList>(null);

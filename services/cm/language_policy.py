@@ -1,7 +1,10 @@
-"""Customer reply language from Content Manager Languages (system standard).
+"""Customer reply language from AI Setup Languages (system standard).
 
 App UI locale / owner preferred_language do not choose DM or comment reply language.
 End customers cannot override reply language; inbound detection only feeds the CM map.
+
+Editable by tenant: supported_languages, default_language, behavior notes.
+Fixed (sabtin): response_language_map — EN→EN, AR→AR, FR→FR, Franco→AR.
 """
 
 from __future__ import annotations
@@ -16,9 +19,21 @@ _REPLY_CODES = frozenset({"ar", "en", "fr"})
 _DETECT_CODES = frozenset(SUPPORTED_LANGUAGES)
 
 
+def frozen_response_language_map() -> dict[str, str]:
+    """Immutable product reply map (cannot be edited in AI Setup)."""
+    return dict(RESPONSE_LANGUAGE_MAP)
+
+
 def frozen_language_policy() -> LanguagePolicy:
     """Schema defaults = frozen system standard (Franco → Arabic, default ar)."""
     return LanguagePolicy()
+
+
+def sanitize_languages_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Force fixed reply map into a languages section payload (draft/API saves)."""
+    out = dict(payload)
+    out["response_language_map"] = frozen_response_language_map()
+    return out
 
 
 def load_language_policy(tenant_id: str | None) -> LanguagePolicy:
@@ -33,6 +48,7 @@ def load_language_policy(tenant_id: str | None) -> LanguagePolicy:
     if not isinstance(raw, dict):
         return frozen_language_policy()
     try:
+        # LanguagePolicy coerces response_language_map to the frozen product map.
         return LanguagePolicy.model_validate(raw)
     except Exception:
         return frozen_language_policy()
@@ -49,7 +65,7 @@ def resolve_customer_response_language(
     detected_language: str | None,
     policy: LanguagePolicy | None = None,
 ) -> str:
-    """Map detected inbound language → customer reply language via CM Languages policy."""
+    """Map detected inbound language → customer reply language via fixed CM map + tenant supports."""
     pol = policy if policy is not None else load_language_policy(tenant_id)
     default = _normalize_default(pol.default_language)
     supported = {str(x).strip().lower() for x in (pol.supported_languages or ()) if str(x).strip()}
@@ -57,12 +73,8 @@ def resolve_customer_response_language(
         supported = set(SUPPORTED_LANGUAGES)
 
     detected = str(detected_language or "").strip().lower()
-    mapping: dict[str, str] = dict(RESPONSE_LANGUAGE_MAP)
-    for key, value in (pol.response_language_map or {}).items():
-        k = str(key).strip().lower()
-        v = str(value).strip().lower()
-        if k:
-            mapping[k] = v
+    # Always use the product-fixed map — never tenant-stored overrides.
+    mapping = frozen_response_language_map()
 
     if not detected or detected not in _DETECT_CODES or detected not in supported:
         response = default
@@ -114,7 +126,19 @@ def language_policy_public_summary(tenant_id: str | None) -> dict[str, Any]:
         "source": "content_manager_languages",
         "supported_languages": list(pol.supported_languages),
         "default_language": _normalize_default(pol.default_language),
-        "response_language_map": dict(pol.response_language_map),
+        "response_language_map": frozen_response_language_map(),
+        "response_language_map_editable": False,
+        "response_language_map_note": (
+            "Fixed product policy (sabtin): English→English, Arabic→Arabic, "
+            "French→French, Franco→Arabic. Cannot be changed."
+        ),
         "owner_or_customer_override": False,
         "app_settings_affects_replies": False,
+        "editable": [
+            "supported_languages",
+            "default_language",
+            "mixed_language_behavior",
+            "unknown_language_behavior",
+        ],
+        "fixed": ["response_language_map"],
     }

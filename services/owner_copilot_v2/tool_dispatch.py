@@ -19,6 +19,7 @@ WRITE_TOOLS = frozenset(
         "propose_cm_patch",
         "propose_cm_article_upsert",
         "propose_cm_faq_upsert",
+        "propose_cm_delete",
         "approve_cm_patch",
         "publish_cm",
         "propose_diagnosis_fix",
@@ -114,7 +115,7 @@ async def dispatch_v2_tool(
             name=name,
             data={"shadow": True, "writes_enabled": False},
             error=(
-                "Content Management Draft writes are disabled on the server "
+                "AI Setup Draft writes are disabled on the server "
                 "(OWNER_COPILOT_WRITES / shadow mode). Proposals can be reviewed, "
                 "but Approve cannot save until writes are enabled."
             ),
