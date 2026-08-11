@@ -25,6 +25,7 @@ import {
   startWhatsAppCloudConnect,
   type WhatsAppCloudStatus,
 } from './WhatsAppCloudCard';
+import { setWhatsAppAiEnabled } from './whatsappCloudApi';
 
 type WaStatus = WhatsAppCloudStatus;
 
@@ -202,10 +203,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
   async function setWhatsAppAi(connectionId: string, enabled: boolean) {
     setWaBusy(true);
     try {
-      const path = enabled
-        ? `/api/whatsapp/cloud/connections/${encodeURIComponent(connectionId)}/ai/enable`
-        : `/api/whatsapp/cloud/connections/${encodeURIComponent(connectionId)}/ai/disable`;
-      await apiFetch(path, { method: 'POST', schema: z.object({ success: z.literal(true) }) });
+      await setWhatsAppAiEnabled(connectionId, enabled);
       await load();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) setAuthGate(true);
@@ -394,6 +392,9 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
           onConnect={() => void connectWhatsApp()}
           onEnableAi={(id) => void setWhatsAppAi(id, true)}
           onDisableAi={(id) => void setWhatsAppAi(id, false)}
+          onBusyChange={setWaBusy}
+          onError={setError}
+          onNotice={setNotice}
         />
         {rows
           .filter((row) => row.platform === 'instagram' || row.platform === 'facebook')

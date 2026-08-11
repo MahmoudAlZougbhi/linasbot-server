@@ -1,4 +1,4 @@
-"""Authenticated WhatsApp Cloud connection + conversation control APIs."""
+"""Authenticated WhatsApp Cloud connection + Embedded Signup APIs."""
 
 from __future__ import annotations
 
@@ -17,8 +17,7 @@ from services.whatsapp_cloud.entitlement import (
     assert_whatsapp_connection_allowed,
     connection_status_payload,
 )
-from services.whatsapp_cloud.graph_client import WhatsAppGraphError, create_message_template, list_message_templates
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository, conversation_public_view
+from services.whatsapp_cloud.repository import WhatsAppCloudRepository
 
 
 def _actor_id(session: Any) -> str:
@@ -67,15 +66,32 @@ async def whatsapp_cloud_status(request: Request) -> Any:
         )
     primary = connections[0] if connections else None
     lifecycle = primary["lifecycle_status"] if primary else "disconnected"
+    ui_open = bool(flags.connection_ui_enabled or flags.public_availability)
+    # Honest Phase 1: non-entitled tenants see Meta-approval wait, not a fake Coming Soon product.
+    awaiting_meta = (not flags.public_availability) and (
+        blocker
+        in {
+            "WHATSAPP_PILOT_REQUIRED",
+            "WHATSAPP_ROLLOUT_DISABLED",
+        }
+    )
     return {
         "success": True,
         "platform": "whatsapp",
         "lifecycle_status": lifecycle,
-        "connectable": connectable and flags.connection_ui_enabled,
-        "coming_soon": not flags.connection_ui_enabled,
+        "connectable": bool(connectable and ui_open),
+        "coming_soon": False,
+        "awaiting_meta_approval": awaiting_meta and not (primary and lifecycle == "connected"),
         "public_availability": flags.public_availability,
         "pilot_entitled": pilot,
         "blocker_code": blocker,
+        "blocker_message": (
+            "WhatsApp integration awaits Meta App Review approval. "
+            "Internal pilot accounts can connect now; public connect opens after Meta approval "
+            "via the central WHATSAPP_CLOUD_PUBLIC_AVAILABILITY switch."
+            if awaiting_meta
+            else None
+        ),
         "coexistence_feature": "whatsapp_business_app_onboarding",
         "connection": primary,
         "connections": connections,
@@ -84,6 +100,8 @@ async def whatsapp_cloud_status(request: Request) -> Any:
             "ai_replies_enabled": flags.ai_replies_enabled,
             "outbound_sends_enabled": flags.outbound_sends_enabled,
             "history_sync_enabled": flags.history_sync_enabled,
+            "public_availability": flags.public_availability,
+            "require_pilot_entitlement": flags.require_pilot_entitlement,
             "embedded_signup_config_configured": flags.embedded_signup_config_id_configured,
         },
     }
@@ -272,193 +290,3 @@ async def whatsapp_embedded_signup_bridge(request: Request) -> HTMLResponse:
     )
     return HTMLResponse(content=html, headers={"X-Robots-Tag": "noindex, nofollow"})
 
-
-@app.post("/api/whatsapp/cloud/connections/{connection_id}/ai/enable")
-async def whatsapp_enable_ai(connection_id: str, request: Request) -> Any:
-    session = _require_wa_manager(request)
-    with whatsapp_session() as db:
-        repo = WhatsAppCloudRepository(db)
-        conn = repo.get_tenant_connection(tenant_id=session.tenant_id, connection_id=connection_id)
-        if conn is None:
-            raise HTTPException(status_code=404, detail="connection_not_found")
-        conn.ai_default_enabled = True
-        repo.add_audit(
-            tenant_id=session.tenant_id,
-            connection_id=conn.id,
-            actor_user_id=_actor_id(session),
-            event_type="ai_default_enabled",
-            detail={},
-        )
-        return {"success": True, "connection": connection_status_payload(db, conn)}
-
-
-@app.post("/api/whatsapp/cloud/connections/{connection_id}/ai/disable")
-async def whatsapp_disable_ai(connection_id: str, request: Request) -> Any:
-    session = _require_wa_manager(request)
-    with whatsapp_session() as db:
-        repo = WhatsAppCloudRepository(db)
-        conn = repo.get_tenant_connection(tenant_id=session.tenant_id, connection_id=connection_id)
-        if conn is None:
-            raise HTTPException(status_code=404, detail="connection_not_found")
-        conn.ai_default_enabled = False
-        repo.add_audit(
-            tenant_id=session.tenant_id,
-            connection_id=conn.id,
-            actor_user_id=_actor_id(session),
-            event_type="ai_default_disabled",
-            detail={},
-        )
-        return {"success": True, "connection": connection_status_payload(db, conn)}
-
-
-@app.post("/api/whatsapp/cloud/conversations/{conversation_id}/pause")
-async def whatsapp_pause_conversation(conversation_id: str, request: Request) -> Any:
-    session = _require_wa_manager(request)
-    with whatsapp_session() as db:
-        repo = WhatsAppCloudRepository(db)
-        conv = repo.get_tenant_conversation(tenant_id=session.tenant_id, conversation_id=conversation_id)
-        if conv is None:
-            raise HTTPException(status_code=404, detail="conversation_not_found")
-        repo.pause_conversation(conv, reason="operator_pause", actor_user_id=_actor_id(session))
-        return {"success": True, "conversation": conversation_public_view(conv)}
-
-
-@app.post("/api/whatsapp/cloud/conversations/{conversation_id}/resume")
-async def whatsapp_resume_conversation(conversation_id: str, request: Request) -> Any:
-    session = _require_wa_manager(request)
-    with whatsapp_session() as db:
-        repo = WhatsAppCloudRepository(db)
-        conv = repo.get_tenant_conversation(tenant_id=session.tenant_id, conversation_id=conversation_id)
-        if conv is None:
-            raise HTTPException(status_code=404, detail="conversation_not_found")
-        repo.resume_conversation(conv, actor_user_id=_actor_id(session))
-        return {"success": True, "conversation": conversation_public_view(conv)}
-
-
-@app.post("/api/whatsapp/cloud/connections/{connection_id}/disconnect")
-async def whatsapp_disconnect(connection_id: str, request: Request, body: dict[str, Any] = Body(default={})) -> Any:
-    session = _require_wa_manager(request)
-    role = (session.role or "").strip().lower()
-    if role not in {"owner", "platform_owner"}:
-        raise HTTPException(status_code=403, detail="owner_only_disconnect")
-    confirm = str(body.get("confirm") or "").strip().upper()
-    if confirm != "DISCONNECT":
-        raise HTTPException(status_code=400, detail="confirm_DISCONNECT_required")
-    with whatsapp_session() as db:
-        repo = WhatsAppCloudRepository(db)
-        conn = repo.get_tenant_connection(tenant_id=session.tenant_id, connection_id=connection_id)
-        if conn is None:
-            raise HTTPException(status_code=404, detail="connection_not_found")
-        repo.revoke_connection(conn, actor_user_id=_actor_id(session), reason="owner_disconnect")
-        repo.add_audit(
-            tenant_id=session.tenant_id,
-            connection_id=conn.id,
-            actor_user_id=_actor_id(session),
-            event_type="connection_revoked",
-            detail={"reason": "owner_disconnect"},
-        )
-        return {"success": True, "lifecycle_status": "revoked"}
-
-
-@app.get("/api/whatsapp/cloud/connections/{connection_id}/templates")
-async def whatsapp_list_templates(connection_id: str, request: Request) -> Any:
-    session = _require_wa_manager(request)
-    with whatsapp_session() as db:
-        repo = WhatsAppCloudRepository(db)
-        conn = repo.get_tenant_connection(tenant_id=session.tenant_id, connection_id=connection_id)
-        if conn is None:
-            raise HTTPException(status_code=404, detail="connection_not_found")
-        token = repo.load_access_token(conn)
-    try:
-        templates = await list_message_templates(access_token=token, waba_id=conn.waba_id)
-    except WhatsAppGraphError as exc:
-        return JSONResponse(status_code=502, content={"success": False, "error": exc.code, "message": exc.message})
-    # Redact nothing sensitive — templates are public metadata.
-    safe = [
-        {
-            "id": t.get("id"),
-            "name": t.get("name"),
-            "status": t.get("status"),
-            "language": t.get("language"),
-            "category": t.get("category"),
-        }
-        for t in templates
-    ]
-    return {"success": True, "templates": safe}
-
-
-@app.post("/api/whatsapp/cloud/connections/{connection_id}/templates")
-async def whatsapp_create_template(connection_id: str, request: Request, body: dict[str, Any] = Body(default={})) -> Any:
-    session = _require_wa_manager(request)
-    name = str(body.get("name") or "").strip()
-    language = str(body.get("language") or "en_US").strip()
-    category = str(body.get("category") or "UTILITY").strip().upper()
-    body_text = str(body.get("body_text") or "").strip()
-    if not name or not body_text:
-        raise HTTPException(status_code=400, detail="name_and_body_text_required")
-    with whatsapp_session() as db:
-        repo = WhatsAppCloudRepository(db)
-        conn = repo.get_tenant_connection(tenant_id=session.tenant_id, connection_id=connection_id)
-        if conn is None:
-            raise HTTPException(status_code=404, detail="connection_not_found")
-        token = repo.load_access_token(conn)
-        waba_id = conn.waba_id
-    try:
-        created = await create_message_template(
-            access_token=token,
-            waba_id=waba_id,
-            name=name,
-            language=language,
-            category=category,
-            body_text=body_text,
-        )
-    except WhatsAppGraphError as exc:
-        return JSONResponse(
-            status_code=400,
-            content={"success": False, "error": exc.code, "message": exc.message},
-        )
-    return {
-        "success": True,
-        "template": {
-            "id": created.get("id"),
-            "status": created.get("status"),
-            "name": name,
-            "language": language,
-            "category": category,
-        },
-    }
-
-
-@app.post("/api/whatsapp/cloud/pilot/grant")
-async def whatsapp_pilot_grant(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
-    session = require_session(request)
-    if not is_platform_owner(session):
-        raise HTTPException(status_code=403, detail="platform_owner_required")
-    tenant_id = str(body.get("tenant_id") or "").strip().lower()
-    reason = str(body.get("reason") or "").strip()
-    if not tenant_id or not reason:
-        raise HTTPException(status_code=400, detail="tenant_id_and_reason_required")
-    with whatsapp_session() as db:
-        repo = WhatsAppCloudRepository(db)
-        row = repo.grant_pilot(tenant_id=tenant_id, granted_by_user_id=_actor_id(session), reason=reason)
-        repo.add_audit(
-            tenant_id=tenant_id,
-            actor_user_id=_actor_id(session),
-            event_type="pilot_granted",
-            detail={"reason": reason},
-        )
-        return {"success": True, "tenant_id": row.tenant_id, "status": row.status}
-
-
-@app.post("/api/whatsapp/cloud/pilot/revoke")
-async def whatsapp_pilot_revoke(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
-    session = require_session(request)
-    if not is_platform_owner(session):
-        raise HTTPException(status_code=403, detail="platform_owner_required")
-    tenant_id = str(body.get("tenant_id") or "").strip().lower()
-    with whatsapp_session() as db:
-        repo = WhatsAppCloudRepository(db)
-        row = repo.revoke_pilot(tenant_id=tenant_id, actor_user_id=_actor_id(session))
-        if row is None:
-            raise HTTPException(status_code=404, detail="pilot_not_found")
-        return {"success": True, "tenant_id": row.tenant_id, "status": row.status}

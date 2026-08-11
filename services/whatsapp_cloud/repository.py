@@ -354,13 +354,31 @@ class WhatsAppCloudRepository:
         )
         return conv
 
-    def get_tenant_conversation(
-        self, *, tenant_id: str, conversation_id: str
-    ) -> WhatsAppConversation | None:
+    def get_tenant_conversation(self, *, tenant_id: str, conversation_id: str) -> WhatsAppConversation | None:
         conv = self.session.get(WhatsAppConversation, conversation_id)
         if conv is None or conv.tenant_id != tenant_id:
             return None
         return conv
+
+    def list_connection_conversations(
+        self,
+        *,
+        tenant_id: str,
+        connection_id: str,
+        limit: int = 50,
+    ) -> list[WhatsAppConversation]:
+        lim = max(1, min(int(limit or 50), 100))
+        return list(
+            self.session.scalars(
+                select(WhatsAppConversation)
+                .where(
+                    WhatsAppConversation.tenant_id == tenant_id,
+                    WhatsAppConversation.connection_id == connection_id,
+                )
+                .order_by(WhatsAppConversation.updated_at.desc())
+                .limit(lim)
+            )
+        )
 
     # --- messages / idempotency ---
     def claim_webhook_event(
@@ -373,9 +391,7 @@ class WhatsAppCloudRepository:
         connection_id: str | None = None,
     ) -> tuple[WhatsAppWebhookEvent | None, bool]:
         """Return (event, is_new). is_new False means duplicate."""
-        existing = self.session.scalar(
-            select(WhatsAppWebhookEvent).where(WhatsAppWebhookEvent.event_key == event_key)
-        )
+        existing = self.session.scalar(select(WhatsAppWebhookEvent).where(WhatsAppWebhookEvent.event_key == event_key))
         if existing is not None:
             existing.attempt_count = int(existing.attempt_count) + 1
             self.session.flush()
@@ -546,6 +562,18 @@ class WhatsAppCloudRepository:
         self.session.flush()
         return row
 
+    def list_pilots(self, *, status: str | None = "active", limit: int = 200) -> list[WhatsAppPilotEntitlement]:
+        lim = max(1, min(int(limit or 200), 500))
+        stmt = select(WhatsAppPilotEntitlement).order_by(WhatsAppPilotEntitlement.created_at.desc()).limit(lim)
+        if status:
+            stmt = (
+                select(WhatsAppPilotEntitlement)
+                .where(WhatsAppPilotEntitlement.status == status)
+                .order_by(WhatsAppPilotEntitlement.created_at.desc())
+                .limit(lim)
+            )
+        return list(self.session.scalars(stmt))
+
     def add_audit(
         self,
         *,
@@ -626,5 +654,6 @@ def conversation_public_view(conv: WhatsAppConversation) -> dict[str, Any]:
         control_epoch=int(conv.control_epoch),
         pause_reason=conv.pause_reason,
         customer_wa_id_masked=_mask_phone_wa_id(conv.customer_wa_id),
+        customer_profile_name=str(conv.customer_profile_name or "")[:64],
     )
     return view.to_dict()

@@ -25,18 +25,6 @@ def tenant_has_whatsapp_pilot(session: Session, tenant_id: str) -> bool:
 
 def assert_whatsapp_connection_allowed(session: Session, tenant_id: str) -> None:
     flags = get_whatsapp_cloud_flags()
-    if flags.public_availability:
-        return
-    if not flags.connection_ui_enabled:
-        raise WhatsAppEntitlementError(
-            "WHATSAPP_ROLLOUT_DISABLED",
-            "WhatsApp Cloud connection UI is not enabled on this server",
-        )
-    if flags.require_pilot_entitlement and not tenant_has_whatsapp_pilot(session, tenant_id):
-        raise WhatsAppEntitlementError(
-            "WHATSAPP_PILOT_REQUIRED",
-            "WhatsApp Cloud is limited to audited internal pilot entitlements until public rollout",
-        )
     if not flags.meta_app_id:
         raise WhatsAppEntitlementError(
             "WHATSAPP_APP_A_NOT_CONFIGURED",
@@ -46,6 +34,19 @@ def assert_whatsapp_connection_allowed(session: Session, tenant_id: str) -> None
         raise WhatsAppEntitlementError(
             "WHATSAPP_EMBEDDED_SIGNUP_CONFIG_MISSING",
             "META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID is not configured",
+        )
+    # Phase 2: central public switch opens connect for all eligible tenants (config-only).
+    if flags.public_availability:
+        return
+    if not flags.connection_ui_enabled:
+        raise WhatsAppEntitlementError(
+            "WHATSAPP_ROLLOUT_DISABLED",
+            "WhatsApp Cloud awaits Meta App Review approval before public connect",
+        )
+    if flags.require_pilot_entitlement and not tenant_has_whatsapp_pilot(session, tenant_id):
+        raise WhatsAppEntitlementError(
+            "WHATSAPP_PILOT_REQUIRED",
+            "WhatsApp Cloud awaits Meta approval. Internal pilot entitlement is required until public rollout",
         )
 
 

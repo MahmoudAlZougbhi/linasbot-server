@@ -16,7 +16,7 @@ import { ModuleNavProvider } from '../features/nav/ModuleNavContext';
 import { useTheme } from '../theme';
 import { AppScreenTree } from './AppScreenTree';
 import { buildModuleNavValue, makeChatNavActions, useAreaFocusNonce } from './moduleNav';
-import { parseIntegrationsDeepLink, parseLiveChatDeepLink, RESOURCE_MAP, type Screen } from './navigation';
+import { parseIntegrationsDeepLink, parseLiveChatDeepLink, type Screen } from './navigation';
 
 /**
  * Root navigation shell. Module screens stay mounted after first visit so
@@ -145,9 +145,8 @@ export function AppShell() {
       setScreen({ name: 'faq' });
       return;
     }
-    const target = RESOURCE_MAP[area];
-    if (target) {
-      setScreen({ name: 'resource', ...target });
+    if (area === 'owner') {
+      setScreen({ name: 'owner' });
       return;
     }
     setScreen({ name: 'chat' });

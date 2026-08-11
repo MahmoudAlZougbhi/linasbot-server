@@ -24,11 +24,10 @@ export type Screen =
       proposalReview?: CmProposalReview | null;
     }
   | { name: 'faq'; proposalReview?: CmProposalReview | null }
+  | { name: 'owner' }
   | { name: 'resource'; title: string; path: string };
 
-export const RESOURCE_MAP: Partial<Record<ControlArea, { title: string; path: string }>> = {
-  owner: { title: 'Owner Control Center', path: '/api/platform/metrics' },
-};
+export const RESOURCE_MAP: Partial<Record<ControlArea, { title: string; path: string }>> = {};
 
 export function parseLiveChatDeepLink(url: string | null): LiveChatOpen | null {
   if (!url) return null;

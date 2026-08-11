@@ -1,8 +1,10 @@
 """Server-side rollout controls for WhatsApp Cloud coexistence.
 
-All controls default OFF. Client cannot enable them. Public availability stays
-false until Meta Advanced Access + an audited pilot entitlement + Mahmoud's
-plan matrix decision.
+All controls default OFF. Client cannot enable them.
+
+Phase 1 (pre-Meta approval): operational flags + audited pilot entitlement rows.
+Phase 2 (post-Meta approval): flip WHATSAPP_CLOUD_PUBLIC_AVAILABILITY=true — no
+deploy / no mobile rebuild required. Never hardcode tenant or email bypasses.
 """
 
 from __future__ import annotations
@@ -24,6 +26,9 @@ WHATSAPP_OPTIONAL_SCOPES = frozenset({"business_management"})
 
 GRAPH_API_HOST = "graph.facebook.com"
 SUPPORTED_GRAPH_VERSIONS = frozenset({"v21.0", "v22.0", "v23.0", "v24.0"})
+
+# Central Phase 2 public switch (config-only; default OFF).
+PUBLIC_AVAILABILITY_ENV = "WHATSAPP_CLOUD_PUBLIC_AVAILABILITY"
 
 
 def _truthy(name: str, default: str = "false") -> bool:
@@ -62,14 +67,17 @@ def get_whatsapp_cloud_flags() -> WhatsAppCloudFlags:
     bridge = (os.getenv("META_WHATSAPP_EMBEDDED_SIGNUP_BRIDGE_URL") or "").strip()
     if not bridge and public_url:
         bridge = f"{public_url}/integrations/whatsapp/embedded-signup"
+    public_availability = _truthy(PUBLIC_AVAILABILITY_ENV)
+    # Phase 1 requires audited pilot rows unless the central public switch is on.
+    require_pilot = not public_availability and _truthy("WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT", "true")
     return WhatsAppCloudFlags(
         connection_ui_enabled=_truthy("WHATSAPP_CLOUD_CONNECTION_UI_ENABLED"),
         webhook_side_effects_enabled=_truthy("WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED"),
         outbound_sends_enabled=_truthy("WHATSAPP_CLOUD_OUTBOUND_SENDS_ENABLED"),
         ai_replies_enabled=_truthy("WHATSAPP_CLOUD_AI_REPLIES_ENABLED"),
         history_sync_enabled=_truthy("WHATSAPP_CLOUD_HISTORY_SYNC_ENABLED"),
-        public_availability=False,  # Hard false until Mahmoud supplies plan matrix + Meta access.
-        require_pilot_entitlement=True,
+        public_availability=public_availability,
+        require_pilot_entitlement=require_pilot,
         embedded_signup_config_id_configured=bool(config_id),
         meta_app_id=app_id if app_id == APP_A_EXPECTED_ID else "",
         meta_app_key=APP_A_KEY,
@@ -100,6 +108,8 @@ def whatsapp_config_key_presence() -> dict[str, bool]:
         "WHATSAPP_CLOUD_OUTBOUND_SENDS_ENABLED",
         "WHATSAPP_CLOUD_AI_REPLIES_ENABLED",
         "WHATSAPP_CLOUD_HISTORY_SYNC_ENABLED",
+        PUBLIC_AVAILABILITY_ENV,
+        "WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT",
         "PUBLIC_URL",
         "MONTYMOBILE_SOURCE_NUMBER",
     ]

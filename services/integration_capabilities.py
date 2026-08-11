@@ -215,7 +215,8 @@ def list_tenant_integration_status(tenant_id: str) -> list[dict[str, Any]]:
         "platform": "whatsapp",
         "label": "WhatsApp",
         "connected": False,
-        "coming_soon": True,
+        "coming_soon": False,
+        "awaiting_meta_approval": True,
         "connectable": False,
         "binding_ids": [],
         "capabilities": {
@@ -232,16 +233,19 @@ def list_tenant_integration_status(tenant_id: str) -> list[dict[str, Any]]:
         from services.whatsapp_cloud.repository import WhatsAppCloudRepository
 
         flags = get_whatsapp_cloud_flags()
-        wa_row["coming_soon"] = not flags.connection_ui_enabled
+        ui_open = bool(flags.connection_ui_enabled or flags.public_availability)
+        wa_row["awaiting_meta_approval"] = not flags.public_availability
+        wa_row["coming_soon"] = False
         if whatsapp_db_configured():
             with whatsapp_session() as session:
                 repo = WhatsAppCloudRepository(session)
                 try:
                     assert_whatsapp_connection_allowed(session, tenant_id)
-                    wa_row["connectable"] = bool(flags.connection_ui_enabled)
-                    wa_row["coming_soon"] = False
+                    wa_row["connectable"] = bool(ui_open)
+                    wa_row["awaiting_meta_approval"] = False
                 except Exception:
                     wa_row["connectable"] = False
+                    wa_row["awaiting_meta_approval"] = not flags.public_availability
                 connections = [
                     c
                     for c in repo.list_tenant_connections(tenant_id)
@@ -256,6 +260,7 @@ def list_tenant_integration_status(tenant_id: str) -> list[dict[str, Any]]:
                     wa_row["whatsapp"] = payload
                     wa_row["coming_soon"] = False
                     wa_row["connectable"] = True
+                    wa_row["awaiting_meta_approval"] = False
                     for key in ("dm_read", "dm_reply"):
                         wa_row["capabilities"][key]["level"] = "connected" if wa_row["connected"] else "available"
                         wa_row["capabilities"][key]["permission_present"] = wa_row["connected"]

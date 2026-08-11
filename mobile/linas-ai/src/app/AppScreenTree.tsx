@@ -16,6 +16,7 @@ import { FaqRoute } from '../features/faq/FaqRoute';
 import { IntegrationsScreen } from '../features/integrations/IntegrationsScreen';
 import { LiveChatScreen } from '../features/livechat/LiveChatScreen';
 import { NotificationsScreen } from '../features/notifications/NotificationsScreen';
+import { OwnerPortalScreen } from '../features/control/OwnerPortalScreen';
 import { SettingsScreen } from '../features/settings/SettingsScreen';
 import { SimpleResourceScreen } from '../features/shared/SimpleResourceScreen';
 import { UsersScreen } from '../features/users/UsersScreen';
@@ -161,6 +162,9 @@ export function AppScreenTree({
           onGoChat={() => setScreen({ name: 'chat' })}
           proposalReview={name === 'faq' ? (screen.proposalReview ?? null) : null}
         />
+      </KeepMountedPane>
+      <KeepMountedPane key={`owner-${authEpoch}`} active={name === 'owner'}>
+        <OwnerPortalScreen />
       </KeepMountedPane>
 
       {name === 'cm_section' ? (

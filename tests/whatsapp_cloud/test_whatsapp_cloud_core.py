@@ -421,3 +421,43 @@ def test_config_key_presence_has_no_values():
     presence = whatsapp_config_key_presence()
     assert isinstance(presence, dict)
     assert all(isinstance(v, bool) for v in presence.values())
+    assert "WHATSAPP_CLOUD_PUBLIC_AVAILABILITY" in presence
+
+
+def test_public_availability_skips_pilot(monkeypatch, wa_db):
+    monkeypatch.setenv("WHATSAPP_CLOUD_PUBLIC_AVAILABILITY", "true")
+    monkeypatch.setenv("WHATSAPP_CLOUD_CONNECTION_UI_ENABLED", "false")
+    from services.whatsapp_cloud.config import get_whatsapp_cloud_flags
+    from services.whatsapp_cloud.entitlement import assert_whatsapp_connection_allowed
+
+    flags = get_whatsapp_cloud_flags()
+    assert flags.public_availability is True
+    assert flags.require_pilot_entitlement is False
+    # Should not raise even without pilot row when public switch is on.
+    assert_whatsapp_connection_allowed(wa_db, "any_tenant")
+
+
+def test_pilot_required_when_public_off(monkeypatch, wa_db):
+    monkeypatch.setenv("WHATSAPP_CLOUD_PUBLIC_AVAILABILITY", "false")
+    monkeypatch.setenv("WHATSAPP_CLOUD_CONNECTION_UI_ENABLED", "true")
+    monkeypatch.setenv("WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT", "true")
+    from services.whatsapp_cloud.entitlement import WhatsAppEntitlementError, assert_whatsapp_connection_allowed
+
+    try:
+        assert_whatsapp_connection_allowed(wa_db, "no_pilot_tenant")
+        raise AssertionError("expected WHATSAPP_PILOT_REQUIRED")
+    except WhatsAppEntitlementError as exc:
+        assert exc.code == "WHATSAPP_PILOT_REQUIRED"
+
+
+def test_grant_pilot_enables_connect(monkeypatch, wa_db):
+    monkeypatch.setenv("WHATSAPP_CLOUD_PUBLIC_AVAILABILITY", "false")
+    monkeypatch.setenv("WHATSAPP_CLOUD_CONNECTION_UI_ENABLED", "true")
+    from services.whatsapp_cloud.entitlement import assert_whatsapp_connection_allowed
+    from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+
+    repo = WhatsAppCloudRepository(wa_db)
+    repo.grant_pilot(tenant_id="pilot_t", granted_by_user_id="owner", reason="internal film")
+    wa_db.commit()
+    assert_whatsapp_connection_allowed(wa_db, "pilot_t")
+    assert repo.list_pilots(status="active")[0].tenant_id == "pilot_t"

@@ -81,6 +81,7 @@ class ConversationPublicView:
     control_epoch: int
     pause_reason: str | None
     customer_wa_id_masked: str
+    customer_profile_name: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -90,6 +91,7 @@ class ConversationPublicView:
             "control_epoch": self.control_epoch,
             "pause_reason": self.pause_reason,
             "customer_wa_id_masked": self.customer_wa_id_masked,
+            "customer_profile_name": self.customer_profile_name,
         }
 
 
