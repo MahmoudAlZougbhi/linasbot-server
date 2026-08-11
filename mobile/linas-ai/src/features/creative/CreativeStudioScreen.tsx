@@ -30,9 +30,9 @@ const ResultSchema = z.object({
   result: z.record(z.string(), z.unknown()),
 });
 
-type Props = { onBack: () => void };
+type Props = Record<string, never>;
 
-export function CreativeStudioScreen({ onBack }: Props) {
+export function CreativeStudioScreen(_props: Props = {}) {
   const [kind, setKind] = useState<(typeof KINDS)[number]['id']>('caption');
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
@@ -66,7 +66,7 @@ export function CreativeStudioScreen({ onBack }: Props) {
   }
 
   return (
-    <ScreenChrome title="Creative Studio" subtitle="Full studio workspace" onBack={onBack}>
+    <ScreenChrome title="Creative Studio" subtitle="Full studio workspace">
       <ScrollView horizontal contentContainerStyle={styles.kinds} showsHorizontalScrollIndicator={false}>
         {KINDS.map((item) => {
           const disabled = 'disabled' in item && item.disabled;

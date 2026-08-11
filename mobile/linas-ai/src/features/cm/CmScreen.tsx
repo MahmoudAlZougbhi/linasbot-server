@@ -24,7 +24,6 @@ import { CM_SECTION_ICONS } from './cmSectionIcons';
 import { CM_HUB_CARDS, CM_SECTION_CARDS, type CmSectionId } from './cmSections';
 
 type Props = {
-  onBack: () => void;
   onOpenSection: (section: CmSectionId) => void;
   onContinueSetup?: (prompt: string) => void;
 };
@@ -34,7 +33,7 @@ function titleMap(): Record<string, string> {
 }
 
 /** CM overview — real fill progress + section rows with Filled / Missing. */
-export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
+export function CmScreen({ onOpenSection, onContinueSetup }: Props) {
   const { colors } = useTheme();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +126,7 @@ export function CmScreen({ onBack, onOpenSection, onContinueSetup }: Props) {
     <ScreenChrome
       title="Content Management"
       subtitle="Configure the AI that answers customer DMs and comments"
-      onBack={onBack}
+     
     >
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       {error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}

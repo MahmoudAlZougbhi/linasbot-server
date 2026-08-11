@@ -9,13 +9,13 @@ import { ScreenChrome } from '../shared/ScreenChrome';
 
 const UsageSchema = z.object({ success: z.literal(true) }).passthrough();
 
-type Props = { onBack: () => void };
+type Props = Record<string, never>;
 
 function num(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }
 
-export function UsageScreen({ onBack }: Props) {
+export function UsageScreen(_props: Props = {}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<Record<string, unknown> | null>(null);
@@ -59,7 +59,7 @@ export function UsageScreen({ onBack }: Props) {
   }, [data]);
 
   return (
-    <ScreenChrome title="Usage & Credits" subtitle="Included period balance" onBack={onBack}>
+    <ScreenChrome title="Usage & Credits" subtitle="Included period balance">
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <ScrollView contentContainerStyle={styles.list}>

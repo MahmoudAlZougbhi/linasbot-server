@@ -1,42 +1,125 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GradientBackground } from '../../components/GradientBackground';
-import { fonts, spacing, typography, useTheme } from '../../theme';
+import { useI18n } from '../../i18n/LanguageContext';
+import { HIT, fonts, spacing, typography, useTheme } from '../../theme';
+import { MenuIcon } from '../chat/ChatHeaderIcons';
+import { NavDrawer } from '../nav/NavDrawer';
+import { useModuleNav } from '../nav/ModuleNavContext';
+import { useModuleDrawerHistory } from '../nav/useModuleDrawerHistory';
 
 type Props = {
   title: string;
   subtitle?: string;
-  onBack: () => void;
-  backLabel?: string;
   children: ReactNode;
 };
 
-export function ScreenChrome({ title, subtitle, onBack, backLabel, children }: Props) {
+/**
+ * Module screen chrome: hamburger (same as Chat) opens the side drawer.
+ * No Back chevron — return to chat via drawer New Chat / history.
+ */
+export function ScreenChrome({ title, subtitle, children }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { tr } = useI18n();
+  const nav = useModuleNav();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawer = useModuleDrawerHistory(nav.isAuthenticated, drawerOpen);
+
   return (
     <GradientBackground>
       <View style={[styles.top, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={onBack} accessibilityLabel={backLabel ?? 'Back to chat'} hitSlop={8}>
-          <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium, marginBottom: 8 }}>
-            {backLabel ?? '← Back to chat'}
-          </Text>
-        </Pressable>
-        <Text style={[typography.title, { color: colors.text }]}>{title}</Text>
-        {subtitle ? (
-          <Text style={{ color: colors.textMuted, fontFamily: fonts.body, marginTop: 4, fontSize: 14 }}>
-            {subtitle}
-          </Text>
-        ) : null}
+        <View style={styles.headerRow}>
+          <Pressable
+            onPress={() => setDrawerOpen(true)}
+            style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
+            accessibilityLabel={tr('openMenu')}
+            accessibilityRole="button"
+            hitSlop={4}
+          >
+            <MenuIcon color={colors.text} />
+          </Pressable>
+          <View style={styles.titleBlock}>
+            <Text style={[typography.title, { color: colors.text }]}>{title}</Text>
+            {subtitle ? (
+              <Text
+                style={{
+                  color: colors.textMuted,
+                  fontFamily: fonts.body,
+                  marginTop: 4,
+                  fontSize: 14,
+                }}
+              >
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+        </View>
       </View>
       <View style={styles.body}>{children}</View>
+
+      <NavDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        isAuthenticated={nav.isAuthenticated}
+        showUsers={nav.isAuthenticated}
+        history={drawer.history}
+        archivedIds={drawer.archivedIds}
+        pinnedIds={drawer.pinnedIds}
+        activeId={null}
+        workspaceLabel={drawer.workspaceLabel}
+        onOpenArea={(area) => {
+          setDrawerOpen(false);
+          nav.openArea(area);
+        }}
+        onNewChat={() => {
+          setDrawerOpen(false);
+          nav.startNewChat();
+        }}
+        onOpenChat={(id) => {
+          setDrawerOpen(false);
+          nav.openChat(id);
+        }}
+        onTogglePin={(id) => void drawer.togglePin(id)}
+        onArchive={(id) => void drawer.setArchived(id, true)}
+        onUnarchive={(id) => void drawer.setArchived(id, false)}
+        onRename={(id, titleNext) => void drawer.rename(id, titleNext)}
+        onDelete={(id) => void drawer.remove(id)}
+        onLogin={() => {
+          setDrawerOpen(false);
+          nav.requestLogin();
+        }}
+        onRegister={() => {
+          setDrawerOpen(false);
+          nav.requestRegister();
+        }}
+      />
     </GradientBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  top: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
+  top: { paddingHorizontal: spacing.md, paddingBottom: spacing.md },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  hit: {
+    width: HIT,
+    height: HIT,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -spacing.sm,
+  },
+  pressed: {
+    opacity: 0.55,
+  },
+  titleBlock: {
+    flex: 1,
+    paddingTop: 10,
+  },
   body: { flex: 1, paddingHorizontal: spacing.lg },
 });

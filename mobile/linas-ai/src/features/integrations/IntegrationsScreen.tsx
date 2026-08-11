@@ -9,6 +9,7 @@ import { useI18n } from '../../i18n/LanguageContext';
 import type { StringKey } from '../../i18n/locales/en';
 import { colors, fonts, spacing } from '../../theme';
 import { AuthGateModal } from '../auth/AuthGateModal';
+import { useModuleNav } from '../nav/ModuleNavContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import {
   IntegrationChannelCard,
@@ -71,7 +72,6 @@ const ToggleResponseSchema = z.object({
 type Row = z.infer<typeof RowSchema>;
 
 type Props = {
-  onBack: () => void;
   onRequestLogin?: () => void;
   onRequestRegister?: () => void;
 };
@@ -89,8 +89,9 @@ function isComingSoon(row: Row): boolean {
   return row.platform === 'tiktok' || row.platform === 'snapchat';
 }
 
-export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }: Props) {
+export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props) {
   const { tr } = useI18n();
+  const nav = useModuleNav();
   const [loading, setLoading] = useState(true);
   const [busyPlatform, setBusyPlatform] = useState<string | null>(null);
   const [busyToggle, setBusyToggle] = useState<{ platform: string; key: 'dm' | 'comments' } | null>(
@@ -293,7 +294,7 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
   }
 
   return (
-    <ScreenChrome title={tr('integrations')} subtitle={tr('integrationsSub')} onBack={onBack}>
+    <ScreenChrome title={tr('integrations')} subtitle={tr('integrationsSub')}>
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <PrimaryButton
@@ -335,7 +336,7 @@ export function IntegrationsScreen({ onBack, onRequestLogin, onRequestRegister }
         visible={authGate}
         onClose={() => {
           setAuthGate(false);
-          onBack();
+          nav.goChat();
         }}
         onLogin={() => {
           setAuthGate(false);
