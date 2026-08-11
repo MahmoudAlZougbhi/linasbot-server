@@ -57,6 +57,7 @@ export function parseLiveChatDeepLink(url: string | null): LiveChatOpen | null {
 
 export type IntegrationsDeepLink = {
   metaConnection: 'success' | 'cancelled' | 'failed' | null;
+  waConnection: 'success' | 'cancelled' | 'failed' | null;
 };
 
 export function parseIntegrationsDeepLink(url: string | null): IntegrationsDeepLink | null {
@@ -68,17 +69,17 @@ export function parseIntegrationsDeepLink(url: string | null): IntegrationsDeepL
     if (path !== 'integrations' && !path.startsWith('integrations/')) {
       return null;
     }
-    const raw = (parsed.searchParams.get('meta_connection') || '').trim().toLowerCase();
-    if (raw === 'success' || raw === 'connected') {
-      return { metaConnection: 'success' };
-    }
-    if (raw === 'cancelled' || raw === 'canceled') {
-      return { metaConnection: 'cancelled' };
-    }
-    if (raw === 'failed') {
-      return { metaConnection: 'failed' };
-    }
-    return { metaConnection: null };
+    const rawMeta = (parsed.searchParams.get('meta_connection') || '').trim().toLowerCase();
+    const rawWa = (parsed.searchParams.get('wa_connection') || '').trim().toLowerCase();
+    let metaConnection: IntegrationsDeepLink['metaConnection'] = null;
+    if (rawMeta === 'success' || rawMeta === 'connected') metaConnection = 'success';
+    else if (rawMeta === 'cancelled' || rawMeta === 'canceled') metaConnection = 'cancelled';
+    else if (rawMeta === 'failed') metaConnection = 'failed';
+    let waConnection: IntegrationsDeepLink['waConnection'] = null;
+    if (rawWa === 'success' || rawWa === 'connected') waConnection = 'success';
+    else if (rawWa === 'cancelled' || rawWa === 'canceled') waConnection = 'cancelled';
+    else if (rawWa === 'failed') waConnection = 'failed';
+    return { metaConnection, waConnection };
   } catch {
     return null;
   }

@@ -73,6 +73,19 @@ class MontyMobileAdapter(WhatsAppAdapter):
             to_number: Destination phone number (can be room_id or phone)
             message: Text message to send
         """
+        # Fail closed: never send via Monty when this source number is Cloud-bound.
+        try:
+            from services.whatsapp_cloud.legacy_isolation import cloud_blocks_monty_send
+
+            if cloud_blocks_monty_send(self.source_number):
+                return {
+                    "success": False,
+                    "error": "cloud_bound_number",
+                    "message": "MontyMobile send blocked for Cloud-bound WhatsApp number",
+                }
+        except Exception:
+            pass
+
         phone_number = self._get_phone_from_room_id(to_number)
 
         # NEW ENDPOINT - Updated from testing

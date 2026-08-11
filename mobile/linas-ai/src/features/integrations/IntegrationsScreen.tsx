@@ -19,6 +19,14 @@ import {
   type IntegrationRow,
 } from './IntegrationChannelCard';
 import { disconnectMetaBindings, startMetaOAuth } from './integrationsOAuth';
+import {
+  WhatsAppCloudCard,
+  fetchWhatsAppCloudStatus,
+  startWhatsAppCloudConnect,
+  type WhatsAppCloudStatus,
+} from './WhatsAppCloudCard';
+
+type WaStatus = WhatsAppCloudStatus;
 
 const TogglesSchema = z.object({
   dm: z.boolean(),
@@ -102,6 +110,8 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
   const [notice, setNotice] = useState<string | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [authGate, setAuthGate] = useState(false);
+  const [waStatus, setWaStatus] = useState<WaStatus | null>(null);
+  const [waBusy, setWaBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -115,6 +125,12 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
       }
       const data = await apiFetch('/api/mobile/integrations', { schema: ListSchema });
       setRows(data.integrations);
+      try {
+        const wa = await fetchWhatsAppCloudStatus();
+        setWaStatus(wa);
+      } catch {
+        setWaStatus(null);
+      }
       setError(null);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -149,15 +165,15 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     const applyMetaResult = (url: string | null) => {
       const parsed = parseIntegrationsDeepLink(url);
       if (!parsed) return;
-      if (parsed.metaConnection === 'success') {
-        setNotice(tr('metaOAuthSuccess'));
+      if (parsed.waConnection === 'success' || parsed.metaConnection === 'success') {
+        setNotice(parsed.waConnection === 'success' ? tr('waOAuthSuccess') : tr('metaOAuthSuccess'));
         setError(null);
-      } else if (parsed.metaConnection === 'cancelled') {
+      } else if (parsed.waConnection === 'cancelled' || parsed.metaConnection === 'cancelled') {
         setNotice(null);
-        setError(tr('metaOAuthCancelled'));
-      } else if (parsed.metaConnection === 'failed') {
+        setError(parsed.waConnection === 'cancelled' ? tr('waOAuthCancelled') : tr('metaOAuthCancelled'));
+      } else if (parsed.waConnection === 'failed' || parsed.metaConnection === 'failed') {
         setNotice(null);
-        setError(tr('metaOAuthFailed'));
+        setError(parsed.waConnection === 'failed' ? tr('waOAuthFailed') : tr('metaOAuthFailed'));
       }
       void load();
     };
@@ -165,6 +181,39 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     const sub = Linking.addEventListener('url', (event) => applyMetaResult(event.url));
     return () => sub.remove();
   }, [load, tr]);
+
+  async function connectWhatsApp() {
+    setWaBusy(true);
+    setError(null);
+    try {
+      await startWhatsAppCloudConnect();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) setAuthGate(true);
+      else if (err instanceof ApiError && err.body && typeof err.body === 'object') {
+        const body = err.body as { message?: unknown; error?: unknown };
+        const msg = body.message;
+        setError(typeof msg === 'string' && msg.trim() ? msg : tr('integrationsActionError'));
+      } else setError(tr('integrationsActionError'));
+    } finally {
+      setWaBusy(false);
+    }
+  }
+
+  async function setWhatsAppAi(connectionId: string, enabled: boolean) {
+    setWaBusy(true);
+    try {
+      const path = enabled
+        ? `/api/whatsapp/cloud/connections/${encodeURIComponent(connectionId)}/ai/enable`
+        : `/api/whatsapp/cloud/connections/${encodeURIComponent(connectionId)}/ai/disable`;
+      await apiFetch(path, { method: 'POST', schema: z.object({ success: z.literal(true) }) });
+      await load();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) setAuthGate(true);
+      else setError(tr('integrationsActionError'));
+    } finally {
+      setWaBusy(false);
+    }
+  }
 
   async function manageMetaAccess(platform: 'instagram' | 'facebook') {
     setBusyPlatform(platform);
@@ -337,6 +386,15 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
         {tr('refreshConnectionStatusHint')}
       </Text>
       <ScrollView contentContainerStyle={styles.list}>
+        <WhatsAppCloudCard
+          status={waStatus}
+          loading={loading}
+          busy={waBusy}
+          onRefresh={() => void load()}
+          onConnect={() => void connectWhatsApp()}
+          onEnableAi={(id) => void setWhatsAppAi(id, true)}
+          onDisableAi={(id) => void setWhatsAppAi(id, false)}
+        />
         {rows
           .filter((row) => row.platform === 'instagram' || row.platform === 'facebook')
           .map((row) => (

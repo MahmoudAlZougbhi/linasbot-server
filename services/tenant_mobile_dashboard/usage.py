@@ -19,6 +19,7 @@ USAGE_BUCKETS = (
     "facebook_dm",
     "instagram_comments",
     "facebook_comments",
+    "whatsapp_dm",
     "owner_copilot",
     "content_management_ai",
     "other",
@@ -44,6 +45,8 @@ def _normalize_usage_bucket(entry: dict[str, Any]) -> str:
         return "instagram_dm"
     if channel in {"facebook", "messenger", "fb"}:
         return "facebook_dm"
+    if channel in {"whatsapp", "whatsapp_dm", "wa"} or "whatsapp" in handler:
+        return "whatsapp_dm"
     if channel in {"owner", "owner_copilot", "dashboard"} or "owner" in handler or "owner_ai" in source:
         return "owner_copilot"
     if source.startswith("cm_") or "cm_runtime" in source or "content_management" in handler:
