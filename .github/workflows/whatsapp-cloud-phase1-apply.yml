@@ -39,39 +39,8 @@ jobs:
             set -e
             cd /opt/linasbot
             git fetch origin main
-            git fetch origin ops/whatsapp-postgres-provision || true
-            CONFIRM='${{ github.event.inputs.CONFIRM }}'
-            OPS_REF=origin/ops/whatsapp-postgres-provision
-            if ! git rev-parse --verify "$OPS_REF" >/dev/null 2>&1; then
-              OPS_REF=origin/main
-            fi
-            if [ "$CONFIRM" = 'PROBE_WHATSAPP_DB' ]; then
-              git show "$OPS_REF:scripts/prod_whatsapp_db_probe.sh" > /tmp/prod_whatsapp_db_probe.sh
-              sudo install -m 0755 /tmp/prod_whatsapp_db_probe.sh /opt/linasbot/scripts/prod_whatsapp_db_probe.sh
-              sudo bash /opt/linasbot/scripts/prod_whatsapp_db_probe.sh
-            elif [ "$CONFIRM" = 'PROVISION_WHATSAPP_POSTGRES_AND_PHASE1' ]; then
-              git reset --hard origin/main
-              for f in \
-                prod_provision_whatsapp_postgres.sh \
-                prod_whatsapp_pg_backup.sh \
-                prod_whatsapp_cloud_postgres_bootstrap.sh \
-                prod_whatsapp_grant_pilot.sh \
-                prod_whatsapp_db_probe.sh \
-                prod_whatsapp_cloud_migrate.sh \
-                prod_apply_whatsapp_cloud_phase1_flags.sh \
-                prod_whatsapp_cloud_phase1_ops.sh
-              do
-                if git cat-file -e "$OPS_REF:scripts/$f" 2>/dev/null; then
-                  git show "$OPS_REF:scripts/$f" > "/tmp/$f"
-                  sudo install -m 0755 "/tmp/$f" "/opt/linasbot/scripts/$f"
-                elif [ -f "/opt/linasbot/scripts/$f" ]; then
-                  sudo chmod 0755 "/opt/linasbot/scripts/$f"
-                fi
-              done
-              sudo MODE='PROVISION_WHATSAPP_POSTGRES_AND_PHASE1' bash /opt/linasbot/scripts/prod_whatsapp_cloud_postgres_bootstrap.sh
-            else
-              git reset --hard origin/main
-              git show origin/main:scripts/prod_whatsapp_cloud_phase1_ops.sh > /tmp/prod_whatsapp_cloud_phase1_ops.sh
-              sudo install -m 0755 /tmp/prod_whatsapp_cloud_phase1_ops.sh /opt/linasbot/scripts/prod_whatsapp_cloud_phase1_ops.sh
-              sudo MODE="$CONFIRM" bash /opt/linasbot/scripts/prod_whatsapp_cloud_phase1_ops.sh
-            fi
+            git fetch origin ops/whatsapp-postgres-provision
+            git reset --hard origin/main
+            git show origin/ops/whatsapp-postgres-provision:scripts/prod_whatsapp_cloud_ssh_entry.sh > /tmp/prod_whatsapp_cloud_ssh_entry.sh
+            sudo install -m 0755 /tmp/prod_whatsapp_cloud_ssh_entry.sh /opt/linasbot/scripts/prod_whatsapp_cloud_ssh_entry.sh
+            sudo MODE='${{ github.event.inputs.CONFIRM }}' OPS_REF=origin/ops/whatsapp-postgres-provision bash /opt/linasbot/scripts/prod_whatsapp_cloud_ssh_entry.sh
