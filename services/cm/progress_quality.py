@@ -89,8 +89,8 @@ def assess_section_fill(section: str, payload: dict[str, Any] | None, *, is_defa
                 "summary": "Optional — default AI comment behavior until you add keyword rules.",
             }
         gaps: list[str] = []
-        rules = [it for it in (payload.get("rules") or []) if isinstance(it, dict)]
-        for rule in rules:
+        comment_rules = [it for it in (payload.get("rules") or []) if isinstance(it, dict)]
+        for rule in comment_rules:
             if rule.get("enabled") is False:
                 continue
             has_match = bool(

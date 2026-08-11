@@ -389,7 +389,7 @@ async def process_meta_comment_event(
             and rule_decision.matched
             and (rule_decision.reply_text or "").strip()
         ):
-            reply_text = rule_decision.reply_text.strip()[:900]
+            reply_text: str | None = rule_decision.reply_text.strip()[:900]
         else:
             reply_text = await _generate_comment_reply_text(
                 tenant_id=binding.tenant_id,

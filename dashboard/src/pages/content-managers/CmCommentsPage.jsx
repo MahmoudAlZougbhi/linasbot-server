@@ -46,7 +46,7 @@ const CmCommentsPage = () => {
 
   /**
    * @param {string} id
-   * @param {Record<string, unknown>} patch
+   * @param {Record<string, unknown>} patchData
    */
   const patch = (id, patchData) =>
     setRules(rules.map((item) => (String(item.id) === id ? { ...item, ...patchData } : item)));
