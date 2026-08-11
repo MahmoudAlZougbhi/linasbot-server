@@ -63,7 +63,8 @@ def _item_id(section: str, item: dict[str, Any]) -> str:
 
 def _item_title(section: str, item: dict[str, Any]) -> str:
     if section == "faq":
-        variants = item.get("variants") if isinstance(item.get("variants"), list) else []
+        raw_variants = item.get("variants")
+        variants: list[Any] = list(raw_variants) if isinstance(raw_variants, list) else []
         for row in variants:
             if not isinstance(row, dict):
                 continue
