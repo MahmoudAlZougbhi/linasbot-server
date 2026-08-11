@@ -1,7 +1,10 @@
 /**
  * Stream stick-to-bottom contracts (no device required).
- * Root cause: liveText / contentSizeChange called scrollToBottom which re-armed
- * stickToBottomRef after the user dragged away, yanking them to the growing stream.
+ *
+ * #170: liveText / contentSizeChange must use followBottomIfStuck (never re-arm).
+ * Follow-up: onScroll must not re-arm stick while the user is mid-drag/momentum —
+ * beginDrag clears stick, but near-bottom onScroll events were flipping it back
+ * within NEAR_BOTTOM_PX and stream follow yanked the list down again.
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -43,7 +46,25 @@ describe('stream scroll freedom', () => {
 
     const list = read('features/chat/ChatMessageList.tsx');
     assert.match(list, /onContentSizeChange=\{\(\)\s*=>\s*\{\s*followBottomIfStuck\(false\)/);
-    assert.match(list, /onScrollBeginDrag=\{\(\)\s*=>\s*\{\s*stickToBottomRef\.current\s*=\s*false/);
+    assert.match(list, /onScrollBeginDrag=\{onScrollBeginDrag\}/);
+    assert.match(list, /stickToBottomRef\.current\s*=\s*false/);
+  });
+
+  it('does not re-arm stick from onScroll during user drag/momentum', () => {
+    const list = read('features/chat/ChatMessageList.tsx');
+    assert.match(list, /userInteractingRef/);
+    assert.match(
+      list,
+      /nearBottom\s*&&\s*!userInteractingRef\.current/,
+      'onScroll must gate stick re-arm on !userInteractingRef',
+    );
+    assert.match(list, /onScrollEndDrag=\{onScrollEndDrag\}/);
+    assert.match(list, /onMomentumScrollEnd=\{onMomentumScrollEnd\}/);
+    assert.match(
+      list,
+      /userInteractingRef\.current\s*=\s*true/,
+      'beginDrag must mark interaction so mid-drag onScroll cannot re-arm',
+    );
   });
 
   it('keyboard show still respects stick latch (#144)', () => {
