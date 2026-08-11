@@ -64,6 +64,8 @@ CAPABILITIES: tuple[Capability, ...] = (
             "(critique, duplicates, unclear, improvements, suspicious) — not only the named topic.",
             "Use inspect_cm_guide / cm_fill_plan to walk remaining gaps one section at a time (skip DONE).",
             "Approve draft proposals, validate, then publish when ready (confirmation required).",
+            "Languages: owners can enable/disable supported languages and set the default; "
+            "the answer map is fixed (sabtin) — EN→EN, AR→AR, FR→FR, Franco→AR — cannot be changed.",
         ),
         tools=(
             "inspect_cm_guide",
@@ -270,7 +272,8 @@ CAPABILITIES: tuple[Capability, ...] = (
         status="available",
         help_steps=(
             "Open Settings from Control Center for app UI language and display name.",
-            "Customer reply language for DMs/comments is AI Setup → Languages only.",
+            "Customer reply language for DMs/comments is AI Setup → Languages only "
+            "(enable/disable + default). The Franco→Arabic (and EN/AR/FR identity) map is fixed.",
         ),
         tools=("read_profile", "update_profile"),
         keywords=("settings", "language", "profile", "address me", "app language", "ui language"),
