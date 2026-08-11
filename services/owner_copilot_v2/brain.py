@@ -22,6 +22,7 @@ from services.owner_copilot_v2.confirm_path import run_confirm_path
 from services.owner_copilot_v2.creative_policy import creative_refusal_message, looks_like_creative_request
 from services.owner_copilot_v2.flags import owner_copilot_v2_enabled, owner_model_name
 from services.owner_copilot_v2.models import ChatChoice, OwnerV2TurnResult, StreamEvent
+from services.owner_copilot_v2.proposal_revise import load_proposal_revise_context, supersede_revised_proposal
 from services.owner_copilot_v2.provider import iter_sol_text_deltas, iter_sol_tool_round
 from services.owner_copilot_v2.tool_dispatch import dispatch_v2_tool, tool_result_for_model
 
@@ -103,18 +104,14 @@ async def iter_owner_turn_v2_events(
     )
     context["recent_messages_raw"] = list(messages or [])
     if revise_proposal_id and not confirm_tool:
-        from services.owner_ai_cm_approval import cm_patch_proposal_store
-
-        prop = cm_patch_proposal_store.get(tenant_id=tenant_id, proposal_id=str(revise_proposal_id))
-        if prop is not None and prop.user_id == user_id and prop.status == "pending":
-            context["proposal_revise"] = {
-                "proposal_id": prop.id,
-                "section": prop.section,
-                "preview": prop.preview,
-                "kind": str((prop.preview or {}).get("kind") or ""),
-            }
-            # Seed replace id into tool_args so delete/upsert tools can supersede.
-            tool_args = {**(tool_args or {}), "replace_proposal_id": prop.id}
+        revise_ctx = load_proposal_revise_context(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            revise_proposal_id=str(revise_proposal_id),
+        )
+        if revise_ctx:
+            context["proposal_revise"] = revise_ctx
+            tool_args = {**(tool_args or {}), "replace_proposal_id": revise_ctx["proposal_id"]}
     stage = str((context.get("account_summary") or {}).get("setup_stage") or "")
     reply_lang = str(context.get("reply_language") or "en")
     attachment_action: Literal["none", "analyze", "import"] | None = None
@@ -356,21 +353,12 @@ async def iter_owner_turn_v2_events(
                         "preview": result.data.get("preview"),
                     }
                     pending_confirmation = result.confirmation_token
-                    revise = context.get("proposal_revise")
-                    if isinstance(revise, dict):
-                        old_id = str(revise.get("proposal_id") or "")
-                        new_id = str(result.data.get("proposal_id") or "")
-                        if old_id and new_id and old_id != new_id:
-                            from services.owner_ai_cm_approval import reject_cm_patch
-
-                            try:
-                                reject_cm_patch(tenant_id=tenant_id, user_id=user_id, proposal_id=old_id)
-                            except Exception:
-                                pass
-                            context["proposal_revise"] = {
-                                **revise,
-                                "proposal_id": new_id,
-                            }
+                    supersede_revised_proposal(
+                        tenant_id=tenant_id,
+                        user_id=user_id,
+                        context=context,
+                        new_proposal_id=str(result.data.get("proposal_id") or "") or None,
+                    )
 
         fin_messages = list(chat_messages)
         fin_messages.append({"role": "system", "content": FINAL_ANSWER_NUDGE})

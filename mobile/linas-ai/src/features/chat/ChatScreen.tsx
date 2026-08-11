@@ -70,9 +70,7 @@ export function ChatScreen({
   const [offline, setOffline] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [ownerMode, setOwnerMode] = useState<OwnerChatMode>('chat');
-  const promoteOwnerMode = useCallback((mode: OwnerChatMode) => {
-    if (mode === 'work') setOwnerMode('work');
-  }, []);
+  const promoteOwnerMode = useCallback((mode: OwnerChatMode) => { if (mode === 'work') setOwnerMode('work'); }, []);
   const turn = useStreamingTurn(owner.conversationId, {
     onTerminal: () => owner.syncAfterTurn(),
     onTitleUpdated: (title) => {
@@ -82,11 +80,7 @@ export function ChatScreen({
     },
     onOwnerModeHint: promoteOwnerMode,
   });
-  const { reviseProposalId, setReviseProposalId, ownerSendWithMode } = useProposalEditMode(
-    ownerMode,
-    setOwnerMode,
-    turn.send,
-  );
+  const { reviseProposalId, setReviseProposalId, ownerSendWithMode } = useProposalEditMode(ownerMode, setOwnerMode, turn.send);
   const imagePreviewByContent = useRef<Record<string, string[]>>({});
   const [choiceBusy, setChoiceBusy] = useState(false);
   const composerInputRef = useRef<TextInput>(null);
@@ -100,8 +94,7 @@ export function ChatScreen({
   const startNewChat = useCallback(() => {
     if (!isAuthenticated) return;
     stickToBottomRef.current = true;
-    setOwnerMode('chat');
-    setReviseProposalId(null);
+    setOwnerMode('chat'); setReviseProposalId(null);
     if (turn.streaming) turn.stop();
     void owner.newChat();
   }, [isAuthenticated, owner, stickToBottomRef, turn]);
@@ -146,8 +139,7 @@ export function ChatScreen({
 
   function openAuthPreservingDraft(hard = false) {
     void savePendingGuestDraft({ text: draft, createdAt: Date.now() });
-    setHardLimit(hard);
-    setAuthGate(true);
+    setHardLimit(hard); setAuthGate(true);
   }
 
   useSetupHandoff({

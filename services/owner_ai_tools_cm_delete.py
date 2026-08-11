@@ -172,9 +172,9 @@ def build_cm_delete_proposal(
             "kind": "cm_delete",
             "action": "delete",
             "delete_all": bool(delete_all),
-            "mode": "archive" if name in STATUS_ARCHIVE_SECTIONS else (
-                "hide" if name in AVAILABLE_SECTIONS else "remove"
-            ),
+            "mode": "archive"
+            if name in STATUS_ARCHIVE_SECTIONS
+            else ("hide" if name in AVAILABLE_SECTIONS else "remove"),
             "targets": targets,
             "field": f"{len(targets)} item(s)",
             "changed_keys": ["items"],

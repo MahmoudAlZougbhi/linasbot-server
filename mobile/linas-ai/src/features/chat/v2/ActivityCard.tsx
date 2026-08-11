@@ -9,7 +9,7 @@ type Props = {
   card: StreamCard;
   onApproveDraft?: (token: string, opts?: { delete_ids?: string[] }) => void;
   onDiscard?: (token?: string, proposalId?: string) => void;
-  onEditProposal?: (proposalId: string, token?: string) => void;
+  onEditProposal?: (proposalId: string) => void;
   onOpenCm?: (review?: CmProposalReview) => void;
   onRetry?: () => void;
 };

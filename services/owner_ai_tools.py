@@ -240,9 +240,9 @@ async def dispatch_tool(
             item_ids=[str(x) for x in raw_ids] if isinstance(raw_ids, list) else None,
             field_keys=[str(x) for x in raw_fields] if isinstance(raw_fields, list) else None,
             delete_all=bool(a.get("delete_all")),
-            replace_proposal_id=str(a["replace_proposal_id"]) if a.get("replace_proposal_id") else (
-                str(a["proposal_edit_id"]) if a.get("proposal_edit_id") else None
-            ),
+            replace_proposal_id=str(a["replace_proposal_id"])
+            if a.get("replace_proposal_id")
+            else (str(a["proposal_edit_id"]) if a.get("proposal_edit_id") else None),
         )
     if name == "approve_cm_patch":
         raw_delete = a.get("delete_ids")
