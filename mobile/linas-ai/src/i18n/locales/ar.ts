@@ -80,6 +80,9 @@ export const ar: Record<StringKey, string> = {
   integrationsLoadError: 'تعذر تحميل التكاملات.',
   integrationsActionError: 'تعذر تحديث الاتصال. حاول مجدداً.',
   integrationsToggleError: 'تعذر تحديث إعداد القناة. حاول مجدداً.',
+  metaOAuthSuccess: 'تم تحديث وصول Meta. جاري تحديث حالة الاتصال…',
+  metaOAuthCancelled: 'تم إلغاء تفويض Meta.',
+  metaOAuthFailed: 'فشل تفويض Meta. حاول إدارة وصول Meta مجدداً.',
   toggleDms: 'الرسائل المباشرة',
   toggleComments: 'التعليقات',
   commentsBlockerMissingPermissions:

@@ -49,6 +49,7 @@ class MetaOAuthResult:
     bindings: tuple[MetaAssetBinding, ...]
     page_name: str
     instagram_username: str
+    return_surface: str = "web"
 
     @property
     def binding(self) -> MetaAssetBinding:
@@ -125,9 +126,12 @@ def begin_meta_business_login(
     tenant_id: str,
     channel: str = "unified",
     actor_id: str,
+    return_surface: str = "web",
     registry: MetaAppRegistry | None = None,
 ) -> str:
     """Create a one-time state and return App A's Business Login URL."""
+
+    from services.meta_oauth_return import normalize_return_surface
 
     flow_mode = normalize_oauth_flow_channel(channel)
     app_key = meta_oauth_app_key()
@@ -140,6 +144,7 @@ def begin_meta_business_login(
     nonce = secrets.token_urlsafe(32)
     nonce_hash = hashlib.sha256(nonce.encode("utf-8")).hexdigest()
     actor_reference = hashlib.sha256(str(actor_id or "oauth").encode("utf-8")).hexdigest()[:16]
+    surface = normalize_return_surface(return_surface)
     current_registry = registry or get_meta_app_registry()
     current_registry.store_oauth_state(
         nonce_hash,
@@ -149,6 +154,7 @@ def begin_meta_business_login(
             "actor_id": f"oauth:{actor_reference}",
             "app_key": app_key,
             "redirect_uri": meta_oauth_redirect_uri(),
+            "return_surface": surface,
             "expires_at": time.time() + META_OAUTH_STATE_TTL_SECONDS,
         },
     )
@@ -310,6 +316,9 @@ async def complete_meta_business_login(
     tenant_id = str(state_data.get("tenant_id") or "").strip()
     flow_mode = _resolve_oauth_flow_channel(str(state_data.get("channel") or ""))
     actor_id = str(state_data.get("actor_id") or "oauth")
+    from services.meta_oauth_return import normalize_return_surface
+
+    return_surface = normalize_return_surface(state_data.get("return_surface"))
     if not tenant_id:
         raise MetaOAuthStateError("OAuth state binding is invalid")
 
@@ -454,6 +463,7 @@ async def complete_meta_business_login(
             bindings=tuple(authorized_bindings),
             page_name=primary_page_name,
             instagram_username=primary_instagram_username,
+            return_surface=return_surface,
         )
     finally:
         if owns_client:

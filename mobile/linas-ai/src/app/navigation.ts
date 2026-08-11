@@ -55,3 +55,32 @@ export function parseLiveChatDeepLink(url: string | null): LiveChatOpen | null {
   }
   return null;
 }
+
+export type IntegrationsDeepLink = {
+  metaConnection: 'success' | 'cancelled' | 'failed' | null;
+};
+
+export function parseIntegrationsDeepLink(url: string | null): IntegrationsDeepLink | null {
+  if (!url) return null;
+  try {
+    const normalized = url.replace(/^linasai:\/\//i, 'https://linasai.app/');
+    const parsed = new URL(normalized);
+    const path = parsed.pathname.replace(/^\//, '');
+    if (path !== 'integrations' && !path.startsWith('integrations/')) {
+      return null;
+    }
+    const raw = (parsed.searchParams.get('meta_connection') || '').trim().toLowerCase();
+    if (raw === 'success' || raw === 'connected') {
+      return { metaConnection: 'success' };
+    }
+    if (raw === 'cancelled' || raw === 'canceled') {
+      return { metaConnection: 'cancelled' };
+    }
+    if (raw === 'failed') {
+      return { metaConnection: 'failed' };
+    }
+    return { metaConnection: null };
+  } catch {
+    return null;
+  }
+}

@@ -114,6 +114,9 @@ export const en = {
   integrationsLoadError: 'Could not load integrations.',
   integrationsActionError: 'Could not update connection. Try again.',
   integrationsToggleError: 'Could not update channel setting. Try again.',
+  metaOAuthSuccess: 'Meta access updated. Refreshing connection status…',
+  metaOAuthCancelled: 'Meta authorization was cancelled.',
+  metaOAuthFailed: 'Meta authorization failed. Try Manage Meta Access again.',
   toggleDms: 'Direct messages',
   toggleComments: 'Comments',
   commentsBlockerMissingPermissions:

@@ -170,7 +170,7 @@ def test_comment_capability_false_toggle_never_effective_without_permissions(mon
         lambda *_a, **_k: True,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.active_channel_bindings",
+        "services.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [_ig_binding(webhook_subscribed_fields=("messages", "messaging_postbacks"))],
     )
     monkeypatch.setattr(
@@ -198,7 +198,34 @@ def test_comment_capability_meta_approval_when_advanced_access_missing(monkeypat
         lambda *_a, **_k: False,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.active_channel_bindings",
+        "services.channel_capability_state.canonical_channel_bindings",
+        lambda *_a, **_k: [_fb_binding(webhook_subscribed_fields=("messages", "messaging_postbacks"))],
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state.get_meta_app_registry",
+        lambda: _Registry(_Cred(("pages_messaging",))),
+    )
+    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: False)
+    monkeypatch.setattr(
+        "services.channel_capability_state._tenant_comment_assets_enabled",
+        lambda *_a, **_k: False,
+    )
+    # Public tenant without Advanced Access stays blocked.
+    state = comment_capability_state("customer_gym", "facebook")
+    assert state["permission_present"] is False
+    assert state["status"] == "meta_approval_required"
+    assert state["blocker_code"] == "meta_approval_required"
+    assert state["effective_enabled"] is False
+    assert state["live_verified"] is False
+
+
+def test_comment_capability_linas_missing_scopes_not_meta_approval(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "services.channel_capability_state._action_requested",
+        lambda *_a, **_k: False,
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [_fb_binding(webhook_subscribed_fields=("messages", "messaging_postbacks"))],
     )
     monkeypatch.setattr(
@@ -212,10 +239,9 @@ def test_comment_capability_meta_approval_when_advanced_access_missing(monkeypat
     )
     state = comment_capability_state("linas", "facebook")
     assert state["permission_present"] is False
-    assert state["status"] == "meta_approval_required"
-    assert state["blocker_code"] == "meta_approval_required"
+    assert state["blocker_code"] == "missing_comment_permissions"
+    assert state["status"] == "permission_required"
     assert state["effective_enabled"] is False
-    assert state["live_verified"] is False
 
 
 def test_comment_capability_effective_only_when_all_gates_pass(monkeypatch) -> None:
@@ -224,7 +250,7 @@ def test_comment_capability_effective_only_when_all_gates_pass(monkeypatch) -> N
         lambda *_a, **_k: True,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.active_channel_bindings",
+        "services.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [_fb_binding()],
     )
     monkeypatch.setattr(
@@ -261,7 +287,7 @@ def test_comment_capability_ready_when_gates_pass_but_not_requested(monkeypatch)
         lambda *_a, **_k: False,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.active_channel_bindings",
+        "services.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [_fb_binding()],
     )
     monkeypatch.setattr(
@@ -284,7 +310,7 @@ def test_comment_capability_webhook_setup_required(monkeypatch) -> None:
         lambda *_a, **_k: False,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.active_channel_bindings",
+        "services.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [_fb_binding(webhook_subscribed_fields=("messages", "messaging_postbacks"))],
     )
     monkeypatch.setattr(
@@ -307,7 +333,7 @@ def test_comment_capability_unhealthy_token(monkeypatch) -> None:
         lambda *_a, **_k: True,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.active_channel_bindings",
+        "services.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [_fb_binding()],
     )
     monkeypatch.setattr(
@@ -336,7 +362,7 @@ def test_dm_capability_effective_when_requested_and_healthy(monkeypatch) -> None
         lambda *_a, **_k: True,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.active_channel_bindings",
+        "services.channel_capability_state.canonical_channel_bindings",
         lambda *_a, **_k: [_fb_binding(webhook_subscribed_fields=("messages", "messaging_postbacks"))],
     )
     monkeypatch.setattr(
@@ -365,7 +391,7 @@ def test_tenant_isolation_bindings(monkeypatch) -> None:
         lambda *_a, **_k: True,
     )
     monkeypatch.setattr(
-        "services.channel_capability_state.active_channel_bindings",
+        "services.channel_capability_state.canonical_channel_bindings",
         lambda tenant_id, platform: [] if tenant_id == "linas" else [other],
     )
     monkeypatch.setattr(
