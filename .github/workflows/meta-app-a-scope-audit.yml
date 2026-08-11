@@ -33,8 +33,10 @@ jobs:
               APP_DIR=/opt/linasbot/linaslaserbot-2.7.22
             fi
             cd /opt/linasbot
-            git fetch origin main
-            git checkout origin/main -- scripts/audit_meta_app_a_scopes.py
+            git fetch origin main fix/ig-fb-comments-capability-gates
+            git checkout origin/fix/ig-fb-comments-capability-gates -- \
+              scripts/audit_meta_app_a_scopes.py \
+              scripts/prod_meta_comment_runtime_probe.py
             set -a
             if [ -f "$APP_DIR/.env" ]; then
               # shellcheck disable=SC1090
@@ -57,3 +59,4 @@ jobs:
             export PYTHONPATH="$APP_DIR${PYTHONPATH:+:$PYTHONPATH}"
             cd "$APP_DIR"
             python3 /opt/linasbot/scripts/audit_meta_app_a_scopes.py
+            python3 /opt/linasbot/scripts/prod_meta_comment_runtime_probe.py
