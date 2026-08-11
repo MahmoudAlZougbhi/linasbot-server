@@ -1,0 +1,66 @@
+name: WhatsApp Cloud Migrate + Phase1 Flags
+
+# Run fail-closed PostgreSQL WhatsApp migrate and apply Phase 1 flags.
+# Does NOT flip WHATSAPP_CLOUD_PUBLIC_AVAILABILITY.
+# Does NOT touch Meta Console / App Review / Redis-required.
+
+on:
+  workflow_dispatch:
+    inputs:
+      CONFIRM:
+        description: "Type APPLY_WHATSAPP_CLOUD_PHASE1 to migrate + apply Phase 1 flags"
+        required: true
+        type: string
+
+concurrency:
+  group: whatsapp-cloud-phase1
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    name: Migrate WhatsApp Cloud + Phase 1 flags
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    if: github.event.inputs.CONFIRM == 'APPLY_WHATSAPP_CLOUD_PHASE1'
+    steps:
+      - name: Migrate + flags via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 20m
+          script: |
+            set -euo pipefail
+            cd /opt/linasbot
+            git fetch origin main
+            git show origin/main:scripts/prod_whatsapp_cloud_migrate.sh > /tmp/prod_whatsapp_cloud_migrate.sh
+            git show origin/main:scripts/prod_apply_whatsapp_cloud_phase1_flags.sh > /tmp/prod_apply_whatsapp_cloud_phase1_flags.sh
+            sudo install -m 0755 /tmp/prod_whatsapp_cloud_migrate.sh /opt/linasbot/scripts/prod_whatsapp_cloud_migrate.sh
+            sudo install -m 0755 /tmp/prod_apply_whatsapp_cloud_phase1_flags.sh /opt/linasbot/scripts/prod_apply_whatsapp_cloud_phase1_flags.sh
+
+            echo "[wa-ops] deployed_sha=$(git rev-parse HEAD)"
+            # Fail closed if WhatsApp DB URL missing — do not invent credentials.
+            if ! sudo bash -lc 'set -a; [ -f /opt/linasbot/.env ] && . /opt/linasbot/.env; set +a; test -n "${LINAS_WHATSAPP_DATABASE_URL:-${DATABASE_URL:-}}"'; then
+              echo "[wa-ops] BLOCKED: LINAS_WHATSAPP_DATABASE_URL / DATABASE_URL unset on server"
+              echo "[wa-ops] Set a PostgreSQL URL for WhatsApp SoT, then re-run this workflow."
+              exit 2
+            fi
+
+            sudo bash /opt/linasbot/scripts/prod_whatsapp_cloud_migrate.sh
+            sudo bash /opt/linasbot/scripts/prod_apply_whatsapp_cloud_phase1_flags.sh
+
+            curl -fsS https://linasaibot.com/api/ready >/tmp/ready.json
+            python3 - <<'PY'
+            import json
+            d=json.load(open("/tmp/ready.json"))
+            assert d.get("ok") is True, d
+            jq=d.get("checks",{}).get("job_queue",{})
+            assert jq.get("redis_required") is not True, jq
+            print("[wa-ops] ready ok; redis_required=", jq.get("redis_required"))
+            PY
