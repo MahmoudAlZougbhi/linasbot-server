@@ -87,19 +87,51 @@ export function ChatMessageList({
   const { colors } = useTheme();
   const [showJump, setShowJump] = useState(false);
   const loadGateRef = useRef(false);
+  /** True from finger-down through momentum end — blocks onScroll from re-arming stick. */
+  const userInteractingRef = useRef(false);
+  const interactFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Allow another older-page fetch only after the previous one finishes.
   if (!loadingMore) loadGateRef.current = false;
 
+  const clearInteractFallback = useCallback(() => {
+    if (interactFallbackRef.current) {
+      clearTimeout(interactFallbackRef.current);
+      interactFallbackRef.current = null;
+    }
+  }, []);
+
+  const distanceFromBottom = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    return contentSize.height - layoutMeasurement.height - contentOffset.y;
+  };
+
+  const latchStickIfNearBottom = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (distanceFromBottom(e) <= NEAR_BOTTOM_PX) stickToBottomRef.current = true;
+    },
+    [stickToBottomRef],
+  );
+
+  const endUserInteraction = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      clearInteractFallback();
+      userInteractingRef.current = false;
+      latchStickIfNearBottom(e);
+    },
+    [clearInteractFallback, latchStickIfNearBottom],
+  );
+
   const onScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-      const distanceFromBottom =
-        contentSize.height - layoutMeasurement.height - contentOffset.y;
-      const nearBottom = distanceFromBottom <= NEAR_BOTTOM_PX;
-      // Only latch true here. Clearing on distance alone is wrong when the keyboard
-      // dismisses and the viewport grows (distanceFromBottom jumps without a user drag).
-      if (nearBottom) stickToBottomRef.current = true;
+      const nearBottom = distanceFromBottom(e) <= NEAR_BOTTOM_PX;
+      // Re-arm only when the user is not mid-gesture. During drag/momentum, beginDrag
+      // cleared stick — onScroll must not flip it back while still within NEAR_BOTTOM_PX
+      // (that race re-enabled followBottomIfStuck and yanked the list to the live stream).
+      // Clearing on distance alone is still wrong: keyboard dismiss grows the viewport
+      // and distanceFromBottom jumps without a user drag (#144).
+      if (nearBottom && !userInteractingRef.current) stickToBottomRef.current = true;
       setShowJump(!nearBottom && contentSize.height > layoutMeasurement.height + 8);
 
       if (contentOffset.y <= NEAR_TOP_PX && hasMore && !loadingMore && !loadGateRef.current) {
@@ -108,6 +140,37 @@ export function ChatMessageList({
       }
     },
     [hasMore, loadingMore, onLoadOlder, stickToBottomRef],
+  );
+
+  const onScrollBeginDrag = useCallback(() => {
+    clearInteractFallback();
+    userInteractingRef.current = true;
+    stickToBottomRef.current = false;
+  }, [clearInteractFallback, stickToBottomRef]);
+
+  const onScrollEndDrag = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      // If fling continues, wait for onMomentumScrollEnd before re-arming.
+      const vy = e.nativeEvent.velocity?.y ?? 0;
+      if (Math.abs(vy) < 0.05) {
+        endUserInteraction(e);
+        return;
+      }
+      // Some Android paths skip momentum end — don't leave interacting latched forever.
+      clearInteractFallback();
+      interactFallbackRef.current = setTimeout(() => {
+        userInteractingRef.current = false;
+        interactFallbackRef.current = null;
+      }, 400);
+    },
+    [clearInteractFallback, endUserInteraction],
+  );
+
+  const onMomentumScrollEnd = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      endUserInteraction(e);
+    },
+    [endUserInteraction],
   );
 
   return (
@@ -130,9 +193,9 @@ export function ChatMessageList({
         onLayout={() => {
           followBottomIfStuck(false);
         }}
-        onScrollBeginDrag={() => {
-          stickToBottomRef.current = false;
-        }}
+        onScrollBeginDrag={onScrollBeginDrag}
+        onScrollEndDrag={onScrollEndDrag}
+        onMomentumScrollEnd={onMomentumScrollEnd}
         onScrollToIndexFailed={() => scrollToBottom(false)}
         ListHeaderComponent={
           loadingMore ? (
