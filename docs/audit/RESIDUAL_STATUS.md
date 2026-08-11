@@ -11,12 +11,12 @@
 - Admin-credit: cross-tenant only `platform_owner`; prod CORS HTTPS-only
 - CSRF / webhook verify: `hmac.compare_digest`
 - Proven deletes: `live_chat_archive/`, `cleanup_reports/`, `third_provider_adapter.py`, unwired `CreativeStudioScreen`, local `logs/*.out` + `.tmp_8010_*`
-- LOC splits: `conversation_router` + `language_resolver`
+- LOC splits: `conversation_router`, `language_resolver`, `token_wallet_service`, `datetime_utils`
 - PII: sensitive `data/*.jsonl` / `content_violations.jsonl` reported in `docs/audit/PII_EXPOSURE_REPORT.md` (still tracked until explicit decision)
 
 ## Residual (must clear before Done)
 
-- Hand-written files still over 500 lines: **~63** (top: `chat_response_service.py`, `LiveChat.jsx`, `text_handlers_respond.py`, `utils.py`, `SmartMessaging.jsx`, `live_chat_service.py`, …)
+- Hand-written files still over 500 lines: **~61** (top: `chat_response_service.py`, `LiveChat.jsx`, `text_handlers_respond.py`, `utils.py`, `SmartMessaging.jsx`, `live_chat_service.py`, …)
 - Inventory `review_status`: mostly still `UNREVIEWED` (shell only)
 - Creative Python API stack: `BLOCKED` (still wired in main/tests)
 - Operator web SPA still present; parity matrix not built yet
