@@ -111,7 +111,7 @@ def test_opaque_confirmation_code_is_random_and_not_pii() -> None:
 
 def test_public_compliance_pages_are_real_html(compliance_client: TestClient) -> None:
     for path, marker in (
-        ("/privacy-policy", "Facebook Messenger and Instagram direct"),
+        ("/privacy-policy", "business customer-support and tenant-knowledge"),
         ("/terms", "does not create, edit, reschedule"),
         ("/data-deletion", "Invalid signatures are rejected"),
     ):
@@ -120,7 +120,15 @@ def test_public_compliance_pages_are_real_html(compliance_client: TestClient) ->
         assert response.headers["content-type"].startswith("text/html")
         assert response.headers["x-frame-options"] == "DENY"
         assert marker in response.text
-        assert "Lina's Laser Clinics" in response.text
+        assert "Linas AI" in response.text
+
+    privacy = compliance_client.get("/privacy-policy")
+    assert "WhatsApp" in privacy.text
+    assert "TikTok" in privacy.text
+    assert "AI Setup" in privacy.text
+    assert "Owner chat" in privacy.text
+    assert "Facebook" in privacy.text
+    assert "Instagram" in privacy.text
 
 
 @pytest.mark.parametrize(

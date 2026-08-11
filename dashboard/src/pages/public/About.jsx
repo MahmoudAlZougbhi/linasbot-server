@@ -22,8 +22,12 @@ const About = () => {
           connection management, and day-to-day operations.
         </p>
         <p className="mt-4 leading-relaxed text-slate-700">
-          Scope is messaging conversations — social media DMs and comments. {PUBLIC_SITE.productName} does not
-          publish posts, Stories, Reels, or videos, and inbound WhatsApp messages are not processed by the AI.
+          Scope is messaging conversations — customer DMs and comments on channels a business
+          connects (Facebook, Instagram, WhatsApp, and TikTok when available through official
+          integrations). {PUBLIC_SITE.productName} answers from tenant-approved knowledge in AI
+          Setup. Publishing posts, Stories, Reels, or videos is separate and only happens when a
+          business user explicitly confirms it. Inbound WhatsApp and TikTok AI run only when that
+          business connects those channels through official APIs.
         </p>
         <p className="mt-6 text-slate-700">
           Contact:{' '}
