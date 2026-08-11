@@ -94,6 +94,10 @@ class WhatsAppConnection(Base):
             "coexistence_mode IN ('whatsapp_business_app_onboarding','api_setup_forbidden')",
             name="ck_wa_connection_coexistence",
         ),
+        CheckConstraint(
+            "connection_source IN ('embedded_signup','meta_app_review_test')",
+            name="ck_wa_connection_source",
+        ),
         Index("ix_wa_connection_tenant_lifecycle", "tenant_id", "lifecycle_status"),
         Index("ix_wa_connection_waba", "waba_id"),
     )
@@ -112,6 +116,11 @@ class WhatsAppConnection(Base):
         String(64),
         nullable=False,
         server_default=text("'whatsapp_business_app_onboarding'"),
+    )
+    connection_source: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        server_default=text("'embedded_signup'"),
     )
     lifecycle_status: Mapped[str] = mapped_column(String(32), nullable=False, server_default=text("'provisioning'"))
     credential_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
@@ -247,9 +256,7 @@ class WhatsAppOutboundIntent(Base):
     __table_args__ = (
         UniqueConstraint("idempotency_key", name="uq_wa_outbound_idempotency"),
         CheckConstraint(
-            "dispatch_state IN ("
-            "'pending','sending','sent','failed','suppressed','reconciliation_required'"
-            ")",
+            "dispatch_state IN ('pending','sending','sent','failed','suppressed','reconciliation_required')",
             name="ck_wa_outbound_dispatch_state",
         ),
         Index("ix_wa_outbound_conversation", "conversation_id"),

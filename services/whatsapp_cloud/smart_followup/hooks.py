@@ -146,3 +146,27 @@ def cancel_conversation_followups(
 def cancel_tenant_followups(session: Session, *, tenant_id: str, reason: str) -> int:
     repo = SmartFollowUpRepository(session)
     return repo.cancel_active_for_tenant(tenant_id=tenant_id, reason=reason)
+
+
+def cancel_connection_followups(
+    session: Session,
+    *,
+    tenant_id: str,
+    connection_id: str,
+    reason: str,
+) -> int:
+    repo = SmartFollowUpRepository(session)
+    count = repo.cancel_active_for_connection(
+        tenant_id=tenant_id,
+        connection_id=connection_id,
+        reason=reason,
+    )
+    if count:
+        emit_wa_event(
+            "smart_followup_cancelled",
+            tenant_id=tenant_id,
+            connection_id=connection_id,
+            reason=reason,
+            jobs=count,
+        )
+    return count
