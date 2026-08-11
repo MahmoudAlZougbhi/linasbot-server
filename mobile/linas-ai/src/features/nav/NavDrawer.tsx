@@ -12,14 +12,13 @@ import {
 import { AppIcon } from '../../components/AppIcon';
 import { LinasStarMark } from '../../components/LinasStarMark';
 import { SideDrawer } from '../../components/SideDrawer';
-import { APP_VERSION_LABEL, LEGAL_URLS } from '../../config';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import type { ControlArea } from '../control/controlAreas';
-import { NewChatIcon } from '../chat/ChatHeaderIcons';
 import { visibleDrawerModules } from './drawerModules';
 import { HistoryRows, type HistoryItem } from './HistoryRows';
 import { DRAWER_TOOL_ICONS, MODULE_ICONS } from './moduleIcons';
+import { NavDrawerFooter } from './NavDrawerFooter';
 
 type Props = {
   open: boolean;
@@ -42,9 +41,6 @@ type Props = {
   onLogin?: () => void;
   onRegister?: () => void;
 };
-
-/** Live expo-constants label — shared with Settings via config.ts (bottom-left layout stays in NavDrawer styles). */
-const VERSION_LABEL = APP_VERSION_LABEL;
 
 export function NavDrawer(props: Props) {
   const { colors } = useTheme();
@@ -233,65 +229,14 @@ export function NavDrawer(props: Props) {
         )}
       </ScrollView>
 
-      <View style={[styles.bottomDock, { borderTopColor: colors.borderSoft }]}>
-        <View style={styles.bottomRow}>
-          <Pressable
-            style={[styles.newChatBtn, { backgroundColor: colors.accent }]}
-            onPress={() => {
-              props.onNewChat();
-              props.onClose();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={tr('newChat')}
-          >
-            <NewChatIcon color={colors.onAccent} size={20} />
-          </Pressable>
-        </View>
-
-        {props.isAuthenticated ? (
-          <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
-            {props.workspaceLabel || tr('workspace')}
-          </Text>
-        ) : (
-          <>
-            <Pressable
-              onPress={() => {
-                props.onClose();
-                props.onLogin?.();
-              }}
-              style={styles.footerRow}
-              accessibilityRole="button"
-              accessibilityLabel={tr('login')}
-            >
-              <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>{tr('login')}</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                props.onClose();
-                props.onRegister?.();
-              }}
-              style={styles.footerRow}
-              accessibilityRole="button"
-              accessibilityLabel={tr('createAccount')}
-            >
-              <Text style={{ color: colors.text }}>{tr('createAccount')}</Text>
-            </Pressable>
-            <Text style={{ color: colors.textDim, fontSize: 11 }}>
-              {tr('privacy')} · {tr('terms')}
-              {LEGAL_URLS.privacy ? '' : ''}
-            </Text>
-          </>
-        )}
-
-        <Text
-          style={[styles.version, { color: colors.textDim }]}
-          numberOfLines={1}
-          accessibilityRole="text"
-          accessibilityLabel={VERSION_LABEL}
-        >
-          {VERSION_LABEL}
-        </Text>
-      </View>
+      <NavDrawerFooter
+        isAuthenticated={props.isAuthenticated}
+        workspaceLabel={props.workspaceLabel}
+        onClose={props.onClose}
+        onNewChat={props.onNewChat}
+        onLogin={props.onLogin}
+        onRegister={props.onRegister}
+      />
     </SideDrawer>
   );
 }
@@ -360,33 +305,4 @@ const styles = StyleSheet.create({
   },
   tileText: { fontFamily: fonts.bodyMedium, fontSize: 13 },
   archiveToggle: { minHeight: 40, justifyContent: 'center' },
-  bottomDock: {
-    borderTopWidth: 1,
-    paddingTop: spacing.sm,
-    gap: spacing.xs,
-  },
-  bottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  newChatBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  version: {
-    fontFamily: fonts.body,
-    fontSize: 11,
-    alignSelf: 'flex-start',
-    textAlign: 'left',
-  },
-  footerRow: {
-    minHeight: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
 });
