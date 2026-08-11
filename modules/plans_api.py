@@ -35,24 +35,28 @@ async def public_plans() -> Any:
                         "customer_dm_automation",
                         "faq_enabled",
                         "comment_automation",
-                        "creative_studio",
-                        "scheduling",
-                        "image_generation",
-                        "video_generation",
                         "tenant_analytics",
+                        "instagram_dm",
+                        "facebook_dm",
                     }
                 },
+                "tagline_key": row["plan_id"],
             }
         )
     return {
         "success": True,
         "catalog_version": catalog_snapshot()["catalog_version"],
+        "billing_period": "monthly",
         "plans": plans,
         "topup_packs": [
             {"price_usd": p["price_usd"], "purchased_credits": p["purchased_credits"], "expires": False}
             for p in topup_pack_matrix()
         ],
-        "credit_unit": "1 credit = $0.001 of actual AI provider cost",
+        # Customer-facing credit note only — never expose provider cost / margin.
+        "credits_note": (
+            "Included credits refresh at the start of each paid billing period and do not roll over. "
+            "Credits purchased separately do not expire."
+        ),
     }
 
 
