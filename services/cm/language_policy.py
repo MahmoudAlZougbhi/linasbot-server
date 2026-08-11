@@ -1,4 +1,4 @@
-"""Customer reply language from Content Manager Languages (system standard).
+"""Customer reply language from AI Setup Languages (system standard).
 
 App UI locale / owner preferred_language do not choose DM or comment reply language.
 End customers cannot override reply language; inbound detection only feeds the CM map.

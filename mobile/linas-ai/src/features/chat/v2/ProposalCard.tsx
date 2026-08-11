@@ -162,10 +162,10 @@ export function ProposalCard({
         <Pressable
           style={[styles.secondary, { borderColor: colors.border }]}
           onPress={() => onOpenCm?.(reviewTarget)}
-          accessibilityLabel="Review in Content Management"
+          accessibilityLabel="Review in AI Setup"
         >
           <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>
-            Review in Content Management
+            Review in AI Setup
           </Text>
         </Pressable>
         <View style={styles.rowActions}>

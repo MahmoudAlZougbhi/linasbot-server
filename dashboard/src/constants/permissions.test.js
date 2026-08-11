@@ -15,7 +15,7 @@ describe("FAQ single entry routes", () => {
     expect(PATH_TO_PERMISSION["/training"]).toBe("contentManagers");
   });
 
-  it("maps Content Managers hub to contentManagers", () => {
+  it("maps AI Setup hub to contentManagers", () => {
     expect(PATH_TO_PERMISSION["/content-managers"]).toBe("contentManagers");
   });
 });

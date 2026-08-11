@@ -41,7 +41,7 @@ async def tool_update_profile(
     if "preferred_language" in safe or "preferredLanguage" in safe:
         data["note"] = (
             "preferred_language is owner chat/app preference only. "
-            "Customer DM/comment reply language comes from Content Management → Languages "
+            "Customer DM/comment reply language comes from AI Setup → Languages "
             "and cannot be changed via profile or Settings."
         )
     return ToolResult(ok=True, name="update_profile", data=data)

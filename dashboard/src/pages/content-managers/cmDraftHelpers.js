@@ -1,5 +1,5 @@
 /**
- * Shared helpers for Content Management draft forms (no JSON owner workflow).
+ * Shared helpers for AI Setup draft forms (no JSON owner workflow).
  */
 
 /**

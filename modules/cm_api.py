@@ -1,5 +1,5 @@
 """
-Content Management control-plane API.
+AI Setup control-plane API.
 
 Draft CRUD with ETag concurrency, validate, publish (hard-403 when disabled),
 versions/rollback stubs, and safe Testing Lab preview packets.

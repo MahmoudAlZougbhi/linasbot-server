@@ -1,5 +1,5 @@
 /**
- * Content Managers hub section cards (plan screen map).
+ * AI Setup hub section cards (plan screen map).
  * @typedef {object} CmSectionCard
  * @property {string} slug
  * @property {string | null} section API section id (null for publish hub)

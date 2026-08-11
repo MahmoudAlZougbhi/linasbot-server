@@ -11,33 +11,33 @@ _COPY: dict[str, dict[str, str]] = {
     "new": {
         "en": (
             "{hi} 👋 I’m Linas AI — your friendly System Copilot for the whole app. "
-            "I can help configure Content Management, connect Meta, and check usage. "
+            "I can help configure AI Setup, connect Meta, and check usage. "
             "Where would you like to start? ✨"
         ),
         "ar": (
             "{hi} 👋 أنا Linas AI — مساعد النظام الودود لتطبيقك بالكامل. "
-            "بساعدك بإعداد Content Management، وربط Meta، ومراجعة الاستخدام. "
+            "بساعدك بإعداد الذكاء الاصطناعي، وربط Meta، ومراجعة الاستخدام. "
             "من وين نبدأ؟ ✨"
         ),
         "fr": (
             "{hi} 👋 Je suis Linas AI — le copilote système chaleureux de toute l’application. "
-            "Je peux vous aider pour Content Management, Meta et l’usage. "
+            "Je peux vous aider pour Configuration IA, Meta et l’usage. "
             "Par où commencer ? ✨"
         ),
     },
     "cm_partial": {
         "en": (
-            "{hi} 👋 Your Content Management setup is partially complete. "
+            "{hi} 👋 Your AI Setup is partially complete. "
             "I can continue where you left off, or jump to integrations or usage. "
             "What feels easiest next?"
         ),
         "ar": (
-            "{hi} 👋 إعداد Content Management لديك مكتمل جزئياً. "
+            "{hi} 👋 إعداد الذكاء الاصطناعي لديك مكتمل جزئياً. "
             "فيني كمّل من وين وقفت، أو ننتقل للتكاملات أو الاستخدام. "
             "شو أسهل خطوة هلأ؟"
         ),
         "fr": (
-            "{hi} 👋 Votre configuration Content Management est partielle. "
+            "{hi} 👋 Votre Configuration IA est partielle. "
             "Je peux continuer, ou passer aux intégrations ou à l’usage. "
             "Quelle est la prochaine étape la plus simple ?"
         ),
@@ -59,15 +59,15 @@ _COPY: dict[str, dict[str, str]] = {
     "fully_configured": {
         "en": (
             "{hi} 👋 Welcome back! Everything core looks configured — ask me about usage, "
-            "Content Management tweaks, or integrations anytime."
+            "AI Setup tweaks, or integrations anytime."
         ),
         "ar": (
             "{hi} 👋 أهلاً بعودتك! الإعداد الأساسي يبدو مكتملاً — اسألني عن الاستخدام، "
-            "تعديلات Content Management، أو التكاملات بأي وقت."
+            "تعديلات إعداد الذكاء الاصطناعي، أو التكاملات بأي وقت."
         ),
         "fr": (
             "{hi} 👋 Bon retour ! L’essentiel semble configuré — demandez-moi l’usage, "
-            "des ajustements CM ou les intégrations quand vous voulez."
+            "des ajustements Configuration IA ou les intégrations quand vous voulez."
         ),
     },
 }

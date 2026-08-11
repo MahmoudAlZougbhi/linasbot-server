@@ -16,7 +16,7 @@ export const FEATURES = {
     key: 'training',
     path: '/training',
     name: 'FAQ (legacy redirect)',
-    description: 'Legacy /training URL redirects to Content Managers → FAQ'
+    description: 'Legacy /training URL redirects to AI Setup → FAQ'
   },
   TESTING: {
     key: 'testing',
@@ -51,14 +51,14 @@ export const FEATURES = {
   CONTENT_MANAGERS: {
     key: 'contentManagers',
     path: '/content-managers',
-    name: 'Content Managers',
+    name: 'AI Setup',
     description: 'Manage content files and knowledge content UI'
   },
   CONTENT_PUBLISH: {
     key: 'contentPublish',
     path: null,
     name: 'Content Publish',
-    description: 'Publish and rollback Content Management versions'
+    description: 'Publish and rollback AI Setup versions'
   },
   ACTIVITY_FLOW: {
     key: 'activityFlow',

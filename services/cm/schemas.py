@@ -1,4 +1,4 @@
-"""Pydantic v2 schemas for the Content Management AI Control Plane."""
+"""Pydantic v2 schemas for the AI Setup AI Control Plane."""
 
 from __future__ import annotations
 
@@ -283,7 +283,7 @@ class AiLimitsSection(CmBaseModel):
     """Tenant-configurable AI usage limits (enforced from published CM)."""
 
     unlimited: bool = False
-    # Capability switches (moved from Settings Features into Content Management).
+    # Capability switches (moved from Settings Features into AI Setup).
     voice_processing_enabled: bool = True
     image_analysis_enabled: bool = True
     image_per_day: int = Field(default=20, ge=0)

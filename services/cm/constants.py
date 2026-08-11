@@ -84,7 +84,7 @@ def cm_publish_enabled() -> bool:
 
 
 def cm_faq_canonical() -> bool:
-    """When true (default), Content Managers → FAQ is the only FAQ writer.
+    """When true (default), AI Setup → FAQ is the only FAQ writer.
 
     Legacy `/training` redirects to CM FAQ, and legacy Bot Training write APIs are disabled.
     Set CM_FAQ_CANONICAL=false only for emergency rollback of write gating.
@@ -100,20 +100,17 @@ PUBLISH_DISABLED_MESSAGE: Final[str] = (
 )
 
 UNPUBLISHED_AI_MESSAGE: Final[dict[str, str]] = {
-    "en": (
-        "This AI is not published yet. Please finish Content Management setup "
-        "and publish before customers can get answers."
-    ),
+    "en": ("This AI is not published yet. Please finish AI Setup and publish before customers can get answers."),
     "ar": (
-        "الذكاء الاصطناعي غير منشور بعد. أكمل إعداد Content Management وانشر المحتوى "
+        "الذكاء الاصطناعي غير منشور بعد. أكمل إعداد الذكاء الاصطناعي وانشر المحتوى "
         "قبل أن يتمكن العملاء من الحصول على إجابات."
     ),
     "fr": (
-        "Cette IA n'est pas encore publiée. Terminez la configuration Content Management "
+        "Cette IA n'est pas encore publiée. Terminez la Configuration IA "
         "et publiez avant que les clients puissent obtenir des réponses."
     ),
     "franco": (
-        "الذكاء الاصطناعي غير منشور بعد. أكمل إعداد Content Management وانشر المحتوى "
+        "الذكاء الاصطناعي غير منشور بعد. أكمل إعداد الذكاء الاصطناعي وانشر المحتوى "
         "قبل أن يتمكن العملاء من الحصول على إجابات."
     ),
 }

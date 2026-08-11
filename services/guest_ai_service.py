@@ -59,7 +59,7 @@ def build_guest_greeting(*, language: str = "en") -> str:
     return (
         "Hi 👋 I’m Linas AI — warm, clear, and here to help. "
         "I explain how we help businesses automate Instagram and Facebook "
-        "DMs and comments with Content Management and integrations. Ask me anything about the product ✨"
+        "DMs and comments with AI Setup and integrations. Ask me anything about the product ✨"
     )
 
 
@@ -73,17 +73,17 @@ def _trim(text: str, limit: int = MAX_HISTORY_CHARS) -> str:
 def _product_primer(lang: str) -> str:
     if lang == "ar":
         return (
-            "Linas AI منصة ذكاء اصطناعي للأعمال: تربط قنواتك، تضبط معرفة نشاطك عبر Content Management، "
+            "Linas AI منصة ذكاء اصطناعي للأعمال: تربط قنواتك، تضبط معرفة نشاطك عبر إعداد الذكاء الاصطناعي، "
             "وترد على العملاء بأسلوب علامتك، مع System Copilot داخل التطبيق بعد الاشتراك."
         )
     if lang == "fr":
         return (
-            "Linas AI est une plateforme d’IA métier : canaux, Content Management (ce que l’IA sait), "
+            "Linas AI est une plateforme d’IA métier : canaux, Configuration IA (ce que l’IA sait), "
             "réponses clients dans la voix de la marque, et System Copilot dans l’app après abonnement."
         )
     return (
         "Linas AI is a business AI platform focused on Instagram/Facebook DMs and comments: "
-        "connect channels, configure Content Management, and use System Copilot in the app after signup. "
+        "connect channels, configure AI Setup, and use System Copilot in the app after signup. "
         "Creative Studio / social post generation is not part of the current product."
     )
 

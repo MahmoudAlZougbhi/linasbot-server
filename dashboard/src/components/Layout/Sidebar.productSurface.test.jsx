@@ -26,7 +26,7 @@ describe("Sidebar product surface", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole("link", { name: /Content Managers/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /AI Setup/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^Settings$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Token Wallet/i })).toBeInTheDocument();
     expect(document.querySelector('a[href="/live-chat"]')).toBeTruthy();
@@ -48,7 +48,7 @@ describe("Sidebar product surface", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole("link", { name: /Content Managers/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /AI Setup/i })).toBeInTheDocument();
     expect(document.querySelector('a[href="/live-chat"]')).toBeNull();
     expect(document.querySelector('a[href="/activity-flow"]')).toBeNull();
     expect(screen.queryByRole("link", { name: /Download Live Chat APK/i })).not.toBeInTheDocument();

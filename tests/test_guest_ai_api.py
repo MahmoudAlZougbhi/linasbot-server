@@ -59,7 +59,7 @@ def guest_client(tmp_path: Path):
             )
         elif "content management" in lower or " cm" in lower or lower.strip() == "cm":
             body = (
-                "Content Management is where you configure what your customer AI knows — "
+                "AI Setup is where you configure what your customer AI knows — "
                 "services, prices, FAQ, handoff — then validate and publish when ready."
             )
         else:
@@ -169,7 +169,7 @@ async def test_compose_guest_reply_uses_llm_not_canned_pitch():
         assert (
             "broken record" in kwargs["messages"][0]["content"] or "not a brochure" in kwargs["messages"][0]["content"]
         )
-        return _FakeResponse("Content Management lets you teach the AI your services and FAQs before publish.")
+        return _FakeResponse("AI Setup lets you teach the AI your services and FAQs before publish.")
 
     fake = type(
         "C",
@@ -177,10 +177,10 @@ async def test_compose_guest_reply_uses_llm_not_canned_pitch():
         {"chat": type("Ch", (), {"completions": type("Co", (), {"create": AsyncMock(side_effect=_create)})()})()},
     )()
     with patch("services.llm_core_service.client", fake):
-        result = await compose_guest_reply("Explain Content Management", language="en")
+        result = await compose_guest_reply("Explain AI Setup", language="en")
     assert result["tools_used"] == []
     assert FORBIDDEN_GUEST_TOOLS
-    assert "Content Management" in result["reply_text"]
+    assert "AI Setup" in result["reply_text"]
     # Old canned sales intro must not be the reply body.
     assert not result["reply_text"].startswith("Linas AI is a business AI platform: connect channels")
 

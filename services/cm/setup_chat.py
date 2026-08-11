@@ -62,7 +62,7 @@ SECTION_MODELS: dict[str, type[CmBaseModel]] = {
 SETUP_SECTION_ORDER: tuple[str, ...] = tuple(s for s in CM_SECTIONS if s in SECTION_MODELS)
 
 INTRO_MESSAGE = (
-    "أنا مساعد إعداد الـAI الخاص بعملك. سأساعدك على تجهيز إعدادات Content Management "
+    "أنا مساعد إعداد الـAI الخاص بعملك. سأساعدك على تجهيز إعدادات الذكاء الاصطناعي "
     "خطوة بخطوة. يمكنك الإجابة علي هنا، ويمكنك دائماً تعديل أي شيء يدوياً من الأقسام الموجودة تحت."
 )
 
@@ -296,7 +296,7 @@ async def interpret_and_patch(
         next_section = current
 
     reply = (
-        f"تم حفظ قسم `{current}` في مسودة Content Management (نفس البيانات التي يعدّلها النموذج اليدوي)."
+        f"تم حفظ قسم `{current}` في مسودة إعداد الذكاء الاصطناعي (نفس البيانات التي يعدّلها النموذج اليدوي)."
         if patch
         else f"تم تخطي قسم `{current}`."
     )
@@ -342,7 +342,7 @@ async def interpret_and_patch(
 
 
 def _setup_llm_model() -> str:
-    """Content Manager setup chat uses gpt-5.6-sol (owner policy)."""
+    """AI Setup chat uses gpt-5.6-sol (owner policy)."""
     from services.model_policy import owner_model_id
 
     return owner_model_id()
@@ -357,7 +357,7 @@ async def _llm_patch(*, tenant_id: str, section: str, message: str) -> tuple[dic
     model = _setup_llm_model()
     schema_hint = json.dumps(default_section_payload(section), ensure_ascii=False)[:4000]
     system = (
-        "You help a business owner fill Content Management drafts. "
+        "You help a business owner fill AI Setup drafts. "
         "Return ONLY a JSON object patch for the current section fields. "
         "Never invent phones, prices, URLs, or medical facts. "
         "If the user did not provide a fact, omit that field. "

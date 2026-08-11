@@ -46,7 +46,7 @@ const ContentManagers = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">Content Managers</h1>
+        <h1 className="text-2xl font-bold text-slate-800">AI Setup</h1>
         <p className="text-slate-600 mt-1 max-w-3xl">
           Configure your business AI: identity, languages, knowledge, handoff, limits, and actions.
           Use the Setup Assistant or edit sections manually — both write the same drafts. Then Validate

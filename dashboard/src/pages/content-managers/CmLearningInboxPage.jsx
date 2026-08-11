@@ -6,7 +6,7 @@ import { useApi } from "../../hooks/useApi";
 
 /**
  * Minimal Learning Inbox: review wrong/unclear feedback and open the same CM FAQ Add path.
- * Feeds the canonical Content Managers → FAQ pipeline (Bot Training UI removed).
+ * Feeds the canonical AI Setup → FAQ pipeline (Bot Training UI removed).
  */
 const CmLearningInboxPage = () => {
   const { getWrongAnswers, getRecentFeedback, createCmFaq } = useApi();
@@ -82,7 +82,7 @@ const CmLearningInboxPage = () => {
           </Link>
           <h1 className="text-2xl font-semibold text-slate-900">Learning Inbox</h1>
           <p className="text-sm text-slate-600 mt-1">
-            Review wrong/unclear feedback and add proven answers to Content Management FAQ.
+            Review wrong/unclear feedback and add proven answers to AI Setup FAQ.
           </p>
         </div>
         <button

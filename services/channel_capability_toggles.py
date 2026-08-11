@@ -1,6 +1,6 @@
 """Per-channel DM/comment enable flags for Linas AI Integrations.
 
-Mirrors Content Management → Actions switches and, for comments, syncs the
+Mirrors AI Setup → Actions switches and, for comments, syncs the
 per-asset Meta comment-reply setting used at runtime.
 
 Mobile UI reads ``effective_enabled`` from the canonical capability matrix only.

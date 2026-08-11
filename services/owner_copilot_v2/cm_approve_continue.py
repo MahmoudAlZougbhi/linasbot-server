@@ -67,7 +67,7 @@ async def continue_after_cm_approve(
     else:
         if live_ok:
             directive = (
-                "Change is Live for customer replies. Content Management tracked sections look filled. "
+                "Change is Live for customer replies. AI Setup tracked sections look filled. "
                 "Congratulate briefly — customers will use this Live knowledge."
             )
         else:

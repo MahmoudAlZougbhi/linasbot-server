@@ -27,7 +27,7 @@ _CHIP_DEFS: dict[str, dict[str, Any]] = {
         },
         "prompt": (
             "Give me a clear tour of what Linas AI can do for my business: "
-            "Owner Copilot, Content Management (the AI that replies to customers), "
+            "Owner Copilot, AI Setup (the AI that replies to customers), "
             "Meta DMs/comments, subscription/usage. Keep it simple and actionable."
         ),
     },
@@ -40,7 +40,7 @@ _CHIP_DEFS: dict[str, dict[str, Any]] = {
             "fr": "Configurer mon IA de réponses pas à pas",
         },
         "prompt": (
-            "I want to set up the AI that replies to my customers (Content Management) "
+            "I want to set up the AI that replies to my customers (AI Setup) "
             "in guided mode — one section at a time. "
             "Call cm_fill_plan action=start, skip DONE/filled sections, "
             "then work ONLY plan.focus with inspect_cm_guide and propose_cm_patch. "
@@ -56,9 +56,9 @@ _CHIP_DEFS: dict[str, dict[str, Any]] = {
             "fr": "Configurer depuis une description complète",
         },
         "prompt": (
-            "I want bulk CM setup. Ask me for a complete business description and how I want "
+            "I want bulk AI Setup. Ask me for a complete business description and how I want "
             "the AI to reply (I may paste text and/or attach a file). "
-            "When I provide it, call ingest_business_dump to distribute into CM sections, "
+            "When I provide it, call ingest_business_dump to distribute into AI Setup sections, "
             "then propose the first section for approval and continue after each approve."
         ),
     },
@@ -66,12 +66,12 @@ _CHIP_DEFS: dict[str, dict[str, Any]] = {
         "modes": ("work",),
         "stages": ("cm_partial",),
         "labels": {
-            "en": "Continue filling missing CM sections",
-            "ar": "كمّل تعبئة أقسام Content Management الناقصة",
-            "fr": "Continuer les sections CM manquantes",
+            "en": "Continue filling missing AI Setup sections",
+            "ar": "كمّل تعبئة أقسام إعداد الذكاء الاصطناعي الناقصة",
+            "fr": "Continuer les sections Configuration IA manquantes",
         },
         "prompt": (
-            "Continue finishing Content Management. Call cm_fill_plan action=start, "
+            "Continue finishing AI Setup. Call cm_fill_plan action=start, "
             "skip DONE sections, walk remaining one at a time with propose_cm_patch."
         ),
     },

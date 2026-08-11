@@ -109,7 +109,7 @@ const CmPublishPage = () => {
           className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-800 mb-2"
         >
           <ArrowLeftIcon className="w-4 h-4" />
-          Content Managers
+          AI Setup
         </Link>
         <h1 className="text-2xl font-bold text-slate-800">Preview / Validate / Publish</h1>
         <p className="text-slate-600 mt-1">

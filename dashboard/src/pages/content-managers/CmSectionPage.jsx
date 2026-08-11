@@ -24,14 +24,14 @@ const CmSectionPage = () => {
     <div className="space-y-4 max-w-xl">
       <h1 className="text-2xl font-semibold text-slate-900">{card.name}</h1>
       <p className="text-slate-600">
-        This section uses a guided form. If you reached this page unexpectedly, open it from the Content Managers hub.
+        This section uses a guided form. If you reached this page unexpectedly, open it from the AI Setup hub.
       </p>
       <Link to={`/content-managers/${card.slug}`} className="text-emerald-700 hover:underline">
         Open {card.name}
       </Link>
       <div>
         <Link to="/content-managers" className="text-sm text-slate-500 hover:underline">
-          ← Back to Content Managers
+          ← Back to AI Setup
         </Link>
       </div>
     </div>

@@ -1,4 +1,4 @@
-"""Customer reply language follows Content Manager Languages policy."""
+"""Customer reply language follows AI Setup Languages policy."""
 
 from __future__ import annotations
 
@@ -86,4 +86,4 @@ def test_answer_luna_messages_include_cm_response_language() -> None:
     blob = msgs[1]["content"]
     assert "response_language" in blob
     assert "fr" in blob
-    assert "Content Manager" in blob or "Languages" in blob
+    assert "AI Setup" in blob or "Languages" in blob

@@ -1,4 +1,4 @@
-"""Content Management FAQ API — canonical owner-facing FAQ control plane."""
+"""AI Setup FAQ API — canonical owner-facing FAQ control plane."""
 
 from __future__ import annotations
 

@@ -1905,7 +1905,7 @@ const APITestingPanel = () => {
         requiresAuth: true,
       },
     ],
-    "Content Management": [
+    "AI Setup": [
       {
         id: "knowledge-base",
         name: "Get Knowledge Base",

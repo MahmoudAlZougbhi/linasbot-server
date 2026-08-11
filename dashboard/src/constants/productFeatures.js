@@ -15,7 +15,7 @@ export const DISABLED_FRONTEND_ROUTES = [
 /** Primary SaaS navigation (plus Live Chat / Interaction Logs in Sidebar). */
 export const SAAS_NAV_ITEMS = [
   { name: "Dashboard", href: "/app", permissionKey: "dashboard" },
-  { name: "Content Managers", href: "/content-managers", permissionKey: "contentManagers" },
+  { name: "AI Setup", href: "/content-managers", permissionKey: "contentManagers" },
   { name: "Interaction Logs", href: "/activity-flow", permissionKey: "activityFlow" },
   { name: "Live Chat", href: "/live-chat", permissionKey: "liveChat" },
   { name: "Settings", href: "/settings", permissionKey: "settings" },

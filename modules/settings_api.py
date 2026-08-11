@@ -35,7 +35,7 @@ async def get_settings() -> Any:
 
 @app.get("/api/settings/ai-limits")
 async def get_ai_limits(request: Request) -> Any:
-    """Read AI limits from published Content Management (sole business SoT)."""
+    """Read AI limits from published AI Setup (sole business SoT)."""
     session = require_session(request)
     payload = get_ai_limits_for_api(session.tenant_id)
     return {
@@ -48,12 +48,12 @@ async def get_ai_limits(request: Request) -> Any:
 
 @app.post("/api/settings/ai-limits")
 async def update_ai_limits_removed() -> Any:
-    """Writes removed — edit Content Management → AI Limits and publish."""
+    """Writes removed — edit AI Setup → AI Limits and publish."""
     return JSONResponse(
         status_code=410,
         content={
             "success": False,
-            "error": "AI limits are edited in Content Management and applied on publish",
+            "error": "AI limits are edited in AI Setup and applied on publish",
             "code": "AI_LIMITS_SETTINGS_WRITE_REMOVED",
         },
     )

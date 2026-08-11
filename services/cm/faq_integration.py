@@ -2,7 +2,7 @@
 
 Actual Q&A rows stay in ``qa_pairs.jsonl`` via :mod:`services.local_qa_service` for full
 compatibility with the existing bot-matching path. The CM ``faq`` draft section only tracks
-group metadata (qa_group_id + a variant preview + tags/notes) so Content Managers can author
+group metadata (qa_group_id + a variant preview + tags/notes) so AI Setup can author
 and audit FAQ without a second, divergent Q&A store.
 
 Preserves the frozen contract (plan §2.4/§8): 4 linked variants per group; Franco question

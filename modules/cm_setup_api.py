@@ -1,4 +1,4 @@
-"""CM Setup Chat API — same draft SoT as manual Content Managers forms."""
+"""CM Setup Chat API — same draft SoT as manual AI Setup forms."""
 
 from __future__ import annotations
 
