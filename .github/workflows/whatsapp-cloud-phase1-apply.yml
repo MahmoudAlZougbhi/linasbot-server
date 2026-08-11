@@ -1,9 +1,5 @@
 name: WhatsApp Cloud Migrate + Phase1 Flags
 
-# Run fail-closed PostgreSQL WhatsApp migrate and/or apply Phase 1 flags.
-# Does NOT flip WHATSAPP_CLOUD_PUBLIC_AVAILABILITY.
-# Does NOT touch Meta Console / App Review / Redis-required.
-
 on:
   workflow_dispatch:
     inputs:
@@ -38,29 +34,29 @@ jobs:
           script_stop: true
           command_timeout: 20m
           script: |
-            set -euo pipefail
+            set -euxo pipefail
             cd /opt/linasbot
             git fetch origin main
-            MODE="${{ github.event.inputs.CONFIRM }}"
-            git show origin/main:scripts/prod_whatsapp_cloud_migrate.sh > /tmp/prod_whatsapp_cloud_migrate.sh
-            git show origin/main:scripts/prod_apply_whatsapp_cloud_phase1_flags.sh > /tmp/prod_apply_whatsapp_cloud_phase1_flags.sh
-            sudo install -m 0755 /tmp/prod_whatsapp_cloud_migrate.sh /opt/linasbot/scripts/prod_whatsapp_cloud_migrate.sh
-            sudo install -m 0755 /tmp/prod_apply_whatsapp_cloud_phase1_flags.sh /opt/linasbot/scripts/prod_apply_whatsapp_cloud_phase1_flags.sh
-
-            echo "[wa-ops] deployed_sha=$(git rev-parse HEAD) mode=$MODE"
-
-            if [ "$MODE" = "APPLY_WHATSAPP_CLOUD_PHASE1" ]; then
-              if ! sudo bash -lc 'set -a; [ -f /opt/linasbot/.env ] && . /opt/linasbot/.env; set +a; test -n "${LINAS_WHATSAPP_DATABASE_URL:-${DATABASE_URL:-}}"'; then
-                echo "[wa-ops] BLOCKED: LINAS_WHATSAPP_DATABASE_URL / DATABASE_URL unset on server"
+            git reset --hard origin/main
+            MODE='${{ github.event.inputs.CONFIRM }}'
+            echo "[wa-ops] deployed_sha=$(git rev-parse HEAD)"
+            echo "[wa-ops] mode=${MODE}"
+            chmod +x scripts/prod_whatsapp_cloud_migrate.sh scripts/prod_apply_whatsapp_cloud_phase1_flags.sh
+            case "${MODE}" in
+              APPLY_WHATSAPP_CLOUD_PHASE1)
+                echo "[wa-ops] running migrate"
+                sudo bash scripts/prod_whatsapp_cloud_migrate.sh
+                ;;
+              APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY)
+                echo "[wa-ops] skipping migrate (FLAGS_ONLY)"
+                ;;
+              *)
+                echo "[wa-ops] BLOCKED: unknown mode"
                 exit 2
-              fi
-              sudo bash /opt/linasbot/scripts/prod_whatsapp_cloud_migrate.sh
-            else
-              echo "[wa-ops] skipping migrate (FLAGS_ONLY)"
-            fi
-
-            sudo bash /opt/linasbot/scripts/prod_apply_whatsapp_cloud_phase1_flags.sh
-
+                ;;
+            esac
+            echo "[wa-ops] applying phase1 flags"
+            sudo bash scripts/prod_apply_whatsapp_cloud_phase1_flags.sh
             curl -fsS https://linasaibot.com/api/ready >/tmp/ready.json
             python3 - <<'PY'
             import json
