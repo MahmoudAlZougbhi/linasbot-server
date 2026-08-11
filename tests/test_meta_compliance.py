@@ -111,7 +111,7 @@ def test_opaque_confirmation_code_is_random_and_not_pii() -> None:
 
 def test_public_compliance_pages_are_real_html(compliance_client: TestClient) -> None:
     for path, marker in (
-        ("/privacy-policy", "Facebook Messenger and Instagram direct"),
+        ("/privacy-policy", "Roles and relationships"),
         ("/terms", "does not create, edit, reschedule"),
         ("/data-deletion", "Invalid signatures are rejected"),
     ):
@@ -120,7 +120,35 @@ def test_public_compliance_pages_are_real_html(compliance_client: TestClient) ->
         assert response.headers["content-type"].startswith("text/html")
         assert response.headers["x-frame-options"] == "DENY"
         assert marker in response.text
-        assert "Lina's Laser Clinics" in response.text
+        assert "Linas AI" in response.text
+        assert "support@linasai.com" in response.text
+
+    privacy = compliance_client.get("/privacy-policy")
+    assert "WhatsApp" in privacy.text
+    assert "TikTok" in privacy.text
+    assert "AI Setup" in privacy.text
+    assert "Owner chat" in privacy.text
+    assert "Facebook" in privacy.text
+    assert "Instagram" in privacy.text
+    assert "Children’s privacy" in privacy.text or "Children's privacy" in privacy.text
+    assert "International transfers" in privacy.text
+    assert "OpenAI" in privacy.text
+    assert "In-App Purchase" in privacy.text or "Apple" in privacy.text
+    assert "mobile app" in privacy.text
+
+    terms = compliance_client.get("/terms")
+    assert "WhatsApp" in terms.text
+    assert "TikTok" in terms.text
+    assert "Limitation of liability" in terms.text
+    assert "AI Setup" in terms.text
+    assert "business customer-support" in terms.text
+
+    deletion = compliance_client.get("/data-deletion")
+    assert "WhatsApp" in deletion.text
+    assert "TikTok" in deletion.text
+    assert "Linas AI account deletion" in deletion.text
+    assert "30 days" in deletion.text
+    assert "Social message data deletion" in deletion.text
 
 
 @pytest.mark.parametrize(

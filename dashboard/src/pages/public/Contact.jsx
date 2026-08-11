@@ -10,7 +10,8 @@ const Contact = () => {
       <main className="mx-auto max-w-3xl px-4 py-14 sm:px-6">
         <h1 className="font-display text-4xl font-bold text-slate-950">Contact</h1>
         <p className="mt-4 text-lg leading-relaxed text-slate-700">
-          For questions about {PUBLIC_SITE.productName}, privacy, Meta connections, or user data deletion, email:
+          For questions about {PUBLIC_SITE.productName}, privacy, Terms, connected channels
+          (Facebook, Instagram, WhatsApp, TikTok), or user data deletion, email:
         </p>
         <p className="mt-6">
           <a

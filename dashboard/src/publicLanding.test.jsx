@@ -102,6 +102,8 @@ describe("public marketing landing", () => {
     expect(deletion).toHaveAttribute("href", PUBLIC_PATHS.dataDeletion);
     expect(screen.getByRole("link", { name: "About" })).toHaveAttribute("href", PUBLIC_PATHS.about);
     expect(screen.getAllByRole("link", { name: /Contact/i })[0]).toBeInTheDocument();
+    expect(PUBLIC_SITE.contactEmail).toBe("support@linasai.com");
+    expect(screen.getAllByRole("link", { name: PUBLIC_SITE.contactEmail }).length).toBeGreaterThan(0);
   });
 
   it("redirects /analytics to /app dashboard home", () => {

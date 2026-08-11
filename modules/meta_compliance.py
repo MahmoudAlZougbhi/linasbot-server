@@ -13,6 +13,11 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from modules.api_security import _client_ip
 from modules.core import app
+from services.compliance_page_content import (
+    data_deletion_body,
+    privacy_policy_body,
+    terms_of_service_body,
+)
 from services.meta_app_registry import (
     APP_A_KEY,
     MetaAppConfig,
@@ -29,7 +34,7 @@ from services.meta_data_deletion import (
 )
 from services.rate_limit_service import rate_limit_service
 
-_CONTACT_EMAIL = "Mahmoudalzougbhi@gmail.com"
+_CONTACT_EMAIL = "support@linasai.com"
 _PUBLIC_BASE_URL = "https://www.linasaibot.com"
 _SECURITY_HEADERS = {
     "Cache-Control": "no-store",
@@ -55,7 +60,7 @@ def _page(title: str, body: str, *, noindex: bool = False) -> HTMLResponse:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   {robots}
-  <title>{html.escape(title)} · Lina's Laser Clinics</title>
+  <title>{html.escape(title)} · Linas AI</title>
   <style>
     :root {{ color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }}
     body {{ margin: 0; background: #fff7fb; color: #251a22; line-height: 1.65; }}
@@ -215,69 +220,7 @@ async def _handle_meta_deauthorization(request: Request) -> JSONResponse:
 async def privacy_policy() -> HTMLResponse:
     return _page(
         "Privacy Policy",
-        f"""
-<h1>Privacy Policy</h1>
-<p class="meta">Effective 2 August 2026</p>
-<p>Lina's Laser Clinics uses Linas AI to answer Facebook Messenger and Instagram direct
-messages that a person voluntarily sends to the official Lina's Laser Clinics Facebook Page
-or linked Instagram professional account. Linas AI also provides an optional business-messaging
-platform through which an independent business can explicitly connect its own Facebook Page and
-linked professional Instagram account using Meta Business Login.</p>
-
-<h2>Data we receive</h2>
-<p>Meta may send us a platform-scoped sender identifier, the destination Page or Instagram
-account identifier, message text, message and timestamp identifiers, postback selections, and
-attachment notifications or metadata. The current social bot does not fetch attachment files;
-it asks the sender to describe what help they need in text.</p>
-
-<h2>How we use it</h2>
-<p>We use this information only to authenticate and deduplicate the webhook, bind the message
-to the business and assets that authorized the connection, preserve tenant-isolated conversation
-context, answer that business's configured service questions, maintain service security, and
-provide an explicit booking or human-support handoff when requested. When a business enables
-optional AI comment replies in Settings, we may also receive public Facebook Page or Instagram
-comment text and reply publicly under that comment using the business's approved content.
-When a business user explicitly creates a post in the dashboard, we publish only after that user
-reviews the caption, previews it, and confirms publishing. We do not publish posts automatically,
-run ads, send unsolicited marketing DMs, hide or delete comments,
-or book an appointment inside Facebook or Instagram.</p>
-
-<h2>Service providers</h2>
-<p>Meta delivers and sends the messages. OpenAI processes message text and relevant
-conversation context to generate an answer. Google Cloud/Firebase stores operational
-conversation records, and DigitalOcean hosts the application. These providers process data
-under their applicable contracts, security controls, and privacy terms.</p>
-
-<h2>Storage, retention, and security</h2>
-<p>Conversation records can include tenant and asset bindings, platform-scoped identifiers,
-message text, AI replies, timestamps, language, and routing state. OAuth credentials and Page
-tokens are encrypted server-side and are never entered or displayed to normal dashboard users.
-Operational logs may contain pseudonymous identifiers,
-status codes, and errors. The service does not currently apply a fixed automatic deletion date
-to conversation records; they remain while needed for continuity, security, troubleshooting,
-and the clinic's legitimate service records, unless a valid deletion request is completed or
-the records are no longer needed. Access is restricted; data is transmitted over HTTPS; Meta
-webhook bodies require HMAC signature validation; and production credentials are kept outside
-the source repository.</p>
-
-<h2>WhatsApp handoff</h2>
-<p>WhatsApp is only an outbound booking or human-agent destination. When a sender explicitly
-asks to book or reach a person, the bot may ask for the minimum branch and gender information
-needed to provide the correct public <code>https://wa.me/...</code> link. WhatsApp inbound
-messages do not enter this AI from this integration, and no Facebook or Instagram appointment
-is created in the clinic CRM.</p>
-
-<h2>Sharing and choices</h2>
-<p>We do not sell social-message data or use it for third-party advertising. A person can stop
-messaging at any time and can request access, correction, or deletion by following our
-<a href="/data-deletion">Data Deletion instructions</a> or emailing
-<a href="mailto:{_CONTACT_EMAIL}">{_CONTACT_EMAIL}</a>. We may ask for enough information to
-verify the relevant Facebook or Instagram conversation before acting.</p>
-
-<h2>Contact</h2>
-<p>Questions about this policy can be sent to
-<a href="mailto:{_CONTACT_EMAIL}">{_CONTACT_EMAIL}</a>.</p>
-""",
+        privacy_policy_body(contact_email=_CONTACT_EMAIL, public_base_url=_PUBLIC_BASE_URL),
     )
 
 
@@ -285,42 +228,7 @@ verify the relevant Facebook or Instagram conversation before acting.</p>
 async def terms_of_service() -> HTMLResponse:
     return _page(
         "Terms of Service",
-        f"""
-<h1>Terms of Service</h1>
-<p class="meta">Effective 2 August 2026</p>
-<p>These terms cover Linas AI replies available through the official Lina's Laser Clinics
-Facebook Messenger and Instagram direct-message accounts and, where enabled, through independent
-business accounts that the business owner connects to Linas AI using Meta Business Login.</p>
-
-<h2>Permitted use</h2>
-<p>You may voluntarily message the clinic to ask about services, prices, preparation, branches,
-and policies. Do not use the service unlawfully, attempt to bypass security, or send content
-that infringes another person's rights.</p>
-
-<h2>Automated information</h2>
-<p>Replies are generated automatically and may be incomplete. They are general clinic
-information, not medical diagnosis, emergency care, or a substitute for advice from a qualified
-health professional. Confirm important treatment, eligibility, pricing, and preparation details
-with clinic staff.</p>
-
-<h2>Appointments and human contact</h2>
-<p>The social bot does not create, edit, reschedule, cancel, or confirm appointments inside
-Facebook, Instagram, or the clinic CRM. When you explicitly request booking or a person, it
-provides the appropriate public WhatsApp contact and link after collecting only required routing
-information. An appointment exists only after clinic staff confirm it through the applicable
-booking process.</p>
-
-<h2>Messaging limits</h2>
-<p>The bot responds to customer-initiated direct messages within Meta's permitted messaging
-window. Optional AI comment replies are off by default and only run when enabled per Page or
-Instagram account in Settings. Availability may
-be interrupted for maintenance, platform limits, or security reasons.</p>
-
-<h2>Privacy and changes</h2>
-<p>Use of the service is also governed by our <a href="/privacy-policy">Privacy Policy</a>.
-We may update these terms when the service or legal requirements change. Questions may be sent
-to <a href="mailto:{_CONTACT_EMAIL}">{_CONTACT_EMAIL}</a>.</p>
-""",
+        terms_of_service_body(contact_email=_CONTACT_EMAIL, public_base_url=_PUBLIC_BASE_URL),
     )
 
 
@@ -328,42 +236,7 @@ to <a href="mailto:{_CONTACT_EMAIL}">{_CONTACT_EMAIL}</a>.</p>
 async def data_deletion_page() -> HTMLResponse:
     return _page(
         "User Data Deletion",
-        f"""
-<h1>User Data Deletion</h1>
-<p>You may request deletion of information associated with your Facebook Messenger or Instagram
-DM interaction with Linas AI, and—when a business enabled optional AI comment replies—public
-comment text we processed to generate a public reply. Social posts published through the
-dashboard are created only after explicit business-user confirmation; we do not retain separate
-public-post copies beyond what Meta stores on the connected Page or Instagram account.</p>
-
-<h2>Request through Meta</h2>
-<p>Remove the app or request deletion through the applicable Facebook or Instagram app settings.
-Meta sends our server an authenticated, signed deletion request. Valid requests remove the
-namespaced Facebook/Instagram user record, its stored conversations, and matching social chat
-index entries. Invalid signatures are rejected.</p>
-<p>After Meta accepts the request, use the confirmation code returned by Meta to check status at
-<code>{_PUBLIC_BASE_URL}/data-deletion/status/&lt;confirmation-code&gt;</code>.</p>
-
-<h2>Request by email</h2>
-<p>Email <a href="mailto:{_CONTACT_EMAIL}?subject=Social%20message%20data%20deletion">
-{_CONTACT_EMAIL}</a> with the subject “Social message data deletion”. State whether the request
-concerns Facebook Messenger or Instagram and provide the public account handle used to contact
-the clinic. Do not send a password, access token, 2FA code, government ID, or unrelated medical
-information. We may reply with a minimal verification step so we delete the correct record.</p>
-
-<h2>What deletion covers</h2>
-<p>Deletion covers the social bot's platform-scoped identifier, stored DM text and AI replies,
-optional comment-derived processing records, conversation state, timestamps, and matching
-social-chat index entries under our control. It
-does not delete records held independently by Meta, OpenAI, or another provider under its own
-legal obligations, nor records the clinic must retain to meet a legal obligation. We will explain
-any narrow exception that applies to a manual request.</p>
-
-<h2>Deauthorization</h2>
-<p>Removing the app from your Meta account settings may also revoke the business connection and
-stop future message processing for the affected authorization. This does not delete the entire
-Linas AI business account.</p>
-""",
+        data_deletion_body(contact_email=_CONTACT_EMAIL, public_base_url=_PUBLIC_BASE_URL),
     )
 
 

@@ -2,13 +2,13 @@
 export const PUBLIC_SITE = {
   productName: 'Linas AI',
   publicBaseUrl: 'https://www.linasaibot.com',
-  contactEmail: 'Mahmoudalzougbhi@gmail.com',
+  contactEmail: 'support@linasai.com',
   heroTitle: 'Linas AI',
   heroHeadline: 'Turn every DM and comment into a helpful answer.',
   heroSupport:
     'Linas AI answers customers using business facts you approve—while one chat-first Owner Copilot keeps setup, control, and visibility in your hands. This site is marketing + a short guest chat. Day-to-day work happens in the app.',
   metaPlatformDataUse:
-    'Our business provides a software platform that helps businesses respond to customer inquiries received on their Facebook Pages and Instagram professional accounts. With each client’s permission, we use the account details and customer messages provided by Meta only to receive inquiries, send automated replies using information approved by the client, and direct customers to the client’s chosen contact channel when booking or human assistance is needed. Each client connects only business accounts it owns or is authorized to manage.',
+    'Linas AI is a business customer-support platform that helps companies answer customers using knowledge each business approves. With each client’s permission, we may process inquiries on Facebook, Instagram, WhatsApp, and TikTok when that client connects those accounts through official platform integrations. We use account details and customer messages from those platforms only to receive inquiries, send automated replies from approved business knowledge, support Owner chat and AI Setup for that client, and direct customers to the client’s chosen contact channel when booking or human assistance is needed. Each client connects only business accounts it owns or is authorized to manage.',
 };
 
 /**

@@ -330,7 +330,7 @@ export const fr = {
   settingsSecuritySupport: 'Sécurité & Support',
   settingsPrivacyData: 'Confidentialité & Données',
   settingsHelpSupport: 'Aide & Support',
-  settingsHelpSupportNote: 'Utilisez le chat in-app pour l’aide produit',
+  settingsHelpSupportNote: 'Écrivez à support@linasai.com ou utilisez le chat Owner',
   settingsAboutLegal: 'À propos & Légal',
   navDashboard: 'Tableau de bord',
   navContentManagement: 'Configuration IA',

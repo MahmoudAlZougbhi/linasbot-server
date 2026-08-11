@@ -24,7 +24,7 @@ When a customer explicitly asks to book or contact a person, the bot asks only
 for the routing information that is still required: branch and gender, one field
 at a time. It then supplies the correct public WhatsApp number and
 `https://wa.me/...` handoff link. The bot does not book, edit, confirm, or cancel
-an appointment inside Facebook, Instagram, or the clinic CRM.
+an appointment inside Facebook, Instagram, WhatsApp, TikTok, or a business CRM.
 
 The integration processes direct messages only. It does not process Facebook or
 Instagram comments, publish content, send outbound marketing or unsolicited
@@ -94,13 +94,13 @@ the private task evidence directory and upload them only to Meta’s review form
 - Data received: platform-scoped sender and destination identifiers, DM text,
   message/timestamp identifiers, postback selections, and attachment metadata.
 - Purpose: authenticate/deduplicate webhooks, maintain conversation continuity,
-  answer the voluntarily submitted clinic question, protect the service, and
+  answer the voluntarily submitted business question from tenant-approved knowledge, protect the service, and
   provide a requested human/booking handoff.
 - Processors: Meta for message delivery, OpenAI for response generation,
   Google Cloud/Firebase for operational conversation storage, and DigitalOcean
   for hosting.
 - Storage and retention: as described in the published Privacy Policy; a valid
-  authenticated deletion request removes records under the clinic’s control.
+  authenticated deletion request removes records under Linas AI / the tenant’s control.
 - Security: HTTPS, strict Page/Instagram allowlists, Meta HMAC-SHA256 webhook
   validation, message-ID deduplication, echo rejection, query-secret-free access
   logging, secret storage outside the repository, and least-privilege access.
