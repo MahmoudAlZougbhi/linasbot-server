@@ -1,61 +1,22 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   DocumentTextIcon,
   CheckCircleIcon,
   ClockIcon,
-  ArrowPathIcon,
-  BookOpenIcon,
-  CurrencyDollarIcon,
-  SparklesIcon,
   MagnifyingGlassIcon,
-  XMarkIcon,
-  ChevronUpIcon,
-  ChevronDownIcon,
 } from "@heroicons/react/24/outline";
 import { useApi } from "../hooks/useApi";
-
-// Icon mapping for different file types
-const FILE_ICONS = {
-  knowledge_base: BookOpenIcon,
-  style_guide: SparklesIcon,
-  price_list: CurrencyDollarIcon,
-};
-
-// Color configuration for different file types
-const FILE_COLORS = {
-  knowledge_base: {
-    icon: "text-blue-600",
-    bg: "bg-blue-100",
-    helpBg: "bg-blue-50",
-    helpBorder: "border-blue-200",
-    helpText: "text-blue-800",
-  },
-  style_guide: {
-    icon: "text-purple-600",
-    bg: "bg-purple-100",
-    helpBg: "bg-purple-50",
-    helpBorder: "border-purple-200",
-    helpText: "text-purple-800",
-  },
-  price_list: {
-    icon: "text-green-600",
-    bg: "bg-green-100",
-    helpBg: "bg-green-50",
-    helpBorder: "border-green-200",
-    helpText: "text-green-800",
-  },
-};
-
-// Description/help text for each file type
-const FILE_HELP_TEXT = {
-  knowledge_base:
-    "This knowledge base contains information the bot can reference when answering customer questions. Include product details, procedures, FAQs, and any other relevant information.",
-  style_guide:
-    "These instructions guide the AI's behavior in every customer conversation. The bot reads these guidelines before responding to ensure consistent, professional interactions.",
-  price_list:
-    "List your service prices here. The bot will reference this when customers ask about pricing. Format: one service per line with price.",
-};
+import {
+  FILE_ICONS,
+  FILE_COLORS,
+  FILE_HELP_TEXT,
+  formatDate,
+  formatFileSize,
+  findTrainingSearchMatches,
+} from "./TrainingFileEditor.meta";
+import { TrainingFileEditorSearch } from "./TrainingFileEditorSearch";
+import { TrainingFileEditorBackups } from "./TrainingFileEditorBackups";
 
 /** @param {{ fileId: keyof typeof FILE_ICONS | string; title: string; description?: string }} props */
 const TrainingFileEditor = ({ fileId, title, description: _description }) => {
@@ -76,7 +37,6 @@ const TrainingFileEditor = ({ fileId, title, description: _description }) => {
   const [lastModified, setLastModified] = useState(/** @type {string | null} */ (null));
   const [isLoading, setIsLoading] = useState(true);
 
-  // Search functionality state
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
@@ -136,64 +96,40 @@ const TrainingFileEditor = ({ fileId, title, description: _description }) => {
     setHasChanges(content !== originalContent);
   }, [content, originalContent]);
 
-  // Search results calculation
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim() || !content) return [];
+  const searchResults = useMemo(
+    () => findTrainingSearchMatches(content, searchQuery),
+    [searchQuery, content]
+  );
 
-    const results = [];
-    const searchLower = searchQuery.toLowerCase();
-    const contentLower = content.toLowerCase();
-    let index = 0;
-
-    while ((index = contentLower.indexOf(searchLower, index)) !== -1) {
-      // Find line number
-      const lineNumber = content.substring(0, index).split('\n').length;
-      // Get context (the line containing the match)
-      const lines = content.split('\n');
-      const lineContent = lines[lineNumber - 1] || '';
-
-      results.push({
-        index,
-        lineNumber,
-        lineContent: lineContent.trim(),
-        matchText: content.substring(index, index + searchQuery.length)
-      });
-      index += 1;
-    }
-
-    return results;
-  }, [searchQuery, content]);
-
-  // Reset current match index when search changes
   useEffect(() => {
     setCurrentMatchIndex(0);
   }, [searchQuery]);
 
-  // Focus search input when search opens
   useEffect(() => {
     if (isSearchOpen && searchInputRef.current) {
       searchInputRef.current.focus();
     }
   }, [isSearchOpen]);
 
-  // Navigate to a specific match in the textarea
-  const navigateToMatch = useCallback((/** @type {number} */ matchIndex) => {
-    if (searchResults.length === 0 || !textareaRef.current) return;
+  const navigateToMatch = useCallback(
+    (/** @type {number} */ matchIndex) => {
+      if (searchResults.length === 0 || !textareaRef.current) return;
 
-    const match = searchResults[matchIndex];
-    if (!match) return;
+      const match = searchResults[matchIndex];
+      if (!match) return;
 
-    const textarea = textareaRef.current;
-    textarea.focus();
-    textarea.setSelectionRange(match.index, match.index + searchQuery.length);
+      const textarea = textareaRef.current;
+      textarea.focus();
+      textarea.setSelectionRange(match.index, match.index + searchQuery.length);
 
-    // Scroll to the selection
-    const lineHeight = 20; // approximate line height in pixels
-    const scrollPosition = (match.lineNumber - 5) * lineHeight;
-    textarea.scrollTop = Math.max(0, scrollPosition);
+      const lineHeight = 20;
+      const scrollPosition = (match.lineNumber - 5) * lineHeight;
+      textarea.scrollTop = Math.max(0, scrollPosition);
 
-    setCurrentMatchIndex(matchIndex);
-  }, [searchResults, searchQuery]);
+      setCurrentMatchIndex(matchIndex);
+    },
+    [searchResults, searchQuery]
+  );
 
   const goToNextMatch = useCallback(() => {
     if (searchResults.length === 0) return;
@@ -214,20 +150,18 @@ const TrainingFileEditor = ({ fileId, title, description: _description }) => {
     }
   };
 
-  // Keyboard shortcut for search (Ctrl+F or Cmd+F)
   useEffect(() => {
     /** @param {KeyboardEvent} e */
     const handleKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
         e.preventDefault();
         setIsSearchOpen(true);
       }
-      if (e.key === 'Escape' && isSearchOpen) {
+      if (e.key === "Escape" && isSearchOpen) {
         setIsSearchOpen(false);
         setSearchQuery("");
       }
-      // Enter key to go to next match
-      if (e.key === 'Enter' && isSearchOpen && searchResults.length > 0) {
+      if (e.key === "Enter" && isSearchOpen && searchResults.length > 0) {
         e.preventDefault();
         if (e.shiftKey) {
           goToPrevMatch();
@@ -237,8 +171,8 @@ const TrainingFileEditor = ({ fileId, title, description: _description }) => {
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isSearchOpen, searchResults.length, goToNextMatch, goToPrevMatch]);
 
   const handleSave = async () => {
@@ -279,22 +213,6 @@ const TrainingFileEditor = ({ fileId, title, description: _description }) => {
     }
   };
 
-  /** @param {string | null | undefined} dateString */
-  const formatDate = (dateString) => {
-    if (!dateString) return "Unknown";
-    const date = new Date(dateString);
-    return date.toLocaleString();
-  };
-
-  /** @param {number | null | undefined} bytes */
-  const formatFileSize = (bytes) => {
-    if (!bytes) return "0 B";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
-  };
-
   if (isLoading) {
     return (
       <motion.div
@@ -316,7 +234,6 @@ const TrainingFileEditor = ({ fileId, title, description: _description }) => {
       transition={{ duration: 0.3 }}
       className="space-y-6"
     >
-      {/* Stats Cards */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="card">
@@ -326,9 +243,7 @@ const TrainingFileEditor = ({ fileId, title, description: _description }) => {
               </div>
               <div>
                 <p className="text-sm font-medium text-slate-600">Lines</p>
-                <p className={`text-xl font-bold ${colors.icon}`}>
-                  {stats.lines}
-                </p>
+                <p className={`text-xl font-bold ${colors.icon}`}>{stats.lines}</p>
               </div>
             </div>
           </div>
@@ -352,9 +267,7 @@ const TrainingFileEditor = ({ fileId, title, description: _description }) => {
               </div>
               <div>
                 <p className="text-sm font-medium text-slate-600">Characters</p>
-                <p className="text-xl font-bold text-purple-600">
-                  {stats.characters}
-                </p>
+                <p className="text-xl font-bold text-purple-600">{stats.characters}</p>
               </div>
             </div>
           </div>
@@ -375,7 +288,6 @@ const TrainingFileEditor = ({ fileId, title, description: _description }) => {
         </div>
       )}
 
-      {/* Main Editor */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -396,13 +308,12 @@ const TrainingFileEditor = ({ fileId, title, description: _description }) => {
                 Unsaved changes
               </span>
             )}
-            {/* Search Toggle Button */}
             <button
               onClick={toggleSearch}
               className={`p-2 rounded-lg transition-all duration-200 ${
                 isSearchOpen
                   ? `${colors.bg} ${colors.icon}`
-                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                  : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
               }`}
               title="Search (Ctrl+F)"
             >
@@ -412,101 +323,19 @@ const TrainingFileEditor = ({ fileId, title, description: _description }) => {
         </div>
 
         <div className="space-y-4">
-          {/* Search Bar */}
-          <AnimatePresence>
-            {isSearchOpen && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.2 }}
-                className="overflow-hidden"
-              >
-                <div className={`${colors.helpBg} border ${colors.helpBorder} rounded-lg p-3`}>
-                  <div className="flex items-center space-x-3">
-                    <div className="relative flex-1">
-                      <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
-                      <input
-                        ref={searchInputRef}
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search in content..."
-                        className="input-field pl-9 pr-4 py-2 w-full text-sm"
-                      />
-                    </div>
-
-                    {/* Match count and navigation */}
-                    {searchQuery && (
-                      <div className="flex items-center space-x-2">
-                        <span className={`text-sm font-medium ${searchResults.length > 0 ? colors.helpText : 'text-slate-400'}`}>
-                          {searchResults.length > 0
-                            ? `${currentMatchIndex + 1} of ${searchResults.length}`
-                            : 'No matches'}
-                        </span>
-
-                        {searchResults.length > 0 && (
-                          <>
-                            <button
-                              onClick={goToPrevMatch}
-                              className={`p-1.5 rounded-lg ${colors.bg} ${colors.icon} hover:opacity-80 transition-opacity`}
-                              title="Previous match (Shift+Enter)"
-                            >
-                              <ChevronUpIcon className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={goToNextMatch}
-                              className={`p-1.5 rounded-lg ${colors.bg} ${colors.icon} hover:opacity-80 transition-opacity`}
-                              title="Next match (Enter)"
-                            >
-                              <ChevronDownIcon className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
-
-                    <button
-                      onClick={toggleSearch}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-                      title="Close search (Esc)"
-                    >
-                      <XMarkIcon className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {/* Search Results Preview */}
-                  {searchQuery && searchResults.length > 0 && (
-                    <div className="mt-3 max-h-40 overflow-y-auto space-y-1">
-                      {searchResults.slice(0, 10).map((result, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => navigateToMatch(idx)}
-                          className={`w-full text-left p-2 rounded-lg text-sm transition-colors ${
-                            idx === currentMatchIndex
-                              ? `${colors.bg} ${colors.helpText}`
-                              : 'hover:bg-white/50 text-slate-600'
-                          }`}
-                        >
-                          <span className="font-medium text-slate-400 mr-2">Line {result.lineNumber}:</span>
-                          <span className="truncate">
-                            {result.lineContent.length > 80
-                              ? result.lineContent.substring(0, 80) + '...'
-                              : result.lineContent}
-                          </span>
-                        </button>
-                      ))}
-                      {searchResults.length > 10 && (
-                        <p className="text-xs text-slate-400 text-center py-1">
-                          +{searchResults.length - 10} more matches
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <TrainingFileEditorSearch
+            isSearchOpen={isSearchOpen}
+            colors={colors}
+            searchInputRef={searchInputRef}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            searchResults={searchResults}
+            currentMatchIndex={currentMatchIndex}
+            goToPrevMatch={goToPrevMatch}
+            goToNextMatch={goToNextMatch}
+            toggleSearch={toggleSearch}
+            navigateToMatch={navigateToMatch}
+          />
 
           {helpText && (
             <div className={`${colors.helpBg} border ${colors.helpBorder} rounded-lg p-4`}>
@@ -532,11 +361,7 @@ const TrainingFileEditor = ({ fileId, title, description: _description }) => {
 
             <div className="flex space-x-3">
               {hasChanges && (
-                <button
-                  onClick={handleDiscard}
-                  className="btn-ghost"
-                  disabled={loading}
-                >
+                <button onClick={handleDiscard} className="btn-ghost" disabled={loading}>
                   Discard Changes
                 </button>
               )}
@@ -562,40 +387,11 @@ const TrainingFileEditor = ({ fileId, title, description: _description }) => {
         </div>
       </div>
 
-      {/* Backups */}
-      {backups.length > 0 && (
-        <div className="card">
-          <h3 className="text-lg font-bold text-slate-800 font-display mb-4 flex items-center">
-            <ArrowPathIcon className="w-5 h-5 mr-2 text-slate-600" />
-            Backup History ({backups.length})
-          </h3>
-
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {backups.map((backup) => (
-              <div
-                key={backup.filename}
-                className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
-              >
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-slate-800">
-                    {backup.filename}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {formatDate(backup.created)} • {formatFileSize(backup.size)}
-                  </p>
-                </div>
-                <button
-                  onClick={() => handleRestore(backup.filename || "")}
-                  disabled={loading}
-                  className="text-sm px-3 py-1 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors disabled:opacity-50"
-                >
-                  Restore
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <TrainingFileEditorBackups
+        backups={backups}
+        loading={loading}
+        handleRestore={handleRestore}
+      />
     </motion.div>
   );
 };
