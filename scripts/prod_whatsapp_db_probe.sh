@@ -8,7 +8,13 @@ cd "$APP_DIR"
 
 echo "[wa-db-probe] deployed_sha=$(git rev-parse HEAD 2>/dev/null || echo unknown)"
 
-python3 - <<'PY'
+PYTHON_CMD="python3"
+if [ -x "$APP_DIR/venv/bin/python" ]; then
+  PYTHON_CMD="$APP_DIR/venv/bin/python"
+fi
+echo "[wa-db-probe] python=$PYTHON_CMD"
+
+"$PYTHON_CMD" - <<'PY'
 from __future__ import annotations
 
 import os
@@ -120,7 +126,8 @@ checks = {
 }
 for name, cmd in checks.items():
     print(f"[wa-db-probe] [{name}]")
-    print(run(cmd))
+    out = run(cmd)
+    print(out if out else "(empty)")
 
 # Attempt SQLAlchemy SELECT 1 without printing DSN.
 url = (merged.get("LINAS_WHATSAPP_DATABASE_URL") or merged.get("DATABASE_URL") or "").strip()
