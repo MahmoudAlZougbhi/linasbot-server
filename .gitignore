@@ -169,3 +169,17 @@ dashboard/test-results/
 
 .venv
 .venv/
+
+#-------------------------
+# Runtime logs / local probes (not seeds)
+#-------------------------
+logs/*.out
+.tmp_8010_*.json
+
+# Runtime jsonl (durable via LINASBOT_DATA_ROOT / cwd — not git seeds).
+# Still TRACKED until owner decision — see docs/audit/PII_EXPOSURE_REPORT.md
+# Uncomment after `git rm --cached` on each path:
+# logs/content_violations.jsonl
+# data/reports_log.jsonl
+# data/analytics_events.jsonl
+# data/conversation_log.jsonl
