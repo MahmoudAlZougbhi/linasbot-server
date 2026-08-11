@@ -36,6 +36,14 @@ def test_disabled_api_path_matcher() -> None:
     assert is_disabled_api_path("/api/media/audio") is False
     assert is_disabled_api_path("/api/smart-messaging/campaigns") is True
     assert is_disabled_api_path("/api/test/foo") is True
+    assert is_disabled_api_path("/api/test") is True
+    assert is_disabled_api_path("/api/test-message") is True
+    assert is_disabled_api_path("/api/test-image") is True
+    assert is_disabled_api_path("/api/test-voice") is True
+    assert is_disabled_api_path("/api/test-voice-text") is True
+    assert is_disabled_api_path("/api/test-voice-upload") is True
+    assert is_disabled_api_path("/api/test-image-upload") is True
+    assert is_disabled_api_path("/api/switch-provider") is True
     assert is_disabled_api_path("/api/meta/social-posts/publish") is True
     assert is_disabled_api_path("/api/settings/clinic") is True
     assert is_disabled_api_path("/api/stats") is True

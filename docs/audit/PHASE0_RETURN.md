@@ -14,7 +14,7 @@
   - `scripts/audit/line_count_gate.py`
 - **All inventory `review_status`:** UNREVIEWED (shell only)
 - **Next:** continue W01 without pause (continuous mode)
-- **Audit commit:** 
+- **Audit commit:** `5f9e8b5` (inventory); return doc `8ea84e0`
 
 ## Residual after W00
 - UNREVIEWED rows: 1283

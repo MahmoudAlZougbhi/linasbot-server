@@ -13,7 +13,7 @@ import os
 import re
 from typing import Any
 
-from fastapi import File, Form, Request, UploadFile
+from fastapi import File, Form, HTTPException, Request, UploadFile
 
 import config
 from handlers.photo_handlers import handle_photo_message
@@ -22,7 +22,13 @@ from handlers.voice_handlers import handle_voice_message
 from modules.core import app, dashboard_bot_responses, dashboard_stats
 from modules.models import ProviderSwitchRequest, TestImageRequest, TestMessageRequest, TestVoiceRequest
 from modules.whatsapp_adapters import send_whatsapp_typing_indicator
+from services.product_features import DISABLED_PRODUCT_MESSAGE
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+
+
+def _refuse_disabled_lab_endpoint() -> None:
+    """Defense-in-depth: Testing Lab / provider-switch HTTP surface is product-disabled."""
+    raise HTTPException(status_code=403, detail=DISABLED_PRODUCT_MESSAGE)
 
 
 async def restore_user_state_from_firestore(user_id: str) -> str:
@@ -379,28 +385,14 @@ async def simulate_webhook(req: Request) -> Any:
 
 @app.get("/api/test")
 async def test_api() -> Any:
-    """Test endpoint for dashboard health check"""
-    return {
-        "status": "online",
-        "message": "Lina's Laser AI Bot is running!",
-        "features": ["Text Chat", "Voice Processing", "Image Analysis", "Multi-Provider WhatsApp", "Q&A Management"],
-        "current_provider": WhatsAppFactory.get_current_provider(),
-        "timestamp": datetime.datetime.now().isoformat(),
-    }
+    """Legacy Testing Lab health probe — disabled for all tenants."""
+    _refuse_disabled_lab_endpoint()
 
 
 @app.post("/api/switch-provider")
 async def switch_provider(request: ProviderSwitchRequest) -> Any:
-    """Switch WhatsApp provider"""
-    try:
-        WhatsAppFactory.switch_provider(request.provider)
-        return {
-            "success": True,
-            "message": f"Switched to {request.provider}",
-            "current_provider": WhatsAppFactory.get_current_provider(),
-        }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    """HTTP provider switching is permanently refused (no process-global WA switch via API)."""
+    _refuse_disabled_lab_endpoint()
 
 
 async def _test_message_meta_social(
@@ -483,6 +475,7 @@ async def test_message(request: TestMessageRequest) -> Any:
     Meta social path (handoff router, tool exclusion, identity scoping) with a
     capture-only adapter. Omitting channel keeps the legacy WhatsApp-style lab path.
     """
+    _refuse_disabled_lab_endpoint()
     try:
         start_time = datetime.datetime.now()
         channel = (request.channel or "").strip().lower() or None
@@ -662,6 +655,7 @@ async def test_message(request: TestMessageRequest) -> Any:
 @app.post("/api/test-image")
 async def test_image(request: TestImageRequest) -> Any:
     """Test image analysis through the bot with image URL"""
+    _refuse_disabled_lab_endpoint()
     try:
         start_time = datetime.datetime.now()
 
@@ -765,6 +759,7 @@ async def test_voice(
     audio: UploadFile = File(None), phone: str = Form(None), provider: str = Form(None), voice_text: str = Form(None)
 ) -> Any:
     """Test voice message processing - handles both file upload and text simulation"""
+    _refuse_disabled_lab_endpoint()
     try:
         # Check if this is a file upload
         if audio is not None and audio.filename:
@@ -920,6 +915,7 @@ async def test_voice(
 @app.post("/api/test-voice-text")
 async def test_voice_text(request: TestVoiceRequest) -> Any:
     """Test voice message using JSON body with pre-transcribed text (simulates voice input)"""
+    _refuse_disabled_lab_endpoint()
     try:
         start_time = datetime.datetime.now()
 
@@ -1016,6 +1012,7 @@ async def test_voice_upload(
     audio: UploadFile = File(...), phone: str = Form("96176466674"), provider: str = Form("montymobile")
 ) -> Any:
     """Test voice message processing with actual audio file upload"""
+    _refuse_disabled_lab_endpoint()
     try:
         start_time = datetime.datetime.now()
 
@@ -1150,6 +1147,7 @@ async def test_image_upload(
     image: UploadFile = File(...), phone: str = Form("96176466674"), provider: str = Form("montymobile")
 ) -> Any:
     """Test image analysis through the bot with file upload"""
+    _refuse_disabled_lab_endpoint()
     try:
         start_time = datetime.datetime.now()
 

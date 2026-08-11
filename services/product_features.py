@@ -19,8 +19,16 @@ DISABLED_PRODUCT_MODULES: Final[tuple[str, ...]] = (
 )
 
 # API path prefixes that belong to disabled modules (all tenants, including linas).
+# NOTE: "/api/test" alone does NOT match hyphenated lab routes ("/api/test-message").
+# Those are listed explicitly and also matched via startswith("/api/test-") in is_disabled_api_path.
 DISABLED_API_PREFIXES: Final[tuple[str, ...]] = (
     "/api/test",
+    "/api/test-message",
+    "/api/test-image",
+    "/api/test-voice",
+    "/api/test-voice-text",
+    "/api/test-voice-upload",
+    "/api/test-image-upload",
     "/api/switch-provider",
     "/api/debug",
     "/api/smart-messaging",
@@ -56,6 +64,9 @@ def is_disabled_api_path(path: str) -> bool:
     """Return True when ``path`` targets a product module that is disabled for everyone."""
     p = _normalize_path(path)
     if p == "/api/stats":
+        return True
+    # Hyphenated Testing Lab routes historically bypassed the "/api/test" prefix check.
+    if p.startswith("/api/test-"):
         return True
     for prefix in DISABLED_API_PREFIXES:
         if p == prefix or p.startswith(f"{prefix}/"):
