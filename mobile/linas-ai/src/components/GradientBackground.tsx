@@ -8,7 +8,10 @@ type Props = {
   style?: ViewStyle;
 };
 
-/** Soft teal wash matching PDF handoff light/dark tokens. */
+/**
+ * Soft top wash matching PDF handoff light/dark tokens.
+ * No bottom wash / elevation strip — that read as a green shadowed bar above the chat composer.
+ */
 export function GradientBackground({ children, style }: Props) {
   const { colors } = useTheme();
   return (
@@ -18,10 +21,6 @@ export function GradientBackground({ children, style }: Props) {
         pointerEvents="none"
       />
       <View style={[styles.glow, { backgroundColor: colors.accentGlow }]} pointerEvents="none" />
-      <View
-        style={[styles.bottomWash, { backgroundColor: colors.surfaceAlt }]}
-        pointerEvents="none"
-      />
       {children}
     </View>
   );
@@ -41,13 +40,5 @@ const styles = StyleSheet.create({
     width: 280,
     height: 280,
     borderRadius: 140,
-  },
-  bottomWash: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: '24%',
-    opacity: 0.55,
   },
 });

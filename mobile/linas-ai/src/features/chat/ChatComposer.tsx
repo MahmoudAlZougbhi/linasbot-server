@@ -173,7 +173,8 @@ export function ChatComposer({
         styles.wrap,
         {
           paddingBottom: Math.max(insets.bottom, 10),
-          backgroundColor: colors.bgElevated,
+          // Match chat canvas — no elevated/green chrome slab above the pill.
+          backgroundColor: colors.bg,
         },
       ]}
     >
@@ -181,7 +182,7 @@ export function ChatComposer({
         style={[
           styles.pill,
           {
-            backgroundColor: colors.bgElevated,
+            backgroundColor: colors.surface,
             borderColor: colors.border,
           },
         ]}
