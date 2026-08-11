@@ -250,6 +250,35 @@ class ActionsSection(CmBaseModel):
     notes: str | None = None
 
 
+class CommentRule(CmBaseModel):
+    """Structured comment behavior: match customer text → public reply, DM, or ignore.
+
+    Optional ``post_id`` targets a Meta post/media id when known. Full Meta post picker
+    is a follow-up; owners can paste ids today.
+    """
+
+    id: str
+    enabled: bool = True
+    name: str = ""
+    match_mode: Literal["contains", "any_keyword", "regex"] = "any_keyword"
+    keywords: list[str] = Field(default_factory=list)
+    pattern: str = ""
+    post_id: str = ""
+    channel: Literal["any", "facebook", "instagram"] = "any"
+    action: Literal["reply_comment", "reply_dm", "ignore"] = "reply_comment"
+    reply_template: str = ""
+    notes: str | None = None
+
+
+class CommentsSection(CmBaseModel):
+    """Comment-specific CM policy evaluated by the Meta comment runtime before AI reply."""
+
+    default_action: Literal["reply_comment", "ignore"] = "reply_comment"
+    policy_text: str = ""
+    rules: list[CommentRule] = Field(default_factory=list)
+    notes: str | None = None
+
+
 class AiLimitsSection(CmBaseModel):
     """Tenant-configurable AI usage limits (enforced from published CM)."""
 
@@ -550,6 +579,7 @@ def default_section_payload(section: str) -> dict[str, object]:
         # Empty by default — Restricted Topics are owner-configured, not auto-seeded.
         "restricted": RestrictedPolicy(),
         "actions": ActionsSection(),
+        "comments": CommentsSection(),
         "ai_limits": AiLimitsSection(),
         "off_days": OffDaysSection(),
         "opening_hours": OpeningHoursSection(),

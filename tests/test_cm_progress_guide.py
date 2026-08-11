@@ -71,8 +71,10 @@ def test_quality_missing_weak_filled() -> None:
 def test_progress_summary_and_fill_plan(tenant: str) -> None:
     summary = progress_summary(tenant, create_missing=False)
     assert summary["total"] == len(CM_SECTIONS)
-    assert summary["complete"] == 0
-    assert set(summary["remaining_sections"]) == set(CM_SECTIONS)
+    # Optional Comments policy defaults count as filled (no owner content required).
+    optional_done = {"comments"}
+    assert summary["complete"] == len(optional_done)
+    assert set(summary["remaining_sections"]) == set(CM_SECTIONS) - optional_done
     assert "cm_fill_plan" in summary["fill_missing_prompt"] or "inspect_cm_guide" in summary["fill_missing_prompt"]
 
     put_draft(

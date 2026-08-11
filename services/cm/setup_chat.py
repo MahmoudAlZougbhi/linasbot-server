@@ -22,6 +22,7 @@ from services.cm.schemas import (
     BranchesSection,
     CareSection,
     CmBaseModel,
+    CommentsSection,
     DynamicMessagesSection,
     FaqSection,
     HandoffPolicy,
@@ -52,6 +53,7 @@ SECTION_MODELS: dict[str, type[CmBaseModel]] = {
     "handoff": HandoffPolicy,
     "restricted": RestrictedPolicy,
     "actions": ActionsSection,
+    "comments": CommentsSection,
     "ai_limits": AiLimitsSection,
     "off_days": OffDaysSection,
 }
@@ -87,6 +89,10 @@ SECTION_PROMPTS: dict[str, str] = {
     "actions": (
         "هل تريد الرد على رسائل فيسبوك/إنستغرام الخاصة؟ هل تريد الرد على التعليقات؟ "
         "هل تريد تحليل الصور؟ (افتراضياً الصور معطّلة)."
+    ),
+    "comments": (
+        "لقواعد التعليقات: هل تريد كلمات مفتاحية يرد عليها الـAI علناً، أو عبر رسالة خاصة، "
+        "أو يتجاهلها؟ يمكنك إضافة قواعد لاحقاً من قسم Comments."
     ),
     "ai_limits": "ما حد الصور يومياً/أسبوعياً لكل عميل؟ وما حد أسطر السياق تقريباً؟",
     "off_days": "هل عندكم يوم عطلة أسبوعي؟ وهل هناك تواريخ محددة يكون العمل فيها مغلقاً؟",
