@@ -72,7 +72,8 @@ export function SideDrawer({
           {
             width,
             paddingTop: insets.top + 8,
-            paddingBottom: insets.bottom + 12,
+            // Safe area only — no extra lift above the home indicator.
+            paddingBottom: Math.max(insets.bottom, 4),
             transform: [{ translateX: anim }],
           },
           style,

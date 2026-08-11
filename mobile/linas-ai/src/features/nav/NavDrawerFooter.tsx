@@ -94,10 +94,11 @@ export function NavDrawerFooter(props: Props) {
             props.onNewChat();
             props.onClose();
           }}
+          hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={tr('newChat')}
         >
-          <NewChatIcon color={colors.onAccent} size={18} />
+          <NewChatIcon color={colors.onAccent} size={16} />
         </Pressable>
       </View>
     </View>
@@ -106,24 +107,24 @@ export function NavDrawerFooter(props: Props) {
 
 const styles = StyleSheet.create({
   bottomDock: {
-    borderTopWidth: 1,
-    paddingTop: spacing.xs,
-    gap: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 2,
+    gap: 2,
   },
   workspaceRow: {
-    marginBottom: 2,
-    fontSize: 12,
+    marginBottom: 0,
+    fontSize: 11,
   },
   bottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    minHeight: 32,
+    minHeight: 28,
   },
   newChatBtn: {
-    width: 32,
-    height: 32,
+    width: 28,
+    height: 28,
     borderRadius: radii.sm,
     alignItems: 'center',
     justifyContent: 'center',

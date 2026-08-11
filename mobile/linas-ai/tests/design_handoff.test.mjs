@@ -325,7 +325,13 @@ test('drawer search chrome is header circle; New chat is compact bottom dock', (
   assert.match(nav, /onChangeText=\{setQuery\}/);
   // Same NewChatIcon component as chat header (compose square+pencil), smaller size only.
   assert.match(footer, /NewChatIcon/);
-  assert.match(footer, /<NewChatIcon color=\{colors\.onAccent\} size=\{18\}/);
+  assert.match(footer, /<NewChatIcon color=\{colors\.onAccent\} size=\{16\}/);
+  assert.match(footer, /hitSlop=\{8\}/);
+  assert.match(footer, /width:\s*28/);
+  assert.match(footer, /height:\s*28/);
+  // Dock sits on safe area only — no extra lift above the home indicator.
+  assert.match(drawer, /paddingBottom:\s*Math\.max\(insets\.bottom,\s*4\)/);
+  assert.doesNotMatch(drawer, /insets\.bottom\s*\+\s*12/);
   assert.doesNotMatch(nav, /DRAWER_TOOL_ICONS\.newChat/);
   assert.doesNotMatch(footer, /DRAWER_TOOL_ICONS\.newChat/);
   assert.match(drawer, /Keyboard\.dismiss/);
