@@ -548,8 +548,8 @@ async def update_meta_comment_replies(
         raise HTTPException(
             status_code=409,
             detail=(
-                "Missing Meta comment permissions. Re-authorize with Add / Manage Facebook & Instagram "
-                "after the new permissions are added to Login Configuration 1057282070324984."
+                "Missing Meta comment permissions. Re-authorize with Manage Meta Access "
+                "(Facebook Connect uses the Facebook-only Login Configuration)."
             ),
         )
     if enabled:

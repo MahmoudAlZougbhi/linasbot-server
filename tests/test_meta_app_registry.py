@@ -331,7 +331,7 @@ def test_prohibited_non_messaging_scope_is_rejected(registry: MetaAppRegistry) -
             page_id=LINAS_PAGE_ID,
             instagram_account_id=LINAS_INSTAGRAM_ACCOUNT_ID,
             app_key=APP_A_KEY,
-            credential=_credential(app_a_id, LINAS_PAGE_ID, scopes=ALL_MESSAGING_SCOPES + ("business_management",)),
+            credential=_credential(app_a_id, LINAS_PAGE_ID, scopes=ALL_MESSAGING_SCOPES + ("ads_management",)),
             actor_id="owner",
         )
 

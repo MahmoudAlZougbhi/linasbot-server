@@ -41,6 +41,7 @@ def oauth_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("META_APP_B_SECRET", "app-b-secret-tests")
     monkeypatch.setenv("META_APP_B_WEBHOOK_VERIFY_TOKEN", "verify-b-tests")
     monkeypatch.setenv("META_APP_A_LOGIN_CONFIG_ID", "business-login-config-tests")
+    monkeypatch.setenv("META_APP_A_FACEBOOK_LOGIN_CONFIG_ID", "facebook-only-config-tests")
     monkeypatch.setenv("META_GRAPH_API_VERSION", "v24.0")
     monkeypatch.setenv("META_OAUTH_REDIRECT_URI", "https://www.linasaibot.com/oauth/meta/callback")
 
@@ -139,7 +140,7 @@ def test_business_login_url_uses_config_id_rerequests_comment_scopes(registry: M
     parsed = urlparse(url)
     query = parse_qs(parsed.query)
     assert parsed.hostname == "www.facebook.com"
-    assert query["config_id"] == ["business-login-config-tests"]
+    assert query["config_id"] == ["facebook-only-config-tests"]
     assert query["client_id"] == ["2963733803971681"]
     assert query["redirect_uri"] == ["https://www.linasaibot.com/oauth/meta/callback"]
     assert query["response_type"] == ["code"]
@@ -150,11 +151,42 @@ def test_business_login_url_uses_config_id_rerequests_comment_scopes(registry: M
     assert "pages_messaging" in scopes
     assert "pages_read_user_content" in scopes
     assert "pages_manage_engagement" in scopes
-    # Facebook Manage Meta Access must not bundle Instagram comment scopes.
+    assert "business_management" in scopes
+    # Facebook Manage Meta Access must not bundle Instagram scopes.
     assert "instagram_manage_comments" not in scopes
+    assert "instagram_basic" not in scopes
+    assert "instagram_manage_messages" not in scopes
     assert "app-b-secret-tests" not in url
-    assert "business_management" not in url
     assert "owner-a" not in registry.store_path.read_text(encoding="utf-8")
+
+
+def test_facebook_connect_rejects_legacy_mixed_config_id(
+    registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("META_APP_A_FACEBOOK_LOGIN_CONFIG_ID", "1057282070324984")
+    with pytest.raises(MetaOAuthError, match="legacy mixed"):
+        begin_meta_business_login(
+            tenant_id="tenant-a",
+            channel="facebook",
+            actor_id="owner-a",
+            registry=registry,
+        )
+
+
+def test_instagram_business_login_fallback_uses_legacy_mixed_config(registry: MetaAppRegistry) -> None:
+    url = begin_meta_business_login(
+        tenant_id="tenant-a",
+        channel="instagram",
+        actor_id="owner-a",
+        registry=registry,
+    )
+    query = parse_qs(urlparse(url).query)
+    assert query["config_id"] == ["business-login-config-tests"]
+    scopes = set((query.get("scope") or [""])[0].split(","))
+    assert "instagram_manage_comments" in scopes
+    assert "pages_manage_engagement" not in scopes
+    assert "pages_read_user_content" not in scopes
+    assert "business_management" not in scopes
 
 
 def test_instagram_business_login_url_can_request_instagram_comment_scope(registry: MetaAppRegistry) -> None:
@@ -168,6 +200,66 @@ def test_instagram_business_login_url_can_request_instagram_comment_scope(regist
     assert "instagram_manage_comments" in scopes
     assert "pages_manage_engagement" not in scopes
     assert "pages_read_user_content" not in scopes
+
+
+def test_facebook_and_instagram_connect_use_separate_auth_paths(
+    registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Facebook Connect uses FB Business Login config; Instagram Connect uses Instagram Login."""
+
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_APP_ID", "1035856539045307")
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_APP_SECRET", "ig-login-secret-tests")
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN", "verify-ig-login-tests")
+    monkeypatch.setenv(
+        "META_INSTAGRAM_LOGIN_REDIRECT_URI",
+        "https://www.linasaibot.com/oauth/instagram/callback",
+    )
+    from services.meta_instagram_login_oauth import begin_instagram_login
+
+    facebook_url = begin_meta_business_login(
+        tenant_id="tenant-a",
+        channel="facebook",
+        actor_id="owner-a",
+        registry=registry,
+    )
+    instagram_url = begin_instagram_login(
+        tenant_id="tenant-a",
+        actor_id="owner-a",
+        registry=registry,
+    )
+    facebook_parsed = urlparse(facebook_url)
+    instagram_parsed = urlparse(instagram_url)
+    facebook_query = parse_qs(facebook_parsed.query)
+    instagram_query = parse_qs(instagram_parsed.query)
+
+    assert facebook_parsed.hostname == "www.facebook.com"
+    assert facebook_query["config_id"] == ["facebook-only-config-tests"]
+    assert facebook_query["config_id"] != ["business-login-config-tests"]
+    assert facebook_query["config_id"] != ["1057282070324984"]
+    assert "dialog/oauth" in facebook_parsed.path
+
+    assert instagram_parsed.hostname == "www.instagram.com"
+    assert "oauth/authorize" in instagram_parsed.path
+    assert "config_id" not in instagram_query
+    ig_scopes = set((instagram_query.get("scope") or [""])[0].split(","))
+    assert "instagram_business_basic" in ig_scopes
+    assert "instagram_business_manage_messages" in ig_scopes
+    assert "instagram_business_manage_comments" in ig_scopes
+    assert "pages_messaging" not in ig_scopes
+    assert facebook_url != instagram_url
+
+
+def test_facebook_default_config_id_is_pages_only_when_env_unset(
+    registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("META_APP_A_FACEBOOK_LOGIN_CONFIG_ID", raising=False)
+    url = begin_meta_business_login(
+        tenant_id="tenant-a",
+        channel="facebook",
+        actor_id="owner-a",
+        registry=registry,
+    )
+    assert parse_qs(urlparse(url).query)["config_id"] == ["1369663304545819"]
 
 
 @pytest.mark.asyncio
