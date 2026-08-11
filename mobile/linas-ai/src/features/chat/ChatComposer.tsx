@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { textDirectionStyle } from '../../lib/textDirection';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../theme';
-import { formatVoiceElapsed, StopGlyph } from './ComposerGlyphs';
+import { COMPOSER_ACTION_SIZE, formatVoiceElapsed, StopGlyph } from './ComposerGlyphs';
 import { LinEffortSheet } from './LinEffortSheet';
 import { OWNER_LIN_DISPLAY, type OwnerChatMode } from './ownerChatMode';
 import type { VoiceState } from './useVoiceDraft';
@@ -193,7 +193,7 @@ export function ChatComposer({
             accessibilityLabel={tr('composerMoreActions')}
             hitSlop={6}
           >
-            <Text style={{ color: colors.text, fontSize: 20, fontWeight: '500', lineHeight: 22 }}>
+            <Text style={{ color: colors.text, fontSize: 22, fontWeight: '500', lineHeight: 24 }}>
               +
             </Text>
           </Pressable>
@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
   },
   pill: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     borderRadius: radii.xl + 4,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 6,
@@ -335,8 +335,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   iconHit: {
-    width: 32,
-    height: 32,
+    width: COMPOSER_ACTION_SIZE,
+    height: COMPOSER_ACTION_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -356,9 +356,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   sendIn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: COMPOSER_ACTION_SIZE,
+    height: COMPOSER_ACTION_SIZE,
+    borderRadius: COMPOSER_ACTION_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
