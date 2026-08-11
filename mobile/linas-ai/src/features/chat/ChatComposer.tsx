@@ -159,13 +159,15 @@ export function ChatComposer({
     setTimeout(dismissKeyboard, 80);
   }
 
+  const idlePlaceholder =
+    ownerMode === 'work' ? tr('composerPlaceholderWork') : tr('composerPlaceholderChat');
   const placeholder = recording
     ? `${tr('composerListening')} ${formatVoiceElapsed(elapsedMs)}`
     : paused
       ? `${tr('composerPaused')} · ${formatVoiceElapsed(elapsedMs)}`
       : transcribing
         ? tr('composerTranscribing')
-        : tr('composerPlaceholder');
+        : idlePlaceholder;
 
   return (
     <View
@@ -219,7 +221,7 @@ export function ChatComposer({
           blurOnSubmit={false}
           textAlign={draftDir.textAlign}
           textAlignVertical={Platform.OS === 'android' ? 'center' : undefined}
-          accessibilityLabel={tr('composerPlaceholder')}
+          accessibilityLabel={idlePlaceholder}
         />
 
         <View style={styles.trailing}>
