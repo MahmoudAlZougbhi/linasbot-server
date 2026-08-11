@@ -11,7 +11,7 @@
 - Admin-credit: cross-tenant only `platform_owner`; prod CORS HTTPS-only
 - CSRF / webhook verify: `hmac.compare_digest`
 - Proven deletes: `live_chat_archive/`, `cleanup_reports/`, `third_provider_adapter.py`, unwired `CreativeStudioScreen`, local `logs/*.out` + `.tmp_8010_*`
-- LOC splits: `conversation_router`, `language_resolver`, `token_wallet_service`, `datetime_utils`
+- LOC splits: `conversation_router`, `language_resolver`, `token_wallet_service`, `datetime_utils`, `sentiment_escalation_service`, `cm/faq_integration`
 - PII: sensitive `data/*.jsonl` / `content_violations.jsonl` reported in `docs/audit/PII_EXPOSURE_REPORT.md` (still tracked until explicit decision)
 
 ## Residual (must clear before Done)
