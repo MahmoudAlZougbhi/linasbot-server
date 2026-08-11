@@ -150,9 +150,7 @@ def canonical_channel_bindings(tenant_id: str, platform: str) -> list[Any]:
     for asset_id in sorted(by_asset.keys()):
         group = by_asset[asset_id]
         if platform_key == "instagram":
-            ig_login = [
-                b for b in group if str(getattr(b, "auth_flow", "") or "") == "instagram_login"
-            ]
+            ig_login = [b for b in group if str(getattr(b, "auth_flow", "") or "") == "instagram_login"]
             chosen = _pick_preferred_binding(ig_login) if ig_login else _pick_preferred_binding(group)
         else:
             chosen = _pick_preferred_binding(group)
@@ -346,8 +344,8 @@ def capability_state(tenant_id: str, platform: str, capability: CapabilityKey) -
     permission_present = bool(bindings) and not missing_scopes
     connection_healthy = bool(bindings) and all(_binding_connection_healthy(b, registry=registry) for b in bindings)
     advanced_access = _advanced_access_approved()
-    comments_policy_ok = True if capability != "comments" else comments_policy_allows(
-        tenant_id, advanced_access=advanced_access
+    comments_policy_ok = (
+        True if capability != "comments" else comments_policy_allows(tenant_id, advanced_access=advanced_access)
     )
 
     if capability == "comments":
@@ -382,11 +380,7 @@ def capability_state(tenant_id: str, platform: str, capability: CapabilityKey) -
 
     usable_permissions = bool(permission_present and comments_policy_ok)
     effective_enabled = bool(
-        connection_healthy
-        and requested_enabled
-        and usable_permissions
-        and webhook_subscribed
-        and tenant_action_enabled
+        connection_healthy and requested_enabled and usable_permissions and webhook_subscribed and tenant_action_enabled
     )
 
     status, blocker_code, blocker_message = _status_and_blocker(

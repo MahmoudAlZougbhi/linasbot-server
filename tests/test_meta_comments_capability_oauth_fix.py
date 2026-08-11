@@ -291,9 +291,7 @@ def test_internal_exception_never_enables_without_scopes(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "services.channel_capability_state.get_meta_app_registry",
-        lambda: _MapRegistry(
-            {"ig-legacy": _Cred(("instagram_business_basic", "instagram_business_manage_messages"))}
-        ),
+        lambda: _MapRegistry({"ig-legacy": _Cred(("instagram_business_basic", "instagram_business_manage_messages"))}),
     )
     monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: False)
     monkeypatch.setattr(
@@ -354,9 +352,7 @@ async def test_instagram_callback_mobile_surface_uses_deep_link(monkeypatch) -> 
         return result
 
     monkeypatch.setattr(meta_connections_api, "complete_instagram_login", _complete)
-    response = await meta_connections_api.instagram_login_oauth_callback(
-        code="code", state="state", error=""
-    )
+    response = await meta_connections_api.instagram_login_oauth_callback(code="code", state="state", error="")
     assert response.status_code == 303
     assert str(response.headers["location"]) == "linasai://integrations?meta_connection=success"
 
