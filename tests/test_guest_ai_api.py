@@ -1,4 +1,4 @@
-"""Guest chat: public access, 10-question / 50-word limits, no tool writes, real LLM path."""
+"""Guest chat: public access, 10-question limit, 500-token input gate, no tool writes."""
 
 from __future__ import annotations
 
@@ -90,7 +90,11 @@ def test_guest_session_public_and_idempotent(guest_client):
     assert r1.status_code == 200
     body1 = r1.json()
     assert body1["success"] is True
-    assert body1["session"]["questions_remaining"] == 10
+    assert body1["session"]["limit_reached"] is False
+    assert body1["session"]["max_input_tokens"] == 500
+    assert "questions_remaining" not in body1["session"]
+    assert "questions_used" not in body1["session"]
+    assert "max_questions" not in body1["session"]
     assert body1["session"]["messages"][0]["role"] == "assistant"
 
     r2 = client.post("/api/guest-ai/session", json={"guest_session_id": sid, "language": "en"})
@@ -114,18 +118,20 @@ def test_guest_word_limit_allows_over_50(guest_client):
 
 
 def test_guest_abuse_word_guard_still_rejects_huge(guest_client):
+    """Oversized paste hits the 500-token subscription gate before the word ceiling."""
     client, _store = guest_client
     sid = "guest-test-session-huge"
     client.post("/api/guest-ai/session", json={"guest_session_id": sid})
-    # Stay under pydantic body max while exceeding GUEST_MAX_WORDS (2000).
+    # Stay under pydantic body max; still far above GUEST_MAX_INPUT_TOKENS.
     huge = " ".join(["w"] * 2001)
     r = client.post(
         "/api/guest-ai/session/messages",
-        json={"guest_session_id": sid, "content": huge},
+        json={"guest_session_id": sid, "content": huge, "language": "en"},
     )
     assert r.status_code == 400
     detail = r.json().get("detail") or {}
-    assert detail.get("error") == "word_limit" or "word" in str(detail).lower()
+    assert detail.get("code") == "GUEST_INPUT_TOO_LARGE"
+    assert detail.get("error") == "input_token_limit"
 
 
 def test_guest_question_limit_and_no_tools(guest_client):
@@ -152,7 +158,8 @@ def test_guest_question_limit_and_no_tools(guest_client):
     gated = r_gate.json()
     assert gated["success"] is False
     assert gated["code"] == "GUEST_QUESTION_LIMIT"
-    assert gated["session"]["questions_remaining"] == 0
+    assert gated["session"]["limit_reached"] is True
+    assert "questions_remaining" not in gated["session"]
 
     session = store.get(sid)
     assert session is not None
@@ -296,3 +303,67 @@ def test_guest_routes_are_public():
     assert is_public_api("POST", "/api/guest-ai/session/messages")
     assert is_public_api("GET", "/api/guest-ai/session")
     assert not is_public_api("POST", "/api/owner-ai/conversations")
+
+
+
+def test_guest_input_token_limit_requires_subscription(guest_client):
+    client, store = guest_client
+    sid = "guest-test-session-tokens"
+    client.post("/api/guest-ai/session", json={"guest_session_id": sid})
+    # ~4 chars/token → 501 tokens needs >2000 chars without spaces... use dense text.
+    huge = "x" * (500 * 4 + 4)
+    r = client.post(
+        "/api/guest-ai/session/messages",
+        json={"guest_session_id": sid, "content": huge, "language": "en"},
+    )
+    assert r.status_code == 400
+    detail = r.json().get("detail") or {}
+    assert detail.get("code") == "GUEST_INPUT_TOO_LARGE"
+    assert detail.get("error") == "input_token_limit"
+    assert "too large" in str(detail.get("message") or "").lower()
+    assert "subscribe" in str(detail.get("message") or "").lower()
+    session = store.get(sid)
+    assert session is not None
+    assert session.questions_used == 0
+
+
+def test_guest_rejects_image_attachments(guest_client):
+    client, store = guest_client
+    sid = "guest-test-session-media"
+    client.post("/api/guest-ai/session", json={"guest_session_id": sid})
+    r = client.post(
+        "/api/guest-ai/session/messages",
+        json={
+            "guest_session_id": sid,
+            "content": "What is Linas?",
+            "attachment_ids": ["att_123"],
+            "language": "en",
+        },
+    )
+    assert r.status_code == 400
+    detail = r.json().get("detail") or {}
+    assert detail.get("code") == "GUEST_MEDIA_BLOCKED"
+    assert "subscribe" in str(detail.get("message") or "").lower()
+    session = store.get(sid)
+    assert session is not None
+    assert session.questions_used == 0
+
+
+def test_guest_system_prompt_is_product_only():
+    from services.guest_ai_service import build_guest_system_prompt
+
+    prompt = build_guest_system_prompt(language="en", knowledge_block="")
+    assert "ONLY Linas AI the product" in prompt or "explain ONLY Linas AI" in prompt
+    assert "NOT a general-purpose chatbot" in prompt
+    assert "NO tenant Content Manager knowledge" in prompt
+    assert "clinic" in prompt.lower() or "tenant business support" in prompt.lower()
+
+
+def test_estimate_guest_tokens_helper():
+    from services.guest_chat_limits import estimate_guest_tokens, tokens_ok
+
+    assert estimate_guest_tokens("") == 0
+    assert estimate_guest_tokens("abcd") == 1
+    assert estimate_guest_tokens("x" * 2000) == 500
+    assert tokens_ok("x" * 2000) is True
+    assert tokens_ok("x" * 2004) is False

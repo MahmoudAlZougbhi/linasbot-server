@@ -216,6 +216,12 @@ export function AppShell() {
   }
 
   function openArea(area: ControlArea) {
+    // Guests cannot open workspace tools (CM, Integrations, Live Chat, etc.).
+    if (!hasAccess) {
+      setResumeArea(area);
+      setScreen({ name: 'login' });
+      return;
+    }
     if (area === 'integrations') {
       bumpAreaFocus();
       setScreen({ name: 'integrations' });
@@ -229,11 +235,6 @@ export function AppShell() {
     if (area === 'notifications') {
       bumpAreaFocus();
       setScreen({ name: 'notifications', backTo: 'chat' });
-      return;
-    }
-    if (!hasAccess) {
-      setResumeArea(area);
-      setScreen({ name: 'login' });
       return;
     }
     openAreaAuthed(area);

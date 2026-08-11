@@ -32,10 +32,8 @@ describe("public marketing landing", () => {
                 success: true,
                 session: {
                   id: "guest-test",
-                  questions_used: 0,
-                  questions_remaining: 10,
-                  max_questions: 10,
-                  max_words: 50,
+                  limit_reached: false,
+                  max_input_tokens: 500,
                   messages: [
                     {
                       id: "g1",

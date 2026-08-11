@@ -1,23 +1,48 @@
-"""Public guest chat API — sales-only, rate-limited, no CM/tool writes."""
+"""Public guest chat API — product-info only, rate-limited, no CM/tool writes."""
 
 from __future__ import annotations
 
 from typing import Any
 
 from fastapi import Header, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from modules.core import app
 from services.guest_ai_service import GuestAIModelError, build_guest_greeting, compose_guest_reply
 from services.guest_chat_limits import (
+    GUEST_MAX_INPUT_TOKENS,
     GUEST_MAX_QUESTIONS,
     GUEST_MAX_WORDS,
     count_words,
+    estimate_guest_tokens,
+    payload_has_guest_media,
+    tokens_ok,
     words_ok,
 )
 from services.guest_chat_store import guest_chat_store
 from services.owner_ai_profile import resolve_owner_reply_language
 from services.rate_limit_service import rate_limit_service
+
+_INPUT_TOO_LARGE_MESSAGE = {
+    "en": (
+        "What you sent is too large (over 500 tokens). "
+        "Subscribe to Linas AI to continue with larger messages."
+    ),
+    "ar": (
+        "اللي بعثتو كبير زيادة (أكثر من 500 توكن). "
+        "اشترك بـ Linas AI لتقدر تبعت رسائل أطول."
+    ),
+    "fr": (
+        "Votre message est trop volumineux (plus de 500 jetons). "
+        "Abonnez-vous à Linas AI pour envoyer des messages plus longs."
+    ),
+}
+
+_MEDIA_BLOCKED_MESSAGE = {
+    "en": "Guests can’t send photos or files. Subscribe to Linas AI to use attachments.",
+    "ar": "الضيوف ما بيقدروا يبعتوا صور أو ملفات. اشترك بـ Linas AI لاستخدام المرفقات.",
+    "fr": "Les invités ne peuvent pas envoyer de photos ou de fichiers. Abonnez-vous à Linas AI.",
+}
 
 
 class GuestSessionBody(BaseModel):
@@ -26,6 +51,10 @@ class GuestSessionBody(BaseModel):
 
 
 class GuestMessageBody(BaseModel):
+    """Text-only guest turns. Extra media keys are allowed only so we can reject them."""
+
+    model_config = ConfigDict(extra="allow")
+
     guest_session_id: str = Field(min_length=8, max_length=80)
     content: str = Field(min_length=1, max_length=16000)
     language: str | None = None
@@ -56,12 +85,11 @@ def _rate_limit_guest(request: Request, session_id: str) -> None:
 
 
 def _session_payload(session: Any) -> dict[str, Any]:
+    """Public session shape for UI — no remaining-count meters."""
     return {
         "id": session.id,
-        "questions_used": session.questions_used,
-        "questions_remaining": session.remaining(),
-        "max_questions": GUEST_MAX_QUESTIONS,
-        "max_words": GUEST_MAX_WORDS,
+        "limit_reached": session.questions_used >= GUEST_MAX_QUESTIONS,
+        "max_input_tokens": GUEST_MAX_INPUT_TOKENS,
         "messages": [
             {
                 "id": m.id,
@@ -78,12 +106,15 @@ def _history_payload(session: Any) -> list[dict[str, Any]]:
     return [{"role": m.role, "content": m.content} for m in session.messages]
 
 
+def _lang(raw: str | None) -> str:
+    lang = (raw or "en").strip().lower()
+    return lang if lang in {"en", "ar", "fr"} else "en"
+
+
 @app.post("/api/guest-ai/session")
 async def ensure_guest_session(body: GuestSessionBody, request: Request) -> Any:
     _rate_limit_guest(request, body.guest_session_id)
-    lang = (body.language or "en").strip().lower()
-    if lang not in {"en", "ar", "fr"}:
-        lang = "en"
+    lang = _lang(body.language)
     try:
         session = guest_chat_store.get_or_create(
             body.guest_session_id,
@@ -112,9 +143,41 @@ async def get_guest_session(
 @app.post("/api/guest-ai/session/messages")
 async def send_guest_message(body: GuestMessageBody, request: Request) -> Any:
     _rate_limit_guest(request, body.guest_session_id)
+
+    # Guests are text-only; reject photo/file payloads before any LLM work.
+    raw_payload = body.model_dump(exclude_none=False)
+    if body.model_extra:
+        raw_payload.update(body.model_extra)
+    if payload_has_guest_media(raw_payload):
+        lang_media = _lang(body.language)
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "guest_media_blocked",
+                "code": "GUEST_MEDIA_BLOCKED",
+                "message": _MEDIA_BLOCKED_MESSAGE[lang_media],
+                "messages": _MEDIA_BLOCKED_MESSAGE,
+            },
+        )
+
     content = (body.content or "").strip()
     if not content:
         raise HTTPException(status_code=400, detail="content required")
+
+    lang = _lang(body.language)
+    if not tokens_ok(content):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "input_token_limit",
+                "code": "GUEST_INPUT_TOO_LARGE",
+                "message": _INPUT_TOO_LARGE_MESSAGE[lang],
+                "messages": _INPUT_TOO_LARGE_MESSAGE,
+                "max_input_tokens": GUEST_MAX_INPUT_TOKENS,
+                "estimated_tokens": estimate_guest_tokens(content),
+            },
+        )
+
     if not words_ok(content):
         raise HTTPException(
             status_code=400,
@@ -145,9 +208,9 @@ async def send_guest_message(body: GuestMessageBody, request: Request) -> Any:
             "code": "GUEST_QUESTION_LIMIT",
             "session": _session_payload(session),
             "message": {
-                "en": "You’ve reached the guest limit (10 questions). Download the Linas AI app and subscribe to continue.",
-                "ar": "وصلت إلى حد الضيف (10 أسئلة). حمّل تطبيق Linas AI واشترك للمتابعة.",
-                "fr": "Limite invité atteinte (10 questions). Téléchargez l’app Linas AI et abonnez-vous pour continuer.",
+                "en": "You’ve reached the guest limit. Download the Linas AI app and subscribe to continue.",
+                "ar": "وصلت إلى حد الضيف. حمّل تطبيق Linas AI واشترك للمتابعة.",
+                "fr": "Limite invité atteinte. Téléchargez l’app Linas AI et abonnez-vous pour continuer.",
             },
         }
 

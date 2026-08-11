@@ -11,10 +11,8 @@ test.describe("public marketing landing smoke", () => {
             success: true,
             session: {
               id: "guest-e2e",
-              questions_used: 0,
-              questions_remaining: 10,
-              max_questions: 10,
-              max_words: 50,
+              limit_reached: false,
+              max_input_tokens: 500,
               messages: [
                 {
                   id: "g1",

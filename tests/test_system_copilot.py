@@ -250,5 +250,7 @@ def test_owner_and_guest_prompts_share_friendly_emoji_voice() -> None:
     guest = build_guest_system_prompt(language="ar", knowledge_block="")
     assert "tasteful emojis" in guest
     assert "warm, friendly" in guest
+    assert "NOT a general-purpose chatbot" in guest
+    assert "NO tenant Content Manager knowledge" in guest
     assert "👋" in build_guest_greeting(language="ar")
     assert "👋" in build_guest_greeting(language="en")

@@ -28,7 +28,6 @@ type Args = {
   voiceState: VoiceState;
   conversationId: string | null;
   guestGated: boolean;
-  guestQuestionsRemaining: number;
   guestSend: GuestSend;
   ownerSend: OwnerTurnSend;
   appendOptimisticUser: (content: string, localImageUris?: string[]) => string;
@@ -61,7 +60,6 @@ export async function sendChatMessage(args: Args): Promise<void> {
     voiceState,
     conversationId,
     guestGated,
-    guestQuestionsRemaining,
     guestSend,
     ownerSend,
     appendOptimisticUser,
@@ -75,8 +73,12 @@ export async function sendChatMessage(args: Args): Promise<void> {
   } = args;
 
   if (!isAuthenticated) {
-    if (guestGated || guestQuestionsRemaining <= 0) {
+    if (guestGated) {
       openAuthPreservingDraft(true);
+      return;
+    }
+    if (pendingFiles.length > 0) {
+      setSendError('guestMediaBlocked');
       return;
     }
     const text = draft.trim();
