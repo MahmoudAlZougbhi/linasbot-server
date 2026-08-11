@@ -365,15 +365,23 @@ def test_system_v2_smart_audit_vs_explicit_full_dump() -> None:
     from services.owner_copilot_v2.brain import MAX_TOOL_ROUNDS
     from services.owner_copilot_v2.brain_support import SYSTEM_V2
     from services.owner_copilot_v2.flags import owner_max_output_tokens
+    from services.owner_copilot_v2.tool_schemas import OWNER_V2_TOOL_SCHEMAS
 
     assert "must NOT dump all CM" in SYSTEM_V2
     assert "concise overview" in SYSTEM_V2 or "concise" in SYSTEM_V2
     assert "explicit full dump" in SYSTEM_V2
     assert "items_offset" in SYSTEM_V2
+    assert "quality_pass" in SYSTEM_V2
+    assert "halwse" in SYSTEM_V2
+    assert "duplicates" in SYSTEM_V2
     assert MAX_TOOL_ROUNDS >= 10
     # High Work replies need headroom so reviews do not die mid-sentence.
     assert owner_max_output_tokens(reasoning_effort="high") >= 4096
     assert owner_max_output_tokens(reasoning_effort="low") >= 2048
+
+    inspect = next(t for t in OWNER_V2_TOOL_SCHEMAS if t["function"]["name"] == "inspect_cm_guide")
+    assert "quality_pass" in inspect["function"]["parameters"]["properties"]
+    assert "proactive" in inspect["function"]["description"].lower()
 
 
 def test_compact_read_never_returns_item_count_only_stub() -> None:

@@ -10,6 +10,7 @@ from services.model_policy import emit_model_policy_trace, owner_stream_route_pa
 from services.owner_ai_context import pack_owner_turn_context
 from services.owner_copilot_v2.assent import looks_like_owner_assent, resolve_pending_confirm_token
 from services.owner_copilot_v2.brain_support import (
+    FINAL_ANSWER_NUDGE,
     _build_messages,
     done_payload,
     emit_as_deltas,
@@ -341,17 +342,7 @@ async def iter_owner_turn_v2_events(
                     pending_confirmation = result.confirmation_token
 
         fin_messages = list(chat_messages)
-        fin_messages.append(
-            {
-                "role": "system",
-                "content": (
-                    "Write the natural final owner-facing answer now from the tool results. No JSON. "
-                    "Default: concise diagnostic CM critique (issues + fixes), not a full CM dump. "
-                    "Only paste full section/article bodies when the owner explicitly asked for them. "
-                    "Finish cleanly — never stop mid-sentence."
-                ),
-            }
-        )
+        fin_messages.append({"role": "system", "content": FINAL_ANSWER_NUDGE})
         fin_policy = resolve_owner_policy(prior=policy)
         parts: list[str] = []
         async for delta_text in iter_sol_text_deltas(

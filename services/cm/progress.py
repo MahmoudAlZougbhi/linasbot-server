@@ -76,8 +76,10 @@ def progress_summary(tenant_id: str, *, create_missing: bool = False) -> dict[st
     else:
         fill_missing_prompt = (
             "Review my Content Management setup. Confirm what is already filled/DONE, "
-            "what still needs polish, and help me publish when ready. "
-            "Use inspect_cm_guide; do not re-ask done sections."
+            "run a proactive quality pass (duplicates, contradictions, unclear wording, "
+            "suspicious content, improvements), and help me publish when ready. "
+            "Use inspect_cm_guide with quality_pass; do not re-ask done sections for fill walks; "
+            "do not dump full CM unless I ask."
         )
 
     return {
