@@ -87,8 +87,8 @@ export default function Pricing() {
           </div>
         )}
         <p className="mt-10 text-[#8B9BB8]">
-          Download the iOS/Android app to subscribe. Operator dashboard login remains at{" "}
-          <code className="text-xs">/login</code> for existing ops — it is not linked from the marketing site.
+          Download the iOS/Android app to subscribe. The public website is marketing-only — account
+          and workspace management live in the Linas AI app.
         </p>
         <Link to={PUBLIC_PATHS.contact} className="mt-4 inline-block text-[#5EE0B5] underline">
           Contact support

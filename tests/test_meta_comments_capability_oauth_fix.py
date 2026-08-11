@@ -14,6 +14,7 @@ from services.channel_capability_state import (
 from services.channel_capability_toggles import set_channel_toggle
 from services.meta_app_registry import APP_A_KEY, APP_B_KEY
 from services.meta_instagram_login_subscription import InstagramLoginSubscriptionState
+from services.meta_oauth import MetaOAuthError
 from services.meta_oauth_return import (
     normalize_return_surface,
     oauth_completion_redirect_url,
@@ -327,7 +328,7 @@ def test_mobile_oauth_success_redirects_to_deep_link_not_login() -> None:
 
 
 def test_invalid_tampered_return_surface_rejected_to_web() -> None:
-    """Case 8: invalid/tampered OAuth return surface is rejected."""
+    """Case 8: invalid/tampered OAuth return surface is rejected to public landing."""
 
     assert normalize_return_surface("mobile") == "mobile"
     assert normalize_return_surface("web") == "web"
@@ -339,7 +340,9 @@ def test_invalid_tampered_return_surface_rejected_to_web() -> None:
         return_surface="https://evil.example/?x=1",
         meta_connection="connected",
     )
-    assert web_url.startswith("/settings?")
+    assert web_url.startswith("/?")
+    assert "/settings" not in web_url
+    assert "/login" not in web_url
     assert "evil.example" not in web_url
 
 
@@ -352,9 +355,47 @@ async def test_instagram_callback_mobile_surface_uses_deep_link(monkeypatch) -> 
         return result
 
     monkeypatch.setattr(meta_connections_api, "complete_instagram_login", _complete)
+    monkeypatch.setattr(meta_connections_api, "peek_return_surface_from_state", lambda *_a, **_k: "mobile")
     response = await meta_connections_api.instagram_login_oauth_callback(code="code", state="state", error="")
-    assert response.status_code == 303
-    assert str(response.headers["location"]) == "linasai://integrations?meta_connection=success"
+    # Mobile uses HTML bridge (Meta in-app browser) rather than bare custom-scheme 303.
+    assert response.status_code == 200
+    body = response.body.decode("utf-8") if hasattr(response, "body") else str(response)
+    assert "linasai://integrations?meta_connection=success" in body
+    assert "/login" not in body
+    assert "/settings" not in body
+
+
+@pytest.mark.asyncio
+async def test_facebook_callback_mobile_surface_uses_html_bridge(monkeypatch) -> None:
+    binding = _ig_binding(auth_flow="facebook_login", status="active", channel="facebook")
+    result = SimpleNamespace(binding=binding, bindings=(binding,), return_surface="mobile")
+
+    async def _complete(**_k):
+        return result
+
+    monkeypatch.setattr(meta_connections_api, "complete_meta_business_login", _complete)
+    monkeypatch.setattr(meta_connections_api, "peek_return_surface_from_state", lambda *_a, **_k: "mobile")
+    response = await meta_connections_api.meta_oauth_callback(code="code", state="state", error="")
+    assert response.status_code == 200
+    body = response.body.decode("utf-8")
+    assert "linasai://integrations?meta_connection=success" in body
+    assert "/login" not in body
+
+
+@pytest.mark.asyncio
+async def test_facebook_callback_preserves_mobile_surface_after_failure(monkeypatch) -> None:
+    async def _fail(**_k):
+        raise MetaOAuthError("simulated failure")
+
+    monkeypatch.setattr(meta_connections_api, "complete_meta_business_login", _fail)
+    monkeypatch.setattr(meta_connections_api, "peek_return_surface_from_state", lambda *_a, **_k: "mobile")
+    monkeypatch.setattr(meta_connections_api, "consume_return_surface_from_state", lambda *_a, **_k: "web")
+    response = await meta_connections_api.meta_oauth_callback(code="code", state="state", error="")
+    assert response.status_code == 200
+    body = response.body.decode("utf-8")
+    assert "linasai://integrations?meta_connection=failed" in body
+    assert "/login" not in body
+    assert "/settings" not in body
 
 
 @pytest.mark.asyncio
