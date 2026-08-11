@@ -1,31 +1,32 @@
 # Residual status (continuous run)
 
 **Branch:** `chore/project-cleanup-reorg`  
-**HEAD:** `747bd31`  
-**Tracked files:** 1281
+**Rule:** Keep working until residual is empty, then Done. No auto merge/deploy to production.
 
-## Done so far
-- W00 inventory (1283→now fewer after deletes)
-- W01 lab API hyphen block + provider switch refuse
-- W02/W03 trusted IP + auth rate limits
-- W05 admin-credit platform_owner + prod CORS HTTPS
-- CSRF/compare_digest
-- W09 delete live_chat_archive + cleanup_reports
-- Delete third_provider_adapter + unwired CreativeStudioScreen (creative Python stack BLOCKED)
-- First LOC split: conversation_router
+## Progress so far (not Done)
 
-## Residual (not Done yet)
-- Hand-written files still >500: ~64+ (gate still FAIL)
-- Inventory rows still mostly UNREVIEWED (shell provisional)
-- Creative API stack still present (BLOCKED)
-- Operator web SPA still present (parity matrix not built yet)
-- Monty still default WA provider (Cloud cutover not done on branch)
-- Redis prod limiter not activated (branch may add later; prod flag off)
-- Baseline wave1/webhook_dedupe env failures from W00 still to clear in-context
+- W00: full tracked inventory (row count matched `git ls-files`) + LOC gate
+- W01: blocked hyphenated `/api/test-*` + HTTP provider switch
+- W02/W03: trusted client IP (`X-Real-IP`) + mobile/auth rate limits
+- Admin-credit: cross-tenant only `platform_owner`; prod CORS HTTPS-only
+- CSRF / webhook verify: `hmac.compare_digest`
+- Proven deletes: `live_chat_archive/`, `cleanup_reports/`, `third_provider_adapter.py`, unwired `CreativeStudioScreen`, local `logs/*.out` + `.tmp_8010_*`
+- LOC splits: `conversation_router` + `language_resolver`
+- PII: sensitive `data/*.jsonl` / `content_violations.jsonl` reported in `docs/audit/PII_EXPOSURE_REPORT.md` (still tracked until explicit decision)
+
+## Residual (must clear before Done)
+
+- Hand-written files still over 500 lines: **~63** (top: `chat_response_service.py`, `LiveChat.jsx`, `text_handlers_respond.py`, `utils.py`, `SmartMessaging.jsx`, `live_chat_service.py`, …)
+- Inventory `review_status`: mostly still `UNREVIEWED` (shell only)
+- Creative Python API stack: `BLOCKED` (still wired in main/tests)
+- Operator web SPA still present; parity matrix not built yet
+- Monty still default WhatsApp provider; Meta Cloud cutover not finished on branch
+- Redis distributed limiter: not production-activated (by design until deploy decision)
 
 ## Next continuous work
-- Keep deleting DELETE_PROVEN candidates
-- Continue security items (uploads, webhook idempotency, Redis on branch)
-- Build parity matrix then landing-only web
-- Split remaining >500 file-by-file with tests
-- Residual loop until empty → then Done (no auto prod deploy)
+
+1. More DELETE_PROVEN (disabled pages after proof; creative unregister carefully)
+2. Parity matrix + mobile gaps + landing-only web
+3. Meta Cloud on branch + staging checklist
+4. Split remaining god-files file-by-file with tests
+5. Residual loop until empty → Done
