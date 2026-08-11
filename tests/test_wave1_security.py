@@ -304,6 +304,18 @@ class TestAPIAuthEnforcement:
         r = client.post("/api/smart-messaging/toggle", json={})
         assert r.status_code == 403
 
+    def test_csrf_mismatch_still_403(self, client):
+        rec = session_service.create_session(user_id="op3b", email="op3b@example.com", role="admin", permissions=None)
+        client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
+        client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
+        r = client.post(
+            "/api/auth/logout",
+            json={},
+            headers={"X-CSRF-Token": "definitely-not-the-csrf-token"},
+        )
+        assert r.status_code == 403
+        assert r.json().get("error") == "CSRF validation failed"
+
     def test_role_matrix_viewer_forbidden_users(self, client):
         rec = session_service.create_session(user_id="v1", email="v@example.com", role="viewer", permissions=None)
         client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import logging
 from typing import Any
@@ -93,7 +94,13 @@ async def verify_meta_messaging_webhook(request: Request) -> Any:
     registry_enabled = meta_multi_app_registry_enabled()
     if not settings.verify_token and not registry_enabled:
         raise HTTPException(status_code=503, detail="Meta webhook verify token is not configured")
-    token_ok = verify_any_meta_challenge_token(token) if registry_enabled else token == settings.verify_token
+    token_ok = (
+        verify_any_meta_challenge_token(token)
+        if registry_enabled
+        else bool(token)
+        and bool(settings.verify_token)
+        and hmac.compare_digest(token, settings.verify_token)
+    )
     if mode == "subscribe" and token_ok and challenge is not None:
         return PlainTextResponse(challenge)
     raise HTTPException(status_code=403, detail="Webhook verification failed")

@@ -8,6 +8,7 @@ Provider webhooks live outside /api/* and are handled separately.
 
 from __future__ import annotations
 
+import hmac
 import os
 import re
 from typing import Any
@@ -332,7 +333,9 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
                     status_code=403,
                     content={"success": False, "error": "CSRF validation failed"},
                 )
-            if header != session.csrf_token or csrf_cookie != session.csrf_token:
+            if not hmac.compare_digest(header, session.csrf_token) or not hmac.compare_digest(
+                csrf_cookie, session.csrf_token
+            ):
                 return JSONResponse(
                     status_code=403,
                     content={"success": False, "error": "CSRF validation failed"},

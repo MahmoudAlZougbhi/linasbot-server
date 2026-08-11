@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import hashlib
+import hmac
 import io
 import json
 import os
@@ -330,7 +331,7 @@ async def verify_webhook(request: Request) -> Any:
     if not VERIFY_TOKEN or VERIFY_TOKEN == "YOUR_SECURE_VERIFY_TOKEN":
         raise HTTPException(status_code=500, detail="WHATSAPP_WEBHOOK_VERIFY_TOKEN must be set in .env")
 
-    if mode == "subscribe" and token == VERIFY_TOKEN:
+    if mode == "subscribe" and token is not None and hmac.compare_digest(token, VERIFY_TOKEN):
         print("WEBHOOK_VERIFIED")
         if challenge is None or (isinstance(challenge, str) and not challenge.strip()):
             raise HTTPException(status_code=400, detail="Invalid webhook challenge")
@@ -372,7 +373,7 @@ async def receive_webhook(request: Request) -> Any:
                 raise HTTPException(status_code=401, detail="Invalid webhook signature")
         elif ingest_secret:
             provided = (request.headers.get("X-Webhook-Secret") or "").strip()
-            if not provided or provided != ingest_secret:
+            if not provided or not hmac.compare_digest(provided, ingest_secret):
                 raise HTTPException(status_code=401, detail="Invalid webhook secret")
             authenticated = True
         elif is_prod:
