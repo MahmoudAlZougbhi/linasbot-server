@@ -25,6 +25,11 @@ import { VoiceComposerControls } from './VoiceComposerControls';
 const INPUT_MIN_H = 36;
 const INPUT_MAX_H = 88;
 
+/** RN multiline TextInput exposes ScrollView-like scrollToEnd at runtime. */
+type ScrollableTextInput = TextInput & {
+  scrollToEnd?: (options?: { animated?: boolean }) => void;
+};
+
 type Props = {
   draft: string;
   onChangeDraft: (v: string) => void;
@@ -86,6 +91,8 @@ export function ChatComposer({
   const [inputHeight, setInputHeight] = useState(INPUT_MIN_H);
   const pulse = useRef(new Animated.Value(1)).current;
   const ring = useRef(new Animated.Value(0.55)).current;
+  /** Always bind locally so we can scrollToEnd even if parent omits inputRef. */
+  const localInputRef = useRef<TextInput | null>(null);
   /** After Send, block one-shot autofocus / remount races from reopening the keyboard. */
   const suppressFocusRef = useRef(false);
   const recording = voiceState === 'recording';
@@ -102,10 +109,33 @@ export function ChatComposer({
     ownerMode === 'work' ? tr('linEffortHigh') : tr('linEffortLow')
   }`;
   const draftDir = textDirectionStyle(draft);
+  const atMaxHeight = inputHeight >= INPUT_MAX_H;
+
+  function assignInputRef(node: TextInput | null) {
+    localInputRef.current = node;
+    if (inputRef) {
+      (inputRef as { current: TextInput | null }).current = node;
+    }
+  }
+
+  function scrollComposerToEnd() {
+    const node = localInputRef.current as ScrollableTextInput | null;
+    node?.scrollToEnd?.({ animated: false });
+  }
 
   function dismissKeyboard() {
-    inputRef?.current?.blur();
+    localInputRef.current?.blur();
     Keyboard.dismiss();
+  }
+
+  function handleContentSizeChange(contentHeight: number) {
+    const contentH = Math.ceil(contentHeight);
+    const next = Math.min(INPUT_MAX_H, Math.max(INPUT_MIN_H, contentH));
+    setInputHeight(next);
+    // Once capped, pin scroll to the bottom so newest typing stays visible.
+    if (contentH >= INPUT_MAX_H) {
+      requestAnimationFrame(scrollComposerToEnd);
+    }
   }
 
   useEffect(() => {
@@ -144,10 +174,10 @@ export function ChatComposer({
     if (!autoFocus || suppressFocusRef.current) return;
     const t = setTimeout(() => {
       if (suppressFocusRef.current) return;
-      inputRef?.current?.focus();
+      localInputRef.current?.focus();
     }, 120);
     return () => clearTimeout(t);
-  }, [autoFocus, inputRef]);
+  }, [autoFocus]);
 
   function handleSend() {
     if (sending || !canSend || voiceBusy) return;
@@ -202,18 +232,22 @@ export function ChatComposer({
         )}
 
         <TextInput
-          ref={inputRef}
+          ref={assignInputRef}
           style={[styles.input, { color: colors.text, height: inputHeight }, draftDir]}
           placeholder={placeholder}
           placeholderTextColor={colors.textDim}
           value={draft}
-          onChangeText={onChangeDraft}
+          onChangeText={(v) => {
+            onChangeDraft(v);
+            // Voice append / paste can grow past the cap without a fresh size event
+            // on the same frame — keep the caret end visible once capped.
+            if (atMaxHeight) requestAnimationFrame(scrollComposerToEnd);
+          }}
           onContentSizeChange={(e) => {
-            const next = Math.ceil(e.nativeEvent.contentSize.height);
-            setInputHeight(Math.min(INPUT_MAX_H, Math.max(INPUT_MIN_H, next)));
+            handleContentSizeChange(e.nativeEvent.contentSize.height);
           }}
           multiline
-          scrollEnabled={inputHeight >= INPUT_MAX_H}
+          scrollEnabled={atMaxHeight}
           editable={!voiceBusy}
           autoFocus={false}
           blurOnSubmit={false}
