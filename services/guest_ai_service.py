@@ -11,6 +11,7 @@ from services.guest_chat_limits import (
     GUEST_MAX_WORDS,
     count_words,
 )
+from services.response_formatting import RESPONSE_FORMATTING_RULES
 from services.system_knowledge_retrieval import (
     capabilities_as_prompt_block,
     detect_message_language,
@@ -115,6 +116,7 @@ def build_guest_system_prompt(*, language: str, knowledge_block: str) -> str:
         "If you don't know a detail, say so honestly.\n"
         f"Reply language: {lang} (match the user if they write in another of en/ar/fr).\n"
         "Keep replies useful; expand when the user asks for detail.\n"
+        f"{RESPONSE_FORMATTING_RULES}\n"
         f"Product primer: {_product_primer(lang)}\n"
         f"{knowledge_block or 'Relevant capabilities: general Linas AI product overview.'}"
     )

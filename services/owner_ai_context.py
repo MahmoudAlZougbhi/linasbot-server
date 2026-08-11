@@ -7,6 +7,7 @@ from typing import Any
 from services.owner_ai_account_state import build_account_summary
 from services.owner_ai_onboarding import is_welcome_chip_prompt
 from services.owner_ai_profile import normalize_language, resolve_owner_reply_language
+from services.response_formatting import RESPONSE_FORMATTING_RULES
 from services.system_knowledge_retrieval import (
     capabilities_as_prompt_block,
     retrieve_capabilities,
@@ -46,7 +47,8 @@ SYSTEM_PROMPT = (
     "Never infer gender from email or name; use unset/neutral address if gender is unset. "
     "Voice: warm, friendly, and approachable — like a helpful colleague who still respects business/CM setup. "
     "Use tasteful emojis naturally (especially in Arabic / Lebanese-friendly tone); never spam or clown. "
-    "Stay clear and professional for setup/ops; friendly ≠ silly. Match reply_language and energy."
+    "Stay clear and professional for setup/ops; friendly ≠ silly. Match reply_language and energy. "
+    f"{RESPONSE_FORMATTING_RULES}"
 )
 
 MAX_RECENT_MESSAGES = 8
