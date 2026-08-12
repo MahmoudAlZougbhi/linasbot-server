@@ -236,9 +236,41 @@ async def complete_event_claim(
 
 
 def try_acquire_job_lock(job_id: str, *, ttl_seconds: float = 120.0) -> bool:
-    """Synchronous file lock for scheduler ticks (multi-instance)."""
-    return _file_try_claim("scheduler_jobs", job_id, ttl_seconds=ttl_seconds)
+    """Distributed scheduler lock: Redis when available, else durable file claim."""
+    jid = (job_id or "").strip()
+    if not jid:
+        return False
+    try:
+        from services.scale.redis_claims import redis_try_claim
+
+        shared = redis_try_claim("scheduler_jobs", jid, ttl_seconds=float(ttl_seconds))
+        if shared is not None:
+            return bool(shared)
+    except Exception:
+        pass
+    return _file_try_claim("scheduler_jobs", jid, ttl_seconds=ttl_seconds)
 
 
 def release_job_lock(job_id: str) -> None:
-    _file_release("scheduler_jobs", job_id)
+    jid = (job_id or "").strip()
+    if not jid:
+        return
+    try:
+        import redis as redis_lib
+
+        from services.queues.config import redis_url
+
+        url = redis_url()
+        if url:
+            client = redis_lib.Redis.from_url(
+                url,
+                decode_responses=True,
+                socket_connect_timeout=1.5,
+                socket_timeout=1.5,
+            )
+            prefix = (os.getenv("LINAS_CLAIM_PREFIX") or "linas:claim").strip()
+            safe = "".join(c if c.isalnum() or c in "-_.:/" else "_" for c in jid)[:200]
+            client.delete(f"{prefix}:scheduler_jobs:{safe}")
+    except Exception:
+        pass
+    _file_release("scheduler_jobs", jid)

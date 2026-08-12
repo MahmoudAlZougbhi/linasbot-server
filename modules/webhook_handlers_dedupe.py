@@ -65,6 +65,20 @@ def _webhook_text_body_fingerprint(parsed_message: dict[str, Any]) -> str:
 async def _webhook_bodyfp_try_claim(fp: str, current_time: float) -> bool:
     if not fp:
         return True
+    # Prefer shared Redis claim so multi-instance ingress does not double-process.
+    try:
+        from services.scale.redis_claims import redis_try_claim
+
+        shared = redis_try_claim(
+            "webhook_bodyfp",
+            fp,
+            ttl_seconds=WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS,
+        )
+        if shared is not None:
+            return bool(shared)
+    except Exception:
+        pass
+
     expired = [k for k, ts in _webhook_bodyfp_cache.items() if current_time - ts > WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS]
     for k in expired:
         _webhook_bodyfp_cache.pop(k, None)
@@ -81,11 +95,24 @@ async def _webhook_bodyfp_try_claim(fp: str, current_time: float) -> bool:
 async def _webhook_memory_try_claim(message_id: str, current_time: float) -> bool:
     """
     Return True if this request should proceed, False if duplicate within WEBHOOK_DEDUP_WINDOW_SECONDS.
-    Atomic per message_id for same-process concurrent webhooks.
+    Atomic per message_id for same-process concurrent webhooks; Redis when available for multi-instance.
     """
     mid = (message_id or "").strip()
     if not mid:
         return True
+
+    try:
+        from services.scale.redis_claims import redis_try_claim
+
+        shared = redis_try_claim(
+            "webhook_mid",
+            mid,
+            ttl_seconds=float(WEBHOOK_DEDUP_WINDOW_SECONDS),
+        )
+        if shared is not None:
+            return bool(shared)
+    except Exception:
+        pass
 
     expired_keys = [k for k, v in _webhook_dedup_cache.items() if current_time - v > WEBHOOK_DEDUP_WINDOW_SECONDS]
     for k in expired_keys:

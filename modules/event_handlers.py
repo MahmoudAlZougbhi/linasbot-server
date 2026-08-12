@@ -68,7 +68,14 @@ async def startup_event() -> None:
 
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
-    """Cleanup on shutdown"""
+    """Cleanup on shutdown — drain first so LB readiness fails before hard exit."""
+    try:
+        from services.scale.shutdown import shutdown_coordinator
+
+        shutdown_coordinator.begin_drain()
+        await shutdown_coordinator.await_idle(timeout_seconds=45)
+    except Exception as e:
+        print(f"⚠️ Drain coordinator error: {type(e).__name__}")
     try:
         from services.meta_instagram_login_lifecycle import stop_instagram_login_lifecycle
 

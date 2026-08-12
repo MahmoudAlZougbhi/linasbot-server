@@ -23,10 +23,30 @@ async def ready() -> Any:
     """
     Public readiness probe: required dependencies without exposing secret values.
     Returns boolean ok flags only (never secret contents).
+
+    When LINAS_SERVICE_ROLE is set to a worker/ingress role, use role-specific checks.
     """
     import os
 
     from modules.api_security import is_production_env
+    from services.scale.shutdown import shutdown_coordinator
+
+    role = (os.getenv("LINAS_SERVICE_ROLE") or "api").strip().lower()
+    if role not in {"", "api", "all"}:
+        from fastapi.responses import JSONResponse
+
+        from services.scale.readiness_roles import readiness_for_role
+
+        payload = readiness_for_role(role)
+        return JSONResponse(status_code=200 if payload.get("ok") else 503, content=payload)
+
+    if shutdown_coordinator.draining:
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            status_code=503,
+            content={"ok": False, "role": "readiness", "checks": {"drain": shutdown_coordinator.snapshot()}},
+        )
 
     checks: dict[str, Any] = {}
     overall_ok = True
