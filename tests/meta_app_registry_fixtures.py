@@ -21,6 +21,7 @@ def meta_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("META_APP_B_ADVANCED_ACCESS_APPROVED", "true")
     monkeypatch.setenv("META_GRAPH_API_VERSION", "v24.0")
     monkeypatch.setenv("META_CREDENTIAL_ENCRYPTION_KEY", "registry-master-secret-used-only-in-tests-123456789")
+    monkeypatch.setenv("META_REGISTRY_BACKEND", "file")
     monkeypatch.delenv("META_APP_B_LINAS_CUTOVER_APPROVED", raising=False)
 
 

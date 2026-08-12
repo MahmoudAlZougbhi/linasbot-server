@@ -1,8 +1,9 @@
 """
-Process-wide guard: identical WhatsApp text to the same logical recipient within a short window.
+Cross-node guard: identical WhatsApp text to the same logical recipient within a short window.
 
 - Normalizes recipient (digits tail) so +961..., 961..., and resolved phone from room_id share one key.
-- Uses in-flight tracking + asyncio lock so two concurrent identical sends only result in one HTTP call.
+- Prefers Valkey/Redis SET NX claims so multi-node LB cannot double-send.
+- Local asyncio inflight/cache remains a same-process fast path only (not sole authority when Redis works).
 - Records success timestamp only after a successful send, so failed API calls do not block retries.
 """
 
@@ -96,6 +97,16 @@ def _prune_stale(now: float) -> None:
         _cache.pop(k, None)
 
 
+def _redis_claim_outbound(key: str) -> bool | None:
+    """True=claimed here; False=duplicate; None=Redis unavailable."""
+    try:
+        from services.scale.redis_claims import redis_try_claim
+
+        return redis_try_claim("outbound_text", key, ttl_seconds=WINDOW_SEC)
+    except Exception:
+        return None
+
+
 async def should_skip_outbound_text(resolved_recipient: str, message: str) -> bool:
     """
     Call before HTTP. Returns True if this send should be skipped (duplicate or in-flight).
@@ -106,18 +117,27 @@ async def should_skip_outbound_text(resolved_recipient: str, message: str) -> bo
     k = _cache_key(rn, message)
     if not k:
         return False
+
+    claimed = await asyncio.to_thread(_redis_claim_outbound, k)
+    if claimed is False:
+        print(
+            "⚠️ Outbound duplicate suppressed (redis): same text to same recipient "
+            f"within window={WINDOW_SEC}s"
+        )
+        return True
+
     now = time.time()
     async with _get_lock():
         _prune_stale(now)
         prev = _cache.get(k)
         if prev is not None and (now - prev) < WINDOW_SEC:
             print(
-                f"⚠️ Outbound duplicate suppressed (global): same text to same recipient within "
+                f"⚠️ Outbound duplicate suppressed (local): same text to same recipient within "
                 f"{now - prev:.1f}s (window={WINDOW_SEC}s)"
             )
             return True
         if k in _inflight:
-            print("⚠️ Outbound duplicate suppressed (global): identical send already in flight")
+            print("⚠️ Outbound duplicate suppressed (local): identical send already in flight")
             return True
         _inflight.add(k)
     return False
@@ -134,3 +154,11 @@ async def finish_outbound_text_attempt(resolved_recipient: str, message: str, se
         _inflight.discard(k)
         if send_success:
             _cache[k] = now
+        else:
+            # Allow retry on failed send: drop redis claim early when possible.
+            try:
+                from services.scale.redis_claims import redis_release_claim
+
+                await asyncio.to_thread(redis_release_claim, "outbound_text", k)
+            except Exception:
+                pass

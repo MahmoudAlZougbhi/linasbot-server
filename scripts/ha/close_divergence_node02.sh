@@ -27,28 +27,28 @@ else
     echo "[ha-share] registry_local_moved=true"
   fi
   mkdir -p "${REG_DIR}"
-  mount -t nfs4 -o rw,hard,timeo=50,retrans=2 "${NODE01_PRIV}:${REG_DIR}" "${REG_DIR}"
+  mount -t nfs4 -o rw,soft,timeo=30,retrans=2 "${NODE01_PRIV}:${REG_DIR}" "${REG_DIR}"
 fi
 
+# Media is legacy-only (Create Post disabled). Local empty dir — do not NFS-mount.
 if mountpoint -q "${MEDIA_DIR}"; then
-  echo "[ha-share] media_already_mounted=true"
-else
-  if [[ -d "${MEDIA_DIR}" ]] && [[ ! -d "${MEDIA_DIR}.local-pre-nfs" ]]; then
-    mv "${MEDIA_DIR}" "${MEDIA_DIR}.local-pre-nfs" 2>/dev/null || true
-  fi
-  mkdir -p "${MEDIA_DIR}"
-  mount -t nfs4 -o rw,hard,timeo=50,retrans=2 "${NODE01_PRIV}:${MEDIA_DIR}" "${MEDIA_DIR}"
+  umount "${MEDIA_DIR}" || umount -l "${MEDIA_DIR}" || true
+  echo "[ha-share] media_nfs_unmounted=true"
 fi
-
-# Persist mounts
+mkdir -p "${MEDIA_DIR}"
+echo "legacy-local $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "${MEDIA_DIR}/.legacy_removed"
 FSTAB="/etc/fstab"
-for pair in "${REG_DIR}" "${MEDIA_DIR}"; do
-  src="${NODE01_PRIV}:${pair}"
-  if ! grep -qF "${src}" "${FSTAB}"; then
-    echo "${src} ${pair} nfs4 rw,hard,timeo=50,retrans=2,_netdev,nofail 0 0" >> "${FSTAB}"
-    echo "[ha-share] fstab_added=${pair}"
-  fi
-done
+if grep -qF "${NODE01_PRIV}:${MEDIA_DIR}" "${FSTAB}"; then
+  cp -a "${FSTAB}" "${FSTAB}.bak.ha-share.$(date +%s)"
+  grep -vF "${NODE01_PRIV}:${MEDIA_DIR}" "${FSTAB}" > /tmp/fstab.ha-share
+  mv /tmp/fstab.ha-share "${FSTAB}"
+  echo "[ha-share] fstab_media_removed=true"
+fi
+src="${NODE01_PRIV}:${REG_DIR}"
+if ! grep -qF "${src}" "${FSTAB}"; then
+  echo "${src} ${REG_DIR} nfs4 rw,soft,timeo=30,retrans=2,_netdev,nofail 0 0" >> "${FSTAB}"
+  echo "[ha-share] fstab_added=${REG_DIR}"
+fi
 
 mount | grep linasbot_data | sed 's/^/[ha-share] mount /'
 ls -la "${REG_DIR}" | sed 's/^/[ha-share] reg /' | head -10
@@ -112,8 +112,7 @@ probe.write_text(f"node02 {time.time()}\n")
 print("[ha-share] registry_probe_write=ok")
 media = Path("/opt/linasbot_data/meta_social_post_media")
 assert media.exists()
-(media / ".ha_share_probe").write_text(f"node02 {time.time()}\n")
-print("[ha-share] media_probe_write=ok")
+print(f"[ha-share] media_local_only=true legacy={ (media / '.legacy_removed').exists() }")
 PY
 
 systemctl restart linasbot

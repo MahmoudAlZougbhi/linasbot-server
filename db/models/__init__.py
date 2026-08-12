@@ -1,8 +1,14 @@
-"""ORM model package for PostgreSQL SoT (WhatsApp Cloud + Customer Requests)."""
+"""ORM model package for PostgreSQL SoT (WhatsApp Cloud + Customer Requests + Meta)."""
 
 from __future__ import annotations
 
 from db.models.base import Base
+from db.models.meta_registry import (
+    MetaAssetBindingRow,
+    MetaBindingCredentialRow,
+    MetaOAuthStateRow,
+    MetaRegistryAuditEvent,
+)
 from db.models.requests import CustomerRequest, CustomerRequestCounter
 from db.models.requests_support import (
     CustomerRequestEvent,
@@ -37,6 +43,10 @@ __all__ = [
     "CustomerRequestIdempotency",
     "CustomerRequestNote",
     "CustomerRequestOutbox",
+    "MetaAssetBindingRow",
+    "MetaBindingCredentialRow",
+    "MetaOAuthStateRow",
+    "MetaRegistryAuditEvent",
     "WhatsAppAuditEvent",
     "WhatsAppConnection",
     "WhatsAppConnectionAttempt",

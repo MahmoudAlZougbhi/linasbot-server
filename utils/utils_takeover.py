@@ -187,6 +187,12 @@ def _clear_takeover_flags_for_user(resolved_user_id: str, raw_user_id: str, cano
                 variants.add(normalized[4:])  # 3956607
     for v in variants:
         config.user_in_human_takeover_mode.pop(v, None)
+        try:
+            from services.scale.conversation_state_redis import set_takeover
+
+            set_takeover(v, False)
+        except Exception:
+            pass
 
 
 def _build_user_id_variants_for_release(resolved_user_id: str, raw_user_id: str, canonical_user_id: str) -> list:
@@ -315,6 +321,12 @@ async def set_human_takeover_status(
         if status:
             for vid in variants:
                 config.user_in_human_takeover_mode[vid] = True
+                try:
+                    from services.scale.conversation_state_redis import set_takeover
+
+                    set_takeover(vid, True)
+                except Exception:
+                    pass
         else:
             _clear_takeover_flags_for_user(resolved_user_id, request_user_id or user_id, canonical_user_id)
 

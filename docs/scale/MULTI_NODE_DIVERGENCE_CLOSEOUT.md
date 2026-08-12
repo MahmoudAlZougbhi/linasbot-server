@@ -24,12 +24,12 @@
 - Both app processes use existing file registry + `fcntl` against one authoritative tree
 - Scripts: `scripts/ha/close_divergence_node01.sh`, `close_divergence_node02.sh`
 
-### 2. social media / runtime media — shared FS (Spaces not required)
+### 2. social media / runtime media — **REMOVED** (Spaces not required)
 
-- Same NFS pattern for `/opt/linasbot_data/meta_social_post_media`
-- Active Meta/WA webhook/API paths do not require media files (dir was empty)
-- Social-posts upload/publish now cross-node safe via NFS without paid Spaces
-- Evidence: cross-node probe write/read PASS in closeout verify
+- Create Post / social creative is product-disabled; `meta_social_post_media` is legacy-only
+- NFS export/mount for media **removed** (local stub dirs only)
+- **Do not buy Spaces** for this path
+- See `HA_NODE01_SPOF_HARDENING.md`
 
 ### 3. WhatsApp Postgres — identical reachable DSN
 
@@ -62,11 +62,11 @@
 
 ## Remaining risks
 
-1. **node01 full outage SPOF** — WA Postgres + NFS exports live on node01. App failover off node01 is proven; power-loss of node01 still loses PG/registry/media until managed PG (+ optional Spaces/Redis registry).
-2. **NFS `fcntl` under dual writers** — acceptable for current write rate; prefer Redis/Postgres registry in a future release if write contention appears.
-3. **PR #240 not deployed** — shared Redis rate-limit / SIGTERM drain / live inbound ledger still await deliberate merge+deploy.
-4. **Other process-local residuals** — Live Chat SSE, `config.user_*`, wallets files (see `NON_HORIZONTAL_STATE_INVENTORY.md`); not required for Meta/WA webhook correctness in this closeout.
-5. **Public `:8003`** — opened for LB HC; prefer tightening to VPC/LB sources only in a later harden pass.
+1. **node01 full outage SPOF** — WA Postgres + registry NFS still on node01. Media NFS removed. Managed PG required — see `HA_NODE01_SPOF_HARDENING.md` (`BLOCKED_OWNER_ACTION — MANAGED_POSTGRES_PURCHASE`).
+2. **NFS `fcntl` under dual writers** — registry still file/NFS until `META_REGISTRY_BACKEND=postgres` after Managed PG + deploy.
+3. **PR #240 not deployed** — Redis claims / SSE pubsub / outbound dedupe / registry PG backend await deliberate merge+deploy.
+4. **Other residuals** — wallets/auth file stores (see `NON_HORIZONTAL_STATE_INVENTORY.md`).
+5. **Port `:8003`** — hardened to VPC `10.106.0.0/20` only on node01 (public Anywhere removed; LB HC verified).
 
 ## Confirmation
 

@@ -25,10 +25,14 @@
 | Meta durable `try_claim_event` | ALREADY_DISTRIBUTED | — | Keep |
 | Requests Postgres outbox / WA pause | ALREADY_DISTRIBUTED | — | Keep |
 | `services/live_chat_sse_broadcaster.py` | MOVE_TO_REDIS pubsub | P1 | Sticky LB or Redis pubsub |
-| `services/meta_social_media_store.py` local disk | MOVE_TO_OBJECT_STORAGE | P1 | **Closed for HA:** NFSv4 shared `meta_social_post_media` (Spaces skipped; residual if node01 full outage) |
-| `services/meta_app_registry_bindings.py` file store | SHARED_FS / MOVE_TO_REDIS | P1 | **Closed for HA:** NFSv4 shared `meta_registry` authoritative on both nodes |
-| WhatsApp Postgres localhost DSN | SHARED_DSN / MANAGED_PG | P0 | **Closed for HA:** identical DSN `10.106.0.3` both nodes; managed PG still residual SPOF |
+| `services/meta_social_media_store.py` local disk | REMOVE | P1 | **Removed runtime/HA dependency** — Create Post disabled; media NFS unexported; Spaces not needed |
+| `services/meta_app_registry_bindings.py` | MUST_MOVE_TO_POSTGRES | P0 | NFS shared today; **PR adds** `META_REGISTRY_BACKEND=file\|postgres\|dual` + Alembic; cutover blocked on Managed PG + deploy |
+| WhatsApp Postgres on node01 | MUST_MOVE_TO_POSTGRES (Managed HA) | P0 | Identical DSN `10.106.0.3`; **BLOCKED_OWNER_ACTION — MANAGED_POSTGRES_PURCHASE** (~$60–61/mo `db-s-1vcpu-2gb` ×2 lon1) |
+| `services/whatsapp_adapters/outbound_text_dedupe.py` | MUST_MOVE_TO_VALKEY | P0 | **Fixed in PR:** Redis claim first |
+| `services/live_chat_sse_broadcaster.py` | MUST_MOVE_TO_VALKEY | P1 | **Fixed in PR:** Redis pub/sub fanout |
+| takeover + pending combine | MUST_MOVE_TO_VALKEY | P0 | **Partial in PR:** `services/scale/conversation_state_redis.py` |
 | Live Chat / retrieval TTL caches | SAFE_LOCAL_CACHE | — | OK |
+| Port `:8003` public | REMOVE | P1 | **Hardened:** VPC-only on node01 |
 
 ## Horizontal scale code added (this phase)
 

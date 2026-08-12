@@ -16,6 +16,10 @@ if str(ROOT) not in sys.path:
 
 from db.models import Base  # noqa: E402
 from db.models import (  # noqa: E402, F401 — register models on metadata
+    MetaAssetBindingRow,
+    MetaBindingCredentialRow,
+    MetaOAuthStateRow,
+    MetaRegistryAuditEvent,
     WhatsAppAuditEvent,
     WhatsAppConnection,
     WhatsAppConnectionAttempt,

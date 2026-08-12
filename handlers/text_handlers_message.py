@@ -306,6 +306,12 @@ async def handle_message(
     async with _combine_schedule_lock(user_id):
         # Message combining logic
         config.user_pending_messages[user_id].append(raw_msg)
+        try:
+            from services.scale.conversation_state_redis import set_pending_messages
+
+            set_pending_messages(user_id, list(config.user_pending_messages[user_id]))
+        except Exception:
+            pass
         # Dashboard /api/test-*: if a webhook-delayed task for this user was just cancelled, it may have
         # left the pending deque empty; keep a copy so _delayed_process_messages can still run GPT.
         if user_data.get("_dashboard_test_simulation"):

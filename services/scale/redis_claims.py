@@ -37,6 +37,16 @@ class RedisClaimStore:
             self._redis = None
             return None
 
+    @staticmethod
+    def _safe_parts(namespace: str, key: str) -> tuple[str, str]:
+        safe_ns = "".join(c if c.isalnum() or c in "-_" else "_" for c in namespace)[:64]
+        safe_key = "".join(c if c.isalnum() or c in "-_.:/" else "_" for c in key)[:200]
+        return safe_ns, safe_key
+
+    def _redis_key(self, namespace: str, key: str) -> str:
+        safe_ns, safe_key = self._safe_parts(namespace, key)
+        return f"{self._prefix}:{safe_ns}:{safe_key}"
+
     def try_claim(self, namespace: str, key: str, *, ttl_seconds: float) -> bool | None:
         """
         True = claimed here; False = duplicate; None = Redis unavailable (caller decides).
@@ -44,11 +54,17 @@ class RedisClaimStore:
         client = self._client()
         if client is None:
             return None
-        safe_ns = "".join(c if c.isalnum() or c in "-_" else "_" for c in namespace)[:64]
-        safe_key = "".join(c if c.isalnum() or c in "-_.:/" else "_" for c in key)[:200]
-        redis_key = f"{self._prefix}:{safe_ns}:{safe_key}"
+        redis_key = self._redis_key(namespace, key)
         ok = bool(client.set(redis_key, "1", nx=True, ex=max(1, int(ttl_seconds))))
         return ok
+
+    def release_claim(self, namespace: str, key: str) -> bool | None:
+        """True=deleted; False=missing; None=Redis unavailable."""
+        client = self._client()
+        if client is None:
+            return None
+        deleted = int(client.delete(self._redis_key(namespace, key)))
+        return deleted > 0
 
 
 _shared_claims = RedisClaimStore()
@@ -56,3 +72,7 @@ _shared_claims = RedisClaimStore()
 
 def redis_try_claim(namespace: str, key: str, *, ttl_seconds: float) -> bool | None:
     return _shared_claims.try_claim(namespace, key, ttl_seconds=ttl_seconds)
+
+
+def redis_release_claim(namespace: str, key: str) -> bool | None:
+    return _shared_claims.release_claim(namespace, key)

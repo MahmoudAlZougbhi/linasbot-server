@@ -5,6 +5,11 @@ tenant/Page tokens only as AES-GCM ciphertext. Active bindings are exclusive per
 channel/asset_id globally, so two Meta apps can never answer the same Page or
 Instagram account at the same time. A workspace may own multiple assets per channel.
 
+Persistence backend via META_REGISTRY_BACKEND:
+  - file (default) — local/NFS JSON (backward compatible)
+  - postgres — Postgres SoT only (fail closed if DB unavailable; no file fallback)
+  - dual — write PG then file; read PG primary (explicit migration mode only)
+
 Helpers: meta_app_registry_common; mixins: bindings/lifecycle/oauth (LOC split).
 """
 
@@ -112,7 +117,7 @@ class MetaAppRegistry(
     MetaAppRegistryLifecycleMixin,
     MetaAppRegistryOAuthMixin,
 ):
-    """File-backed, process-safe registry with encrypted credential envelopes."""
+    """Process-safe registry with encrypted credential envelopes (file|postgres|dual)."""
 
 
 _registry_instance: MetaAppRegistry | None = None
@@ -135,6 +140,8 @@ def get_meta_registry_readiness(
 ) -> tuple[bool, dict[str, bool]]:
     """Fail-closed readiness for enabling the encrypted multi-app router."""
 
+    from services.meta_app_registry_bindings import resolve_meta_registry_backend
+
     checks: dict[str, bool] = {
         "encryption_key_configured": len((os.getenv("META_CREDENTIAL_ENCRYPTION_KEY") or "").strip()) >= 32,
         "app_a_configured": get_meta_app_configs()[APP_A_KEY].enabled,
@@ -143,7 +150,23 @@ def get_meta_registry_readiness(
         "active_indexes_exclusive": True,
         "active_credentials_valid": True,
         "app_b_not_active_on_linas": True,
+        "registry_backend_ready": True,
     }
+    try:
+        backend = resolve_meta_registry_backend()
+    except MetaRegistryError:
+        checks["registry_backend_ready"] = False
+        return False, checks
+    if backend in {"postgres", "dual"}:
+        from db.session import get_engine, whatsapp_db_configured
+
+        if not whatsapp_db_configured():
+            checks["registry_backend_ready"] = False
+        else:
+            try:
+                get_engine(require=True)
+            except Exception:  # noqa: BLE001 — readiness must fail closed
+                checks["registry_backend_ready"] = False
     try:
         current_registry = registry or get_meta_app_registry()
         bindings = current_registry.list_bindings(include_inactive=False)

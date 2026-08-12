@@ -72,9 +72,24 @@ async def _delayed_process_messages(
             await asyncio.sleep(delay)
 
         combined_message = None
+        if not config.user_pending_messages[user_id]:
+            try:
+                from services.scale.conversation_state_redis import get_pending_messages
+
+                remote_pending = get_pending_messages(user_id)
+                if remote_pending:
+                    config.user_pending_messages[user_id].extend(remote_pending)
+            except Exception:
+                pass
         if config.user_pending_messages[user_id]:
             combined_message = " ".join(config.user_pending_messages[user_id])
             config.user_pending_messages[user_id].clear()
+            try:
+                from services.scale.conversation_state_redis import set_pending_messages
+
+                set_pending_messages(user_id, [])
+            except Exception:
+                pass
             user_data.pop("_dashboard_last_message_for_fallback", None)
             user_data.pop("_dashboard_test_turn_sticky", None)
         elif user_data.get("_dashboard_test_simulation"):

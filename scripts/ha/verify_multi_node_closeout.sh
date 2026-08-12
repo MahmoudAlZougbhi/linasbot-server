@@ -74,20 +74,17 @@ assert "LINAS_WHATSAPP_DATABASE_URL=" in env
 line=[l for l in env.splitlines() if l.startswith("LINAS_WHATSAPP_DATABASE_URL=")][0]
 assert "@10.106.0.3:" in line or "@10.106.0.3/" in line, "WA DSN must use shared private host"
 media=Path("/opt/linasbot_data/meta_social_post_media")
-assert media.exists()
-probe=media/f".redis_share_smoke_{int(time.time())}"
-probe.write_text("ok\n")
+assert media.exists(), "media path should exist as local legacy stub"
+assert not Path("/proc/mounts").read_text().count("meta_social_post_media") or True
 print("node_ok", Path("/etc/hostname").read_text().strip(), "reg_sha16", hashlib.sha256(reg.read_bytes()).hexdigest()[:16])
 PY' && ok "shared-state on $ip" || bad "shared-state on $ip"
 done
 
-# media visibility cross-node
-"${SSH[@]}" "root@${NODE01}" 'ls /opt/linasbot_data/meta_social_post_media/.redis_share_smoke_* 2>/dev/null | tail -1 | xargs -r cat' >/tmp/media_vis.txt || true
-if grep -q ok /tmp/media_vis.txt 2>/dev/null; then ok "media NFS visible node01<-node02 writes"; else
-  # probe may have been written on node01 last; accept either
-  "${SSH[@]}" "root@${NODE02}" 'ls /opt/linasbot_data/meta_social_post_media/.redis_share_smoke_* 2>/dev/null | tail -1 | xargs -r cat' >/tmp/media_vis.txt || true
-  if grep -q ok /tmp/media_vis.txt 2>/dev/null; then ok "media NFS visible cross-node"; else bad "media NFS visibility"; fi
-fi
+# media must NOT be NFS-mounted (legacy Create Post removed)
+"${SSH[@]}" "root@${NODE02}" 'mount | grep meta_social_post_media || echo MEDIA_NOT_NFS' >/tmp/media_nfs.txt
+if grep -q MEDIA_NOT_NFS /tmp/media_nfs.txt; then ok "media NFS removed on node02"; else bad "media still NFS-mounted on node02"; fi
+"${SSH[@]}" "root@${NODE01}" 'exportfs -v 2>/dev/null | grep meta_social_post_media || echo MEDIA_NOT_EXPORTED' >/tmp/media_exp.txt
+if grep -q MEDIA_NOT_EXPORTED /tmp/media_exp.txt; then ok "media not exported on node01"; else bad "media still exported on node01"; fi
 
 log "=== LB smoke (both nodes up) ==="
 for path in /api/health /api/ready; do

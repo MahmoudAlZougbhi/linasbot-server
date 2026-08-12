@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import tempfile
 import threading
 import time
 import uuid
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from services.meta_app_registry_common import (
     REGISTRY_SCHEMA_VERSION,
@@ -31,9 +32,23 @@ from services.meta_app_registry_common import (
 )
 from storage.persistent_storage import _DATA_ROOT
 
+logger = logging.getLogger(__name__)
+
+MetaRegistryBackend = Literal["file", "postgres", "dual"]
+
+
+def resolve_meta_registry_backend() -> MetaRegistryBackend:
+    raw = (os.getenv("META_REGISTRY_BACKEND") or "file").strip().lower()
+    if raw not in {"file", "postgres", "dual"}:
+        raise MetaRegistryError("META_REGISTRY_BACKEND must be file|postgres|dual")
+    return cast(MetaRegistryBackend, raw)
+
 
 class MetaAppRegistryBindingsMixin:
-    """File lock, persistence, listing, and OAuth asset authorization."""
+    """Persistence primitives, listing, and OAuth asset authorization.
+
+    Backend via META_REGISTRY_BACKEND: file (default), postgres, or dual (migration).
+    """
 
     def __init__(
         self,
@@ -46,10 +61,14 @@ class MetaAppRegistryBindingsMixin:
         self.store_path = store_path or registry_root / "registry.json"
         self.audit_path = audit_path or registry_root / "audit.jsonl"
         self.lock_path = self.store_path.with_suffix(".lock")
-        self.store_path.parent.mkdir(parents=True, exist_ok=True)
-        self.audit_path.parent.mkdir(parents=True, exist_ok=True)
+        self._backend = resolve_meta_registry_backend()
+        if self._backend in {"file", "dual"}:
+            self.store_path.parent.mkdir(parents=True, exist_ok=True)
+            self.audit_path.parent.mkdir(parents=True, exist_ok=True)
         self._thread_lock = threading.RLock()
         self._cipher = MetaCredentialCipher(master_secret or os.getenv("META_CREDENTIAL_ENCRYPTION_KEY") or "")
+        self._pg_session: Any = None
+        self._lock_depth = 0
 
     def _empty(self) -> dict[str, Any]:
         return {
@@ -59,20 +78,66 @@ class MetaAppRegistryBindingsMixin:
             "oauth_states": {},
         }
 
-    @contextmanager
-    def _locked(self) -> Iterator[None]:
+    def _file_lock_cm(self):
         import fcntl
 
         self.lock_path.touch(mode=0o600, exist_ok=True)
         os.chmod(self.lock_path, 0o600)
-        with self._thread_lock, self.lock_path.open("r+", encoding="utf-8") as lock_handle:
-            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+
+        @contextmanager
+        def _cm() -> Iterator[None]:
+            with self.lock_path.open("r+", encoding="utf-8") as lock_handle:
+                fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+
+        return _cm()
+
+    @contextmanager
+    def _locked(self) -> Iterator[None]:
+        if self._lock_depth > 0:
+            self._lock_depth += 1
             try:
                 yield
             finally:
-                fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+                self._lock_depth -= 1
+            return
 
-    def _read_unlocked(self) -> dict[str, Any]:
+        from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+        from services.meta_app_registry_pg_store import (
+            acquire_registry_advisory_lock,
+            release_registry_advisory_lock,
+        )
+
+        needs_pg = self._backend in {"postgres", "dual"}
+        needs_file = self._backend in {"file", "dual"}
+        with self._thread_lock:
+            file_cm = self._file_lock_cm() if needs_file else nullcontext()
+            with file_cm:
+                if not needs_pg:
+                    self._lock_depth = 1
+                    try:
+                        yield
+                    finally:
+                        self._lock_depth = 0
+                    return
+                try:
+                    with whatsapp_session(require=True) as session:
+                        acquire_registry_advisory_lock(session)
+                        self._pg_session = session
+                        self._lock_depth = 1
+                        try:
+                            yield
+                        finally:
+                            release_registry_advisory_lock(session)
+                            self._pg_session = None
+                            self._lock_depth = 0
+                except WhatsAppDatabaseUnavailable as exc:
+                    raise MetaRegistryError("Meta registry Postgres backend is unavailable") from exc
+
+    def _read_file_unlocked(self) -> dict[str, Any]:
         if not self.store_path.exists():
             return self._empty()
         try:
@@ -86,7 +151,25 @@ class MetaAppRegistryBindingsMixin:
                 raise MetaRegistryError("Meta registry structure is invalid")
         return cast(dict[str, Any], raw)
 
-    def _write_unlocked(self, state: dict[str, Any]) -> None:
+    def _read_unlocked(self) -> dict[str, Any]:
+        from services.meta_app_registry_pg_store import load_state, state_fingerprint
+
+        if self._backend == "file":
+            return self._read_file_unlocked()
+        if self._pg_session is None:
+            raise MetaRegistryError("Meta registry Postgres session is not locked")
+        pg_state = load_state(self._pg_session)
+        if self._backend == "dual":
+            file_state = self._read_file_unlocked()
+            if state_fingerprint(pg_state) != state_fingerprint(file_state):
+                logger.warning(
+                    "meta_registry dual-read mismatch: pg=%s file=%s",
+                    state_fingerprint(pg_state),
+                    state_fingerprint(file_state),
+                )
+        return pg_state
+
+    def _write_file_unlocked(self, state: dict[str, Any]) -> None:
         self.store_path.parent.mkdir(parents=True, exist_ok=True)
         fd, temporary_name = tempfile.mkstemp(prefix=".meta-registry-", dir=self.store_path.parent)
         temporary_path = Path(temporary_name)
@@ -102,9 +185,21 @@ class MetaAppRegistryBindingsMixin:
             if temporary_path.exists():
                 temporary_path.unlink()
 
-    def _append_audit(self, event: dict[str, Any]) -> None:
+    def _write_unlocked(self, state: dict[str, Any]) -> None:
+        from services.meta_app_registry_pg_store import save_state
+
+        if self._backend == "file":
+            self._write_file_unlocked(state)
+            return
+        if self._pg_session is None:
+            raise MetaRegistryError("Meta registry Postgres session is not locked")
+        save_state(self._pg_session, state)
+        if self._backend == "dual":
+            self._write_file_unlocked(state)
+
+    def _redacted_audit(self, event: dict[str, Any]) -> dict[str, Any]:
         actor_id = str(event.get("actor_id") or "system")
-        safe = {
+        return {
             "timestamp": time.time(),
             "event": str(event.get("event") or "unknown"),
             "actor_id_hash": hashlib.sha256(actor_id.encode("utf-8")).hexdigest()[:16],
@@ -115,9 +210,22 @@ class MetaAppRegistryBindingsMixin:
             "binding_id": str(event.get("binding_id") or ""),
             "result": str(event.get("result") or "ok"),
         }
+
+    def _append_audit_file(self, safe: dict[str, Any]) -> None:
         with self.audit_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(safe, separators=(",", ":"), sort_keys=True) + "\n")
         os.chmod(self.audit_path, 0o600)
+
+    def _append_audit(self, event: dict[str, Any]) -> None:
+        from services.meta_app_registry_pg_store import append_audit_event
+
+        safe = self._redacted_audit(event)
+        if self._backend in {"postgres", "dual"}:
+            if self._pg_session is None:
+                raise MetaRegistryError("Meta registry Postgres session is not locked")
+            append_audit_event(self._pg_session, safe)
+        if self._backend in {"file", "dual"}:
+            self._append_audit_file(safe)
 
     @staticmethod
     def _binding_from_dict(raw: dict[str, Any]) -> MetaAssetBinding:

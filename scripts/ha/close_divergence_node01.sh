@@ -45,9 +45,8 @@ fi
 ufw allow from "${NODE02_PRIV}" to any port 5432 proto tcp comment "linas-ha-wa-pg-node02" || true
 # NFS/RPC + full VPC allow for peer (mountd uses dynamic ports)
 ufw allow from "${NODE02_PRIV}" comment "linas-ha-node02-vpc" || true
-# LB health checks hit app :8003 directly
-ufw allow from 10.106.0.0/20 to any port 8003 proto tcp comment "linas-ha-lb-hc-vpc" || true
-ufw allow 8003/tcp comment "linas-ha-app-hc" || true
+# LB health checks hit app :8003 from VPC only (no public Anywhere)
+ufw allow from "${VPC_CIDR}" to any port 8003 proto tcp comment "linas-ha-lb-hc-vpc" || true
 ufw status | sed -n '1,40p' | sed 's/^/[ha-share] ufw /'
 
 systemctl reload postgresql || systemctl restart postgresql
@@ -55,12 +54,14 @@ sleep 1
 ss -lnt | grep 5432 | sed 's/^/[ha-share] pg_listen /'
 sudo -u postgres psql -tAc "SHOW listen_addresses;" | sed 's/^/[ha-share] listen_addresses=/'
 
-# --- NFS: export registry + media to node02 only ---
+# --- NFS: export registry only (media is legacy; Create Post disabled — no Spaces) ---
 export DEBIAN_FRONTEND=noninteractive
 if ! dpkg -s nfs-kernel-server >/dev/null 2>&1; then
   apt-get update -y
   apt-get install -y nfs-kernel-server
 fi
+mkdir -p "${MEDIA_DIR}"
+echo "legacy-local $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "${MEDIA_DIR}/.legacy_removed"
 
 NFS_MARKER="# linas-ha-share"
 TMP_EXP="$(mktemp)"
@@ -79,12 +80,14 @@ fi
 cat >> "${TMP_EXP}" <<EOF
 ${NFS_MARKER}
 ${REG_DIR} ${NODE02_PRIV}(rw,sync,no_subtree_check,no_root_squash)
-${MEDIA_DIR} ${NODE02_PRIV}(rw,sync,no_subtree_check,no_root_squash)
 EOF
 mv "${TMP_EXP}" "${EXPORTS}"
 exportfs -ra
 systemctl enable --now nfs-server
 exportfs -v | sed 's/^/[ha-share] export /'
+# Prefer VPC-only :8003 (LB HC). Public Anywhere is removed by harden_port_8003.sh.
+ufw allow from "${VPC_CIDR}" to any port 8003 proto tcp comment "linas-ha-lb-hc-vpc" || true
+ufw status | grep 8003 | sed 's/^/[ha-share] ufw8003 /' || true
 
 # --- Point node01 DSN at private IP (identical DSN as node02 will use) ---
 ENV_FILE="/opt/linasbot/.env"

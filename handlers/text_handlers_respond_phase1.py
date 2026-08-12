@@ -183,7 +183,18 @@ async def text_handlers_respond_phase1(ctx: dict) -> Any:
     # Bot saves what AI returns. No bot-side keyword/pattern extraction for name.
 
     # Check if human takeover is active (dashboard /api/test-* sets _dashboard_test_simulation to bypass and reach GPT)
-    if not user_data.get("_dashboard_test_simulation") and config.user_in_human_takeover_mode.get(user_id, False):
+    _takeover_local = config.user_in_human_takeover_mode.get(user_id, False)
+    if not _takeover_local:
+        try:
+            from services.scale.conversation_state_redis import get_takeover
+
+            _remote = get_takeover(user_id)
+            if _remote is True:
+                config.user_in_human_takeover_mode[user_id] = True
+                _takeover_local = True
+        except Exception:
+            pass
+    if not user_data.get("_dashboard_test_simulation") and _takeover_local:
         print(
             f"[_process_and_respond] INFO: Conversation {current_conversation_id} for user {user_id} is in human takeover mode. AI fallback guard active."
         )

@@ -5,7 +5,7 @@
 **PR:** [#240](https://github.com/MahmoudAlZougbhi/linasbot-server/pull/240)  
 **Rule:** Inventory + HA closeout notes. No merge / app-release deploy in this doc.
 
-**HA update (live):** Valkey `linas-redis-prod`, LB `linas-http-lb-lon1` (`157.245.31.104`), peer `linas-app-lon1-02`. Multi-node divergence closed via NFS (`meta_registry` + media) + identical WA PG DSN `10.106.0.3` — see `MULTI_NODE_DIVERGENCE_CLOSEOUT.md` / `HA_PURCHASE_EXECUTION.md`. PR #240 still not merged/deployed.
+**HA update (live):** Valkey `linas-redis-prod`, LB `linas-http-lb-lon1` (`157.245.31.104`), peer `linas-app-lon1-02`. Divergence closeout: registry NFS (temp) + identical WA PG DSN `10.106.0.3`; media NFS **removed** (legacy). Port `:8003` VPC-only. See `MULTI_NODE_DIVERGENCE_CLOSEOUT.md` / `HA_NODE01_SPOF_HARDENING.md`. PR #240 still not merged/deployed. Managed PG **blocked on owner purchase**.
 
 ## Evidence classes
 

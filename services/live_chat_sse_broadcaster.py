@@ -1,9 +1,12 @@
-"""Shared SSE broadcaster for Live Chat events."""
+"""Shared SSE broadcaster for Live Chat events (local hub + optional Valkey fanout)."""
 
 from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import os
+import threading
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Any
@@ -11,6 +14,10 @@ from typing import Any
 from fastapi import Request
 
 from services.live_chat_contracts import utc_now
+
+logger = logging.getLogger(__name__)
+
+_PUBSUB_CHANNEL = (os.getenv("LINAS_LIVE_CHAT_SSE_CHANNEL") or "linas:live_chat:sse").strip()
 
 
 def _json_serializer(obj: Any) -> Any:
@@ -29,11 +36,16 @@ class LiveChatSSEBroadcaster:
         self._clients: set[asyncio.Queue] = set()
         self._lock = asyncio.Lock()
         self._sequence = 0
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._pubsub_started = False
+        self._origin = f"pid:{os.getpid()}:{id(self)}"
 
     async def _register(self) -> asyncio.Queue:
         queue: asyncio.Queue = asyncio.Queue(maxsize=self.CLIENT_QUEUE_SIZE)
         async with self._lock:
             self._clients.add(queue)
+            self._loop = asyncio.get_running_loop()
+        self._ensure_pubsub_listener()
         return queue
 
     async def _unregister(self, queue: asyncio.Queue) -> None:
@@ -53,11 +65,94 @@ class LiveChatSSEBroadcaster:
         async with self._lock:
             return len(self._clients)
 
-    async def publish(self, event_type: str, data: dict[str, Any]) -> None:
+    def _redis_client(self) -> Any | None:
+        try:
+            from services.queues.config import redis_url
+
+            url = redis_url()
+            if not url:
+                return None
+            import redis
+
+            client = redis.Redis.from_url(
+                url,
+                decode_responses=True,
+                socket_connect_timeout=1.5,
+                socket_timeout=1.5,
+            )
+            client.ping()
+            return client
+        except Exception:
+            return None
+
+    def _ensure_pubsub_listener(self) -> None:
+        if self._pubsub_started:
+            return
+        self._pubsub_started = True
+        thread = threading.Thread(target=self._pubsub_loop, name="live-chat-sse-pubsub", daemon=True)
+        thread.start()
+
+    def _pubsub_loop(self) -> None:
+        while True:
+            client = self._redis_client()
+            if client is None:
+                time_sleep = __import__("time").sleep
+                time_sleep(2.0)
+                continue
+            try:
+                pubsub = client.pubsub(ignore_subscribe_messages=True)
+                pubsub.subscribe(_PUBSUB_CHANNEL)
+                for message in pubsub.listen():
+                    if not message or message.get("type") != "message":
+                        continue
+                    raw = message.get("data")
+                    if not isinstance(raw, str):
+                        continue
+                    try:
+                        envelope = json.loads(raw)
+                    except ValueError:
+                        continue
+                    if envelope.get("origin") == self._origin:
+                        continue
+                    event = envelope.get("event")
+                    if not isinstance(event, dict):
+                        continue
+                    loop = self._loop
+                    if loop is None:
+                        continue
+                    asyncio.run_coroutine_threadsafe(self._deliver_local(event), loop)
+            except Exception as exc:
+                logger.warning("live chat SSE pubsub reconnect: %s", type(exc).__name__)
+                __import__("time").sleep(1.0)
+
+    async def _deliver_local(self, event: dict[str, Any]) -> None:
         clients = await self._snapshot_clients()
         if not clients:
             return
+        stale_clients = []
+        for queue in clients:
+            try:
+                if queue.full():
+                    queue.get_nowait()
+                queue.put_nowait(event)
+            except Exception:
+                stale_clients.append(queue)
+        if stale_clients:
+            async with self._lock:
+                for queue in stale_clients:
+                    self._clients.discard(queue)
 
+    def _publish_redis(self, event: dict[str, Any]) -> None:
+        client = self._redis_client()
+        if client is None:
+            return
+        try:
+            payload = json.dumps({"origin": self._origin, "event": event}, default=_json_serializer)
+            client.publish(_PUBSUB_CHANNEL, payload)
+        except Exception as exc:
+            logger.warning("live chat SSE redis publish failed: %s", type(exc).__name__)
+
+    async def publish(self, event_type: str, data: dict[str, Any]) -> None:
         event = {
             "type": event_type,
             "data": data,
@@ -66,21 +161,8 @@ class LiveChatSSEBroadcaster:
                 "broadcast_at": utc_now().isoformat(),
             },
         }
-
-        stale_clients = []
-        for queue in clients:
-            try:
-                if queue.full():
-                    # Prevent stalled clients from blocking the broadcaster forever.
-                    queue.get_nowait()
-                queue.put_nowait(event)
-            except Exception:
-                stale_clients.append(queue)
-
-        if stale_clients:
-            async with self._lock:
-                for queue in stale_clients:
-                    self._clients.discard(queue)
+        await self._deliver_local(event)
+        await asyncio.to_thread(self._publish_redis, event)
 
     async def stream(
         self,
