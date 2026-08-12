@@ -78,3 +78,4 @@
 | 2026-08-12T18:56:00Z | Phase B durability: inbound ledger + Meta persist-before-ACK + reconcile job + tests | DONE |
 | 2026-08-12T18:56:00Z | Spaces: not created (media local-disk residual P1; inbound path independent) | DONE |
 | 2026-08-12T18:56:00Z | Phase C/D purchase+load cert deferred until DO unlock | BLOCKED_OWNER_ACTION |
+| 2026-08-12T16:06:00Z | PR #240 CI green @ 37381ed (backend/frontend/mobile/secret-scan/deploy-readiness) | DONE |
