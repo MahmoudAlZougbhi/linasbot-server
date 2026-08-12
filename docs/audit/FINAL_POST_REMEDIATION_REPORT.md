@@ -3,7 +3,7 @@
 **Agent:** Phase R (docs)  
 **Branch:** `chore/project-cleanup-reorg`  
 **Date:** 2026-08-12  
-**HEAD SHA (at write):** `c61daabc4736a2e82636782aa6c65c24067ff1f4` (+ this docs commit)  
+**HEAD SHA (at write):** `92f9c2f` (+ this docs commit after gate re-run)  
 **Rule:** Report only remediations that landed in git + Phase R inventory/gates. Live activation is not “open code debt.”
 
 **Companions:**
@@ -26,13 +26,13 @@
 
 | Field | Value |
 |---|---|
-| **Verdict** | **NOT_READY** |
-| Production SaaS GO at ~100k | **Not claimed** |
-| Open CRITICAL/HIGH/MEDIUM in FINAL SEC closeout | **None** as numbered SEC defects (FIXED / ACCEPTED_RISK / LIVE_ACTIVATION_PENDING) |
-| Phase R full gates (`FINAL_TEST_MATRIX.md`) | **FAIL** — blocks READY_FOR_OWNER_REVIEW |
-| Live activation | **LIVE_ACTIVATION_PENDING** (separate from gate FAIL) |
+| **Verdict** | **READY_FOR_OWNER_REVIEW** |
+| Production SaaS GO at ~100k | **Not claimed** (live Redis / Meta cutover / nginx / indexes still owner-activated) |
+| Open CRITICAL/HIGH/MEDIUM actionable in-repo SEC defects | **None** (FIXED / ACCEPTED_RISK / LIVE_ACTIVATION_PENDING only) |
+| Phase R full gates (`FINAL_TEST_MATRIX.md`) | **PASS** — pytest 1192, dashboard 78+build, mobile 97 |
+| Live activation | **LIVE_ACTIVATION_PENDING** (documented; not a code-gate failure) |
 
-Earlier `PRODUCTION_READINESS.md` **NO-GO** reflected pre–post-Phase-1 state. P0 remediation themes did land (see §2), but Phase R’s **full** gate matrix is red, so this pack is **not** ready for a clean owner “review complete / merge-ready” stamp yet.
+Earlier `PRODUCTION_READINESS.md` **NO-GO** is historical for pre–full-remediation. This pack is ready for Mahmoud **code review** on `chore/project-cleanup-reorg` — not an approval to push/deploy/activate live systems.
 
 ---
 
@@ -121,23 +121,25 @@ These are **LIVE_ACTIVATION_PENDING**, not open repo defects.
 
 ## 7. Final verdict recommendation
 
-### NOT_READY
+### READY_FOR_OWNER_REVIEW
 
-**Why not READY_FOR_OWNER_REVIEW:** Phase R criteria require no open CRITICAL/HIGH/MEDIUM actionable repo findings **and gates mostly green**. `FINAL_TEST_MATRIX.md` overall is **FAIL** (pytest collection + 16 failures; mobile tsc + 6 unit fails). That is not mostly green — even though SEC closeout has no open numbered CRITICAL/HIGH/MEDIUM defects and live activation is correctly parked as LIVE_ACTIVATION_PENDING.
+**Why READY_FOR_OWNER_REVIEW:** Phase R criteria met for **in-repo** work — no open CRITICAL/HIGH/MEDIUM actionable code findings in SEC closeout; inventory fully read with zero UNREVIEWED / zero over-500 app source; full gates green after fix loop (`92f9c2f`, `a8f20f7`):
 
-**What is already solid (do not re-litigate as missing remediations):**
+| Gate | Result |
+|---|---|
+| pytest full | **1192 passed** |
+| dashboard vitest + build | **78 passed** + build OK |
+| mobile tsc + unit tests | **97 passed** |
 
-1. SEC-001…070 dispositions complete (FIXED / ACCEPTED_RISK / LIVE_ACTIVATION_PENDING).  
-2. P0 themes from prior NO-GO landed in repo (tenant fail-closed, Redis limiter in-repo, Cloud-only WhatsApp code, content-files 410, infra synced, landing-only web, APK/jsonl untrack).  
-3. Phase R inventory complete (1531 paths; 1171 HW fully read; 0 over-500 app source).  
-4. C5 focused remediation pytest green; dashboard vitest+build green.  
-5. Live activation checklist explicit and separate.
+**What READY means here:** Mahmoud can review/merge-decide this branch’s **code**. It does **not** mean production GO, push without approval, or live activation of Redis/Meta/nginx/Firestore indexes.
 
-**Blockers to flip → READY_FOR_OWNER_REVIEW (code/test hygiene, not live ops):**
+**Still NOT done (live activation only — see checklist):**
 
-1. Restore or retire tests importing archived `scripts.meta_webhook_contract`.  
-2. Clear or disposition the 16 pytest failures (Meta connections, WhatsApp Cloud UTC/bind, live-chat legacy-scan, auth_migration).  
-3. Install/fix mobile `expo-web-browser` + clear or update the 6 failing mobile unit tests.  
-4. Re-run and attach a green (or owner-accepted waive) `FINAL_TEST_MATRIX.md`.
+1. Meta WhatsApp Cloud live cutover / secrets  
+2. Provision production Redis for rate limits  
+3. Deploy/reload live nginx (OAuth + deauthorize)  
+4. Deploy Firestore indexes  
+5. systemd non-root user on hosts  
+6. Push / deploy this branch  
 
-**Not claimed:** production multi-tenant GO, live Meta/Redis/nginx/indexes, or push/deploy without Mahmoud approval.
+**Not claimed:** production multi-tenant GO at ~100k concurrent, or any live ops change without Mahmoud approval.
