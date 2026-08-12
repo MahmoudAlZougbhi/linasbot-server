@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -11,7 +10,12 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from services.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential, get_meta_graph_api_version
+from services.meta_app_registry import (
+    APP_A_KEY,
+    MetaAppRegistry,
+    MetaBindingCredential,
+    get_meta_graph_api_version,
+)
 from services.meta_comment_events import resolve_registry_comment_events
 from services.meta_cross_flow_dedup import global_comment_claim_key
 from services.meta_graph_routing import graph_api_url
@@ -28,19 +32,15 @@ from services.meta_instagram_login_subscription import (
     subscribed_fields_for_granted_scopes,
 )
 from services.meta_multi_app_router import resolve_registry_events
-
-INSTAGRAM_ID = "17840000999900021"
-DM_SCOPES = (
-    "instagram_business_basic",
-    "instagram_business_manage_messages",
+from tests.meta_instagram_login_lifecycle_helpers import (
+    DM_SCOPES,
+    FULL_SCOPES,
+    INSTAGRAM_ID,
+    PAGE_SCOPES,
+    _binding,
+    _comment_payload,
+    _dm_payload,
 )
-FULL_SCOPES = (
-    "instagram_business_basic",
-    "instagram_business_manage_messages",
-    "instagram_business_manage_comments",
-    "instagram_business_content_publish",
-)
-PAGE_SCOPES = ("instagram_basic", "instagram_manage_messages", "instagram_manage_comments", "instagram_content_publish")
 
 
 @pytest.fixture
@@ -63,79 +63,6 @@ def registry(tmp_path: Path, instagram_env: None) -> MetaAppRegistry:
         audit_path=tmp_path / "audit.jsonl",
         master_secret="instagram-login-lifecycle-secret-tests-1234567890",
     )
-
-
-def _binding(
-    registry: MetaAppRegistry,
-    *,
-    auth_flow: str,
-    scopes: tuple[str, ...] = FULL_SCOPES,
-    webhook_status: str = "ready",
-    webhook_fields: tuple[str, ...] = ("messages", "messaging_postbacks"),
-) -> object:
-    return registry.authorize_oauth_asset(
-        tenant_id="tenant-a",
-        channel="instagram",
-        asset_id=INSTAGRAM_ID,
-        page_id="112233" if auth_flow == "facebook_login" else "",
-        instagram_account_id=INSTAGRAM_ID,
-        app_key=APP_A_KEY,
-        credential=MetaBindingCredential(
-            access_token=f"token-{auth_flow}",
-            token_app_id="2963733803971681" if auth_flow == "facebook_login" else "1035856539045307",
-            token_profile_id="112233" if auth_flow == "facebook_login" else INSTAGRAM_ID,
-            scopes=scopes,
-            expires_at=int(time.time()) + 30 * 24 * 3600,
-            authorized_meta_user_id="998877",
-            auth_flow=auth_flow,
-        ),
-        actor_id="owner",
-        instagram_username="clinic_ig",
-        auth_flow=auth_flow,
-        webhook_subscription_status=webhook_status,
-        webhook_subscribed_fields=webhook_fields,
-    )
-
-
-def _dm_payload() -> dict:
-    return {
-        "object": "instagram",
-        "entry": [
-            {
-                "id": INSTAGRAM_ID,
-                "messaging": [
-                    {
-                        "sender": {"id": "sender-1"},
-                        "recipient": {"id": INSTAGRAM_ID},
-                        "timestamp": 1_700_000_000_000,
-                        "message": {"mid": "mid-dup", "text": "hello"},
-                    }
-                ],
-            }
-        ],
-    }
-
-
-def _comment_payload() -> dict:
-    return {
-        "object": "instagram",
-        "entry": [
-            {
-                "id": INSTAGRAM_ID,
-                "changes": [
-                    {
-                        "field": "comments",
-                        "value": {
-                            "id": "comment-1",
-                            "text": "nice",
-                            "from": {"id": "author-1", "username": "fan"},
-                            "media": {"id": "media-1"},
-                        },
-                    }
-                ],
-            }
-        ],
-    }
 
 
 @pytest.mark.asyncio

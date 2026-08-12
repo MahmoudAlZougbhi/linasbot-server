@@ -6,21 +6,20 @@ import hashlib
 import time
 
 from services.conversation_router import get_gender_from_message
-
 from services.social_contact_routing_detect import (
     SOCIAL_BOOKING_PREFERENCE_MEMORY_PREFIX,
     SOCIAL_BOOKING_PREFERENCES_FIELD,
     SOCIAL_CHANNELS,
     SOCIAL_CONTACT_FLOW_TTL_SECONDS,
     SocialContactScope,
-    detect_branch,
-    is_appointment_request,
-    is_tattoo_removal_request,
+    SocialContactScopeError,
     _explicit_handoff_intent,
     _is_cancel_handoff,
     _is_greeting_only,
     _other_person_booking_gender,
+    detect_branch,
 )
+
 
 def _flow_scope(user_data: dict) -> SocialContactScope:
     tenant_id = str(user_data.get("tenant_id") or user_data.get("workspace_id") or "").strip()
