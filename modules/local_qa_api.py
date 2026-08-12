@@ -11,9 +11,15 @@ from datetime import datetime
 from typing import Any
 
 from modules.core import app
+
+# Register FAQ correction routes; re-export handlers.
+from modules.local_qa_api_faq import (  # noqa: E402, F401
+    faq_create_from_livechat,
+    faq_update_answer,
+)
 from modules.local_qa_api_helpers import (  # noqa: F401
-    QA_FILE_PATH,
     _LEGACY_FAQ_WRITE_BLOCKED,
+    QA_FILE_PATH,
     _answer_in_arabic_script,
     _legacy_faq_writes_blocked,
     _translate_to_arabic_script,
@@ -25,12 +31,6 @@ from modules.local_qa_api_helpers import (  # noqa: F401
     write_qa_pairs,
 )
 from services.language_detection_service import language_detection_service
-
-# Register FAQ correction routes; re-export handlers.
-from modules.local_qa_api_faq import (  # noqa: E402, F401
-    faq_create_from_livechat,
-    faq_update_answer,
-)
 
 
 @app.get("/api/local-qa/list")
@@ -231,7 +231,7 @@ async def test_local_qa_match(test_data: dict) -> Any:
             print("✅ MATCH FOUND!")
             print(f"   Score: {match_score:.2%}")
             print(f"   Matched Question: {qa_pair.get('question')}")
-            print(f"   Answer: {qa_pair.get('answer')[:100]}...")
+            print(f"   Answer_len={len(str(qa_pair.get('answer') or ''))}")
             print(f"{'=' * 80}\n")
 
             return {

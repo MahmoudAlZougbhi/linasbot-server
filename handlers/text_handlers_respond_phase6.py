@@ -4,16 +4,33 @@ from __future__ import annotations
 import asyncio
 
 import config
+from handlers.text_handlers_respond_intent import (
+    _clean_reply_text,
+    _flow_meta_has_crm_booking_confirmation,
+    _reply_claims_booking_done,
+)
+from handlers.text_handlers_respond_reply import (
+    _reply_offers_handover_confirmation,
+    _user_explicitly_requests_human_agent,
+)
+from handlers.text_handlers_wa_me_handoff import build_wa_me_handoff_guidance
 
 _PHASE_HALT = "_PHASE_HALT"
 
 
+def _coerce_unauthorized_to_wa_me(
+    *,
+    user_data: dict,
+    current_preferred_lang: str,
+    reason: str,
+) -> tuple[str, str]:
+    """Replace unauthorized human_handover coerce with WhatsApp/wa.me guidance."""
+    reply = build_wa_me_handoff_guidance(user_data=user_data, language=current_preferred_lang)
+    print(f"[_process_and_respond] unauthorized handover coerce blocked → wa.me handoff ({reason})")
+    return "answer_question", reply
+
+
 async def text_handlers_respond_phase6(ctx: dict):
-    _clean_reply_text = ctx.get('_clean_reply_text')
-    _flow_meta_has_crm_booking_confirmation = ctx.get('_flow_meta_has_crm_booking_confirmation')
-    _reply_claims_booking_done = ctx.get('_reply_claims_booking_done')
-    _reply_offers_handover_confirmation = ctx.get('_reply_offers_handover_confirmation')
-    _user_explicitly_requests_human_agent = ctx.get('_user_explicitly_requests_human_agent')
     canonical_user_id = ctx.get('canonical_user_id')
     current_conversation_id = ctx.get('current_conversation_id')
     current_gender = ctx.get('current_gender')
@@ -54,22 +71,28 @@ async def text_handlers_respond_phase6(ctx: dict):
     booking_retry = flow_meta.get("booking_retry") or {}
 
     if int(booking_retry.get("failed_submit_count") or 0) >= 5:
-        action = "human_handover"
-        escalation_reason_from_gpt = "technical_error"
+        # Product: no unauthorized operator-queue coerce — WhatsApp/wa.me guidance only.
+        action, bot_reply_text = _coerce_unauthorized_to_wa_me(
+            user_data=user_data,
+            current_preferred_lang=current_preferred_lang,
+            reason="booking_retry_exceeded",
+        )
+        escalation_reason_from_gpt = None
         _flow_error_reason = (
             "Step: submit_booking_intent retry guard | exceeded 5 failed booking attempts | "
             f"error_code={booking_retry.get('last_error_code') or 'unknown'} | "
             f"failure_stage={booking_retry.get('last_failure_stage') or 'unknown'} | "
-            f"pipeline_phase={booking_retry.get('last_pipeline_phase') or 'unknown'}"
+            f"pipeline_phase={booking_retry.get('last_pipeline_phase') or 'unknown'} | "
+            "wa_me_handoff=1"
         )
         flow_meta["booking_retry_exceeded"] = True
         print(
-            "[_process_and_respond] booking retry guard → human handover | "
+            "[_process_and_respond] booking retry guard → wa.me handoff | "
             f"count={booking_retry.get('failed_submit_count')} | "
             f"error_code={booking_retry.get('last_error_code')}"
         )
 
-    # When GPT fails (error in flow_meta): if user in waiting queue → waiting message; else → hand over to human
+    # When GPT fails (error in flow_meta): if user in waiting queue → waiting message; else → wa.me (not queue)
     if flow_meta.get("error") and action != "human_handover":
         in_waiting = config.user_in_human_takeover_mode.get(user_id, False)
         if not in_waiting and current_conversation_id:
@@ -100,24 +123,14 @@ async def text_handlers_respond_phase6(ctx: dict):
                 or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
             )
             action = "answer_question"
-            print(f"[_process_and_respond] GPT error but user {user_id} in waiting queue → sending waiting message")
+            print(f"[_process_and_respond] GPT error but user ...{str(user_id)[-4:]} in waiting queue → sending waiting message")
         else:
-            if is_post_takeover_escalation_cooldown(user_data):
-                bot_reply_text = (
-                    get_dynamic_message("generic_error_message", current_preferred_lang)
-                    or "عذراً، واجهت مشكلة تقنية لحظية. جرّب إعادة صياغة سؤالك أو انتظر لحظة ثم أعد المحاولة."
-                )
-                action = "answer_question"
-                print(
-                    f"[_process_and_respond] GPT/system error during post-release cooldown → generic reply, no handover. error={flow_meta.get('error')}"
-                )
-            else:
-                # Error/API/system issue → hand over to human
-                action = "human_handover"
-                escalation_reason_from_gpt = "technical_error"
-                print(
-                    f"[_process_and_respond] GPT/system error → handing over to human. error={flow_meta.get('error')}"
-                )
+            action, bot_reply_text = _coerce_unauthorized_to_wa_me(
+                user_data=user_data,
+                current_preferred_lang=current_preferred_lang,
+                reason=f"flow_meta_error:{flow_meta.get('error')}",
+            )
+            escalation_reason_from_gpt = None
 
     _handover_offer_needs_confirmation = (
         bool(bot_reply_text)
@@ -187,22 +200,16 @@ async def text_handlers_respond_phase6(ctx: dict):
             action_was_coerced = True
         else:
             bad_action = action
-            if is_post_takeover_escalation_cooldown(user_data):
-                action = "answer_question"
-                bot_reply_text = (
-                    get_dynamic_message("generic_error_message", current_preferred_lang)
-                    or "عذراً، لم أتمكن من معالجة طلبك الآن. حاول مرة أخرى بصياغة أبسط."
-                )
-                print(
-                    f"[_process_and_respond] WARN: bad GPT action '{bad_action}' during cooldown → generic reply, no handover"
-                )
-            else:
-                action = "human_handover"
-                escalation_reason_from_gpt = "technical_error"
-                _flow_error_reason = f"Step: Parse GPT response | Action '{bad_action}' not in known_actions, bot_reply empty. flow_meta.error={flow_meta.get('error', 'none')}"
-                print(
-                    f"[_process_and_respond] WARN: GPT action '{bad_action}' not in known_actions and bot_reply empty → handing over to human. flow_error={flow_meta.get('error', 'none')}"
-                )
+            action, bot_reply_text = _coerce_unauthorized_to_wa_me(
+                user_data=user_data,
+                current_preferred_lang=current_preferred_lang,
+                reason=f"bad_action:{bad_action}",
+            )
+            escalation_reason_from_gpt = None
+            _flow_error_reason = (
+                f"Step: Parse GPT response | Action '{bad_action}' not in known_actions, "
+                f"bot_reply empty. flow_meta.error={flow_meta.get('error', 'none')} | wa_me_handoff=1"
+            )
 
     if action == "human_handover" and _handover_offer_needs_confirmation:
         print(
@@ -220,30 +227,39 @@ async def text_handlers_respond_phase6(ctx: dict):
 
     # Allow summary + confirmation request before submit; if the model falsely claims that booking
     # already happened or that the request was already sent to the system without CRM success,
-    # treat it as an execution-path failure and hand over instead of showing the user fake progress.
+    # send wa.me guidance instead of putting the user in the operator queue.
     if not _flow_meta_has_crm_booking_confirmation(flow_meta) and _reply_claims_booking_done(str(bot_reply_text or "")):
         print(
             "[_process_and_respond] BLOCKED booking claim: text claims booking/request already happened "
-            "without submit_booking_intent/create_appointment success+booking_flow_state=booked"
+            "without submit_booking_intent/create_appointment success+booking_flow_state=booked → wa.me"
         )
-        action = "human_handover"
-        escalation_reason_from_gpt = "technical_error"
+        action, bot_reply_text = _coerce_unauthorized_to_wa_me(
+            user_data=user_data,
+            current_preferred_lang=current_preferred_lang,
+            reason="booking_claim_without_crm",
+        )
+        escalation_reason_from_gpt = None
         _flow_error_reason = (
             "Step: Booking execution guard | assistant claimed booking/request already happened "
-            "without real CRM success"
+            "without real CRM success | wa_me_handoff=1"
         )
 
+    # Unauthorized AI human_handover (no explicit user request / not confirmed flow):
+    # never put the user in the operator queue — WhatsApp/wa.me guidance only.
     if (
-        is_post_takeover_escalation_cooldown(user_data)
-        and action == "human_handover"
-        and bot_reply_text
+        action == "human_handover"
         and not _user_explicitly_requests_human_agent(user_input_to_process)
         and not flow_meta.get("booking_retry_exceeded")
     ):
         print(
-            "[_process_and_respond] post-release cooldown: AI chose human_handover without explicit user request → answer_question"
+            "[_process_and_respond] unauthorized human_handover without explicit user request → wa.me handoff"
         )
-        action = "answer_question"
+        action, bot_reply_text = _coerce_unauthorized_to_wa_me(
+            user_data=user_data,
+            current_preferred_lang=current_preferred_lang,
+            reason="ai_human_handover_without_user_request",
+        )
+        escalation_reason_from_gpt = None
     _pack = ['_', '_clean_reply_text', '_flow_error_reason', '_flow_meta_has_crm_booking_confirmation', '_handover_offer_needs_confirmation', '_reply_claims_booking_done', '_reply_offers_handover_confirmation', '_user_explicitly_requests_human_agent', 'action', 'action_was_coerced', 'bad_action', 'booking_retry', 'bot_reply_text', 'canonical_user_id', 'current_conversation_id', 'current_gender', 'current_preferred_lang', 'd', 'db', 'detected_gender_from_gpt', 'detected_language', 'detected_name_from_gpt', 'e', 'escalation_reason_from_gpt', 'flow_meta', 'get_canonical_user_id_and_phone', 'get_dynamic_message', 'get_firestore_db', 'gpt_response_data', 'handover_degree', 'in_waiting', 'is_post_takeover_escalation_cooldown', 'known_actions', 'ref', 'snap', 'uid', 'user_data', 'user_id', 'user_input_to_process', 'users_coll']
     for _k in _pack:
         if _k in locals():

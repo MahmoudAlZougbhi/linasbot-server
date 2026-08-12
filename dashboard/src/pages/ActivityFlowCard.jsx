@@ -20,6 +20,7 @@ import {
   formatUsd,
   costSummary,
 } from "./ActivityFlow.meta";
+import { redactActivityFlowEntryForJson } from "./ActivityFlow.redact";
 import { FlowStep } from "./ActivityFlowStep";
 
 /**
@@ -350,7 +351,7 @@ export const FlowCard = ({ entry, isExpanded, onToggle }) => {
               </button>
               {showRawJson ? (
                 <pre className="mt-2 p-3 bg-slate-900 text-slate-100 text-[10px] rounded-lg overflow-auto max-h-72 whitespace-pre-wrap">
-                  {JSON.stringify(entry, null, 2)}
+                  {JSON.stringify(redactActivityFlowEntryForJson(entry), null, 2)}
                 </pre>
               ) : null}
             </div>

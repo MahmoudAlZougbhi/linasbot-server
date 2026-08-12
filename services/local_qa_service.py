@@ -8,16 +8,13 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from datetime import datetime
-from difflib import SequenceMatcher
 from typing import Any, cast
 
 from services.language_detection_service import language_detection_service
+from services.local_qa_service_match import LocalQAServiceMatchMixin
 from storage.persistent_storage import QA_PAIRS_FILE, ensure_dirs
 
-
-from services.local_qa_service_match import LocalQAServiceMatchMixin
 
 class LocalQAService(LocalQAServiceMatchMixin):
     """Manages Q&A pairs using local JSONL file (no backend dependency)"""
