@@ -1,13 +1,11 @@
-# FINAL_TEST_MATRIX — Phase R gates (re-run)
+# FINAL_TEST_MATRIX — FINAL FREEZE VERIFICATION
 
 **Branch:** `chore/project-cleanup-reorg`  
 **Date:** 2026-08-12  
-**HEAD at write:** see `git rev-parse HEAD` after accompanying report commit  
-**Overall gate:** **PASS**
+**FINAL_CANDIDATE_SHA:** `1900bf59925c61e35e4defe41cdbcb557a719062`  
+**Overall gate:** **FAIL** → **NOT_READY**
 
-Prior FAIL matrix (collection errors + 16 pytest fails + mobile deps/tests) cleared by:
-- `92f9c2f` — pytest suite restore after LOC/archive splits (UTC import, meta webhook shim, Meta connections exports, live-chat mocks, app_review_bind)
-- `a8f20f7` — mobile `expo-web-browser` + unit test alignment
+Fresh re-run only (no reused PASS). Python: `.venv/bin/python`.
 
 ---
 
@@ -15,7 +13,11 @@ Prior FAIL matrix (collection errors + 16 pytest fails + mobile deps/tests) clea
 
 | Gate | Result | Counts / notes |
 |------|--------|----------------|
-| Full suite `.venv/bin/python -m pytest -q --tb=line` | **PASS** | **1192 passed**, 0 failed, 2 warnings (~15.3s) |
+| Full suite `.venv/bin/python -m pytest -q --tb=line` | **PASS** | **1195 passed**, 0 failed, 2 warnings (~12.0s) |
+| Auth/security focused | **PASS** | 13 passed |
+| Migration validation (no mutation) | **PASS** | 15 passed |
+| mypy scoped (`modules/auth_api.py`, `services/token_metering.py`) | **PASS** | 0 issues |
+| ruff modules/services/handlers/config/main | **FAIL** | 186 findings |
 
 ---
 
@@ -23,8 +25,13 @@ Prior FAIL matrix (collection errors + 16 pytest fails + mobile deps/tests) clea
 
 | Gate | Result | Counts / notes |
 |------|--------|----------------|
-| `npm test -- --run` (vitest) | **PASS** | **30** files, **78** tests passed (~8.2s) |
-| `npm run build` (vite) | **PASS** | Built in ~1.01s |
+| `npm test` (vitest) | **FAIL** | **4 failed / 74 passed** (78); `ProtectedRoute.test.jsx` ×3, `permissions.test.js` ×1 |
+| Landing/auth/route subset | **PASS** | 16 passed |
+| `npm run build` | **PASS** | `dashboard/build/` (~672ms); `MobileLiveChat-*.js` present for `/mobile/live-chat` only; operator paths redirect in `App.jsx` |
+| `npm run lint` | **FAIL** | 91 warnings, max-warnings 0 |
+| `npm run typecheck` | **FAIL** | 139 TS errors |
+
+**Failure note:** `getDefaultPath` now returns `/` (landing-only) after `5f1d1ea`; tests still expect `/app`.
 
 ---
 
@@ -32,21 +39,29 @@ Prior FAIL matrix (collection errors + 16 pytest fails + mobile deps/tests) clea
 
 | Gate | Result | Counts / notes |
 |------|--------|----------------|
-| `npx tsc --noEmit -p .` (via `npm test` typecheck) | **PASS** | Exit 0 |
-| `npm test` / node tests | **PASS** | **97** passed, **0** failed |
+| `npx tsc --noEmit` | **PASS** | via `npm test` |
+| `node --test tests/*.test.mjs` | **PASS** | **97 passed**, 0 failed |
+| `npm run lint:lines` | **PASS** | no file >400 in mobile src |
+| `npm run secret-scan` | **PASS** | 223 files |
+| `npx expo-doctor` | **FAIL** | missing peers; 4 patch mismatches |
 
 ---
 
-## 4. Residual scans (secret / PII / tenant patterns)
+## 4. Residual scans
 
-| Pattern | Residual count | Verdict note |
-|---------|----------------|--------------|
-| `operator_001` (non-comment, app code) | **0** | Comments/tests only |
-| `Access-Control-Allow-Origin` + `*` in app code | **0** | SSE allowlist reflection |
-| `sk-live` / `BEGIN PRIVATE KEY` in tracked files | **0** | Clean |
-| Explicit `"linas"` product config (exempt/unlimited/CM default tenant) | Present | **ACCEPTED** explicit founder-clinic env/product defaults — not request-path coalesce |
-| UNREVIEWED inventory rows | **0** | Phase R inventory `fully_read=YES` / `COMPLETE` for all HW sources |
-| Hand-written app source >500 LOC | **0** | See `FINAL_OVER_500_FILES.md` |
+| Pattern / gate | Result | Notes |
+|---------|--------|-------|
+| tracked-secret scan | **PASS** | |
+| npm audit gate | **PASS** | 0 vulns |
+| pip-audit / pip check | **PASS** | |
+| `operator_001` app code | **PASS** | comments/tests only |
+| CORS `*` | **PASS** | |
+| live private key / sk-live | **PASS** | |
+| app source >500 LOC | **PASS** | **0** |
+| workflow YAML | **PASS** | 28 OK |
+| inventory parity | **PASS** | 1539 = `git ls-files` |
+| unsafe `"linas"` defaults | **ACCEPTED** | explicit env/product defaults |
+| obsolete operator SPA primary ship | **PASS** | redirects to `/#get-app`; mobile live-chat chunk only |
 
 ---
 
@@ -54,10 +69,13 @@ Prior FAIL matrix (collection errors + 16 pytest fails + mobile deps/tests) clea
 
 | Area | Pass/Fail |
 |------|-----------|
-| Pytest full | **PASS** (1192) |
-| Dashboard test + build | **PASS** |
-| Mobile tsc + unit tests | **PASS** (97) |
-| Residual operator_001 / CORS\* / live secrets | **PASS** |
-| Over-500 / UNREVIEWED | **PASS** |
+| Pytest full | **PASS** (1195) |
+| Dashboard vitest | **FAIL** (4) |
+| Dashboard build | **PASS** |
+| Dashboard lint/typecheck | **FAIL** |
+| Mobile tsc + unit | **PASS** (97) |
+| Expo-doctor | **FAIL** |
+| Ruff | **FAIL** |
+| Secrets / audits / LOC / inventory | **PASS** |
 
-**Phase R gates: PASS** — repo remediation + gates green. Live activation (Redis provision, nginx reload, Firestore indexes, Meta cutover) remains owner-activated only — see `FINAL_EXTERNAL_ACTIVATION_CHECKLIST.md`.
+**Freeze gates: FAIL** — see `FINAL_FREEZE_VERIFICATION.md`. Live activation A1–A7 still owner-only and **not** executed.

@@ -1,10 +1,12 @@
 # FINAL_SECURITY_FINDINGS.md — SEC-001…SEC-070 closeout
 
-**Agent:** C3 (SEC closeout)  
+**Agent:** C3 (SEC closeout) + FINAL FREEZE VERIFICATION reconcile  
 **Branch:** `chore/project-cleanup-reorg`  
 **Date:** 2026-08-12  
-**Sources:** `docs/audit/SECURITY_FINDINGS.md` + current code (`rg`/read) + Phase 1 / post–Phase-1 remediation commits.  
-**Rule:** Exactly one disposition per SEC. Do not treat stale `Status: OPEN` text in `SECURITY_FINDINGS.md` as current truth without re-check.
+**FINAL_CANDIDATE_SHA:** `1900bf59925c61e35e4defe41cdbcb557a719062`  
+**Sources:** `docs/audit/SECURITY_FINDINGS.md` + current code (`rg`/read) + Phase 1 / post–Phase-1 remediation commits + freeze re-check.  
+**Rule:** Exactly one disposition per SEC. Do not treat stale `Status: OPEN` text in `SECURITY_FINDINGS.md` as current truth without re-check.  
+**Freeze note:** Dispositions unchanged. ACCEPTED MEDIUM (038/041/048) remain explicit — not cleared by pytest PASS. Full accepted table: `FINAL_FREEZE_VERIFICATION.md` §4.
 
 ### Allowed dispositions
 

@@ -2,53 +2,56 @@
 
 **Repo:** `/Users/alzoughbi/linasbot-server`  
 **Branch:** `chore/project-cleanup-reorg`  
-**Phase R READY commit (claimed):** `ee72f137c3785ff2d08d9ff39f7f2cefdf7a8749` (`ee72f13`) — verified with `git rev-parse HEAD` at summary start  
-**This summary commit:** see `git log -1 -- docs/audit/OWNER_SUMMARY_COMPLETE.md`  
+**FINAL_CANDIDATE_SHA (freeze):** `1900bf59925c61e35e4defe41cdbcb557a719062`  
+**Phase R READY claim (historical):** `ee72f137c3785ff2d08d9ff39f7f2cefdf7a8749` (`ee72f13`) — **superseded by freeze**  
 **Date:** 2026-08-12  
-**Purpose:** ملف واحد فيه الصورة الكبيرة. للتفاصيل العميقة افتح روابط قسم 8.
+**Purpose:** ملف واحد فيه الصورة الكبيرة. للتفاصيل: [`FINAL_FREEZE_VERIFICATION.md`](FINAL_FREEZE_VERIFICATION.md).
 
-> **ملاحظة صدق:** هالملف يلخّص حالة **الكود على الـ branch** بعد Phase R. مش موافقة deploy / Meta cutover / Redis live / push.
+> **ملاحظة صدق:** Freeze verification أظهر **NOT_READY**. مش موافقة deploy / Meta cutover / Redis live / push.
 
 ---
 
 ## 1. القرار النهائي — Final verdict
 
 | Field | Value |
-|---|---|
-| **Verdict** | **READY_FOR_OWNER_REVIEW** |
-| Source | [`FINAL_POST_REMEDIATION_REPORT.md`](FINAL_POST_REMEDIATION_REPORT.md) §1 + §7 |
-| Phase R gates | **PASS** — [`FINAL_TEST_MATRIX.md`](FINAL_TEST_MATRIX.md) |
-| Open CRITICAL/HIGH/MEDIUM actionable **in-repo** SEC | **None** (FIXED / ACCEPTED_RISK / LIVE_ACTIVATION_PENDING فقط) |
+| --- | --- |
+| **Verdict** | **NOT_READY** |
+| Source | [`FINAL_FREEZE_VERIFICATION.md`](FINAL_FREEZE_VERIFICATION.md) + [`FINAL_TEST_MATRIX.md`](FINAL_TEST_MATRIX.md) |
+| Freeze gates | **FAIL** — dashboard vitest 4 fail; lint/typecheck/ruff/expo-doctor fail |
+| Backend / mobile | pytest **1195 PASS**; mobile **97 PASS** |
+| Open CRITICAL/HIGH actionable in-repo SEC | **None** |
+| ACCEPTED MEDIUM (explicit) | SEC-038, SEC-041, SEC-048 |
 | Production SaaS GO (~100k) | **غير مدّعى** |
-| Live activation | **LIVE_ACTIVATION_PENDING** (كل بنود A1–A7 ☐) |
+| Live activation | **LIVE_ACTIVATION_PENDING** (A1–A7 ☐) — **ما انعمل** |
 
 ### بالعربية — شو يعني هالقرار
 
-- **READY_FOR_OWNER_REVIEW** = محمود يقدر يراجع كود الفرع ويقرر merge/push لاحقاً.
-- **ما يعنيش** production GO، ولا تفعيل Redis/Meta/nginx/Firestore على السيرفر، ولا push بدون موافقتك.
-- تقرير `PRODUCTION_READINESS.md` اللي كان **NO-GO** هو **تاريخي** (قبل full remediation). الحقيقة الحالية بعد Phase R: gates خضرا + SEC closeout مقفول بالكود؛ التفعيل اللايف لساته عندك.
+- **NOT_READY** = لا تُعامل الفرع كجاهز للمالك حتى تنصلح بوابات dashboard vitest (على الأقل).
+- Phase R ادّعى READY عند `ee72f13`؛ بعده `5f1d1ea` كسر 4 اختبارات permissions/ProtectedRoute (landing-only `getDefaultPath`).
+- **ما يعنيش** production GO، ولا تفعيل Redis/Meta/nginx/Firestore، ولا push.
 
-### Honesty note على الـ gates
+### Honesty note على الـ gates (freeze @ `1900bf5`)
 
-- مصفوفة الاختبار النهائية: **PASS** (pytest 1192 / dashboard 78+build / mobile 97).
-- قسم قديم جوّا نفس تقرير الـ post-remediation كان يذكر FAIL قبل حلقة الإصلاح (`92f9c2f`, `a8f20f7`) — **المرجع الحالي هو `FINAL_TEST_MATRIX.md` + commit `ee72f13`.**
+- pytest: **1195 passed**
+- dashboard vitest: **4 failed / 74 passed**; build PASS; lint/typecheck FAIL
+- mobile: **97 passed**; expo-doctor FAIL
+- ruff: FAIL (186); inventory **1539 = git ls-files**
 
 ---
 
 ## 2. وين صرنا — Where we are
 
 | Item | Status |
-|---|---|
+| --- | --- |
 | Branch | `chore/project-cleanup-reorg` |
-| Phase R READY SHA (verified at start) | `ee72f137c3785ff2d08d9ff39f7f2cefdf7a8749` |
-| Ahead of `origin/main` | **~153+** commits at Phase R tip; tip continues to grow with docs/fix commits على نفس الفرع |
-| Pushed to remote as this branch tip | **لا** — الفرع يتتبع `origin/main` وهو ahead محلياً؛ **ما انعمل push لهالشغل** |
-| Deployed to production | **لا** |
-| Live Redis / Meta cutover / nginx reload / Firestore indexes | **لا** |
+| FINAL_CANDIDATE_SHA | `1900bf59925c61e35e4defe41cdbcb557a719062` |
+| Phase R READY SHA (historical) | `ee72f137c3785ff2d08d9ff39f7f2cefdf7a8749` |
+| Commits after ee72f13 | `5f1d1ea`, `72853ef`, `1900bf5` (+ freeze docs) |
+| Pushed | **لا** |
+| Deployed / live Redis / Meta / nginx / indexes | **لا** |
+| Working tree after freeze cleanup | **clean** (removed untracked `_phase0*` junk) |
 
-**SHA honesty:** `ee72f13` = commit إعلان Phase R gates PASS / READY_FOR_OWNER_REVIEW. بعده نزل على الأقل `5f1d1ea` (fail-closed metering / custom-roles cleanup) قبل هالملخص. راجع `git log ee72f13..HEAD --oneline` لأي شغل بعد الـ READY.
-
-**Working tree note:** قد تبقى تعديلات محلية غير مُلتزَمة (LiveChat dashboard / إلخ) — **مش جزء من ملخص الـ READY.** راجع `git status` قبل أي قرار merge.
+**SHA honesty:** Freeze candidate = `1900bf5`. READY claim at `ee72f13` is no longer valid after vitest failure.
 
 ---
 
@@ -150,7 +153,7 @@
 | Hand-written fully read | **1171 / 1171 (100%)** |
 | UNREVIEWED | **0** |
 | App source >500 LOC | **0** ([`FINAL_OVER_500_FILES.md`](FINAL_OVER_500_FILES.md)) |
-| pytest full | **1192 passed** |
+| pytest full | **1195 passed** (freeze) / historical Phase R 1192 |
 | Dashboard vitest + build | **78 passed** + vite build OK |
 | Mobile tsc + unit | **97 passed** |
 | Residual `operator_001` / CORS `*` / live private keys (scoped) | **0** |
@@ -197,7 +200,7 @@ LIVE_ACTIVATION_PENDING (SEC): **025** booking env/scale، **026** Meta cutover�
 ## 7. شو لازم تعمل إنت هلق — What you do next (ordered)
 
 1. **اقرأ** هالملف + [`FINAL_POST_REMEDIATION_REPORT.md`](FINAL_POST_REMEDIATION_REPORT.md) (و SEC إذا بدك عمق).
-2. **راجع الكود** على `chore/project-cleanup-reorg` عند SHA `ee72f13` (وتأكد من أي dirty local LiveChat قبل القرار).
+2. **راجع الكود** على `chore/project-cleanup-reorg` عند FINAL_CANDIDATE_SHA `1900bf5` — **NOT_READY** حتى إصلاح vitest.
 3. **جرّب على الجهاز** — checklist قسم 9 (موبايل + جاهزية API إذا عندك بيئة staging/local).
 4. **قرّر:** approve للمراجعة فقط، أو اطلب PR/push لاحقاً — **ما في push بهالجلسة**.
 5. **تفعيل لايف منفصل:** إذا بدك Redis/Meta/nginx/indexes/deploy — موافقة **منفصلة وصريحة** لكل بند (A1–A7). ما تخلط مراجعة الكود مع تفعيل الإنتاج.
@@ -256,5 +259,5 @@ LIVE_ACTIVATION_PENDING (SEC): **025** booking env/scale، **026** Meta cutover�
 
 ## Bottom line (سطرين)
 
-الفرع **جاهز لمراجعة محمود** (`READY_FOR_OWNER_REVIEW`) عند `ee72f13`، gates خضرا، وSEC بالكود مقفول أو مقبول أو معلّق على تفعيل لايف.  
+الفرع حالياً **NOT_READY** عند FINAL_CANDIDATE_SHA `1900bf5` (freeze): dashboard vitest فاشل. SEC CRITICAL/HIGH مقفولة؛ 3 MEDIUM ACCEPTED صريحة؛ تفعيل لايف معلّق.  
 **ما انعمل push ولا deploy ولا تفعيل Redis/Meta/nginx/indexes** — هيدا خطوة لاحقة بموافقتك الصريحة.
