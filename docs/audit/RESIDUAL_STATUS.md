@@ -1,32 +1,20 @@
 # Residual status (continuous run)
 
-**Branch:** `chore/project-cleanup-reorg`  
-**Rule:** Keep working until residual is empty, then Done. No auto merge/deploy to production.
+**Branch:** `chore/project-cleanup-reorg` (ahead of `origin/main`, not deployed)
 
-## Progress so far (not Done)
+## LOC gate
 
-- W00: full tracked inventory (row count matched `git ls-files`) + LOC gate
-- W01: blocked hyphenated `/api/test-*` + HTTP provider switch
-- W02/W03: trusted client IP (`X-Real-IP`) + mobile/auth rate limits
-- Admin-credit: cross-tenant only `platform_owner`; prod CORS HTTPS-only
-- CSRF / webhook verify: `hmac.compare_digest`
-- Proven deletes: `live_chat_archive/`, `cleanup_reports/`, `third_provider_adapter.py`, unwired `CreativeStudioScreen`, local `logs/*.out` + `.tmp_8010_*`, `docs/bot-chat.md` (runtime log dump)
-- LOC splits: `conversation_router`, `language_resolver`, `token_wallet_service`, `datetime_utils`, `sentiment_escalation_service`, `cm/faq_integration`, `auth_api`, `live_chat_api`, `user_service`, `local_qa_api`, `meta_connections_api`, `meta_oauth`, `whatsapp_cloud/repository`, `app_review_bind`, `owner_ai_tools_cm_content`, `qa_database_service`, `local_qa_service`, `useLiveChatSSE`, `AuthContext`, `domain.d.ts`, `social_contact_routing`, `event_handlers`, `appointment_scheduler`, `booking_fsm`, `intent_pipeline`
-- PII: sensitive `data/*.jsonl` / `content_violations.jsonl` reported in `docs/audit/PII_EXPOSURE_REPORT.md` (still tracked until explicit decision)
+`python3 scripts/audit/line_count_gate.py` → **OK: 0 hand-written tracked files over 500 lines.**
 
-## Residual (must clear before Done)
+Last god-file split: `chat_response_service.py` facade (`74027d8`).
 
-- Hand-written files still over 500 lines: **~51** (top: `chat_response_service.py`, `LiveChat.jsx`, `text_handlers_respond.py`, `utils.py`, `SmartMessaging.jsx`, `live_chat_service.py`, …)
-- Inventory `review_status`: mostly still `UNREVIEWED` (shell only)
-- Creative Python API stack: `BLOCKED` (still wired in main/tests)
-- Operator web SPA still present; parity matrix not built yet
-- Monty still default WhatsApp provider; Meta Cloud cutover not finished on branch
-- Redis distributed limiter: not production-activated (by design until deploy decision)
+## Not Done yet (program residual)
 
-## Next continuous work
+- Inventory `review_status`: still mostly `UNREVIEWED` (W00 shell; row count must be refreshed vs current `git ls-files`)
+- Security items remaining: Redis limiter on branch (prod flag off), upload validation, webhook replay tests, secret/dep scans, already-strong re-verify
+- Mobile parity matrix + landing-only web not completed
+- WhatsApp Meta Cloud cutover not done (Monty/Qiscus still present, split not deleted)
+- Sensitive `data/*.jsonl` still tracked (see `PII_EXPOSURE_REPORT.md`)
+- Characterization/regression of the large splits (chat_response, LiveChat, utils) still light
 
-1. More DELETE_PROVEN (disabled pages after proof; creative unregister carefully)
-2. Parity matrix + mobile gaps + landing-only web
-3. Meta Cloud on branch + staging checklist
-4. Split remaining god-files file-by-file with tests
-5. Residual loop until empty → Done
+Continue until inventory COMPLETE and remaining program items closed. No auto merge/deploy.
