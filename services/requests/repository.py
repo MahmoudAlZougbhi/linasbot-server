@@ -32,11 +32,7 @@ class CustomerRequestsRepository:
 
     def allocate_request_number(self, tenant_id: str) -> str:
         # Row lock prevents duplicate request_number under concurrent creates (Postgres).
-        stmt = (
-            select(CustomerRequestCounter)
-            .where(CustomerRequestCounter.tenant_id == tenant_id)
-            .with_for_update()
-        )
+        stmt = select(CustomerRequestCounter).where(CustomerRequestCounter.tenant_id == tenant_id).with_for_update()
         row = self.session.execute(stmt).scalar_one_or_none()
         if row is None:
             row = CustomerRequestCounter(tenant_id=tenant_id, next_number=2)

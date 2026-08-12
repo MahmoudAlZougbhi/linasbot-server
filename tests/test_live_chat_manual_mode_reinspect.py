@@ -73,7 +73,9 @@ async def test_image_send_reports_failure_when_adapter_fails() -> None:
         patch("utils.utils.get_canonical_user_id_and_phone", return_value=("user1", "+961")),
         patch("utils.utils.get_firestore_db", return_value=None),
         patch("utils.utils.save_conversation_message_to_firestore", new_callable=AsyncMock),
-        patch("utils.utils.upload_base64_to_firebase_storage", new_callable=AsyncMock, return_value="https://cdn/x.jpg"),
+        patch(
+            "utils.utils.upload_base64_to_firebase_storage", new_callable=AsyncMock, return_value="https://cdn/x.jpg"
+        ),
         patch(
             "services.requests.manual_mode.activate_manual_mode",
             new_callable=AsyncMock,

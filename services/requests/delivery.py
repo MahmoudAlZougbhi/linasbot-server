@@ -75,10 +75,7 @@ def _meta_bindings_for_account(
     exact = [
         b
         for b in bindings
-        if b.tenant_id == tenant_id
-        and b.channel in meta_channels
-        and b.asset_id == account
-        and b.active
+        if b.tenant_id == tenant_id and b.channel in meta_channels and b.asset_id == account and b.active
     ]
     if exact:
         return exact
