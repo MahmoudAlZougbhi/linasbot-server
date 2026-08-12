@@ -57,41 +57,34 @@ export const AuthProvider = ({ children }) => {
             signal: controller.signal
           }));
           clearTimeout(timeoutId);
-          const data = await response.json();
-          const authErrorText = String(data?.error || '').toLowerCase();
-          const transientSessionError = (
-            authErrorText.includes('quota')
-            || authErrorText.includes('429')
-            || authErrorText.includes('resource exhausted')
-            || authErrorText.includes('timeout')
-            || authErrorText.includes('unavailable')
-          );
 
-          console.log('[AuthContext] checkSession response:', JSON.stringify({ success: data?.success, hasUser: !!data?.user, userStatus: data?.user?.status }));
+          if (response.status === 401 || response.status === 403) {
+            localStorage.removeItem('auth_session');
+            setUser(null);
+            navigate('/login');
+            return;
+          }
+
+          const data = await response.json();
 
           if (!data.success || !data.user || typeof data.user !== 'object') {
-            if (transientSessionError && sessionData.user) {
-              const cachedUser = buildUserData(sessionData.user);
-              if (cachedUser) {
-                console.warn('[AuthContext] checkSession transient error, using cached session user');
-                setUser(cachedUser);
-                return;
-              }
-            }
-            console.warn('[AuthContext] checkSession: invalid or missing user data', data);
+            console.warn('[AuthContext] checkSession: invalid or missing user data');
             localStorage.removeItem('auth_session');
+            setUser(null);
             return;
           }
           if (data.user.status !== 'active') {
             console.warn('[AuthContext] checkSession: user status not active', data.user.status);
             localStorage.removeItem('auth_session');
+            setUser(null);
             return;
           }
 
           const userData = buildUserData(data.user);
           if (!userData) {
-            console.warn('[AuthContext] checkSession: buildUserData returned null', data.user);
+            console.warn('[AuthContext] checkSession: buildUserData returned null');
             localStorage.removeItem('auth_session');
+            setUser(null);
             return;
           }
 
@@ -108,29 +101,10 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Session check failed:', error);
-      // Fail-open on transient backend issues: keep cached session if valid.
-      try {
-        const session = localStorage.getItem('auth_session');
-        if (session) {
-          const sessionData = JSON.parse(session);
-          const sessionTime = new Date(sessionData.timestamp);
-          const now = new Date();
-          const hoursDiff = (now.getTime() - sessionTime.getTime()) / (1000 * 60 * 60);
-          if (hoursDiff < 24 && sessionData.user?.id) {
-            const cachedUser = buildUserData(sessionData.user);
-            if (cachedUser) {
-              console.warn('[AuthContext] using cached session after checkSession failure');
-              setUser(cachedUser);
-              return;
-            }
-          }
-        }
-      } catch {
-        // Ignore fallback parse errors and clear invalid session below.
-      }
       localStorage.removeItem('auth_session');
+      setUser(null);
     }
-  }, []);
+  }, [navigate]);
 
   // Check for existing session on mount
   useEffect(() => {
@@ -180,9 +154,6 @@ export const AuthProvider = ({ children }) => {
 
       const data = await response.json();
 
-      // Debug: log exact auth response shape before processing
-      console.log('[AuthContext] login response:', JSON.stringify({ success: data?.success, hasUser: !!data?.user, userKeys: data?.user ? Object.keys(data.user) : [] }));
-
       if (!data.success) {
         const errMsg = data.error || 'Login failed';
         if (errMsg.includes(TRANSIENT_AUTH_ERROR) && retryCount < maxRetries) {
@@ -195,13 +166,13 @@ export const AuthProvider = ({ children }) => {
       }
 
       if (!data.user || typeof data.user !== 'object') {
-        console.error('[AuthContext] login failed: data.user missing or invalid', data);
+        console.error('[AuthContext] login failed: data.user missing or invalid');
         throw new Error('Invalid login response: missing user data');
       }
 
       const userData = buildUserData(data.user);
       if (!userData) {
-        console.error('[AuthContext] login failed: buildUserData returned null', data.user);
+        console.error('[AuthContext] login failed: buildUserData returned null');
         throw new Error('Invalid login response: could not build user');
       }
 
@@ -212,7 +183,6 @@ export const AuthProvider = ({ children }) => {
         lastValidatedAt: new Date().toISOString()
       };
 
-      console.log('[AuthContext] login: about to setUser + localStorage + navigate');
       if (data.csrf_token) {
         localStorage.setItem('csrf_token', data.csrf_token);
       }
@@ -220,7 +190,6 @@ export const AuthProvider = ({ children }) => {
       setUser(userData);
       toast.success('Welcome back!');
       navigate(redirectTo || '/app');
-      console.log('[AuthContext] login: setUser + localStorage + navigate completed');
 
       return userData;
     } catch (error) {

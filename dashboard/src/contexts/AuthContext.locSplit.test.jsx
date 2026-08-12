@@ -26,5 +26,8 @@ describe("AuthContext LOC split", () => {
     expect(typeof withAuthFetch).toBe("function");
     expect(typeof createAuthUserManagement).toBe("function");
     expect(buildUserData(null)).toBeNull();
+    expect(buildUserData({ id: "1", email: "a@test.com", role: "admin" })).toBeNull();
+    expect(buildUserData({ id: "1", email: "a@test.com", tenantId: "linas" })).toBeNull();
+    expect(buildUserData({ id: "1", email: "a@test.com", role: "admin", tenantId: "linas" })?.tenantId).toBe("linas");
   });
 });
