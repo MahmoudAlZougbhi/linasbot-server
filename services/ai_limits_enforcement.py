@@ -33,8 +33,20 @@ def enforce_image_analysis_quota(
 
     Logs an honest operator line when blocked. Does not raise.
     """
-    tenant_id = resolve_tenant_id(user_data)
     end_user = _end_user_id(user_id, user_data)
+    try:
+        tenant_id = resolve_tenant_id(user_data)
+    except ValueError:
+        print(
+            f"[ai_limits] image_quota_blocked tenant=missing user={end_user[-8:]} reason=tenant_required",
+            flush=True,
+        )
+        return QuotaDecision(
+            allowed=False,
+            reason="tenant_required",
+            allowed_amount=0,
+            customer_message=CUSTOMER_IMAGE_LIMIT_MESSAGE,
+        )
     if consume:
         decision = ai_usage_limits_service.consume_images(tenant_id, end_user, amount=amount)
     else:
@@ -60,8 +72,15 @@ def enforce_context_line_budget(
 
     Returns (possibly truncated text, decision). When remaining is 0, text is empty.
     """
-    tenant_id = resolve_tenant_id(user_data)
     end_user = _end_user_id(user_id, user_data)
+    try:
+        tenant_id = resolve_tenant_id(user_data)
+    except ValueError:
+        print(
+            f"[ai_limits] context_lines_blocked tenant=missing user={end_user[-8:]} reason=tenant_required",
+            flush=True,
+        )
+        return "", QuotaDecision(allowed=False, reason="tenant_required", allowed_amount=0)
     lines = count_non_empty_lines(text)
     decision = ai_usage_limits_service.check_context_line_quota(tenant_id, end_user, amount=lines)
     allowed = int(decision.allowed_amount or 0)

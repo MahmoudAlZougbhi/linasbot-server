@@ -96,7 +96,7 @@ export function useLiveChatShared({ mobile = false }) {
 
   const {
     getUnifiedChats, getChatsByTemplateSendLog, getLiveConversations, getWaitingQueue,
-    rebuildLiveChatIndex, simulateWebhook, getConversationMessages, takeoverConversation,
+    getConversationMessages, takeoverConversation,
     releaseConversation, sendOperatorMessage, updateOperatorStatus, submitFeedback,
   } = useApi();
 
@@ -131,7 +131,7 @@ export function useLiveChatShared({ mobile = false }) {
     messageCacheRef, hasMoreMessagesRef, autoLoadedPagesRef, botListRef,
     botLoadMoreSentinelRef, botListScrollThrottleRef, botFloatingScrollRef, loadMoreInProgressRef,
     loadMoreCooldownUntilRef, messagesLoadingStartRef, getUnifiedChats, getChatsByTemplateSendLog,
-    getLiveConversations, getWaitingQueue, rebuildLiveChatIndex, simulateWebhook,
+    getLiveConversations, getWaitingQueue,
     getConversationMessages, takeoverConversation, releaseConversation, sendOperatorMessage,
     updateOperatorStatus, submitFeedback,
   };
