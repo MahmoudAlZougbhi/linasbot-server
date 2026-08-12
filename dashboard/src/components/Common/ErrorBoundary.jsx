@@ -41,14 +41,6 @@ class ErrorBoundary extends Component {
 
   render() {
     if (this.state.hasError) {
-      const err = this.state.error;
-      const isNetworkError =
-        (err && 'code' in err && err.code === 'ERR_NETWORK') ||
-        err?.message?.includes('Network Error');
-      if (isNetworkError) {
-        return this.props.children;
-      }
-
       return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
           <div className="text-center p-8">
