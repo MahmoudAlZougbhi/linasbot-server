@@ -3,78 +3,79 @@
 **Date:** 2026-08-12  
 **Branch:** `chore/project-cleanup-reorg`  
 **PR:** [#240](https://github.com/MahmoudAlZougbhi/linasbot-server/pull/240)  
-**Path:** HA (not LEAN $15 single-node Valkey)
+**Status:** `HA_INFRA_WIRED_AND_LOAD_CERTIFIED` (app release **not** merged/deployed)
 
-## Phase A — Live DO price reconciliation (account evidence)
+## Resources created (live)
 
-Source: `doctl account get`, `doctl databases options slugs --engine valkey`, `doctl compute size list`, `doctl compute droplet get 510629908`, create probe.
+| Resource | ID / name | Spec | Monthly |
+|----------|-----------|------|---------|
+| Managed Valkey | `linas-redis-prod` `c19219f0-4179-4c0e-aff4-6ff708b3408a` | Valkey 8, lon1, `db-s-1vcpu-2gb` × **2** (primary+standby), TLS/`rediss`, VPC `default-lon1` | **$60** |
+| Regional HTTP LB | `linas-http-lb-lon1` `2535b8ff-…` IP `157.245.31.104` | 1 node lon1; TLS terminate (DO LE cert `linasaibot-lb-cert`); → nginx `:80`; HC `http://:8003/api/health` | **$12** |
+| App peer | `linas-app-lon1-02` `591901417` `167.99.89.243` / `10.106.0.4` | `s-2vcpu-4gb` lon1 | **$24** |
+| Spaces | — | not created | **$0** |
+| **NEW monthly** | | | **`$96`** |
 
-| Resource | Slug / plan | Nodes | Account price | Approved target | Match? |
-|----------|-------------|-------|---------------|-----------------|--------|
-| Valkey 8 lon1 HA | `db-s-1vcpu-2gb` | **2** (primary+standby) | **~$60/mo** ($30×2) | ~$60 | **YES** |
-| Regional HTTP LB lon1 | `size-unit=1` | 1 | **~$12/mo** | ~$12 | **YES** |
-| App peer ≥2 vCPU / 4 GiB | **`s-2vcpu-4gb`** | 1 | **$24/mo** | ~$24 (warn if ~$32) | **YES** (cheapest) |
-| Alt Intel 4 GiB | `s-2vcpu-4gb-intel` | 1 | $28/mo | — | skip (costlier) |
-| Alt Intel 120GB | `s-2vcpu-4gb-120gb-intel` | 1 | **$32/mo** | — | skip |
-| Existing Linas node | `s-2vcpu-2gb-90gb-intel` | 1 | **$24/mo** (existing) | keep | YES |
-| Spaces | — | — | **not created** | only if required | see below |
+Existing node `510629908` (`139.59.167.62`, `s-2vcpu-2gb-90gb-intel`) kept. Linas total ≈ **$120/mo** (+ SportBook/BOC unchanged).
 
-### Spaces decision
+**Trusted sources (Valkey):** droplet `510629908`, droplet `591901417`, tag `linas` only. **Never** SportBook (`sportbook-redis-prod` fra1 untouched).
 
-**Proof:** `services/meta_social_media_store.py` writes under `LINASBOT_DATA_ROOT/meta_social_post_media` (local droplet disk). Inbound webhook durability does **not** depend on that path (Firestore/Postgres + inbound ledger).  
-**Decision:** Do **not** create Spaces for this HA launch. Residual P1: multi-node social-post media GETs can diverge until Spaces or sticky media node is added later.
+**DNS:** `linasaibot.com` + `www` A → `157.245.31.104` (TTL 60).
 
-### Accurate HA new-monthly (when purchase unblocked)
+## Wiring (current prod `main` @ `781a94c` — not PR #240)
 
-| Item | Monthly |
-|------|---------|
-| Valkey HA `db-s-1vcpu-2gb` ×2 | **$60** |
-| Regional LB 1 node | **$12** |
-| Second app `s-2vcpu-4gb` | **$24** |
-| Spaces | **$0** |
-| **NEW total** | **`$96/mo`** |
+- Both nodes: private `REDIS_URL` / `RATE_LIMIT_REDIS_URL` = Valkey `rediss://…` (TLS+auth); `LINAS_REQUIRE_REDIS=false`; `RATE_LIMIT_BACKEND=redis` set for forward-compat.
+- Live `/api/ready`: `redis_reachable=true`, `production_ready=true`, Meta App A active on both.
+- Nginx HTTP server accepts DO LB traffic when `X-Forwarded-Proto=https` (serves API/SPA); direct HTTP still redirects to HTTPS.
+- Workers / durable queues **not** activated (`LINAS_REQUIRE_REDIS` remains false). **BOC OFF.** No Requests migration. PR #240 **not** merged / **not** deployed.
 
-Prior band `$104–$141` reconciled to **`$96`** with cheapest suitable 4 GiB peer (`s-2vcpu-4gb`). If owner insists on Intel/larger disk peer matching premium SKUs, use `$28` or `$32` droplet → **`$100`** or **`$104`**.
+### Env note for operators
 
-Existing Linas droplet ($24) + new $96 → **Linas infra ≈ $120/mo** (excluding SportBook/BOC).
+Private URI from: `doctl databases connection c19219f0-4179-4c0e-aff4-6ff708b3408a --private`.  
+Do **not** commit passwords. Current prod rate-limit **code** on disk is still file-backed (`main`); Redis shared RL lands with PR #240 deploy. Fail-closed Redis RL applies after that release.
 
-## BLOCKED_OWNER_ACTION — cannot purchase
+## HA / failover proof
 
-```
-doctl account status: locked
-status_message: team locked due to lack of payment or improper use
-POST /v2/databases → 403 "team is currently on a hold"
-```
+| Test | Result |
+|------|--------|
+| Valkey TLS auth PING/SET/GET | PASS |
+| Replication | `role=master`, `connected_slaves=1`; standby read OK (`master_link=up`) |
+| Shared counter / idempotency / locks (real Valkey) | PASS (see real-infra cert) |
+| LB both nodes | PASS |
+| Stop node01; wait HC; LB `/api/health` | **20/20** via node02 |
+| Restore node01 | PASS |
+| Graceful SIGTERM on current `main` | Process dies → nginx 502 until restart (drain/503 is PR #240 code) |
 
-Prices/topology **match** approved HA targets. Purchase/create of Valkey, LB, and second droplet is **blocked by DigitalOcean team hold**, not by price mismatch.
+Forced managed-primary Valkey kill not executed (DO auto-failover); standby replication proven.
 
-**Owner action:** Clear DO billing/hold (support ticket), unlock team, then re-run create commands in this doc. Do **not** buy `db-s-1vcpu-1gb` ($15 single-node) as final HA.
+## Durability proof
 
-### Create commands (after unlock only)
+- In-repo ledger + reconcile: `tests/scale/test_inbound_event_durability.py` → `unexplained_missing_events=0`
+- Real-infra cert includes that suite: **PASS**, unexplained **0**
 
-```bash
-# Valkey HA — never SportBook; never $15 single-node as final HA
-doctl databases create linas-redis-prod \
-  --engine valkey --region lon1 --size db-s-1vcpu-2gb \
-  --num-nodes 2 --version 8
+## Load cert (real Valkey + LB + both nodes; mocked providers in harness)
 
-# Second app peer (cheapest ≥2vCPU/4GiB)
-doctl compute droplet create linas-app-lon1-02 \
-  --region lon1 --size s-2vcpu-4gb --image ubuntu-24-04-x64 \
-  --vpc-uuid d0e11d67-3fba-4966-b2db-6a471307df85 \
-  --enable-private-networking
+Artifact: `docs/scale/LOAD_TEST_RESULTS_REAL_INFRA.json` — **`all_passed=true`**, `unexplained_missing_events=0`.
 
-# Regional HTTP LB (attach Linas droplets only after both healthy)
-doctl compute load-balancer create \
-  --name linas-http-lb-lon1 --region lon1 --size-unit 1 \
-  --forwarding-rules entry_protocol:http,entry_port:80,target_protocol:http,target_port:80 \
-  --health-check protocol:http,port:8000,path:/api/ready,check_interval_seconds:10,response_timeout_seconds:5,healthy_threshold:3,unhealthy_threshold:3 \
-  --droplet-ids 510629908,<NEW_DROPLET_ID> \
-  --vpc-uuid d0e11d67-3fba-4966-b2db-6a471307df85
-```
+| Scenario | Result |
+|----------|--------|
+| 5k owners set | PASS |
+| 20k burst idempotency (dupes) | PASS (18001 accepted / 1999 dupes) |
+| OOO conversation locks (1000 conv) | PASS |
+| Worker crash retry/DLQ | PASS |
+| Durable ledger reconcile | PASS |
+| LB `/api/health` ×200 @16 workers | PASS (p95 ~783ms) |
+| LB `/api/ready` ×30 sequential | PASS |
 
-Trusted sources on Valkey: Linas app droplet IPs/tags only. BOC stays OFF. Do not merge PR #240. Do not deploy new app release from this wave.
+Harness: `scripts/loadtest/run_real_infra_cert.py` (run on a Linas droplet; Valkey trusted sources block public clients).
 
-## Phase B — Durability (in-repo; done without purchase)
+## Remaining bottlenecks / residuals
 
-Authoritative inbound ledger + Meta ingress persist-before-ACK + reconcile watchdog. See ledger + tests `tests/scale/test_inbound_event_durability.py`.
+1. **PR #240 not deployed** — Redis shared rate-limit, SIGTERM drain/503, inbound ledger in live webhook path await release.
+2. **`LINAS_REQUIRE_REDIS=false`** — durable queue workers not on; job_queue Redis is reachable for readiness only.
+3. **Node-local state** — `meta_registry`, social media files, WhatsApp Postgres on node01 localhost (P1 multi-node divergence).
+4. **`/api/ready` heavy** under concurrency (Meta checks); LB HC uses `/api/health`.
+5. **2vCPU nodes** — API concurrency headroom limited; scale out before 5k live owners.
+
+## Ready for Requests migration + prod deploy of PR #240?
+
+**Not yet.** Infra HA + Valkey + LB are ready. Next OWNER gates: merge/deploy PR #240 deliberately, enable workers only with explicit `LINAS_REQUIRE_REDIS` approval, then Requests migration. Do **not** buy $15 single-node Valkey as final HA.

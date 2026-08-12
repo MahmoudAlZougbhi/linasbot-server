@@ -3,7 +3,7 @@
 **Started:** 2026-08-12T15:21:18Z  
 **Branch:** `chore/project-cleanup-reorg`  
 **PR:** [#240](https://github.com/MahmoudAlZougbhi/linasbot-server/pull/240)  
-**Rules:** No merge · No prod deploy · No purchase until gate · BOC OFF · Do not reuse SportBook Valkey · Do not buy prior $15 single-node proposal without HA comparison  
+**Rules:** No merge · No prod app-release deploy · BOC OFF · Do not reuse SportBook Valkey · Do not buy $15 single-node Valkey as final HA  
 
 ## Status legend
 
@@ -45,9 +45,9 @@
 
 ## Constraints lock
 
-- [x] Do NOT purchase Valkey yet — **attempted; DO team hold 403**
+- [x] Purchase Valkey HA + LB + peer — **DONE** (DO hold cleared)
 - [x] Do NOT merge PR #240
-- [x] Do NOT deploy production / new release
+- [x] Do NOT deploy new application release / Requests migration
 - [x] Do NOT reuse `sportbook-redis-prod`
 - [x] BOC stays OFF
 - [x] Meta VERIFY_AND_PRESERVE already passed (no disconnect)
@@ -79,3 +79,9 @@
 | 2026-08-12T18:56:00Z | Spaces: not created (media local-disk residual P1; inbound path independent) | DONE |
 | 2026-08-12T18:56:00Z | Phase C/D purchase+load cert deferred until DO unlock | BLOCKED_OWNER_ACTION |
 | 2026-08-12T16:06:00Z | PR #240 CI green @ 37381ed (backend/frontend/mobile/secret-scan/deploy-readiness) | DONE |
+| 2026-08-12T16:12:43Z | Created Valkey HA `linas-redis-prod` (2× db-s-1vcpu-2gb lon1) | DONE |
+| 2026-08-12T16:12:51Z | Created peer droplet `linas-app-lon1-02` s-2vcpu-4gb | DONE |
+| 2026-08-12T16:17:47Z | Created LB `linas-http-lb-lon1` + later TLS terminate + DNS cutover | DONE |
+| 2026-08-12T16:21:55Z | Wired private rediss URL on both nodes; redis_reachable=true | DONE |
+| 2026-08-12T16:48:00Z | Real-infra load cert all_passed; unexplained_missing_events=0 | DONE |
+| 2026-08-12T16:50:00Z | HA docs/ledger updated; awaiting OWNER GO for PR#240 deploy + Requests | BLOCKED_OWNER_ACTION |

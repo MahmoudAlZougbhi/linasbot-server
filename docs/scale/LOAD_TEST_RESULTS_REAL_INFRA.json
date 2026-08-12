@@ -1,0 +1,81 @@
+{
+  "generated_at": "2026-08-12T16:48:35Z",
+  "run_id": "c4ac9af662ca432a9b302e076404a11e",
+  "topology": "real_valkey_ha_optional_lb",
+  "results": [
+    {
+      "name": "valkey_tls_auth_replication",
+      "passed": true,
+      "details": {
+        "role": "master",
+        "slaves": 1
+      }
+    },
+    {
+      "name": "owners_5k_set",
+      "passed": true,
+      "details": {
+        "cardinality": 5000,
+        "expected": 5000
+      }
+    },
+    {
+      "name": "burst_20k_idempotency",
+      "passed": true,
+      "details": {
+        "accepted": 18001,
+        "duplicates": 1999,
+        "burst": 20000
+      }
+    },
+    {
+      "name": "ooo_conversation_locks",
+      "passed": true,
+      "details": {
+        "conversations": 1000,
+        "lost_locks": 0,
+        "ordering_failures": 0
+      }
+    },
+    {
+      "name": "durable_ledger_reconcile",
+      "passed": true,
+      "details": {
+        "returncode": 0,
+        "stdout_tail": "                     [100%]\n=============================== warnings summary ===============================\n../linasbot/venv/lib/python3.12/site-packages/_pytest/config/__init__.py:1464\n  /opt/linasbot/venv/lib/python3.12/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: asyncio_mode\n  \n    self._warn_or_fail_if_strict(f\"Unknown config option: {key}\\n\")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n3 passed, 1 warning in 2.36s\n",
+        "stderr_tail": "",
+        "unexplained_missing_events": 0
+      }
+    },
+    {
+      "name": "worker_crash_retry_dlq",
+      "passed": true,
+      "details": {
+        "processed": 94,
+        "requeued_drained": 6,
+        "unexplained": 0,
+        "pre_drain_remaining": 6
+      }
+    },
+    {
+      "name": "lb_traffic_burst",
+      "passed": true,
+      "details": {
+        "health_burst": {
+          "path": "/api/health",
+          "ok": 200,
+          "errors": 0,
+          "p50_ms": 270.3862500000014,
+          "p95_ms": 782.7285000000011,
+          "p99_ms": 795.2547919999979,
+          "passed": true
+        },
+        "ready_sequential_ok": 30,
+        "note": "/api/ready is heavy (meta+redis); concurrency certified on /api/health; ready sequential via LB"
+      }
+    }
+  ],
+  "all_passed": true,
+  "unexplained_missing_events": 0,
+  "lb_mode": "https_terminate_to_http_80_nginx"
+}
