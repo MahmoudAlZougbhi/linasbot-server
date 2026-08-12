@@ -8,11 +8,11 @@ Audit-only. Application source is not modified.
 |--------|-------|
 | Tracked files (`git ls-files`) | 1539 |
 | Inventory rows | 1539 |
-| COMPLETE | 145 |
-| UNREVIEWED | 1394 |
+| COMPLETE | 175 |
+| UNREVIEWED | 1364 |
 | IN_REVIEW | 0 |
-| Last batch | Batch 5 (seq 116–145) |
-| Last audit commit | b76cbec902fb73c38b456bd4035eacfbbdd4da41 |
+| Last batch | Batch 6 (seq 146–175) |
+| Last audit commit | (pending annotate) |
 
 ---
 
@@ -179,3 +179,23 @@ Applied sharper dispositions from completed audit agents without changing COMPLE
 - Confirmed seq 118/119/126/131 findings already aligned
 
 Sources: agent audits for seq 56–85, 86–115, 116–145.
+
+---
+
+## Batch 6 — seq 146–175 (2026-08-12)
+
+### Scope
+
+Dashboard constants (brand/permissions/product/public), AuthContext cluster, Operator/Permissions/PublicLanding contexts, useApi* + Live Chat SSE/media hooks, index bootstrap, ActivityFlow page.
+
+### Highlights
+
+- **DELETE_CANDIDATE:** `linasBrand.js` (zero imports), `hooks/usePermissions.jsx` (duplicate of PermissionsContext)
+- **KEEP_SECURITY_FIX:** `AuthContext.helpers` default `role=admin` / `tenantId=linas`; `AuthContext.jsx` session fail-open + auth console logs; `useLiveChatMediaComposer` hardcodes `operator_001`
+- **KEEP_FIX:** `productFeatures` disable helper unused; `OperatorStatusContext` silent fallback; `useApiTesting` offline `success:true` mocks
+- **LANDING_KEEP:** publicSite / publicLandingLocale / PublicLandingLocaleContext
+- Active: permissions map, AuthProvider, useApi facade, Live Chat SSE, ActivityFlow `/activity-flow`
+
+### Cumulative
+
+COMPLETE **175 / 1539**
