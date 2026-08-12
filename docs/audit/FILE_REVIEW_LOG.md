@@ -8,10 +8,10 @@ Audit-only. Application source is not modified.
 |--------|-------|
 | Tracked files (`git ls-files`) | 1539 |
 | Inventory rows | 1539 |
-| COMPLETE | 85 |
-| UNREVIEWED | 1454 |
+| COMPLETE | 115 |
+| UNREVIEWED | 1424 |
 | IN_REVIEW | 0 |
-| Last batch | Batch 3 (seq 56–85) |
+| Last batch | Batch 4 (seq 86–115) |
 | Last audit commit | 7a39305c161e5a8833d3ac765f87b172df87ba03 |
 
 ---
@@ -125,3 +125,23 @@ COMPLETE **55 / 1539**
 ### Cumulative
 
 COMPLETE **85 / 1539**
+
+---
+
+## Batch 4 — seq 86–115 (2026-08-12)
+
+### Files opened / reviewed
+
+- Brand PNGs 86–93 via metadata + `linasBrand.js` refs (NOT_APPLICABLE)
+- Fully read: manifest, App.jsx, auth/tests, BotInstructionsTab, ErrorBoundary, LoadingScreen, ContentFilesPanel, DynamicMessagesPanel, Feedback/Like modals, Header, Sidebar(+tests), LiveChat mobile panes/helpers
+
+### Key findings
+
+- App `/mobile/live-chat` missing `requiredPermission="liveChat"` → KEEP_SECURITY_FIX
+- Sidebar default `tenantId||"linas"` → KEEP_FIX
+- Header fake notifications → KEEP_FIX
+- BotInstructionsTab / ContentFilesPanel / DynamicMessagesPanel → DELETE_CANDIDATE (zero imports)
+
+### Cumulative
+
+COMPLETE **115 / 1539**
