@@ -6,6 +6,7 @@ import { useApi } from "./useApi";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 
+/** @param {string} rel */
 function lineCount(rel) {
   return fs.readFileSync(path.join(root, rel), "utf8").split(/\r?\n/).length;
 }
@@ -15,7 +16,6 @@ describe("useApi LOC split", () => {
     expect(lineCount("useApi.jsx")).toBeLessThan(500);
     expect(lineCount("useApiClient.js")).toBeLessThan(500);
     expect(lineCount("useApiTesting.js")).toBeLessThan(500);
-    expect(lineCount("useApiLiveChat.js")).toBeLessThan(500);
     expect(lineCount("useApiQA.js")).toBeLessThan(500);
     expect(lineCount("useApiTraining.js")).toBeLessThan(500);
     expect(lineCount("useApiContent.js")).toBeLessThan(500);

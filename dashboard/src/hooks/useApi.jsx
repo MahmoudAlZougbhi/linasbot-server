@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useApiContent } from "./useApiContent";
-import { useApiLiveChat } from "./useApiLiveChat";
 import { useApiQA } from "./useApiQA";
 import { useApiTesting } from "./useApiTesting";
 import { useApiTraining } from "./useApiTraining";
@@ -17,7 +16,6 @@ export const useApi = () => {
   }));
 
   const testing = useApiTesting({ setLoading, currentProvider, setCurrentProvider, setBotStatus });
-  const liveChat = useApiLiveChat({ setLoading });
   const qa = useApiQA({ setLoading });
   const training = useApiTraining({ setLoading });
   const content = useApiContent();
@@ -27,7 +25,6 @@ export const useApi = () => {
     currentProvider,
     botStatus,
     ...testing,
-    ...liveChat,
     ...qa,
     ...training,
     ...content,

@@ -1,8 +1,6 @@
-import { Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 
-import ProtectedRoute from './components/Auth/ProtectedRoute';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
@@ -15,20 +13,11 @@ import Features from './pages/public/Features';
 import { AuthProvider } from './contexts/AuthContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
 import { PublicLandingLocaleProvider } from './contexts/PublicLandingLocaleContext';
-import { OperatorStatusProvider } from './contexts/OperatorStatusContext';
 
 /**
  * Operator SPA shell removed after FINAL_WEB_TO_MOBILE_PARITY_MATRIX.csv.
- * Day-to-day ops live in Expo (mobile/linas-ai). Web keeps marketing + thin auth
- * + APK Live Chat bridge at /mobile/live-chat.
+ * Day-to-day ops live in Expo (mobile/linas-ai). Web keeps marketing + thin auth.
  */
-const MobileLiveChat = lazy(() => import('./pages/MobileLiveChat'));
-
-const RouteFallback = () => (
-  <div className="flex items-center justify-center py-24 text-slate-600 text-sm">
-    Loading…
-  </div>
-);
 
 /** Minimal stub for bookmarks that still hit former operator paths. */
 function UseMobileAppPage() {
@@ -49,18 +38,6 @@ function UseMobileAppPage() {
       </div>
       <Toaster position="top-right" />
     </div>
-  );
-}
-
-function MobileLiveChatRoute() {
-  return (
-    <OperatorStatusProvider>
-      <div className="h-[100dvh] overflow-hidden bg-slate-950">
-        <Suspense fallback={<RouteFallback />}>
-          <MobileLiveChat />
-        </Suspense>
-      </div>
-    </OperatorStatusProvider>
   );
 }
 
@@ -93,16 +70,8 @@ function App() {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
 
-            <Route
-              path="/mobile/live-chat"
-              element={
-                <ProtectedRoute requiredPermission="liveChat">
-                  <MobileLiveChatRoute />
-                </ProtectedRoute>
-              }
-            />
-
             {/* Former operator SPA routes → mobile app CTA (parity matrix committed first). */}
+            <Route path="/mobile/live-chat" element={<Navigate to="/#get-app" replace />} />
             <Route path="/app" element={<UseMobileAppPage />} />
             <Route path="/training" element={<Navigate to="/#get-app" replace />} />
             <Route path="/content-managers/*" element={<Navigate to="/#get-app" replace />} />
