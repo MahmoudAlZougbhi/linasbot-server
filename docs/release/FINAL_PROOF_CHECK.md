@@ -12,8 +12,8 @@
 | Field | Value |
 |-------|--------|
 | `AUDITED_FAIL_HEAD` | `12e00eb797cd0e774c6948ba5379bc0974837c91` (PROOF_FAILED_NOT_READY) |
-| `FINAL_RC_SHA` | `810fb88afb9b6d20620e072b0e2251af897ce2a5` |
-| `PR_240` | open — CI SUCCESS on freeze SHA |
+| `FINAL_RC_SHA` | `b3f428475325860a2252e6a0cf33776d7e81c4ea` |
+| `PR_240` | open — CI SUCCESS @ `b3f4284` (backend · frontend · mobile · secret-scan · deploy-readiness) |
 | Prior CI @ `12e00eb` | all SUCCESS (backend · frontend · mobile · secret-scan · deploy-readiness) |
 
 ### Focused tests (this proof)
@@ -168,10 +168,9 @@ NODE_LOCAL_CRITICAL_STATE=NONE
 
 ```
 AUDITED_FAIL_HEAD=12e00eb797cd0e774c6948ba5379bc0974837c91
-FINAL_RC_SHA=810fb88afb9b6d20620e072b0e2251af897ce2a5
-PROOF_DOCS_SHA=810fb88afb9b6d20620e072b0e2251af897ce2a5
-PR_240_HEAD=810fb88afb9b6d20620e072b0e2251af897ce2a5
-PR_240_CI=pending_after_format
+FINAL_RC_SHA=b3f428475325860a2252e6a0cf33776d7e81c4ea
+PR_240_HEAD=b3f428475325860a2252e6a0cf33776d7e81c4ea
+PR_240_CI=SUCCESS (backend, frontend, mobile, secret-scan, deploy-readiness)
 NODE_LOCAL_CRITICAL_STATE=NONE
 ```
 

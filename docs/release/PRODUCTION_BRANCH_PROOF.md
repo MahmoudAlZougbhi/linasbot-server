@@ -14,17 +14,18 @@ PRODUCTION_BRANCH_READY
 
 ```
 AUDITED_FAIL_HEAD=12e00eb797cd0e774c6948ba5379bc0974837c91
-FINAL_RC_SHA=810fb88afb9b6d20620e072b0e2251af897ce2a5
-PROOF_DOCS_SHA=810fb88afb9b6d20620e072b0e2251af897ce2a5
-PR_240_HEAD=810fb88afb9b6d20620e072b0e2251af897ce2a5
-PR_240_CI=pending_after_format
+FINAL_RC_SHA=b3f428475325860a2252e6a0cf33776d7e81c4ea
+PR_240_HEAD=b3f428475325860a2252e6a0cf33776d7e81c4ea
+PR_240_CI=SUCCESS (backend, frontend, mobile, secret-scan, deploy-readiness)
 NODE_LOCAL_CRITICAL_STATE=NONE
-CURRENT_HEAD=810fb88afb9b6d20620e072b0e2251af897ce2a5
+CURRENT_HEAD=b3f428475325860a2252e6a0cf33776d7e81c4ea
 BRANCH=chore/project-cleanup-reorg
 PROOF_DOC=docs/release/FINAL_PROOF_CHECK.md
 CUTOVER_DOC=docs/release/PG_CUTOVER_RC.md
 FORBIDDEN_HONORED=no_merge_no_deploy_no_requests_migration_no_droplet_boc_off_no_live_sot_flips
 ```
+
+Note: `FINAL_RC_SHA` is the last fully green implementation tip (ASSN/auth/PG cutover + CI lint/mypy fixes). Later docs-only commits may advance `PR_240_HEAD` without changing that freeze.
 
 ## What closed the prior FAIL / PARTIAL set
 
@@ -44,8 +45,8 @@ FORBIDDEN_HONORED=no_merge_no_deploy_no_requests_migration_no_droplet_boc_off_no
 ## Evidence tests (local)
 
 - Backend focused: **79 passed** (Apple ASSN/JWS/revoke/atomic + billing/auth/credits PG + meta + redis fail-closed + financial/inbound invariants)
-- Mobile: **5 passed** (`appleAccount.test.mjs`)
-- Ruff on touched Apple/billing modules: clean
+- Mobile: **113 passed** (`npm test` including `appleAccount.test.mjs`)
+- PR #240 CI @ `b3f4284`: **all SUCCESS**
 
 ## Ops readiness (not executed live)
 
