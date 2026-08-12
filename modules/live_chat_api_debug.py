@@ -4,11 +4,22 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import Query
+from fastapi import HTTPException, Query, Request
 
+from modules.api_security import require_session
 from modules.core import app
 from modules.live_chat_api_helpers import _run_endpoint
 from services.live_chat_service import live_chat_service
+
+_ELEVATED_DEBUG_ROLES = frozenset({"admin", "platform_owner"})
+
+
+def _require_live_chat_debug_elevation(request: Request) -> None:
+    """liveChat alone is insufficient for debug-firestore / rebuild-index."""
+    session = require_session(request)
+    role = (session.role or "").strip().lower()
+    if role not in _ELEVATED_DEBUG_ROLES:
+        raise HTTPException(status_code=403, detail="Elevated role required")
 
 
 @app.get("/api/live-chat/status")
@@ -41,8 +52,9 @@ async def live_chat_status() -> Any:
 
 
 @app.get("/api/live-chat/debug-firestore")
-async def debug_firestore() -> Any:
+async def debug_firestore(request: Request) -> Any:
     """Debug endpoint to check Firestore data without cache"""
+    _require_live_chat_debug_elevation(request)
     try:
         import datetime
 
@@ -147,9 +159,12 @@ async def debug_firestore() -> Any:
 
 @app.post("/api/live-chat/rebuild-index")
 async def rebuild_live_chat_index(
-    max_users: int = Query(default=None), max_conversations_per_user: int = Query(default=None)
+    request: Request,
+    max_users: int = Query(default=None),
+    max_conversations_per_user: int = Query(default=None),
 ) -> Any:
     """Temporary debug endpoint to rebuild/backfill live_chat_index from Firestore conversations."""
+    _require_live_chat_debug_elevation(request)
 
     async def _handler() -> Any:
         written = await live_chat_service.rebuild_index_from_firestore(

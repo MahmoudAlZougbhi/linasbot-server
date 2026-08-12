@@ -330,6 +330,43 @@ class TestDebugAndSimulationEndpoints:
         assert response.status_code == 401
 
 
+class TestLiveChatDebugElevation:
+    def _set_operator_session(self, client: TestClient, *, with_csrf_header: bool = False) -> str:
+        rec = session_service.create_session(
+            user_id="matrix-operator",
+            email="matrix-operator@example.com",
+            role="operator",
+            permissions=None,
+        )
+        client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
+        client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
+        if with_csrf_header:
+            client.headers[CSRF_HEADER_NAME] = rec.csrf_token
+        else:
+            client.headers.pop(CSRF_HEADER_NAME, None)
+        return rec.csrf_token
+
+    def test_debug_firestore_forbidden_for_operator(self, client: TestClient) -> None:
+        _clear_client_auth(client)
+        self._set_operator_session(client)
+        response = client.get("/api/live-chat/debug-firestore")
+        assert response.status_code == 403
+
+    def test_rebuild_index_forbidden_for_operator(self, client: TestClient) -> None:
+        _clear_client_auth(client)
+        csrf = self._set_operator_session(client, with_csrf_header=True)
+        response = client.post(
+            "/api/live-chat/rebuild-index",
+            headers={CSRF_HEADER_NAME: csrf},
+        )
+        assert response.status_code == 403
+
+    def test_debug_firestore_unauthenticated_401(self, client: TestClient) -> None:
+        _clear_client_auth(client)
+        response = client.get("/api/live-chat/debug-firestore")
+        assert response.status_code == 401
+
+
 class TestSocialLiveChatMutations:
     def _social_payload(self, path: str) -> dict[str, str]:
         base = {
