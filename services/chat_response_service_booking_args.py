@@ -396,5 +396,8 @@ def _infer_service_id_from_leak(leaked: dict, current_gender: str) -> int:
     svc = str(leaked.get("service") or "").strip().lower()
     if "hair" in svc or "شعر" in svc or "laser hair" in svc:
         return 12 if current_gender == "female" else 1
-    return int(config.DEFAULT_SERVICE_ID or 1)
+    default_sid = getattr(config, "DEFAULT_SERVICE_ID", None)
+    if default_sid is None:
+        raise ValueError("DEFAULT_SERVICE_ID is required when service cannot be resolved")
+    return int(default_sid)
 
