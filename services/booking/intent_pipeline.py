@@ -61,7 +61,7 @@ async def handle_submit_booking_intent(
 
     Returns a dict suitable for JSON tool output to the model.
     """
-    from services.product_features import boc_disabled_response, boc_booking_enabled
+    from services.product_features import boc_booking_enabled, boc_disabled_response
 
     if not boc_booking_enabled():
         return boc_disabled_response(operation="submit_booking_intent")
