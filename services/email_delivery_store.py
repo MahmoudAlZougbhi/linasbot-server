@@ -37,9 +37,11 @@ class EmailDeliveryStore:
             raise ValueError("svix_id_required")
 
         event_type = str(payload.get("type") or "").strip()
-        data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+        raw_data = payload.get("data")
+        data: dict[str, Any] = raw_data if isinstance(raw_data, dict) else {}
         email_id = str(data.get("email_id") or data.get("id") or "").strip() or None
-        to_list = data.get("to") if isinstance(data.get("to"), list) else []
+        raw_to = data.get("to")
+        to_list: list[Any] = raw_to if isinstance(raw_to, list) else []
         # Store only domain-safe recipient fingerprint (no full mailbox when avoidable).
         recipients: list[str] = []
         for item in to_list[:10]:
@@ -75,9 +77,10 @@ class EmailDeliveryStore:
             if not path.exists():
                 return None
             try:
-                return json.loads(path.read_text(encoding="utf-8"))
+                loaded = json.loads(path.read_text(encoding="utf-8"))
             except Exception:
                 return None
+            return loaded if isinstance(loaded, dict) else None
 
 
 email_delivery_store = EmailDeliveryStore()

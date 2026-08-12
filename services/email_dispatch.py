@@ -65,9 +65,10 @@ class _IdempotencyStore:
             try:
                 import json
 
-                return json.loads(path.read_text(encoding="utf-8"))
+                loaded = json.loads(path.read_text(encoding="utf-8"))
             except Exception:
                 return None
+            return loaded if isinstance(loaded, dict) else None
 
     def put(self, key: str, payload: dict[str, Any]) -> None:
         import json
