@@ -55,7 +55,7 @@ export const resolveUserPermissions = (user) => {
     return { ...DEFAULT_PERMISSIONS, ...user.permissions };
   }
 
-  const roles = getRoles();
+  const roles = /** @type {Record<string, { permissions: Record<string, boolean> }>} */ (getRoles());
   const role = user.role ? roles[user.role] : undefined;
 
   if (role) {
@@ -71,7 +71,7 @@ export const resolveUserPermissions = (user) => {
  * @param {string} feature
  */
 export const hasPermission = (user, feature) => {
-  const permissions = resolveUserPermissions(user);
+  const permissions = /** @type {Record<string, boolean>} */ (resolveUserPermissions(user));
   return permissions[feature] === true;
 };
 

@@ -33,7 +33,7 @@ export function useApiTraining({ setLoading }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLoading]);
 
   const updateTrainingFile = useCallback(async (/** @type {string} */ fileId, /** @type {string} */ content) => {
     try {
@@ -56,7 +56,7 @@ export function useApiTraining({ setLoading }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLoading]);
 
   const getTrainingFileBackups = useCallback(async (/** @type {string} */ fileId) => {
     try {
@@ -92,7 +92,7 @@ export function useApiTraining({ setLoading }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLoading]);
 
   const getTrainingFileStats = useCallback(async (/** @type {string} */ fileId) => {
     try {

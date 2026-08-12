@@ -33,7 +33,7 @@ export function useApiQA({ setLoading }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLoading]);
 
   const createQAPair = useCallback(async (/** @type {Record<string, unknown>} */ qaData) => {
     try {
@@ -50,7 +50,7 @@ export function useApiQA({ setLoading }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLoading]);
 
   const updateQAPair = useCallback(async (/** @type {string} */ qaId, /** @type {Record<string, unknown>} */ updates) => {
     try {
@@ -67,7 +67,7 @@ export function useApiQA({ setLoading }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLoading]);
 
   const deleteQAPair = useCallback(async (/** @type {string} */ qaId) => {
     try {
@@ -84,7 +84,7 @@ export function useApiQA({ setLoading }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLoading]);
 
   const testQAMatch = useCallback(async (/** @type {string} */ question, language = "ar") => {
     try {
@@ -103,7 +103,7 @@ export function useApiQA({ setLoading }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLoading]);
 
   const getQAStatistics = useCallback(async () => {
     try {
@@ -176,9 +176,7 @@ export function useApiQA({ setLoading }) {
       } finally {
         setLoading(false);
       }
-    },
-    []
-  );
+    }, [setLoading]);
 
   const translateQAPair = useCallback(
     /**
@@ -204,9 +202,7 @@ export function useApiQA({ setLoading }) {
       } finally {
         setLoading(false);
       }
-    },
-    []
-  );
+    }, [setLoading]);
 
   // ✨ NEW: Local Q&A Management Functions (JSON file-based)
   const getLocalQAPairs = useCallback(async (/** @type {QAFilters} */ filters = {}) => {
@@ -233,7 +229,7 @@ export function useApiQA({ setLoading }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLoading]);
 
   const createLocalQAPair = useCallback(async (/** @type {Record<string, unknown>} */ qaData) => {
     try {
@@ -252,7 +248,7 @@ export function useApiQA({ setLoading }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLoading]);
 
   const updateLocalQAPair = useCallback(async (/** @type {string} */ qaId, /** @type {Record<string, unknown>} */ updates) => {
     try {
@@ -271,7 +267,7 @@ export function useApiQA({ setLoading }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLoading]);
 
   const deleteLocalQAPair = useCallback(async (/** @type {string} */ qaId) => {
     try {
@@ -290,7 +286,7 @@ export function useApiQA({ setLoading }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLoading]);
 
   const getLocalQAStatistics = useCallback(async () => {
     try {
@@ -341,7 +337,7 @@ export function useApiQA({ setLoading }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLoading]);
 
   const getFeedbackStats = useCallback(async () => {
     try {

@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import toast from "react-hot-toast";
 import { getAxiosErrorCode } from "../utils/apiValidate";
-import { api, toastInfo } from "./useApiClient";
+import { api } from "./useApiClient";
 
 /** @param {{ setLoading: Function; currentProvider: string; setCurrentProvider: Function; setBotStatus: Function }} args */
 export function useApiTesting({ setLoading, currentProvider, setCurrentProvider, setBotStatus }) {
@@ -51,7 +51,7 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLoading, setBotStatus]);
 
   // Test text message
   const testTextMessage = useCallback(
@@ -81,9 +81,7 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
       } finally {
         setLoading(false);
       }
-    },
-    []
-  );
+    }, [setLoading]);
 
   // Test voice transcription
   const testVoiceTranscription = useCallback(
@@ -112,9 +110,7 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
       } finally {
         setLoading(false);
       }
-    },
-    [currentProvider]
-  );
+    }, [currentProvider, setLoading]);
 
   // Test image analysis (file upload)
   const testImageAnalysis = useCallback(
@@ -150,9 +146,7 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
       } finally {
         setLoading(false);
       }
-    },
-    [currentProvider]
-  );
+    }, [currentProvider, setLoading]);
 
   // Test image analysis with URL (new endpoint)
   const testImageWithUrl = useCallback(
@@ -188,9 +182,7 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
       } finally {
         setLoading(false);
       }
-    },
-    [currentProvider]
-  );
+    }, [currentProvider, setLoading]);
 
   // Test voice message with text (new endpoint)
   const testVoiceWithText = useCallback(
@@ -219,9 +211,7 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
       } finally {
         setLoading(false);
       }
-    },
-    [currentProvider]
-  );
+    }, [currentProvider, setLoading]);
 
   // Training functions
   const addTrainingData = useCallback(
@@ -245,9 +235,7 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
       } finally {
         setLoading(false);
       }
-    },
-    []
-  );
+    }, [setLoading]);
 
   const getTrainingData = useCallback(async () => {
     try {
@@ -257,7 +245,7 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLoading]);
 
   const deleteTrainingData = useCallback(async (/** @type {string} */ id) => {
     try {
@@ -268,7 +256,7 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLoading]);
 
   // Search training data
   const searchTrainingData = useCallback(async (/** @type {string} */ query) => {
@@ -282,7 +270,7 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLoading]);
 
   // Provider switching
   const switchProvider = useCallback(async (/** @type {string} */ provider) => {
@@ -293,7 +281,7 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
       });
 
       setCurrentProvider(provider);
-      setBotStatus((prev) => ({
+      setBotStatus((/** @type {BotStatus | Record<string, unknown>} */ prev) => ({
         ...prev,
         currentProvider: provider,
       }));
@@ -310,7 +298,7 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setLoading, setBotStatus, setCurrentProvider]);
 
   // Test message with provider (optional channel=instagram|facebook for Meta parity)
   const testMessageWithProvider = useCallback(
@@ -356,9 +344,7 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
       } finally {
         setLoading(false);
       }
-    },
-    [currentProvider]
-  );
+    }, [currentProvider, setLoading]);
 
   // Test webhook simulation (full webhook flow)
   const testWebhookSimulation = useCallback(
@@ -387,9 +373,7 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
       } finally {
         setLoading(false);
       }
-    },
-    [currentProvider]
-  );
+    }, [currentProvider, setLoading]);
 
 
   return {

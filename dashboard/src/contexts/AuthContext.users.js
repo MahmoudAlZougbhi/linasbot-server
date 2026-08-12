@@ -1,5 +1,3 @@
-import toast from 'react-hot-toast';
-import { errorMessage } from '../utils/apiValidate';
 import { API_BASE, buildUserData, withAuthFetch } from './AuthContext.helpers';
 
 /**

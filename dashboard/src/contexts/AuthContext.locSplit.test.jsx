@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "./AuthContext";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 
+/** @param {string} rel */
 function lineCount(rel) {
   return fs.readFileSync(path.join(root, rel), "utf8").split(/\r?\n/).length;
 }

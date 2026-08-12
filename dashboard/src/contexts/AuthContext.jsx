@@ -21,6 +21,7 @@ export const useAuth = () => {
   return context;
 };
 
+/** @param {{ children: import('react').ReactNode }} props */
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(/** @type {AuthUser | null} */ (null));
   const [loading, setLoading] = useState(true);

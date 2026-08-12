@@ -16,6 +16,7 @@ import PermissionMatrix from './PermissionMatrix';
 /** @param {{ user?: DashboardUser | null; onSubmit: (data: Record<string, unknown>) => Promise<void>; onClose: () => void }} props */
 const UserForm = ({ user, onSubmit, onClose }) => {
   const isEditing = !!user;
+  /** @type {Record<string, { id: string; name: string; description?: string; permissions: Record<string, boolean> }>} */
   const allRoles = SYSTEM_ROLES;
 
   const [formData, setFormData] = useState({
@@ -25,6 +26,7 @@ const UserForm = ({ user, onSubmit, onClose }) => {
     role: 'viewer',
     status: 'active',
     useCustomPermissions: false,
+    /** @type {Record<string, boolean>} */
     permissions: { ...DEFAULT_PERMISSIONS }
   });
 
@@ -42,7 +44,11 @@ const UserForm = ({ user, onSubmit, onClose }) => {
         role: user.role || 'viewer',
         status: user.status || 'active',
         useCustomPermissions: !!user.permissions,
-        permissions: user.permissions || resolveUserPermissions(user)
+        permissions: /** @type {Record<string, boolean>} */ (
+          user.permissions && typeof user.permissions === "object" && !Array.isArray(user.permissions)
+            ? { ...DEFAULT_PERMISSIONS, ...user.permissions }
+            : resolveUserPermissions(user)
+        ),
       });
     }
   }, [user]);
@@ -54,7 +60,7 @@ const UserForm = ({ user, onSubmit, onClose }) => {
       if (role) {
         setFormData(prev => ({
           ...prev,
-          permissions: { ...role.permissions }
+          permissions: /** @type {Record<string, boolean>} */ ({ ...role.permissions }),
         }));
       }
     }

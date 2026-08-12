@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createAuthUserManagement } from "./AuthContext.users";
+import { makeAuthUser } from "../testHelpers/renderWithProviders";
 
 describe("createAuthUserManagement userManagement gate", () => {
   beforeEach(() => {
@@ -13,11 +14,11 @@ describe("createAuthUserManagement userManagement gate", () => {
 
   it("denies admin without userManagement resolvedPermission", async () => {
     const api = createAuthUserManagement({
-      user: {
+      user: makeAuthUser({
         id: "1",
         role: "admin",
         resolvedPermissions: { userManagement: false },
-      },
+      }),
       setUser: vi.fn(),
     });
 
@@ -31,11 +32,11 @@ describe("createAuthUserManagement userManagement gate", () => {
 
   it("allows when userManagement is resolved true", async () => {
     const api = createAuthUserManagement({
-      user: {
+      user: makeAuthUser({
         id: "1",
         role: "admin",
         resolvedPermissions: { userManagement: true },
-      },
+      }),
       setUser: vi.fn(),
     });
 
@@ -47,11 +48,11 @@ describe("createAuthUserManagement userManagement gate", () => {
 
   it("allows platform_owner without relying on admin role bypass", async () => {
     const api = createAuthUserManagement({
-      user: {
+      user: makeAuthUser({
         id: "1",
         role: "platform_owner",
         resolvedPermissions: { userManagement: false },
-      },
+      }),
       setUser: vi.fn(),
     });
 

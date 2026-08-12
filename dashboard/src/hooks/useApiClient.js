@@ -4,8 +4,6 @@ import { getApiBaseUrl } from "../utils/apiBaseUrl";
 import { getCsrfToken } from "../utils/csrf";
 import {
   errorMessage,
-  getAxiosErrorCode,
-  getAxiosResponseDetail,
   isAxiosLikeError,
   isPlainObject,
 } from "../utils/apiValidate";

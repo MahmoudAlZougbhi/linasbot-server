@@ -11,6 +11,7 @@ import { SYSTEM_ROLES } from '../../constants/permissions';
 
 /** @param {{ users: DashboardUser[]; currentUserId?: string; loading: boolean; onEdit: (user: DashboardUser) => void; onDelete: (userId: string) => void }} props */
 const UserList = ({ users, currentUserId, loading, onEdit, onDelete }) => {
+  /** @type {Record<string, { name?: string }>} */
   const allRoles = SYSTEM_ROLES;
 
   /** @param {string} roleId */
