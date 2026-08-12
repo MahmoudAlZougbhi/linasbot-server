@@ -203,7 +203,7 @@ async def handle_voice_message(
         )
 
         user_text_input = transcription_response.text
-        print(f"👂 تم تحويل الصوت إلى نص: {user_text_input}")
+        print(f"👂 voice transcription ok len={len(user_text_input or '')}")
 
         # Activity Flow: store voice pipeline metadata for multimodal flow display
         transcription_duration_ms = (time.time() - start_time) * 1000
@@ -240,7 +240,11 @@ async def handle_voice_message(
         # - audio_url: link to original audio
         # - text: the transcribed content
         # - transcribed: true flag
-        print(f"DEBUG: voice_handlers - current_conversation_id: {current_conversation_id}, audio_url: {audio_url}")
+        print(
+            "DEBUG: voice_handlers - "
+            f"current_conversation_id: {current_conversation_id}, "
+            f"has_audio_url: {bool(audio_url)}"
+        )
         if current_conversation_id and audio_url:
             print("✅ Calling update_voice_message_with_transcription...")
             await update_voice_message_with_transcription(
