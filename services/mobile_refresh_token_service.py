@@ -1,4 +1,4 @@
-"""Opaque mobile refresh tokens (file-backed; hash-only at rest)."""
+"""Opaque mobile refresh tokens (file or Postgres; hash-only at rest)."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from services.billing_backend import auth_tokens_use_postgres
 from storage.persistent_storage import _DATA_ROOT
 
 MOBILE_REFRESH_TTL_SECONDS = int(os.getenv("MOBILE_REFRESH_TTL_SECONDS", str(60 * 60 * 24 * 30)))
@@ -22,7 +23,6 @@ def _hash_token(raw: str) -> str:
 
 
 def _require_tenant_id(tenant_id: str | None) -> str:
-    """Normalize tenant_id; fail closed when missing or blank."""
     tid = str(tenant_id or "").strip()
     if not tid:
         raise ValueError("tenant_id required")
@@ -93,13 +93,53 @@ class MobileRefreshTokenService:
             created_at=now,
             expires_at=now + ttl,
         )
-        with self._lock:
-            self._path(token_hash).write_text(json.dumps(record.to_dict()), encoding="utf-8")
+        if auth_tokens_use_postgres():
+            from db.session import whatsapp_session
+            from services.auth_token_pg_store import mobile_issue
+
+            with whatsapp_session() as session:
+                mobile_issue(
+                    session,
+                    token_hash=token_hash,
+                    user_id=record.user_id,
+                    email=record.email,
+                    tenant_id=record.tenant_id,
+                    session_id=record.session_id,
+                    created_at=record.created_at,
+                    expires_at=record.expires_at,
+                )
+        else:
+            with self._lock:
+                self._path(token_hash).write_text(json.dumps(record.to_dict()), encoding="utf-8")
         return raw
 
     def consume(self, raw: str) -> MobileRefreshRecord | None:
-        """Validate and revoke refresh token (rotate-on-use)."""
         token_hash = _hash_token((raw or "").strip())
+        if auth_tokens_use_postgres():
+            from db.session import whatsapp_session
+            from services.auth_token_pg_store import mobile_delete, mobile_get, mobile_revoke
+
+            with whatsapp_session() as session:
+                row = mobile_get(session, token_hash)
+                if row is None:
+                    return None
+                record = MobileRefreshRecord(
+                    user_id=row.user_id,
+                    email=row.email,
+                    tenant_id=row.tenant_id,
+                    session_id=row.session_id,
+                    created_at=float(row.created_at),
+                    expires_at=float(row.expires_at),
+                    revoked_at=float(row.revoked_at) if row.revoked_at is not None else None,
+                )
+                if record.revoked_at is not None:
+                    return None
+                if record.expires_at < time.time():
+                    mobile_delete(session, token_hash)
+                    return None
+                mobile_revoke(session, row, time.time())
+                return record
+
         path = self._path(token_hash)
         with self._lock:
             if not path.is_file():
@@ -127,6 +167,13 @@ class MobileRefreshTokenService:
             return record
 
     def revoke_all_for_user(self, user_id: str) -> int:
+        if auth_tokens_use_postgres():
+            from db.session import whatsapp_session
+            from services.auth_token_pg_store import mobile_revoke_all_for_user
+
+            with whatsapp_session() as session:
+                return mobile_revoke_all_for_user(session, user_id, time.time())
+
         count = 0
         with self._lock:
             for path in self._store_dir.glob("*.json"):

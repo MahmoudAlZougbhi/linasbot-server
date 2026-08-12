@@ -3,6 +3,14 @@
 from __future__ import annotations
 
 from db.models.base import Base
+from db.models.billing_auth import (
+    AdminCreditIdempotencyRow,
+    AuthEmailTokenRow,
+    MobileRefreshTokenRow,
+    StripeProcessedEventRow,
+    TokenWalletLedgerRow,
+    TokenWalletRow,
+)
 from db.models.meta_registry import (
     MetaAssetBindingRow,
     MetaBindingCredentialRow,
@@ -36,6 +44,8 @@ from db.models.whatsapp_smart_followup import (
 )
 
 __all__ = [
+    "AdminCreditIdempotencyRow",
+    "AuthEmailTokenRow",
     "Base",
     "CustomerRequest",
     "CustomerRequestCounter",
@@ -47,6 +57,10 @@ __all__ = [
     "MetaBindingCredentialRow",
     "MetaOAuthStateRow",
     "MetaRegistryAuditEvent",
+    "MobileRefreshTokenRow",
+    "StripeProcessedEventRow",
+    "TokenWalletLedgerRow",
+    "TokenWalletRow",
     "WhatsAppAuditEvent",
     "WhatsAppConnection",
     "WhatsAppConnectionAttempt",

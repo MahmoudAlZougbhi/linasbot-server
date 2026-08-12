@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import os
-import threading
-import time
-from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException, Request, Response
@@ -15,15 +10,15 @@ from pydantic import BaseModel, Field
 
 from modules.api_security import require_permission, require_session
 from modules.core import app
+from services.admin_credit_idempotency import (
+    load_admin_credit_idempotent,
+    store_admin_credit_idempotent,
+)
 from services.mail_service import public_app_base_url
 from services.stripe_checkout_service import stripe_checkout_service, stripe_configured
 from services.token_package_catalog import catalog_public_payload, get_package
 from services.token_wallet_service import is_unlimited_tenant, token_wallet_service
 from services.wallet_spend_analytics import build_wallet_spend_analytics
-from storage.persistent_storage import _DATA_ROOT
-
-_ADMIN_CREDIT_IDEMP_LOCK = threading.RLock()
-_ADMIN_CREDIT_IDEMP_DIR = Path(_DATA_ROOT) / "billing" / "admin_credit_idempotency"
 
 
 class CheckoutRequest(BaseModel):
@@ -79,32 +74,6 @@ def assert_admin_credit_target_allowed(
         raise HTTPException(status_code=400, detail="tenant_id required")
     if target != actor_tenant and (session_role or "").strip().lower() != "platform_owner":
         raise HTTPException(status_code=403, detail="Cross-tenant credit forbidden")
-
-
-def _admin_credit_idempotency_path(key: str) -> Path:
-    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:40]
-    return _ADMIN_CREDIT_IDEMP_DIR / f"{digest}.json"
-
-
-def _load_admin_credit_idempotent(key: str) -> dict[str, Any] | None:
-    path = _admin_credit_idempotency_path(key)
-    if not path.is_file():
-        return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    return data if isinstance(data, dict) else None
-
-
-def _store_admin_credit_idempotent(key: str, payload: dict[str, Any]) -> None:
-    _ADMIN_CREDIT_IDEMP_DIR.mkdir(parents=True, exist_ok=True)
-    path = _admin_credit_idempotency_path(key)
-    with _ADMIN_CREDIT_IDEMP_LOCK:
-        path.write_text(
-            json.dumps({"idempotency_key": key, "ts": time.time(), "response": payload}),
-            encoding="utf-8",
-        )
 
 
 @app.get("/api/billing/packages")
@@ -191,7 +160,7 @@ async def admin_credit(body: AdminCreditRequest, request: Request) -> Any:
 
     idem_key = (body.idempotency_key or body.reference or "").strip() or None
     if idem_key:
-        cached = _load_admin_credit_idempotent(idem_key)
+        cached = load_admin_credit_idempotent(idem_key)
         if cached and isinstance(cached.get("response"), dict):
             out = dict(cached["response"])
             out["duplicate"] = True
@@ -229,7 +198,7 @@ async def admin_credit(body: AdminCreditRequest, request: Request) -> Any:
     }
     payload = {"success": True, "wallet": snap.to_public_dict(), "audit": audit, "duplicate": False}
     if idem_key:
-        _store_admin_credit_idempotent(idem_key, payload)
+        store_admin_credit_idempotent(idem_key, payload)
     return payload
 
 

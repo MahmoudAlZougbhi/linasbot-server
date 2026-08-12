@@ -7,21 +7,23 @@ Policy (fail closed):
   - Never go negative; raise InsufficientTokenBalance if either bucket cannot cover.
 
 Legacy single-balance wallets are migrated once on read:
-  remaining balance_tokens is split 80% input / 20% output (same historical prepaid
-  assumption), with an explicit migration note on the wallet record.
+    remaining balance_tokens is split 80% input / 20% output (same historical prepaid
+    assumption), with an explicit migration note on the wallet record.
 
+Persistence via LINAS_BILLING_BACKEND=file|postgres (default file).
 Models/helpers: token_wallet_models (LOC split).
 """
 
 from __future__ import annotations
 
-import json
 import threading
 import time
 import uuid
 from pathlib import Path
 from typing import Any
 
+from services.billing_backend import billing_uses_postgres
+from services.token_wallet_file_store import TokenWalletFileStore
 from services.token_wallet_models import (  # noqa: F401
     DEFAULT_UNLIMITED_TENANTS,
     LEGACY_INPUT_SHARE,
@@ -33,145 +35,76 @@ from services.token_wallet_models import (  # noqa: F401
     normalize_wallet_tenant_id,
     unlimited_tenant_ids,
 )
-from storage.persistent_storage import _DATA_ROOT
 
 
 class TokenWalletService:
-    def __init__(self, store_dir: Path | None = None) -> None:
+    def __init__(self, store_dir: Path | None = None, *, file_store: TokenWalletFileStore | None = None) -> None:
         self._lock = threading.RLock()
-        self._store_dir = store_dir or (Path(_DATA_ROOT) / "billing" / "wallets")
-        self._store_dir.mkdir(parents=True, exist_ok=True)
-        self._ledger_dir = self._store_dir / "ledger"
-        self._ledger_dir.mkdir(parents=True, exist_ok=True)
-
-    def _wallet_path(self, tenant_id: str) -> Path:
-        safe = (tenant_id or "unknown").strip().lower().replace("/", "_")
-        return self._store_dir / f"{safe}.json"
-
-    def _empty(self, tenant_id: str) -> dict[str, Any]:
-        return {
-            "tenant_id": tenant_id,
-            "input_remaining": 0,
-            "output_remaining": 0,
-            "lifetime_input_credited": 0,
-            "lifetime_output_credited": 0,
-            "lifetime_input_debited": 0,
-            "lifetime_output_debited": 0,
-            "lifetime_spent_usd": 0.0,
-            # Kept as derived convenience for older readers.
-            "balance_tokens": 0,
-            "lifetime_credited": 0,
-            "lifetime_debited": 0,
-            "updated_at": time.time(),
-            "schema_version": 2,
-        }
-
-    def _migrate_legacy_if_needed(self, tenant_id: str, data: dict[str, Any]) -> dict[str, Any]:
-        """Split legacy balance_tokens once into input/output buckets (80/20)."""
-        if data.get("schema_version") == 2 and "input_remaining" in data and "output_remaining" in data:
-            # Keep balance_tokens in sync.
-            data["balance_tokens"] = int(data.get("input_remaining") or 0) + int(data.get("output_remaining") or 0)
-            data["lifetime_credited"] = int(data.get("lifetime_input_credited") or 0) + int(
-                data.get("lifetime_output_credited") or 0
-            )
-            data["lifetime_debited"] = int(data.get("lifetime_input_debited") or 0) + int(
-                data.get("lifetime_output_debited") or 0
-            )
-            return data
-
-        legacy_balance = int(data.get("balance_tokens") or 0)
-        # Already has dual fields from a partial write.
-        if "input_remaining" in data and "output_remaining" in data and data.get("schema_version") == 2:
-            return data
-
-        input_rem = int(round(legacy_balance * LEGACY_INPUT_SHARE))
-        output_rem = max(0, legacy_balance - input_rem)
-        legacy_credited = int(data.get("lifetime_credited") or 0)
-        legacy_debited = int(data.get("lifetime_debited") or 0)
-        input_credited = int(round(legacy_credited * LEGACY_INPUT_SHARE))
-        output_credited = max(0, legacy_credited - input_credited)
-        input_debited = int(round(legacy_debited * LEGACY_INPUT_SHARE))
-        output_debited = max(0, legacy_debited - input_debited)
-
-        migrated = {
-            "tenant_id": tenant_id,
-            "input_remaining": input_rem,
-            "output_remaining": output_rem,
-            "lifetime_input_credited": input_credited,
-            "lifetime_output_credited": output_credited,
-            "lifetime_input_debited": input_debited,
-            "lifetime_output_debited": output_debited,
-            "lifetime_spent_usd": float(data.get("lifetime_spent_usd") or 0.0),
-            "balance_tokens": input_rem + output_rem,
-            "lifetime_credited": input_credited + output_credited,
-            "lifetime_debited": input_debited + output_debited,
-            "updated_at": time.time(),
-            "schema_version": 2,
-            "migrated_from_legacy": True,
-            "migration_note": MIGRATION_NOTE,
-            "legacy_balance_tokens_before_migration": legacy_balance,
-        }
-        return migrated
+        self._file = file_store or TokenWalletFileStore(store_dir)
 
     def _read(self, tenant_id: str) -> dict[str, Any]:
-        path = self._wallet_path(tenant_id)
-        if not path.exists():
-            return self._empty(tenant_id)
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            if not isinstance(data, dict):
-                return self._empty(tenant_id)
-            data.setdefault("tenant_id", tenant_id)
-            migrated = self._migrate_legacy_if_needed(tenant_id, data)
-            # Persist migration so it happens once.
-            if migrated.get("migrated_from_legacy") and data.get("schema_version") != 2:
-                self._write(tenant_id, migrated)
-                self._append_ledger(
-                    {
-                        "id": str(uuid.uuid4()),
-                        "ts": time.time(),
-                        "tenant_id": tenant_id,
-                        "type": "migration_legacy_split",
-                        "input_tokens": migrated["input_remaining"],
-                        "output_tokens": migrated["output_remaining"],
-                        "reason": "legacy_balance_80_20_split",
-                        "note": MIGRATION_NOTE,
-                        "legacy_balance_tokens": migrated.get("legacy_balance_tokens_before_migration"),
-                    }
-                )
+        if billing_uses_postgres():
+            from db.session import whatsapp_session
+            from services.token_wallet_pg_store import read_wallet
+
+            with whatsapp_session() as session:
+                data = read_wallet(session, tenant_id)
+        else:
+            with self._lock:
+                data = self._file.read(tenant_id)
+
+        migrated = self._file.migrate_legacy_if_needed(tenant_id, data)
+        if migrated.get("migrated_from_legacy") and data.get("schema_version") != 2:
+            self._persist_wallet(tenant_id, migrated, migration_ledger=True)
             return migrated
-        except Exception:
-            return self._empty(tenant_id)
+        return migrated
+
+    def _persist_wallet(self, tenant_id: str, data: dict[str, Any], *, migration_ledger: bool = False) -> None:
+        if billing_uses_postgres():
+            from db.session import whatsapp_session
+            from services.token_wallet_pg_store import append_ledger, write_wallet
+
+            with whatsapp_session() as session:
+                write_wallet(session, tenant_id, data)
+                if migration_ledger:
+                    append_ledger(
+                        session,
+                        {
+                            "id": str(uuid.uuid4()),
+                            "ts": time.time(),
+                            "tenant_id": tenant_id,
+                            "type": "migration_legacy_split",
+                            "input_tokens": data["input_remaining"],
+                            "output_tokens": data["output_remaining"],
+                            "reason": "legacy_balance_80_20_split",
+                            "note": MIGRATION_NOTE,
+                            "legacy_balance_tokens": data.get("legacy_balance_tokens_before_migration"),
+                        },
+                    )
+        else:
+            with self._lock:
+                self._file.write(tenant_id, data)
+                if migration_ledger:
+                    self._file.persist_legacy_migration(tenant_id, data)
 
     def _write(self, tenant_id: str, data: dict[str, Any]) -> None:
-        path = self._wallet_path(tenant_id)
-        tmp = path.with_suffix(".tmp")
-        payload = dict(data)
-        payload["schema_version"] = 2
-        payload["input_remaining"] = int(payload.get("input_remaining") or 0)
-        payload["output_remaining"] = int(payload.get("output_remaining") or 0)
-        payload["balance_tokens"] = payload["input_remaining"] + payload["output_remaining"]
-        payload["lifetime_credited"] = int(payload.get("lifetime_input_credited") or 0) + int(
-            payload.get("lifetime_output_credited") or 0
-        )
-        payload["lifetime_debited"] = int(payload.get("lifetime_input_debited") or 0) + int(
-            payload.get("lifetime_output_debited") or 0
-        )
-        payload["updated_at"] = time.time()
-        tmp.write_text(json.dumps(payload), encoding="utf-8")
-        tmp.replace(path)
+        self._persist_wallet(tenant_id, data)
 
     def _append_ledger(self, entry: dict[str, Any]) -> None:
-        tenant_id = str(entry.get("tenant_id") or "unknown")
-        path = self._ledger_dir / f"{tenant_id}.jsonl"
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(entry) + "\n")
+        if billing_uses_postgres():
+            from db.session import whatsapp_session
+            from services.token_wallet_pg_store import append_ledger
+
+            with whatsapp_session() as session:
+                append_ledger(session, entry)
+        else:
+            with self._lock:
+                self._file.append_ledger(entry)
 
     def get_wallet(self, tenant_id: str) -> WalletSnapshot:
         tid = normalize_wallet_tenant_id(tenant_id)
         unlimited = is_unlimited_tenant(tid)
-        with self._lock:
-            data = self._read(tid)
+        data = self._read(tid)
         return WalletSnapshot(
             tenant_id=tid,
             input_remaining=int(data.get("input_remaining") or 0),
@@ -187,7 +120,6 @@ class TokenWalletService:
         )
 
     def ensure_ai_allowed(self, tenant_id: str, *, require_at_least: int = 1) -> WalletSnapshot:
-        """Fail closed when either input or output bucket is empty."""
         snap = self.get_wallet(tenant_id)
         if snap.unlimited:
             return snap
@@ -225,12 +157,6 @@ class TokenWalletService:
         package_id: str | None = None,
         actor: str | None = None,
     ) -> WalletSnapshot:
-        """
-        Credit input and/or output allotments.
-
-        Prefer explicit input_tokens/output_tokens. Legacy ``tokens`` alone is
-        split 80/20 for admin credits that still pass a single total.
-        """
         tid = normalize_wallet_tenant_id(tenant_id)
 
         if input_tokens is not None or output_tokens is not None:
@@ -246,39 +172,80 @@ class TokenWalletService:
         if add_in <= 0 and add_out <= 0:
             raise ValueError("input_tokens or output_tokens must be positive")
 
-        with self._lock:
-            data = self._read(tid)
-            before_in = int(data.get("input_remaining") or 0)
-            before_out = int(data.get("output_remaining") or 0)
-            data["input_remaining"] = before_in + add_in
-            data["output_remaining"] = before_out + add_out
-            data["lifetime_input_credited"] = int(data.get("lifetime_input_credited") or 0) + add_in
-            data["lifetime_output_credited"] = int(data.get("lifetime_output_credited") or 0) + add_out
-            if amount_usd and amount_usd > 0:
-                data["lifetime_spent_usd"] = float(data.get("lifetime_spent_usd") or 0.0) + float(amount_usd)
-            self._write(tid, data)
-            self._append_ledger(
-                {
-                    "id": str(uuid.uuid4()),
-                    "ts": time.time(),
-                    "tenant_id": tid,
-                    "type": "credit",
-                    "input_tokens": add_in,
-                    "output_tokens": add_out,
-                    "tokens": add_in + add_out,
-                    "amount_usd": float(amount_usd or 0.0),
-                    "reason": reason,
-                    "reference": reference,
-                    "package_id": package_id,
-                    "actor": actor,
-                    "input_remaining_before": before_in,
-                    "output_remaining_before": before_out,
-                    "balance_before": before_in + before_out,
-                    "input_remaining_after": data["input_remaining"],
-                    "output_remaining_after": data["output_remaining"],
-                    "balance_after": data["input_remaining"] + data["output_remaining"],
-                }
-            )
+        if billing_uses_postgres():
+            from db.session import whatsapp_session
+            from services.token_wallet_pg_store import append_ledger, read_wallet, write_wallet
+
+            with whatsapp_session() as session:
+                data = read_wallet(session, tid)
+                data = self._file.migrate_legacy_if_needed(tid, data)
+                before_in = int(data.get("input_remaining") or 0)
+                before_out = int(data.get("output_remaining") or 0)
+                data["input_remaining"] = before_in + add_in
+                data["output_remaining"] = before_out + add_out
+                data["lifetime_input_credited"] = int(data.get("lifetime_input_credited") or 0) + add_in
+                data["lifetime_output_credited"] = int(data.get("lifetime_output_credited") or 0) + add_out
+                if amount_usd and amount_usd > 0:
+                    data["lifetime_spent_usd"] = float(data.get("lifetime_spent_usd") or 0.0) + float(amount_usd)
+                write_wallet(session, tid, data)
+                append_ledger(
+                    session,
+                    {
+                        "id": str(uuid.uuid4()),
+                        "ts": time.time(),
+                        "tenant_id": tid,
+                        "type": "credit",
+                        "input_tokens": add_in,
+                        "output_tokens": add_out,
+                        "tokens": add_in + add_out,
+                        "amount_usd": float(amount_usd or 0.0),
+                        "reason": reason,
+                        "reference": reference,
+                        "package_id": package_id,
+                        "actor": actor,
+                        "input_remaining_before": before_in,
+                        "output_remaining_before": before_out,
+                        "balance_before": before_in + before_out,
+                        "input_remaining_after": data["input_remaining"],
+                        "output_remaining_after": data["output_remaining"],
+                        "balance_after": data["input_remaining"] + data["output_remaining"],
+                    },
+                )
+        else:
+            with self._lock:
+                data = self._file.read(tid)
+                data = self._file.migrate_legacy_if_needed(tid, data)
+                before_in = int(data.get("input_remaining") or 0)
+                before_out = int(data.get("output_remaining") or 0)
+                data["input_remaining"] = before_in + add_in
+                data["output_remaining"] = before_out + add_out
+                data["lifetime_input_credited"] = int(data.get("lifetime_input_credited") or 0) + add_in
+                data["lifetime_output_credited"] = int(data.get("lifetime_output_credited") or 0) + add_out
+                if amount_usd and amount_usd > 0:
+                    data["lifetime_spent_usd"] = float(data.get("lifetime_spent_usd") or 0.0) + float(amount_usd)
+                self._file.write(tid, data)
+                self._file.append_ledger(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "ts": time.time(),
+                        "tenant_id": tid,
+                        "type": "credit",
+                        "input_tokens": add_in,
+                        "output_tokens": add_out,
+                        "tokens": add_in + add_out,
+                        "amount_usd": float(amount_usd or 0.0),
+                        "reason": reason,
+                        "reference": reference,
+                        "package_id": package_id,
+                        "actor": actor,
+                        "input_remaining_before": before_in,
+                        "output_remaining_before": before_out,
+                        "balance_before": before_in + before_out,
+                        "input_remaining_after": data["input_remaining"],
+                        "output_remaining_after": data["output_remaining"],
+                        "balance_after": data["input_remaining"] + data["output_remaining"],
+                    }
+                )
         return self.get_wallet(tid)
 
     def debit(
@@ -295,18 +262,12 @@ class TokenWalletService:
         reference: str | None = None,
         model: str | None = None,
     ) -> WalletSnapshot:
-        """
-        Atomically debit input (prompt) and output (completion) buckets.
-        Unlimited tenants record usage without blocking.
-        Never allows negative balances (fail closed).
-        """
         tid = normalize_wallet_tenant_id(tenant_id)
 
         if prompt_tokens is not None or completion_tokens is not None:
             use_in = max(0, int(prompt_tokens or 0))
             use_out = max(0, int(completion_tokens or 0))
         elif tokens is not None:
-            # Legacy single-total debit: split 80/20 like old metering.
             total = max(0, int(tokens))
             use_in = int(round(total * LEGACY_INPUT_SHARE))
             use_out = max(0, total - use_in)
@@ -317,98 +278,91 @@ class TokenWalletService:
         if use_in <= 0 and use_out <= 0:
             return self.get_wallet(tid)
 
-        if is_unlimited_tenant(tid):
-            with self._lock:
-                data = self._read(tid)
-                data["lifetime_input_debited"] = int(data.get("lifetime_input_debited") or 0) + use_in
-                data["lifetime_output_debited"] = int(data.get("lifetime_output_debited") or 0) + use_out
-                self._write(tid, data)
-                self._append_ledger(
-                    {
-                        "id": str(uuid.uuid4()),
-                        "ts": time.time(),
-                        "tenant_id": tid,
-                        "type": "debit_unlimited",
-                        "input_tokens": use_in,
-                        "output_tokens": use_out,
-                        "tokens": use_in + use_out,
-                        "cost_usd": float(cost_usd or 0.0),
-                        "input_cost_usd": float(input_cost_usd or 0.0),
-                        "output_cost_usd": float(output_cost_usd or 0.0),
-                        "reason": reason,
-                        "reference": reference,
-                        "model": model,
-                        "input_remaining_after": data.get("input_remaining", 0),
-                        "output_remaining_after": data.get("output_remaining", 0),
-                        "balance_after": int(data.get("input_remaining") or 0) + int(data.get("output_remaining") or 0),
-                    }
-                )
-            return self.get_wallet(tid)
+        entry_type = "debit_unlimited" if is_unlimited_tenant(tid) else "debit"
 
-        with self._lock:
-            data = self._read(tid)
-            input_bal = int(data.get("input_remaining") or 0)
-            output_bal = int(data.get("output_remaining") or 0)
-            if use_in > input_bal:
-                raise InsufficientTokenBalance(
-                    tid,
-                    input_bal,
-                    use_in,
-                    bucket="input",
-                    input_remaining=input_bal,
-                    output_remaining=output_bal,
-                )
-            if use_out > output_bal:
-                raise InsufficientTokenBalance(
-                    tid,
-                    output_bal,
-                    use_out,
-                    bucket="output",
-                    input_remaining=input_bal,
-                    output_remaining=output_bal,
-                )
-            data["input_remaining"] = input_bal - use_in
-            data["output_remaining"] = output_bal - use_out
+        def _apply(data: dict[str, Any]) -> dict[str, Any]:
+            if not is_unlimited_tenant(tid):
+                input_bal = int(data.get("input_remaining") or 0)
+                output_bal = int(data.get("output_remaining") or 0)
+                if use_in > input_bal:
+                    raise InsufficientTokenBalance(
+                        tid,
+                        input_bal,
+                        use_in,
+                        bucket="input",
+                        input_remaining=input_bal,
+                        output_remaining=output_bal,
+                    )
+                if use_out > output_bal:
+                    raise InsufficientTokenBalance(
+                        tid,
+                        output_bal,
+                        use_out,
+                        bucket="output",
+                        input_remaining=input_bal,
+                        output_remaining=output_bal,
+                    )
+                data["input_remaining"] = input_bal - use_in
+                data["output_remaining"] = output_bal - use_out
             data["lifetime_input_debited"] = int(data.get("lifetime_input_debited") or 0) + use_in
             data["lifetime_output_debited"] = int(data.get("lifetime_output_debited") or 0) + use_out
-            self._write(tid, data)
-            self._append_ledger(
-                {
-                    "id": str(uuid.uuid4()),
-                    "ts": time.time(),
-                    "tenant_id": tid,
-                    "type": "debit",
-                    "input_tokens": use_in,
-                    "output_tokens": use_out,
-                    "tokens": use_in + use_out,
-                    "cost_usd": float(cost_usd or 0.0),
-                    "input_cost_usd": float(input_cost_usd or 0.0),
-                    "output_cost_usd": float(output_cost_usd or 0.0),
-                    "reason": reason,
-                    "reference": reference,
-                    "model": model,
-                    "input_remaining_after": data["input_remaining"],
-                    "output_remaining_after": data["output_remaining"],
-                    "balance_after": data["input_remaining"] + data["output_remaining"],
-                }
-            )
+            return data
+
+        ledger_entry = {
+            "id": str(uuid.uuid4()),
+            "ts": time.time(),
+            "tenant_id": tid,
+            "type": entry_type,
+            "input_tokens": use_in,
+            "output_tokens": use_out,
+            "tokens": use_in + use_out,
+            "cost_usd": float(cost_usd or 0.0),
+            "input_cost_usd": float(input_cost_usd or 0.0),
+            "output_cost_usd": float(output_cost_usd or 0.0),
+            "reason": reason,
+            "reference": reference,
+            "model": model,
+        }
+
+        if billing_uses_postgres():
+            from db.session import whatsapp_session
+            from services.token_wallet_pg_store import append_ledger, read_wallet, write_wallet
+
+            with whatsapp_session() as session:
+                data = read_wallet(session, tid)
+                data = self._file.migrate_legacy_if_needed(tid, data)
+                data = _apply(data)
+                ledger_entry["input_remaining_after"] = data.get("input_remaining", 0)
+                ledger_entry["output_remaining_after"] = data.get("output_remaining", 0)
+                ledger_entry["balance_after"] = int(data.get("input_remaining") or 0) + int(
+                    data.get("output_remaining") or 0
+                )
+                write_wallet(session, tid, data)
+                append_ledger(session, ledger_entry)
+        else:
+            with self._lock:
+                data = self._file.read(tid)
+                data = self._file.migrate_legacy_if_needed(tid, data)
+                data = _apply(data)
+                ledger_entry["input_remaining_after"] = data.get("input_remaining", 0)
+                ledger_entry["output_remaining_after"] = data.get("output_remaining", 0)
+                ledger_entry["balance_after"] = int(data.get("input_remaining") or 0) + int(
+                    data.get("output_remaining") or 0
+                )
+                self._file.write(tid, data)
+                self._file.append_ledger(ledger_entry)
+
         return self.get_wallet(tid)
 
     def recent_ledger(self, tenant_id: str, *, limit: int = 50) -> list[dict[str, Any]]:
         tid = normalize_wallet_tenant_id(tenant_id)
-        path = self._ledger_dir / f"{tid}.jsonl"
-        if not path.exists():
-            return []
-        lines = path.read_text(encoding="utf-8").splitlines()
-        out: list[dict[str, Any]] = []
-        for line in lines[-max(1, limit) :]:
-            try:
-                row = json.loads(line)
-                if isinstance(row, dict):
-                    out.append(row)
-            except Exception:
-                continue
-        return list(reversed(out))
+        if billing_uses_postgres():
+            from db.session import whatsapp_session
+            from services.token_wallet_pg_store import recent_ledger
+
+            with whatsapp_session() as session:
+                return recent_ledger(session, tid, limit=limit)
+        return self._file.recent_ledger(tid, limit=limit)
 
 
 token_wallet_service = TokenWalletService()

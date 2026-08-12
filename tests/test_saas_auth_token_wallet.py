@@ -241,10 +241,11 @@ async def test_admin_credit_audit_and_file_idempotency(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import modules.wallet_api as wallet_api
+    import services.admin_credit_idempotency as admin_idem
     from services.dashboard_session_service import SessionRecord
 
     monkeypatch.setattr(wallet_api, "token_wallet_service", wallet_svc)
-    monkeypatch.setattr(wallet_api, "_ADMIN_CREDIT_IDEMP_DIR", tmp_path / "admin_credit_idem")
+    monkeypatch.setattr(admin_idem, "_IDEMP_DIR", tmp_path / "admin_credit_idem")
 
     session = SessionRecord(
         session_id="s1",
