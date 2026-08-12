@@ -8,10 +8,14 @@ from services.appointment_scheduler import (
     populate_one_month_followups,
     populate_scheduled_messages_from_appointments,
 )
+from services.product_features import boc_appointment_jobs_allowed, boc_job_skipped_response
 
 
 async def populate_messages_job() -> None:
     """Fetch real appointments from backend and populate scheduled messages"""
+    if not boc_appointment_jobs_allowed():
+        print(f"BOC booking jobs skipped: {boc_job_skipped_response(operation='populate_messages_job')}")
+        return
     try:
         print("🔄 POPULATING SCHEDULED MESSAGES FROM REAL APPOINTMENTS")
         print("=" * 80)
@@ -37,6 +41,9 @@ async def populate_messages_job() -> None:
 # Job 0A3: Populate 1-MONTH FOLLOW-UP messages (from last month's appointments)
 async def populate_one_month_job() -> None:
     """Fetch last month's appointments and populate 1-month follow-up messages"""
+    if not boc_appointment_jobs_allowed():
+        print(f"BOC booking jobs skipped: {boc_job_skipped_response(operation='populate_one_month_job')}")
+        return
     try:
         print("📅 POPULATING 1-MONTH FOLLOW-UP MESSAGES")
         print("=" * 80)
@@ -59,6 +66,9 @@ async def populate_one_month_job() -> None:
 # Job 0A4: Populate MISSED-MONTH messages (from this month's missed appointments)
 async def populate_missed_month_job() -> None:
     """Fetch this month's missed appointments and populate missed-month messages"""
+    if not boc_appointment_jobs_allowed():
+        print(f"BOC booking jobs skipped: {boc_job_skipped_response(operation='populate_missed_month_job')}")
+        return
     try:
         print("📅 POPULATING MISSED-MONTH MESSAGES")
         print("=" * 80)
@@ -81,6 +91,9 @@ async def populate_missed_month_job() -> None:
 # Job 0A5: Populate MISSED-YESTERDAY messages (from yesterday's paused appointments)
 async def populate_missed_yesterday_job() -> None:
     """Fetch yesterday's paused appointments and populate missed-yesterday messages"""
+    if not boc_appointment_jobs_allowed():
+        print(f"BOC booking jobs skipped: {boc_job_skipped_response(operation='populate_missed_yesterday_job')}")
+        return
     try:
         print("📅 POPULATING MISSED-YESTERDAY MESSAGES")
         print("=" * 80)

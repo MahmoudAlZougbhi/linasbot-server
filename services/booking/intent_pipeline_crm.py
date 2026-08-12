@@ -110,6 +110,11 @@ async def legacy_create_appointment_tool_output(
     Internal/legacy path: after chat_response_service preprocessing, run the same CRM create + response
     shape as submit_booking_intent (success + api_response wrapper, or validation_error on CRM reject).
     """
+    from services.product_features import boc_booking_enabled, boc_disabled_response
+
+    if not boc_booking_enabled():
+        return boc_disabled_response(operation="create_appointment")
+
     fa = dict(function_args or {})
     sid = _coerce_int_id(fa.get("service_id"))
     bid = _coerce_int_id(fa.get("branch_id"))

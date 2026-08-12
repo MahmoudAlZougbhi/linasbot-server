@@ -98,6 +98,28 @@ async def handle_retrieve_or_submit_tools(ns: Any) -> Any:
         )
         from services.booking.intent_pipeline import handle_submit_booking_intent
         from services.booking.schemas import validation_error_response
+        from services.product_features import boc_disabled_response, legacy_booking_tools_disabled
+
+        if legacy_booking_tools_disabled():
+            ns.tool_output = boc_disabled_response(operation="tool:submit_booking_intent")
+            ns.tool_content = json.dumps(ns.tool_output, default=str)
+            ns.tool_round_trips.append(
+                _record_tool_round_trip(
+                    ns.function_name,
+                    ns.function_args,
+                    ns.tool_content,
+                    ns.tool_output,
+                )
+            )
+            ns.messages.append(
+                {
+                    "tool_call_id": ns.tool_call.id,
+                    "role": "tool",
+                    "name": ns.function_name,
+                    "content": ns.tool_content,
+                }
+            )
+            return
 
         ns.explicit_submit_args = _extract_direct_submit_booking_args_from_user_message(
             ns.user_input,

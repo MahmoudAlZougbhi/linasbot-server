@@ -36,6 +36,11 @@ async def populate_scheduled_messages_from_appointments() -> Any:
     The backend's /agent/appointments/reminders endpoint returns appointments by date.
     We query today + next 7 days to get all upcoming appointments (reduced from 30 for performance).
     """
+    from services.product_features import boc_appointment_jobs_allowed, boc_job_skipped_response
+
+    if not boc_appointment_jobs_allowed():
+        return boc_job_skipped_response(operation="populate_scheduled_messages_from_appointments")
+
     try:
         import asyncio
 

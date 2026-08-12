@@ -14,17 +14,19 @@ from services.chat_response_runtime_common import (
     get_openai_tools_schema,
     json,
 )
+from services.product_features import legacy_booking_tools_disabled
 
 
 async def call_first_gpt(ns: Any) -> Any:
     ns.final_response_model_used = ns.selected_model
+    excluded = set(LEGACY_BOOKING_TOOL_NAMES) if legacy_booking_tools_disabled() else set()
     ns.response = await client.chat.completions.create(
         model=ns.selected_model,
         messages=cast(list[ChatCompletionMessageParam], ns.messages),
         temperature=0.7,
         tools=cast(
             list[ChatCompletionToolParam],
-            get_openai_tools_schema(excluded_tool_names=set(LEGACY_BOOKING_TOOL_NAMES)),
+            get_openai_tools_schema(excluded_tool_names=excluded),
         ),
         tool_choice="auto",
         response_format=cast(ResponseFormatJSONObject, {"type": "json_object"}),

@@ -21,6 +21,11 @@ async def populate_missed_yesterday_messages() -> Any:
 
     Uses /appointments/reminders?status=Available&date=yesterday
     """
+    from services.product_features import boc_appointment_jobs_allowed, boc_job_skipped_response
+
+    if not boc_appointment_jobs_allowed():
+        return boc_job_skipped_response(operation="populate_missed_yesterday_messages")
+
     try:
         today = datetime.now()
         yesterday = today - timedelta(days=1)
@@ -173,6 +178,11 @@ async def populate_one_month_followups() -> Any:
     Example: In January 2026, fetch all December 2025 appointments.
     Those appointments + 30 days = January 2026 follow-ups.
     """
+    from services.product_features import boc_appointment_jobs_allowed, boc_job_skipped_response
+
+    if not boc_appointment_jobs_allowed():
+        return boc_job_skipped_response(operation="populate_one_month_followups")
+
     try:
         import asyncio
 

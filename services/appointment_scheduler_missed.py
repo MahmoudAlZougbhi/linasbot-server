@@ -36,6 +36,11 @@ async def populate_missed_month_messages() -> Any:
     - start_date: First day of current month (e.g., 2026-01-01)
     - end_date: First day of next month (e.g., 2026-02-01)
     """
+    from services.product_features import boc_appointment_jobs_allowed, boc_job_skipped_response
+
+    if not boc_appointment_jobs_allowed():
+        return boc_job_skipped_response(operation="populate_missed_month_messages")
+
     try:
         import calendar
 

@@ -19,6 +19,33 @@ async def handle_execute_api_tool(ns: Any) -> Any:
     if ns.function_name in ("retrieve_relevant_knowledge", "submit_booking_intent"):
         return None
     if hasattr(api_integrations, ns.function_name) and callable(getattr(api_integrations, ns.function_name)):
+        from services.product_features import (
+            LEGACY_BOOKING_TOOL_NAMES,
+            boc_disabled_response,
+            legacy_booking_tools_disabled,
+        )
+
+        if legacy_booking_tools_disabled() and ns.function_name in LEGACY_BOOKING_TOOL_NAMES:
+            ns.tool_output = boc_disabled_response(operation=f"tool:{ns.function_name}")
+            ns.tool_content = json.dumps(ns.tool_output, default=str)
+            ns.tool_round_trips.append(
+                _record_tool_round_trip(
+                    ns.function_name,
+                    ns.function_args,
+                    ns.tool_content,
+                    ns.tool_output,
+                )
+            )
+            ns.messages.append(
+                {
+                    "tool_call_id": ns.tool_call.id,
+                    "role": "tool",
+                    "name": ns.function_name,
+                    "content": ns.tool_content,
+                }
+            )
+            return ns
+
         ns.function_to_call = getattr(api_integrations, ns.function_name)
         print(f"DEBUG: Executing tool: {ns.function_name} with args: {ns.function_args}")
 

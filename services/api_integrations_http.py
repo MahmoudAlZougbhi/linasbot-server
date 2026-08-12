@@ -82,6 +82,11 @@ async def _post_update_status_logged(resolved_url: str, json_data: dict) -> dict
     POST JSON to CRM update-status with full request/response logging (URL, method, payload, status, body).
     Normalizes CRM success when the body message is ``Status updated for X appointments``.
     """
+    from services.product_features import boc_booking_enabled, boc_disabled_response
+
+    if not boc_booking_enabled():
+        return boc_disabled_response(operation="update_appointments_status")
+
     headers = {
         "Authorization": f"Bearer {api_config.LINASLASER_API_TOKEN}",
         "Content-Type": "application/json",
@@ -196,7 +201,15 @@ async def _make_api_request(
 ) -> Any:
     """
     Helper function to make authenticated API requests to the LinasLaser Agent API.
+
+    When ``LINASLASER_BOC_BOOKING_ENABLED`` is off (default), returns an honest disabled
+    payload and performs zero HTTP — no silent fallback to another booking system.
     """
+    from services.product_features import boc_booking_enabled, boc_disabled_response
+
+    if not boc_booking_enabled():
+        return boc_disabled_response(operation=f"{method.upper()} {endpoint}")
+
     headers = {"Authorization": f"Bearer {api_config.LINASLASER_API_TOKEN}", "Content-Type": "application/json"}
 
     try:
