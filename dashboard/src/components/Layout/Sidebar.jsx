@@ -15,7 +15,6 @@ import {
   CurrencyDollarIcon,
 } from "@heroicons/react/24/outline";
 import { useAuth } from "../../contexts/AuthContext";
-import { hasPermission } from "../../utils/permissions";
 import { buildDisplayLabel } from "../../utils/buildInfo";
 import { authFetch } from "../../utils/authFetch";
 
@@ -122,8 +121,8 @@ const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
         return false;
       }
       if (!item.permissionKey) return true;
-      if (user.role === "admin") return true;
-      return hasPermission(user, item.permissionKey);
+      // Fail-closed: role alone (including admin) never bypasses resolvedPermissions.
+      return user.resolvedPermissions?.[item.permissionKey] === true;
     };
 
     return navigationItems.filter(keepItem);
@@ -137,13 +136,9 @@ const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
       return [];
     }
 
-    if (user.role === "admin") {
-      return downloadItems;
-    }
-
     return downloadItems.filter((item) => {
       if (!item.permissionKey) return true;
-      return hasPermission(user, item.permissionKey);
+      return user.resolvedPermissions?.[item.permissionKey] === true;
     });
   }, [user]);
 

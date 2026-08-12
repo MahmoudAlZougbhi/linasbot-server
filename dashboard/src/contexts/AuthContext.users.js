@@ -31,8 +31,11 @@ export const createAuthUserManagement = ({ user, setUser }) => {
   const createUser = async (/** @type {Record<string, unknown>} */ userData) => {
     if (!user) throw new Error('Not authenticated');
   
-    // Check if current user can manage users
-    if (user.resolvedPermissions?.userManagement !== true && user.role !== 'admin') {
+    // Check if current user can manage users (fail-closed; no role===admin bypass)
+    if (
+      user.resolvedPermissions?.userManagement !== true &&
+      user.role !== 'platform_owner'
+    ) {
       throw new Error('Permission denied');
     }
   
@@ -71,8 +74,11 @@ export const createAuthUserManagement = ({ user, setUser }) => {
   ) => {
     if (!user) throw new Error('Not authenticated');
   
-    // Check if current user can manage users
-    if (user.resolvedPermissions?.userManagement !== true && user.role !== 'admin') {
+    // Check if current user can manage users (fail-closed; no role===admin bypass)
+    if (
+      user.resolvedPermissions?.userManagement !== true &&
+      user.role !== 'platform_owner'
+    ) {
       throw new Error('Permission denied');
     }
   
@@ -113,8 +119,11 @@ export const createAuthUserManagement = ({ user, setUser }) => {
   const deleteUser = async (/** @type {string} */ userId) => {
     if (!user) throw new Error('Not authenticated');
   
-    // Check if current user can manage users
-    if (user.resolvedPermissions?.userManagement !== true && user.role !== 'admin') {
+    // Check if current user can manage users (fail-closed; no role===admin bypass)
+    if (
+      user.resolvedPermissions?.userManagement !== true &&
+      user.role !== 'platform_owner'
+    ) {
       throw new Error('Permission denied');
     }
   

@@ -18,7 +18,8 @@ const Dashboard = () => {
     }
     const key = item.permissionKey;
     if (!key) return true;
-    return user?.resolvedPermissions?.[key] === true || user?.role === 'admin';
+    // Fail-closed: admin must have the permission resolved server-side.
+    return user?.resolvedPermissions?.[key] === true;
   });
 
   return (

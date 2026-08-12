@@ -2,8 +2,6 @@ import { createContext, useContext, useMemo, useEffect } from "react";
 import { useAuth } from './AuthContext';
 import {
   resolveUserPermissions,
-  hasPermission as checkPermission,
-  canManageUsers as checkCanManageUsers,
   canAccessPath,
   getDefaultPath,
   getRoles,
@@ -41,18 +39,21 @@ export const PermissionsProvider = ({ children }) => {
   }, []);
 
   /**
-   * Check if current user has a specific permission
+   * Check if current user has a specific permission (server resolvedPermissions only).
    * @param {string} feature
    */
   const hasPermission = (feature) => {
-    return checkPermission(user, feature);
+    return user?.resolvedPermissions?.[feature] === true;
   };
 
   /**
    * Check if current user can manage users
    */
   const canManageUsers = () => {
-    return checkCanManageUsers(user);
+    return (
+      user?.resolvedPermissions?.userManagement === true ||
+      user?.role === 'platform_owner'
+    );
   };
 
   /**

@@ -84,4 +84,35 @@ describe("Settings product surface cleanup", () => {
     expect(screen.queryByRole("button", { name: /General/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Notifications/i })).not.toBeInTheDocument();
   });
+
+  it("hides Users tab for admin without userManagement (no role bypass)", async () => {
+    mockUseAuth.mockReturnValue({
+      user: {
+        role: "admin",
+        tenantId: "linas",
+        resolvedPermissions: { userManagement: false },
+      },
+      changePassword: vi.fn(),
+    });
+
+    render(<Settings />);
+
+    expect(await screen.findByRole("button", { name: /Security/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Users$/i })).not.toBeInTheDocument();
+  });
+
+  it("shows Users tab for platform_owner without admin role bypass", async () => {
+    mockUseAuth.mockReturnValue({
+      user: {
+        role: "platform_owner",
+        tenantId: "linas",
+        resolvedPermissions: { userManagement: false },
+      },
+      changePassword: vi.fn(),
+    });
+
+    render(<Settings />);
+
+    expect(await screen.findByRole("button", { name: /^Users$/i })).toBeInTheDocument();
+  });
 });

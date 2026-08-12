@@ -17,8 +17,25 @@ vi.mock("../../utils/authFetch", () => ({
 }));
 
 describe("Sidebar APK download gating", () => {
-  it("shows Live Chat APK for admin", async () => {
-    mockUseAuth.mockReturnValue({ user: makeAuthUser({ role: "admin" }) });
+  it("shows Live Chat APK when liveChat is resolved (including admin)", async () => {
+    mockUseAuth.mockReturnValue({
+      user: makeAuthUser({
+        role: "admin",
+        tenantId: "linas",
+        resolvedPermissions: {
+          dashboard: true,
+          liveChat: true,
+          training: false,
+          testing: false,
+          analytics: true,
+          smartMessaging: false,
+          settings: false,
+          userManagement: false,
+          contentManagers: false,
+          activityFlow: true,
+        },
+      }),
+    });
 
     render(
       <MemoryRouter>
@@ -27,6 +44,35 @@ describe("Sidebar APK download gating", () => {
     );
 
     expect(screen.getByRole("link", { name: /Download Live Chat APK/i })).toBeInTheDocument();
+  });
+
+  it("hides APK for admin without liveChat in resolvedPermissions", async () => {
+    mockUseAuth.mockReturnValue({
+      user: makeAuthUser({
+        role: "admin",
+        tenantId: "linas",
+        resolvedPermissions: {
+          dashboard: true,
+          liveChat: false,
+          training: false,
+          testing: false,
+          analytics: true,
+          smartMessaging: false,
+          settings: true,
+          userManagement: true,
+          contentManagers: true,
+          activityFlow: true,
+        },
+      }),
+    });
+
+    render(
+      <MemoryRouter>
+        <Sidebar collapsed={false} onToggleCollapse={() => {}} />
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByRole("link", { name: /Download Live Chat APK/i })).not.toBeInTheDocument();
   });
 
   it("hides APK download for viewers without liveChat permission", async () => {
