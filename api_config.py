@@ -1,4 +1,5 @@
-# data/api_config.py
+# api_config.py (repo root) — companion to config.py for LinasLaser Agent API URLs/tokens.
+# Prefer .env keys documented in .env.example (no .env.local). Do not merge into config.py.
 import os
 
 # Base URL for the LinasLaser Agent API (calendar/CRM/customer APIs)

@@ -1,6 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 
-import type { PublicUser } from '../api/types';
+import { PublicUserSchema, type PublicUser } from '../api/types';
 
 const ACCESS_KEY = 'linas_access_token';
 const REFRESH_KEY = 'linas_refresh_token';
@@ -25,7 +25,18 @@ export const tokenStore = {
     if (!raw) {
       return null;
     }
-    return JSON.parse(raw) as PublicUser;
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      const result = PublicUserSchema.safeParse(parsed);
+      if (!result.success) {
+        await SecureStore.deleteItemAsync(USER_KEY);
+        return null;
+      }
+      return result.data;
+    } catch {
+      await SecureStore.deleteItemAsync(USER_KEY);
+      return null;
+    }
   },
   async clear(): Promise<void> {
     await SecureStore.deleteItemAsync(ACCESS_KEY);
