@@ -16,7 +16,7 @@
 | 0 | Finish PR #240 CI | **DONE** |
 | 1 | Requests architecture + data model | **DONE** (prod migration not applied) |
 | 2 | Backend domain + APIs | **IN_PROGRESS** (core APIs + tests landed) |
-| 3 | AI Setup Requests & Appointments | PENDING |
+| 3 | AI Setup Requests & Appointments | **DONE** |
 | 4 | Customer AI request flow | PENDING |
 | 5 | Mobile Requests module | PENDING |
 | 6 | Chat with customer / manual mode | PENDING |

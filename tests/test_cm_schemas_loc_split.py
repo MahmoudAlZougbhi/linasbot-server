@@ -22,9 +22,12 @@ def _line_count(rel: str) -> int:
 def test_cm_schema_modules_under_500_lines() -> None:
     assert _line_count("services/cm/schemas.py") < 500
     assert _line_count("services/cm/schemas_content.py") < 500
+    assert _line_count("services/cm/schemas_requests.py") < 500
 
 
 def test_public_schemas_import_still_exposes_content_and_runtime() -> None:
+    from services.cm.schemas import RequestsAppointmentsSection
+
     assert LocalizedLabels(en="Hello").en == "Hello"
     assert AiBasics().assistant_name == ""
     assert CommentsSection().default_action == "reply_comment"
@@ -36,3 +39,6 @@ def test_public_schemas_import_still_exposes_content_and_runtime() -> None:
     policy = initial_restricted_policy()
     assert policy.topics
     assert all(t.active is False for t in policy.topics)
+    ra = RequestsAppointmentsSection.model_validate(default_section_payload("requests_appointments"))
+    assert ra.module_enabled is False
+    assert ra.enabled_types == []

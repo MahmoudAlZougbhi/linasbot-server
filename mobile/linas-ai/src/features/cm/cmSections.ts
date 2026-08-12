@@ -15,6 +15,7 @@ export type CmSectionId =
   | 'restricted'
   | 'comments'
   | 'off_days'
+  | 'requests_appointments'
   /** Settings-hosted (not listed in CM hub). */
   | 'actions'
   | 'ai_limits';
@@ -113,6 +114,12 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
     id: 'off_days',
     title: 'Off Days',
     description: 'Tap calendar days the business is closed.',
+    mobileSupported: true,
+  },
+  {
+    id: 'requests_appointments',
+    title: 'Requests & Appointments',
+    description: 'الطلبات والمواعيد — orders, appointments, and other customer requests.',
     mobileSupported: true,
   },
   {

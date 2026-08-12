@@ -118,6 +118,34 @@ def assess_section_fill(section: str, payload: dict[str, Any] | None, *, is_defa
             "summary": "Filled enough to use — do not re-ask unless the owner explicitly wants changes.",
         }
 
+    # Requests & Appointments is optional — disabled defaults keep capture inactive.
+    if name == "requests_appointments":
+        if is_default or not isinstance(payload, dict):
+            return {
+                "fill": "filled",
+                "is_done": True,
+                "gaps": [],
+                "summary": "Optional — module stays off until you enable types and publish.",
+            }
+        gaps_ra: list[str] = []
+        enabled = bool(payload.get("module_enabled"))
+        types = payload.get("enabled_types") or []
+        if enabled and (not isinstance(types, list) or not types):
+            gaps_ra.append("enabled_types_when_module_on")
+        if gaps_ra:
+            return {
+                "fill": "weak",
+                "is_done": False,
+                "gaps": gaps_ra,
+                "summary": "Module is on but no request types are enabled — pick ORDER/APPOINTMENT/OTHER or disable.",
+            }
+        return {
+            "fill": "filled",
+            "is_done": True,
+            "gaps": [],
+            "summary": "Filled enough to use — do not re-ask unless the owner explicitly wants changes.",
+        }
+
     if is_default or not isinstance(payload, dict):
         return {
             "fill": "missing",

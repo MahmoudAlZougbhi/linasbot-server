@@ -41,6 +41,13 @@ from services.cm.schemas_content import (  # noqa: F401
     StylePolicy,
     ValidationSeverity,
 )
+from services.cm.schemas_requests import (  # noqa: F401
+    RequestAssignmentDefaults,
+    RequestCatalogItem,
+    RequestFieldDef,
+    RequestMessages,
+    RequestsAppointmentsSection,
+)
 
 
 class AiLimitsSection(CmBaseModel):
@@ -347,6 +354,7 @@ def default_section_payload(section: str) -> dict[str, object]:
         "ai_limits": AiLimitsSection(),
         "off_days": OffDaysSection(),
         "opening_hours": OpeningHoursSection(),
+        "requests_appointments": RequestsAppointmentsSection(),
     }
     model = builders.get(section)
     if model is None:

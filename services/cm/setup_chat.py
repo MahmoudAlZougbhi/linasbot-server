@@ -31,6 +31,7 @@ from services.cm.schemas import (
     OffDaysSection,
     OpeningHoursSection,
     PricesSection,
+    RequestsAppointmentsSection,
     RestrictedPolicy,
     ServicesSection,
     StylePolicy,
@@ -56,6 +57,7 @@ SECTION_MODELS: dict[str, type[CmBaseModel]] = {
     "comments": CommentsSection,
     "ai_limits": AiLimitsSection,
     "off_days": OffDaysSection,
+    "requests_appointments": RequestsAppointmentsSection,
 }
 
 # Interview order for guided setup (Sources/Publish are UI hubs, not draft sections).
@@ -96,6 +98,11 @@ SECTION_PROMPTS: dict[str, str] = {
     ),
     "ai_limits": "ما حد الصور يومياً/أسبوعياً لكل عميل؟ وما حد أسطر السياق تقريباً؟",
     "off_days": "هل عندكم يوم عطلة أسبوعي؟ وهل هناك تواريخ محددة يكون العمل فيها مغلقاً؟",
+    "requests_appointments": (
+        "هل تريد تفعيل طلبات العملاء والمواعيد؟ إن نعم: أي أنواع (طلب/موعد/أخرى)؟ "
+        "ما الحقول المطلوبة؟ وما رسائل التأكيد/الجاهزية/الإلغاء؟ "
+        "أو قل تخطي — يبقى المعطّل حتى تنشر إعداداً مفعّلاً."
+    ),
 }
 
 

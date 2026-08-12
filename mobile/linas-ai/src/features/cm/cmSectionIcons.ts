@@ -17,6 +17,7 @@ export const CM_SECTION_ICONS: Record<CmSectionId, AppIconName> = {
   restricted: feather('slash'),
   comments: feather('message-circle'),
   off_days: feather('calendar'),
+  requests_appointments: feather('clipboard'),
   actions: feather('zap'),
   ai_limits: feather('sliders'),
 };

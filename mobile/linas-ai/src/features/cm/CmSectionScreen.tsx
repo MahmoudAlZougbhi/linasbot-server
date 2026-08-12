@@ -18,6 +18,7 @@ import { OpeningHoursEditor } from './editors/OpeningHoursEditor';
 import { ActionsEditor, AiLimitsEditor, RestrictedEditor } from './editors/PolicyEditors';
 import { CommentsEditor } from './editors/CommentsEditor';
 import { PricesEditor } from './editors/PricesEditor';
+import { RequestsAppointmentsEditor } from './editors/RequestsAppointmentsEditor';
 import { ServicesEditor } from './editors/ServicesEditor';
 import { StyleEditor } from './editors/StyleEditor';
 import { useCmDraft } from './useCmDraft';
@@ -70,6 +71,8 @@ function SectionBody({
       return <AiLimitsEditor payload={payload} onChange={onChange} />;
     case 'off_days':
       return <OffDaysEditor payload={payload} onChange={onChange} />;
+    case 'requests_appointments':
+      return <RequestsAppointmentsEditor payload={payload} onChange={onChange} />;
     default:
       return <Text style={cmFormStyles.error}>Unknown section.</Text>;
   }
