@@ -244,3 +244,15 @@ Merged sharper notes from completed agent (seq 146–175) without changing COMPL
 - Kept stronger **KEEP_SECURITY_FIX** on Auth helpers defaults + `operator_001` media composer
 
 Source: agent audit for seq 146–175.
+
+---
+
+## Follow-up — reconcile agent forensics (batch 6, second agent)
+
+Additional sharpen from duplicate agent run (seq 146–175):
+
+- Seq 147 permissions.jsx → **KEEP_FIX** (unused `FEATURE_METADATA`)
+- Seq 174 index.jsx → **KEEP_FIX** (dev network-error console suppression)
+- Confirmed stronger dispositions already set (152/160/165/168)
+
+Source: second agent audit for seq 146–175.
