@@ -1,0 +1,53 @@
+web_route,web_feature,mobile_path,parity_status,notes
+/,Public landing + get-app + guest chat panel,mobile/linas-ai/src/features/chat/ChatScreen.tsx (guest) + store listings,PARITY,Marketing web kept. Guest chat uses /api/guest-ai/*; mobile ChatScreen is primary in-app guest/owner chat.
+/about,About page,n/a (marketing),WEB_ONLY,Landing/legal marketing surface — keep on web; not an operator feature.
+/contact,Contact page,LEGAL_URLS.contact → /contact,PARITY,Mobile Settings/legal links open public contact URL; keep web Contact page.
+/pricing,Pricing page,mobile/linas-ai/src/features/billing/BillingScreen.tsx + planCatalog,PARTIAL,Web Pricing is marketing copy; mobile BillingScreen is live plan/entitlement UX (StoreKit/Play not bound yet per storePricing.ts).
+/features,Features page,n/a (marketing),WEB_ONLY,Marketing-only; keep on web.
+/register,Create-account redirect to /#get-app,mobile/linas-ai/src/features/auth/RegisterScreen.tsx,PARITY,Web already redirects to get-app; registration is mobile-primary.
+/login,Operator/thin auth login,mobile/linas-ai/src/features/auth/LoginScreen.tsx,PARITY,Keep thin web login for ops/APK/email flows; mobile LoginScreen is day-to-day auth.
+/forgot-password,Forgot password,LEGAL_URLS.forgotPassword → /forgot-password,PARITY,Mobile opens web forgot-password URL; keep thin auth on web.
+/reset-password,Reset password,web thin auth (linked from email),PARITY,Email deep-link lands on web; keep.
+/verify-email,Verify email,RegisterScreen verify messaging + email link to web,PARITY,Keep thin auth on web.
+/privacy-policy,Privacy Policy (public legal),mobile LEGAL_URLS.privacy + Settings legal rows,PARITY,Public compliance URL; keep. Not part of operator shell trim.
+/terms,Terms of Service (public legal),mobile LEGAL_URLS.terms + Settings legal rows,PARITY,Public compliance URL; keep.
+/data-deletion,Data deletion instructions (public legal),mobile LEGAL_URLS.dataDeletion + Settings legal rows,PARITY,Public compliance URL; keep.
+/app,Operator dashboard home (link hub),mobile/linas-ai/src/features/dashboard/DashboardScreen.tsx,PARTIAL,Mobile tenant dashboard (usage/credits/channels/readiness) is primary and richer; web /app is a thin link hub only → safe to defer web shell to get-app.
+/training,Legacy FAQ/training redirect → CM FAQ,mobile/linas-ai/src/features/faq/FaqRoute.tsx,PARITY,Web Training.jsx already Navigate→/content-managers/faq; mobile has dedicated FAQ module.
+/content-managers,AI Setup hub + setup chat panel,mobile/linas-ai/src/features/cm/CmScreen.tsx + ChatScreen setup handoff,PARITY,Mobile CM hub + continue-setup→chat is primary operator path.
+/content-managers/ai-basics,CM AI Basics editor,mobile/.../cm/editors/AiBasicsEditor.tsx via CmSectionScreen,PARITY,Evidence: cmSections.ts mobileSupported + CmSectionScreen switch case.
+/content-managers/languages,CM Languages editor,mobile/.../cm/editors/LanguagesEditor.tsx,PARITY,Same CM draft API path on mobile.
+/content-managers/style,CM Style & Tone editor,mobile/.../cm/editors/StyleEditor.tsx,PARITY,Same CM draft API path on mobile.
+/content-managers/dynamic-messages,CM Dynamic Messages editor,mobile/.../cm/editors/DynamicMessagesEditor.tsx,PARITY,Same CM draft API path on mobile.
+/content-managers/services,CM Services editor,mobile/.../cm/editors/ServicesEditor.tsx,PARITY,Same CM draft API path on mobile.
+/content-managers/branches,CM Locations/Branches editor,mobile/.../cm/editors/BranchesEditor.tsx,PARITY,Same CM draft API path on mobile.
+/content-managers/opening-hours,CM Opening Hours editor,mobile/.../cm/editors/OpeningHoursEditor.tsx,PARITY,Same CM draft API path on mobile.
+/content-managers/prices,CM Prices editor,mobile/.../cm/editors/PricesEditor.tsx,PARITY,Same CM draft API path on mobile.
+/content-managers/care,CM Care articles editor,mobile/.../cm/editors/ArticlesEditor.tsx (care),PARITY,Same CM draft API path on mobile.
+/content-managers/knowledge,CM Knowledge articles editor,mobile/.../cm/editors/ArticlesEditor.tsx (knowledge),PARITY,Same CM draft API path on mobile.
+/content-managers/faq,CM FAQ visual editor,mobile/linas-ai/src/features/faq/FaqScreen.tsx (FaqRoute),PARITY,Mobile FAQ is a first-class drawer module (not only CM section).
+/content-managers/learning-inbox,Learning Inbox (unclear→FAQ pipeline),LiveChat LikeFeedbackModal (partial substitute only),DEFERRED_OWNER,No dedicated Learning Inbox screen under mobile/. Like-to-FAQ in LiveChat is partial. Owner accepts gap for SPA trim; do not claim full parity.
+/content-managers/handoff,CM Human Handoff editor,mobile/.../cm/editors/HandoffEditor.tsx,PARITY,Same CM draft API path on mobile.
+/content-managers/restricted,CM Restricted topics editor,mobile/.../cm/editors/PolicyEditors.tsx RestrictedEditor,PARITY,Same CM draft API path on mobile.
+/content-managers/actions,CM Actions/Capabilities editor,mobile/.../cm/editors/PolicyEditors.tsx ActionsEditor (Settings-hosted),PARITY,Mobile hosts actions under SettingsScreen→cm_section actions (showInCmHub:false).
+/content-managers/comments,CM Comments policy editor,mobile/.../cm/editors/CommentsEditor.tsx,PARITY,Same CM draft API path on mobile.
+/content-managers/ai-limits,CM AI Limits editor,mobile/.../cm/editors/PolicyEditors.tsx AiLimitsEditor (Settings-hosted),PARITY,Mobile hosts ai_limits under SettingsScreen→cm_section.
+/content-managers/off-days,CM Off Days editor,mobile/.../cm/editors/OffDaysEditor.tsx,PARITY,Same CM draft API path on mobile.
+/content-managers/sources,Sources & Archive inventory,n/a,DEFERRED_OWNER,Web-only ops/archive inventory (checksums/migrated files). Not ported to mobile; owner defers — not required for day-to-day mobile ops.
+/content-managers/publish,Preview / Validate / Publish hub,CmScreen publish CTA + chat publish_cm/validate_cm tools,PARTIAL,No dedicated Publish screen on mobile; publish/validate via CM readiness + owner chat tools. Mobile is primary path; web publish page may be removed from SPA.
+/content-managers/:sectionSlug,Generic CM section fallback page,CmSectionScreen for known CmSectionId,PARTIAL,Web catch-all for unknown slugs; mobile only opens known section ids from cmSections.ts.
+/activity-flow,Interaction Logs (flow logs UI),n/a (permission key activityFlow exists on users only),DEFERRED_OWNER,No ActivityFlow/Interaction Logs screen in mobile AppScreenTree/drawerModules. Permission bit exists for future. Owner explicitly defers web-only logs UI for SPA trim.
+/live-chat,Operator Live Chat (desktop web),mobile/linas-ai/src/features/livechat/LiveChatScreen.tsx,PARITY,Expo LiveChatScreen is primary (inbox+thread+like-FAQ). Web /live-chat SPA may redirect to get-app.
+/mobile/live-chat,APK/WebView Live Chat bridge (LiveChat mobile=true),LiveChatScreen (Expo) supersedes for new clients; bridge kept for APK,PARTIAL,Sidebar still offers live-chat-android.apk download. KEEP /mobile/live-chat protected route until APK retired; Expo is preferred.
+/wallet,Token Wallet (Stripe packs + spend analytics),mobile/.../billing/BillingScreen.tsx (subscription/plans/credits),PARTIAL,Related but not equal: web Wallet = /api/billing/wallet packs; mobile Billing = plans/entitlements/usage (no wallet pack checkout found). Mobile billing primary; token-pack Stripe UX DEFERRED_OWNER gap accepted for SPA trim.
+/settings,Web Settings (general/security/notifications/users tabs),mobile/.../settings/SettingsScreen.tsx + UsersScreen + NotificationsScreen,PARTIAL,Mobile splits settings/users/notifications/integrations. Web Settings users tab ≈ UsersScreen. Security password flows lean on thin web auth. Safe to drop operator Settings SPA in favor of mobile.
+/analytics,Legacy redirect → /app,DashboardScreen,PARITY,Already Navigate→/app; after trim both go to get-app.
+/smart-messaging,Legacy redirect → /content-managers,mobile/.../smartFollowUp/SmartFollowUpScreen.tsx,MOBILE_ONLY,Web route is redirect-only; Smart Follow-Up is mobile drawer module (no dedicated web operator page).
+/social-posts,Legacy redirect → /content-managers,n/a,DEFERRED_OWNER,Web redirect stub only; no dedicated social-posts module in mobile AppScreenTree/drawerModules.
+/testing,Legacy redirect → /content-managers,n/a,DEFERRED_OWNER,Debug/lab redirect only; not a product surface for mobile parity.
+/api-debug,Legacy redirect → /content-managers,n/a,DEFERRED_OWNER,Debug/lab redirect only; not a product surface for mobile parity.
+(none),Integrations (IG/FB/WA connect),mobile/linas-ai/src/features/integrations/IntegrationsScreen.tsx,MOBILE_ONLY,Removed from web Settings tabs (Settings.integrations.test asserts Integrations hidden). Mobile-only operator surface.
+(none),Users / team permissions,mobile/linas-ai/src/features/users/UsersScreen.tsx,MOBILE_ONLY,Also mirrored historically under web Settings users tab; mobile UsersScreen is primary.
+(none),Notifications center,mobile/linas-ai/src/features/notifications/NotificationsScreen.tsx,MOBILE_ONLY,Web Settings notifications tab is linas-tenant prefs only; mobile has full notifications→livechat open.
+(none),Owner Control Center,mobile/linas-ai/src/features/control/OwnerPortalScreen.tsx,MOBILE_ONLY,Platform-owner mobile surface; no web route in App.jsx.
+(none),Smart Follow-Up (also covered by /smart-messaging redirect row),mobile/linas-ai/src/features/smartFollowUp/SmartFollowUpScreen.tsx,MOBILE_ONLY,First-class mobile drawer module; web has no dedicated operator page.
