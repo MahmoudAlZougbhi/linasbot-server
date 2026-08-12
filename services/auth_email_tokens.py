@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from services.billing_backend import auth_tokens_use_postgres
+from services.billing_backend import auth_tokens_use_postgres, require_auth_token_pg_session
 from storage.persistent_storage import _DATA_ROOT
 
 TokenPurpose = Literal["password_reset", "email_verify", "email_change"]
@@ -129,10 +129,9 @@ class AuthEmailTokenService:
             meta=dict(meta) if isinstance(meta, dict) else None,
         )
         if auth_tokens_use_postgres():
-            from db.session import whatsapp_session
             from services.auth_token_pg_store import email_issue
 
-            with whatsapp_session() as session:
+            with require_auth_token_pg_session() as session:
                 email_issue(
                     session,
                     token_hash=token_hash,
@@ -152,10 +151,9 @@ class AuthEmailTokenService:
     def peek(self, raw_token: str, purpose: TokenPurpose) -> AuthEmailTokenRecord | None:
         token_hash = _hash_token((raw_token or "").strip())
         if auth_tokens_use_postgres():
-            from db.session import whatsapp_session
             from services.auth_token_pg_store import email_get
 
-            with whatsapp_session() as session:
+            with require_auth_token_pg_session() as session:
                 row = email_get(session, token_hash)
                 if row is None:
                     return None
@@ -184,10 +182,9 @@ class AuthEmailTokenService:
     def consume(self, raw_token: str, purpose: TokenPurpose) -> AuthEmailTokenRecord | None:
         token_hash = _hash_token((raw_token or "").strip())
         if auth_tokens_use_postgres():
-            from db.session import whatsapp_session
             from services.auth_token_pg_store import email_get, email_mark_used
 
-            with whatsapp_session() as session:
+            with require_auth_token_pg_session() as session:
                 row = email_get(session, token_hash)
                 if row is None:
                     return None
@@ -236,10 +233,9 @@ class AuthEmailTokenService:
 
     def revoke_unused_for_user(self, user_id: str, purpose: TokenPurpose | None = None) -> int:
         if auth_tokens_use_postgres():
-            from db.session import whatsapp_session
             from services.auth_token_pg_store import email_delete_unused_for_user
 
-            with whatsapp_session() as session:
+            with require_auth_token_pg_session() as session:
                 return email_delete_unused_for_user(session, user_id, purpose)
 
         removed = 0

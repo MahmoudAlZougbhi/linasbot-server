@@ -1,7 +1,8 @@
 """Internal Linas credit ledger with reserve / capture / release for expensive jobs.
 
-File SoT by default; Postgres when LINAS_BILLING_BACKEND=postgres.
+Postgres SoT when LINAS_BILLING_BACKEND=postgres (default); file when explicitly set.
 """
+
 
 from __future__ import annotations
 

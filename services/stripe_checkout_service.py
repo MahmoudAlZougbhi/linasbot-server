@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from services.billing_backend import billing_uses_postgres
+from services.billing_backend import billing_uses_postgres, require_billing_pg_session
 from storage.persistent_storage import _DATA_ROOT
 
 logger = logging.getLogger(__name__)
@@ -41,19 +41,17 @@ class StripeCheckoutService:
 
     def already_processed(self, event_id: str) -> bool:
         if billing_uses_postgres():
-            from db.session import whatsapp_session
             from services.billing_pg_store import stripe_already_processed
 
-            with whatsapp_session() as session:
+            with require_billing_pg_session() as session:
                 return stripe_already_processed(session, event_id)
         return self._event_path(event_id).exists()
 
     def mark_processed(self, event_id: str, payload: dict[str, Any]) -> None:
         if billing_uses_postgres():
-            from db.session import whatsapp_session
             from services.billing_pg_store import stripe_mark_processed
 
-            with whatsapp_session() as session:
+            with require_billing_pg_session() as session:
                 stripe_mark_processed(session, event_id, payload)
             return
         path = self._event_path(event_id)

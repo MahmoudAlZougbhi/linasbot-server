@@ -5,14 +5,16 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from db.models.apple_billing import AppleAppAccountTokenRow, AppleCreditGrantRow
+from db.models.apple_billing import AppleAppAccountTokenRow
 from db.session import whatsapp_session
-from services.credit_ledger_service import credit_ledger_service
+from services.apple_credit_grant_ops import (  # noqa: F401 — re-export for callers
+    grant_consumable_credits,
+    reverse_consumable_credits,
+)
 from services.entitlements_service import EntitlementStatus, apply_store_notification, entitlements_store
 from services.iap_product_catalog import (
     is_credit_product,
     is_subscription_product,
-    map_credit_product,
     map_subscription_product,
 )
 from services.store_iap_service import normalize_apple_status
@@ -99,141 +101,7 @@ def apply_subscription_effect(
         original_transaction_id=original_transaction_id,
         idempotency_key=idempotency_key,
     )
-    # Also stamp store_original_transaction_id via set_plan path already done.
     return {"kind": "subscription", "plan_id": plan_id, "status": status, **result}
-
-
-def grant_consumable_credits(
-    *,
-    tenant_id: str,
-    product_id: str,
-    transaction_id: str,
-    allow_regrant_after_reverse: bool = False,
-) -> dict[str, Any]:
-    credits = map_credit_product(product_id)
-    with whatsapp_session() as session:
-        existing = session.get(AppleCreditGrantRow, transaction_id)
-        if existing is not None and existing.status == "granted":
-            return {
-                "kind": "credits",
-                "duplicate": True,
-                "credits": existing.credits,
-                "transaction_id": transaction_id,
-            }
-        if existing is not None and existing.status == "reversed" and not allow_regrant_after_reverse:
-            return {
-                "kind": "credits",
-                "duplicate": True,
-                "reversed": True,
-                "credits": existing.credits,
-                "transaction_id": transaction_id,
-            }
-        prior_credits = int(existing.credits) if existing is not None else credits
-
-    # After REFUND_REVERSED, use a distinct ledger request_id so N→1 idempotency
-    # does not collide with the original grant_pack / reverse_pack pair.
-    ledger_request_id = f"{transaction_id}:refund_reversed_restore" if allow_regrant_after_reverse else transaction_id
-    grant_credits = prior_credits if allow_regrant_after_reverse else credits
-    ledger = credit_ledger_service.grant_pack(
-        tenant_id=tenant_id,
-        credits=grant_credits,
-        request_id=ledger_request_id,
-        source="apple",
-        meta={"product_id": product_id, "transaction_id": transaction_id},
-    )
-    now = time.time()
-    with whatsapp_session() as session:
-        row = session.get(AppleCreditGrantRow, transaction_id)
-        if row is None:
-            session.add(
-                AppleCreditGrantRow(
-                    transaction_id=transaction_id,
-                    tenant_id=tenant_id,
-                    product_id=product_id,
-                    credits=grant_credits,
-                    status="granted",
-                    granted_at=now,
-                    reversed_at=None,
-                    ledger_entry_id=str(ledger.get("ledger_entry_id") or "") or None,
-                    meta={"source": "apple"},
-                )
-            )
-        else:
-            row.status = "granted"
-            row.granted_at = now
-            row.reversed_at = None
-            row.credits = grant_credits
-            row.ledger_entry_id = str(ledger.get("ledger_entry_id") or row.ledger_entry_id)
-            meta = dict(row.meta or {})
-            if allow_regrant_after_reverse:
-                meta["refund_reversed_restore"] = True
-                meta["restore_ledger_request_id"] = ledger_request_id
-            row.meta = meta
-    return {
-        "kind": "credits",
-        "duplicate": bool(ledger.get("duplicate")),
-        "credits": grant_credits,
-        "transaction_id": transaction_id,
-        "ledger": ledger,
-        "restored_after_refund_reversed": bool(allow_regrant_after_reverse),
-    }
-
-
-def reverse_consumable_credits(
-    *,
-    tenant_id: str,
-    transaction_id: str,
-    product_id: str | None = None,
-) -> dict[str, Any]:
-    with whatsapp_session() as session:
-        row = session.get(AppleCreditGrantRow, transaction_id)
-        if row is None:
-            # No prior grant recorded — nothing to reverse (do not invent free credits).
-            return {
-                "kind": "credits_reverse",
-                "skipped": True,
-                "reason": "no_grant",
-                "transaction_id": transaction_id,
-            }
-        if row.status == "reversed":
-            return {
-                "kind": "credits_reverse",
-                "duplicate": True,
-                "credits": row.credits,
-                "transaction_id": transaction_id,
-            }
-        credits = int(row.credits)
-        grant_tenant = row.tenant_id
-        pid = product_id or row.product_id
-
-    if grant_tenant != tenant_id:
-        raise PermissionError("cross-tenant credit reverse denied")
-
-    ledger = credit_ledger_service.reverse_pack(
-        tenant_id=tenant_id,
-        request_id=transaction_id,
-        credits=credits,
-        meta={"product_id": pid, "source": "apple_refund"},
-    )
-    now = time.time()
-    with whatsapp_session() as session:
-        row = session.get(AppleCreditGrantRow, transaction_id)
-        if row is not None:
-            row.status = "reversed"
-            row.reversed_at = now
-            meta = dict(row.meta or {})
-            if int(ledger.get("debt") or 0) > 0:
-                meta["debt"] = int(ledger["debt"])
-            meta["reverse_ledger_entry_id"] = ledger.get("ledger_entry_id")
-            row.meta = meta
-    return {
-        "kind": "credits_reverse",
-        "duplicate": bool(ledger.get("duplicate")),
-        "credits": credits,
-        "transaction_id": transaction_id,
-        "debt": int(ledger.get("debt") or 0),
-        "ledger": ledger,
-    }
 
 
 def classify_product(product_id: str) -> str:

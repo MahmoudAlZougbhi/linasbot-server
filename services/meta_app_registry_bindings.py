@@ -38,7 +38,14 @@ MetaRegistryBackend = Literal["file", "postgres", "dual"]
 
 
 def resolve_meta_registry_backend() -> MetaRegistryBackend:
-    raw = (os.getenv("META_REGISTRY_BACKEND") or "file").strip().lower()
+    """Resolve meta registry backend.
+
+    Production-cutover-ready default is ``postgres``. Explicit options:
+      - ``file`` — local/dev or emergency rollback
+      - ``postgres`` — Postgres SoT only (fail closed; no file fallback)
+      - ``dual`` — migration helper only (PG primary + file mirror)
+    """
+    raw = (os.getenv("META_REGISTRY_BACKEND") or "postgres").strip().lower()
     if raw not in {"file", "postgres", "dual"}:
         raise MetaRegistryError("META_REGISTRY_BACKEND must be file|postgres|dual")
     return cast(MetaRegistryBackend, raw)
@@ -47,7 +54,7 @@ def resolve_meta_registry_backend() -> MetaRegistryBackend:
 class MetaAppRegistryBindingsMixin:
     """Persistence primitives, listing, and OAuth asset authorization.
 
-    Backend via META_REGISTRY_BACKEND: file (default), postgres, or dual (migration).
+    Backend via META_REGISTRY_BACKEND: postgres (default), file, or dual (migration only).
     """
 
     def __init__(

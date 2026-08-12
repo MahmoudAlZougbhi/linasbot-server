@@ -14,12 +14,14 @@ from modules.core import app
 from modules.mobile_auth_api import issue_mobile_tokens
 from services.apple_identity_service import (
     AppleIdentityError,
+    find_active_apple_sub_for_user,
     find_by_apple_sub,
     get_or_create_app_account_token,
     link_apple_identity,
     unlink_all_apple_for_user,
     unlink_apple_identity,
 )
+from services.apple_revoke_outbox import maybe_store_refresh_from_authorization_code, revoke_on_account_delete
 from services.apple_sign_in_service import AppleSignInError, is_private_relay_email, verify_identity_token
 from services.dashboard_session_service import session_service
 from services.mobile_refresh_token_service import mobile_refresh_token_service
@@ -34,11 +36,13 @@ class AppleSignInRequest(BaseModel):
     nonce: str | None = None
     full_name: str | None = None
     email: str | None = None
+    authorization_code: str | None = None
 
 
 class AppleLinkRequest(BaseModel):
     identity_token: str = Field(min_length=16)
     nonce: str | None = None
+    authorization_code: str | None = None
 
 
 class AppleUnlinkRequest(BaseModel):
@@ -143,6 +147,11 @@ async def mobile_apple_sign_in(body: AppleSignInRequest) -> Any:
                 )
             except AppleIdentityError:
                 pass
+        maybe_store_refresh_from_authorization_code(
+            user_id=str(user["id"]),
+            sub=sub,
+            authorization_code=body.authorization_code,
+        )
         return _issue_with_app_account_token(user)
 
     if not email:
@@ -179,6 +188,11 @@ async def mobile_apple_sign_in(body: AppleSignInRequest) -> Any:
     except AppleIdentityError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+    maybe_store_refresh_from_authorization_code(
+        user_id=str(user["id"]),
+        sub=sub,
+        authorization_code=body.authorization_code,
+    )
     return _issue_with_app_account_token(user)
 
 
@@ -192,11 +206,12 @@ async def mobile_apple_link(request: Request, body: AppleLinkRequest) -> Any:
 
     email = (claims.get("email") or "").strip().lower() or None
     relay = bool(claims.get("is_private_email")) or is_private_relay_email(email)
+    sub = str(claims["sub"])
     try:
         identity = link_apple_identity(
             tenant_id=str(session.tenant_id),
             user_id=str(session.user_id),
-            sub=str(claims["sub"]),
+            sub=sub,
             email=email,
             is_private_relay=relay,
             display_name=None,
@@ -204,6 +219,11 @@ async def mobile_apple_link(request: Request, body: AppleLinkRequest) -> Any:
     except AppleIdentityError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+    maybe_store_refresh_from_authorization_code(
+        user_id=str(session.user_id),
+        sub=sub,
+        authorization_code=body.authorization_code,
+    )
     token = get_or_create_app_account_token(str(session.tenant_id), str(session.user_id))
     return {
         "success": True,
@@ -215,15 +235,18 @@ async def mobile_apple_link(request: Request, body: AppleLinkRequest) -> Any:
 
 
 @app.post("/api/auth/mobile/apple/unlink")
-async def mobile_apple_unlink(request: Request, body: AppleUnlinkRequest) -> Any:
+async def mobile_apple_unlink(request: Request, body: AppleUnlinkRequest | None = None) -> Any:
     session = require_session(request)
-    sub = (body.sub or "").strip()
-    if body.identity_token:
+    payload = body or AppleUnlinkRequest()
+    sub = (payload.sub or "").strip()
+    if payload.identity_token:
         try:
-            claims = verify_identity_token(body.identity_token, nonce=body.nonce)
+            claims = verify_identity_token(payload.identity_token, nonce=payload.nonce)
         except AppleSignInError as exc:
             raise HTTPException(status_code=401, detail=str(exc)) from exc
         sub = str(claims["sub"])
+    if not sub:
+        sub = find_active_apple_sub_for_user(str(session.user_id)) or ""
     if not sub:
         raise HTTPException(status_code=400, detail="sub or identity_token required")
 
@@ -240,6 +263,15 @@ async def mobile_account_delete(request: Request) -> Any:
     """Self-service account deletion (Apple Guideline 5.1.1). Preserves apple_transactions."""
     session = require_session(request)
     user_id = str(session.user_id)
+    authorization_code: str | None = None
+    try:
+        raw = await request.json()
+        if isinstance(raw, dict):
+            authorization_code = (str(raw.get("authorization_code") or "")).strip() or None
+    except Exception:
+        authorization_code = None
+    # Revoke Apple tokens before soft-delete; durable outbox if HTTP fails.
+    revoke_on_account_delete(user_id=user_id, authorization_code=authorization_code)
     unlink_all_apple_for_user(user_id)
     mobile_refresh_token_service.revoke_all_for_user(user_id)
     session_service.revoke_all_for_user(user_id)

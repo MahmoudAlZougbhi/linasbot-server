@@ -16,6 +16,11 @@ os.environ.setdefault("LINASLASER_API_TOKEN", "pytest-token")
 os.environ.setdefault("DASHBOARD_AUTH_SECRET", "pytest-dashboard-secret")
 os.environ.setdefault("OPENAI_API_KEY", "sk-test-not-a-real-key")
 os.environ.setdefault("ENVIRONMENT", "test")
+# Unit tests use file SoT unless a postgres fixture explicitly overrides.
+# Production code defaults remain postgres (see services/billing_backend.py).
+os.environ.setdefault("LINAS_BILLING_BACKEND", "file")
+os.environ.setdefault("LINAS_AUTH_TOKEN_BACKEND", "file")
+os.environ.setdefault("META_REGISTRY_BACKEND", "file")
 # Hash embeddings are test-harness only (rejected when CM_RUNTIME_MODE=published or
 # outside ENVIRONMENT=test). Published-mode tests override to openai + a mocked transport.
 os.environ.setdefault("CM_EMBEDDING_PROVIDER", "hash")

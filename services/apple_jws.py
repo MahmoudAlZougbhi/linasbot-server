@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+from datetime import datetime, timezone
 from typing import Any
 
 from cryptography import x509
@@ -91,10 +92,33 @@ def _ec_public_key(cert: x509.Certificate) -> EllipticCurvePublicKey:
     return pub
 
 
-def _verify_chain(certs: list[x509.Certificate], *, skip_root_anchor: bool = False) -> None:
+def _assert_cert_validity(cert: x509.Certificate, now: datetime | None = None) -> None:
+    """Require ``not_valid_before <= now <= not_valid_after`` (UTC-aware)."""
+    when = now if now is not None else datetime.now(timezone.utc)
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    else:
+        when = when.astimezone(timezone.utc)
+    before = cert.not_valid_before_utc
+    after = cert.not_valid_after_utc
+    if when < before:
+        raise AppleJwsError("certificate not yet valid")
+    if when > after:
+        raise AppleJwsError("certificate expired")
+
+
+def _verify_chain(
+    certs: list[x509.Certificate],
+    *,
+    skip_root_anchor: bool = False,
+    now: datetime | None = None,
+) -> None:
     """Validate leaf←…←Apple Root. ``skip_root_anchor`` is tests-only via env monkeypatch."""
     if not certs:
         raise AppleJwsError("empty certificate chain")
+    when = now if now is not None else datetime.now(timezone.utc)
+    for cert in certs:
+        _assert_cert_validity(cert, when)
     for i in range(len(certs) - 1):
         child, parent = certs[i], certs[i + 1]
         try:
@@ -110,6 +134,7 @@ def _verify_chain(certs: list[x509.Certificate], *, skip_root_anchor: bool = Fal
     if skip_root_anchor:
         return
     root = _load_apple_root()
+    _assert_cert_validity(root, when)
     leaf_root = certs[-1]
     if leaf_root.fingerprint(SHA256()) != root.fingerprint(SHA256()):
         # Chain may omit root — verify last cert is signed by Apple root.

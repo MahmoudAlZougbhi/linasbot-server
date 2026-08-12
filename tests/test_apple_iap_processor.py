@@ -56,7 +56,7 @@ def apple_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
     monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
     monkeypatch.setattr("services.apple_iap_effects.entitlements_store", store)
-    monkeypatch.setattr("services.apple_iap_effects.credit_ledger_service", ledger)
+    monkeypatch.setattr("services.apple_credit_grant_ops.credit_ledger_service", ledger)
     monkeypatch.setattr(
         "services.entitlements_service._DATA_ROOT",
         tmp_path,

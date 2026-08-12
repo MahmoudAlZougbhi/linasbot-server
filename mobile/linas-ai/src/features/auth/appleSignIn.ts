@@ -86,6 +86,9 @@ export async function signInWithApple(): Promise<AppleSignInResult> {
   const fullName = fullNameFromCredential(credential.fullName);
   if (fullName) body.full_name = fullName;
   if (credential.email) body.email = credential.email;
+  if (credential.authorizationCode) {
+    body.authorization_code = credential.authorizationCode;
+  }
 
   try {
     const result = await apiFetch('/api/auth/mobile/apple', {

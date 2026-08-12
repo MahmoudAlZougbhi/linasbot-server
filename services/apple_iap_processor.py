@@ -3,61 +3,40 @@
 from __future__ import annotations
 
 import logging
-import time
-from typing import Any, Literal
+from typing import Any
 
-from db.models.apple_billing import AppleNotificationEventRow
-from db.session import whatsapp_session
 from services import apple_transaction_ledger as txn_ledger
 from services.apple_app_store_client import (
     AppleIapConfigError,
     apple_app_store_client,
     iap_credentials_configured,
 )
+from services.apple_assn_handlers import (
+    handle_apply_txn,
+    handle_consumable_only,
+    handle_consumption_request,
+    handle_metadata_only,
+    handle_refund_or_revoke,
+    handle_refund_reversed,
+    resolve_tenant,
+)
+from services.apple_assn_types import classify_assn_action
 from services.apple_iap_effects import (
     apply_subscription_effect,
     bump_entitlement_period_from_expires,
     classify_product,
     grant_consumable_credits,
-    lookup_tenant_by_app_account_token,
-    reverse_consumable_credits,
     subscription_status_from_payload,
 )
 from services.apple_jws import AppleJwsError, decode_jws_payload, sha256_hex
-from services.iap_product_catalog import is_credit_product
+from services.apple_notification_claim import claim_notification, finalize_notification
+from services.apple_renewal_info import decode_and_apply_renewal_info
 
 logger = logging.getLogger(__name__)
-
-_SKIP_NOTIFY_TYPES = frozenset({"TEST"})
 
 
 class AppleIapProcessorError(RuntimeError):
     """Processing failure (config, tenant, or payload)."""
-
-
-def _resolve_tenant(
-    *,
-    tenant_id: str | None,
-    payload: dict[str, Any],
-    source: str,
-) -> tuple[str, str | None]:
-    token = str(payload.get("appAccountToken") or "").strip()
-    mapped = lookup_tenant_by_app_account_token(token) if token else None
-    client_sources = {"client_verify", "client_restore"}
-    if source in client_sources:
-        if not mapped:
-            raise PermissionError("appAccountToken required for client purchase verification")
-        if tenant_id and mapped[0] != str(tenant_id).strip():
-            raise PermissionError("appAccountToken belongs to a different tenant")
-        return mapped[0], mapped[1]
-    if tenant_id:
-        tid = str(tenant_id).strip()
-        if mapped and mapped[0] != tid:
-            raise PermissionError("appAccountToken belongs to a different tenant")
-        return tid, (mapped[1] if mapped else None)
-    if mapped:
-        return mapped[0], mapped[1]
-    raise AppleIapProcessorError("tenant_id required (pass explicitly or set appAccountToken)")
 
 
 def process_signed_transaction(
@@ -78,7 +57,12 @@ def process_signed_transaction(
     else:
         payload = decode_jws_payload(signed_transaction_jws)
 
-    tid_resolved, token_user = _resolve_tenant(tenant_id=tenant_id, payload=payload, source=source)
+    try:
+        tid_resolved, token_user = resolve_tenant(
+            tenant_id=tenant_id, payload=payload, source=source
+        )
+    except ValueError as exc:
+        raise AppleIapProcessorError(str(exc)) from exc
     uid = user_id or token_user or None
     product_id = str(payload.get("productId") or "").strip()
     transaction_id = str(payload.get("transactionId") or "").strip()
@@ -151,167 +135,19 @@ def process_signed_transaction(
     }
 
 
-def _record_notification(
-    *,
-    notification_uuid: str,
-    notification_type: str,
-    subtype: str | None,
-    environment: str,
-    signed_payload_sha256: str,
-    processing_status: str,
-    result: dict[str, Any],
-    related_transaction_id: str | None,
-) -> dict[str, Any]:
-    now = time.time()
-    with whatsapp_session() as session:
-        row = session.get(AppleNotificationEventRow, notification_uuid)
-        if row is not None and row.processing_status in {"applied", "ignored"}:
-            return {"duplicate": True, "result": row.result or {}}
-        if row is None:
-            session.add(
-                AppleNotificationEventRow(
-                    notification_uuid=notification_uuid,
-                    notification_type=notification_type,
-                    subtype=subtype,
-                    environment=environment,
-                    signed_payload_sha256=signed_payload_sha256,
-                    processing_status=processing_status,
-                    first_seen_at=now,
-                    last_seen_at=now,
-                    result=result,
-                    related_transaction_id=related_transaction_id,
-                )
-            )
-        else:
-            row.processing_status = processing_status
-            row.last_seen_at = now
-            row.result = result
-            row.related_transaction_id = related_transaction_id or row.related_transaction_id
-        return {"duplicate": False, "result": result}
-
-
-def _handle_refund_or_revoke(
-    *,
-    payload: dict[str, Any],
-    tenant_id: str | None,
-    notification_type: str,
-) -> dict[str, Any]:
-    product_id = str(payload.get("productId") or "").strip()
-    transaction_id = str(payload.get("transactionId") or "").strip()
-    original_transaction_id = str(payload.get("originalTransactionId") or transaction_id).strip()
-    tid, _ = _resolve_tenant(tenant_id=tenant_id, payload=payload, source="assn")
-    status: Literal["refunded", "revoked"] = "refunded" if notification_type == "REFUND" else "revoked"
-    out: dict[str, Any] = {"notification_type": notification_type, "tenant_id": tid}
-    if is_credit_product(product_id):
-        out["credit_reverse"] = reverse_consumable_credits(
-            tenant_id=tid,
-            transaction_id=transaction_id,
-            product_id=product_id,
-        )
-        try:
-            txn_ledger.mark_reversed(transaction_id, effect=out["credit_reverse"])
-        except ValueError:
-            pass
-    else:
-        out["subscription"] = apply_subscription_effect(
-            tenant_id=tid,
-            product_id=product_id,
-            original_transaction_id=original_transaction_id,
-            status=status,
-            idempotency_key=f"apple:notify:{notification_type}:{transaction_id}",
-        )
-    return out
-
-
-def _handle_refund_reversed(
-    *,
-    payload: dict[str, Any],
-    tenant_id: str | None,
-) -> dict[str, Any]:
-    """Re-apply credits or subscription after Apple REFUND_REVERSED."""
-    product_id = str(payload.get("productId") or "").strip()
-    transaction_id = str(payload.get("transactionId") or "").strip()
-    original_transaction_id = str(payload.get("originalTransactionId") or transaction_id).strip()
-    tid, _ = _resolve_tenant(tenant_id=tenant_id, payload=payload, source="assn")
-    out: dict[str, Any] = {"notification_type": "REFUND_REVERSED", "tenant_id": tid}
-    if is_credit_product(product_id):
-        out["credit_restore"] = grant_consumable_credits(
-            tenant_id=tid,
-            product_id=product_id,
-            transaction_id=transaction_id,
-            allow_regrant_after_reverse=True,
-        )
-        try:
-            txn_ledger.mark_applied(transaction_id, effect=out["credit_restore"])
-        except ValueError:
-            pass
-    else:
-        out["subscription"] = apply_subscription_effect(
-            tenant_id=tid,
-            product_id=product_id,
-            original_transaction_id=original_transaction_id,
-            status="active",
-            idempotency_key=f"apple:notify:REFUND_REVERSED:{transaction_id}",
-        )
-    return out
-
-
-def _handle_consumption_request(
-    *,
-    payload: dict[str, Any] | None,
-    related_transaction_id: str | None,
-) -> dict[str, Any]:
-    """Respond to ASSN CONSUMPTION_REQUEST via App Store Server API when configured."""
-    tid = str((payload or {}).get("transactionId") or related_transaction_id or "").strip()
-    if not tid:
-        return {"ack": "consumption_request", "sent": False, "reason": "missing_transaction_id"}
-    if not iap_credentials_configured():
-        return {"ack": "consumption_request", "sent": False, "reason": "iap_credentials_missing"}
-
-    from db.models.apple_billing import AppleCreditGrantRow
-
-    with whatsapp_session() as session:
-        grant = session.get(AppleCreditGrantRow, tid)
-    # Apple consumption statuses: 0 undeclared, 1 not consumed, 2 partially, 3 fully.
-    if grant is None:
-        consumption_status = 0
-        delivery_status = 0
-    elif grant.status == "reversed":
-        consumption_status = 1
-        delivery_status = 1
-    else:
-        consumption_status = 3
-        delivery_status = 1
-    body = {
-        "customerConsented": True,
-        "consumptionStatus": consumption_status,
-        "platform": 1,  # Apple
-        "sampleContentProvided": False,
-        "deliveryStatus": delivery_status,
-    }
-    try:
-        apple_app_store_client.send_consumption_info(tid, body)
-        return {"ack": "consumption_request", "sent": True, "transaction_id": tid, "body": body}
-    except Exception as exc:  # noqa: BLE001 — fail-soft; ASSN must still ACK
-        logger.warning("apple_consumption_info_failed tid=%s err=%s", tid, exc)
-        return {
-            "ack": "consumption_request",
-            "sent": False,
-            "transaction_id": tid,
-            "error": str(exc)[:200],
-        }
-
-
 def process_notification_v2(body: dict[str, Any]) -> dict[str, Any]:
-    """Verify ASSN V2 signedPayload and apply idempotently by notificationUUID."""
+    """Verify ASSN V2 signedPayload and apply idempotently by notificationUUID.
+
+    Claim-before-effect: insert ``processing`` immediately after UUID extract.
+    On exception after claim, finalize as ``failed`` (failed may be re-driven).
+    """
     if not isinstance(body, dict):
         raise AppleJwsError("notification body must be an object")
     signed = body.get("signedPayload")
     if not isinstance(signed, str) or not signed.strip():
         raise AppleJwsError("signedPayload required")
     if not iap_credentials_configured() and not body.get("_linas_test_bypass_credentials"):
-        # JWS verify still possible without API key, but fail closed if ops expect keys.
-        # Allow verify-only path: credentials gate is for App Store API, not JWS x5c.
+        # JWS verify still possible without API key; API key is for App Store Server API.
         pass
 
     outer = decode_jws_payload(signed)
@@ -325,87 +161,159 @@ def process_notification_v2(body: dict[str, Any]) -> dict[str, Any]:
         raise AppleJwsError("notificationUUID required")
 
     digest = sha256_hex(signed)
-    with whatsapp_session() as session:
-        existing = session.get(AppleNotificationEventRow, notification_uuid)
-        if existing is not None and existing.processing_status in {"applied", "ignored"}:
-            logger.info("apple_assn_duplicate uuid=%s type=%s", notification_uuid, notification_type)
-            return {"ok": True, "duplicate": True, "notification_uuid": notification_uuid}
-
-    signed_txn = data.get("signedTransactionInfo")
-    txn_payload: dict[str, Any] | None = None
-    if isinstance(signed_txn, str) and signed_txn.strip():
-        txn_payload = decode_jws_payload(signed_txn)
-
-    related_tid = str((txn_payload or {}).get("transactionId") or "") or None
-    result: dict[str, Any] = {"notification_type": notification_type, "subtype": subtype}
-
-    if notification_type == "TEST":
-        result["ack"] = "test"
-        _record_notification(
-            notification_uuid=notification_uuid,
-            notification_type=notification_type,
-            subtype=subtype,
-            environment=environment,
-            signed_payload_sha256=digest,
-            processing_status="ignored",
-            result=result,
-            related_transaction_id=related_tid,
-        )
-        return {"ok": True, "duplicate": False, "notification_uuid": notification_uuid, **result}
-
-    if notification_type == "CONSUMPTION_REQUEST":
-        result.update(_handle_consumption_request(payload=txn_payload, related_transaction_id=related_tid))
-        _record_notification(
-            notification_uuid=notification_uuid,
-            notification_type=notification_type,
-            subtype=subtype,
-            environment=environment,
-            signed_payload_sha256=digest,
-            processing_status="applied",
-            result=result,
-            related_transaction_id=related_tid,
-        )
-        return {"ok": True, "duplicate": False, "notification_uuid": notification_uuid, **result}
-
-    if txn_payload is None:
-        raise AppleJwsError("signedTransactionInfo required for this notification type")
-
-    if notification_type == "REFUND_REVERSED":
-        result["effect"] = _handle_refund_reversed(payload=txn_payload, tenant_id=None)
-    elif notification_type in {"REFUND", "REVOKE"}:
-        result["effect"] = _handle_refund_or_revoke(
-            payload=txn_payload,
-            tenant_id=None,
-            notification_type=notification_type,
-        )
-    else:
-        # Map renewal-status subtype for DID_CHANGE_RENEWAL_STATUS
-        ntype = notification_type
-        if notification_type == "DID_CHANGE_RENEWAL_STATUS" and subtype == "AUTO_RENEW_DISABLED":
-            ntype = "DID_CHANGE_RENEWAL_STATUS"
-        if notification_type in {"GRACE_PERIOD", "DID_FAIL_TO_RENEW", "BILLING_RETRY"}:
-            ntype = "DID_FAIL_TO_RENEW"
-        result["effect"] = process_signed_transaction(
-            signed_transaction_jws=str(signed_txn),
-            tenant_id=None,
-            source=f"assn:{notification_type}",
-            notification_type=ntype,
-            decoded_payload=txn_payload,
-            skip_jws_verify=True,
-        )
-
-    status = "ignored" if notification_type in _SKIP_NOTIFY_TYPES else "applied"
-    _record_notification(
+    # Claim IMMEDIATELY after UUID extract — before any financial effect.
+    claim = claim_notification(
         notification_uuid=notification_uuid,
         notification_type=notification_type,
         subtype=subtype,
         environment=environment,
         signed_payload_sha256=digest,
-        processing_status=status,
-        result=result,
-        related_transaction_id=related_tid,
     )
-    return {"ok": True, "duplicate": False, "notification_uuid": notification_uuid, **result}
+    if claim.get("duplicate"):
+        logger.info("apple_assn_duplicate uuid=%s type=%s", notification_uuid, notification_type)
+        return {
+            "ok": True,
+            "duplicate": True,
+            "notification_uuid": notification_uuid,
+            "processing_status": claim.get("processing_status"),
+            **(claim.get("result") or {}),
+        }
+
+    result: dict[str, Any] = {"notification_type": notification_type, "subtype": subtype}
+    related_tid: str | None = None
+    final_status = "applied"
+
+    try:
+        signed_txn = data.get("signedTransactionInfo")
+        txn_payload: dict[str, Any] | None = None
+        if isinstance(signed_txn, str) and signed_txn.strip():
+            txn_payload = decode_jws_payload(signed_txn)
+        related_tid = str((txn_payload or {}).get("transactionId") or "") or None
+
+        signed_renewal = data.get("signedRenewalInfo")
+        renewal_result: dict[str, Any] | None = None
+        if isinstance(signed_renewal, str) and signed_renewal.strip() and txn_payload is not None:
+            renewal_result = decode_and_apply_renewal_info(
+                signed_renewal,
+                tenant_id=None,
+                notification_type=notification_type,
+                subtype=subtype,
+                txn_payload=txn_payload,
+            )
+            result["renewal"] = renewal_result
+
+        classified = classify_assn_action(notification_type, subtype)
+        result["classification"] = {
+            "action": classified["action"],
+            "status": classified.get("status"),
+            "effect_kind": classified.get("effect_kind"),
+        }
+        action = classified["action"]
+
+        if action == "ignore":
+            reason = classified.get("reason") or classified.get("effect_kind") or "ignored"
+            result["ack"] = reason
+            final_status = "ignored"
+            if classified.get("effect_kind") == "failed_unknown_type":
+                result["reason"] = "failed_unknown_type"
+                logger.warning(
+                    "apple_assn_unknown_type uuid=%s type=%s — no financial effect",
+                    notification_uuid,
+                    notification_type,
+                )
+        elif action == "consumption":
+            result.update(
+                handle_consumption_request(payload=txn_payload, related_transaction_id=related_tid)
+            )
+        elif action == "refund_reversed":
+            if txn_payload is None:
+                raise AppleJwsError("signedTransactionInfo required for REFUND_REVERSED")
+            result["effect"] = handle_refund_reversed(payload=txn_payload, tenant_id=None)
+        elif action == "refund":
+            if txn_payload is None:
+                raise AppleJwsError("signedTransactionInfo required for REFUND/REVOKE")
+            result["effect"] = handle_refund_or_revoke(
+                payload=txn_payload,
+                tenant_id=None,
+                notification_type=notification_type,
+            )
+        elif action == "metadata":
+            result["effect"] = handle_metadata_only(
+                notification_type=notification_type,
+                subtype=subtype,
+                renewal=renewal_result,
+            )
+            # Metadata-only: no status→active. Renewal info may still have applied grace/cancel.
+        elif action == "apply_txn":
+            if txn_payload is None or not isinstance(signed_txn, str):
+                raise AppleJwsError("signedTransactionInfo required for this notification type")
+            if classified.get("effect_kind") == "consumable_only":
+                result["effect"] = handle_consumable_only(
+                    process_signed_transaction_fn=process_signed_transaction,
+                    signed_transaction_jws=str(signed_txn),
+                    txn_payload=txn_payload,
+                    notification_type=notification_type,
+                )
+                if result["effect"].get("skipped"):
+                    final_status = "ignored"
+            else:
+                result["effect"] = handle_apply_txn(
+                    process_signed_transaction_fn=process_signed_transaction,
+                    signed_transaction_jws=str(signed_txn),
+                    txn_payload=txn_payload,
+                    notification_type=notification_type,
+                    status=classified.get("status"),
+                )
+        elif action == "error":
+            raise AppleIapProcessorError(
+                classified.get("reason") or f"unhandled ASSN action for {notification_type}"
+            )
+        else:
+            raise AppleIapProcessorError(f"unknown ASSN action: {action}")
+
+        finalize_notification(
+            notification_uuid=notification_uuid,
+            processing_status=final_status,
+            result=result,
+            related_transaction_id=related_tid,
+            notification_type=notification_type,
+            subtype=subtype,
+        )
+        return {
+            "ok": True,
+            "duplicate": False,
+            "notification_uuid": notification_uuid,
+            **result,
+        }
+    except Exception as exc:
+        # Crash recovery: failed may be re-driven via claim_notification.
+        logger.exception(
+            "apple_assn_failed uuid=%s type=%s err=%s",
+            notification_uuid,
+            notification_type,
+            exc,
+        )
+        fail_result = {
+            **result,
+            "error": str(exc)[:500],
+            "failed": True,
+        }
+        try:
+            finalize_notification(
+                notification_uuid=notification_uuid,
+                processing_status="failed",
+                result=fail_result,
+                related_transaction_id=related_tid,
+                notification_type=notification_type,
+                subtype=subtype,
+            )
+        except Exception as fin_exc:  # noqa: BLE001
+            logger.error(
+                "apple_assn_finalize_failed uuid=%s err=%s",
+                notification_uuid,
+                fin_exc,
+            )
+        raise
 
 
 def reconcile_original_transaction(original_transaction_id: str) -> dict[str, Any]:

@@ -127,6 +127,13 @@ def test_postgres_backend_fails_closed_without_engine(
     assert checks["registry_backend_ready"] is False
 
 
+def test_meta_registry_code_default_is_postgres(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("META_REGISTRY_BACKEND", raising=False)
+    from services.meta_app_registry_bindings import resolve_meta_registry_backend
+
+    assert resolve_meta_registry_backend() == "postgres"
+
+
 def test_dual_write_pg_then_file(tmp_path: Path, meta_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
     url = f"sqlite:///{tmp_path / 'meta_dual.db'}"
     monkeypatch.setenv("LINAS_WHATSAPP_DATABASE_URL", url)

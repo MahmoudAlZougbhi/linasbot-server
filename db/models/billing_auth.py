@@ -1,7 +1,7 @@
 """Billing + auth token ORM models (PostgreSQL SoT).
 
 Additive tables for LINAS_BILLING_BACKEND=postgres and
-LINAS_AUTH_TOKEN_BACKEND=postgres. File stores remain default until cutover.
+LINAS_AUTH_TOKEN_BACKEND=postgres (code default postgres; set file for local/dev).
 """
 
 from __future__ import annotations

@@ -2,7 +2,7 @@
 
 Purchase events may arrive from Apple, Google, or (optionally) Stripe.
 
-File SoT by default; Postgres when LINAS_BILLING_BACKEND=postgres.
+Postgres SoT when LINAS_BILLING_BACKEND=postgres (default); file when explicitly set.
 
 Subscription gate exemption (explicit allowlist only — not a hidden fallback):
   Env ``SUBSCRIPTION_EXEMPT_TENANT_IDS`` (comma-separated tenant ids).
@@ -24,7 +24,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from services.billing_backend import billing_uses_postgres
+from services.billing_backend import billing_uses_postgres, require_billing_pg_session
 from services.plan_economics import PLAN_FEATURES, PLAN_PRICES_USD, recommend_allowance
 from storage.persistent_storage import _DATA_ROOT as _DEFAULT_DATA_ROOT
 
@@ -99,10 +99,9 @@ class EntitlementsStore:
 
     def get(self, tenant_id: str) -> TenantEntitlement:
         if billing_uses_postgres():
-            from db.session import whatsapp_session
             from services.entitlements_pg_store import get_entitlement
 
-            with whatsapp_session() as session:
+            with require_billing_pg_session() as session:
                 data = get_entitlement(session, tenant_id)
             if data is None:
                 return self._empty(tenant_id)
@@ -117,10 +116,9 @@ class EntitlementsStore:
     def save(self, ent: TenantEntitlement) -> TenantEntitlement:
         ent.updated_at = time.time()
         if billing_uses_postgres():
-            from db.session import whatsapp_session
             from services.entitlements_pg_store import save_entitlement
 
-            with whatsapp_session() as session:
+            with require_billing_pg_session() as session:
                 save_entitlement(session, asdict(ent))
             return ent
         with self._lock:
@@ -251,10 +249,9 @@ def apply_store_notification(
 ) -> dict[str, Any]:
     """Idempotent entitlement update from Apple/Google server notifications."""
     if billing_uses_postgres():
-        from db.session import whatsapp_session
         from services.entitlements_pg_store import mark_processed_event, processed_event_exists
 
-        with whatsapp_session() as session:
+        with require_billing_pg_session() as session:
             if processed_event_exists(session, idempotency_key):
                 return {"duplicate": True, "entitlement": get_tenant_entitlement_public(tenant_id)}
         ent = entitlements_store.set_plan(
@@ -264,7 +261,7 @@ def apply_store_notification(
             source=source,
             store_original_transaction_id=original_transaction_id,
         )
-        with whatsapp_session() as session:
+        with require_billing_pg_session() as session:
             if not mark_processed_event(
                 session,
                 idempotency_key=idempotency_key,

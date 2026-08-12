@@ -8,7 +8,6 @@ from typing import Any
 from fastapi import HTTPException, Request
 
 from modules.core import app
-from services.apple_app_store_client import iap_credentials_configured
 from services.apple_iap_processor import process_notification_v2
 from services.apple_jws import AppleJwsError
 
@@ -16,8 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _handle_apple_assn(request: Request) -> Any:
-    if not iap_credentials_configured():
-        raise HTTPException(status_code=503, detail="Apple IAP credentials not configured")
+    # ASSN V2 verifies via JWS x5c (Apple Root) — App Store API .p8 is not required.
     try:
         body = await request.json()
     except Exception as exc:  # noqa: BLE001

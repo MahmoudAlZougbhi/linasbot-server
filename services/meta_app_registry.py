@@ -6,9 +6,9 @@ channel/asset_id globally, so two Meta apps can never answer the same Page or
 Instagram account at the same time. A workspace may own multiple assets per channel.
 
 Persistence backend via META_REGISTRY_BACKEND:
-  - file (default) — local/NFS JSON (backward compatible)
-  - postgres — Postgres SoT only (fail closed if DB unavailable; no file fallback)
-  - dual — write PG then file; read PG primary (explicit migration mode only)
+  - postgres (default) — Postgres SoT only (fail closed if DB unavailable; no file fallback)
+  - file — local/dev or emergency rollback
+  - dual — write PG then file; read PG primary (migration helper only)
 
 Helpers: meta_app_registry_common; mixins: bindings/lifecycle/oauth (LOC split).
 """

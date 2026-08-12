@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from services.billing_backend import billing_uses_postgres
+from services.billing_backend import billing_uses_postgres, require_billing_pg_session
 from storage.persistent_storage import _DATA_ROOT
 
 _LOCK = threading.RLock()
@@ -23,10 +23,9 @@ def _idempotency_path(key: str) -> Path:
 
 def load_admin_credit_idempotent(key: str) -> dict[str, Any] | None:
     if billing_uses_postgres():
-        from db.session import whatsapp_session
         from services.billing_pg_store import admin_credit_load
 
-        with whatsapp_session() as session:
+        with require_billing_pg_session() as session:
             return admin_credit_load(session, key)
 
     path = _idempotency_path(key)
@@ -41,10 +40,9 @@ def load_admin_credit_idempotent(key: str) -> dict[str, Any] | None:
 
 def store_admin_credit_idempotent(key: str, payload: dict[str, Any]) -> None:
     if billing_uses_postgres():
-        from db.session import whatsapp_session
         from services.billing_pg_store import admin_credit_store
 
-        with whatsapp_session() as session:
+        with require_billing_pg_session() as session:
             admin_credit_store(session, key, payload)
         return
 

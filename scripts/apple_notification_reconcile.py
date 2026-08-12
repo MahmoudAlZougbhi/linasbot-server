@@ -14,10 +14,66 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+_MAX_HISTORY_PAGES = 100
+
+
+def _process_history_pages(
+    *,
+    start_ms: int,
+    end_ms: int,
+    notification_type: str,
+    max_pages: int = _MAX_HISTORY_PAGES,
+) -> dict[str, Any]:
+    from services.apple_app_store_client import apple_app_store_client
+    from services.apple_iap_processor import process_notification_v2
+    from services.apple_jws import sha256_hex
+
+    processed = 0
+    duplicates = 0
+    errors = 0
+    pages = 0
+    for history in apple_app_store_client.iter_notification_history(
+        start_ms,
+        end_ms,
+        notification_type=notification_type or None,
+        max_pages=max_pages,
+    ):
+        pages += 1
+        for item in history.get("notificationHistory") or []:
+            if not isinstance(item, dict):
+                continue
+            signed = item.get("signedPayload")
+            if not isinstance(signed, str) or not signed.strip():
+                continue
+            try:
+                out = process_notification_v2({"signedPayload": signed})
+                processed += 1
+                if out.get("duplicate"):
+                    duplicates += 1
+            except Exception as exc:  # noqa: BLE001
+                errors += 1
+                print(
+                    json.dumps(
+                        {
+                            "ok": False,
+                            "error": type(exc).__name__,
+                            "payload_sha256": sha256_hex(signed),
+                        }
+                    )
+                )
+    return {
+        "ok": errors == 0,
+        "processed": processed,
+        "duplicates": duplicates,
+        "errors": errors,
+        "pages": pages,
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -26,16 +82,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start-ms", type=int, default=0, help="Notification history start (ms)")
     parser.add_argument("--end-ms", type=int, default=0, help="Notification history end (ms)")
     parser.add_argument("--notification-type", default="", help="Optional ASSN type filter")
+    parser.add_argument(
+        "--max-pages",
+        type=int,
+        default=_MAX_HISTORY_PAGES,
+        help=f"Safety cap for notification-history pages (default {_MAX_HISTORY_PAGES})",
+    )
     args = parser.parse_args(argv)
 
     from services.apple_app_store_client import (
         AppleIapConfigError,
-        apple_app_store_client,
         iap_credentials_configured,
         iap_key_id,
     )
-    from services.apple_iap_processor import process_notification_v2, reconcile_original_transaction
-    from services.apple_jws import sha256_hex
+    from services.apple_iap_processor import reconcile_original_transaction
 
     if not iap_credentials_configured():
         print(json.dumps({"ok": False, "error": "Apple IAP credentials not configured"}))
@@ -68,48 +128,14 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.start_ms and args.end_ms and args.end_ms > args.start_ms:
-            history = apple_app_store_client.get_notification_history(
-                args.start_ms,
-                args.end_ms,
-                notification_type=args.notification_type or None,
+            summary = _process_history_pages(
+                start_ms=args.start_ms,
+                end_ms=args.end_ms,
+                notification_type=args.notification_type,
+                max_pages=max(1, int(args.max_pages)),
             )
-            processed = 0
-            duplicates = 0
-            errors = 0
-            for item in history.get("notificationHistory") or []:
-                if not isinstance(item, dict):
-                    continue
-                signed = item.get("signedPayload")
-                if not isinstance(signed, str) or not signed.strip():
-                    continue
-                try:
-                    out = process_notification_v2({"signedPayload": signed})
-                    processed += 1
-                    if out.get("duplicate"):
-                        duplicates += 1
-                except Exception as exc:  # noqa: BLE001
-                    errors += 1
-                    print(
-                        json.dumps(
-                            {
-                                "ok": False,
-                                "error": type(exc).__name__,
-                                "payload_sha256": sha256_hex(signed),
-                            }
-                        )
-                    )
-            print(
-                json.dumps(
-                    {
-                        "ok": True,
-                        "processed": processed,
-                        "duplicates": duplicates,
-                        "errors": errors,
-                        "has_more": bool(history.get("hasMore")),
-                    }
-                )
-            )
-            return 0 if errors == 0 else 1
+            print(json.dumps(summary))
+            return 0 if summary.get("ok") else 1
 
         print(
             json.dumps(

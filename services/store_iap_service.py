@@ -86,18 +86,19 @@ def map_product_to_plan(product_id: str) -> str:
 
 
 def normalize_apple_status(notification_type: str) -> EntitlementStatus:
-    t = (notification_type or "").upper()
-    if t in {"DID_RENEW", "SUBSCRIBED", "OFFER_REDEEMED", "INITIAL_BUY"}:
-        return "active"
-    if t in {"DID_FAIL_TO_RENEW", "GRACE_PERIOD_EXPIRED"}:
-        return "grace"
-    if t in {"EXPIRED"}:
-        return "expired"
-    if t in {"REVOKE", "REFUND"}:
-        return "refunded"
-    if t in {"CANCEL", "DID_CHANGE_RENEWAL_STATUS"}:
-        return "canceled"
-    return "active"
+    """Map ASSN notification type → entitlement status.
+
+    Unknown / metadata-only types never fall through to ``active``.
+    Raises ``ValueError`` when the type does not map to a status change.
+    """
+    from services.apple_assn_types import status_for_notification_type
+
+    status = status_for_notification_type(notification_type)
+    if status is None:
+        raise ValueError(
+            f"ASSN notification type does not map to an entitlement status: {notification_type}"
+        )
+    return status
 
 
 def normalize_google_status(subscription_state: str) -> EntitlementStatus:
@@ -139,12 +140,10 @@ def verify_apple_notification_payload(body: dict[str, Any]) -> dict[str, Any]:
     """Verify ASSN V2 via apple_iap_processor and return normalized fields.
 
     Prefer calling ``process_notification_v2`` directly from webhook routes.
+    JWS x5c verify does not require App Store API .p8 credentials.
     """
-    from services.apple_app_store_client import iap_credentials_configured
     from services.apple_iap_processor import process_notification_v2
 
-    if not iap_credentials_configured():
-        raise PermissionError("Apple IAP credentials not configured")
     result = process_notification_v2(body)
     effect_raw = result.get("effect")
     effect: dict[str, Any] = effect_raw if isinstance(effect_raw, dict) else {}

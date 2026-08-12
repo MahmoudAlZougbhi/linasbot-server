@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import time
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -234,6 +235,34 @@ class AppleAppStoreClient:
         if not isinstance(data, dict):
             raise ValueError("notification history returned non-object JSON")
         return data
+
+    def iter_notification_history(
+        self,
+        start_ms: int,
+        end_ms: int,
+        *,
+        notification_type: str | None = None,
+        only_failures: bool = False,
+        max_pages: int = 100,
+    ) -> Iterator[dict[str, Any]]:
+        """Yield notification-history pages until exhausted or ``max_pages``."""
+        token: str | None = None
+        limit = max(1, int(max_pages))
+        for _ in range(limit):
+            page = self.get_notification_history(
+                start_ms,
+                end_ms,
+                notification_type=notification_type,
+                pagination_token=token,
+                only_failures=only_failures,
+            )
+            yield page
+            if not page.get("hasMore"):
+                return
+            next_token = page.get("paginationToken")
+            if not isinstance(next_token, str) or not next_token.strip():
+                return
+            token = next_token
 
     def send_consumption_info(self, transaction_id: str, body: dict[str, Any]) -> dict[str, Any]:
         """Respond to CONSUMPTION_REQUEST when refund consumption data is permitted."""

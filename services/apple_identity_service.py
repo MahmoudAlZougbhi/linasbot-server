@@ -60,6 +60,25 @@ def find_by_apple_sub(sub: str) -> dict[str, Any] | None:
         return _row_to_dict(row) if row else None
 
 
+def find_active_apple_sub_for_user(user_id: str) -> str | None:
+    """Return provider_subject for the user's active Apple link, if any."""
+    uid = (user_id or "").strip()
+    if not uid:
+        return None
+    with whatsapp_session() as session:
+        row = session.execute(
+            select(AuthExternalIdentityRow).where(
+                AuthExternalIdentityRow.provider == PROVIDER_APPLE,
+                AuthExternalIdentityRow.user_id == uid,
+                AuthExternalIdentityRow.unlinked_at.is_(None),
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            return None
+        sub = str(row.provider_subject or "").strip()
+        return sub or None
+
+
 def _find_any_apple_row(session: Any, sub: str) -> AuthExternalIdentityRow | None:
     row = session.execute(
         select(AuthExternalIdentityRow).where(

@@ -1,7 +1,7 @@
 """Credit ledger + tenant entitlements ORM (PostgreSQL SoT).
 
-Additive tables for LINAS_BILLING_BACKEND=postgres. File stores remain default
-until cutover. Covers Apple/Google/admin entitlement effects + credit packs.
+Additive tables for LINAS_BILLING_BACKEND=postgres (code default postgres; set file for local/dev).
+Covers Apple/Google/admin entitlement effects + credit packs.
 """
 
 from __future__ import annotations

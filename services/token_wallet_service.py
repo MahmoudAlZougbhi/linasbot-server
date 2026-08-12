@@ -10,9 +10,10 @@ Legacy single-balance wallets are migrated once on read:
     remaining balance_tokens is split 80% input / 20% output (same historical prepaid
     assumption), with an explicit migration note on the wallet record.
 
-Persistence via LINAS_BILLING_BACKEND=file|postgres (default file).
+Persistence via LINAS_BILLING_BACKEND=file|postgres (default postgres).
 Models/helpers: token_wallet_models (LOC split).
 """
+
 
 from __future__ import annotations
 
@@ -22,7 +23,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from services.billing_backend import billing_uses_postgres
+from services.billing_backend import billing_uses_postgres, require_billing_pg_session
 from services.token_wallet_file_store import TokenWalletFileStore
 from services.token_wallet_models import (  # noqa: F401
     DEFAULT_UNLIMITED_TENANTS,
@@ -56,10 +57,9 @@ class TokenWalletService:
 
     def _read(self, tenant_id: str) -> dict[str, Any]:
         if billing_uses_postgres():
-            from db.session import whatsapp_session
             from services.token_wallet_pg_store import read_wallet
 
-            with whatsapp_session() as session:
+            with require_billing_pg_session() as session:
                 data = read_wallet(session, tenant_id)
         else:
             with self._lock:
@@ -73,10 +73,9 @@ class TokenWalletService:
 
     def _persist_wallet(self, tenant_id: str, data: dict[str, Any], *, migration_ledger: bool = False) -> None:
         if billing_uses_postgres():
-            from db.session import whatsapp_session
             from services.token_wallet_pg_store import append_ledger, write_wallet
 
-            with whatsapp_session() as session:
+            with require_billing_pg_session() as session:
                 write_wallet(session, tenant_id, data)
                 if migration_ledger:
                     append_ledger(
@@ -104,10 +103,9 @@ class TokenWalletService:
 
     def _append_ledger(self, entry: dict[str, Any]) -> None:
         if billing_uses_postgres():
-            from db.session import whatsapp_session
             from services.token_wallet_pg_store import append_ledger
 
-            with whatsapp_session() as session:
+            with require_billing_pg_session() as session:
                 append_ledger(session, entry)
         else:
             with self._lock:
@@ -185,10 +183,9 @@ class TokenWalletService:
             raise ValueError("input_tokens or output_tokens must be positive")
 
         if billing_uses_postgres():
-            from db.session import whatsapp_session
             from services.token_wallet_pg_store import append_ledger, read_wallet, write_wallet
 
-            with whatsapp_session() as session:
+            with require_billing_pg_session() as session:
                 data = read_wallet(session, tid)
                 data = self._file.migrate_legacy_if_needed(tid, data)
                 before_in = int(data.get("input_remaining") or 0)
@@ -337,10 +334,9 @@ class TokenWalletService:
         }
 
         if billing_uses_postgres():
-            from db.session import whatsapp_session
             from services.token_wallet_pg_store import append_ledger, read_wallet, write_wallet
 
-            with whatsapp_session() as session:
+            with require_billing_pg_session() as session:
                 data = read_wallet(session, tid)
                 data = self._file.migrate_legacy_if_needed(tid, data)
                 data = _apply(data)
@@ -369,10 +365,9 @@ class TokenWalletService:
     def recent_ledger(self, tenant_id: str, *, limit: int = 50) -> list[dict[str, Any]]:
         tid = normalize_wallet_tenant_id(tenant_id)
         if billing_uses_postgres():
-            from db.session import whatsapp_session
             from services.token_wallet_pg_store import recent_ledger
 
-            with whatsapp_session() as session:
+            with require_billing_pg_session() as session:
                 return recent_ledger(session, tid, limit=limit)
         return self._file.recent_ledger(tid, limit=limit)
 

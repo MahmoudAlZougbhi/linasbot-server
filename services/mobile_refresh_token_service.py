@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from services.billing_backend import auth_tokens_use_postgres
+from services.billing_backend import auth_tokens_use_postgres, require_auth_token_pg_session
 from storage.persistent_storage import _DATA_ROOT
 
 MOBILE_REFRESH_TTL_SECONDS = int(os.getenv("MOBILE_REFRESH_TTL_SECONDS", str(60 * 60 * 24 * 30)))
@@ -94,10 +94,9 @@ class MobileRefreshTokenService:
             expires_at=now + ttl,
         )
         if auth_tokens_use_postgres():
-            from db.session import whatsapp_session
             from services.auth_token_pg_store import mobile_issue
 
-            with whatsapp_session() as session:
+            with require_auth_token_pg_session() as session:
                 mobile_issue(
                     session,
                     token_hash=token_hash,
@@ -116,10 +115,9 @@ class MobileRefreshTokenService:
     def consume(self, raw: str) -> MobileRefreshRecord | None:
         token_hash = _hash_token((raw or "").strip())
         if auth_tokens_use_postgres():
-            from db.session import whatsapp_session
             from services.auth_token_pg_store import mobile_delete, mobile_get, mobile_revoke
 
-            with whatsapp_session() as session:
+            with require_auth_token_pg_session() as session:
                 row = mobile_get(session, token_hash)
                 if row is None:
                     return None
@@ -168,10 +166,9 @@ class MobileRefreshTokenService:
 
     def revoke_all_for_user(self, user_id: str) -> int:
         if auth_tokens_use_postgres():
-            from db.session import whatsapp_session
             from services.auth_token_pg_store import mobile_revoke_all_for_user
 
-            with whatsapp_session() as session:
+            with require_auth_token_pg_session() as session:
                 return mobile_revoke_all_for_user(session, user_id, time.time())
 
         count = 0
