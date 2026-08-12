@@ -169,13 +169,17 @@ def unlink_google_identity(*, user_id: str, sub: str) -> None:
         # Prevent lock-out: require password login or another provider.
         user = user_service.get_user_by_id(uid)
         password_ok = bool(user and user.get("passwordLoginEnabled"))
-        other_providers = session.execute(
-            select(AuthExternalIdentityRow).where(
-                AuthExternalIdentityRow.user_id == uid,
-                AuthExternalIdentityRow.unlinked_at.is_(None),
-                AuthExternalIdentityRow.provider != PROVIDER_GOOGLE,
+        other_providers = (
+            session.execute(
+                select(AuthExternalIdentityRow).where(
+                    AuthExternalIdentityRow.user_id == uid,
+                    AuthExternalIdentityRow.unlinked_at.is_(None),
+                    AuthExternalIdentityRow.provider != PROVIDER_GOOGLE,
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         if not password_ok and not other_providers:
             raise GoogleIdentityError("cannot_unlink_last_sign_in_method")
 

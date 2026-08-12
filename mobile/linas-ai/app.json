@@ -15,7 +15,8 @@
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Linas AI uses the microphone so you can dictate messages in chat. Audio is sent to Linas servers for speech-to-text only.",
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "appleTeamId": "55624L5UXL"
     },
     "android": {
       "package": "com.linasai.app",
