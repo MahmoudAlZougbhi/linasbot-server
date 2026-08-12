@@ -19,10 +19,11 @@ from typing import Any, Literal
 
 from storage.persistent_storage import _DATA_ROOT
 
-TokenPurpose = Literal["password_reset", "email_verify"]
+TokenPurpose = Literal["password_reset", "email_verify", "email_change"]
 
 PASSWORD_RESET_TTL_SECONDS = int(os.getenv("PASSWORD_RESET_TTL_SECONDS", str(60 * 60)))
 EMAIL_VERIFY_TTL_SECONDS = int(os.getenv("EMAIL_VERIFY_TTL_SECONDS", str(48 * 60 * 60)))
+EMAIL_CHANGE_TTL_SECONDS = int(os.getenv("EMAIL_CHANGE_TTL_SECONDS", str(24 * 60 * 60)))
 
 
 def _hash_token(raw: str) -> str:
@@ -38,9 +39,10 @@ class AuthEmailTokenRecord:
     created_at: float
     expires_at: float
     used_at: float | None = None
+    meta: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "purpose": self.purpose,
             "user_id": self.user_id,
             "email": self.email,
@@ -49,12 +51,16 @@ class AuthEmailTokenRecord:
             "expires_at": self.expires_at,
             "used_at": self.used_at,
         }
+        if self.meta:
+            payload["meta"] = self.meta
+        return payload
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AuthEmailTokenRecord:
         tenant_id = str(data.get("tenant_id") or "").strip()
         if not tenant_id:
             raise ValueError("tenant_id required")
+        meta = data.get("meta")
         return cls(
             purpose=data["purpose"],  # type: ignore[arg-type]
             user_id=str(data["user_id"]),
@@ -63,6 +69,7 @@ class AuthEmailTokenRecord:
             created_at=float(data["created_at"]),
             expires_at=float(data["expires_at"]),
             used_at=float(data["used_at"]) if data.get("used_at") is not None else None,
+            meta=dict(meta) if isinstance(meta, dict) else None,
         )
 
 
@@ -83,6 +90,7 @@ class AuthEmailTokenService:
         email: str,
         tenant_id: str,
         ttl_seconds: int | None = None,
+        meta: dict[str, Any] | None = None,
     ) -> str:
         """Create a token and return the raw secret (show once to the user via email)."""
         tid = str(tenant_id or "").strip()
@@ -92,7 +100,12 @@ class AuthEmailTokenService:
         token_hash = _hash_token(raw)
         now = time.time()
         if ttl_seconds is None:
-            ttl_seconds = PASSWORD_RESET_TTL_SECONDS if purpose == "password_reset" else EMAIL_VERIFY_TTL_SECONDS
+            if purpose == "password_reset":
+                ttl_seconds = PASSWORD_RESET_TTL_SECONDS
+            elif purpose == "email_change":
+                ttl_seconds = EMAIL_CHANGE_TTL_SECONDS
+            else:
+                ttl_seconds = EMAIL_VERIFY_TTL_SECONDS
         record = AuthEmailTokenRecord(
             purpose=purpose,
             user_id=user_id,
@@ -100,6 +113,7 @@ class AuthEmailTokenService:
             tenant_id=tid,
             created_at=now,
             expires_at=now + max(60, int(ttl_seconds)),
+            meta=dict(meta) if isinstance(meta, dict) else None,
         )
         with self._lock:
             self._path(token_hash).write_text(json.dumps(record.to_dict()), encoding="utf-8")
@@ -150,6 +164,7 @@ class AuthEmailTokenService:
                 created_at=record.created_at,
                 expires_at=record.expires_at,
                 used_at=time.time(),
+                meta=record.meta,
             )
             path.write_text(json.dumps(used.to_dict()), encoding="utf-8")
             return used

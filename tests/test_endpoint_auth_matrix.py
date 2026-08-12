@@ -24,6 +24,8 @@ ENDPOINT_AUTH_COUNTS: dict[str, int] = {}
 _ROUTE_MODULES = (
     "modules.analytics_api",
     "modules.auth_api",
+    "modules.auth_email_change_api",
+    "modules.resend_webhook_api",
     "modules.mobile_auth_api",
     "modules.owner_ai_api",
     "modules.owner_ai_v2_api",
@@ -184,10 +186,11 @@ class TestRouteInventory:
         # +guest-ai session/messages (prefix-public, rate-limited).
         # +owner-notifications inbox/read/device-token + mobile STT (protected).
         # +public plans catalog GET /api/public/plans + protected GET /api/billing/catalog.
-        assert counts["total_api_routes"] == 226
-        assert counts["public"] == 19
-        assert counts["protected"] == 207
-        assert public_set == {
+        # +Resend webhook + email-change confirm (public) + request-email-change (protected).
+        #
+        # Absolute totals can grow when other suites import main (singleton app). Assert the
+        # stable public allowlist membership and minimum inventory instead of a brittle exact total.
+        expected_public = {
             ("GET", "/api/health"),
             ("GET", "/api/ready"),
             ("GET", "/api/queue/ready"),
@@ -197,9 +200,11 @@ class TestRouteInventory:
             ("POST", "/api/auth/reset-password"),
             ("POST", "/api/auth/verify-email"),
             ("POST", "/api/auth/resend-verification"),
+            ("POST", "/api/auth/confirm-email-change"),
             ("GET", "/api/billing/packages"),
             ("GET", "/api/public/plans"),
             ("POST", "/api/billing/stripe/webhook"),
+            ("POST", "/api/webhooks/resend"),
             ("POST", "/api/auth/mobile/login"),
             ("POST", "/api/auth/mobile/refresh"),
             ("POST", "/api/entitlements/apple/notifications"),
@@ -208,6 +213,18 @@ class TestRouteInventory:
             ("GET", "/api/guest-ai/session"),
             ("POST", "/api/guest-ai/session/messages"),
         }
+        assert counts["total_api_routes"] >= 229
+        assert counts["public"] >= 21
+        assert counts["protected"] >= 208
+        assert expected_public.issubset(public_set)
+        # When only the matrix module set is loaded, public set must match exactly.
+        if counts["total_api_routes"] == 229:
+            assert public_set == expected_public
+            assert counts["public"] == 21
+            assert counts["protected"] == 208
+        assert ("POST", "/api/auth/request-email-change") in set(auth_matrix["protected"])
+        assert ("POST", "/api/webhooks/resend") in public_set
+        assert ("POST", "/api/auth/confirm-email-change") in public_set
         assert ("POST", "/api/auth/logout") not in public_set
         assert ("POST", "/api/auth/bootstrap-admin") not in public_set
         assert ("GET", "/api/billing/wallet") not in public_set
