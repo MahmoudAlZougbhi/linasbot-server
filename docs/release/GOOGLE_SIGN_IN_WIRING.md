@@ -41,3 +41,22 @@
 - iOS logs: https://expo.dev/accounts/mahmoudalzoughbi/projects/linas-ai/builds/6a89dd01-1141-47a8-a341-129ef4939187
 - Android logs: https://expo.dev/accounts/mahmoudalzoughbi/projects/linas-ai/builds/edad34e3-cb12-420e-9e74-0d367e55e880
 - Play Internal auto-submit: **blocked** — no Google Play service-account JSON on this machine / in EAS submit credentials. Upload AAB manually after build finishes (Play Console → Testing → Internal testing).
+
+## Store delivery
+
+| Item | Status |
+|------|--------|
+| iOS TestFlight submit | Scheduled `a26a2fde-1617-40ad-a10d-883fa920d761` |
+| iOS IPA | https://expo.dev/artifacts/eas/aCI-YanM13cvIrMPHjkJ-haXJJDzlfMEUzR_APen0R0.ipa |
+| Android AAB | https://expo.dev/artifacts/eas/lm4502TaEf2DMJBtY1SP0SHgN2zD25OehGj2hwybguY.aab |
+| Local AAB | `artifacts/mobile/linas-ai-v1.0.0-vc26-google-native.aab` |
+| Play Internal auto-upload | **BLOCKED** — EAS lacks Google Play service-account (non-interactive setup refused). Manual: Play Console → Testing → Internal testing → Upload AAB |
+
+## Verification checklist
+
+- [x] Backend audiences Web+iOS+Android on both nodes; restart active
+- [x] Bad token → 401 (LB + local nodes)
+- [x] Unit tests `tests/test_google_sign_in.py` (4 passed)
+- [x] No client secret in mobile / git / nodes
+- [ ] Owner device: Android native Google login + iOS Google login on builds above
+
