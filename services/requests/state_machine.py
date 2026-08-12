@@ -87,9 +87,7 @@ def can_transition(request_type: str, from_status: str, to_status: str) -> bool:
 
 def require_transition(request_type: str, from_status: str, to_status: str) -> None:
     if not can_transition(request_type, from_status, to_status):
-        raise InvalidRequestTransition(
-            f"invalid transition {from_status!r} → {to_status!r} for {request_type!r}"
-        )
+        raise InvalidRequestTransition(f"invalid transition {from_status!r} → {to_status!r} for {request_type!r}")
 
 
 def resolve_final_action_status(request_type: str, action: str) -> str:

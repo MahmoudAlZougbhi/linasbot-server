@@ -33,6 +33,7 @@ from services.chat_response_runtime_tool_create_name import handle_create_appoin
 from services.chat_response_runtime_tool_create_payload import handle_create_appointment_payload
 from services.chat_response_runtime_tool_execute import handle_execute_api_tool
 from services.chat_response_runtime_tool_helpers import bind_tool_helpers
+from services.chat_response_runtime_tool_requests import handle_create_customer_request_tool
 from services.chat_response_runtime_tool_submit import handle_retrieve_or_submit_tools
 from services.chat_response_runtime_tool_update import handle_update_appointment_tools
 
@@ -354,6 +355,11 @@ async def run_tool_loop(ns: Any) -> Any:
                         continue
 
         _remember_booking_selection(ns.user_id, ns.function_args)
+        result = await handle_create_customer_request_tool(ns)
+        if result is LOOP_CONTINUE:
+            continue
+        if result is not None:
+            return result
         result = await handle_retrieve_or_submit_tools(ns)
         if result is LOOP_CONTINUE:
             continue

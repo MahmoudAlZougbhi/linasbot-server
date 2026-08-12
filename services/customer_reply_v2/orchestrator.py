@@ -133,6 +133,7 @@ async def run_customer_reply_v2_dm(
         message=message,
         response_language=response_language,
         explicit_gender=facts.gender,
+        channel=channel,
     )
     if policy:
         trace = build_safe_trace(
@@ -254,6 +255,9 @@ async def run_customer_reply_v2_dm(
         customer_profile=profile,
         history_messages=[{"role": m["role"], "content": m["content"]} for m in history_for_model],
         channel=channel,
+        conversation_id=conversation_id or None,
+        asset_id=asset_id or None,
+        provider_sender_id=provider_sender_id or user_id or None,
         response_language=response_language,
         detected_language=detected_language,
         fixture_reply=fixture_answer,
@@ -291,6 +295,9 @@ async def run_customer_reply_v2_dm(
                 customer_profile=profile,
                 history_messages=[{"role": m["role"], "content": m["content"]} for m in history_for_model],
                 channel=channel,
+                conversation_id=conversation_id or None,
+                asset_id=asset_id or None,
+                provider_sender_id=provider_sender_id or user_id or None,
                 response_language=response_language,
                 detected_language=detected_language,
                 fixture_reply=(

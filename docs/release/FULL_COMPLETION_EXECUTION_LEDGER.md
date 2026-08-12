@@ -15,14 +15,14 @@
 |------:|------|--------|
 | 0 | Finish PR #240 CI | **DONE** |
 | 1 | Requests architecture + data model | **DONE** (prod migration not applied) |
-| 2 | Backend domain + APIs | **IN_PROGRESS** (core APIs + tests landed) |
+| 2 | Backend domain + APIs | **DONE** |
 | 3 | AI Setup Requests & Appointments | **DONE** |
-| 4 | Customer AI request flow | PENDING |
+| 4 | Customer AI request flow | **DONE** |
 | 5 | Mobile Requests module | **DONE** |
 | 6 | Chat with customer / manual mode | **DONE** (foundations) |
 | 7 | Channel delivery | **DONE** (outbox foundations) |
 | 8 | BOC isolation (default OFF) | **DONE** |
-| 9 | Security/correctness/performance tests | PENDING |
+| 9 | Security/correctness/performance tests | IN_PROGRESS |
 | 10 | Independent review + PR closeout | PENDING |
 | 11 | Full file-by-file reinspection | PENDING |
 | 12 | Final freeze | PENDING |

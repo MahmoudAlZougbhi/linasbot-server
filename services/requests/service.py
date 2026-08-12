@@ -7,6 +7,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from db.models.requests import CustomerRequest
 from services.requests.config_loader import (
     published_configuration_version,
     requests_capture_active,
@@ -43,9 +44,7 @@ class CustomerRequestsService:
         self.session = session
         self.repo = CustomerRequestsRepository(session)
 
-    def create_from_ai(
-        self, *, tenant_id: str, body: RequestCreateBody
-    ) -> dict[str, Any]:
+    def create_from_ai(self, *, tenant_id: str, body: RequestCreateBody) -> dict[str, Any]:
         if not body.customer_confirmed:
             raise CustomerRequestsError(
                 "CUSTOMER_CONFIRMATION_REQUIRED",
@@ -57,9 +56,7 @@ class CustomerRequestsService:
                 "Requests capture inactive until published configuration",
                 http_status=409,
             )
-        existing = self.repo.get_idempotency(
-            tenant_id=tenant_id, scope="ai_create", key=body.idempotency_key
-        )
+        existing = self.repo.get_idempotency(tenant_id=tenant_id, scope="ai_create", key=body.idempotency_key)
         if existing and existing.request_id:
             row = self.repo.get_for_tenant(tenant_id=tenant_id, request_id=existing.request_id)
             if row is None:
@@ -115,17 +112,13 @@ class CustomerRequestsService:
         self.session.commit()
         return serialize_request(row, include_sensitive=True)
 
-    def get(
-        self, *, tenant_id: str, request_id: str, include_sensitive: bool
-    ) -> dict[str, Any]:
+    def get(self, *, tenant_id: str, request_id: str, include_sensitive: bool) -> dict[str, Any]:
         row = self.repo.get_for_tenant(tenant_id=tenant_id, request_id=request_id)
         if row is None:
             raise CustomerRequestsError("NOT_FOUND", "Request not found", http_status=404)
         data = serialize_request(row, include_sensitive=include_sensitive)
         data["notes"] = [serialize_note(n) for n in self.repo.list_notes(tenant_id=tenant_id, request_id=request_id)]
-        data["events"] = [
-            serialize_event(e) for e in self.repo.list_events(tenant_id=tenant_id, request_id=request_id)
-        ]
+        data["events"] = [serialize_event(e) for e in self.repo.list_events(tenant_id=tenant_id, request_id=request_id)]
         return data
 
     def list(
@@ -191,9 +184,7 @@ class CustomerRequestsService:
         self.session.commit()
         return serialize_request(row)
 
-    def add_note(
-        self, *, tenant_id: str, request_id: str, author_user_id: str, body: str
-    ) -> dict[str, Any]:
+    def add_note(self, *, tenant_id: str, request_id: str, author_user_id: str, body: str) -> dict[str, Any]:
         row = self.repo.get_for_tenant(tenant_id=tenant_id, request_id=request_id)
         if row is None:
             raise CustomerRequestsError("NOT_FOUND", "Request not found", http_status=404)
@@ -266,9 +257,7 @@ class CustomerRequestsService:
         idempotency_key: str,
         send_notification: bool,
     ) -> dict[str, Any]:
-        existing = self.repo.get_idempotency(
-            tenant_id=tenant_id, scope="final_action", key=idempotency_key
-        )
+        existing = self.repo.get_idempotency(tenant_id=tenant_id, scope="final_action", key=idempotency_key)
         if existing and existing.request_id:
             row = self.repo.get_for_tenant(tenant_id=tenant_id, request_id=existing.request_id)
             if row is None:
@@ -356,7 +345,7 @@ class CustomerRequestsService:
         self.session.commit()
         return serialize_request(row)
 
-    def _lock_version(self, tenant_id: str, request_id: str, row_version: int):
+    def _lock_version(self, tenant_id: str, request_id: str, row_version: int) -> CustomerRequest:
         row = self.repo.get_for_tenant(tenant_id=tenant_id, request_id=request_id)
         if row is None:
             raise CustomerRequestsError("NOT_FOUND", "Request not found", http_status=404)

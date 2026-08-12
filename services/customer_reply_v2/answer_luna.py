@@ -200,7 +200,10 @@ async def _default_llm(
     from services.model_policy import emit_model_policy_trace, resolve_customer_social_policy
 
     if tools:
-        raise RuntimeError("Answer Tera must not receive retrieval tools")
+        from services.requests.capture_answer_loop import capture_tools_allowed
+
+        if not capture_tools_allowed(tools):
+            raise RuntimeError("Answer Tera must not receive retrieval tools")
     policy = resolve_customer_social_policy(channel=channel, regeneration=regeneration)
     model = customer_answer_model_name()
     if model != policy.model:
@@ -211,9 +214,13 @@ async def _default_llm(
         max_tokens=900,
         temperature=0.3,
         reasoning_effort=str(policy.reasoning_effort),
+        has_function_tools=bool(tools),
     )
     kwargs["messages"] = messages
     kwargs["model"] = model
+    if tools:
+        kwargs["tools"] = tools
+        kwargs["tool_choice"] = "auto"
     emit_model_policy_trace(policy, extra={"role": "answer", "stage": "answer" if not regeneration else "repair"})
     return await client.chat.completions.create(**kwargs)
 
@@ -253,6 +260,9 @@ async def run_answer_luna(
     history_messages: list[dict[str, str]] | None = None,
     comment_context: dict[str, Any] | None = None,
     channel: str = "instagram_dm",
+    conversation_id: str | None = None,
+    asset_id: str | None = None,
+    provider_sender_id: str | None = None,
     response_language: str = "ar",
     detected_language: str = "",
     llm_fn: LlmFn | None = None,
@@ -296,9 +306,40 @@ async def run_answer_luna(
             raw_structured=data,
         )
 
+    from services.requests.capture import is_public_comment_channel
+    from services.requests.capture_answer_loop import (
+        build_answer_capture_context,
+        maybe_run_capture_tool_round,
+    )
+    from services.requests.capture_tools_wire import customer_reply_capture_tools
+
+    capture_tools = [] if is_public_comment_channel(channel) else customer_reply_capture_tools(tenant_id)
+    capture_ctx = (
+        build_answer_capture_context(
+            tenant_id=tenant_id,
+            channel=channel,
+            conversation_id=conversation_id,
+            customer_profile=customer_profile,
+            response_language=response_language,
+            asset_id=asset_id,
+            provider_sender_id=provider_sender_id,
+        )
+        if capture_tools
+        else None
+    )
+
     llm = llm_fn or (lambda **kw: _default_llm(**kw, channel=channel, regeneration=bool(repair_failures)))
     try:
-        response = await llm(messages=messages, tools=None)
+        response = await llm(messages=messages, tools=capture_tools or None)
+        if capture_tools and capture_ctx is not None:
+            response = await maybe_run_capture_tool_round(
+                tenant_id=tenant_id,
+                messages=messages,
+                response=response,
+                ctx=capture_ctx,
+                llm_fn=llm,
+                channel=channel,
+            )
     except Exception as exc:
         return AnswerLunaResult(
             reply_text="",

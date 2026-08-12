@@ -26,7 +26,34 @@ def _coerce_unauthorized_to_wa_me(
     current_preferred_lang: str,
     reason: str,
 ) -> tuple[str, str]:
-    """Replace unauthorized human_handover coerce with WhatsApp/wa.me guidance."""
+    """Replace unauthorized human_handover coerce with WhatsApp/wa.me guidance.
+
+    When Requests capture is active, booking/appointment claim paths must not force wa.me.
+    """
+    booking_reasons = {
+        "booking_retry_exceeded",
+        "booking_claim_without_crm",
+    }
+    if reason in booking_reasons or reason.startswith("booking_"):
+        try:
+            from services.requests.capture import (
+                appointment_pending_confirmation_message,
+                skip_forced_booking_wa_me,
+            )
+
+            tenant_id = str(
+                (user_data or {}).get("tenant_id")
+                or (user_data or {}).get("tenantId")
+                or (user_data or {}).get("workspace_id")
+                or ""
+            ).strip()
+            if skip_forced_booking_wa_me(tenant_id):
+                reply = appointment_pending_confirmation_message(current_preferred_lang)
+                print(f"[_process_and_respond] requests capture active → skip forced wa.me booking handoff ({reason})")
+                return "answer_question", reply
+        except Exception as exc:
+            print(f"[_process_and_respond] requests capture gate check failed: {exc}")
+
     reply = build_wa_me_handoff_guidance(user_data=user_data, language=current_preferred_lang)
     print(f"[_process_and_respond] unauthorized handover coerce blocked → wa.me handoff ({reason})")
     return "answer_question", reply

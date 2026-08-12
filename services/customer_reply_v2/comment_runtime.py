@@ -145,6 +145,7 @@ async def run_customer_reply_v2_comment(
         message=comment_text,
         response_language=response_language,
         explicit_gender=facts.gender,
+        channel=channel,
     )
     if policy:
         return CustomerReplyOutcome(

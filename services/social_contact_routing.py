@@ -56,6 +56,19 @@ from services.social_contact_routing_flow import (  # noqa: F401
 )
 
 
+def should_force_wa_me_booking_handoff(tenant_id: str | None, message: str | None = None) -> bool:
+    """False when Requests capture is active (appointment/order must not force wa.me)."""
+    del message  # Intent is gated by capture flag; message reserved for callers.
+    try:
+        from services.requests.capture import skip_forced_booking_wa_me
+
+        if skip_forced_booking_wa_me(tenant_id):
+            return False
+    except Exception:
+        pass
+    return True
+
+
 def route_social_contact_request(
     message: str,
     user_data: dict,
@@ -82,6 +95,27 @@ def route_social_contact_request(
         if explicit:
             raise
         return None
+
+    # Requests capture active: do not force wa.me booking handoff for appointment/order.
+    # Human-agent handoff and tattoo refuse paths remain.
+    if explicit == "booking":
+        try:
+            from services.requests.capture import skip_forced_booking_wa_me
+
+            if skip_forced_booking_wa_me(_tenant_id_from_user_data(user_data)):
+                return None
+        except Exception:
+            pass
+    if state and state.get("intent") == "booking" and not explicit:
+        try:
+            from services.requests.capture import skip_forced_booking_wa_me
+
+            if skip_forced_booking_wa_me(_tenant_id_from_user_data(user_data)):
+                _clear_flow_state(user_data)
+                return None
+        except Exception:
+            pass
+
     if state and _state_expired(state):
         _clear_flow_state(user_data)
         state = {}
