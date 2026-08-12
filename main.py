@@ -37,6 +37,9 @@ if os.path.exists(DASHBOARD_BUILD_PATH):
 
 # Import all modules to register routes and events (must run before SPA catch-all).
 import modules.analytics_api  # noqa: E402, F401
+import modules.apple_auth_api  # noqa: E402, F401
+import modules.apple_iap_client_api  # noqa: E402, F401
+import modules.apple_store_webhook_api  # noqa: E402, F401
 import modules.auth_api  # noqa: E402, F401
 import modules.auth_email_change_api  # noqa: E402, F401
 import modules.chat_history_api  # noqa: E402, F401
@@ -62,7 +65,6 @@ import modules.meta_instagram_login_webhook  # noqa: E402, F401
 import modules.meta_messaging_webhook  # noqa: E402, F401
 import modules.meta_social_posts_api  # noqa: E402, F401
 import modules.mobile_auth_api  # noqa: E402, F401
-import modules.apple_auth_api  # noqa: E402, F401
 import modules.mobile_dashboard_api  # noqa: E402, F401
 import modules.mobile_integrations_api  # noqa: E402, F401
 import modules.mobile_stt_api  # noqa: E402, F401
@@ -79,8 +81,6 @@ import modules.scale_api  # noqa: E402, F401
 import modules.schedule_api  # noqa: E402, F401
 import modules.settings_api  # noqa: E402, F401
 import modules.smart_messaging_api  # noqa: E402, F401
-import modules.apple_iap_client_api  # noqa: E402, F401
-import modules.apple_store_webhook_api  # noqa: E402, F401
 import modules.store_iap_api  # noqa: E402, F401
 import modules.training_files_api  # noqa: E402, F401
 import modules.wallet_api  # noqa: E402, F401

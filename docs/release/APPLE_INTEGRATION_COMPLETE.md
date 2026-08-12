@@ -62,7 +62,8 @@ UI prices: StoreKit `displayPrice` only — no hardcoded checkout USD.
 - Rate limits on `POST /api/auth/mobile/apple`
 
 ### StoreKit 2 (mobile)
-- `react-native-iap` path; verify-before-`finishTransaction`
+- `react-native-iap` dependency (autolink on native prebuild/EAS; **not** listed as Expo config plugin — package has no `app.plugin.js` and breaks `expo export`)
+- Verify-before-`finishTransaction`
 - Monthly/Yearly toggle, credit packs, restore, manage subscriptions, refund request sheet
 - Stable `appAccountToken` UUID from server
 
