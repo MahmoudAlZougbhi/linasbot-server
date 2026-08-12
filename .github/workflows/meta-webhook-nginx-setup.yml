@@ -2,6 +2,11 @@ name: Meta Webhook Nginx Setup
 
 on:
   workflow_dispatch:
+    inputs:
+      CONFIRM:
+        description: "Type APPLY_META_WEBHOOK_NGINX_SETUP to apply"
+        required: true
+        type: string
 
 concurrency:
   group: meta-webhook-nginx-setup
@@ -15,6 +20,7 @@ jobs:
     name: Set Meta verify token + validate webhook
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    if: github.event.inputs.CONFIRM == 'APPLY_META_WEBHOOK_NGINX_SETUP'
 
     steps:
       - name: Set production verify token and validate webhook
