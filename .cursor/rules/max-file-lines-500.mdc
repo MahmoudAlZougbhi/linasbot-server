@@ -1,0 +1,37 @@
+---
+description: Hard limit — no hand-written source file may exceed 500 physical lines
+alwaysApply: true
+---
+
+# Max file size: 500 physical lines
+
+Hard cap: **500 physical lines** for any hand-written application/source file the agent creates or edits.
+
+## Before growing a file
+
+- If a file is approaching, at, or over 500 lines: **split first**, then add logic.
+- Split by responsibility: routes, controllers, services, schemas, validators, components, hooks, helpers, workers, tests.
+- Never put a whole feature, endpoint group, screen, or worker flow in one file when it can be cleanly separated.
+- Prefer small targeted patches; do not grow huge files to "finish faster."
+
+## Existing oversized files
+
+- If a file is already over 500: **do not add more logic** without splitting.
+- When feasible, plan and perform the split in the **same change**.
+
+## Exclusions (not an excuse to grow app source)
+
+These may exceed 500 and are outside the hand-written app-source cap:
+
+- Generated lockfiles / `package-lock` / similar
+- Minified bundles
+- Binary assets
+- Vendored third-party code
+- Large JSON fixtures / data dumps
+- Auto-generated code
+
+Exclusions never justify expanding hand-written application source past 500 lines.
+
+## Alignment
+
+Matches the Mahmoud/SportBook hard file-size rule in user rules (stricter 500-line cap). Do not weaken that rule.
