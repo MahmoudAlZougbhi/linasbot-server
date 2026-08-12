@@ -1,11 +1,20 @@
 import { Link } from 'react-router-dom';
 import { SAAS_NAV_ITEMS } from '../constants/productFeatures';
+import { useAuth } from '../contexts/AuthContext';
 
 /**
  * Operator /app home — replaces the disabled Analytics dashboard surface.
  * Deep links to enabled SaaS areas; public marketing stays on landing routes.
  */
 const Dashboard = () => {
+  const { user } = useAuth();
+  const items = SAAS_NAV_ITEMS.filter((item) => {
+    if (item.href === '/app') return false;
+    const key = item.permissionKey;
+    if (!key) return true;
+    return user?.resolvedPermissions?.[key] === true || user?.role === 'admin';
+  });
+
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       <div>
@@ -15,7 +24,7 @@ const Dashboard = () => {
         </p>
       </div>
       <ul className="grid gap-3 sm:grid-cols-2">
-        {SAAS_NAV_ITEMS.filter((item) => item.href !== '/app').map((item) => (
+        {items.map((item) => (
           <li key={item.href}>
             <Link
               to={item.href}
