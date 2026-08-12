@@ -259,7 +259,7 @@ All Quality Gates + Security Checks SUCCESS on PR head. No merge.
 | Field | Value |
 |------|-------|
 | Starting SHA | `d3be9b6fab44dac023764be798f4e9507f71d926` |
-| Ending SHA | _(pinned after this commit)_ |
+| Ending SHA | `e8d6e6574bc91941d0abd38f630dda868cc39041` |
 | Status | **DONE** |
 | New file | `tests/test_requests_phase9_security.py` (13 tests, ≤500 LOC) |
 
