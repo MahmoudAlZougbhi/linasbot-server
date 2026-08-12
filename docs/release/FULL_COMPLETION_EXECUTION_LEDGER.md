@@ -88,7 +88,6 @@ All Quality Gates + Security Checks SUCCESS on PR head. No merge.
 ### Still needed in Phase 2–7
 
 - AI create tool wiring, outbox delivery workers, channel send adapters
-- CM `requests_appointments` section draft→publish
 - Mobile Requests UI
 - Manual chat pause/resume server authority
 - Remove forced wa.me appointment/order handoff when Requests capture active
@@ -96,6 +95,31 @@ All Quality Gates + Security Checks SUCCESS on PR head. No merge.
 
 ---
 
+## Phase 3 — AI Setup Requests & Appointments
+
+| Field | Value |
+|------|-------|
+| Starting SHA | `b90861f` (Phase 2 head) |
+| Ending SHA | `c93ec455edda605460289bf16e1053aa9792176c` |
+| Status | **DONE** |
+| Tests | `tests/test_cm_requests_appointments.py` + related CM guides — 37 passed |
+
+### Landed
+
+- CM section key `requests_appointments` in `CM_SECTIONS` (defaults: `module_enabled=false`, `enabled_types=[]`)
+- Schema: `services/cm/schemas_requests.py` → re-exported via `services/cm/schemas.py`
+- Draft → preview/diff → approval → publish path via existing CM machinery (`SECTION_MODELS`, section guide, setup chat prompt, progress optional-done)
+- Mobile AI Setup hub registration + `RequestsAppointmentsEditor`
+- Capture remains inactive for missing/unpublished/disabled published config (`config_loader.requests_capture_active`)
+
+### Not changed
+
+- `services/requests/service.py` APIs
+- BOC / booking
+- Mobile Requests list screens (other ownership)
+
+---
+
 ## Resume notes
 
-Continue Phase 2 remaining + Phases 3–8 next. Do not merge until Phase 13 ready.
+Continue Phase 2 remaining + Phases 4–8 next. Do not merge until Phase 13 ready.
