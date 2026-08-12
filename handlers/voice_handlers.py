@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import io
 import time
 from typing import Any
@@ -116,7 +117,7 @@ async def handle_voice_message(
                 .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
                 .document(current_conversation_id)
             )
-            doc_snap = conv_doc_ref.get()
+            doc_snap = await asyncio.to_thread(conv_doc_ref.get)
 
             if doc_snap.exists:
                 conv_data = doc_snap.to_dict()
