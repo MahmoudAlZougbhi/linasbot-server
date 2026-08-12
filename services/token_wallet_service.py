@@ -42,6 +42,18 @@ class TokenWalletService:
         self._lock = threading.RLock()
         self._file = file_store or TokenWalletFileStore(store_dir)
 
+    # Compat for tests/tools that inspect the file path layout.
+    @property
+    def _store_dir(self) -> Path:
+        return self._file._store_dir
+
+    @property
+    def _ledger_dir(self) -> Path:
+        return self._file._ledger_dir
+
+    def _wallet_path(self, tenant_id: str) -> Path:
+        return self._file.wallet_path(tenant_id)
+
     def _read(self, tenant_id: str) -> dict[str, Any]:
         if billing_uses_postgres():
             from db.session import whatsapp_session
