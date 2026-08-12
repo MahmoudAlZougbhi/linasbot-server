@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 # handlers/text_handlers_firestore.py
-# Shared imports and utilities for all text handler modules
+# Shared imports / re-exports for text handler modules (not Firestore-only).
+# Kept under this filename for historical import paths — do not git-mv without a
+# coordinated barrel update.
 import asyncio
 import datetime
 import random
