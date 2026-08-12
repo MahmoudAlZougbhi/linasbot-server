@@ -1,8 +1,5 @@
 /* eslint-disable no-unused-vars */
-import toast from "react-hot-toast";
 import { motion } from "framer-motion";
-import { errorMessage } from "../utils/apiValidate";
-import { CHAT_LIST_PAGE_SIZE } from "./LiveChat.helpers";
 import {
   ChatBubbleLeftRightIcon,
   UserIcon,
@@ -44,8 +41,7 @@ export function LiveChatSidebar(s) {
     botDateFrom, setBotDateFrom, botDateTo, setBotDateTo, templateSendFilterId, setTemplateSendFilterId,
     templateSendFilterActive, setTemplateSendFilterActive, templateSendFilterChats, setTemplateSendFilterChats, templateSendFilterMeta, setTemplateSendFilterMeta,
     templateSendFilterLoading, setTemplateSendFilterLoading, messagingTemplates, setMessagingTemplates, setChatPage, nextCursor,
-    setNextCursor, hasMoreChats, setHasMoreChats, loadingMoreChats, setLoadingMoreChats, rebuildingIndex,
-    setRebuildingIndex, sidebarCollapsed, setSidebarCollapsed, botPanelOpen, setBotPanelOpen, mobileListSection,
+    setNextCursor, hasMoreChats, setHasMoreChats, loadingMoreChats, setLoadingMoreChats, sidebarCollapsed, setSidebarCollapsed, botPanelOpen, setBotPanelOpen, mobileListSection,
     setMobileListSection, mobileDetailsOpen, setMobileDetailsOpen, mobileFilterSheetOpen, setMobileFilterSheetOpen, readMessageCountByConv,
     setReadMessageCountByConv, isReleasing, setIsReleasing, releasingRef, sendingRef, editContent,
     setEditContent, isSubmittingEdit, setIsSubmittingEdit, faqContext, setFaqContext, faqEditAnswer,
@@ -54,7 +50,7 @@ export function LiveChatSidebar(s) {
     useMockDataRef, debouncedSearchRef, isMountedRef, previousConversationIdRef, previousMessageCountRef, forceBottomOnOpenRef,
     messageCacheRef, hasMoreMessagesRef, autoLoadedPagesRef, botListRef, botLoadMoreSentinelRef, botListScrollThrottleRef,
     botFloatingScrollRef, loadMoreInProgressRef, loadMoreCooldownUntilRef, messagesLoadingStartRef, getUnifiedChats, getChatsByTemplateSendLog,
-    getLiveConversations, getWaitingQueue, rebuildLiveChatIndex, simulateWebhook, getConversationMessages, takeoverConversation,
+    getLiveConversations, getWaitingQueue, getConversationMessages, takeoverConversation,
     releaseConversation, sendOperatorMessage, updateOperatorStatus, submitFeedback, normalizeUserIdentity, formatPhoneForDisplay,
     userRequestedReasons, normalizeConversationStatus, normalizeIncomingConversation, mergeActiveWaitingIntoQueue, mergeMissingActiveChats, applyServerConversations,
     effectiveWaitingQueue, filteredWaitingQueue, withOperator, filteredWithOperator, botConversations, botConversationsForList,
@@ -223,60 +219,6 @@ export function LiveChatSidebar(s) {
                   className="text-xs px-2 py-1 rounded border border-slate-200 hover:bg-slate-50 text-slate-600"
                 >
                   Clear
-                </button>
-                <button
-                  type="button"
-                  disabled={rebuildingIndex}
-                  onClick={async () => {
-                    setRebuildingIndex(true);
-                    try {
-                      const r = await rebuildLiveChatIndex();
-                      if (r?.success) {
-                        toast.success(`Index rebuilt (${r.written ?? "?"} conversations)`);
-                        const refreshed = await getUnifiedChats("", 1, CHAT_LIST_PAGE_SIZE);
-                        if (refreshed?.success && Array.isArray(refreshed.chats)) {
-                          applyServerConversations(refreshed.chats);
-                          setHasMoreChats(refreshed.has_more ?? false);
-                          setNextCursor(refreshed.next_cursor ?? null);
-                        }
-                      } else {
-                        toast.error(r?.error || "Rebuild failed");
-                      }
-                    } catch (e) {
-                      toast.error(errorMessage(e) || "Rebuild failed");
-                    } finally {
-                      setRebuildingIndex(false);
-                    }
-                  }}
-                  className="text-xs px-2 py-1 rounded border border-amber-200 hover:bg-amber-50 text-amber-700"
-                  title="If chats don't show, rebuild index from Firestore"
-                >
-                  {rebuildingIndex ? "Rebuilding..." : "Rebuild index"}
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const r = await simulateWebhook("9613000000", "Hello");
-                      if (r?.success) {
-                        toast.success("Test message sent – check Live Chat in a few seconds");
-                        setTimeout(async () => {
-                          const refreshed = await getUnifiedChats("", 1, CHAT_LIST_PAGE_SIZE);
-                          if (refreshed?.success && Array.isArray(refreshed.chats)) {
-                            applyServerConversations(refreshed.chats);
-                          }
-                        }, 2000);
-                      } else {
-                        toast.error(r?.error || "Simulate failed");
-                      }
-                    } catch (e) {
-                      toast.error(errorMessage(e) || "Simulate failed");
-                    }
-                  }}
-                  className="text-xs px-2 py-1 rounded border border-green-200 hover:bg-green-50 text-green-700"
-                  title="Test if message flow works (simulates webhook)"
-                >
-                  Test flow
                 </button>
                 {isBotDateFilterActive && !templateSendFilterViewActive && (
                   <span className="text-[11px] text-slate-500">
