@@ -125,7 +125,9 @@ def email_delete_unused_for_user(
 def upsert_mobile_refresh(session: Session, token_hash: str, data: dict[str, Any]) -> None:
     row = session.get(MobileRefreshTokenRow, token_hash)
     if row is None:
-        row = MobileRefreshTokenRow(token_hash=token_hash, user_id=str(data["user_id"]), tenant_id=str(data["tenant_id"]))
+        row = MobileRefreshTokenRow(
+            token_hash=token_hash, user_id=str(data["user_id"]), tenant_id=str(data["tenant_id"])
+        )
         session.add(row)
     row.email = str(data.get("email") or "")
     row.session_id = str(data.get("session_id") or "")

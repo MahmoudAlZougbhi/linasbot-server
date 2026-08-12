@@ -133,8 +133,7 @@ async def should_skip_outbound_text(resolved_recipient: str, message: str) -> bo
         return True
     if claimed is None and _outbound_fail_closed_on_redis_miss():
         print(
-            f"⚠️ Outbound duplicate suppressed (fail-closed): Redis unavailable for shared dedupe "
-            f"(window={WINDOW_SEC}s)"
+            f"⚠️ Outbound duplicate suppressed (fail-closed): Redis unavailable for shared dedupe (window={WINDOW_SEC}s)"
         )
         return True
 
