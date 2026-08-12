@@ -25,14 +25,14 @@
 | 9 | Security/correctness/performance tests | **DONE** |
 | 10 | Independent review + PR closeout | **DONE** (CI green; no merge) |
 | 11 | Full file-by-file reinspection | **DONE** |
-| 12 | Final freeze | **IN_PROGRESS** |
-| 13 | Production preparation | **BLOCKED_OWNER_ACTION** (after 11–12 green) |
-| 14 | Merge PR #240 + deploy | BLOCKED (needs 11–13) |
+| 12 | Final freeze | **DONE** (CI green @ `9757d01`) |
+| 13 | Production preparation | **BLOCKED_OWNER_ACTION** |
+| 14 | Merge PR #240 + deploy | BLOCKED (needs Phase 13 owner) |
 | 15 | Live post-deploy smoke | PENDING |
 | 16 | Mobile distribution (EAS) | PENDING (will need Apple/Google 2FA) |
 | 17 | Final live revalidation | PENDING |
 | 20 | Final deliverables `docs/release/*` | IN_PROGRESS |
-| 21 | Verdict | **NOT_READY** (Phase 12 freeze + Phase 13 owner) |
+| 21 | Verdict | **NOT_READY** (Phase 13 owner actions) |
 
 ---
 
@@ -342,26 +342,28 @@ Do not enable `LINASLASER_BOC_BOOKING_ENABLED` in production.
 
 | Field | Value |
 |------|-------|
-| Status | **IN_PROGRESS** |
-| Candidate | tip after Phase 11 docs commit + push; CI must be green on PR #240 |
-| Rule | One application candidate SHA; repair until all gates green; clean tree |
+| Status | **DONE** |
+| Freeze candidate SHA | `9757d014dbaca0bfc0b84e9a48133356fdc14958` |
+| Artifact | `docs/release/FINAL_FREEZE_VERIFICATION.md` |
+| CI | backend / frontend / mobile / secret-scan / deploy-readiness all **pass** on PR #240 |
+| Repair | ruff format on 3 Phase-11 files (`9757d01`) after `dfb5aea` format failure |
 
 ---
 
-## Current stop (2026-08-12 resume)
+## Current stop (2026-08-12)
 
-### Verdict: **NOT_READY** (Phase 11 done; Phase 12 freeze + Phase 13 owner)
+### Verdict: **NOT_READY** — Phases 11–12 application-complete; **Phase 13 BLOCKED_OWNER_ACTION**
 
-### BLOCKED_OWNER_ACTION (Phase 13 — do before any merge)
+Do **not** merge PR #240. Do **not** deploy. Do **not** apply production migration without Mahmoud approval.
+
+### BLOCKED_OWNER_ACTION (exact — Mahmoud)
 
 1. **Redis:** Confirm whether a DigitalOcean Redis already exists for Linas production.
-   - If **yes**: provide/confirm URL secret name to set (`RATE_LIMIT_REDIS_URL` / `REDIS_URL`) with TLS/auth; ops can wire without purchase.
+   - If **yes**: provide/confirm URL secret name (`RATE_LIMIT_REDIS_URL` / `REDIS_URL`) with TLS/auth.
    - If **no**: approve purchase — product/region/size/cost (exact DO button) before provisioning.
 2. **Meta VERIFY_AND_PRESERVE:** Confirm Meta connection health; if Meta OTP / account-owner confirmation appears, complete it (do not disconnect/rebuild).
-3. **Migration apply approval:** Approve applying additive `20260812_customer_requests` on production Postgres after backup (not applied yet).
-4. **Merge approval:** Only after Phases 11–12 green **and** items 1–3 above — merging `main` auto-runs Quality Gates → Production Deploy.
+3. **Migration apply approval:** Approve applying additive `20260812_customer_requests` on production Postgres **after backup** (not applied yet).
+4. **Merge approval:** Only after 1–3 — then merge #240 (Quality Gates → Production Deploy).
 
-### Resume
-
-Finish Phase 12 freeze CI green. Do **not** merge PR #240 until Phase 13 owner actions complete.
+Checklist: `docs/release/PHASE13_PRODUCTION_PREP_CHECKLIST.md`
 
