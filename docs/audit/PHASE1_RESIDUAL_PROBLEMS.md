@@ -23,6 +23,26 @@
 
 ---
 
+## Production readiness lead addendum (2026-08-12)
+
+Owner verdict file: **`docs/audit/PRODUCTION_READINESS.md`** → **NO-GO** for ~100k multi-tenant SaaS.
+
+### New / sharpened findings (code-verified)
+
+| Item | Evidence | Priority |
+|---|---|---|
+| `GET /api/live-chat/status` lacks elevation | `modules/live_chat_api_debug.py` — no `_require_live_chat_debug_elevation`; any `liveChat` session | P0 |
+| Wallet/AI metering silent `linas` family | `token_wallet_service.py`, `ai_usage_limits.py`, `chat_response_runtime_prompt.py`, `wallet_spend_analytics.py` | P0 |
+| `legacy_isolation` DB error → empty set | `services/whatsapp_cloud/legacy_isolation.py` — fail-open vs Cloud binds | P0 |
+| Dashboard Dockerfile Node 20 vs engines ≥22.19 | `dashboard/Dockerfile.prod` vs `dashboard/package.json` engines | P1 / parked infra |
+| `nginx-api-include.conf` missing `/oauth/` + `/meta/deauthorize` | vs full `deploy/nginx-linasaibot.conf` | P0 verify live / P1 sync snippet |
+| GHA secret-apply typed CONFIRM | Wave 6 **FIXED** — residual doc SEC OPEN text is stale | FIXED_CONFIRMED |
+| `subscription-exempt-probe` no longer dumps display names | Aggregates only; still logs tenant/role maps | P1 residual |
+
+Do **not** treat inventory `SECURITY_FINDINGS.md` OPEN rows for SEC-001…016 client/GHA items as current code truth without re-checking — Phase 1 + this readiness pass closed many in source.
+
+---
+
 ## 1. STILL_BROKEN (must fix)
 
 Clear code / product residuals that Phase 1 intended to close (or classic regressions still present). Safe to schedule as next GO waves without infra approval unless noted.
@@ -174,3 +194,5 @@ Inventory CSV / `SECURITY_FINDINGS.md` may still list many of these as OPEN disp
 | Next GO | **Wave A** (tenant/operator) → **Wave B** (mobile finish) → answers unlock D; archive C anytime with caller STOP |
 
 **Not changed by this doc:** application source, infra, deploy, Redis, Meta cutover.
+
+**Production readiness (2026-08-12 lead):** see `docs/audit/PRODUCTION_READINESS.md` — **NO-GO** (P0=10, P1=12). Fix list next; do not approve deploy.
