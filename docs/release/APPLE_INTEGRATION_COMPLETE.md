@@ -1,7 +1,9 @@
 # Apple Auth + StoreKit + IAP + Subscriptions — Integration Report
 
 **Branch:** `feat/apple-auth-billing` → merged into `chore/project-cleanup-reorg`  
+**Head SHA:** `2d287bbec08986f0424729f158b4a7cc6ae9aa24`  
 **PR:** [#240](https://github.com/MahmoudAlZougbhi/linasbot-server/pull/240)  
+**CI:** backend · frontend · mobile · secret-scan · deploy-readiness = **pass** (no merge to main; no deploy)  
 **Rules honored:** no merge to main · no production deploy · BOC off · Meta unchanged · no `.p8` committed
 
 ---
