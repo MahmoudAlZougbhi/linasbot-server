@@ -310,18 +310,27 @@ class TestDebugAndSimulationEndpoints:
     def test_simulate_webhook_disabled_in_production_like_env(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        from services.rate_limit_service import rate_limit_service
+
         monkeypatch.setenv("ENVIRONMENT", "production")
         monkeypatch.setenv("ALLOW_DEBUG_SIMULATE_WEBHOOK", "true")
-        _clear_client_auth(client)
-        csrf = _set_admin_session(client, with_csrf_header=True)
-        response = client.post(
-            "/api/debug/simulate-webhook",
-            json={"phone": "9613000000", "text": "hi"},
-            headers={CSRF_HEADER_NAME: csrf},
-        )
-        assert response.status_code == 403
-        body = response.json()
-        assert body.get("code") == "PRODUCT_MODULE_DISABLED"
+        # Production defaults rate-limit to Redis fail-closed (503). Pin memory so
+        # this case asserts product-module disable, not backend unavailability.
+        monkeypatch.setenv("RATE_LIMIT_BACKEND", "memory")
+        rate_limit_service.reconfigure(backend="memory")
+        try:
+            _clear_client_auth(client)
+            csrf = _set_admin_session(client, with_csrf_header=True)
+            response = client.post(
+                "/api/debug/simulate-webhook",
+                json={"phone": "9613000000", "text": "hi"},
+                headers={CSRF_HEADER_NAME: csrf},
+            )
+            assert response.status_code == 403
+            body = response.json()
+            assert body.get("code") == "PRODUCT_MODULE_DISABLED"
+        finally:
+            rate_limit_service.reconfigure(backend=None, redis_client=None, redis_url=None)
 
     def test_debug_webhook_status_requires_auth(self, client: TestClient) -> None:
         _clear_client_auth(client)
