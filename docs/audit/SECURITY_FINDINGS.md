@@ -10,7 +10,7 @@
 
 **Official total:** 69 findings (= 16 inventory KEEP_SECURITY_FIX + 1 Phase 0C seq 870 + 52 substantive notes).
 
-**Status:** All findings listed here are **OPEN**.
+**Status:** Closeout dispositions in `docs/audit/FINAL_SECURITY_FINDINGS.md` (SEC-001…070). Per-finding **Status** fields updated 2026-08-12 (C3).
 
 ---
 
@@ -46,7 +46,7 @@
 - **Evidence:** FILE_INVENTORY.csv disposition KEEP_SECURITY_FIX. security_findings: NO confirmation input unlike sibling secret-apply workflows — anyone with Actions write on repo can rotate dashboard auth. Secret passed via envs to SSH (expected). | disposition_evidence: Missing confirmation string gate on high-impact secret apply
 - **Disposition:** `KEEP_SECURITY_FIX`
 - **Required test:** Add confirmation-string gate; workflow dry-run assert fails without confirmation.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** KEEP_SECURITY_FIX inventory
 
 ### SEC-002 — HIGH
@@ -58,7 +58,7 @@
 - **Evidence:** FILE_INVENTORY.csv disposition KEEP_SECURITY_FIX. security_findings: Emergency bypass skips gate verification (documented). Uses appleboy/ssh-action@v1.0.3 while siblings use v1.2.0 (supply-chain version skew). data/ backup to /tmp/linasbot_data_backup_$$ then restore after hard reset — /tmp world-readable risk window if perms loose. | disposition_evidence: Pin/update ssh-action version consistency; harden data backup path permissions; keep confirmation for emergency
 - **Disposition:** `KEEP_SECURITY_FIX`
 - **Required test:** Workflow review checklist: pin ssh-action; assert backup dir permissions; keep emergency confirmation.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** KEEP_SECURITY_FIX inventory
 
 ### SEC-003 — HIGH
@@ -70,7 +70,7 @@
 - **Evidence:** FILE_INVENTORY.csv disposition KEEP_SECURITY_FIX. security_findings: No typed confirmation; secrets via SSH envs; never logs values (stated) | disposition_evidence: Secret apply without confirmation string
 - **Disposition:** `KEEP_SECURITY_FIX`
 - **Required test:** Add confirmation-string gate like sibling workflows.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** KEEP_SECURITY_FIX inventory
 
 ### SEC-004 — HIGH
@@ -82,7 +82,7 @@
 - **Evidence:** FILE_INVENTORY.csv disposition KEEP_SECURITY_FIX. security_findings: No confirmation string; rotates verify token — webhook auth impact | disposition_evidence: Verify-token apply without typed confirmation
 - **Disposition:** `KEEP_SECURITY_FIX`
 - **Required test:** Add confirmation-string gate; assert non-empty token still required.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** KEEP_SECURITY_FIX inventory
 
 ### SEC-005 — HIGH
@@ -94,7 +94,7 @@
 - **Evidence:** FILE_INVENTORY.csv disposition KEEP_SECURITY_FIX. security_findings: No confirmation; applies billing-critical API key | disposition_evidence: OpenAI key apply without typed confirmation
 - **Disposition:** `KEEP_SECURITY_FIX`
 - **Required test:** Add confirmation-string gate; retain post-apply verify script.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** KEEP_SECURITY_FIX inventory
 
 ### SEC-006 — HIGH
@@ -106,7 +106,7 @@
 - **Evidence:** FILE_INVENTORY.csv disposition KEEP_SECURITY_FIX. security_findings: Prints SUBSCRIPTION_EXEMPT_TENANT_IDS value, TOKEN_WALLET_UNLIMITED value, linas.json entitlement raw[:400], and per-user tenant/role/status/display names into Actions logs (no emails but business display names + tenant map). Firestore stream of all dashboard_users unbounded. | disposition_evidence: Logs entitlement raw + tenant env values + all user display rows to CI logs
 - **Disposition:** `KEEP_SECURITY_FIX`
 - **Required test:** Assert redaction of env/raw entitlement; bound Firestore reads; no display-name dump in logs.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** KEEP_SECURITY_FIX inventory
 
 ### SEC-007 — MEDIUM
@@ -118,7 +118,7 @@
 - **Evidence:** FILE_INVENTORY.csv disposition KEEP_SECURITY_FIX. security_findings: Confirmation-gated but runs git reset --hard origin/main on /opt/linasbot before ops — can discard server-local uncommitted state | disposition_evidence: Production git reset --hard inside workflow
 - **Disposition:** `KEEP_SECURITY_FIX`
 - **Required test:** Document intentional sync or remove hard reset; regression: confirmation still required.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** KEEP_SECURITY_FIX inventory
 
 ### SEC-008 — HIGH
@@ -130,7 +130,7 @@
 - **Evidence:** FILE_INVENTORY.csv disposition KEEP_SECURITY_FIX. security_findings: /mobile/live-chat ProtectedRoute WITHOUT requiredPermission=liveChat (tests cover with permission but App omits). Client-side guards only. | disposition_evidence: Mobile live-chat route missing requiredPermission
 - **Disposition:** `KEEP_SECURITY_FIX`
 - **Required test:** App.routes / MobileLiveChat.auth.test: route requires requiredPermission="liveChat".
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** KEEP_SECURITY_FIX inventory
 
 ### SEC-009 — HIGH
@@ -142,7 +142,7 @@
 - **Evidence:** FILE_INVENTORY.csv disposition KEEP_SECURITY_FIX. security_findings: Custom roles persisted only in browser localStorage (dashboard/src/utils/permissions.jsx CUSTOM_ROLES_KEY) — not shared across admins/devices; assigning custom roleId to server users may not resolve on other browsers | disposition_evidence: Active in UserManagement; custom roles in localStorage create cross-admin authorization inconsistency
 - **Disposition:** `KEEP_SECURITY_FIX`
 - **Required test:** Document client-only limitation or server-backed roles; test custom role not trusted server-side alone.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** KEEP_SECURITY_FIX inventory
 
 ### SEC-010 — CRITICAL
@@ -154,7 +154,7 @@
 - **Evidence:** FILE_INVENTORY.csv disposition KEEP_SECURITY_FIX. security_findings: buildUserData defaults role to admin and tenantId to linas when missing — privilege/tenant spoof risk if backend omits fields | disposition_evidence: Default role=admin and tenantId=linas in buildUserData when fields absent | agent also flags admin/tenantId defaults as correctness risk
 - **Disposition:** `KEEP_SECURITY_FIX`
 - **Required test:** Unit test: missing role/tenantId must not default to admin/linas.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** KEEP_SECURITY_FIX inventory
 
 ### SEC-011 — HIGH
@@ -166,7 +166,7 @@
 - **Evidence:** FILE_INVENTORY.csv disposition KEEP_SECURITY_FIX. security_findings: Fail-open: keeps cached auth_session on transient session errors and catch; console.log of login/session response shapes; CSRF stored in localStorage | disposition_evidence: Session fail-open on errors + debug console.log of auth payloads; active AuthProvider
 - **Disposition:** `KEEP_SECURITY_FIX`
 - **Required test:** Explicit fail-open vs fail-closed policy test; no auth payload console.log in production builds.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** KEEP_SECURITY_FIX inventory
 
 ### SEC-012 — MEDIUM
@@ -178,7 +178,7 @@
 - **Evidence:** FILE_INVENTORY.csv disposition KEEP_SECURITY_FIX. security_findings: Hardcodes operatorId "operator_001" for voice/image sends — wrong attribution / authz risk | disposition_evidence: operator_001 hardcoded in sendVoiceMessage and sendImageMessage | hardcoded operator_001; agent KEEP_FIX — elevated as attribution/authz risk
 - **Disposition:** `KEEP_SECURITY_FIX`
 - **Required test:** Assert media sends use authenticated operator id from auth user.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** KEEP_SECURITY_FIX inventory
 
 ### SEC-013 — HIGH
@@ -190,7 +190,7 @@
 - **Evidence:** FILE_INVENTORY.csv disposition KEEP_SECURITY_FIX. security_findings: UI exposes Rebuild index and Test flow (simulateWebhook phone 9613000000) to any liveChat user — high-impact ops without elevated gate | disposition_evidence: simulateWebhook and rebuildLiveChatIndex buttons visible in operator sidebar
 - **Disposition:** `KEEP_SECURITY_FIX`
 - **Required test:** UI/API gate: rebuild-index and simulate-webhook require admin (or elevated) permission.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** KEEP_SECURITY_FIX inventory
 
 ### SEC-014 — HIGH
@@ -202,7 +202,7 @@
 - **Evidence:** FILE_INVENTORY.csv disposition KEEP_SECURITY_FIX. security_findings: route permission gap tracked on App.jsx | Route may be reachable without liveChat permission if URL known; Sidebar gates nav but route does not | disposition_evidence: Active mobile route wrapper | App.jsx ProtectedRoute for /mobile/live-chat omits requiredPermission=liveChat (agent + prior App audit)
 - **Disposition:** `KEEP_SECURITY_FIX`
 - **Required test:** ProtectedRoute on /mobile/live-chat requires liveChat (covered via App test).
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** KEEP_SECURITY_FIX inventory
 
 ### SEC-015 — HIGH
@@ -214,7 +214,7 @@
 - **Evidence:** FILE_INVENTORY.csv disposition KEEP_SECURITY_FIX. security_findings: (user?.tenantId || "linas") === "linas" unlocks general/notifications when tenantId missing — same default-tenant risk | disposition_evidence: Missing tenantId defaults to linas enabling ops settings tabs | Missing tenantId defaults to linas enabling ops settings tabs | also loads unused botName/enableVoice/humanTakeoverNotifyMobiles (agent KEEP_FIX debt)
 - **Disposition:** `KEEP_SECURITY_FIX`
 - **Required test:** non-linas / missing-tenantId tab gating test must not unlock linas-only settings.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** KEEP_SECURITY_FIX inventory
 
 ### SEC-016 — HIGH
@@ -226,7 +226,7 @@
 - **Evidence:** FILE_INVENTORY.csv disposition KEEP_SECURITY_FIX. security_findings: Routes registered in production via main→modules.live_chat_api→import live_chat_api_debug. NOT public: DashboardAuthMiddleware requires authenticated session + liveChat permission for /api/live-chat*. Non-linas tenants blocked from /api/live-chat*. Handler itself has no Depends/role check. GET /api/live-chat/debug-firestore streams all users' conversation metadata (ids, message_count, status, human_takeover, index last_message_text). GET /api/live-chat/status exposes index/users counts. POST /api/live-chat/rebuild-index triggers live_chat_service.rebuild_index_from_firestore (ops-level). Any liveChat operator can invoke — insufficient elevation → KEEP_SECURITY_FIX HIGH. | disposition_evidence: Authenticated+liveChat via middleware; insufficient authz for debug dump/rebuild; exposes Firestore conversation metadata | Phase 0C W0C confirmation: middleware requires auth+liveChat (NOT unauthenticated); insufficient elevation — any liveChat operator can dump metadata / rebuild index. Registered via main→live_chat_api→live_chat_api_debug. Severity HIGH.
 - **Disposition:** `KEEP_SECURITY_FIX`
 - **Required test:** Auth matrix: anonymous 401; after fix only elevated role succeeds for debug-firestore/rebuild-index; non-liveChat 403.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** KEEP_SECURITY_FIX inventory + Phase 0C confirmed (seq 801)
 
 ### SEC-017 — CRITICAL
@@ -238,7 +238,7 @@
 - **Evidence:** Phase 0C confirmed destructive CLI ops finding. Guard is --dry-run/--confirm only; zero workflow callers; inventory disposition MOVE_TO_ARCHIVE — MUST appear as official security finding.
 - **Disposition:** `MOVE_TO_ARCHIVE`
 - **Required test:** Do not run against prod. Static: assert script requires --confirm for delete; no CI references; archive under protected ops.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Phase 0C confirmed (seq 870)
 
 ### SEC-018 — LOW
@@ -250,7 +250,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 3 [KEEP_AS_IS]: Uses SSH secrets; masks phones to last4; avoids FAQ/customer bodies. Loads prod .env via setdefault (does not override existing env). Risk: Actions actors with workflow run + secrets can read CM structure summaries.
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-019 — LOW
@@ -262,7 +262,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 4 [KEEP_AS_IS]: High-impact prod mutations; mitigated by confirmation string + concurrency group. generic_tenant_proof fetches origin/main script mid-run.
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-020 — LOW
@@ -274,7 +274,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 9 [KEEP_AS_IS]: Uses GH environment protection; fails if secret empty; hardcoded redirect https://www.linasaibot.com/oauth/meta/callback
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-021 — LOW
@@ -286,7 +286,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 14 [KEEP_AS_IS]: Large secret surface (App A/B + encryption key) over SSH envs; advanced access hardcoded false
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-022 — LOW
@@ -298,7 +298,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 16 [KEEP_AS_IS]: Highest-impact Meta cutover; confirmation + environment; rollback encryption key required
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-023 — LOW
@@ -310,7 +310,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 18 [KEEP_AS_IS]: No confirmation; creates encrypted archive — lower risk than restore but still prod access
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-024 — LOW
@@ -322,7 +322,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 28 [KEEP_AS_IS]: Blocks if public availability not false or App Review bind token set; flock lock; prints db host/name not password
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-025 — MEDIUM
@@ -334,7 +334,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 52 [KEEP_FIX]: In-memory state not tenant-isolated for multi-instance; FIRESTORE path hardcoded data/firebase_data.json
 - **Disposition:** `KEEP_FIX`
 - **Required test:** Regression covering security note for config.py.
-- **Status:** OPEN
+- **Status:** LIVE_ACTIVATION_PENDING (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-026 — LOW
@@ -346,7 +346,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 53 [DELETE_CANDIDATE]: Commits api_id, tenant UUID, source phone 96178974402; api_key empty (good). Template wa_message_id/record_guid are provider IDs.
 - **Disposition:** `DELETE_CANDIDATE`
 - **Required test:** No secrets in committed templates; scrub phone/tenant identifiers or archive.
-- **Status:** OPEN
+- **Status:** LIVE_ACTIVATION_PENDING (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-027 — MEDIUM
@@ -358,7 +358,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 97 [KEEP_AS_IS]: tests requiredPermission liveChat — App.jsx currently omits it (gap)
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-028 — HIGH
@@ -370,7 +370,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 98 [KEEP_AS_IS]: requiredPermission bypass when user.role===admin; client-only — server auth required. Path checks via canAccessPath.
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Server authz must not trust client admin bypass; API matrix rejects unauthorized despite client admin role claim.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-029 — LOW
@@ -382,7 +382,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 106 [KEEP_FIX]: shows user email in UI (expected); hardcoded fake notifications not from API
 - **Disposition:** `KEEP_FIX`
 - **Required test:** Regression covering security note for dashboard/src/components/Layout/Header.jsx.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-030 — MEDIUM
@@ -394,7 +394,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 109 [KEEP_FIX]: Live Chat/Activity Flow/APK gated to tenantId===linas client-side; admin sees all permitted items; Missing tenantId defaults to linas unlocking Live Chat/Activity Flow/APK ops surfaces
 - **Disposition:** `KEEP_FIX`
 - **Required test:** Missing tenantId must not unlock linas-only Sidebar ops surfaces.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-031 — LOW
@@ -406,7 +406,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 119 [DELETE_CANDIDATE]: Would allow unauthenticated write only if mounted without ProtectedRoute; currently unreachable. updateTrainingFile requires authenticated api client when used.
 - **Disposition:** `DELETE_CANDIDATE`
 - **Required test:** Confirm zero importers before delete; if remounted, require ProtectedRoute + server authz.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-032 — LOW
@@ -418,7 +418,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 120 [DELETE_CANDIDATE]: restore uses window.confirm only; would POST restore with auth if mounted
 - **Disposition:** `DELETE_CANDIDATE`
 - **Required test:** Confirm zero importers before delete; if remounted, require ProtectedRoute + server authz.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-033 — INFO
@@ -430,7 +430,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 129 [KEEP_AS_IS]: Relies on AuthContext client permission check before API; server must enforce on /users endpoints
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-034 — LOW
@@ -442,7 +442,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 130 [LANDING_KEEP]: Guest session ID in localStorage (linas_guest_session_id); no auth; input maxLength 2000; handles GUEST_INPUT_TOO_LARGE and GUEST_MEDIA_BLOCKED codes; rate limit via server session.limit_reached
 - **Disposition:** `LANDING_KEEP`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-035 — LOW
@@ -454,7 +454,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 162 [KEEP_AS_IS]: 401 hard redirect; CSRF from localStorage; withCredentials true
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-036 — MEDIUM
@@ -466,7 +466,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 164 [KEEP_AS_IS]: simulateWebhook debug endpoint exposed via hook — UI must gate
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** simulateWebhook API requires elevated permission; hook alone insufficient.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-037 — MEDIUM
@@ -478,7 +478,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 166 [KEEP_FIX]: test endpoints can drive bot with arbitrary phone — server must auth+entitle
 - **Disposition:** `KEEP_FIX`
 - **Required test:** Testing endpoints require auth+entitlement; arbitrary phone rejected when unauthorized.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-038 — MEDIUM
@@ -490,7 +490,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 179 [KEEP_AS_IS]: Show technical JSON dumps full entry (phones/messages/CM) to any operator with activityFlow — intentional observability but high PII surface
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** activityFlow PII dump access limited to entitled roles; consider redaction policy test.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-039 — MEDIUM
@@ -502,7 +502,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 183 [KEEP_FIX]: links not filtered by user permissions in this page — Sidebar/ProtectedRoute gate destinations
 - **Disposition:** `KEEP_FIX`
 - **Required test:** Regression covering security note for dashboard/src/pages/Dashboard.jsx.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-040 — MEDIUM
@@ -514,7 +514,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 186 [KEEP_AS_IS]: permission via route (mobile missing requiredPermission noted in App audit)
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-041 — MEDIUM
@@ -526,7 +526,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 191 [KEEP_FIX]: FAQ save-all-languages actions — server must authz
 - **Disposition:** `KEEP_FIX`
 - **Required test:** Regression covering security note for dashboard/src/pages/LiveChatModals.jsx.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-042 — LOW
@@ -538,7 +538,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 195 [KEEP_AS_IS]: renders image_url/audio_url from server — trust media URLs; media send via composer operator_001 issue upstream
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-043 — LOW
@@ -550,7 +550,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 201 [KEEP_AS_IS]: token in URL query (email link pattern); no client min-length beyond required — server must enforce
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-044 — INFO
@@ -562,7 +562,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 306 [KEEP_AS_IS]: HTTP redirect strips query string (line 12); sensitive endpoints use linasbot_safe log format via access_log directive; webhook/oauth/data-deletion logging minimized.
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** LIVE_ACTIVATION_PENDING (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-045 — INFO
@@ -574,7 +574,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 307 [KEEP_AS_IS]: Deliberately excludes $request_uri/$args—reduces OAuth/webhook token leakage into access logs.
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-046 — LOW
@@ -586,7 +586,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 308 [KEEP_AS_IS]: Runs as root; loads EnvironmentFile .env—ensure file permissions restricted.
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** LIVE_ACTIVATION_PENDING (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-047 — MEDIUM
@@ -598,7 +598,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 463 [KEEP_FIX]: verbose DEBUG prints include user_id, phone, message preview — log PII risk
 - **Disposition:** `KEEP_FIX`
 - **Required test:** DEBUG logs must not emit phone/message preview at production log level.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-048 — MEDIUM
@@ -610,7 +610,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 477 [KEEP_AS_IS]: coerces unauthorized human_handover after post-release cooldown
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-049 — INFO
@@ -622,7 +622,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 489 [KEEP_AS_IS]: access_log=False to avoid webhook query secrets in logs; APK route requires auth+liveChat permission
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-050 — INFO
@@ -634,7 +634,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1101 [KEEP_AS_IS]: FORBIDDEN_GUEST_TOOLS denylist blocks CM/tool writes; no tenant mutation by design
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-051 — INFO
@@ -646,7 +646,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1145 [KEEP_AS_IS]: secrets/billing surface — server-side only; API authz required
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Endpoint auth matrix: unauthenticated and non-authorized callers rejected for billing/secrets routes.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-052 — INFO
@@ -658,7 +658,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1157 [KEEP_AS_IS]: secrets/billing surface — server-side only; API authz required
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Endpoint auth matrix: unauthenticated and non-authorized callers rejected for billing/secrets routes.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-053 — INFO
@@ -670,7 +670,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1160 [KEEP_AS_IS]: secrets/billing surface — server-side only; API authz required
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Endpoint auth matrix: unauthenticated and non-authorized callers rejected for billing/secrets routes.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-054 — MEDIUM
@@ -682,7 +682,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1161 [KEEP_FIX]: HMAC signature verification on webhooks; page tokens from env/registry
 - **Disposition:** `KEEP_FIX`
 - **Required test:** Regression covering security note for services/meta_messaging.py.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-055 — INFO
@@ -694,7 +694,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1163 [KEEP_AS_IS]: tokens encrypted via meta_app_registry AES-GCM; state TTL 10min; scopes validated
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-056 — INFO
@@ -706,7 +706,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1164 [KEEP_AS_IS]: secrets/billing surface — server-side only; API authz required
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Endpoint auth matrix: unauthenticated and non-authorized callers rejected for billing/secrets routes.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-057 — INFO
@@ -718,7 +718,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1165 [KEEP_AS_IS]: secrets/billing surface — server-side only; API authz required
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Endpoint auth matrix: unauthenticated and non-authorized callers rejected for billing/secrets routes.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-058 — MEDIUM
@@ -730,7 +730,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1171 [KEEP_FIX]: secrets/billing surface — server-side only; API authz required
 - **Disposition:** `KEEP_FIX`
 - **Required test:** Endpoint auth matrix: unauthenticated and non-authorized callers rejected for billing/secrets routes.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-059 — MEDIUM
@@ -742,7 +742,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1227 [KEEP_FIX]: secrets/billing surface — server-side only; API authz required
 - **Disposition:** `KEEP_FIX`
 - **Required test:** Endpoint auth matrix: unauthenticated and non-authorized callers rejected for billing/secrets routes.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-060 — INFO
@@ -754,7 +754,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1254 [KEEP_AS_IS]: redacts tokens/secrets in logs — must remain installed at startup
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-061 — INFO
@@ -766,7 +766,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1276 [KEEP_AS_IS]: secrets/billing surface — server-side only; API authz required
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Endpoint auth matrix: unauthenticated and non-authorized callers rejected for billing/secrets routes.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-062 — INFO
@@ -778,7 +778,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1277 [KEEP_AS_IS]: secrets/billing surface — server-side only; API authz required
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Endpoint auth matrix: unauthenticated and non-authorized callers rejected for billing/secrets routes.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-063 — INFO
@@ -790,7 +790,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1288 [KEEP_AS_IS]: secrets/billing surface — server-side only; API authz required
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Endpoint auth matrix: unauthenticated and non-authorized callers rejected for billing/secrets routes.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-064 — INFO
@@ -802,7 +802,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1289 [KEEP_AS_IS]: secrets/billing surface — server-side only; API authz required
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Endpoint auth matrix: unauthenticated and non-authorized callers rejected for billing/secrets routes.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-065 — MEDIUM
@@ -814,7 +814,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1290 [KEEP_FIX]: linas default tenant reference; secrets/billing surface — server-side only; API authz required
 - **Disposition:** `KEEP_FIX`
 - **Required test:** Endpoint auth matrix: unauthenticated and non-authorized callers rejected for billing/secrets routes.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-066 — INFO
@@ -826,7 +826,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1291 [KEEP_AS_IS]: InsufficientTokenBalance fail-closed; threaded RLock on wallet files
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Monitor: no new exposure; periodic review that mitigations remain.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-067 — MEDIUM
@@ -838,7 +838,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1295 [KEEP_FIX]: bcrypt hashing; query timeouts; tenant-scoped collection paths
 - **Disposition:** `KEEP_FIX`
 - **Required test:** Regression covering security note for services/user_service.py.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-068 — INFO
@@ -850,7 +850,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1297 [KEEP_AS_IS]: secrets/billing surface — server-side only; API authz required
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Endpoint auth matrix: unauthenticated and non-authorized callers rejected for billing/secrets routes.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ### SEC-069 — INFO
@@ -862,7 +862,7 @@
 - **Evidence:** ALL_PROBLEMS_FOUND.md § Other substantive security notes — Seq 1315 [KEEP_AS_IS]: secrets/billing surface — server-side only; API authz required
 - **Disposition:** `KEEP_AS_IS`
 - **Required test:** Endpoint auth matrix: unauthenticated and non-authorized callers rejected for billing/secrets routes.
-- **Status:** OPEN
+- **Status:** ACCEPTED_RISK_WITH_REASON (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** Other substantive security notes
 
 ---
@@ -884,7 +884,7 @@
 - **Evidence:** ID entropy via Math.random filling Uint8Array — not crypto.getRandomValues; guest ids more guessable
 - **Disposition:** `KEEP_SECURITY_FIX`
 - **Required test:** Assert guest id generation uses CSPRNG (`getRandomValues`); collision/entropy smoke.
-- **Status:** OPEN
+- **Status:** FIXED (see FINAL_SECURITY_FINDINGS.md)
 - **Source bucket:** PHASE0C_FOLLOWUP (W0C-B1)
 
 
