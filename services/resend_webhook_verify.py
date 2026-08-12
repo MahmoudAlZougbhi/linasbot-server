@@ -7,7 +7,7 @@ import hashlib
 import hmac
 import os
 import time
-from typing import Mapping
+from collections.abc import Mapping
 
 
 class WebhookSignatureError(ValueError):
@@ -52,7 +52,7 @@ def verify_resend_webhook(
         raise WebhookSignatureError("timestamp_out_of_tolerance")
 
     body = payload.decode("utf-8") if isinstance(payload, (bytes, bytearray)) else str(payload)
-    signed_content = f"{msg_id}.{timestamp}.{body}".encode("utf-8")
+    signed_content = f"{msg_id}.{timestamp}.{body}".encode()
 
     raw_secret = whsec
     if raw_secret.startswith("whsec_"):
