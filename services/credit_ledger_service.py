@@ -13,7 +13,16 @@ from typing import Any, Literal
 from services.entitlements_service import entitlements_store
 from storage.persistent_storage import _DATA_ROOT
 
-LedgerOp = Literal["grant_included", "grant_pack", "reserve", "capture", "release", "debit", "admin_adjust"]
+LedgerOp = Literal[
+    "grant_included",
+    "grant_pack",
+    "reverse_pack",
+    "reserve",
+    "capture",
+    "release",
+    "debit",
+    "admin_adjust",
+]
 
 
 @dataclass
@@ -220,6 +229,136 @@ class CreditLedgerService:
                 )
             )
             return {"duplicate": False, "op": "release", "credits": credits}
+
+    def _find_ops_by_request_id(self, tenant_id: str, request_id: str) -> list[dict[str, Any]]:
+        path = self._log_path(tenant_id)
+        if not path.is_file():
+            return []
+        found: list[dict[str, Any]] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if row.get("tenant_id") == tenant_id and row.get("request_id") == request_id:
+                found.append(row)
+        return found
+
+    def grant_pack(
+        self,
+        *,
+        tenant_id: str,
+        credits: int,
+        request_id: str,
+        source: str,
+        meta: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Idempotent credit pack grant keyed by ``request_id`` (Apple transaction id)."""
+        if credits <= 0:
+            raise ValueError("credits must be positive")
+        rid = str(request_id or "").strip()
+        if not rid:
+            raise ValueError("request_id required")
+        self.ensure_period_grant(tenant_id)
+        with self._lock:
+            prior = self._find_ops_by_request_id(tenant_id, rid)
+            if any(r.get("op") == "grant_pack" for r in prior):
+                return {"duplicate": True, "op": "grant_pack", "credits": credits, "request_id": rid}
+            data = json.loads(self._balance_path(tenant_id).read_text(encoding="utf-8"))
+            available = int(data["available"]) + int(credits)
+            reserved = int(data["reserved"])
+            self._set_balance(tenant_id, available, reserved)
+            entry_id = uuid.uuid4().hex
+            self._append(
+                LedgerEntry(
+                    id=entry_id,
+                    tenant_id=tenant_id,
+                    user_id=None,
+                    op="grant_pack",
+                    credits=int(credits),
+                    balance_after=available,
+                    operation_type="pack_grant",
+                    model_provider=None,
+                    provider_cost_usd=None,
+                    request_id=rid,
+                    created_at=time.time(),
+                    meta={"source": source, **(meta or {})},
+                )
+            )
+            ent = entitlements_store.get(tenant_id)
+            ent.extra_credits = int(ent.extra_credits) + int(credits)
+            entitlements_store.save(ent)
+            return {
+                "duplicate": False,
+                "op": "grant_pack",
+                "credits": int(credits),
+                "request_id": rid,
+                "ledger_entry_id": entry_id,
+                "balance_after": available,
+            }
+
+    def reverse_pack(
+        self,
+        *,
+        tenant_id: str,
+        request_id: str,
+        credits: int,
+        meta: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Idempotent reverse of a prior grant_pack.
+
+        If available balance is insufficient, balance floors at 0 and remaining
+        debt is returned in ``debt`` (never silent free credits).
+        """
+        if credits <= 0:
+            raise ValueError("credits must be positive")
+        rid = str(request_id or "").strip()
+        if not rid:
+            raise ValueError("request_id required")
+        self.ensure_period_grant(tenant_id)
+        with self._lock:
+            prior = self._find_ops_by_request_id(tenant_id, rid)
+            if any(r.get("op") == "reverse_pack" for r in prior):
+                return {"duplicate": True, "op": "reverse_pack", "credits": credits, "request_id": rid}
+            if not any(r.get("op") == "grant_pack" for r in prior):
+                # Still reverse entitlements/balance if Apple says refund — record debt honestly.
+                pass
+            data = json.loads(self._balance_path(tenant_id).read_text(encoding="utf-8"))
+            available = int(data["available"])
+            reserved = int(data["reserved"])
+            reduce_by = min(available, int(credits))
+            debt = int(credits) - reduce_by
+            available = available - reduce_by
+            self._set_balance(tenant_id, available, reserved)
+            entry_id = uuid.uuid4().hex
+            self._append(
+                LedgerEntry(
+                    id=entry_id,
+                    tenant_id=tenant_id,
+                    user_id=None,
+                    op="reverse_pack",
+                    credits=int(credits),
+                    balance_after=available,
+                    operation_type="pack_reverse",
+                    model_provider=None,
+                    provider_cost_usd=None,
+                    request_id=rid,
+                    created_at=time.time(),
+                    meta={"debt": debt, "reduced": reduce_by, **(meta or {})},
+                )
+            )
+            ent = entitlements_store.get(tenant_id)
+            ent.extra_credits = max(0, int(ent.extra_credits) - int(credits))
+            entitlements_store.save(ent)
+            return {
+                "duplicate": False,
+                "op": "reverse_pack",
+                "credits": int(credits),
+                "request_id": rid,
+                "ledger_entry_id": entry_id,
+                "balance_after": available,
+                "debt": debt,
+                "reduced": reduce_by,
+            }
 
 
 credit_ledger_service = CreditLedgerService()

@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { StringKey } from '../../i18n';
 import { fonts, radii, spacing, useTheme } from '../../theme';
+import type { BillingPeriod } from './appleProductIds';
 import type { PlanDefinition, PlanId } from './planCatalog';
 import type { PlanCta } from './subscriptionCta';
 import { accentForPlan } from './subscriptionCta';
@@ -14,6 +15,7 @@ type Props = {
   taglineKey: StringKey;
   featureKeys: StringKey[];
   price: StorePrice | null;
+  period?: BillingPeriod;
   cta: PlanCta;
   isCurrent: boolean;
   purchasing: boolean;
@@ -27,6 +29,7 @@ export function PlanCardView({
   taglineKey,
   featureKeys,
   price,
+  period = 'monthly',
   cta,
   isCurrent,
   purchasing,
@@ -37,9 +40,10 @@ export function PlanCardView({
   const accent = accentForPlan(plan.id);
   const priceUnavailable = !price?.available;
   const showPreview = Boolean(price?.preview);
+  const periodSuffix = period === 'yearly' ? tr('subPerYear') : tr('subPerMonth');
   const priceLabel = priceUnavailable
     ? tr('subPriceUnavailable')
-    : `${price?.localizedPrice ?? ''}${tr('subPerMonth')}`;
+    : `${price?.localizedPrice ?? ''}${periodSuffix}`;
 
   return (
     <View

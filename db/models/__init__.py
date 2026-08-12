@@ -1,7 +1,14 @@
-"""ORM model package for PostgreSQL SoT (WhatsApp Cloud + Customer Requests + Meta)."""
+"""ORM model package for PostgreSQL SoT (WhatsApp Cloud + Customer Requests + Meta + Apple)."""
 
 from __future__ import annotations
 
+from db.models.apple_billing import (
+    AppleAppAccountTokenRow,
+    AppleCreditGrantRow,
+    AppleNotificationEventRow,
+    AppleTransactionRow,
+    AuthExternalIdentityRow,
+)
 from db.models.base import Base
 from db.models.billing_auth import (
     AdminCreditIdempotencyRow,
@@ -45,7 +52,12 @@ from db.models.whatsapp_smart_followup import (
 
 __all__ = [
     "AdminCreditIdempotencyRow",
+    "AppleAppAccountTokenRow",
+    "AppleCreditGrantRow",
+    "AppleNotificationEventRow",
+    "AppleTransactionRow",
     "AuthEmailTokenRow",
+    "AuthExternalIdentityRow",
     "Base",
     "CustomerRequest",
     "CustomerRequestCounter",

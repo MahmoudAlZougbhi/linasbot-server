@@ -350,6 +350,10 @@ export const fr = {
   socialContinueWith: 'ou continuer avec',
   socialContinueGoogle: 'Continuer avec Google',
   socialContinueApple: 'Continuer avec Apple',
+  appleSignInFailed: 'Échec de la connexion Apple. Réessayez.',
+  appleSignInUnavailable: 'Connexion avec Apple indisponible sur cet appareil.',
+  appleLinkRequired:
+    'Un compte existe déjà pour cet e-mail. Connectez-vous avec votre mot de passe, puis liez Apple dans les réglages.',
   ...subscriptionFr,
   ...whatsappFr,
   ...smartFollowUpFr,

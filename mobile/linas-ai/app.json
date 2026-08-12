@@ -11,6 +11,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.linasai.app",
       "buildNumber": "23",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Linas AI uses the microphone so you can dictate messages in chat. Audio is sent to Linas servers for speech-to-text only.",
         "ITSAppUsesNonExemptEncryption": false
@@ -38,6 +39,8 @@
     },
     "plugins": [
       "expo-secure-store",
+      "expo-apple-authentication",
+      "react-native-iap",
       [
         "expo-audio",
         {

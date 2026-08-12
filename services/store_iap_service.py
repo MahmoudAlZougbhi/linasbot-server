@@ -2,41 +2,42 @@
 
 from __future__ import annotations
 
-import json
 import os
 from typing import Any, Literal
 
 from services.entitlements_service import EntitlementStatus, apply_store_notification
+from services.iap_product_catalog import subscription_product_map
 from services.plan_economics import PLAN_PRICES_USD
 
 StoreSource = Literal["apple", "google"]
 
+# Google Play product id aliases (not Apple ASC). Kept for Android map compatibility.
+_GOOGLE_PRODUCT_ALIASES: dict[str, str] = {
+    "linas_ai_lite_monthly": "lite",
+    "linas_ai_starter_monthly": "starter",
+    "linas_ai_growth_monthly": "growth",
+    "linas_ai_pro_monthly": "pro",
+    "linas_ai_max_monthly": "max",
+}
 
-# Product IDs must be created in App Store Connect / Play Console — mapped here by env.
+
 def _product_map() -> dict[str, str]:
-    """Map store product id → plan_id. Override via LINAS_IAP_PRODUCT_MAP_JSON."""
-    raw = (os.getenv("LINAS_IAP_PRODUCT_MAP_JSON") or "").strip()
-    if raw:
-        data = json.loads(raw)
-        if isinstance(data, dict):
-            return {str(k): str(v) for k, v in data.items()}
-    # Defaults — placeholders until store products exist (not secrets).
-    return {
-        "com.linasai.app.lite.monthly": "lite",
-        "com.linasai.app.starter.monthly": "starter",
-        "com.linasai.app.growth.monthly": "growth",
-        "com.linasai.app.pro.monthly": "pro",
-        "com.linasai.app.max.monthly": "max",
-        "linas_ai_lite_monthly": "lite",
-        "linas_ai_starter_monthly": "starter",
-        "linas_ai_growth_monthly": "growth",
-        "linas_ai_pro_monthly": "pro",
-        "linas_ai_max_monthly": "max",
-    }
+    """Map store product id → plan_id (Apple catalog + Google aliases).
+
+    Apple subscription map (incl. legacy aliases + LINAS_IAP_PRODUCT_MAP_JSON
+    merge) lives in ``services.iap_product_catalog``.
+    """
+    mapping = dict(subscription_product_map())
+    mapping.update(_GOOGLE_PRODUCT_ALIASES)
+    return mapping
 
 
 def iap_config_status() -> dict[str, Any]:
-    apple_key = bool((os.getenv("APPLE_IAP_SHARED_SECRET") or os.getenv("APPLE_APP_STORE_KEY_ID") or "").strip())
+    from services.apple_app_store_client import iap_credentials_configured
+
+    apple_key = iap_credentials_configured() or bool(
+        (os.getenv("APPLE_IAP_SHARED_SECRET") or os.getenv("APPLE_IAP_KEY_ID") or os.getenv("APPLE_APP_STORE_KEY_ID") or "").strip()
+    )
     apple_bundle = bool((os.getenv("APPLE_BUNDLE_ID") or "com.linasai.app").strip())
     google_sa = bool((os.getenv("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_PATH") or "").strip())
     google_pkg = bool((os.getenv("GOOGLE_PLAY_PACKAGE_NAME") or "com.linasai.app").strip())
@@ -44,15 +45,19 @@ def iap_config_status() -> dict[str, Any]:
         "plans": PLAN_PRICES_USD,
         "product_map": _product_map(),
         "apple": {
-            "configured": apple_key and apple_bundle,
+            "configured": bool(apple_key and apple_bundle),
             "bundle_id_env": "APPLE_BUNDLE_ID",
             "key_envs": [
-                "APPLE_IAP_SHARED_SECRET",
-                "APPLE_APP_STORE_KEY_ID",
+                "APPLE_IAP_ISSUER_ID",
+                "APPLE_IAP_KEY_ID",
+                "APPLE_IAP_PRIVATE_KEY_PATH",
                 "APPLE_APP_STORE_ISSUER_ID",
+                "APPLE_APP_STORE_KEY_ID",
                 "APPLE_APP_STORE_PRIVATE_KEY_PATH",
+                "APPLE_IAP_SHARED_SECRET",
             ],
             "notification_path": "/api/entitlements/apple/notifications",
+            "webhook_path": "/webhooks/apple/app-store",
             "sandbox_verified": False,
         },
         "google": {
@@ -126,18 +131,26 @@ def apply_normalized_notification(
 
 
 def verify_apple_notification_payload(body: dict[str, Any]) -> dict[str, Any]:
-    """Parse Apple ASSN v2-style payload fields we need.
+    """Verify ASSN V2 via apple_iap_processor and return normalized fields.
 
-    Full JWS cryptographic verification requires APPLE_APP_STORE_* credentials.
-    Without them this raises — never silently accept.
+    Prefer calling ``process_notification_v2`` directly from webhook routes.
     """
-    if not iap_config_status()["apple"]["configured"]:
+    from services.apple_app_store_client import iap_credentials_configured
+    from services.apple_iap_processor import process_notification_v2
+
+    if not iap_credentials_configured():
         raise PermissionError("Apple IAP credentials not configured")
-    # When credentials exist, replace with real JWS verify. Until then fail closed.
-    raise PermissionError(
-        "Apple notification signature verification not yet bound to production keys — "
-        "configure APPLE_APP_STORE_* then enable verifier"
-    )
+    result = process_notification_v2(body)
+    effect = result.get("effect") if isinstance(result.get("effect"), dict) else {}
+    nested = effect.get("effect") if isinstance(effect.get("effect"), dict) else effect
+    return {
+        "tenant_id": nested.get("tenant_id") or result.get("tenant_id") or "",
+        "product_id": "",
+        "notification_type": result.get("notification_type") or "",
+        "original_transaction_id": "",
+        "event_id": result.get("notification_uuid") or "",
+        "processor_result": result,
+    }
 
 
 def verify_google_notification_payload(body: dict[str, Any]) -> dict[str, Any]:
@@ -153,7 +166,11 @@ def external_store_checklist() -> dict[str, Any]:
     return {
         "apple": [
             "Create App ID com.linasai.app in App Store Connect",
-            "Create auto-renewable subscriptions: lite/starter/growth/pro/max monthly at $9.99/$25/$59/$109/$259",
+            "Create auto-renewable subscriptions in group 22305050: "
+            "com.linasai.subscription.{basic,plus,growth,pro,scale}.{monthly,yearly} "
+            "(basic→lite, plus→starter, growth→growth, pro→pro, scale→max); "
+            "Pro/Scale yearly may be Higher Price Point pending",
+            "Create credit consumables: com.linasai.credits.{2500,5000,12500,25000,50000}",
             "Configure App Store Server Notifications V2 URL: https://linasaibot.com/api/entitlements/apple/notifications",
             "Create API key (Issuer ID, Key ID, .p8) and set server env APPLE_APP_STORE_*",
             "Run sandbox purchase for each SKU; confirm entitlement active + renewal + cancel",

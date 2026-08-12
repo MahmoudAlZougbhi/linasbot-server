@@ -184,3 +184,6 @@ logs/content_violations.jsonl
 # Built APK artifacts (keep landing brand + mobile icons tracked).
 *.apk
 mobile/releases/*.apk
+
+# Apple AuthKey / SubscriptionKey material — never commit
+*.p8

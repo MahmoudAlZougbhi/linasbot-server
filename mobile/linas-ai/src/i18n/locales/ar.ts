@@ -344,6 +344,10 @@ export const ar = {
   socialContinueWith: 'أو تابع عبر',
   socialContinueGoogle: 'المتابعة مع Google',
   socialContinueApple: 'المتابعة مع Apple',
+  appleSignInFailed: 'فشل تسجيل الدخول عبر Apple. حاول مرة أخرى.',
+  appleSignInUnavailable: 'تسجيل الدخول عبر Apple غير متاح على هذا الجهاز.',
+  appleLinkRequired:
+    'يوجد حساب بهذا البريد. سجّل الدخول بكلمة المرور ثم اربط Apple من الإعدادات.',
   ...subscriptionAr,
   ...whatsappAr,
   ...smartFollowUpAr,

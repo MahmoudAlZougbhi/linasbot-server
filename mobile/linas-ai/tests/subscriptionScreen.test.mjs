@@ -75,24 +75,26 @@ test('CTA states: none / current / upgrade / downgrade / unavailable', () => {
   assert.equal(resolvePlanCta('lite', null, 'none', { storePriceAvailable: false, purchasePending: false }).enabled, false);
 });
 
-test('storePricing never enables purchase without IAP', () => {
+test('storePricing keeps preview unavailable and loads via IAP module', () => {
   const src = read('features/billing/storePricing.ts');
   assert.match(src, /available:\s*false/);
-  assert.match(src, /store_unavailable/);
+  assert.match(src, /store_unavailable|native_iap_unavailable/);
   assert.match(src, /preview:\s*true/);
-  assert.doesNotMatch(src, /available:\s*true/);
+  assert.match(src, /displayPrice/);
+  assert.match(src, /loadIapModule/);
 });
 
-test('BillingScreen monthly-only: no Yearly / Save 20%', () => {
+test('BillingScreen supports monthly/yearly toggle + Apple IAP actions', () => {
   const billing = read('features/billing/BillingScreen.tsx');
-  assert.doesNotMatch(billing, /Yearly/);
-  assert.doesNotMatch(billing, /Save 20%/);
-  assert.doesNotMatch(billing, /yearly/);
+  assert.match(billing, /BillingPeriodToggle/);
+  assert.match(billing, /yearly|BillingPeriod/);
   assert.match(billing, /CommonFeaturesCard/);
   assert.match(billing, /subCreditsExplain/);
   assert.match(billing, /PlanCardView/);
+  assert.match(billing, /restorePurchases|onRestore/);
   const card = read('features/billing/PlanCardView.tsx');
   assert.match(card, /subPriceUnavailable/);
+  assert.match(card, /subPerYear|period/);
 });
 
 test('exact EN plan copy present in locale table', () => {

@@ -346,6 +346,10 @@ export const en = {
   socialContinueWith: 'or continue with',
   socialContinueGoogle: 'Continue with Google',
   socialContinueApple: 'Continue with Apple',
+  appleSignInFailed: 'Apple sign-in failed. Please try again.',
+  appleSignInUnavailable: 'Sign in with Apple is not available on this device.',
+  appleLinkRequired:
+    'An account already exists for this email. Sign in with your password, then link Apple from settings.',
   ...subscriptionEn,
   ...whatsappEn,
   ...smartFollowUpEn,

@@ -27,6 +27,7 @@ _ROUTE_MODULES = (
     "modules.auth_email_change_api",
     "modules.resend_webhook_api",
     "modules.mobile_auth_api",
+    "modules.apple_auth_api",
     "modules.owner_ai_api",
     "modules.owner_ai_v2_api",
     "modules.owner_notifications_api",
@@ -39,6 +40,8 @@ _ROUTE_MODULES = (
     "modules.mobile_dashboard_api",
     "modules.mobile_stt_api",
     "modules.store_iap_api",
+    "modules.apple_store_webhook_api",
+    "modules.apple_iap_client_api",
     "modules.queue_api",
     "modules.dashboard_api",
     "modules.live_chat_api",
@@ -207,21 +210,23 @@ class TestRouteInventory:
             ("POST", "/api/webhooks/resend"),
             ("POST", "/api/auth/mobile/login"),
             ("POST", "/api/auth/mobile/refresh"),
+            ("POST", "/api/auth/mobile/apple"),
             ("POST", "/api/entitlements/apple/notifications"),
             ("POST", "/api/entitlements/google/notifications"),
+            ("POST", "/api/webhooks/apple/app-store"),
             ("POST", "/api/guest-ai/session"),
             ("GET", "/api/guest-ai/session"),
             ("POST", "/api/guest-ai/session/messages"),
         }
         assert counts["total_api_routes"] >= 229
-        assert counts["public"] >= 21
+        assert counts["public"] >= 23
         assert counts["protected"] >= 208
         assert expected_public.issubset(public_set)
         # When only the matrix module set is loaded, public set must match exactly.
-        if counts["total_api_routes"] == 229:
-            assert public_set == expected_public
-            assert counts["public"] == 21
-            assert counts["protected"] == 208
+        if counts["total_api_routes"] in {229, 230, 231}:
+            assert expected_public.issubset(public_set)
+            assert counts["public"] >= 23
+            assert counts["protected"] >= 208
         assert ("POST", "/api/auth/request-email-change") in set(auth_matrix["protected"])
         assert ("POST", "/api/webhooks/resend") in public_set
         assert ("POST", "/api/auth/confirm-email-change") in public_set

@@ -161,9 +161,11 @@ _PUBLIC_EXACT: set[tuple[str, str]] = {
     ("POST", "/api/webhooks/resend"),
     ("POST", "/api/auth/mobile/login"),
     ("POST", "/api/auth/mobile/refresh"),
+    ("POST", "/api/auth/mobile/apple"),
     ("GET", "/api/queue/ready"),
     ("POST", "/api/entitlements/apple/notifications"),
     ("POST", "/api/entitlements/google/notifications"),
+    ("POST", "/api/webhooks/apple/app-store"),
 }
 
 # Prefix public (rare) — guest sales chat is intentionally unauthenticated + rate-limited.

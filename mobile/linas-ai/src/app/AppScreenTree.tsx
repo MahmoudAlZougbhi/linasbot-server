@@ -71,6 +71,7 @@ export function AppScreenTree({
         <RegisterScreen
           onBack={() => setScreen({ name: 'login' })}
           onDone={() => setScreen({ name: 'login' })}
+          onLoggedIn={() => void afterLogin()}
         />
       ) : null}
       {showSubGate ? (

@@ -162,6 +162,10 @@ class UserService(UserServiceAuthMixin):
             created_by_norm = str(created_by or "").strip().lower()
             user_doc["emailVerified"] = created_by_norm not in {"public-register", "public_register"}
 
+        # Apple-only accounts use a random unusable password and disable password login.
+        if "passwordLoginEnabled" in user_data:
+            user_doc["passwordLoginEnabled"] = bool(user_data.get("passwordLoginEnabled"))
+
         # Save to Firestore
         self.collection.document(user_id).set(
             user_doc,
@@ -330,7 +334,7 @@ class UserService(UserServiceAuthMixin):
                     raise ValueError(str(exc)) from exc
 
             # Allowed fields to update
-            allowed_fields = ["name", "role", "permissions", "status"]
+            allowed_fields = ["name", "role", "permissions", "status", "passwordLoginEnabled"]
             for field in allowed_fields:
                 if field in updates:
                     update_data[field] = updates[field]
@@ -394,6 +398,31 @@ class UserService(UserServiceAuthMixin):
         except Exception as e:
             print(f"Error updating user: {e}")
             raise
+
+    def mark_self_service_deleted(self, user_id: str) -> dict[str, Any]:
+        """
+        Soft-delete for Apple Guideline 5.1.1 self-service account deletion.
+
+        Sets status=deleted without the global last-admin guard (tenant owners must
+        be able to delete their own account). Does not touch billing/Apple tables.
+        """
+        from datetime import datetime
+
+        user = self.get_user_by_id(user_id)
+        if not user:
+            raise ValueError("User not found")
+        self.collection.document(user_id).update(
+            {
+                "status": "deleted",
+                "updatedAt": datetime.utcnow().isoformat(),
+            },
+            timeout=self.AUTH_WRITE_TIMEOUT_SECONDS,
+            retry=None,
+        )
+        updated = self.get_user_by_id(user_id)
+        if updated is None:
+            raise ValueError(f"User not found after delete mark: {user_id}")
+        return self._sanitize_user(updated) or {}
 
     def delete_user(self, user_id: str) -> bool:
         """

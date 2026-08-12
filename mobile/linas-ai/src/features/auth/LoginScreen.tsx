@@ -102,7 +102,10 @@ export function LoginScreen({ onLoggedIn, onGoRegister, onBack }: Props) {
             <Text style={styles.link}>{tr('forgotPassword')}</Text>
           </Pressable>
 
-          <SocialAuthButtons />
+          <SocialAuthButtons
+            onAppleSuccess={onLoggedIn}
+            onAppleError={(message) => setError(message)}
+          />
           <View style={styles.legal}>
             <Text style={styles.legalText}>
               {tr('loginLegalAgree')}{' '}
