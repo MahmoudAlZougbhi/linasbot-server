@@ -54,18 +54,26 @@ describe('Requests mobile module', () => {
     assert.match(detail, /retryRequestNotify/);
     assert.match(detail, /addRequestNote/);
     assert.match(detail, /RequestFinalActionModal/);
+    assert.match(detail, /canViewSensitiveRequests/);
+    assert.match(detail, /gatedSensitive/);
+    assert.match(detail, /bannerError/);
+    assert.doesNotMatch(detail, /if \(error \|\| !detail\)/);
   });
 
   it('home covers counters, filters, setup-required, and pagination hooks', () => {
     const home = read('features/requests/RequestsHome.tsx');
     assert.match(home, /COUNTER_STATUSES/);
     assert.match(home, /reqSetupRequiredTitle/);
+    assert.match(home, /errorKind === 'setup'/);
     assert.match(home, /onEndReached/);
     assert.match(home, /RefreshControl/);
     const hook = read('features/requests/useRequestsList.ts');
     assert.match(hook, /fetchRequestsSetupStatus/);
     assert.match(hook, /listRequests/);
-    assert.match(hook, /withinDatePreset/);
+    assert.match(hook, /createdAfterForPreset/);
+    assert.match(hook, /createdAfter:/);
+    const api = read('features/requests/requestsApi.ts');
+    assert.match(api, /created_after/);
   });
 
   it('permission labels include requests keys', () => {

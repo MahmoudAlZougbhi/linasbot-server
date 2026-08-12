@@ -114,6 +114,15 @@ export function RequestsHome({ list, onOpen, onOpenAiSetup }: Props) {
       </View>
     );
   }
+  if (list.errorKind === 'setup') {
+    return (
+      <View style={styles.centerPad}>
+        <EmptyState title={tr('reqSetupRequiredTitle')} body={tr('reqSetupRequiredBody')} />
+        <PrimaryButton label={tr('reqOpenAiSetup')} onPress={onOpenAiSetup} />
+        <PrimaryButton label={tr('reqRetry')} onPress={() => void list.refresh()} variant="ghost" />
+      </View>
+    );
+  }
   if (list.errorKind === 'other' || list.error) {
     return (
       <View style={styles.centerPad}>

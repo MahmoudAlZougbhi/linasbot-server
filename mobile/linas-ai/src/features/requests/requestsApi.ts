@@ -20,6 +20,8 @@ export type ListRequestsParams = {
   assignedUserId?: string | null;
   q?: string | null;
   cursor?: string | null;
+  createdAfter?: string | null;
+  createdOnOrBefore?: string | null;
   limit?: number;
 };
 
@@ -52,6 +54,8 @@ export async function listRequests(params: ListRequestsParams = {}) {
   if (params.assignedUserId) q.set('assigned_user_id', params.assignedUserId);
   if (params.q?.trim()) q.set('q', params.q.trim());
   if (params.cursor) q.set('cursor', params.cursor);
+  if (params.createdAfter) q.set('created_after', params.createdAfter);
+  if (params.createdOnOrBefore) q.set('created_on_or_before', params.createdOnOrBefore);
   q.set('limit', String(params.limit ?? 25));
   const path = `/api/requests?${q.toString()}`;
   return apiFetch(path, { schema: RequestListSchema });

@@ -29,6 +29,7 @@ import {
   canManageRequests,
   canManualChatRequests,
   canNotifyRequests,
+  canViewSensitiveRequests,
 } from './requestsPermissions';
 import {
   CHANNEL_LABEL_KEYS,
@@ -49,6 +50,8 @@ type Props = {
   onOpenLiveChat: (target: LiveChatTarget) => void;
 };
 
+type BannerError = 'action' | 'chat';
+
 function defaultMessage(tr: (k: StringKey) => string, type: string): string {
   if (type === 'APPOINTMENT') return tr('reqDefaultConfirmAppt');
   if (type === 'ORDER') return tr('reqDefaultMarkReady');
@@ -66,26 +69,41 @@ function Field({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
+/** Never show raw PII unless requestsSensitive; otherwise restricted label only. */
+function gatedSensitive(
+  raw: string | null | undefined,
+  present: boolean | undefined,
+  allowed: boolean,
+  hiddenLabel: string,
+): string | null {
+  if (allowed && raw) return raw;
+  if (present || raw) return hiddenLabel;
+  return null;
+}
+
 export function RequestDetailView({ requestId, user, onBack, onOpenLiveChat }: Props) {
   const { colors } = useTheme();
   const { tr, language } = useI18n();
   const [detail, setDetail] = useState<RequestDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [bannerError, setBannerError] = useState<BannerError | null>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [finalOpen, setFinalOpen] = useState(false);
   const [finalMessage, setFinalMessage] = useState('');
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const load = useCallback(async (opts?: { quiet?: boolean }) => {
+    const quiet = Boolean(opts?.quiet);
+    if (!quiet) setLoading(true);
+    setLoadError(null);
     try {
       setDetail(await getRequest(requestId));
+      setBannerError(null);
     } catch (err) {
-      setError(classifyRequestsError(err));
+      setLoadError(classifyRequestsError(err));
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   }, [requestId]);
 
@@ -93,14 +111,14 @@ export function RequestDetailView({ requestId, user, onBack, onOpenLiveChat }: P
     void load();
   }, [load]);
 
-  if (loading) {
+  if (loading && !detail) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={colors.accent} />
       </View>
     );
   }
-  if (error || !detail) {
+  if (!detail) {
     return (
       <View style={styles.centerPad}>
         <EmptyState title={tr('reqLoadError')} />
@@ -113,6 +131,7 @@ export function RequestDetailView({ requestId, user, onBack, onOpenLiveChat }: P
   const manage = canManageRequests(user);
   const notify = canNotifyRequests(user);
   const chatOk = canManualChatRequests(user);
+  const sensitiveOk = canViewSensitiveRequests(user);
   const final = FINAL_ACTION_BY_TYPE[detail.request_type];
   const typeKey = TYPE_LABEL_KEYS[detail.request_type];
   const statusKey = STATUS_LABEL_KEYS[detail.status];
@@ -120,15 +139,17 @@ export function RequestDetailView({ requestId, user, onBack, onOpenLiveChat }: P
 
   async function withBusy(fn: () => Promise<void>) {
     setBusy(true);
-    setError(null);
+    setBannerError(null);
     try {
       await fn();
     } catch {
-      setError('action');
+      setBannerError('action');
     } finally {
       setBusy(false);
     }
   }
+
+  const refresh = () => load({ quiet: true });
 
   return (
     <ScrollView contentContainerStyle={styles.pad}>
@@ -166,18 +187,30 @@ export function RequestDetailView({ requestId, user, onBack, onOpenLiveChat }: P
       <Field label={tr('reqCustomerNotes')} value={detail.customer_notes} />
       <Field
         label={tr('reqPhone')}
-        value={detail.phone_normalized || (detail.phone_present ? tr('reqPresentHidden') : null)}
+        value={gatedSensitive(
+          detail.phone_normalized,
+          detail.phone_present,
+          sensitiveOk,
+          tr('reqPresentHidden'),
+        )}
       />
       <Field
         label={tr('reqEmail')}
-        value={detail.email || (detail.email_present ? tr('reqPresentHidden') : null)}
+        value={gatedSensitive(detail.email, detail.email_present, sensitiveOk, tr('reqPresentHidden'))}
       />
       <Field
         label={tr('reqAddress')}
-        value={
-          detail.delivery_address || (detail.delivery_address_present ? tr('reqPresentHidden') : null)
-        }
+        value={gatedSensitive(
+          detail.delivery_address,
+          detail.delivery_address_present,
+          sensitiveOk,
+          tr('reqPresentHidden'),
+        )}
       />
+
+      {loadError ? (
+        <Text style={[styles.err, { color: colors.danger }]}>{tr('reqLoadError')}</Text>
+      ) : null}
 
       {chatOk ? (
         <PrimaryButton
@@ -188,13 +221,13 @@ export function RequestDetailView({ requestId, user, onBack, onOpenLiveChat }: P
             if (userId && conversationId) {
               onOpenLiveChat({ userId, conversationId });
             } else {
-              setError('chat');
+              setBannerError('chat');
             }
           }}
           style={styles.gap}
         />
       ) : null}
-      {error === 'chat' ? (
+      {bannerError === 'chat' ? (
         <Text style={[styles.err, { color: colors.danger }]}>{tr('reqChatUnavailable')}</Text>
       ) : null}
 
@@ -209,7 +242,7 @@ export function RequestDetailView({ requestId, user, onBack, onOpenLiveChat }: P
                   assigned_user_id: user.id,
                   row_version: detail.row_version,
                 });
-                await load();
+                await refresh();
               })
             }
             loading={busy}
@@ -225,7 +258,7 @@ export function RequestDetailView({ requestId, user, onBack, onOpenLiveChat }: P
                   assigned_user_id: null,
                   row_version: detail.row_version,
                 });
-                await load();
+                await refresh();
               })
             }
             disabled={busy}
@@ -253,7 +286,7 @@ export function RequestDetailView({ requestId, user, onBack, onOpenLiveChat }: P
           onPress={() =>
             void withBusy(async () => {
               await retryRequestNotify(detail.request_id, idempotencyKey('notify'));
-              await load();
+              await refresh();
             })
           }
           disabled={busy}
@@ -261,7 +294,7 @@ export function RequestDetailView({ requestId, user, onBack, onOpenLiveChat }: P
         />
       ) : null}
 
-      {error === 'action' ? (
+      {bannerError === 'action' ? (
         <Text style={[styles.err, { color: colors.danger }]}>{tr('reqActionError')}</Text>
       ) : null}
 
@@ -287,7 +320,7 @@ export function RequestDetailView({ requestId, user, onBack, onOpenLiveChat }: P
                 if (!note.trim()) return;
                 await addRequestNote(detail.request_id, note.trim());
                 setNote('');
-                await load();
+                await refresh();
               })
             }
             disabled={busy || !note.trim()}
@@ -322,7 +355,7 @@ export function RequestDetailView({ requestId, user, onBack, onOpenLiveChat }: P
               send_notification: true,
             });
             setFinalOpen(false);
-            await load();
+            await refresh();
           })
         }
       />

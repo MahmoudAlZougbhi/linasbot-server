@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { tokenStore } from '../../auth/tokenStore';
 import type { PublicUser } from '../../api/types';
 import { classifyRequestsError, fetchRequestsSetupStatus, listRequests } from './requestsApi';
 import { canViewRequests } from './requestsPermissions';
 import {
-  withinDatePreset,
+  createdAfterForPreset,
   type AssigneeFilter,
   type DatePreset,
   type RequestCard,
@@ -99,6 +99,7 @@ export function useRequestsList(enabled: boolean): RequestsListState {
           assignedUserId: assigneeFilter === 'me' ? currentUser?.id ?? null : null,
           q: debouncedQ || null,
           cursor: mode === 'append' ? cursor : null,
+          createdAfter: createdAfterForPreset(datePreset),
           limit: 25,
         });
         const nextItems = page.items ?? [];
@@ -116,22 +117,17 @@ export function useRequestsList(enabled: boolean): RequestsListState {
         setLoadingMore(false);
       }
     },
-    [assigneeFilter, channelFilter, cursor, debouncedQ, enabled, statusFilter, typeFilter],
+    [assigneeFilter, channelFilter, cursor, datePreset, debouncedQ, enabled, statusFilter, typeFilter],
   );
 
   useEffect(() => {
     void load('replace');
     // Reset pagination when filters change — intentionally omit cursor/load identity churn
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, typeFilter, statusFilter, channelFilter, assigneeFilter, debouncedQ]);
-
-  const filteredItems = useMemo(
-    () => items.filter((item) => withinDatePreset(item.created_at, datePreset)),
-    [items, datePreset],
-  );
+  }, [enabled, typeFilter, statusFilter, channelFilter, assigneeFilter, datePreset, debouncedQ]);
 
   return {
-    items: filteredItems,
+    items,
     counts,
     loading,
     refreshing,

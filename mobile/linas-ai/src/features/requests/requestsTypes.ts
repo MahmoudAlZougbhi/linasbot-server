@@ -164,18 +164,16 @@ export function idempotencyKey(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function withinDatePreset(iso: string | null | undefined, preset: DatePreset): boolean {
-  if (preset === 'all') return true;
-  if (!iso) return false;
-  const created = Date.parse(iso);
-  if (Number.isNaN(created)) return true;
-  const now = Date.now();
+/** ISO bound for server-side list filter (`created_after`). */
+export function createdAfterForPreset(preset: DatePreset): string | null {
+  if (preset === 'all') return null;
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
-  if (preset === 'today') return created >= startOfToday.getTime();
-  if (preset === 'last7') return created >= now - 7 * 24 * 60 * 60 * 1000;
-  if (preset === 'last30') return created >= now - 30 * 24 * 60 * 60 * 1000;
-  return true;
+  if (preset === 'today') return startOfToday.toISOString();
+  const now = Date.now();
+  if (preset === 'last7') return new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+  if (preset === 'last30') return new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+  return null;
 }
 
 export function formatWhen(iso: string | null | undefined, locale: string): string {
