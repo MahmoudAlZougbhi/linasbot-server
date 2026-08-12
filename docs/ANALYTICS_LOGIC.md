@@ -110,4 +110,4 @@ User IDs are masked for privacy: `...XXXX` (last 4 chars).
 
 ## Dashboard Location
 
-Analytics is available in the **sidebar** under **Analytics** (ChartBarIcon), with permission key `analytics`. Route: `/analytics`.
+Analytics is available in the **sidebar** under **Analytics** (ChartBarIcon), with permission key `analytics`. Route: `/app` (legacy `/analytics` redirects there).

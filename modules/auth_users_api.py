@@ -18,7 +18,7 @@ async def get_users(request: Request) -> Any:
     session = require_session(request)
     try:
         users = [
-            user for user in user_service.get_all_users() if str(user.get("tenantId") or "linas") == session.tenant_id
+            user for user in user_service.get_all_users() if str(user.get("tenantId") or "").strip() == session.tenant_id
         ]
         return {"success": True, "users": users}
     except Exception as e:
@@ -38,7 +38,7 @@ async def create_user(body: CreateUserRequest, request: Request) -> Any:
     ent = entitlements_store.get(session.tenant_id)
     if ent.plan_id in {"lite", "starter", "growth", "pro", "max"}:
         tenant_users = [
-            user for user in user_service.get_all_users() if str(user.get("tenantId") or "linas") == session.tenant_id
+            user for user in user_service.get_all_users() if str(user.get("tenantId") or "").strip() == session.tenant_id
         ]
         non_owners = [
             u
@@ -81,7 +81,7 @@ async def create_user(body: CreateUserRequest, request: Request) -> Any:
 async def update_user(user_id: str, body: UpdateUserRequest, request: Request) -> Any:
     session = require_session(request)
     target = user_service.get_user_by_id(user_id)
-    if target is None or str(target.get("tenantId") or "linas") != session.tenant_id:
+    if target is None or str(target.get("tenantId") or "").strip() != session.tenant_id:
         raise HTTPException(status_code=404, detail="User not found")
     if body.tenant_id is not None and body.tenant_id.strip() != session.tenant_id:
         raise HTTPException(status_code=403, detail="Cross-tenant user reassignment is forbidden")
@@ -112,7 +112,7 @@ async def update_user(user_id: str, body: UpdateUserRequest, request: Request) -
 async def delete_user(user_id: str, request: Request) -> Any:
     session = require_session(request)
     target = user_service.get_user_by_id(user_id)
-    if target is None or str(target.get("tenantId") or "linas") != session.tenant_id:
+    if target is None or str(target.get("tenantId") or "").strip() != session.tenant_id:
         raise HTTPException(status_code=404, detail="User not found")
     try:
         success = user_service.delete_user(user_id)

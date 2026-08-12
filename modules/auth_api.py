@@ -102,12 +102,16 @@ async def login(request: LoginRequest, response: Response) -> Any:
             if not user:
                 return {"success": False, "error": "Invalid email or password"}
 
+            tenant_id = str(user.get("tenantId") or "").strip()
+            if not tenant_id:
+                return {"success": False, "error": "Tenant required"}
+
             record = session_service.create_session(
                 user_id=str(user["id"]),
                 email=str(user.get("email") or email),
                 role=str(user.get("role") or "viewer"),
                 permissions=user.get("permissions"),
-                tenant_id=str(user.get("tenantId") or "linas"),
+                tenant_id=tenant_id,
                 password_epoch=int(user.get("passwordEpoch") or user.get("password_epoch") or 0),
             )
             _set_auth_cookies(response, session_service.cookie_value_for(record), record.csrf_token)
@@ -254,11 +258,15 @@ async def forgot_password(body: ForgotPasswordRequest) -> Any:
     if not user or user.get("status") != "active":
         return generic
 
+    tenant_id = str(user.get("tenantId") or "").strip()
+    if not tenant_id:
+        return generic
+
     raw_token = auth_email_token_service.issue(
         purpose="password_reset",
         user_id=str(user["id"]),
         email=str(user.get("email") or email),
-        tenant_id=str(user.get("tenantId") or "linas"),
+        tenant_id=tenant_id,
     )
     reset_url = f"{public_app_base_url()}/reset-password?token={raw_token}"
     text = (
@@ -363,12 +371,16 @@ async def resend_verification(body: ResendVerificationRequest, request: Request)
     if user_service.is_email_verified(user):
         return {"success": True, "message": "Email is already verified", "mail_configured": mail_configured()}
 
+    tenant_id = str(user.get("tenantId") or "").strip()
+    if not tenant_id:
+        return generic
+
     auth_email_token_service.revoke_unused_for_user(str(user["id"]), "email_verify")
     raw_token = auth_email_token_service.issue(
         purpose="email_verify",
         user_id=str(user["id"]),
         email=str(user.get("email") or ""),
-        tenant_id=str(user.get("tenantId") or "linas"),
+        tenant_id=tenant_id,
     )
     verify_url = f"{public_app_base_url()}/verify-email?token={raw_token}"
     text = f"Verify your Linas AI email address:\n\n{verify_url}\n\nThis link expires in 48 hours."
@@ -467,7 +479,7 @@ async def change_password(body: ChangePasswordRequest, request: Request, respons
             email=str(user.get("email") or session.email),
             role=str(user.get("role") or session.role),
             permissions=user.get("permissions"),
-            tenant_id=str(user.get("tenantId") or session.tenant_id),
+            tenant_id=str(user.get("tenantId") or session.tenant_id or "").strip(),
             password_epoch=int(user.get("passwordEpoch") or user.get("password_epoch") or 0),
         )
         _set_auth_cookies(response, session_service.cookie_value_for(record), record.csrf_token)

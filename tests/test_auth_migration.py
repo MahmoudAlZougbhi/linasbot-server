@@ -46,8 +46,7 @@ def test_password_epoch_invalidates_session_without_default_password():
         email="owner@example.com",
         role="admin",
         permissions=None,
-        password_epoch=0,
-    )
+        password_epoch=0, tenant_id="linas")
     cookie = svc.cookie_value_for(record)
     assert svc.get_valid_session(cookie) is not None
 
@@ -69,8 +68,7 @@ def test_session_expiry_and_revoke():
         role="viewer",
         permissions=None,
         password_epoch=0,
-        ttl_seconds=1,
-    )
+        ttl_seconds=1, tenant_id="linas")
     cookie = svc.cookie_value_for(record)
     with patch("services.user_service.user_service.get_user_by_id", return_value=None):
         assert svc.get_valid_session(cookie) is not None
@@ -80,9 +78,9 @@ def test_session_expiry_and_revoke():
 
 def test_revoke_all_for_user_marks_local_sessions():
     svc = DashboardSessionService()
-    r1 = svc.create_session(user_id="u1", email="a@x.com", role="admin", permissions=None)
-    r2 = svc.create_session(user_id="u1", email="a@x.com", role="admin", permissions=None)
-    other = svc.create_session(user_id="u2", email="b@x.com", role="viewer", permissions=None)
+    r1 = svc.create_session(user_id="u1", email="a@x.com", role="admin", permissions=None, tenant_id="linas")
+    r2 = svc.create_session(user_id="u1", email="a@x.com", role="admin", permissions=None, tenant_id="linas")
+    other = svc.create_session(user_id="u2", email="b@x.com", role="viewer", permissions=None, tenant_id="linas")
     with patch("utils.utils.get_firestore_db", return_value=None):
         n = svc.revoke_all_for_user("u1")
     assert n >= 2

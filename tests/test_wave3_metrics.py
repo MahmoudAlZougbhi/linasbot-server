@@ -191,8 +191,7 @@ class TestIntegrationsStatus:
             user_id="admin1",
             email="admin@example.com",
             role="admin",
-            permissions=None,
-        )
+            permissions=None, tenant_id="linas")
         client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
         client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
         ok = client.get("/api/settings/integrations")

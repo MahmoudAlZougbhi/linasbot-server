@@ -1,5 +1,9 @@
 # CLAUDE_MEMORY.md - Lina's Laser Bot v2.7.22
 
+> **STALE BANNER (Phase 1 Wave 10):** This memory file is historical. Prefer live code,
+> `.env.example`, and `docs/audit/` for current product truth. Do not treat provider
+> lists or version pins here as authoritative without verifying the repo.
+
 ## Project Overview
 - **Name**: Lina's Laser AI Bot - WhatsApp chatbot for a laser clinic
 - **Version**: 2.7.22

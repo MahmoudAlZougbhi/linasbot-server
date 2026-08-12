@@ -123,10 +123,13 @@ class DashboardSessionService:
         email: str,
         role: str,
         permissions: dict[str, bool] | None,
-        tenant_id: str = "linas",
+        tenant_id: str | None = None,
         password_epoch: int = 0,
         ttl_seconds: int | None = None,
     ) -> SessionRecord:
+        tid = (tenant_id or "").strip()
+        if not tid:
+            raise ValueError("tenant_id required")
         ttl = int(ttl_seconds or DEFAULT_SESSION_TTL_SECONDS)
         now = time.time()
         record = SessionRecord(
@@ -135,7 +138,7 @@ class DashboardSessionService:
             email=email,
             role=role or "viewer",
             permissions=permissions,
-            tenant_id=(tenant_id or "linas").strip() or "linas",
+            tenant_id=tid,
             csrf_token=secrets.token_urlsafe(32),
             created_at=now,
             expires_at=now + ttl,

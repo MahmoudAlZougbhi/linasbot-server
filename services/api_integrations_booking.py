@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from services.api_integrations_http import _make_api_request, log_report_event

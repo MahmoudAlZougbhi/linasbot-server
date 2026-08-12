@@ -71,8 +71,12 @@ class MontyMobileAdapter(MontyMobileAdapterParseMixin, WhatsAppAdapter):
                     "error": "cloud_bound_number",
                     "message": "MontyMobile send blocked for Cloud-bound WhatsApp number",
                 }
-        except Exception:
-            pass
+        except Exception as exc:
+            return {
+                "success": False,
+                "error": "legacy_isolation_check_failed",
+                "message": f"MontyMobile send refused: isolation check failed ({exc})",
+            }
 
         phone_number = self._get_phone_from_room_id(to_number)
 
