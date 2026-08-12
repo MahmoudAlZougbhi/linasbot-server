@@ -17,17 +17,17 @@
 | `config.py` `user_*` conversation dicts | MOVE_TO_REDIS | P0 | **Residual** (combine buffer / takeover / booking FSM) |
 | `handlers/text_handlers_*` delayed combine registries | MOVE_TO_REDIS | P0 | **Residual** |
 | `services/whatsapp_adapters/outbound_text_dedupe.py` in-memory | MOVE_TO_REDIS / enable FS dedupe | P0 | **Residual** |
-| Token wallet / credit ledger / entitlements JSON | MOVE_TO_POSTGRES | P0 | **Residual — needs owner schema approval** |
-| Stripe / admin-credit file idempotency | MOVE_TO_POSTGRES / REDIS | P0 | **Residual** |
+| Token wallet / credit ledger / entitlements JSON | MOVE_TO_POSTGRES | P0 | **Wallet+Stripe+admin idempotency PG in PR** (`LINAS_BILLING_BACKEND`); credit ledger + entitlements still file |
+| Stripe / admin-credit file idempotency | MOVE_TO_POSTGRES / REDIS | P0 | **PG path in PR** (default file until cutover) |
 | Smart messaging file queue + in-memory dict | MOVE_TO_POSTGRES / Redis | P0 | **Residual** (locks only prevent double cron ticks) |
-| Guest/session/mobile refresh/email token files | MOVE_TO_REDIS / POSTGRES | P0–P1 | **Residual** |
+| Guest/session/mobile refresh/email token files | MOVE_TO_REDIS / POSTGRES | P0–P1 | **Mobile refresh + email tokens PG in PR** (`LINAS_AUTH_TOKEN_BACKEND`); guest residual |
 | `services/outbound_turn_idempotency.py` | ALREADY_DISTRIBUTED (Firestore) | — | Keep |
 | Meta durable `try_claim_event` | ALREADY_DISTRIBUTED | — | Keep |
 | Requests Postgres outbox / WA pause | ALREADY_DISTRIBUTED | — | Keep |
 | `services/live_chat_sse_broadcaster.py` | MOVE_TO_REDIS pubsub | P1 | Sticky LB or Redis pubsub |
 | `services/meta_social_media_store.py` local disk | REMOVE | P1 | **Removed runtime/HA dependency** — Create Post disabled; media NFS unexported; Spaces not needed |
-| `services/meta_app_registry_bindings.py` | MUST_MOVE_TO_POSTGRES | P0 | NFS shared today; **PR adds** `META_REGISTRY_BACKEND=file\|postgres\|dual` + Alembic; cutover blocked on Managed PG + deploy |
-| WhatsApp Postgres on node01 | MUST_MOVE_TO_POSTGRES (Managed HA) | P0 | Identical DSN `10.106.0.3`; **BLOCKED_OWNER_ACTION — MANAGED_POSTGRES_PURCHASE** (~$60–61/mo `db-s-1vcpu-2gb` ×2 lon1) |
+| `services/meta_app_registry_bindings.py` | MUST_MOVE_TO_POSTGRES | P0 | NFS live; Managed PG dual-read **PASS**; cutover blocked on **PR #240 deploy** then `postgres` |
+| WhatsApp Postgres on node01 | MUST_MOVE_TO_POSTGRES (Managed HA) | P0 | **DONE ops:** `linas-postgres-prod` HA + both nodes private TLS DSN; node01 PG kept for rollback |
 | `services/whatsapp_adapters/outbound_text_dedupe.py` | MUST_MOVE_TO_VALKEY | P0 | **Fixed in PR:** Redis claim first |
 | `services/live_chat_sse_broadcaster.py` | MUST_MOVE_TO_VALKEY | P1 | **Fixed in PR:** Redis pub/sub fanout |
 | takeover + pending combine | MUST_MOVE_TO_VALKEY | P0 | **Partial in PR:** `services/scale/conversation_state_redis.py` |

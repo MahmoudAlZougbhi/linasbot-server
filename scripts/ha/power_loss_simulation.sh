@@ -113,10 +113,26 @@ c=$(via_lb /api/ready)
 if [[ "$c" == "200" ]]; then ok "LB /api/ready during $TARGET loss"; else
   body=$(head -c 240 /tmp/ha_pl_body 2>/dev/null | tr '\n' ' ')
   if [[ "$TARGET" == "node01" ]]; then
-    log "EXPECTED_DEGRADED: LB /api/ready during node01 loss (got $c) body=$body"
-    ok "documented WA/registry SPOF on node01 full loss (ready may fail)"
+    # After Managed PG cutover, ready may still fail solely due to registry NFS SPOF
+    # until META_REGISTRY_BACKEND=postgres is deployed. Managed WA DB must still work.
+    log "EXPECTED_DEGRADED: LB /api/ready during node01 loss (got $c) — registry NFS residual; body=$body"
+    ok "documented registry-NFS residual on node01 full loss (ready may fail)"
   else
     bad "LB /api/ready during $TARGET loss (got $c)"
+  fi
+fi
+
+# Prove Managed Postgres survives node01 full loss (peer can query private TLS DSN).
+if [[ "$TARGET" == "node01" ]]; then
+  if "${SSH[@]}" "root@${OTHER}" 'bash -s' <<'EOF'
+set -euo pipefail
+set -a; source /root/.linas_ha/managed_pg.env; set +a
+export PGPASSWORD="$MANAGED_PG_PASSWORD" PGSSLMODE=require
+psql "host=$MANAGED_PG_HOST port=$MANAGED_PG_PORT user=$MANAGED_PG_USER dbname=$MANAGED_PG_DB sslmode=require" \
+  -Atc "SELECT 'managed_ok bindings='||count(*) FROM meta_asset_bindings;" | grep -q managed_ok
+EOF
+  then ok "Managed PG reachable from $OTHER_LABEL during node01 loss"
+  else bad "Managed PG unreachable from $OTHER_LABEL during node01 loss"
   fi
 fi
 
@@ -167,8 +183,8 @@ PY' && ok "$OTHER_LABEL redis_reachable" || {
 if [[ "$TARGET" == "node01" ]]; then
   "${SSH[@]}" "root@${OTHER}" 'timeout 8 bash -c "cat /opt/linasbot_data/meta_registry/registry.json >/dev/null" && echo registry_readable || echo registry_unavailable' | tee /tmp/ha_pl_reg.txt
   if grep -q registry_unavailable /tmp/ha_pl_reg.txt; then
-    log "EXPECTED: meta_registry unavailable without node01 (NFS SPOF until Managed PG cutover)"
-    ok "documented registry SPOF on node01 full loss"
+    log "EXPECTED: meta_registry NFS unavailable without node01 until META_REGISTRY_BACKEND=postgres deploy"
+    ok "documented registry NFS residual on node01 full loss"
   else
     ok "registry readable during node01 loss (soft mount still serving cache?)"
   fi

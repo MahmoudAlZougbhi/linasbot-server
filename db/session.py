@@ -44,6 +44,31 @@ def _sqlite_allowed() -> bool:
     }
 
 
+def _truthy_env(name: str) -> bool:
+    return (os.getenv(name) or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _normalize_database_url(url: str) -> str:
+    if url.startswith("sqlite:"):
+        return url
+    is_pg = url.startswith("postgresql://") or url.startswith("postgresql+psycopg2://")
+    if not is_pg:
+        return url
+
+    lower = url.lower()
+    has_sslmode = "sslmode=" in lower
+    if _truthy_env("LINAS_WHATSAPP_REQUIRE_SSL") and not has_sslmode:
+        raise WhatsAppDatabaseUnavailable(
+            "LINAS_WHATSAPP_REQUIRE_SSL=true but database URL has no sslmode= parameter."
+        )
+
+    sslmode = (os.getenv("LINAS_WHATSAPP_DB_SSLMODE") or "").strip()
+    if sslmode and not has_sslmode:
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}sslmode={sslmode}"
+    return url
+
+
 def get_engine(*, require: bool = True) -> Engine:
     global _ENGINE, _SESSION_FACTORY
     url = database_url()
@@ -54,6 +79,7 @@ def get_engine(*, require: bool = True) -> Engine:
                 "(or DATABASE_URL). File-backed WhatsApp stores are not a live fallback."
             )
         raise WhatsAppDatabaseUnavailable("DATABASE_URL not set")
+    url = _normalize_database_url(url)
     if _ENGINE is None:
         if url.startswith("sqlite:"):
             if not _sqlite_allowed():

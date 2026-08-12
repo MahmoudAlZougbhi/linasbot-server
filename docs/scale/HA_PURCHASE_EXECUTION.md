@@ -3,93 +3,62 @@
 **Date:** 2026-08-12  
 **Branch:** `chore/project-cleanup-reorg`  
 **PR:** [#240](https://github.com/MahmoudAlZougbhi/linasbot-server/pull/240)  
-**Status:** `HA_INFRA_WIRED_AND_LOAD_CERTIFIED` (app release **not** merged/deployed)
+**Status:** `HA_MANAGED_PG_CUTOVER_COMPLETE` (app release **not** merged/deployed)
 
 ## Resources created (live)
 
 | Resource | ID / name | Spec | Monthly |
 |----------|-----------|------|---------|
-| Managed Valkey | `linas-redis-prod` `c19219f0-4179-4c0e-aff4-6ff708b3408a` | Valkey 8, lon1, `db-s-1vcpu-2gb` × **2** (primary+standby), TLS/`rediss`, VPC `default-lon1` | **$60** |
-| Regional HTTP LB | `linas-http-lb-lon1` `2535b8ff-…` IP `157.245.31.104` | 1 node lon1; TLS terminate (DO LE cert `linasaibot-lb-cert`); → nginx `:80`; HC `http://:8003/api/health` | **$12** |
+| Managed Valkey | `linas-redis-prod` `c19219f0-4179-4c0e-aff4-6ff708b3408a` | Valkey 8, lon1, `db-s-1vcpu-2gb` × **2**, TLS/`rediss`, VPC `default-lon1` | **$60** |
+| Managed PostgreSQL | `linas-postgres-prod` `17d6fb7e-30d7-442a-a716-5c5344639659` | PG 17, lon1, `db-s-1vcpu-2gb` × **2**, private VPC, TLS | **~$60–61** |
+| Regional HTTP LB | `linas-http-lb-lon1` `2535b8ff-…` IP `157.245.31.104` | TLS terminate → nginx `:80`; HC `http://:8003/api/health` | **$12** |
 | App peer | `linas-app-lon1-02` `591901417` `167.99.89.243` / `10.106.0.4` | `s-2vcpu-4gb` lon1 | **$24** |
 | Spaces | — | not created | **$0** |
-| **NEW monthly** | | | **`$96`** |
+| **NEW monthly (Valkey+LB+node02+PG)** | | | **~$156–157** |
 
-Existing node `510629908` (`139.59.167.62`, `s-2vcpu-2gb-90gb-intel`) kept. Linas total ≈ **$120/mo** (+ SportBook/BOC unchanged).
+Existing node `510629908` kept. SportBook/BOC databases **untouched**.
 
-**Trusted sources (Valkey):** droplet `510629908`, droplet `591901417`, tag `linas` only. **Never** SportBook (`sportbook-redis-prod` fra1 untouched).
+**Trusted sources (Valkey + Postgres):** droplet `510629908`, droplet `591901417`, tag `linas` only.
 
-**DNS:** `linasaibot.com` + `www` A → `157.245.31.104` (TTL 60).
+**DNS:** `linasaibot.com` + `www` A → `157.245.31.104`.
 
-## Wiring (current prod `main` @ `781a94c` — not PR #240)
+## Postgres cutover (2026-08-12)
 
-- Both nodes: private `REDIS_URL` / `RATE_LIMIT_REDIS_URL` = Valkey `rediss://…` (TLS+auth); `LINAS_REQUIRE_REDIS=false`; `RATE_LIMIT_BACKEND=redis` set for forward-compat.
-- Live `/api/ready`: `redis_reachable=true`, `production_ready=true`, Meta App A active on both.
-- Nginx HTTP server accepts DO LB traffic when `X-Forwarded-Proto=https` (serves API/SPA); direct HTTP still redirects to HTTPS.
-- Workers / durable queues **not** activated (`LINAS_REQUIRE_REDIS` remains false). **BOC OFF.** No Requests migration. PR #240 **not** merged / **not** deployed.
+- Dump/restore verified; both nodes private DSN + `sslmode=require`.
+- Managed alembic head: `20260812_ha_billing_auth` (Requests **not** applied).
+- node01 local PG retained for rollback.
+- Scripts: `scripts/ha/managed_pg_*.sh`.
 
-### Env note for operators
+## Wiring notes
 
-Private URI from: `doctl databases connection c19219f0-4179-4c0e-aff4-6ff708b3408a --private`.  
-Do **not** commit passwords. Current prod rate-limit **code** on disk is still file-backed (`main`); Redis shared RL lands with PR #240 deploy. Fail-closed Redis RL applies after that release.
+- Valkey: private `REDIS_URL` / `RATE_LIMIT_REDIS_URL`; `LINAS_REQUIRE_REDIS=false` (workers off).
+- Postgres: private `LINAS_WHATSAPP_DATABASE_URL` with TLS on **both** nodes.
+- `LINAS_BILLING_BACKEND` / `LINAS_AUTH_TOKEN_BACKEND` / `META_REGISTRY_BACKEND` remain **file** on live until PR #240 deploy + explicit flag flip.
+- `LINAS_FAIL_CLOSED_REDIS_CLAIMS` prepared in PR; **not** enabled on prod.
+- **BOC OFF.** No Requests migration. PR #240 **not** merged / **not** deployed.
 
 ## HA / failover proof
 
 | Test | Result |
 |------|--------|
-| Valkey TLS auth PING/SET/GET | PASS |
-| Replication | `role=master`, `connected_slaves=1`; standby read OK (`master_link=up`) |
-| Shared counter / idempotency / locks (real Valkey) | PASS (see real-infra cert) |
+| Valkey TLS + standby | PASS (prior) |
+| Managed PG TLS from both nodes | PASS |
+| Managed PG row parity vs node01 dump | PASS |
+| Standby streaming (`linas-postgres-prod-2`) | PASS |
+| Forced managed primary kill | **Skipped** (safe — standby proven; DO auto-failover) |
+| Pool reconnect storm (30× SELECT) | PASS |
 | LB both nodes | PASS |
-| Stop node01; wait HC; LB `/api/health` | **20/20** via node02 |
-| Restore node01 | PASS |
-| Graceful SIGTERM on current `main` | Process dies → nginx 502 until restart (drain/503 is PR #240 code) |
+| node01 full loss | PASS `pass=8 fail=0` — Managed PG OK from node02; registry NFS residual |
+| node02 full loss | PASS `pass=6 fail=0` |
 
-Forced managed-primary Valkey kill not executed (DO auto-failover); standby replication proven.
+## Remaining before merge/deploy
 
-## Durability proof
+1. Merge/deploy PR #240 deliberately.
+2. Enable `META_REGISTRY_BACKEND=dual` → soak → `postgres` → unexport registry NFS.
+3. Enable `LINAS_BILLING_BACKEND=postgres` + `LINAS_AUTH_TOKEN_BACKEND=postgres` after import verify.
+4. Owner gate for `LINAS_REQUIRE_REDIS` / `LINAS_FAIL_CLOSED_REDIS_CLAIMS`.
+5. Then Requests migration (separate approval).
 
-- In-repo ledger + reconcile: `tests/scale/test_inbound_event_durability.py` → `unexplained_missing_events=0`
-- Real-infra cert includes that suite: **PASS**, unexplained **0**
+## Confirmation
 
-## Load cert (real Valkey + LB + both nodes; mocked providers in harness)
-
-Artifact: `docs/scale/LOAD_TEST_RESULTS_REAL_INFRA.json` — **`all_passed=true`**, `unexplained_missing_events=0`.
-
-| Scenario | Result |
-|----------|--------|
-| 5k owners set | PASS |
-| 20k burst idempotency (dupes) | PASS (18001 accepted / 1999 dupes) |
-| OOO conversation locks (1000 conv) | PASS |
-| Worker crash retry/DLQ | PASS |
-| Durable ledger reconcile | PASS |
-| LB `/api/health` ×200 @16 workers | PASS (p95 ~783ms) |
-| LB `/api/ready` ×30 sequential | PASS |
-
-Harness: `scripts/loadtest/run_real_infra_cert.py` (run on a Linas droplet; Valkey trusted sources block public clients).
-
-## Multi-node divergence closeout (2026-08-12)
-
-See `MULTI_NODE_DIVERGENCE_CLOSEOUT.md` and `HA_NODE01_SPOF_HARDENING.md`.
-
-| Item | Closure |
-|------|---------|
-| `meta_registry` | NFS shared (temp). PR adds Postgres SoT; tables imported on node01 PG (prep). Live backend still `file`. |
-| social media files | **REMOVED** NFS — legacy Create Post; **Spaces not required** |
-| WhatsApp Postgres | Identical DSN `10.106.0.3`; Managed PG **not** purchased |
-| Port `:8003` | VPC-only HC on node01 (public Anywhere removed) |
-| Power-loss | node01: LB health 20/20 via node02; WA/registry SPOF documented. node02: LB OK via node01 |
-
-Scripts: `scripts/ha/close_divergence_node0{1,2}.sh`, `verify_multi_node_closeout.sh`, `remove_media_nfs.sh`, `harden_port_8003.sh`, `power_loss_simulation.sh`.
-
-## Remaining bottlenecks / residuals
-
-1. **PR #240 not deployed** — Redis shared rate-limit, SIGTERM drain/503, inbound ledger, outbound dedupe Redis, SSE pubsub, registry PG backend await release.
-2. **`LINAS_REQUIRE_REDIS=false`** — durable queue workers not on; job_queue Redis is reachable for readiness only.
-3. **node01 full-outage SPOF** — WA Postgres + registry NFS — **BLOCKED_OWNER_ACTION — MANAGED_POSTGRES_PURCHASE** (`db-s-1vcpu-2gb` ×2 lon1 ≈ **$60–61/mo**).
-4. **`/api/ready` heavy** under concurrency (Meta checks); LB HC uses `/api/health`.
-5. **2vCPU nodes** — API concurrency headroom limited; scale out before 5k live owners.
-
-## Ready for Requests migration + prod deploy of PR #240?
-
-**Not yet.** Next OWNER gates: purchase Managed PG HA, merge/deploy PR #240 deliberately, cut over registry to Postgres, enable workers only with explicit `LINAS_REQUIRE_REDIS` approval, then Requests migration. Do **not** buy Spaces for media. Do **not** buy $15 single-node Valkey as final HA.
+- PR #240 **not** merged · no app-release deploy · Requests **not** migrated · BOC **OFF** · Spaces **not** purchased

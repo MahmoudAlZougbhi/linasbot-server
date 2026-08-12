@@ -3,122 +3,76 @@
 **Date:** 2026-08-12  
 **Branch:** `chore/project-cleanup-reorg`  
 **PR:** [#240](https://github.com/MahmoudAlZougbhi/linasbot-server/pull/240)  
-**Constraint:** No merge · No app-release deploy · BOC OFF · No Requests prod migration · No Managed PG/Spaces purchase in this pass
+**Constraint:** No merge · No app-release deploy · BOC OFF · No Requests prod migration
 
-## 1. Postgres SPOF audit (live node01)
-
-| Item | Observed |
-|------|----------|
-| Engine | PostgreSQL **17.7** (Ubuntu) on node01 |
-| DB | `linas_whatsapp` @ `10.106.0.3:5432` |
-| Size | **~8.6 MB** |
-| Extensions | `plpgsql` only |
-| Alembic (prod) | `20260811_wa_app_review_source` (Requests **not** applied) |
-| Listen | `localhost,10.106.0.3` |
-| Consumers | WA Cloud tables + smart follow-up; Requests code shares DSN but migration not live; Meta registry **file/NFS** today |
-| App pool | `pool_size=5` + `max_overflow=10` / process; `pool_pre_ping`; **no SSL**; **no failover** |
-| Backup dir | `/opt/linasbot_backups/pg` **absent** on node01 at audit time |
-
-### Managed PostgreSQL recommendation (DO **lon1**) — **DO NOT PURCHASE YET**
+## 1. Managed PostgreSQL HA — **LIVE**
 
 | Field | Value |
-|-------|-------|
-| Plan slug | `db-s-1vcpu-2gb` |
-| Nodes | **2** (primary + standby HA) |
-| Region / VPC | `lon1` / `default-lon1` |
-| Engine | PostgreSQL **17** (match droplet) |
+|------|-------|
+| Name / ID | `linas-postgres-prod` / `17d6fb7e-30d7-442a-a716-5c5344639659` |
+| Engine | PostgreSQL **17** (managed 17.10) |
+| Region / VPC | `lon1` / `default-lon1` (`d0e11d67-…`) |
+| Size / nodes | `db-s-1vcpu-2gb` × **2** (primary + standby) |
 | Est. monthly | **~$60–61** (same size class as `linas-redis-prod`) |
-| Name suggestion | `linas-postgres-prod` |
-| Trusted sources | both Linas droplets + tag `linas` |
-| Why not 1 GiB | HA standby requires ≥2 GiB on DO |
+| Network | Private only; trusted sources = droplets `510629908`, `591901417` + tag `linas` |
+| App DB | `linas_whatsapp` (not SportBook/BOC) |
+| TLS | `sslmode=require` from **both** app nodes (proved) |
+| Standby | `pg_stat_replication`: `linas-postgres-prod-2` streaming (async) + `pghoard` |
+| Forced failover | **Not executed** (safe path: standby streaming proved; DO auto-failover) |
 
-**Migration method:** `pg_dump -Fc` → create managed → `pg_restore` → dual-node DSN flip to private URI with `sslmode=require` → restart `linasbot` → soak → decommission node01 PG listen.  
-**Expected downtime:** ~1–5 minutes for DSN flip if restore pre-verified (DB is tiny).  
-**Rollback:** restore prior `.env` DSN to `10.106.0.3`, restart both apps; keep node01 PG intact until soak passes.
+### Migration executed
 
-**Verdict:** Managed PG HA is **required** to remove Postgres SPOF. See **BLOCKED_OWNER_ACTION** below.
+1. Verified `pg_dump -Fc` on node01 → `/opt/linasbot_backups/pg/` (+ sha256 + meta).
+2. `pg_restore` into managed; **exact row-count parity** (19 tables); extensions=`plpgsql`; indexes=68; constraints=214.
+3. Alembic on managed advanced to `20260812_ha_billing_auth` (billing/auth tables additive). **Requests migration not applied.**
+4. Both nodes `LINAS_WHATSAPP_DATABASE_URL` → private managed URI with `sslmode=require` (no localhost / `10.106.0.3`).
+5. Env backups under `/opt/linasbot_backups/env/`. **node01 local PG left intact for rollback** (`alembic=20260812_meta_app_registry`).
+
+Scripts: `scripts/ha/managed_pg_*.sh`, `_managed_pg_common.sh`.
 
 ## 2. meta_registry
 
 | Item | Status |
 |------|--------|
-| Current live authority | NFS file store on node01 (`/opt/linasbot_data/meta_registry`) |
-| Code in PR | Postgres SoT via `META_REGISTRY_BACKEND=file\|postgres\|dual` |
-| Schema | Alembic `20260812_meta_app_registry` (revises prod head; **before** Requests) |
-| Import | `scripts/ha/import_meta_registry_to_postgres.py` |
-| Cutover | Not activated on prod (no release deploy). Default remains `file` |
-| node01-off for registry | **Blocked** until Managed PG + backend=`postgres` deploy |
+| File/NFS live authority | Still NFS on node01 (`META_REGISTRY_BACKEND` default `file` — **no release deploy**) |
+| Managed PG rows | `meta_asset_bindings=4`, `meta_binding_credentials=4` |
+| Dual-read file↔PG | **PASS** (binding_id / tenant_id / asset_id / credential links) |
+| Cutover to `postgres` | **Blocked on PR #240 deploy** then `dual` → `postgres` → `remove_registry_nfs.sh` |
 
 ## 3. Media `meta_social_post_media`
 
-| Item | Status |
-|------|--------|
-| Product need | **LEGACY_ONLY** — Create Post / social creative disabled |
-| Spaces | **Not required — do not buy** |
-| Live action | NFS export/mount **removed**; local stub dirs only |
-| Scripts | `scripts/ha/remove_media_nfs.sh`; closeout scripts updated |
+LEGACY_ONLY — NFS removed earlier; **Spaces not required**.
 
-## 4. Multi-node residuals (classification)
+## 4. Correctness-critical multi-node state (code in PR)
 
-| Surface | Class | Notes |
-|---------|-------|-------|
-| Webhook mid/bodyfp claims | ACCEPTABLE_WITH_REASON | Redis claims in PR #240 (await deploy) |
-| Scheduler job locks | ACCEPTABLE_WITH_REASON | Redis-preferred in PR (await deploy) |
-| Outbound text dedupe | MUST_MOVE_TO_VALKEY → **fixed in PR** | Redis claim first |
-| Live Chat SSE | MUST_MOVE_TO_VALKEY → **fixed in PR** | Redis pub/sub fanout |
-| `config.user_*` takeover + pending combine | MUST_MOVE_TO_VALKEY → **partial in PR** | Redis sync for takeover + pending |
-| Remaining `config.user_*` FSM/gender/etc. | ACCEPTABLE_WITH_REASON | Non-money UX; follow-up after deploy |
-| Wallets / credits / Stripe file idempotency | MUST_MOVE_TO_POSTGRES | Needs owner schema approval + Managed PG |
-| Mobile refresh / email / guest file tokens | MUST_MOVE_TO_POSTGRES / VALKEY | Residual |
-| Requests outbox claim/worker | MUST_MOVE_TO_VALKEY / PG claim | Residual; Requests not on prod |
-| Job queue file backend | REMOVE for HA | Redis path exists; `LINAS_REQUIRE_REDIS` owner gate |
-| Live Chat / retrieval TTL caches | SAFE_LOCAL_CACHE | OK |
+| Surface | Status |
+|---------|--------|
+| Wallets / Stripe / admin-credit idempotency | **PG path in PR** via `LINAS_BILLING_BACKEND=file\|postgres` (default file). Tables + import done on managed. Live apps still file until deploy+flag. |
+| Mobile refresh / email auth tokens | **PG path in PR** via `LINAS_AUTH_TOKEN_BACKEND=file\|postgres`. Imported (12 mobile / 4 email). |
+| Credit ledger / entitlements | Still file (documented residual in `billing_backend.py`) |
+| Requests outbox claim | **SKIP LOCKED + processing** in PR; Requests **not** on prod |
+| Webhook / outbound / job locks / takeover | Redis-first; **`LINAS_FAIL_CLOSED_REDIS_CLAIMS`** (and/or `LINAS_REQUIRE_REDIS`) fail-closed — prepared, **not enabled** on prod |
+| Valkey | HA locks/RL/queues remain on `linas-redis-prod` |
 
 ## 5. Port 8003 hardening
 
-- node01 UFW: public Anywhere `:8003` **removed**
-- Kept: `8003/tcp` from `10.106.0.0/20` (LB HC VPC)
-- Public direct `:8003` times out; LB `https://linasaibot.com/api/health` **200**
-- Script: `scripts/ha/harden_port_8003.sh`
+- node01 + node02: public `:8003` **blocked**; VPC `10.106.0.0/20` only for HC.
+- LB `https://linasaibot.com/api/health` **200**.
 
-## 6. Full power-loss tests (executed 2026-08-12)
-
-Script: `scripts/ha/power_loss_simulation.sh {node01|node02}`
+## 6. Full power-loss tests (post Managed PG)
 
 | Scenario | Result |
 |----------|--------|
-| **A. node01 full loss** (stop `linasbot` + PostgreSQL + NFS) | **PASS** harness `pass=7 fail=0`. LB `/api/health` **20/20** via node02 after HC drain. Meta/WA webhook verify **403** via LB (app reached). `/api/ready` **degraded/timeout** (expected — PG + registry NFS on node01). `meta_registry` **unavailable** on node02 (NFS SPOF). Peer redis/ready probe may timeout while NFS soft-errors. |
-| **B. node02 full loss** (stop app only) | **PASS** harness `pass=6 fail=0`. LB `/api/health` **18/20**, `/api/ready` **200**, webhooks **403**, Valkey reachable from node01. |
-| Durability unit | `tests/scale/test_inbound_event_durability.py` + registry PG tests: **26 passed**; unexplained_missing_events path covered in suite |
+| **A. node01 full loss** (stop app + local PG + NFS) | **PASS** `pass=8 fail=0`. LB health **20/20**. **Managed PG reachable from node02**. Registry NFS residual documented. |
+| **B. node02 full loss** | **PASS** `pass=6 fail=0`. LB health **20/20**, ready **200**, webhooks **403**, Valkey OK. |
+| Unit durability / registry / billing / claims | **63 passed** (scale + billing + redis fail-closed + outbox + wallet auth) |
 
-Honest: **WA Postgres + meta_registry still fail on node01 total loss** until Managed PG + `META_REGISTRY_BACKEND=postgres` deploy/cutover. Media NFS already removed (not required).
-
-## 7. Owner action required
-
-```
-BLOCKED_OWNER_ACTION — MANAGED_POSTGRES_PURCHASE
-```
-
-Exact purchase (after owner approval only):
-
-```bash
-doctl databases create linas-postgres-prod \
-  --engine pg --version 17 \
-  --region lon1 \
-  --size db-s-1vcpu-2gb \
-  --num-nodes 2 \
-  --private-network-uuid <default-lon1-vpc-uuid>
-```
-
-**Est. cost:** ~$60–61/mo.  
-**Spaces:** not required.  
-**Then:** dump/restore → DSN cutover both nodes → enable `META_REGISTRY_BACKEND=dual` then `postgres` (tables already imported on node01 PG as dry-run; re-import after managed restore) → unexport registry NFS → re-run power-loss.
-
-## Confirmation
+## 7. Confirmation
 
 - PR #240 **not** merged
-- New application release **not** deployed
+- New application release **not** deployed (DSN/env cutover + restarts only)
 - Requests migration **not** applied
 - BOC **OFF**
-- Managed Postgres **not** purchased
+- Managed Postgres **purchased and cut over**
 - Spaces **not** purchased
+- node01 PG **not destroyed** (rollback available)
