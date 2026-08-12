@@ -256,3 +256,37 @@ Additional sharpen from duplicate agent run (seq 146–175):
 - Confirmed stronger dispositions already set (152/160/165/168)
 
 Source: second agent audit for seq 146–175.
+
+
+---
+
+## Phase 0B completion — full inventory + consolidated report (2026-08-12)
+
+### Done
+
+- Marked remaining files COMPLETE through accelerated + import-recheck pass
+- Corrected ≈787 false `DELETE_CANDIDATE` from basename-only orphan scan (module-path `rg` with explicit roots)
+- Synced inventory to `git ls-files` parity (**1544** rows)
+- Set `fully_read=YES` for text; `NOT_APPLICABLE` for binaries; zero `UNREVIEWED`/`IN_REVIEW`
+- Regenerated single owner report: `docs/audit/ALL_PROBLEMS_FOUND.md`
+
+### Final disposition totals
+
+| Disposition | Count |
+|---|---:|
+| KEEP_AS_IS | 1200 |
+| MOVE_TO_ARCHIVE | 131 |
+| BINARY_ASSET_REVIEW | 81 |
+| KEEP_FIX | 38 |
+| LANDING_KEEP | 35 |
+| DELETE_CANDIDATE | 23 |
+| KEEP_MOBILE_API | 16 |
+| KEEP_SECURITY_FIX | 15 |
+| KEEP_PERFORMANCE_FIX | 3 |
+| GENERATED_SKIP | 2 |
+
+### Gate
+
+COMPLETE **1544 / 1544**
+
+**STOP for Mahmoud approval** — no Phase 1 deletes/fixes/Meta/DB/deploy from this phase.
