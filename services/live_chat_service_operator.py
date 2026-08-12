@@ -25,6 +25,10 @@ class LiveChatOperatorMixin:
         adapter: Any,
         message_type: str = "text",
         idempotency_key: str | None = None,
+        tenant_id: str | None = None,
+        operator_name: str | None = None,
+        request_id: str | None = None,
+        source_channel: str | None = None,
     ) -> dict[str, Any]:
         """Send message from operator to customer
 
@@ -36,6 +40,9 @@ class LiveChatOperatorMixin:
             adapter: WhatsApp adapter instance
             message_type: Type of message - "text", "voice", or "image"
             idempotency_key:  client key; duplicates within TTL are no-oped (no second WhatsApp delivery).
+            tenant_id: Session tenant — used for WA Cloud epoch pause + Requests audit
+            request_id: Optional Customer Request id for manual-mode audit linkage
+            source_channel: Optional Requests source_channel hint
         """
         lock_ref = None
         completed_ok = False
@@ -62,6 +69,45 @@ class LiveChatOperatorMixin:
                     "message": "Already processed (duplicate request)",
                     "deduplicated": True,
                 }
+
+            # Server-authoritative: pause AI before outbound so in-flight AI cannot win the race.
+            manual_meta: dict[str, Any] = {}
+            try:
+                from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+                from services.requests.manual_mode import activate_manual_mode
+
+                wa_session = None
+                wa_cm = None
+                try:
+                    if tenant_id:
+                        wa_cm = whatsapp_session()
+                        wa_session = wa_cm.__enter__()
+                except WhatsAppDatabaseUnavailable:
+                    wa_session = None
+                try:
+                    pause_result = await activate_manual_mode(
+                        conversation_id=conversation_id,
+                        user_id=user_id,
+                        actor_user_id=operator_id,
+                        tenant_id=tenant_id,
+                        operator_name=operator_name,
+                        request_id=request_id,
+                        source_channel=source_channel,
+                        session=wa_session,
+                    )
+                    if wa_session is not None:
+                        wa_session.commit()
+                    manual_meta = {
+                        "manual_mode_activated": pause_result.activated,
+                        "manual_mode_already_active": pause_result.already_active,
+                        "control_epoch": pause_result.control_epoch,
+                    }
+                finally:
+                    if wa_cm is not None:
+                        wa_cm.__exit__(None, None, None)
+            except Exception as pause_err:
+                print(f"⚠️ manual_mode pause before send failed: {pause_err}")
+                return {"success": False, "error": f"Failed to pause AI before send: {pause_err}"}
 
             canonical_user_id, normalized_phone = get_canonical_user_id_and_phone(user_id)
             # For Qiscus, we need to fetch the phone_number from Firebase
@@ -183,6 +229,7 @@ class LiveChatOperatorMixin:
                     "message": "Voice message sent successfully",
                     "storage_url": storage_url,
                     "whatsapp_audio_url": build_whatsapp_audio_delivery_url(storage_url) if storage_url else None,
+                    **manual_meta,
                 }
 
             elif message_type == "image":
@@ -244,7 +291,12 @@ class LiveChatOperatorMixin:
                 print(f"✅ Image message processed and sent for ...{str(user_id)[-4:]}")
 
                 completed_ok = True
-                return {"success": True, "message": "Image message sent successfully", "storage_url": storage_url}
+                return {
+                    "success": True,
+                    "message": "Image message sent successfully",
+                    "storage_url": storage_url,
+                    **manual_meta,
+                }
 
             else:  # Default to text
                 # Save to Firestore first (SSE broadcasts immediately → message appears in UI fast)
@@ -283,6 +335,7 @@ class LiveChatOperatorMixin:
                     "success": True,
                     "message": "Message sent successfully",
                     "delivered": True,
+                    **manual_meta,
                 }
 
         except Exception as e:
@@ -294,6 +347,59 @@ class LiveChatOperatorMixin:
         finally:
             if lock_ref is not None and not completed_ok:
                 await _release_operator_idempotency_lock(db, lock_ref)
+
+    async def resume_ai_conversation(
+        self,
+        conversation_id: str,
+        user_id: str,
+        operator_id: str,
+        tenant_id: str | None = None,
+        request_id: str | None = None,
+        source_channel: str | None = None,
+    ) -> dict[str, Any]:
+        """Explicit Resume AI — clears server pause (Firestore + WA Cloud epoch)."""
+        try:
+            from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+            from services.requests.manual_mode import resume_manual_mode
+
+            wa_cm = None
+            wa_session = None
+            try:
+                if tenant_id:
+                    wa_cm = whatsapp_session()
+                    wa_session = wa_cm.__enter__()
+            except WhatsAppDatabaseUnavailable:
+                wa_session = None
+            try:
+                result = await resume_manual_mode(
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    actor_user_id=operator_id,
+                    tenant_id=tenant_id,
+                    request_id=request_id,
+                    source_channel=source_channel,
+                    session=wa_session,
+                )
+                if wa_session is not None:
+                    wa_session.commit()
+            finally:
+                if wa_cm is not None:
+                    wa_cm.__exit__(None, None, None)
+
+            # Best-effort Live Chat index / canonical state refresh.
+            release = await self.release_conversation(conversation_id, user_id)
+            return {
+                "success": True,
+                "message": "AI resumed for conversation",
+                "conversation_id": conversation_id,
+                "control_epoch": result.control_epoch,
+                "already_active": result.already_active,
+                "audit_recorded": result.audit_recorded,
+                "release_ok": bool(release.get("success")),
+            }
+        except Exception as e:
+            print(f"❌ Error resuming AI: {e}")
+            return {"success": False, "error": str(e)}
 
     async def update_operator_status(self, operator_id: str, status: str) -> dict[str, Any]:
         """Update operator availability"""

@@ -63,6 +63,20 @@ class RequestNotifyRetryBody(BaseModel):
     idempotency_key: str = Field(min_length=8, max_length=128)
 
 
+class RequestManualModeBody(BaseModel):
+    """Pause/resume AI for the request's linked conversation."""
+
+    user_id: str = Field(min_length=1, max_length=256)
+
+
+class RequestManualSendBody(BaseModel):
+    """Authorized text reply to the customer on the request conversation."""
+
+    user_id: str = Field(min_length=1, max_length=256)
+    message: str = Field(min_length=1, max_length=4000)
+    idempotency_key: str | None = Field(default=None, max_length=128)
+
+
 class RequestListQuery(BaseModel):
     request_type: str | None = None
     status: str | None = None

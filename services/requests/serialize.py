@@ -12,9 +12,10 @@ def _dt(value: Any) -> str | None:
     if value is None:
         return None
     try:
-        return value.isoformat()
+        iso = value.isoformat()
     except Exception:
         return str(value)
+    return str(iso) if iso is not None else None
 
 
 def serialize_request(
@@ -52,6 +53,7 @@ def serialize_request(
         "last_notification_error": row.last_notification_error,
         "completion_message": row.completion_message,
         "cancellation_reason": row.cancellation_reason,
+        "manual_mode_conversation_ref": row.manual_mode_conversation_ref,
         "created_at": _dt(row.created_at),
         "submitted_at": _dt(row.submitted_at),
         "updated_at": _dt(row.updated_at),

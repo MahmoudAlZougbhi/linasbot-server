@@ -181,6 +181,13 @@ class ReleaseRequest(BaseModel):
     user_id: str
 
 
+class ResumeAiRequest(BaseModel):
+    conversation_id: str
+    user_id: str
+    request_id: str | None = None
+    source_channel: str | None = None
+
+
 class MarkConversationReadRequest(BaseModel):
     conversation_id: str
     user_id: str
@@ -194,6 +201,8 @@ class SendOperatorMessageRequest(BaseModel):
     message_type: str = "text"  # "text", "voice", "image"
     # Same key within TTL suppresses a second Firestore write + WhatsApp send (double-submit / retries).
     idempotency_key: str | None = None
+    request_id: str | None = None
+    source_channel: str | None = None
 
 
 class OperatorStatusRequest(BaseModel):

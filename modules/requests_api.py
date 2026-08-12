@@ -11,6 +11,7 @@ from modules.core import app
 from services.requests.permissions import (
     can_view_sensitive,
     require_requests_manage,
+    require_requests_manual_chat,
     require_requests_notify,
     require_requests_view,
 )
@@ -18,6 +19,8 @@ from services.requests.schemas import (
     RequestAssignBody,
     RequestCreateBody,
     RequestFinalActionBody,
+    RequestManualModeBody,
+    RequestManualSendBody,
     RequestNoteBody,
     RequestNotifyRetryBody,
     RequestStatusBody,
@@ -159,9 +162,7 @@ def add_request_note(request_id: str, body: RequestNoteBody, request: Request) -
 
 
 @app.post("/api/requests/{request_id}/status")
-def change_request_status(
-    request_id: str, body: RequestStatusBody, request: Request
-) -> dict[str, Any]:
+def change_request_status(request_id: str, body: RequestStatusBody, request: Request) -> dict[str, Any]:
     session = require_requests_manage(request)
     tenant_id = _tenant(session)
     with _db_cm() as db:
@@ -216,3 +217,83 @@ def retry_request_notification(
             )
         except CustomerRequestsError as exc:
             raise _http(exc) from exc
+
+
+@app.post("/api/requests/{request_id}/manual-mode/resume")
+async def resume_request_manual_mode(
+    request_id: str, body: RequestManualModeBody, request: Request
+) -> dict[str, Any]:
+    session = require_requests_manual_chat(request)
+    tenant_id = _tenant(session)
+    with _db_cm() as db:
+        try:
+            row = CustomerRequestsService(db).get(
+                tenant_id=tenant_id,
+                request_id=request_id,
+                include_sensitive=False,
+            )
+        except CustomerRequestsError as exc:
+            raise _http(exc) from exc
+        conversation_id = str(row.get("conversation_id") or row.get("manual_mode_conversation_ref") or "")
+        if not conversation_id:
+            raise HTTPException(
+                status_code=409, detail={"code": "NO_CONVERSATION", "message": "Request has no conversation"}
+            )
+        from services.requests.manual_mode import resume_manual_mode
+
+        result = await resume_manual_mode(
+            conversation_id=conversation_id,
+            user_id=body.user_id,
+            actor_user_id=_actor(session),
+            tenant_id=tenant_id,
+            request_id=request_id,
+            source_channel=row.get("source_channel"),
+            session=db,
+        )
+        db.commit()
+        return {
+            "success": True,
+            "conversation_id": result.conversation_id,
+            "control_epoch": result.control_epoch,
+            "already_active": result.already_active,
+            "audit_recorded": result.audit_recorded,
+        }
+
+
+@app.post("/api/requests/{request_id}/manual-chat/send")
+async def send_request_manual_chat(request_id: str, body: RequestManualSendBody, request: Request) -> dict[str, Any]:
+    """Text reply on the request conversation — pauses AI first (server-authoritative)."""
+    session = require_requests_manual_chat(request)
+    tenant_id = _tenant(session)
+    with _db_cm() as db:
+        try:
+            row = CustomerRequestsService(db).get(
+                tenant_id=tenant_id,
+                request_id=request_id,
+                include_sensitive=False,
+            )
+        except CustomerRequestsError as exc:
+            raise _http(exc) from exc
+        conversation_id = str(row.get("conversation_id") or "")
+        if not conversation_id:
+            raise HTTPException(
+                status_code=409, detail={"code": "NO_CONVERSATION", "message": "Request has no conversation"}
+            )
+
+    from services.live_chat_service import live_chat_service
+    from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
+
+    adapter = WhatsAppFactory.get_adapter(WhatsAppFactory.get_current_provider())
+    return await live_chat_service.send_operator_message(
+        conversation_id=conversation_id,
+        user_id=body.user_id,
+        message=body.message,
+        operator_id=_actor(session),
+        adapter=adapter,
+        message_type="text",
+        idempotency_key=body.idempotency_key,
+        tenant_id=tenant_id,
+        operator_name=getattr(session, "email", None),
+        request_id=request_id,
+        source_channel=row.get("source_channel"),
+    )

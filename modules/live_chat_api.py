@@ -28,6 +28,7 @@ from modules.models import (
     MarkConversationReadRequest,
     OperatorStatusRequest,
     ReleaseRequest,
+    ResumeAiRequest,
     SendOperatorMessageRequest,
     TakeoverRequest,
 )
@@ -248,6 +249,30 @@ async def release_conversation(request: ReleaseRequest, http_request: Request) -
     return await _run_endpoint(_handler)
 
 
+@app.post("/api/live-chat/resume-ai")
+async def resume_ai_conversation(request: ResumeAiRequest, http_request: Request) -> Any:
+    """Explicit Resume AI — clears server-authoritative manual pause."""
+
+    async def _handler() -> Any:
+        from modules.api_security import reject_social_operator_mutation, require_session
+
+        session = require_session(http_request)
+        reject_social_operator_mutation(request.user_id)
+        result = await live_chat_service.resume_ai_conversation(
+            conversation_id=request.conversation_id,
+            user_id=request.user_id,
+            operator_id=session.user_id,
+            tenant_id=getattr(session, "tenant_id", None),
+            request_id=request.request_id,
+            source_channel=request.source_channel,
+        )
+        if result.get("success"):
+            await broadcast_sse_event("conversations", {"trigger_refresh": True})
+        return result
+
+    return await _run_endpoint(_handler)
+
+
 @app.post("/api/live-chat/mark-read")
 async def mark_conversation_read(request: MarkConversationReadRequest) -> Any:
     """Mark conversation as read when operator opens it. Persists unread_count=0 in Firestore."""
@@ -279,6 +304,10 @@ async def send_operator_message(request: SendOperatorMessageRequest, http_reques
             message_type=request.message_type,
             adapter=adapter,
             idempotency_key=request.idempotency_key,
+            tenant_id=getattr(session, "tenant_id", None),
+            operator_name=getattr(session, "email", None),
+            request_id=getattr(request, "request_id", None),
+            source_channel=getattr(request, "source_channel", None),
         )
 
     return await _run_endpoint(_handler)
