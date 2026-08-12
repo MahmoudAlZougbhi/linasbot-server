@@ -186,3 +186,7 @@ Phase 0C complete for owner approval. **Do not begin Phase 1.**
 After late W0C-B* completions, lead merged **35** remaining disposition elevations into `FILE_INVENTORY.csv` (notably seq 535 KEEP_SECURITY_FIX). App source still untouched.
 
 Post-follow-up totals: KEEP_SECURITY_FIX=17, KEEP_FIX=100, DELETE_CANDIDATE=46, KEEP_AS_IS=1145.
+
+## 16. W0C-C thin-range forensic merge (206–320)
+
+Late validator produced `_phase0c_rows_206_320.json` (115 rows; 57 re-read / 58 reused). Disposition deltas vs inventory: **0**. Merged improved callers/purpose into **115** inventory rows. App source untouched.

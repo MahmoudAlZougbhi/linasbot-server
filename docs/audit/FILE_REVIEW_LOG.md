@@ -352,3 +352,7 @@ Merged remaining disposition elevations from W0C-B1..B5 JSON after initial commi
 - Additional KEEP_FIX / DELETE_CANDIDATE rows from mobile + modules + api_integrations
 - Official SECURITY_FINDINGS updated; inventory KEEP_SECURITY_FIX now **17**
 
+### Phase 0C follow-up — W0C-C 206–320 forensic callers
+
+Merged richer purpose/caller fields from `_phase0c_rows_206_320.json` into inventory for **115** rows (no disposition changes; elevations already aligned).
+
