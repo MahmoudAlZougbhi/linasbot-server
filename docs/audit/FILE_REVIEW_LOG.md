@@ -8,11 +8,11 @@ Audit-only. Application source is not modified.
 |--------|-------|
 | Tracked files (`git ls-files`) | 1539 |
 | Inventory rows | 1539 |
-| COMPLETE | 175 |
-| UNREVIEWED | 1364 |
+| COMPLETE | 205 |
+| UNREVIEWED | 1334 |
 | IN_REVIEW | 0 |
-| Last batch | Batch 6 (seq 146–175) |
-| Last audit commit |  |
+| Last batch | Batch 7 (seq 176–205) |
+| Last audit commit | `04acbe0` (annotate `edee237`) |
 
 ---
 
@@ -199,3 +199,22 @@ Dashboard constants (brand/permissions/product/public), AuthContext cluster, Ope
 ### Cumulative
 
 COMPLETE **175 / 1539**
+
+---
+
+## Batch 7 — seq 176–205 (2026-08-12)
+
+### Scope
+
+ActivityFlow cluster, ContentManagers hub, Dashboard, auth pages, Live Chat page split (helpers→thread), Settings, Training redirect, VerifyEmail.
+
+### Highlights
+
+- **KEEP_SECURITY_FIX:** LiveChatSidebar exposes `simulateWebhook` (“Test flow”) + rebuild index; Settings `(tenantId||linas)` unlocks general/notifications
+- **KEEP_FIX:** Dashboard nav tiles ignore permissions; LiveChatDetails stub Transfer/Priority; Login hardcodes personal `/Users/mahmoudalzougbhi/...` paths
+- **KEEP_SPLIT:** LiveChatBotOverlay/Modals/ThreadHeader god-object prop dumps
+- Active: Live Chat, AI Setup hub, Interaction Logs cards, Settings trimmed surface, Training→FAQ redirect
+
+### Cumulative
+
+COMPLETE **205 / 1539**
