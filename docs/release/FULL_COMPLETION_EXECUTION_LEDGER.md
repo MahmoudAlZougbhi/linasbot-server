@@ -26,13 +26,13 @@
 | 10 | Independent review + PR closeout | **DONE** (CI green; no merge) |
 | 11 | Full file-by-file reinspection | **DONE** |
 | 12 | Final freeze | **DONE** (CI green @ `9757d01`) |
-| 13 | Production preparation | **IN_PROGRESS** (prep report done; owner gates remain) |
-| 14 | Merge PR #240 + deploy | BLOCKED (needs Phase 13 owner) |
-| 15 | Live post-deploy smoke | PENDING |
-| 16 | Mobile distribution (EAS) | PENDING (will need Apple/Google 2FA) |
-| 17 | Final live revalidation | PENDING |
-| 20 | Final deliverables `docs/release/*` | IN_PROGRESS |
-| 21 | Verdict | **NOT_READY** (Phase 13 owner actions) |
+| 13 | Production preparation | **DONE** (Valkey+PG already purchased; pins/backup done) |
+| 14 | Merge PR #240 + deploy | **DONE** (`12e6181` → prod; Google follow-on `1932249`) |
+| 15 | Live post-deploy smoke | **DONE** (PG cutover + ready/health/Meta/Apple/Google endpoint) |
+| 16 | Mobile distribution (EAS) | **DONE** TestFlight uploaded; Android AAB local (Play upload owner) |
+| 17 | Final live revalidation | **DONE** (see FINAL_PRODUCTION_LIVE_REPORT.md) |
+| 20 | Final deliverables `docs/release/*` | **DONE** |
+| 21 | Verdict | **PRODUCTION_LIVE_AND_TEST_BUILDS_READY** |
 
 ---
 
@@ -362,19 +362,21 @@ Do not enable `LINASLASER_BOC_BOOKING_ENABLED` in production.
 | Migration | **READY_TO_APPLY** `20260812_customer_requests` (ephemeral PG validated; **not** applied to prod) |
 | nginx / systemd / Firestore indexes | **READY** (read-only / functional) |
 
-### Current stop (2026-08-12)
+### Release execution closeout (2026-08-12 / 2026-08-13)
 
-### Verdict: **NOT_READY** — Phase 13 prep report complete; **remaining BLOCKED_OWNER_ACTION**
+### Verdict: **PRODUCTION_LIVE_AND_TEST_BUILDS_READY**
 
-Do **not** merge PR #240. Do **not** deploy. Do **not** apply production migration without Mahmoud approval. Do **not** purchase Redis without approval.
+See `docs/release/FINAL_PRODUCTION_LIVE_REPORT.md` for SHA, services, TestFlight, AAB path, and remaining owner console actions.
 
-### BLOCKED_OWNER_ACTION (exact — Mahmoud) — execution order
+| Item | Result |
+|------|--------|
+| PR #240 merge | `12e61810fcdb0e508a278f144388a60d38902bc5` |
+| Google Sign-In PR #242 | merged → prod `1932249679bd6e8c6c4343d43c36767f150b9247` |
+| Alembic | stopped at `20260812_apple_billing` |
+| SoT cutover | file pins removed; postgres defaults |
+| TestFlight | build **43** submitted (`f5f08009-2457-4e59-ac27-ec9ad1722d8f`) |
+| Android AAB | `artifacts/mobile/linas-ai-v1.0.0-vc24.aab` (vc24 / RC SHA) |
+| Remaining owner | Google iOS/Android OAuth clients; Play Internal upload; ASC ASSN URLs; Apple `.p8` confirm |
 
-1. **Redis purchase:** Approve DO Managed Valkey `linas-redis-prod`, region **lon1**, size **`db-s-1vcpu-1gb`**, ~**$15/mo** (not SportBook fra1 cluster). Then wire TLS/auth URL + smoke (no live activate without go-ahead).
-2. **Meta:** Live VERIFIED — no OTP required for completed checks. Optional GHA secret hygiene only; **no** disconnect/rebuild.
-3. **Migration apply approval:** Approve backup then apply additive `20260812_customer_requests` on production Postgres (not applied yet).
-4. **Merge approval:** Only after 1–3 — then merge #240 (Quality Gates → Production Deploy).
-
-Checklist: `docs/release/PHASE13_PRODUCTION_PREP_CHECKLIST.md`  
-Report: `docs/release/PHASE13_PRODUCTION_PREP_REPORT.md`
+**Still forbidden without new GO:** Requests migration, BOC, droplet resize/NFS delete, Redis require/fail-closed.
 
