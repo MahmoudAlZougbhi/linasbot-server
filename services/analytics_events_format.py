@@ -10,7 +10,6 @@ from typing import Any
 
 
 class AnalyticsEventsFormatMixin:
-
     """Shape aggregate stats into the dashboard analytics payload."""
 
     def _format_analytics_response(self, stats: dict, days: int) -> dict[str, Any]:

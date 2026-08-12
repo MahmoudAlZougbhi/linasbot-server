@@ -280,7 +280,9 @@ class LiveChatRebuildMixin:
                 timeout=self.INDEX_REFRESH_TIMEOUT_SECONDS,
             )
             if not result.get("written"):
-                print(f"⚠️ [index-refresh] skipped user=...{str(user_id)[-4:]} conv={conv_id} reason={result.get('reason')}")
+                print(
+                    f"⚠️ [index-refresh] skipped user=...{str(user_id)[-4:]} conv={conv_id} reason={result.get('reason')}"
+                )
                 return
             print(
                 f"🔄 [index-refresh] rebuilt index user={result.get('resolved_user_id', user_id)} conv={conv_id} state={result.get('conversation_state')}"

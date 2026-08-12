@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.local_qa_service import LocalQAService, get_qa_response as local_get
+from services.local_qa_service import LocalQAService
+from services.local_qa_service import get_qa_response as local_get
 from services.local_qa_service_match import LocalQAServiceMatchMixin
-from services.qa_database_service import QADatabaseService, get_qa_response as db_get
+from services.qa_database_service import QADatabaseService
+from services.qa_database_service import get_qa_response as db_get
 from services.qa_database_service_match import QADatabaseServiceMatchMixin
 
 

@@ -203,5 +203,3 @@ def _normalize_body_part_ids(raw_value: Any) -> list[int]:
 
     parsed_single = _safe_int(raw_value)
     return [parsed_single] if parsed_single is not None and parsed_single > 0 else []
-
-

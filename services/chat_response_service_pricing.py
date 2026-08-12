@@ -37,6 +37,7 @@ def _reply_from_submit_booking_tool(tool_output: dict[str, Any], language: str) 
     )
     return str(reason)
 
+
 def _get_body_part_required_service_ids() -> set[int]:
     configured_ids = set(DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS)
     try:
@@ -55,6 +56,7 @@ def _get_body_part_required_service_ids() -> set[int]:
     except Exception as settings_error:
         print(f"ℹ️ Pricing sync settings fallback to defaults: {settings_error}")
     return configured_ids
+
 
 def _pricing_missing_details_reply(language: str, missing: str) -> str:
     messages = {
@@ -79,6 +81,7 @@ def _pricing_missing_details_reply(language: str, missing: str) -> str:
     }
     lang_bucket = messages.get(missing, messages["unavailable"])
     return lang_bucket.get(language, lang_bucket["en"])
+
 
 def _infer_service_id_for_pricing(user_input: str, current_gender: str, booking_state: dict[str, Any]) -> int | None:
     existing = _safe_int(booking_state.get("service_id"))
@@ -111,6 +114,7 @@ def _infer_service_id_for_pricing(user_input: str, current_gender: str, booking_
             return 12
         return 1
     return None
+
 
 def _merge_pricing_args_with_booking_state(
     function_name: str,
@@ -153,6 +157,7 @@ def _merge_pricing_args_with_booking_state(
             if st_sid is None or arg_sid is None or st_sid == arg_sid:
                 function_args["body_part_ids"] = booking_state.get("body_part_ids")
 
+
 def _finalize_create_appointment_payload_for_api(function_args: dict[str, Any]) -> None:
     """
     Align tool args before legacy create: CRM POST uses top-level body_part_ids (PDF).
@@ -179,6 +184,7 @@ def _finalize_create_appointment_payload_for_api(function_args: dict[str, Any]) 
     if ids:
         function_args["body_parts_with_sessions"] = [{"body_part_id": bid, "session_number": 1} for bid in ids]
         function_args["body_part_ids"] = list(ids)
+
 
 def _remember_booking_selection(user_id: str, function_args: dict[str, Any]) -> None:
     state = config.user_booking_state[user_id]
@@ -215,6 +221,7 @@ def _remember_booking_selection(user_id: str, function_args: dict[str, Any]) -> 
     except Exception:
         pass
 
+
 def _extract_first_numeric(item: dict[str, Any], keys: list[str]) -> float | None:
     for key in keys:
         if key in item:
@@ -222,6 +229,7 @@ def _extract_first_numeric(item: dict[str, Any], keys: list[str]) -> float | Non
             if parsed is not None:
                 return parsed
     return None
+
 
 def _extract_label(item: dict[str, Any]) -> str:
     machine_value = item.get("machine")
@@ -241,6 +249,7 @@ def _extract_label(item: dict[str, Any]) -> str:
         if candidate is not None and str(candidate).strip():
             return str(candidate).strip()
     return "Price"
+
 
 def _extract_pricing_rows(pricing_payload: Any) -> list[dict[str, Any]]:
     if pricing_payload is None:
@@ -333,6 +342,7 @@ def _extract_pricing_rows(pricing_payload: Any) -> list[dict[str, Any]]:
 
     return rows
 
+
 def _format_amount(value: float | None) -> str:
     if value is None:
         return "0"
@@ -340,6 +350,7 @@ def _format_amount(value: float | None) -> str:
     if abs(rounded - round(rounded)) < 0.01:
         return str(int(round(rounded)))
     return f"{rounded:.2f}".rstrip("0").rstrip(".")
+
 
 def _build_exact_pricing_reply(language: str, pricing_payload: Any) -> str:
     rows = _extract_pricing_rows(pricing_payload)
@@ -381,4 +392,3 @@ def _build_exact_pricing_reply(language: str, pricing_payload: Any) -> str:
             lines.append(f"- {label}: {final_amount}$")
 
     return "\n".join(lines)
-

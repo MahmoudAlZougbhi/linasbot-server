@@ -27,6 +27,7 @@ from services.user_persistence_service import user_persistence
 
 logger = logging.getLogger(__name__)
 
+
 async def populate_scheduled_messages_from_appointments() -> Any:
     """
     Fetch appointments for multiple future days via send_appointment_reminders() endpoint
@@ -134,13 +135,17 @@ async def populate_scheduled_messages_from_appointments() -> Any:
 
                 if not customer_phone or not apt_datetime_str:
                     if idx < 3:  # Log first 3 failures for debugging
-                        print(f"⚠️ Appointment {idx} missing data: phone=***{str(customer_phone)[-4:] if customer_phone else ''}, date={apt_datetime_str}")
+                        print(
+                            f"⚠️ Appointment {idx} missing data: phone=***{str(customer_phone)[-4:] if customer_phone else ''}, date={apt_datetime_str}"
+                        )
                     failed_count += 1
                     continue
 
                 # DEBUG: Print first 3 successful extractions
                 if idx < 3:
-                    print(f"✅ Apt {idx}: phone=***{str(customer_phone)[-4:] if customer_phone else ''}, date={apt_datetime_str}")
+                    print(
+                        f"✅ Apt {idx}: phone=***{str(customer_phone)[-4:] if customer_phone else ''}, date={apt_datetime_str}"
+                    )
 
                 # Parse appointment datetime
                 apt_datetime = parse_appointment_date(apt_datetime_str)

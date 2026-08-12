@@ -394,4 +394,3 @@ async def update_appointment_date(appointment_id: int, phone: str, date: str, us
             },
         )
     return response
-

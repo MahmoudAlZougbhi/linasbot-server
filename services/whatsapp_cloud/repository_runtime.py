@@ -367,4 +367,3 @@ class WhatsAppCloudRepositoryRuntimeMixin:
         self.session.add(row)
         self.session.flush()
         return row
-

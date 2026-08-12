@@ -44,6 +44,7 @@ def append_turn_to_user_context_memory(user_id: str, role: str, text: str) -> No
         }
     )
 
+
 def _filter_in_memory_context_for_window(mem: list, window_hours: int) -> list:
     """
     Apply the same time window discipline to in-process memory as Firestore context.
@@ -64,6 +65,7 @@ def _filter_in_memory_context_for_window(mem: list, window_hours: int) -> list:
         if msg_ts is not None and msg_ts >= cutoff:
             filtered.append(msg)
     return filtered
+
 
 async def get_conversation_context_for_gpt(
     user_id: str,
@@ -101,6 +103,7 @@ async def get_conversation_context_for_gpt(
         print(f"ℹ️ GPT context: in-memory transcript ({len(use)} msgs) > Firestore ({len(fs)}); using in-memory.")
         return openai_safe
     return fs
+
 
 async def get_conversation_history_from_firestore(
     user_id: str,
@@ -255,6 +258,7 @@ async def get_conversation_history_from_firestore(
         traceback.print_exc()
         return []
 
+
 async def get_conversation_last_ai_response_at(
     user_id: str, conversation_id: str, alternate_user_id: str | None = None
 ) -> Any:
@@ -291,6 +295,7 @@ async def get_conversation_last_ai_response_at(
         except Exception as e:
             print(f"⚠️ get_conversation_last_ai_response_at failed for {uid}: {e}")
     return None
+
 
 async def get_last_bot_message_from_conversation(
     user_id: str, conversation_id: str, alternate_user_id: str | None = None
@@ -333,6 +338,7 @@ async def get_last_bot_message_from_conversation(
         except Exception as e:
             print(f"⚠️ get_last_bot_message_from_conversation failed for {uid}: {e}")
     return None
+
 
 async def get_last_bot_message_for_gpt_context(
     user_id: str,

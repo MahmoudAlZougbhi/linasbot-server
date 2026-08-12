@@ -419,5 +419,3 @@ async def end_conversation(request: dict, http_request: Request) -> Any:
         )
 
     return await _run_endpoint(_handler)
-
-

@@ -273,4 +273,3 @@ class UserServiceAuthMixin:
             "formOfAddress": user.get("formOfAddress") or "",
             "addressPromptAsked": bool(user.get("addressPromptAsked")),
         }
-

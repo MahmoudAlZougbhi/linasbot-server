@@ -16,8 +16,8 @@ def test_live_chat_api_modules_under_500_lines() -> None:
 
 
 def test_live_chat_api_preserves_broadcast_sse_export() -> None:
-    from modules.live_chat_api_helpers import broadcast_sse_event as helper_broadcast
     from modules import live_chat_api
+    from modules.live_chat_api_helpers import broadcast_sse_event as helper_broadcast
 
     assert live_chat_api.broadcast_sse_event is helper_broadcast
     assert callable(live_chat_api.broadcast_sse_event)

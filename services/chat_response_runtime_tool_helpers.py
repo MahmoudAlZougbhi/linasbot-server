@@ -118,9 +118,7 @@ def bind_tool_helpers(ns: Any) -> None:
                 if ns.is_paused_status(ns.extract_appointment_status(next_appointment_payload)):
                     paused_appointment_id = ns.extract_appointment_id(next_appointment_payload)
         except Exception as pause_next_error:
-            print(
-                f"WARNING: Paused guard check_next_appointment failed for {normalized_phone}: {pause_next_error}"
-            )
+            print(f"WARNING: Paused guard check_next_appointment failed for {normalized_phone}: {pause_next_error}")
 
         # Fallback: scan all customer appointments for paused records.
         if not paused_appointment_id:
@@ -276,10 +274,9 @@ def bind_tool_helpers(ns: Any) -> None:
             return False
 
         function_args["date"] = dt_obj.astimezone(BOOKING_TZ).strftime("%Y-%m-%d %H:%M:%S")
-        print(
-            f"DEBUG: Normalized date for {function_name}: {original_date_str or dc_raw} -> {function_args['date']}"
-        )
+        print(f"DEBUG: Normalized date for {function_name}: {original_date_str or dc_raw} -> {function_args['date']}")
         return True
+
     ns.normalize_phone_for_lookup = normalize_phone_for_lookup
     ns.extract_appointment_id = extract_appointment_id
     ns.extract_appointment_status = extract_appointment_status

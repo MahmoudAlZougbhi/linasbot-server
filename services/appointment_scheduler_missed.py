@@ -16,6 +16,7 @@ from services.user_persistence_service import user_persistence
 
 logger = logging.getLogger(__name__)
 
+
 async def populate_no_show_messages_from_missed_appointments() -> Any:
     """Removed: no_show_followup template is no longer used."""
     return {
@@ -24,6 +25,7 @@ async def populate_no_show_messages_from_missed_appointments() -> Any:
         "total_messages": 0,
         "no_show_messages_count": 0,
     }
+
 
 async def populate_missed_month_messages() -> Any:
     """

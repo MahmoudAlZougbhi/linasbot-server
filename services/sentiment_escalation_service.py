@@ -151,7 +151,9 @@ class SentimentEscalationService:
             "detected_issues": detected_issues,
         }
 
-        print(f"📊 Sentiment Analysis for ...{str(user_id)[-4:]}: sentiment={result.get('sentiment') if isinstance(result, dict) else type(result).__name__}")
+        print(
+            f"📊 Sentiment Analysis for ...{str(user_id)[-4:]}: sentiment={result.get('sentiment') if isinstance(result, dict) else type(result).__name__}"
+        )
 
         return result
 

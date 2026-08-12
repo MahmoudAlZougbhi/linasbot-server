@@ -376,4 +376,3 @@ async def get_clinic_hours() -> Any:
             {"api": "get_clinic_hours", "status": "failed", "error": response.get("message")},
         )
     return response
-

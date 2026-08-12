@@ -111,7 +111,9 @@ class MontyMobileAdapter(MontyMobileAdapterParseMixin, WhatsAppAdapter):
                 # Check if successful based on MontyMobile response format
                 if response.status_code == 200 and result.get("success"):
                     message_id = result.get("data", {}).get("messageId", "unknown")
-                    print(f"MONTYMOBILE text sent to ***{str(phone_number)[-4:] if phone_number else ''} message_id={message_id}")
+                    print(
+                        f"MONTYMOBILE text sent to ***{str(phone_number)[-4:] if phone_number else ''} message_id={message_id}"
+                    )
                     return {"success": True, "data": result, "message_id": message_id}
                 else:
                     error_msg = result.get("message", "Unknown error")

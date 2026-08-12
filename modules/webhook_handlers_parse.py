@@ -181,4 +181,3 @@ def _count_images_in_single_message(message_type: str, content: Any) -> int:
         return 1
 
     return 0
-

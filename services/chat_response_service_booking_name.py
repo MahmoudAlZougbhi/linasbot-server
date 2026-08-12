@@ -167,6 +167,7 @@ def _extract_customer_name_from_conversation_for_booking(
         return None
     return customer_name
 
+
 async def _recovery_map_body_part_label_to_ids(
     service_id: int,
     machine_id: int | None,
@@ -200,6 +201,7 @@ async def _recovery_map_body_part_label_to_ids(
         return None
     return [bid]
 
+
 async def _try_recover_create_appointment_from_auxiliary_gpt_json(
     gpt_raw_content: str,
     *,
@@ -219,6 +221,7 @@ async def _try_recover_create_appointment_from_auxiliary_gpt_json(
     while the backend only validates and executes canonical payloads.
     """
     return None
+
 
 async def _coerce_body_part_ids_from_gpt_booking_args(
     booking_args: dict, service_id: int, machine_id: int | None = None
@@ -260,6 +263,7 @@ async def _coerce_body_part_ids_from_gpt_booking_args(
     normalized = _normalize_body_part_ids(out)
     return normalized if normalized else None
 
+
 def _sanitize_submit_booking_tool_for_model(tool_output: dict[str, Any]) -> dict[str, Any]:
     """
     Strip internal/technical strings from tool JSON before sending to the model so the assistant
@@ -279,6 +283,7 @@ def _sanitize_submit_booking_tool_for_model(tool_output: dict[str, Any]) -> dict
     elif out.get("error_type") == "submit_exception":
         out["human_readable_reason"] = _SUBMIT_BOOKING_TOOL_HINT_TECHNICAL
     return out
+
 
 def _missing_body_part_booking_prompt(service_id: int | None, lang: str) -> str:
     """Ask for body area in wording that matches the service (tattoo vs hair vs other)."""
@@ -322,6 +327,7 @@ def _missing_body_part_booking_prompt(service_id: int | None, lang: str) -> str:
         return ar
     return en
 
+
 def _service_hint_to_service_id(val: Any) -> int | None:
     if val is None:
         return None
@@ -337,6 +343,7 @@ def _service_hint_to_service_id(val: Any) -> int | None:
         return 2
     return None
 
+
 def _branch_hint_to_branch_id(val: Any) -> int | None:
     if val is None:
         return None
@@ -349,6 +356,7 @@ def _branch_hint_to_branch_id(val: Any) -> int | None:
     if any(x in s for x in ("antelias", "أنطلياس", "انطلياس")):
         return 2
     return None
+
 
 def _datetime_from_gpt_booking_args(booking_args: dict) -> datetime.datetime | None:
     """Build an aware datetime from GPT-emitted date + optional time fields."""
@@ -374,4 +382,3 @@ def _datetime_from_gpt_booking_args(booking_args: dict) -> datetime.datetime | N
     if parsed is None:
         return None
     return to_bot_tz(parsed)
-

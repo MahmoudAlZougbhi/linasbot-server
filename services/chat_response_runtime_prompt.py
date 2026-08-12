@@ -187,7 +187,11 @@ async def prepare_chat_response_prompt(ns: Any) -> Any:
         )
     else:
         ns.system_instruction_final = (
-            ns.system_instruction_core + "\n\n" + ns.dynamic_customer_context + ns.routing_guardrail + ns.json_output_contract
+            ns.system_instruction_core
+            + "\n\n"
+            + ns.dynamic_customer_context
+            + ns.routing_guardrail
+            + ns.json_output_contract
         )
 
     # Steer the model when the user only confirms after we promised an appointment update (Ok/deal/تمام…).
@@ -234,7 +238,7 @@ async def prepare_chat_response_prompt(ns: Any) -> Any:
         ns.context_messages_for_ai.append({"role": ns._role, "content": ns._content})
     ns.context_cap = int(getattr(config, "MAX_CONTEXT_MESSAGES_IN_WINDOW", 0) or 0)
     if ns.context_cap > 0 and len(ns.context_messages_for_ai) > ns.context_cap:
-        ns.context_messages_for_ai = ns.context_messages_for_ai[-ns.context_cap:]
+        ns.context_messages_for_ai = ns.context_messages_for_ai[-ns.context_cap :]
 
     if len(ns.context_messages_for_ai) < 4:
         ns.system_instruction_final += (
@@ -268,9 +272,7 @@ async def prepare_chat_response_prompt(ns: Any) -> Any:
         f"- User query: {ns.user_input[:400]}{'...' if len(ns.user_input) > 400 else ''}"
     )
     if ns.custom_knowledge_context:
-        ns.flow_ai_query_summary += (
-            f"\n- Dynamic knowledge: {len(ns.custom_knowledge_context)} chars, full content:\n{ns.custom_knowledge_context}"
-        )
+        ns.flow_ai_query_summary += f"\n- Dynamic knowledge: {len(ns.custom_knowledge_context)} chars, full content:\n{ns.custom_knowledge_context}"
     ns.flow_context_dump = []
     for ns.msg in ns.context_messages_for_ai:
         ns.role = ns.msg.get("role", "unknown")

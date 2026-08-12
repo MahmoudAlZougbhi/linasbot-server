@@ -204,9 +204,7 @@ async def save_message_without_conversation_id(
             config.user_data_whatsapp[canonical_user_id] = {}
         config.user_data_whatsapp[canonical_user_id]["current_conversation_id"] = resolved_conversation_id
         _invalidate_live_chat_cache()
-        await _ensure_live_chat_index_after_save(
-            canonical_user_id, resolved_conversation_id, doc_data, update_payload
-        )
+        await _ensure_live_chat_index_after_save(canonical_user_id, resolved_conversation_id, doc_data, update_payload)
         print(
             f"✅ Appended {role} message to existing conversation {resolved_conversation_id} for user {canonical_user_id} (total: {len(current_messages)})"
         )

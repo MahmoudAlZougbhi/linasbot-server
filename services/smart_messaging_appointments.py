@@ -43,7 +43,9 @@ class SmartMessagingAppointmentsMixin:
         messages_scheduled = 0
         now = datetime.now()
 
-        print(f"\n📋 Scheduling reminders for name_len={len(str(customer_name or ''))} (***{str(customer_phone)[-4:] if customer_phone else ''})")
+        print(
+            f"\n📋 Scheduling reminders for name_len={len(str(customer_name or ''))} (***{str(customer_phone)[-4:] if customer_phone else ''})"
+        )
         print(f"   Appointment: {appointment_date}")
         print(f"   Current time: {now}")
 
@@ -201,7 +203,9 @@ class SmartMessagingAppointmentsMixin:
                 print(f"   [SYNC] Marked {message_id} as sent in scheduled_messages dict")
 
         if updated == 0:
-            print(f"   [SYNC] No matching scheduled message found for ***{str(customer_phone)[-4:] if customer_phone else ''} / {message_type}")
+            print(
+                f"   [SYNC] No matching scheduled message found for ***{str(customer_phone)[-4:] if customer_phone else ''} / {message_type}"
+            )
         else:
             self._persist_sent_messages()
 

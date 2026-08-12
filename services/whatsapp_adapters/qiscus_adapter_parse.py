@@ -75,7 +75,9 @@ class QiscusAdapterParseMixin:
                     self.room_mapping[phone_number] = room_id
                 print(f"DEBUG: Stored room mapping - user_id: ...{str(user_id)[-4:]} -> room_id: {room_id}")
                 if phone_number:
-                    print(f"DEBUG: Stored phone mapping - phone: ***{str(phone_number)[-4:] if phone_number else ''} -> room_id={room_id}")
+                    print(
+                        f"DEBUG: Stored phone mapping - phone: ***{str(phone_number)[-4:] if phone_number else ''} -> room_id={room_id}"
+                    )
 
                 # Extract message information
                 message = payload.get("message", {})
@@ -258,7 +260,9 @@ class QiscusAdapterParseMixin:
             caption = payload.get("caption", "")
             message_text = message.get("text", "").lower()
 
-            print(f"DEBUG: file_attachment - url_len={len(str(url or ''))}, caption_len={len(str(caption or ''))}, text_len={len(str(message_text or ''))}")
+            print(
+                f"DEBUG: file_attachment - url_len={len(str(url or ''))}, caption_len={len(str(caption or ''))}, text_len={len(str(message_text or ''))}"
+            )
 
             # Determine file type from URL, caption, or message text
             # Check for images

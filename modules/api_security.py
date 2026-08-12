@@ -212,11 +212,7 @@ def required_permission_for(method: str, path: str) -> str | None:
     # Live Chat FAQ correction (save-all-languages) — operators need liveChat, not training.
     if p.startswith("/api/faq/"):
         return "liveChat"
-    if (
-        p.startswith("/api/local-qa")
-        or p.startswith("/api/qa")
-        or p.startswith("/api/training")
-    ):
+    if p.startswith("/api/local-qa") or p.startswith("/api/qa") or p.startswith("/api/training"):
         return "training"
     if p.startswith("/api/feedback"):
         return "training"

@@ -200,6 +200,7 @@ class SmartMessagingQueueMixin:
                 )
         except Exception as e:
             print(f"Error adding to preview queue: {e}")
+
     def _release_stuck_sending_messages(self, now: datetime) -> int:
         """
         Re-queue messages left in 'sending' after a worker crash or unhandled error.

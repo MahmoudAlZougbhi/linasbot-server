@@ -29,6 +29,7 @@ def set_post_takeover_escalation_cooldown(user_data: dict) -> None:
         mins = 45
     user_data["post_takeover_escalation_cooldown_until"] = utc_now() + datetime.timedelta(minutes=mins)
 
+
 def is_post_takeover_escalation_cooldown(user_data: dict) -> bool:
     """True while we should not auto-escalate from handover_degree or GPT error paths."""
     if not isinstance(user_data, dict):
@@ -42,6 +43,7 @@ def is_post_takeover_escalation_cooldown(user_data: dict) -> bool:
         return until > utc_now()
     except TypeError:
         return False
+
 
 def iter_conversation_parent_user_ids_for_firestore(user_id: str) -> list:
     """
@@ -79,6 +81,7 @@ def iter_conversation_parent_user_ids_for_firestore(user_id: str) -> list:
                     add(normalized[4:])
     return out
 
+
 def merge_conversation_user_id_variants(*seeds: str) -> list:
     """Union of iter_conversation_parent_user_ids_for_firestore for each non-empty seed, stable order."""
     seen = set()
@@ -91,6 +94,7 @@ def merge_conversation_user_id_variants(*seeds: str) -> list:
                 seen.add(v)
                 merged.append(v)
     return merged
+
 
 async def conversation_any_path_post_release_blocked(
     conversation_id: str, user_id: str, request_user_id: str | None = None
@@ -107,6 +111,7 @@ async def conversation_any_path_post_release_blocked(
         if snap.exists and firestore_post_release_waiting_blocked(snap.to_dict() or {}):
             return True
     return False
+
 
 async def update_conversation_on_all_existing_paths(
     conversation_id: str,
@@ -135,6 +140,7 @@ async def update_conversation_on_all_existing_paths(
                 )
     return n
 
+
 def firestore_post_release_waiting_blocked(conv_payload: dict) -> bool:
     """
     True if the conversation document forbids re-entering the waiting queue (after release to bot).
@@ -149,6 +155,7 @@ def firestore_post_release_waiting_blocked(conv_payload: dict) -> bool:
         return parse_timestamp_utc(raw) > utc_now()
     except Exception:
         return False
+
 
 def sync_post_release_cooldown_from_conv_payload(user_data: dict, conv_data: dict) -> None:
     """
@@ -167,6 +174,7 @@ def sync_post_release_cooldown_from_conv_payload(user_data: dict, conv_data: dic
     except Exception:
         pass
 
+
 def _clear_takeover_flags_for_user(resolved_user_id: str, raw_user_id: str, canonical_user_id: str) -> None:
     """Clear config.user_in_human_takeover_mode for all user_id variants so release works regardless of message format."""
     variants = {v for v in (resolved_user_id, raw_user_id, canonical_user_id) if v}
@@ -180,6 +188,7 @@ def _clear_takeover_flags_for_user(resolved_user_id: str, raw_user_id: str, cano
     for v in variants:
         config.user_in_human_takeover_mode.pop(v, None)
 
+
 def _build_user_id_variants_for_release(resolved_user_id: str, raw_user_id: str, canonical_user_id: str) -> list:
     """Build all user_id variants that might have a conversation doc (for release - update all paths)."""
     return merge_conversation_user_id_variants(
@@ -187,6 +196,7 @@ def _build_user_id_variants_for_release(resolved_user_id: str, raw_user_id: str,
         resolved_user_id or "",
         canonical_user_id or "",
     )
+
 
 async def set_human_takeover_status(
     user_id: str,

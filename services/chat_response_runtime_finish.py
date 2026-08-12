@@ -78,7 +78,9 @@ async def finish_chat_response(ns: Any) -> Any:
 
     # Claims paused appointment was cleared / became active without a successful CRM update.
     ns._paused_date_changed_without_resume = (
-        ns.update_appointment_date_success_count > 0 and ns.pause_resume_attempted and ns.pause_resume_success_count == 0
+        ns.update_appointment_date_success_count > 0
+        and ns.pause_resume_attempted
+        and ns.pause_resume_success_count == 0
     )
     if (
         not ns.api_failure_reason
@@ -232,7 +234,9 @@ async def finish_chat_response(ns: Any) -> Any:
         ns.prompt_tokens_val = getattr(ns.usage, "prompt_tokens", None) if ns.usage else None
         ns.completion_tokens_val = getattr(ns.usage, "completion_tokens", None) if ns.usage else None
         ns.cost_info = (
-            _compute_cost_from_usage(ns.final_response_model_used, ns.prompt_tokens_val or 0, ns.completion_tokens_val or 0)
+            _compute_cost_from_usage(
+                ns.final_response_model_used, ns.prompt_tokens_val or 0, ns.completion_tokens_val or 0
+            )
             if (ns.prompt_tokens_val is not None or ns.completion_tokens_val is not None)
             else {}
         )

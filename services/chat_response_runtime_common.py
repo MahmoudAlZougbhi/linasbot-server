@@ -225,4 +225,3 @@ __all__ = [
     "re",
     "validate_booking_slot",
 ]
-

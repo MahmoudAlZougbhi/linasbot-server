@@ -283,4 +283,3 @@ class CommentsSection(CmBaseModel):
     policy_text: str = ""
     rules: list[CommentRule] = Field(default_factory=list)
     notes: str | None = None
-

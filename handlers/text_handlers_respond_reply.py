@@ -42,6 +42,7 @@ def _strip_redundant_greeting_prefix(reply_text: str) -> str:
         return fallback
     return cleaned
 
+
 def _split_reply_units(text: str) -> list:
     cleaned = _clean_reply_text(text)
     if not cleaned:
@@ -54,6 +55,7 @@ def _split_reply_units(text: str) -> list:
             out.append(unit)
     return out
 
+
 def _looks_like_question(unit: str) -> bool:
     probe = str(unit or "").strip()
     if not probe:
@@ -63,12 +65,14 @@ def _looks_like_question(unit: str) -> bool:
     lowered = probe.lower()
     return lowered.startswith(INTERROGATIVE_PREFIXES)
 
+
 def _truncate_chars(text: str, max_chars: int) -> str:
     content = str(text or "").strip()
     if len(content) <= max_chars:
         return content
     trimmed = content[: max_chars - 1].rstrip()
     return f"{trimmed}…"
+
 
 def _apply_turn_by_turn_policy(action: str, bot_reply: str, lang: str) -> str:
     """
@@ -135,6 +139,7 @@ def _apply_turn_by_turn_policy(action: str, bot_reply: str, lang: str) -> str:
 
     return cleaned
 
+
 def _user_explicitly_requests_human_agent(text: str) -> bool:
     """True if the current user message clearly asks to speak with a person (not inferred from history)."""
     if not text or not str(text).strip():
@@ -165,6 +170,7 @@ def _user_explicitly_requests_human_agent(text: str) -> bool:
         "مدير",
     )
     return any(n in m for n in needles)
+
 
 def _reply_offers_handover_confirmation(text: str) -> bool:
     """True when the AI reply asks permission before connecting the user to staff."""
@@ -210,6 +216,7 @@ def _reply_offers_handover_confirmation(text: str) -> bool:
         "spécialiste",
     )
     return any(p in m for p in permission_markers) and any(h in m for h in handover_markers)
+
 
 async def _handle_published_cm_runtime(
     *,
@@ -290,4 +297,3 @@ async def _handle_published_cm_runtime(
     if v2_outcome.error:
         meta["blocker"] = str(v2_outcome.error)[:200]
     return reply, meta
-

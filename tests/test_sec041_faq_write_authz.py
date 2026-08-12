@@ -177,9 +177,7 @@ class TestLiveChatFaqWriteAuthz:
         )
         assert response.status_code == 403
 
-    def test_faq_update_rejects_other_tenant_row(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_faq_update_rejects_other_tenant_row(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         _clear_client_auth(client)
         _set_session(client, role="operator", user_id="lc-faq-op", tenant_id="tenant_a")
 

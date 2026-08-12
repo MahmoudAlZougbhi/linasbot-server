@@ -190,7 +190,9 @@ class MontyMobileAdapterParseMixin:
 
             # CRITICAL FIX: Check if message is from our bot number
             if message_from and (message_from == self.source_number or message_from == f"+{self.source_number}"):
-                print(f"⚠️ Ignoring message from our own bot number: ***{str(message_from)[-4:] if message_from else ''}")
+                print(
+                    f"⚠️ Ignoring message from our own bot number: ***{str(message_from)[-4:] if message_from else ''}"
+                )
                 return None
 
             if not phone_number:
@@ -201,7 +203,9 @@ class MontyMobileAdapterParseMixin:
             if phone_number and not phone_number.startswith("+"):
                 phone_number = f"+{phone_number}"
 
-            print(f"✅ Extracted: phone=***{str(phone_number)[-4:] if phone_number else ''}, name_len={len(str(user_name or ''))}, type={message_type}, from=***{str(message_from)[-4:] if message_from else ''}")
+            print(
+                f"✅ Extracted: phone=***{str(phone_number)[-4:] if phone_number else ''}, name_len={len(str(user_name or ''))}, type={message_type}, from=***{str(message_from)[-4:] if message_from else ''}"
+            )
 
             # Extract content based on type
             content = {}
@@ -326,7 +330,9 @@ class MontyMobileAdapterParseMixin:
                 "phone_number": phone_number,
             }
 
-            print(f"✅ Parsed simple format: type={parsed_message.get('type') if isinstance(parsed_message, dict) else type(parsed_message).__name__}")
+            print(
+                f"✅ Parsed simple format: type={parsed_message.get('type') if isinstance(parsed_message, dict) else type(parsed_message).__name__}"
+            )
             return parsed_message
 
         except Exception as e:
@@ -453,4 +459,3 @@ class MontyMobileAdapterParseMixin:
         # Fallback: return room_id as-is
         print(f"WARNING: No phone mapping found for room_id {room_id}, using as-is")
         return room_id
-

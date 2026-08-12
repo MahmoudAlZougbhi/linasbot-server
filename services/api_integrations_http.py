@@ -258,7 +258,6 @@ async def _make_api_request(
         }
 
 
-
 # Modified log_report_event to accept user_id and update Firestore metrics
 def log_report_event(event_type: str, user_id: str, user_gender: str, details: dict | None = None) -> None:
     user_name = config.user_names.get(user_id, "N/A")  # Get user_name from config
@@ -291,4 +290,3 @@ def log_report_event(event_type: str, user_id: str, user_gender: str, details: d
 
     except Exception as e:
         print(f"❌ ERROR logging report event: {e}")
-

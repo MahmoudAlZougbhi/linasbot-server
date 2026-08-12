@@ -22,7 +22,10 @@ async def monitor_smart_messages_job() -> None:
     """Monitor scheduled messages with smart controls"""
     from services.durable_event_claim import release_job_lock, try_acquire_job_lock
 
-    if not try_acquire_job_lock("monitor_smart_messages", ttl_seconds=max(60, max(1, int(os.getenv("SMART_MONITOR_INTERVAL_MINUTES", "5"))) * 60)):
+    if not try_acquire_job_lock(
+        "monitor_smart_messages",
+        ttl_seconds=max(60, max(1, int(os.getenv("SMART_MONITOR_INTERVAL_MINUTES", "5"))) * 60),
+    ):
         print("[smart_scheduler] monitor tick skipped — another instance holds the lock")
         return
     try:
@@ -137,7 +140,9 @@ async def monitor_smart_messages_job() -> None:
                                             **({"appointment_id": _apt_id} if _apt_id is not None else {}),
                                         },
                                     )
-                                    print(f"   💾 Saved smart message to conversation history for ***{str(phone)[-4:] if phone else ''}")
+                                    print(
+                                        f"   💾 Saved smart message to conversation history for ***{str(phone)[-4:] if phone else ''}"
+                                    )
                                 else:
                                     print(f"   Failed to send {message_id}: {result.get('error')}")
                         except Exception as send_error:
@@ -255,6 +260,7 @@ async def monitor_smart_messages_job() -> None:
     finally:
         release_job_lock("monitor_smart_messages")
 
+
 async def send_appointment_reminders_job() -> None:
     try:
         print("📧 Running appointment reminders job...")
@@ -266,6 +272,7 @@ async def send_appointment_reminders_job() -> None:
             print(f"⚠️ Appointment reminders failed: {result.get('message')}")
     except Exception as e:
         print(f"❌ Error in appointment reminders job: {e}")
+
 
 async def send_missed_yesterday_followups() -> None:
     try:
@@ -292,9 +299,7 @@ async def send_missed_yesterday_followups() -> None:
         yesterday = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
 
         # Use the new paused appointments API with yesterday as both start and end
-        result = await get_paused_appointments_between_dates(
-            start_date=yesterday, end_date=yesterday, service_id=None
-        )
+        result = await get_paused_appointments_between_dates(start_date=yesterday, end_date=yesterday, service_id=None)
 
         paused_appointments = []
         if result.get("success"):
@@ -323,9 +328,7 @@ async def send_missed_yesterday_followups() -> None:
                         "phone_number": config.TRAINER_WHATSAPP_NUMBER or "+961 XX XXXXXX",
                     }
 
-                    message_content = smart_messaging.get_message_content(
-                        "missed_yesterday", language, placeholders
-                    )
+                    message_content = smart_messaging.get_message_content("missed_yesterday", language, placeholders)
 
                     if message_content:
                         adapter = WhatsAppFactory.get_adapter()
@@ -338,9 +341,13 @@ async def send_missed_yesterday_followups() -> None:
                             rendered_text=message_content,
                         )
                         if result.get("dry_run"):
-                            print(f"📋 [DRY-RUN] Would send missed yesterday to ***{str(customer_phone)[-4:] if customer_phone else ''}")
+                            print(
+                                f"📋 [DRY-RUN] Would send missed yesterday to ***{str(customer_phone)[-4:] if customer_phone else ''}"
+                            )
                         elif result.get("success"):
-                            print(f"✅ Sent missed yesterday message to ***{str(customer_phone)[-4:] if customer_phone else ''}")
+                            print(
+                                f"✅ Sent missed yesterday message to ***{str(customer_phone)[-4:] if customer_phone else ''}"
+                            )
 
                             smart_messaging.mark_messages_sent_by_phone(customer_phone, "missed_yesterday")
 
@@ -372,6 +379,7 @@ async def send_missed_yesterday_followups() -> None:
             print("ℹ️ No paused appointments from yesterday")
     except Exception as e:
         print(f"❌ Error in missed yesterday follow-ups job: {e}")
+
 
 async def send_missed_this_month_followups() -> None:
     try:
@@ -421,9 +429,7 @@ async def send_missed_this_month_followups() -> None:
                         "phone_number": config.TRAINER_WHATSAPP_NUMBER or "+961 XX XXXXXX",
                     }
 
-                    message_content = smart_messaging.get_message_content(
-                        "sent_for_pause", language, placeholders
-                    )
+                    message_content = smart_messaging.get_message_content("sent_for_pause", language, placeholders)
 
                     if message_content:
                         adapter = WhatsAppFactory.get_adapter()
@@ -436,9 +442,13 @@ async def send_missed_this_month_followups() -> None:
                             rendered_text=message_content,
                         )
                         if result.get("dry_run"):
-                            print(f"📋 [DRY-RUN] Would send missed this month to ***{str(customer_phone)[-4:] if customer_phone else ''}")
+                            print(
+                                f"📋 [DRY-RUN] Would send missed this month to ***{str(customer_phone)[-4:] if customer_phone else ''}"
+                            )
                         elif result.get("success"):
-                            print(f"✅ Sent missed this month message to ***{str(customer_phone)[-4:] if customer_phone else ''}")
+                            print(
+                                f"✅ Sent missed this month message to ***{str(customer_phone)[-4:] if customer_phone else ''}"
+                            )
 
                             smart_messaging.mark_messages_sent_by_phone(customer_phone, "sent_for_pause")
 

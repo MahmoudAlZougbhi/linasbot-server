@@ -279,8 +279,6 @@ def _merge_body_parts_sessions_from_intent(
     return out
 
 
-
-
 def _crm_rejection_validation_error(
     norm_vals: dict[str, Any],
     api_resp: dict[str, Any],

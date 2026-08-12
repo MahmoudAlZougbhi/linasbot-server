@@ -159,7 +159,9 @@ async def _delayed_process_messages(
     except asyncio.CancelledError:
         raise
     except Exception as e:
-        print(f"[_delayed_process_messages] ERROR: An error occurred in delayed processing for user ...{str(user_id)[-4:]}: {e}")
+        print(
+            f"[_delayed_process_messages] ERROR: An error occurred in delayed processing for user ...{str(user_id)[-4:]}: {e}"
+        )
         import traceback
 
         traceback.print_exc()

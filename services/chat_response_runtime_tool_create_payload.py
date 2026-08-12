@@ -52,9 +52,7 @@ async def handle_create_appointment_payload(ns: Any) -> Any:
                         ns.customer_gender_for_api = "female"
 
             if ns.customer_gender_for_api == "unknown":
-                ns.customer_gender_for_api = (
-                    "male"  # Default to male if still unknown, adjust as clinic policy
-                )
+                ns.customer_gender_for_api = "male"  # Default to male if still unknown, adjust as clinic policy
 
         # Ensure gender is in "Male" or "Female" format as required by API
         if ns.customer_gender_for_api:
@@ -72,7 +70,9 @@ async def handle_create_appointment_payload(ns: Any) -> Any:
                 ns.customer_exists = True
                 print(f"DEBUG: Customer ***{str(ns.phone_number)[-4:] if ns.phone_number else ''} found in API.")
             else:
-                print(f"DEBUG: Customer ***{str(ns.phone_number)[-4:] if ns.phone_number else ''} not found in API. Attempting to create.")
+                print(
+                    f"DEBUG: Customer ***{str(ns.phone_number)[-4:] if ns.phone_number else ''} not found in API. Attempting to create."
+                )
                 if ns.customer_name and ns.customer_gender_for_api:
                     ns.create_customer_response = await api_integrations.create_customer(
                         name=ns.customer_name,
@@ -186,9 +186,7 @@ async def handle_create_appointment_payload(ns: Any) -> Any:
 
         if ns._legacy_inf:
             ns.sid_for_coerce = (
-                ns.selected_service_id
-                if ns.selected_service_id is not None
-                else _safe_int(config.DEFAULT_SERVICE_ID)
+                ns.selected_service_id if ns.selected_service_id is not None else _safe_int(config.DEFAULT_SERVICE_ID)
             )
             ns.coerced_bp = await _coerce_body_part_ids_from_gpt_booking_args(
                 ns.function_args,

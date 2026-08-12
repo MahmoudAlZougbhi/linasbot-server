@@ -1,4 +1,5 @@
 """Core _process_and_respond phase 7."""
+
 from __future__ import annotations
 
 import asyncio
@@ -12,45 +13,45 @@ _PHASE_HALT = "_PHASE_HALT"
 
 
 async def text_handlers_respond_phase7(ctx: dict):
-    _build_firestore_user_candidates = ctx.get('_build_firestore_user_candidates')
-    _is_plausible_extracted_customer_name = ctx.get('_is_plausible_extracted_customer_name')
-    action = ctx.get('action')
-    alt_candidate = ctx.get('alt_candidate')
-    bot_reply_text = ctx.get('bot_reply_text')
-    candidate = ctx.get('candidate')
-    candidate_ref = ctx.get('candidate_ref')
-    candidate_snap = ctx.get('candidate_snap')
-    candidate_user_id = ctx.get('candidate_user_id')
-    candidate_user_ids = ctx.get('candidate_user_ids')
-    canonical_user_id = ctx.get('canonical_user_id')
-    conversation_id = ctx.get('conversation_id')
-    current_conversation_id = ctx.get('current_conversation_id')
-    current_gender = ctx.get('current_gender')
-    current_preferred_lang = ctx.get('current_preferred_lang')
-    db = ctx.get('db')
-    detected_gender_from_gpt = ctx.get('detected_gender_from_gpt')
-    detected_language = ctx.get('detected_language')
-    detected_name_from_gpt = ctx.get('detected_name_from_gpt')
-    e = ctx.get('e')
-    escalation_reason = ctx.get('escalation_reason')
-    get_canonical_user_id_and_phone = ctx.get('get_canonical_user_id_and_phone')
-    get_firestore_db = ctx.get('get_firestore_db')
-    idx_err = ctx.get('idx_err')
-    is_social_channel = ctx.get('is_social_channel')
-    log_report_event = ctx.get('log_report_event')
-    notify_error = ctx.get('notify_error')
-    notify_human_on_whatsapp = ctx.get('notify_human_on_whatsapp')
-    raw_user_id = ctx.get('raw_user_id')
-    route_social_contact_request = ctx.get('route_social_contact_request')
-    social_route = ctx.get('social_route')
-    trigger_source = ctx.get('trigger_source')
-    user_data = ctx.get('user_data')
-    user_doc_ref = ctx.get('user_doc_ref')
-    user_id = ctx.get('user_id')
-    user_input_to_process = ctx.get('user_input_to_process')
-    user_name = ctx.get('user_name')
-    user_persistence = ctx.get('user_persistence')
-    users_coll = ctx.get('users_coll')
+    _build_firestore_user_candidates = ctx.get("_build_firestore_user_candidates")
+    _is_plausible_extracted_customer_name = ctx.get("_is_plausible_extracted_customer_name")
+    action = ctx.get("action")
+    alt_candidate = ctx.get("alt_candidate")
+    bot_reply_text = ctx.get("bot_reply_text")
+    candidate = ctx.get("candidate")
+    candidate_ref = ctx.get("candidate_ref")
+    candidate_snap = ctx.get("candidate_snap")
+    candidate_user_id = ctx.get("candidate_user_id")
+    candidate_user_ids = ctx.get("candidate_user_ids")
+    canonical_user_id = ctx.get("canonical_user_id")
+    conversation_id = ctx.get("conversation_id")
+    current_conversation_id = ctx.get("current_conversation_id")
+    current_gender = ctx.get("current_gender")
+    current_preferred_lang = ctx.get("current_preferred_lang")
+    db = ctx.get("db")
+    detected_gender_from_gpt = ctx.get("detected_gender_from_gpt")
+    detected_language = ctx.get("detected_language")
+    detected_name_from_gpt = ctx.get("detected_name_from_gpt")
+    e = ctx.get("e")
+    escalation_reason = ctx.get("escalation_reason")
+    get_canonical_user_id_and_phone = ctx.get("get_canonical_user_id_and_phone")
+    get_firestore_db = ctx.get("get_firestore_db")
+    idx_err = ctx.get("idx_err")
+    is_social_channel = ctx.get("is_social_channel")
+    log_report_event = ctx.get("log_report_event")
+    notify_error = ctx.get("notify_error")
+    notify_human_on_whatsapp = ctx.get("notify_human_on_whatsapp")
+    raw_user_id = ctx.get("raw_user_id")
+    route_social_contact_request = ctx.get("route_social_contact_request")
+    social_route = ctx.get("social_route")
+    trigger_source = ctx.get("trigger_source")
+    user_data = ctx.get("user_data")
+    user_doc_ref = ctx.get("user_doc_ref")
+    user_id = ctx.get("user_id")
+    user_input_to_process = ctx.get("user_input_to_process")
+    user_name = ctx.get("user_name")
+    user_persistence = ctx.get("user_persistence")
+    users_coll = ctx.get("users_coll")
     if is_social_channel(user_data.get("channel")):
         social_force_intent = None
         if action in {
@@ -284,7 +285,68 @@ async def text_handlers_respond_phase7(ctx: dict):
         await user_persistence.save_user_gender(
             user_id, detected_gender_from_gpt, phone=user_id, name=config.user_names.get(user_id, user_name)
         )
-    _pack = ['_', '_build_firestore_user_candidates', '_is_plausible_extracted_customer_name', '_leak', 'action', 'alt_candidate', 'app_id_for_firestore', 'bot_reply_text', 'candidate', 'candidate_ref', 'candidate_snap', 'candidate_user_id', 'candidate_user_ids', 'candidates', 'canonical_user_id', 'conversation_any_path_post_release_blocked', 'conversation_id', 'current_conversation_id', 'current_gender', 'current_preferred_lang', 'db', 'detected_gender_from_gpt', 'detected_language', 'detected_name_from_gpt', 'e', 'escalation_reason', 'escalation_reason_from_gpt', 'get_canonical_user_id_and_phone', 'get_firestore_db', 'handover_degree', 'human_takeover_notification_service', 'idx_err', 'is_social_channel', 'last_ref', 'last_snap', 'live_chat_service', 'log_report_event', 'merge_conversation_user_id_variants', 'n', 'name_clean', 'name_pattern', 'notify_error', 'notify_human_on_whatsapp', 'previous_lang', 'raw_user_id', 'route_social_contact_request', 'social_force_intent', 'social_route', 'trigger_source', 'update_conversation_on_all_existing_paths', 'update_payload', 'user_data', 'user_doc_ref', 'user_id', 'user_input_to_process', 'user_name', 'user_persistence', 'users_coll', 'vid', 'wrote']
+    _pack = [
+        "_",
+        "_build_firestore_user_candidates",
+        "_is_plausible_extracted_customer_name",
+        "_leak",
+        "action",
+        "alt_candidate",
+        "app_id_for_firestore",
+        "bot_reply_text",
+        "candidate",
+        "candidate_ref",
+        "candidate_snap",
+        "candidate_user_id",
+        "candidate_user_ids",
+        "candidates",
+        "canonical_user_id",
+        "conversation_any_path_post_release_blocked",
+        "conversation_id",
+        "current_conversation_id",
+        "current_gender",
+        "current_preferred_lang",
+        "db",
+        "detected_gender_from_gpt",
+        "detected_language",
+        "detected_name_from_gpt",
+        "e",
+        "escalation_reason",
+        "escalation_reason_from_gpt",
+        "get_canonical_user_id_and_phone",
+        "get_firestore_db",
+        "handover_degree",
+        "human_takeover_notification_service",
+        "idx_err",
+        "is_social_channel",
+        "last_ref",
+        "last_snap",
+        "live_chat_service",
+        "log_report_event",
+        "merge_conversation_user_id_variants",
+        "n",
+        "name_clean",
+        "name_pattern",
+        "notify_error",
+        "notify_human_on_whatsapp",
+        "previous_lang",
+        "raw_user_id",
+        "route_social_contact_request",
+        "social_force_intent",
+        "social_route",
+        "trigger_source",
+        "update_conversation_on_all_existing_paths",
+        "update_payload",
+        "user_data",
+        "user_doc_ref",
+        "user_id",
+        "user_input_to_process",
+        "user_name",
+        "user_persistence",
+        "users_coll",
+        "vid",
+        "wrote",
+    ]
     for _k in _pack:
         if _k in locals():
             ctx[_k] = locals()[_k]

@@ -66,6 +66,7 @@ def _fix_misassigned_tattoo_service_for_hair_booking(
         print(f"DEBUG: Corrected service_id 13 → {new_sid} (hair booking; machine_id={mid}, hair_thread={hair_thread})")
         function_args["service_id"] = new_sid
 
+
 def _recent_booking_context_blob(context_messages: list[dict] | None, user_input: str, last_n: int = 24) -> str:
     parts: list[str] = []
     if user_input and str(user_input).strip():
@@ -75,6 +76,7 @@ def _recent_booking_context_blob(context_messages: list[dict] | None, user_input
         if isinstance(c, str) and c.strip():
             parts.append(c)
     return " ".join(parts)
+
 
 async def _try_infer_body_part_ids_from_conversation(
     service_id: int,
@@ -123,6 +125,7 @@ async def _try_infer_body_part_ids_from_conversation(
             return resolved
     return None
 
+
 def _is_placeholder_booking_customer_name(name: str | None) -> bool:
     if not name or not str(name).strip():
         return True
@@ -148,6 +151,7 @@ def _is_placeholder_booking_customer_name(name: str | None) -> bool:
     if n.startswith("test user"):
         return True
     return False
+
 
 def _extract_latin_name_from_franco_booking_bundle(text: str) -> str | None:
     """
@@ -248,6 +252,7 @@ def _extract_latin_name_from_franco_booking_bundle(text: str) -> str | None:
             return cand
     return None
 
+
 def _apply_inferred_name_from_user_bundle(
     user_id: str,
     user_input: str,
@@ -267,6 +272,7 @@ def _apply_inferred_name_from_user_bundle(
         config.user_names[user_id] = inferred
     except Exception as persist_e:
         print(f"⚠️ inferred name persist (bundle): {persist_e}")
+
 
 def _prune_redundant_booking_questions_when_name_from_bundle(
     user_input: str,
@@ -301,4 +307,3 @@ def _prune_redundant_booking_questions_when_name_from_bundle(
         parsed_response["bot_reply"] = "تمام أستاذ 🌷 تم تسجيل اسمك والوقت اللي ذكرتهما من رسالتك؛ منتابع لإكمال الحجز."
     else:
         parsed_response["bot_reply"] = br2
-

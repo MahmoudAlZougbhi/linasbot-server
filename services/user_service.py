@@ -77,7 +77,6 @@ class UserService(UserServiceAuthMixin):
             print(f"[auth:user_service] collection property: accessed in {elapsed:.3f}s", flush=True)
         return coll
 
-
     # ==========================================
     # CRUD Operations
     # ==========================================

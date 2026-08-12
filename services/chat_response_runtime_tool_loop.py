@@ -76,7 +76,9 @@ async def run_tool_loop(ns: Any) -> Any:
                 },
                 ensure_ascii=False,
             )
-            ns.tool_round_trips.append(_record_tool_round_trip(ns.function_name, ns.function_args, ns.err_content, None))
+            ns.tool_round_trips.append(
+                _record_tool_round_trip(ns.function_name, ns.function_args, ns.err_content, None)
+            )
             ns.messages.append(
                 {
                     "tool_call_id": ns.tool_call.id,
@@ -388,4 +390,3 @@ async def run_tool_loop(ns: Any) -> Any:
 
     ns.parsed_response = _parse_gpt_response_json(ns.gpt_raw_content)
     return None
-

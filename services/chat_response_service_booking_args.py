@@ -70,6 +70,7 @@ def _extract_json_objects(raw: str) -> Iterator[str]:
         else:
             break
 
+
 def _dedupe_bot_reply_text(text: str) -> str:
     """
     Models sometimes echo the same user-visible text twice, or concatenate two identical JSON blobs
@@ -101,6 +102,7 @@ def _dedupe_bot_reply_text(text: str) -> str:
                 pass
     return s
 
+
 def _parse_gpt_response_json(raw: str) -> dict:
     """
     Parse GPT response that may contain multiple JSON objects. Returns the first object
@@ -131,6 +133,7 @@ def _parse_gpt_response_json(raw: str) -> dict:
         return matches[0]
     return matches[0]
 
+
 def _extract_preferred_booking_from_gpt(raw: str) -> dict:
     """
     Extract preferred_* fields from GPT response (first JSON object). Used by booking fallback
@@ -155,6 +158,7 @@ def _extract_preferred_booking_from_gpt(raw: str) -> dict:
         except (json.JSONDecodeError, TypeError):
             continue
     return out
+
 
 def _extract_booking_args_from_gpt_raw(raw: str) -> dict:
     """
@@ -205,6 +209,7 @@ def _extract_booking_args_from_gpt_raw(raw: str) -> dict:
         out.pop("time", None)
     return out
 
+
 def _detect_change_request_intent(user_text: str) -> bool:
     text = str(user_text or "").strip().lower()
     if not text:
@@ -218,6 +223,7 @@ def _detect_change_request_intent(user_text: str) -> bool:
     return any(re.search(pattern, text, re.IGNORECASE | re.UNICODE) for pattern in change_patterns) or (
         detect_existing_appointment_edit_intent(text)
     )
+
 
 def _collect_recent_user_text_for_change_intent(
     context_messages: list[dict] | None, latest_user_input: str, max_parts: int = 15
@@ -233,6 +239,7 @@ def _collect_recent_user_text_for_change_intent(
     if latest_clean and (not parts or parts[-1] != latest_clean):
         parts.append(latest_clean)
     return " ".join(parts[-max_parts:]).strip()
+
 
 def _normalize_booking_date_for_tool_args(function_args: dict) -> tuple[bool, str | None]:
     """
@@ -274,6 +281,7 @@ def _normalize_booking_date_for_tool_args(function_args: dict) -> tuple[bool, st
     function_args["date"] = dt_obj.astimezone(BOOKING_TZ).strftime("%Y-%m-%d %H:%M:%S")
     return True, None
 
+
 def _bot_reply_claims_completed_booking(bot_reply: str) -> bool:
     """True if the assistant text tells the user a NEW booking was completed (CRM must have confirmed)."""
     br = (bot_reply or "").strip().lower()
@@ -306,6 +314,7 @@ def _bot_reply_claims_completed_booking(bot_reply: str) -> bool:
         )
     )
 
+
 def _parse_tool_round_bot_returned_local(bot_returned: str) -> Any:
     if not bot_returned or not isinstance(bot_returned, str):
         return None
@@ -313,6 +322,7 @@ def _parse_tool_round_bot_returned_local(bot_returned: str) -> Any:
         return json.loads(bot_returned)
     except (json.JSONDecodeError, TypeError):
         return None
+
 
 def _latest_successful_update_date_from_tool_rounds(tool_round_trips: list[dict[str, Any]]) -> str | None:
     """Return the most recent CRM new_date from a successful appointment date/update tool."""
@@ -329,6 +339,7 @@ def _latest_successful_update_date_from_tool_rounds(tool_round_trips: list[dict[
         if new_date:
             return str(new_date)
     return None
+
 
 def _partial_paused_date_update_reply(language: str, new_date: str | None) -> str:
     """User-facing fallback when date changed but pause/Available status did not confirm."""
@@ -347,6 +358,7 @@ def _partial_paused_date_update_reply(language: str, new_date: str | None) -> st
         f"الوقت اتعدّل على السيستم{when}. "
         "حالة البوز ما تأكد تغييرها من الـ API، فإذا بقيت ظاهرة عند الاستقبال بدها متابعة يدوية."
     )
+
 
 def _extract_submit_booking_failure_details(tool_round_trips: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Return the last submit_booking_intent failure with structured details for loop guard logs."""
@@ -372,6 +384,7 @@ def _extract_submit_booking_failure_details(tool_round_trips: list[dict[str, Any
         }
     return last_detail
 
+
 def _resolve_branch_id_from_leak(leaked: dict) -> int | None:
     bid = _safe_int(leaked.get("branch_id"))
     if bid in (1, 2):
@@ -382,6 +395,7 @@ def _resolve_branch_id_from_leak(leaked: dict) -> int | None:
     if "antelias" in br or "انطلياس" in br or "antaliyas" in br:
         return 2
     return None
+
 
 def _infer_service_id_from_leak(leaked: dict, current_gender: str) -> int:
     sid = _safe_int(leaked.get("service_id"))
@@ -400,4 +414,3 @@ def _infer_service_id_from_leak(leaked: dict, current_gender: str) -> int:
     if default_sid is None:
         raise ValueError("DEFAULT_SERVICE_ID is required when service cannot be resolved")
     return int(default_sid)
-

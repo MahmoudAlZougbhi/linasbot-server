@@ -16,9 +16,10 @@ def test_meta_connections_api_modules_under_500_lines() -> None:
 
 
 def test_meta_connections_api_preserves_helper_exports() -> None:
-    from modules.meta_connections_api_helpers import _query_text, _tenant_binding
     from modules import meta_connections_api
+    from modules.meta_connections_api_helpers import _query_text, _tenant_binding
 
     assert meta_connections_api._query_text is _query_text
+    assert meta_connections_api._tenant_binding is _tenant_binding
     assert callable(meta_connections_api.list_meta_connections)
     assert hasattr(meta_connections_api, "meta_connections_api_lifecycle")

@@ -1,4 +1,5 @@
 """Core _process_and_respond phase 10."""
+
 from __future__ import annotations
 
 import time
@@ -8,18 +9,18 @@ _PHASE_HALT = "_PHASE_HALT"
 
 
 async def text_handlers_respond_phase10(ctx: dict):
-    _looks_like_booking_offer_confirmation_question = ctx.get('_looks_like_booking_offer_confirmation_question')
-    action = ctx.get('action')
-    booking_origin_query = ctx.get('booking_origin_query')
-    sent_reply = ctx.get('sent_reply')
-    start_time = ctx.get('start_time')
-    step_start = ctx.get('step_start')
-    steps_list = ctx.get('steps_list')
-    user_data = ctx.get('user_data')
-    user_image_base64 = ctx.get('user_image_base64')
-    user_image_format = ctx.get('user_image_format')
-    user_input_to_process = ctx.get('user_input_to_process')
-    voice_meta = ctx.get('voice_meta')
+    _looks_like_booking_offer_confirmation_question = ctx.get("_looks_like_booking_offer_confirmation_question")
+    action = ctx.get("action")
+    booking_origin_query = ctx.get("booking_origin_query")
+    sent_reply = ctx.get("sent_reply")
+    start_time = ctx.get("start_time")
+    step_start = ctx.get("step_start")
+    steps_list = ctx.get("steps_list")
+    user_data = ctx.get("user_data")
+    user_image_base64 = ctx.get("user_image_base64")
+    user_image_format = ctx.get("user_image_format")
+    user_input_to_process = ctx.get("user_input_to_process")
+    voice_meta = ctx.get("voice_meta")
     if _looks_like_booking_offer_confirmation_question(sent_reply):
         booking_origin_query = (
             user_data.get("original_question") or user_data.get("pending_clarification_query") or user_input_to_process
@@ -111,7 +112,28 @@ async def text_handlers_respond_phase10(ctx: dict):
         for s in steps_list:
             s["step"] = s["step"] + offset
         return prepended + steps_list, "voice" if voice_meta else ("image" if user_image_base64 else "text")
-    _pack = ['_looks_like_booking_offer_confirmation_question', 'action', 'booking_origin_query', 'flow_source', 'flow_steps', 'msg_type', 'offset', 'prepended', 'response_time_ms', 's', 'sent_reply', 'start_time', 'step_start', 'steps_list', 'user_data', 'user_image_base64', 'user_image_format', 'user_input_to_process', 'voice_meta']
+
+    _pack = [
+        "_looks_like_booking_offer_confirmation_question",
+        "action",
+        "booking_origin_query",
+        "flow_source",
+        "flow_steps",
+        "msg_type",
+        "offset",
+        "prepended",
+        "response_time_ms",
+        "s",
+        "sent_reply",
+        "start_time",
+        "step_start",
+        "steps_list",
+        "user_data",
+        "user_image_base64",
+        "user_image_format",
+        "user_input_to_process",
+        "voice_meta",
+    ]
     for _k in _pack:
         if _k in locals():
             ctx[_k] = locals()[_k]

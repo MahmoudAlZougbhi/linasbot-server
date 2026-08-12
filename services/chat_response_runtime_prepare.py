@@ -29,7 +29,9 @@ async def prepare_chat_response_identity(ns: Any) -> Any:
     }
 
     # Extract customer phone number (without country code for API calls)
-    ns.customer_phone_full = None if ns.social_channel else config.user_data_whatsapp.get(ns.user_id, {}).get("phone_number")
+    ns.customer_phone_full = (
+        None if ns.social_channel else config.user_data_whatsapp.get(ns.user_id, {}).get("phone_number")
+    )
 
     # CRITICAL: Sync CRM lookup when we have phone but no known name (fixes race: defer_external
     # runs in background, so AI was called before CRM name arrived - bot asked for name when customer has file)
@@ -76,7 +78,9 @@ async def prepare_chat_response_identity(ns: Any) -> Any:
                             f"✅ CRM sync: loaded name '{ns.user_name}' and gender '{ns.ext['gender']}' for {ns.user_id} before AI call"
                         )
                     else:
-                        print(f"✅ CRM sync: loaded name_len={len(str(ns.user_name or ''))} for ...{str(ns.user_id)[-4:]} before AI call")
+                        print(
+                            f"✅ CRM sync: loaded name_len={len(str(ns.user_name or ''))} for ...{str(ns.user_id)[-4:]} before AI call"
+                        )
                 elif ns.ext.get("exists"):
                     if ns.user_id in config.user_data_whatsapp:
                         config.user_data_whatsapp[ns.user_id]["crm_customer_exists"] = True
@@ -87,7 +91,9 @@ async def prepare_chat_response_identity(ns: Any) -> Any:
                     if ns.ext.get("gender") in ("male", "female"):
                         config.user_gender[ns.user_id] = ns.ext["gender"]
                         config.gender_attempts[ns.user_id] = 0
-                        print(f"✅ CRM sync: customer has file, loaded gender '{ns.ext['gender']}' for ...{str(ns.user_id)[-4:]}")
+                        print(
+                            f"✅ CRM sync: customer has file, loaded gender '{ns.ext['gender']}' for ...{str(ns.user_id)[-4:]}"
+                        )
                     else:
                         print(f"✅ CRM sync: customer has file but no name in CRM for ...{str(ns.user_id)[-4:]}")
             except Exception as e:
@@ -251,7 +257,9 @@ async def prepare_chat_response_identity(ns: Any) -> Any:
     # Build dynamic customer context - just the VALUES, rules are in style_guide.txt
     # user_name, name_is_known, crm_customer_exists: set after CRM sync (see block above)
     ns.customer_first_name = (
-        (ns.user_name.split()[0] if ns.user_name and ns.user_name != "client" else ns.user_name) if ns.user_name else None
+        (ns.user_name.split()[0] if ns.user_name and ns.user_name != "client" else ns.user_name)
+        if ns.user_name
+        else None
     )
     ns._placeholder_names = {
         "client",
@@ -278,7 +286,9 @@ async def prepare_chat_response_identity(ns: Any) -> Any:
 
     ns.customer_name_context = "NOT KNOWN - You MUST ask for their full name (see Name Capture Rules in Style Guide)"
     if ns.name_is_known:
-        ns.customer_name_context = f"KNOWN - {ns.user_name} (First name: {ns.customer_first_name}). Do NOT ask for name again."
+        ns.customer_name_context = (
+            f"KNOWN - {ns.user_name} (First name: {ns.customer_first_name}). Do NOT ask for name again."
+        )
     elif ns.crm_customer_exists:
         ns.customer_name_context = (
             "Customer has EXISTING FILE in CRM - do NOT ask for their name. "

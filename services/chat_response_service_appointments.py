@@ -72,6 +72,7 @@ async def _build_multi_appointment_reschedule_hint(phone_clean: str) -> str:
         "- **Never** call **`pause_appointment`** — it is disabled. For **Paused → Available at the same date/time**, call **`resume_appointment`** once you have the right **`appointment_id`**.\n"
     )
 
+
 async def _build_live_crm_appointments_snapshot(phone_clean: str) -> str:
     """
     Inject current get_customer_appointments rows into the system prompt so listing answers
@@ -117,6 +118,7 @@ async def _build_live_crm_appointments_snapshot(phone_clean: str) -> str:
         "- Also call `check_next_appointment` when rules require it; if tool JSON disagrees, prefer the **tool** result.\n"
     )
 
+
 async def _count_live_reschedule_row_total(phone_clean: str) -> int:
     """How many CRM rows we surface for reschedule/listing (same filter as LIVE snapshot)."""
     if not phone_clean or not str(phone_clean).strip():
@@ -134,6 +136,7 @@ async def _count_live_reschedule_row_total(phone_clean: str) -> int:
     if not rows:
         rows = raw[:50]
     return len(rows)
+
 
 def _bot_reply_claims_bulk_all_appointments_updated(bot_reply: str) -> bool:
     """Model implies every appointment row was updated (common hallucination after bulk user ask)."""
@@ -153,6 +156,7 @@ def _bot_reply_claims_bulk_all_appointments_updated(bot_reply: str) -> bool:
     if "صاروا كلهم" in br or "كلهم صاروا" in br:
         return True
     return False
+
 
 def _user_message_is_acknowledgment_only(text: str) -> bool:
     """True for ok/تمام/yes and similar short replies that cannot carry new booking args."""
@@ -215,6 +219,7 @@ def _user_message_is_acknowledgment_only(text: str) -> bool:
         return True
     return False
 
+
 def _operational_context_promises_imminent_appointment_update(ctx: str | None) -> bool:
     """Last bot line said it will update/reschedule (but tools may not have run yet)."""
     if not ctx or not str(ctx).strip():
@@ -246,6 +251,7 @@ def _operational_context_promises_imminent_appointment_update(ctx: str | None) -
     )
     return any(n in c for n in needles_ar) or any(n in c_low for n in needles_en)
 
+
 def _user_intent_resume_paused_appointment(user_text: str) -> bool:
     """True when the user is trying to re-activate a paused row / set a new date on paused (not move an active slot)."""
     t = (user_text or "").strip().lower()
@@ -273,6 +279,7 @@ def _user_intent_resume_paused_appointment(user_text: str) -> bool:
     ):
         return True
     return False
+
 
 def _bot_reply_claims_pause_lifted_or_resumed(bot_reply: str) -> bool:
     """bot_reply asserts the paused appointment was cleared / re-scheduled / became active."""
@@ -303,6 +310,7 @@ def _bot_reply_claims_pause_lifted_or_resumed(bot_reply: str) -> bool:
     if "available" in br and ("pause" in br or "paused" in br or "موقوف" in br):
         return True
     return False
+
 
 def _build_pause_resume_execution_guardrail(
     *,
@@ -339,9 +347,11 @@ def _build_pause_resume_execution_guardrail(
         facts.append("- No successful resume action was confirmed. Do NOT claim the paused status was removed.")
     return "\n".join(facts)
 
+
 def _status_requests_available(status_val: Any) -> bool:
     sv = str(status_val or "").strip().lower()
     return sv in ("available", "active", "resume", "resumed")
+
 
 def _arabic_indic_digits_to_ascii(text: str) -> str:
     if not text:
@@ -352,6 +362,7 @@ def _arabic_indic_digits_to_ascii(text: str) -> str:
             "01234567890123456789",
         )
     )
+
 
 def _appointment_numeric_id(apt: dict | None) -> int | None:
     if not isinstance(apt, dict):
@@ -366,6 +377,7 @@ def _appointment_numeric_id(apt: dict | None) -> int | None:
             continue
     return None
 
+
 def _customer_appointments_embedded_in_payload(payload: dict) -> list[dict]:
     """check_next_appointment enriched shape: data.customer_appointments."""
     if not isinstance(payload, dict):
@@ -376,4 +388,3 @@ def _customer_appointments_embedded_in_payload(payload: dict) -> list[dict]:
         if isinstance(ca, list) and ca:
             return [x for x in ca if isinstance(x, dict)]
     return []
-

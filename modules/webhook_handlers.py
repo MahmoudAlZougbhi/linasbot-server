@@ -174,7 +174,6 @@ async def receive_webhook(request: Request) -> Any:
         )
 
 
-
 async def handle_message_whatsapp_with_adapter(
     user_id: str, user_input_text: str, user_name: str, adapter: Any, phone_number: str | None = None
 ) -> Any:
@@ -227,7 +226,9 @@ async def handle_message_whatsapp_with_adapter(
                     and not result.get("dry_run")
                     and os.getenv("TRACE_AI_OUTBOUND", "").lower() in ("1", "true", "yes")
                 ):
-                    print(f"[whatsapp-send] trace_id={tid} sent=ok user=...{str(user_id)[-4:]} text_len={len(message_text)}")
+                    print(
+                        f"[whatsapp-send] trace_id={tid} sent=ok user=...{str(user_id)[-4:]} text_len={len(message_text)}"
+                    )
             if fp and result and result.get("success"):
                 _same_turn_text_sends.add(fp)
             return result
@@ -248,7 +249,6 @@ async def handle_message_whatsapp_with_adapter(
         send_action_func=send_whatsapp_typing_indicator,
     )
     await await_whatsapp_delayed_processing(user_id)
-
 
 
 async def start_training_mode_whatsapp(user_whatsapp_id: str) -> Any:

@@ -46,7 +46,9 @@ def _log_dry_run(to_number: str, message_type: str, payload: dict[str, Any]) -> 
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception as e:
         print(f"⚠️ Could not write dry-run log: {e}")
-    print(f"📋 [DRY-RUN] Would send {message_type} to ***{str(to_number)[-4:] if to_number else ''} (see {_DRY_RUN_LOG})")
+    print(
+        f"📋 [DRY-RUN] Would send {message_type} to ***{str(to_number)[-4:] if to_number else ''} (see {_DRY_RUN_LOG})"
+    )
 
 
 class SafeSendAdapter(WhatsAppAdapter):

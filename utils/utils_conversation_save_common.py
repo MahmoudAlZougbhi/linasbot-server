@@ -90,4 +90,3 @@ def _broadcast_saved_message_sse(
         )
     except Exception as sse_err:
         _log.exception("SSE broadcast error after save: %s", sse_err)
-

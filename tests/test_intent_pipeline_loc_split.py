@@ -18,11 +18,11 @@ def test_intent_pipeline_modules_under_500_lines() -> None:
 
 def test_intent_pipeline_preserves_public_exports() -> None:
     from services.booking import intent_pipeline as ip
+    from services.booking.constants import _service_requires_machine
     from services.booking.intent_pipeline_crm import (
         finalize_crm_booking_tool_output,
         legacy_create_appointment_tool_output,
     )
-    from services.booking.constants import _service_requires_machine
 
     assert callable(ip.handle_submit_booking_intent)
     assert ip.finalize_crm_booking_tool_output is finalize_crm_booking_tool_output

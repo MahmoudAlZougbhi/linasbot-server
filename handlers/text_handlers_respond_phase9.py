@@ -1,4 +1,5 @@
 """Core _process_and_respond phase 9."""
+
 from __future__ import annotations
 
 import config
@@ -7,29 +8,29 @@ _PHASE_HALT = "_PHASE_HALT"
 
 
 async def text_handlers_respond_phase9(ctx: dict):
-    _activate_ai_handover = ctx.get('_activate_ai_handover')
-    action = ctx.get('action')
-    bot_reply_text = ctx.get('bot_reply_text')
-    current_conversation_id = ctx.get('current_conversation_id')
-    current_gender = ctx.get('current_gender')
-    current_preferred_lang = ctx.get('current_preferred_lang')
-    detected_gender_from_gpt = ctx.get('detected_gender_from_gpt')
-    escalation_reason_from_gpt = ctx.get('escalation_reason_from_gpt')
-    flow_meta = ctx.get('flow_meta')
-    get_dynamic_message = ctx.get('get_dynamic_message')
-    is_social_channel = ctx.get('is_social_channel')
-    log_report_event = ctx.get('log_report_event')
-    route_social_contact_request = ctx.get('route_social_contact_request')
-    save_conversation_message_to_firestore = ctx.get('save_conversation_message_to_firestore')
-    send_message_func = ctx.get('send_message_func')
-    sent_reply = ctx.get('sent_reply')
-    social_route = ctx.get('social_route')
-    update_dashboard_metric_in_firestore = ctx.get('update_dashboard_metric_in_firestore')
-    user_data = ctx.get('user_data')
-    user_id = ctx.get('user_id')
-    user_input_to_process = ctx.get('user_input_to_process')
-    user_name = ctx.get('user_name')
-    user_persistence = ctx.get('user_persistence')
+    _activate_ai_handover = ctx.get("_activate_ai_handover")
+    action = ctx.get("action")
+    bot_reply_text = ctx.get("bot_reply_text")
+    current_conversation_id = ctx.get("current_conversation_id")
+    current_gender = ctx.get("current_gender")
+    current_preferred_lang = ctx.get("current_preferred_lang")
+    detected_gender_from_gpt = ctx.get("detected_gender_from_gpt")
+    escalation_reason_from_gpt = ctx.get("escalation_reason_from_gpt")
+    flow_meta = ctx.get("flow_meta")
+    get_dynamic_message = ctx.get("get_dynamic_message")
+    is_social_channel = ctx.get("is_social_channel")
+    log_report_event = ctx.get("log_report_event")
+    route_social_contact_request = ctx.get("route_social_contact_request")
+    save_conversation_message_to_firestore = ctx.get("save_conversation_message_to_firestore")
+    send_message_func = ctx.get("send_message_func")
+    sent_reply = ctx.get("sent_reply")
+    social_route = ctx.get("social_route")
+    update_dashboard_metric_in_firestore = ctx.get("update_dashboard_metric_in_firestore")
+    user_data = ctx.get("user_data")
+    user_id = ctx.get("user_id")
+    user_input_to_process = ctx.get("user_input_to_process")
+    user_name = ctx.get("user_name")
+    user_persistence = ctx.get("user_persistence")
     if action in ["initial_greet_and_ask_gender", "ask_gender"]:
         # AI-primary: AI decides to request gender, backend persists state and executes.
         if not user_data.get("original_question"):
@@ -367,7 +368,37 @@ async def text_handlers_respond_phase9(ctx: dict):
                     user_data.get("phone_number"),
                     metadata={"handled_by": "ai"},
                 )
-    _pack = ['_activate_ai_handover', '_flow_error_reason', 'action', 'bot_reply_text', 'clarification_anchor', 'current_conversation_id', 'current_gender', 'current_preferred_lang', 'detected_gender_from_gpt', 'escalation_reason_from_gpt', 'fallback', 'flow_meta', 'get_dynamic_message', 'handoff_msg', 'handover_ok', 'is_social_channel', 'log_report_event', 'reply_to_send', 'route_social_contact_request', 'save_conversation_message_to_firestore', 'send_message_func', 'sent_reply', 'social_route', 'update_dashboard_metric_in_firestore', 'user_data', 'user_id', 'user_input_to_process', 'user_name', 'user_persistence']
+    _pack = [
+        "_activate_ai_handover",
+        "_flow_error_reason",
+        "action",
+        "bot_reply_text",
+        "clarification_anchor",
+        "current_conversation_id",
+        "current_gender",
+        "current_preferred_lang",
+        "detected_gender_from_gpt",
+        "escalation_reason_from_gpt",
+        "fallback",
+        "flow_meta",
+        "get_dynamic_message",
+        "handoff_msg",
+        "handover_ok",
+        "is_social_channel",
+        "log_report_event",
+        "reply_to_send",
+        "route_social_contact_request",
+        "save_conversation_message_to_firestore",
+        "send_message_func",
+        "sent_reply",
+        "social_route",
+        "update_dashboard_metric_in_firestore",
+        "user_data",
+        "user_id",
+        "user_input_to_process",
+        "user_name",
+        "user_persistence",
+    ]
     for _k in _pack:
         if _k in locals():
             ctx[_k] = locals()[_k]

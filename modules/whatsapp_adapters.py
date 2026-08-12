@@ -45,14 +45,15 @@ async def send_whatsapp_message(
     except httpx.HTTPStatusError as e:
         print(f"ERROR sending WhatsApp message (HTTP Status {e.response.status_code})")
         log_report_event(
-            "whatsapp_send_failed", "System", "N/A", {"to": to_number, "error": "http_status_error", "status": e.response.status_code}
+            "whatsapp_send_failed",
+            "System",
+            "N/A",
+            {"to": to_number, "error": "http_status_error", "status": e.response.status_code},
         )
         return False
     except httpx.RequestError as e:
         print(f"ERROR sending WhatsApp message (Request Error): {type(e).__name__}")
-        log_report_event(
-            "whatsapp_send_failed", "System", "N/A", {"to": to_number, "error": type(e).__name__}
-        )
+        log_report_event("whatsapp_send_failed", "System", "N/A", {"to": to_number, "error": type(e).__name__})
         return False
 
 

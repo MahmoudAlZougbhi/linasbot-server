@@ -59,6 +59,7 @@ def detect_language(text: str) -> dict:
     # Default to English
     return {"language": "en", "confidence": 0.5}
 
+
 def notify_human_on_whatsapp(
     user_name: Any, user_gender: Any, message_content: Any, type_of_notification: Any = "عام"
 ) -> None:
@@ -78,10 +79,12 @@ def notify_human_on_whatsapp(
     # The existing calls in text_handlers.py and photo_handlers.py already handle the actual sending.
     print(f"Would send WhatsApp notification to {config.WHATSAPP_TO} (defined in .env).")
 
+
 def count_tokens(text: Any) -> Any:
     if not text:
         return 0
     return len(text.split())
+
 
 def save_for_training_conversation_log(user_message: Any, bot_response: Any) -> None:
     log_entry = {
@@ -100,6 +103,7 @@ def save_for_training_conversation_log(user_message: Any, bot_response: Any) -> 
         import traceback
 
         traceback.print_exc()
+
 
 async def translate_qa_pair_with_gpt(question: str, answer: str, target_languages: list) -> Any:
     """

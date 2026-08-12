@@ -13,6 +13,7 @@ from services.user_persistence_service import user_persistence
 
 logger = logging.getLogger(__name__)
 
+
 async def populate_missed_yesterday_messages() -> Any:
     """
     Fetch appointments from YESTERDAY with status "Available" (not attended)

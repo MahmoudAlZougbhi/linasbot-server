@@ -254,5 +254,3 @@ async def test_local_qa_match(test_data: dict) -> Any:
 
         traceback.print_exc()
         return {"success": False, "error": str(e)}
-
-

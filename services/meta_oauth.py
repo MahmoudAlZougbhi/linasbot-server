@@ -56,6 +56,7 @@ MetaOAuthFlowMode = Literal["facebook", "instagram", "unified"]
 
 META_OAUTH_STATE_TTL_SECONDS = 10 * 60
 
+
 @dataclass(frozen=True)
 class MetaOAuthResult:
     bindings: tuple[MetaAssetBinding, ...]
@@ -223,7 +224,6 @@ def begin_meta_business_login(
         }
     )
     return f"https://www.facebook.com/{app.graph_api_version}/dialog/oauth?{query}"
-
 
 
 async def complete_meta_business_login(
@@ -400,5 +400,3 @@ async def complete_meta_business_login(
     finally:
         if owns_client:
             await http_client.aclose()
-
-

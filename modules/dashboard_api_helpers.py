@@ -80,7 +80,9 @@ async def dashboard_send_message_capture(
             if key not in dashboard_bot_responses:
                 dashboard_bot_responses[key] = []
             dashboard_bot_responses[key].append(line)
-        print(f"Dashboard captured bot response for ***{str(to_number)[-4:] if to_number else ''}: len={len(line or '')}")
+        print(
+            f"Dashboard captured bot response for ***{str(to_number)[-4:] if to_number else ''}: len={len(line or '')}"
+        )
     return True
 
 

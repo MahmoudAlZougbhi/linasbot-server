@@ -379,4 +379,3 @@ async def get_pending_messages() -> Any:
 
         traceback.print_exc()
         return {"success": False, "error": str(e)}
-

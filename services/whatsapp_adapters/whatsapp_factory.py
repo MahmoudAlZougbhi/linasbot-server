@@ -102,23 +102,17 @@ class WhatsAppFactory:
     @classmethod
     def _create_360dialog_adapter(cls) -> WhatsAppAdapter:
         """Archived: 360dialog is not a runtime transport."""
-        raise ValueError(
-            "360dialog WhatsApp provider is unsupported. Runtime transport is Meta Cloud only."
-        )
+        raise ValueError("360dialog WhatsApp provider is unsupported. Runtime transport is Meta Cloud only.")
 
     @classmethod
     def _create_qiscus_adapter(cls) -> WhatsAppAdapter:
         """Archived: Qiscus is not a runtime transport."""
-        raise ValueError(
-            "Qiscus WhatsApp provider is unsupported. Runtime transport is Meta Cloud only."
-        )
+        raise ValueError("Qiscus WhatsApp provider is unsupported. Runtime transport is Meta Cloud only.")
 
     @classmethod
     def _create_montymobile_adapter(cls) -> WhatsAppAdapter:
         """Archived: MontyMobile is not a runtime transport."""
-        raise ValueError(
-            "MontyMobile WhatsApp provider is unsupported. Runtime transport is Meta Cloud only."
-        )
+        raise ValueError("MontyMobile WhatsApp provider is unsupported. Runtime transport is Meta Cloud only.")
 
     @classmethod
     def switch_provider(cls, provider: str) -> WhatsAppAdapter:

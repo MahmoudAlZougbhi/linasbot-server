@@ -48,6 +48,7 @@ def _ordered_paused_appointments_from_snapshot(payload: dict | None) -> list[dic
         out.append(apt)
     return out
 
+
 def _resolve_user_chosen_paused_appointment_id(user_text: str, paused_ids: list[int]) -> int | None:
     """
     After the bot listed paused rows 1..N, map the user's reply to the CRM appointment_id.
@@ -81,6 +82,7 @@ def _resolve_user_chosen_paused_appointment_id(user_text: str, paused_ids: list[
 
     return None
 
+
 def _bot_reply_claims_completed_appointment_update(bot_reply: str) -> bool:
     br = (bot_reply or "").strip().lower()
     if "تم تثبيت تعديل" in br or "تمّ تثبيت تعديل" in br:
@@ -94,6 +96,7 @@ def _bot_reply_claims_completed_appointment_update(bot_reply: str) -> bool:
     if "تم تحديث الموعد" in br or "تم نقل الموعد" in br:
         return True
     return False
+
 
 def validate_language_match(user_language: str, bot_response: str, detected_response_lang: str) -> tuple:
     """
@@ -140,8 +143,10 @@ def validate_language_match(user_language: str, bot_response: str, detected_resp
 
     return True, ""
 
+
 def _contains_arabic_script(text: str) -> bool:
     return bool(re.search(r"[\u0600-\u06FF]", str(text or "")))
+
 
 def looks_like_working_hours_reply(text: str) -> bool:
     """Heuristic: detect replies that are clearly about clinic hours/opening times."""
@@ -159,6 +164,7 @@ def looks_like_working_hours_reply(text: str) -> bool:
         r"\bouvert\b",
     ]
     return any(re.search(pattern, normalized, re.IGNORECASE | re.UNICODE) for pattern in hours_patterns)
+
 
 def is_price_related_question(text: str, booking_state: dict[str, Any] | None = None) -> bool:
     normalized = str(text or "").lower()
@@ -192,6 +198,7 @@ def is_price_related_question(text: str, booking_state: dict[str, Any] | None = 
 
     # Weak signals (kam/adde/قديش) need either clinic context or active booking context.
     return has_clinic_context or has_booking_context
+
 
 def _booking_submit_payload_complete_for_execution(function_args: dict[str, Any], current_gender: str) -> bool:
     """True when submit_booking_intent has enough concrete values to execute without a recap round-trip."""
@@ -228,6 +235,7 @@ def _booking_submit_payload_complete_for_execution(function_args: dict[str, Any]
             )
         )
     return has_datetime
+
 
 def _extract_direct_submit_booking_args_from_user_message(
     text: str,
@@ -299,6 +307,7 @@ def _extract_direct_submit_booking_args_from_user_message(
     }
     return out if _booking_submit_payload_complete_for_execution(out, gender or current_gender) else None
 
+
 def _merge_explicit_user_booking_args(
     function_args: dict[str, Any],
     explicit_args: dict[str, Any] | None,
@@ -336,4 +345,3 @@ def _merge_explicit_user_booking_args(
         function_args.pop("date_components", None)
         function_args.pop("calendar_day_intent", None)
     return changed
-

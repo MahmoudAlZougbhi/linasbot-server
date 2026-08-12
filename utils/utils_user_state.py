@@ -58,6 +58,7 @@ async def save_user_name_to_firestore(user_id: str, name: str) -> None:
 
         traceback.print_exc()
 
+
 async def get_user_state_from_firestore(user_id: str) -> dict:
     """
     Retrieves user state (gender, greeting_stage, name, phone) from Firestore.

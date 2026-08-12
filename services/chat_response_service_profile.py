@@ -83,6 +83,7 @@ def _record_tool_round_trip(
         rec["backend_execution"] = {k: v for k, v in summ.items() if v is not None}
     return rec
 
+
 def _normalize_profile_gender(value: Any) -> str | None:
     """Normalize user-facing gender words to the backend profile values."""
     s = str(value or "").strip().lower()
@@ -96,6 +97,7 @@ def _normalize_profile_gender(value: Any) -> str | None:
         return "female"
     return None
 
+
 def _validate_profile_name(value: Any) -> tuple[str | None, str | None]:
     """Return (clean_name, error) for a user-requested profile name change."""
     name = str(value or "").strip()
@@ -107,6 +109,7 @@ def _validate_profile_name(value: Any) -> tuple[str | None, str | None]:
     if not re.match(name_pattern, name, re.UNICODE):
         return None, "name_characters_invalid"
     return name, None
+
 
 async def _update_profile_name_in_firestore(user_id: str, name: str, phone_number: str | None) -> int:
     """Persist a profile name on all known user-id variants we can safely resolve."""
@@ -138,6 +141,7 @@ async def _update_profile_name_in_firestore(user_id: str, name: str, phone_numbe
         except Exception as exc:
             print(f"⚠️ update profile name failed for {uid}: {exc}")
     return updated
+
 
 async def _update_current_conversation_customer_info(
     user_id: str,
@@ -180,6 +184,7 @@ async def _update_current_conversation_customer_info(
             print(f"⚠️ update conversation customer_info failed for {uid}/{conversation_id}: {exc}")
     return updated
 
+
 def _clinic_holiday_calendar_block(user_id: str, current_local_time: datetime.datetime) -> str:
     """Inject branch holiday / closure rules from dashboard Settings into the system prompt."""
     try:
@@ -189,6 +194,7 @@ def _clinic_holiday_calendar_block(user_id: str, current_local_time: datetime.da
     except Exception as e:
         print(f"WARNING: clinic holiday block: {e}")
         return ""
+
 
 def _normalize_arabic_reply(text: str) -> str:
     """Replace Latin brand/assistant names with Arabic when reply is in Arabic (no mixing)."""
@@ -207,6 +213,7 @@ def _normalize_arabic_reply(text: str) -> str:
     text = re.sub(r"Lina['']s\s*Laser", "ليناز ليزر", text, flags=re.IGNORECASE)
     text = re.sub(r"\bLaser\b", "ليزر", text, flags=re.IGNORECASE)
     return text
+
 
 def _extract_appointment_id_from_check_response(response: dict) -> int | None:
     """Extract appointment_id from check_next_appointment API response."""
@@ -232,6 +239,7 @@ def _extract_appointment_id_from_check_response(response: dict) -> int | None:
                     pass
     return None
 
+
 def _extract_customer_appointments_list(response_payload: dict) -> list:
     """Normalize get_customer_appointments API payload to a list of appointment dicts."""
     if not isinstance(response_payload, dict):
@@ -252,15 +260,19 @@ def _extract_customer_appointments_list(response_payload: dict) -> list:
                 return [data]
     return []
 
+
 def _normalize_appointment_status_token(status_val: str) -> str:
     return str(status_val or "").strip().lower().replace("_", " ").replace("-", " ")
+
 
 def _is_paused_like_appointment_status(status_val: str) -> bool:
     """True when CRM row is paused/on-hold/postponed (not the same as Available/active)."""
     return _normalize_appointment_status_token(status_val) in _PAUSED_LIKE_STATUS_NORMALIZED
 
+
 def _appointment_row_status_lower(apt: dict) -> str:
     return str(apt.get("status") or "").strip().lower()
+
 
 def _reschedule_row_kind_tag(apt: dict) -> str:
     st = str(apt.get("status") or "")
@@ -271,10 +283,12 @@ def _reschedule_row_kind_tag(apt: dict) -> str:
         return "AVAILABLE"
     return "ACTIVE"
 
+
 def _filter_appointments_for_reschedule_overview(appointments: list[dict]) -> list[dict]:
     """Prefer rows that are not clearly finished/cancelled when listing choices for reschedule."""
     kept = [a for a in appointments if _appointment_row_status_lower(a) not in _EXCLUDED_RESCHEDULE_SUMMARY_STATUSES]
     return kept if len(kept) >= 2 else list(appointments)
+
 
 def _format_appointment_row_for_reschedule_hint(idx: int, apt: dict) -> str:
     """One CRM row for prompts: emphasize appointment_id + service/branch/datetime/machine/areas/price from JSON only."""
@@ -343,4 +357,3 @@ def _format_appointment_row_for_reschedule_hint(idx: int, apt: dict) -> str:
     if st:
         bits.append(f"status={st}")
     return f"{idx}. [{_reschedule_row_kind_tag(apt)}] " + " | ".join(bits)
-

@@ -121,10 +121,7 @@ def route_social_contact_request(
                 from services.owner_alert_service import owner_alert_service
 
                 scope_tenant = str(
-                    user_data.get("tenant_id")
-                    or user_data.get("tenantId")
-                    or user_data.get("workspace_id")
-                    or ""
+                    user_data.get("tenant_id") or user_data.get("tenantId") or user_data.get("workspace_id") or ""
                 ).strip()
                 scope_channel = str(user_data.get("channel") or "").strip()
                 try:

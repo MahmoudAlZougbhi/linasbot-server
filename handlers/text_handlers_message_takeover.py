@@ -264,7 +264,9 @@ async def maybe_send_takeover_autoreply(
                             if operator_id:
                                 # User has an operator — never stay silent.
                                 # Send assignment notice once, then send a short reminder on each user turn.
-                                print(f"[handle_message] INFO: User ...{str(user_id)[-4:]} has operator. AI will not respond.")
+                                print(
+                                    f"[handle_message] INFO: User ...{str(user_id)[-4:]} has operator. AI will not respond."
+                                )
                                 if not user_data.get("notified_human_takeover"):
                                     operator_name = conv_data.get("operator_name")
                                     if not operator_name:

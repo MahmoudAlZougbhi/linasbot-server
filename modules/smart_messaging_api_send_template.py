@@ -279,4 +279,3 @@ async def send_test_template_message(request_data: dict[str, Any]) -> Any:
 
         traceback.print_exc()
         return {"success": False, "error": str(e)}
-

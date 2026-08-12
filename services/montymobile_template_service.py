@@ -208,7 +208,9 @@ class MontyMobileTemplateService(MontyMobileTemplatePayloadMixin):
             url = f"https://graph.facebook.com/{_GRAPH_VERSION}/{phone_number_id}/messages"
             headers = {"Authorization": f"Bearer {api_token}", "Content-Type": "application/json"}
 
-            print(f"📤 Sending Cloud template '{template_id}' to ***{str(phone_number)[-4:] if phone_number else ''} (lang: {language})")
+            print(
+                f"📤 Sending Cloud template '{template_id}' to ***{str(phone_number)[-4:] if phone_number else ''} (lang: {language})"
+            )
             print(f"   URL: graph.facebook.com/.../{phone_number_id}/messages")
 
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -228,8 +230,7 @@ class MontyMobileTemplateService(MontyMobileTemplatePayloadMixin):
                     return {
                         "success": False,
                         "error": (
-                            f"Meta Cloud template HTTP {response.status_code}: "
-                            f"{err_msg or (response.text or '')[:500]}"
+                            f"Meta Cloud template HTTP {response.status_code}: {err_msg or (response.text or '')[:500]}"
                         ),
                         "outbound_template_name": (payload.get("template") or {}).get("name"),
                         "response": response_data,

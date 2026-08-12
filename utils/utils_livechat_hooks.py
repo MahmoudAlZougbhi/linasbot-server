@@ -35,8 +35,10 @@ MESSAGE_DEDUPE_WINDOW_SECONDS = 20
 def _extract_source_message_id(metadata: dict) -> str:
     return contract_extract_source_message_id(metadata)
 
+
 def _parse_timestamp_for_dedupe(timestamp: Any) -> datetime.datetime:
     return parse_timestamp_utc(timestamp)
+
 
 def _is_duplicate_message(existing_messages: list, new_message: dict) -> bool:
     return contract_is_duplicate_message(
@@ -44,6 +46,7 @@ def _is_duplicate_message(existing_messages: list, new_message: dict) -> bool:
         new_message,
         dedupe_window_seconds=MESSAGE_DEDUPE_WINDOW_SECONDS,
     )
+
 
 def _message_to_dashboard_format(msg: dict) -> dict:
     """Convert internal message format to dashboard-compatible shape for instant SSE append."""
@@ -83,6 +86,7 @@ def _message_to_dashboard_format(msg: dict) -> dict:
         out["metadata"]["faq_match"] = meta["faq_match"]
     return out
 
+
 async def _update_customer_name_from_external_after_save(
     canonical_user_id: str,
     normalized_phone: str,
@@ -120,6 +124,7 @@ async def _update_customer_name_from_external_after_save(
     except Exception as e:
         _log.warning("Background customer name update failed: %s", e)
 
+
 def _invalidate_live_chat_cache() -> None:
     try:
         from services.live_chat_service import live_chat_service
@@ -127,6 +132,7 @@ def _invalidate_live_chat_cache() -> None:
         live_chat_service.invalidate_cache()
     except Exception:
         pass
+
 
 def _refresh_live_chat_index_async(user_id: str, conversation_id: str) -> None:
     """Fire-and-forget index refresh so new messages populate live_chat_index."""
@@ -138,6 +144,7 @@ def _refresh_live_chat_index_async(user_id: str, conversation_id: str) -> None:
         asyncio.create_task(live_chat_service._refresh_index_for_conversation(canonical_user_id, conversation_id))
     except Exception as e:
         print(f"⚠️ [index-refresh] enqueue failed for user={user_id} conv={conversation_id}: {e}")
+
 
 def _conversation_state_fields_changed(doc_before: Any, update_payload: dict) -> bool:
     """True if save payload changes fields that drive live_chat_index / dashboard tabs."""
@@ -151,6 +158,7 @@ def _conversation_state_fields_changed(doc_before: Any, update_payload: dict) ->
         if doc_before.get(key) != update_payload.get(key):
             return True
     return False
+
 
 async def _resolve_conversation_doc_for_save(
     db: Any,
@@ -199,6 +207,7 @@ async def _resolve_conversation_doc_for_save(
     best = max(found, key=_pick_score)
     return best
 
+
 async def _ensure_live_chat_index_after_save(
     canonical_user_id: str,
     conversation_id: str,
@@ -225,6 +234,7 @@ async def _ensure_live_chat_index_after_save(
     except Exception as e:
         print(f"⚠️ [index-refresh] after save conv={conversation_id}: {e}")
         _refresh_live_chat_index_async(canonical_user_id, conversation_id)
+
 
 async def _propagate_takeover_state_to_sibling_conversation_docs(
     db: Any,
@@ -307,6 +317,7 @@ async def _propagate_takeover_state_to_sibling_conversation_docs(
     if any_updated:
         _invalidate_live_chat_cache()
 
+
 async def _resolve_latest_conversation_id(conversations_collection_for_user: Any) -> str | None:
     """
     Prefer the conversation with the newest last_updated. Uses an ordered query when possible;
@@ -352,6 +363,7 @@ async def _resolve_latest_conversation_id(conversations_collection_for_user: Any
             key=lambda d: len((d.to_dict() or {}).get("messages") or []),
         ).id
     )
+
 
 async def _latest_smart_ai_across_conversations(canonical_user_id: str, within_hours: float = 72) -> dict | None:
     """Newest ai message with metadata.source == smart_message across all threads for this user."""

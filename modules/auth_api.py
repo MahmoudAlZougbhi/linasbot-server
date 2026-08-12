@@ -493,5 +493,3 @@ async def change_password(body: ChangePasswordRequest, request: Request, respons
     except Exception as e:
         print(f"Change password error: {e}")
         return {"success": False, "error": "Failed to change password"}
-
-

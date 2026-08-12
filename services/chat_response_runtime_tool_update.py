@@ -109,11 +109,11 @@ async def handle_update_appointment_tools(ns: Any) -> Any:
                     if isinstance(ns.fresh_apts, dict) and ns.fresh_apts.get("success"):
                         ns.paused_order = _ordered_paused_appointments_from_snapshot(ns.fresh_apts)
                 except Exception as multi_pause_e:
-                    print(
-                        f"WARNING: multi-paused pick: get_customer_appointments refresh failed: {multi_pause_e}"
-                    )
+                    print(f"WARNING: multi-paused pick: get_customer_appointments refresh failed: {multi_pause_e}")
             if len(ns.paused_order) >= 2:
-                ns.pids = [ns.x for ns.x in (_appointment_numeric_id(ns.r) for ns.r in ns.paused_order) if ns.x is not None]
+                ns.pids = [
+                    ns.x for ns.x in (_appointment_numeric_id(ns.r) for ns.r in ns.paused_order) if ns.x is not None
+                ]
                 ns.chosen_pid = _resolve_user_chosen_paused_appointment_id(ns.user_input, ns.pids)
                 if ns.chosen_pid is not None:
                     try:
@@ -146,9 +146,7 @@ async def handle_update_appointment_tools(ns: Any) -> Any:
                 except (TypeError, ValueError):
                     ns.gpt_aid_resume = None
                 if ns.gpt_aid_resume is None:
-                    print(
-                        f"DEBUG: Auto-chaining paused NEXT appointment_id for resume -> {ns._next_id_resume}"
-                    )
+                    print(f"DEBUG: Auto-chaining paused NEXT appointment_id for resume -> {ns._next_id_resume}")
                     ns.function_args["appointment_id"] = ns._next_id_resume
                     ns.forced_update_appointment_id = ns._next_id_resume
 

@@ -1,15 +1,16 @@
 """Core _process_and_respond phase 8."""
+
 from __future__ import annotations
 
 _PHASE_HALT = "_PHASE_HALT"
 
 
 async def text_handlers_respond_phase8(ctx: dict):
-    action = ctx.get('action')
-    bot_reply_text = ctx.get('bot_reply_text')
-    current_preferred_lang = ctx.get('current_preferred_lang')
-    flow_meta = ctx.get('flow_meta')
-    get_dynamic_message = ctx.get('get_dynamic_message')
+    action = ctx.get("action")
+    bot_reply_text = ctx.get("bot_reply_text")
+    current_preferred_lang = ctx.get("current_preferred_lang")
+    flow_meta = ctx.get("flow_meta")
+    get_dynamic_message = ctx.get("get_dynamic_message")
     _actions_requiring_bot_text = {
         "initial_greet_and_ask_gender",
         "ask_gender",
@@ -46,7 +47,15 @@ async def text_handlers_respond_phase8(ctx: dict):
 
     # Track what we send for flow logging
     sent_reply: str = bot_reply_text
-    _pack = ['_actions_requiring_bot_text', 'action', 'bot_reply_text', 'current_preferred_lang', 'flow_meta', 'get_dynamic_message', 'sent_reply']
+    _pack = [
+        "_actions_requiring_bot_text",
+        "action",
+        "bot_reply_text",
+        "current_preferred_lang",
+        "flow_meta",
+        "get_dynamic_message",
+        "sent_reply",
+    ]
     for _k in _pack:
         if _k in locals():
             ctx[_k] = locals()[_k]

@@ -184,7 +184,9 @@ async def _process_parsed_message_impl(parsed_message: dict[str, Any], adapter: 
     # Store phone number IMMEDIATELY
     if phone_number:
         config.user_data_whatsapp[user_id]["phone_number"] = phone_number
-        print(f"✅ CRITICAL: Stored phone_number ***{str(phone_number)[-4:]} for user ...{str(user_id)[-4:]} BEFORE any processing")
+        print(
+            f"✅ CRITICAL: Stored phone_number ***{str(phone_number)[-4:]} for user ...{str(user_id)[-4:]} BEFORE any processing"
+        )
     else:
         print(f"⚠️ WARNING: No phone_number extracted for user ...{str(user_id)[-4:]}")
 
@@ -428,4 +430,3 @@ async def start_command_whatsapp(user_whatsapp_id: str, user_name: str) -> None:
     print(
         f"DEBUG: start_command_whatsapp ended for user {user_whatsapp_id}. Stage: {config.user_greeting_stage[user_whatsapp_id]}, Gender: '{config.user_gender.get(user_whatsapp_id, 'unknown')}'"
     )
-

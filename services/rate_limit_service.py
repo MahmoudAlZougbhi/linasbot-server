@@ -67,12 +67,7 @@ def _is_production_env() -> bool:
 
 
 def _redis_url_from_env() -> str | None:
-    raw = (
-        os.getenv("RATE_LIMIT_REDIS_URL")
-        or os.getenv("REDIS_URL")
-        or os.getenv("LINAS_REDIS_URL")
-        or ""
-    ).strip()
+    raw = (os.getenv("RATE_LIMIT_REDIS_URL") or os.getenv("REDIS_URL") or os.getenv("LINAS_REDIS_URL") or "").strip()
     return raw or None
 
 
@@ -235,7 +230,9 @@ class RateLimitService:
                         script_exc,
                     )
                     self._redis_script = False  # type: ignore[assignment]
-            return self._hit_redis_pipeline(client, rkey, now=now, window_seconds=window_seconds, limit=limit, member=member)
+            return self._hit_redis_pipeline(
+                client, rkey, now=now, window_seconds=window_seconds, limit=limit, member=member
+            )
         except RateLimitUnavailableError:
             raise
         except Exception as exc:

@@ -33,6 +33,7 @@ async def daily_refresh_messages_job() -> None:
 
         traceback.print_exc()
 
+
 async def run_daily_template_dispatcher_job() -> None:
     """
     Minute-level runner that dispatches enabled template jobs
@@ -65,6 +66,7 @@ async def run_daily_template_dispatcher_job() -> None:
         traceback.print_exc()
     finally:
         release_job_lock("daily_template_dispatcher")
+
 
 async def run_smart_followup_worker_job() -> None:
     from services.durable_event_claim import release_job_lock, try_acquire_job_lock

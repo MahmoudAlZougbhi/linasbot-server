@@ -278,4 +278,3 @@ BOOKING_OR_PRICE_KEYWORDS = [
     "rendez-vous",
     "tarif",
 ]
-

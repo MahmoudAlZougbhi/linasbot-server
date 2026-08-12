@@ -20,7 +20,9 @@ async def check_customer_gender(phone: str | None = None, user_code: str | None 
         if phone_clean.startswith("961"):
             phone_clean = phone_clean[3:]  # Remove Lebanon country code
 
-    print(f"API Call: check_customer_gender for phone=***{str(phone_clean)[-4:] if phone_clean else ''} (original_last4=***{str(phone)[-4:] if phone else ''}), user_code={user_code}")
+    print(
+        f"API Call: check_customer_gender for phone=***{str(phone_clean)[-4:] if phone_clean else ''} (original_last4=***{str(phone)[-4:] if phone else ''}), user_code={user_code}"
+    )
     params = {}
     # NEW: Ensure either phone or user_code is provided for the API call
     if phone_clean:
@@ -151,7 +153,6 @@ async def update_customer_gender(customer_id: int, gender: str) -> Any:
     # Return a mock success to prevent errors in legacy code
     # Gender is actually saved via Firestore in user_persistence_service.py
     return {"success": True, "message": "Gender saved via Firestore (external API deprecated)"}
-
 
 
 # Refactored generate_daily_report_command to return string and accept send_message_func

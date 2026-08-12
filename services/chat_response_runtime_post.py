@@ -29,7 +29,9 @@ async def postprocess_chat_response(ns: Any) -> Any:
     if not ns.tool_calls and not ns.social_channel:
         ns.direct_submit_args = _extract_direct_submit_booking_args_from_user_message(
             ns.user_input,
-            phone=ns.customer_phone_clean or config.user_data_whatsapp.get(ns.user_id, {}).get("phone_number") or ns.user_id,
+            phone=ns.customer_phone_clean
+            or config.user_data_whatsapp.get(ns.user_id, {}).get("phone_number")
+            or ns.user_id,
             current_gender=ns.current_gender,
             fallback_name=config.user_names.get(ns.user_id, ns.user_name),
         )
@@ -92,7 +94,9 @@ async def postprocess_chat_response(ns: Any) -> Any:
     # AI decides language - use AI's detected_language from response, fallback to pre-detected
     ns.bot_reply = ns.parsed_response.get("bot_reply", "")
     ns.ai_detected = ns.parsed_response.get("detected_language")
-    ns.detected_language = ns.ai_detected if ns.ai_detected in ("ar", "en", "fr", "franco") else ns.current_preferred_lang
+    ns.detected_language = (
+        ns.ai_detected if ns.ai_detected in ("ar", "en", "fr", "franco") else ns.current_preferred_lang
+    )
     ns.parsed_response["detected_language"] = ns.detected_language
     print(f"🌐 AI detected language: {ns.detected_language}")
 
@@ -152,7 +156,11 @@ async def postprocess_chat_response(ns: Any) -> Any:
 
     # Flow logging metadata for dashboard transparency (detailed for Activity Flow)
     ns.tool_names = (
-        [getattr(getattr(ns.tc, "function", None), "name", "") for ns.tc in ns.tool_calls if getattr(ns.tc, "function", None)]
+        [
+            getattr(getattr(ns.tc, "function", None), "name", "")
+            for ns.tc in ns.tool_calls
+            if getattr(ns.tc, "function", None)
+        ]
         if ns.tool_calls
         else []
     ) + ns.extra_tool_names
@@ -173,7 +181,9 @@ async def postprocess_chat_response(ns: Any) -> Any:
     ):
         ns.direct_submit_args = _extract_direct_submit_booking_args_from_user_message(
             ns.user_input,
-            phone=ns.customer_phone_clean or config.user_data_whatsapp.get(ns.user_id, {}).get("phone_number") or ns.user_id,
+            phone=ns.customer_phone_clean
+            or config.user_data_whatsapp.get(ns.user_id, {}).get("phone_number")
+            or ns.user_id,
             current_gender=ns.current_gender,
             fallback_name=config.user_names.get(ns.user_id, ns.user_name),
         )
@@ -223,8 +233,12 @@ async def postprocess_chat_response(ns: Any) -> Any:
     ns._rec_has_date = bool(ns._leaked_rec.get("date") or ns._leaked_rec.get("date_components"))
     ns._rec_mach = _safe_int(ns._leaked_rec.get("machine_id"))
     ns._rec_lw = dict(ns._leaked_rec)
-    _fix_misassigned_tattoo_service_for_hair_booking(ns._rec_lw, ns.current_gender, ns.user_input, ns.current_context_messages)
-    ns._rec_sid = _safe_int(ns._rec_lw.get("service_id")) or _infer_service_id_from_leak(ns._leaked_rec, ns.current_gender)
+    _fix_misassigned_tattoo_service_for_hair_booking(
+        ns._rec_lw, ns.current_gender, ns.user_input, ns.current_context_messages
+    )
+    ns._rec_sid = _safe_int(ns._rec_lw.get("service_id")) or _infer_service_id_from_leak(
+        ns._leaked_rec, ns.current_gender
+    )
     ns.stuck_hair_booking_recovery = (
         (ns.parsed_response.get("action") or "").strip().lower() == "ask_for_details_for_booking"
         and ns._rec_has_date
@@ -286,7 +300,9 @@ async def postprocess_chat_response(ns: Any) -> Any:
                     from services.analytics_events import analytics
 
                     ns._rec_api = (
-                        ns.rec_api.get("api_response") if isinstance(ns.rec_api.get("api_response"), dict) else ns.rec_api
+                        ns.rec_api.get("api_response")
+                        if isinstance(ns.rec_api.get("api_response"), dict)
+                        else ns.rec_api
                     )
                     ns.raw_data_payload = ns._rec_api.get("data", {}) if isinstance(ns._rec_api, dict) else {}
                     ns.appointment_data = (
@@ -326,6 +342,8 @@ async def postprocess_chat_response(ns: Any) -> Any:
                     else (ns.rec_api or {}).get("human_readable_reason", "Unknown error")
                 )
                 ns.err_msg = (
-                    str(ns.err_msg_raw) if not isinstance(ns.err_msg_raw, dict) else json.dumps(ns.err_msg_raw, default=str)
+                    str(ns.err_msg_raw)
+                    if not isinstance(ns.err_msg_raw, dict)
+                    else json.dumps(ns.err_msg_raw, default=str)
                 )
                 ns.api_failure_reason = f"create_appointment_tool_failed: {ns.err_msg}"

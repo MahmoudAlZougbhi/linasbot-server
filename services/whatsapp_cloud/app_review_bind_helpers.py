@@ -28,6 +28,7 @@ class AppReviewBindError(RuntimeError):
         self.code = code
         self.message = message
 
+
 def _mask_id(value: str) -> str:
     raw = str(value or "").strip()
     if len(raw) <= 6:
@@ -126,4 +127,3 @@ async def _validate_meta_assets(
     if matched is None:
         raise AppReviewBindError("phone_not_in_waba", "phone_number_id is not part of the supplied WABA")
     return matched, sorted(granted & (WHATSAPP_REQUIRED_SCOPES | {"business_management"})), dbg
-

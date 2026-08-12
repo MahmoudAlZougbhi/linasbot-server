@@ -33,6 +33,7 @@ async def populate_messages_job() -> None:
 
         traceback.print_exc()
 
+
 # Job 0A3: Populate 1-MONTH FOLLOW-UP messages (from last month's appointments)
 async def populate_one_month_job() -> None:
     """Fetch last month's appointments and populate 1-month follow-up messages"""
@@ -54,6 +55,7 @@ async def populate_one_month_job() -> None:
 
         traceback.print_exc()
 
+
 # Job 0A4: Populate MISSED-MONTH messages (from this month's missed appointments)
 async def populate_missed_month_job() -> None:
     """Fetch this month's missed appointments and populate missed-month messages"""
@@ -74,6 +76,7 @@ async def populate_missed_month_job() -> None:
         import traceback
 
         traceback.print_exc()
+
 
 # Job 0A5: Populate MISSED-YESTERDAY messages (from yesterday's paused appointments)
 async def populate_missed_yesterday_job() -> None:

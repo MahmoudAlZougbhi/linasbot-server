@@ -1,19 +1,20 @@
 """Core _process_and_respond phase 11."""
+
 from __future__ import annotations
 
 _PHASE_HALT = "_PHASE_HALT"
 
 
 async def text_handlers_respond_phase11(ctx: dict):
-    _dynamic_retrieval_flow_meta = ctx.get('_dynamic_retrieval_flow_meta')
-    _flow_error_reason = ctx.get('_flow_error_reason')
-    _prepend_multimodal_steps = ctx.get('_prepend_multimodal_steps')
-    action = ctx.get('action')
-    booking_retry = ctx.get('booking_retry')
-    flow_meta = ctx.get('flow_meta')
-    response_time_ms = ctx.get('response_time_ms')
-    sent_reply = ctx.get('sent_reply')
-    user_input_to_process = ctx.get('user_input_to_process')
+    _dynamic_retrieval_flow_meta = ctx.get("_dynamic_retrieval_flow_meta")
+    _flow_error_reason = ctx.get("_flow_error_reason")
+    _prepend_multimodal_steps = ctx.get("_prepend_multimodal_steps")
+    action = ctx.get("action")
+    booking_retry = ctx.get("booking_retry")
+    flow_meta = ctx.get("flow_meta")
+    response_time_ms = ctx.get("response_time_ms")
+    sent_reply = ctx.get("sent_reply")
+    user_input_to_process = ctx.get("user_input_to_process")
     if _dynamic_retrieval_flow_meta:
         dr = _dynamic_retrieval_flow_meta
         bot_sent_selector = dr.get("bot_sent_to_selector", "")
@@ -415,7 +416,56 @@ async def text_handlers_respond_phase11(ctx: dict):
             }
         )
         flow_steps, msg_type = _prepend_multimodal_steps(steps, 1)
-    _pack = ['SELECTOR_MODEL', 'SELECTOR_MODEL_INPUT_PER_1M_USD', 'SELECTOR_MODEL_OUTPUT_PER_1M_USD', '_dynamic_retrieval_flow_meta', '_flow_error_reason', '_i', '_prepend_multimodal_steps', 'action', 'ai_error', 'ai_first', 'ai_raw_or_error', 'ai_selected_str', 'ai_selector_return', 'booking_retry', 'bot_sent_selector', 'ct', 'cust_ctx', 'dr', 'err_msg', 'err_step', 'exec_step', 'final_model', 'first_call', 'flow_meta', 'flow_steps', 'loaded_content_block', 'loaded_content_full', 'main_cost', 'msg_type', 'orchestration_model', 'pt', 'resp_step', 'response_time_ms', 'second_call', 'sel_ct', 'sel_pt', 'selected_titles', 'selector_cost', 'sent_reply', 'stage_models', 'step_num', 'steps', 'summary_parts', 'token_breakdown', 'tool_round_trips', 'total_cost', 'tr', 'user_input_to_process']
+    _pack = [
+        "SELECTOR_MODEL",
+        "SELECTOR_MODEL_INPUT_PER_1M_USD",
+        "SELECTOR_MODEL_OUTPUT_PER_1M_USD",
+        "_dynamic_retrieval_flow_meta",
+        "_flow_error_reason",
+        "_i",
+        "_prepend_multimodal_steps",
+        "action",
+        "ai_error",
+        "ai_first",
+        "ai_raw_or_error",
+        "ai_selected_str",
+        "ai_selector_return",
+        "booking_retry",
+        "bot_sent_selector",
+        "ct",
+        "cust_ctx",
+        "dr",
+        "err_msg",
+        "err_step",
+        "exec_step",
+        "final_model",
+        "first_call",
+        "flow_meta",
+        "flow_steps",
+        "loaded_content_block",
+        "loaded_content_full",
+        "main_cost",
+        "msg_type",
+        "orchestration_model",
+        "pt",
+        "resp_step",
+        "response_time_ms",
+        "second_call",
+        "sel_ct",
+        "sel_pt",
+        "selected_titles",
+        "selector_cost",
+        "sent_reply",
+        "stage_models",
+        "step_num",
+        "steps",
+        "summary_parts",
+        "token_breakdown",
+        "tool_round_trips",
+        "total_cost",
+        "tr",
+        "user_input_to_process",
+    ]
     for _k in _pack:
         if _k in locals():
             ctx[_k] = locals()[_k]

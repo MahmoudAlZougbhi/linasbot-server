@@ -15,6 +15,7 @@ _log = logging.getLogger(__name__)
 
 _PHONE_ROOM_MAPPING_CACHE: dict[str, Any] = {"mtime": None, "room_to_phone": {}}
 
+
 def get_canonical_user_id_and_phone(user_id: str, phone_number: str | None = None) -> tuple[str, str | None]:
     """
     Return (canonical_user_id, normalized_phone) for Firestore and identity.
@@ -29,6 +30,7 @@ def get_canonical_user_id_and_phone(user_id: str, phone_number: str | None = Non
     canonical = normalized if normalized else user_id
     return canonical, normalized
 
+
 def _normalize_phone_digits(value: str) -> str:
     if value is None:
         return ""
@@ -36,6 +38,7 @@ def _normalize_phone_digits(value: str) -> str:
     if digits.startswith("00"):
         digits = digits[2:]
     return digits
+
 
 def _is_placeholder_phone(phone_number: Any) -> bool:
     if phone_number is None:
@@ -48,6 +51,7 @@ def _is_placeholder_phone(phone_number: Any) -> bool:
     value = str(phone_number).strip().lower()
     return (not value) or value in {"unknown", "none", "null"} or value.startswith("room:")
 
+
 def _clean_phone_for_lookup(phone_number: str) -> str:
     digits = _normalize_phone_digits(phone_number)
     if digits.startswith("961") and len(digits) > 8:
@@ -55,6 +59,7 @@ def _clean_phone_for_lookup(phone_number: str) -> str:
     if digits.startswith("1") and len(digits) == 11:
         return digits[1:]
     return digits
+
 
 def _load_room_to_phone_mapping() -> dict[str, str]:
     """
@@ -105,9 +110,11 @@ def _load_room_to_phone_mapping() -> dict[str, str]:
     _PHONE_ROOM_MAPPING_CACHE["mtime"] = mtime
     return room_to_phone
 
+
 def _resolve_phone_from_room_mapping(user_id: str) -> str:
     room_to_phone = _load_room_to_phone_mapping()
     return room_to_phone.get(str(user_id).strip(), "")
+
 
 def persist_room_to_phone_mapping(room_id: str, phone: str) -> None:
     """

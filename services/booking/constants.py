@@ -39,4 +39,3 @@ def service_requires_machine(service_id: int | None) -> bool:
 
 # Backward-compatible alias used by booking_fsm / intent_pipeline.
 _service_requires_machine = service_requires_machine
-

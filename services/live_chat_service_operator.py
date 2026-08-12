@@ -76,7 +76,9 @@ class LiveChatOperatorMixin:
                     if user_doc.exists:
                         user_data = user_doc.to_dict()
                         phone_number = user_data.get("phone_full")
-                        print(f"📱 Found phone_number from Firebase: ***{str(phone_number)[-4:] if phone_number else ''}")
+                        print(
+                            f"📱 Found phone_number from Firebase: ***{str(phone_number)[-4:] if phone_number else ''}"
+                        )
                 except Exception as e:
                     print(f"⚠️ Could not fetch phone_number from Firebase: {e}")
 

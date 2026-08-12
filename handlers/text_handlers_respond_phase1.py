@@ -1,4 +1,5 @@
 """Core _process_and_respond phase 1."""
+
 from __future__ import annotations
 
 import asyncio
@@ -11,23 +12,23 @@ _PHASE_HALT = "_PHASE_HALT"
 
 
 async def text_handlers_respond_phase1(ctx: dict):
-    get_canonical_user_id_and_phone = ctx.get('get_canonical_user_id_and_phone')
-    get_dynamic_message = ctx.get('get_dynamic_message')
-    get_firestore_db = ctx.get('get_firestore_db')
-    is_flow_logging_enabled = ctx.get('is_flow_logging_enabled')
-    language_detection_service = ctx.get('language_detection_service')
-    log_interaction = ctx.get('log_interaction')
-    save_conversation_message_to_firestore = ctx.get('save_conversation_message_to_firestore')
-    send_action_func = ctx.get('send_action_func')
-    send_message_func = ctx.get('send_message_func')
-    takeover_check_error = ctx.get('takeover_check_error')
-    user_data = ctx.get('user_data')
-    user_id = ctx.get('user_id')
-    user_image_base64 = ctx.get('user_image_base64')
-    user_image_format = ctx.get('user_image_format')
-    user_input_to_process = ctx.get('user_input_to_process')
-    user_name = ctx.get('user_name')
-    user_persistence = ctx.get('user_persistence')
+    get_canonical_user_id_and_phone = ctx.get("get_canonical_user_id_and_phone")
+    get_dynamic_message = ctx.get("get_dynamic_message")
+    get_firestore_db = ctx.get("get_firestore_db")
+    is_flow_logging_enabled = ctx.get("is_flow_logging_enabled")
+    language_detection_service = ctx.get("language_detection_service")
+    log_interaction = ctx.get("log_interaction")
+    save_conversation_message_to_firestore = ctx.get("save_conversation_message_to_firestore")
+    send_action_func = ctx.get("send_action_func")
+    send_message_func = ctx.get("send_message_func")
+    takeover_check_error = ctx.get("takeover_check_error")
+    user_data = ctx.get("user_data")
+    user_id = ctx.get("user_id")
+    user_image_base64 = ctx.get("user_image_base64")
+    user_image_format = ctx.get("user_image_format")
+    user_input_to_process = ctx.get("user_input_to_process")
+    user_name = ctx.get("user_name")
+    user_persistence = ctx.get("user_persistence")
     """
     Core logic for processing user input and generating bot response.
     This function is adapted from the original `_process_and_respond`
@@ -277,7 +278,77 @@ async def text_handlers_respond_phase1(ctx: dict):
                 metadata={"handled_by": "ai", "source": "waiting_queue_fallback"},
             )
             return _PHASE_HALT
-    _pack = ['_', '_CM_DEFAULT_TENANT', '_LANG_DEFAULT_TENANT', '_clear_takeover_flags_for_user', '_dynamic_retrieval_flow_meta', '_lang_tenant', '_resolve_latest_conversation_id', '_social_tenant', '_tenant_allows_legacy_bridge', '_tenant_uses_cm_runtime', '_use_legacy_social_router', 'alt_candidate', 'candidate', 'candidate_ref', 'candidate_snap', 'candidate_user_id', 'candidate_user_ids', 'canonical_user_id', 'clear_social_booking_preference', 'conv_data', 'conv_id_to_check', 'conversations_collection_for_user', 'current_conversation_id', 'current_gender', 'current_preferred_lang', 'customer_image_limit_message', 'db', 'enforce_image_analysis_quota', 'firestore_conversation_id', 'get_canonical_user_id_and_phone', 'get_dynamic_message', 'get_firestore_db', 'image_quota', 'is_expecting_name', 'is_flow_logging_enabled', 'is_post_takeover_escalation_cooldown', 'is_social_channel', 'lang_result', 'language_detection_service', 'limit_msg', 'log_interaction', 'preference_persisted', 'reply', 'resolve_customer_response_language', 'response_language', 'route_social_contact_request', 'router_reply_lang', 'save_conversation_message_to_firestore', 'send_action_func', 'send_message_func', 'set_post_takeover_escalation_cooldown', 'should_send_waiting', 'social_booking_preference_key', 'social_booking_preference_reply', 'social_route', 'start_time', 'sync_post_release_cooldown_from_conv_payload', 'takeover_check_error', 'takeover_still_active', 'user_data', 'user_doc_ref', 'user_id', 'user_image_base64', 'user_image_format', 'user_input_to_process', 'user_name', 'user_persistence', 'users_coll', 'waiting_msg']
+    _pack = [
+        "_",
+        "_CM_DEFAULT_TENANT",
+        "_LANG_DEFAULT_TENANT",
+        "_clear_takeover_flags_for_user",
+        "_dynamic_retrieval_flow_meta",
+        "_lang_tenant",
+        "_resolve_latest_conversation_id",
+        "_social_tenant",
+        "_tenant_allows_legacy_bridge",
+        "_tenant_uses_cm_runtime",
+        "_use_legacy_social_router",
+        "alt_candidate",
+        "candidate",
+        "candidate_ref",
+        "candidate_snap",
+        "candidate_user_id",
+        "candidate_user_ids",
+        "canonical_user_id",
+        "clear_social_booking_preference",
+        "conv_data",
+        "conv_id_to_check",
+        "conversations_collection_for_user",
+        "current_conversation_id",
+        "current_gender",
+        "current_preferred_lang",
+        "customer_image_limit_message",
+        "db",
+        "enforce_image_analysis_quota",
+        "firestore_conversation_id",
+        "get_canonical_user_id_and_phone",
+        "get_dynamic_message",
+        "get_firestore_db",
+        "image_quota",
+        "is_expecting_name",
+        "is_flow_logging_enabled",
+        "is_post_takeover_escalation_cooldown",
+        "is_social_channel",
+        "lang_result",
+        "language_detection_service",
+        "limit_msg",
+        "log_interaction",
+        "preference_persisted",
+        "reply",
+        "resolve_customer_response_language",
+        "response_language",
+        "route_social_contact_request",
+        "router_reply_lang",
+        "save_conversation_message_to_firestore",
+        "send_action_func",
+        "send_message_func",
+        "set_post_takeover_escalation_cooldown",
+        "should_send_waiting",
+        "social_booking_preference_key",
+        "social_booking_preference_reply",
+        "social_route",
+        "start_time",
+        "sync_post_release_cooldown_from_conv_payload",
+        "takeover_check_error",
+        "takeover_still_active",
+        "user_data",
+        "user_doc_ref",
+        "user_id",
+        "user_image_base64",
+        "user_image_format",
+        "user_input_to_process",
+        "user_name",
+        "user_persistence",
+        "users_coll",
+        "waiting_msg",
+    ]
     for _k in _pack:
         if _k in locals():
             ctx[_k] = locals()[_k]

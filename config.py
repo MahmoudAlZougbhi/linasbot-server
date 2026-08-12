@@ -244,6 +244,7 @@ DEFAULT_MACHINE_ID = _booking_default_id("DEFAULT_MACHINE_ID", 1)
 # Requirement: wait 3 seconds after the LAST message before responding.
 MESSAGE_COMBINING_DELAY = 3.0  # seconds
 
+
 # --- Bot Welcome Messages (Language-specific) ---
 # Founder-clinic (Lina's Laser / Marwa) copy. CM-published tenants should prefer
 # published CM welcome / ai_basics — these strings are legacy WhatsApp boot copy,

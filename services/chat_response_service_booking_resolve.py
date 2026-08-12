@@ -76,6 +76,7 @@ async def _resolve_body_part_ids_from_area_hint(
         print(f"_resolve_body_part_ids_from_area_hint: {ex}")
     return None
 
+
 def _user_explicitly_requests_machine_change(text: str | None) -> bool:
     s = (text or "").strip().lower()
     if not s:
@@ -96,6 +97,7 @@ def _user_explicitly_requests_machine_change(text: str | None) -> bool:
             "كوادرو",
         )
     )
+
 
 async def _resolve_machine_for_booking(
     service_id: int | None,
@@ -189,6 +191,7 @@ async def _resolve_machine_for_booking(
         print(f"_resolve_machine_for_booking: {ex}")
     return _first_non_none(preferred_existing, cand, fallback)
 
+
 def _area_name_to_body_part_ids(area_name: str, service_id: int) -> list[int] | None:
     """
     Map area name (e.g. full body, full kel shi) to body_part_ids. Uses app_settings mapping
@@ -210,6 +213,7 @@ def _area_name_to_body_part_ids(area_name: str, service_id: int) -> list[int] | 
         return mapping.get("full_body") or mapping.get("full")
     return mapping.get(area_lower)
 
+
 def _get_area_to_body_part_mapping() -> dict[Any, Any]:
     """Load area->body_part_ids mapping from app_settings or use defaults."""
     try:
@@ -223,6 +227,7 @@ def _get_area_to_body_part_mapping() -> dict[Any, Any]:
     except Exception:
         pass
     return {}
+
 
 async def _fetch_customer_file_summary_for_ai(customer_phone_clean: str) -> str | None:
     """
@@ -313,6 +318,7 @@ async def _fetch_customer_file_summary_for_ai(customer_phone_clean: str) -> str 
 
         return "\n".join(lines) if len(lines) > 1 else None
     except Exception as e:
-        print(f"⚠️ _fetch_customer_file_summary_for_ai failed for ***{str(customer_phone_clean)[-4:] if customer_phone_clean else ''}: {e}")
+        print(
+            f"⚠️ _fetch_customer_file_summary_for_ai failed for ***{str(customer_phone_clean)[-4:] if customer_phone_clean else ''}: {e}"
+        )
         return None
-

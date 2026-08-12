@@ -109,6 +109,7 @@ async def update_voice_message_with_transcription(
 
         traceback.print_exc()
 
+
 def convert_webm_to_opus(base64_webm: str) -> tuple[str, str | None]:
     """
     Convert WebM audio (base64) to OGG/Opus format (base64).
@@ -167,6 +168,7 @@ def convert_webm_to_opus(base64_webm: str) -> tuple[str, str | None]:
         print("   ⚠️ Falling back to original WebM format...")
         # Fall back to original if conversion fails
         return base64_webm, None
+
 
 async def upload_base64_to_firebase_storage(
     base64_data: str, file_name: str, file_type: str = "audio/webm"
@@ -246,6 +248,7 @@ async def upload_base64_to_firebase_storage(
 
         traceback.print_exc()
         return None
+
 
 async def update_dashboard_metric_in_firestore(user_id: str, metric_name: str, increment_by: int = 1) -> None:
     """

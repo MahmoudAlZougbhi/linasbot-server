@@ -63,10 +63,10 @@ app = FastAPI(
 def cors_allow_origins(*, environment: str | None = None) -> list[str]:
     """CORS origins: localhost always; linasaibot.com is HTTPS-only in production."""
     env = (
-        environment
-        if environment is not None
-        else (os.getenv("ENVIRONMENT") or os.getenv("ENV") or "")
-    ).strip().lower()
+        (environment if environment is not None else (os.getenv("ENVIRONMENT") or os.getenv("ENV") or ""))
+        .strip()
+        .lower()
+    )
     origins = [
         "http://localhost:3000",  # React development server
         "http://127.0.0.1:3000",

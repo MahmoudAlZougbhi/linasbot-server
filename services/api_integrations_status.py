@@ -22,7 +22,9 @@ def _phone_clean_for_appointment_api(phone: str) -> str:
 async def pause_appointment(phone: str, appointment_id: int) -> Any:
     """Pauses an appointment by updating its status to Paused."""
     phone_clean = _phone_clean_for_appointment_api(phone)
-    print(f"API Call: pause_appointment for phone=***{str(phone_clean)[-4:] if phone_clean else ''}, appointment_id={appointment_id}")
+    print(
+        f"API Call: pause_appointment for phone=***{str(phone_clean)[-4:] if phone_clean else ''}, appointment_id={appointment_id}"
+    )
     json_data = {"phone": phone_clean, "appointment_id": appointment_id}
     response = await _make_api_request("POST", "appointments/pause", json_data=json_data)
     if response.get("success"):
@@ -371,4 +373,3 @@ async def get_customer_appointments(phone: str) -> Any:
         )
 
     return response
-

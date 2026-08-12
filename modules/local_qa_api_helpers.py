@@ -231,5 +231,3 @@ async def create_local_qa_pair_internal(
             "qa_group_id": qa_group_id,
         }
     return {"success": False, "error": "Failed to write to file"}
-
-

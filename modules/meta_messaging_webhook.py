@@ -97,9 +97,7 @@ async def verify_meta_messaging_webhook(request: Request) -> Any:
     token_ok = (
         verify_any_meta_challenge_token(token)
         if registry_enabled
-        else bool(token)
-        and bool(settings.verify_token)
-        and hmac.compare_digest(token, settings.verify_token)
+        else bool(token) and bool(settings.verify_token) and hmac.compare_digest(token, settings.verify_token)
     )
     if mode == "subscribe" and token_ok and challenge is not None:
         return PlainTextResponse(challenge)

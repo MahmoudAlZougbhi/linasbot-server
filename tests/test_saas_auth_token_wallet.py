@@ -199,7 +199,7 @@ def test_credit_ledger_includes_actor_tenant_amount_before_after(wallet_svc: Tok
 def test_admin_credit_cross_tenant_platform_owner_only(monkeypatch: pytest.MonkeyPatch) -> None:
     from fastapi import HTTPException
 
-    from modules.wallet_api import assert_admin_credit_target_allowed, _admin_credit_allowed
+    from modules.wallet_api import _admin_credit_allowed, assert_admin_credit_target_allowed
 
     monkeypatch.setenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS", "linas")
     monkeypatch.setenv("TOKEN_WALLET_ADMIN_CREDIT_TENANT_IDS", "linas")

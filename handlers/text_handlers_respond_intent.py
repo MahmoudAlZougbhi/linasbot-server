@@ -34,6 +34,7 @@ def _parse_tool_round_bot_returned(bot_returned: str) -> Any:
     except (json.JSONDecodeError, TypeError):
         return None
 
+
 def _flow_meta_has_crm_booking_confirmation(flow_meta: dict) -> bool:
     """
     True when this GPT turn actually ran submit_booking_intent (or legacy create_appointment)
@@ -47,6 +48,7 @@ def _flow_meta_has_crm_booking_confirmation(flow_meta: dict) -> bool:
         if isinstance(po, dict) and po.get("success") is True and po.get("booking_flow_state") == "booked":
             return True
     return False
+
 
 def _booking_not_confirmed_safe_reply(lang: str) -> str:
     """User-facing text when the model tried to confirm a booking without CRM success."""
@@ -65,6 +67,7 @@ def _booking_not_confirmed_safe_reply(lang: str) -> str:
         "لم يُسجَّل الموعد بعد في نظام العيادة لأن خطوة الحجز لم تُكمَل بنجاح. "
         "من فضلك لا تعتبري الموعد مؤكداً قبل ما يظهر تأكيد من النظام—رح كمّل إجراء الحجز بالأدوات المناسبة."
     )
+
 
 def _reply_claims_booking_done(text: str) -> bool:
     """
@@ -107,20 +110,25 @@ def _reply_claims_booking_done(text: str) -> bool:
         return False
     return any(re.search(p, t, flags=re.IGNORECASE) for p in positive_done_patterns)
 
+
 def _is_price_intent(text: str) -> bool:
     normalized = str(text or "").lower()
     return any(keyword in normalized for keyword in PRICE_INTENT_KEYWORDS)
+
 
 def _is_laser_hair_intent(text: str) -> bool:
     normalized = str(text or "").lower()
     return any(keyword in normalized for keyword in LASER_HAIR_INTENT_KEYWORDS)
 
+
 def _has_body_area_hint(text: str) -> bool:
     normalized = str(text or "").lower()
     return any(keyword in normalized for keyword in BODY_AREA_HINT_KEYWORDS)
 
+
 def _contains_arabic_chars(value: str) -> bool:
     return bool(re.search(r"[\u0600-\u06FF]", str(value or "")))
+
 
 def _latin_name_token_to_arabic(token: str) -> str:
     token = (token or "").strip().lower()
@@ -189,6 +197,7 @@ def _latin_name_token_to_arabic(token: str) -> str:
             out.append(mapped)
     return "".join(out).strip()
 
+
 def _transliterate_name_to_arabic(name: str) -> str:
     raw_name = str(name or "").strip()
     if not raw_name:
@@ -210,6 +219,7 @@ def _transliterate_name_to_arabic(name: str) -> str:
 
     return " ".join(arabic_tokens).strip()
 
+
 def _build_arabic_respectful_address(current_gender: str, user_name: str) -> str:
     if current_gender == "male":
         title = "أستاذ"
@@ -230,10 +240,12 @@ def _build_arabic_respectful_address(current_gender: str, user_name: str) -> str
         return f"{title} {name_ar}"
     return title
 
+
 def _build_single_laser_area_question(current_gender: str, user_name: str) -> str:
     respectful_address = _build_arabic_respectful_address(current_gender, user_name)
     verb = "تعملي" if current_gender == "female" else "تعمل"
     return f"أكيد {respectful_address}، ممكن تخبرني شو المنطقة اللي بدك {verb} ليزر شعر عليها؟"
+
 
 def _is_plausible_extracted_customer_name(name: str, user_message: str) -> bool:
     """
@@ -292,6 +304,7 @@ def _is_plausible_extracted_customer_name(name: str, user_message: str) -> bool:
             return False
     return True
 
+
 def _is_out_of_clinic_scope_query(text: str) -> bool:
     probe = str(text or "").strip()
     if len(probe) < 3:
@@ -314,6 +327,7 @@ def _is_out_of_clinic_scope_query(text: str) -> bool:
 
     return False
 
+
 def _build_out_of_scope_reply(lang: str) -> str:
     messages = {
         "ar": "أنا مخصّصة فقط لخدمات عيادة ليناز ليزر. فيني ساعدك بأي سؤال عن خدمات الليزر، الأسعار، أو المواعيد.",
@@ -322,6 +336,7 @@ def _build_out_of_scope_reply(lang: str) -> str:
         "fr": "Je peux uniquement aider concernant les services de la clinique Linas Laser : services laser, prix et rendez-vous.",
     }
     return messages.get((lang or "ar").lower(), messages["ar"])
+
 
 def _unwrap_embedded_json_reply(text: str) -> str:
     """
@@ -341,6 +356,7 @@ def _unwrap_embedded_json_reply(text: str) -> str:
         value = str(parsed.get("bot_reply") or "").strip()
     return value
 
+
 def _clean_reply_text(text: str) -> str:
     value = _unwrap_embedded_json_reply(text)
     value = value.replace("\r\n", "\n").replace("\r", "\n")
@@ -348,15 +364,18 @@ def _clean_reply_text(text: str) -> str:
     value = re.sub(r"[ \t]+", " ", value)
     return value.strip()
 
+
 def _tokenize_intent_words(text: str) -> set:
     normalized = _clean_reply_text(text).lower()
     return set(re.findall(r"[a-zA-Z0-9\u0600-\u06FF]+", normalized, re.UNICODE))
+
 
 def _looks_like_booking_offer_confirmation_question(reply_text: str) -> bool:
     cleaned = _clean_reply_text(reply_text)
     if not cleaned or ("؟" not in cleaned and "?" not in cleaned):
         return False
     return bool(BOOKING_OFFER_QUESTION_RE.search(cleaned))
+
 
 def _classify_booking_offer_confirmation_reply(user_text: str) -> str:
     normalized = _clean_reply_text(user_text).lower()
@@ -379,6 +398,7 @@ def _classify_booking_offer_confirmation_reply(user_text: str) -> str:
 
     return ""
 
+
 def _build_booking_followup_question(lang: str) -> str:
     messages = {
         "ar": "أكيد، خلّينا نحجز موعد جديد. لأي خدمة بتحب تحجز؟",
@@ -387,6 +407,7 @@ def _build_booking_followup_question(lang: str) -> str:
         "fr": "Bien sûr, prenons un nouveau rendez-vous. Pour quel service souhaitez-vous réserver ?",
     }
     return messages.get((lang or "ar").lower(), messages["ar"])
+
 
 def _build_booking_decline_reply(lang: str) -> str:
     messages = {
@@ -397,11 +418,13 @@ def _build_booking_decline_reply(lang: str) -> str:
     }
     return messages.get((lang or "ar").lower(), messages["ar"])
 
+
 def _looks_like_greeting_unit(unit: str) -> bool:
     probe = _clean_reply_text(unit).lower()
     if not probe:
         return False
     return probe.startswith(GREETING_OPENERS)
+
 
 def _strip_leading_greeting_phrase(text: str) -> str:
     cleaned = _clean_reply_text(text)
@@ -415,4 +438,3 @@ def _strip_leading_greeting_phrase(text: str) -> str:
     without_address = _LEADING_ADDRESS_RE.sub("", without_greeting, count=1).strip()
     without_address = re.sub(r"^[،,:;!\-–—]+\s*", "", without_address).strip()
     return without_address or cleaned
-

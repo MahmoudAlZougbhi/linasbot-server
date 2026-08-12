@@ -99,4 +99,3 @@ def get_firestore_db() -> Any:
         print("[auth:Firestore] get_firestore_db: triggering initialize_firestore (lazy init)", flush=True)
         initialize_firestore()
     return _firestore_db
-

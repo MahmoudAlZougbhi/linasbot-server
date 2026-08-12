@@ -81,7 +81,9 @@ async def send_test_message(request_data: dict[str, Any]) -> Any:
                     if stored_phone_full or stored_phone_clean:
                         print(f"   Checking user_id=...{str(user_id)[-4:]}:")
                         print(f"     phone_full_last4: ***{str(stored_phone_full)[-4:] if stored_phone_full else ''}")
-                        print(f"     phone_clean_last4: ***{str(stored_phone_clean)[-4:] if stored_phone_clean else ''}")
+                        print(
+                            f"     phone_clean_last4: ***{str(stored_phone_clean)[-4:] if stored_phone_clean else ''}"
+                        )
 
                     # Clean both for comparison
                     stored_phone_full_clean = (
@@ -159,7 +161,9 @@ async def send_test_message(request_data: dict[str, Any]) -> Any:
             result = await adapter.send_text_message(to_number=room_id, message=message)
 
             if result.get("dry_run"):
-                print(f"📋 [DRY-RUN] Test message would be sent to ***{str(phone_number)[-4:] if phone_number else ''} (room {room_id})")
+                print(
+                    f"📋 [DRY-RUN] Test message would be sent to ***{str(phone_number)[-4:] if phone_number else ''} (room {room_id})"
+                )
                 return {
                     "success": True,
                     "message": f"Dry-run: message not sent (local/sandbox mode). Would send to {phone_number}.",
@@ -168,7 +172,9 @@ async def send_test_message(request_data: dict[str, Any]) -> Any:
                     "dry_run": True,
                 }
             if result.get("success"):
-                print(f"✅ Test message sent successfully to ***{str(phone_number)[-4:] if phone_number else ''} (room {room_id})")
+                print(
+                    f"✅ Test message sent successfully to ***{str(phone_number)[-4:] if phone_number else ''} (room {room_id})"
+                )
 
                 # Save to conversation history for continuous context
                 from utils.utils import save_conversation_message_to_firestore
@@ -182,7 +188,9 @@ async def send_test_message(request_data: dict[str, Any]) -> Any:
                     phone_number=phone_number,
                     metadata={"source": "smart_message", "type": template_id or "test_message"},
                 )
-                print(f"💾 Saved test message to conversation history for ***{str(phone_number)[-4:] if phone_number else ''}")
+                print(
+                    f"💾 Saved test message to conversation history for ***{str(phone_number)[-4:] if phone_number else ''}"
+                )
 
                 return {
                     "success": True,
@@ -194,7 +202,9 @@ async def send_test_message(request_data: dict[str, Any]) -> Any:
                 }
             else:
                 error_msg = result.get("error", "Unknown error")
-                print(f"❌ Failed to send test message to ***{str(phone_number)[-4:] if phone_number else ''} - {error_msg}")
+                print(
+                    f"❌ Failed to send test message to ***{str(phone_number)[-4:] if phone_number else ''} - {error_msg}"
+                )
                 return {"success": False, "error": f"Failed to send message: {error_msg}"}
 
         except Exception as lookup_error:
@@ -210,5 +220,3 @@ async def send_test_message(request_data: dict[str, Any]) -> Any:
 
         traceback.print_exc()
         return {"success": False, "error": f"Failed to send test message: {str(e)}"}
-
-

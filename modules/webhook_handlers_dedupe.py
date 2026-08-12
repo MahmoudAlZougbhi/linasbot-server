@@ -37,7 +37,6 @@ def _extract_text_from_content(content: Any) -> str:
     return str(content or "")
 
 
-
 def _webhook_text_body_fingerprint(parsed_message: dict[str, Any]) -> str:
     """
     Stable key for short-window text dedupe (same logical sender + same body).
@@ -284,5 +283,3 @@ async def await_whatsapp_delayed_processing(user_id: str) -> None:
         print(f"❌ [webhook] Delayed processing failed for user_id=...{str(user_id)[-4:]}: {e}")
     finally:
         _delayed_processing_tasks.pop(user_id, None)
-
-

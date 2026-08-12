@@ -149,7 +149,9 @@ async def update_paused_appointment(
     """
     phone_clean = _phone_clean_for_appointment_api(phone)
     path = (os.getenv("LINASLASER_UPDATE_PAUSED_APPOINTMENT_PATH") or "appointments/edit").strip().lstrip("/")
-    print(f"API Call: update_paused_appointment appointment_id={appointment_id}, phone=***{str(phone_clean)[-4:] if phone_clean else ''}, path={path}")
+    print(
+        f"API Call: update_paused_appointment appointment_id={appointment_id}, phone=***{str(phone_clean)[-4:] if phone_clean else ''}, path={path}"
+    )
 
     json_data: dict = {
         "appointment_id": int(appointment_id),
@@ -231,4 +233,3 @@ async def update_paused_appointment(
             },
         )
     return response
-

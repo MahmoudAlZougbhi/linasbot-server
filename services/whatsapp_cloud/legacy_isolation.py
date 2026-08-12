@@ -53,9 +53,7 @@ def cloud_bound_display_digits() -> set[str]:
         raise
     except Exception as exc:
         emit_wa_event("legacy_isolation_scan_failed", error=type(exc).__name__)
-        raise LegacyIsolationScanError(
-            "Cloud bind scan failed; refusing to treat as empty (fail closed)"
-        ) from exc
+        raise LegacyIsolationScanError("Cloud bind scan failed; refusing to treat as empty (fail closed)") from exc
 
 
 def assert_no_monty_cloud_dual_bind() -> dict[str, Any]:
@@ -68,9 +66,7 @@ def assert_no_monty_cloud_dual_bind() -> dict[str, Any]:
         cloud = cloud_bound_display_digits()
     except LegacyIsolationScanError as exc:
         emit_wa_event("legacy_isolation_assert_scan_failed", error=type(exc).__name__)
-        raise RuntimeError(
-            "Fail closed: cannot verify Monty/Cloud isolation (Cloud bind scan failed)."
-        ) from exc
+        raise RuntimeError("Fail closed: cannot verify Monty/Cloud isolation (Cloud bind scan failed).") from exc
     # Compare full digits and last4.
     overlap = False
     if monty in cloud:

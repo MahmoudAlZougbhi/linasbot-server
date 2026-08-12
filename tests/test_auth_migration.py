@@ -46,7 +46,9 @@ def test_password_epoch_invalidates_session_without_default_password():
         email="owner@example.com",
         role="admin",
         permissions=None,
-        password_epoch=0, tenant_id="linas")
+        password_epoch=0,
+        tenant_id="linas",
+    )
     cookie = svc.cookie_value_for(record)
     assert svc.get_valid_session(cookie) is not None
 
@@ -68,7 +70,9 @@ def test_session_expiry_and_revoke():
         role="viewer",
         permissions=None,
         password_epoch=0,
-        ttl_seconds=1, tenant_id="linas")
+        ttl_seconds=1,
+        tenant_id="linas",
+    )
     cookie = svc.cookie_value_for(record)
     with patch("services.user_service.user_service.get_user_by_id", return_value=None):
         assert svc.get_valid_session(cookie) is not None

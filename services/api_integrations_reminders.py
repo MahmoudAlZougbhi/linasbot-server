@@ -75,7 +75,9 @@ async def check_next_appointment(phone: str, user_code: str | None = None) -> An
     if phone_clean.startswith("961"):
         phone_clean = phone_clean[3:]  # Remove Lebanon country code
 
-    print(f"API Call: check_next_appointment for phone=***{str(phone_clean)[-4:] if phone_clean else ''} (original_last4=***{str(phone)[-4:] if phone else ''}), user_code={user_code}")
+    print(
+        f"API Call: check_next_appointment for phone=***{str(phone_clean)[-4:] if phone_clean else ''} (original_last4=***{str(phone)[-4:] if phone else ''}), user_code={user_code}"
+    )
     params = {"phone": phone_clean}
     if user_code:
         params["user_code"] = user_code
@@ -200,7 +202,9 @@ async def check_appointment_payment(phone: str, user_code: str | None = None) ->
     if phone_clean.startswith("961"):
         phone_clean = phone_clean[3:]  # Remove Lebanon country code
 
-    print(f"API Call: check_appointment_payment for phone=***{str(phone_clean)[-4:] if phone_clean else ''} (original_last4=***{str(phone)[-4:] if phone else ''}), user_code={user_code}")
+    print(
+        f"API Call: check_appointment_payment for phone=***{str(phone_clean)[-4:] if phone_clean else ''} (original_last4=***{str(phone)[-4:] if phone else ''}), user_code={user_code}"
+    )
     params = {"phone": phone_clean}
     if user_code:
         params["user_code"] = user_code
@@ -365,4 +369,3 @@ async def get_appointment_details(appointment_id: int) -> Any:
             },
         )
     return response
-

@@ -133,5 +133,3 @@ def _env_float(name: str, default: float) -> float:
 def _env_bool(name: str, default: bool = False) -> bool:
     raw = os.getenv(name, "true" if default else "false")
     return str(raw).strip().lower() in {"1", "true", "yes", "on"}
-
-

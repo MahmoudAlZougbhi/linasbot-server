@@ -131,9 +131,7 @@ async def handle_execute_api_tool(ns: Any) -> Any:
                                     f"DEBUG: check_next_appointment enriched with {len(ns.all_apts)} customer_appointments"
                                 )
                     except Exception as enrich_e:
-                        print(
-                            f"WARNING: check_next_appointment enrich get_customer_appointments failed: {enrich_e}"
-                        )
+                        print(f"WARNING: check_next_appointment enrich get_customer_appointments failed: {enrich_e}")
                 ns.check_next_appointment_result = ns.tool_output
                 print("DEBUG: Stored check_next_appointment result for auto-chaining")
 
@@ -181,9 +179,7 @@ async def handle_execute_api_tool(ns: Any) -> Any:
                     else (str(ns.machine_info) if ns.machine_info else "unassigned")
                 )
 
-                print(
-                    f"📊 Analytics: Service tracked from appointment - {ns.service_name}, Machine: {ns.machine_name}"
-                )
+                print(f"📊 Analytics: Service tracked from appointment - {ns.service_name}, Machine: {ns.machine_name}")
 
                 # Log appointment booking
                 analytics.log_appointment(
@@ -209,9 +205,7 @@ async def handle_execute_api_tool(ns: Any) -> Any:
                 and not ns.tool_output.get("success")
             ):
                 ns._api = (
-                    ns.tool_output.get("api_response")
-                    if isinstance(ns.tool_output.get("api_response"), dict)
-                    else {}
+                    ns.tool_output.get("api_response") if isinstance(ns.tool_output.get("api_response"), dict) else {}
                 )
                 ns.err_msg_raw = (
                     ns._api.get("message")
@@ -231,8 +225,7 @@ async def handle_execute_api_tool(ns: Any) -> Any:
 
             # 📊 ANALYTICS: Track appointment reschedule
             elif (
-                ns.function_name
-                in ("update_appointment_date", "update_paused_appointment", "edit_appointment")
+                ns.function_name in ("update_appointment_date", "update_paused_appointment", "edit_appointment")
                 and isinstance(ns.tool_output, dict)
                 and ns.tool_output.get("success")
             ):
@@ -304,8 +297,7 @@ async def handle_execute_api_tool(ns: Any) -> Any:
                 if ns.target_row_was_paused:
                     ns.paused_followup_update_succeeded = True
             elif (
-                ns.function_name
-                in ("update_appointment_date", "update_paused_appointment", "edit_appointment")
+                ns.function_name in ("update_appointment_date", "update_paused_appointment", "edit_appointment")
                 and isinstance(ns.tool_output, dict)
                 and not ns.tool_output.get("success")
             ):

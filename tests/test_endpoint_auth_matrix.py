@@ -153,10 +153,8 @@ def _clear_client_auth(client: TestClient) -> None:
 
 def _set_admin_session(client: TestClient, *, with_csrf_header: bool = False) -> str:
     rec = session_service.create_session(
-        user_id="matrix-admin",
-        email="matrix-admin@example.com",
-        role="admin",
-        permissions=None, tenant_id="linas")
+        user_id="matrix-admin", email="matrix-admin@example.com", role="admin", permissions=None, tenant_id="linas"
+    )
     client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
     client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
     if with_csrf_header:
@@ -344,7 +342,9 @@ class TestLiveChatDebugElevation:
             user_id="matrix-operator",
             email="matrix-operator@example.com",
             role="operator",
-            permissions=None, tenant_id="linas")
+            permissions=None,
+            tenant_id="linas",
+        )
         client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
         client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
         if with_csrf_header:

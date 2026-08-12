@@ -1,4 +1,5 @@
 """Core _process_and_respond phase 6."""
+
 from __future__ import annotations
 
 import asyncio
@@ -31,21 +32,21 @@ def _coerce_unauthorized_to_wa_me(
 
 
 async def text_handlers_respond_phase6(ctx: dict):
-    canonical_user_id = ctx.get('canonical_user_id')
-    current_conversation_id = ctx.get('current_conversation_id')
-    current_gender = ctx.get('current_gender')
-    current_preferred_lang = ctx.get('current_preferred_lang')
-    db = ctx.get('db')
-    e = ctx.get('e')
-    get_canonical_user_id_and_phone = ctx.get('get_canonical_user_id_and_phone')
-    get_dynamic_message = ctx.get('get_dynamic_message')
-    get_firestore_db = ctx.get('get_firestore_db')
-    gpt_response_data = ctx.get('gpt_response_data')
-    is_post_takeover_escalation_cooldown = ctx.get('is_post_takeover_escalation_cooldown')
-    user_data = ctx.get('user_data')
-    user_id = ctx.get('user_id')
-    user_input_to_process = ctx.get('user_input_to_process')
-    users_coll = ctx.get('users_coll')
+    canonical_user_id = ctx.get("canonical_user_id")
+    current_conversation_id = ctx.get("current_conversation_id")
+    current_gender = ctx.get("current_gender")
+    current_preferred_lang = ctx.get("current_preferred_lang")
+    db = ctx.get("db")
+    e = ctx.get("e")
+    get_canonical_user_id_and_phone = ctx.get("get_canonical_user_id_and_phone")
+    get_dynamic_message = ctx.get("get_dynamic_message")
+    get_firestore_db = ctx.get("get_firestore_db")
+    gpt_response_data = ctx.get("gpt_response_data")
+    is_post_takeover_escalation_cooldown = ctx.get("is_post_takeover_escalation_cooldown")
+    user_data = ctx.get("user_data")
+    user_id = ctx.get("user_id")
+    user_input_to_process = ctx.get("user_input_to_process")
+    users_coll = ctx.get("users_coll")
     if not gpt_response_data:
         print("[_process_and_respond] ERROR: gpt_response_data is empty — synthesizing fallback reply")
         gpt_response_data = {
@@ -123,7 +124,9 @@ async def text_handlers_respond_phase6(ctx: dict):
                 or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
             )
             action = "answer_question"
-            print(f"[_process_and_respond] GPT error but user ...{str(user_id)[-4:]} in waiting queue → sending waiting message")
+            print(
+                f"[_process_and_respond] GPT error but user ...{str(user_id)[-4:]} in waiting queue → sending waiting message"
+            )
         else:
             action, bot_reply_text = _coerce_unauthorized_to_wa_me(
                 user_data=user_data,
@@ -251,16 +254,55 @@ async def text_handlers_respond_phase6(ctx: dict):
         and not _user_explicitly_requests_human_agent(user_input_to_process)
         and not flow_meta.get("booking_retry_exceeded")
     ):
-        print(
-            "[_process_and_respond] unauthorized human_handover without explicit user request → wa.me handoff"
-        )
+        print("[_process_and_respond] unauthorized human_handover without explicit user request → wa.me handoff")
         action, bot_reply_text = _coerce_unauthorized_to_wa_me(
             user_data=user_data,
             current_preferred_lang=current_preferred_lang,
             reason="ai_human_handover_without_user_request",
         )
         escalation_reason_from_gpt = None
-    _pack = ['_', '_clean_reply_text', '_flow_error_reason', '_flow_meta_has_crm_booking_confirmation', '_handover_offer_needs_confirmation', '_reply_claims_booking_done', '_reply_offers_handover_confirmation', '_user_explicitly_requests_human_agent', 'action', 'action_was_coerced', 'bad_action', 'booking_retry', 'bot_reply_text', 'canonical_user_id', 'current_conversation_id', 'current_gender', 'current_preferred_lang', 'd', 'db', 'detected_gender_from_gpt', 'detected_language', 'detected_name_from_gpt', 'e', 'escalation_reason_from_gpt', 'flow_meta', 'get_canonical_user_id_and_phone', 'get_dynamic_message', 'get_firestore_db', 'gpt_response_data', 'handover_degree', 'in_waiting', 'is_post_takeover_escalation_cooldown', 'known_actions', 'ref', 'snap', 'uid', 'user_data', 'user_id', 'user_input_to_process', 'users_coll']
+    _pack = [
+        "_",
+        "_clean_reply_text",
+        "_flow_error_reason",
+        "_flow_meta_has_crm_booking_confirmation",
+        "_handover_offer_needs_confirmation",
+        "_reply_claims_booking_done",
+        "_reply_offers_handover_confirmation",
+        "_user_explicitly_requests_human_agent",
+        "action",
+        "action_was_coerced",
+        "bad_action",
+        "booking_retry",
+        "bot_reply_text",
+        "canonical_user_id",
+        "current_conversation_id",
+        "current_gender",
+        "current_preferred_lang",
+        "d",
+        "db",
+        "detected_gender_from_gpt",
+        "detected_language",
+        "detected_name_from_gpt",
+        "e",
+        "escalation_reason_from_gpt",
+        "flow_meta",
+        "get_canonical_user_id_and_phone",
+        "get_dynamic_message",
+        "get_firestore_db",
+        "gpt_response_data",
+        "handover_degree",
+        "in_waiting",
+        "is_post_takeover_escalation_cooldown",
+        "known_actions",
+        "ref",
+        "snap",
+        "uid",
+        "user_data",
+        "user_id",
+        "user_input_to_process",
+        "users_coll",
+    ]
     for _k in _pack:
         if _k in locals():
             ctx[_k] = locals()[_k]
