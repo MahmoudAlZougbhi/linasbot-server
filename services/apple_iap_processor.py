@@ -58,9 +58,7 @@ def process_signed_transaction(
         payload = decode_jws_payload(signed_transaction_jws)
 
     try:
-        tid_resolved, token_user = resolve_tenant(
-            tenant_id=tenant_id, payload=payload, source=source
-        )
+        tid_resolved, token_user = resolve_tenant(tenant_id=tenant_id, payload=payload, source=source)
     except ValueError as exc:
         raise AppleIapProcessorError(str(exc)) from exc
     uid = user_id or token_user or None
@@ -222,9 +220,7 @@ def process_notification_v2(body: dict[str, Any]) -> dict[str, Any]:
                     notification_type,
                 )
         elif action == "consumption":
-            result.update(
-                handle_consumption_request(payload=txn_payload, related_transaction_id=related_tid)
-            )
+            result.update(handle_consumption_request(payload=txn_payload, related_transaction_id=related_tid))
         elif action == "refund_reversed":
             if txn_payload is None:
                 raise AppleJwsError("signedTransactionInfo required for REFUND_REVERSED")
@@ -265,9 +261,7 @@ def process_notification_v2(body: dict[str, Any]) -> dict[str, Any]:
                     status=classified.get("status"),
                 )
         elif action == "error":
-            raise AppleIapProcessorError(
-                classified.get("reason") or f"unhandled ASSN action for {notification_type}"
-            )
+            raise AppleIapProcessorError(classified.get("reason") or f"unhandled ASSN action for {notification_type}")
         else:
             raise AppleIapProcessorError(f"unknown ASSN action: {action}")
 

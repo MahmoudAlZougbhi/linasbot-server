@@ -178,9 +178,7 @@ def test_normalize_no_longer_defaults_active() -> None:
     "ntype",
     ["PRICE_INCREASE", "RENEWAL_EXTENDED", "DID_CHANGE_RENEWAL_PREF"],
 )
-def test_processor_metadata_types_not_active(
-    apple_env: Path, monkeypatch: pytest.MonkeyPatch, ntype: str
-) -> None:
+def test_processor_metadata_types_not_active(apple_env: Path, monkeypatch: pytest.MonkeyPatch, ntype: str) -> None:
     token = get_or_create_app_account_token(tenant_id="tenant_meta", user_id="user_meta")
     txn = _sub_payload(transaction_id=f"txn_meta_{ntype}", app_account_token=token)
     outer = {
@@ -200,9 +198,7 @@ def test_processor_metadata_types_not_active(
     assert ent.status == "none"
 
 
-def test_processor_one_time_charge_consumable(
-    apple_env: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_processor_one_time_charge_consumable(apple_env: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     token = get_or_create_app_account_token(tenant_id="tenant_otc", user_id="user_otc")
     txn = _credit_payload(transaction_id="txn_otc_1", app_account_token=token)
     outer = {
@@ -222,9 +218,7 @@ def test_processor_one_time_charge_consumable(
     assert entitlements_store.get("tenant_otc").status == "none"
 
 
-def test_processor_one_time_charge_subscription_skipped(
-    apple_env: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_processor_one_time_charge_subscription_skipped(apple_env: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     token = get_or_create_app_account_token(tenant_id="tenant_otc_sub", user_id="u")
     txn = _sub_payload(transaction_id="txn_otc_sub", app_account_token=token)
     outer = {
@@ -240,9 +234,7 @@ def test_processor_one_time_charge_subscription_skipped(
     assert entitlements_store.get("tenant_otc_sub").status == "none"
 
 
-def test_processor_unknown_type_ignored_no_effect(
-    apple_env: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_processor_unknown_type_ignored_no_effect(apple_env: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     token = get_or_create_app_account_token(tenant_id="tenant_unk", user_id="u")
     txn = _sub_payload(transaction_id="txn_unk", app_account_token=token)
     nuid = str(uuid.uuid4())
@@ -267,9 +259,7 @@ def test_processor_unknown_type_ignored_no_effect(
 # --- B) signedRenewalInfo ---
 
 
-def test_signed_renewal_info_grace_and_cancel(
-    apple_env: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_signed_renewal_info_grace_and_cancel(apple_env: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     token = get_or_create_app_account_token(tenant_id="tenant_ren", user_id="user_ren")
     txn = _sub_payload(transaction_id="txn_ren_1", app_account_token=token)
     # First activate via SUBSCRIBED
@@ -374,9 +364,7 @@ def test_failed_can_be_redriven(apple_env: Path) -> None:
     assert again.get("retried") is True
 
 
-def test_concurrent_notification_one_effect(
-    apple_env: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_concurrent_notification_one_effect(apple_env: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     token = get_or_create_app_account_token(tenant_id="tenant_race", user_id="user_race")
     txn = _sub_payload(transaction_id="txn_race_1", app_account_token=token)
     nuid = str(uuid.uuid4())

@@ -250,9 +250,11 @@ def process_pending_revokes(limit: int = 25) -> dict[str, Any]:
     with whatsapp_session() as session:
         rows = list(
             session.execute(
-                select(AuthExternalIdentityRow).where(
+                select(AuthExternalIdentityRow)
+                .where(
                     AuthExternalIdentityRow.provider == PROVIDER_APPLE,
-                ).limit(500)
+                )
+                .limit(500)
             )
             .scalars()
             .all()

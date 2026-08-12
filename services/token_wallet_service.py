@@ -14,7 +14,6 @@ Persistence via LINAS_BILLING_BACKEND=file|postgres (default postgres).
 Models/helpers: token_wallet_models (LOC split).
 """
 
-
 from __future__ import annotations
 
 import threading

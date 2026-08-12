@@ -71,8 +71,7 @@ def require_billing_pg_session() -> Iterator[Session]:
             yield session
     except WhatsAppDatabaseUnavailable as exc:
         raise BillingBackendError(
-            "Billing Postgres backend is unavailable (LINAS_BILLING_BACKEND=postgres). "
-            "File SoT is not a live fallback."
+            "Billing Postgres backend is unavailable (LINAS_BILLING_BACKEND=postgres). File SoT is not a live fallback."
         ) from exc
 
 
@@ -80,9 +79,7 @@ def require_billing_pg_session() -> Iterator[Session]:
 def require_auth_token_pg_session() -> Iterator[Session]:
     """Postgres session for auth-token SoT. Never falls back to file."""
     if not auth_tokens_use_postgres():
-        raise BillingBackendError(
-            "Auth-token Postgres session requested but LINAS_AUTH_TOKEN_BACKEND is not postgres"
-        )
+        raise BillingBackendError("Auth-token Postgres session requested but LINAS_AUTH_TOKEN_BACKEND is not postgres")
     from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
 
     try:

@@ -239,9 +239,7 @@ def handle_apply_txn(
 
     product_id = str(txn_payload.get("productId") or "").strip()
     transaction_id = str(txn_payload.get("transactionId") or "").strip()
-    original_transaction_id = str(
-        txn_payload.get("originalTransactionId") or transaction_id
-    ).strip()
+    original_transaction_id = str(txn_payload.get("originalTransactionId") or transaction_id).strip()
     if not product_id or not transaction_id:
         raise ValueError("transaction payload missing productId/transactionId")
     kind = classify_product(product_id)

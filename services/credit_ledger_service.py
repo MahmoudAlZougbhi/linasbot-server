@@ -3,7 +3,6 @@
 Postgres SoT when LINAS_BILLING_BACKEND=postgres (default); file when explicitly set.
 """
 
-
 from __future__ import annotations
 
 import json

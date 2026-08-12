@@ -101,9 +101,7 @@ def decode_and_apply_renewal_info(
 
     effect: dict[str, Any] | None = None
     tid = _resolve_tenant_id(tenant_id, txn_payload)
-    product_id = str(
-        auto_renew_product_id or txn_payload.get("productId") or ""
-    ).strip()
+    product_id = str(auto_renew_product_id or txn_payload.get("productId") or "").strip()
     original_transaction_id = str(
         renewal.get("originalTransactionId")
         or txn_payload.get("originalTransactionId")
@@ -117,13 +115,7 @@ def decode_and_apply_renewal_info(
     elif lifecycle == "canceled":
         status_to_apply = "canceled"
 
-    if (
-        tid
-        and status_to_apply
-        and product_id
-        and original_transaction_id
-        and is_subscription_product(product_id)
-    ):
+    if tid and status_to_apply and product_id and original_transaction_id and is_subscription_product(product_id):
         ntype = (notification_type or "RENEWAL_INFO").upper()
         effect = apply_subscription_effect(
             tenant_id=tid,

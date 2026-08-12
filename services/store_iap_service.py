@@ -95,9 +95,7 @@ def normalize_apple_status(notification_type: str) -> EntitlementStatus:
 
     status = status_for_notification_type(notification_type)
     if status is None:
-        raise ValueError(
-            f"ASSN notification type does not map to an entitlement status: {notification_type}"
-        )
+        raise ValueError(f"ASSN notification type does not map to an entitlement status: {notification_type}")
     return status
 
 

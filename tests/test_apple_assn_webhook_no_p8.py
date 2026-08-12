@@ -50,9 +50,7 @@ def apple_env_no_p8(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 @pytest.mark.asyncio
-async def test_assn_webhook_works_without_p8(
-    apple_env_no_p8: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_assn_webhook_works_without_p8(apple_env_no_p8: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from services.apple_app_store_client import iap_credentials_configured
 
     assert iap_credentials_configured() is False

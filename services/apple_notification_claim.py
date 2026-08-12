@@ -68,8 +68,7 @@ def claim_notification(
                         subtype=subtype if subtype is not None else existing.subtype,
                         environment=env,
                         signed_payload_sha256=signed_payload_sha256,
-                        related_transaction_id=related_transaction_id
-                        or existing.related_transaction_id,
+                        related_transaction_id=related_transaction_id or existing.related_transaction_id,
                         result={},
                     )
                 )
