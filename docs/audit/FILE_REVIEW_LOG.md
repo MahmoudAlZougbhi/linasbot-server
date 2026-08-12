@@ -8,10 +8,10 @@ Audit-only. Application source is not modified.
 |--------|-------|
 | Tracked files (`git ls-files`) | 1539 |
 | Inventory rows | 1539 |
-| COMPLETE | 55 |
-| UNREVIEWED | 1484 |
+| COMPLETE | 85 |
+| UNREVIEWED | 1454 |
 | IN_REVIEW | 0 |
-| Last batch | Batch 2 (seq 26–55) |
+| Last batch | Batch 3 (seq 56–85) |
 | Last audit commit | 4d5da86c4be500d959bbe4af988f93ebc1343815 |
 
 ---
@@ -106,3 +106,22 @@ COMPLETE **25 / 1539**
 ### Cumulative
 
 COMPLETE **55 / 1539**
+
+---
+
+## Batch 3 — seq 56–85 (2026-08-12)
+
+### Files opened and fully read
+
+- Text/config: `dashboard/Dockerfile.prod`, `README.md`, e2e specs, eslint, index.html, jsconfig, nginx, package.json, playwright, postcss, both landing SVGs
+- Inspected (not source-read): `package-lock.json` (GENERATED_SKIP); PNG/JPG landing assets via metadata + `landingDesignAssets.js` refs
+
+### Findings
+
+- Seq 57 README MOVE_TO_ARCHIVE (tradershubs.site, port 8001, stale features)
+- Seq 59/61/68–85 LANDING_KEEP
+- Seq 64 GENERATED_SKIP
+
+### Cumulative
+
+COMPLETE **85 / 1539**
