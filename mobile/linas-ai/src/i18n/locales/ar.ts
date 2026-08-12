@@ -1,6 +1,7 @@
 import { subscriptionAr } from './subscriptionAr';
 import { smartFollowUpAr } from './smartFollowUpAr';
 import { whatsappAr } from './whatsappAr';
+import { requestsAr } from './requestsAr';
 import type { StringKey } from './en';
 
 export const ar = {
@@ -346,6 +347,7 @@ export const ar = {
   ...subscriptionAr,
   ...whatsappAr,
   ...smartFollowUpAr,
+  ...requestsAr,
 
   proposalChangeTitle: 'تعديل إعداد الذكاء الاصطناعي',
   proposalDeleteTitle: 'حذف من إعداد الذكاء الاصطناعي',

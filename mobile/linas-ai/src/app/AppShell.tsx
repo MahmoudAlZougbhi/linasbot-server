@@ -130,6 +130,10 @@ export function AppShell() {
       setScreen({ name: 'livechat', open: null });
       return;
     }
+    if (area === 'requests') {
+      setScreen({ name: 'requests' });
+      return;
+    }
     if (area === 'notifications') {
       setScreen({ name: 'notifications', backTo: 'chat' });
       return;

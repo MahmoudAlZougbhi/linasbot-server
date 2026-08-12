@@ -16,6 +16,7 @@ import { FaqRoute } from '../features/faq/FaqRoute';
 import { IntegrationsScreen } from '../features/integrations/IntegrationsScreen';
 import { LiveChatScreen } from '../features/livechat/LiveChatScreen';
 import { NotificationsScreen } from '../features/notifications/NotificationsScreen';
+import { RequestsScreen } from '../features/requests/RequestsScreen';
 import { OwnerPortalScreen } from '../features/control/OwnerPortalScreen';
 import { SettingsScreen } from '../features/settings/SettingsScreen';
 import { SmartFollowUpScreen } from '../features/smartFollowUp/SmartFollowUpScreen';
@@ -127,6 +128,11 @@ export function AppScreenTree({
       </KeepMountedPane>
       <KeepMountedPane key={`livechat-${authEpoch}`} active={name === 'livechat'}>
         <LiveChatScreen initialOpen={name === 'livechat' ? (screen.open ?? null) : null} />
+      </KeepMountedPane>
+      <KeepMountedPane key={`requests-${authEpoch}`} active={name === 'requests'}>
+        <RequestsScreen
+          onOpenLiveChat={(target) => setScreen({ name: 'livechat', open: target })}
+        />
       </KeepMountedPane>
       <KeepMountedPane key={`notifications-${authEpoch}`} active={name === 'notifications'}>
         <NotificationsScreen

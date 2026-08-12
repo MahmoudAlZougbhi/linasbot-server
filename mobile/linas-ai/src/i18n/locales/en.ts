@@ -1,6 +1,7 @@
 import { subscriptionEn } from './subscriptionEn';
 import { smartFollowUpEn } from './smartFollowUpEn';
 import { whatsappEn } from './whatsappEn';
+import { requestsEn } from './requestsEn';
 
 export const en = {
   appName: 'Linas AI',
@@ -348,6 +349,7 @@ export const en = {
   ...subscriptionEn,
   ...whatsappEn,
   ...smartFollowUpEn,
+  ...requestsEn,
 
   proposalChangeTitle: 'AI Setup change',
   proposalDeleteTitle: 'Delete from AI Setup',

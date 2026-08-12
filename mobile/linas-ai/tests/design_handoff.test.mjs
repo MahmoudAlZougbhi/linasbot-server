@@ -28,6 +28,7 @@ test('drawer module order matches binding product order', () => {
     'smartFollowUp',
     'faq',
     'livechat',
+    'requests',
     'integrations',
     'users',
     'subscription',

@@ -18,10 +18,10 @@
 | 2 | Backend domain + APIs | **IN_PROGRESS** (core APIs + tests landed) |
 | 3 | AI Setup Requests & Appointments | **DONE** |
 | 4 | Customer AI request flow | PENDING |
-| 5 | Mobile Requests module | PENDING |
+| 5 | Mobile Requests module | **DONE** |
 | 6 | Chat with customer / manual mode | PENDING |
 | 7 | Channel delivery | PENDING |
-| 8 | BOC isolation (default OFF) | PENDING |
+| 8 | BOC isolation (default OFF) | **DONE** |
 | 9 | Security/correctness/performance tests | PENDING |
 | 10 | Independent review + PR closeout | PENDING |
 | 11 | Full file-by-file reinspection | PENDING |
@@ -91,7 +91,6 @@ All Quality Gates + Security Checks SUCCESS on PR head. No merge.
 - Mobile Requests UI
 - Manual chat pause/resume server authority
 - Remove forced wa.me appointment/order handoff when Requests capture active
-- BOC default-OFF gate + docs
 
 ---
 
@@ -120,6 +119,75 @@ All Quality Gates + Security Checks SUCCESS on PR head. No merge.
 
 ---
 
+## Phase 5 — Mobile Requests module
+
+| Field | Value |
+|------|-------|
+| Starting SHA | `41f8f7853357a1d9c31976e186b4c7fc26b9d845` |
+| Ending SHA | *(filled after commit)* |
+| Status | **DONE** |
+| Tests | `mobile/linas-ai`: `npm run typecheck` + `npm test` — **103 passed** |
+
+### Landed
+
+- Expo module `features/requests/*` against `/api/requests*` (list, get, assign, notes, final-action, notify-retry, setup-status)
+- Drawer tile **Requests / طلبات العملاء** with keep-mounted screen + permission gate (`requests`)
+- Home: status counters, type/status/platform/assignee/date filters, search, cursor pagination, pull-to-refresh, loading/empty/error/offline/setup-required
+- Cards omit full phone/address; detail shows permitted fields, timeline, notes, assign, type-specific final actions with message preview, notify retry
+- Chat with Customer → existing Live Chat (`external_customer_id` + `conversation_id`)
+- i18n EN/AR/FR (`requestsEn|Ar|Fr`); UserFormModal permission labels for Requests keys
+
+### Not changed
+
+- Operator web SPA (not restored)
+- Server/infra/migrations
+- Manual chat pause/resume authority (Phase 6)
+- Channel delivery / outbox workers (Phase 7)
+
+---
+
+## Phase 8 — BOC isolation (default OFF)
+
+| Field | Value |
+|------|-------|
+| Starting SHA | (pre-Phase-8 branch head) |
+| Ending SHA | *(filled after commit)* |
+| Status | **DONE** |
+| Gate | `LINASLASER_BOC_BOOKING_ENABLED` default **false** via `services/product_features.boc_booking_enabled()` |
+| Production | **Not enabled** |
+
+### Files
+
+- `services/product_features.py` — single gate + readiness/disabled payloads
+- `services/api_integrations_http.py` — zero HTTP when OFF
+- `modules/dashboard_api_health.py` — `/api/ready` `boc_booking` check
+- `services/chat_response_runtime_gpt.py` / `*_tool_execute.py` / `*_tool_submit.py` — tools withheld/refused
+- `services/booking/intent_pipeline.py`, `intent_pipeline_crm.py` — submit/create refuse when OFF
+- `services/appointment_scheduler*.py`, `modules/event_handlers_populate_jobs.py` — no job start
+- `docs/requests/BOC_FUTURE_INTEGRATION.md`, `.env.example`, `docs/PREDEPLOY_ENV_CHECKLIST.md`
+- `tests/test_boc_booking_isolation.py`
+
+### Tests
+
+```text
+.venv/bin/python -m pytest tests/test_boc_booking_isolation.py \
+  tests/test_wave3_saas_generics.py tests/test_dashboard_api_loc_split.py \
+  tests/test_appointment_scheduler_loc_split.py \
+  tests/test_wave4_reliability.py::TestReadyEndpoint \
+  tests/test_product_modules_disabled.py -q
+# → 25 passed
+```
+
+### Not changed
+
+- BOC repository / live BOC servers
+- Production migrations
+- `services/requests/*` domain
+- Mobile UI / CM section schemas
+
+---
+
 ## Resume notes
 
-Continue Phase 2 remaining + Phases 4–8 next. Do not merge until Phase 13 ready.
+Continue Phase 2 remaining + Phases 4–7, 9+. Do not merge until Phase 13 ready.
+Do not enable `LINASLASER_BOC_BOOKING_ENABLED` in production.

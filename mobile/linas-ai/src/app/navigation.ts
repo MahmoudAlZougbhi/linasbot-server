@@ -15,6 +15,7 @@ export type Screen =
   | { name: 'dashboard' }
   | { name: 'billing' }
   | { name: 'livechat'; open?: LiveChatOpen | null }
+  | { name: 'requests' }
   | { name: 'notifications'; backTo?: 'chat' | 'settings' }
   | { name: 'cm' }
   | {

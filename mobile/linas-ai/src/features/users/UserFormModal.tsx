@@ -41,6 +41,11 @@ const PERM_LABEL: Record<PermissionKey, StringKey> = {
   contentManagers: 'permContentManagers',
   contentPublish: 'permContentPublish',
   activityFlow: 'permActivityFlow',
+  requests: 'permRequests',
+  requestsManage: 'permRequestsManage',
+  requestsNotify: 'permRequestsNotify',
+  requestsManualChat: 'permRequestsManualChat',
+  requestsSensitive: 'permRequestsSensitive',
 };
 
 const ROLE_LABEL: Record<AssignableRole, StringKey> = {

@@ -1,6 +1,7 @@
 import { subscriptionFr } from './subscriptionFr';
 import { smartFollowUpFr } from './smartFollowUpFr';
 import { whatsappFr } from './whatsappFr';
+import { requestsFr } from './requestsFr';
 import type { StringKey } from './en';
 
 export const fr = {
@@ -352,6 +353,7 @@ export const fr = {
   ...subscriptionFr,
   ...whatsappFr,
   ...smartFollowUpFr,
+  ...requestsFr,
 
   proposalChangeTitle: 'Modification Configuration IA',
   proposalDeleteTitle: 'Supprimer de la Configuration IA',
