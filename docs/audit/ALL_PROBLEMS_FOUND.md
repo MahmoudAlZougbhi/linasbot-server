@@ -13,16 +13,17 @@ _Source: `docs/audit/FILE_INVENTORY.csv` after full Phase 0B + false-orphan corr
 
 | Disposition | Count |
 |---|---:|
-| KEEP_AS_IS | 1179 |
+| KEEP_AS_IS | 1145 |
 | MOVE_TO_ARCHIVE | 100 |
 | BINARY_ASSET_REVIEW | 81 |
-| KEEP_FIX | 77 |
+| KEEP_FIX | 100 |
 | LANDING_KEEP | 35 |
-| DELETE_CANDIDATE | 35 |
-| KEEP_SECURITY_FIX | 16 |
-| KEEP_MOBILE_API | 16 |
+| DELETE_CANDIDATE | 46 |
+| KEEP_SECURITY_FIX | 17 |
+| KEEP_MOBILE_API | 15 |
 | KEEP_PERFORMANCE_FIX | 3 |
 | GENERATED_SKIP | 2 |
+
 
 
 
@@ -30,6 +31,7 @@ _Source: `docs/audit/FILE_INVENTORY.csv` after full Phase 0B + false-orphan corr
 
 ## Top priority — `KEEP_SECURITY_FIX`
 
+- **Seq 535** `mobile/linas-ai/src/auth/guestSession.ts` — Guest IDs via Math.random not CSPRNG | `randomId` fills Uint8Array with Math.random | Prefer crypto.getRandomValues
 - **Seq 801** `modules/live_chat_api_debug.py` — Authenticated+liveChat via middleware but insufficient elevation: any liveChat operator can GET `/api/live-chat/debug-firestore` (dumps all conversation metadata) and POST `/api/live-chat/rebuild-index` | Registered via main→live_chat_api import; not public; non-linas tenants blocked | Unbounded Firestore streams — expensive
 - **Seq 6** `.github/workflows/dashboard-auth-secret-apply.yml` — Missing confirmation string gate on high-impact secret apply | NO confirmation input unlike sibling secret-apply workflows — anyone with Actions write on repo can rotate dashboard auth. Secret passed via envs to SSH (expected). | Fails if apply script missing
 - **Seq 7** `.github/workflows/deploy.yml` — Pin/update ssh-action version consistency; harden data backup path permissions; keep confirmation for emergency | Emergency bypass skips gate verification (documented). Uses appleboy/ssh-action@v1.0.3 while siblings use v1.2.0 (supply-chain version skew). data/ backup to /tmp/linasbot_data_backup_$$ then restore after hard reset — /tmp world-readable risk window if perms loose. | Restores data/ after reset so local data survives; relies on dep...
@@ -516,6 +518,8 @@ _Extra security notes listed: 52_
 ---
 
 ## Phase 0C addendum (integrity reconciliation)
+
+**Follow-up:** Late W0C-B1..B5 elevations merged post-`f2de99a` (guestSession KEEP_SECURITY_FIX; mobile orphans DELETE; api_integrations missing `import os` KEEP_FIX; live_chat_api debug JSONL KEEP_FIX).
 
 - Official security findings: **69** in `docs/audit/SECURITY_FINDINGS.md` (includes prior KEEP_SECURITY_FIX + converted extra notes + seq 801/870).
 - Known-concern reconciliation: `docs/audit/KNOWN_SECURITY_CONCERNS.md` (9/9 statuses assigned).

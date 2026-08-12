@@ -168,11 +168,11 @@ Full machine list snapshot: `docs/audit/_phase0c_reclassified.json` (working; ha
 
 | Class | Count |
 |---|---:|
-| KEEP_SECURITY_FIX (inventory) | 16 |
+| KEEP_SECURITY_FIX (inventory) | 17 |
 | Official SEC findings (all severities) | 69 |
-| KEEP_FIX (correctness/product) | 77 |
+| KEEP_FIX (correctness/product) | 100 |
 | KEEP_PERFORMANCE_FIX | 3 |
-| DELETE_CANDIDATE | 35 |
+| DELETE_CANDIDATE | 46 |
 | MOVE_TO_ARCHIVE | 100 |
 | KEEP_SPLIT | 0 |
 | Hand-written >500 LOC | 0 |
@@ -180,3 +180,9 @@ Full machine list snapshot: `docs/audit/_phase0c_reclassified.json` (working; ha
 ## 14. STOP
 
 Phase 0C complete for owner approval. **Do not begin Phase 1.**
+
+## 15. Follow-up elevation merge (same Phase 0C)
+
+After late W0C-B* completions, lead merged **35** remaining disposition elevations into `FILE_INVENTORY.csv` (notably seq 535 KEEP_SECURITY_FIX). App source still untouched.
+
+Post-follow-up totals: KEEP_SECURITY_FIX=17, KEEP_FIX=100, DELETE_CANDIDATE=46, KEEP_AS_IS=1145.

@@ -345,3 +345,10 @@ All PASS — see PHASE0C_RECONCILIATION.md.
 
 COMPLETE **1544 / 1544** (Phase 0C gate). STOP for owner approval — do not start Phase 1.
 
+### Phase 0C follow-up — late subagent elevation merge
+
+Merged remaining disposition elevations from W0C-B1..B5 JSON after initial commit `f2de99a`:
+- Seq **535** `guestSession.ts` → KEEP_SECURITY_FIX (Math.random entropy)
+- Additional KEEP_FIX / DELETE_CANDIDATE rows from mobile + modules + api_integrations
+- Official SECURITY_FINDINGS updated; inventory KEEP_SECURITY_FIX now **17**
+

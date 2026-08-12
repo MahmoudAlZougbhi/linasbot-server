@@ -19,11 +19,11 @@
 | Severity | Count |
 |----------|------:|
 | CRITICAL | 2 |
-| HIGH | 14 |
+| HIGH | 15 |
 | MEDIUM | 18 |
 | LOW | 16 |
 | INFO | 19 |
-| **TOTAL** | **69** |
+| **TOTAL** | **70** |
 
 ### Source breakdown
 
@@ -875,6 +875,18 @@
 - Cross-check known-concern reconciliation in `docs/audit/_phase0c_known_concerns.md`.
 
 ---
+
+
+### SEC-070 — HIGH — seq 535 `mobile/linas-ai/src/auth/guestSession.ts`
+
+- **Symbol/route:** `randomId` / `getOrCreateGuestSessionId`
+- **Exploit/failure scenario:** Guest session IDs filled via `Math.random` into `Uint8Array` instead of `crypto.getRandomValues` — more guessable guest ids across devices/sessions.
+- **Evidence:** ID entropy via Math.random filling Uint8Array — not crypto.getRandomValues; guest ids more guessable
+- **Disposition:** `KEEP_SECURITY_FIX`
+- **Required test:** Assert guest id generation uses CSPRNG (`getRandomValues`); collision/entropy smoke.
+- **Status:** OPEN
+- **Source bucket:** PHASE0C_FOLLOWUP (W0C-B1)
+
 
 ## Previously known security concerns (Phase 0C)
 
