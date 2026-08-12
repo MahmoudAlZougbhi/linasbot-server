@@ -124,7 +124,7 @@ All Quality Gates + Security Checks SUCCESS on PR head. No merge.
 | Field | Value |
 |------|-------|
 | Starting SHA | `41f8f7853357a1d9c31976e186b4c7fc26b9d845` |
-| Ending SHA | *(filled after commit)* |
+| Ending SHA | `62ce92d658970f5e0b6a5dd7c8d0d8ed72abc7a7` |
 | Status | **DONE** |
 | Tests | `mobile/linas-ai`: `npm run typecheck` + `npm test` — **103 passed** |
 
@@ -151,7 +151,7 @@ All Quality Gates + Security Checks SUCCESS on PR head. No merge.
 | Field | Value |
 |------|-------|
 | Starting SHA | (pre-Phase-8 branch head) |
-| Ending SHA | *(filled after commit)* |
+| Ending SHA |  |
 | Status | **DONE** |
 | Gate | `LINASLASER_BOC_BOOKING_ENABLED` default **false** via `services/product_features.boc_booking_enabled()` |
 | Production | **Not enabled** |
