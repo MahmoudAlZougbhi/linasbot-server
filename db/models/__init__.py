@@ -1,8 +1,15 @@
-"""ORM model package for WhatsApp Cloud PostgreSQL SoT."""
+"""ORM model package for PostgreSQL SoT (WhatsApp Cloud + Customer Requests)."""
 
 from __future__ import annotations
 
 from db.models.base import Base
+from db.models.requests import CustomerRequest, CustomerRequestCounter
+from db.models.requests_support import (
+    CustomerRequestEvent,
+    CustomerRequestIdempotency,
+    CustomerRequestNote,
+    CustomerRequestOutbox,
+)
 from db.models.whatsapp_cloud import (
     WhatsAppAuditEvent,
     WhatsAppConnection,
@@ -24,6 +31,12 @@ from db.models.whatsapp_smart_followup import (
 
 __all__ = [
     "Base",
+    "CustomerRequest",
+    "CustomerRequestCounter",
+    "CustomerRequestEvent",
+    "CustomerRequestIdempotency",
+    "CustomerRequestNote",
+    "CustomerRequestOutbox",
     "WhatsAppAuditEvent",
     "WhatsAppConnection",
     "WhatsAppConnectionAttempt",

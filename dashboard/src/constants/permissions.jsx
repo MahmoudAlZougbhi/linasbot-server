@@ -65,6 +65,36 @@ export const FEATURES = {
     path: '/activity-flow',
     name: 'Interaction Logs',
     description: 'Read-only observability of user ↔ bot ↔ AI turns'
+  },
+  REQUESTS: {
+    key: 'requests',
+    path: null,
+    name: 'Requests',
+    description: 'View customer orders and appointment requests'
+  },
+  REQUESTS_MANAGE: {
+    key: 'requestsManage',
+    path: null,
+    name: 'Manage Requests',
+    description: 'Assign, update status, and cancel customer requests'
+  },
+  REQUESTS_NOTIFY: {
+    key: 'requestsNotify',
+    path: null,
+    name: 'Request Notifications',
+    description: 'Send and retry customer request notifications'
+  },
+  REQUESTS_MANUAL_CHAT: {
+    key: 'requestsManualChat',
+    path: null,
+    name: 'Request Manual Chat',
+    description: 'Chat with the customer and pause or resume AI'
+  },
+  REQUESTS_SENSITIVE: {
+    key: 'requestsSensitive',
+    path: null,
+    name: 'Request Sensitive Data',
+    description: 'View raw phone, email, and delivery address on requests'
   }
 };
 
@@ -100,7 +130,12 @@ export const SYSTEM_ROLES = {
       userManagement: true,
       contentManagers: true,
       contentPublish: true,
-      activityFlow: true
+      activityFlow: true,
+      requests: true,
+      requestsManage: true,
+      requestsNotify: true,
+      requestsManualChat: true,
+      requestsSensitive: true
     }
   },
   platform_owner: {
@@ -120,7 +155,12 @@ export const SYSTEM_ROLES = {
       userManagement: true,
       contentManagers: true,
       contentPublish: true,
-      activityFlow: true
+      activityFlow: true,
+      requests: true,
+      requestsManage: true,
+      requestsNotify: true,
+      requestsManualChat: true,
+      requestsSensitive: true
     }
   },
   operator: {
@@ -139,7 +179,12 @@ export const SYSTEM_ROLES = {
       userManagement: false,
       contentManagers: false,
       contentPublish: false,
-      activityFlow: true
+      activityFlow: true,
+      requests: true,
+      requestsManage: true,
+      requestsNotify: true,
+      requestsManualChat: true,
+      requestsSensitive: false
     }
   },
   viewer: {
@@ -158,7 +203,12 @@ export const SYSTEM_ROLES = {
       userManagement: false,
       contentManagers: false,
       contentPublish: false,
-      activityFlow: true
+      activityFlow: true,
+      requests: false,
+      requestsManage: false,
+      requestsNotify: false,
+      requestsManualChat: false,
+      requestsSensitive: false
     }
   }
 };
@@ -175,7 +225,12 @@ export const DEFAULT_PERMISSIONS = {
   userManagement: false,
   contentManagers: false,
   contentPublish: false,
-  activityFlow: false
+  activityFlow: false,
+  requests: false,
+  requestsManage: false,
+  requestsNotify: false,
+  requestsManualChat: false,
+  requestsSensitive: false
 };
 
 // Permission keys array for iteration

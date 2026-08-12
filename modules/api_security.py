@@ -63,6 +63,11 @@ PERMISSION_KEYS = {
     "contentManagers",
     "contentPublish",
     "activityFlow",
+    "requests",
+    "requestsManage",
+    "requestsNotify",
+    "requestsManualChat",
+    "requestsSensitive",
 }
 
 SYSTEM_ROLE_PERMISSIONS: dict[str, dict[str, bool]] = {
@@ -80,6 +85,11 @@ SYSTEM_ROLE_PERMISSIONS: dict[str, dict[str, bool]] = {
         "contentManagers": False,
         "contentPublish": False,
         "activityFlow": True,
+        "requests": True,
+        "requestsManage": True,
+        "requestsNotify": True,
+        "requestsManualChat": True,
+        "requestsSensitive": False,
     },
     "viewer": {
         "dashboard": True,
@@ -93,6 +103,11 @@ SYSTEM_ROLE_PERMISSIONS: dict[str, dict[str, bool]] = {
         "contentManagers": False,
         "contentPublish": False,
         "activityFlow": True,
+        "requests": False,
+        "requestsManage": False,
+        "requestsNotify": False,
+        "requestsManualChat": False,
+        "requestsSensitive": False,
     },
 }
 
@@ -191,6 +206,8 @@ def required_permission_for(method: str, path: str) -> str | None:
         return "activityFlow"
     if p.startswith("/api/live-chat") or p.startswith("/api/chat-history"):
         return "liveChat"
+    if p.startswith("/api/requests"):
+        return "requests"
     if p.startswith("/api/owner-notifications"):
         return "liveChat"
     if p.startswith("/api/smart-messaging"):
