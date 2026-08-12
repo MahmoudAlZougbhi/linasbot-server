@@ -65,7 +65,9 @@
         }
       ],
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-font",
+      "expo-asset"
     ],
     "extra": {
       "apiBaseUrl": "https://linasaibot.com",
