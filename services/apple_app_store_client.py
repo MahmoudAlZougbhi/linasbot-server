@@ -223,9 +223,7 @@ class AppleAppStoreClient:
             body["paginationToken"] = pagination_token
         resp = self._request("POST", "/inApps/v1/notifications/history", base=PROD_BASE, json_body=body)
         if resp.status_code in {401, 404}:
-            resp = self._request(
-                "POST", "/inApps/v1/notifications/history", base=SANDBOX_BASE, json_body=body
-            )
+            resp = self._request("POST", "/inApps/v1/notifications/history", base=SANDBOX_BASE, json_body=body)
         if resp.status_code >= 400:
             raise httpx.HTTPStatusError(
                 f"App Store API {resp.status_code} for notification history",

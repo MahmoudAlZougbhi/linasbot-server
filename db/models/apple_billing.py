@@ -44,9 +44,7 @@ class AuthExternalIdentityRow(Base):
     provider: Mapped[str] = mapped_column(String(32), nullable=False)
     provider_subject: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)
-    email_is_private_relay: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("false")
-    )
+    email_is_private_relay: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     linked_at: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
     unlinked_at: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -57,9 +55,7 @@ class AppleAppAccountTokenRow(Base):
     """One stable appAccountToken UUID string per (tenant_id, user_id)."""
 
     __tablename__ = "apple_app_account_tokens"
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "user_id", name="uq_apple_app_account_token_tenant_user"),
-    )
+    __table_args__ = (UniqueConstraint("tenant_id", "user_id", name="uq_apple_app_account_token_tenant_user"),)
 
     app_account_token: Mapped[str] = mapped_column(String(36), primary_key=True)
     tenant_id: Mapped[str] = mapped_column(String(64), nullable=False)

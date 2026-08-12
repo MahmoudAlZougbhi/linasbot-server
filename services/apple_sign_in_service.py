@@ -58,11 +58,7 @@ def get_apple_jwks(*, force_refresh: bool = False) -> dict[str, Any]:
     global _jwks_cache, _jwks_fetched_at
     now = time.time()
     with _lock:
-        if (
-            not force_refresh
-            and _jwks_cache is not None
-            and (now - _jwks_fetched_at) < _JWKS_TTL_SECONDS
-        ):
+        if not force_refresh and _jwks_cache is not None and (now - _jwks_fetched_at) < _JWKS_TTL_SECONDS:
             return _jwks_cache
     data = _fetch_jwks_uncached()
     with _lock:

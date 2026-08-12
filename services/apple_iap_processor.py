@@ -79,7 +79,7 @@ def process_signed_transaction(
         payload = decode_jws_payload(signed_transaction_jws)
 
     tid_resolved, token_user = _resolve_tenant(tenant_id=tenant_id, payload=payload, source=source)
-    uid = (user_id or token_user or None)
+    uid = user_id or token_user or None
     product_id = str(payload.get("productId") or "").strip()
     transaction_id = str(payload.get("transactionId") or "").strip()
     original_transaction_id = str(payload.get("originalTransactionId") or transaction_id).strip()

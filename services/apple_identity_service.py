@@ -144,12 +144,16 @@ def list_active_providers_for_user(user_id: str) -> list[str]:
     if not uid:
         return []
     with whatsapp_session() as session:
-        rows = session.execute(
-            select(AuthExternalIdentityRow.provider).where(
-                AuthExternalIdentityRow.user_id == uid,
-                AuthExternalIdentityRow.unlinked_at.is_(None),
+        rows = (
+            session.execute(
+                select(AuthExternalIdentityRow.provider).where(
+                    AuthExternalIdentityRow.user_id == uid,
+                    AuthExternalIdentityRow.unlinked_at.is_(None),
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return sorted({str(p) for p in rows if p})
 
 
@@ -171,12 +175,16 @@ def user_has_other_login_method(*, user_id: str, excluding_apple_sub: str | None
     if excluding_apple_sub:
         # Count non-apple providers, or other apple rows (unlikely).
         with whatsapp_session() as session:
-            rows = session.execute(
-                select(AuthExternalIdentityRow).where(
-                    AuthExternalIdentityRow.user_id == uid,
-                    AuthExternalIdentityRow.unlinked_at.is_(None),
+            rows = (
+                session.execute(
+                    select(AuthExternalIdentityRow).where(
+                        AuthExternalIdentityRow.user_id == uid,
+                        AuthExternalIdentityRow.unlinked_at.is_(None),
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             for row in rows:
                 if row.provider == PROVIDER_APPLE and row.provider_subject == excluding_apple_sub:
                     continue
@@ -221,13 +229,17 @@ def unlink_all_apple_for_user(user_id: str) -> int:
     now = time.time()
     count = 0
     with whatsapp_session() as session:
-        rows = session.execute(
-            select(AuthExternalIdentityRow).where(
-                AuthExternalIdentityRow.provider == PROVIDER_APPLE,
-                AuthExternalIdentityRow.user_id == uid,
-                AuthExternalIdentityRow.unlinked_at.is_(None),
+        rows = (
+            session.execute(
+                select(AuthExternalIdentityRow).where(
+                    AuthExternalIdentityRow.provider == PROVIDER_APPLE,
+                    AuthExternalIdentityRow.user_id == uid,
+                    AuthExternalIdentityRow.unlinked_at.is_(None),
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for row in rows:
             row.unlinked_at = now
             count += 1

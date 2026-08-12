@@ -44,11 +44,7 @@ def apple_sign_in_key_path() -> str:
 
 
 def apple_iap_key_path() -> str:
-    raw = (
-        os.getenv("APPLE_IAP_PRIVATE_KEY_PATH")
-        or os.getenv("APPLE_APP_STORE_PRIVATE_KEY_PATH")
-        or ""
-    ).strip()
+    raw = (os.getenv("APPLE_IAP_PRIVATE_KEY_PATH") or os.getenv("APPLE_APP_STORE_PRIVATE_KEY_PATH") or "").strip()
     if raw:
         return str(_expand(raw))
     return str(_DEFAULT_IAP_KEY_PATH)
@@ -67,16 +63,12 @@ def apple_sign_in_key_id() -> str:
 
 
 def apple_iap_key_id() -> str:
-    return (
-        os.getenv("APPLE_IAP_KEY_ID") or os.getenv("APPLE_APP_STORE_KEY_ID") or _DEFAULT_IAP_KEY_ID
-    ).strip()
+    return (os.getenv("APPLE_IAP_KEY_ID") or os.getenv("APPLE_APP_STORE_KEY_ID") or _DEFAULT_IAP_KEY_ID).strip()
 
 
 def apple_iap_issuer_id() -> str:
     return (
-        os.getenv("APPLE_IAP_ISSUER_ID")
-        or os.getenv("APPLE_APP_STORE_ISSUER_ID")
-        or _DEFAULT_IAP_ISSUER_ID
+        os.getenv("APPLE_IAP_ISSUER_ID") or os.getenv("APPLE_APP_STORE_ISSUER_ID") or _DEFAULT_IAP_ISSUER_ID
     ).strip()
 
 

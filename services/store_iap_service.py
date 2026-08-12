@@ -36,7 +36,12 @@ def iap_config_status() -> dict[str, Any]:
     from services.apple_app_store_client import iap_credentials_configured
 
     apple_key = iap_credentials_configured() or bool(
-        (os.getenv("APPLE_IAP_SHARED_SECRET") or os.getenv("APPLE_IAP_KEY_ID") or os.getenv("APPLE_APP_STORE_KEY_ID") or "").strip()
+        (
+            os.getenv("APPLE_IAP_SHARED_SECRET")
+            or os.getenv("APPLE_IAP_KEY_ID")
+            or os.getenv("APPLE_APP_STORE_KEY_ID")
+            or ""
+        ).strip()
     )
     apple_bundle = bool((os.getenv("APPLE_BUNDLE_ID") or "com.linasai.app").strip())
     google_sa = bool((os.getenv("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_PATH") or "").strip())
