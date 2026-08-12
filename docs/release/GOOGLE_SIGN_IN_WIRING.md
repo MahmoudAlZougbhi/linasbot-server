@@ -30,3 +30,14 @@
 - No BOC enable
 - No Requests migration
 - No secret values printed
+
+## EAS builds (this wiring)
+
+| Platform | Build ID | Profile | Version |
+|----------|----------|---------|---------|
+| iOS TestFlight | `6a89dd01-1141-47a8-a341-129ef4939187` | testflight | 1.0.0 (44) |
+| Android AAB | `edad34e3-cb12-420e-9e74-0d367e55e880` | production | 1.0.0 (vc26) |
+
+- iOS logs: https://expo.dev/accounts/mahmoudalzoughbi/projects/linas-ai/builds/6a89dd01-1141-47a8-a341-129ef4939187
+- Android logs: https://expo.dev/accounts/mahmoudalzoughbi/projects/linas-ai/builds/edad34e3-cb12-420e-9e74-0d367e55e880
+- Play Internal auto-submit: **blocked** — no Google Play service-account JSON on this machine / in EAS submit credentials. Upload AAB manually after build finishes (Play Console → Testing → Internal testing).

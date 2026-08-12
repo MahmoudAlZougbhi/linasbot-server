@@ -64,7 +64,8 @@ Note: first RC iOS attempt `bee0c9a6-…` failed (provisioning profile missing S
 | Local path | `artifacts/mobile/linas-ai-v1.0.0-vc24.aab` (~69 MB) |
 | Artifact URL | https://expo.dev/artifacts/eas/fHYmhWdhxJ9b99y7UD3kTPNR3kal4Zk5p3vEwSNnj4k.aab |
 | Play Internal upload | **BLOCKED_OWNER_ACTION** — EAS lacks Google Play service-account key (non-interactive setup refused) |
-| Follow-on AAB (Google Sign-In env) | EAS build `6f1e6d9f-0687-42b0-b018-e56fa2c74a54` versionCode **25** (in progress / supersedes for Google button) |
+| Native-client AAB (iOS+Android IDs) | EAS build `edad34e3-cb12-420e-9e74-0d367e55e880` versionCode **26** |
+| Native-client iOS TF | EAS build `6a89dd01-1141-47a8-a341-129ef4939187` build **44** |
 
 ---
 
