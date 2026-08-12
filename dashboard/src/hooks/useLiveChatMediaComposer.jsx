@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
+import { useAuth } from "../contexts/AuthContext";
 
 /** @param {Blob} blob */
 const blobToBase64 = (blob) =>
@@ -37,6 +38,9 @@ export const useLiveChatMediaComposer = ({
   sendOperatorMessage,
   onAppendMessage: _onAppendMessage,
 }) => {
+  const { user } = useAuth();
+  const operatorId = user?.id;
+
   const [isRecording, setIsRecording] = useState(false);
   const [recordedAudio, setRecordedAudio] = useState(/** @type {{ blob: Blob; url: string } | null} */ (null));
   const [recordingTime, setRecordingTime] = useState(0);
@@ -125,6 +129,11 @@ export const useLiveChatMediaComposer = ({
     if (!recordedAudio || !selectedConversation || isSendingVoice || sendingVoiceRef.current)
       return;
 
+    if (!operatorId) {
+      toast.error("Operator identity required");
+      return;
+    }
+
     sendingVoiceRef.current = true;
     setIsSendingVoice(true);
     const localRecordedAudio = recordedAudio;
@@ -139,7 +148,7 @@ export const useLiveChatMediaComposer = ({
         selectedConversation.conversation.conversation_id,
         selectedConversation.conversation.user_id,
         base64Audio,
-        "operator_001",
+        operatorId,
         "voice",
         idempotencyKey
       );
@@ -194,6 +203,11 @@ export const useLiveChatMediaComposer = ({
   const sendImageMessage = async () => {
     if (!selectedImage || !selectedConversation || sendingImageRef.current) return;
 
+    if (!operatorId) {
+      toast.error("Operator identity required");
+      return;
+    }
+
     sendingImageRef.current = true;
     const idempotencyKey =
       typeof crypto !== "undefined" && crypto.randomUUID
@@ -206,7 +220,7 @@ export const useLiveChatMediaComposer = ({
         selectedConversation.conversation.conversation_id,
         selectedConversation.conversation.user_id,
         base64Image,
-        "operator_001",
+        operatorId,
         "image",
         idempotencyKey
       );
