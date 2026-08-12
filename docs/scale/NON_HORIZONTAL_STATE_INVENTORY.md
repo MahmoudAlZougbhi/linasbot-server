@@ -25,7 +25,9 @@
 | Meta durable `try_claim_event` | ALREADY_DISTRIBUTED | — | Keep |
 | Requests Postgres outbox / WA pause | ALREADY_DISTRIBUTED | — | Keep |
 | `services/live_chat_sse_broadcaster.py` | MOVE_TO_REDIS pubsub | P1 | Sticky LB or Redis pubsub |
-| `services/meta_social_media_store.py` local disk | MOVE_TO_OBJECT_STORAGE | P1 | Spaces if multi-node media |
+| `services/meta_social_media_store.py` local disk | MOVE_TO_OBJECT_STORAGE | P1 | **Closed for HA:** NFSv4 shared `meta_social_post_media` (Spaces skipped; residual if node01 full outage) |
+| `services/meta_app_registry_bindings.py` file store | SHARED_FS / MOVE_TO_REDIS | P1 | **Closed for HA:** NFSv4 shared `meta_registry` authoritative on both nodes |
+| WhatsApp Postgres localhost DSN | SHARED_DSN / MANAGED_PG | P0 | **Closed for HA:** identical DSN `10.106.0.3` both nodes; managed PG still residual SPOF |
 | Live Chat / retrieval TTL caches | SAFE_LOCAL_CACHE | — | OK |
 
 ## Horizontal scale code added (this phase)

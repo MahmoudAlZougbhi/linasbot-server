@@ -68,14 +68,29 @@ Artifact: `docs/scale/LOAD_TEST_RESULTS_REAL_INFRA.json` — **`all_passed=true`
 
 Harness: `scripts/loadtest/run_real_infra_cert.py` (run on a Linas droplet; Valkey trusted sources block public clients).
 
+## Multi-node divergence closeout (2026-08-12)
+
+See `MULTI_NODE_DIVERGENCE_CLOSEOUT.md`. Closed on **current prod** (no PR #240 deploy):
+
+| Item | Closure |
+|------|---------|
+| `meta_registry` | NFSv4 shared from node01 → node02 (`/opt/linasbot_data/meta_registry`) |
+| social media files | NFSv4 shared `meta_social_post_media` (Spaces not purchased; not required) |
+| WhatsApp Postgres | Identical DSN host `10.106.0.3` on both nodes; private listen + UFW/pg_hba |
+| Independent paths | Both nodes serve health/ready/Meta/WA verify; LB sticky=`none` |
+| Failover retest | node01 app down 20/20 via node02; node02 app down 20/20 via node01 |
+| Durability | `unexplained_missing_events=0` (pytest) |
+
+Scripts: `scripts/ha/close_divergence_node0{1,2}.sh`, `verify_multi_node_closeout.sh`.
+
 ## Remaining bottlenecks / residuals
 
 1. **PR #240 not deployed** — Redis shared rate-limit, SIGTERM drain/503, inbound ledger in live webhook path await release.
 2. **`LINAS_REQUIRE_REDIS=false`** — durable queue workers not on; job_queue Redis is reachable for readiness only.
-3. **Node-local state** — `meta_registry`, social media files, WhatsApp Postgres on node01 localhost (P1 multi-node divergence).
+3. **node01 full-outage SPOF** — WA Postgres + NFS still hosted on node01 (app failover proven; managed PG still OWNER gate).
 4. **`/api/ready` heavy** under concurrency (Meta checks); LB HC uses `/api/health`.
 5. **2vCPU nodes** — API concurrency headroom limited; scale out before 5k live owners.
 
 ## Ready for Requests migration + prod deploy of PR #240?
 
-**Not yet.** Infra HA + Valkey + LB are ready. Next OWNER gates: merge/deploy PR #240 deliberately, enable workers only with explicit `LINAS_REQUIRE_REDIS` approval, then Requests migration. Do **not** buy $15 single-node Valkey as final HA.
+**Not yet.** Infra HA + Valkey + LB + multi-node shared registry/media/WA DSN are ready. Next OWNER gates: merge/deploy PR #240 deliberately, enable workers only with explicit `LINAS_REQUIRE_REDIS` approval, then Requests migration. Do **not** buy $15 single-node Valkey as final HA.

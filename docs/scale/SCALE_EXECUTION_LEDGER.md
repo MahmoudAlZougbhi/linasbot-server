@@ -85,3 +85,4 @@
 | 2026-08-12T16:21:55Z | Wired private rediss URL on both nodes; redis_reachable=true | DONE |
 | 2026-08-12T16:48:00Z | Real-infra load cert all_passed; unexplained_missing_events=0 | DONE |
 | 2026-08-12T16:50:00Z | HA docs/ledger updated; awaiting OWNER GO for PR#240 deploy + Requests | BLOCKED_OWNER_ACTION |
+| 2026-08-12T17:10:00Z | Multi-node divergence closed: NFS registry+media; WA PG private identical DSN; LB failover 20/20 both ways; durability unexplained=0; no merge/deploy | DONE — see `MULTI_NODE_DIVERGENCE_CLOSEOUT.md` |

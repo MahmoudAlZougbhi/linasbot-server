@@ -3,7 +3,9 @@
 **Date:** 2026-08-12  
 **Branch:** `chore/project-cleanup-reorg`  
 **PR:** [#240](https://github.com/MahmoudAlZougbhi/linasbot-server/pull/240)  
-**Rule:** Read-only inventory for scale phase. No purchase / merge / deploy in this doc.
+**Rule:** Inventory + HA closeout notes. No merge / app-release deploy in this doc.
+
+**HA update (live):** Valkey `linas-redis-prod`, LB `linas-http-lb-lon1` (`157.245.31.104`), peer `linas-app-lon1-02`. Multi-node divergence closed via NFS (`meta_registry` + media) + identical WA PG DSN `10.106.0.3` — see `MULTI_NODE_DIVERGENCE_CLOSEOUT.md` / `HA_PURCHASE_EXECUTION.md`. PR #240 still not merged/deployed.
 
 ## Evidence classes
 
