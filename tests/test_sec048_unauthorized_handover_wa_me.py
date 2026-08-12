@@ -103,6 +103,33 @@ async def test_booking_claim_without_crm_uses_wa_me(wa_me_reply: str) -> None:
 
 
 @pytest.mark.asyncio
+async def test_booking_claim_capture_active_skips_wa_me_without_false_recorded(
+    monkeypatch: pytest.MonkeyPatch,
+    wa_me_reply: str,
+) -> None:
+    monkeypatch.setattr(
+        "services.requests.capture.skip_forced_booking_wa_me",
+        lambda _tid: True,
+    )
+    ctx = _base_ctx(
+        gpt_response_data={
+            "action": "answer_question",
+            "bot_reply": "Your appointment has been booked successfully.",
+            "handover_degree": "none",
+            "_flow_meta": {},
+        }
+    )
+    await text_handlers_respond_phase6(ctx)
+    assert ctx["action"] == "answer_question"
+    reply = str(ctx["bot_reply_text"] or "").lower()
+    assert "wa.me" not in reply
+    assert ctx["bot_reply_text"] != wa_me_reply
+    # Must not pretend the request was already recorded when the claim failed.
+    assert "i’ve recorded" not in reply and "i've recorded" not in reply
+    assert "reconfirm" in reply or "details" in reply
+
+
+@pytest.mark.asyncio
 async def test_ai_human_handover_without_user_request_uses_wa_me(wa_me_reply: str) -> None:
     ctx = _base_ctx(
         user_input_to_process="what are your hours?",

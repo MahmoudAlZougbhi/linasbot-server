@@ -231,3 +231,89 @@ def test_human_handoff_still_allowed_when_capture_active(monkeypatch):
     out = route_social_contact_request("I want to speak with a human agent", ud, "en")
     assert out is not None
     assert out.intent == "human"
+
+
+def _policy_sections_with_handoff_phone() -> dict:
+    return {
+        "restricted": {"topics": [], "notes": ""},
+        "actions": {
+            "items": [
+                {"id": "human_handoff", "enabled": True},
+                {"id": "respond_instagram_comments", "enabled": True},
+            ]
+        },
+        "handoff": {
+            "contacts": [
+                {
+                    "id": "wa1",
+                    "destination_type": "whatsapp",
+                    "destination_value": "+96178847527",
+                    "label": "Team",
+                }
+            ],
+            "matrix": [],
+            "policy_text": "",
+        },
+    }
+
+
+def test_policy_comment_linked_dm_continues_capture_not_dm_invite(monkeypatch):
+    """comment_linked_dm must not be treated as a public comment via substring match."""
+    from services.customer_reply_v2.policy import enforce_restricted_and_handoff
+
+    monkeypatch.setattr(
+        "services.customer_reply_v2.policy.load_published_content",
+        lambda _tid: (object(), _policy_sections_with_handoff_phone()),
+    )
+    monkeypatch.setattr("services.requests.capture.requests_capture_active", lambda _tid: True)
+    out = enforce_restricted_and_handoff(
+        tenant_id="tenant-a",
+        message="I want to book an appointment tomorrow",
+        response_language="en",
+        channel="comment_linked_dm",
+    )
+    assert out is None
+
+
+def test_policy_public_comment_never_posts_wa_me(monkeypatch):
+    from services.customer_reply_v2.policy import enforce_restricted_and_handoff
+
+    monkeypatch.setattr(
+        "services.customer_reply_v2.policy.load_published_content",
+        lambda _tid: (object(), _policy_sections_with_handoff_phone()),
+    )
+    monkeypatch.setattr("services.requests.capture.requests_capture_active", lambda _tid: False)
+    out = enforce_restricted_and_handoff(
+        tenant_id="tenant-a",
+        message="I want to speak with a human agent",
+        response_language="en",
+        channel="instagram_comment",
+    )
+    assert out is not None
+    assert out["reason"] == "handoff_public_comment_dm_invite"
+    reply = str(out["reply"] or "").lower()
+    assert "wa.me" not in reply
+    assert "96178847527" not in reply
+    assert "dm" in reply
+    assert out["metadata"].get("pii_safe_public_comment") is True
+
+
+def test_policy_public_comment_booking_with_capture_invites_dm(monkeypatch):
+    from services.customer_reply_v2.policy import enforce_restricted_and_handoff
+
+    monkeypatch.setattr(
+        "services.customer_reply_v2.policy.load_published_content",
+        lambda _tid: (object(), _policy_sections_with_handoff_phone()),
+    )
+    monkeypatch.setattr("services.requests.capture.requests_capture_active", lambda _tid: True)
+    out = enforce_restricted_and_handoff(
+        tenant_id="tenant-a",
+        message="I want to book an appointment tomorrow",
+        response_language="en",
+        channel="instagram_comment",
+    )
+    assert out is not None
+    assert out["reason"] == "requests_comment_dm_invite"
+    reply = str(out["reply"] or "").lower()
+    assert "wa.me" not in reply
+    assert "phone" not in reply

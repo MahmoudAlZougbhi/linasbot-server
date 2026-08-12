@@ -20,6 +20,35 @@ from handlers.text_handlers_wa_me_handoff import build_wa_me_handoff_guidance
 _PHASE_HALT = "_PHASE_HALT"
 
 
+def _capture_active_booking_guard_reply(language: str | None) -> str:
+    """Honest reply when a booking claim failed but Requests capture is active.
+
+    Must not force wa.me and must not claim the request was already recorded.
+    """
+    lang = str(language or "en").strip().lower() or "en"
+    messages = {
+        "ar": (
+            "ما قدرت أكمل تسجيل الطلب هلق. أكّدلي التفاصيل مرة تانية "
+            "وبسجّل طلبك كـ تفضيل بانتظار تأكيد الفريق — بدون واتساب إجباري."
+        ),
+        "en": (
+            "I couldn't finalize that booking claim just now. Please reconfirm the details "
+            "and I'll submit your request as a preference pending team confirmation — "
+            "no forced WhatsApp handoff."
+        ),
+        "fr": (
+            "Je n'ai pas pu finaliser cette réservation. Reconfirmez les détails "
+            "et j'enregistrerai votre demande comme préférence en attente de confirmation "
+            "de l'équipe — sans bascule WhatsApp forcée."
+        ),
+        "franco": (
+            "Ma ederet akammel el talab halla2. Akked el details kaman marra "
+            "w sajjel request ka preference pending confirmation — bela forced WhatsApp."
+        ),
+    }
+    return messages.get(lang, messages["en"])
+
+
 def _coerce_unauthorized_to_wa_me(
     *,
     user_data: dict,
@@ -28,7 +57,8 @@ def _coerce_unauthorized_to_wa_me(
 ) -> tuple[str, str]:
     """Replace unauthorized human_handover coerce with WhatsApp/wa.me guidance.
 
-    When Requests capture is active, booking/appointment claim paths must not force wa.me.
+    When Requests capture is active, booking/appointment claim paths must not force wa.me
+    and must not pretend the request was already recorded.
     """
     booking_reasons = {
         "booking_retry_exceeded",
@@ -36,10 +66,7 @@ def _coerce_unauthorized_to_wa_me(
     }
     if reason in booking_reasons or reason.startswith("booking_"):
         try:
-            from services.requests.capture import (
-                appointment_pending_confirmation_message,
-                skip_forced_booking_wa_me,
-            )
+            from services.requests.capture import skip_forced_booking_wa_me
 
             tenant_id = str(
                 (user_data or {}).get("tenant_id")
@@ -48,7 +75,7 @@ def _coerce_unauthorized_to_wa_me(
                 or ""
             ).strip()
             if skip_forced_booking_wa_me(tenant_id):
-                reply = appointment_pending_confirmation_message(current_preferred_lang)
+                reply = _capture_active_booking_guard_reply(current_preferred_lang)
                 print(f"[_process_and_respond] requests capture active → skip forced wa.me booking handoff ({reason})")
                 return "answer_question", reply
         except Exception as exc:
