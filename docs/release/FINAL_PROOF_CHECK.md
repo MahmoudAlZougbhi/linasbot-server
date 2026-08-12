@@ -12,8 +12,8 @@
 | Field | Value |
 |-------|--------|
 | `AUDITED_FAIL_HEAD` | `12e00eb797cd0e774c6948ba5379bc0974837c91` (PROOF_FAILED_NOT_READY) |
-| `FINAL_RC_SHA` | *(set after freeze commit — see PRODUCTION_BRANCH_PROOF.md)* |
-| `PR_240` | open — CI must re-run green on freeze SHA |
+| `FINAL_RC_SHA` | `6afc54fe3650e74f31fd1bfb672fc85bf1d7bd89` |
+| `PR_240` | open — CI re-run required on freeze SHA |
 | Prior CI @ `12e00eb` | all SUCCESS (backend · frontend · mobile · secret-scan · deploy-readiness) |
 
 ### Focused tests (this proof)
@@ -168,9 +168,10 @@ NODE_LOCAL_CRITICAL_STATE=NONE
 
 ```
 AUDITED_FAIL_HEAD=12e00eb797cd0e774c6948ba5379bc0974837c91
-FINAL_RC_SHA=<freeze-commit>
-PR_240_HEAD=<freeze-commit>
-PR_240_CI=<pending/re-run on freeze>
+FINAL_RC_SHA=6afc54fe3650e74f31fd1bfb672fc85bf1d7bd89
+PROOF_DOCS_SHA=144592a5d94fd05d974a4987ae3a5fc3764131dc
+PR_240_HEAD=144592a5d94fd05d974a4987ae3a5fc3764131dc
+PR_240_CI=pending_rerun_on_freeze
 NODE_LOCAL_CRITICAL_STATE=NONE
 ```
 
