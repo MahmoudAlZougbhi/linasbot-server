@@ -54,7 +54,7 @@ async def text_handlers_respond_phase9(ctx: dict):
             await user_persistence.save_user_gender(
                 user_id, detected_gender_from_gpt, phone=user_data.get("phone_number", user_id), name=user_name
             )
-            print(f"✅ Saved gender '{detected_gender_from_gpt}' for user {user_id} to API")
+            print(f"✅ Saved gender '{detected_gender_from_gpt}' for user ...{str(user_id)[-4:]} to API")
         user_data["awaiting_gender"] = False
         user_data["last_bot_question_type"] = None
         config.user_greeting_stage[user_id] = 2

@@ -76,7 +76,7 @@ async def handle_message(
 
     # Check if user is in training mode
     if config.user_in_training_mode.get(user_id, False):
-        print(f"[handle_message] INFO: User {user_id} in training mode. Handing over to handle_training_input.")
+        print(f"[handle_message] INFO: User ...{str(user_id)[-4:]} in training mode. Handing over to handle_training_input.")
         await handle_training_input(
             user_id=user_id,
             user_input_text=user_input_text,
@@ -89,7 +89,7 @@ async def handle_message(
     raw_msg = user_input_text.strip()
 
     if not raw_msg:
-        print(f"[handle_message] ERROR: No usable text in message for user {user_id}. raw_msg is empty. Exiting.")
+        print(f"[handle_message] ERROR: No usable text in message for user ...{str(user_id)[-4:]}. raw_msg is empty. Exiting.")
         return
 
     # Per single-message guardrail: limit long pasted text to avoid excessive token usage.
@@ -295,7 +295,7 @@ async def handle_message(
     # Language detection is now handled BEFORE GPT call by language_detection_service
     # The LanguageResolver detects language on each message using heuristics (Arabic script, Franco-Arabic, French/English markers)
     # GPT is then instructed to respond in the detected language
-    print(f"[handle_message] 🌐 Language will be detected pre-GPT by language_detection_service for user {user_id}")
+    print(f"[handle_message] 🌐 Language will be detected pre-GPT by language_detection_service for user ...{str(user_id)[-4:]}")
 
     async with _combine_schedule_lock(user_id):
         # Message combining logic
@@ -319,7 +319,7 @@ async def handle_message(
         # Dashboard /api/test-* sets _dashboard_test_simulation: run GPT path inline so the HTTP handler
         # sees captured replies before returning (background create_task was still racing / missing awaits).
         if user_data.get("_dashboard_test_simulation"):
-            print(f"[handle_message] Dashboard test simulation: inline delayed processing for {user_id}")
+            print(f"[handle_message] Dashboard test simulation: inline delayed processing for ...{str(user_id)[-4:]}")
             try:
                 await _delayed_process_messages(
                     user_id,

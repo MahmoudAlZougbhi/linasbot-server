@@ -249,7 +249,7 @@ async def maybe_send_takeover_autoreply(
 
                         if not is_post_takeover_escalation_cooldown(user_data):
                             set_post_takeover_escalation_cooldown(user_data)
-                        print(f"[handle_message] INFO: User {user_id} just returned from human takeover.")
+                        print(f"[handle_message] INFO: User ...{str(user_id)[-4:]} just returned from human takeover.")
                     if config.user_in_human_takeover_mode[user_id]:
                         if user_data.get("_dashboard_test_simulation"):
                             print(
@@ -264,7 +264,7 @@ async def maybe_send_takeover_autoreply(
                             if operator_id:
                                 # User has an operator — never stay silent.
                                 # Send assignment notice once, then send a short reminder on each user turn.
-                                print(f"[handle_message] INFO: User {user_id} has operator. AI will not respond.")
+                                print(f"[handle_message] INFO: User ...{str(user_id)[-4:]} has operator. AI will not respond.")
                                 if not user_data.get("notified_human_takeover"):
                                     operator_name = conv_data.get("operator_name")
                                     if not operator_name:
@@ -334,5 +334,5 @@ async def maybe_send_takeover_autoreply(
                         f"WARNING: Conversation {conv_for_takeover_check} not found in Firestore during takeover check."
                     )
             except Exception as e:
-                print(f"❌ ERROR checking human takeover status from Firestore for user {user_id}: {e}")
+                print(f"❌ ERROR checking human takeover status from Firestore for user ...{str(user_id)[-4:]}: {e}")
     return False

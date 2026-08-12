@@ -69,7 +69,9 @@ async def text_handlers_respond_phase5(ctx: dict):
         print("[_process_and_respond] 🔍 Gender Check:")
         print(f"  - current_gender: {current_gender}")
         print(f"  - greeting_stage: {config.user_greeting_stage[user_id]}")
-        print(f"  - initial_query: {initial_user_query_to_process_original}")
+        print(
+            f"  - initial_query_len={len(str(initial_user_query_to_process_original or ''))}"
+        )
 
         if (
             (not ai_primary_mode)
@@ -78,7 +80,7 @@ async def text_handlers_respond_phase5(ctx: dict):
             and initial_user_query_to_process_original
         ):
             print(
-                f"[_process_and_respond] ✅ Gender confirmed! Answering original query: '{initial_user_query_to_process_original}'"
+                f"[_process_and_respond] ✅ Gender confirmed! Answering original query_len={len(str(initial_user_query_to_process_original or ''))}"
             )
             user_data["initial_user_query_to_process"] = None
             query_to_send_to_gpt = initial_user_query_to_process_original
@@ -103,7 +105,9 @@ async def text_handlers_respond_phase5(ctx: dict):
 
         # Check Smart Answers / FAQ before GPT. Prefer tenant-safe multi-signal match
         # (not blind 90% similarity). Falls back to legacy matcher only when no tenant.
-        print(f"[_process_and_respond] 🔍 Checking Q&A DATABASE for: '{query_to_send_to_gpt}'")
+        print(
+            f"[_process_and_respond] 🔍 Checking Q&A DATABASE for query_len={len(str(query_to_send_to_gpt or ''))}"
+        )
 
         is_reschedule_intent = detect_reschedule_intent(query_to_send_to_gpt)
         is_price_intent = _is_price_intent(query_to_send_to_gpt)
@@ -157,7 +161,7 @@ async def text_handlers_respond_phase5(ctx: dict):
             print("[_process_and_respond] 🎯 Returning Q&A directly")
             print("[_process_and_respond] 💰 AI CREDITS SAVED: $0.02-0.05 (NO GPT-4 CALL)")
             print("[_process_and_respond] ⚡ Response Time: ~100-200ms (vs 2-5s with GPT-4)")
-            print(f"[_process_and_respond] 🎯 Answer: {qa_response[:100]}...")
+            print(f"[_process_and_respond] 🎯 Answer_len={len(str(qa_response or ''))}")
             if _faq_tenant:
                 try:
                     from services.faq_metrics import faq_metrics_store

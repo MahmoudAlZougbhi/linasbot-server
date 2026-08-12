@@ -255,7 +255,7 @@ async def text_handlers_respond_phase2(ctx: dict):
 
     # Phase 12: Debugging/logging (Plan §18)
     print("[_process_and_respond] 📋 ORCHESTRATION LOG:")
-    print(f"   - normalized_input: '{user_input_to_process.strip()[:100]}'")
+    print(f"   - normalized_input_len={len((user_input_to_process or '').strip())}")
     print(
         f"   - state_before: gender={conv_state.get('gender')}, awaiting_gender={conv_state.get('awaiting_gender')}, awaiting_clarification={conv_state.get('awaiting_clarification')}, original_question={bool(conv_state.get('original_question'))}"
     )

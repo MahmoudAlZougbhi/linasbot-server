@@ -256,7 +256,7 @@ async def text_handlers_respond_phase7(ctx: dict):
             log_report_event(
                 "name_saved", name_clean, current_gender, {"method": "AI Extraction", "whatsapp_id": user_id}
             )
-            print(f"✅ Saved name '{name_clean}' from AI for user {user_id}")
+            print(f"✅ Saved name_len={len(str(name_clean or ''))} from AI for user ...{str(user_id)[-4:]}")
             user_name = name_clean
         elif 2 <= len(name_clean) <= 50 and re.match(name_pattern, name_clean, re.UNICODE):
             print(

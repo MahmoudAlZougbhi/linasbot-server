@@ -65,7 +65,7 @@ async def handle_voice_message(
         print(f"[handle_voice_message] voice gate lookup failed for {tenant_id}: {exc}")
 
     if config.user_in_training_mode.get(user_id, False):
-        print(f"[handle_voice_message] INFO: User {user_id} in training mode. Handing over to handle_training_input.")
+        print(f"[handle_voice_message] INFO: User ...{str(user_id)[-4:]} in training mode. Handing over to handle_training_input.")
         # Pass necessary data directly to handle_training_input for voice processing in training mode
         await handle_training_input(
             user_id=user_id,

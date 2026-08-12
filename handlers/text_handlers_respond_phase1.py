@@ -163,7 +163,7 @@ async def text_handlers_respond_phase1(ctx: dict):
                 return _PHASE_HALT
 
     # DEBUG: Log gender state at start of processing
-    print(f"[_process_and_respond] 🔍 USER STATE for {user_id}:")
+    print(f"[_process_and_respond] 🔍 USER STATE for ...{str(user_id)[-4:]}:")
     print(f"   - current_gender: '{current_gender}'")
     print(f"   - greeting_stage: {config.user_greeting_stage.get(user_id, 0)}")
     print(f"   - gender_attempts: {config.gender_attempts.get(user_id, 0)}")
