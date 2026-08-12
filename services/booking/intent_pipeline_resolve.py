@@ -90,7 +90,11 @@ async def resolve_submit_booking_entities(
         br_miss: str | None
         br_id, br_miss = resolve_branch_id(intent.get("branch_name"), intent.get("branch_id"), branches)
         if br_id is None:
-            br_id = int(config.DEFAULT_BRANCH_ID or BEIRUT_BRANCH_ID)
+            default_br = getattr(config, "DEFAULT_BRANCH_ID", None)
+            if default_br is None:
+                missing.append("branch")
+            else:
+                br_id = int(default_br)
         if svc_miss:
             missing.append(svc_miss)
         if br_miss and had_branch_hint:
