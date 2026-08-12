@@ -43,9 +43,11 @@ def test_auth_email_routes_are_public() -> None:
     assert is_public_api("POST", "/api/auth/reset-password")
     assert is_public_api("POST", "/api/auth/verify-email")
     assert is_public_api("POST", "/api/auth/resend-verification")
+    assert is_public_api("POST", "/api/auth/confirm-email-change")
     assert is_public_api("GET", "/api/billing/packages")
     assert is_public_api("GET", "/api/public/plans")
     assert is_public_api("POST", "/api/billing/stripe/webhook")
+    assert is_public_api("POST", "/api/webhooks/resend")
 
 
 def test_forgot_password_does_not_reveal_missing_email(app_client: TestClient) -> None:

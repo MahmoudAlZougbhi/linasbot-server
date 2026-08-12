@@ -22,6 +22,7 @@ _SENSITIVE_MUTATION_PREFIXES = (
     "/api/auth/login",
     "/api/auth/register",
     "/api/auth/change-password",
+    "/api/auth/request-email-change",
     "/api/auth/mobile/login",
     "/api/auth/mobile/refresh",
 )
@@ -34,6 +35,8 @@ _AUTH_IDENTIFIER_PATHS = frozenset(
         "/api/auth/reset-password",
         "/api/auth/verify-email",
         "/api/auth/resend-verification",
+        "/api/auth/request-email-change",
+        "/api/auth/confirm-email-change",
         "/api/auth/mobile/login",
         "/api/auth/mobile/refresh",
     }
@@ -90,10 +93,11 @@ def _identifier_from_auth_body(path: str, body: dict[str, Any]) -> str | None:
         "/api/auth/register",
         "/api/auth/forgot-password",
         "/api/auth/resend-verification",
+        "/api/auth/request-email-change",
         "/api/auth/mobile/login",
     }:
-        return _normalize_email_identifier(body.get("email"))
-    if path in {"/api/auth/reset-password", "/api/auth/verify-email"}:
+        return _normalize_email_identifier(body.get("email") or body.get("new_email"))
+    if path in {"/api/auth/reset-password", "/api/auth/verify-email", "/api/auth/confirm-email-change"}:
         return _token_fingerprint(body.get("token"))
     if path == "/api/auth/mobile/refresh":
         return _token_fingerprint(body.get("refresh_token"))
@@ -160,6 +164,14 @@ def auth_rate_limit_rules(path: str, ip: str, identifier: str | None = None) -> 
         rules.append((f"resend-verify:{ip}", 5, 300))
         if identifier:
             rules.append((f"resend-verify:id:{identifier}", 5, 300))
+    if path == "/api/auth/request-email-change":
+        rules.append((f"email-change:{ip}", 5, 300))
+        if identifier:
+            rules.append((f"email-change:id:{identifier}", 5, 300))
+    if path == "/api/auth/confirm-email-change":
+        rules.append((f"email-change-confirm:{ip}", 10, 300))
+        if identifier:
+            rules.append((f"email-change-confirm:id:{identifier}", 5, 300))
     if path == "/api/auth/change-password":
         rules.append((f"pw:{ip}", 10, 300))
     if path.startswith("/api/guest-ai/"):

@@ -214,6 +214,33 @@ class UserServiceAuthMixin:
         user["emailVerifiedAt"] = now
         return self._sanitize_user(user)
 
+    def change_email_address(self, user_id: str, new_email: str) -> dict[str, Any] | None:
+        """Apply a confirmed email change; marks the new address verified."""
+        email = (new_email or "").strip().lower()
+        if not email or "@" not in email:
+            raise ValueError("Valid email is required")
+        user = self.get_user_by_id(user_id)
+        if not user:
+            raise ValueError("User not found")
+        other = self.get_user_by_email(email)
+        if other and str(other.get("id")) != str(user_id):
+            raise ValueError("Email is unavailable")
+        now = datetime.utcnow().isoformat()
+        self.collection.document(user_id).update(
+            {
+                "email": email,
+                "emailVerified": True,
+                "emailVerifiedAt": now,
+                "updatedAt": now,
+            },
+            timeout=self.AUTH_WRITE_TIMEOUT_SECONDS,
+            retry=None,
+        )
+        user["email"] = email
+        user["emailVerified"] = True
+        user["emailVerifiedAt"] = now
+        return self._sanitize_user(user)
+
     def is_email_verified(self, user: dict[str, Any] | None) -> bool:
         if not user:
             return False
