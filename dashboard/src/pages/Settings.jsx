@@ -19,7 +19,7 @@ import { errorMessage } from '../utils/apiValidate';
 
 const Settings = () => {
   const { user, changePassword } = /** @type {AuthContextValue} */ (useAuth());
-  const isLinasTenant = (user?.tenantId || 'linas') === 'linas';
+  const isLinasTenant = user?.tenantId === 'linas';
   const [activeTab, setActiveTab] = useState(isLinasTenant ? 'general' : 'security');
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',

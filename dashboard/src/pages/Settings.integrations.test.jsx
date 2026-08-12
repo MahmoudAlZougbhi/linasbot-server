@@ -68,4 +68,20 @@ describe("Settings product surface cleanup", () => {
     expect(screen.queryByText(/Human Takeover/i)).not.toBeInTheDocument();
     expect(screen.getAllByText(/System language/i).length).toBeGreaterThan(0);
   });
+
+  it("does not treat missing tenantId as linas (no General/Notifications tabs)", async () => {
+    mockUseAuth.mockReturnValue({
+      user: {
+        role: "admin",
+        resolvedPermissions: { userManagement: true },
+      },
+      changePassword: vi.fn(),
+    });
+
+    render(<Settings />);
+
+    expect(await screen.findByRole("button", { name: /Security/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /General/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Notifications/i })).not.toBeInTheDocument();
+  });
 });
