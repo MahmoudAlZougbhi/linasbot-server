@@ -72,3 +72,4 @@
 
 | 2026-08-12T15:32:07Z | Scale code+docs+loadtests complete; awaiting CI + purchase gate | BLOCKED_OWNER_ACTION |
 | 2026-08-12T15:37:35Z | CI green on PR #240 @ b7e2238; STOP purchase gate | BLOCKED_OWNER_ACTION — DIGITALOCEAN SCALE RESOURCES |
+| 2026-08-12T15:41:12Z | Late audit agents folded: daily_refresh lock + residual P0 inventory (Meta/WA queue wire post-Valkey) | DONE |

@@ -16,6 +16,11 @@ async def daily_refresh_messages_job() -> None:
     Runs daily to clear stale queue entries while preserving
     long-horizon follow-ups and campaign messages.
     """
+    from services.durable_event_claim import release_job_lock, try_acquire_job_lock
+
+    if not try_acquire_job_lock("daily_refresh_messages", ttl_seconds=600):
+        print("[smart_scheduler] daily refresh skipped — another instance holds the lock")
+        return
     try:
         print("\n" + "=" * 80)
         print("🌅 DAILY MESSAGE REFRESH - Clearing stale queue entries")
@@ -32,6 +37,8 @@ async def daily_refresh_messages_job() -> None:
         import traceback
 
         traceback.print_exc()
+    finally:
+        release_job_lock("daily_refresh_messages")
 
 
 async def run_daily_template_dispatcher_job() -> None:
