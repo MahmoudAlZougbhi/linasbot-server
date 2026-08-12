@@ -22,95 +22,7 @@ export function useApiContent() {
     }
   }, []);
 
-  // Content Files API (Knowledge, Price, Style managers - dynamic retrieval)
-  const getContentFilesList = useCallback(async (/** @type {string} */ section) => {
-    try {
-      const response = await api.get(`/api/content-files/${section}/list`);
-      return response.data;
-    } catch (error) {
-      console.error("Error getting content files list:", error);
-      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
-        return { success: false, error: "Backend offline", data: [], count: 0 };
-      }
-      return { success: false, error: errorMessage(error), data: [], count: 0 };
-    }
-  }, []);
-
-  const getContentFile = useCallback(async (/** @type {string} */ section, /** @type {string} */ fileId) => {
-    try {
-      const response = await api.get(`/api/content-files/${section}/${fileId}`);
-      return response.data;
-    } catch (error) {
-      console.error("Error getting content file:", error);
-      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
-        return { success: false, error: "Backend offline" };
-      }
-      return { success: false, error: errorMessage(error) };
-    }
-  }, []);
-
-  const createContentFile = useCallback(async (/** @type {string} */ section, /** @type {Record<string, unknown>} */ payload) => {
-    try {
-      const response = await api.post(`/api/content-files/${section}/create`, payload);
-      return response.data;
-    } catch (error) {
-      console.error("Error creating content file:", error);
-      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
-        return { success: false, error: "Backend offline" };
-      }
-      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
-    }
-  }, []);
-
-  const updateContentFile = useCallback(async (/** @type {string} */ section, /** @type {string} */ fileId, /** @type {Record<string, unknown>} */ payload) => {
-    try {
-      const response = await api.put(`/api/content-files/${section}/${fileId}`, payload);
-      return response.data;
-    } catch (error) {
-      console.error("Error updating content file:", error);
-      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
-        return { success: false, error: "Backend offline" };
-      }
-      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
-    }
-  }, []);
-
-  const deleteContentFile = useCallback(async (/** @type {string} */ section, /** @type {string} */ fileId) => {
-    try {
-      const response = await api.delete(`/api/content-files/${section}/${fileId}`);
-      return response.data;
-    } catch (error) {
-      console.error("Error deleting content file:", error);
-      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
-        return { success: false, error: "Backend offline" };
-      }
-      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
-    }
-  }, []);
-
-  const getDynamicMessages = useCallback(async () => {
-    try {
-      const response = await api.get("/api/content-files/dynamic-messages");
-      return response.data;
-    } catch (error) {
-      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
-        return { success: false, error: "Backend offline", data: {} };
-      }
-      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error), data: {} };
-    }
-  }, []);
-
-  const updateDynamicMessages = useCallback(async (/** @type {Record<string, unknown>} */ data) => {
-    try {
-      const response = await api.put("/api/content-files/dynamic-messages", { data });
-      return response.data;
-    } catch (error) {
-      if (getAxiosErrorCode(error) === "ERR_NETWORK") {
-        return { success: false, error: "Backend offline" };
-      }
-      return { success: false, error: getAxiosResponseDetail(error) || errorMessage(error) };
-    }
-  }, []);
+  // Legacy /api/content-files hooks removed — product path is /api/cm (below).
 
   // AI Setup control-plane APIs
   const getCmMeta = useCallback(async () => {
@@ -375,13 +287,6 @@ export function useApiContent() {
 
   return {
     getFlowLogs,
-    getContentFilesList,
-    getContentFile,
-    createContentFile,
-    updateContentFile,
-    deleteContentFile,
-    getDynamicMessages,
-    updateDynamicMessages,
     getCmMeta,
     getCmDraft,
     uploadCmMedia,
