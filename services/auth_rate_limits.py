@@ -1,4 +1,4 @@
-"""Trusted client IP + auth rate-limit rule builders (file-backed limiter)."""
+"""Trusted client IP + auth rate-limit rule builders (Redis/file/memory limiter)."""
 
 from __future__ import annotations
 
@@ -175,6 +175,16 @@ async def check_rate_limit(request: Request, path: str) -> JSONResponse | None:
     for key, limit, window in auth_rate_limit_rules(path, ip, identifier):
         allowed, retry = rate_limit_service.hit(key, limit=limit, window_seconds=window)
         if not allowed:
+            if rate_limit_service.last_deny_reason == "backend_unavailable":
+                return JSONResponse(
+                    status_code=503,
+                    content={
+                        "success": False,
+                        "error": "Rate limit service unavailable",
+                        "retry_after": retry,
+                    },
+                    headers={"Retry-After": str(retry)},
+                )
             return JSONResponse(
                 status_code=429,
                 content={"success": False, "error": "Rate limit exceeded", "retry_after": retry},
