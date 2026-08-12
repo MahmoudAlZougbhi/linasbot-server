@@ -72,8 +72,8 @@ import modules.platform_api  # noqa: E402, F401
 import modules.qa_api  # noqa: E402, F401
 import modules.queue_api  # noqa: E402, F401
 import modules.requests_api  # noqa: E402, F401
-import modules.schedule_api  # noqa: E402, F401
 import modules.scale_api  # noqa: E402, F401
+import modules.schedule_api  # noqa: E402, F401
 import modules.settings_api  # noqa: E402, F401
 import modules.smart_messaging_api  # noqa: E402, F401
 import modules.store_iap_api  # noqa: E402, F401
