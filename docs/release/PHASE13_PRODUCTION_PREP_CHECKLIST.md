@@ -1,14 +1,15 @@
 # Phase 13 — Production preparation checklist
 
-**Status:** **BLOCKED_OWNER_ACTION** — Phases 11–12 application work may be green; owner must clear Redis / Meta / migration before merge.  
+**Status:** **BLOCKED_OWNER_ACTION** — prep report complete; owner must purchase Redis, approve migration apply, then approve merge.  
 **PR:** #240  
+**Report:** [`PHASE13_PRODUCTION_PREP_REPORT.md`](./PHASE13_PRODUCTION_PREP_REPORT.md)  
 **Rule:** Merging `main` triggers Quality Gates then Production Deploy. **Do not merge** until the blocked list below is cleared by Mahmoud.
 
 ## BLOCKED_OWNER_ACTION (exact)
 
-1. **Redis confirm or purchase:** Confirm existing DigitalOcean Redis for Linas production **or** approve paid purchase (product/region/size/cost/button). Wire `RATE_LIMIT_REDIS_URL` / `REDIS_URL` with TLS/auth; prod must fail-closed (no file/memory fallback).
-2. **Meta VERIFY_AND_PRESERVE:** Confirm Meta connection health. If Meta OTP / account-owner confirmation is required, complete it. Do **not** disconnect or rebuild.
-3. **Migration apply approval:** Approve applying additive Alembic `20260812_customer_requests` on production Postgres **after backup**. Not applied yet.
+1. **Redis purchase:** No Linas-dedicated DO Valkey exists. Approve **Managed Valkey** `linas-redis-prod`, region **lon1**, size **`db-s-1vcpu-1gb`**, ~**$15/mo**. Do not reuse `sportbook-redis-prod` (fra1 / wrong product). After create: TLS/auth URL → `RATE_LIMIT_REDIS_URL` / `REDIS_URL`; multi-worker smoke; fail-closed. Do **not** activate live wiring without owner go-ahead after purchase.
+2. **Meta VERIFY_AND_PRESERVE:** Live production **VERIFIED** (ready + preflight + scope audit + webhooks). No OTP required for those checks. Optional: fix GHA `META_PAGE_ACCESS_TOKEN` allowlist for CI Token Validate only — **do not** disconnect/rebuild live Meta.
+3. **Migration apply approval:** Approve applying additive Alembic `20260812_customer_requests` on production Postgres **after backup**. Validated on ephemeral Postgres; **not applied** to prod.
 4. **Merge approval:** Only after 1–3 and Phase 12 freeze green — then merge #240 (Quality Gates → Production Deploy).
 
 ---
@@ -17,16 +18,16 @@
 
 | Item | Owner action / note |
 |------|---------------------|
-| Exact current production SHA | Record at cutover |
+| Exact current production SHA | `781a94ca3d50b02b6a8da1b0afeaeaa32e01bb26` (recorded 2026-08-12) |
 | Exact new release SHA | PR #240 merge commit |
-| Database backup/snapshot | Postgres WA Cloud + Requests tables |
-| Firestore backup/restore plan | Live Chat / users |
-| Previous deploy artifact | systemd/unit path |
-| Rollback command | `git revert` / redeploy previous SHA |
+| Database backup/snapshot | Postgres WA Cloud + Requests tables — see report §C |
+| Firestore backup/restore plan | Live Chat / users — indexes owner-gated; dry-run OK |
+| Previous deploy artifact | systemd `/etc/systemd/system/linasbot.service` |
+| Rollback command | `git reset --hard 781a94ca3d50b02b6a8da1b0afeaeaa32e01bb26 && sudo bash /opt/linasbot/deploy.sh` |
 | Migration forward/rollback | `20260812_customer_requests` additive; downgrade drops new tables only |
-| Meta connection snapshot | VERIFY_AND_PRESERVE — no disconnect/rebuild |
+| Meta connection snapshot | VERIFY_AND_PRESERVE — live verified; no disconnect/rebuild |
 | Redis rollback | unset require flag / previous URL |
-| nginx / systemd rollback | prior unit files |
+| nginx / systemd rollback | prior unit files; no reload in Phase 13 prep |
 
 Do not expose secrets in this doc or commits.
 
@@ -34,19 +35,17 @@ Do not expose secrets in this doc or commits.
 
 ## 13.2 Redis
 
-Inspect DigitalOcean first (owner/ops).
+Inspected DigitalOcean: **no Linas Valkey**. Only `sportbook-redis-prod` (fra1). Prod has Redis URL configured but **unreachable**.
 
-- If Redis **already exists**: configure `RATE_LIMIT_REDIS_URL` / `REDIS_URL`, TLS/auth, multi-worker test, outage fail-closed (see `docs/RATE_LIMIT_REDIS.md`). Production must **not** silently fall back to file/memory.
-- If a **new paid Redis** must be purchased: stop with `BLOCKED_OWNER_ACTION` — exact product/region/size/cost/button for Mahmoud.
-
-Optional durable queues: `LINAS_REQUIRE_REDIS` remains opt-in; do not enable without owner approval.
+- Purchase gate: see BLOCKED list item 1 + full report.
+- Optional durable queues: `LINAS_REQUIRE_REDIS` remains opt-in; do not enable without owner approval.
 
 ---
 
 ## 13.3 Requests migration + indexes
 
-- Validate migration on production-like copy first
-- Apply additive `20260812_customer_requests` only after backup
+- Validated on production-like ephemeral Postgres (upgrade + downgrade)
+- Apply additive `20260812_customer_requests` only after backup + owner approval
 - Confirm single Alembic head
 - No destructive rewrite
 
@@ -54,9 +53,9 @@ Optional durable queues: `LINAS_REQUIRE_REDIS` remains opt-in; do not enable wit
 
 ## 13.4 systemd / nginx / Meta
 
-- systemd units match deploy workflow
-- nginx webhook routes unchanged (VERIFY_AND_PRESERVE)
-- Meta: validate tokens/webhooks without OTP if possible; if Meta OTP/owner confirmation required → `BLOCKED_OWNER_ACTION`
+- systemd unit live + serving (read-only READY)
+- nginx webhook routes functionally verified (VERIFY_AND_PRESERVE)
+- Meta: live VERIFIED without OTP for completed checks
 
 ---
 

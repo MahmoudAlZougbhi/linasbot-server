@@ -1,6 +1,6 @@
 # OWNER STATUS COMPLETE — وضع المالك الكامل
 
-**تاريخ التحديث / Updated:** 2026-08-12  
+**تاريخ التحديث / Updated:** 2026-08-12 (Phase 13 prep report)  
 **جمهور / Audience:** Mahmoud (owner) — ملف واحد للصورة الكبيرة  
 **Repo:** `/Users/alzoughbi/linasbot-server`
 
@@ -12,7 +12,7 @@
 
 ### **NOT_READY**
 
-**ليش؟ / Why:** التطبيق (Phases 0–12) خلص ومجمّد مع CI أخضر على freeze — بس **Phase 13 مسكّر على أكشن منك أنت (owner)**. ما في merge، ما في deploy، وما في تطبيق migration على production بدون موافقتك.
+**ليش؟ / Why:** التطبيق (Phases 0–12) خلص ومجمّد مع CI أخضر على freeze. Phase 13 **تحضير جاهز** (`PHASE13_PRODUCTION_PREP_REPORT.md`) — بس لسا مسكّر على أكشن منك: **شراء Redis**، **موافقة migration**، **موافقة merge**. ما في merge/deploy/migration prod بدون موافقتك.
 
 | ممنوع الآن / Do NOT | السبب |
 |---------------------|--------|
@@ -30,15 +30,19 @@
 | Item | Value |
 |------|--------|
 | **Branch** | `chore/project-cleanup-reorg` |
-| **HEAD tip (عند كتابة هيدا الملف)** | `768ebe7b93c1e4e770e50fab6faf1f9dcc1f63b0` |
+| **HEAD tip (عند كتابة هيدا الملف)** | انظر `git rev-parse HEAD` (docs-only بعد Phase 13 report) |
 | **Freeze SHA (Phase 12)** | `9757d014dbaca0bfc0b84e9a48133356fdc14958` |
+| **Production SHA (live)** | `781a94ca3d50b02b6a8da1b0afeaeaa32e01bb26` (#238) |
 | **Last green app baseline (قبل Requests)** | `72d1d439b589f4d111b0a4cc7cd61030ceaca677` |
 | **PR** | [#240](https://github.com/MahmoudAlZougbhi/linasbot-server/pull/240) → `main` |
 | **PR state** | **OPEN**, mergeable |
-| **CI على PR #240** | **أخضر / GREEN** — backend, frontend, mobile, secret-scan, deploy-readiness كلها **SUCCESS** |
+| **CI على PR #240** | **أخضر / GREEN** على tip `768ebe7` — backend, frontend, mobile, secret-scan, deploy-readiness |
 | **Freeze CI workflow** | https://github.com/MahmoudAlZougbhi/linasbot-server/actions/runs/31602974014 |
 | **Application freeze** | **DONE** عند `9757d01` |
-| **Production migration** | **مش مطبّقة** (`20260812_customer_requests`) |
+| **Phase 13 prep report** | [`PHASE13_PRODUCTION_PREP_REPORT.md`](./PHASE13_PRODUCTION_PREP_REPORT.md) |
+| **Redis** | **BLOCKED_PURCHASE** — لا يوجد Valkey لـ Linas؛ اقترح `linas-redis-prod` lon1 1GB ~$15/mo |
+| **Meta** | **VERIFIED** على production (VERIFY_AND_PRESERVE) |
+| **Production migration** | **READY_TO_APPLY** / **مش مطبّقة** (`20260812_customer_requests`) |
 | **BOC booking** | **OFF** (default false) |
 
 **ملاحظة tip vs freeze:** الـ tip ممكن يتقدّم بـ docs-only (مثل هيدا الملف + ledger). الـ freeze الرسمي للتطبيق هو `9757d01`. قبل الـ merge: أكّد إن CI لسا أخضر على الـ tip.
@@ -112,16 +116,16 @@
 
 ## 4. شو لساته / What’s left
 
-### Phase 13 — Production preparation — **BLOCKED_OWNER_ACTION**
+### Phase 13 — Production preparation — **prep DONE / owner gates remain**
 
-مسكّر عليك أنت. التفاصيل: [`PHASE13_PRODUCTION_PREP_CHECKLIST.md`](./PHASE13_PRODUCTION_PREP_CHECKLIST.md)
+تقرير كامل: [`PHASE13_PRODUCTION_PREP_REPORT.md`](./PHASE13_PRODUCTION_PREP_REPORT.md) · checklist: [`PHASE13_PRODUCTION_PREP_CHECKLIST.md`](./PHASE13_PRODUCTION_PREP_CHECKLIST.md)
 
-1. **Redis** — أكّد إذا في DigitalOcean Redis للـ production، أو وافق على شراء (product/region/size/cost). ربط `RATE_LIMIT_REDIS_URL` / `REDIS_URL` مع TLS/auth؛ production **fail-closed** (بدون file/memory fallback صامت).
-2. **Meta VERIFY_AND_PRESERVE** — صحّة اتصال Meta؛ إذا طلع OTP / تأكيد صاحب الحساب، كمّله. **لا تفصل ولا تعيد بناء.**
-3. **Migration apply approval** — وافق على تطبيق `20260812_customer_requests` على Postgres production **بعد backup**.
+1. **Redis — BLOCKED_PURCHASE:** ما في Valkey لـ Linas. وافق على شراء Managed Valkey `linas-redis-prod`، منطقة **lon1**، حجم **`db-s-1vcpu-1gb`**, ~**$15/mo**. (لا تستخدم `sportbook-redis-prod`.) بعد الإنشاء: ربط TLS/auth + smoke — بدون تفعيل يغيّر prod بدون موافقة.
+2. **Meta — VERIFIED:** اتصال production مؤكّد بدون OTP للفحصات المنفّذة. **لا تفصل ولا تعيد بناء.** (اختياري: تصليح GHA secret للـ Token Validate فقط.)
+3. **Migration — READY_TO_APPLY:** وافق على backup ثم تطبيق `20260812_customer_requests` على Postgres production.
 4. **Merge approval** — بس بعد 1–3 والـ freeze أخضر → merge #240.
 
-كمان قبل الـ merge (تحضير rollback): سجّل production SHA الحالي، backup Postgres/Firestore، خطة nginx/systemd — بدون أسرار بالـ git.
+Rollback SHA الحالي: `781a94ca3d50b02b6a8da1b0afeaeaa32e01bb26`.
 
 ### بعد Phase 13 (لسا ما بلّشنا)
 
@@ -175,6 +179,7 @@ e8d6e65 test(requests): expand security and correctness coverage
 |-------------|-------------|
 | **هيدا الملف (الصورة الكبيرة)** | `docs/release/OWNER_STATUS_COMPLETE.md` |
 | Execution ledger (كل الـ phases) | [`docs/release/FULL_COMPLETION_EXECUTION_LEDGER.md`](./FULL_COMPLETION_EXECUTION_LEDGER.md) |
+| Phase 13 prep report | [`docs/release/PHASE13_PRODUCTION_PREP_REPORT.md`](./PHASE13_PRODUCTION_PREP_REPORT.md) |
 | Phase 13 checklist (owner block) | [`docs/release/PHASE13_PRODUCTION_PREP_CHECKLIST.md`](./PHASE13_PRODUCTION_PREP_CHECKLIST.md) |
 | Phase 12 freeze verification | [`docs/release/FINAL_FREEZE_VERIFICATION.md`](./FINAL_FREEZE_VERIFICATION.md) |
 | Independent PR review | [`docs/release/FINAL_INDEPENDENT_PR_REVIEW.md`](./FINAL_INDEPENDENT_PR_REVIEW.md) |
@@ -192,17 +197,13 @@ e8d6e65 test(requests): expand security and correctness coverage
 
 ## 7. شو بدك تعمل هلق / What you should do now (Mahmoud only)
 
-1. **اقرأ هيدا الملف** وتأكّد إنك موافق على قرار **NOT_READY** لحد ما Phase 13 يخلص.
-2. **Redis:** افتح DigitalOcean — في Redis للـ Linas production؟  
-   - إذا **نعم:** أكّد اسم الـ secret / الـ URL (`RATE_LIMIT_REDIS_URL` أو `REDIS_URL`) مع TLS/auth.  
-   - إذا **لا:** قل الموافقة على شراء (product / region / size / الكلفة / الزر) قبل ما حدا يشتري.
-3. **Meta:** تحقّق صحة الاتصال (VERIFY_AND_PRESERVE). إذا طلب OTP أو تأكيد owner — كمّله. **لا disconnect / لا rebuild.**
-4. **Backup + موافقة migration:** بعد backup لـ Postgres، وافق صراحةً على تطبيق `20260812_customer_requests` على production.
-5. **بعد 2–4 فقط:** أعطِ موافقة **merge PR #240** (بعدها Quality Gates → Production Deploy تلقائياً من الحماية على `main`).
-6. **لا تعمل:** merge من عندك قبل ما تخلّص Redis/Meta/migration؛ ولا تفعّل BOC؛ ولا تطلب force-push.
-
-لما توافق على الخطوات فوق، الفريق بيكمّل Phase 14+ (deploy smoke → EAS → live revalidation).
+1. **اقرأ** [`PHASE13_PRODUCTION_PREP_REPORT.md`](./PHASE13_PRODUCTION_PREP_REPORT.md).
+2. **وافق على شراء Redis:** DO Managed Valkey `linas-redis-prod` / **lon1** / `db-s-1vcpu-1gb` / ~**$15/mo** (Databases → Create → Valkey).
+3. **Meta:** ما في OTP مطلوب للفحصات المنفّذة — محفوظ VERIFY_AND_PRESERVE.
+4. **Backup + موافقة migration** ثم تطبيق `20260812_customer_requests`.
+5. **بعد 2–4:** موافقة **merge PR #240**.
+6. **لا تعمل:** merge قبل Redis+migration؛ ولا تفعّل BOC؛ ولا force-push.
 
 ---
 
-**آخر سطر:** الكود جاهز للـ freeze والمراجعة — **الإنتاج مش جاهز** لحد ما Mahmoud يحلّ Phase 13.
+**آخر سطر:** Phase 13 prep مكتمل تقنياً — **الإنتاج مش جاهز** لحد ما Mahmoud يوافق على شراء Redis + migration + merge.

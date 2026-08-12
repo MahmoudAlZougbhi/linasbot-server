@@ -26,7 +26,7 @@
 | 10 | Independent review + PR closeout | **DONE** (CI green; no merge) |
 | 11 | Full file-by-file reinspection | **DONE** |
 | 12 | Final freeze | **DONE** (CI green @ `9757d01`) |
-| 13 | Production preparation | **BLOCKED_OWNER_ACTION** |
+| 13 | Production preparation | **IN_PROGRESS** (prep report done; owner gates remain) |
 | 14 | Merge PR #240 + deploy | BLOCKED (needs Phase 13 owner) |
 | 15 | Live post-deploy smoke | PENDING |
 | 16 | Mobile distribution (EAS) | PENDING (will need Apple/Google 2FA) |
@@ -350,20 +350,31 @@ Do not enable `LINASLASER_BOC_BOOKING_ENABLED` in production.
 
 ---
 
-## Current stop (2026-08-12)
+## Phase 13 — Production preparation
 
-### Verdict: **NOT_READY** — Phases 11–12 application-complete; **Phase 13 BLOCKED_OWNER_ACTION**
+| Field | Value |
+|------|-------|
+| Status | **IN_PROGRESS** — inspect/verify/prepare **DONE**; owner purchase/apply/merge still blocked |
+| Artifact | `docs/release/PHASE13_PRODUCTION_PREP_REPORT.md` |
+| Prod SHA (live) | `781a94ca3d50b02b6a8da1b0afeaeaa32e01bb26` |
+| Redis | **BLOCKED_PURCHASE** — no Linas Valkey; propose `linas-redis-prod` Valkey lon1 `db-s-1vcpu-1gb` ~$15/mo |
+| Meta | **VERIFIED** live (VERIFY_AND_PRESERVE); GHA Token Validate allowlist fail is CI-secret only |
+| Migration | **READY_TO_APPLY** `20260812_customer_requests` (ephemeral PG validated; **not** applied to prod) |
+| nginx / systemd / Firestore indexes | **READY** (read-only / functional) |
 
-Do **not** merge PR #240. Do **not** deploy. Do **not** apply production migration without Mahmoud approval.
+### Current stop (2026-08-12)
 
-### BLOCKED_OWNER_ACTION (exact — Mahmoud)
+### Verdict: **NOT_READY** — Phase 13 prep report complete; **remaining BLOCKED_OWNER_ACTION**
 
-1. **Redis:** Confirm whether a DigitalOcean Redis already exists for Linas production.
-   - If **yes**: provide/confirm URL secret name (`RATE_LIMIT_REDIS_URL` / `REDIS_URL`) with TLS/auth.
-   - If **no**: approve purchase — product/region/size/cost (exact DO button) before provisioning.
-2. **Meta VERIFY_AND_PRESERVE:** Confirm Meta connection health; if Meta OTP / account-owner confirmation appears, complete it (do not disconnect/rebuild).
-3. **Migration apply approval:** Approve applying additive `20260812_customer_requests` on production Postgres **after backup** (not applied yet).
+Do **not** merge PR #240. Do **not** deploy. Do **not** apply production migration without Mahmoud approval. Do **not** purchase Redis without approval.
+
+### BLOCKED_OWNER_ACTION (exact — Mahmoud) — execution order
+
+1. **Redis purchase:** Approve DO Managed Valkey `linas-redis-prod`, region **lon1**, size **`db-s-1vcpu-1gb`**, ~**$15/mo** (not SportBook fra1 cluster). Then wire TLS/auth URL + smoke (no live activate without go-ahead).
+2. **Meta:** Live VERIFIED — no OTP required for completed checks. Optional GHA secret hygiene only; **no** disconnect/rebuild.
+3. **Migration apply approval:** Approve backup then apply additive `20260812_customer_requests` on production Postgres (not applied yet).
 4. **Merge approval:** Only after 1–3 — then merge #240 (Quality Gates → Production Deploy).
 
-Checklist: `docs/release/PHASE13_PRODUCTION_PREP_CHECKLIST.md`
+Checklist: `docs/release/PHASE13_PRODUCTION_PREP_CHECKLIST.md`  
+Report: `docs/release/PHASE13_PRODUCTION_PREP_REPORT.md`
 
