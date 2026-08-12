@@ -333,7 +333,6 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
             or path.startswith("/api/platform/")
             or path.startswith("/api/safety/")
             or path.startswith("/api/queue/")
-            or path.startswith("/api/entitlements/")
         ):
             return JSONResponse(
                 status_code=403,

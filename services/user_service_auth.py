@@ -38,9 +38,9 @@ class UserServiceAuthMixin:
             elapsed = time.monotonic() - t0
             print(f"[auth:_verify_password] done in {elapsed:.3f}s", flush=True)
             return result
-        except Exception as e:
+        except Exception:
             elapsed = time.monotonic() - t0
-            print(f"[auth:_verify_password] ERROR after {elapsed:.3f}s: {e}", flush=True)
+            print(f"[auth:_verify_password] ERROR after {elapsed:.3f}s", flush=True)
             return False
 
     def authenticate(self, email: str, password: str) -> dict[str, Any] | None:
@@ -59,7 +59,8 @@ class UserServiceAuthMixin:
             return time.monotonic() - t0
 
         email_norm = (email or "").strip().lower()
-        print(f"[auth:authenticate] 1. ENTRY t=0.00s for {email_norm}", flush=True)
+        # Timing logs only — never print email / password material.
+        print("[auth:authenticate] 1. ENTRY t=0.00s", flush=True)
 
         # Step 1: Firestore user lookup (may trigger lazy db init)
         print(f"[auth:authenticate] 2. USER_LOOKUP_START t={_elapsed():.3f}s", flush=True)
@@ -115,9 +116,10 @@ class UserServiceAuthMixin:
                         print(
                             f"[auth:authenticate] lastLogin update completed in {elapsed:.3f}s (background)", flush=True
                         )
-                except Exception as e:
+                except Exception:
                     print(
-                        f"[auth:authenticate] lastLogin background update FAILED (auth still succeeds): {e}", flush=True
+                        "[auth:authenticate] lastLogin background update FAILED (auth still succeeds)",
+                        flush=True,
                     )
 
             t = threading.Thread(target=_update_lastlogin_background, daemon=True)
@@ -171,7 +173,7 @@ class UserServiceAuthMixin:
             retry=None,
         )
 
-        print(f"Password changed for user: {user['email']}")
+        print(f"Password changed for user_id={user_id}")
         return True
 
     def set_password_with_reset(self, user_id: str, new_password: str) -> bool:
