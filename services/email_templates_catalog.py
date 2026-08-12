@@ -266,19 +266,47 @@ BILLING_TEMPLATE_IDS = (
 )
 
 for _bid, _en_subject, _en_heading, _en_line in (
-    ("billing_subscription_started", "Your Linas AI subscription started", "Subscription started", "Your subscription is active."),
+    (
+        "billing_subscription_started",
+        "Your Linas AI subscription started",
+        "Subscription started",
+        "Your subscription is active.",
+    ),
     ("billing_plan_changed", "Your Linas AI plan changed", "Plan updated", "Your subscription plan was updated."),
-    ("billing_payment_problem", "Linas AI payment problem", "Payment needs attention", "We could not process a subscription payment."),
-    ("billing_subscription_ended", "Your Linas AI subscription ended", "Subscription ended", "Your subscription is no longer active."),
-    ("billing_credits_purchased", "Linas AI credits purchased", "Credits added", "Token credits were added to your account."),
-    ("billing_refund", "Linas AI refund / credit adjustment", "Account adjustment", "A refund or credit adjustment was applied."),
+    (
+        "billing_payment_problem",
+        "Linas AI payment problem",
+        "Payment needs attention",
+        "We could not process a subscription payment.",
+    ),
+    (
+        "billing_subscription_ended",
+        "Your Linas AI subscription ended",
+        "Subscription ended",
+        "Your subscription is no longer active.",
+    ),
+    (
+        "billing_credits_purchased",
+        "Linas AI credits purchased",
+        "Credits added",
+        "Token credits were added to your account.",
+    ),
+    (
+        "billing_refund",
+        "Linas AI refund / credit adjustment",
+        "Account adjustment",
+        "A refund or credit adjustment was applied.",
+    ),
 ):
     _TEMPLATES[_bid] = {
         "en": {
             "subject": _en_subject,
             "preview": _en_heading,
             "heading": _en_heading,
-            "body_lines": [_en_line, "Open Linas AI for details. Store receipts remain authoritative for App Store / Play."],
+            "body_lines": [
+                _en_line,
+                "Open Linas AI for details. Store receipts remain authoritative for App Store / Play.",
+            ],
             "cta_label": "Open billing",
             "footer_note": "Questions? Contact support@linasaibot.com.",
         },

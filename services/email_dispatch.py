@@ -175,7 +175,9 @@ def send_verify_email(*, to_email: str, raw_token: str, locale: str | None = Non
     )
 
 
-def send_reset_password_email(*, to_email: str, raw_token: str, locale: str | None = None, user_id: str = "") -> DispatchResult:
+def send_reset_password_email(
+    *, to_email: str, raw_token: str, locale: str | None = None, user_id: str = ""
+) -> DispatchResult:
     return dispatch_template_email(
         template_id="reset_password",
         to_email=to_email,
@@ -196,7 +198,9 @@ def send_password_changed_email(*, to_email: str, locale: str | None = None, use
     )
 
 
-def send_email_change_confirm(*, to_email: str, raw_token: str, locale: str | None = None, user_id: str = "") -> DispatchResult:
+def send_email_change_confirm(
+    *, to_email: str, raw_token: str, locale: str | None = None, user_id: str = ""
+) -> DispatchResult:
     return dispatch_template_email(
         template_id="email_change_confirm",
         to_email=to_email,

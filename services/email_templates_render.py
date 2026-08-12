@@ -70,7 +70,10 @@ def render_transactional_email(
 
     # HTML
     dir_attr = 'dir="rtl"' if loc == "ar" else 'dir="ltr"'
-    lines_html = "".join(f"<p style=\"margin:0 0 12px;color:{BRAND_TEXT};font-size:15px;line-height:1.55;\">{html.escape(line)}</p>" for line in body_lines)
+    lines_html = "".join(
+        f'<p style="margin:0 0 12px;color:{BRAND_TEXT};font-size:15px;line-height:1.55;">{html.escape(line)}</p>'
+        for line in body_lines
+    )
     cta_html = ""
     if safe_url:
         cta_html = (
