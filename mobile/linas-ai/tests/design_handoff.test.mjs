@@ -17,10 +17,15 @@ function read(rel) {
 
 test('drawer module order matches binding product order', () => {
   const text = read('features/nav/drawerModules.ts');
-  const ids = [...text.matchAll(/id: '([a-z]+)'/g)].map((m) => m[1]);
+  // AI Setup (cm) is featured separately; grid order is DRAWER_MODULES only.
+  assert.match(text, /export const FEATURED_AI_SETUP[\s\S]*?id:\s*'cm'/);
+  const gridBlock = text.match(/export const DRAWER_MODULES: DrawerModule\[] = \[([\s\S]*?)\];/);
+  assert.ok(gridBlock, 'DRAWER_MODULES array missing');
+  assert.doesNotMatch(gridBlock[1], /id:\s*'cm'/);
+  const ids = [...gridBlock[1].matchAll(/id:\s*'([^']+)'/g)].map((m) => m[1]);
   assert.deepEqual(ids, [
     'dashboard',
-    'cm',
+    'smartFollowUp',
     'faq',
     'livechat',
     'integrations',
@@ -130,8 +135,8 @@ test('cold open is branded star splash then chat (no character mash / progress b
   assert.match(appJson, /"bundleIdentifier":\s*"com\.linasai\.app"/);
   assert.match(appJson, /"package":\s*"com\.linasai\.app"/);
   assert.match(appJson, /expo-audio/);
-  assert.match(appJson, /"buildNumber":\s*"20"/);
-  assert.match(appJson, /"versionCode":\s*20/);
+  assert.match(appJson, /"buildNumber":\s*"23"/);
+  assert.match(appJson, /"versionCode":\s*23/);
   assert.ok(existsSync(join(root, 'assets/splash-native.png')));
   assert.doesNotMatch(
     chat,
@@ -183,23 +188,32 @@ test('owner stream shows Thinking then live bubble in the same footer slot', () 
   assert.match(chat, /thinkingLabel=\{tr\('chatThinking'\)\}/);
   assert.match(footer, /id: 'live-stream'/);
   assert.match(list, /thinking=\{thinking\}/);
-  assert.match(chat, /thinking=\{turn\.thinking\}/);
+  // Guest send also shows Thinking in the same footer slot.
+  assert.match(chat, /thinking=\{turn\.thinking \|\| \(!isAuthenticated && guest\.sending\)\}/);
   assert.match(thinking, /isReduceMotionEnabled|reduceMotionChanged/);
   assert.match(thinking, /LinasStarMark/);
 });
 
 test('proposal card exposes complete V2 actions beyond Review/Discard', () => {
   const card = read('features/chat/v2/ProposalCard.tsx');
-  for (const needle of [
-    'Approve and go live',
-    'Review in AI Setup',
-    'Discard',
-    'CURRENT',
-    'PROPOSED',
-    'Not applied yet',
+  for (const key of [
+    'proposalApprove',
+    'proposalReviewInSetup',
+    'proposalCancel',
+    'proposalEdit',
+    'proposalCurrent',
+    'proposalProposed',
+    'proposalNotAppliedYet',
   ]) {
-    assert.match(card, new RegExp(needle));
+    assert.match(card, new RegExp(`tr\\('${key}'\\)`));
   }
+  const en = read('i18n/locales/en.ts');
+  assert.match(en, /proposalApprove:\s*'Approve'/);
+  assert.match(en, /proposalReviewInSetup:\s*'Review in AI Setup'/);
+  assert.match(en, /proposalCancel:\s*'Cancel'/);
+  assert.match(en, /proposalCurrent:\s*'Current'/);
+  assert.match(en, /proposalProposed:\s*'Proposed'/);
+  assert.match(en, /proposalNotAppliedYet:\s*'Not applied yet/);
 });
 
 test('guest pending draft handoff does not import transcript', () => {
@@ -241,11 +255,15 @@ test('voice STT wires transcript into composer draft (no auto-send)', () => {
   // Mic stays available with typed draft so confirm can append, not replace.
   assert.match(composer, /showMic && onToggleVoice && !streamingStop/);
   assert.doesNotMatch(composer, /voiceBusy \|\| !canSend/);
-  assert.match(composer, /Listening…/);
-  assert.match(composer, /Paused ·/);
-  assert.match(composer, /Transcribing…/);
+  assert.match(composer, /tr\('composerListening'\)/);
+  assert.match(composer, /tr\('composerPaused'\)/);
+  assert.match(composer, /tr\('composerTranscribing'\)/);
   assert.match(composer, /formatVoiceElapsed/);
   assert.match(composer, /StopGlyph/);
+  const en = read('i18n/locales/en.ts');
+  assert.match(en, /composerListening:\s*'Listening…'/);
+  assert.match(en, /composerPaused:\s*'Paused'/);
+  assert.match(en, /composerTranscribing:\s*'Transcribing…'/);
   assert.match(controls, /Continue recording/);
   assert.match(controls, /Use recording/);
   assert.match(controls, /Discard recording/);
