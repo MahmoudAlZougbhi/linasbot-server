@@ -1,22 +1,22 @@
 # Phase 0B — Complete problems report (all tracked files)
 
-_Source: `docs/audit/FILE_INVENTORY.csv` after full Phase 0B + false-orphan correction._
+_Source: `docs/audit/FILE_INVENTORY.csv` after full Phase 0B + false-orphan correction + late agent reconcile._
 
 **Audit-only.** Do **not** delete, fix, migrate, Meta-cutover, or deploy until Mahmoud approves Phase 1.
 
-- **Inventory parity:** 1544 / 1544 (will match `git ls-files` after this report is committed)
+- **Inventory parity:** 1544 / 1544
 - **Review status:** all `COMPLETE`
 - **Fully read:** YES for text sources; NOT_APPLICABLE for binaries
-- **Quality:** seq 1–205 careful hand/agent forensic; later rows import-rechecked (≈787 false DELETE corrected). Prefer KEEP_*_FIX + DELETE as actionable.
+- **Quality:** seq 1–205 careful hand/agent forensic; later rows import-rechecked; late agents 206–520 merged where available.
 
 ## Disposition totals
 
 | Disposition | Count |
 |---|---:|
-| KEEP_AS_IS | 1200 |
-| MOVE_TO_ARCHIVE | 131 |
+| KEEP_AS_IS | 1190 |
+| MOVE_TO_ARCHIVE | 130 |
 | BINARY_ASSET_REVIEW | 81 |
-| KEEP_FIX | 38 |
+| KEEP_FIX | 49 |
 | LANDING_KEEP | 35 |
 | DELETE_CANDIDATE | 23 |
 | KEEP_MOBILE_API | 16 |
@@ -89,6 +89,17 @@ _Source: `docs/audit/FILE_INVENTORY.csv` after full Phase 0B + false-orphan corr
 - **Seq 191** `dashboard/src/pages/LiveChatModals.jsx` — Active modals; prop dump pattern like siblings | Active modals; duplicate fragment wrappers + unused-import LOC-split debt | FAQ save-all-languages actions — server must authz | god-object destructure; duplicate fragment wrappers | duplicate nested fragments; god-object unused destructure
 - **Seq 194** `dashboard/src/pages/LiveChatThreadHeader.jsx` — Active header; same full-controller prop pattern | Active header; unused-import / full-controller destructuring debt from LOC split | god-object destructure
 - **Seq 196** `dashboard/src/pages/Login.jsx` — Dev connection help embeds personal absolute paths | Hardcodes personal laptop paths /Users/mahmoudalzougbhi/linas ai bot in connection error UI — wrong for other machines and leaks local layout
+- **Seq 305** `deploy/nginx-api-include.conf` — Active deploy snippet per README; drift vs full config on /oauth/ routes. | access_log off + crit-only error_log on webhook/data-deletion/integrations; owner-ai SSE has 300s timeout and proxy_buffering off. | Snippet lacks /oauth/ and /meta/deauthorize present in full nginx-linasaibot.conf—include-only installs may miss OAuth routes. | SSE location disables buffering—correct for streaming.
+- **Seq 310** `docker-compose.yml` — Hardcoded tradershubs API URL in dashboard service env (line 65) diverges from prod nginx same-origin design. | Dev compose exposes Redis 6379 and mounts repo—dev only. | REACT_APP_API_URL=https://bot.tradershubs.site/api is stale/wrong for linasaibot.com local dev—conflicts with vite same-origin pattern.
+- **Seq 313** `docs/ANALYTICS_LOGIC.md` — Accurate event logic but references removed /analytics dashboard route. | Documents user_id masking ...XXXX for privacy. | Stale: dashboard Analytics sidebar route redirected to /app in App.jsx:141; doc line 113 outdated.
+- **Seq 318** `docs/CLAUDE_MEMORY.md` — Useful but 495 lines with version-specific claims that may be outdated. | States v2.7.22 and deprecated conversation_log—partially stale vs CM cutover and current branch; use with caution.
+- **Seq 456** `firestore.indexes.json` — rg: live_chat_index query paths in live_chat_service_*; doc drift on index #3 collection | docs/FIRESTORE_INDEXES.md item 3 mentions conversations collection_group human_takeover_active but JSON defines live_chat_index.human_takeover_active — doc/index mismatch | required for ordered/filtered live_chat_index queries at scale
+- **Seq 457** `handlers/VERSION.py` — rg: only handlers/text_handlers.py imports VERSION; stale build notes | Stale: BUILD_ID NAME_COLLECTION_v1, LAST_MODIFIED 2025-01-24, CHANGES claims 5 modular files while tree has 20+ handler modules | print_version_info() runs on every text_handlers import (noisy logs)
+- **Seq 462** `handlers/text_handlers_firestore.py` — rg: _delayed_processing_tasks imported by webhook dedupe, dashboard lab, social processor | misnamed file (re-exports many non-firestore symbols) — maintainability debt | in-memory task dict per worker
+- **Seq 463** `handlers/text_handlers_message.py` — rg: 7+ importers; tests enforce LOC split | verbose DEBUG prints include user_id, phone, message preview — log PII risk | text_turn_epoch prevents duplicate sends; training mode delegation; MAX_TEXT_LINES guard | sentiment + optional Firestore sentiment update per message; per-user asyncio.Lock in greeting module
+- **Seq 472** `handlers/text_handlers_respond_phase12.py` — rg: terminal phase; dead _pack block after halt return | unreachable _pack after return _PHASE_HALT (dead code) | analytics + optional training log per turn
+- **Seq 482** `handlers/text_handlers_start.py` — rg: exported from text_handlers; webhook_process comments removed direct call | webhook start_command_whatsapp no longer calls start_command directly — possible dead export
+- **Seq 484** `handlers/voice_handlers.py` — rg: webhook_handlers_voice + dashboard lab import handle_voice_message | uses synchronous conv_doc_ref.get() inside async handler (blocks event loop); skip_firestore_save prevents double-save | pydub transcode + Whisper API per voice message
 - **Seq 1175** `services/montymobile_template_service.py` — No importers found via module path patterns
 - **Seq 1176** `services/montymobile_template_service_payload.py` — No importers found via module path patterns
 - **Seq 1302** `services/whatsapp_adapters/montymobile_adapter.py` — No importers found via module path patterns
@@ -127,7 +138,7 @@ Zero external importers after module-path recheck (or orphan cluster / orphan te
 
 ---
 
-## Archive candidates — `MOVE_TO_ARCHIVE` (131)
+## Archive candidates — `MOVE_TO_ARCHIVE` (130)
 
 | Area | Count | Examples |
 |---|---:|---|
@@ -138,7 +149,6 @@ Zero external importers after module-path recheck (or orphan cluster / orphan te
 | `docs/design` | 6 | `docs/design/MAHMOUD_MOBILE_PROMPT.md`, `docs/design/MAHMOUD_MOBILE_PROMPT_content_management.md`, `docs/design/MAHMOUD_MOBILE_PROMPT_guest_chat.md`, `docs/design/MAHMOUD_MOBILE_PROMPT_live_chat.md` |
 | `data` | 4 | `data/analytics_events.jsonl`, `data/conversation_log.jsonl`, `data/qa_pairs.jsonl`, `data/reports_log.jsonl` |
 | `dashboard` | 1 | `dashboard/README.md` |
-| `docs/CLAUDE_MEMORY.md` | 1 | `docs/CLAUDE_MEMORY.md` |
 | `docs/CM_FULL_CORPUS_LEDGER.md` | 1 | `docs/CM_FULL_CORPUS_LEDGER.md` |
 | `docs/CONTENT_MANAGEMENT_AI_CONTROL_PLANE_PLAN_architecture.md` | 1 | `docs/CONTENT_MANAGEMENT_AI_CONTROL_PLANE_PLAN_architecture.md` |
 | `docs/CONTENT_MANAGEMENT_AI_CONTROL_PLANE_PLAN_overview.md` | 1 | `docs/CONTENT_MANAGEMENT_AI_CONTROL_PLANE_PLAN_overview.md` |
@@ -172,7 +182,6 @@ Zero external importers after module-path recheck (or orphan cluster / orphan te
 - Seq 284: `data/conversation_log.jsonl`
 - Seq 292: `data/qa_pairs.jsonl`
 - Seq 293: `data/reports_log.jsonl`
-- Seq 318: `docs/CLAUDE_MEMORY.md`
 - Seq 319: `docs/CM_FULL_CORPUS_LEDGER.md`
 - Seq 321: `docs/CONTENT_MANAGEMENT_AI_CONTROL_PLANE_PLAN_architecture.md`
 - Seq 322: `docs/CONTENT_MANAGEMENT_AI_CONTROL_PLANE_PLAN_overview.md`
@@ -426,8 +435,14 @@ Owner may elevate later. Excludes doc/planning/PII-jsonl boilerplate.
 - **Seq 191** `dashboard/src/pages/LiveChatModals.jsx` [KEEP_FIX] — FAQ save-all-languages actions — server must authz
 - **Seq 195** `dashboard/src/pages/LiveChatThreadMessages.jsx` [KEEP_AS_IS] — renders image_url/audio_url from server — trust media URLs; media send via composer operator_001 issue upstream
 - **Seq 201** `dashboard/src/pages/ResetPassword.jsx` [KEEP_AS_IS] — token in URL query (email link pattern); no client min-length beyond required — server must enforce
+- **Seq 306** `deploy/nginx-linasaibot.conf` [KEEP_AS_IS] — HTTP redirect strips query string (line 12); sensitive endpoints use linasbot_safe log format via access_log directive; webhook/oauth/data-deletion logging minimized.
+- **Seq 307** `deploy/nginx-privacy-log.conf` [KEEP_AS_IS] — Deliberately excludes $request_uri/$args—reduces OAuth/webhook token leakage into access logs.
+- **Seq 308** `deploy/systemd/linasbot-worker@.service` [KEEP_AS_IS] — Runs as root; loads EnvironmentFile .env—ensure file permissions restricted.
+- **Seq 463** `handlers/text_handlers_message.py` [KEEP_FIX] — verbose DEBUG prints include user_id, phone, message preview — log PII risk
+- **Seq 477** `handlers/text_handlers_respond_phase6.py` [KEEP_AS_IS] — coerces unauthorized human_handover after post-release cooldown
+- **Seq 489** `main.py` [KEEP_AS_IS] — access_log=False to avoid webhook query secrets in logs; APK route requires auth+liveChat permission
 
-_Extra security notes listed: 24_
+_Extra security notes listed: 30_
 
 ---
 
@@ -435,7 +450,7 @@ _Extra security notes listed: 24_
 
 - `LANDING_KEEP`: 35
 - `KEEP_MOBILE_API`: 16
-- `KEEP_AS_IS`: 1200
+- `KEEP_AS_IS`: 1190
 - `GENERATED_SKIP`: 2
 
 ---

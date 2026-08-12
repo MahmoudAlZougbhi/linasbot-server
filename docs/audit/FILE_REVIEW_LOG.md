@@ -290,3 +290,13 @@ Source: second agent audit for seq 146–175.
 COMPLETE **1544 / 1544**
 
 **STOP for Mahmoud approval** — no Phase 1 deletes/fixes/Meta/DB/deploy from this phase.
+
+
+---
+
+## Follow-up — merge late agent forensics (seq 206–320 / 321–520)
+
+- Merged sharper notes from [Audit seq 206-320](1bcea833-a817-4de2-8c74-65141128416e) and [Audit seq 321-520](c1941dcd-695a-4e63-aa3d-5cf1906d0975) into inventory.
+- Disposition upgrades applied where agent findings were stronger (11 changes).
+- [Audit seq 521-800](38e54f8a-dce5-460a-a695-665b5fb450be) failed with resource_exhausted; range already COMPLETE from full-pass + import recheck — no re-run.
+
