@@ -180,9 +180,7 @@ def change_request_status(request_id: str, body: RequestStatusBody, request: Req
 
 
 @app.post("/api/requests/{request_id}/final-action")
-async def request_final_action(
-    request_id: str, body: RequestFinalActionBody, request: Request
-) -> dict[str, Any]:
+async def request_final_action(request_id: str, body: RequestFinalActionBody, request: Request) -> dict[str, Any]:
     session = require_requests_notify(request)
     tenant_id = _tenant(session)
     with _db_cm() as db:
@@ -215,9 +213,7 @@ async def request_final_action(
 
 
 @app.post("/api/requests/{request_id}/notify-retry")
-async def retry_request_notification(
-    request_id: str, body: RequestNotifyRetryBody, request: Request
-) -> dict[str, Any]:
+async def retry_request_notification(request_id: str, body: RequestNotifyRetryBody, request: Request) -> dict[str, Any]:
     session = require_requests_notify(request)
     tenant_id = _tenant(session)
     with _db_cm() as db:
@@ -244,9 +240,7 @@ async def retry_request_notification(
 
 
 @app.post("/api/requests/{request_id}/manual-mode/resume")
-async def resume_request_manual_mode(
-    request_id: str, body: RequestManualModeBody, request: Request
-) -> dict[str, Any]:
+async def resume_request_manual_mode(request_id: str, body: RequestManualModeBody, request: Request) -> dict[str, Any]:
     session = require_requests_manual_chat(request)
     tenant_id = _tenant(session)
     with _db_cm() as db:

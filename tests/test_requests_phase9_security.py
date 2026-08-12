@@ -162,9 +162,7 @@ def test_invalid_appointment_transition_refused(req_db, monkeypatch):
 
 
 def test_invalid_order_skip_to_ready_refused(req_db, monkeypatch):
-    created = _create(
-        req_db, monkeypatch, request_type="ORDER", channel="whatsapp_cloud", key="idem-p9-bad-ord"
-    )
+    created = _create(req_db, monkeypatch, request_type="ORDER", channel="whatsapp_cloud", key="idem-p9-bad-ord")
     svc = CustomerRequestsService(req_db)
     with pytest.raises(CustomerRequestsError) as exc:
         svc.transition_status(
@@ -274,9 +272,7 @@ def test_get_omits_sensitive_without_flag(req_db, monkeypatch):
 
 
 def test_notify_retry_idempotent_outbox(req_db, monkeypatch):
-    created = _create(
-        req_db, monkeypatch, request_type="ORDER", channel="instagram_dm", key="idem-p9-retry"
-    )
+    created = _create(req_db, monkeypatch, request_type="ORDER", channel="instagram_dm", key="idem-p9-retry")
     svc = CustomerRequestsService(req_db)
     first = svc.retry_notification(
         tenant_id="tenant-a",

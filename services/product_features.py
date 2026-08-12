@@ -183,14 +183,8 @@ def boc_booking_readiness() -> dict:
             "jobs_allowed": False,
         }
 
-    base = (
-        (os.getenv("EXTERNAL_API_BASE_URL") or "").strip()
-        or (os.getenv("LINASLASER_API_BASE_URL") or "").strip()
-    )
-    token = (
-        (os.getenv("EXTERNAL_API_TOKEN") or "").strip()
-        or (os.getenv("LINASLASER_API_TOKEN") or "").strip()
-    )
+    base = (os.getenv("EXTERNAL_API_BASE_URL") or "").strip() or (os.getenv("LINASLASER_API_BASE_URL") or "").strip()
+    token = (os.getenv("EXTERNAL_API_TOKEN") or "").strip() or (os.getenv("LINASLASER_API_TOKEN") or "").strip()
     configured = bool(base) and bool(token)
     return {
         "ok": configured,

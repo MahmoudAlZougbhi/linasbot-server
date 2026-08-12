@@ -387,7 +387,12 @@ class LiveChatOperatorMixin:
                     wa_cm.__exit__(None, None, None)
 
             # Best-effort Live Chat index / canonical state refresh.
-            release = await self.release_conversation(conversation_id, user_id)
+            # release_conversation lives on LiveChatLifecycleMixin (composed on LiveChatService).
+            release_fn = getattr(self, "release_conversation", None)
+            if callable(release_fn):
+                release = await release_fn(conversation_id, user_id)
+            else:
+                release = {"success": False, "error": "release_conversation unavailable"}
             return {
                 "success": True,
                 "message": "AI resumed for conversation",

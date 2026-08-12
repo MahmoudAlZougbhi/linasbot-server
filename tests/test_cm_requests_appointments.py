@@ -174,11 +174,7 @@ async def test_published_without_section_key_stays_inactive(
     from tests.cm_test_helpers import install_mocked_openai_embeddings
 
     install_mocked_openai_embeddings(monkeypatch, published_mode=True)
-    legacy_sections = {
-        name: default_section_payload(name)
-        for name in CM_SECTIONS
-        if name != "requests_appointments"
-    }
+    legacy_sections = {name: default_section_payload(name) for name in CM_SECTIONS if name != "requests_appointments"}
     version_id = f"v_{tenant_data}_legacy"
     checksums = write_version_content(tenant_data, version_id, legacy_sections)
     index_manifest = await build_index(
