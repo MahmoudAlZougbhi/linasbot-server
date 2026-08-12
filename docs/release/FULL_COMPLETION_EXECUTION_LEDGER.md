@@ -122,7 +122,7 @@ All Quality Gates + Security Checks SUCCESS on PR head. No merge.
 | Field | Value |
 |------|-------|
 | Status | **DONE** (outbox foundations) |
-| Ending SHA | *(see commit `feat(requests): channel notification outbox delivery`)* |
+| Ending SHA | `44de52495e37a19295aa329963a2b7fd83db4313` |
 | Tests | `tests/test_requests_outbox_delivery.py` |
 
 ### Landed
