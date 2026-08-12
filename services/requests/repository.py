@@ -212,7 +212,7 @@ class CustomerRequestsRepository:
             claimed = row.claimed_at or row.created_at
             if claimed is None:
                 continue
-            ts = claimed.timestamp() if hasattr(claimed, "timestamp") else float(claimed)
+            ts = claimed.timestamp()
             if ts > cutoff:
                 continue
             row.status = "pending"
