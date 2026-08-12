@@ -184,7 +184,7 @@ class TestRouteInventory:
         # +guest-ai session/messages (prefix-public, rate-limited).
         # +owner-notifications inbox/read/device-token + mobile STT (protected).
         # +public plans catalog GET /api/public/plans + protected GET /api/billing/catalog.
-        assert counts["total_api_routes"] == 225
+        assert counts["total_api_routes"] == 226
         assert counts["public"] == 19
         assert counts["protected"] == 206
         assert public_set == {
