@@ -6,7 +6,6 @@ from typing import Any
 
 from modules.core import app
 
-
 # ==========================================
 # PREVIEW QUEUE ENDPOINTS
 # ==========================================

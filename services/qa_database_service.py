@@ -6,8 +6,6 @@ Replaces the deprecated JSON file approach with real database integration
 
 from __future__ import annotations
 
-import re
-from difflib import SequenceMatcher
 from typing import Any, cast
 
 import httpx
@@ -15,12 +13,11 @@ from dotenv import load_dotenv
 
 import api_config
 from services.language_detection_service import language_detection_service
+from services.qa_database_service_match import QADatabaseServiceMatchMixin
 
 # Load environment variables (.env then .env.local via core; load_dotenv for standalone scripts)
 load_dotenv()
 
-
-from services.qa_database_service_match import QADatabaseServiceMatchMixin
 
 class QADatabaseService(QADatabaseServiceMatchMixin):
     """

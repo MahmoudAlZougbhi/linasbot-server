@@ -165,7 +165,7 @@ class LiveChatHistoryApiMixin:
                 "total_pages": total_pages,
             }
         except Exception as e:
-            print(f"❌ Error getting history conversations for {user_id}: {e}")
+            print(f"❌ Error getting history conversations for ...{str(user_id)[-4:]}: {e}")
             import traceback
 
             traceback.print_exc()

@@ -279,9 +279,9 @@ async def await_whatsapp_delayed_processing(user_id: str) -> None:
     try:
         await asyncio.shield(task)
     except asyncio.CancelledError:
-        print(f"⚠️ [webhook] Delayed processing cancelled for user_id={user_id}")
+        print(f"⚠️ [webhook] Delayed processing cancelled for user_id=...{str(user_id)[-4:]}")
     except Exception as e:
-        print(f"❌ [webhook] Delayed processing failed for user_id={user_id}: {e}")
+        print(f"❌ [webhook] Delayed processing failed for user_id=...{str(user_id)[-4:]}: {e}")
     finally:
         _delayed_processing_tasks.pop(user_id, None)
 

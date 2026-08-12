@@ -76,7 +76,7 @@ async def prepare_chat_response_identity(ns: Any) -> Any:
                             f"✅ CRM sync: loaded name '{ns.user_name}' and gender '{ns.ext['gender']}' for {ns.user_id} before AI call"
                         )
                     else:
-                        print(f"✅ CRM sync: loaded name '{ns.user_name}' for {ns.user_id} before AI call")
+                        print(f"✅ CRM sync: loaded name_len={len(str(ns.user_name or ''))} for ...{str(ns.user_id)[-4:]} before AI call")
                 elif ns.ext.get("exists"):
                     if ns.user_id in config.user_data_whatsapp:
                         config.user_data_whatsapp[ns.user_id]["crm_customer_exists"] = True
@@ -87,11 +87,11 @@ async def prepare_chat_response_identity(ns: Any) -> Any:
                     if ns.ext.get("gender") in ("male", "female"):
                         config.user_gender[ns.user_id] = ns.ext["gender"]
                         config.gender_attempts[ns.user_id] = 0
-                        print(f"✅ CRM sync: customer has file, loaded gender '{ns.ext['gender']}' for {ns.user_id}")
+                        print(f"✅ CRM sync: customer has file, loaded gender '{ns.ext['gender']}' for ...{str(ns.user_id)[-4:]}")
                     else:
-                        print(f"✅ CRM sync: customer has file but no name in CRM for {ns.user_id}")
+                        print(f"✅ CRM sync: customer has file but no name in CRM for ...{str(ns.user_id)[-4:]}")
             except Exception as e:
-                print(f"⚠️ CRM sync lookup failed for {ns.user_id}: {e}")
+                print(f"⚠️ CRM sync lookup failed for ...{str(ns.user_id)[-4:]}: {e}")
         # Use gender from config if we just loaded it from CRM (for current request)
         if config.user_gender.get(ns.user_id) in ("male", "female"):
             ns.current_gender = config.user_gender[ns.user_id]

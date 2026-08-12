@@ -19,7 +19,7 @@ import config
 from services.booking.constants import (
     BOOKING_TIMEZONE_LABEL,
     DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS,
-    _service_requires_machine,
+    _service_requires_machine,  # noqa: F401 — public re-export for tests/callers
 )
 from services.booking.intent_pipeline_crm import (  # noqa: F401
     _ensure_customer,
@@ -39,7 +39,11 @@ from services.booking.intent_pipeline_helpers import (  # noqa: F401
     _merge_intent,
 )
 from services.booking.intent_pipeline_resolve import resolve_submit_booking_entities
-from services.booking.schemas import empty_booking_intent_template, success_validation_shell, validation_error_response
+from services.booking.schemas import (  # noqa: F401 — empty_booking_intent_template re-exported
+    empty_booking_intent_template,
+    success_validation_shell,
+    validation_error_response,
+)
 from utils.appointment_slot_rules import parse_normalized_api_datetime, validate_booking_slot
 from utils.datetime_utils import BOT_FIXED_TZ
 

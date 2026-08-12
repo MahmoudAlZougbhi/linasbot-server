@@ -76,44 +76,44 @@ class SentimentEscalationService:
         if offensive_found:
             detected_issues.append("offensive_language")
             escalation_score += 80
-            print(f"🚨 ESCALATION: User {user_id} used offensive language")
+            print(f"🚨 ESCALATION: User ...{str(user_id)[-4:]} used offensive language")
         elif anger_found:
             detected_issues.append("anger_detected")
             escalation_score += 60
-            print(f"⚠️ WARNING: User {user_id} showing signs of anger")
+            print(f"⚠️ WARNING: User ...{str(user_id)[-4:]} showing signs of anger")
 
         # 3. Check for confusion/frustration
         confusion_found = self._check_keywords(message_lower, self.CONFUSION_KEYWORDS, language)
         if confusion_found:
             detected_issues.append("confusion_detected")
             escalation_score += 40
-            print(f"⚠️ WARNING: User {user_id} seems confused")
+            print(f"⚠️ WARNING: User ...{str(user_id)[-4:]} seems confused")
 
         # 4. Check for urgency
         urgency_found = self._check_keywords(message_lower, self.URGENCY_KEYWORDS, language)
         if urgency_found:
             detected_issues.append("urgency_detected")
             escalation_score += 30
-            print(f"⚠️ WARNING: User {user_id} indicated urgency")
+            print(f"⚠️ WARNING: User ...{str(user_id)[-4:]} indicated urgency")
 
         # 5. Check for message repetition (user keeps asking same thing)
         repetition_score = self._check_repetition(user_id, message)
         if repetition_score >= self.REPETITION_THRESHOLD:
             detected_issues.append("message_repetition")
             escalation_score += 50
-            print(f"⚠️ WARNING: User {user_id} repeating messages ({repetition_score} times)")
+            print(f"⚠️ WARNING: User ...{str(user_id)[-4:]} repeating messages ({repetition_score} times)")
 
         # 6. Check for excessive punctuation (!!!, ???)
         if self._check_excessive_punctuation(message):
             detected_issues.append("excessive_punctuation")
             escalation_score += 20
-            print(f"⚠️ WARNING: User {user_id} using excessive punctuation")
+            print(f"⚠️ WARNING: User ...{str(user_id)[-4:]} using excessive punctuation")
 
         # 7. Check for ALL CAPS (shouting)
         if self._check_all_caps(message):
             detected_issues.append("all_caps")
             escalation_score += 25
-            print(f"⚠️ WARNING: User {user_id} using ALL CAPS")
+            print(f"⚠️ WARNING: User ...{str(user_id)[-4:]} using ALL CAPS")
 
         # Determine sentiment
         if escalation_score >= 80:
@@ -151,7 +151,7 @@ class SentimentEscalationService:
             "detected_issues": detected_issues,
         }
 
-        print(f"📊 Sentiment Analysis for {user_id}: {result}")
+        print(f"📊 Sentiment Analysis for ...{str(user_id)[-4:]}: sentiment={result.get('sentiment') if isinstance(result, dict) else type(result).__name__}")
 
         return result
 

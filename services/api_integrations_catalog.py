@@ -7,6 +7,7 @@ from typing import Any
 
 from services.api_integrations_http import _make_api_request, log_report_event
 
+
 async def get_branches() -> Any:
     """Retrieves a list of all branches associated with the clinic."""
     print("API Call: get_branches")

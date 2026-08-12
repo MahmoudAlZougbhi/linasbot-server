@@ -36,6 +36,7 @@ from services.meta_oauth import (
     unsubscribe_binding_webhook,
 )
 
+
 @app.post("/api/meta/connections/{binding_id}/disconnect")
 async def disconnect_meta_connection(binding_id: str, request: Request) -> Any:
     session = require_permission(request, "settings")

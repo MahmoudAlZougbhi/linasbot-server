@@ -6,7 +6,9 @@ import os
 from typing import Any
 
 from services.api_integrations_http import _make_api_request, log_report_event
-from services.api_integrations_status import _phone_clean_for_appointment_api
+from services.api_integrations_reminders import get_appointment_details
+from services.api_integrations_status import _phone_clean_for_appointment_api, resume_appointment
+
 
 def _clean_body_part_ids_for_api(raw: list | None) -> list[int]:
     out: list[int] = []
@@ -92,7 +94,7 @@ async def create_appointment(
         phone_clean = phone_clean[3:]  # Remove Lebanon country code
 
     print(
-        f"API Call: create_appointment for phone={phone_clean} (original: {phone}), service={service_id}, date={date}"
+        f"API Call: create_appointment for phone=***{str(phone_clean)[-4:] if phone_clean else ''} (original_last4=***{str(phone)[-4:] if phone else ''}), service={service_id}, date={date}"
     )
     json_data = {"phone": phone_clean, "service_id": service_id, "branch_id": branch_id, "date": date}
     if machine_id is not None:
@@ -342,7 +344,7 @@ async def update_appointment_date(appointment_id: int, phone: str, date: str, us
     phone_clean = _phone_clean_for_appointment_api(phone)
 
     print(
-        f"API Call: update_appointment_date for appointment_id={appointment_id}, phone={phone_clean} (original: {phone}), date={date}"
+        f"API Call: update_appointment_date for appointment_id={appointment_id}, phone=***{str(phone_clean)[-4:] if phone_clean else ''} (original_last4=***{str(phone)[-4:] if phone else ''}), date={date}"
     )
     json_data = {"appointment_id": appointment_id, "phone": phone_clean, "date": date}
     if user_code:

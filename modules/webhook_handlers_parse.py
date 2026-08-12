@@ -7,6 +7,7 @@ from typing import Any
 from modules.models import WebhookRequest
 from modules.webhook_handlers_dedupe import _synthetic_inbound_id_from_wa_message
 
+
 def _webhook_is_meta_status_only(webhook_data: dict[str, Any]) -> bool:
     """WhatsApp Cloud API sends delivery/read/sent updates with statuses[] and no messages[]."""
     try:

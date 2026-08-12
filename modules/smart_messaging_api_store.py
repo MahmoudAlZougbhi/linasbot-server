@@ -7,7 +7,6 @@ import os
 import tempfile
 import threading
 from collections.abc import Iterator
-from contextlib import contextmanager
 from typing import Any
 
 from services.smart_messaging_catalog import (

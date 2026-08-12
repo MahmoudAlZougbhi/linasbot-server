@@ -10,6 +10,7 @@ from typing import Any
 import config
 from services.api_integrations_http import REPORT_LOG_FILE, _make_api_request, log_report_event
 
+
 async def check_customer_gender(phone: str | None = None, user_code: str | None = None) -> Any:
     """Returns the gender of a customer based on the provided identifier."""
     # Clean phone number to match API expected format (without + prefix and country code)
@@ -19,7 +20,7 @@ async def check_customer_gender(phone: str | None = None, user_code: str | None 
         if phone_clean.startswith("961"):
             phone_clean = phone_clean[3:]  # Remove Lebanon country code
 
-    print(f"API Call: check_customer_gender for phone={phone_clean} (original: {phone}), user_code={user_code}")
+    print(f"API Call: check_customer_gender for phone=***{str(phone_clean)[-4:] if phone_clean else ''} (original_last4=***{str(phone)[-4:] if phone else ''}), user_code={user_code}")
     params = {}
     # NEW: Ensure either phone or user_code is provided for the API call
     if phone_clean:
@@ -95,7 +96,7 @@ async def create_customer(
                 if "phone_number" in data and data["phone_number"]:
                     if str(uid) == str(phone):  # room_id matches phone variable
                         print(
-                            f"⚠️ create_customer: Detected invalid phone={phone}, using actual phone {data['phone_number']}"
+                            f"⚠️ create_customer: Detected invalid phone=***{str(phone)[-4:] if phone else ''}, using actual phone ***{str(data['phone_number'])[-4:]}"
                         )
                         phone_clean = str(data["phone_number"]).replace("+", "").replace(" ", "").replace("-", "")
                         if phone_clean.startswith("961"):
@@ -106,7 +107,7 @@ async def create_customer(
     gender_api_format = gender.capitalize() if gender.lower() in ["male", "female"] else "Male"
 
     print(
-        f"API Call: create_customer for name={name}, phone={phone_clean} (original: {phone}), "
+        f"API Call: create_customer for name_len={len(str(name or ''))}, phone=***{str(phone_clean)[-4:] if phone_clean else ''} (original_last4=***{str(phone)[-4:] if phone else ''}), "
         f"gender={gender_api_format}, branch_id={resolved_branch_int}"
     )
     json_data = {

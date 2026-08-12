@@ -129,7 +129,7 @@ class LiveChatRebuildMixin:
                     docs = await asyncio.to_thread(lambda: list(q.stream()))
                     return user_id, docs
                 except Exception as e:
-                    print(f"⚠️ Error streaming conversations for {user_id}: {e}")
+                    print(f"⚠️ Error streaming conversations for ...{str(user_id)[-4:]}: {e}")
                     return user_id, []
 
         conversation_results = await asyncio.gather(*[_bounded(uid) for uid in user_ids])
@@ -280,13 +280,13 @@ class LiveChatRebuildMixin:
                 timeout=self.INDEX_REFRESH_TIMEOUT_SECONDS,
             )
             if not result.get("written"):
-                print(f"⚠️ [index-refresh] skipped user={user_id} conv={conv_id} reason={result.get('reason')}")
+                print(f"⚠️ [index-refresh] skipped user=...{str(user_id)[-4:]} conv={conv_id} reason={result.get('reason')}")
                 return
             print(
                 f"🔄 [index-refresh] rebuilt index user={result.get('resolved_user_id', user_id)} conv={conv_id} state={result.get('conversation_state')}"
             )
         except TimeoutError:
-            print(f"⚠️ [index-refresh] timeout user={user_id} conv={conv_id}")
+            print(f"⚠️ [index-refresh] timeout user=...{str(user_id)[-4:]} conv={conv_id}")
         except Exception as e:
             print(f"⚠️ Failed to refresh index for {conv_id}: {e}")
 

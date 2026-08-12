@@ -88,13 +88,13 @@ async def handle_create_appointment_name(ns: Any) -> Any:
                 ns.user_id.replace("+", "").replace("-", "").replace(" ", "").isdigit() and len(ns.user_id) >= 8
             ):
                 ns.phone_number = ns.user_id
-                print(f"DEBUG: Using user_id as phone_number (Meta/Dialog360 format): {ns.phone_number}")
+                print(f"DEBUG: Using user_id as phone_number (Meta/Dialog360 format): ***{str(ns.phone_number)[-4:] if ns.phone_number else ''}")
             else:
                 print(
                     f"ERROR: No phone_number found for user {ns.user_id} and user_id doesn't look like a phone number"
                 )
         else:
-            print(f"DEBUG: Using stored phone_number from user_data: {ns.phone_number}")
+            print(f"DEBUG: Using stored phone_number from user_data: ***{str(ns.phone_number)[-4:] if ns.phone_number else ''}")
 
         # CRITICAL FIX: Priority 1 - Use collected name (protected from webhook)
         ns.user_data_dict = config.user_data_whatsapp.get(ns.user_id, {})

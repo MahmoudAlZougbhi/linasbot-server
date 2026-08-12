@@ -27,7 +27,7 @@ class MetaAdapter(WhatsAppAdapter):
             response = await self.client.post(url, headers=self.headers, json=payload)
             response.raise_for_status()
             result = response.json()
-            print(f"Meta WhatsApp message sent to {to_number}. Response: {result}")
+            print(f"Meta WhatsApp message sent to ***{str(to_number)[-4:] if to_number else ''}. status=ok")
             return {"success": True, "data": result}
         except Exception as e:
             print(f"ERROR sending Meta WhatsApp message: {e}")
@@ -52,7 +52,7 @@ class MetaAdapter(WhatsAppAdapter):
             response = await self.client.post(url, headers=self.headers, json=payload)
             response.raise_for_status()
             result = response.json()
-            print(f"Meta WhatsApp image sent to {to_number}. Response: {result}")
+            print(f"Meta WhatsApp image sent to ***{str(to_number)[-4:] if to_number else ''}. status=ok")
             return {"success": True, "data": result}
         except Exception as e:
             print(f"ERROR sending Meta WhatsApp image: {e}")

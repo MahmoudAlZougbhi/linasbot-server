@@ -11,7 +11,8 @@ from services.api_integrations_booking import (
     _clean_body_parts_with_sessions_for_api,
 )
 from services.api_integrations_http import _make_api_request, log_report_event
-from services.api_integrations_status import _phone_clean_for_appointment_api
+from services.api_integrations_status import _phone_clean_for_appointment_api, resume_appointment
+
 
 async def edit_appointment(
     appointment_id: int,
@@ -148,7 +149,7 @@ async def update_paused_appointment(
     """
     phone_clean = _phone_clean_for_appointment_api(phone)
     path = (os.getenv("LINASLASER_UPDATE_PAUSED_APPOINTMENT_PATH") or "appointments/edit").strip().lstrip("/")
-    print(f"API Call: update_paused_appointment appointment_id={appointment_id}, phone={phone_clean}, path={path}")
+    print(f"API Call: update_paused_appointment appointment_id={appointment_id}, phone=***{str(phone_clean)[-4:] if phone_clean else ''}, path={path}")
 
     json_data: dict = {
         "appointment_id": int(appointment_id),

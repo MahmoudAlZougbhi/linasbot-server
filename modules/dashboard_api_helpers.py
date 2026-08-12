@@ -31,7 +31,7 @@ async def restore_user_state_from_firestore(user_id: str) -> str:
         try:
             from utils.utils import get_user_state_from_firestore
 
-            print(f"🔄 [Dashboard] Restoring user state from Firestore for {user_id}...")
+            print(f"🔄 [Dashboard] Restoring user state from Firestore for ...{str(user_id)[-4:]}...")
             firestore_state = await get_user_state_from_firestore(user_id)
 
             if firestore_state:
@@ -54,7 +54,7 @@ async def restore_user_state_from_firestore(user_id: str) -> str:
                     restored_name = firestore_name
                     print(f"✅ [Dashboard] Restored name from Firestore: {firestore_name}")
             else:
-                print(f"ℹ️ [Dashboard] No user state found in Firestore for {user_id}")
+                print(f"ℹ️ [Dashboard] No user state found in Firestore for ...{str(user_id)[-4:]}")
         except Exception as e:
             print(f"❌ [Dashboard] Error restoring user state: {e}")
             import traceback
@@ -80,7 +80,7 @@ async def dashboard_send_message_capture(
             if key not in dashboard_bot_responses:
                 dashboard_bot_responses[key] = []
             dashboard_bot_responses[key].append(line)
-        print(f"Dashboard captured bot response for {to_number}: {line[:500]}")
+        print(f"Dashboard captured bot response for ***{str(to_number)[-4:] if to_number else ''}: len={len(line or '')}")
     return True
 
 
@@ -129,16 +129,16 @@ async def _await_dashboard_delayed_task(user_id: str) -> str | None:
     Returns a short diagnostic string when the task did not complete normally (for API hints).
     """
     if user_id not in _delayed_processing_tasks:
-        print(f"DEBUG: No delayed task found for user {user_id}")
+        print(f"DEBUG: No delayed task found for user ...{str(user_id)[-4:]}")
         return "no_delayed_task_scheduled"
-    print(f"DEBUG: Waiting for delayed task for user {user_id} to complete...")
+    print(f"DEBUG: Waiting for delayed task for user ...{str(user_id)[-4:]} to complete...")
     task = _delayed_processing_tasks[user_id]
     note: str | None = None
     try:
         await asyncio.shield(task)
-        print(f"DEBUG: Delayed task completed for user {user_id}")
+        print(f"DEBUG: Delayed task completed for user ...{str(user_id)[-4:]}")
     except asyncio.CancelledError:
-        print(f"DEBUG: Delayed task await cancelled for user {user_id}")
+        print(f"DEBUG: Delayed task await cancelled for user ...{str(user_id)[-4:]}")
         note = "await_cancelled"
     except Exception as e:
         print(f"DEBUG: Delayed task error: {e}")

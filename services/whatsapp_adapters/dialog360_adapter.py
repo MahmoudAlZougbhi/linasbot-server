@@ -28,7 +28,7 @@ class Dialog360Adapter(WhatsAppAdapter):
             response = await self.client.post(url, headers=self.headers, json=payload)
             response.raise_for_status()
             result = response.json()
-            print(f"360Dialog message sent to {to_number}. Response: {result}")
+            print(f"360Dialog message sent to ***{str(to_number)[-4:] if to_number else ''}. status=ok")
             return {"success": True, "data": result}
         except Exception as e:
             print(f"ERROR sending 360Dialog message: {e}")
@@ -48,7 +48,7 @@ class Dialog360Adapter(WhatsAppAdapter):
             response = await self.client.post(url, headers=self.headers, json=payload)
             response.raise_for_status()
             result = response.json()
-            print(f"360Dialog image sent to {to_number}. Response: {result}")
+            print(f"360Dialog image sent to ***{str(to_number)[-4:] if to_number else ''}. status=ok")
             return {"success": True, "data": result}
         except Exception as e:
             print(f"ERROR sending 360Dialog image: {e}")
@@ -69,7 +69,7 @@ class Dialog360Adapter(WhatsAppAdapter):
             response = await self.client.post(url, headers=self.headers, json=payload)
             response.raise_for_status()
             result = response.json()
-            print(f"360Dialog webhook set to {webhook_url}. Response: {result}")
+            print("360Dialog webhook set. status=ok")
             return {"success": True, "data": result}
         except Exception as e:
             print(f"ERROR setting 360Dialog webhook: {e}")
@@ -134,7 +134,7 @@ class Dialog360Adapter(WhatsAppAdapter):
             response = await self.client.post(url, headers=self.headers, json=payload)
             response.raise_for_status()
             result = response.json()
-            print(f"360Dialog template sent to {to_number}. Response: {result}")
+            print(f"360Dialog template sent to ***{str(to_number)[-4:] if to_number else ''}. status=ok")
             return {"success": True, "data": result}
         except Exception as e:
             print(f"ERROR sending 360Dialog template: {e}")

@@ -14,6 +14,8 @@ from typing import Any
 from fastapi import Query, Request
 from fastapi.responses import StreamingResponse
 
+# Register status/debug/rebuild routes.
+from modules import live_chat_api_debug  # noqa: E402, F401
 from modules.core import app, cors_allow_origins
 from modules.live_chat_api_helpers import (  # noqa: F401
     _error_response,
@@ -32,9 +34,6 @@ from modules.models import (
 from services.live_chat_service import live_chat_service
 from services.live_chat_sse_broadcaster import live_chat_sse_broadcaster
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
-
-# Register status/debug/rebuild routes.
-from modules import live_chat_api_debug  # noqa: E402, F401
 
 _log = logging.getLogger(__name__)
 

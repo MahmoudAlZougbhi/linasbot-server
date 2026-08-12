@@ -190,7 +190,7 @@ class MontyMobileAdapterParseMixin:
 
             # CRITICAL FIX: Check if message is from our bot number
             if message_from and (message_from == self.source_number or message_from == f"+{self.source_number}"):
-                print(f"⚠️ Ignoring message from our own bot number: {message_from}")
+                print(f"⚠️ Ignoring message from our own bot number: ***{str(message_from)[-4:] if message_from else ''}")
                 return None
 
             if not phone_number:
@@ -201,7 +201,7 @@ class MontyMobileAdapterParseMixin:
             if phone_number and not phone_number.startswith("+"):
                 phone_number = f"+{phone_number}"
 
-            print(f"✅ Extracted: phone={phone_number}, name={user_name}, type={message_type}, from={message_from}")
+            print(f"✅ Extracted: phone=***{str(phone_number)[-4:] if phone_number else ''}, name_len={len(str(user_name or ''))}, type={message_type}, from=***{str(message_from)[-4:] if message_from else ''}")
 
             # Extract content based on type
             content = {}
@@ -326,7 +326,7 @@ class MontyMobileAdapterParseMixin:
                 "phone_number": phone_number,
             }
 
-            print(f"✅ Parsed simple format: {parsed_message}")
+            print(f"✅ Parsed simple format: type={parsed_message.get('type') if isinstance(parsed_message, dict) else type(parsed_message).__name__}")
             return parsed_message
 
         except Exception as e:
@@ -342,7 +342,7 @@ class MontyMobileAdapterParseMixin:
             import re
 
             room_name = room.get("name", "")
-            print(f"DEBUG: Checking room name for phone: {room_name}")
+            print(f"DEBUG: Checking room name for phone: ***{str(room_name)[-4:] if room_name else ''}")
 
             phone_patterns = [r"\+(\d{1,4})\s*(\d{8,12})", r"(\d{1,4})\s*(\d{8,12})", r"\+(\d{10,15})", r"(\d{10,15})"]
 
@@ -358,22 +358,22 @@ class MontyMobileAdapterParseMixin:
                         if not phone.startswith("+"):
                             phone = f"+{phone}"
 
-                    print(f"DEBUG: Found phone in room name: {phone}")
+                    print(f"DEBUG: Found phone in room name: ***{str(phone)[-4:] if phone else ''}")
                     return phone
 
             user_email = from_user.get("email", "")
-            print(f"DEBUG: Checking user email for phone: {user_email}")
+            print(f"DEBUG: Checking user email for phone: email_len={len(str(user_email or ''))}")
 
             if user_email.isdigit() and len(user_email) >= 8:
                 phone = f"+{user_email}"
-                print(f"DEBUG: Found phone as user email (direct): {phone}")
+                print(f"DEBUG: Found phone as user email (direct): ***{str(phone)[-4:] if phone else ''}")
                 return phone
 
             if "@wa.qiscus.com" in user_email or "@whatsapp" in user_email:
                 phone_part = user_email.split("@")[0]
                 if phone_part.isdigit() and len(phone_part) >= 8:
                     phone = f"+{phone_part}"
-                    print(f"DEBUG: Found phone in user email: {phone}")
+                    print(f"DEBUG: Found phone in user email: ***{str(phone)[-4:] if phone else ''}")
                     return phone
 
             print("DEBUG: No phone number found in room information")

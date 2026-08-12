@@ -14,6 +14,7 @@ from services.meta_app_registry import (
     get_meta_app_registry,
 )
 
+
 def _query_text(value: Any) -> str:
     """Normalize FastAPI Query defaults when handlers are awaited directly in tests."""
 

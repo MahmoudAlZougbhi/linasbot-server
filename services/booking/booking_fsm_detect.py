@@ -7,7 +7,6 @@ import re
 from typing import Any, cast
 
 import config
-from services.booking.constants import DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS
 
 # --- Intent detection (booking mode entry) ---
 # Include Franco spellings (mw3ad = موعد, 7ejz = حجز) so booking FSM + body-area NL run on short replies.

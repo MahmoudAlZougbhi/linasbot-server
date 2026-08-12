@@ -22,8 +22,6 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from storage.persistent_storage import _DATA_ROOT
-
 from services.token_wallet_models import (  # noqa: F401
     DEFAULT_UNLIMITED_TENANTS,
     LEGACY_INPUT_SHARE,
@@ -35,6 +33,7 @@ from services.token_wallet_models import (  # noqa: F401
     normalize_wallet_tenant_id,
     unlimited_tenant_ids,
 )
+from storage.persistent_storage import _DATA_ROOT
 
 
 class TokenWalletService:

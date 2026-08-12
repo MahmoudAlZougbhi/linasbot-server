@@ -6,10 +6,10 @@ import asyncio
 import os
 from typing import Any
 
+from modules.event_handlers_monitor_jobs import monitor_smart_messages_job
 from services.daily_template_dispatcher import daily_template_dispatcher
 from services.smart_messaging import smart_messaging
 
-from modules.event_handlers_monitor_jobs import monitor_smart_messages_job
 
 async def daily_refresh_messages_job() -> None:
     """

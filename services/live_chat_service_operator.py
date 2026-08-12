@@ -76,7 +76,7 @@ class LiveChatOperatorMixin:
                     if user_doc.exists:
                         user_data = user_doc.to_dict()
                         phone_number = user_data.get("phone_full")
-                        print(f"📱 Found phone_number from Firebase: {phone_number}")
+                        print(f"📱 Found phone_number from Firebase: ***{str(phone_number)[-4:] if phone_number else ''}")
                 except Exception as e:
                     print(f"⚠️ Could not fetch phone_number from Firebase: {e}")
 
@@ -84,7 +84,7 @@ class LiveChatOperatorMixin:
             if message_type == "voice":
                 # message contains base64 audio data
 
-                print(f"🎙️ Operator {operator_id} recorded voice message for {user_id}")
+                print(f"🎙️ Operator {operator_id} recorded voice message for ...{str(user_id)[-4:]}")
 
                 # Step 0: Convert WebM to Opus (Qiscus/WhatsApp standard)
                 print("� Converting voice to Opus format (WhatsApp standard)...")
@@ -140,7 +140,7 @@ class LiveChatOperatorMixin:
                 )
 
                 # Step 3: Send voice message via WhatsApp
-                print(f"🎙️ Sending voice message via WhatsApp to {user_id}...")
+                print(f"🎙️ Sending voice message via WhatsApp to ...{str(user_id)[-4:]}...")
                 try:
                     if storage_url:
                         whatsapp_audio_url = build_whatsapp_audio_delivery_url(storage_url)
@@ -170,7 +170,7 @@ class LiveChatOperatorMixin:
                     traceback.print_exc()
                     return {"success": False, "error": f"Failed to send voice: {str(e)}"}
 
-                print(f"✅ Voice message processed and sent for {user_id}")
+                print(f"✅ Voice message processed and sent for ...{str(user_id)[-4:]}")
 
                 completed_ok = True
                 return {
@@ -182,7 +182,7 @@ class LiveChatOperatorMixin:
 
             elif message_type == "image":
                 # message contains base64 image data
-                print(f"🖼️ Operator {operator_id} uploaded image for {user_id}")
+                print(f"🖼️ Operator {operator_id} uploaded image for ...{str(user_id)[-4:]}")
                 print("📝 Uploading image to Firebase Storage...")
 
                 # Step 1: Upload to Firebase Storage
@@ -219,7 +219,7 @@ class LiveChatOperatorMixin:
                 )
 
                 # Step 3: Send image via Qiscus
-                print(f"🖼️ Sending image via Qiscus to {user_id}...")
+                print(f"🖼️ Sending image via Qiscus to ...{str(user_id)[-4:]}...")
                 try:
                     if storage_url:
                         # Send as native image message (displays in gallery on phone, not just a link)
@@ -236,7 +236,7 @@ class LiveChatOperatorMixin:
 
                     traceback.print_exc()
 
-                print(f"✅ Image message processed and sent for {user_id}")
+                print(f"✅ Image message processed and sent for ...{str(user_id)[-4:]}")
 
                 completed_ok = True
                 return {"success": True, "message": "Image message sent successfully", "storage_url": storage_url}
@@ -264,7 +264,7 @@ class LiveChatOperatorMixin:
                             "error": f"Message saved locally but delivery failed: {err}",
                             "delivered": False,
                         }
-                    print(f"✅ Operator {operator_id} sent message to {user_id} via WhatsApp")
+                    print(f"✅ Operator {operator_id} sent message to ...{str(user_id)[-4:]} via WhatsApp")
                 except Exception as send_error:
                     print(f"⚠️ WhatsApp adapter error after save: {send_error}")
                     return {

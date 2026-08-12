@@ -10,7 +10,6 @@ existing propose → approve → ``apply_section_patch`` write spine.
 from __future__ import annotations
 
 import json
-import uuid
 from typing import Any
 
 from modules.api_security import resolve_permissions

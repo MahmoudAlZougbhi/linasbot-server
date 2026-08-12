@@ -19,10 +19,10 @@ from handlers.text_handlers import handle_message
 from handlers.training_handlers import exit_training_mode, start_training_mode
 from modules.core import app
 from modules.webhook_handlers_dedupe import (  # noqa: F401
+    _PROCESS_PARSED_MID_TTL_SECONDS,
     WEBHOOK_DEDUP_WINDOW_SECONDS,
     WEBHOOK_TEXT_BODYFP_MAX_CHARS,
     WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS,
-    _PROCESS_PARSED_MID_TTL_SECONDS,
     _extract_text_from_content,
     _process_parsed_mid_claims,
     _process_parsed_mid_locks,
@@ -189,9 +189,9 @@ async def handle_message_whatsapp_with_adapter(
 
     if phone_number:
         config.user_data_whatsapp[user_id]["phone_number"] = phone_number
-        print(f"✅ DEBUG: Stored phone_number {phone_number} for user {user_id}")
+        print(f"✅ DEBUG: Stored phone_number ***{str(phone_number)[-4:]} for user ...{str(user_id)[-4:]}")
     else:
-        print(f"❌ CRITICAL: No phone_number extracted for user {user_id}!")
+        print(f"❌ CRITICAL: No phone_number extracted for user ...{str(user_id)[-4:]}!")
         config.user_data_whatsapp[user_id]["phone_number"] = None
 
     _same_turn_text_sends = set()
@@ -227,7 +227,7 @@ async def handle_message_whatsapp_with_adapter(
                     and not result.get("dry_run")
                     and os.getenv("TRACE_AI_OUTBOUND", "").lower() in ("1", "true", "yes")
                 ):
-                    print(f"[whatsapp-send] trace_id={tid} sent=ok user={user_id[:12]}… text_len={len(message_text)}")
+                    print(f"[whatsapp-send] trace_id={tid} sent=ok user=...{str(user_id)[-4:]} text_len={len(message_text)}")
             if fp and result and result.get("success"):
                 _same_turn_text_sends.add(fp)
             return result

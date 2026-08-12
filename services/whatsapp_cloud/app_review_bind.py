@@ -15,10 +15,8 @@ from typing import Any
 from db.session import whatsapp_session
 from services.meta_app_registry import APP_A_KEY, get_meta_app_configs
 from services.whatsapp_cloud.app_review_bind_helpers import (
-    ALLOWED_WABA_ENV,
     APP_REVIEW_SOURCE,
     APP_REVIEW_TENANT_ID,
-    TOKEN_ENV,
     AppReviewBindError,
     _assert_numeric_ids,
     _assert_tenant,

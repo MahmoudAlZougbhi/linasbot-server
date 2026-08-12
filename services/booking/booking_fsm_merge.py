@@ -5,10 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import config
-from services.booking.constants import (
-    DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS,
-    _service_requires_machine,
-)
 from services.booking.booking_fsm_detect import (
     _fsm_root,
     detect_affirmative_short,
@@ -18,6 +14,11 @@ from services.booking.booking_fsm_detect import (
     log_fsm,
     require_final_confirmation,
 )
+from services.booking.constants import (
+    DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS,
+    _service_requires_machine,
+)
+
 
 def apply_heuristic_confirmation(user_id: str, user_input: str) -> None:
     """If awaiting confirmation and user sends a short yes, allow execution."""

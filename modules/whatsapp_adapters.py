@@ -40,7 +40,7 @@ async def send_whatsapp_message(
     try:
         response = await whatsapp_api_client.post("/messages", headers=headers, json=payload)
         response.raise_for_status()
-        print(f"WhatsApp message sent to {to_number[:6]}*** status={response.status_code}")
+        print(f"WhatsApp message sent to ***{str(to_number)[-4:] if to_number else ''} status={response.status_code}")
         return True
     except httpx.HTTPStatusError as e:
         print(f"ERROR sending WhatsApp message (HTTP Status {e.response.status_code})")

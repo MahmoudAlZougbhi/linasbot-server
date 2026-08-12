@@ -208,7 +208,7 @@ class MontyMobileTemplateService(MontyMobileTemplatePayloadMixin):
             url = f"https://graph.facebook.com/{_GRAPH_VERSION}/{phone_number_id}/messages"
             headers = {"Authorization": f"Bearer {api_token}", "Content-Type": "application/json"}
 
-            print(f"📤 Sending Cloud template '{template_id}' to {phone_number} (lang: {language})")
+            print(f"📤 Sending Cloud template '{template_id}' to ***{str(phone_number)[-4:] if phone_number else ''} (lang: {language})")
             print(f"   URL: graph.facebook.com/.../{phone_number_id}/messages")
 
             async with httpx.AsyncClient(timeout=30.0) as client:

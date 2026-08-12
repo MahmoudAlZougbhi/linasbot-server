@@ -17,6 +17,7 @@ from services.smart_messaging import deliver_scheduled_smart_whatsapp, smart_mes
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 from utils.utils import save_conversation_message_to_firestore
 
+
 async def monitor_smart_messages_job() -> None:
     """Monitor scheduled messages with smart controls"""
     from services.durable_event_claim import release_job_lock, try_acquire_job_lock
@@ -25,9 +26,6 @@ async def monitor_smart_messages_job() -> None:
         print("[smart_scheduler] monitor tick skipped — another instance holds the lock")
         return
     try:
-        import json
-        import os
-
         # Check if smart messaging is globally enabled
         from storage.persistent_storage import APP_SETTINGS_FILE
 
@@ -115,7 +113,7 @@ async def monitor_smart_messages_job() -> None:
                                     # sent without delivering them — Live Chat / dashboard then looks
                                     # "done" while WhatsApp only got the first one.
                                     smart_messaging.mark_message_sent(message_id)
-                                    print(f"   Sent message {message_id} to {phone}")
+                                    print(f"   Sent message {message_id} to ***{str(phone)[-4:] if phone else ''}")
 
                                     _sched = smart_messaging.scheduled_messages.get(message_id) or {}
                                     _meta_raw = _sched.get("metadata")
@@ -139,7 +137,7 @@ async def monitor_smart_messages_job() -> None:
                                             **({"appointment_id": _apt_id} if _apt_id is not None else {}),
                                         },
                                     )
-                                    print(f"   💾 Saved smart message to conversation history for {phone}")
+                                    print(f"   💾 Saved smart message to conversation history for ***{str(phone)[-4:] if phone else ''}")
                                 else:
                                     print(f"   Failed to send {message_id}: {result.get('error')}")
                         except Exception as send_error:
@@ -189,7 +187,7 @@ async def monitor_smart_messages_job() -> None:
             print(f"\n📤 Sending Message #{i}:")
             print(f"   ID: {message_id}")
             print(f"   Type: {msg_type}")
-            print(f"   To: {phone}")
+            print(f"   To: ***{str(phone)[-4:] if phone else ''}")
             print(f"   Content: {content[:100]}{'...' if len(content) > 100 else ''}")
 
             try:
@@ -340,9 +338,9 @@ async def send_missed_yesterday_followups() -> None:
                             rendered_text=message_content,
                         )
                         if result.get("dry_run"):
-                            print(f"📋 [DRY-RUN] Would send missed yesterday to {customer_phone}")
+                            print(f"📋 [DRY-RUN] Would send missed yesterday to ***{str(customer_phone)[-4:] if customer_phone else ''}")
                         elif result.get("success"):
-                            print(f"✅ Sent missed yesterday message to {customer_phone}")
+                            print(f"✅ Sent missed yesterday message to ***{str(customer_phone)[-4:] if customer_phone else ''}")
 
                             smart_messaging.mark_messages_sent_by_phone(customer_phone, "missed_yesterday")
 
@@ -438,9 +436,9 @@ async def send_missed_this_month_followups() -> None:
                             rendered_text=message_content,
                         )
                         if result.get("dry_run"):
-                            print(f"📋 [DRY-RUN] Would send missed this month to {customer_phone}")
+                            print(f"📋 [DRY-RUN] Would send missed this month to ***{str(customer_phone)[-4:] if customer_phone else ''}")
                         elif result.get("success"):
-                            print(f"✅ Sent missed this month message to {customer_phone}")
+                            print(f"✅ Sent missed this month message to ***{str(customer_phone)[-4:] if customer_phone else ''}")
 
                             smart_messaging.mark_messages_sent_by_phone(customer_phone, "sent_for_pause")
 

@@ -5,13 +5,12 @@ Handles initialization of WhatsApp provider and scheduling services.
 
 from __future__ import annotations
 
-from modules.core import app
-from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
-
 # Preserve extracted job modules as part of the event-handlers package surface.
 from modules import event_handlers_monitor_jobs as event_handlers_monitor_jobs  # noqa: F401
 from modules import event_handlers_populate_jobs as event_handlers_populate_jobs  # noqa: F401
 from modules import event_handlers_scheduler as event_handlers_scheduler  # noqa: F401
+from modules.core import app
+from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 
 
 @app.on_event("startup")

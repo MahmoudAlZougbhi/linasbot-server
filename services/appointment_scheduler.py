@@ -11,8 +11,15 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from services.api_integrations import (
-    get_paused_appointments_between_dates,
     send_appointment_reminders,
+)
+from services.appointment_scheduler_followups import (
+    populate_missed_yesterday_messages,
+    populate_one_month_followups,
+)
+from services.appointment_scheduler_missed import (
+    populate_missed_month_messages,
+    populate_no_show_messages_from_missed_appointments,
 )
 from services.appointment_scheduler_parse import parse_appointment_date
 from services.smart_messaging import smart_messaging
@@ -127,13 +134,13 @@ async def populate_scheduled_messages_from_appointments() -> Any:
 
                 if not customer_phone or not apt_datetime_str:
                     if idx < 3:  # Log first 3 failures for debugging
-                        print(f"⚠️ Appointment {idx} missing data: phone={customer_phone}, date={apt_datetime_str}")
+                        print(f"⚠️ Appointment {idx} missing data: phone=***{str(customer_phone)[-4:] if customer_phone else ''}, date={apt_datetime_str}")
                     failed_count += 1
                     continue
 
                 # DEBUG: Print first 3 successful extractions
                 if idx < 3:
-                    print(f"✅ Apt {idx}: phone={customer_phone}, date={apt_datetime_str}")
+                    print(f"✅ Apt {idx}: phone=***{str(customer_phone)[-4:] if customer_phone else ''}, date={apt_datetime_str}")
 
                 # Parse appointment datetime
                 apt_datetime = parse_appointment_date(apt_datetime_str)
@@ -295,15 +302,6 @@ async def populate_scheduled_messages_from_appointments() -> Any:
         logger.error(f"❌ Error in appointment population: {e}", exc_info=True)
         return {"success": False, "message": f"Error: {str(e)}"}
 
-
-from services.appointment_scheduler_followups import (  # noqa: F401
-    populate_missed_yesterday_messages,
-    populate_one_month_followups,
-)
-from services.appointment_scheduler_missed import (  # noqa: F401
-    populate_missed_month_messages,
-    populate_no_show_messages_from_missed_appointments,
-)
 
 __all__ = [
     "parse_appointment_date",

@@ -23,7 +23,7 @@ async def send_test_message(request_data: dict[str, Any]) -> Any:
         if not message:
             return {"success": False, "error": "Message content is empty"}
 
-        print(f"📤 Sending test message to phone: {phone_number}")
+        print(f"📤 Sending test message to phone: ***{str(phone_number)[-4:] if phone_number else ''}")
         print(f"   Template: {template_id}")
         print(f"   Language: {language}")
         print(f"   Message preview: {message[:100]}...")
@@ -35,12 +35,12 @@ async def send_test_message(request_data: dict[str, Any]) -> Any:
         phone_without_country = phone_clean.lstrip("961")  # Remove Lebanon country code
         phone_with_plus = f"+{phone_clean}"
 
-        print(f"🔍 Searching for phone: {phone_number}")
-        print(f"   Cleaned: {phone_clean}")
-        print(f"   Without country: {phone_without_country}")
+        print(f"🔍 Searching for phone: ***{str(phone_number)[-4:] if phone_number else ''}")
+        print(f"   Cleaned_last4: ***{str(phone_clean)[-4:] if phone_clean else ''}")
+        print(f"   Without_country_last4: ***{str(phone_without_country)[-4:] if phone_without_country else ''}")
 
-        print(f"🔍 Searching for phone: {phone_number}")
-        print(f"   Cleaned: {phone_clean}")
+        print(f"🔍 Searching for phone: ***{str(phone_number)[-4:] if phone_number else ''}")
+        print(f"   Cleaned_last4: ***{str(phone_clean)[-4:] if phone_clean else ''}")
 
         # Generate multiple phone variations for matching (handles different formats)
         phone_without_country = phone_clean.lstrip("961")  # Remove Lebanon country code
@@ -48,10 +48,10 @@ async def send_test_message(request_data: dict[str, Any]) -> Any:
         phone_with_plus_country = f"+961{phone_without_country}"
 
         print("   Variations to try:")
-        print(f"     - {phone_clean}")
-        print(f"     - {phone_without_country}")
-        print(f"     - {phone_with_plus}")
-        print(f"     - {phone_with_plus_country}")
+        print(f"     - ***{str(phone_clean)[-4:] if phone_clean else ''}")
+        print(f"     - ***{str(phone_without_country)[-4:] if phone_without_country else ''}")
+        print(f"     - ***{str(phone_with_plus)[-4:] if phone_with_plus else ''}")
+        print(f"     - ***{str(phone_with_plus_country)[-4:] if phone_with_plus_country else ''}")
 
         # For Qiscus: need to fetch the room_id from Firebase using the phone number
         try:
@@ -79,9 +79,9 @@ async def send_test_message(request_data: dict[str, Any]) -> Any:
 
                     # Log what we're checking
                     if stored_phone_full or stored_phone_clean:
-                        print(f"   Checking user_id={user_id}:")
-                        print(f"     phone_full: {stored_phone_full}")
-                        print(f"     phone_clean: {stored_phone_clean}")
+                        print(f"   Checking user_id=...{str(user_id)[-4:]}:")
+                        print(f"     phone_full_last4: ***{str(stored_phone_full)[-4:] if stored_phone_full else ''}")
+                        print(f"     phone_clean_last4: ***{str(stored_phone_clean)[-4:] if stored_phone_clean else ''}")
 
                     # Clean both for comparison
                     stored_phone_full_clean = (
@@ -126,9 +126,9 @@ async def send_test_message(request_data: dict[str, Any]) -> Any:
                         )
                         user_phone_without_country = user_phone_clean.lstrip("961")
 
-                        print(f"   Checking config user_id={user_id}:")
-                        print(f"     phone: {user_phone}")
-                        print(f"     cleaned: {user_phone_clean}")
+                        print(f"   Checking config user_id=...{str(user_id)[-4:]}:")
+                        print(f"     phone_last4: ***{str(user_phone)[-4:] if user_phone else ''}")
+                        print(f"     cleaned_last4: ***{str(user_phone_clean)[-4:] if user_phone_clean else ''}")
 
                         # Try matching with multiple variations
                         config_match_pairs = [
@@ -159,7 +159,7 @@ async def send_test_message(request_data: dict[str, Any]) -> Any:
             result = await adapter.send_text_message(to_number=room_id, message=message)
 
             if result.get("dry_run"):
-                print(f"📋 [DRY-RUN] Test message would be sent to {phone_number} (room {room_id})")
+                print(f"📋 [DRY-RUN] Test message would be sent to ***{str(phone_number)[-4:] if phone_number else ''} (room {room_id})")
                 return {
                     "success": True,
                     "message": f"Dry-run: message not sent (local/sandbox mode). Would send to {phone_number}.",
@@ -168,7 +168,7 @@ async def send_test_message(request_data: dict[str, Any]) -> Any:
                     "dry_run": True,
                 }
             if result.get("success"):
-                print(f"✅ Test message sent successfully to {phone_number} (room {room_id})")
+                print(f"✅ Test message sent successfully to ***{str(phone_number)[-4:] if phone_number else ''} (room {room_id})")
 
                 # Save to conversation history for continuous context
                 from utils.utils import save_conversation_message_to_firestore
@@ -182,7 +182,7 @@ async def send_test_message(request_data: dict[str, Any]) -> Any:
                     phone_number=phone_number,
                     metadata={"source": "smart_message", "type": template_id or "test_message"},
                 )
-                print(f"💾 Saved test message to conversation history for {phone_number}")
+                print(f"💾 Saved test message to conversation history for ***{str(phone_number)[-4:] if phone_number else ''}")
 
                 return {
                     "success": True,
@@ -194,7 +194,7 @@ async def send_test_message(request_data: dict[str, Any]) -> Any:
                 }
             else:
                 error_msg = result.get("error", "Unknown error")
-                print(f"❌ Failed to send test message to {phone_number} - {error_msg}")
+                print(f"❌ Failed to send test message to ***{str(phone_number)[-4:] if phone_number else ''} - {error_msg}")
                 return {"success": False, "error": f"Failed to send message: {error_msg}"}
 
         except Exception as lookup_error:

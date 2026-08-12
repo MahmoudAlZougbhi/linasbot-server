@@ -9,6 +9,7 @@ from services.appointment_scheduler import (
     populate_scheduled_messages_from_appointments,
 )
 
+
 async def populate_messages_job() -> None:
     """Fetch real appointments from backend and populate scheduled messages"""
     try:

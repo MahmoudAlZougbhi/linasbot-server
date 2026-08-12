@@ -96,7 +96,7 @@ class MontyMobileAdapter(MontyMobileAdapterParseMixin, WhatsAppAdapter):
             import os
 
             if os.getenv("DEBUG_MONTYMOBILE", "false").lower() == "true":
-                print(f"🔄 MONTYMOBILE: Sending to {phone_number[:6]}***")
+                print(f"🔄 MONTYMOBILE: Sending to ***{str(phone_number)[-4:] if phone_number else ''}")
 
             t0 = time.time()
             response = await self.client.post(url, headers=self.headers, json=payload)
@@ -111,7 +111,7 @@ class MontyMobileAdapter(MontyMobileAdapterParseMixin, WhatsAppAdapter):
                 # Check if successful based on MontyMobile response format
                 if response.status_code == 200 and result.get("success"):
                     message_id = result.get("data", {}).get("messageId", "unknown")
-                    print(f"MONTYMOBILE text sent to {phone_number[:6]}*** message_id={message_id}")
+                    print(f"MONTYMOBILE text sent to ***{str(phone_number)[-4:] if phone_number else ''} message_id={message_id}")
                     return {"success": True, "data": result, "message_id": message_id}
                 else:
                     error_msg = result.get("message", "Unknown error")
@@ -167,7 +167,7 @@ class MontyMobileAdapter(MontyMobileAdapterParseMixin, WhatsAppAdapter):
         }
 
         try:
-            print(f"🔄 MONTYMOBILE: Sending image to {phone_number[:6]}***")
+            print(f"🔄 MONTYMOBILE: Sending image to ***{str(phone_number)[-4:] if phone_number else ''}")
 
             t0 = time.time()
             response = await self.client.post(url, headers=self.headers, json=payload)
@@ -212,7 +212,7 @@ class MontyMobileAdapter(MontyMobileAdapterParseMixin, WhatsAppAdapter):
         send_url = f"{self.base_url}/api/v2/WhatsappApi/send-session"
 
         try:
-            print(f"🔄 MONTYMOBILE: Sending audio to {phone_number[:6]}***")
+            print(f"🔄 MONTYMOBILE: Sending audio to ***{str(phone_number)[-4:] if phone_number else ''}")
 
             # Attempt 1: Send as DOCUMENT type with link (AUDIO type doesn't deliver)
             doc_payload = {
@@ -283,7 +283,7 @@ class MontyMobileAdapter(MontyMobileAdapterParseMixin, WhatsAppAdapter):
             response = await self.client.post(url, headers=self.headers, json=payload)
             response.raise_for_status()
             result = response.json()
-            print(f"MontyMobile document sent to {phone_number[:6]}*** status=ok")
+            print(f"MontyMobile document sent to ***{str(phone_number)[-4:] if phone_number else ''} status=ok")
             return {"success": True, "data": result}
         except Exception as e:
             print(f"ERROR sending MontyMobile document: {type(e).__name__}")

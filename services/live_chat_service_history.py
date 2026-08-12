@@ -77,7 +77,7 @@ class LiveChatHistoryMixin:
             )
             return user_id, conversations_docs
         except Exception as e:
-            print(f"⚠️ Error fetching conversations for user {user_id}: {e}")
+            print(f"⚠️ Error fetching conversations for user ...{str(user_id)[-4:]}: {e}")
             return user_id, []
 
     async def _stream_conversations_for_users(self, users_collection: Any, user_ids: list[str]) -> Any:

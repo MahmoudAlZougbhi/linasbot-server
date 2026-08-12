@@ -57,11 +57,11 @@ class QiscusAdapterParseMixin:
 
                 # Extract phone number from room name or participants
                 phone_number = self._extract_phone_from_qiscus_room(room, from_user)
-                print(f"🔍 DEBUG: Phone extraction result: {phone_number}")
+                print(f"🔍 DEBUG: Phone extraction result: ***{str(phone_number)[-4:] if phone_number else ''}")
                 if not phone_number:
                     print("❌ CRITICAL: Phone extraction FAILED!")
                     print(f"❌ Room name: {room_name}")
-                    print(f"❌ User email: {user_email}")
+                    print(f"❌ User email_len={len(str(user_email or ''))}")
                     print(f"❌ Room options: {room_options}")
 
                 # Validate room_id exists
@@ -73,9 +73,9 @@ class QiscusAdapterParseMixin:
                 self.room_mapping[user_id] = room_id
                 if phone_number:
                     self.room_mapping[phone_number] = room_id
-                print(f"DEBUG: Stored room mapping - user_id: {user_id} -> room_id: {room_id}")
+                print(f"DEBUG: Stored room mapping - user_id: ...{str(user_id)[-4:]} -> room_id: {room_id}")
                 if phone_number:
-                    print(f"DEBUG: Stored phone mapping - phone: {phone_number} -> room_id: {room_id}")
+                    print(f"DEBUG: Stored phone mapping - phone: ***{str(phone_number)[-4:] if phone_number else ''} -> room_id={room_id}")
 
                 # Extract message information
                 message = payload.get("message", {})
@@ -83,7 +83,7 @@ class QiscusAdapterParseMixin:
                 message_text = message.get("text", "")
                 _message_payload = message.get("payload", {})
 
-                print(f"DEBUG: Message type: {message_type}, text: {message_text}")
+                print(f"DEBUG: Message type: {message_type}, text_len={len(str(message_text or ''))}")
 
                 # Generate unique message_id using unique_temp_id or message id
                 # This prevents collision when message_text is empty (e.g., images with no caption)
@@ -132,7 +132,7 @@ class QiscusAdapterParseMixin:
         try:
             # Method 1: Extract from room name
             room_name = room.get("name", "")
-            print(f"DEBUG: Checking room name for phone: {room_name}")
+            print(f"DEBUG: Checking room name for phone: ***{str(room_name)[-4:] if room_name else ''}")
 
             # Look for phone patterns in room name
             import re
@@ -158,17 +158,17 @@ class QiscusAdapterParseMixin:
                         if not phone.startswith("+"):
                             phone = f"+{phone}"
 
-                    print(f"DEBUG: Found phone in room name: {phone}")
+                    print(f"DEBUG: Found phone in room name: ***{str(phone)[-4:] if phone else ''}")
                     return phone
 
             # Method 2: Extract from user email (common in WhatsApp integrations)
             user_email = from_user.get("email", "")
-            print(f"DEBUG: Checking user email for phone: {user_email}")
+            print(f"DEBUG: Checking user email for phone: email_len={len(str(user_email or ''))}")
 
             # Check if email is just a phone number (like "96176466674")
             if user_email.isdigit() and len(user_email) >= 8:
                 phone = f"+{user_email}"
-                print(f"DEBUG: Found phone as user email (direct): {phone}")
+                print(f"DEBUG: Found phone as user email (direct): ***{str(phone)[-4:] if phone else ''}")
                 return phone
 
             if "@wa.qiscus.com" in user_email or "@whatsapp" in user_email:
@@ -176,7 +176,7 @@ class QiscusAdapterParseMixin:
                 phone_part = user_email.split("@")[0]
                 if phone_part.isdigit() and len(phone_part) >= 8:
                     phone = f"+{phone_part}"
-                    print(f"DEBUG: Found phone in user email: {phone}")
+                    print(f"DEBUG: Found phone in user email: ***{str(phone)[-4:] if phone else ''}")
                     return phone
 
             # Method 3: Check participants for phone information
@@ -187,7 +187,7 @@ class QiscusAdapterParseMixin:
                     phone_part = participant_email.split("@")[0]
                     if phone_part.isdigit() and len(phone_part) >= 8:
                         phone = f"+{phone_part}"
-                        print(f"DEBUG: Found phone in participant email: {phone}")
+                        print(f"DEBUG: Found phone in participant email: ***{str(phone)[-4:] if phone else ''}")
                         return phone
 
             # Method 4: Check room options for channel details
@@ -215,7 +215,7 @@ class QiscusAdapterParseMixin:
                     phone = phone.replace(" ", "").replace("-", "")
                     if not phone.startswith("+"):
                         phone = f"+{phone}"
-                    print(f"DEBUG: Found phone directly in channel_details: {phone}")
+                    print(f"DEBUG: Found phone directly in channel_details: ***{str(phone)[-4:] if phone else ''}")
                     return phone
 
                 # Some Qiscus integrations store phone in channel details
@@ -233,7 +233,7 @@ class QiscusAdapterParseMixin:
                                     if not phone.startswith("+"):
                                         phone = f"+{phone}"
 
-                                print(f"DEBUG: Found phone in channel details: {phone}")
+                                print(f"DEBUG: Found phone in channel details: ***{str(phone)[-4:] if phone else ''}")
                                 return phone
 
             print("DEBUG: No phone number found in room information")
@@ -258,7 +258,7 @@ class QiscusAdapterParseMixin:
             caption = payload.get("caption", "")
             message_text = message.get("text", "").lower()
 
-            print(f"DEBUG: file_attachment - URL: {url}, caption: {caption}, text: {message_text}")
+            print(f"DEBUG: file_attachment - url_len={len(str(url or ''))}, caption_len={len(str(caption or ''))}, text_len={len(str(message_text or ''))}")
 
             # Determine file type from URL, caption, or message text
             # Check for images

@@ -2,26 +2,20 @@
 
 from __future__ import annotations
 
-import copy
 import datetime
 import json
 import re
 from typing import Any
 
 import config
-from services.booking.constants import (
-    BOOKING_TIMEZONE_LABEL,
-    DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS,
-    LASER_HAIR_REMOVAL_SERVICE_IDS,
-)
-from services.booking.schemas import validation_error_response
+from services.booking.schemas import empty_booking_intent_template, validation_error_response
 from utils.datetime_utils import (
-    BOT_FIXED_TZ,
     align_datetime_to_day_reference,
     datetime_from_ai_date_components,
     now_in_bot_tz,
     parse_datetime_flexible,
 )
+
 
 def _log_booking_attempt(payload: dict[str, Any]) -> None:
     try:

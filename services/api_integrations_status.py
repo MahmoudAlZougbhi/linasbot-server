@@ -11,6 +11,7 @@ from services.api_integrations_http import (
     log_report_event,
 )
 
+
 def _phone_clean_for_appointment_api(phone: str) -> str:
     phone_clean = str(phone).replace("+", "").replace(" ", "").replace("-", "")
     if phone_clean.startswith("961"):
@@ -21,7 +22,7 @@ def _phone_clean_for_appointment_api(phone: str) -> str:
 async def pause_appointment(phone: str, appointment_id: int) -> Any:
     """Pauses an appointment by updating its status to Paused."""
     phone_clean = _phone_clean_for_appointment_api(phone)
-    print(f"API Call: pause_appointment for phone={phone_clean}, appointment_id={appointment_id}")
+    print(f"API Call: pause_appointment for phone=***{str(phone_clean)[-4:] if phone_clean else ''}, appointment_id={appointment_id}")
     json_data = {"phone": phone_clean, "appointment_id": appointment_id}
     response = await _make_api_request("POST", "appointments/pause", json_data=json_data)
     if response.get("success"):
@@ -254,7 +255,7 @@ async def add_customer_note(phone: str, note: str) -> Any:
     phone_clean = str(phone).replace("+", "").replace(" ", "").replace("-", "")
     if phone_clean.startswith("961"):
         phone_clean = phone_clean[3:]
-    print(f"API Call: add_customer_note for phone={phone_clean}")
+    print(f"API Call: add_customer_note for phone=***{str(phone_clean)[-4:] if phone_clean else ''}")
     json_data = {"phone": phone_clean, "note": note[:1000]}
     response = await _make_api_request("POST", "customers/notes/add", json_data=json_data)
     if response.get("success"):
@@ -310,7 +311,7 @@ async def get_customer_by_phone(phone: str) -> Any:
         phone_clean = str(phone).replace("+", "").replace(" ", "").replace("-", "")
         if phone_clean.startswith("961"):
             phone_clean = phone_clean[3:]
-    print(f"API Call: get_customer_by_phone for phone={phone_clean}")
+    print(f"API Call: get_customer_by_phone for phone=***{str(phone_clean)[-4:] if phone_clean else ''}")
     params = {"phone": phone_clean}
     response = await _make_api_request("GET", "customers/by-phone", params=params)  # Assuming this endpoint exists
     if response.get("success"):
@@ -342,7 +343,7 @@ async def get_customer_by_phone(phone: str) -> Any:
 
 async def get_customer_appointments(phone: str) -> Any:
     """Retrieves all appointments for a customer by phone number (no country code)."""
-    print(f"API Call: get_customer_appointments for phone={phone}")
+    print(f"API Call: get_customer_appointments for phone=***{str(phone)[-4:] if phone else ''}")
 
     # Remove country code if present (e.g., +961 -> empty, keep only digits)
     phone_clean = phone.replace("+", "").replace(" ", "")

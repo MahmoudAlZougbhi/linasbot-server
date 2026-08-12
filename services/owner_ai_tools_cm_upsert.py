@@ -15,6 +15,7 @@ from services.owner_ai_tools_cm_content import (
     _require,
 )
 
+
 def _build_article_upsert(
     *,
     tenant_id: str,

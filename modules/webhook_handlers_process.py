@@ -21,6 +21,7 @@ from services.api_integrations import log_report_event
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 from utils.utils import set_human_takeover_status
 
+
 async def process_parsed_message(parsed_message: dict[str, Any], adapter: Any) -> None:
     """Entry: dedupe same message_id in-process, then delegate."""
     mid_for_dedupe = (parsed_message.get("message_id") or "").strip()
@@ -58,7 +59,7 @@ async def _process_parsed_message_impl(parsed_message: dict[str, Any], adapter: 
         f"DEBUG: identity raw_user_id={raw_user_id} normalized_phone={normalized_phone} canonical_user_id={canonical_user_id}"
     )
     if raw_user_id != canonical_user_id:
-        print(f"🔄 Identity resolved: {raw_user_id} → {canonical_user_id}")
+        print(f"🔄 Identity resolved: ...{str(raw_user_id)[-4:]} → ...{str(canonical_user_id)[-4:]}")
 
     # Migrate in-memory state from raw to canonical so we don't lose conversation_id etc.
     if raw_user_id != user_id and raw_user_id in config.user_data_whatsapp:
@@ -136,7 +137,7 @@ async def _process_parsed_message_impl(parsed_message: dict[str, Any], adapter: 
                 if config.user_greeting_stage.get(user_id, 0) <= 1:
                     config.user_greeting_stage[user_id] = 2
         except Exception as e:
-            print(f"WARNING: External resolve failed for {normalized_phone}: {e}; using phone only")
+            print(f"WARNING: External resolve failed for ***{str(normalized_phone)[-4:]}: {e}; using phone only")
             config.user_names.pop(user_id, None)
             parsed_message["user_name"] = ""
     elif defer_external:
@@ -178,14 +179,14 @@ async def _process_parsed_message_impl(parsed_message: dict[str, Any], adapter: 
             "customer_file_status": None,
             **config.DEFAULT_CONVERSATION_STATE,
         }
-        print(f"✅ Initialized user_data_whatsapp for user {user_id}")
+        print(f"✅ Initialized user_data_whatsapp for user ...{str(user_id)[-4:]}")
 
     # Store phone number IMMEDIATELY
     if phone_number:
         config.user_data_whatsapp[user_id]["phone_number"] = phone_number
-        print(f"✅ CRITICAL: Stored phone_number {phone_number} for user {user_id} BEFORE any processing")
+        print(f"✅ CRITICAL: Stored phone_number ***{str(phone_number)[-4:]} for user ...{str(user_id)[-4:]} BEFORE any processing")
     else:
-        print(f"⚠️ WARNING: No phone_number extracted for user {user_id}")
+        print(f"⚠️ WARNING: No phone_number extracted for user ...{str(user_id)[-4:]}")
 
     if external_exists is not None:
         config.user_data_whatsapp[user_id]["crm_customer_exists"] = external_exists
@@ -215,7 +216,7 @@ async def _process_parsed_message_impl(parsed_message: dict[str, Any], adapter: 
         try:
             from utils.utils import get_user_state_from_firestore
 
-            print(f"🔄 Attempting to restore user state from Firestore for {user_id}...")
+            print(f"🔄 Attempting to restore user state from Firestore for ...{str(user_id)[-4:]}...")
             firestore_state = await get_user_state_from_firestore(user_id)
             print(f"🔍 DEBUG: Firestore returned state: {firestore_state}")
 
@@ -239,7 +240,7 @@ async def _process_parsed_message_impl(parsed_message: dict[str, Any], adapter: 
                     user_name = firestore_name
                     print(f"✅ Restored name from Firestore: {firestore_name}")
             else:
-                print(f"ℹ️ No user state found in Firestore for {user_id}")
+                print(f"ℹ️ No user state found in Firestore for ...{str(user_id)[-4:]}")
         except Exception as e:
             print(f"❌ Error restoring user state from Firestore: {e}")
             import traceback
@@ -261,12 +262,12 @@ async def _process_parsed_message_impl(parsed_message: dict[str, Any], adapter: 
         or config.user_greeting_stage.get(user_id, 0) == 0
     )
     if is_new_user:
-        print(f"🆕 NEW USER detected: {user_id}, using session greeting flow (no auto /start).")
+        print(f"🆕 NEW USER detected: ...{str(user_id)[-4:]}, using session greeting flow (no auto /start).")
         config.user_greeting_stage[user_id] = max(config.user_greeting_stage.get(user_id, 0), 1)
         if config.user_gender.get(user_id) not in ["male", "female"]:
             config.user_gender[user_id] = "unknown"
     else:
-        print(f"👤 EXISTING USER: {user_id}, normal flow.")
+        print(f"👤 EXISTING USER: ...{str(user_id)[-4:]}, normal flow.")
 
     # Handle different message types
     if message_type == "text":
@@ -367,7 +368,7 @@ async def _process_parsed_message_impl(parsed_message: dict[str, Any], adapter: 
         await adapter.send_text_message(
             user_id, "عذراً، أنا أستطيع معالجة الرسائل النصية، الصور، والرسائل الصوتية فقط حالياً. 😅"
         )
-        print(f"Unhandled message type: {message_type} from {user_id}")
+        print(f"Unhandled message type: {message_type} from ...{str(user_id)[-4:]}")
 
     # Clear one-shot source ID if it wasn't consumed in handlers.
     config.user_data_whatsapp.get(user_id, {}).pop("_source_message_id", None)

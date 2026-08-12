@@ -13,7 +13,6 @@ import re
 from typing import Any
 
 import config
-
 from services.booking.booking_fsm_detect import (  # noqa: F401
     _AFFIRM_RE,
     _BODY_AREA_MENTION_RE,
@@ -60,6 +59,7 @@ from services.booking.booking_fsm_merge import (  # noqa: F401
     sync_from_flat_booking_state,
     sync_from_tool_call,
 )
+
 
 def build_unified_booking_snapshot(
     user_id: str,

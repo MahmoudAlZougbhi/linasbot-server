@@ -157,7 +157,7 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
         mids = user_data.pop("_batch_inbound_mids", []) or []
         claim_id = stable_ai_claim_identity(user_id, user_data.get("phone_number"))
         if mids and not await try_claim_ai_turn(claim_id, mids):
-            print(f"⚠️ [ai-turn] trace_id={trace} image claim=DUPLICATE_SKIP user={user_id[:20]}…")
+            print(f"⚠️ [ai-turn] trace_id={trace} image claim=DUPLICATE_SKIP user=...{str(user_id)[-4:]}")
             return
         if mids:
             print(f"[ai-turn] trace_id={trace} image claim=OK claim_key={claim_id[:20]}… mids_n={len(mids)}")
@@ -178,7 +178,7 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
         )
 
     except Exception as e:
-        print(f"ERROR processing image {image_id} for user {user_id}: {e}")
+        print(f"ERROR processing image {image_id} for user ...{str(user_id)[-4:]}: {e}")
         error_reply = "عذراً، واجهت مشكلة في معالجة صورتك. الرجاء المحاولة مرة أخرى."
         await adapter.send_text_message(user_id, error_reply)
         log_report_event(

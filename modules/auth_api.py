@@ -31,12 +31,6 @@ from modules.auth_api_common import (  # noqa: F401
     _cookie_secure,
     _set_auth_cookies,
 )
-from modules.core import app
-from services.dashboard_session_service import (
-    SESSION_COOKIE_NAME,
-    session_service,
-)
-from services.user_service import AuthBackendUnavailableError, user_service
 
 # Register user CRUD routes; re-export handlers for tests (`auth_api.get_users`, …).
 from modules.auth_users_api import (  # noqa: E402, F401
@@ -45,6 +39,12 @@ from modules.auth_users_api import (  # noqa: E402, F401
     get_users,
     update_user,
 )
+from modules.core import app
+from services.dashboard_session_service import (
+    SESSION_COOKIE_NAME,
+    session_service,
+)
+from services.user_service import AuthBackendUnavailableError, user_service
 
 
 @app.on_event("startup")

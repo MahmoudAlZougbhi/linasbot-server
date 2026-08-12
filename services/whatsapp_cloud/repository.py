@@ -9,10 +9,8 @@ import hashlib
 import secrets
 import uuid
 from datetime import UTC, timedelta
-from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from db.models.whatsapp_cloud import (
@@ -24,8 +22,6 @@ from db.models.whatsapp_cloud import (
 from services.whatsapp_cloud.crypto import open_whatsapp_token, seal_whatsapp_token
 from services.whatsapp_cloud.repository_helpers import (
     ACTIVE_LIFECYCLES,
-    _mask_id,
-    _mask_phone_wa_id,
     _utcnow,
     connection_public_view,
     conversation_public_view,

@@ -10,8 +10,8 @@ from modules.core import app
 from services.chatted_no_crm_lead_campaign_service import chatted_no_crm_lead_campaign_service
 from services.message_logs_service import message_logs_service
 from services.missed_paused_campaign_service import missed_paused_campaign_service
+from services.smart_messaging_catalog import TEMPLATE_METADATA, normalize_template_id
 from services.template_schedule_service import template_schedule_service
-
 
 # ==========================================
 # SMART MESSAGING SETTINGS & PREVIEW QUEUE

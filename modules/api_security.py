@@ -209,9 +209,11 @@ def required_permission_for(method: str, path: str) -> str | None:
         if p.startswith("/api/cm/local-qa"):
             return "contentManagers"
         return "contentManagers"
+    # Live Chat FAQ correction (save-all-languages) — operators need liveChat, not training.
+    if p.startswith("/api/faq/"):
+        return "liveChat"
     if (
         p.startswith("/api/local-qa")
-        or p.startswith("/api/faq")
         or p.startswith("/api/qa")
         or p.startswith("/api/training")
     ):
@@ -308,6 +310,7 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
             path.startswith("/api/auth/")
             or path.startswith("/api/meta/connections")
             or path.startswith("/api/cm")
+            or path.startswith("/api/faq/")
             or path.startswith("/api/billing/")
             or path.startswith("/api/owner-ai/")
             or path.startswith("/api/mobile/")

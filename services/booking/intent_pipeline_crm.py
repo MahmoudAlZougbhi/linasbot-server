@@ -23,6 +23,7 @@ from services.booking.intent_pipeline_helpers import (
 )
 from services.booking.schemas import validation_error_response
 
+
 async def finalize_crm_booking_tool_output(
     *,
     user_id: str,

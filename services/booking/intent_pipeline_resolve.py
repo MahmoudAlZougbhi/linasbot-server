@@ -7,7 +7,6 @@ from typing import Any
 
 import config
 from services.booking.constants import (
-    BEIRUT_BRANCH_ID,
     BOOKING_TIMEZONE_LABEL,
     DEFAULT_BODY_PART_REQUIRED_SERVICE_IDS,
     HAIR_REMOVAL_MACHINE_IDS,

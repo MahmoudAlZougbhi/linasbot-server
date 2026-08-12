@@ -79,7 +79,7 @@ async def handle_voice_message_whatsapp_with_adapter(user_id: str, audio_id: str
         await await_whatsapp_delayed_processing(user_id)
 
     except Exception as e:
-        print(f"ERROR processing audio {audio_id} for user {user_id}: {e}")
+        print(f"ERROR processing audio {audio_id} for user ...{str(user_id)[-4:]}: {e}")
         await adapter.send_text_message(
             user_id, "عذراً، واجهت مشكلة في معالجة رسالتك الصوتية. الرجاء المحاولة مرة أخرى."
         )

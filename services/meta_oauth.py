@@ -37,14 +37,14 @@ from services.meta_app_registry import (
     get_meta_app_registry,
     normalize_meta_tenant_id,
 )
-from services.meta_oauth_graph import (
+from services.meta_oauth_graph import (  # noqa: F401 — re-export Graph helpers for meta_* consumers
     META_GRAPH_BASE_URL,
     MetaOAuthError,
     _debug_token,
     _eligible_pages,
+    _granular_targets_are_allowlisted,
     _graph_get,
     _graph_post_form,
-    _granular_targets_are_allowlisted,
     _safe_json,
     _scope_tuple,
     disconnect_binding_webhook,

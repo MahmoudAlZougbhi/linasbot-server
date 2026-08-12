@@ -61,7 +61,7 @@ class QiscusAdapter(QiscusAdapterParseMixin, WhatsAppAdapter):
         }
 
         try:
-            print(f"🔄 Sending Qiscus message to room {to_number}")
+            print(f"🔄 Sending Qiscus message to room ***{str(to_number)[-4:] if to_number else ''}")
             print(f"📤 URL: {url}")
             print(f"📤 Payload: {payload}")
 
@@ -76,7 +76,7 @@ class QiscusAdapter(QiscusAdapterParseMixin, WhatsAppAdapter):
             if response_text:
                 try:
                     result = response.json()
-                    print(f"✅ Qiscus message sent to room {to_number}. Response: {result}")
+                    print(f"✅ Qiscus message sent to room ***{str(to_number)[-4:] if to_number else ''}. status=ok")
                     return {"success": True, "data": result}
                 except json.JSONDecodeError as json_err:
                     print(f"⚠️ Response is not JSON: {json_err}")
@@ -135,7 +135,7 @@ class QiscusAdapter(QiscusAdapterParseMixin, WhatsAppAdapter):
         }
 
         try:
-            print(f"🔄 Sending Qiscus image to room {to_number}")
+            print(f"🔄 Sending Qiscus image to room ***{str(to_number)[-4:] if to_number else ''}")
             print(f"📤 Image URL: {image_url}")
             if caption:
                 print(f"📤 Caption: {caption}")
@@ -154,7 +154,7 @@ class QiscusAdapter(QiscusAdapterParseMixin, WhatsAppAdapter):
             if response.status_code == 200:
                 try:
                     result = response.json()
-                    print(f"✅ Image sent via file_attachment. Response: {result}")
+                    print("✅ Image sent via file_attachment. status=ok")
                     return {"success": True, "data": result, "method": "file_attachment"}
                 except json.JSONDecodeError:
                     # 200 status but non-JSON response is still success
@@ -174,7 +174,7 @@ class QiscusAdapter(QiscusAdapterParseMixin, WhatsAppAdapter):
                 if response2.status_code == 200:
                     try:
                         result = response2.json()
-                        print(f"✅ Image sent as text URL. Response: {result}")
+                        print("✅ Image sent as text URL. status=ok")
                         return {"success": True, "data": result, "method": "text_url"}
                     except json.JSONDecodeError:
                         print("✅ Image sent as text URL (non-JSON response)")
@@ -229,7 +229,7 @@ class QiscusAdapter(QiscusAdapterParseMixin, WhatsAppAdapter):
         }
 
         try:
-            print(f"🔄 Sending Qiscus audio message to room {to_number}")
+            print(f"🔄 Sending Qiscus audio message to room ***{str(to_number)[-4:] if to_number else ''}")
             print(f"📤 Audio URL: {audio_url}")
 
             # First, try with file_attachment type
@@ -246,7 +246,7 @@ class QiscusAdapter(QiscusAdapterParseMixin, WhatsAppAdapter):
             if response.status_code == 200:
                 try:
                     result = response.json()
-                    print(f"✅ Audio sent via file_attachment. Response: {result}")
+                    print("✅ Audio sent via file_attachment. status=ok")
                     return {"success": True, "data": result, "method": "file_attachment"}
                 except json.JSONDecodeError:
                     # 200 status but non-JSON response is still success
@@ -266,7 +266,7 @@ class QiscusAdapter(QiscusAdapterParseMixin, WhatsAppAdapter):
                 if response2.status_code == 200:
                     try:
                         result = response2.json()
-                        print(f"✅ Audio sent as text URL (.opus). Response: {result}")
+                        print("✅ Audio sent as text URL (.opus). status=ok")
                         return {"success": True, "data": result, "method": "text_url"}
                     except json.JSONDecodeError:
                         print("✅ Audio sent as text URL (.opus) (non-JSON response)")
@@ -309,7 +309,7 @@ class QiscusAdapter(QiscusAdapterParseMixin, WhatsAppAdapter):
             response = await self.client.post(url, headers=self.headers, json=payload)
             response.raise_for_status()
             result = response.json()
-            print(f"Qiscus document sent to room {to_number}. Response: {result}")
+            print(f"Qiscus document sent to room ***{str(to_number)[-4:] if to_number else ''}. status=ok")
             return {"success": True, "data": result}
         except Exception as e:
             print(f"ERROR sending Qiscus document: {e}")

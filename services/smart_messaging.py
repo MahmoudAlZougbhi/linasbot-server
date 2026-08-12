@@ -9,15 +9,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from storage.persistent_storage import (
-    APP_SETTINGS_FILE,
-    MESSAGE_TEMPLATES_FILE,
-    PENDING_SMART_MESSAGES_FILE,
-    SENT_SMART_MESSAGES_FILE,
-    SERVICE_TEMPLATE_MAPPING_FILE,
-    ensure_dirs,
-)
-
 from services.smart_messaging_appointments import SmartMessagingAppointmentsMixin
 from services.smart_messaging_deliver import (  # noqa: F401
     deliver_scheduled_smart_whatsapp,
@@ -26,6 +17,14 @@ from services.smart_messaging_deliver import (  # noqa: F401
 from services.smart_messaging_firestore import get_sent_smart_messages_from_firestore  # noqa: F401
 from services.smart_messaging_queue import SmartMessagingQueueMixin
 from services.smart_messaging_templates import SmartMessagingTemplatesMixin
+from storage.persistent_storage import (
+    APP_SETTINGS_FILE,
+    MESSAGE_TEMPLATES_FILE,
+    PENDING_SMART_MESSAGES_FILE,
+    SENT_SMART_MESSAGES_FILE,
+    SERVICE_TEMPLATE_MAPPING_FILE,
+    ensure_dirs,
+)
 
 # Preview mode blocks automatic sends. No metadata source may bypass approval.
 AUTOMATED_PREVIEW_EXEMPT_METADATA_SOURCES: frozenset[str] = frozenset()

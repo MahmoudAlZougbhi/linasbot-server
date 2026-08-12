@@ -6,6 +6,7 @@ from typing import Any
 
 from services.api_integrations_http import _make_api_request, log_report_event
 
+
 async def send_appointment_reminders(
     date: str | None = None, phone: str | None = None, user_code: str | None = None, status: str | None = None
 ) -> Any:
@@ -19,7 +20,7 @@ async def send_appointment_reminders(
         status: Filter by status (done, available, postponed, paused)
     """
     print(
-        f"API Call: send_appointment_reminders for date={date}, phone={phone}, user_code={user_code}, status={status}"
+        f"API Call: send_appointment_reminders for date={date}, phone=***{str(phone)[-4:] if phone else ''}, user_code={user_code}, status={status}"
     )
     params = {}
     if date:
@@ -74,7 +75,7 @@ async def check_next_appointment(phone: str, user_code: str | None = None) -> An
     if phone_clean.startswith("961"):
         phone_clean = phone_clean[3:]  # Remove Lebanon country code
 
-    print(f"API Call: check_next_appointment for phone={phone_clean} (original: {phone}), user_code={user_code}")
+    print(f"API Call: check_next_appointment for phone=***{str(phone_clean)[-4:] if phone_clean else ''} (original_last4=***{str(phone)[-4:] if phone else ''}), user_code={user_code}")
     params = {"phone": phone_clean}
     if user_code:
         params["user_code"] = user_code
@@ -108,7 +109,7 @@ async def get_sessions_count_by_phone(
             phone_clean = phone_clean[3:]  # Remove Lebanon country code
 
     print(
-        f"API Call: get_sessions_count_by_phone for phone={phone_clean} (original: {phone}), user_code={user_code}, service_ids={service_ids}"
+        f"API Call: get_sessions_count_by_phone for phone=***{str(phone_clean)[-4:] if phone_clean else ''} (original_last4=***{str(phone)[-4:] if phone else ''}), user_code={user_code}, service_ids={service_ids}"
     )
     params: dict[str, Any] = {}
     if phone_clean:
@@ -161,7 +162,7 @@ async def move_client_branch(
 
     nd = (new_date or "").strip() if new_date is not None else ""
     print(
-        f"API Call: move_client_branch for phone={phone_clean} (original: {phone}), "
+        f"API Call: move_client_branch for phone=***{str(phone_clean)[-4:] if phone_clean else ''} (original_last4=***{str(phone)[-4:] if phone else ''}), "
         f"from={from_branch_id}, to={to_branch_id}, new_date={'set' if nd else 'omitted'}"
     )
     json_data = {
@@ -199,7 +200,7 @@ async def check_appointment_payment(phone: str, user_code: str | None = None) ->
     if phone_clean.startswith("961"):
         phone_clean = phone_clean[3:]  # Remove Lebanon country code
 
-    print(f"API Call: check_appointment_payment for phone={phone_clean} (original: {phone}), user_code={user_code}")
+    print(f"API Call: check_appointment_payment for phone=***{str(phone_clean)[-4:] if phone_clean else ''} (original_last4=***{str(phone)[-4:] if phone else ''}), user_code={user_code}")
     params = {"phone": phone_clean}
     if user_code:
         params["user_code"] = user_code

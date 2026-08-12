@@ -313,6 +313,6 @@ async def _fetch_customer_file_summary_for_ai(customer_phone_clean: str) -> str 
 
         return "\n".join(lines) if len(lines) > 1 else None
     except Exception as e:
-        print(f"⚠️ _fetch_customer_file_summary_for_ai failed for {customer_phone_clean}: {e}")
+        print(f"⚠️ _fetch_customer_file_summary_for_ai failed for ***{str(customer_phone_clean)[-4:] if customer_phone_clean else ''}: {e}")
         return None
 

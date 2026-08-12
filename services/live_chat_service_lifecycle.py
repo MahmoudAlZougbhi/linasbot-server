@@ -102,7 +102,7 @@ class LiveChatLifecycleMixin:
 
                     # Send notification via WhatsApp
                     await adapter.send_text_message(canonical_user_id, notification_message)
-                    print(f"✅ Sent end conversation notification to customer {user_id}")
+                    print(f"✅ Sent end conversation notification to customer ...{str(user_id)[-4:]}")
 
                     # Save notification to Firebase
                     from utils.utils import save_conversation_message_to_firestore

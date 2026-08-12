@@ -9,7 +9,14 @@ from fastapi import Body, HTTPException, Query, Request
 
 from modules.api_security import require_permission
 from modules.core import app
-from services.meta_app_registry import (
+from modules.meta_connections_api_helpers import (  # noqa: F401
+    _active_conflict,
+    _authorization_title,
+    _query_text,
+    _subscription_identity,
+    _tenant_binding,
+)
+from services.meta_app_registry import (  # noqa: F401 — re-exports for lifecycle/tests
     APP_A_KEY,
     APP_B_KEY,
     MetaAssetBinding,
@@ -19,8 +26,8 @@ from services.meta_app_registry import (
     get_meta_app_registry,
     meta_multi_app_registry_enabled,
 )
-from services.meta_comment_reply_settings import get_comment_reply_setting, set_comment_reply_setting
-from services.meta_comment_webhooks import (
+from services.meta_comment_reply_settings import get_comment_reply_setting, set_comment_reply_setting  # noqa: F401
+from services.meta_comment_webhooks import (  # noqa: F401 — re-exports for lifecycle/tests
     credential_has_comment_scopes,
     ensure_instagram_comment_app_webhook,
     ensure_page_comment_webhook_subscription,
@@ -29,8 +36,10 @@ from services.meta_comment_webhooks import (
 from services.meta_graph_routing import required_comment_scopes_for_binding
 from services.meta_instagram_login_config import instagram_login_config_status
 from services.meta_instagram_login_oauth import begin_instagram_login, complete_instagram_login
-from services.meta_instagram_login_subscription_recovery import retry_instagram_login_webhook_subscription
-from services.meta_oauth import (
+from services.meta_instagram_login_subscription_recovery import (  # noqa: F401
+    retry_instagram_login_webhook_subscription,
+)
+from services.meta_oauth import (  # noqa: F401 — re-exports patched by tests / used by lifecycle
     MetaOAuthError,
     begin_meta_business_login,
     complete_meta_business_login,
@@ -46,14 +55,6 @@ from services.meta_oauth_return import (
     peek_return_surface_from_state,
 )
 
-
-from modules.meta_connections_api_helpers import (  # noqa: F401
-    _active_conflict,
-    _authorization_title,
-    _query_text,
-    _subscription_identity,
-    _tenant_binding,
-)
 
 @app.get("/api/meta/connections")
 async def list_meta_connections(request: Request) -> Any:

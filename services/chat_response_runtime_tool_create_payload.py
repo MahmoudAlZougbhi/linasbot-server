@@ -70,9 +70,9 @@ async def handle_create_appointment_payload(ns: Any) -> Any:
                 and ns.customer_check_response.get("data")
             ):
                 ns.customer_exists = True
-                print(f"DEBUG: Customer {ns.phone_number} found in API.")
+                print(f"DEBUG: Customer ***{str(ns.phone_number)[-4:] if ns.phone_number else ''} found in API.")
             else:
-                print(f"DEBUG: Customer {ns.phone_number} not found in API. Attempting to create.")
+                print(f"DEBUG: Customer ***{str(ns.phone_number)[-4:] if ns.phone_number else ''} not found in API. Attempting to create.")
                 if ns.customer_name and ns.customer_gender_for_api:
                     ns.create_customer_response = await api_integrations.create_customer(
                         name=ns.customer_name,

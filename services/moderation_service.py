@@ -168,7 +168,7 @@ async def moderate_content(text: str, user_id: str | None = None) -> tuple[bool,
             is_service_context = is_laser_service_context(text)
 
             if is_self_harm_flag and is_service_context:
-                print(f"✅ MODERATION: False positive detected for user {user_id} - laser service context")
+                print(f"✅ MODERATION: False positive detected for user ...{str(user_id)[-4:]} - laser service context")
                 print(f"   Message: '{text[:100]}...' flagged as {flagged_categories} but is service-related")
                 return True, {
                     "flagged": False,
@@ -197,7 +197,7 @@ async def moderate_content(text: str, user_id: str | None = None) -> tuple[bool,
                     "message": "Content allowed - low confidence flag",
                 }
 
-            print(f"⚠️ MODERATION WARNING: Content flagged for user {user_id}")
+            print(f"⚠️ MODERATION WARNING: Content flagged for user ...{str(user_id)[-4:]}")
             print(f"Categories: {flagged_categories}")
 
             # Log the violation
@@ -325,7 +325,7 @@ def log_violation(user_id: str, content: str, categories: dict) -> None:
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
 
-        print(f"📝 Violation logged for user {user_id}")
+        print(f"📝 Violation logged for user ...{str(user_id)[-4:]}")
 
     except Exception as e:
         print(f"❌ ERROR logging violation: {e}")

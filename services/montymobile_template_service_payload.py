@@ -190,7 +190,7 @@ class MontyMobileTemplatePayloadMixin:
         # Debug: Print what we received
         print("🔍 DEBUG build_template_payload:")
         print(f"   template_id: {template_id} (type: {type(template_id)})")
-        print(f"   phone_number (raw): {phone_number} (type: {type(phone_number)})")
+        print(f"   phone_number (raw_last4): ***{str(phone_number)[-4:] if phone_number else ''} (type: {type(phone_number).__name__})")
         print(f"   language: {language} (type: {type(language)})")
         print(f"   parameters: {parameters}")
 
@@ -198,9 +198,9 @@ class MontyMobileTemplatePayloadMixin:
 
         to_digits = self._normalize_recipient_for_monty_template(phone_number)
         if not to_digits:
-            print(f"❌ Invalid or unsupported phone for Monty template: {phone_number!r}")
+            print(f"❌ Invalid or unsupported phone for Monty template: ***{str(phone_number)[-4:] if phone_number else ''}")
             return None
-        print(f"   phone_number (Monty 'to'): {to_digits!r}")
+        print(f"   phone_number (Monty 'to') last4: ***{str(to_digits)[-4:] if to_digits else ''}")
 
         if not self.templates:
             print("❌ WhatsApp Cloud templates not loaded")
