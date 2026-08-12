@@ -8,10 +8,10 @@ Audit-only. Application source is not modified.
 |--------|-------|
 | Tracked files (`git ls-files`) | 1539 |
 | Inventory rows | 1539 |
-| COMPLETE | 115 |
-| UNREVIEWED | 1424 |
+| COMPLETE | 145 |
+| UNREVIEWED | 1394 |
 | IN_REVIEW | 0 |
-| Last batch | Batch 4 (seq 86–115) |
+| Last batch | Batch 5 (seq 116–145) |
 | Last audit commit | 7bc01d9f7c61a7e52bb60a6e47d982b48d6acbc9 |
 
 ---
@@ -145,3 +145,22 @@ COMPLETE **85 / 1539**
 ### Cumulative
 
 COMPLETE **115 / 1539**
+
+---
+
+## Batch 5 — seq 116–145 (2026-08-12)
+
+### Scope
+
+Mobile LiveChat view/audio, orphaned TrainingFileEditor cluster, UserManagement, public landing sections + design assets.
+
+### Highlights
+
+- DELETE_CANDIDATE orphans: SystemPromptKnowledgeStylePanel, TrainingFileEditor*, LinasBotMascot (zero page imports)
+- KEEP_SECURITY_FIX: RoleManager custom roles localStorage-only
+- LANDING_KEEP: Hero/sections/GuestChat/header/footer
+- KEEP_FIX: ModernAudioPlayer play-state; unused landing asset keys
+
+### Cumulative
+
+COMPLETE **145 / 1539**
