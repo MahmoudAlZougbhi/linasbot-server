@@ -146,8 +146,3 @@ async def text_handlers_respond_phase12(ctx: dict):
 
     config.user_last_bot_response_time[user_id] = datetime.datetime.now()
     return _PHASE_HALT
-    _pack = ['_flow_error_reason', 'action', 'ai_primary_mode', 'bot_reply_text', 'combined_text', 'completion_tokens', 'cost', 'count_tokens', 'current_conversation_id', 'current_gender', 'current_preferred_lang', 'detected_gender_from_gpt', 'fallback_model', 'fallback_pricing', 'flow_error_for_log', 'flow_meta', 'flow_source', 'flow_steps', 'get_system_instruction', 'input_per_1m', 'keyword', 'keywords', 'log_interaction', 'msg_type', 'output_per_1m', 'prompt_tokens', 'response_time_ms', 'router_action', 'save_for_training_conversation_log', 'sent_reply', 'service', 'service_keywords', 'start_time', 'user_data', 'user_id', 'user_input_to_process', 'user_name']
-    for _k in _pack:
-        if _k in locals():
-            ctx[_k] = locals()[_k]
-    return None
