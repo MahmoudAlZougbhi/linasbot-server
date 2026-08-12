@@ -124,16 +124,6 @@ async def handle_message(
         was_new_conversation = not current_conversation_id
         phone_for_save = user_data.get("phone_number")
 
-        # DEBUG: Log critical info before saving user message
-        print(f"\n{'=' * 60}")
-        print("🔍 HANDLE_MESSAGE: About to save USER message")
-        print(f"   user_id: {user_id}")
-        print(f"   current_conversation_id: {current_conversation_id}")
-        print(f"   phone_number from user_data: {phone_for_save}")
-        print(f"   phone_number from config: {config.user_data_whatsapp.get(user_id, {}).get('phone_number')}")
-        print(f"   raw_msg preview: {raw_msg[:50] if raw_msg else 'None'}...")
-        print(f"{'=' * 60}\n")
-
         source_message_id = user_data.pop("_source_message_id", None)
         message_metadata = {"type": "text"}
         channel = str(user_data.get("channel") or "").strip().lower()
