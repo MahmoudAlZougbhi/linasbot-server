@@ -55,10 +55,14 @@ jobs:
             raw = os.environ.get("SUBSCRIPTION_EXEMPT_TENANT_IDS")
             print(f"[probe] SUBSCRIPTION_EXEMPT_TENANT_IDS_set={raw is not None}")
             if raw is not None:
-                print(f"[probe] SUBSCRIPTION_EXEMPT_TENANT_IDS_len={len(raw.strip())} empty={not bool(raw.strip())} value={raw.strip()!r}")
+                stripped = raw.strip()
+                print(f"[probe] SUBSCRIPTION_EXEMPT_TENANT_IDS_len={len(stripped)} empty={not bool(stripped)}")
             tw = os.environ.get("TOKEN_WALLET_UNLIMITED_TENANT_IDS")
-            print(f"[probe] TOKEN_WALLET_UNLIMITED_set={tw is not None} value={(tw or '').strip()!r}")
-            print(f"[probe] LINASBOT_TENANT_ID={(os.environ.get('LINASBOT_TENANT_ID') or '').strip()!r}")
+            tw_stripped = (tw or "").strip()
+            print(f"[probe] TOKEN_WALLET_UNLIMITED_set={tw is not None} len={len(tw_stripped)} empty={not bool(tw_stripped)}")
+            linas_tid = os.environ.get("LINASBOT_TENANT_ID")
+            linas_tid_stripped = (linas_tid or "").strip()
+            print(f"[probe] LINASBOT_TENANT_ID_set={linas_tid is not None} empty={not bool(linas_tid_stripped)}")
 
             from services.entitlements_service import (
                 is_subscription_exempt_tenant,
@@ -67,14 +71,14 @@ jobs:
                 get_tenant_entitlement_public,
                 entitlements_store,
             )
-            print(f"[probe] exempt_ids={sorted(subscription_exempt_tenant_ids())}")
+            print(f"[probe] exempt_ids_count={len(subscription_exempt_tenant_ids())}")
             print(f"[probe] linas_exempt={is_subscription_exempt_tenant('linas')}")
             print(f"[probe] linas_app_access={tenant_has_app_access('linas')}")
             try:
                 pub = get_tenant_entitlement_public("linas")
                 print(f"[probe] linas_public app_access={pub.get('app_access')} exempt={pub.get('subscription_exempt')} plan={pub.get('plan_id')} status={pub.get('status')}")
             except Exception as e:
-                print(f"[probe] linas_public_ERROR type={type(e).__name__} msg={e}")
+                print(f"[probe] linas_public_ERROR type={type(e).__name__}")
 
             from storage.persistent_storage import _DATA_ROOT
             print(f"[probe] data_root={_DATA_ROOT}")
@@ -84,23 +88,21 @@ jobs:
             if not ent_root.exists():
                 ent_root = Path("/opt/linasbot/data/entitlements")
             files = sorted(p.name for p in ent_root.glob("*.json")) if ent_root.exists() else []
-            print(f"[probe] entitlement_files={files[:40]} count={len(files)}")
-            if (ent_root / "linas.json").exists():
-                print(f"[probe] linas_entitlement_raw={(ent_root / 'linas.json').read_text()[:400]!r}")
+            print(f"[probe] entitlement_files_count={len(files)}")
 
             try:
                 from utils.utils import get_firestore_db
                 db = get_firestore_db()
             except Exception as e:
-                print(f"[probe] firestore_import_error type={type(e).__name__} msg={e}")
-                print("[probe] COMPLETE_OK")
-                raise SystemExit(0)
+                print(f"[probe] firestore_import_error type={type(e).__name__}")
+                raise SystemExit(1)
             if not db:
                 print("[probe] firestore_unavailable")
-                print("[probe] COMPLETE_OK")
-                raise SystemExit(0)
+                raise SystemExit(1)
+            MAX_DASHBOARD_USERS = 500
             coll = db.collection("artifacts").document("linas-ai-bot-backend").collection("dashboard_users")
-            docs = list(coll.stream())
+            docs = list(coll.limit(MAX_DASHBOARD_USERS).stream())
+            stream_bounded = len(docs) >= MAX_DASHBOARD_USERS
             tenant_counts = Counter()
             role_tenant = Counter()
             linas_roles = Counter()
@@ -116,25 +118,11 @@ jobs:
                     linas_roles[role] += 1
                 if role in {"admin", "owner", "platform_owner"} and tid != "linas" and status in {"", "active"}:
                     non_linas_admins += 1
-            print(f"[probe] users_total={len(docs)}")
+            print(f"[probe] users_sampled={len(docs)} stream_bounded={stream_bounded} max={MAX_DASHBOARD_USERS}")
             print(f"[probe] tenant_id_counts={dict(tenant_counts.most_common(30))}")
             print(f"[probe] linas_role_counts={dict(linas_roles)}")
             print(f"[probe] role_tenant_top={dict(role_tenant.most_common(40))}")
             print(f"[probe] non_linas_admin_or_owner_active={non_linas_admins}")
-
-            biz_by_tenant = {}
-            for doc in docs:
-                data = doc.to_dict() or {}
-                tid = str(data.get("tenantId") or data.get("tenant_id") or "(unset)").strip().lower() or "(unset)"
-                biz = str(data.get("businessName") or data.get("business_name") or data.get("name") or "").strip()[:80]
-                role = str(data.get("role") or "").strip().lower()
-                status = str(data.get("status") or "").strip().lower()
-                has_tid_field = ("tenantId" in data) or ("tenant_id" in data)
-                # No emails. Show only tenant + role + status + display-ish name.
-                print(f"[probe] user_row tenant={tid!r} role={role!r} status={status!r} has_tenant_field={has_tid_field} display={biz!r}")
-                if tid not in biz_by_tenant:
-                    biz_by_tenant[tid] = biz
-            print(f"[probe] biz_by_tenant={biz_by_tenant}")
             # Evaluate app_access for every observed tenant id
             for tid in sorted(tenant_counts):
                 if tid in {"missing", "MISSING"}:
@@ -144,12 +132,12 @@ jobs:
                 except Exception as e:
                     print(f"[probe] access_for_error tenant={tid!r} type={type(e).__name__}")
 
-            # CM clinic_name for linas if present
             try:
                 from services.cm.version_store import load_published_content
                 _p, sections = load_published_content("linas")
                 basics = sections.get("ai_basics") or {}
-                print(f"[probe] linas_clinic_name={basics.get('clinic_name')!r}")
+                clinic_name = str(basics.get("clinic_name") or "").strip()
+                print(f"[probe] linas_clinic_name_set={bool(clinic_name)} len={len(clinic_name)}")
             except Exception as e:
                 print(f"[probe] cm_clinic_name_error type={type(e).__name__}")
             print("[probe] COMPLETE_OK")
