@@ -10,7 +10,6 @@ from typing import Any
 
 from services.token_wallet_models import (
     LEGACY_INPUT_SHARE,
-    LEGACY_OUTPUT_SHARE,
     MIGRATION_NOTE,
 )
 from storage.persistent_storage import _DATA_ROOT
