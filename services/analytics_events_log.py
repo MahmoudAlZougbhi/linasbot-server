@@ -10,6 +10,9 @@ from typing import Any
 class AnalyticsEventsLogMixin:
     """Append-only event logging helpers."""
 
+    _append_event: Any
+    events_file: Any
+
     def log_message(
         self,
         source: str,

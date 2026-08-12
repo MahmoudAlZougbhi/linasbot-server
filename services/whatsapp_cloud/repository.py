@@ -9,6 +9,7 @@ import hashlib
 import secrets
 import uuid
 from datetime import UTC, timedelta
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -68,7 +69,7 @@ class WhatsAppCloudRepository(WhatsAppCloudRepositoryRuntimeMixin):
         self.session.flush()
         return attempt, nonce
 
-    def get_attempt_by_state_hash(self, state_hash: str) -> WhatsAppConnectionAttempt | None:
+    def get_attempt_by_state_hash(self, state_hash: str) -> Any:
         return self.session.scalar(
             select(WhatsAppConnectionAttempt).where(WhatsAppConnectionAttempt.state_hash == state_hash)
         )
@@ -97,7 +98,7 @@ class WhatsAppCloudRepository(WhatsAppCloudRepositoryRuntimeMixin):
         return attempt
 
     # --- connections ---
-    def find_active_by_phone_number_id(self, phone_number_id: str) -> WhatsAppConnection | None:
+    def find_active_by_phone_number_id(self, phone_number_id: str) -> Any:
         rows = self.session.scalars(
             select(WhatsAppConnection).where(
                 WhatsAppConnection.phone_number_id == phone_number_id,
@@ -117,10 +118,10 @@ class WhatsAppCloudRepository(WhatsAppCloudRepositoryRuntimeMixin):
             stmt = stmt.where(WhatsAppConnection.lifecycle_status != "revoked")
         return list(self.session.scalars(stmt.order_by(WhatsAppConnection.created_at.desc())).all())
 
-    def get_connection(self, connection_id: str) -> WhatsAppConnection | None:
+    def get_connection(self, connection_id: str) -> Any:
         return self.session.get(WhatsAppConnection, connection_id)
 
-    def get_tenant_connection(self, *, tenant_id: str, connection_id: str) -> WhatsAppConnection | None:
+    def get_tenant_connection(self, *, tenant_id: str, connection_id: str) -> Any:
         conn = self.get_connection(connection_id)
         if conn is None or conn.tenant_id != tenant_id:
             return None

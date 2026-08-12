@@ -9,6 +9,8 @@ from typing import Any
 class QiscusAdapterParseMixin:
     """Parse inbound Qiscus webhook payloads."""
 
+    room_mapping: Any
+
     def parse_webhook_message(self, webhook_data: dict[str, Any]) -> dict[str, Any] | None:
         """
         Parse incoming Qiscus webhook message to standard format

@@ -4,10 +4,16 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 
 class MessagePreviewQueueMixin:
     """Add/get/approve/reject/edit/batch operations on the preview queue."""
+
+    _load_preview_queue: Any
+    _save_preview_queue: Any
+    render_message_preview: Any
+    validate_message: Any
 
     def add_to_preview_queue(self, message_data: dict) -> dict:
         """
@@ -115,7 +121,7 @@ class MessagePreviewQueueMixin:
 
         return results
 
-    def get_message_by_id(self, message_id: str) -> dict | None:
+    def get_message_by_id(self, message_id: str) -> Any:
         """Get a specific message by ID"""
         for msg in self.preview_queue:
             if msg.get("message_id") == message_id:

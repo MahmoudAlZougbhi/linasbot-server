@@ -21,6 +21,49 @@ from utils.utils import (
 class LiveChatUnifiedMixin:
     """Unified chat list queries and fallback scans."""
 
+    _conversations_cache: Any
+    _conversations_cache_time: Any
+    _queue_cache: Any
+    _queue_cache_time: Any
+    _unified_chats_cache: Any
+    _unified_chats_cache_time: Any
+    _unified_chats_cache_has_more: Any
+    _unified_chats_cache_total: Any
+    _unified_chats_cache_next_cursor: Any
+    _unified_chats_cache_page_size: Any
+    _index_counters_cache_time: Any
+    _index_write_paused_until: Any
+    _phone_mapping_cache_time: Any
+    _room_to_phone_cache: Any
+    _phone_to_room_cache: Any
+
+    FIRESTORE_QUERY_TIMEOUT_SECONDS: Any
+    SEARCH_WIDEN_MAX_DOCS: Any
+    STATE_ASSIGNED: Any
+    STATE_BOT_ACTIVE: Any
+    STATE_WAITING_OPERATOR: Any
+    UNIFIED_CACHE_TTL: Any
+    _cached_unified_response: Any
+    _compute_index_counters: Any
+    _empty_counters: Any
+    _empty_unified_response: Any
+    _filter_conversations: Any
+    _get_users_collection: Any
+    _index_collection: Any
+    _index_counters_cache: Any
+    _is_cache_fresh: Any
+    _is_live_window: Any
+    _normalize_conversation_state: Any
+    _parse_timestamp: Any
+    _persist_unified_cache_to_disk: Any
+    _resolve_user_phone: Any
+    _run_blocking_with_timeout: Any
+    _state_filter_values: Any
+    _stream_conversations_for_users: Any
+    _stream_user_docs: Any
+    _to_frontend_chat_format: Any
+    _visible_chat_messages: Any
+
     async def _legacy_active_scan_for_fallback(
         self, search: str | None = None, user_limit: int | None = None
     ) -> list[dict[str, Any]]:
@@ -139,7 +182,7 @@ class LiveChatUnifiedMixin:
         page_size: int = 30,
         filter_state: str = "all",
         cursor: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> Any:
         """
         WhatsApp-style inbox driven ONLY by live_chat_index.
         - Single master list ordered by last_message_at desc

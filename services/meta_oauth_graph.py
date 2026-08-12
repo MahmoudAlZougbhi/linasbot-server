@@ -198,7 +198,7 @@ async def disconnect_binding_webhook(
     actor_id: str,
     registry: MetaAppRegistry | None = None,
     client: httpx.AsyncClient | None = None,
-) -> MetaAssetBinding:
+) -> Any:
     """Unsubscribe the Page, then retain an encrypted disconnected rollback record."""
 
     current_registry = registry or get_meta_app_registry()

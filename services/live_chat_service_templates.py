@@ -21,6 +21,40 @@ from utils.utils import (
 class LiveChatTemplatesMixin:
     """Template-send-log chat lookup and index counters."""
 
+    _conversations_cache: Any
+    _conversations_cache_time: Any
+    _queue_cache: Any
+    _queue_cache_time: Any
+    _unified_chats_cache: Any
+    _unified_chats_cache_time: Any
+    _unified_chats_cache_has_more: Any
+    _unified_chats_cache_total: Any
+    _unified_chats_cache_next_cursor: Any
+    _unified_chats_cache_page_size: Any
+    _index_counters_cache: Any
+    _index_counters_cache_time: Any
+    _index_write_paused_until: Any
+    _phone_mapping_cache_time: Any
+    _room_to_phone_cache: Any
+    _phone_to_room_cache: Any
+
+    FIRESTORE_QUERY_TIMEOUT_SECONDS: Any
+    INDEX_COUNTERS_CACHE_TTL: Any
+    INDEX_COUNTER_SCAN_LIMIT: Any
+    STATE_ARCHIVED: Any
+    STATE_ASSIGNED: Any
+    STATE_BOT_ACTIVE: Any
+    STATE_RESOLVED: Any
+    STATE_WAITING_OPERATOR: Any
+    _empty_counters: Any
+    _identity_keys_for_index_chat: Any
+    _index_collection: Any
+    _is_cache_fresh: Any
+    _normalize_conversation_state: Any
+    _parse_timestamp: Any
+    _run_blocking_with_timeout: Any
+    _to_frontend_chat_format: Any
+
     async def get_chats_by_template_send_log(
         self,
         template_id: str,
@@ -185,7 +219,7 @@ class LiveChatTemplatesMixin:
             "date_to": dt or "",
         }
 
-    async def _compute_index_counters(self) -> dict[str, int]:
+    async def _compute_index_counters(self) -> Any:
         """Compute dashboard counters directly from live_chat_index (best-effort, capped for performance)."""
         if self._is_cache_fresh(
             self._index_counters_cache_time,

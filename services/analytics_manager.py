@@ -13,7 +13,7 @@ from services.analytics_events import analytics
 class AnalyticsManager:
     """Manager for analytics aggregation operations."""
 
-    def get_summary(self, days: int = 7) -> dict[str, Any]:
+    def get_summary(self, days: int = 7) -> Any:
         try:
             safe_days = max(int(days), 1)
         except (TypeError, ValueError):

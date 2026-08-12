@@ -12,6 +12,12 @@ from services.smart_messaging_catalog import TWENTY_DAY_FOLLOWUP_LOOKBACK_DAYS, 
 class SmartMessagingAppointmentsMixin:
     """Appointment reminder scheduling and daily cleanup."""
 
+    scheduled_messages: dict[str, Any]
+
+    _log_reminder_sent_analytics: Any
+    _persist_sent_messages: Any
+    schedule_message: Any
+
     def schedule_appointment_reminders(self, appointment_date: datetime, customer_data: dict) -> int:
         """Schedule all reminders for an appointment
 

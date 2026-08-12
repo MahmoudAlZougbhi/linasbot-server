@@ -20,6 +20,11 @@ from services.user_persistence_service import user_persistence
 class DailyTemplateDispatcherJobsMixin:
     """Schedule/enqueue jobs used by DailyTemplateDispatcher."""
 
+    _build_placeholders: Any
+    _enqueue_message: Any
+    _has_existing_message: Any
+    _now_in_timezone: Any
+
     async def _schedule_from_reminders(
         self,
         *,

@@ -82,7 +82,7 @@ async def save_message_without_conversation_id(
 
     if resolved_conversation_id and resolved_exists:
         saved_conv_id = resolved_conversation_id
-        doc_data = doc_snap.to_dict() or {}
+        doc_data = (doc_snap.to_dict() if doc_snap is not None else {}) or {}
         current_messages = doc_data.get("messages", [])
 
         if _is_duplicate_message(current_messages, message_data):
@@ -188,6 +188,7 @@ async def save_message_without_conversation_id(
                     "operator_id": None,
                 }
             )
+        assert doc_ref is not None
         await asyncio.to_thread(doc_ref.update, update_payload)
         await _propagate_takeover_state_to_sibling_conversation_docs(
             db,

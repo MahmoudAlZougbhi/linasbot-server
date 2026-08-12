@@ -5,53 +5,53 @@ from __future__ import annotations
 import asyncio
 import datetime
 import re
-from typing import Any
+from typing import Any, cast
 
 import config
 
 _PHASE_HALT = "_PHASE_HALT"
 
 
-async def text_handlers_respond_phase7(ctx: dict):
-    _build_firestore_user_candidates = ctx.get("_build_firestore_user_candidates")
-    _is_plausible_extracted_customer_name = ctx.get("_is_plausible_extracted_customer_name")
-    action = ctx.get("action")
-    alt_candidate = ctx.get("alt_candidate")
-    bot_reply_text = ctx.get("bot_reply_text")
-    candidate = ctx.get("candidate")
-    candidate_ref = ctx.get("candidate_ref")
-    candidate_snap = ctx.get("candidate_snap")
-    candidate_user_id = ctx.get("candidate_user_id")
-    candidate_user_ids = ctx.get("candidate_user_ids")
-    canonical_user_id = ctx.get("canonical_user_id")
-    conversation_id = ctx.get("conversation_id")
-    current_conversation_id = ctx.get("current_conversation_id")
-    current_gender = ctx.get("current_gender")
-    current_preferred_lang = ctx.get("current_preferred_lang")
-    db = ctx.get("db")
-    detected_gender_from_gpt = ctx.get("detected_gender_from_gpt")
-    detected_language = ctx.get("detected_language")
-    detected_name_from_gpt = ctx.get("detected_name_from_gpt")
-    e = ctx.get("e")
-    escalation_reason = ctx.get("escalation_reason")
-    get_canonical_user_id_and_phone = ctx.get("get_canonical_user_id_and_phone")
-    get_firestore_db = ctx.get("get_firestore_db")
-    idx_err = ctx.get("idx_err")
-    is_social_channel = ctx.get("is_social_channel")
-    log_report_event = ctx.get("log_report_event")
-    notify_error = ctx.get("notify_error")
-    notify_human_on_whatsapp = ctx.get("notify_human_on_whatsapp")
-    raw_user_id = ctx.get("raw_user_id")
-    route_social_contact_request = ctx.get("route_social_contact_request")
-    social_route = ctx.get("social_route")
-    trigger_source = ctx.get("trigger_source")
-    user_data = ctx.get("user_data")
-    user_doc_ref = ctx.get("user_doc_ref")
-    user_id = ctx.get("user_id")
-    user_input_to_process = ctx.get("user_input_to_process")
-    user_name = ctx.get("user_name")
-    user_persistence = ctx.get("user_persistence")
-    users_coll = ctx.get("users_coll")
+async def text_handlers_respond_phase7(ctx: dict) -> Any:
+    _build_firestore_user_candidates = cast(Any, ctx.get("_build_firestore_user_candidates"))
+    _is_plausible_extracted_customer_name = cast(Any, ctx.get("_is_plausible_extracted_customer_name"))
+    action = cast(Any, ctx.get("action"))
+    alt_candidate = cast(Any, ctx.get("alt_candidate"))
+    bot_reply_text = cast(Any, ctx.get("bot_reply_text"))
+    candidate = cast(Any, ctx.get("candidate"))
+    candidate_ref = cast(Any, ctx.get("candidate_ref"))
+    candidate_snap = cast(Any, ctx.get("candidate_snap"))
+    candidate_user_id = cast(Any, ctx.get("candidate_user_id"))
+    candidate_user_ids = cast(Any, ctx.get("candidate_user_ids"))
+    canonical_user_id = cast(Any, ctx.get("canonical_user_id"))
+    conversation_id = cast(Any, ctx.get("conversation_id"))
+    current_conversation_id = cast(Any, ctx.get("current_conversation_id"))
+    current_gender = cast(Any, ctx.get("current_gender"))
+    current_preferred_lang = cast(Any, ctx.get("current_preferred_lang"))
+    db = cast(Any, ctx.get("db"))
+    detected_gender_from_gpt = cast(Any, ctx.get("detected_gender_from_gpt"))
+    detected_language = cast(Any, ctx.get("detected_language"))
+    detected_name_from_gpt = cast(Any, ctx.get("detected_name_from_gpt"))
+    e = cast(Any, ctx.get("e"))
+    escalation_reason = cast(Any, ctx.get("escalation_reason"))
+    get_canonical_user_id_and_phone = cast(Any, ctx.get("get_canonical_user_id_and_phone"))
+    get_firestore_db = cast(Any, ctx.get("get_firestore_db"))
+    idx_err = cast(Any, ctx.get("idx_err"))
+    is_social_channel = cast(Any, ctx.get("is_social_channel"))
+    log_report_event = cast(Any, ctx.get("log_report_event"))
+    notify_error = cast(Any, ctx.get("notify_error"))
+    notify_human_on_whatsapp = cast(Any, ctx.get("notify_human_on_whatsapp"))
+    raw_user_id = cast(Any, ctx.get("raw_user_id"))
+    route_social_contact_request = cast(Any, ctx.get("route_social_contact_request"))
+    social_route = cast(Any, ctx.get("social_route"))
+    trigger_source = cast(Any, ctx.get("trigger_source"))
+    user_data = cast(Any, ctx.get("user_data"))
+    user_doc_ref = cast(Any, ctx.get("user_doc_ref"))
+    user_id = cast(Any, ctx.get("user_id"))
+    user_input_to_process = cast(Any, ctx.get("user_input_to_process"))
+    user_name = cast(Any, ctx.get("user_name"))
+    user_persistence = cast(Any, ctx.get("user_persistence"))
+    users_coll = cast(Any, ctx.get("users_coll"))
     if is_social_channel(user_data.get("channel")):
         social_force_intent = None
         if action in {
@@ -103,7 +103,7 @@ async def text_handlers_respond_phase7(ctx: dict):
                     bot_reply_text = None
                     user_data["_social_force_fresh_answer"] = True
 
-    def _build_firestore_user_candidates(canonical_user_id: str, raw_user_id: str) -> list:
+    def _build_local_firestore_user_candidates(canonical_user_id: str, raw_user_id: str) -> list:
         candidates = []
         for candidate in [canonical_user_id, raw_user_id]:
             if candidate and candidate not in candidates:
@@ -115,7 +115,7 @@ async def text_handlers_respond_phase7(ctx: dict):
         return candidates
 
     async def _resolve_conversation_doc_ref(users_coll: Any, conversation_id: str, canonical_user_id: str) -> Any:
-        candidate_user_ids = _build_firestore_user_candidates(canonical_user_id, user_id)
+        candidate_user_ids = _build_local_firestore_user_candidates(canonical_user_id, user_id)
         last_ref = None
         last_snap = None
         for candidate_user_id in candidate_user_ids:

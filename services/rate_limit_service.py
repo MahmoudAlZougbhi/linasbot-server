@@ -216,8 +216,8 @@ class RateLimitService:
                 try:
                     self._redis_script = client.register_script(_REDIS_HIT_LUA)
                 except Exception:
-                    self._redis_script = False  # type: ignore[assignment]
-            if self._redis_script:
+                    self._redis_script = None
+            if callable(self._redis_script):
                 try:
                     result = self._redis_script(keys=[rkey], args=[now, window_seconds, limit, member])
                     allowed = int(result[0]) == 1
@@ -229,7 +229,7 @@ class RateLimitService:
                         "rate_limit Redis Lua unavailable (%s); using pipeline fallback",
                         script_exc,
                     )
-                    self._redis_script = False  # type: ignore[assignment]
+                    self._redis_script = None
             return self._hit_redis_pipeline(
                 client, rkey, now=now, window_seconds=window_seconds, limit=limit, member=member
             )

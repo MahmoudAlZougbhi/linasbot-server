@@ -13,6 +13,9 @@ from services.media_service import build_whatsapp_audio_delivery_url
 class LiveChatOperatorMixin:
     """Operator send/status and Qiscus/WhatsApp media delivery."""
 
+    APP_ID: Any
+    operator_status: Any
+
     async def send_operator_message(
         self,
         conversation_id: str,

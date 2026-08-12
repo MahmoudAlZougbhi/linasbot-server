@@ -8,7 +8,7 @@ import os
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import cast
+from typing import Any, cast
 
 from scripts.meta_webhook_contract import (
     APP_INSTAGRAM_WEBHOOK_FIELDS,
@@ -83,7 +83,7 @@ def validate_debug_payload(
     debug_payload: dict[str, object],
     *,
     expected_app_id: str,
-) -> dict[str, bool]:
+) -> Any:
     """Validate DM baseline token metadata before making any Page data request."""
 
     if not expected_app_id.isdigit() or expected_app_id == RETIRED_APP_ID:
@@ -122,7 +122,7 @@ def validate_payloads(
     page_payload: dict[str, object],
     *,
     expected_app_id: str,
-) -> dict[str, bool]:
+) -> Any:
     """Return boolean-only baseline checks or fail without rendering any credential."""
 
     checks = validate_debug_payload(debug_payload, expected_app_id=expected_app_id)
@@ -143,7 +143,7 @@ def validate_payloads(
 def validate_conversation_payloads(
     messenger_payload: dict[str, object],
     instagram_payload: dict[str, object],
-) -> dict[str, bool]:
+) -> Any:
     """Prove both messaging APIs are callable without rendering conversation data."""
 
     checks = {
@@ -160,7 +160,7 @@ def validate_page_subscription_baseline(
     payload: dict[str, object],
     *,
     expected_app_id: str,
-) -> dict[str, bool]:
+) -> Any:
     """Require Page subscribed_apps to preserve DM fields; feed must not fail baseline."""
 
     return assert_page_subscription_baseline(
@@ -175,7 +175,7 @@ def validate_page_subscription_configuration(
     *,
     expected_app_id: str,
     expect_facebook_comment_delivery: bool,
-) -> dict[str, bool]:
+) -> Any:
     """Validate Page subscription profile for the explicit delivery mode."""
 
     return assert_page_subscription_configuration(
@@ -190,13 +190,13 @@ def validate_page_subscription_payload(
     payload: dict[str, object],
     *,
     expected_app_id: str,
-) -> dict[str, bool]:
+) -> Any:
     """Backward-compatible alias for baseline Page subscription validation."""
 
     return validate_page_subscription_baseline(payload, expected_app_id=expected_app_id)
 
 
-def validate_app_webhook_configuration(payload: dict[str, object]) -> dict[str, bool]:
+def validate_app_webhook_configuration(payload: dict[str, object]) -> Any:
     """Require active Page and Instagram callbacks with exact app-level webhook fields."""
 
     raw_subscriptions = payload.get("data")
@@ -238,7 +238,7 @@ def validate_app_webhook_configuration(payload: dict[str, object]) -> dict[str, 
     return checks
 
 
-def validate_app_webhook_payload(payload: dict[str, object]) -> dict[str, bool]:
+def validate_app_webhook_payload(payload: dict[str, object]) -> Any:
     """Backward-compatible alias for app webhook configuration validation."""
 
     return validate_app_webhook_configuration(payload)

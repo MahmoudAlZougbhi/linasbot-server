@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import time
+from typing import Any, cast
 
 import config
 from services.analytics_events import analytics
@@ -11,31 +12,31 @@ from services.analytics_events import analytics
 _PHASE_HALT = "_PHASE_HALT"
 
 
-async def text_handlers_respond_phase12(ctx: dict):
-    _flow_error_reason = ctx.get("_flow_error_reason")
-    action = ctx.get("action")
-    ai_primary_mode = ctx.get("ai_primary_mode")
-    bot_reply_text = ctx.get("bot_reply_text")
-    count_tokens = ctx.get("count_tokens")
-    current_conversation_id = ctx.get("current_conversation_id")
-    current_gender = ctx.get("current_gender")
-    current_preferred_lang = ctx.get("current_preferred_lang")
-    detected_gender_from_gpt = ctx.get("detected_gender_from_gpt")
-    flow_meta = ctx.get("flow_meta")
-    flow_source = ctx.get("flow_source")
-    flow_steps = ctx.get("flow_steps")
-    get_system_instruction = ctx.get("get_system_instruction")
-    log_interaction = ctx.get("log_interaction")
-    msg_type = ctx.get("msg_type")
-    response_time_ms = ctx.get("response_time_ms")
-    router_action = ctx.get("router_action")
-    save_for_training_conversation_log = ctx.get("save_for_training_conversation_log")
-    sent_reply = ctx.get("sent_reply")
-    start_time = ctx.get("start_time")
-    user_data = ctx.get("user_data")
-    user_id = ctx.get("user_id")
-    user_input_to_process = ctx.get("user_input_to_process")
-    user_name = ctx.get("user_name")
+async def text_handlers_respond_phase12(ctx: dict) -> Any:
+    _flow_error_reason = cast(Any, ctx.get("_flow_error_reason"))
+    action = cast(Any, ctx.get("action"))
+    ai_primary_mode = cast(Any, ctx.get("ai_primary_mode"))
+    bot_reply_text = cast(Any, ctx.get("bot_reply_text"))
+    count_tokens = cast(Any, ctx.get("count_tokens"))
+    current_conversation_id = cast(Any, ctx.get("current_conversation_id"))
+    current_gender = cast(Any, ctx.get("current_gender"))
+    current_preferred_lang = cast(Any, ctx.get("current_preferred_lang"))
+    detected_gender_from_gpt = cast(Any, ctx.get("detected_gender_from_gpt"))
+    flow_meta = cast(Any, ctx.get("flow_meta"))
+    flow_source = cast(Any, ctx.get("flow_source"))
+    flow_steps = cast(Any, ctx.get("flow_steps"))
+    get_system_instruction = cast(Any, ctx.get("get_system_instruction"))
+    log_interaction = cast(Any, ctx.get("log_interaction"))
+    msg_type = cast(Any, ctx.get("msg_type"))
+    response_time_ms = cast(Any, ctx.get("response_time_ms"))
+    router_action = cast(Any, ctx.get("router_action"))
+    save_for_training_conversation_log = cast(Any, ctx.get("save_for_training_conversation_log"))
+    sent_reply = cast(Any, ctx.get("sent_reply"))
+    start_time = cast(Any, ctx.get("start_time"))
+    user_data = cast(Any, ctx.get("user_data"))
+    user_id = cast(Any, ctx.get("user_id"))
+    user_input_to_process = cast(Any, ctx.get("user_input_to_process"))
+    user_name = cast(Any, ctx.get("user_name"))
     flow_error_for_log = flow_meta.get("error") or _flow_error_reason
     log_interaction(
         user_id,

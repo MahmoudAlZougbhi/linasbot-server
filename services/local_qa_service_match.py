@@ -10,6 +10,10 @@ from typing import Any
 class LocalQAServiceMatchMixin:
     """Text normalization, search, and tiered matching for LocalQAService."""
 
+    _normalize_language: Any
+    match_threshold: Any
+    qa_pairs: Any
+
     def normalize_text(self, text: str) -> str:
         """Normalize text for better matching"""
         text = re.sub(r"\s+", " ", text.strip())

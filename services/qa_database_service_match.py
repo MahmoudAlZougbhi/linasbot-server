@@ -10,6 +10,12 @@ from typing import Any
 class QADatabaseServiceMatchMixin:
     """Similarity matching, usage tracking, and statistics for QADatabaseService."""
 
+    _extract_question_for_language: Any
+    _make_api_request: Any
+    _normalize_language: Any
+    get_qa_pairs: Any
+    match_threshold: Any
+
     def normalize_text(self, text: str) -> str:
         """Normalize text for better matching"""
         # Remove extra spaces
@@ -102,7 +108,7 @@ class QADatabaseServiceMatchMixin:
 
     async def track_usage(
         self, qa_id: int, customer_phone: str | None = None, matched: bool = True, match_score: float = 0
-    ) -> dict:
+    ) -> Any:
         """
         Track Q&A usage in database (POST .../qa/track-usage).
 
@@ -133,7 +139,7 @@ class QADatabaseServiceMatchMixin:
 
         return response
 
-    async def get_statistics(self) -> dict:
+    async def get_statistics(self) -> Any:
         """
         Get Q&A statistics from database
 
@@ -150,7 +156,7 @@ class QADatabaseServiceMatchMixin:
 
         return response
 
-    async def get_categories(self) -> dict:
+    async def get_categories(self) -> Any:
         """
         Get list of Q&A categories from database
 

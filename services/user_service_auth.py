@@ -15,6 +15,15 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 class UserServiceAuthMixin:
     """Authentication, password, and sanitize helpers for UserService."""
 
+    AUTH_LASTLOGIN_MIN_WRITE_INTERVAL_SECONDS: Any
+    AUTH_QUERY_TIMEOUT_SECONDS: Any
+    AUTH_WRITE_TIMEOUT_SECONDS: Any
+    _last_lastlogin_write_at: Any
+    _normalize_tenant_id: Any
+    collection: Any
+    get_user_by_email: Any
+    get_user_by_id: Any
+
     def _hash_password(self, password: str) -> str:
         """Hash a password using bcrypt"""
         salt = bcrypt.gensalt(rounds=12)

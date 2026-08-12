@@ -17,6 +17,29 @@ from utils.phone_utils import is_phone_like_user_id, normalize_phone
 class LiveChatPhoneMixin:
     """Phone/room mapping and conversation search helpers."""
 
+    _conversations_cache: Any
+    _conversations_cache_time: Any
+    _queue_cache: Any
+    _queue_cache_time: Any
+    _unified_chats_cache: Any
+    _unified_chats_cache_time: Any
+    _unified_chats_cache_has_more: Any
+    _unified_chats_cache_total: Any
+    _unified_chats_cache_next_cursor: Any
+    _unified_chats_cache_page_size: Any
+    _index_counters_cache: Any
+    _index_counters_cache_time: Any
+    _index_write_paused_until: Any
+    _phone_to_room_cache: Any
+
+    _phone_mapping_cache_time: Any
+    _room_to_phone_cache: Any
+
+    PHONE_MAPPING_CACHE_TTL: Any
+    get_unified_chats: Any
+    get_waiting_queue: Any
+    operator_status: Any
+
     def _normalize_phone_digits(self, value: Any) -> str:
         """Return digits-only phone value (supports +, spaces, dashes, 00 prefix)."""
         if value is None:
@@ -124,7 +147,7 @@ class LiveChatPhoneMixin:
 
         return current_phone
 
-    def _load_phone_room_mapping(self) -> dict[str, str]:
+    def _load_phone_room_mapping(self) -> Any:
         """Load `data/phone_to_room_mapping.json` with short TTL cache."""
         now = utc_now()
         if (
@@ -167,7 +190,7 @@ class LiveChatPhoneMixin:
         self._phone_mapping_cache_time = now
         return self._room_to_phone_cache
 
-    def _get_mapped_phone_for_room(self, user_id: str) -> str | None:
+    def _get_mapped_phone_for_room(self, user_id: str) -> Any:
         """Return mapped phone for a room_id/user_id when available."""
         room_to_phone = self._load_phone_room_mapping()
         return room_to_phone.get(str(user_id))

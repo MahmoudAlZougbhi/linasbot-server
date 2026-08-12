@@ -14,6 +14,15 @@ from services.smart_messaging_catalog import normalize_template_id
 class SmartMessagingQueueMixin:
     """Queue persistence and scheduled-message lifecycle."""
 
+    QUEUE_FILE: Any
+    SENT_MESSAGES_FILE: Any
+    STUCK_SENDING_MAX_AGE_SECONDS: Any
+    get_message_content: Any
+    mapping_file: Any
+    scheduled_messages: Any
+    sent_messages_log: Any
+    settings_file: Any
+
     # ------------------------------------------------------------------
     # Persistence helpers — keep queue + sent messages across restarts
     # ------------------------------------------------------------------

@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 _PHASE_HALT = "_PHASE_HALT"
 
 
-async def text_handlers_respond_phase8(ctx: dict):
-    action = ctx.get("action")
-    bot_reply_text = ctx.get("bot_reply_text")
-    current_preferred_lang = ctx.get("current_preferred_lang")
-    flow_meta = ctx.get("flow_meta")
-    get_dynamic_message = ctx.get("get_dynamic_message")
+async def text_handlers_respond_phase8(ctx: dict) -> Any:
+    action = cast(Any, ctx.get("action"))
+    bot_reply_text = cast(Any, ctx.get("bot_reply_text"))
+    current_preferred_lang = cast(Any, ctx.get("current_preferred_lang"))
+    flow_meta = cast(Any, ctx.get("flow_meta"))
+    get_dynamic_message = cast(Any, ctx.get("get_dynamic_message"))
     _actions_requiring_bot_text = {
         "initial_greet_and_ask_gender",
         "ask_gender",

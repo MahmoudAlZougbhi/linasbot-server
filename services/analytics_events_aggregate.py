@@ -12,6 +12,16 @@ from typing import Any
 class AnalyticsEventsAggregateMixin:
     """Read events and aggregate analytics stats."""
 
+    _build_conversation_type_metrics: Any
+    _format_analytics_response: Any
+    _is_test_user_id: Any
+    _latest_session_rating_by_user: Any
+    _normalize_user_id: Any
+    _parse_timestamp: Any
+    _safe_float: Any
+    _safe_int: Any
+    events_file: Any
+
     def get_events(self, days: int | None = 7, event_type: str | None = None) -> list[dict[str, Any]]:
         """
         Read events from file and filter by date range
@@ -57,7 +67,7 @@ class AnalyticsEventsAggregateMixin:
             print(f"❌ Error reading events: {e}")
             return []
 
-    def aggregate_analytics(self, days: int = 7) -> dict[str, Any]:
+    def aggregate_analytics(self, days: int = 7) -> Any:
         """
         Aggregate all events into analytics data
 

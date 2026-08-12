@@ -12,6 +12,11 @@ from typing import Any
 class AnalyticsEventsFormatMixin:
     """Shape aggregate stats into the dashboard analytics payload."""
 
+    _mask_phone_tail: Any
+    _mask_user_id: Any
+    _normalize_user_id: Any
+    _parse_timestamp: Any
+
     def _format_analytics_response(self, stats: dict, days: int) -> dict[str, Any]:
         """Format aggregated stats into API response"""
 

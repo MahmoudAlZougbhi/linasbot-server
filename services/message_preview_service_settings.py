@@ -12,6 +12,9 @@ from storage.persistent_storage import get_data_root
 class MessagePreviewSettingsMixin:
     """App settings, Monty header URL resolution, and smart-messaging toggles."""
 
+    app_settings_file: Any
+    templates_file: Any
+
     def _merge_legacy_app_settings(self, primary: dict) -> dict:
         """
         If smartMessaging was saved under legacy project data/app_settings.json (before

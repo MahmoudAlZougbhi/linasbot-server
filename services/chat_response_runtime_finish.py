@@ -150,7 +150,7 @@ async def finish_chat_response(ns: Any) -> Any:
                     ns.tattoo_soft_recover = True
                     ns.parsed_response["action"] = "ask_for_details_for_booking"
                     ns.parsed_response["bot_reply"] = _missing_body_part_booking_prompt(13, ns.detected_language)
-                    ns.partial_state: dict[str, Any] = {"service_id": 13}
+                    ns.partial_state = {"service_id": 13}
                     ns.bid = _resolve_branch_id_from_leak(ns.leaked_book)
                     if ns.bid is not None:
                         ns.partial_state["branch_id"] = ns.bid
@@ -186,7 +186,7 @@ async def finish_chat_response(ns: Any) -> Any:
     # Token usage: when tool calls exist, sum BOTH first and second API call usage (second_response alone misses first call's output)
     ns.first_usage = getattr(ns.response, "usage", None) if ns.tool_calls else None
     ns.usage = getattr(ns.second_response, "usage", None) if ns.tool_calls else getattr(ns.response, "usage", None)
-    ns.token_breakdown: dict[str, Any] | None = None
+    ns.token_breakdown = None
     if ns.tool_calls and ns.first_usage and ns.usage:
         ns.pt1 = getattr(ns.first_usage, "prompt_tokens", 0) or 0
         ns.ct1 = getattr(ns.first_usage, "completion_tokens", 0) or 0
@@ -353,7 +353,7 @@ async def finish_chat_response(ns: Any) -> Any:
                 ns.parsed_response["action"] = "ask_for_details_for_booking"
                 ns.parsed_response["bot_reply"] = _pricing_missing_details_reply(ns.current_preferred_lang, "body_part")
             else:
-                ns.pricing_call_args: dict[str, Any] = {"service_id": ns.service_id_for_sync}
+                ns.pricing_call_args = {"service_id": ns.service_id_for_sync}
                 ns.machine_id_for_sync = _safe_int(ns.booking_state.get("machine_id"))
                 ns.branch_id_for_sync = _safe_int(ns.booking_state.get("branch_id"))
                 if ns.machine_id_for_sync is not None:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import Any
+from typing import Any, cast
 
 import config
 from utils.utils import (
@@ -14,30 +14,30 @@ from utils.utils import (
 _PHASE_HALT = "_PHASE_HALT"
 
 
-async def text_handlers_respond_phase3(ctx: dict):
-    FALLBACK_TEMPLATES = ctx.get("FALLBACK_TEMPLATES")
-    GREETING_TEMPLATES = ctx.get("GREETING_TEMPLATES")
-    _activate_ai_handover_router = ctx.get("_activate_ai_handover_router")
-    _build_arabic_respectful_address = ctx.get("_build_arabic_respectful_address")
-    ai_primary_mode = ctx.get("ai_primary_mode")
-    current_conversation_id = ctx.get("current_conversation_id")
-    current_gender = ctx.get("current_gender")
-    current_preferred_lang = ctx.get("current_preferred_lang")
-    get_dynamic_message = ctx.get("get_dynamic_message")
-    is_social_channel = ctx.get("is_social_channel")
-    log_interaction = ctx.get("log_interaction")
-    log_report_event = ctx.get("log_report_event")
-    route_social_contact_request = ctx.get("route_social_contact_request")
-    router_action = ctx.get("router_action")
-    router_reply_lang = ctx.get("router_reply_lang")
-    save_conversation_message_to_firestore = ctx.get("save_conversation_message_to_firestore")
-    send_message_func = ctx.get("send_message_func")
-    social_route = ctx.get("social_route")
-    update_dashboard_metric_in_firestore = ctx.get("update_dashboard_metric_in_firestore")
-    user_data = ctx.get("user_data")
-    user_id = ctx.get("user_id")
-    user_input_to_process = ctx.get("user_input_to_process")
-    user_name = ctx.get("user_name")
+async def text_handlers_respond_phase3(ctx: dict) -> Any:
+    FALLBACK_TEMPLATES = cast(Any, ctx.get("FALLBACK_TEMPLATES"))
+    GREETING_TEMPLATES = cast(Any, ctx.get("GREETING_TEMPLATES"))
+    _activate_ai_handover_router = cast(Any, ctx.get("_activate_ai_handover_router"))
+    _build_arabic_respectful_address = cast(Any, ctx.get("_build_arabic_respectful_address"))
+    ai_primary_mode = cast(Any, ctx.get("ai_primary_mode"))
+    current_conversation_id = cast(Any, ctx.get("current_conversation_id"))
+    current_gender = cast(Any, ctx.get("current_gender"))
+    current_preferred_lang = cast(Any, ctx.get("current_preferred_lang"))
+    get_dynamic_message = cast(Any, ctx.get("get_dynamic_message"))
+    is_social_channel = cast(Any, ctx.get("is_social_channel"))
+    log_interaction = cast(Any, ctx.get("log_interaction"))
+    log_report_event = cast(Any, ctx.get("log_report_event"))
+    route_social_contact_request = cast(Any, ctx.get("route_social_contact_request"))
+    router_action = cast(Any, ctx.get("router_action"))
+    router_reply_lang = cast(Any, ctx.get("router_reply_lang"))
+    save_conversation_message_to_firestore = cast(Any, ctx.get("save_conversation_message_to_firestore"))
+    send_message_func = cast(Any, ctx.get("send_message_func"))
+    social_route = cast(Any, ctx.get("social_route"))
+    update_dashboard_metric_in_firestore = cast(Any, ctx.get("update_dashboard_metric_in_firestore"))
+    user_data = cast(Any, ctx.get("user_data"))
+    user_id = cast(Any, ctx.get("user_id"))
+    user_input_to_process = cast(Any, ctx.get("user_input_to_process"))
+    user_name = cast(Any, ctx.get("user_name"))
     if (not ai_primary_mode) and router_action == "human_handover":
         if is_social_channel(user_data.get("channel")):
             social_route = route_social_contact_request(

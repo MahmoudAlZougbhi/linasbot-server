@@ -13,6 +13,15 @@ from utils.phone_utils import normalize_phone
 class MontyMobileTemplatePayloadMixin:
     """Build Monty WhatsApp template payloads (header/body/recipient)."""
 
+    _describe_template_resolution: Any
+    _outbound_template_name: Any
+    _resolve_template_config_key: Any
+    api_config: Any
+    get_template_info: Any
+    resolve_whatsapp_language_for_template: Any
+    templates: Any
+    templates_are_text_only: Any
+
     def _resolve_template_header_components(
         self, template: dict[str, Any], template_lang: dict[str, Any], lookup: dict[str, str | None]
     ) -> list[dict[str, Any]]:

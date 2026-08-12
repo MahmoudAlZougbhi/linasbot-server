@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any, cast
 
 import config
 from handlers.text_handlers_respond_intent import (
@@ -31,22 +32,22 @@ def _coerce_unauthorized_to_wa_me(
     return "answer_question", reply
 
 
-async def text_handlers_respond_phase6(ctx: dict):
-    canonical_user_id = ctx.get("canonical_user_id")
-    current_conversation_id = ctx.get("current_conversation_id")
-    current_gender = ctx.get("current_gender")
-    current_preferred_lang = ctx.get("current_preferred_lang")
-    db = ctx.get("db")
-    e = ctx.get("e")
-    get_canonical_user_id_and_phone = ctx.get("get_canonical_user_id_and_phone")
-    get_dynamic_message = ctx.get("get_dynamic_message")
-    get_firestore_db = ctx.get("get_firestore_db")
-    gpt_response_data = ctx.get("gpt_response_data")
-    is_post_takeover_escalation_cooldown = ctx.get("is_post_takeover_escalation_cooldown")
-    user_data = ctx.get("user_data")
-    user_id = ctx.get("user_id")
-    user_input_to_process = ctx.get("user_input_to_process")
-    users_coll = ctx.get("users_coll")
+async def text_handlers_respond_phase6(ctx: dict) -> Any:
+    canonical_user_id = cast(Any, ctx.get("canonical_user_id"))
+    current_conversation_id = cast(Any, ctx.get("current_conversation_id"))
+    current_gender = cast(Any, ctx.get("current_gender"))
+    current_preferred_lang = cast(Any, ctx.get("current_preferred_lang"))
+    db = cast(Any, ctx.get("db"))
+    e = cast(Any, ctx.get("e"))
+    get_canonical_user_id_and_phone = cast(Any, ctx.get("get_canonical_user_id_and_phone"))
+    get_dynamic_message = cast(Any, ctx.get("get_dynamic_message"))
+    get_firestore_db = cast(Any, ctx.get("get_firestore_db"))
+    gpt_response_data = cast(Any, ctx.get("gpt_response_data"))
+    is_post_takeover_escalation_cooldown = cast(Any, ctx.get("is_post_takeover_escalation_cooldown"))
+    user_data = cast(Any, ctx.get("user_data"))
+    user_id = cast(Any, ctx.get("user_id"))
+    user_input_to_process = cast(Any, ctx.get("user_input_to_process"))
+    users_coll = cast(Any, ctx.get("users_coll"))
     if not gpt_response_data:
         print("[_process_and_respond] ERROR: gpt_response_data is empty — synthesizing fallback reply")
         gpt_response_data = {

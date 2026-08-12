@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 _PHASE_HALT = "_PHASE_HALT"
 
 
-async def text_handlers_respond_phase11(ctx: dict):
-    _dynamic_retrieval_flow_meta = ctx.get("_dynamic_retrieval_flow_meta")
-    _flow_error_reason = ctx.get("_flow_error_reason")
-    _prepend_multimodal_steps = ctx.get("_prepend_multimodal_steps")
-    action = ctx.get("action")
-    booking_retry = ctx.get("booking_retry")
-    flow_meta = ctx.get("flow_meta")
-    response_time_ms = ctx.get("response_time_ms")
-    sent_reply = ctx.get("sent_reply")
-    user_input_to_process = ctx.get("user_input_to_process")
+async def text_handlers_respond_phase11(ctx: dict) -> Any:
+    _dynamic_retrieval_flow_meta = cast(Any, ctx.get("_dynamic_retrieval_flow_meta"))
+    _flow_error_reason = cast(Any, ctx.get("_flow_error_reason"))
+    _prepend_multimodal_steps = cast(Any, ctx.get("_prepend_multimodal_steps"))
+    action = cast(Any, ctx.get("action"))
+    booking_retry = cast(Any, ctx.get("booking_retry"))
+    flow_meta = cast(Any, ctx.get("flow_meta"))
+    response_time_ms = cast(Any, ctx.get("response_time_ms"))
+    sent_reply = cast(Any, ctx.get("sent_reply"))
+    user_input_to_process = cast(Any, ctx.get("user_input_to_process"))
     if _dynamic_retrieval_flow_meta:
         dr = _dynamic_retrieval_flow_meta
         bot_sent_selector = dr.get("bot_sent_to_selector", "")

@@ -57,7 +57,7 @@ class MontyMobileTemplateService(MontyMobileTemplatePayloadMixin):
             self.templates = {}
             self.api_config = {}
 
-    def get_template_info(self, template_id: str) -> dict | None:
+    def get_template_info(self, template_id: str) -> Any:
         """Get template information by ID"""
         canonical = normalize_template_id(template_id)
         template = self.templates.get(canonical)
@@ -67,7 +67,7 @@ class MontyMobileTemplateService(MontyMobileTemplatePayloadMixin):
         alt = _LEGACY_TEMPLATE_CONFIG_KEYS.get(canonical, canonical)
         return self.templates.get(alt)
 
-    def templates_are_text_only(self) -> bool:
+    def templates_are_text_only(self) -> Any:
         """When True: never attach header image components for template sends."""
         return bool((self.api_config or {}).get("templates_are_text_only", False))
 

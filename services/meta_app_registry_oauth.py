@@ -22,6 +22,15 @@ from services.meta_app_registry_common import (
 class MetaAppRegistryOAuthMixin:
     """Staged activation, credentials, revoke/rollback, and OAuth state."""
 
+    _append_audit: Any
+    _binding_from_dict: Any
+    _cipher: Any
+    _locked: Any
+    _read_unlocked: Any
+    _validate_activation_unlocked: Any
+    _write_unlocked: Any
+    list_bindings: Any
+
     def activate_staged_binding(
         self,
         binding_id: str,
@@ -29,7 +38,7 @@ class MetaAppRegistryOAuthMixin:
         actor_id: str,
         expected_generation: int | None = None,
         replace_existing: bool = False,
-    ) -> MetaAssetBinding:
+    ) -> Any:
         """Atomically activate a staged binding and optionally replace one provider."""
 
         with self._locked():
@@ -164,7 +173,7 @@ class MetaAppRegistryOAuthMixin:
                 )
         return revoked
 
-    def rollback_binding(self, binding_id: str, *, actor_id: str) -> MetaAssetBinding:
+    def rollback_binding(self, binding_id: str, *, actor_id: str) -> Any:
         with self._locked():
             state = self._read_unlocked()
             raw = state["bindings"].get(binding_id)
@@ -234,7 +243,7 @@ class MetaAppRegistryOAuthMixin:
         *,
         state: Any,
         actor_id: str,
-    ) -> MetaAssetBinding:
+    ) -> Any:
         from services.meta_instagram_login_subscription import InstagramLoginSubscriptionState
 
         if not isinstance(state, InstagramLoginSubscriptionState):

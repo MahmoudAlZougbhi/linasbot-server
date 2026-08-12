@@ -29,6 +29,13 @@ from services.meta_app_registry_common import (
 class MetaAppRegistryLifecycleMixin:
     """Archive duplicates, validate/activate bindings, and set status."""
 
+    _append_audit: Any
+    _binding_from_dict: Any
+    _cipher: Any
+    _locked: Any
+    _read_unlocked: Any
+    _write_unlocked: Any
+
     def archive_superseded_duplicate_bindings(self, *, actor_id: str = "binding-archive") -> int:
         """Mark older duplicate rows superseded when a newer active row exists for the same asset key."""
 
@@ -105,7 +112,7 @@ class MetaAppRegistryLifecycleMixin:
         *,
         expected_generation: int | None = None,
         replacing_binding_id: str = "",
-    ) -> MetaAssetBinding:
+    ) -> Any:
         """Read-only activation preflight used before any Meta subscription change."""
 
         with self._locked():
@@ -137,7 +144,7 @@ class MetaAppRegistryLifecycleMixin:
         expected_generation: int | None = None,
         replace_existing: bool = False,
         status: BindingStatus = "active",
-    ) -> MetaAssetBinding:
+    ) -> Any:
         tenant = normalize_meta_tenant_id(tenant_id)
         asset = asset_id.strip()
         if not tenant or channel not in {"facebook", "instagram"} or not asset:
@@ -271,7 +278,7 @@ class MetaAppRegistryLifecycleMixin:
         status: BindingStatus,
         actor_id: str,
         expected_generation: int | None = None,
-    ) -> MetaAssetBinding:
+    ) -> Any:
         if status not in {"active", "inactive", "testing", "disconnected"}:
             raise MetaBindingConflictError("invalid binding status")
         with self._locked():

@@ -18,6 +18,19 @@ from utils.utils import (
 class LiveChatLifecycleMixin:
     """End, reopen, takeover, release, and read-state lifecycle."""
 
+    APP_ID: Any
+    STATE_ARCHIVED: Any
+    STATE_ASSIGNED: Any
+    STATE_BOT_ACTIVE: Any
+    STATE_RESOLVED: Any
+    _get_doc_with_timeout: Any
+    _index_collection: Any
+    _index_signature_cache: Any
+    _refresh_index_for_conversation: Any
+    _resolve_conversation_doc_ref: Any
+    invalidate_cache: Any
+    operator_sessions: Any
+
     async def end_conversation(
         self, conversation_id: str, user_id: str, operator_id: str, adapter: Any | None = None
     ) -> dict[str, Any]:

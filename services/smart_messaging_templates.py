@@ -12,6 +12,9 @@ from services.smart_messaging_catalog import normalize_template_id
 class SmartMessagingTemplatesMixin:
     """Load JSON templates and render placeholder content."""
 
+    message_templates: Any
+    templates_file: Any
+
     def _load_templates(self) -> dict:
         """Load message templates from JSON file or use defaults"""
         template_file = self.templates_file

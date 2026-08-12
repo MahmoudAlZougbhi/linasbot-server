@@ -19,7 +19,42 @@ from utils.utils import (
 class LiveChatIndexMixin:
     """Index, cache, and conversation-state helpers."""
 
-    def _normalize_conversation_state(self, conv_data: dict) -> str:
+    _conversations_cache: Any
+    _conversations_cache_time: Any
+    _queue_cache: Any
+    _queue_cache_time: Any
+    _unified_chats_cache: Any
+    _unified_chats_cache_time: Any
+    _unified_chats_cache_has_more: Any
+    _unified_chats_cache_total: Any
+    _unified_chats_cache_next_cursor: Any
+    _unified_chats_cache_page_size: Any
+    _index_counters_cache: Any
+    _index_counters_cache_time: Any
+    _index_write_paused_until: Any
+    _phone_mapping_cache_time: Any
+    _room_to_phone_cache: Any
+    _phone_to_room_cache: Any
+
+    ACTIVE_TIME_WINDOW: Any
+    APP_ID: Any
+    FIRESTORE_DOC_TIMEOUT_SECONDS: Any
+    FIRESTORE_QUERY_TIMEOUT_SECONDS: Any
+    INDEX_COLLECTION: Any
+    INDEX_REFRESH_MIN_INTERVAL_SECONDS: Any
+    INDEX_WRITE_COOLDOWN_SECONDS: Any
+    PERSIST_UNIFIED_CACHE: Any
+    STATE_ARCHIVED: Any
+    STATE_ASSIGNED: Any
+    STATE_BOT_ACTIVE: Any
+    STATE_RESOLVED: Any
+    STATE_WAITING_OPERATOR: Any
+    UNIFIED_CACHE_PATH: Any
+    UNIFIED_DISK_CACHE_MAX_AGE_SECONDS: Any
+    _parse_timestamp: Any
+    _read_path_refresh_tracker: Any
+
+    def _normalize_conversation_state(self, conv_data: dict) -> Any:
         """
         Resolve a safe canonical conversation_state without downgrading valid states.
         human_takeover_active explicitly False means released to bot — never trust stale
@@ -81,7 +116,7 @@ class LiveChatIndexMixin:
 
         return self.STATE_BOT_ACTIVE
 
-    def _is_live_window(self, ts: datetime.datetime) -> bool:
+    def _is_live_window(self, ts: datetime.datetime) -> Any:
         return bool(ts) and (utc_now() - ts).total_seconds() <= self.ACTIVE_TIME_WINDOW
 
     def _state_filter_values(self, filter_key: str) -> Any:
@@ -96,7 +131,7 @@ class LiveChatIndexMixin:
             return [self.STATE_RESOLVED, self.STATE_ARCHIVED]
         return []
 
-    def _conversation_state_to_status(self, state: str) -> str:
+    def _conversation_state_to_status(self, state: str) -> Any:
         """Map canonical conversation_state to frontend status (bot, waiting_human, human)."""
         if state == self.STATE_ASSIGNED:
             return "human"
@@ -183,7 +218,7 @@ class LiveChatIndexMixin:
             "closed": 0,
         }
 
-    def _is_index_write_paused(self) -> bool:
+    def _is_index_write_paused(self) -> Any:
         if self._index_write_paused_until is None:
             return False
         return utc_now() < self._index_write_paused_until
@@ -192,7 +227,7 @@ class LiveChatIndexMixin:
         self._index_write_paused_until = utc_now() + datetime.timedelta(seconds=self.INDEX_WRITE_COOLDOWN_SECONDS)
         print(f"⚠️ Pausing live_chat_index writes for {self.INDEX_WRITE_COOLDOWN_SECONDS}s: {reason}")
 
-    def _should_schedule_read_path_refresh(self, conversation_id: str) -> bool:
+    def _should_schedule_read_path_refresh(self, conversation_id: str) -> Any:
         now = utc_now()
         last = self._read_path_refresh_tracker.get(conversation_id)
         if last:
@@ -220,7 +255,7 @@ class LiveChatIndexMixin:
             "source": "cache",
         }
 
-    def _unified_cache_file(self) -> str:
+    def _unified_cache_file(self) -> Any:
         path = str(self.UNIFIED_CACHE_PATH or "").strip()
         if not path:
             return ""

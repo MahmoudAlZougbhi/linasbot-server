@@ -11,6 +11,10 @@ from typing import Any
 class AnalyticsEventsConversationMixin:
     """Session rating / masking / conversation 1-2-3 metrics."""
 
+    _normalize_user_id: Any
+    _parse_timestamp: Any
+    conversation_session_gap_minutes: Any
+
     def _latest_session_rating_by_user(self, events: list[dict[str, Any]]) -> dict[str, int]:
         """Most recent session_rating stars per user_id within the given event list."""
         latest_ts: dict[str, datetime.datetime] = {}

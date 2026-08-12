@@ -2,35 +2,37 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import config
 
 _PHASE_HALT = "_PHASE_HALT"
 
 
-async def text_handlers_respond_phase9(ctx: dict):
-    _activate_ai_handover = ctx.get("_activate_ai_handover")
-    action = ctx.get("action")
-    bot_reply_text = ctx.get("bot_reply_text")
-    current_conversation_id = ctx.get("current_conversation_id")
-    current_gender = ctx.get("current_gender")
-    current_preferred_lang = ctx.get("current_preferred_lang")
-    detected_gender_from_gpt = ctx.get("detected_gender_from_gpt")
-    escalation_reason_from_gpt = ctx.get("escalation_reason_from_gpt")
-    flow_meta = ctx.get("flow_meta")
-    get_dynamic_message = ctx.get("get_dynamic_message")
-    is_social_channel = ctx.get("is_social_channel")
-    log_report_event = ctx.get("log_report_event")
-    route_social_contact_request = ctx.get("route_social_contact_request")
-    save_conversation_message_to_firestore = ctx.get("save_conversation_message_to_firestore")
-    send_message_func = ctx.get("send_message_func")
-    sent_reply = ctx.get("sent_reply")
-    social_route = ctx.get("social_route")
-    update_dashboard_metric_in_firestore = ctx.get("update_dashboard_metric_in_firestore")
-    user_data = ctx.get("user_data")
-    user_id = ctx.get("user_id")
-    user_input_to_process = ctx.get("user_input_to_process")
-    user_name = ctx.get("user_name")
-    user_persistence = ctx.get("user_persistence")
+async def text_handlers_respond_phase9(ctx: dict) -> Any:
+    _activate_ai_handover = cast(Any, ctx.get("_activate_ai_handover"))
+    action = cast(Any, ctx.get("action"))
+    bot_reply_text = cast(Any, ctx.get("bot_reply_text"))
+    current_conversation_id = cast(Any, ctx.get("current_conversation_id"))
+    current_gender = cast(Any, ctx.get("current_gender"))
+    current_preferred_lang = cast(Any, ctx.get("current_preferred_lang"))
+    detected_gender_from_gpt = cast(Any, ctx.get("detected_gender_from_gpt"))
+    escalation_reason_from_gpt = cast(Any, ctx.get("escalation_reason_from_gpt"))
+    flow_meta = cast(Any, ctx.get("flow_meta"))
+    get_dynamic_message = cast(Any, ctx.get("get_dynamic_message"))
+    is_social_channel = cast(Any, ctx.get("is_social_channel"))
+    log_report_event = cast(Any, ctx.get("log_report_event"))
+    route_social_contact_request = cast(Any, ctx.get("route_social_contact_request"))
+    save_conversation_message_to_firestore = cast(Any, ctx.get("save_conversation_message_to_firestore"))
+    send_message_func = cast(Any, ctx.get("send_message_func"))
+    sent_reply = cast(Any, ctx.get("sent_reply"))
+    social_route = cast(Any, ctx.get("social_route"))
+    update_dashboard_metric_in_firestore = cast(Any, ctx.get("update_dashboard_metric_in_firestore"))
+    user_data = cast(Any, ctx.get("user_data"))
+    user_id = cast(Any, ctx.get("user_id"))
+    user_input_to_process = cast(Any, ctx.get("user_input_to_process"))
+    user_name = cast(Any, ctx.get("user_name"))
+    user_persistence = cast(Any, ctx.get("user_persistence"))
     if action in ["initial_greet_and_ask_gender", "ask_gender"]:
         # AI-primary: AI decides to request gender, backend persists state and executes.
         if not user_data.get("original_question"):

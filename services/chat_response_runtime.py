@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 from services.chat_response_runtime_common import (
     json,
@@ -53,24 +53,24 @@ async def get_bot_chat_response(
     ns.flow_customer_context_sent = None
     early = await prepare_chat_response_identity(ns)
     if early is not None:
-        return early
+        return cast(dict[str, Any], early)
     early = await prepare_chat_response_prompt(ns)
     if early is not None:
-        return early
+        return cast(dict[str, Any], early)
     try:
         early = await call_first_gpt(ns)
         if early is not None:
-            return early
+            return cast(dict[str, Any], early)
         early = await run_tool_loop(ns)
         if early is not None:
-            return early
+            return cast(dict[str, Any], early)
         early = await postprocess_chat_response(ns)
         if early is not None:
-            return early
+            return cast(dict[str, Any], early)
         early = await finish_chat_response(ns)
         if early is not None:
-            return early
-        return ns.parsed_response
+            return cast(dict[str, Any], early)
+        return cast(dict[str, Any], ns.parsed_response)
     except json.JSONDecodeError as e:
         print(f"â‌Œ JSON Decode Error from GPT chat response: {e}. Raw content: {ns.gpt_raw_content}")
         # NEW: Try to parse a potential plain text reply if JSON fails

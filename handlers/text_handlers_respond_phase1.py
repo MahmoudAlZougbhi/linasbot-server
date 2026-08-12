@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from typing import Any, cast
 
 import config
 from services.analytics_events import analytics
@@ -11,24 +12,24 @@ from services.analytics_events import analytics
 _PHASE_HALT = "_PHASE_HALT"
 
 
-async def text_handlers_respond_phase1(ctx: dict):
-    get_canonical_user_id_and_phone = ctx.get("get_canonical_user_id_and_phone")
-    get_dynamic_message = ctx.get("get_dynamic_message")
-    get_firestore_db = ctx.get("get_firestore_db")
-    is_flow_logging_enabled = ctx.get("is_flow_logging_enabled")
-    language_detection_service = ctx.get("language_detection_service")
-    log_interaction = ctx.get("log_interaction")
-    save_conversation_message_to_firestore = ctx.get("save_conversation_message_to_firestore")
-    send_action_func = ctx.get("send_action_func")
-    send_message_func = ctx.get("send_message_func")
-    takeover_check_error = ctx.get("takeover_check_error")
-    user_data = ctx.get("user_data")
-    user_id = ctx.get("user_id")
-    user_image_base64 = ctx.get("user_image_base64")
-    user_image_format = ctx.get("user_image_format")
-    user_input_to_process = ctx.get("user_input_to_process")
-    user_name = ctx.get("user_name")
-    user_persistence = ctx.get("user_persistence")
+async def text_handlers_respond_phase1(ctx: dict) -> Any:
+    get_canonical_user_id_and_phone = cast(Any, ctx.get("get_canonical_user_id_and_phone"))
+    get_dynamic_message = cast(Any, ctx.get("get_dynamic_message"))
+    get_firestore_db = cast(Any, ctx.get("get_firestore_db"))
+    is_flow_logging_enabled = cast(Any, ctx.get("is_flow_logging_enabled"))
+    language_detection_service = cast(Any, ctx.get("language_detection_service"))
+    log_interaction = cast(Any, ctx.get("log_interaction"))
+    save_conversation_message_to_firestore = cast(Any, ctx.get("save_conversation_message_to_firestore"))
+    send_action_func = cast(Any, ctx.get("send_action_func"))
+    send_message_func = cast(Any, ctx.get("send_message_func"))
+    takeover_check_error = cast(Any, ctx.get("takeover_check_error"))
+    user_data = cast(Any, ctx.get("user_data"))
+    user_id = cast(Any, ctx.get("user_id"))
+    user_image_base64 = cast(Any, ctx.get("user_image_base64"))
+    user_image_format = cast(Any, ctx.get("user_image_format"))
+    user_input_to_process = cast(Any, ctx.get("user_input_to_process"))
+    user_name = cast(Any, ctx.get("user_name"))
+    user_persistence = cast(Any, ctx.get("user_persistence"))
     """
     Core logic for processing user input and generating bot response.
     This function is adapted from the original `_process_and_respond`

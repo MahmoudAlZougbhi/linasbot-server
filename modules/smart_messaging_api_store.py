@@ -6,7 +6,8 @@ import json
 import os
 import tempfile
 import threading
-from collections.abc import Iterator
+from collections.abc import Generator
+from contextlib import contextmanager
 from typing import Any
 
 from services.smart_messaging_catalog import (
@@ -36,7 +37,8 @@ _TEMPLATE_LOCK_FILE = MESSAGE_TEMPLATES_LOCK_FILE
 _PROCESS_TEMPLATE_LOCK = threading.Lock()
 
 
-def _template_store_lock() -> Iterator[None]:
+@contextmanager
+def _template_store_lock() -> Generator[None, None, None]:
     """Lock template read/write across threads and (on Unix) processes."""
     ensure_dirs()
     with _PROCESS_TEMPLATE_LOCK:

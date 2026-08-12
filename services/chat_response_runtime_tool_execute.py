@@ -143,7 +143,7 @@ async def handle_execute_api_tool(ns: Any) -> Any:
             ):
                 from services.analytics_events import analytics
 
-                ns.create_api_wrapped: dict[str, Any] = (
+                ns.create_api_wrapped = (
                     cast(dict[str, Any], ns.tool_output.get("api_response"))
                     if isinstance(ns.tool_output.get("api_response"), dict)
                     else ns.tool_output
@@ -152,7 +152,7 @@ async def handle_execute_api_tool(ns: Any) -> Any:
                     ns.create_api_wrapped.get("data", {}) if isinstance(ns.create_api_wrapped, dict) else {}
                 )
                 if isinstance(ns.raw_data_payload, dict):
-                    ns.create_appointment_data: dict[str, Any] = ns.raw_data_payload.get("appointment") or {}
+                    ns.create_appointment_data = ns.raw_data_payload.get("appointment") or {}
                     ns.pricing_from_appointment = (
                         ns.raw_data_payload.get("pricing")
                         or ns.create_appointment_data.get("pricing")
@@ -235,7 +235,7 @@ async def handle_execute_api_tool(ns: Any) -> Any:
                 from services.analytics_events import analytics
 
                 # Get service from appointment data if available
-                ns.update_appointment_data: dict[str, Any] = cast(dict[str, Any], ns.tool_output.get("data", {}))
+                ns.update_appointment_data = cast(dict[str, Any], ns.tool_output.get("data", {}))
                 ns.service_id = ns.update_appointment_data.get("service_id")
 
                 ns.service_map = {

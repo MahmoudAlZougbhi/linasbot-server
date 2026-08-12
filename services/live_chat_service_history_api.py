@@ -22,6 +22,35 @@ from utils.utils import (
 class LiveChatHistoryApiMixin:
     """History API reads and waiting-queue listing."""
 
+    _conversations_cache: Any
+    _conversations_cache_time: Any
+    _queue_cache: Any
+    _queue_cache_time: Any
+    _unified_chats_cache: Any
+    _unified_chats_cache_time: Any
+    _unified_chats_cache_has_more: Any
+    _unified_chats_cache_total: Any
+    _unified_chats_cache_next_cursor: Any
+    _unified_chats_cache_page_size: Any
+    _index_counters_cache: Any
+    _index_counters_cache_time: Any
+    _index_write_paused_until: Any
+    _phone_mapping_cache_time: Any
+    _room_to_phone_cache: Any
+    _phone_to_room_cache: Any
+
+    FIRESTORE_QUERY_TIMEOUT_SECONDS: Any
+    STATE_WAITING_OPERATOR: Any
+    _collect_history_customer_rows: Any
+    _get_users_collection: Any
+    _history_filter_match: Any
+    _index_collection: Any
+    _is_cache_fresh: Any
+    _normalize_conversation_state: Any
+    _paginate: Any
+    _parse_timestamp: Any
+    _visible_chat_messages: Any
+
     async def get_history_customers(
         self,
         search: str = "",
@@ -254,7 +283,7 @@ class LiveChatHistoryApiMixin:
             traceback.print_exc()
             return {"success": False, "error": str(e), "messages": []}
 
-    async def get_client_conversations(self, user_id: str) -> list[dict[str, Any]]:
+    async def get_client_conversations(self, user_id: str) -> Any:
         """
         Get all conversations for a specific client (for expanded view)
         """
@@ -310,7 +339,7 @@ class LiveChatHistoryApiMixin:
             print(f"❌ Error getting client conversations: {e}")
             return []
 
-    async def get_waiting_queue(self) -> list[dict[str, Any]]:
+    async def get_waiting_queue(self) -> Any:
         """
         Get conversations waiting for human intervention
         Queries live_chat_index for conversations_state == waiting_for_operator

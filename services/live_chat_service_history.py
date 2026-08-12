@@ -25,6 +25,13 @@ from utils.utils import (
 class LiveChatHistoryMixin:
     """History streaming, filters, and customer-row helpers."""
 
+    APP_ID: Any
+    CACHE_TTL: Any
+    FIRESTORE_FETCH_PARALLELISM: Any
+    FIRESTORE_QUERY_TIMEOUT_SECONDS: Any
+    _parse_timestamp: Any
+    _resolve_user_phone: Any
+
     def _dedupe_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return contract_dedupe_messages(messages)
 

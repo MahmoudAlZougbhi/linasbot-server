@@ -2,54 +2,56 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import config
 
 _PHASE_HALT = "_PHASE_HALT"
 
 
-async def text_handlers_respond_phase5(ctx: dict):
-    _apply_turn_by_turn_policy = ctx.get("_apply_turn_by_turn_policy")
-    _build_arabic_respectful_address = ctx.get("_build_arabic_respectful_address")
-    _faq_exc = ctx.get("_faq_exc")
-    _is_price_intent = ctx.get("_is_price_intent")
-    _ra = ctx.get("_ra")
-    _resume_original_question = ctx.get("_resume_original_question")
-    ai_primary_mode = ctx.get("ai_primary_mode")
-    canonical_user_id = ctx.get("canonical_user_id")
-    conv_state = ctx.get("conv_state")
-    conversation_history = ctx.get("conversation_history")
-    current_conversation_id = ctx.get("current_conversation_id")
-    current_gender = ctx.get("current_gender")
-    current_preferred_lang = ctx.get("current_preferred_lang")
-    detect_reschedule_intent = ctx.get("detect_reschedule_intent")
-    firestore_conversation_id = ctx.get("firestore_conversation_id")
-    get_bot_chat_response = ctx.get("get_bot_chat_response")
-    get_canonical_user_id_and_phone = ctx.get("get_canonical_user_id_and_phone")
-    get_conversation_context_for_gpt = ctx.get("get_conversation_context_for_gpt")
-    get_conversation_last_ai_response_at = ctx.get("get_conversation_last_ai_response_at")
-    get_dynamic_message = ctx.get("get_dynamic_message")
-    get_last_bot_message_for_gpt_context = ctx.get("get_last_bot_message_for_gpt_context")
-    gpt_response_data = ctx.get("gpt_response_data")
-    initial_user_query_to_process_original = ctx.get("initial_user_query_to_process_original")
-    is_initial_message_for_gpt = ctx.get("is_initial_message_for_gpt")
-    is_post_takeover_escalation_cooldown = ctx.get("is_post_takeover_escalation_cooldown")
-    last_ai_response_at = ctx.get("last_ai_response_at")
-    local_qa_service = ctx.get("local_qa_service")
-    log_interaction = ctx.get("log_interaction")
-    query_pre_set_from_booking_confirmation = ctx.get("query_pre_set_from_booking_confirmation")
-    query_to_send_to_gpt = ctx.get("query_to_send_to_gpt")
-    respectful_address = ctx.get("respectful_address")
-    response_language = ctx.get("response_language")
-    save_conversation_message_to_firestore = ctx.get("save_conversation_message_to_firestore")
-    save_for_training_conversation_log = ctx.get("save_for_training_conversation_log")
-    send_message_func = ctx.get("send_message_func")
-    update_dashboard_metric_in_firestore = ctx.get("update_dashboard_metric_in_firestore")
-    user_data = ctx.get("user_data")
-    user_id = ctx.get("user_id")
-    user_image_base64 = ctx.get("user_image_base64")
-    user_image_format = ctx.get("user_image_format")
-    user_input_to_process = ctx.get("user_input_to_process")
-    user_name = ctx.get("user_name")
+async def text_handlers_respond_phase5(ctx: dict) -> Any:
+    _apply_turn_by_turn_policy = cast(Any, ctx.get("_apply_turn_by_turn_policy"))
+    _build_arabic_respectful_address = cast(Any, ctx.get("_build_arabic_respectful_address"))
+    _faq_exc = cast(Any, ctx.get("_faq_exc"))
+    _is_price_intent = cast(Any, ctx.get("_is_price_intent"))
+    _ra = cast(Any, ctx.get("_ra"))
+    _resume_original_question = cast(Any, ctx.get("_resume_original_question"))
+    ai_primary_mode = cast(Any, ctx.get("ai_primary_mode"))
+    canonical_user_id = cast(Any, ctx.get("canonical_user_id"))
+    conv_state = cast(Any, ctx.get("conv_state"))
+    conversation_history = cast(Any, ctx.get("conversation_history"))
+    current_conversation_id = cast(Any, ctx.get("current_conversation_id"))
+    current_gender = cast(Any, ctx.get("current_gender"))
+    current_preferred_lang = cast(Any, ctx.get("current_preferred_lang"))
+    detect_reschedule_intent = cast(Any, ctx.get("detect_reschedule_intent"))
+    firestore_conversation_id = cast(Any, ctx.get("firestore_conversation_id"))
+    get_bot_chat_response = cast(Any, ctx.get("get_bot_chat_response"))
+    get_canonical_user_id_and_phone = cast(Any, ctx.get("get_canonical_user_id_and_phone"))
+    get_conversation_context_for_gpt = cast(Any, ctx.get("get_conversation_context_for_gpt"))
+    get_conversation_last_ai_response_at = cast(Any, ctx.get("get_conversation_last_ai_response_at"))
+    get_dynamic_message = cast(Any, ctx.get("get_dynamic_message"))
+    get_last_bot_message_for_gpt_context = cast(Any, ctx.get("get_last_bot_message_for_gpt_context"))
+    gpt_response_data = cast(Any, ctx.get("gpt_response_data"))
+    initial_user_query_to_process_original = cast(Any, ctx.get("initial_user_query_to_process_original"))
+    is_initial_message_for_gpt = cast(Any, ctx.get("is_initial_message_for_gpt"))
+    is_post_takeover_escalation_cooldown = cast(Any, ctx.get("is_post_takeover_escalation_cooldown"))
+    last_ai_response_at = cast(Any, ctx.get("last_ai_response_at"))
+    local_qa_service = cast(Any, ctx.get("local_qa_service"))
+    log_interaction = cast(Any, ctx.get("log_interaction"))
+    query_pre_set_from_booking_confirmation = cast(Any, ctx.get("query_pre_set_from_booking_confirmation"))
+    query_to_send_to_gpt = cast(Any, ctx.get("query_to_send_to_gpt"))
+    respectful_address = cast(Any, ctx.get("respectful_address"))
+    response_language = cast(Any, ctx.get("response_language"))
+    save_conversation_message_to_firestore = cast(Any, ctx.get("save_conversation_message_to_firestore"))
+    save_for_training_conversation_log = cast(Any, ctx.get("save_for_training_conversation_log"))
+    send_message_func = cast(Any, ctx.get("send_message_func"))
+    update_dashboard_metric_in_firestore = cast(Any, ctx.get("update_dashboard_metric_in_firestore"))
+    user_data = cast(Any, ctx.get("user_data"))
+    user_id = cast(Any, ctx.get("user_id"))
+    user_image_base64 = cast(Any, ctx.get("user_image_base64"))
+    user_image_format = cast(Any, ctx.get("user_image_format"))
+    user_input_to_process = cast(Any, ctx.get("user_input_to_process"))
+    user_name = cast(Any, ctx.get("user_name"))
     if not gpt_response_data:
         # Only use raw input when not resuming; do NOT overwrite query pre-set from booking confirmation
         if not _resume_original_question and not query_pre_set_from_booking_confirmation:
@@ -323,11 +325,10 @@ async def text_handlers_respond_phase5(ctx: dict):
             from handlers.text_handlers_respond_phase5_gpt import text_handlers_respond_phase5_gpt
 
             await text_handlers_respond_phase5_gpt(ctx)
-            gpt_response_data = ctx.get("gpt_response_data")
-            conversation_history = ctx.get("conversation_history")
-            last_ai_response_at = ctx.get("last_ai_response_at")
-            query_to_send_to_gpt = ctx.get("query_to_send_to_gpt")
-
+            gpt_response_data = cast(Any, ctx.get("gpt_response_data"))
+            conversation_history = cast(Any, ctx.get("conversation_history"))
+            last_ai_response_at = cast(Any, ctx.get("last_ai_response_at"))
+            query_to_send_to_gpt = cast(Any, ctx.get("query_to_send_to_gpt"))
     _pack = [
         "_",
         "_act",

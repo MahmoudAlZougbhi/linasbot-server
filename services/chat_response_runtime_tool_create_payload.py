@@ -200,7 +200,7 @@ async def handle_create_appointment_payload(ns: Any) -> Any:
         # If the model passed body_parts_with_sessions, normalize and align body_part_ids.
         ns.bps_raw = ns.function_args.get("body_parts_with_sessions")
         if isinstance(ns.bps_raw, list) and ns.bps_raw:
-            ns.cleaned_sessions: list[dict[str, Any]] = []
+            ns.cleaned_sessions = []
             for ns.item in ns.bps_raw:
                 if not isinstance(ns.item, dict):
                     continue

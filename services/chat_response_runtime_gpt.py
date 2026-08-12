@@ -39,7 +39,7 @@ async def call_first_gpt(ns: Any) -> Any:
 
     ns.tool_calls = ns.first_response_message.tool_calls
 
-    ns.parsed_response: dict[str, Any] = {}
+    ns.parsed_response = {}
     ns.latest_pricing_payload = None
     ns.api_failure_reason = None  # Set when create_appointment/other API fails → flow_meta.error → human handover (submit_booking_intent uses sanitized tool hints + AI reply, no raw exceptions)
     ns.update_appointment_date_success_count = 0  # Successful date/edit updates this turn (bulk guard)
@@ -51,8 +51,8 @@ async def call_first_gpt(ns: Any) -> Any:
     ns.direct_resume_success = False
     ns.paused_followup_update_succeeded = False
     ns.paused_followup_available_action_requested = False
-    ns.tool_round_trips: list[dict[str, Any]] = []
-    ns.extra_tool_names: list[str] = []
+    ns.tool_round_trips = []
+    ns.extra_tool_names = []
     ns.ai_first_response_with_tools = ""
     ns.recovered_create_appointment_ok = False
     ns.booking_create_attempted_this_turn = False

@@ -17,6 +17,18 @@ from utils.utils import (
 class LiveChatDetailsMixin:
     """Conversation details, FAQ match context, message edits, metrics."""
 
+    ENABLE_INDEX_BACKFILL_ON_READ: Any
+    INDEX_READ_TIMEOUT_SECONDS: Any
+    _conversation_state_to_status: Any
+    _format_single_message: Any
+    _get_doc_with_timeout: Any
+    _index_collection: Any
+    _parse_timestamp: Any
+    _refresh_index_for_conversation: Any
+    _should_schedule_read_path_refresh: Any
+    _visible_chat_messages: Any
+    invalidate_cache: Any
+
     async def get_conversation_details(
         self,
         user_id: str,

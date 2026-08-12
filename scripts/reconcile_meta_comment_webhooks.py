@@ -8,7 +8,7 @@ import os
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
 from scripts.meta_webhook_contract import (
     APP_INSTAGRAM_WEBHOOK_FIELDS,
@@ -57,7 +57,7 @@ def _request_json(
     return cast(dict[str, object], decoded)
 
 
-def merge_app_subscription_fields(current: set[str], required: frozenset[str]) -> set[str]:
+def merge_app_subscription_fields(current: set[str], required: frozenset[str]) -> Any:
     merged = set(current) | set(required)
     if not DM_WEBHOOK_FIELDS.issubset(merged):
         raise MetaCommentWebhookReconcileError("DM webhook fields would be removed")
@@ -153,7 +153,7 @@ def reconcile_page_subscription(
     version: str,
     current_fields: set[str],
     request_json: GraphRequest = _request_json,
-) -> set[str]:
+) -> Any:
     """Idempotently add Page-level feed while preserving DM subscribed fields."""
 
     target_fields = plan_page_subscription_reconcile(current_fields)

@@ -3,24 +3,26 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, cast
 
 _PHASE_HALT = "_PHASE_HALT"
 
 
-async def text_handlers_respond_phase10(ctx: dict):
-    _looks_like_booking_offer_confirmation_question = ctx.get("_looks_like_booking_offer_confirmation_question")
-    action = ctx.get("action")
-    booking_origin_query = ctx.get("booking_origin_query")
-    sent_reply = ctx.get("sent_reply")
-    start_time = ctx.get("start_time")
-    step_start = ctx.get("step_start")
-    steps_list = ctx.get("steps_list")
-    user_data = ctx.get("user_data")
-    user_image_base64 = ctx.get("user_image_base64")
-    user_image_format = ctx.get("user_image_format")
-    user_input_to_process = ctx.get("user_input_to_process")
-    voice_meta = ctx.get("voice_meta")
+async def text_handlers_respond_phase10(ctx: dict) -> Any:
+    _looks_like_booking_offer_confirmation_question = cast(
+        Any, ctx.get("_looks_like_booking_offer_confirmation_question")
+    )
+    action = cast(Any, ctx.get("action"))
+    booking_origin_query = cast(Any, ctx.get("booking_origin_query"))
+    sent_reply = cast(Any, ctx.get("sent_reply"))
+    start_time = cast(Any, ctx.get("start_time"))
+    step_start = cast(Any, ctx.get("step_start"))
+    steps_list = cast(Any, ctx.get("steps_list"))
+    user_data = cast(Any, ctx.get("user_data"))
+    user_image_base64 = cast(Any, ctx.get("user_image_base64"))
+    user_image_format = cast(Any, ctx.get("user_image_format"))
+    user_input_to_process = cast(Any, ctx.get("user_input_to_process"))
+    voice_meta = cast(Any, ctx.get("voice_meta"))
     if _looks_like_booking_offer_confirmation_question(sent_reply):
         booking_origin_query = (
             user_data.get("original_question") or user_data.get("pending_clarification_query") or user_input_to_process

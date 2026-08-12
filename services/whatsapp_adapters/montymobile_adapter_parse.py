@@ -28,6 +28,9 @@ def _stable_id_when_provider_omits_message_id(webhook_data: dict[str, Any]) -> s
 class MontyMobileAdapterParseMixin:
     """Parse inbound MontyMobile / Meta / legacy Qiscus webhook payloads."""
 
+    room_mapping: Any
+    source_number: Any
+
     def parse_webhook_message(self, webhook_data: dict[str, Any]) -> dict[str, Any] | None:
         """
         Parse incoming MontyMobile webhook message to standard format

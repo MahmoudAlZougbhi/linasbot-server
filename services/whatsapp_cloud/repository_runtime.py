@@ -20,6 +20,8 @@ from services.whatsapp_cloud.repository_helpers import _utcnow
 
 
 class WhatsAppCloudRepositoryRuntimeMixin:
+    session: Any
+
     """Conversation, webhook idempotency, outbound intent, pilot, and audit helpers."""
 
     def get_or_create_conversation(
@@ -29,7 +31,7 @@ class WhatsAppCloudRepositoryRuntimeMixin:
         connection_id: str,
         customer_wa_id: str,
         profile_name: str = "",
-    ) -> WhatsAppConversation:
+    ) -> Any:
         row = self.session.scalar(
             select(WhatsAppConversation).where(
                 WhatsAppConversation.connection_id == connection_id,
@@ -72,7 +74,7 @@ class WhatsAppCloudRepositoryRuntimeMixin:
         *,
         reason: str,
         actor_user_id: str | None = None,
-    ) -> WhatsAppConversation:
+    ) -> Any:
         conv.control_state = "HUMAN_PAUSED"
         conv.control_epoch = int(conv.control_epoch) + 1
         conv.pause_reason = reason[:64]
@@ -93,7 +95,7 @@ class WhatsAppCloudRepositoryRuntimeMixin:
         conv: WhatsAppConversation,
         *,
         actor_user_id: str,
-    ) -> WhatsAppConversation:
+    ) -> Any:
         conv.control_state = "AI_ACTIVE"
         conv.control_epoch = int(conv.control_epoch) + 1
         conv.pause_reason = None
@@ -108,7 +110,7 @@ class WhatsAppCloudRepositoryRuntimeMixin:
         )
         return conv
 
-    def get_tenant_conversation(self, *, tenant_id: str, conversation_id: str) -> WhatsAppConversation | None:
+    def get_tenant_conversation(self, *, tenant_id: str, conversation_id: str) -> Any:
         conv = self.session.get(WhatsAppConversation, conversation_id)
         if conv is None or conv.tenant_id != tenant_id:
             return None
@@ -267,7 +269,7 @@ class WhatsAppCloudRepositoryRuntimeMixin:
         return intent
 
     # --- pilot entitlement ---
-    def get_active_pilot(self, tenant_id: str) -> WhatsAppPilotEntitlement | None:
+    def get_active_pilot(self, tenant_id: str) -> Any:
         return self.session.scalar(
             select(WhatsAppPilotEntitlement).where(
                 WhatsAppPilotEntitlement.tenant_id == tenant_id,
@@ -281,7 +283,7 @@ class WhatsAppCloudRepositoryRuntimeMixin:
         tenant_id: str,
         granted_by_user_id: str,
         reason: str,
-    ) -> WhatsAppPilotEntitlement:
+    ) -> Any:
         existing = self.session.scalar(
             select(WhatsAppPilotEntitlement).where(WhatsAppPilotEntitlement.tenant_id == tenant_id)
         )
@@ -304,7 +306,7 @@ class WhatsAppCloudRepositoryRuntimeMixin:
         self.session.flush()
         return row
 
-    def revoke_pilot(self, *, tenant_id: str, actor_user_id: str) -> WhatsAppPilotEntitlement | None:
+    def revoke_pilot(self, *, tenant_id: str, actor_user_id: str) -> Any:
         row = self.session.scalar(
             select(WhatsAppPilotEntitlement).where(WhatsAppPilotEntitlement.tenant_id == tenant_id)
         )

@@ -47,7 +47,7 @@ async def run_tool_loop(ns: Any) -> Any:
 
     # Track check_next_appointment result to auto-chain appointment_id for update_appointment_date
     ns.check_next_appointment_result = None
-    ns.paused_appointment_lookup_cache: dict[str, Any] = {}
+    ns.paused_appointment_lookup_cache = {}
     bind_tool_helpers(ns)
     for ns.tool_call in ns.tool_calls:
         ns.fn = getattr(ns.tool_call, "function", None)
@@ -97,7 +97,7 @@ async def run_tool_loop(ns: Any) -> Any:
                 ns.function_args.get("new_gender") or ns.function_args.get("gender")
             )
             ns.errors = []
-            ns.updated_fields: dict[str, Any] = {}
+            ns.updated_fields = {}
 
             if ns.name_error:
                 ns.errors.append(ns.name_error)
@@ -296,7 +296,7 @@ async def run_tool_loop(ns: Any) -> Any:
                 ns.dt_local = parse_normalized_api_datetime(ns.date_s.strip(), BOOKING_TZ)
             if ns.dt_local is not None:
                 ns.sid = ns.bid = None
-                ns.mid: int | None = None
+                ns.mid = None
                 if ns.function_name == "create_appointment":
                     ns.sid = _safe_int(ns.function_args.get("service_id"))
                     ns.bid = _safe_int(ns.function_args.get("branch_id"))

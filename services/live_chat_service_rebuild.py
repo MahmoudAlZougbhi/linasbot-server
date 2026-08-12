@@ -21,6 +21,45 @@ from utils.utils import (
 class LiveChatRebuildMixin:
     """Index rebuild, upsert, and refresh helpers."""
 
+    _conversations_cache: Any
+    _conversations_cache_time: Any
+    _queue_cache: Any
+    _queue_cache_time: Any
+    _unified_chats_cache: Any
+    _unified_chats_cache_time: Any
+    _unified_chats_cache_has_more: Any
+    _unified_chats_cache_total: Any
+    _unified_chats_cache_next_cursor: Any
+    _unified_chats_cache_page_size: Any
+    _index_counters_cache: Any
+    _index_counters_cache_time: Any
+    _index_write_paused_until: Any
+    _phone_mapping_cache_time: Any
+    _room_to_phone_cache: Any
+    _phone_to_room_cache: Any
+
+    FIRESTORE_FETCH_PARALLELISM: Any
+    INDEX_REFRESH_TIMEOUT_SECONDS: Any
+    INDEX_WRITE_TIMEOUT_SECONDS: Any
+    RECENT_MESSAGES_IN_INDEX: Any
+    STATE_ASSIGNED: Any
+    STATE_BOT_ACTIVE: Any
+    STATE_WAITING_OPERATOR: Any
+    _empty_counters: Any
+    _format_single_message: Any
+    _get_users_collection: Any
+    _index_collection: Any
+    _index_signature_cache: Any
+    _is_index_write_paused: Any
+    _is_live_window: Any
+    _normalize_conversation_state: Any
+    _parse_timestamp: Any
+    _pause_index_writes: Any
+    _resolve_conversation_doc_ref: Any
+    _resolve_user_phone: Any
+    _stream_user_docs: Any
+    _visible_chat_messages: Any
+
     async def _sync_index_from_source(
         self, user_id: str, conversation_id: str, *, allow_state_backfill: bool = False
     ) -> dict[str, Any]:

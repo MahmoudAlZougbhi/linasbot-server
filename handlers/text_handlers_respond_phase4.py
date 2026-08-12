@@ -2,39 +2,41 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import config
 
 _PHASE_HALT = "_PHASE_HALT"
 
 
-async def text_handlers_respond_phase4(ctx: dict):
-    ASK_CLARIFICATION_TEMPLATES = ctx.get("ASK_CLARIFICATION_TEMPLATES")
-    _build_booking_decline_reply = ctx.get("_build_booking_decline_reply")
-    _classify_booking_offer_confirmation_reply = ctx.get("_classify_booking_offer_confirmation_reply")
-    ai_primary_mode = ctx.get("ai_primary_mode")
-    canonical_user_id = ctx.get("canonical_user_id")
-    conv_state = ctx.get("conv_state")
-    current_conversation_id = ctx.get("current_conversation_id")
-    current_gender = ctx.get("current_gender")
-    current_preferred_lang = ctx.get("current_preferred_lang")
-    firestore_conversation_id = ctx.get("firestore_conversation_id")
-    get_bot_chat_response = ctx.get("get_bot_chat_response")
-    get_canonical_user_id_and_phone = ctx.get("get_canonical_user_id_and_phone")
-    get_conversation_context_for_gpt = ctx.get("get_conversation_context_for_gpt")
-    get_conversation_last_ai_response_at = ctx.get("get_conversation_last_ai_response_at")
-    get_dynamic_message = ctx.get("get_dynamic_message")
-    get_gender_from_message = ctx.get("get_gender_from_message")
-    log_interaction = ctx.get("log_interaction")
-    response_language = ctx.get("response_language")
-    router_action = ctx.get("router_action")
-    router_reply_lang = ctx.get("router_reply_lang")
-    save_conversation_message_to_firestore = ctx.get("save_conversation_message_to_firestore")
-    send_message_func = ctx.get("send_message_func")
-    user_data = ctx.get("user_data")
-    user_id = ctx.get("user_id")
-    user_input_to_process = ctx.get("user_input_to_process")
-    user_name = ctx.get("user_name")
-    user_persistence = ctx.get("user_persistence")
+async def text_handlers_respond_phase4(ctx: dict) -> Any:
+    ASK_CLARIFICATION_TEMPLATES = cast(Any, ctx.get("ASK_CLARIFICATION_TEMPLATES"))
+    _build_booking_decline_reply = cast(Any, ctx.get("_build_booking_decline_reply"))
+    _classify_booking_offer_confirmation_reply = cast(Any, ctx.get("_classify_booking_offer_confirmation_reply"))
+    ai_primary_mode = cast(Any, ctx.get("ai_primary_mode"))
+    canonical_user_id = cast(Any, ctx.get("canonical_user_id"))
+    conv_state = cast(Any, ctx.get("conv_state"))
+    current_conversation_id = cast(Any, ctx.get("current_conversation_id"))
+    current_gender = cast(Any, ctx.get("current_gender"))
+    current_preferred_lang = cast(Any, ctx.get("current_preferred_lang"))
+    firestore_conversation_id = cast(Any, ctx.get("firestore_conversation_id"))
+    get_bot_chat_response = cast(Any, ctx.get("get_bot_chat_response"))
+    get_canonical_user_id_and_phone = cast(Any, ctx.get("get_canonical_user_id_and_phone"))
+    get_conversation_context_for_gpt = cast(Any, ctx.get("get_conversation_context_for_gpt"))
+    get_conversation_last_ai_response_at = cast(Any, ctx.get("get_conversation_last_ai_response_at"))
+    get_dynamic_message = cast(Any, ctx.get("get_dynamic_message"))
+    get_gender_from_message = cast(Any, ctx.get("get_gender_from_message"))
+    log_interaction = cast(Any, ctx.get("log_interaction"))
+    response_language = cast(Any, ctx.get("response_language"))
+    router_action = cast(Any, ctx.get("router_action"))
+    router_reply_lang = cast(Any, ctx.get("router_reply_lang"))
+    save_conversation_message_to_firestore = cast(Any, ctx.get("save_conversation_message_to_firestore"))
+    send_message_func = cast(Any, ctx.get("send_message_func"))
+    user_data = cast(Any, ctx.get("user_data"))
+    user_id = cast(Any, ctx.get("user_id"))
+    user_input_to_process = cast(Any, ctx.get("user_input_to_process"))
+    user_name = cast(Any, ctx.get("user_name"))
+    user_persistence = cast(Any, ctx.get("user_persistence"))
     if (not ai_primary_mode) and router_action == "ask_clarification":
         user_data["original_question"] = user_input_to_process
         user_data["awaiting_clarification"] = True
