@@ -85,20 +85,20 @@ def load_state(session: Session) -> dict[str, Any]:
 
     state = empty_state()
     try:
-        for row in session.scalars(select(MetaAssetBindingRow)).all():
-            state["bindings"][row.binding_id] = _binding_row_to_dict(row)
-        for row in session.scalars(select(MetaBindingCredentialRow)).all():
-            state["credentials"][row.credential_id] = {
-                "binding_id": row.binding_id,
-                "aad": row.aad,
-                "sealed": row.sealed,
-                "created_at": float(row.created_at or 0),
+        for binding_row in session.scalars(select(MetaAssetBindingRow)).all():
+            state["bindings"][binding_row.binding_id] = _binding_row_to_dict(binding_row)
+        for cred_row in session.scalars(select(MetaBindingCredentialRow)).all():
+            state["credentials"][cred_row.credential_id] = {
+                "binding_id": cred_row.binding_id,
+                "aad": cred_row.aad,
+                "sealed": cred_row.sealed,
+                "created_at": float(cred_row.created_at or 0),
             }
-        for row in session.scalars(select(MetaOAuthStateRow)).all():
-            payload = dict(row.payload or {})
+        for oauth_row in session.scalars(select(MetaOAuthStateRow)).all():
+            payload = dict(oauth_row.payload or {})
             if "expires_at" not in payload:
-                payload["expires_at"] = float(row.expires_at or 0)
-            state["oauth_states"][row.nonce] = payload
+                payload["expires_at"] = float(oauth_row.expires_at or 0)
+            state["oauth_states"][oauth_row.nonce] = payload
     except Exception as exc:  # noqa: BLE001 — fail closed for SoT
         raise MetaRegistryError("Meta registry Postgres store is unreadable") from exc
     return state
@@ -207,9 +207,12 @@ def append_audit_event(session: Session, safe_event: dict[str, Any]) -> None:
 def state_fingerprint(state: dict[str, Any]) -> dict[str, Any]:
     """Counts + sorted ids for import verification / dual-read mismatch checks."""
 
-    bindings = state.get("bindings") if isinstance(state.get("bindings"), dict) else {}
-    credentials = state.get("credentials") if isinstance(state.get("credentials"), dict) else {}
-    oauth_states = state.get("oauth_states") if isinstance(state.get("oauth_states"), dict) else {}
+    bindings_raw = state.get("bindings")
+    credentials_raw = state.get("credentials")
+    oauth_raw = state.get("oauth_states")
+    bindings: dict[str, Any] = bindings_raw if isinstance(bindings_raw, dict) else {}
+    credentials: dict[str, Any] = credentials_raw if isinstance(credentials_raw, dict) else {}
+    oauth_states: dict[str, Any] = oauth_raw if isinstance(oauth_raw, dict) else {}
     return {
         "binding_count": len(bindings),
         "credential_count": len(credentials),

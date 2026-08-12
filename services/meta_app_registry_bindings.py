@@ -78,7 +78,7 @@ class MetaAppRegistryBindingsMixin:
             "oauth_states": {},
         }
 
-    def _file_lock_cm(self):
+    def _file_lock_cm(self) -> Any:
         import fcntl
 
         self.lock_path.touch(mode=0o600, exist_ok=True)
