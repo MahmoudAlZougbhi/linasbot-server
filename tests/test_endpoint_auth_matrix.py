@@ -186,7 +186,7 @@ class TestRouteInventory:
         # +public plans catalog GET /api/public/plans + protected GET /api/billing/catalog.
         assert counts["total_api_routes"] == 226
         assert counts["public"] == 19
-        assert counts["protected"] == 206
+        assert counts["protected"] == 207
         assert public_set == {
             ("GET", "/api/health"),
             ("GET", "/api/ready"),
