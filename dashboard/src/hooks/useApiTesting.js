@@ -302,15 +302,9 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
       return response.data;
     } catch (error) {
       const code = getAxiosErrorCode(error);
-      // Handle network error gracefully
       if (code === "ERR_NETWORK") {
-        setCurrentProvider(provider);
-        setBotStatus((prev) => ({
-          ...prev,
-          currentProvider: provider,
-        }));
-        toastInfo(`Switched to ${provider} (offline mode)`);
-        return { success: true, provider };
+        toast.error("Backend offline — cannot switch provider");
+        return { success: false, error: "Backend offline" };
       }
       throw error;
     } finally {
