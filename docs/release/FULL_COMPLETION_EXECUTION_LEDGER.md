@@ -22,7 +22,7 @@
 | 6 | Chat with customer / manual mode | **DONE** (foundations) |
 | 7 | Channel delivery | **DONE** (outbox foundations) |
 | 8 | BOC isolation (default OFF) | **DONE** |
-| 9 | Security/correctness/performance tests | IN_PROGRESS |
+| 9 | Security/correctness/performance tests | **DONE** |
 | 10 | Independent review + PR closeout | PENDING |
 | 11 | Full file-by-file reinspection | PENDING |
 | 12 | Final freeze | PENDING |
@@ -254,7 +254,53 @@ All Quality Gates + Security Checks SUCCESS on PR head. No merge.
 
 ---
 
+## Phase 9 — Security / correctness / performance tests
+
+| Field | Value |
+|------|-------|
+| Starting SHA | `d3be9b6fab44dac023764be798f4e9507f71d926` |
+| Ending SHA | _(pinned after this commit)_ |
+| Status | **DONE** |
+| New file | `tests/test_requests_phase9_security.py` (13 tests, ≤500 LOC) |
+
+### Coverage
+
+| Contract | Evidence |
+|----------|----------|
+| Tenant isolation get/list (wrong tenant 404) | Phase 9 + `test_customer_requests` |
+| Stale `row_version` → 409 | Phase 9 (`VERSION_CONFLICT`) |
+| Invalid status / final-action transitions | Phase 9 service-level |
+| Create without `customer_confirmed` refused | Phase 9 + domain/AI capture |
+| AI tool `public_comment` refused | Phase 9 + `test_requests_ai_capture` |
+| BOC disabled zero HTTP | `test_boc_booking_isolation` (not duplicated) |
+| Notification outbox idempotency | Phase 9 notify-retry + `test_requests_outbox_delivery` |
+| Path gate `/api/requests*` → `requests` | Phase 9 + `test_customer_requests` |
+| Sensitive PII omitted without flag | Phase 9 |
+| Viewer lacks / operator has Requests keys | Phase 9 |
+
+### Tests
+
+```text
+.venv/bin/python -m pytest \
+  tests/test_requests_phase9_security.py \
+  tests/test_customer_requests.py \
+  tests/test_requests_ai_capture.py \
+  tests/test_requests_manual_mode.py \
+  tests/test_requests_outbox_delivery.py \
+  tests/test_boc_booking_isolation.py \
+  tests/test_cm_requests_appointments.py -q
+# → 65 passed (13 new Phase 9)
+```
+
+### Not changed
+
+- Application domain / API implementation (tests + ledger only)
+- Production migrations / BOC enablement
+- Performance load harness (correctness-first; no invented load runner)
+
+---
+
 ## Resume notes
 
-Continue Phase 9+. Do not merge until Phase 13 ready.
+Continue Phases 10+. Do not merge until Phase 13 ready.
 Do not enable `LINASLASER_BOC_BOOKING_ENABLED` in production.
