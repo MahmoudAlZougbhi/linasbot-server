@@ -90,7 +90,7 @@ def _latencies_to_result(
     return result
 
 
-def _fakeredis():
+def _fakeredis() -> Any:
     import fakeredis
 
     return fakeredis.FakeRedis(decode_responses=True)

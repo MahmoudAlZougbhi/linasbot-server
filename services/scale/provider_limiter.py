@@ -131,4 +131,4 @@ class ProviderLimiter:
 
     def backoff_seconds(self, attempt: int, *, base: float = 1.0, cap: float = 60.0) -> float:
         exp = min(cap, base * (2 ** max(0, min(attempt, 8))))
-        return exp + random.random() * 0.5
+        return float(exp + random.random() * 0.5)
