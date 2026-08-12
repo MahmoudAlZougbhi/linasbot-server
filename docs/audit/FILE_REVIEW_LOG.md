@@ -300,3 +300,13 @@ COMPLETE **1544 / 1544**
 - Disposition upgrades applied where agent findings were stronger (11 changes).
 - [Audit seq 521-800](38e54f8a-dce5-460a-a695-665b5fb450be) failed with resource_exhausted; range already COMPLETE from full-pass + import recheck — no re-run.
 
+
+
+---
+
+## Follow-up — merge agent forensics (seq 1101–1539)
+
+- Merged [Audit seq 1101-1539](d2369170-b96e-494e-b58f-b57873f675d3) from `docs/audit/_phase0b_batch_1101_1539_final.json` (439 records).
+- Disposition upgrades: 10; skipped downgrades: 5.
+- Agent summary: KEEP_FIX for linas-tenant defaults in multi-tenant services; DELETE_CANDIDATE confirmed for dead queue/monitoring services.
+

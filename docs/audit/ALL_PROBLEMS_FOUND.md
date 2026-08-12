@@ -1,22 +1,22 @@
 # Phase 0B — Complete problems report (all tracked files)
 
-_Source: `docs/audit/FILE_INVENTORY.csv` after full Phase 0B + false-orphan correction + late agent reconcile._
+_Source: `docs/audit/FILE_INVENTORY.csv` after full Phase 0B + false-orphan correction + agent reconciles._
 
 **Audit-only.** Do **not** delete, fix, migrate, Meta-cutover, or deploy until Mahmoud approves Phase 1.
 
 - **Inventory parity:** 1544 / 1544
 - **Review status:** all `COMPLETE`
 - **Fully read:** YES for text sources; NOT_APPLICABLE for binaries
-- **Quality:** seq 1–205 careful hand/agent forensic; later rows import-rechecked; late agents 206–520 merged where available.
+- **Quality:** careful seq 1–205; import-recheck; agent merges including 1101–1539.
 
 ## Disposition totals
 
 | Disposition | Count |
 |---|---:|
-| KEEP_AS_IS | 1190 |
+| KEEP_AS_IS | 1180 |
 | MOVE_TO_ARCHIVE | 130 |
 | BINARY_ASSET_REVIEW | 81 |
-| KEEP_FIX | 49 |
+| KEEP_FIX | 59 |
 | LANDING_KEEP | 35 |
 | DELETE_CANDIDATE | 23 |
 | KEEP_MOBILE_API | 16 |
@@ -100,11 +100,21 @@ _Source: `docs/audit/FILE_INVENTORY.csv` after full Phase 0B + false-orphan corr
 - **Seq 472** `handlers/text_handlers_respond_phase12.py` — rg: terminal phase; dead _pack block after halt return | unreachable _pack after return _PHASE_HALT (dead code) | analytics + optional training log per turn
 - **Seq 482** `handlers/text_handlers_start.py` — rg: exported from text_handlers; webhook_process comments removed direct call | webhook start_command_whatsapp no longer calls start_command directly — possible dead export
 - **Seq 484** `handlers/voice_handlers.py` — rg: webhook_handlers_voice + dashboard lab import handle_voice_message | uses synchronous conv_doc_ref.get() inside async handler (blocks event loop); skip_firestore_save prevents double-save | pydub transcode + Whisper API per voice message
-- **Seq 1175** `services/montymobile_template_service.py` — No importers found via module path patterns
-- **Seq 1176** `services/montymobile_template_service_payload.py` — No importers found via module path patterns
-- **Seq 1302** `services/whatsapp_adapters/montymobile_adapter.py` — No importers found via module path patterns
-- **Seq 1303** `services/whatsapp_adapters/montymobile_adapter_parse.py` — No importers found via module path patterns
-- **Seq 1319** `services/whatsapp_cloud/legacy_isolation.py` — No importers found via module path patterns
+- **Seq 1161** `services/meta_messaging.py` — Active Meta messaging adapter; linas default tenant_id in dataclass should derive from binding only | HMAC signature verification on webhooks; page tokens from env/registry | MetaMessagingSettings defaults tenant_id=linas — multi-tenant risk if binding tenant omitted
+- **Seq 1171** `services/mobile_refresh_token_service.py` — Mobile auth tokens should require explicit tenant_id | secrets/billing surface — server-side only; API authz required | refresh token payload defaults tenant_id to linas
+- **Seq 1175** `services/montymobile_template_service.py` — some broad exception handlers swallow errors
+- **Seq 1176** `services/montymobile_template_service_payload.py` — see inventory row
+- **Seq 1203** `services/owner_alert_store.py` — Owner alert persistence; linas default on empty tenant | tenant path defaults to linas
+- **Seq 1227** `services/owner_push_token_store.py` — Push token store; linas default on empty tenant | secrets/billing surface — server-side only; API authz required | tenant path defaults to linas
+- **Seq 1270** `services/social_contact_routing.py` — Active social routing; linas fallback breaks multi-tenant isolation | defaults tenant_id to linas when missing in user_data
+- **Seq 1271** `services/social_contact_routing_detect.py` — Phone routing detection; linas-centric defaults need tenant-scoped config | resolve_social_whatsapp_number defaults tenant_id=linas; env override only for linas
+- **Seq 1273** `services/social_messaging_processor.py` — Meta social event processor; linas fallback on missing tenant | event tenant_id falls back to settings.tenant_id or linas
+- **Seq 1274** `services/social_user_id.py` — Cross-channel user id helper; linas default risks id collision across tenants | scopes social user ids with linas default tenant
+- **Seq 1290** `services/token_wallet_models.py` — Billing models active; empty tenant_id should not silently become linas in SaaS | linas default tenant reference; secrets/billing surface — server-side only; API authz required | normalize tenant defaults to linas when empty
+- **Seq 1295** `services/user_service.py` — Active auth service; linas default tenant normalization needs fail-closed for new tenants | bcrypt hashing; query timeouts; tenant-scoped collection paths | _normalize_tenant_id defaults missing tenant to linas — SaaS isolation risk | blocking sleep; streaming iteration — watch memory on large sets
+- **Seq 1302** `services/whatsapp_adapters/montymobile_adapter.py` — some broad exception handlers swallow errors
+- **Seq 1303** `services/whatsapp_adapters/montymobile_adapter_parse.py` — some broad exception handlers swallow errors
+- **Seq 1319** `services/whatsapp_cloud/legacy_isolation.py` — see inventory row
 
 ---
 
@@ -113,28 +123,50 @@ _Source: `docs/audit/FILE_INVENTORY.csv` after full Phase 0B + false-orphan corr
 Zero external importers after module-path recheck (or orphan cluster / orphan test).
 
 - **Seq 53** `config/montymobile_templates.json` — Confirmed zero-import orphan from manual Phase 0B audit | Commits api_id, tenant UUID, source phone 96178974402; api_key empty (good). Template wa_message_id/record_guid are provider IDs. | No importers found via module path patterns
+
 - **Seq 100** `dashboard/src/components/BotInstructionsTab.jsx` — Confirmed zero-import orphan from manual Phase 0B audit | restore by filename from API — server must validate path | No importers found via module path patterns | loads instructions+stats+backups on mount
+
 - **Seq 103** `dashboard/src/components/ContentFilesPanel.jsx` — Confirmed zero-import orphan from manual Phase 0B audit | delete/create via API; auth assumed in useApi | No importers found via module path patterns | loads full file content on select
+
 - **Seq 104** `dashboard/src/components/DynamicMessagesPanel.jsx` — Confirmed zero-import orphan from manual Phase 0B audit | No importers found via module path patterns | JSON.stringify dirty check entire tree
+
 - **Seq 119** `dashboard/src/components/SystemPromptKnowledgeStylePanel.jsx` — Confirmed zero-import orphan from manual Phase 0B audit | Would allow unauthenticated write only if mounted without ProtectedRoute; currently unreachable. updateTrainingFile requires authenticated api client when used. | No importers found via module path patterns | Loads three large text files in parallel on mount — fine if wired
+
 - **Seq 120** `dashboard/src/components/TrainingFileEditor.jsx` — Confirmed zero-import orphan from manual Phase 0B audit | restore uses window.confirm only; would POST restore with auth if mounted | No importers found via module path patterns | findTrainingSearchMatches rescans full content per match index; document keydown listener on every open-search state
+
 - **Seq 121** `dashboard/src/components/TrainingFileEditor.locSplit.test.js` — Test for orphaned TrainingFileEditor cluster; no production import
+
 - **Seq 122** `dashboard/src/components/TrainingFileEditor.meta.js` — Confirmed zero-import orphan from manual Phase 0B audit | No importers found via module path patterns | findTrainingSearchMatches O(n*m) with content.split per match
+
 - **Seq 123** `dashboard/src/components/TrainingFileEditorBackups.jsx` — Confirmed zero-import orphan from manual Phase 0B audit | restore delegated to parent handleRestore (confirm + API) | No importers found via module path patterns | max-h-64 scroll list — fine
+
 - **Seq 124** `dashboard/src/components/TrainingFileEditorSearch.jsx` — Confirmed zero-import orphan from manual Phase 0B audit | No importers found via module path patterns | slices results to 10 in UI — good
+
 - **Seq 131** `dashboard/src/components/landing/LinasBotMascot.jsx` — Confirmed zero-import orphan from manual Phase 0B audit | No importers found via module path patterns | If mounted: 12s wander interval, 14s bored interval, window pointermove listener, framer-motion infinite repeat — non-trivial JS thread load
+
 - **Seq 146** `dashboard/src/constants/linasBrand.js` — Confirmed zero-import orphan from manual Phase 0B audit | No importers found via module path patterns
+
 - **Seq 172** `dashboard/src/hooks/usePermissions.jsx` — Confirmed zero-import orphan from manual Phase 0B audit | No importers found via module path patterns
+
 - **Seq 577** `mobile/linas-ai/src/features/chat/GuestBanner.tsx` — No importers after module-path recheck; orphan candidate | No importers found via module path patterns
+
 - **Seq 579** `mobile/linas-ai/src/features/chat/HistoryDrawer.tsx` — No importers after module-path recheck; orphan candidate | No importers found via module path patterns
+
 - **Seq 875** `scripts/montymobile_manual_probe.py` — No importers after module-path recheck; orphan candidate | No importers found via module path patterns
+
 - **Seq 970** `services/bot_data_service.py` — No importers after module-path recheck; orphan candidate | No importers found via module path patterns
+
 - **Seq 1090** `services/dynamic_model_selector.py` — No importers after module-path recheck; orphan candidate | No importers found via module path patterns
+
 - **Seq 1092** `services/enhanced_message_handler.py` — No importers after module-path recheck; orphan candidate | No importers found via module path patterns
+
 - **Seq 1098** `services/faq_translation_service.py` — No importers after module-path recheck; orphan candidate | No importers found via module path patterns
-- **Seq 1123** `services/live_monitoring.py` — No importers after module-path recheck; orphan candidate | No importers found via module path patterns
-- **Seq 1139** `services/message_queue_service.py` — No importers after module-path recheck; orphan candidate | No importers found via module path patterns
-- **Seq 1140** `services/message_sync_service.py` — No importers after module-path recheck; orphan candidate | No importers found via module path patterns
+
+- **Seq 1123** `services/live_monitoring.py` — Zero importers; duplicate of live_chat_service architecture; safe archive candidate after confirm no dynamic import | in-memory only; not wired to live_chat_service or SSE
+
+- **Seq 1139** `services/message_queue_service.py` — No static importers; storage paths remain for data compat — remove code after confirming no cron references | orphaned; smart_messaging_queue.py is active queue path | full JSON load/save on each operation if ever invoked
+
+- **Seq 1140** `services/message_sync_service.py` — Zero importers; only pairs with unused message_queue_service | orphaned companion to message_queue_service | would scan all appointments if invoked
 
 ---
 
@@ -419,9 +451,11 @@ Owner may elevate later. Excludes doc/planning/PII-jsonl boilerplate.
 - **Seq 18** `.github/workflows/meta-social-rollback-snapshot.yml` [KEEP_AS_IS] — No confirmation; creates encrypted archive — lower risk than restore but still prod access
 - **Seq 28** `.github/workflows/wa-app-review-connection-source-migrate.yml` [KEEP_AS_IS] — Blocks if public availability not false or App Review bind token set; flock lock; prints db host/name not password
 - **Seq 52** `config.py` [KEEP_FIX] — In-memory state not tenant-isolated for multi-instance; FIRESTORE path hardcoded data/firebase_data.json
+- **Seq 53** `config/montymobile_templates.json` [DELETE_CANDIDATE] — Commits api_id, tenant UUID, source phone 96178974402; api_key empty (good). Template wa_message_id/record_guid are provider IDs.
 - **Seq 97** `dashboard/src/MobileLiveChat.auth.test.jsx` [KEEP_AS_IS] — tests requiredPermission liveChat — App.jsx currently omits it (gap)
 - **Seq 98** `dashboard/src/components/Auth/ProtectedRoute.jsx` [KEEP_AS_IS] — requiredPermission bypass when user.role===admin; client-only — server auth required. Path checks via canAccessPath.
 - **Seq 106** `dashboard/src/components/Layout/Header.jsx` [KEEP_FIX] — shows user email in UI (expected); hardcoded fake notifications not from API
+- **Seq 109** `dashboard/src/components/Layout/Sidebar.jsx` [KEEP_FIX] — Live Chat/Activity Flow/APK gated to tenantId===linas client-side; admin sees all permitted items; Missing tenantId defaults to linas unlocking Live Chat/Activity Flow/APK ops surfaces
 - **Seq 119** `dashboard/src/components/SystemPromptKnowledgeStylePanel.jsx` [DELETE_CANDIDATE] — Would allow unauthenticated write only if mounted without ProtectedRoute; currently unreachable. updateTrainingFile requires authenticated api client when used.
 - **Seq 120** `dashboard/src/components/TrainingFileEditor.jsx` [DELETE_CANDIDATE] — restore uses window.confirm only; would POST restore with auth if mounted
 - **Seq 129** `dashboard/src/components/UserManagement/UserManagement.jsx` [KEEP_AS_IS] — Relies on AuthContext client permission check before API; server must enforce on /users endpoints
@@ -441,8 +475,28 @@ Owner may elevate later. Excludes doc/planning/PII-jsonl boilerplate.
 - **Seq 463** `handlers/text_handlers_message.py` [KEEP_FIX] — verbose DEBUG prints include user_id, phone, message preview — log PII risk
 - **Seq 477** `handlers/text_handlers_respond_phase6.py` [KEEP_AS_IS] — coerces unauthorized human_handover after post-release cooldown
 - **Seq 489** `main.py` [KEEP_AS_IS] — access_log=False to avoid webhook query secrets in logs; APK route requires auth+liveChat permission
+- **Seq 1101** `services/guest_ai_service.py` [KEEP_AS_IS] — FORBIDDEN_GUEST_TOOLS denylist blocks CM/tool writes; no tenant mutation by design
+- **Seq 1145** `services/meta_app_registry_oauth.py` [KEEP_AS_IS] — secrets/billing surface — server-side only; API authz required
+- **Seq 1157** `services/meta_instagram_login_oauth.py` [KEEP_AS_IS] — secrets/billing surface — server-side only; API authz required
+- **Seq 1160** `services/meta_instagram_login_tokens.py` [KEEP_AS_IS] — secrets/billing surface — server-side only; API authz required
+- **Seq 1161** `services/meta_messaging.py` [KEEP_FIX] — HMAC signature verification on webhooks; page tokens from env/registry
+- **Seq 1163** `services/meta_oauth.py` [KEEP_AS_IS] — tokens encrypted via meta_app_registry AES-GCM; state TTL 10min; scopes validated
+- **Seq 1164** `services/meta_oauth_graph.py` [KEEP_AS_IS] — secrets/billing surface — server-side only; API authz required
+- **Seq 1165** `services/meta_oauth_return.py` [KEEP_AS_IS] — secrets/billing surface — server-side only; API authz required
+- **Seq 1171** `services/mobile_refresh_token_service.py` [KEEP_FIX] — secrets/billing surface — server-side only; API authz required
+- **Seq 1227** `services/owner_push_token_store.py` [KEEP_FIX] — secrets/billing surface — server-side only; API authz required
+- **Seq 1254** `services/sensitive_request_logging.py` [KEEP_AS_IS] — redacts tokens/secrets in logs — must remain installed at startup
+- **Seq 1276** `services/store_iap_service.py` [KEEP_AS_IS] — secrets/billing surface — server-side only; API authz required
+- **Seq 1277** `services/stripe_checkout_service.py` [KEEP_AS_IS] — secrets/billing surface — server-side only; API authz required
+- **Seq 1288** `services/token_metering.py` [KEEP_AS_IS] — secrets/billing surface — server-side only; API authz required
+- **Seq 1289** `services/token_package_catalog.py` [KEEP_AS_IS] — secrets/billing surface — server-side only; API authz required
+- **Seq 1290** `services/token_wallet_models.py` [KEEP_FIX] — linas default tenant reference; secrets/billing surface — server-side only; API authz required
+- **Seq 1291** `services/token_wallet_service.py` [KEEP_AS_IS] — InsufficientTokenBalance fail-closed; threaded RLock on wallet files
+- **Seq 1295** `services/user_service.py` [KEEP_FIX] — bcrypt hashing; query timeouts; tenant-scoped collection paths
+- **Seq 1297** `services/wallet_spend_analytics.py` [KEEP_AS_IS] — secrets/billing surface — server-side only; API authz required
+- **Seq 1315** `services/whatsapp_cloud/crypto.py` [KEEP_AS_IS] — secrets/billing surface — server-side only; API authz required
 
-_Extra security notes listed: 30_
+_Extra security notes listed: 52_
 
 ---
 
@@ -450,7 +504,7 @@ _Extra security notes listed: 30_
 
 - `LANDING_KEEP`: 35
 - `KEEP_MOBILE_API`: 16
-- `KEEP_AS_IS`: 1190
+- `KEEP_AS_IS`: 1180
 - `GENERATED_SKIP`: 2
 
 ---
