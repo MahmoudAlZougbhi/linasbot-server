@@ -11,7 +11,7 @@ saga), then apply the file ledger so N retries still yield one credit effect.
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy.exc import IntegrityError
 
@@ -68,7 +68,7 @@ def _claim_pending_row(
     allow_regrant_after_reverse: bool,
 ) -> AppleCreditGrantRow | dict[str, Any]:
     """Insert or reclaim grant row. Returns row to complete, or a duplicate result dict."""
-    existing = session.get(AppleCreditGrantRow, transaction_id)
+    existing = cast(AppleCreditGrantRow | None, session.get(AppleCreditGrantRow, transaction_id))
     if existing is not None and existing.status == "granted":
         return _duplicate_granted(existing, transaction_id=transaction_id)
     if existing is not None and existing.status == "reversed" and not allow_regrant_after_reverse:
@@ -93,7 +93,7 @@ def _claim_pending_row(
                 session.flush()
             return row
         except IntegrityError:
-            existing = session.get(AppleCreditGrantRow, transaction_id)
+            existing = cast(AppleCreditGrantRow | None, session.get(AppleCreditGrantRow, transaction_id))
             if existing is None:
                 raise
             if existing.status == "granted":

@@ -7,7 +7,7 @@ Kept separate from ``apple_iap_processor`` so the processor stays under the
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from db.models.apple_billing import AppleCreditGrantRow
 from db.session import whatsapp_session
@@ -196,13 +196,16 @@ def handle_consumable_only(
             "kind": kind,
             "status": None,
         }
-    return process_signed_transaction_fn(
-        signed_transaction_jws=signed_transaction_jws,
-        tenant_id=None,
-        source=f"assn:{notification_type}",
-        notification_type=notification_type,
-        decoded_payload=txn_payload,
-        skip_jws_verify=True,
+    return cast(
+        dict[str, Any],
+        process_signed_transaction_fn(
+            signed_transaction_jws=signed_transaction_jws,
+            tenant_id=None,
+            source=f"assn:{notification_type}",
+            notification_type=notification_type,
+            decoded_payload=txn_payload,
+            skip_jws_verify=True,
+        ),
     )
 
 
@@ -228,13 +231,16 @@ def handle_apply_txn(
             "status": None,
         }
     if status == "active":
-        return process_signed_transaction_fn(
-            signed_transaction_jws=signed_transaction_jws,
-            tenant_id=None,
-            source=f"assn:{notification_type}",
-            notification_type=notification_type,
-            decoded_payload=txn_payload,
-            skip_jws_verify=True,
+        return cast(
+            dict[str, Any],
+            process_signed_transaction_fn(
+                signed_transaction_jws=signed_transaction_jws,
+                tenant_id=None,
+                source=f"assn:{notification_type}",
+                notification_type=notification_type,
+                decoded_payload=txn_payload,
+                skip_jws_verify=True,
+            ),
         )
 
     product_id = str(txn_payload.get("productId") or "").strip()
