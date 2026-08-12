@@ -33,10 +33,18 @@ jobs:
               APP_DIR=/opt/linasbot/linaslaserbot-2.7.22
             fi
             cd /opt/linasbot
-            git fetch origin main fix/ig-fb-comments-capability-gates
-            git checkout origin/fix/ig-fb-comments-capability-gates -- \
-              scripts/audit_meta_app_a_scopes.py \
-              scripts/prod_meta_comment_runtime_probe.py
+            # Prefer scripts already deployed on the host (main). Do not soft-checkout
+            # a stale feature branch (fix/ig-fb-comments-capability-gates).
+            if [ ! -f /opt/linasbot/scripts/audit_meta_app_a_scopes.py ]; then
+              git fetch origin main
+              git show origin/main:scripts/audit_meta_app_a_scopes.py > /tmp/audit_meta_app_a_scopes.py
+              install -m 0755 /tmp/audit_meta_app_a_scopes.py /opt/linasbot/scripts/audit_meta_app_a_scopes.py
+            fi
+            if [ ! -f /opt/linasbot/scripts/prod_meta_comment_runtime_probe.py ]; then
+              git fetch origin main
+              git show origin/main:scripts/prod_meta_comment_runtime_probe.py > /tmp/prod_meta_comment_runtime_probe.py
+              install -m 0755 /tmp/prod_meta_comment_runtime_probe.py /opt/linasbot/scripts/prod_meta_comment_runtime_probe.py
+            fi
             set -a
             if [ -f "$APP_DIR/.env" ]; then
               # shellcheck disable=SC1090

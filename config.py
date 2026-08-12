@@ -29,9 +29,13 @@ LINASLASER_API_TOKEN = os.getenv("LINASLASER_API_TOKEN")
 
 # --- Firebase Firestore Configuration (NEW) ---
 # Path to your Firebase service account key JSON file.
-# This file is downloaded from Firebase Console -> Project settings -> Service accounts.
-# Make sure to place it in the 'data' directory.
-FIRESTORE_SERVICE_ACCOUNT_KEY_PATH = "data/firebase_data.json"  # تم تحديث هذا المسار بناءً على اسم ملفك الجديد
+# Prefer FIRESTORE_SERVICE_ACCOUNT_KEY_PATH / GOOGLE_APPLICATION_CREDENTIALS in
+# production; the data/firebase_data.json default is for local/dev only (SEC-025).
+FIRESTORE_SERVICE_ACCOUNT_KEY_PATH = (
+    os.getenv("FIRESTORE_SERVICE_ACCOUNT_KEY_PATH")
+    or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    or "data/firebase_data.json"
+).strip() or "data/firebase_data.json"
 
 # Firestore Collection Names (NEW)
 FIRESTORE_CONVERSATIONS_COLLECTION = "conversations"  # Collection for storing chat logs
@@ -82,6 +86,30 @@ LOCAL_ALLOWED_WHATSAPP_NUMBERS = {n.strip() for n in _LOCAL_ALLOWED_RAW.split(",
 def is_local_env() -> bool:
     """True when running in local/development mode (same external APIs, safe messaging)."""
     return APP_MODE == "local" or ENV == "development"
+
+
+def is_production_runtime() -> bool:
+    """True when ENV/ENVIRONMENT/APP_ENV explicitly marks production (fail-closed helpers)."""
+    for key in ("ENVIRONMENT", "ENV", "APP_ENV"):
+        val = (os.getenv(key) or "").strip().lower()
+        if val in {"prod", "production", "live"}:
+            return True
+    return False
+
+
+def _booking_default_id(env_name: str, local_default: int) -> int | None:
+    """Booking CRM id defaults.
+
+    Local/dev: keep numeric defaults so boot and founder-clinic flows work.
+    Production: require explicit env — no silent DEFAULT_*_ID=1 privilege (SEC-025).
+    Callers must handle None (refuse / ask) rather than inventing branch/service IDs.
+    """
+    raw = (os.getenv(env_name) or "").strip()
+    if raw:
+        return int(raw)
+    if is_production_runtime():
+        return None
+    return local_default
 
 
 # --- Bot Operational Settings ---
@@ -205,21 +233,42 @@ MAX_CONTEXT_MESSAGES_IN_WINDOW = int(os.getenv("MAX_CONTEXT_MESSAGES_IN_WINDOW",
 MAX_RELEVANT_CUSTOM_QA = 3  # Max relevant custom Q&A entries to fetch
 MAX_GENDER_ASK_ATTEMPTS = 3  # Max times bot will ask for gender before suggesting human handover
 
-# Default IDs for booking (if not explicitly provided by user in conversation)
-DEFAULT_BRANCH_ID = 1
-DEFAULT_SERVICE_ID = 1
-DEFAULT_MACHINE_ID = 1
+# Default IDs for booking (if not explicitly provided by user in conversation).
+# SEC-025: no DEFAULT role/tenant in this module. Booking IDs are env-driven;
+# production without env → None (fail-closed), local keeps 1 for founder-clinic boot.
+DEFAULT_BRANCH_ID = _booking_default_id("DEFAULT_BRANCH_ID", 1)
+DEFAULT_SERVICE_ID = _booking_default_id("DEFAULT_SERVICE_ID", 1)
+DEFAULT_MACHINE_ID = _booking_default_id("DEFAULT_MACHINE_ID", 1)
 
 # Delay for combining rapid messages from a user (e.g., multiple short texts sent quickly)
 # Requirement: wait 3 seconds after the LAST message before responding.
 MESSAGE_COMBINING_DELAY = 3.0  # seconds
 
 # --- Bot Welcome Messages (Language-specific) ---
+# Founder-clinic (Lina's Laser / Marwa) copy. CM-published tenants should prefer
+# published CM welcome / ai_basics — these strings are legacy WhatsApp boot copy,
+# not a privilege default. Override per language via WELCOME_MESSAGE_<LANG>.
+def _welcome_message(lang: str, default: str) -> str:
+    return (os.getenv(f"WELCOME_MESSAGE_{lang.upper()}") or "").strip() or default
+
+
 WELCOME_MESSAGES = {
-    "ar": "مرحباً! 😊\nمعك مروى – المساعد الذكي بالذكاء الاصطناعي من مركز ليناز ليزر.\nكيفك؟ كيف فيني ساعدك اليوم؟ 🧠✨\n\nفيك تحكيلي بأي طريقة بتحبها – حتى لو بالصوت! 🎤\nأنا هون مشان أساعدك بأي شي بدك ياه، بكل سهولة وسرعة.\nجاهز؟ يلا نحكي! 🤖💬\n\nوبالمناسبة، كرمال نقدر نساعدك ونقدم لك أفضل خدمة، ممكن تخبرنا لو سمحت إذا أنتَ شاباً أم صبية؟ 👦👧",
-    "en": "Hello! 😊\nThis is Marwa AI Assistant – your smart AI assistant from Lina's Laser Center.\nHow are you? How can I help you today? 🧠✨\n\nYou can talk to me in any way you prefer – even with your voice! 🎤\nI'm here to help you with anything you need, easily and quickly.\nReady? Let's chat! 🤖💬\n\nBy the way, to help and serve you better, could you please tell us if you are male or female? 👦👧",
-    "fr": "Bonjour ! 😊\nC'est Marwa AI Assistant – votre assistant intelligent de Lina's Laser Center.\nComment allez-vous ? Comment puis-je vous aider aujourd'hui ? 🧠✨\n\nYou can talk to me in any way you prefer – even by voice! 🎤\nI'm here to help you with anything you need, easily and quickly.\nReady? Let's chat! 🤖💬\n\nAu fait, afin de mieux vous aider et de vous offrir le meilleur service, pourriez-vous nous dire si vous êtes un homme ou une femme ? 👦👧",
-    "franco": "مرحباً! 😊\nمعك مروى – المساعد الذكي بالذكاء الاصطناعي من مركز ليناز ليزر.\nكيفك؟ كيف فيني ساعدك اليوم؟ 🧠✨\n\nفيك تحكيلي بأي طريقة بتحبها – حتى لو بالصوت! 🎤\nأنا هون مشان أساعدك بأي شي بدك ياه، بكل سهولة وسرعة.\nجاهز؟ يلا نحكي! 🤖💬\n\nوبالمناسبة، كرمال نقدر نساعدك ونقدم لك أفضل خدمة، ممكن تخبرنا لو سمحت إذا أنتَ شاباً أم صبية؟ 👦👧",
+    "ar": _welcome_message(
+        "ar",
+        "مرحباً! 😊\nمعك مروى – المساعد الذكي بالذكاء الاصطناعي من مركز ليناز ليزر.\nكيفك؟ كيف فيني ساعدك اليوم؟ 🧠✨\n\nفيك تحكيلي بأي طريقة بتحبها – حتى لو بالصوت! 🎤\nأنا هون مشان أساعدك بأي شي بدك ياه، بكل سهولة وسرعة.\nجاهز؟ يلا نحكي! 🤖💬\n\nوبالمناسبة، كرمال نقدر نساعدك ونقدم لك أفضل خدمة، ممكن تخبرنا لو سمحت إذا أنتَ شاباً أم صبية؟ 👦👧",
+    ),
+    "en": _welcome_message(
+        "en",
+        "Hello! 😊\nThis is Marwa AI Assistant – your smart AI assistant from Lina's Laser Center.\nHow are you? How can I help you today? 🧠✨\n\nYou can talk to me in any way you prefer – even with your voice! 🎤\nI'm here to help you with anything you need, easily and quickly.\nReady? Let's chat! 🤖💬\n\nBy the way, to help and serve you better, could you please tell us if you are male or female? 👦👧",
+    ),
+    "fr": _welcome_message(
+        "fr",
+        "Bonjour ! 😊\nC'est Marwa AI Assistant – votre assistant intelligent de Lina's Laser Center.\nComment allez-vous ? Comment puis-je vous aider aujourd'hui ? 🧠✨\n\nYou can talk to me in any way you prefer – even by voice! 🎤\nI'm here to help you with anything you need, easily and quickly.\nReady? Let's chat! 🤖💬\n\nAu fait, afin de mieux vous aider et de vous offrir le meilleur service, pourriez-vous nous dire si vous êtes un homme ou une femme ? 👦👧",
+    ),
+    "franco": _welcome_message(
+        "franco",
+        "مرحباً! 😊\nمعك مروى – المساعد الذكي بالذكاء الاصطناعي من مركز ليناز ليزر.\nكيفك؟ كيف فيني ساعدك اليوم؟ 🧠✨\n\nفيك تحكيلي بأي طريقة بتحبها – حتى لو بالصوت! 🎤\nأنا هون مشان أساعدك بأي شي بدك ياه، بكل سهولة وسرعة.\nجاهز؟ يلا نحكي! 🤖💬\n\nوبالمناسبة، كرمال نقدر نساعدك ونقدم لك أفضل خدمة، ممكن تخبرنا لو سمحت إذا أنتَ شاباً أم صبية؟ 👦👧",
+    ),
 }
 
 # --- Gender Question Variations ---

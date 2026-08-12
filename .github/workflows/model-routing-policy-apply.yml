@@ -34,15 +34,12 @@ jobs:
           script_stop: true
           command_timeout: 15m
           script: |
-            set -e
+            set -euo pipefail
             cd /opt/linasbot
             git fetch origin main
-            if [ ! -f /opt/linasbot/scripts/prod_apply_model_routing_policy.sh ]; then
-              git show origin/main:scripts/prod_apply_model_routing_policy.sh > /tmp/prod_apply_model_routing_policy.sh
-              sudo install -m 0755 /tmp/prod_apply_model_routing_policy.sh /opt/linasbot/scripts/prod_apply_model_routing_policy.sh
-            else
-              sudo chmod 0755 /opt/linasbot/scripts/prod_apply_model_routing_policy.sh
-            fi
+            # Always refresh apply script from origin/main (no soft-success on stale copy).
+            git show origin/main:scripts/prod_apply_model_routing_policy.sh > /tmp/prod_apply_model_routing_policy.sh
+            sudo install -m 0755 /tmp/prod_apply_model_routing_policy.sh /opt/linasbot/scripts/prod_apply_model_routing_policy.sh
             sudo bash /opt/linasbot/scripts/prod_apply_model_routing_policy.sh
             curl -fsS https://linasaibot.com/api/ready >/tmp/ready.json
             python3 - <<'PY'

@@ -32,3 +32,6 @@ firebase deploy --only firestore:indexes
 ```
 
 The `firestore.indexes.json` in the project root defines these indexes.
+
+**LIVE deploy is owner-activated** — see `docs/FIRESTORE_INDEXES_DEPLOY.md`.
+There is no automatic GHA deploy of indexes on every push.

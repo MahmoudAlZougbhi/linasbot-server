@@ -119,11 +119,13 @@ jobs:
                 if role in {"admin", "owner", "platform_owner"} and tid != "linas" and status in {"", "active"}:
                     non_linas_admins += 1
             print(f"[probe] users_sampled={len(docs)} stream_bounded={stream_bounded} max={MAX_DASHBOARD_USERS}")
-            print(f"[probe] tenant_id_counts={dict(tenant_counts.most_common(30))}")
+            print(f"[probe] distinct_tenant_ids={len(tenant_counts)}")
             print(f"[probe] linas_role_counts={dict(linas_roles)}")
-            print(f"[probe] role_tenant_top={dict(role_tenant.most_common(40))}")
+            # Role×tenant only for high-privilege roles (counts, no display names / emails).
+            priv = {k: v for k, v in role_tenant.items() if k.split("|", 1)[0] in {"admin", "owner", "platform_owner"}}
+            print(f"[probe] privileged_role_tenant_counts={dict(sorted(priv.items(), key=lambda kv: (-kv[1], kv[0]))[:40])}")
             print(f"[probe] non_linas_admin_or_owner_active={non_linas_admins}")
-            # Evaluate app_access for every observed tenant id
+            # Evaluate app_access for every observed tenant id (ids only, no PII).
             for tid in sorted(tenant_counts):
                 if tid in {"missing", "MISSING"}:
                     continue
