@@ -8,10 +8,10 @@ Audit-only. Application source is not modified.
 |--------|-------|
 | Tracked files (`git ls-files`) | 1539 |
 | Inventory rows | 1539 |
-| COMPLETE | 25 |
-| UNREVIEWED | 1514 |
+| COMPLETE | 55 |
+| UNREVIEWED | 1484 |
 | IN_REVIEW | 0 |
-| Last batch | Batch 1 (seq 1–25) |
+| Last batch | Batch 2 (seq 26–55) |
 | Last audit commit | 82152df2115a9d3bafb8d8aefa6c9d062c89a593 |
 
 ---
@@ -77,3 +77,32 @@ Audit-only. Application source is not modified.
 ### Cumulative
 
 COMPLETE **25 / 1539**
+
+---
+
+## Batch 2 — seq 26–55 (2026-08-12)
+
+### Files opened and fully read
+
+26–30 remaining WA/security workflows; 31 `.gitignore`; 32–38 `.planning/codebase/*`; 39 `PERSISTENT_STORAGE_REFACTOR.md`; 40 `README-LOCAL.md`; 41–46 alembic; 47 `api_config.py`; 48–51 backend Docker/requirements; 52 `config.py`; 53 `config/montymobile_templates.json`; 54–55 dashboard Docker.
+
+### Findings summary
+
+**Security**
+- Seq 27: CI logs entitlement raw + exempt env values + all Firestore user display rows.
+- Seq 30: `git reset --hard origin/main` on production during Phase1 apply.
+- Seq 53: Monty `api_id`/`tenant`/source phone committed in JSON.
+
+**Correctness**
+- Seq 29: hardcoded 2026-08-11 probe windows; soft `exit 0`.
+- Seq 40: `.env.local.example` vs `.env.example` mismatch.
+- Seq 50: Docker health on :8000 vs project :8003.
+- Seq 52: Welcome copy still Marwa/Lina Laser; import-time asset load.
+
+**Legacy / product**
+- Seq 32–38: MOVE_TO_ARCHIVE (Jan 2026 stale planning; claims no CI/tests).
+- Seq 53: DELETE_CANDIDATE (Monty templates) pending caller cutover evidence.
+
+### Cumulative
+
+COMPLETE **55 / 1539**
