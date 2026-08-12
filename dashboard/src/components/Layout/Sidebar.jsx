@@ -109,7 +109,7 @@ const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
   const navigation = useMemo(() => {
     if (!user) return [];
 
-    const tenantId = String(user.tenantId || "linas").trim() || "linas";
+    const tenantId = String(user.tenantId || "").trim();
     const linasOpsSurface = tenantId === "linas";
 
     /** @param {typeof navigationItems[number]} item */
@@ -132,7 +132,7 @@ const Sidebar = ({ collapsed, onToggleCollapse, onClose }) => {
   const downloads = useMemo(() => {
     if (!user) return [];
 
-    const tenantId = String(user.tenantId || "linas").trim() || "linas";
+    const tenantId = String(user.tenantId || "").trim();
     if (tenantId !== "linas") {
       return [];
     }
