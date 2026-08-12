@@ -302,7 +302,19 @@ async def prepare_chat_response_prompt(ns: Any) -> Any:
         from services.token_wallet_service import InsufficientTokenBalance
 
         ns._ud = config.user_data_whatsapp.get(ns.user_id) or {}
-        ns._tenant = str(ns._ud.get("tenant_id") or ns._ud.get("tenantId") or "linas")
+        ns._tenant = str(ns._ud.get("tenant_id") or ns._ud.get("tenantId") or "").strip()
+        if not ns._tenant:
+            return {
+                "action": "reply",
+                "reply": "Unable to process this request because the workspace could not be identified. Please try again later.",
+                "source": "tenant_required",
+                "_flow_meta": {
+                    "source": "tenant_required",
+                    "ai_called": False,
+                    "cost_status": "none",
+                    "tokens": 0,
+                },
+            }
         assert_tenant_can_use_ai(ns._tenant)
     except InsufficientTokenBalance:
         return {

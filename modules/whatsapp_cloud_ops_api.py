@@ -373,7 +373,9 @@ async def whatsapp_app_review_bind(request: Request, body: dict[str, Any] = Body
         raise HTTPException(status_code=403, detail="platform_owner_required")
     from services.whatsapp_cloud.app_review_bind import AppReviewBindError, bind_app_review_test_number
 
-    tenant_id = str(body.get("tenant_id") or "linas").strip().lower()
+    tenant_id = str(body.get("tenant_id") or "").strip().lower()
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="tenant_id_required")
     waba_id = str(body.get("waba_id") or "").strip()
     phone_number_id = str(body.get("phone_number_id") or "").strip()
     dry_run = bool(body.get("dry_run"))
@@ -403,7 +405,9 @@ async def whatsapp_app_review_unbind(request: Request, body: dict[str, Any] = Bo
         raise HTTPException(status_code=403, detail="platform_owner_required")
     from services.whatsapp_cloud.app_review_bind import AppReviewBindError, unbind_app_review_test_number
 
-    tenant_id = str(body.get("tenant_id") or "linas").strip().lower()
+    tenant_id = str(body.get("tenant_id") or "").strip().lower()
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="tenant_id_required")
     connection_id = str(body.get("connection_id") or "").strip() or None
     idempotency_key = str(body.get("idempotency_key") or "").strip() or None
     try:

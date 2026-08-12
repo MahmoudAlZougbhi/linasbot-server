@@ -44,6 +44,9 @@ class InsufficientTokenBalance(Exception):
 
 
 def unlimited_tenant_ids() -> frozenset[str]:
+    # Explicit product config: env default lists founder clinic "linas" as unlimited.
+    # This is NOT a request-path coalesce — missing tenant_id on API/service calls
+    # must still fail closed via normalize_wallet_tenant_id / callers.
     raw = (os.getenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS") or "linas").strip()
     ids = {part.strip().lower() for part in raw.split(",") if part.strip()}
     return frozenset(ids or DEFAULT_UNLIMITED_TENANTS)

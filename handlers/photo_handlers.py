@@ -42,7 +42,10 @@ async def handle_photo_message(
     config.user_names[user_id] = user_name  # Ensure name is updated
 
     # Wave 3: photo analysis is an optional CM capability (default off for new tenants).
-    tenant_id = str(user_data.get("tenant_id") or "linas").strip() or "linas"
+    tenant_id = str(user_data.get("tenant_id") or "").strip()
+    if not tenant_id:
+        print("ERROR: photo handler refused — tenant_id required")
+        return
     if not _photo_analysis_enabled_for_tenant(tenant_id):
         await send_message_func(
             user_id,

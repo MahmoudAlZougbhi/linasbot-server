@@ -32,6 +32,7 @@ from services.token_wallet_models import (  # noqa: F401
     InsufficientTokenBalance,
     WalletSnapshot,
     is_unlimited_tenant,
+    normalize_wallet_tenant_id,
     unlimited_tenant_ids,
 )
 
@@ -168,7 +169,7 @@ class TokenWalletService:
             handle.write(json.dumps(entry) + "\n")
 
     def get_wallet(self, tenant_id: str) -> WalletSnapshot:
-        tid = (tenant_id or "").strip().lower() or "linas"
+        tid = normalize_wallet_tenant_id(tenant_id)
         unlimited = is_unlimited_tenant(tid)
         with self._lock:
             data = self._read(tid)
@@ -231,9 +232,7 @@ class TokenWalletService:
         Prefer explicit input_tokens/output_tokens. Legacy ``tokens`` alone is
         split 80/20 for admin credits that still pass a single total.
         """
-        tid = (tenant_id or "").strip().lower()
-        if not tid:
-            raise ValueError("tenant_id required")
+        tid = normalize_wallet_tenant_id(tenant_id)
 
         if input_tokens is not None or output_tokens is not None:
             add_in = max(0, int(input_tokens or 0))
@@ -302,7 +301,7 @@ class TokenWalletService:
         Unlimited tenants record usage without blocking.
         Never allows negative balances (fail closed).
         """
-        tid = (tenant_id or "").strip().lower() or "linas"
+        tid = normalize_wallet_tenant_id(tenant_id)
 
         if prompt_tokens is not None or completion_tokens is not None:
             use_in = max(0, int(prompt_tokens or 0))
@@ -397,7 +396,7 @@ class TokenWalletService:
         return self.get_wallet(tid)
 
     def recent_ledger(self, tenant_id: str, *, limit: int = 50) -> list[dict[str, Any]]:
-        tid = (tenant_id or "").strip().lower()
+        tid = normalize_wallet_tenant_id(tenant_id)
         path = self._ledger_dir / f"{tid}.jsonl"
         if not path.exists():
             return []

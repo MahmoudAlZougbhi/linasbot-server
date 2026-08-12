@@ -52,11 +52,14 @@ class AuthEmailTokenRecord:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AuthEmailTokenRecord:
+        tenant_id = str(data.get("tenant_id") or "").strip()
+        if not tenant_id:
+            raise ValueError("tenant_id required")
         return cls(
             purpose=data["purpose"],  # type: ignore[arg-type]
             user_id=str(data["user_id"]),
             email=str(data["email"]),
-            tenant_id=str(data.get("tenant_id") or "linas"),
+            tenant_id=tenant_id,
             created_at=float(data["created_at"]),
             expires_at=float(data["expires_at"]),
             used_at=float(data["used_at"]) if data.get("used_at") is not None else None,
@@ -82,6 +85,9 @@ class AuthEmailTokenService:
         ttl_seconds: int | None = None,
     ) -> str:
         """Create a token and return the raw secret (show once to the user via email)."""
+        tid = str(tenant_id or "").strip()
+        if not tid:
+            raise ValueError("tenant_id required")
         raw = secrets.token_urlsafe(32)
         token_hash = _hash_token(raw)
         now = time.time()
@@ -91,7 +97,7 @@ class AuthEmailTokenService:
             purpose=purpose,
             user_id=user_id,
             email=(email or "").strip().lower(),
-            tenant_id=tenant_id,
+            tenant_id=tid,
             created_at=now,
             expires_at=now + max(60, int(ttl_seconds)),
         )

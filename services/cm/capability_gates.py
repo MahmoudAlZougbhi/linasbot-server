@@ -8,7 +8,9 @@ from services.cm.version_store import PublishedVersionError, load_published_cont
 
 
 def _load_ai_limits(tenant_id: str) -> AiLimitsSection | None:
-    tid = (tenant_id or "").strip() or "linas"
+    tid = (tenant_id or "").strip()
+    if not tid:
+        raise ValueError("tenant_id required")
     if not tenant_uses_cm_runtime(tid):
         return None
     try:
