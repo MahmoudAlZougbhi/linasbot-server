@@ -7,7 +7,6 @@ from handlers.text_handlers_delayed import _delayed_process_messages
 from handlers.text_handlers_firestore import _delayed_processing_tasks
 from handlers.text_handlers_message import handle_message
 from handlers.text_handlers_respond import _process_and_respond
-from handlers.text_handlers_start import start_command
 from handlers.VERSION import BUILD_ID, LAST_MODIFIED, VERSION, print_version_info
 
 # Print version info when module is loaded
@@ -19,7 +18,6 @@ __build_id__ = BUILD_ID
 __last_modified__ = LAST_MODIFIED
 
 __all__ = [
-    "start_command",
     "handle_message",
     "_delayed_process_messages",
     "_process_and_respond",

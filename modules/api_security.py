@@ -8,6 +8,7 @@ Provider webhooks live outside /api/* and are handled separately.
 
 from __future__ import annotations
 
+import hmac
 import os
 import re
 from typing import Any
@@ -16,6 +17,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from services.auth_rate_limits import auth_rate_limit_rules, check_rate_limit, client_ip
 from services.dashboard_session_service import (
     CSRF_COOKIE_NAME,
     CSRF_HEADER_NAME,
@@ -24,7 +26,29 @@ from services.dashboard_session_service import (
     session_service,
 )
 from services.product_features import DISABLED_PRODUCT_MESSAGE, is_disabled_api_path
-from services.rate_limit_service import rate_limit_service
+
+# Re-export for callers that historically imported from this module.
+_client_ip = client_ip
+
+__all__ = (
+    "DashboardAuthMiddleware",
+    "_client_ip",
+    "auth_rate_limit_rules",
+    "check_rate_limit",
+    "client_ip",
+    "get_request_session",
+    "is_platform_owner",
+    "is_production_env",
+    "is_public_api",
+    "is_social_user_id",
+    "reject_social_operator_mutation",
+    "require_permission",
+    "require_platform_owner",
+    "require_session",
+    "required_permission_for",
+    "resolve_permissions",
+    "user_has_permission",
+)
 
 # Frontend-aligned permission keys
 PERMISSION_KEYS = {
@@ -39,6 +63,11 @@ PERMISSION_KEYS = {
     "contentManagers",
     "contentPublish",
     "activityFlow",
+    "requests",
+    "requestsManage",
+    "requestsNotify",
+    "requestsManualChat",
+    "requestsSensitive",
 }
 
 SYSTEM_ROLE_PERMISSIONS: dict[str, dict[str, bool]] = {
@@ -56,6 +85,11 @@ SYSTEM_ROLE_PERMISSIONS: dict[str, dict[str, bool]] = {
         "contentManagers": False,
         "contentPublish": False,
         "activityFlow": True,
+        "requests": True,
+        "requestsManage": True,
+        "requestsNotify": True,
+        "requestsManualChat": True,
+        "requestsSensitive": False,
     },
     "viewer": {
         "dashboard": True,
@@ -69,6 +103,11 @@ SYSTEM_ROLE_PERMISSIONS: dict[str, dict[str, bool]] = {
         "contentManagers": False,
         "contentPublish": False,
         "activityFlow": True,
+        "requests": False,
+        "requestsManage": False,
+        "requestsNotify": False,
+        "requestsManualChat": False,
+        "requestsSensitive": False,
     },
 }
 
@@ -115,14 +154,18 @@ _PUBLIC_EXACT: set[tuple[str, str]] = {
     ("POST", "/api/auth/reset-password"),
     ("POST", "/api/auth/verify-email"),
     ("POST", "/api/auth/resend-verification"),
+    ("POST", "/api/auth/confirm-email-change"),
     ("GET", "/api/billing/packages"),
     ("GET", "/api/public/plans"),
     ("POST", "/api/billing/stripe/webhook"),
+    ("POST", "/api/webhooks/resend"),
     ("POST", "/api/auth/mobile/login"),
     ("POST", "/api/auth/mobile/refresh"),
+    ("POST", "/api/auth/mobile/apple"),
     ("GET", "/api/queue/ready"),
     ("POST", "/api/entitlements/apple/notifications"),
     ("POST", "/api/entitlements/google/notifications"),
+    ("POST", "/api/webhooks/apple/app-store"),
 }
 
 # Prefix public (rare) — guest sales chat is intentionally unauthenticated + rate-limited.
@@ -167,6 +210,8 @@ def required_permission_for(method: str, path: str) -> str | None:
         return "activityFlow"
     if p.startswith("/api/live-chat") or p.startswith("/api/chat-history"):
         return "liveChat"
+    if p.startswith("/api/requests"):
+        return "requests"
     if p.startswith("/api/owner-notifications"):
         return "liveChat"
     if p.startswith("/api/smart-messaging"):
@@ -185,12 +230,10 @@ def required_permission_for(method: str, path: str) -> str | None:
         if p.startswith("/api/cm/local-qa"):
             return "contentManagers"
         return "contentManagers"
-    if (
-        p.startswith("/api/local-qa")
-        or p.startswith("/api/faq")
-        or p.startswith("/api/qa")
-        or p.startswith("/api/training")
-    ):
+    # Live Chat FAQ correction (save-all-languages) — operators need liveChat, not training.
+    if p.startswith("/api/faq/"):
+        return "liveChat"
+    if p.startswith("/api/local-qa") or p.startswith("/api/qa") or p.startswith("/api/training"):
         return "training"
     if p.startswith("/api/feedback"):
         return "training"
@@ -202,60 +245,6 @@ def required_permission_for(method: str, path: str) -> str | None:
         return None
     # Default deny classifies unknown /api as settings-level (admin-ish) rather than open
     return "settings"
-
-
-_SENSITIVE_MUTATION_PREFIXES = (
-    "/api/smart-messaging/send",
-    "/api/smart-messaging/campaigns",
-    "/api/smart-messaging/toggle",
-    "/api/live-chat/send-message",
-    "/api/live-chat/takeover",
-    "/api/debug/",
-    "/api/auth/login",
-    "/api/auth/register",
-    "/api/auth/change-password",
-)
-
-
-def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for") or ""
-    if forwarded:
-        return forwarded.split(",")[0].strip() or "unknown"
-    if request.client:
-        return request.client.host or "unknown"
-    return "unknown"
-
-
-def check_rate_limit(request: Request, path: str) -> JSONResponse | None:
-    ip = _client_ip(request)
-    rules = []
-    if path == "/api/auth/login":
-        rules.append((f"login:{ip}", 10, 300))
-    if path == "/api/auth/register":
-        rules.append((f"register:{ip}", 5, 300))
-    if path == "/api/auth/forgot-password":
-        rules.append((f"forgot:{ip}", 5, 300))
-    if path == "/api/auth/reset-password":
-        rules.append((f"reset:{ip}", 10, 300))
-    if path == "/api/auth/verify-email":
-        rules.append((f"verify:{ip}", 20, 300))
-    if path == "/api/auth/resend-verification":
-        rules.append((f"resend-verify:{ip}", 5, 300))
-    if path == "/api/auth/change-password":
-        rules.append((f"pw:{ip}", 10, 300))
-    if path.startswith("/api/guest-ai/"):
-        rules.append((f"guest-ai:{ip}", 60, 300))
-    if any(path.startswith(p) for p in _SENSITIVE_MUTATION_PREFIXES):
-        rules.append((f"mut:{ip}:{path.split('?')[0]}", 60, 60))
-    for key, limit, window in rules:
-        allowed, retry = rate_limit_service.hit(key, limit=limit, window_seconds=window)
-        if not allowed:
-            return JSONResponse(
-                status_code=429,
-                content={"success": False, "error": "Rate limit exceeded", "retry_after": retry},
-                headers={"Retry-After": str(retry)},
-            )
-    return None
 
 
 def get_request_session(request: Request) -> SessionRecord | None:
@@ -304,7 +293,7 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
         request.state.dashboard_session = session
         request.state.auth_via_bearer = used_bearer
 
-        limited = check_rate_limit(request, path)
+        limited = await check_rate_limit(request, path)
         if limited is not None:
             return limited
 
@@ -338,6 +327,7 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
             path.startswith("/api/auth/")
             or path.startswith("/api/meta/connections")
             or path.startswith("/api/cm")
+            or path.startswith("/api/faq/")
             or path.startswith("/api/billing/")
             or path.startswith("/api/owner-ai/")
             or path.startswith("/api/mobile/")
@@ -347,7 +337,6 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
             or path.startswith("/api/platform/")
             or path.startswith("/api/safety/")
             or path.startswith("/api/queue/")
-            or path.startswith("/api/entitlements/")
         ):
             return JSONResponse(
                 status_code=403,
@@ -363,7 +352,9 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
                     status_code=403,
                     content={"success": False, "error": "CSRF validation failed"},
                 )
-            if header != session.csrf_token or csrf_cookie != session.csrf_token:
+            if not hmac.compare_digest(header, session.csrf_token) or not hmac.compare_digest(
+                csrf_cookie, session.csrf_token
+            ):
                 return JSONResponse(
                     status_code=403,
                     content={"success": False, "error": "CSRF validation failed"},

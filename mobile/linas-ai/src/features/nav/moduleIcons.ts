@@ -12,6 +12,7 @@ export const MODULE_ICONS: Record<ControlArea, AppIconName> = {
   smartFollowUp: ion('timer-outline'),
   faq: feather('help-circle'),
   livechat: feather('message-square'),
+  requests: feather('clipboard'),
   integrations: mci('power-plug-outline'),
   users: feather('users'),
   subscription: feather('credit-card'),

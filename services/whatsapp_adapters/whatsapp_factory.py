@@ -1,8 +1,10 @@
 """
 WhatsApp Adapter Factory
-Creates and manages WhatsApp adapters (Meta, 360Dialog, ThirdProvider, etc.)
-In local/development mode or when ENABLE_SENDING=false, wraps the real adapter
-with SafeSendAdapter so outbound messaging is dry-run or sandbox-only.
+Creates and manages WhatsApp adapters.
+
+Runtime transport is Meta Cloud only. Legacy MontyMobile / Qiscus / 360dialog
+adapter modules may remain on disk for archive, but must not be selected as
+default or fallback transport.
 """
 
 from __future__ import annotations
@@ -11,11 +13,8 @@ import os
 from typing import Any
 
 from .base_adapter import WhatsAppAdapter
-from .dialog360_adapter import Dialog360Adapter
 from .meta_adapter import MetaAdapter
-from .montymobile_adapter import MontyMobileAdapter
 from .outbound_dedupe_text_adapter import DedupeOutboundTextAdapter
-from .qiscus_adapter import QiscusAdapter
 from .safe_send_adapter import SafeSendAdapter
 
 _config_module: Any
@@ -25,6 +24,10 @@ except ImportError:
     _config_module = None
 
 config: Any = _config_module
+
+# Supported runtime transport. Legacy names are refused (no silent Monty fallback).
+_SUPPORTED_PROVIDERS = frozenset({"meta", "cloud"})
+_UNSUPPORTED_LEGACY_PROVIDERS = frozenset({"montymobile", "qiscus", "360dialog", "dialog360"})
 
 
 def _wrap_if_safe_send(adapter: WhatsAppAdapter) -> WhatsAppAdapter:
@@ -37,37 +40,50 @@ def _wrap_if_safe_send(adapter: WhatsAppAdapter) -> WhatsAppAdapter:
     return adapter
 
 
+def _normalize_provider(provider: str | None) -> str:
+    raw = (provider or "").strip().lower()
+    if not raw:
+        raw = (os.getenv("WHATSAPP_PROVIDER") or "meta").strip().lower() or "meta"
+    # "cloud" is an alias for Meta Cloud API
+    if raw == "cloud":
+        return "meta"
+    return raw
+
+
+def _refuse_unsupported_provider(provider: str) -> None:
+    if provider in _SUPPORTED_PROVIDERS or provider == "meta":
+        return
+    if provider in _UNSUPPORTED_LEGACY_PROVIDERS:
+        raise ValueError(
+            f"WhatsApp provider {provider!r} is unsupported. "
+            "Runtime transport is Meta Cloud only (WHATSAPP_PROVIDER=meta). "
+            "MontyMobile / Qiscus / 360dialog are not available as runtime fallback."
+        )
+    raise ValueError(
+        f"Unknown WhatsApp provider: {provider!r}. "
+        "Supported: meta (Cloud). Legacy montymobile/qiscus/360dialog are disabled."
+    )
+
+
 class WhatsAppFactory:
-    """Factory for creating WhatsApp adapters"""
+    """Factory for creating WhatsApp adapters (Meta Cloud only at runtime)."""
 
     _current_adapter: WhatsAppAdapter | None = None
-    _current_provider: str = "montymobile"  # NEW DEFAULT: MontyMobile (new Qiscus endpoint)
+    _current_provider: str = "meta"
 
     @classmethod
     def get_adapter(cls, provider: str | None = None) -> WhatsAppAdapter:
-        """Get WhatsApp adapter instance"""
-        if provider:
-            cls._current_provider = provider
+        """Get WhatsApp adapter instance (Meta Cloud only)."""
+        resolved = _normalize_provider(provider if provider is not None else cls._current_provider)
+        _refuse_unsupported_provider(resolved)
+        cls._current_provider = "meta"
 
-        # If adapter exists and is the same provider, return it
         if cls._current_adapter and hasattr(cls._current_adapter, "provider_name"):
-            if cls._current_adapter.provider_name == cls._current_provider:
+            if cls._current_adapter.provider_name == "meta":
                 return cls._current_adapter
 
-        # Create new adapter
-        if cls._current_provider == "meta":
-            cls._current_adapter = cls._create_meta_adapter()
-        elif cls._current_provider == "360dialog":
-            cls._current_adapter = cls._create_360dialog_adapter()
-        elif cls._current_provider == "qiscus":
-            cls._current_adapter = cls._create_qiscus_adapter()
-        elif cls._current_provider == "montymobile":
-            cls._current_adapter = cls._create_montymobile_adapter()
-        else:
-            raise ValueError(f"Unknown WhatsApp provider: {cls._current_provider}")
-
-        # Add provider name for tracking
-        cls._current_adapter.provider_name = cls._current_provider
+        cls._current_adapter = cls._create_meta_adapter()
+        cls._current_adapter.provider_name = "meta"
         cls._current_adapter = _wrap_if_safe_send(cls._current_adapter)
         cls._current_adapter = DedupeOutboundTextAdapter(cls._current_adapter)
         return cls._current_adapter
@@ -84,77 +100,32 @@ class WhatsAppFactory:
         return MetaAdapter(api_token, phone_number_id)
 
     @classmethod
-    def _create_360dialog_adapter(cls) -> Dialog360Adapter:
-        """Create 360Dialog adapter"""
-        api_token = os.getenv("DIALOG360_API_KEY", "rqwWBA_sandbox")  # Default to sandbox key from docs
-        is_sandbox = os.getenv("DIALOG360_SANDBOX", "true").lower() == "true"
-
-        return Dialog360Adapter(api_token, is_sandbox)
+    def _create_360dialog_adapter(cls) -> WhatsAppAdapter:
+        """Archived: 360dialog is not a runtime transport."""
+        raise ValueError("360dialog WhatsApp provider is unsupported. Runtime transport is Meta Cloud only.")
 
     @classmethod
-    def _create_qiscus_adapter(cls) -> QiscusAdapter:
-        """
-        Create Qiscus adapter
-        """
-        # Get credentials from environment variables
-        api_token = os.getenv("QISCUS_SDK_SECRET")
-        app_code = os.getenv("QISCUS_APP_CODE")
-        sender_email = os.getenv("QISCUS_SENDER_EMAIL")
-
-        # : Get additional configuration
-        base_url = os.getenv("QISCUS_BASE_URL", "https://omnichannel.qiscus.com")
-
-        if not api_token or not app_code or not sender_email:
-            raise ValueError(
-                "Qiscus credentials not found in environment variables. Required: QISCUS_SDK_SECRET, QISCUS_APP_CODE, QISCUS_SENDER_EMAIL"
-            )
-
-        # Create adapter with configuration
-        kwargs = {}
-        if base_url:
-            kwargs["base_url"] = base_url
-
-        return QiscusAdapter(api_token, app_code, sender_email, **kwargs)
+    def _create_qiscus_adapter(cls) -> WhatsAppAdapter:
+        """Archived: Qiscus is not a runtime transport."""
+        raise ValueError("Qiscus WhatsApp provider is unsupported. Runtime transport is Meta Cloud only.")
 
     @classmethod
-    def _create_montymobile_adapter(cls) -> MontyMobileAdapter:
-        """
-        Create MontyMobile adapter (New Qiscus endpoint)
-        """
-        # Get credentials from environment variables
-        api_token = os.getenv("MONTYMOBILE_API_KEY")
-        tenant_id = os.getenv("MONTYMOBILE_TENANT_ID")
-        api_id = os.getenv("MONTYMOBILE_API_ID")
-        source_number = os.getenv("MONTYMOBILE_SOURCE_NUMBER")
-
-        # : Get additional configuration
-        base_url = os.getenv("MONTYMOBILE_BASE_URL", "https://omni-apis.montymobile.com")
-
-        if not api_token or not tenant_id or not api_id or not source_number:
-            raise ValueError(
-                "MontyMobile credentials not found in environment variables. "
-                "Required: MONTYMOBILE_API_KEY, MONTYMOBILE_TENANT_ID, MONTYMOBILE_API_ID, MONTYMOBILE_SOURCE_NUMBER"
-            )
-
-        # Create adapter with configuration
-        kwargs = {}
-        if base_url:
-            kwargs["base_url"] = base_url
-
-        return MontyMobileAdapter(api_token, tenant_id, api_id, source_number, **kwargs)
+    def _create_montymobile_adapter(cls) -> WhatsAppAdapter:
+        """Archived: MontyMobile is not a runtime transport."""
+        raise ValueError("MontyMobile WhatsApp provider is unsupported. Runtime transport is Meta Cloud only.")
 
     @classmethod
     def switch_provider(cls, provider: str) -> WhatsAppAdapter:
-        """Switch to a different WhatsApp provider"""
-        print(f"Switching WhatsApp provider from {cls._current_provider} to {provider}")
+        """Switch WhatsApp provider (Meta Cloud only; legacy names refused)."""
+        resolved = _normalize_provider(provider)
+        _refuse_unsupported_provider(resolved)
+        print(f"Switching WhatsApp provider from {cls._current_provider} to meta")
 
-        # Close current adapter if exists
         if cls._current_adapter:
-            # Note: We'll handle cleanup in the background
             pass
 
-        cls._current_provider = provider
-        cls._current_adapter = None  # Force recreation
+        cls._current_provider = "meta"
+        cls._current_adapter = None
         return cls.get_adapter()
 
     @classmethod

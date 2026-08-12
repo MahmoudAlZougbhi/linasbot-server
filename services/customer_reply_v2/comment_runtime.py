@@ -41,11 +41,12 @@ def _safe_failure_reply(response_language: str, *, kind: str = "validation") -> 
             "franco": "Ma ederet akked el maaloome men el content. Fini a3teek el team iza baddak.",
         }
     else:
+        # Public-comment safe: invite DM only — never phone / wa.me destinations.
         messages = {
-            "ar": "خليني تأكدلك المعلومة صح — راسلنا على واتساب لنساعدك بدقة.",
-            "en": "Let me make sure this is accurate — please reach us on WhatsApp for a precise answer.",
-            "fr": "Laissez-moi vérifier — contactez-nous sur WhatsApp pour une réponse précise.",
-            "franco": "Khallini akked el maaloome — rasilna 3a WhatsApp la jawab sahih.",
+            "ar": "خليني تأكدلك المعلومة صح — راسلنا بالخاص (DM) لنساعدك بدقة.",
+            "en": "Let me make sure this is accurate — please message us in DM for a precise answer.",
+            "fr": "Laissez-moi vérifier — écrivez-nous en message privé (DM) pour une réponse précise.",
+            "franco": "Khallini akked el maaloome — rasilna bil DM la jawab sahih.",
         }
     return messages.get(response_language, messages["en"])
 
@@ -145,6 +146,7 @@ async def run_customer_reply_v2_comment(
         message=comment_text,
         response_language=response_language,
         explicit_gender=facts.gender,
+        channel=channel,
     )
     if policy:
         return CustomerReplyOutcome(

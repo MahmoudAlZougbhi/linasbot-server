@@ -37,7 +37,11 @@ if os.path.exists(DASHBOARD_BUILD_PATH):
 
 # Import all modules to register routes and events (must run before SPA catch-all).
 import modules.analytics_api  # noqa: E402, F401
+import modules.apple_auth_api  # noqa: E402, F401
+import modules.apple_iap_client_api  # noqa: E402, F401
+import modules.apple_store_webhook_api  # noqa: E402, F401
 import modules.auth_api  # noqa: E402, F401
+import modules.auth_email_change_api  # noqa: E402, F401
 import modules.chat_history_api  # noqa: E402, F401
 import modules.cm_api  # noqa: E402, F401
 import modules.cm_faq_api  # noqa: E402, F401
@@ -71,6 +75,9 @@ import modules.plans_api  # noqa: E402, F401
 import modules.platform_api  # noqa: E402, F401
 import modules.qa_api  # noqa: E402, F401
 import modules.queue_api  # noqa: E402, F401
+import modules.requests_api  # noqa: E402, F401
+import modules.resend_webhook_api  # noqa: E402, F401
+import modules.scale_api  # noqa: E402, F401
 import modules.schedule_api  # noqa: E402, F401
 import modules.settings_api  # noqa: E402, F401
 import modules.smart_messaging_api  # noqa: E402, F401

@@ -3,6 +3,7 @@
 import { z } from 'zod';
 
 import { ApiError, apiUpload } from '../../api/client';
+import { appendLocalFile } from '../../api/formDataFile';
 
 const UploadSchema = z
   .object({
@@ -24,11 +25,8 @@ export async function uploadCmArticleMedia(file: {
 }): Promise<CmMediaUploadResult> {
   const response = await apiUpload('/api/cm/media', () => {
     const form = new FormData();
-    form.append('file', {
-      uri: file.uri,
-      name: file.name,
-      type: file.mimeType || 'application/octet-stream',
-    } as unknown as Blob);
+    // Expo 57 global fetch rejects RN `{uri,name,type}` FormData parts.
+    appendLocalFile(form, 'file', file.uri, { name: file.name });
     return form;
   });
   const text = await response.text();

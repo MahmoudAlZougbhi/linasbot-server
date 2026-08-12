@@ -92,7 +92,8 @@ describe('owner stream auth contracts', () => {
     const en = read('i18n/locales/en.ts');
     assert.match(en, /Message failed\. You can retry\./);
     assert.match(en, /Could not load chat\. Tap Retry\./);
+    assert.match(en, /tapToRetry:\s*'Tap to retry'/);
     const banners = read('features/chat/ChatStatusBanners.tsx');
-    assert.match(banners, /Tap to retry/);
+    assert.match(banners, /tr\('tapToRetry'\)/);
   });
 });

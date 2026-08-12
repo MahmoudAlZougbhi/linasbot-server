@@ -65,7 +65,7 @@ jobs:
           fi
 
       - name: Deploy on production server
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -79,10 +79,12 @@ jobs:
             cd /opt/linasbot
 
             # Backup entire data/ before git reset (Q&A, knowledge, style, price, content files, settings)
+            umask 077
             DATA_BACKUP="/tmp/linasbot_data_backup_$$"
             if [ -d data ]; then
               echo "[deploy] Backing up data/ (knowledge, style, Q&A, settings, content files...)"
               cp -a data "$DATA_BACKUP"
+              chmod 700 "$DATA_BACKUP"
             fi
 
             git fetch origin main

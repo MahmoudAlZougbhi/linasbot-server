@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+from modules.api_security import _client_ip
 from modules.core import app
 from services.guest_ai_service import GuestAIModelError, build_guest_greeting, compose_guest_reply
 from services.guest_chat_limits import (
@@ -52,15 +53,6 @@ class GuestMessageBody(BaseModel):
     guest_session_id: str = Field(min_length=8, max_length=80)
     content: str = Field(min_length=1, max_length=16000)
     language: str | None = None
-
-
-def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for") or ""
-    if forwarded:
-        return forwarded.split(",")[0].strip() or "unknown"
-    if request.client:
-        return request.client.host or "unknown"
-    return "unknown"
 
 
 def _rate_limit_guest(request: Request, session_id: str) -> None:

@@ -72,9 +72,28 @@ async def _delayed_process_messages(
             await asyncio.sleep(delay)
 
         combined_message = None
+        if not config.user_pending_messages[user_id]:
+            try:
+                from services.scale.conversation_state_redis import get_pending_messages
+                from services.scale.redis_claims import redis_claims_fail_closed
+
+                remote_pending = get_pending_messages(user_id)
+                if remote_pending:
+                    config.user_pending_messages[user_id].extend(remote_pending)
+                elif redis_claims_fail_closed() and remote_pending is None:
+                    # Do not assume another node has no pending chunks when Redis is down.
+                    pass
+            except Exception:
+                pass
         if config.user_pending_messages[user_id]:
             combined_message = " ".join(config.user_pending_messages[user_id])
             config.user_pending_messages[user_id].clear()
+            try:
+                from services.scale.conversation_state_redis import set_pending_messages
+
+                set_pending_messages(user_id, [])
+            except Exception:
+                pass
             user_data.pop("_dashboard_last_message_for_fallback", None)
             user_data.pop("_dashboard_test_turn_sticky", None)
         elif user_data.get("_dashboard_test_simulation"):
@@ -159,7 +178,9 @@ async def _delayed_process_messages(
     except asyncio.CancelledError:
         raise
     except Exception as e:
-        print(f"[_delayed_process_messages] ERROR: An error occurred in delayed processing for user {user_id}: {e}")
+        print(
+            f"[_delayed_process_messages] ERROR: An error occurred in delayed processing for user ...{str(user_id)[-4:]}: {e}"
+        )
         import traceback
 
         traceback.print_exc()

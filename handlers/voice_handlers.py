@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import io
 import time
 from typing import Any
@@ -47,7 +48,10 @@ async def handle_voice_message(
     """
     config.user_names[user_id] = user_name  # Ensure name is updated
 
-    tenant_id = str(user_data.get("tenant_id") or "linas").strip() or "linas"
+    tenant_id = str(user_data.get("tenant_id") or "").strip()
+    if not tenant_id:
+        print("ERROR: voice handler refused — tenant_id required")
+        return
     try:
         from services.cm.capability_gates import voice_processing_enabled
 
@@ -61,7 +65,9 @@ async def handle_voice_message(
         print(f"[handle_voice_message] voice gate lookup failed for {tenant_id}: {exc}")
 
     if config.user_in_training_mode.get(user_id, False):
-        print(f"[handle_voice_message] INFO: User {user_id} in training mode. Handing over to handle_training_input.")
+        print(
+            f"[handle_voice_message] INFO: User ...{str(user_id)[-4:]} in training mode. Handing over to handle_training_input."
+        )
         # Pass necessary data directly to handle_training_input for voice processing in training mode
         await handle_training_input(
             user_id=user_id,
@@ -116,7 +122,7 @@ async def handle_voice_message(
                 .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
                 .document(current_conversation_id)
             )
-            doc_snap = conv_doc_ref.get()
+            doc_snap = await asyncio.to_thread(conv_doc_ref.get)
 
             if doc_snap.exists:
                 conv_data = doc_snap.to_dict()
@@ -199,7 +205,7 @@ async def handle_voice_message(
         )
 
         user_text_input = transcription_response.text
-        print(f"👂 تم تحويل الصوت إلى نص: {user_text_input}")
+        print(f"👂 voice transcription ok len={len(user_text_input or '')}")
 
         # Activity Flow: store voice pipeline metadata for multimodal flow display
         transcription_duration_ms = (time.time() - start_time) * 1000
@@ -236,7 +242,11 @@ async def handle_voice_message(
         # - audio_url: link to original audio
         # - text: the transcribed content
         # - transcribed: true flag
-        print(f"DEBUG: voice_handlers - current_conversation_id: {current_conversation_id}, audio_url: {audio_url}")
+        print(
+            "DEBUG: voice_handlers - "
+            f"current_conversation_id: {current_conversation_id}, "
+            f"has_audio_url: {bool(audio_url)}"
+        )
         if current_conversation_id and audio_url:
             print("✅ Calling update_voice_message_with_transcription...")
             await update_voice_message_with_transcription(

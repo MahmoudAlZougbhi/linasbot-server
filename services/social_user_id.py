@@ -29,7 +29,9 @@ def compose_social_user_id(
     sender_id: str,
     multi_asset_channel: bool | None = None,
 ) -> str:
-    tenant = str(tenant_id or "linas").strip()
+    tenant = str(tenant_id or "").strip()
+    if not tenant:
+        raise ValueError("tenant_id required")
     channel_name = str(channel or "").strip().lower()
     asset = str(asset_id or "").strip()
     sender = str(sender_id or "").strip()

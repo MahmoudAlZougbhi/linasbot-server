@@ -130,10 +130,10 @@ const Login = () => {
 
                     <div className="rounded-lg border border-red-200 bg-white/80 p-2 text-[11px] leading-relaxed">
                       <p className="font-semibold">Terminal 1 - backend</p>
-                      <code className="block">{'cd "/Users/mahmoudalzougbhi/linas ai bot"'}</code>
+                      <code className="block">cd /path/to/linasbot-server</code>
                       <code className="block">.venv/bin/python main.py</code>
                       <p className="mt-2 font-semibold">Terminal 2 - dashboard (dev)</p>
-                      <code className="block">{'cd "/Users/mahmoudalzougbhi/linas ai bot/dashboard"'}</code>
+                      <code className="block">cd /path/to/linasbot-server/dashboard</code>
                       <code className="block">npm start</code>
                     </div>
 

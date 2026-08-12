@@ -42,7 +42,6 @@ import { useStreamingTurn } from './v2/useStreamingTurn';
 
 type Props = {
   isAuthenticated: boolean;
-  isPlatformOwner: boolean;
   onOpenArea: (area: ControlArea) => void;
   onOpenCmReview?: (review: CmProposalReview) => void;
   onRequestLogin: () => void;
@@ -173,7 +172,7 @@ export function ChatScreen({
       >
         <ChatHeader
           isAuthenticated={isAuthenticated}
-          workspaceLabel={null}
+          workspaceLabel={workspaceLabel}
           onOpenMenu={() => {
             Keyboard.dismiss();
             setDrawerOpen(true);

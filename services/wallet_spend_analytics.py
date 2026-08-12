@@ -73,10 +73,14 @@ def _normalize_channel(raw: Any) -> str:
 
 
 def _entry_matches_tenant(entry: dict[str, Any], tenant_id: str) -> bool:
-    """Attribute historical rows without tenant_id to linas only."""
-    tid = (tenant_id or "linas").strip().lower() or "linas"
+    """Match entry tenant; unlabeled historical rows match only explicit linas queries."""
+    tid = str(tenant_id or "").strip().lower()
+    if not tid:
+        raise ValueError("tenant_id required")
     raw = entry.get("tenant_id")
     if raw is None or str(raw).strip() == "":
+        # Historical activity rows predating tenant tagging: attribute only when
+        # the caller intentionally queries the founder clinic tenant.
         return tid == "linas"
     return str(raw).strip().lower() == tid
 
@@ -230,7 +234,9 @@ def build_wallet_spend_analytics(
     log_path: str | None = None,
 ) -> dict[str, Any]:
     """Aggregate FB/IG/Testing Lab spend for trailing + prior 12 months."""
-    tid = (tenant_id or "linas").strip().lower() or "linas"
+    tid = str(tenant_id or "").strip().lower()
+    if not tid:
+        raise ValueError("tenant_id required")
     current_start, current_end, prior_start, prior_end = _period_bucket()
     all_entries = entries if entries is not None else _load_entries(log_path)
     scoped = [e for e in all_entries if _entry_matches_tenant(e, tid)]

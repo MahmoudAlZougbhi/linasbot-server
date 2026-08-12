@@ -2,132 +2,49 @@
 Auth API Module
 Handles authentication and user management endpoints for the dashboard.
 Sessions are server-issued HttpOnly cookies; permissions enforced server-side.
+
+Shared models/cookies: auth_api_common; user CRUD: auth_users_api (LOC split).
 """
 
 from __future__ import annotations
 
 import asyncio
-import os
-from typing import Any, Literal, cast
+from typing import Any
 
-from fastapi import HTTPException, Request, Response
-from pydantic import BaseModel
+from fastapi import Request, Response
 
-from modules.api_security import is_production_env, require_session
+from modules.api_security import require_session
+from modules.auth_api_common import (  # noqa: F401
+    AUTH_LOGIN_TIMEOUT_SECONDS,
+    AUTH_SESSION_TIMEOUT_SECONDS,
+    ChangePasswordRequest,
+    CreateUserRequest,
+    ForgotPasswordRequest,
+    LoginRequest,
+    RegisterRequest,
+    ResendVerificationRequest,
+    ResetPasswordRequest,
+    UpdateUserRequest,
+    VerifyEmailRequest,
+    _clear_auth_cookies,
+    _cookie_samesite,
+    _cookie_secure,
+    _set_auth_cookies,
+)
+
+# Register user CRUD routes; re-export handlers for tests (`auth_api.get_users`, …).
+from modules.auth_users_api import (  # noqa: E402, F401
+    create_user,
+    delete_user,
+    get_users,
+    update_user,
+)
 from modules.core import app
 from services.dashboard_session_service import (
-    CSRF_COOKIE_NAME,
     SESSION_COOKIE_NAME,
     session_service,
 )
 from services.user_service import AuthBackendUnavailableError, user_service
-
-AUTH_LOGIN_TIMEOUT_SECONDS = float(os.getenv("AUTH_LOGIN_TIMEOUT_SECONDS", "12"))
-AUTH_SESSION_TIMEOUT_SECONDS = float(os.getenv("AUTH_SESSION_TIMEOUT_SECONDS", "8"))
-
-
-def _cookie_secure() -> bool:
-    if os.getenv("DASHBOARD_COOKIE_SECURE", "").strip().lower() in {"1", "true", "yes", "on"}:
-        return True
-    if os.getenv("DASHBOARD_COOKIE_SECURE", "").strip().lower() in {"0", "false", "no", "off"}:
-        return False
-    return is_production_env()
-
-
-def _cookie_samesite() -> Literal["lax", "strict", "none"]:
-    value = (os.getenv("DASHBOARD_COOKIE_SAMESITE") or "lax").strip().lower()
-    if value in {"lax", "strict", "none"}:
-        return cast(Literal["lax", "strict", "none"], value)
-    return "lax"
-
-
-def _set_auth_cookies(response: Response, cookie_value: str, csrf_token: str) -> None:
-    secure = _cookie_secure()
-    samesite = _cookie_samesite()
-    # SameSite=None requires Secure
-    if samesite.lower() == "none":
-        secure = True
-    max_age = int(os.getenv("DASHBOARD_SESSION_TTL_SECONDS", str(12 * 60 * 60)))
-    response.set_cookie(
-        key=SESSION_COOKIE_NAME,
-        value=cookie_value,
-        httponly=True,
-        secure=secure,
-        samesite=samesite,
-        max_age=max_age,
-        path="/",
-    )
-    response.set_cookie(
-        key=CSRF_COOKIE_NAME,
-        value=csrf_token,
-        httponly=False,
-        secure=secure,
-        samesite=samesite,
-        max_age=max_age,
-        path="/",
-    )
-
-
-def _clear_auth_cookies(response: Response) -> None:
-    response.delete_cookie(SESSION_COOKIE_NAME, path="/")
-    response.delete_cookie(CSRF_COOKIE_NAME, path="/")
-
-
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-
-
-class RegisterRequest(BaseModel):
-    business_name: str
-    email: str
-    password: str
-    name: str | None = None
-    display_name: str | None = None
-    gender: str | None = None  # male | female | unset — never inferred server-side
-    preferred_language: str | None = None  # ar | en | fr
-    form_of_address: str | None = None
-
-
-class CreateUserRequest(BaseModel):
-    email: str
-    password: str
-    name: str | None = None
-    role: str | None = "viewer"
-    permissions: dict[str, bool] | None = None
-    tenant_id: str | None = None
-    status: str | None = "active"
-
-
-class UpdateUserRequest(BaseModel):
-    name: str | None = None
-    role: str | None = None
-    permissions: dict[str, bool] | None = None
-    tenant_id: str | None = None
-    status: str | None = None
-    password: str | None = None
-
-
-class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str
-
-
-class ForgotPasswordRequest(BaseModel):
-    email: str
-
-
-class ResetPasswordRequest(BaseModel):
-    token: str
-    new_password: str
-
-
-class VerifyEmailRequest(BaseModel):
-    token: str
-
-
-class ResendVerificationRequest(BaseModel):
-    email: str | None = None
 
 
 @app.on_event("startup")
@@ -185,12 +102,16 @@ async def login(request: LoginRequest, response: Response) -> Any:
             if not user:
                 return {"success": False, "error": "Invalid email or password"}
 
+            tenant_id = str(user.get("tenantId") or "").strip()
+            if not tenant_id:
+                return {"success": False, "error": "Tenant required"}
+
             record = session_service.create_session(
                 user_id=str(user["id"]),
                 email=str(user.get("email") or email),
                 role=str(user.get("role") or "viewer"),
                 permissions=user.get("permissions"),
-                tenant_id=str(user.get("tenantId") or "linas"),
+                tenant_id=tenant_id,
                 password_epoch=int(user.get("passwordEpoch") or user.get("password_epoch") or 0),
             )
             _set_auth_cookies(response, session_service.cookie_value_for(record), record.csrf_token)
@@ -268,10 +189,10 @@ async def register(request: RegisterRequest, response: Response) -> Any:
         return {"success": False, "error": "Registration failed"}
 
     user = result.user
-    # Issue email verification token + attempt delivery (SMTP env required in production).
+    # Issue email verification token + attempt delivery (Resend/SMTP env required in production).
     try:
         from services.auth_email_tokens import auth_email_token_service
-        from services.mail_service import public_app_base_url, send_email
+        from services.email_dispatch import send_verify_email
 
         raw_verify = auth_email_token_service.issue(
             purpose="email_verify",
@@ -279,12 +200,11 @@ async def register(request: RegisterRequest, response: Response) -> Any:
             email=str(user.get("email") or request.email),
             tenant_id=str(result.tenant_id),
         )
-        verify_url = f"{public_app_base_url()}/verify-email?token={raw_verify}"
-        send_email(
+        send_verify_email(
             to_email=str(user.get("email") or request.email),
-            subject="Verify your Linas AI email",
-            text_body=f"Verify your Linas AI email:\n\n{verify_url}\n",
-            html_body=f'<p>Verify your Linas AI email:</p><p><a href="{verify_url}">Verify email</a></p>',
+            raw_token=raw_verify,
+            locale=str(user.get("preferredLanguage") or request.preferred_language or "en"),
+            user_id=str(user["id"]),
         )
     except Exception as exc:
         print(f"[auth_api] register: verify email dispatch failed: {exc}", flush=True)
@@ -312,10 +232,11 @@ async def register(request: RegisterRequest, response: Response) -> Any:
 async def forgot_password(body: ForgotPasswordRequest) -> Any:
     """
     Always return a generic success message (do not reveal whether email exists).
-    When SMTP is configured, send a time-limited reset link.
+    When mail is configured, send a time-limited reset link.
     """
     from services.auth_email_tokens import auth_email_token_service
-    from services.mail_service import mail_configured, public_app_base_url, send_email
+    from services.email_dispatch import send_reset_password_email
+    from services.mail_service import mail_configured
 
     email = (body.email or "").strip().lower()
     generic = {
@@ -337,30 +258,29 @@ async def forgot_password(body: ForgotPasswordRequest) -> Any:
     if not user or user.get("status") != "active":
         return generic
 
+    tenant_id = str(user.get("tenantId") or "").strip()
+    if not tenant_id:
+        return generic
+
+    auth_email_token_service.revoke_unused_for_user(str(user["id"]), "password_reset")
     raw_token = auth_email_token_service.issue(
         purpose="password_reset",
         user_id=str(user["id"]),
         email=str(user.get("email") or email),
-        tenant_id=str(user.get("tenantId") or "linas"),
+        tenant_id=tenant_id,
     )
-    reset_url = f"{public_app_base_url()}/reset-password?token={raw_token}"
-    text = (
-        "Reset your Linas AI password using this link (expires in 1 hour):\n\n"
-        f"{reset_url}\n\n"
-        "If you did not request this, you can ignore this email."
+    result = send_reset_password_email(
+        to_email=email,
+        raw_token=raw_token,
+        locale=str(user.get("preferredLanguage") or "en"),
+        user_id=str(user["id"]),
     )
-    html = (
-        "<p>Reset your Linas AI password using this link (expires in 1 hour):</p>"
-        f'<p><a href="{reset_url}">Reset password</a></p>'
-        "<p>If you did not request this, you can ignore this email.</p>"
-    )
-    result = send_email(to_email=email, subject="Reset your Linas AI password", text_body=text, html_body=html)
     payload = dict(generic)
     payload["mail_sent"] = bool(result.sent)
-    if not result.sent and result.reason.startswith("smtp_not_configured"):
+    if not result.sent and "not_configured" in result.reason:
         payload["message"] = (
             "If an account exists for that email, a password reset was prepared. "
-            "Mail delivery requires SMTP configuration on the server."
+            "Mail delivery requires Resend/SMTP configuration on the server."
         )
     return payload
 
@@ -395,6 +315,12 @@ async def reset_password(body: ResetPasswordRequest, response: Response) -> Any:
 
     session_service.revoke_all_for_user(record.user_id)
     _clear_auth_cookies(response)
+    try:
+        from modules.auth_email_change_api import notify_password_changed
+
+        notify_password_changed(user_id=record.user_id, email=record.email)
+    except Exception:
+        pass
     return {"success": True, "message": "Password updated. You can sign in with your new password."}
 
 
@@ -424,7 +350,8 @@ async def verify_email(body: VerifyEmailRequest) -> Any:
 @app.post("/api/auth/resend-verification")
 async def resend_verification(body: ResendVerificationRequest, request: Request) -> Any:
     from services.auth_email_tokens import auth_email_token_service
-    from services.mail_service import mail_configured, public_app_base_url, send_email
+    from services.email_dispatch import send_verify_email
+    from services.mail_service import mail_configured
 
     email = (body.email or "").strip().lower()
     cookie = request.cookies.get(SESSION_COOKIE_NAME)
@@ -446,25 +373,22 @@ async def resend_verification(body: ResendVerificationRequest, request: Request)
     if user_service.is_email_verified(user):
         return {"success": True, "message": "Email is already verified", "mail_configured": mail_configured()}
 
+    tenant_id = str(user.get("tenantId") or "").strip()
+    if not tenant_id:
+        return generic
+
     auth_email_token_service.revoke_unused_for_user(str(user["id"]), "email_verify")
     raw_token = auth_email_token_service.issue(
         purpose="email_verify",
         user_id=str(user["id"]),
         email=str(user.get("email") or ""),
-        tenant_id=str(user.get("tenantId") or "linas"),
+        tenant_id=tenant_id,
     )
-    verify_url = f"{public_app_base_url()}/verify-email?token={raw_token}"
-    text = f"Verify your Linas AI email address:\n\n{verify_url}\n\nThis link expires in 48 hours."
-    html = (
-        "<p>Verify your Linas AI email address:</p>"
-        f'<p><a href="{verify_url}">Verify email</a></p>'
-        "<p>This link expires in 48 hours.</p>"
-    )
-    result = send_email(
+    result = send_verify_email(
         to_email=str(user.get("email") or ""),
-        subject="Verify your Linas AI email",
-        text_body=text,
-        html_body=html,
+        raw_token=raw_token,
+        locale=str(user.get("preferredLanguage") or "en"),
+        user_id=str(user["id"]),
     )
     payload = dict(generic)
     payload["mail_sent"] = bool(result.sent)
@@ -550,131 +474,23 @@ async def change_password(body: ChangePasswordRequest, request: Request, respons
             email=str(user.get("email") or session.email),
             role=str(user.get("role") or session.role),
             permissions=user.get("permissions"),
-            tenant_id=str(user.get("tenantId") or session.tenant_id),
+            tenant_id=str(user.get("tenantId") or session.tenant_id or "").strip(),
             password_epoch=int(user.get("passwordEpoch") or user.get("password_epoch") or 0),
         )
         _set_auth_cookies(response, session_service.cookie_value_for(record), record.csrf_token)
-        return {
-            "success": True,
-            "message": "Password changed successfully",
-            "csrf_token": record.csrf_token,
-        }
+        try:
+            from modules.auth_email_change_api import notify_password_changed
+
+            notify_password_changed(
+                user_id=str(user["id"]),
+                email=str(user.get("email") or session.email),
+                locale=str(user.get("preferredLanguage") or "en"),
+            )
+        except Exception:
+            pass
+        return {"success": True, "message": "Password changed successfully", "csrf_token": record.csrf_token}
     except ValueError as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
         print(f"Change password error: {e}")
         return {"success": False, "error": "Failed to change password"}
-
-
-@app.get("/api/auth/users")
-async def get_users(request: Request) -> Any:
-    session = require_session(request)
-    try:
-        users = [
-            user for user in user_service.get_all_users() if str(user.get("tenantId") or "linas") == session.tenant_id
-        ]
-        return {"success": True, "users": users}
-    except Exception as e:
-        print(f"Get users error: {e}")
-        return {"success": False, "error": "Failed to fetch users"}
-
-
-@app.post("/api/auth/users")
-async def create_user(body: CreateUserRequest, request: Request) -> Any:
-    session = require_session(request)
-    requested_tenant = (body.tenant_id or session.tenant_id).strip()
-    if requested_tenant != session.tenant_id:
-        raise HTTPException(status_code=403, detail="Cross-tenant user provisioning is forbidden")
-    from services.entitlements_service import entitlements_store
-    from services.membership.seats import SeatLimitExceeded, assert_can_add_seat
-
-    ent = entitlements_store.get(session.tenant_id)
-    if ent.plan_id in {"lite", "starter", "growth", "pro", "max"}:
-        tenant_users = [
-            user for user in user_service.get_all_users() if str(user.get("tenantId") or "linas") == session.tenant_id
-        ]
-        non_owners = [
-            u
-            for u in tenant_users
-            if str(u.get("role") or "").lower() != "owner" and str(u.get("status") or "active").lower() == "active"
-        ]
-        # No invitation subsystem on this spine yet — count active non-owners only.
-        try:
-            assert_can_add_seat(
-                ent.plan_id,
-                active_non_owner_members=len(non_owners),
-                pending_invitations=0,
-            )
-        except SeatLimitExceeded as exc:
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
-        except KeyError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-    try:
-        user = user_service.create_user(
-            {
-                "email": body.email,
-                "password": body.password,
-                "name": body.name,
-                "role": body.role,
-                "permissions": body.permissions,
-                "tenantId": session.tenant_id,
-                "status": body.status,
-            },
-            created_by=session.user_id,
-        )
-        return {"success": True, "user": user, "message": "User created successfully"}
-    except ValueError as e:
-        return {"success": False, "error": str(e)}
-    except Exception as e:
-        print(f"Create user error: {e}")
-        return {"success": False, "error": "Failed to create user"}
-
-
-@app.put("/api/auth/users/{user_id}")
-async def update_user(user_id: str, body: UpdateUserRequest, request: Request) -> Any:
-    session = require_session(request)
-    target = user_service.get_user_by_id(user_id)
-    if target is None or str(target.get("tenantId") or "linas") != session.tenant_id:
-        raise HTTPException(status_code=404, detail="User not found")
-    if body.tenant_id is not None and body.tenant_id.strip() != session.tenant_id:
-        raise HTTPException(status_code=403, detail="Cross-tenant user reassignment is forbidden")
-    try:
-        updates: dict[str, Any] = {}
-        if body.name is not None:
-            updates["name"] = body.name
-        if body.role is not None:
-            updates["role"] = body.role
-        if body.permissions is not None:
-            updates["permissions"] = body.permissions
-        if body.status is not None:
-            updates["status"] = body.status
-        if body.password is not None:
-            updates["password"] = body.password
-        user = user_service.update_user(user_id, updates)
-        if body.password is not None:
-            session_service.revoke_all_for_user(user_id)
-        return {"success": True, "user": user, "message": "User updated successfully"}
-    except ValueError as e:
-        return {"success": False, "error": str(e)}
-    except Exception as e:
-        print(f"Update user error: {e}")
-        return {"success": False, "error": "Failed to update user"}
-
-
-@app.delete("/api/auth/users/{user_id}")
-async def delete_user(user_id: str, request: Request) -> Any:
-    session = require_session(request)
-    target = user_service.get_user_by_id(user_id)
-    if target is None or str(target.get("tenantId") or "linas") != session.tenant_id:
-        raise HTTPException(status_code=404, detail="User not found")
-    try:
-        success = user_service.delete_user(user_id)
-        if success:
-            session_service.revoke_all_for_user(user_id)
-            return {"success": True, "message": "User deleted successfully"}
-        return {"success": False, "error": "Failed to delete user"}
-    except ValueError as e:
-        return {"success": False, "error": str(e)}
-    except Exception as e:
-        print(f"Delete user error: {e}")
-        return {"success": False, "error": "Failed to delete user"}

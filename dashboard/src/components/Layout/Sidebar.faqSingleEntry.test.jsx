@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import Sidebar from "./Sidebar";
 import Training from "../../pages/Training";
 import { makeAuthUser } from "../../testHelpers/renderWithProviders";
+import { SYSTEM_ROLES } from "../../constants/permissions";
 
 const mockUseAuth = vi.fn();
 vi.mock("../../contexts/AuthContext", () => ({
@@ -19,7 +20,12 @@ vi.mock("../../utils/authFetch", () => ({
 
 describe("Sidebar FAQ single entry", () => {
   it("shows AI Setup and no Bot Training / Legacy FAQ nav writers", () => {
-    mockUseAuth.mockReturnValue({ user: makeAuthUser({ role: "admin" }) });
+    mockUseAuth.mockReturnValue({
+      user: makeAuthUser({
+        role: "admin",
+        resolvedPermissions: { ...SYSTEM_ROLES.admin.permissions },
+      }),
+    });
 
     render(
       <MemoryRouter>

@@ -36,9 +36,21 @@ def test_disabled_api_path_matcher() -> None:
     assert is_disabled_api_path("/api/media/audio") is False
     assert is_disabled_api_path("/api/smart-messaging/campaigns") is True
     assert is_disabled_api_path("/api/test/foo") is True
+    assert is_disabled_api_path("/api/test") is True
+    assert is_disabled_api_path("/api/test-message") is True
+    assert is_disabled_api_path("/api/test-image") is True
+    assert is_disabled_api_path("/api/test-voice") is True
+    assert is_disabled_api_path("/api/test-voice-text") is True
+    assert is_disabled_api_path("/api/test-voice-upload") is True
+    assert is_disabled_api_path("/api/test-image-upload") is True
+    assert is_disabled_api_path("/api/switch-provider") is True
     assert is_disabled_api_path("/api/meta/social-posts/publish") is True
     assert is_disabled_api_path("/api/settings/clinic") is True
     assert is_disabled_api_path("/api/stats") is True
+    assert (
+        is_disabled_api_path("/api/content-files/knowledge/list") is False
+    )  # 410 via handler, not product-disable prefix
+    assert is_disabled_api_path("/api/instructions/get") is False
     assert is_disabled_api_path("/api/cm/draft") is False
     assert is_disabled_api_path("/api/meta/connections") is False
     assert is_disabled_api_path("/api/billing/wallet") is False

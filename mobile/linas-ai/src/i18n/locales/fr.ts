@@ -1,6 +1,8 @@
+import { appleAccountFr } from './appleAccountFr';
 import { subscriptionFr } from './subscriptionFr';
 import { smartFollowUpFr } from './smartFollowUpFr';
 import { whatsappFr } from './whatsappFr';
+import { requestsFr } from './requestsFr';
 import type { StringKey } from './en';
 
 export const fr = {
@@ -26,8 +28,10 @@ export const fr = {
   registerStepCredentials: 'D’abord, e-mail et mot de passe.',
   registerStepName: 'Parlez-nous de votre activité.',
   registerStepGender: 'Optionnel — aide Linas à vous adresser correctement.',
-  registerNeedCredentials: 'Saisissez un e-mail valide et un mot de passe (6+ caractères).',
+  registerNeedCredentials: 'Saisissez un e-mail valide et un mot de passe (12+ caractères).',
   registerNeedBusiness: 'Le nom de l’entreprise est requis.',
+  registerFailed: 'Échec de l’inscription.',
+  networkError: 'Erreur réseau. Vérifiez votre connexion et réessayez.',
   registeredVerify: 'Compte créé. Vérifiez votre e-mail, puis connectez-vous.',
   chatEmptyTitle: 'Je suis Linas AI — votre assistant dans l’app',
   chatEmptyBody:
@@ -347,9 +351,13 @@ export const fr = {
   socialContinueWith: 'ou continuer avec',
   socialContinueGoogle: 'Continuer avec Google',
   socialContinueApple: 'Continuer avec Apple',
+  appleSignInFailed: 'Échec de la connexion Apple. Réessayez.',
+  appleSignInUnavailable: 'Connexion avec Apple indisponible sur cet appareil.',
+  ...appleAccountFr,
   ...subscriptionFr,
   ...whatsappFr,
   ...smartFollowUpFr,
+  ...requestsFr,
 
   proposalChangeTitle: 'Modification Configuration IA',
   proposalDeleteTitle: 'Supprimer de la Configuration IA',

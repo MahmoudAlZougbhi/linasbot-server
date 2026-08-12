@@ -14,7 +14,10 @@ export type PlanDefinition = {
   additionalSeats: number | null;
   commentAutomation: boolean;
   recommended?: boolean;
-  /** Store product id stubs — server map is authoritative. */
+  /**
+   * Default Apple monthly product id (canonical ASC SKU).
+   * Yearly variants live in appleProductIds.ts — server map is authoritative.
+   */
   appleProductId: string;
   googleProductId: string;
 };
@@ -29,7 +32,7 @@ export const PLAN_CATALOG: Record<PlanId, PlanDefinition> = {
     faqCapacity: 50,
     additionalSeats: 0,
     commentAutomation: false,
-    appleProductId: 'com.linasai.app.lite.monthly',
+    appleProductId: 'com.linasai.subscription.basic.monthly',
     googleProductId: 'linas_ai_lite_monthly',
   },
   starter: {
@@ -39,7 +42,7 @@ export const PLAN_CATALOG: Record<PlanId, PlanDefinition> = {
     faqCapacity: 110,
     additionalSeats: 2,
     commentAutomation: true,
-    appleProductId: 'com.linasai.app.starter.monthly',
+    appleProductId: 'com.linasai.subscription.plus.monthly',
     googleProductId: 'linas_ai_starter_monthly',
   },
   growth: {
@@ -50,7 +53,7 @@ export const PLAN_CATALOG: Record<PlanId, PlanDefinition> = {
     additionalSeats: 5,
     commentAutomation: true,
     recommended: true,
-    appleProductId: 'com.linasai.app.growth.monthly',
+    appleProductId: 'com.linasai.subscription.growth.monthly',
     googleProductId: 'linas_ai_growth_monthly',
   },
   pro: {
@@ -60,7 +63,7 @@ export const PLAN_CATALOG: Record<PlanId, PlanDefinition> = {
     faqCapacity: 600,
     additionalSeats: null,
     commentAutomation: true,
-    appleProductId: 'com.linasai.app.pro.monthly',
+    appleProductId: 'com.linasai.subscription.pro.monthly',
     googleProductId: 'linas_ai_pro_monthly',
   },
   max: {
@@ -70,7 +73,7 @@ export const PLAN_CATALOG: Record<PlanId, PlanDefinition> = {
     faqCapacity: 1500,
     additionalSeats: null,
     commentAutomation: true,
-    appleProductId: 'com.linasai.app.max.monthly',
+    appleProductId: 'com.linasai.subscription.scale.monthly',
     googleProductId: 'linas_ai_max_monthly',
   },
 };

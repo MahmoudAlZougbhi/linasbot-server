@@ -2,6 +2,8 @@
 
 Purchase events may arrive from Apple, Google, or (optionally) Stripe.
 
+Postgres SoT when LINAS_BILLING_BACKEND=postgres (default); file when explicitly set.
+
 Subscription gate exemption (explicit allowlist only — not a hidden fallback):
   Env ``SUBSCRIPTION_EXEMPT_TENANT_IDS`` (comma-separated tenant ids).
   Default: ``linas`` — the reserved Linas Laser founder clinic tenant
@@ -22,6 +24,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from services.billing_backend import billing_uses_postgres, require_billing_pg_session
 from services.plan_economics import PLAN_FEATURES, PLAN_PRICES_USD, recommend_allowance
 from storage.persistent_storage import _DATA_ROOT as _DEFAULT_DATA_ROOT
 
@@ -81,26 +84,43 @@ class EntitlementsStore:
     def _path(self, tenant_id: str) -> Path:
         return self._root / f"{tenant_id}.json"
 
+    def _empty(self, tenant_id: str) -> TenantEntitlement:
+        return TenantEntitlement(
+            tenant_id=tenant_id,
+            plan_id="none",
+            status="none",
+            source="none",
+            current_period_end=None,
+            included_credits=0,
+            extra_credits=0,
+            features={},
+            updated_at=time.time(),
+        )
+
     def get(self, tenant_id: str) -> TenantEntitlement:
+        if billing_uses_postgres():
+            from services.entitlements_pg_store import get_entitlement
+
+            with require_billing_pg_session() as session:
+                data = get_entitlement(session, tenant_id)
+            if data is None:
+                return self._empty(tenant_id)
+            return TenantEntitlement(**data)
         path = self._path(tenant_id)
         with self._lock:
             if not path.is_file():
-                return TenantEntitlement(
-                    tenant_id=tenant_id,
-                    plan_id="none",
-                    status="none",
-                    source="none",
-                    current_period_end=None,
-                    included_credits=0,
-                    extra_credits=0,
-                    features={},
-                    updated_at=time.time(),
-                )
+                return self._empty(tenant_id)
             data = json.loads(path.read_text(encoding="utf-8"))
         return TenantEntitlement(**data)
 
     def save(self, ent: TenantEntitlement) -> TenantEntitlement:
         ent.updated_at = time.time()
+        if billing_uses_postgres():
+            from services.entitlements_pg_store import save_entitlement
+
+            with require_billing_pg_session() as session:
+                save_entitlement(session, asdict(ent))
+            return ent
         with self._lock:
             self._path(ent.tenant_id).write_text(json.dumps(asdict(ent)), encoding="utf-8")
         return ent
@@ -228,6 +248,29 @@ def apply_store_notification(
     idempotency_key: str,
 ) -> dict[str, Any]:
     """Idempotent entitlement update from Apple/Google server notifications."""
+    if billing_uses_postgres():
+        from services.entitlements_pg_store import mark_processed_event, processed_event_exists
+
+        with require_billing_pg_session() as session:
+            if processed_event_exists(session, idempotency_key):
+                return {"duplicate": True, "entitlement": get_tenant_entitlement_public(tenant_id)}
+        ent = entitlements_store.set_plan(
+            tenant_id=tenant_id,
+            plan_id=plan_id,
+            status=status,
+            source=source,
+            store_original_transaction_id=original_transaction_id,
+        )
+        with require_billing_pg_session() as session:
+            if not mark_processed_event(
+                session,
+                idempotency_key=idempotency_key,
+                tenant_id=tenant_id,
+                meta={"event_id": idempotency_key, "uuid": uuid.uuid4().hex},
+            ):
+                return {"duplicate": True, "entitlement": get_tenant_entitlement_public(tenant_id)}
+        return {"duplicate": False, "entitlement": asdict(ent)}
+
     processed_dir = Path(_DATA_ROOT) / "entitlements" / "processed_events"
     processed_dir.mkdir(parents=True, exist_ok=True)
     marker = processed_dir / f"{idempotency_key}.json"
@@ -241,7 +284,14 @@ def apply_store_notification(
         store_original_transaction_id=original_transaction_id,
     )
     marker.write_text(
-        json.dumps({"tenant_id": tenant_id, "event_id": idempotency_key, "ts": time.time(), "uuid": uuid.uuid4().hex}),
+        json.dumps(
+            {
+                "tenant_id": tenant_id,
+                "event_id": idempotency_key,
+                "ts": time.time(),
+                "uuid": uuid.uuid4().hex,
+            }
+        ),
         encoding="utf-8",
     )
     return {"duplicate": False, "entitlement": asdict(ent)}

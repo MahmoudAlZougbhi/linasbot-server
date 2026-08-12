@@ -1,91 +1,44 @@
 import { SYSTEM_ROLES, DEFAULT_PERMISSIONS, PATH_TO_PERMISSION } from '../constants/permissions';
 
-const CUSTOM_ROLES_KEY = 'custom_roles_db';
-
 /**
- * Get all roles (system + custom)
+ * System roles only. Custom roles must not come from localStorage (SEC-009).
  */
 export const getRoles = () => {
-  const customRoles = getCustomRoles();
-  return { ...SYSTEM_ROLES, ...customRoles };
+  return { ...SYSTEM_ROLES };
+};
+
+/** @deprecated Custom roles localStorage removed — always empty. */
+export const getCustomRoles = () => ({});
+
+/** @deprecated No-op: custom roles are not persisted client-side. */
+export const saveCustomRoles = () => {};
+
+/**
+ * Custom role mutation disabled — server is SoT for roles/permissions.
+ * @param {{ name: string; description?: string; permissions?: Record<string, boolean> }} _roleData
+ */
+export const createCustomRole = (_roleData) => {
+  throw new Error('Custom roles are disabled; use server-managed roles only');
 };
 
 /**
- * Get custom roles from localStorage
+ * @param {string} _roleId
+ * @param {Partial<RoleData>} _updates
  */
-export const getCustomRoles = () => {
-  try {
-    const stored = localStorage.getItem(CUSTOM_ROLES_KEY);
-    return stored ? JSON.parse(stored) : {};
-  } catch (error) {
-    console.error('Failed to get custom roles:', error);
-    return {};
-  }
+export const updateCustomRole = (_roleId, _updates) => {
+  throw new Error('Custom roles are disabled; use server-managed roles only');
 };
 
 /**
- * Save custom roles to localStorage
- * @param {Record<string, RoleData>} roles
+ * @param {string} _roleId
  */
-export const saveCustomRoles = (roles) => {
-  try {
-    localStorage.setItem(CUSTOM_ROLES_KEY, JSON.stringify(roles));
-  } catch (error) {
-    console.error('Failed to save custom roles:', error);
-  }
-};
-
-/**
- * Create a new custom role
- * @param {{ name: string; description?: string; permissions?: Record<string, boolean> }} roleData
- */
-export const createCustomRole = (roleData) => {
-  const customRoles = getCustomRoles();
-  const id = `custom_${Date.now()}`;
-  const newRole = {
-    id,
-    name: roleData.name,
-    description: roleData.description || '',
-    isSystem: false,
-    permissions: { ...DEFAULT_PERMISSIONS, ...roleData.permissions }
-  };
-  customRoles[id] = newRole;
-  saveCustomRoles(customRoles);
-  return newRole;
-};
-
-/**
- * Update a custom role
- * @param {string} roleId
- * @param {Partial<RoleData>} updates
- */
-export const updateCustomRole = (roleId, updates) => {
-  const customRoles = getCustomRoles();
-  if (customRoles[roleId]) {
-    customRoles[roleId] = { ...customRoles[roleId], ...updates };
-    saveCustomRoles(customRoles);
-    return customRoles[roleId];
-  }
-  return null;
-};
-
-/**
- * Delete a custom role
- * @param {string} roleId
- */
-export const deleteCustomRole = (roleId) => {
-  const customRoles = getCustomRoles();
-  if (customRoles[roleId] && !customRoles[roleId].isSystem) {
-    delete customRoles[roleId];
-    saveCustomRoles(customRoles);
-    return true;
-  }
-  return false;
+export const deleteCustomRole = (_roleId) => {
+  throw new Error('Custom roles are disabled; use server-managed roles only');
 };
 
 /**
  * Resolve user's effective permissions
- * If user has custom permissions, use those; otherwise use role defaults
+ * Prefer server resolvedPermissions; else role defaults; never invent admin.
  * @param {AuthUser | DashboardUser | null | undefined} user
  */
 export const resolveUserPermissions = (user) => {
@@ -93,20 +46,22 @@ export const resolveUserPermissions = (user) => {
     return { ...DEFAULT_PERMISSIONS };
   }
 
-  // If user has custom permissions override, use those
+  if (user.resolvedPermissions && typeof user.resolvedPermissions === 'object') {
+    return { ...DEFAULT_PERMISSIONS, ...user.resolvedPermissions };
+  }
+
+  // If user has custom permissions override from server payload, use those
   if (user.permissions) {
     return { ...DEFAULT_PERMISSIONS, ...user.permissions };
   }
 
-  // Otherwise, get permissions from role
-  const roles = getRoles();
+  const roles = /** @type {Record<string, { permissions: Record<string, boolean> }>} */ (getRoles());
   const role = user.role ? roles[user.role] : undefined;
 
   if (role) {
     return { ...role.permissions };
   }
 
-  // Fallback to default (all denied)
   return { ...DEFAULT_PERMISSIONS };
 };
 
@@ -116,7 +71,7 @@ export const resolveUserPermissions = (user) => {
  * @param {string} feature
  */
 export const hasPermission = (user, feature) => {
-  const permissions = resolveUserPermissions(user);
+  const permissions = /** @type {Record<string, boolean>} */ (resolveUserPermissions(user));
   return permissions[feature] === true;
 };
 
@@ -145,7 +100,8 @@ export const canAccessPath = (user, path) => {
  * @param {AuthUser | DashboardUser | null | undefined} user
  */
 export const getDefaultPath = (user) => {
-  const paths = ['/app', '/live-chat', '/content-managers', '/testing', '/smart-messaging', '/settings', '/activity-flow'];
+  // Landing-only SPA: operator paths redirect to get-app; prefer thin auth home.
+  const paths = ['/', '/login', '/app', '/live-chat', '/content-managers', '/settings', '/activity-flow'];
 
   for (const path of paths) {
     if (canAccessPath(user, path)) {
@@ -153,15 +109,16 @@ export const getDefaultPath = (user) => {
     }
   }
 
-  // If no path is accessible, return app home (this shouldn't happen for valid users)
-  return '/app';
+  return '/';
 };
 
 /**
- * Migrate existing users to new schema with permissions fields
+ * Legacy localStorage users_db migration — no longer invents role=admin.
+ * Clears stale custom_roles_db if present.
  */
 export const migrateUsers = () => {
   try {
+    localStorage.removeItem('custom_roles_db');
     const stored = localStorage.getItem('users_db');
     if (!stored) return;
 
@@ -169,16 +126,16 @@ export const migrateUsers = () => {
     let migrated = false;
 
     const updatedUsers = users.map((/** @type {Record<string, unknown>} */ user) => {
-      // Skip if already migrated
       if (user.status !== undefined) {
         return user;
       }
 
       migrated = true;
+      const role = typeof user.role === 'string' && user.role ? user.role : 'viewer';
       return {
         ...user,
-        role: user.role || 'admin', // Preserve existing access
-        permissions: null, // No custom overrides
+        role,
+        permissions: null,
         status: 'active',
         lastLogin: null,
         createdBy: null,
@@ -188,7 +145,6 @@ export const migrateUsers = () => {
 
     if (migrated) {
       localStorage.setItem('users_db', JSON.stringify(updatedUsers));
-      console.log('Users migrated to new permissions schema');
     }
 
     return updatedUsers;

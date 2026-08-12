@@ -2,6 +2,11 @@ name: OpenAI API Key Apply
 
 on:
   workflow_dispatch:
+    inputs:
+      CONFIRM:
+        description: "Type APPLY_OPENAI_API_KEY to apply"
+        required: true
+        type: string
 
 concurrency:
   group: openai-api-key-apply
@@ -15,6 +20,7 @@ jobs:
     name: Apply OPENAI_API_KEY on production
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    if: github.event.inputs.CONFIRM == 'APPLY_OPENAI_API_KEY'
     steps:
       - name: Apply OpenAI key via SSH
         uses: appleboy/ssh-action@v1.2.0

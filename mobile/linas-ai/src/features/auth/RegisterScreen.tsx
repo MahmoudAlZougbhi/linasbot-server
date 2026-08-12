@@ -31,9 +31,11 @@ type Step = 0 | 1 | 2 | 3;
 type Props = {
   onBack: () => void;
   onDone?: () => void;
+  /** Called when Sign in with Apple stores tokens (same as password login success). */
+  onLoggedIn?: () => void;
 };
 
-export function RegisterScreen({ onBack, onDone }: Props) {
+export function RegisterScreen({ onBack, onDone, onLoggedIn }: Props) {
   const insets = useSafeAreaInsets();
   const { tr, language } = useI18n();
   const [step, setStep] = useState<Step>(0);
@@ -67,17 +69,17 @@ export function RegisterScreen({ onBack, onDone }: Props) {
         setStep(3);
         setMessage(tr('registeredVerify'));
       } else {
-        setMessage(result.error ?? 'Registration failed');
+        setMessage(result.error ?? tr('registerFailed'));
       }
     } catch (err) {
-      setMessage(err instanceof ApiError ? 'Registration failed' : 'Network error');
+      setMessage(err instanceof ApiError ? tr('registerFailed') : tr('networkError'));
     } finally {
       setLoading(false);
     }
   }
 
   function nextFromCredentials() {
-    if (!email.trim() || password.length < 6) {
+    if (!email.trim() || password.length < 12) {
       setMessage(tr('registerNeedCredentials'));
       return;
     }
@@ -142,7 +144,10 @@ export function RegisterScreen({ onBack, onDone }: Props) {
               />
               {message ? <Text style={styles.msg}>{message}</Text> : null}
               <PrimaryButton label={tr('continue')} onPress={nextFromCredentials} />
-              <SocialAuthButtons />
+              <SocialAuthButtons
+                onAppleSuccess={() => (onLoggedIn ? onLoggedIn() : onDone ? onDone() : onBack())}
+                onAppleError={(msg) => setMessage(msg)}
+              />
             </>
           ) : null}
 

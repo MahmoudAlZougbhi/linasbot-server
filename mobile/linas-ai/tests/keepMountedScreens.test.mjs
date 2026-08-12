@@ -32,6 +32,7 @@ describe('keep-mounted module screens', () => {
       'cm',
       'faq',
       'smartFollowUp',
+      'requests',
     ]) {
       assert.ok(
         tree.includes('KeepMountedPane key={`' + name + '-${authEpoch}`}'),

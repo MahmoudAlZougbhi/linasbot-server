@@ -19,8 +19,16 @@ DISABLED_PRODUCT_MODULES: Final[tuple[str, ...]] = (
 )
 
 # API path prefixes that belong to disabled modules (all tenants, including linas).
+# NOTE: "/api/test" alone does NOT match hyphenated lab routes ("/api/test-message").
+# Those are listed explicitly and also matched via startswith("/api/test-") in is_disabled_api_path.
 DISABLED_API_PREFIXES: Final[tuple[str, ...]] = (
     "/api/test",
+    "/api/test-message",
+    "/api/test-image",
+    "/api/test-voice",
+    "/api/test-voice-text",
+    "/api/test-voice-upload",
+    "/api/test-image-upload",
     "/api/switch-provider",
     "/api/debug",
     "/api/smart-messaging",
@@ -57,13 +65,16 @@ def is_disabled_api_path(path: str) -> bool:
     p = _normalize_path(path)
     if p == "/api/stats":
         return True
+    # Hyphenated Testing Lab routes historically bypassed the "/api/test" prefix check.
+    if p.startswith("/api/test-"):
+        return True
     for prefix in DISABLED_API_PREFIXES:
         if p == prefix or p.startswith(f"{prefix}/"):
             return True
     return False
 
 
-# Disabled booking/CRM tool names — never offered to the model (all tenants / channels).
+# Disabled booking/CRM tool names — never offered to the model when BOC booking is OFF.
 LEGACY_BOOKING_TOOL_NAMES: frozenset[str] = frozenset(
     {
         "update_customer_profile",
@@ -92,10 +103,95 @@ LEGACY_BOOKING_TOOL_NAMES: frozenset[str] = frozenset(
         "get_services",
         "get_machines",
         "get_available_slots",
+        "get_body_parts",
+        "get_service_data",
+        "get_clinic_hours",
+        "get_paused_appointments_between_dates",
+        "get_pricing_details",
+        "pause_appointment",
+        "add_appointment_discount",
     }
 )
 
+# Single runtime gate for BOC / LinasLaser Agent booking. Default OFF — zero network when disabled.
+# See docs/requests/BOC_FUTURE_INTEGRATION.md. Do not enable in production without owner approval.
+BOC_BOOKING_ENABLED_ENV: Final[str] = "LINASLASER_BOC_BOOKING_ENABLED"
+BOC_BOOKING_DISABLED_CODE: Final[str] = "boc_booking_disabled"
+
+
+def _env_flag_true(name: str, *, default: str = "false") -> bool:
+    import os
+
+    return (os.getenv(name) or default).strip().lower() in ("1", "true", "yes", "on")
+
+
+def boc_booking_enabled() -> bool:
+    """True only when LINASLASER_BOC_BOOKING_ENABLED is explicitly on (default: off)."""
+    return _env_flag_true(BOC_BOOKING_ENABLED_ENV, default="false")
+
 
 def legacy_booking_tools_disabled() -> bool:
-    """Booking/CRM tools are disabled for the current SaaS product (all tenants)."""
-    return True
+    """Booking/CRM tools are withheld from the model unless BOC booking is explicitly enabled."""
+    return not boc_booking_enabled()
+
+
+def boc_appointment_jobs_allowed() -> bool:
+    """Appointment-scheduler / BOC populate jobs may start only when the gate is on."""
+    return boc_booking_enabled()
+
+
+def boc_disabled_response(*, operation: str = "request") -> dict:
+    """Honest refusal payload — no alternate provider and no network attempt."""
+    return {
+        "success": False,
+        "error": BOC_BOOKING_DISABLED_CODE,
+        "boc_booking_enabled": False,
+        "message": (
+            "BOC / LinasLaser Agent booking is disabled "
+            f"({BOC_BOOKING_ENABLED_ENV} is not true). "
+            f"No network call was made for {operation}."
+        ),
+    }
+
+
+def boc_job_skipped_response(*, operation: str) -> dict:
+    """Explicit skip for BOC appointment jobs when the gate is OFF (not a silent no-op)."""
+    out = boc_disabled_response(operation=operation)
+    out["skipped"] = True
+    out["job_started"] = False
+    out["total_appointments"] = 0
+    out["total_messages"] = 0
+    return out
+
+
+def boc_booking_readiness() -> dict:
+    """
+    Readiness fragment for GET /api/ready.
+
+    When OFF: healthy without token, base URL, or booking IDs.
+    When ON: requires configured base URL + token (values never returned).
+    """
+    import os
+
+    enabled = boc_booking_enabled()
+    if not enabled:
+        return {
+            "ok": True,
+            "enabled": False,
+            "token_required": False,
+            "booking_ids_required": False,
+            "jobs_allowed": False,
+        }
+
+    base = (os.getenv("EXTERNAL_API_BASE_URL") or "").strip() or (os.getenv("LINASLASER_API_BASE_URL") or "").strip()
+    token = (os.getenv("EXTERNAL_API_TOKEN") or "").strip() or (os.getenv("LINASLASER_API_TOKEN") or "").strip()
+    configured = bool(base) and bool(token)
+    return {
+        "ok": configured,
+        "enabled": True,
+        "token_required": True,
+        "booking_ids_required": True,
+        "jobs_allowed": True,
+        "base_url_configured": bool(base),
+        "token_configured": bool(token),
+    }

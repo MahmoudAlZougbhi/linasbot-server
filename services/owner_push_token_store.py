@@ -15,6 +15,13 @@ from typing import Any
 from storage.persistent_storage import _DATA_ROOT
 
 
+def _require_tenant_id(tenant_id: str | None) -> str:
+    tid = str(tenant_id or "").strip()
+    if not tid:
+        raise ValueError("tenant_id required")
+    return tid
+
+
 class OwnerPushTokenStore:
     def __init__(self, root: Path | None = None) -> None:
         self._lock = threading.RLock()
@@ -22,7 +29,7 @@ class OwnerPushTokenStore:
         self._root.mkdir(parents=True, exist_ok=True)
 
     def _path(self, tenant_id: str) -> Path:
-        safe = (tenant_id or "linas").strip() or "linas"
+        safe = _require_tenant_id(tenant_id)
         return self._root / f"{safe}.json"
 
     def _load(self, tenant_id: str) -> dict[str, Any]:
@@ -49,7 +56,7 @@ class OwnerPushTokenStore:
         platform: str | None = None,
         expo_project_id: str | None = None,
     ) -> dict[str, Any]:
-        tid = (tenant_id or "linas").strip() or "linas"
+        tid = _require_tenant_id(tenant_id)
         uid = (user_id or "").strip()
         tok = (token or "").strip()
         if not uid or not tok:

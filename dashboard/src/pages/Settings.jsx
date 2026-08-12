@@ -19,7 +19,7 @@ import { errorMessage } from '../utils/apiValidate';
 
 const Settings = () => {
   const { user, changePassword } = /** @type {AuthContextValue} */ (useAuth());
-  const isLinasTenant = (user?.tenantId || 'linas') === 'linas';
+  const isLinasTenant = user?.tenantId === 'linas';
   const [activeTab, setActiveTab] = useState(isLinasTenant ? 'general' : 'security');
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
@@ -80,8 +80,10 @@ const Settings = () => {
     }
   }, [isLinasTenant]);
 
-  // Check if user can manage users
-  const canManageUsers = user?.role === 'admin' || user?.resolvedPermissions?.userManagement === true;
+  // Permission or explicit platform_owner — never role===admin alone.
+  const canManageUsers =
+    user?.resolvedPermissions?.userManagement === true ||
+    user?.role === 'platform_owner';
 
   const tabs = [
     ...(isLinasTenant ? [{ id: 'general', name: 'General', icon: Cog6ToothIcon, color: 'from-blue-500 to-cyan-500' }] : []),

@@ -23,13 +23,17 @@ class MobileRefreshRequest(BaseModel):
     refresh_token: str = Field(min_length=16)
 
 
-def _issue_mobile_tokens(user: dict[str, Any]) -> dict[str, Any]:
+def issue_mobile_tokens(user: dict[str, Any]) -> dict[str, Any]:
+    """Issue mobile access + refresh tokens for an authenticated user."""
+    tenant_id = str(user.get("tenantId") or "").strip()
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant required")
     session = session_service.create_session(
         user_id=str(user["id"]),
         email=str(user.get("email") or ""),
         role=str(user.get("role") or "viewer"),
         permissions=user.get("permissions") if isinstance(user.get("permissions"), dict) else None,
-        tenant_id=str(user.get("tenantId") or "linas"),
+        tenant_id=tenant_id,
         password_epoch=int(user.get("passwordEpoch") or user.get("password_epoch") or 0),
     )
     access_token = session_service.cookie_value_for(session)
@@ -47,6 +51,10 @@ def _issue_mobile_tokens(user: dict[str, Any]) -> dict[str, Any]:
         "expires_in": DEFAULT_SESSION_TTL_SECONDS,
         "token_type": "Bearer",
     }
+
+
+# Backward-compatible alias for in-module callers.
+_issue_mobile_tokens = issue_mobile_tokens
 
 
 @app.post("/api/auth/mobile/login")

@@ -349,7 +349,7 @@ if __name__ == "__main__":
         if result:
             print(f"Question: {q}")
             print(f"Match Score: {result['match_score']:.2%}")
-            print(f"Answer: {result['qa_pair']['ar']['answer']}\n")
+            print(f"Answer_len={len(str(result['qa_pair']['ar']['answer'] or ''))}")
         else:
             print(f"Question: {q} - No match found\n")
 

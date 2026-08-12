@@ -111,7 +111,7 @@ class OwnerAlertService:
             user_id=user_id,
             within_seconds=dedupe_seconds,
         ):
-            print(f"[owner_alert] dedupe skip type={atype} conv={conversation_id} user={user_id}")
+            print(f"[owner_alert] dedupe skip type={atype} conv={conversation_id} user=...{str(user_id)[-4:]}")
             return None
 
         channel_key = _channel_key(channel, user_id)

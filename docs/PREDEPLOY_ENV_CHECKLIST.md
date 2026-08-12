@@ -42,6 +42,8 @@ No known/default passwords. Existing dashboard users keep hashes; `passwordEpoch
 After deploy: `GET /api/ready` must return `ok: true` with boolean checks only (no secret values).  
 `GET /api/health` is liveness only.
 
+BOC / LinasLaser Agent booking (`LINASLASER_BOC_BOOKING_ENABLED`) defaults **off**. When off, readiness must not require BOC token or booking IDs (`checks.boc_booking`). See `docs/requests/BOC_FUTURE_INTEGRATION.md`. Do not enable BOC in production without owner approval.
+
 ## Explicit non-goals
 
 - Do not rotate production secrets in this closure work without a separate owner-approved rotation plan.

@@ -44,10 +44,10 @@ class UserPersistenceService:
                 firestore_gender = user_state["gender"]
                 self._gender_cache[user_id] = firestore_gender
                 config.user_gender[user_id] = firestore_gender
-                print(f"✅ Gender fetched from Firestore for {user_id}: {firestore_gender}")
+                print(f"✅ Gender fetched from Firestore for ...{str(user_id)[-4:]}: {firestore_gender}")
                 return cast(str, firestore_gender)
         except Exception as e:
-            print(f"⚠️ Error fetching gender from Firestore for {user_id}: {e}")
+            print(f"⚠️ Error fetching gender from Firestore for ...{str(user_id)[-4:]}: {e}")
 
         # Fallback: Fetch from external API
         try:
@@ -62,10 +62,10 @@ class UserPersistenceService:
                     # Update cache and memory
                     self._gender_cache[user_id] = api_gender
                     config.user_gender[user_id] = api_gender
-                    print(f"✅ Gender fetched from API for {user_id}: {api_gender}")
+                    print(f"✅ Gender fetched from API for ...{str(user_id)[-4:]}: {api_gender}")
                     return cast(str, api_gender)
         except Exception as e:
-            print(f"⚠️ Error fetching gender from API for {user_id}: {e}")
+            print(f"⚠️ Error fetching gender from API for ...{str(user_id)[-4:]}: {e}")
 
         return "unknown"
 
@@ -128,9 +128,9 @@ class UserPersistenceService:
                     )
 
                 firestore_saved = True
-                print(f"✅ Gender saved to Firestore for {user_id}: {gender}")
+                print(f"✅ Gender saved to Firestore for ...{str(user_id)[-4:]}: {gender}")
         except Exception as e:
-            print(f"⚠️ Error saving gender to Firestore for {user_id}: {e}")
+            print(f"⚠️ Error saving gender to Firestore for ...{str(user_id)[-4:]}: {e}")
             import traceback
 
             traceback.print_exc()
@@ -165,10 +165,10 @@ class UserPersistenceService:
                     await asyncio.to_thread(
                         conv_ref.update, {"customer_info": customer_info, "last_updated": datetime.datetime.now()}
                     )
-                    print(f"✅ Gender updated in conversation {conv.id} customer_info for {user_id}")
+                    print(f"✅ Gender updated in conversation {conv.id} customer_info for ...{str(user_id)[-4:]}")
                     break
         except Exception as e:
-            print(f"⚠️ Error updating conversation customer_info with gender for {user_id}: {e}")
+            print(f"⚠️ Error updating conversation customer_info with gender for ...{str(user_id)[-4:]}: {e}")
             import traceback
 
             traceback.print_exc()
@@ -316,7 +316,7 @@ class UserPersistenceService:
                 lambda: list(conv_col.order_by("last_updated", direction=firestore.Query.DESCENDING).limit(5).get())
             )
         except Exception as e:
-            print(f"⚠️ language lookup order_by failed for {user_id}: {e}")
+            print(f"⚠️ language lookup order_by failed for ...{str(user_id)[-4:]}: {e}")
             docs = await asyncio.to_thread(lambda: list(conv_col.limit(40).stream()))
 
         for doc in docs:
@@ -391,9 +391,9 @@ class UserPersistenceService:
         config.user_data_whatsapp[user_id]["user_preferred_lang"] = language
 
         if previous_lang and previous_lang != language:
-            print(f"🌐 Language updated for {user_id}: {previous_lang} → {language}")
+            print(f"🌐 Language updated for ...{str(user_id)[-4:]}: {previous_lang} → {language}")
         else:
-            print(f"🌐 Language set for {user_id}: {language}")
+            print(f"🌐 Language set for ...{str(user_id)[-4:]}: {language}")
 
     def clear_cache(self, user_id: str | None = None) -> None:
         """Clear cache for a specific user or all users"""

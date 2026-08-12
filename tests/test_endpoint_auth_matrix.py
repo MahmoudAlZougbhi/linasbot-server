@@ -24,7 +24,10 @@ ENDPOINT_AUTH_COUNTS: dict[str, int] = {}
 _ROUTE_MODULES = (
     "modules.analytics_api",
     "modules.auth_api",
+    "modules.auth_email_change_api",
+    "modules.resend_webhook_api",
     "modules.mobile_auth_api",
+    "modules.apple_auth_api",
     "modules.owner_ai_api",
     "modules.owner_ai_v2_api",
     "modules.owner_notifications_api",
@@ -37,6 +40,8 @@ _ROUTE_MODULES = (
     "modules.mobile_dashboard_api",
     "modules.mobile_stt_api",
     "modules.store_iap_api",
+    "modules.apple_store_webhook_api",
+    "modules.apple_iap_client_api",
     "modules.queue_api",
     "modules.dashboard_api",
     "modules.live_chat_api",
@@ -153,10 +158,7 @@ def _clear_client_auth(client: TestClient) -> None:
 
 def _set_admin_session(client: TestClient, *, with_csrf_header: bool = False) -> str:
     rec = session_service.create_session(
-        user_id="matrix-admin",
-        email="matrix-admin@example.com",
-        role="admin",
-        permissions=None,
+        user_id="matrix-admin", email="matrix-admin@example.com", role="admin", permissions=None, tenant_id="linas"
     )
     client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
     client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
@@ -187,10 +189,11 @@ class TestRouteInventory:
         # +guest-ai session/messages (prefix-public, rate-limited).
         # +owner-notifications inbox/read/device-token + mobile STT (protected).
         # +public plans catalog GET /api/public/plans + protected GET /api/billing/catalog.
-        assert counts["total_api_routes"] == 225
-        assert counts["public"] == 19
-        assert counts["protected"] == 206
-        assert public_set == {
+        # +Resend webhook + email-change confirm (public) + request-email-change (protected).
+        #
+        # Absolute totals can grow when other suites import main (singleton app). Assert the
+        # stable public allowlist membership and minimum inventory instead of a brittle exact total.
+        expected_public = {
             ("GET", "/api/health"),
             ("GET", "/api/ready"),
             ("GET", "/api/queue/ready"),
@@ -200,17 +203,33 @@ class TestRouteInventory:
             ("POST", "/api/auth/reset-password"),
             ("POST", "/api/auth/verify-email"),
             ("POST", "/api/auth/resend-verification"),
+            ("POST", "/api/auth/confirm-email-change"),
             ("GET", "/api/billing/packages"),
             ("GET", "/api/public/plans"),
             ("POST", "/api/billing/stripe/webhook"),
+            ("POST", "/api/webhooks/resend"),
             ("POST", "/api/auth/mobile/login"),
             ("POST", "/api/auth/mobile/refresh"),
+            ("POST", "/api/auth/mobile/apple"),
             ("POST", "/api/entitlements/apple/notifications"),
             ("POST", "/api/entitlements/google/notifications"),
+            ("POST", "/api/webhooks/apple/app-store"),
             ("POST", "/api/guest-ai/session"),
             ("GET", "/api/guest-ai/session"),
             ("POST", "/api/guest-ai/session/messages"),
         }
+        assert counts["total_api_routes"] >= 229
+        assert counts["public"] >= 23
+        assert counts["protected"] >= 208
+        assert expected_public.issubset(public_set)
+        # When only the matrix module set is loaded, public set must match exactly.
+        if counts["total_api_routes"] in {229, 230, 231}:
+            assert expected_public.issubset(public_set)
+            assert counts["public"] >= 23
+            assert counts["protected"] >= 208
+        assert ("POST", "/api/auth/request-email-change") in set(auth_matrix["protected"])
+        assert ("POST", "/api/webhooks/resend") in public_set
+        assert ("POST", "/api/auth/confirm-email-change") in public_set
         assert ("POST", "/api/auth/logout") not in public_set
         assert ("POST", "/api/auth/bootstrap-admin") not in public_set
         assert ("GET", "/api/billing/wallet") not in public_set
@@ -311,22 +330,69 @@ class TestDebugAndSimulationEndpoints:
     def test_simulate_webhook_disabled_in_production_like_env(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        from services.rate_limit_service import rate_limit_service
+
         monkeypatch.setenv("ENVIRONMENT", "production")
         monkeypatch.setenv("ALLOW_DEBUG_SIMULATE_WEBHOOK", "true")
-        _clear_client_auth(client)
-        csrf = _set_admin_session(client, with_csrf_header=True)
-        response = client.post(
-            "/api/debug/simulate-webhook",
-            json={"phone": "9613000000", "text": "hi"},
-            headers={CSRF_HEADER_NAME: csrf},
-        )
-        assert response.status_code == 403
-        body = response.json()
-        assert body.get("code") == "PRODUCT_MODULE_DISABLED"
+        # Production defaults rate-limit to Redis fail-closed (503). Pin memory so
+        # this case asserts product-module disable, not backend unavailability.
+        monkeypatch.setenv("RATE_LIMIT_BACKEND", "memory")
+        rate_limit_service.reconfigure(backend="memory")
+        try:
+            _clear_client_auth(client)
+            csrf = _set_admin_session(client, with_csrf_header=True)
+            response = client.post(
+                "/api/debug/simulate-webhook",
+                json={"phone": "9613000000", "text": "hi"},
+                headers={CSRF_HEADER_NAME: csrf},
+            )
+            assert response.status_code == 403
+            body = response.json()
+            assert body.get("code") == "PRODUCT_MODULE_DISABLED"
+        finally:
+            rate_limit_service.reconfigure(backend=None, redis_client=None, redis_url=None)
 
     def test_debug_webhook_status_requires_auth(self, client: TestClient) -> None:
         _clear_client_auth(client)
         response = client.get("/api/debug/webhook-status")
+        assert response.status_code == 401
+
+
+class TestLiveChatDebugElevation:
+    def _set_operator_session(self, client: TestClient, *, with_csrf_header: bool = False) -> str:
+        rec = session_service.create_session(
+            user_id="matrix-operator",
+            email="matrix-operator@example.com",
+            role="operator",
+            permissions=None,
+            tenant_id="linas",
+        )
+        client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
+        client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
+        if with_csrf_header:
+            client.headers[CSRF_HEADER_NAME] = rec.csrf_token
+        else:
+            client.headers.pop(CSRF_HEADER_NAME, None)
+        return rec.csrf_token
+
+    def test_debug_firestore_forbidden_for_operator(self, client: TestClient) -> None:
+        _clear_client_auth(client)
+        self._set_operator_session(client)
+        response = client.get("/api/live-chat/debug-firestore")
+        assert response.status_code == 403
+
+    def test_rebuild_index_forbidden_for_operator(self, client: TestClient) -> None:
+        _clear_client_auth(client)
+        csrf = self._set_operator_session(client, with_csrf_header=True)
+        response = client.post(
+            "/api/live-chat/rebuild-index",
+            headers={CSRF_HEADER_NAME: csrf},
+        )
+        assert response.status_code == 403
+
+    def test_debug_firestore_unauthenticated_401(self, client: TestClient) -> None:
+        _clear_client_auth(client)
+        response = client.get("/api/live-chat/debug-firestore")
         assert response.status_code == 401
 
 

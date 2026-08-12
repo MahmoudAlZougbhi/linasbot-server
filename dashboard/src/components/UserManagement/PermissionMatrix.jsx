@@ -145,27 +145,20 @@ const PermissionMatrix = ({ permissions, onChange, disabled = false }) => {
               </div>
             </div>
 
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isEnabled}
-                onChange={() => handleToggle(perm.key)}
-                disabled={disabled}
-                className="sr-only peer"
-              />
-              <div className={`w-10 h-5 rounded-full peer transition-colors ${
+            <div
+              className={`relative inline-flex items-center w-10 h-5 rounded-full transition-colors ${
                 disabled
                   ? 'bg-slate-200'
                   : isEnabled
                     ? 'bg-primary-600'
                     : 'bg-slate-200'
-              } peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300
-                after:content-[''] after:absolute after:top-[2px] after:left-[2px]
+              } after:content-[''] after:absolute after:top-[2px] after:left-[2px]
                 after:bg-white after:border-slate-300 after:border after:rounded-full
                 after:h-4 after:w-4 after:transition-all ${
                 isEnabled ? 'after:translate-x-5 after:border-white' : ''
-              }`}></div>
-            </label>
+              }`}
+              aria-hidden="true"
+            />
           </motion.div>
         );
       })}

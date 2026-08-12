@@ -21,13 +21,14 @@ RECHARGE_REQUIRED_MESSAGE = (
 
 
 def resolve_tenant_id(user_data: dict[str, Any] | None = None, explicit: str | None = None) -> str:
+    """Resolve tenant for metering. Missing/blank tenant fails closed (no silent linas)."""
     if explicit and str(explicit).strip():
         return str(explicit).strip().lower()
     if user_data:
         tid = user_data.get("tenant_id") or user_data.get("tenantId")
-        if tid:
+        if tid and str(tid).strip():
             return str(tid).strip().lower()
-    return "linas"
+    raise ValueError("tenant_id required")
 
 
 def assert_tenant_can_use_ai(tenant_id: str | None) -> None:

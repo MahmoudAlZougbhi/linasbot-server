@@ -28,6 +28,7 @@ describe('nav drawer Smart Follow-Up + AI Setup featured tile', () => {
       'smartFollowUp',
       'faq',
       'livechat',
+      'requests',
       'integrations',
       'users',
       'subscription',

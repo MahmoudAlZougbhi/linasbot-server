@@ -8,8 +8,18 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+# SEC-046: Prefer a dedicated non-root account once the host is provisioned:
+#   sudo useradd --system --home __APP_DIR__ --shell /usr/sbin/nologin linasbot
+#   sudo chown -R linasbot:linasbot __APP_DIR__ /var/log/linasbot-worker-*.log
+# Then set User=/Group= below to linasbot (do not leave root on new installs).
+# Kept as root only for legacy hosts that already run the API as root and share
+# the same EnvironmentFile; changing User without matching file ownership breaks
+# workers. Repo-only guidance — does not change live units until owner deploys.
 User=root
 WorkingDirectory=__APP_DIR__
+# EnvironmentFile must be mode 0600 and owned by the service user (never
+# world-/group-readable). The leading '-' means "missing file is OK" for local
+# dry boots; production MUST provide __APP_DIR__/.env with secrets.
 EnvironmentFile=-__APP_DIR__/.env
 Environment=PYTHONUNBUFFERED=1
 Environment=LINAS_WORKER_QUEUE=%i
@@ -23,6 +33,9 @@ StandardOutput=append:/var/log/linasbot-worker-%i.log
 StandardError=append:/var/log/linasbot-worker-%i.error.log
 # Never dump EnvironmentFile into logs.
 SyslogIdentifier=linasbot-worker-%i
+# Harden process surface when capabilities allow (no-op on older systemd).
+NoNewPrivileges=true
+PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target

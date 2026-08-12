@@ -34,10 +34,17 @@ describe("permissions utils", () => {
     const viewer = testUser({ role: "viewer" });
     expect(hasPermission(viewer, "liveChat")).toBe(false);
     expect(canAccessPath(viewer, "/live-chat")).toBe(false);
-    expect(getDefaultPath(viewer)).toBe("/app");
+    // Landing-only SPA: prefer thin public home over /app operator shell
+    expect(getDefaultPath(viewer)).toBe("/");
   });
 
-  it("allows admin to access content managers and activity flow", () => {
+  it("prefers / as default path for authenticated roles (landing-only)", () => {
+    expect(getDefaultPath(testUser({ role: "admin" }))).toBe("/");
+    expect(getDefaultPath(testUser({ role: "operator" }))).toBe("/");
+    expect(getDefaultPath(null)).toBe("/");
+  });
+
+  it("allows admin to access content managers and activity flow path map", () => {
     const admin = testUser({ role: "admin" });
     expect(canAccessPath(admin, "/content-managers")).toBe(true);
     expect(canAccessPath(admin, "/activity-flow")).toBe(true);

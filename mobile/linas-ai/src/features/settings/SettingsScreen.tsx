@@ -1,10 +1,12 @@
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { APP_BUILD_LABEL, APP_VERSION, LEGAL_URLS } from '../../config';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { AppLanguage } from '../../i18n';
 import { fonts, radii, spacing, useTheme } from '../../theme';
+import { deleteAccount, linkApple, unlinkApple } from '../auth/appleAccount';
 import { useModuleNav } from '../nav/ModuleNavContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
 
@@ -29,6 +31,65 @@ export function SettingsScreen({
   const { tr, language, setLanguage } = useI18n();
   const { colors, mode, setMode } = useTheme();
   const nav = useModuleNav();
+  const [appleBusy, setAppleBusy] = useState(false);
+  const showAppleAccount = Platform.OS === 'ios';
+
+  async function runLinkApple() {
+    if (appleBusy) return;
+    setAppleBusy(true);
+    try {
+      const result = await linkApple();
+      if (result.ok) {
+        Alert.alert(tr('settingsLinkApple'), tr('settingsAppleLinkOk'));
+      } else if (result.code !== 'cancel') {
+        Alert.alert(tr('settingsLinkApple'), tr('settingsAppleLinkError'));
+      }
+    } finally {
+      setAppleBusy(false);
+    }
+  }
+
+  async function runUnlinkApple() {
+    if (appleBusy) return;
+    setAppleBusy(true);
+    try {
+      const result = await unlinkApple();
+      if (result.ok) {
+        Alert.alert(tr('settingsUnlinkApple'), tr('settingsAppleUnlinkOk'));
+      } else {
+        Alert.alert(tr('settingsUnlinkApple'), tr('settingsAppleUnlinkError'));
+      }
+    } finally {
+      setAppleBusy(false);
+    }
+  }
+
+  function confirmDeleteAccount() {
+    if (appleBusy) return;
+    Alert.alert(tr('settingsDeleteAccountTitle'), tr('settingsDeleteAccountConfirm'), [
+      { text: tr('settingsAppleCancel'), style: 'cancel' },
+      {
+        text: tr('settingsDeleteAccountAction'),
+        style: 'destructive',
+        onPress: () => void runDeleteAccount(),
+      },
+    ]);
+  }
+
+  async function runDeleteAccount() {
+    if (appleBusy) return;
+    setAppleBusy(true);
+    try {
+      const result = await deleteAccount();
+      if (result.ok) {
+        onLogout();
+        return;
+      }
+      Alert.alert(tr('settingsDeleteAccount'), tr('settingsAppleDeleteError'));
+    } finally {
+      setAppleBusy(false);
+    }
+  }
 
   return (
     <ScreenChrome title={tr('settings')} subtitle={tr('settingsSub')}>
@@ -53,6 +114,28 @@ export function SettingsScreen({
           subtitle={tr('settingsBusinessProfileSub')}
           onPress={nav.goChat}
           note={tr('settingsBusinessProfileNote')}
+        />
+        {showAppleAccount ? (
+          <>
+            <Row
+              title={tr('settingsLinkApple')}
+              subtitle={tr('settingsLinkAppleSub')}
+              onPress={() => void runLinkApple()}
+              disabled={appleBusy}
+            />
+            <Row
+              title={tr('settingsUnlinkApple')}
+              subtitle={tr('settingsUnlinkAppleSub')}
+              onPress={() => void runUnlinkApple()}
+              disabled={appleBusy}
+            />
+          </>
+        ) : null}
+        <Row
+          title={tr('settingsDeleteAccount')}
+          subtitle={tr('settingsDeleteAccountSub')}
+          onPress={confirmDeleteAccount}
+          disabled={appleBusy}
         />
         {onOpenNotifications ? (
           <Row

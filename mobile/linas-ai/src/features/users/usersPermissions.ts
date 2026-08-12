@@ -13,6 +13,11 @@ export const PERMISSION_KEYS = [
   'contentManagers',
   'contentPublish',
   'activityFlow',
+  'requests',
+  'requestsManage',
+  'requestsNotify',
+  'requestsManualChat',
+  'requestsSensitive',
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -38,6 +43,11 @@ export const DEFAULT_PERMISSIONS: PermissionMap = {
   contentManagers: false,
   contentPublish: false,
   activityFlow: false,
+  requests: false,
+  requestsManage: false,
+  requestsNotify: false,
+  requestsManualChat: false,
+  requestsSensitive: false,
 };
 
 export const ROLE_PERMISSIONS: Record<AssignableRole, PermissionMap> = {
@@ -53,6 +63,11 @@ export const ROLE_PERMISSIONS: Record<AssignableRole, PermissionMap> = {
     contentManagers: true,
     contentPublish: true,
     activityFlow: true,
+    requests: true,
+    requestsManage: true,
+    requestsNotify: true,
+    requestsManualChat: true,
+    requestsSensitive: true,
   },
   operator: {
     dashboard: true,
@@ -66,6 +81,11 @@ export const ROLE_PERMISSIONS: Record<AssignableRole, PermissionMap> = {
     contentManagers: false,
     contentPublish: false,
     activityFlow: true,
+    requests: true,
+    requestsManage: true,
+    requestsNotify: true,
+    requestsManualChat: true,
+    requestsSensitive: false,
   },
   viewer: {
     dashboard: true,
@@ -79,6 +99,11 @@ export const ROLE_PERMISSIONS: Record<AssignableRole, PermissionMap> = {
     contentManagers: false,
     contentPublish: false,
     activityFlow: true,
+    requests: false,
+    requestsManage: false,
+    requestsNotify: false,
+    requestsManualChat: false,
+    requestsSensitive: false,
   },
 };
 

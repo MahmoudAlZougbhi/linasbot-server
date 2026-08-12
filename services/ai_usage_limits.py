@@ -175,13 +175,15 @@ class AiUsageLimitsService:
         self._counters_dir.mkdir(parents=True, exist_ok=True)
 
     def _safe_tenant(self, tenant_id: str | None) -> str:
-        tid = (tenant_id or "linas").strip().lower() or "linas"
+        tid = (tenant_id or "").strip().lower()
+        if not tid:
+            raise ValueError("tenant_id required")
         return tid.replace("/", "_").replace("..", "_")
 
-    def _settings_path(self, tenant_id: str) -> Path:
+    def _settings_path(self, tenant_id: str | None) -> Path:
         return self._root / f"{self._safe_tenant(tenant_id)}.json"
 
-    def _counter_path(self, tenant_id: str, end_user_id: str, period_key: str) -> Path:
+    def _counter_path(self, tenant_id: str | None, end_user_id: str, period_key: str) -> Path:
         safe_user = (end_user_id or "unknown").strip().replace("/", "_")[:180] or "unknown"
         safe_period = period_key.replace("/", "_")
         tenant_dir = self._counters_dir / self._safe_tenant(tenant_id)
@@ -189,7 +191,7 @@ class AiUsageLimitsService:
         return tenant_dir / f"{safe_user}__{safe_period}.json"
 
     def get_settings(self, tenant_id: str | None) -> AiLimitSettings:
-        path = self._settings_path(tenant_id or "linas")
+        path = self._settings_path(tenant_id)
         with self._lock:
             if not path.exists():
                 # New SaaS tenants (and linas until configured) get recommended finite defaults.
@@ -204,7 +206,7 @@ class AiUsageLimitsService:
         current = self.get_settings(tenant_id)
         merged = {**asdict(current), **(updates or {})}
         normalized = normalize_ai_limit_settings(merged)
-        path = self._settings_path(tenant_id or "linas")
+        path = self._settings_path(tenant_id)
         with self._lock:
             path.write_text(json.dumps(asdict(normalized), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         return normalized
@@ -241,8 +243,8 @@ class AiUsageLimitsService:
         day_key = day_period_key(now)
         week_key = week_period_key(now)
         with self._lock:
-            day = self._read_counter(self._counter_path(tenant_id or "linas", end_user_id, day_key))
-            week = self._read_counter(self._counter_path(tenant_id or "linas", end_user_id, week_key))
+            day = self._read_counter(self._counter_path(tenant_id, end_user_id, day_key))
+            week = self._read_counter(self._counter_path(tenant_id, end_user_id, week_key))
         return {"day": {"period": day_key, **day}, "week": {"period": week_key, **week}}
 
     def _check_metric(
@@ -350,7 +352,7 @@ class AiUsageLimitsService:
         week_key = week_period_key(now)
         with self._lock:
             for period in (day_key, week_key):
-                path = self._counter_path(tenant_id or "linas", end_user_id, period)
+                path = self._counter_path(tenant_id, end_user_id, period)
                 data = self._read_counter(path)
                 data["images"] = int(data["images"]) + int(decision.allowed_amount)
                 self._write_counter(path, data)
@@ -395,7 +397,7 @@ class AiUsageLimitsService:
         week_key = week_period_key(now)
         with self._lock:
             for period in (day_key, week_key):
-                path = self._counter_path(tenant_id or "linas", end_user_id, period)
+                path = self._counter_path(tenant_id, end_user_id, period)
                 data = self._read_counter(path)
                 data["context_lines"] = int(data["context_lines"]) + consume
                 self._write_counter(path, data)

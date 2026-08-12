@@ -34,15 +34,8 @@ v2.0.0 - 2025-01-24
 
 
 def print_version_info() -> None:
-    """Print version information to console"""
-    print("=" * 80)
-    print("🚀 TEXT HANDLERS MODULE LOADED")
-    print(f"   Version: {VERSION}")
-    print(f"   Build ID: {BUILD_ID}")
-    print(f"   Last Modified: {LAST_MODIFIED}")
-    print(f"   Loaded At: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("   Architecture: Modular (5 split files)")
-    print("=" * 80)
+    """No-op kept for backward compatibility with text_handlers import."""
+    return
 
 
 def get_version() -> Any:

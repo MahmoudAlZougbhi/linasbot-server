@@ -61,9 +61,12 @@ services:
       context: ./dashboard
       dockerfile: Dockerfile
     container_name: linas_dashboard
+    # Local compose: same-origin relative /api via browser when empty, or override.
+    # Never bake the retired tradershubs hostname (stale). Prefer linasaibot.com
+    # only when explicitly targeting that host from a remote browser.
     environment:
-      - REACT_APP_API_URL=https://bot.tradershubs.site/api
-      - REACT_APP_WS_URL=wss://bot.tradershubs.site/ws
+      - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:8003/api}
+      - REACT_APP_WS_URL=${REACT_APP_WS_URL:-ws://localhost:8003/ws}
     ports:
       - "3000:3000"
     depends_on:

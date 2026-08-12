@@ -1,0 +1,125 @@
+{
+  "templates": {
+    "reminder_24h": {
+      "name": "reminder_24h",
+      "category": "UTILITY",
+      "status": "APPROVED",
+      "languages": {
+        "ar": {
+          "language_code": "ar",
+          "parameters_count": 5,
+          "parameters": [
+            "customer_name",
+            "appointment_date",
+            "appointment_time",
+            "branch_name",
+            "service_name"
+          ]
+        }
+      }
+    },
+    "thank_you_message_sent_after_session": {
+      "name": "thank_you_message_sent_after_session",
+      "omit_empty_header_component": true,
+      "category": "UTILITY",
+      "status": "APPROVED",
+      "languages": {
+        "ar": {
+          "language_code": "ar",
+          "parameters_count": 1,
+          "parameters": [
+            "customer_name"
+          ]
+        }
+      }
+    },
+    "sent_17_days_after_last_session_new": {
+      "name": "sent_17_days_after_last_session_new",
+      "omit_empty_header_component": true,
+      "category": "UTILITY",
+      "status": "APPROVED",
+      "languages": {
+        "ar": {
+          "language_code": "ar",
+          "parameters_count": 3,
+          "parameters": [
+            "customer_name",
+            "branch_name",
+            "service_name"
+          ]
+        }
+      }
+    },
+    "missed_yesterday": {
+      "name": "missed_yesterday",
+      "omit_empty_header_component": true,
+      "meta_template_name": "sent_day_after_missed_appointment",
+      "category": "MARKETING",
+      "status": "APPROVED",
+      "languages": {
+        "ar": {
+          "language_code": "ar",
+          "parameters_count": 1,
+          "parameters": [
+            "customer_name"
+          ]
+        }
+      }
+    },
+    "sent_for_pause": {
+      "name": "sent_for_pause",
+      "meta_template_name": "sent_for_pause_",
+      "omit_empty_header_component": true,
+      "category": "MARKETING",
+      "status": "APPROVED",
+      "languages": {
+        "ar": {
+          "language_code": "ar",
+          "parameters_count": 1,
+          "parameters": [
+            "customer_name"
+          ]
+        }
+      }
+    },
+    "whatsapp_lead_no_booking": {
+      "name": "whatsapp_lead_no_booking",
+      "omit_empty_header_component": false,
+      "category": "MARKETING",
+      "status": "APPROVED",
+      "languages": {
+        "ar": {
+          "language_code": "ar",
+          "parameters_count": 0,
+          "parameters": []
+        }
+      }
+    },
+    "session_feedback": {
+      "name": "session_feedback",
+      "omit_empty_header_component": true,
+      "force_whatsapp_language": "en",
+      "category": "MARKETING",
+      "status": "APPROVED",
+      "languages": {
+        "en": {
+          "language_code": "en",
+          "parameters_count": 1,
+          "parameters": [
+            "customer_name"
+          ]
+        }
+      }
+    }
+  },
+  "api_config": {
+    "templates_are_text_only": true,
+    "send_empty_header_component": true,
+    "assume_whatsapp_image_header": false,
+    "allow_global_template_header_image_url": false
+  },
+  "notes": {
+    "transport": "Meta Cloud API (WHATSAPP_API_TOKEN + WHATSAPP_PHONE_NUMBER_ID)",
+    "migrated_from": "montymobile_templates.json — Monty HTTP credentials removed"
+  }
+}

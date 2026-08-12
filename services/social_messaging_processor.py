@@ -106,7 +106,9 @@ async def process_meta_social_event(
     """
     channel = str(event["channel"])
     sender_id = str(event["sender_id"])
-    tenant_id = str(event.get("tenant_id") or settings.tenant_id or "linas").strip()
+    tenant_id = str(event.get("tenant_id") or settings.tenant_id or "").strip()
+    if not tenant_id:
+        raise ValueError("tenant_id required for social messaging")
     account_id = resolve_meta_send_account_id(channel, event, settings)
     asset_id = settings.instagram_account_id if channel == "instagram" else settings.page_id
     from services.social_user_id import compose_social_user_id

@@ -11,100 +11,23 @@ from typing import Any
 import config
 from handlers.text_handlers_delayed import _delayed_process_messages
 from handlers.text_handlers_firestore import _delayed_processing_tasks
+from handlers.text_handlers_message_greeting import (
+    GREETING_INACTIVITY_SECONDS,
+    _combine_schedule_lock,
+    _get_session_greeting_message,
+)
+from handlers.text_handlers_message_takeover import (
+    maybe_send_takeover_autoreply,
+    resolve_conversation_doc_ref,
+)
 from handlers.training_handlers import handle_training_input
-from services.dynamic_messages_service import get_dynamic_message
 from services.outbound_turn_idempotency import record_inbound_mid_for_ai_turn
 from services.sentiment_escalation_service import sentiment_service
 from utils.utils import (
     get_canonical_user_id_and_phone,
     get_firestore_db,
-    notify_human_on_whatsapp,
     save_conversation_message_to_firestore,
 )
-
-GREETING_INACTIVITY_SECONDS = 43200  # 12 hours
-
-# Serialize append + epoch bump + create_task per user so two concurrent handle_message calls
-# cannot both read the same _text_turn_epoch and schedule two waves with the same epoch (duplicate sends).
-_combine_schedule_locks: dict[str, asyncio.Lock] = {}
-
-
-def _combine_schedule_lock(user_id: str) -> asyncio.Lock:
-    lock = _combine_schedule_locks.get(user_id)
-    if lock is None:
-        lock = asyncio.Lock()
-        _combine_schedule_locks[user_id] = lock
-    return lock
-
-
-def _extract_greeting_from_style_content(style_content: str) -> str:
-    """Extract a user-facing greeting sentence from a style file content."""
-    if not style_content:
-        return ""
-    lines = [ln.strip() for ln in str(style_content).splitlines() if ln.strip()]
-    # Prefer explicit example bot lines first.
-    for ln in lines:
-        lower = ln.lower()
-        if lower.startswith("bot:") or lower.startswith("assistant:"):
-            candidate = ln.split(":", 1)[1].strip()
-            if candidate:
-                return candidate
-    # Fallback: first non-heading/non-rule line.
-    for ln in lines:
-        if ln.startswith("#") or ln.startswith("-") or ln.lower().startswith("rule"):
-            continue
-        if len(ln) >= 8:
-            return ln
-    return ""
-
-
-def _get_session_greeting_message(user_lang: str = "ar") -> str:
-    """
-    Load greeting from AI Setup style files (title contains 'greeting').
-    Falls back to router greeting templates when no suitable content is found.
-    """
-    try:
-        from services import content_files_service as cfs
-
-        titles = cfs.get_titles_only("style") or []
-        greeting_candidates = []
-        for t in titles:
-            title = str(t.get("title", ""))
-            if "greeting" in title.lower() or "ترحيب" in title.lower():
-                greeting_candidates.append(t)
-
-        # Prefer file language match first.
-        def _lang_score(t: Any) -> Any:
-            lang = (t.get("language") or "").lower()
-            if lang == user_lang:
-                return 2
-            if lang in ("", "ar", "general"):
-                return 1
-            return 0
-
-        greeting_candidates.sort(key=_lang_score, reverse=True)
-        for t in greeting_candidates:
-            data = cfs.get_file("style", t.get("id", ""))
-            if not data:
-                continue
-            extracted = _extract_greeting_from_style_content(data.get("content", ""))
-            if extracted:
-                return extracted
-    except Exception as e:
-        print(f"[handle_message] ⚠️ Failed loading greeting from content manager: {e}")
-
-    # Try dynamic messages catalog first
-    dyn = get_dynamic_message("session_greeting_after_inactivity", user_lang)
-    if dyn:
-        return dyn
-
-    # Final fallback
-    try:
-        from services.conversation_router import GREETING_TEMPLATES
-
-        return GREETING_TEMPLATES.get(user_lang, GREETING_TEMPLATES["ar"])
-    except Exception:
-        return "مرحباً! 😊 كيف فيني ساعدك اليوم؟"
 
 
 async def handle_message(
@@ -153,7 +76,9 @@ async def handle_message(
 
     # Check if user is in training mode
     if config.user_in_training_mode.get(user_id, False):
-        print(f"[handle_message] INFO: User {user_id} in training mode. Handing over to handle_training_input.")
+        print(
+            f"[handle_message] INFO: User ...{str(user_id)[-4:]} in training mode. Handing over to handle_training_input."
+        )
         await handle_training_input(
             user_id=user_id,
             user_input_text=user_input_text,
@@ -166,7 +91,9 @@ async def handle_message(
     raw_msg = user_input_text.strip()
 
     if not raw_msg:
-        print(f"[handle_message] ERROR: No usable text in message for user {user_id}. raw_msg is empty. Exiting.")
+        print(
+            f"[handle_message] ERROR: No usable text in message for user ...{str(user_id)[-4:]}. raw_msg is empty. Exiting."
+        )
         return
 
     # Per single-message guardrail: limit long pasted text to avoid excessive token usage.
@@ -200,16 +127,6 @@ async def handle_message(
         current_conversation_id = user_data.get("current_conversation_id")
         was_new_conversation = not current_conversation_id
         phone_for_save = user_data.get("phone_number")
-
-        # DEBUG: Log critical info before saving user message
-        print(f"\n{'=' * 60}")
-        print("🔍 HANDLE_MESSAGE: About to save USER message")
-        print(f"   user_id: {user_id}")
-        print(f"   current_conversation_id: {current_conversation_id}")
-        print(f"   phone_number from user_data: {phone_for_save}")
-        print(f"   phone_number from config: {config.user_data_whatsapp.get(user_id, {}).get('phone_number')}")
-        print(f"   raw_msg preview: {raw_msg[:50] if raw_msg else 'None'}...")
-        print(f"{'=' * 60}\n")
 
         source_message_id = user_data.pop("_source_message_id", None)
         message_metadata = {"type": "text"}
@@ -265,165 +182,6 @@ async def handle_message(
     # Get Firestore DB instance for sentiment and takeover checks
     db = get_firestore_db()
 
-    def _build_firestore_user_candidates(canonical_user_id: str, raw_user_id: str) -> list:
-        """Build candidate Firestore user IDs to handle legacy/raw identity paths."""
-        candidates = []
-        for candidate in [canonical_user_id, raw_user_id]:
-            if candidate and candidate not in candidates:
-                candidates.append(candidate)
-            if candidate and (candidate.startswith("+") or (candidate.isdigit() and len(candidate) >= 10)):
-                alt_candidate = candidate[1:] if candidate.startswith("+") else f"+{candidate}"
-                if alt_candidate not in candidates:
-                    candidates.append(alt_candidate)
-        return candidates
-
-    async def _resolve_conversation_doc_ref(users_coll: Any, conversation_id: str, canonical_user_id: str) -> Any:
-        """
-        Resolve conversation doc across canonical/raw/alt user paths.
-        Returns (doc_ref, doc_snap, resolved_user_id).
-        """
-        candidate_user_ids = _build_firestore_user_candidates(canonical_user_id, user_id)
-        last_ref = None
-        last_snap = None
-
-        for candidate_user_id in candidate_user_ids:
-            candidate_ref = (
-                users_coll.document(candidate_user_id)
-                .collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
-                .document(conversation_id)
-            )
-            candidate_snap = await asyncio.to_thread(candidate_ref.get)
-            last_ref = candidate_ref
-            last_snap = candidate_snap
-            if candidate_snap.exists:
-                return candidate_ref, candidate_snap, candidate_user_id
-
-        return last_ref, last_snap, canonical_user_id
-
-    async def _trigger_human_takeover(
-        trigger_source: str,
-        escalation_reason: str,
-        customer_message: str,
-        escalation_score: float | None = None,
-        detected_issues: list | None = None,
-    ) -> Any:
-        """Mark conversation as waiting_human, notify admins, and write audit event."""
-        if not current_conversation_id:
-            return
-        if not db:
-            print("⚠️ _trigger_human_takeover skipped: Firestore not available")
-            return
-
-        from utils.utils import (
-            conversation_any_path_post_release_blocked,
-            merge_conversation_user_id_variants,
-            update_conversation_on_all_existing_paths,
-        )
-
-        if await conversation_any_path_post_release_blocked(current_conversation_id, user_id):
-            print("⚠️ _trigger_human_takeover skipped: post-release cooldown on at least one user path")
-            return
-
-        update_payload = {
-            "status": "waiting_human",
-            "human_takeover_active": True,
-            "human_takeover_requested": True,
-            "operator_id": None,
-            "conversation_state": "waiting_for_operator",
-            "escalation_reason": escalation_reason,
-            "escalation_time": datetime.datetime.now(),
-            "last_updated": datetime.datetime.now(),
-            "post_release_escalation_suppressed_until": None,
-        }
-        if escalation_score is not None:
-            update_payload["escalation_score"] = escalation_score
-        if detected_issues:
-            update_payload["detected_issues"] = detected_issues
-
-        try:
-            n = await update_conversation_on_all_existing_paths(current_conversation_id, user_id, update_payload)
-            if n == 0:
-                print(f"⚠️ Conversation {current_conversation_id} not found in Firestore on any user path")
-                return
-            print(f"✅ Conversation marked as waiting_human in Firebase ({n} doc path(s))")
-            try:
-                canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
-                from services.live_chat_service import live_chat_service
-
-                live_chat_service.invalidate_cache()
-                asyncio.create_task(
-                    live_chat_service._refresh_index_for_conversation(canonical_user_id, current_conversation_id)
-                )
-            except Exception as idx_err:
-                print(f"⚠️ Index refresh after handover: {idx_err}")
-        except Exception as e:
-            print(f"⚠️ Failed to mark conversation as waiting_human: {e}")
-            return
-
-        for vid in merge_conversation_user_id_variants("", user_id):
-            config.user_in_human_takeover_mode[vid] = True
-
-        escalation_messages = {
-            "ar": "تم تحويلك لأحد من موظفينا شوي، ويكون معك. شكراً لصبرك 🙏",
-            "en": "Thanks for your patience. You'll be transferred to one of our staff members shortly. 🙏",
-            "fr": "Merci pour votre patience. Vous serez transféré à l'un de nos employés sous peu. 🙏",
-        }
-        calm_handover_messages = {
-            "ar": "أسف/ة إنك مش راضي/ة، رح حوّلك عند واحد من موظفينا يتواصل معك 🙏",
-            "en": "Sorry you're not satisfied. I'll transfer you to one of our staff to connect with you 🙏",
-            "fr": "Désolé que vous ne soyez pas satisfait. Je vous transfère à un de nos employés 🙏",
-        }
-        issues = set(detected_issues or [])
-        should_use_calm_handover = bool(issues.intersection({"offensive_language", "anger_detected"}))
-        escalation_msg = escalation_messages.get(user_data.get("user_preferred_lang", "ar"), escalation_messages["ar"])
-        if should_use_calm_handover:
-            escalation_msg = calm_handover_messages.get(
-                user_data.get("user_preferred_lang", "ar"),
-                calm_handover_messages["ar"],
-            )
-        await send_message_func(user_id, escalation_msg)
-        await save_conversation_message_to_firestore(
-            user_id,
-            "ai",
-            escalation_msg,
-            current_conversation_id,
-            user_name,
-            user_data.get("phone_number"),
-            metadata={"handled_by": "ai", "source": "smart_message", "event": "auto_handover_escalation"},
-        )
-
-        notify_human_on_whatsapp(
-            user_name,
-            config.user_gender.get(user_id, "unknown"),
-            customer_message,
-            type_of_notification=f"{trigger_source} - {escalation_reason}",
-        )
-
-        try:
-            from services.human_takeover_notification_service import human_takeover_notification_service
-
-            notify_result = await human_takeover_notification_service.notify_and_audit_handoff(
-                user_id=user_id,
-                user_gender=config.user_gender.get(user_id, "unknown"),
-                customer_name=user_name,
-                customer_phone=user_data.get("phone_number", "Unknown"),
-                escalation_reason=escalation_reason,
-                last_message=customer_message,
-                trigger_source=trigger_source,
-                conversation_id=current_conversation_id,
-                extra_details={"escalation_score": escalation_score, "detected_issues": detected_issues or []},
-            )
-            notification_result = notify_result.get("notification_result", {})
-            if notification_result.get("success"):
-                print(f"✅ Sent notifications to {notification_result.get('sent_count')} admin(s)")
-            else:
-                print(f"⚠️ Notification sending failed: {notification_result.get('error')}")
-        except Exception as notify_error:
-            print(f"⚠️ Error sending human takeover notifications: {notify_error}")
-            import traceback
-
-            traceback.print_exc()
-
     # AI-primary: GPT decides when to transfer to human (handover_degree, human_handover action).
     # Sentiment is still logged for dashboard; escalation decision is delegated to GPT.
     # Owner alerts for anger/offensive use this same keyword analyzer (no new ML).
@@ -452,10 +210,11 @@ async def handle_message(
             app_id_for_firestore = "linas-ai-bot-backend"
             canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
             users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
-            conv_doc_ref, doc_snap, _ = await _resolve_conversation_doc_ref(
+            conv_doc_ref, doc_snap, _ = await resolve_conversation_doc_ref(
                 users_coll,
                 user_data["current_conversation_id"],
                 canonical_user_id,
+                user_id,
             )
             if not doc_snap or not doc_snap.exists:
                 raise ValueError("Conversation not found for sentiment update")
@@ -467,146 +226,14 @@ async def handle_message(
         except Exception as e:
             print(f"⚠️ Failed to update sentiment in Firebase: {e}")
 
-    # Check Firestore for human takeover status (use canonical path + alternate fallback)
-    if db:
-        conv_for_takeover_check = user_data.get("current_conversation_id")
-        if not conv_for_takeover_check:
-            try:
-                app_id_for_firestore = "linas-ai-bot-backend"
-                canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
-                users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
-                from utils.utils import _resolve_latest_conversation_id
-
-                user_doc_ref = users_coll.document(canonical_user_id)
-                conversations_collection_for_user = user_doc_ref.collection(config.FIRESTORE_CONVERSATIONS_COLLECTION)
-                conv_for_takeover_check = await _resolve_latest_conversation_id(conversations_collection_for_user)
-                if conv_for_takeover_check:
-                    print(
-                        f"[handle_message] INFO: Takeover sync using latest conversation "
-                        f"{conv_for_takeover_check} (no current_conversation_id)"
-                    )
-            except Exception as e:
-                print(f"⚠️ Takeover sync: could not resolve conversation: {e}")
-                conv_for_takeover_check = None
-
-        if conv_for_takeover_check:
-            try:
-                app_id_for_firestore = "linas-ai-bot-backend"
-                canonical_user_id, _ = get_canonical_user_id_and_phone(user_id, user_data.get("phone_number"))
-                users_coll = db.collection("artifacts").document(app_id_for_firestore).collection("users")
-                conv_doc_ref, doc_snap, _ = await _resolve_conversation_doc_ref(
-                    users_coll,
-                    conv_for_takeover_check,
-                    canonical_user_id,
-                )
-                if doc_snap.exists:
-                    conv_data = doc_snap.to_dict()
-                    from utils.utils import sync_post_release_cooldown_from_conv_payload
-
-                    sync_post_release_cooldown_from_conv_payload(user_data, conv_data)
-                    was_in_takeover = config.user_in_human_takeover_mode.get(user_id, False)
-                    new_takeover = conv_data.get("human_takeover_active", False)
-                    if new_takeover:
-                        config.user_in_human_takeover_mode[user_id] = True
-                    else:
-                        from utils.utils import _clear_takeover_flags_for_user
-
-                        _clear_takeover_flags_for_user(canonical_user_id, user_id, canonical_user_id)
-                    if was_in_takeover and not new_takeover:
-                        user_data["just_returned_from_human_takeover"] = True
-                        from utils.utils import (
-                            is_post_takeover_escalation_cooldown,
-                            set_post_takeover_escalation_cooldown,
-                        )
-
-                        if not is_post_takeover_escalation_cooldown(user_data):
-                            set_post_takeover_escalation_cooldown(user_data)
-                        print(f"[handle_message] INFO: User {user_id} just returned from human takeover.")
-                    if config.user_in_human_takeover_mode[user_id]:
-                        if user_data.get("_dashboard_test_simulation"):
-                            print(
-                                f"[handle_message] INFO: User {user_id} in takeover queue, but dashboard test "
-                                "simulation is on — skipping operator/waiting auto-reply so the AI can respond."
-                            )
-                        else:
-                            operator_id = conv_data.get("operator_id")
-                            user_lang = user_data.get("user_preferred_lang", "ar")
-                            conv_id_for_save = user_data.get("current_conversation_id") or conv_for_takeover_check
-
-                            if operator_id:
-                                # User has an operator — never stay silent.
-                                # Send assignment notice once, then send a short reminder on each user turn.
-                                print(f"[handle_message] INFO: User {user_id} has operator. AI will not respond.")
-                                if not user_data.get("notified_human_takeover"):
-                                    operator_name = conv_data.get("operator_name")
-                                    if not operator_name:
-                                        if operator_id and "@" in str(operator_id):
-                                            operator_name = (
-                                                str(operator_id)
-                                                .split("@")[0]
-                                                .replace(".", " ")
-                                                .replace("_", " ")
-                                                .title()
-                                            )
-                                        else:
-                                            operator_name = operator_id
-                                    handover_messages = {
-                                        "ar": f"📞 تم تحويل المحادثة إلى {operator_name}. سيقوم بالرد عليك قريباً.",
-                                        "en": f"📞 The conversation has been transferred to {operator_name}. They will respond to you shortly.",
-                                        "fr": f"📞 La conversation a été transférée à {operator_name}. Il vous répondra sous peu.",
-                                    }
-                                    handover_msg = handover_messages.get(user_lang, handover_messages["ar"])
-                                    await send_message_func(user_id, handover_msg)
-                                    await save_conversation_message_to_firestore(
-                                        user_id,
-                                        "ai",
-                                        handover_msg,
-                                        conv_id_for_save,
-                                        user_name,
-                                        user_data.get("phone_number"),
-                                        metadata={
-                                            "handled_by": "ai",
-                                            "source": "smart_message",
-                                            "event": "operator_assigned_notice",
-                                        },
-                                    )
-                                    user_data["notified_human_takeover"] = True
-                                else:
-                                    # Operator is handling the chat — do not send a bot follow-up on every user turn
-                                    # (it duplicated the human reply and looked like "two messages").
-                                    print(
-                                        f"[handle_message] INFO: User {user_id} has operator; skipping per-turn bot follow-up."
-                                    )
-                            else:
-                                # User is in waiting queue (no operator yet) — always send "please wait" (every time user speaks)
-                                print(
-                                    f"[handle_message] INFO: User {user_id} in waiting queue. Sending waiting auto-reply."
-                                )
-                                waiting_msg = (
-                                    get_dynamic_message("waiting_queue_message", user_lang)
-                                    or "شوي، منكون معك، شكراً لصبركم، عندنا شوي ضغط 🙏"
-                                )
-                                await send_message_func(user_id, waiting_msg)
-                                await save_conversation_message_to_firestore(
-                                    user_id,
-                                    "ai",
-                                    waiting_msg,
-                                    conv_id_for_save,
-                                    user_name,
-                                    user_data.get("phone_number"),
-                                    metadata={
-                                        "handled_by": "ai",
-                                        "source": "smart_message",
-                                        "event": "waiting_queue_autoreply",
-                                    },
-                                )
-                            return
-                else:
-                    print(
-                        f"WARNING: Conversation {conv_for_takeover_check} not found in Firestore during takeover check."
-                    )
-            except Exception as e:
-                print(f"❌ ERROR checking human takeover status from Firestore for user {user_id}: {e}")
+    if await maybe_send_takeover_autoreply(
+        db=db,
+        user_id=user_id,
+        user_name=user_name,
+        user_data=user_data,
+        send_message_func=send_message_func,
+    ):
+        return
 
     ai_primary_mode = bool(getattr(config, "AI_PRIMARY_ORCHESTRATION", True))
 
@@ -672,11 +299,25 @@ async def handle_message(
     # Language detection is now handled BEFORE GPT call by language_detection_service
     # The LanguageResolver detects language on each message using heuristics (Arabic script, Franco-Arabic, French/English markers)
     # GPT is then instructed to respond in the detected language
-    print(f"[handle_message] 🌐 Language will be detected pre-GPT by language_detection_service for user {user_id}")
+    print(
+        f"[handle_message] 🌐 Language will be detected pre-GPT by language_detection_service for user ...{str(user_id)[-4:]}"
+    )
 
     async with _combine_schedule_lock(user_id):
         # Message combining logic
         config.user_pending_messages[user_id].append(raw_msg)
+        try:
+            from services.scale.conversation_state_redis import set_pending_messages
+            from services.scale.redis_claims import redis_claims_fail_closed
+
+            if not set_pending_messages(user_id, list(config.user_pending_messages[user_id])):
+                if redis_claims_fail_closed():
+                    print(
+                        f"[handle_message] WARN: pending combine not published to shared Redis "
+                        f"(fail-closed) user=...{str(user_id)[-4:]}"
+                    )
+        except Exception:
+            pass
         # Dashboard /api/test-*: if a webhook-delayed task for this user was just cancelled, it may have
         # left the pending deque empty; keep a copy so _delayed_process_messages can still run GPT.
         if user_data.get("_dashboard_test_simulation"):
@@ -696,7 +337,7 @@ async def handle_message(
         # Dashboard /api/test-* sets _dashboard_test_simulation: run GPT path inline so the HTTP handler
         # sees captured replies before returning (background create_task was still racing / missing awaits).
         if user_data.get("_dashboard_test_simulation"):
-            print(f"[handle_message] Dashboard test simulation: inline delayed processing for {user_id}")
+            print(f"[handle_message] Dashboard test simulation: inline delayed processing for ...{str(user_id)[-4:]}")
             try:
                 await _delayed_process_messages(
                     user_id,

@@ -104,4 +104,58 @@ describe("ActivityFlow", () => {
       expect(screen.getByText("unavailable")).toBeInTheDocument();
     });
   });
+
+  it("redacts phones and message bodies in technical JSON dump", async () => {
+    getFlowLogs.mockResolvedValue({
+      success: true,
+      data: [
+        {
+          timestamp: "2026-08-04T12:00:00Z",
+          user_id: "whatsapp:+96170123456",
+          user_phone: "+96170123456",
+          user_name: "Secret Name",
+          user_message: "SECRET_USER_MESSAGE_BODY",
+          bot_to_user: "SECRET_BOT_REPLY_BODY",
+          source: "gpt",
+          channel: "whatsapp",
+          outcome: "answer_question",
+          model: "gpt-5.4-mini",
+          cost_usd: 0.001,
+          cost_status: "estimated",
+          cm_diagnostics: {
+            reason: "packet_ready",
+            content_version_id: "cv-redact",
+            source_ids: ["svc.a"],
+            retrieved_sources: [{ source_id: "svc.a", title: "Hidden title", raw: "secret" }],
+            raw_payload: { prompt: "do not leak" },
+          },
+          flow_steps: [{ step: 1, title: "User → Bot", content: "SECRET_STEP_CONTENT" }],
+        },
+      ],
+    });
+
+    render(<ActivityFlow />);
+    await waitFor(() => {
+      expect(screen.getByText(/SECRET_USER_MESSAGE_BODY/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText(/SECRET_USER_MESSAGE_BODY/i));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Show technical JSON/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Show technical JSON/i }));
+
+    const jsonDump = await screen.findByText(/\[REDACTED\]/);
+    const dumped = jsonDump.textContent || "";
+    expect(dumped).toContain("[REDACTED]");
+    expect(dumped).not.toContain("+96170123456");
+    expect(dumped).not.toContain("whatsapp:+96170123456");
+    expect(dumped).not.toContain("SECRET_USER_MESSAGE_BODY");
+    expect(dumped).not.toContain("SECRET_BOT_REPLY_BODY");
+    expect(dumped).not.toContain("SECRET_STEP_CONTENT");
+    expect(dumped).not.toContain("do not leak");
+    expect(dumped).toContain("answer_question");
+    expect(dumped).toContain("packet_ready");
+    expect(dumped).toContain("gpt-5.4-mini");
+  });
 });

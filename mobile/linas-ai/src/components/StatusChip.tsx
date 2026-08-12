@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { colors, fonts, radii, spacing } from '../theme';
+import { fonts, radii, spacing, useTheme, type ThemeColors } from '../theme';
 
 type Tone = 'neutral' | 'ok' | 'warn' | 'soon';
 
@@ -9,15 +9,23 @@ type Props = {
   tone?: Tone;
 };
 
-const TONE: Record<Tone, { bg: string; fg: string }> = {
-  neutral: { bg: colors.surfaceAlt, fg: colors.textMuted },
-  ok: { bg: colors.mintSoft, fg: colors.mint },
-  warn: { bg: colors.accentSoft, fg: colors.warning },
-  soon: { bg: colors.surfaceAlt, fg: colors.textDim },
-};
+function toneColors(colors: ThemeColors, tone: Tone): { bg: string; fg: string } {
+  switch (tone) {
+    case 'ok':
+      return { bg: colors.mintSoft, fg: colors.mint };
+    case 'warn':
+      return { bg: colors.accentSoft, fg: colors.warning };
+    case 'soon':
+      return { bg: colors.surfaceAlt, fg: colors.textDim };
+    case 'neutral':
+    default:
+      return { bg: colors.surfaceAlt, fg: colors.textMuted };
+  }
+}
 
 export function StatusChip({ label, tone = 'neutral' }: Props) {
-  const t = TONE[tone];
+  const { colors } = useTheme();
+  const t = toneColors(colors, tone);
   return (
     <View style={[styles.chip, { backgroundColor: t.bg }]}>
       <Text style={[styles.text, { color: t.fg }]}>{label}</Text>

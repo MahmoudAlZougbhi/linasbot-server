@@ -42,7 +42,10 @@ async def handle_photo_message(
     config.user_names[user_id] = user_name  # Ensure name is updated
 
     # Wave 3: photo analysis is an optional CM capability (default off for new tenants).
-    tenant_id = str(user_data.get("tenant_id") or "linas").strip() or "linas"
+    tenant_id = str(user_data.get("tenant_id") or "").strip()
+    if not tenant_id:
+        print("ERROR: photo handler refused — tenant_id required")
+        return
     if not _photo_analysis_enabled_for_tenant(tenant_id):
         await send_message_func(
             user_id,
@@ -51,7 +54,9 @@ async def handle_photo_message(
         return
 
     if config.user_in_training_mode.get(user_id, False):
-        print(f"[handle_photo_message] INFO: User {user_id} in training mode. Handing over to handle_training_input.")
+        print(
+            f"[handle_photo_message] INFO: User ...{str(user_id)[-4:]} in training mode. Handing over to handle_training_input."
+        )
         # Pass necessary data directly to handle_training_input for photo analysis in training mode
         await handle_training_input(
             user_id=user_id,
@@ -184,7 +189,7 @@ async def handle_photo_message(
         # NEW: Update dashboard metrics if it's a critical issue (e.g., burn report)
         if analysis_data.get("is_critical_issue"):
             await update_dashboard_metric_in_firestore(user_id, "burn_reports", 1)
-            print(f"DEBUG: Updated 'burn_reports' metric for user {user_id}.")
+            print(f"DEBUG: Updated 'burn_reports' metric for user ...{str(user_id)[-4:]}.")
 
     except Exception as e:
         print(f"❌ ERROR in handle_photo_message: {e}")

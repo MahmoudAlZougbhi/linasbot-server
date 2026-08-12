@@ -12,6 +12,13 @@ from typing import Any
 from storage.persistent_storage import _DATA_ROOT
 
 
+def _require_tenant_id(tenant_id: str | None) -> str:
+    tid = str(tenant_id or "").strip()
+    if not tid:
+        raise ValueError("tenant_id required")
+    return tid
+
+
 class OwnerAlertStore:
     """Persist owner alerts under ``data/owner_alerts/{tenant_id}/``.
 
@@ -24,7 +31,7 @@ class OwnerAlertStore:
         self._root.mkdir(parents=True, exist_ok=True)
 
     def _tenant_dir(self, tenant_id: str) -> Path:
-        safe = (tenant_id or "linas").strip() or "linas"
+        safe = _require_tenant_id(tenant_id)
         path = self._root / safe
         path.mkdir(parents=True, exist_ok=True)
         return path
@@ -37,7 +44,7 @@ class OwnerAlertStore:
         alert_id = uuid.uuid4().hex
         record = {
             "id": alert_id,
-            "tenant_id": (tenant_id or "linas").strip() or "linas",
+            "tenant_id": _require_tenant_id(tenant_id),
             "created_at": now,
             "read": False,
             "read_at": None,

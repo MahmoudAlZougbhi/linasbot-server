@@ -26,12 +26,8 @@ const Header = ({ onMenuClick, botStatus: _botStatus }) => {
   const { user, logout } = useAuth();
   const appTimezone = getTimezoneName();
 
-  // Sample notifications - in a real app, these would come from an API/context
-  const notifications = [
-    { id: 1, type: 'info', message: 'Bot connected successfully', time: '2 min ago', read: false },
-    { id: 2, type: 'warning', message: 'High message volume detected', time: '15 min ago', read: false },
-    { id: 3, type: 'success', message: 'Settings saved successfully', time: '1 hour ago', read: true },
-  ];
+  // Notifications come from a real API when available — never invent fake Live events.
+  const notifications = /** @type {Array<{ id: number; type: string; message: string; time: string; read: boolean }>} */ ([]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 

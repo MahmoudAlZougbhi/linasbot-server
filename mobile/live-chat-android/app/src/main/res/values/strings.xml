@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">Lina Live Chat</string>
-    <string name="loading_live_chat">Opening Live Chat…</string>
-    <string name="error_title">Couldn\'t open Live Chat</string>
-    <string name="error_message">Please check your connection or try again in a moment.</string>
-    <string name="retry">Retry</string>
-</resources>

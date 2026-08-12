@@ -1,4 +1,9 @@
-"""Apple / Google store notification endpoints + IAP readiness."""
+"""Apple / Google store notification endpoints + IAP readiness.
+
+Apple ASSN V2 live handling lives in ``modules.apple_store_webhook_api``
+(``POST /webhooks/apple/app-store`` and alias
+``POST /api/entitlements/apple/notifications``).
+"""
 
 from __future__ import annotations
 
@@ -15,7 +20,6 @@ from services.store_iap_service import (
     iap_config_status,
     normalize_apple_status,
     normalize_google_status,
-    verify_apple_notification_payload,
     verify_google_notification_payload,
 )
 
@@ -36,26 +40,6 @@ async def iap_status(request: Request) -> Any:
     require_session(request)
     status = iap_config_status()
     return {"success": True, "iap": status, "checklist": external_store_checklist()}
-
-
-@app.post("/api/entitlements/apple/notifications")
-async def apple_notifications(request: Request) -> Any:
-    body = await request.json()
-    if not isinstance(body, dict):
-        raise HTTPException(status_code=400, detail="Invalid payload")
-    try:
-        parsed = verify_apple_notification_payload(body)
-    except PermissionError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    result = apply_normalized_notification(
-        tenant_id=str(parsed["tenant_id"]),
-        source="apple",
-        product_id=str(parsed["product_id"]),
-        status=normalize_apple_status(str(parsed.get("notification_type") or "")),
-        original_transaction_id=str(parsed["original_transaction_id"]),
-        event_id=str(parsed["event_id"]),
-    )
-    return {"success": True, **result}
 
 
 @app.post("/api/entitlements/google/notifications")

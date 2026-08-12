@@ -173,7 +173,7 @@ class AnalyticsService:
         except (TypeError, ValueError):
             return default
 
-    async def get_analytics_summary(self, time_range: int = 7, use_real_costs: bool = True) -> dict[str, Any]:
+    async def get_analytics_summary(self, time_range: int = 7, use_real_costs: bool = True) -> Any:
         safe_days = self._safe_days(time_range, default=7)
         result = analytics_manager.get_summary(days=safe_days)
 

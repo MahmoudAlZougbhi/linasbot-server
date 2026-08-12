@@ -16,6 +16,7 @@ import { FaqRoute } from '../features/faq/FaqRoute';
 import { IntegrationsScreen } from '../features/integrations/IntegrationsScreen';
 import { LiveChatScreen } from '../features/livechat/LiveChatScreen';
 import { NotificationsScreen } from '../features/notifications/NotificationsScreen';
+import { RequestsScreen } from '../features/requests/RequestsScreen';
 import { OwnerPortalScreen } from '../features/control/OwnerPortalScreen';
 import { SettingsScreen } from '../features/settings/SettingsScreen';
 import { SmartFollowUpScreen } from '../features/smartFollowUp/SmartFollowUpScreen';
@@ -28,7 +29,6 @@ type Props = {
   screen: Screen;
   authEpoch: number;
   hasAccess: boolean;
-  isPlatformOwner: boolean;
   showSubGate: boolean;
   subGateLoading: boolean;
   onOpenArea: (area: ControlArea) => void;
@@ -45,7 +45,6 @@ export function AppScreenTree({
   screen,
   authEpoch,
   hasAccess,
-  isPlatformOwner,
   showSubGate,
   subGateLoading,
   onOpenArea,
@@ -72,6 +71,7 @@ export function AppScreenTree({
         <RegisterScreen
           onBack={() => setScreen({ name: 'login' })}
           onDone={() => setScreen({ name: 'login' })}
+          onLoggedIn={() => void afterLogin()}
         />
       ) : null}
       {showSubGate ? (
@@ -86,7 +86,6 @@ export function AppScreenTree({
       <KeepMountedPane key={`chat-${authEpoch}`} active={chatActive}>
         <ChatScreen
           isAuthenticated={hasAccess}
-          isPlatformOwner={isPlatformOwner}
           onOpenArea={onOpenArea}
           onOpenCmReview={onOpenCmReview}
           onRequestLogin={() => setScreen({ name: 'login' })}
@@ -130,6 +129,11 @@ export function AppScreenTree({
       </KeepMountedPane>
       <KeepMountedPane key={`livechat-${authEpoch}`} active={name === 'livechat'}>
         <LiveChatScreen initialOpen={name === 'livechat' ? (screen.open ?? null) : null} />
+      </KeepMountedPane>
+      <KeepMountedPane key={`requests-${authEpoch}`} active={name === 'requests'}>
+        <RequestsScreen
+          onOpenLiveChat={(target) => setScreen({ name: 'livechat', open: target })}
+        />
       </KeepMountedPane>
       <KeepMountedPane key={`notifications-${authEpoch}`} active={name === 'notifications'}>
         <NotificationsScreen

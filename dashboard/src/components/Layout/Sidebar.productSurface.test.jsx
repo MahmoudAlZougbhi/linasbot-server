@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import Sidebar from "./Sidebar";
 import { makeAuthUser } from "../../testHelpers/renderWithProviders";
+import { SYSTEM_ROLES } from "../../constants/permissions";
 
 const mockUseAuth = vi.fn();
 vi.mock("../../contexts/AuthContext", () => ({
@@ -18,7 +19,13 @@ vi.mock("../../utils/authFetch", () => ({
 
 describe("Sidebar product surface", () => {
   it("restores Live Chat + Interaction Logs for linas and keeps Wave-1 modules hidden", async () => {
-    mockUseAuth.mockReturnValue({ user: makeAuthUser({ role: "admin", tenantId: "linas" }) });
+    mockUseAuth.mockReturnValue({
+      user: makeAuthUser({
+        role: "admin",
+        tenantId: "linas",
+        resolvedPermissions: { ...SYSTEM_ROLES.admin.permissions },
+      }),
+    });
 
     render(
       <MemoryRouter>
@@ -40,7 +47,13 @@ describe("Sidebar product surface", () => {
   });
 
   it("hides Live Chat ops surface for non-linas SaaS tenants", async () => {
-    mockUseAuth.mockReturnValue({ user: makeAuthUser({ role: "admin", tenantId: "acme-gym" }) });
+    mockUseAuth.mockReturnValue({
+      user: makeAuthUser({
+        role: "admin",
+        tenantId: "acme-gym",
+        resolvedPermissions: { ...SYSTEM_ROLES.admin.permissions },
+      }),
+    });
 
     render(
       <MemoryRouter>

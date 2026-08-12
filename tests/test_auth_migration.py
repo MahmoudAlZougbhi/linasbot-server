@@ -47,6 +47,7 @@ def test_password_epoch_invalidates_session_without_default_password():
         role="admin",
         permissions=None,
         password_epoch=0,
+        tenant_id="linas",
     )
     cookie = svc.cookie_value_for(record)
     assert svc.get_valid_session(cookie) is not None
@@ -70,6 +71,7 @@ def test_session_expiry_and_revoke():
         permissions=None,
         password_epoch=0,
         ttl_seconds=1,
+        tenant_id="linas",
     )
     cookie = svc.cookie_value_for(record)
     with patch("services.user_service.user_service.get_user_by_id", return_value=None):
@@ -80,9 +82,9 @@ def test_session_expiry_and_revoke():
 
 def test_revoke_all_for_user_marks_local_sessions():
     svc = DashboardSessionService()
-    r1 = svc.create_session(user_id="u1", email="a@x.com", role="admin", permissions=None)
-    r2 = svc.create_session(user_id="u1", email="a@x.com", role="admin", permissions=None)
-    other = svc.create_session(user_id="u2", email="b@x.com", role="viewer", permissions=None)
+    r1 = svc.create_session(user_id="u1", email="a@x.com", role="admin", permissions=None, tenant_id="linas")
+    r2 = svc.create_session(user_id="u1", email="a@x.com", role="admin", permissions=None, tenant_id="linas")
+    other = svc.create_session(user_id="u2", email="b@x.com", role="viewer", permissions=None, tenant_id="linas")
     with patch("utils.utils.get_firestore_db", return_value=None):
         n = svc.revoke_all_for_user("u1")
     assert n >= 2
@@ -96,10 +98,13 @@ def test_no_known_default_admin_password_in_user_service_source():
     from pathlib import Path
 
     src = Path("services/user_service.py").read_text(encoding="utf-8")
+    auth_src = Path("services/user_service_auth.py").read_text(encoding="utf-8")
     # Avoid embedding the banned default password literal in the test file (secret scan).
     banned = "admin" + "123"
     assert banned not in src
-    assert "ensure_default_admin is disabled" in src
+    assert banned not in auth_src
+    # ensure_default_admin lives on the auth mixin after LOC split.
+    assert "ensure_default_admin is disabled" in auth_src
 
 
 def test_no_http_bootstrap_and_cli_provisioning_exists():

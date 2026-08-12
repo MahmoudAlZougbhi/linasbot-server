@@ -10,6 +10,10 @@ from services.whatsapp_cloud.observability import emit_wa_event
 from services.whatsapp_cloud.repository import WhatsAppCloudRepository
 
 
+class LegacyIsolationScanError(RuntimeError):
+    """Cloud bind scan could not complete — callers must fail closed."""
+
+
 def _normalize_digits(value: str) -> str:
     return "".join(ch for ch in str(value or "") if ch.isdigit())
 
@@ -19,6 +23,11 @@ def monty_source_number_digits() -> str:
 
 
 def cloud_bound_display_digits() -> set[str]:
+    """Return active Cloud display digits.
+
+    When WhatsApp DB is not configured, returns empty set (no Cloud binds).
+    On DB/scan failure raises LegacyIsolationScanError (fail closed — never empty-on-error).
+    """
     if not whatsapp_db_configured():
         return set()
     try:
@@ -40,9 +49,11 @@ def cloud_bound_display_digits() -> set[str]:
                 if row.display_phone_last4:
                     out.add(row.display_phone_last4)
             return out
+    except LegacyIsolationScanError:
+        raise
     except Exception as exc:
         emit_wa_event("legacy_isolation_scan_failed", error=type(exc).__name__)
-        return set()
+        raise LegacyIsolationScanError("Cloud bind scan failed; refusing to treat as empty (fail closed)") from exc
 
 
 def assert_no_monty_cloud_dual_bind() -> dict[str, Any]:
@@ -51,7 +62,11 @@ def assert_no_monty_cloud_dual_bind() -> dict[str, Any]:
     monty = monty_source_number_digits()
     if not monty:
         return {"ok": True, "overlap": False}
-    cloud = cloud_bound_display_digits()
+    try:
+        cloud = cloud_bound_display_digits()
+    except LegacyIsolationScanError as exc:
+        emit_wa_event("legacy_isolation_assert_scan_failed", error=type(exc).__name__)
+        raise RuntimeError("Fail closed: cannot verify Monty/Cloud isolation (Cloud bind scan failed).") from exc
     # Compare full digits and last4.
     overlap = False
     if monty in cloud:
@@ -73,13 +88,18 @@ def cloud_blocks_monty_send(to_number: str) -> bool:
 
     Outbound from Monty to an arbitrary customer is still legacy; this guard blocks
     Monty from sending *as* a Cloud-bound business number / for Cloud-owned assets.
+
+    On Cloud bind scan failure, returns True (fail closed — block Monty send).
     """
 
     digits = _normalize_digits(to_number)
     monty = monty_source_number_digits()
     if monty and digits and digits == monty:
         # Sending as the Monty source that is also Cloud-bound is forbidden.
-        cloud = cloud_bound_display_digits()
+        try:
+            cloud = cloud_bound_display_digits()
+        except LegacyIsolationScanError:
+            return True
         if monty in cloud or (len(monty) >= 4 and monty[-4:] in cloud):
             return True
     return False
@@ -92,5 +112,8 @@ def is_phone_number_id_cloud_bound(phone_number_id: str) -> bool:
         with whatsapp_session() as session:
             repo = WhatsAppCloudRepository(session)
             return repo.find_active_by_phone_number_id(str(phone_number_id or "").strip()) is not None
-    except Exception:
-        return False
+    except Exception as exc:
+        emit_wa_event("legacy_isolation_pnid_lookup_failed", error=type(exc).__name__)
+        raise LegacyIsolationScanError(
+            "phone_number_id Cloud bind lookup failed; refusing False (fail closed)"
+        ) from exc

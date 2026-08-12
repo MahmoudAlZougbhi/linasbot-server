@@ -1,32 +1,36 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Linking,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  View,
 } from 'react-native';
-import { z } from 'zod';
 
-import { apiFetch } from '../../api/client';
-import { LEGAL_URLS } from '../../config';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { StringKey } from '../../i18n';
 import { fonts, spacing, useTheme } from '../../theme';
 import { useModuleNav } from '../nav/ModuleNavContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
+import { BillingPeriodToggle } from './BillingPeriodToggle';
+import { BillingStoreActions } from './BillingStoreActions';
 import { CommonFeaturesCard } from './CommonFeaturesCard';
+import { CreditPacksSection } from './CreditPacksSection';
 import { CurrentPlanSummary } from './CurrentPlanSummary';
 import { PlanCardView } from './PlanCardView';
-import { isPlanId, PLAN_CATALOG, PLAN_ORDER, type PlanId } from './planCatalog';
+import type { BillingPeriod, CreditPackId } from './appleProductIds';
+import { appleProductIdForPlan } from './appleProductIds';
+import {
+  openManageSubscriptions,
+  purchaseCredits,
+  purchaseSubscription,
+  requestRefundForProduct,
+  restorePurchases,
+} from './iapPurchases';
+import { PLAN_CATALOG, PLAN_ORDER, type PlanId } from './planCatalog';
 import { resolvePlanCta } from './subscriptionCta';
-import { loadStorePrices, previewCatalogPrices, type StorePrice } from './storePricing';
-
-const EntitlementsSchema = z.object({ success: z.boolean() }).passthrough();
-const UsageSchema = z.object({ success: z.literal(true) }).passthrough();
+import { useBillingEntitlement, useBillingStorePrices } from './useBillingData';
 
 type Props = Record<string, never>;
 
@@ -80,117 +84,84 @@ export function BillingScreen(_props: Props = {}) {
   const { colors } = useTheme();
   const { tr, language } = useI18n();
   const nav = useModuleNav();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [planId, setPlanId] = useState<PlanId | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [periodEnd, setPeriodEnd] = useState<number | null>(null);
-  const [includedCredits, setIncludedCredits] = useState<number | null>(null);
-  const [purchasedCredits, setPurchasedCredits] = useState<number | null>(null);
-  const [creditBalance, setCreditBalance] = useState<number | null>(null);
-  const [storePrices, setStorePrices] = useState<Record<PlanId, StorePrice | null>>({
-    lite: null,
-    starter: null,
-    growth: null,
-    pro: null,
-    max: null,
-  });
-  const [storeLoading, setStoreLoading] = useState(false);
+  const [period, setPeriod] = useState<BillingPeriod>('monthly');
   const [purchasing, setPurchasing] = useState(false);
-  const [purchaseNote, setPurchaseNote] = useState<string | null>(null);
   const tapLock = useRef(false);
-  const [raw, setRaw] = useState('');
-
   const locale = language === 'ar' ? 'ar' : language === 'fr' ? 'fr' : 'en';
 
-  const refreshEntitlement = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await apiFetch('/api/entitlements/me', { schema: EntitlementsSchema });
-      const record = data as Record<string, unknown>;
-      const entitlement =
-        record.entitlement && typeof record.entitlement === 'object'
-          ? (record.entitlement as Record<string, unknown>)
-          : record;
-      const p =
-        (typeof entitlement.plan_id === 'string' && entitlement.plan_id) ||
-        (typeof entitlement.plan === 'string' && entitlement.plan) ||
-        null;
-      setPlanId(isPlanId(p) ? p : null);
-      setStatus(typeof entitlement.status === 'string' ? entitlement.status : null);
-      setPeriodEnd(
-        typeof entitlement.current_period_end === 'number' ? entitlement.current_period_end : null,
-      );
-      setIncludedCredits(
-        typeof entitlement.included_credits === 'number' ? entitlement.included_credits : null,
-      );
-      const purchased =
-        typeof entitlement.purchased_credits === 'number'
-          ? entitlement.purchased_credits
-          : typeof entitlement.extra_credits === 'number'
-            ? entitlement.extra_credits
-            : null;
-      setPurchasedCredits(purchased);
-      if (__DEV__) setRaw(JSON.stringify(data, null, 2));
-      else setRaw('');
-      setError(null);
-    } catch {
-      setError(tr('subLoadError'));
-      setPlanId(null);
-      setStatus(null);
-      setRaw('');
-    } finally {
-      setLoading(false);
-    }
-  }, [tr]);
+  const entitlement = useBillingEntitlement();
+  const store = useBillingStorePrices(period, locale);
+  const { planId, status } = entitlement;
 
-  const refreshUsage = useCallback(async () => {
-    try {
-      const res = await apiFetch('/api/mobile/usage', { schema: UsageSchema });
-      const bal = (res as Record<string, unknown>).credit_balance;
-      setCreditBalance(typeof bal === 'number' ? bal : null);
-    } catch {
-      setCreditBalance(null);
-    }
-  }, []);
+  const mapResultNote = useCallback(
+    (code: string) => {
+      if (code === 'cancel') return tr('subPurchaseCanceled');
+      if (code === 'unavailable') return tr('subStoreUnavailable');
+      if (code === 'verify_failed') return tr('subPurchaseVerifyFailed');
+      return tr('subPurchaseError');
+    },
+    [tr],
+  );
 
-  const refreshStore = useCallback(async () => {
-    setStoreLoading(true);
-    setPurchaseNote(null);
-    try {
-      const state = await loadStorePrices(Platform.OS);
-      setStorePrices(state.prices);
-      if (state.error && __DEV__) {
-        setStorePrices(previewCatalogPrices(locale));
-        setPurchaseNote(tr('subPricePreview'));
-      }
-    } finally {
-      setStoreLoading(false);
-    }
-  }, [locale, tr]);
-
-  useEffect(() => {
-    void refreshEntitlement();
-    void refreshUsage();
-    void refreshStore();
-  }, [refreshEntitlement, refreshUsage, refreshStore]);
-
-  const onPurchase = useCallback(
-    (target: PlanId) => {
+  const runPurchase = useCallback(
+    async (fn: () => Promise<{ ok: boolean; code?: string }>, successKey: StringKey) => {
       if (tapLock.current || purchasing) return;
       tapLock.current = true;
       setPurchasing(true);
-      setPurchaseNote(tr('subPurchaseBlocked'));
-      setTimeout(() => {
+      store.setPurchaseNote(tr('subPurchasePending'));
+      try {
+        const result = await fn();
+        if (result.ok) {
+          store.setPurchaseNote(tr(successKey));
+          await entitlement.refresh();
+        } else {
+          store.setPurchaseNote(mapResultNote(result.code || 'error'));
+        }
+      } finally {
         tapLock.current = false;
         setPurchasing(false);
-      }, 800);
-      void target;
+      }
     },
-    [purchasing, tr],
+    [entitlement, mapResultNote, purchasing, store, tr],
   );
 
+  const onRestore = useCallback(async () => {
+    if (purchasing) return;
+    setPurchasing(true);
+    store.setPurchaseNote(tr('subRestorePending'));
+    try {
+      const result = await restorePurchases();
+      if (result.ok) {
+        store.setPurchaseNote(tr('subRestoreSuccess'));
+        await entitlement.refresh();
+      } else if (result.code === 'unavailable') {
+        store.setPurchaseNote(tr('subRestoreUnavailable'));
+      } else {
+        store.setPurchaseNote(tr('subRestoreError'));
+      }
+    } finally {
+      setPurchasing(false);
+    }
+  }, [entitlement, purchasing, store, tr]);
+
+  const onRefund = useCallback(async () => {
+    if (!planId || purchasing) return;
+    setPurchasing(true);
+    try {
+      const result = await requestRefundForProduct(appleProductIdForPlan(planId, period));
+      if (result.ok) store.setPurchaseNote(tr('subRefundSubmitted'));
+      else if (result.code === 'cancel') store.setPurchaseNote(tr('subPurchaseCanceled'));
+      else store.setPurchaseNote(tr('subRefundUnavailable'));
+    } finally {
+      setPurchasing(false);
+    }
+  }, [period, planId, purchasing, store, tr]);
+
   const cards = useMemo(() => PLAN_ORDER.map((id) => PLAN_CATALOG[id]), []);
+  const showRefund =
+    Platform.OS === 'ios' &&
+    Boolean(planId) &&
+    Boolean(status && ['active', 'grace', 'canceled'].includes(String(status).toLowerCase()));
 
   return (
     <ScreenChrome title={tr('navSubscription')} subtitle={tr('subSubtitle')}>
@@ -203,10 +174,14 @@ export function BillingScreen(_props: Props = {}) {
         <Text style={[styles.backText, { color: colors.accent }]}>{tr('subBackToChat')}</Text>
       </Pressable>
 
-      {loading || storeLoading ? <ActivityIndicator color={colors.accent} /> : null}
-      {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
-      {purchaseNote ? (
-        <Text style={[styles.note, { color: colors.warning }]}>{purchaseNote}</Text>
+      {entitlement.loading || store.storeLoading ? (
+        <ActivityIndicator color={colors.accent} />
+      ) : null}
+      {entitlement.error ? (
+        <Text style={[styles.error, { color: colors.danger }]}>{entitlement.error}</Text>
+      ) : null}
+      {store.purchaseNote ? (
+        <Text style={[styles.note, { color: colors.warning }]}>{store.purchaseNote}</Text>
       ) : null}
 
       <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
@@ -214,12 +189,12 @@ export function BillingScreen(_props: Props = {}) {
           tr={tr}
           planId={planId}
           status={status}
-          periodEnd={periodEnd}
-          includedCredits={includedCredits}
-          purchasedCredits={purchasedCredits}
-          creditBalance={creditBalance}
+          periodEnd={entitlement.periodEnd}
+          includedCredits={entitlement.includedCredits}
+          purchasedCredits={entitlement.purchasedCredits}
+          creditBalance={entitlement.creditBalance}
           locale={locale}
-          onManage={() => void Linking.openURL(LEGAL_URLS.terms)}
+          onManage={() => void openManageSubscriptions()}
         />
 
         <Text style={[styles.creditsExplain, { color: colors.textMuted }]}>
@@ -229,54 +204,61 @@ export function BillingScreen(_props: Props = {}) {
           {tr('subOwnerSeatNote')}
         </Text>
 
+        <BillingPeriodToggle period={period} onChange={setPeriod} tr={tr} />
         <CommonFeaturesCard tr={tr} />
 
         {cards.map((plan) => {
-          const price = storePrices[plan.id];
+          const price = store.storePrices[plan.id];
           const cta = resolvePlanCta(plan.id, planId, status, {
             storePriceAvailable: Boolean(price?.available),
             purchasePending: purchasing,
           });
           return (
             <PlanCardView
-              key={plan.id}
+              key={`${plan.id}-${period}`}
               plan={plan}
               tr={tr}
               taglineKey={TAGLINE_KEYS[plan.id]}
               featureKeys={FEATURE_KEYS[plan.id]}
               price={price}
+              period={period}
               cta={cta}
               isCurrent={planId === plan.id && Boolean(status && status !== 'none')}
               purchasing={purchasing}
-              onPressCta={() => onPurchase(plan.id)}
-              onRetryPrice={() => void refreshStore()}
+              onPressCta={() =>
+                void runPurchase(
+                  () => purchaseSubscription(plan.id, period),
+                  'subPurchaseSuccess',
+                )
+              }
+              onRetryPrice={() => void store.refreshStore()}
             />
           );
         })}
 
-        <View style={[styles.footer, { borderColor: colors.border }]}>
-          <Text style={[styles.footerText, { color: colors.textMuted }]}>{tr('subFooterStore')}</Text>
-          <Text style={[styles.footerText, { color: colors.textMuted }]}>{tr('subFooterReset')}</Text>
-          <Text style={[styles.footerText, { color: colors.textMuted }]}>{tr('subFooterPurchased')}</Text>
-          <Pressable
-            onPress={() => setPurchaseNote(tr('subRestoreUnavailable'))}
-            accessibilityRole="button"
-          >
-            <Text style={[styles.link, { color: colors.accent }]}>{tr('subRestore')}</Text>
-          </Pressable>
-          <View style={styles.legalRow}>
-            <Pressable onPress={() => void Linking.openURL(LEGAL_URLS.terms)}>
-              <Text style={[styles.link, { color: colors.accent }]}>{tr('terms')}</Text>
-            </Pressable>
-            <Text style={{ color: colors.textDim }}> · </Text>
-            <Pressable onPress={() => void Linking.openURL(LEGAL_URLS.privacy)}>
-              <Text style={[styles.link, { color: colors.accent }]}>{tr('privacy')}</Text>
-            </Pressable>
-          </View>
-        </View>
+        {Platform.OS === 'ios' ? (
+          <CreditPacksSection
+            tr={tr}
+            prices={store.creditPrices}
+            purchasing={purchasing}
+            onBuy={(credits: CreditPackId) =>
+              void runPurchase(() => purchaseCredits(credits), 'subCreditsPurchaseSuccess')
+            }
+            locale={locale}
+          />
+        ) : null}
 
-        {__DEV__ && raw ? (
-          <Text style={[styles.mono, { color: colors.textMuted }]}>{raw}</Text>
+        <BillingStoreActions
+          tr={tr}
+          showRefund={showRefund}
+          busy={purchasing}
+          onRestore={() => void onRestore()}
+          onManage={() => void openManageSubscriptions()}
+          onRefund={() => void onRefund()}
+        />
+
+        {__DEV__ && entitlement.raw ? (
+          <Text style={[styles.mono, { color: colors.textMuted }]}>{entitlement.raw}</Text>
         ) : null}
       </ScrollView>
     </ScreenChrome>
@@ -288,15 +270,6 @@ const styles = StyleSheet.create({
   backText: { fontFamily: fonts.bodyMedium, fontSize: 14 },
   list: { paddingBottom: 48, gap: spacing.md },
   creditsExplain: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18 },
-  footer: {
-    borderTopWidth: 1,
-    paddingTop: spacing.md,
-    gap: 6,
-    marginTop: spacing.sm,
-  },
-  footerText: { fontFamily: fonts.body, fontSize: 12, lineHeight: 17 },
-  legalRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  link: { fontFamily: fonts.bodyMedium, fontSize: 13 },
   error: { fontFamily: fonts.body, marginBottom: spacing.sm },
   note: { fontFamily: fonts.body, fontSize: 13, marginBottom: spacing.sm },
   mono: { fontFamily: 'Courier', fontSize: 11, lineHeight: 15 },

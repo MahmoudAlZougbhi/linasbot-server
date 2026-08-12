@@ -51,6 +51,14 @@ function mockFetch(impl) {
   global.fetch = /** @type {typeof fetch} */ (/** @type {unknown} */ (vi.fn(impl)));
 }
 
+const validSessionUser = {
+  id: "1",
+  email: "a@test.com",
+  role: "admin",
+  tenantId: "linas",
+  status: "active",
+};
+
 describe("AuthContext", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -67,7 +75,7 @@ describe("AuthContext", () => {
 
   it("clears expired local session older than 24 hours", async () => {
     const stale = {
-      user: { id: "1", email: "stale@test.com", role: "admin", status: "active" },
+      user: { id: "1", email: "stale@test.com", role: "admin", tenantId: "linas", status: "active" },
       timestamp: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(),
     };
     localStorage.setItem("auth_session", JSON.stringify(stale));
@@ -83,14 +91,57 @@ describe("AuthContext", () => {
     localStorage.setItem(
       "auth_session",
       JSON.stringify({
-        user: { id: "1", email: "a@test.com", role: "admin", status: "active" },
+        user: { id: "1", email: "a@test.com", role: "admin", tenantId: "linas", status: "active" },
         timestamp: new Date().toISOString(),
       })
     );
     mockFetch(async () => ({
       ok: true,
+      status: 200,
       json: async () => ({ success: false, error: "Session expired" }),
     }));
+
+    renderAuth();
+    await waitFor(() => {
+      expect(screen.getByTestId("user-email")).toHaveTextContent("none");
+    });
+    expect(localStorage.getItem("auth_session")).toBeNull();
+  });
+
+  it("clears session on 401 and does not restore privileged cache", async () => {
+    localStorage.setItem(
+      "auth_session",
+      JSON.stringify({
+        user: { id: "1", email: "a@test.com", role: "admin", tenantId: "linas", status: "active" },
+        timestamp: new Date().toISOString(),
+      })
+    );
+    mockFetch(async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({ success: false, error: "Authentication required" }),
+    }));
+
+    renderAuth();
+    await waitFor(() => {
+      expect(screen.getByText("login-page")).toBeInTheDocument();
+    });
+    expect(localStorage.getItem("auth_session")).toBeNull();
+  });
+
+  it("does not restore admin cache on network timeout", async () => {
+    localStorage.setItem(
+      "auth_session",
+      JSON.stringify({
+        user: { id: "1", email: "a@test.com", role: "admin", tenantId: "linas", status: "active" },
+        timestamp: new Date().toISOString(),
+      })
+    );
+    mockFetch(async () => {
+      const err = new Error("Aborted");
+      err.name = "AbortError";
+      throw err;
+    });
 
     renderAuth();
     await waitFor(() => {
@@ -105,6 +156,7 @@ describe("AuthContext", () => {
         expect(/** @type {RequestInit} */ (options).credentials).toBe("include");
         return {
           ok: true,
+          status: 200,
           json: async () => ({
             success: true,
             csrf_token: "fresh-csrf",
@@ -112,6 +164,7 @@ describe("AuthContext", () => {
               id: "9",
               email: "a@test.com",
               role: "admin",
+              tenantId: "linas",
               status: "active",
             },
           }),
@@ -119,6 +172,7 @@ describe("AuthContext", () => {
       }
       return {
         ok: true,
+        status: 200,
         json: async () => ({ success: false }),
       };
     });
@@ -138,6 +192,7 @@ describe("AuthContext", () => {
   it("surfaces login failure for forbidden credentials", async () => {
     mockFetch(async () => ({
       ok: true,
+      status: 200,
       json: async () => ({ success: false, error: "Invalid email or password" }),
     }));
 
@@ -159,6 +214,7 @@ describe("AuthContext", () => {
           id: "1",
           email: "a@test.com",
           role: "admin",
+          tenantId: "linas",
           status: "active",
           resolvedPermissions: {},
         },
@@ -172,16 +228,17 @@ describe("AuthContext", () => {
       if (String(url).includes("/session")) {
         return {
           ok: true,
+          status: 200,
           json: async () => ({
             success: true,
-            user: { id: "1", email: "a@test.com", role: "admin", status: "active" },
+            user: { id: "1", email: "a@test.com", role: "admin", tenantId: "linas", status: "active" },
           }),
         };
       }
       if (String(url).includes("/logout")) {
-        return { ok: true, json: async () => ({ success: true }) };
+        return { ok: true, status: 200, json: async () => ({ success: true }) };
       }
-      return { ok: true, json: async () => ({ success: false }) };
+      return { ok: true, status: 200, json: async () => ({ success: false }) };
     });
 
     renderAuth();
@@ -196,5 +253,40 @@ describe("AuthContext", () => {
     });
     expect(localStorage.getItem("auth_session")).toBeNull();
     expect(localStorage.getItem("csrf_token")).toBeNull();
+  });
+
+  it("restores valid linas admin session from backend", async () => {
+    localStorage.setItem(
+      "auth_session",
+      JSON.stringify({
+        user: validSessionUser,
+        timestamp: new Date().toISOString(),
+      })
+    );
+    mockFetch(async (url) => {
+      if (String(url).includes("/session")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            user: {
+              id: "1",
+              email: "admin@linas.ai",
+              role: "admin",
+              tenantId: "linas",
+              status: "active",
+              emailVerified: true,
+            },
+          }),
+        };
+      }
+      return { ok: true, json: async () => ({ success: false }) };
+    });
+
+    renderAuth();
+    await waitFor(() => {
+      expect(screen.getByTestId("user-email")).toHaveTextContent("admin@linas.ai");
+    });
   });
 });

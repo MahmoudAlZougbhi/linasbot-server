@@ -1,6 +1,8 @@
+import { appleAccountEn } from './appleAccountEn';
 import { subscriptionEn } from './subscriptionEn';
 import { smartFollowUpEn } from './smartFollowUpEn';
 import { whatsappEn } from './whatsappEn';
+import { requestsEn } from './requestsEn';
 
 export const en = {
   appName: 'Linas AI',
@@ -25,8 +27,10 @@ export const en = {
   registerStepCredentials: 'First, set your email and password.',
   registerStepName: 'Tell us about your business.',
   registerStepGender: 'Optional — helps personalize how Linas addresses you.',
-  registerNeedCredentials: 'Enter a valid email and a password (6+ characters).',
+  registerNeedCredentials: 'Enter a valid email and a password (12+ characters).',
   registerNeedBusiness: 'Business name is required.',
+  registerFailed: 'Registration failed.',
+  networkError: 'Network error. Check your connection and try again.',
   registeredVerify: 'Registered. Verify your email, then log in.',
   chatEmptyTitle: "I'm Linas AI — your assistant in the app",
   chatEmptyBody:
@@ -343,9 +347,13 @@ export const en = {
   socialContinueWith: 'or continue with',
   socialContinueGoogle: 'Continue with Google',
   socialContinueApple: 'Continue with Apple',
+  appleSignInFailed: 'Apple sign-in failed. Please try again.',
+  appleSignInUnavailable: 'Sign in with Apple is not available on this device.',
+  ...appleAccountEn,
   ...subscriptionEn,
   ...whatsappEn,
   ...smartFollowUpEn,
+  ...requestsEn,
 
   proposalChangeTitle: 'AI Setup change',
   proposalDeleteTitle: 'Delete from AI Setup',

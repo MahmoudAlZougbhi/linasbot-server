@@ -1,0 +1,98 @@
+[
+  {
+    "path": "dashboard/src/components/UserManagement/UserForm.jsx",
+    "pattern": "password_assign",
+    "line": 79,
+    "snippet": "password = 'Password is required';     } else if (formData.password && formData."
+  },
+  {
+    "path": "dashboard/src/components/UserManagement/UserList.jsx",
+    "pattern": "admin_bypass",
+    "line": 115,
+    "snippet": "role === 'admin'                     ? 'bg-purple-100 text-purple-700'          "
+  },
+  {
+    "path": "dashboard/src/contexts/PermissionsContext.jsx",
+    "pattern": "admin_bypass",
+    "line": 78,
+    "snippet": "role === 'admin';   };    const value = {     permissions,     roles,     hasPer"
+  },
+  {
+    "path": "mobile/linas-ai/src/features/users/usersPermissions.ts",
+    "pattern": "admin_bypass",
+    "line": 90,
+    "snippet": "role === 'admin' || role === 'platform_owner') {     return { ...ROLE_PERMISSION"
+  },
+  {
+    "path": "modules/models.py",
+    "pattern": "operator_001",
+    "line": 168,
+    "snippet": "operator_001 default     language: str = \"ar\"   # Live Chat Models class Takeove"
+  },
+  {
+    "path": "modules/wallet_api.py",
+    "pattern": "silent_linas_or",
+    "line": 55,
+    "snippet": "or \"linas\").split(\",\")         if part.strip()     }     return session_tenant.s"
+  },
+  {
+    "path": "scripts/audit_meta_app_a_scopes.py",
+    "pattern": "silent_linas_or",
+    "line": 38,
+    "snippet": "or \"linas\").strip() or \"linas\"     actions = load_actions_section(tenant_id)    "
+  },
+  {
+    "path": "scripts/cm_prepare_remove_linas_bridge.py",
+    "pattern": "silent_linas_or",
+    "line": 30,
+    "snippet": "or \"linas\").strip()     pointer = read_published_pointer(tenant_id)     report: "
+  },
+  {
+    "path": "services/cm/constants.py",
+    "pattern": "silent_linas_or",
+    "line": 20,
+    "snippet": "or \"linas\"  # Initial Restricted defaults (plan D8) \u2014 owner may change in an app"
+  },
+  {
+    "path": "services/entitlements_service.py",
+    "pattern": "silent_linas_or",
+    "line": 37,
+    "snippet": "or \"linas\").strip()     ids = {part.strip().lower() for part in raw.split(\",\") i"
+  },
+  {
+    "path": "services/token_wallet_models.py",
+    "pattern": "silent_linas_or",
+    "line": 50,
+    "snippet": "or \"linas\").strip()     ids = {part.strip().lower() for part in raw.split(\",\") i"
+  },
+  {
+    "path": "tests/test_admin_provisioning.py",
+    "pattern": "password_assign",
+    "line": 30,
+    "snippet": "password=\"SecurePassPhrase99!\",             name=\"Owner\",         )     assert r"
+  },
+  {
+    "path": "tests/test_live_chat_sse_cors.py",
+    "pattern": "cors_star",
+    "line": 1,
+    "snippet": "Access-Control-Allow-Origin: *.\"\"\"  from __future__ import annotations  from sta"
+  },
+  {
+    "path": "tests/test_models_operator_id.py",
+    "pattern": "operator_001",
+    "line": 32,
+    "snippet": "operator_001_default() -> None:     req = FeedbackRequest(         conversation_"
+  },
+  {
+    "path": "tests/test_tenant_fail_closed_a2.py",
+    "pattern": "silent_linas_or",
+    "line": 236,
+    "snippet": "or \"linas\"' not in src     assert \"tenant_required\" in src "
+  },
+  {
+    "path": "tests/test_tenant_user_isolation.py",
+    "pattern": "password_assign",
+    "line": 67,
+    "snippet": "password=\"test-password-only\",         tenant_id=\"tenant-b\",     )      with pyt"
+  }
+]

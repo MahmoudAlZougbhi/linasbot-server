@@ -1,26 +1,33 @@
 import { StyleSheet, TextInput, type TextInputProps } from 'react-native';
 
-import { colors, fonts, radii, spacing } from '../theme';
+import { fonts, radii, spacing, useTheme } from '../theme';
 
 type Props = TextInputProps;
 
 export function TextField(props: Props) {
+  const { colors } = useTheme();
   return (
     <TextInput
       placeholderTextColor={colors.textDim}
       {...props}
-      style={[styles.input, props.multiline && styles.multi, props.style]}
+      style={[
+        styles.input,
+        {
+          backgroundColor: colors.input,
+          borderColor: colors.border,
+          color: colors.text,
+        },
+        props.multiline && styles.multi,
+        props.style,
+      ]}
     />
   );
 }
 
 const styles = StyleSheet.create({
   input: {
-    backgroundColor: colors.input,
-    borderColor: colors.border,
     borderWidth: 1,
     borderRadius: radii.md,
-    color: colors.text,
     fontFamily: fonts.body,
     fontSize: 16,
     paddingHorizontal: spacing.lg - 2,

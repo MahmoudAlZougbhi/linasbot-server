@@ -26,7 +26,7 @@ class MetaMessagingSettings:
     graph_api_version: str
     app_id: str = ""
     app_key: str = "linas_first_party"
-    tenant_id: str = "linas"
+    tenant_id: str = ""
     binding_id: str = ""
     auth_flow: str = "facebook_login"
     graph_base_url: str = "https://graph.facebook.com"

@@ -57,12 +57,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 export function useTheme(): ThemeContextValue {
   const ctx = useContext(ThemeContext);
   if (!ctx) {
-    return {
-      mode: 'light',
-      resolved: 'light',
-      colors: lightColors,
-      setMode: () => undefined,
-    };
+    throw new Error('useTheme requires ThemeProvider');
   }
   return ctx;
 }

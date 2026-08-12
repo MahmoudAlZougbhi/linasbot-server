@@ -29,6 +29,11 @@ jobs:
           script: |
             set -euo pipefail
             cd /opt/linasbot
-            git fetch origin fix/ig-fb-comments-capability-gates main
-            git checkout origin/fix/ig-fb-comments-capability-gates -- scripts/prod_meta_comment_runtime_probe.py
+            # Prefer deployed script; refresh from origin/main only if missing.
+            # Do not soft-checkout a stale feature branch.
+            if [ ! -f /opt/linasbot/scripts/prod_meta_comment_runtime_probe.py ]; then
+              git fetch origin main
+              git show origin/main:scripts/prod_meta_comment_runtime_probe.py > /tmp/prod_meta_comment_runtime_probe.py
+              install -m 0755 /tmp/prod_meta_comment_runtime_probe.py /opt/linasbot/scripts/prod_meta_comment_runtime_probe.py
+            fi
             python3 /opt/linasbot/scripts/prod_meta_comment_runtime_probe.py

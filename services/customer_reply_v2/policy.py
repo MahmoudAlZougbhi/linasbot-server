@@ -25,6 +25,7 @@ def enforce_restricted_and_handoff(
     message: str,
     response_language: str,
     explicit_gender: str | None = None,
+    channel: str | None = None,
 ) -> dict[str, Any] | None:
     """Return a stop decision dict if restricted/handoff applies; else None."""
     _pointer, sections = load_published_content(tenant_id)
@@ -41,10 +42,48 @@ def enforce_restricted_and_handoff(
         }
 
     from services.cm.actions import ACTION_HUMAN_HANDOFF, action_enabled
+    from services.requests.capture import (
+        comment_capture_policy_reply,
+        is_public_comment_channel,
+        public_comment_dm_invite,
+        skip_forced_booking_wa_me,
+    )
+    from services.requests.intent import is_appointment_or_order_intent
 
+    # Exact public-comment channels only — never substring-match (comment_linked_dm is private).
+    public_comment = is_public_comment_channel(channel)
     handoff_intent = _detect_booking_or_human(message)
+    if handoff_intent == "booking" and skip_forced_booking_wa_me(tenant_id):
+        if public_comment:
+            return comment_capture_policy_reply(
+                tenant_id=tenant_id,
+                message=message,
+                response_language=response_language,
+                booking_or_order_intent=True,
+            )
+        # DM/private (incl. comment_linked_dm): let Requests capture AI continue (no forced wa.me).
+        return None
+    if public_comment and skip_forced_booking_wa_me(tenant_id) and is_appointment_or_order_intent(message):
+        return comment_capture_policy_reply(
+            tenant_id=tenant_id,
+            message=message,
+            response_language=response_language,
+            booking_or_order_intent=True,
+        )
+
     actions_section = ActionsSection.model_validate(sections.get("actions") or {})
     if handoff_intent and action_enabled(actions_section, ACTION_HUMAN_HANDOFF):
+        # Public comments must never receive phone / wa.me / email destinations.
+        if public_comment:
+            return {
+                "stop": True,
+                "reply": public_comment_dm_invite(response_language),
+                "reason": "handoff_public_comment_dm_invite",
+                "metadata": {
+                    "handoff_intent": handoff_intent,
+                    "pii_safe_public_comment": True,
+                },
+            }
         handoff_policy = HandoffPolicy.model_validate(sections.get("handoff") or {})
         gender = None
         if explicit_gender in {"men", "male", "man"}:

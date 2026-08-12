@@ -58,11 +58,11 @@ describe("ProtectedRoute", () => {
       <MemoryRouter initialEntries={["/settings"]}>
         <Routes>
           <Route path="/settings" element={<ProtectedRoute><div>settings</div></ProtectedRoute>} />
-          <Route path="/app" element={<div>dashboard-home</div>} />
+          <Route path="/" element={<div>landing-home</div>} />
         </Routes>
       </MemoryRouter>
     );
-    expect(screen.getByText("dashboard-home")).toBeInTheDocument();
+    expect(screen.getByText("landing-home")).toBeInTheDocument();
   });
 
   it("blocks requiredPermission when user lacks feature", () => {
@@ -84,10 +84,37 @@ describe("ProtectedRoute", () => {
               </ProtectedRoute>
             }
           />
-          <Route path="/app" element={<div>dashboard-home</div>} />
+          <Route path="/" element={<div>landing-home</div>} />
         </Routes>
       </MemoryRouter>
     );
-    expect(screen.getByText("dashboard-home")).toBeInTheDocument();
+    expect(screen.getByText("landing-home")).toBeInTheDocument();
+  });
+
+  it("denies admin without requiredPermission (fail-closed, no admin bypass)", () => {
+    mockUseAuth.mockReturnValue({
+      user: makeAuthUser({
+        role: "admin",
+        resolvedPermissions: { dashboard: true, liveChat: false, settings: true },
+      }),
+      loading: false,
+    });
+    render(
+      <MemoryRouter initialEntries={["/live-chat"]}>
+        <Routes>
+          <Route
+            path="/live-chat"
+            element={
+              <ProtectedRoute requiredPermission="liveChat">
+                <div>live-chat-page</div>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/" element={<div>landing-home</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(screen.queryByText("live-chat-page")).not.toBeInTheDocument();
+    expect(screen.getByText("landing-home")).toBeInTheDocument();
   });
 });

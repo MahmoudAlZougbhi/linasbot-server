@@ -123,10 +123,13 @@ class DashboardSessionService:
         email: str,
         role: str,
         permissions: dict[str, bool] | None,
-        tenant_id: str = "linas",
+        tenant_id: str | None = None,
         password_epoch: int = 0,
         ttl_seconds: int | None = None,
     ) -> SessionRecord:
+        tid = (tenant_id or "").strip()
+        if not tid:
+            raise ValueError("tenant_id required")
         ttl = int(ttl_seconds or DEFAULT_SESSION_TTL_SECONDS)
         now = time.time()
         record = SessionRecord(
@@ -135,7 +138,7 @@ class DashboardSessionService:
             email=email,
             role=role or "viewer",
             permissions=permissions,
-            tenant_id=(tenant_id or "linas").strip() or "linas",
+            tenant_id=tid,
             csrf_token=secrets.token_urlsafe(32),
             created_at=now,
             expires_at=now + ttl,
@@ -239,13 +242,16 @@ class DashboardSessionService:
             except Exception:
                 # If user lookup fails, rely on revoke/expiry only (do not invent access).
                 pass
+        tenant_id = str(data.get("tenant_id") or "").strip()
+        if not tenant_id:
+            return None
         return SessionRecord(
             session_id=str(data["session_id"]),
             user_id=user_id,
             email=str(data.get("email") or ""),
             role=str(data.get("role") or "viewer"),
             permissions=data.get("permissions"),
-            tenant_id=str(data.get("tenant_id") or "linas"),
+            tenant_id=tenant_id,
             csrf_token=str(data.get("csrf_token") or ""),
             created_at=float(data.get("created_at") or 0),
             expires_at=float(data.get("expires_at") or 0),
@@ -260,13 +266,16 @@ class DashboardSessionService:
         if not data:
             return
         data["revoked"] = True
+        tenant_id = str(data.get("tenant_id") or "").strip()
+        if not tenant_id:
+            return
         record = SessionRecord(
             session_id=session_id,
             user_id=str(data.get("user_id") or ""),
             email=str(data.get("email") or ""),
             role=str(data.get("role") or "viewer"),
             permissions=data.get("permissions"),
-            tenant_id=str(data.get("tenant_id") or "linas"),
+            tenant_id=tenant_id,
             csrf_token=str(data.get("csrf_token") or ""),
             created_at=float(data.get("created_at") or 0),
             expires_at=float(data.get("expires_at") or 0),

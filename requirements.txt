@@ -58,6 +58,7 @@ stripe>=11.0.0,<13.0.0
 
 # Authenticated encryption for tenant Meta access tokens at rest
 cryptography==50.0.0
+PyJWT==2.13.0
 
 # Language Detection for English/French (used in language_resolver.py)
 # langdetect is pure Python and works reliably

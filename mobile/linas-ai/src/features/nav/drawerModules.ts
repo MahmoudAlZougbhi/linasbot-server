@@ -26,6 +26,7 @@ export const DRAWER_MODULES: DrawerModule[] = [
   { id: 'smartFollowUp', titleKey: 'navSmartFollowUp', guestVisible: true },
   { id: 'faq', titleKey: 'faqTitle', guestVisible: true },
   { id: 'livechat', titleKey: 'navLiveChat', guestVisible: true },
+  { id: 'requests', titleKey: 'navRequests', guestVisible: true },
   { id: 'integrations', titleKey: 'integrations', guestVisible: true },
   { id: 'users', titleKey: 'usersTitle', guestVisible: true, entitlement: 'users' },
   { id: 'subscription', titleKey: 'navSubscription', guestVisible: true },

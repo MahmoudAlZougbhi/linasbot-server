@@ -10,12 +10,15 @@ from unittest.mock import patch
 import pytest
 
 from modules.api_security import (
+    _client_ip,
+    auth_rate_limit_rules,
     is_public_api,
     is_social_user_id,
     required_permission_for,
     resolve_permissions,
 )
 from services.dashboard_session_service import CSRF_COOKIE_NAME, SESSION_COOKIE_NAME, session_service
+from services.product_features import is_disabled_api_path
 from services.safe_path import is_safe_relative_name, resolve_backup_filename, resolve_under_root
 from services.ssrf_guard import SSRFValidationError, validate_fetch_url
 
@@ -80,10 +83,7 @@ class TestSSRFGuard:
 class TestSessionService:
     def test_roundtrip_and_revoke(self):
         rec = session_service.create_session(
-            user_id="u1",
-            email="a@example.com",
-            role="admin",
-            permissions=None,
+            user_id="u1", email="a@example.com", role="admin", permissions=None, tenant_id="linas"
         )
         cookie = session_service.cookie_value_for(rec)
         loaded = session_service.get_valid_session(cookie)
@@ -94,7 +94,9 @@ class TestSessionService:
         assert session_service.get_valid_session(cookie) is None
 
     def test_tampered_cookie_rejected(self):
-        rec = session_service.create_session(user_id="u2", email="b@example.com", role="viewer", permissions=None)
+        rec = session_service.create_session(
+            user_id="u2", email="b@example.com", role="viewer", permissions=None, tenant_id="linas"
+        )
         cookie = session_service.cookie_value_for(rec) + "x"
         assert session_service.get_valid_session(cookie) is None
 
@@ -118,12 +120,92 @@ class TestRBACHelpers:
 
 
 class TestMontySecretNotTracked:
-    def test_tracked_config_has_empty_api_key(self):
+    def test_monty_templates_json_removed(self):
         root = Path(__file__).resolve().parents[1]
-        data = json.loads((root / "config" / "montymobile_templates.json").read_text())
-        key = (data.get("api_config") or {}).get("api_key") or ""
-        assert key == ""
-        assert (data.get("api_config") or {}).get("api_key_env") == "MONTYMOBILE_API_KEY"
+        assert not (root / "config" / "montymobile_templates.json").exists()
+        cloud = root / "config" / "whatsapp_cloud_templates.json"
+        assert cloud.is_file()
+        data = json.loads(cloud.read_text())
+        api = data.get("api_config") or {}
+        assert "api_key" not in api
+        assert "tenant" not in api
+        assert "api_id" not in api
+
+
+class TestClientIpTrustedProxy:
+    def _request(self, headers: dict[str, str], client_host: str = "10.0.0.9"):
+        from starlette.requests import Request
+
+        scope = {
+            "type": "http",
+            "asgi": {"version": "3.0"},
+            "http_version": "1.1",
+            "method": "GET",
+            "scheme": "http",
+            "path": "/",
+            "raw_path": b"/",
+            "query_string": b"",
+            "headers": [(k.lower().encode("latin-1"), v.encode("latin-1")) for k, v in headers.items()],
+            "client": (client_host, 12345),
+            "server": ("testserver", 80),
+        }
+        return Request(scope)
+
+    def test_prefers_x_real_ip_over_spoofed_xff(self, monkeypatch):
+        monkeypatch.delenv("TRUSTED_PROXY_MODE", raising=False)
+        req = self._request(
+            {
+                "x-forwarded-for": "1.2.3.4, 10.0.0.9",
+                "x-real-ip": "203.0.113.50",
+            }
+        )
+        assert _client_ip(req) == "203.0.113.50"
+
+    def test_ignores_xff_when_no_x_real_ip(self, monkeypatch):
+        monkeypatch.delenv("TRUSTED_PROXY_MODE", raising=False)
+        req = self._request({"x-forwarded-for": "1.2.3.4"})
+        assert _client_ip(req) == "10.0.0.9"
+
+    def test_direct_mode_ignores_forwarded_headers(self, monkeypatch):
+        monkeypatch.setenv("TRUSTED_PROXY_MODE", "direct")
+        req = self._request({"x-real-ip": "203.0.113.50", "x-forwarded-for": "1.2.3.4"})
+        assert _client_ip(req) == "10.0.0.9"
+
+
+class TestAuthRateLimitRules:
+    def test_mobile_login_and_refresh_have_ip_and_identifier_buckets(self):
+        login_rules = auth_rate_limit_rules("/api/auth/mobile/login", "9.9.9.9", "user@example.com")
+        refresh_rules = auth_rate_limit_rules("/api/auth/mobile/refresh", "9.9.9.9", "abcd1234fingerprint")
+        login_keys = {k for k, _, _ in login_rules}
+        refresh_keys = {k for k, _, _ in refresh_rules}
+        assert "mobile-login:9.9.9.9" in login_keys
+        assert "mobile-login:id:user@example.com" in login_keys
+        assert "mobile-refresh:9.9.9.9" in refresh_keys
+        assert "mobile-refresh:id:abcd1234fingerprint" in refresh_keys
+
+        # Match or stricter than dashboard login IP budget (10/300).
+        dash = {
+            k: (lim, win) for k, lim, win in auth_rate_limit_rules("/api/auth/login", "9.9.9.9", "user@example.com")
+        }
+        mobile = {k: (lim, win) for k, lim, win in login_rules}
+        assert mobile["mobile-login:9.9.9.9"][0] <= dash["login:9.9.9.9"][0]
+        assert mobile["mobile-login:id:user@example.com"][0] <= dash["login:id:user@example.com"][0]
+
+    def test_password_reset_verify_resend_have_identifier_buckets(self):
+        forgot = auth_rate_limit_rules("/api/auth/forgot-password", "1.1.1.1", "a@b.co")
+        reset = auth_rate_limit_rules("/api/auth/reset-password", "1.1.1.1", "tokfingerprint")
+        verify = auth_rate_limit_rules("/api/auth/verify-email", "1.1.1.1", "tokfingerprint")
+        resend = auth_rate_limit_rules("/api/auth/resend-verification", "1.1.1.1", "a@b.co")
+        assert any(k.startswith("forgot:id:") for k, _, _ in forgot)
+        assert any(k.startswith("reset:id:") for k, _, _ in reset)
+        assert any(k.startswith("verify:id:") for k, _, _ in verify)
+        assert any(k.startswith("resend-verify:id:") for k, _, _ in resend)
+
+    def test_disabled_product_paths_still_matched(self):
+        # Regression: disabled-path gate remains in place (covered elsewhere; keep a smoke assert).
+        assert is_disabled_api_path("/api/test/foo") is True
+        assert is_disabled_api_path("/api/switch-provider") is True
+        assert is_disabled_api_path("/api/auth/mobile/login") is False
 
 
 @pytest.fixture(scope="module")
@@ -174,7 +256,9 @@ class TestAPIAuthEnforcement:
         r = client.get("/api/media/audio", params={"url": "http://127.0.0.1:9/"})
         assert r.status_code == 401
         # Authenticated viewer with liveChat
-        rec = session_service.create_session(user_id="op1", email="op@example.com", role="operator", permissions=None)
+        rec = session_service.create_session(
+            user_id="op1", email="op@example.com", role="operator", permissions=None, tenant_id="linas"
+        )
         client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
         client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
         r2 = client.get("/api/media/audio", params={"url": "http://127.0.0.1:9/"})
@@ -182,7 +266,9 @@ class TestAPIAuthEnforcement:
         assert r2.status_code == 400
 
     def test_simulate_webhook_disabled(self, client):
-        rec = session_service.create_session(user_id="t1", email="t@example.com", role="admin", permissions=None)
+        rec = session_service.create_session(
+            user_id="t1", email="t@example.com", role="admin", permissions=None, tenant_id="linas"
+        )
         client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
         client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
         r = client.post(
@@ -195,7 +281,9 @@ class TestAPIAuthEnforcement:
         assert body.get("code") == "PRODUCT_MODULE_DISABLED"
 
     def test_social_takeover_forbidden(self, client):
-        rec = session_service.create_session(user_id="op2", email="op2@example.com", role="admin", permissions=None)
+        rec = session_service.create_session(
+            user_id="op2", email="op2@example.com", role="admin", permissions=None, tenant_id="linas"
+        )
         client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
         client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
         r = client.post(
@@ -211,7 +299,7 @@ class TestAPIAuthEnforcement:
 
     def test_session_idor_blocked(self, client):
         rec = session_service.create_session(
-            user_id="real-user", email="real@example.com", role="admin", permissions=None
+            user_id="real-user", email="real@example.com", role="admin", permissions=None, tenant_id="linas"
         )
         client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
         r = client.get("/api/auth/session/other-user")
@@ -219,14 +307,32 @@ class TestAPIAuthEnforcement:
         assert r.json().get("success") is False
 
     def test_csrf_required_on_mutation(self, client):
-        rec = session_service.create_session(user_id="op3", email="op3@example.com", role="admin", permissions=None)
+        rec = session_service.create_session(
+            user_id="op3", email="op3@example.com", role="admin", permissions=None, tenant_id="linas"
+        )
         client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
         client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
         r = client.post("/api/smart-messaging/toggle", json={})
         assert r.status_code == 403
 
+    def test_csrf_mismatch_still_403(self, client):
+        rec = session_service.create_session(
+            user_id="op3b", email="op3b@example.com", role="admin", permissions=None, tenant_id="linas"
+        )
+        client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
+        client.cookies.set(CSRF_COOKIE_NAME, rec.csrf_token)
+        r = client.post(
+            "/api/auth/logout",
+            json={},
+            headers={"X-CSRF-Token": "definitely-not-the-csrf-token"},
+        )
+        assert r.status_code == 403
+        assert r.json().get("error") == "CSRF validation failed"
+
     def test_role_matrix_viewer_forbidden_users(self, client):
-        rec = session_service.create_session(user_id="v1", email="v@example.com", role="viewer", permissions=None)
+        rec = session_service.create_session(
+            user_id="v1", email="v@example.com", role="viewer", permissions=None, tenant_id="linas"
+        )
         client.cookies.set(SESSION_COOKIE_NAME, session_service.cookie_value_for(rec))
         r = client.get("/api/auth/users")
         assert r.status_code == 403

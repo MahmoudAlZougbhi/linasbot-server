@@ -169,3 +169,21 @@ dashboard/test-results/
 
 .venv
 .venv/
+
+#-------------------------
+# Runtime logs / local probes (not seeds)
+#-------------------------
+logs/*.out
+.tmp_8010_*.json
+
+# Runtime jsonl (durable via LINASBOT_DATA_ROOT / cwd — not git seeds).
+# Untracked after owner decision (A5): keep files on disk, stop tracking.
+data/*.jsonl
+logs/content_violations.jsonl
+
+# Built APK artifacts (keep landing brand + mobile icons tracked).
+*.apk
+mobile/releases/*.apk
+
+# Apple AuthKey / SubscriptionKey material — never commit
+*.p8

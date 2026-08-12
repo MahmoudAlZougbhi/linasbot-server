@@ -117,7 +117,9 @@ class HumanTakeoverNotificationService:
         }
 
         print(f"📤 Sending human takeover notifications to {len(notify_numbers)} number(s)")
-        print(f"   Customer: {customer_name} ({customer_phone})")
+        print(
+            f"   Customer: name_len={len(str(customer_name or ''))} (***{str(customer_phone)[-4:] if customer_phone else ''})"
+        )
         print(f"   Reason: {escalation_reason} → {escalation_reason_ar}")
         print(f"   Notify: {', '.join(notify_numbers)}")
 
@@ -136,9 +138,11 @@ class HumanTakeoverNotificationService:
 
                 if result.get("success"):
                     success_count += 1
-                    print(f"   ✅ Sent to {phone_number}")
+                    print(f"   ✅ Sent to ***{str(phone_number)[-4:] if phone_number else ''}")
                 else:
-                    print(f"   ❌ Failed to send to {phone_number}: {result.get('error')}")
+                    print(
+                        f"   ❌ Failed to send to ***{str(phone_number)[-4:] if phone_number else ''}: {result.get('error')}"
+                    )
 
                 results.append(
                     {
@@ -150,7 +154,7 @@ class HumanTakeoverNotificationService:
                 )
 
             except Exception as e:
-                print(f"   ❌ Exception sending to {phone_number}: {e}")
+                print(f"   ❌ Exception sending to ***{str(phone_number)[-4:] if phone_number else ''}: {e}")
                 results.append({"phone_number": phone_number, "success": False, "error": str(e)})
 
         return {
