@@ -8,7 +8,6 @@ from unittest import mock
 
 import jwt
 import pytest
-from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 from services import google_sign_in_service as gsi

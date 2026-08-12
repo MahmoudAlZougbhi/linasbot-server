@@ -41,7 +41,6 @@ import modules.apple_auth_api  # noqa: E402, F401
 import modules.apple_iap_client_api  # noqa: E402, F401
 import modules.apple_store_webhook_api  # noqa: E402, F401
 import modules.auth_api  # noqa: E402, F401
-import modules.google_auth_api  # noqa: E402, F401
 import modules.auth_email_change_api  # noqa: E402, F401
 import modules.chat_history_api  # noqa: E402, F401
 import modules.cm_api  # noqa: E402, F401
@@ -55,6 +54,7 @@ import modules.entitlements_api  # noqa: E402, F401
 import modules.event_handlers  # noqa: E402, F401
 import modules.feedback_api  # noqa: E402, F401
 import modules.flow_api  # noqa: E402, F401
+import modules.google_auth_api  # noqa: E402, F401
 import modules.guest_ai_api  # noqa: E402, F401
 import modules.instructions_api  # noqa: E402, F401
 import modules.live_chat_api  # noqa: E402, F401
