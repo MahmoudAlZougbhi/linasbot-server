@@ -151,7 +151,7 @@ All Quality Gates + Security Checks SUCCESS on PR head. No merge.
 | Field | Value |
 |------|-------|
 | Starting SHA | (pre-Phase-8 branch head) |
-| Ending SHA |  |
+| Ending SHA | `53dff9284654200a295a0f24c23b4cf4d5b985e2` |
 | Status | **DONE** |
 | Gate | `LINASLASER_BOC_BOOKING_ENABLED` default **false** via `services/product_features.boc_booking_enabled()` |
 | Production | **Not enabled** |
