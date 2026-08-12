@@ -182,6 +182,7 @@ class CustomerRequestsRepository:
         request_id: str | None = None,
         limit: int = 20,
     ) -> list[CustomerRequestOutbox]:
+        """Read-only pending rows (no claim). Prefer claim_pending_outbox for workers."""
         lim = max(1, min(int(limit or 20), 100))
         clauses = [CustomerRequestOutbox.status == "pending"]
         if tenant_id:
@@ -195,6 +196,43 @@ class CustomerRequestsRepository:
             .limit(lim)
         )
         return list(self.session.execute(stmt).scalars().all())
+
+    def claim_pending_outbox(
+        self,
+        *,
+        tenant_id: str | None = None,
+        request_id: str | None = None,
+        limit: int = 20,
+    ) -> list[CustomerRequestOutbox]:
+        """
+        Atomically claim pending outbox rows for processing (multi-worker safe on Postgres).
+
+        Postgres: SELECT … FOR UPDATE SKIP LOCKED, then pending → processing in same transaction.
+        SQLite (tests): simple SELECT pending, still marks processing before return.
+        """
+        lim = max(1, min(int(limit or 20), 100))
+        clauses = [CustomerRequestOutbox.status == "pending"]
+        if tenant_id:
+            clauses.append(CustomerRequestOutbox.tenant_id == tenant_id)
+        if request_id:
+            clauses.append(CustomerRequestOutbox.request_id == request_id)
+        stmt = (
+            select(CustomerRequestOutbox)
+            .where(and_(*clauses))
+            .order_by(CustomerRequestOutbox.created_at.asc())
+            .limit(lim)
+        )
+        bind = self.session.get_bind()
+        dialect_name = bind.dialect.name if bind is not None else "sqlite"
+        if dialect_name == "postgresql":
+            stmt = stmt.with_for_update(skip_locked=True)
+        rows = list(self.session.execute(stmt).scalars().all())
+        for row in rows:
+            row.status = "processing"
+            row.attempts = int(row.attempts or 0) + 1
+        if rows:
+            self.session.flush()
+        return rows
 
     def get_outbox(self, *, tenant_id: str, outbox_id: str) -> CustomerRequestOutbox | None:
         row = self.session.get(CustomerRequestOutbox, outbox_id)

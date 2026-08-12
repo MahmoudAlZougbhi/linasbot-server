@@ -84,7 +84,7 @@ class CustomerRequestOutbox(Base):
     __table_args__ = (
         UniqueConstraint("tenant_id", "idempotency_key", name="uq_customer_request_outbox_idem"),
         CheckConstraint(
-            "status IN ('pending','sent','failed','blocked','cancelled')",
+            "status IN ('pending','processing','sent','failed','blocked','cancelled')",
             name="ck_customer_request_outbox_status",
         ),
         Index("ix_customer_request_outbox_tenant_request", "tenant_id", "request_id"),

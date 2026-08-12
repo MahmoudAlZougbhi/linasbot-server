@@ -42,7 +42,7 @@ def claim_pending_outbox(
     limit: int = 20,
 ) -> list[CustomerRequestOutbox]:
     repo = CustomerRequestsRepository(session)
-    return repo.list_pending_outbox(
+    return repo.claim_pending_outbox(
         tenant_id=tenant_id,
         request_id=request_id,
         limit=limit,
@@ -104,8 +104,10 @@ async def process_outbox_item(
 
     payload = item.payload if isinstance(item.payload, dict) else {}
     text = str(payload.get("message") or request.completion_message or "").strip()
-    item.attempts = int(item.attempts or 0) + 1
-    session.flush()
+    if item.status == "pending":
+        item.status = "processing"
+        item.attempts = int(item.attempts or 0) + 1
+        session.flush()
 
     deliver_fn = deliver or deliver_on_source_channel
     result = await deliver_fn(

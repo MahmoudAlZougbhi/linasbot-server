@@ -67,7 +67,7 @@ async def _webhook_bodyfp_try_claim(fp: str, current_time: float) -> bool:
         return True
     # Prefer shared Redis claim so multi-instance ingress does not double-process.
     try:
-        from services.scale.redis_claims import redis_try_claim
+        from services.scale.redis_claims import redis_claims_fail_closed, redis_try_claim
 
         shared = redis_try_claim(
             "webhook_bodyfp",
@@ -76,8 +76,13 @@ async def _webhook_bodyfp_try_claim(fp: str, current_time: float) -> bool:
         )
         if shared is not None:
             return bool(shared)
+        if redis_claims_fail_closed():
+            return False
     except Exception:
-        pass
+        from services.scale.redis_claims import redis_claims_fail_closed
+
+        if redis_claims_fail_closed():
+            return False
 
     expired = [k for k, ts in _webhook_bodyfp_cache.items() if current_time - ts > WEBHOOK_TEXT_BODYFP_WINDOW_SECONDS]
     for k in expired:
@@ -102,7 +107,7 @@ async def _webhook_memory_try_claim(message_id: str, current_time: float) -> boo
         return True
 
     try:
-        from services.scale.redis_claims import redis_try_claim
+        from services.scale.redis_claims import redis_claims_fail_closed, redis_try_claim
 
         shared = redis_try_claim(
             "webhook_mid",
@@ -111,8 +116,13 @@ async def _webhook_memory_try_claim(message_id: str, current_time: float) -> boo
         )
         if shared is not None:
             return bool(shared)
+        if redis_claims_fail_closed():
+            return False
     except Exception:
-        pass
+        from services.scale.redis_claims import redis_claims_fail_closed
+
+        if redis_claims_fail_closed():
+            return False
 
     expired_keys = [k for k, v in _webhook_dedup_cache.items() if current_time - v > WEBHOOK_DEDUP_WINDOW_SECONDS]
     for k in expired_keys:

@@ -6,6 +6,26 @@ import os
 from typing import Any
 
 
+def _truthy_env(name: str) -> bool:
+    return (os.getenv(name) or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def redis_claims_fail_closed() -> bool:
+    """
+    When True, Redis claim unavailability must not fall back to process-local or file authority.
+
+    Enabled by LINAS_FAIL_CLOSED_REDIS_CLAIMS and/or LINAS_REQUIRE_REDIS (durable queues).
+    """
+    if _truthy_env("LINAS_FAIL_CLOSED_REDIS_CLAIMS"):
+        return True
+    try:
+        from services.queues.config import redis_required
+
+        return redis_required()
+    except Exception:
+        return False
+
+
 class RedisClaimStore:
     """SET NX EX claims. Returns True when this caller owns the claim."""
 

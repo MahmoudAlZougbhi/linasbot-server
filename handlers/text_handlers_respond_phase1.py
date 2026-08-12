@@ -187,13 +187,23 @@ async def text_handlers_respond_phase1(ctx: dict) -> Any:
     if not _takeover_local:
         try:
             from services.scale.conversation_state_redis import get_takeover
+            from services.scale.redis_claims import redis_claims_fail_closed
 
             _remote = get_takeover(user_id)
             if _remote is True:
                 config.user_in_human_takeover_mode[user_id] = True
                 _takeover_local = True
+            elif redis_claims_fail_closed() and _remote is None:
+                # Shared takeover unknown — do not trust process-local alone on multi-node.
+                _takeover_local = True
         except Exception:
-            pass
+            try:
+                from services.scale.redis_claims import redis_claims_fail_closed
+
+                if redis_claims_fail_closed():
+                    _takeover_local = True
+            except Exception:
+                pass
     if not user_data.get("_dashboard_test_simulation") and _takeover_local:
         print(
             f"[_process_and_respond] INFO: Conversation {current_conversation_id} for user {user_id} is in human takeover mode. AI fallback guard active."

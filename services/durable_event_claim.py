@@ -241,13 +241,18 @@ def try_acquire_job_lock(job_id: str, *, ttl_seconds: float = 120.0) -> bool:
     if not jid:
         return False
     try:
-        from services.scale.redis_claims import redis_try_claim
+        from services.scale.redis_claims import redis_claims_fail_closed, redis_try_claim
 
         shared = redis_try_claim("scheduler_jobs", jid, ttl_seconds=float(ttl_seconds))
         if shared is not None:
             return bool(shared)
+        if redis_claims_fail_closed():
+            return False
     except Exception:
-        pass
+        from services.scale.redis_claims import redis_claims_fail_closed
+
+        if redis_claims_fail_closed():
+            return False
     return _file_try_claim("scheduler_jobs", jid, ttl_seconds=ttl_seconds)
 
 

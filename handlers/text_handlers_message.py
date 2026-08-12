@@ -308,8 +308,14 @@ async def handle_message(
         config.user_pending_messages[user_id].append(raw_msg)
         try:
             from services.scale.conversation_state_redis import set_pending_messages
+            from services.scale.redis_claims import redis_claims_fail_closed
 
-            set_pending_messages(user_id, list(config.user_pending_messages[user_id]))
+            if not set_pending_messages(user_id, list(config.user_pending_messages[user_id])):
+                if redis_claims_fail_closed():
+                    print(
+                        f"[handle_message] WARN: pending combine not published to shared Redis "
+                        f"(fail-closed) user=...{str(user_id)[-4:]}"
+                    )
         except Exception:
             pass
         # Dashboard /api/test-*: if a webhook-delayed task for this user was just cancelled, it may have

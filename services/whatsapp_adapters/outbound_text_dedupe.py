@@ -107,6 +107,15 @@ def _redis_claim_outbound(key: str) -> bool | None:
         return None
 
 
+def _outbound_fail_closed_on_redis_miss() -> bool:
+    try:
+        from services.scale.redis_claims import redis_claims_fail_closed
+
+        return redis_claims_fail_closed()
+    except Exception:
+        return False
+
+
 async def should_skip_outbound_text(resolved_recipient: str, message: str) -> bool:
     """
     Call before HTTP. Returns True if this send should be skipped (duplicate or in-flight).
@@ -121,6 +130,12 @@ async def should_skip_outbound_text(resolved_recipient: str, message: str) -> bo
     claimed = await asyncio.to_thread(_redis_claim_outbound, k)
     if claimed is False:
         print(f"⚠️ Outbound duplicate suppressed (redis): same text to same recipient within window={WINDOW_SEC}s")
+        return True
+    if claimed is None and _outbound_fail_closed_on_redis_miss():
+        print(
+            f"⚠️ Outbound duplicate suppressed (fail-closed): Redis unavailable for shared dedupe "
+            f"(window={WINDOW_SEC}s)"
+        )
         return True
 
     now = time.time()

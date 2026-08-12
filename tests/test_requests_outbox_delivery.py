@@ -224,6 +224,28 @@ async def test_tenant_isolation_outbox(req_db, monkeypatch):
     assert other == []
 
 
+def test_claim_pending_outbox_marks_processing_and_exclusive(req_db, monkeypatch):
+    created = _create(req_db, monkeypatch, key="idem-claim-1")
+    svc = CustomerRequestsService(req_db)
+    svc.repo.enqueue_outbox(
+        tenant_id="tenant-a",
+        request_id=created["request_id"],
+        idempotency_key="claim-1",
+        channel="instagram_dm",
+        payload={"message": "hi"},
+    )
+    req_db.commit()
+
+    repo = svc.repo
+    claimed = repo.claim_pending_outbox(tenant_id="tenant-a", limit=10)
+    assert len(claimed) == 1
+    assert claimed[0].status == "processing"
+    assert claimed[0].attempts == 1
+
+    again = repo.claim_pending_outbox(tenant_id="tenant-a", limit=10)
+    assert again == []
+
+
 def test_redact_and_classify():
     assert "credential_or_auth_error" in redact_delivery_error("Authorization: Bearer SECRET")
     assert classify_platform_block(channel="instagram_dm", error_code=551, message="")

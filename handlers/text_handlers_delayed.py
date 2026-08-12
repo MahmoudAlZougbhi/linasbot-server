@@ -75,10 +75,14 @@ async def _delayed_process_messages(
         if not config.user_pending_messages[user_id]:
             try:
                 from services.scale.conversation_state_redis import get_pending_messages
+                from services.scale.redis_claims import redis_claims_fail_closed
 
                 remote_pending = get_pending_messages(user_id)
                 if remote_pending:
                     config.user_pending_messages[user_id].extend(remote_pending)
+                elif redis_claims_fail_closed() and remote_pending is None:
+                    # Do not assume another node has no pending chunks when Redis is down.
+                    pass
             except Exception:
                 pass
         if config.user_pending_messages[user_id]:

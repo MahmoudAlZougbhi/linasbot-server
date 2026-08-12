@@ -42,6 +42,20 @@ def _client() -> Any | None:
         return None
 
 
+def shared_conv_state_fail_closed() -> bool:
+    """True when cross-node conversation flags must not rely on process-local cache."""
+    try:
+        from services.scale.redis_claims import redis_claims_fail_closed
+
+        return redis_claims_fail_closed()
+    except Exception:
+        return False
+
+
+def shared_conv_redis_available() -> bool:
+    return _client() is not None
+
+
 def _key(tenant_user: str, field: str) -> str:
     safe = "".join(c if c.isalnum() or c in "-_.:/" else "_" for c in tenant_user)[:200]
     return f"{_PREFIX}:{field}:{safe}"
