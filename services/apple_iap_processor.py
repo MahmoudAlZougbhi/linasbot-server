@@ -28,7 +28,7 @@ from services.iap_product_catalog import is_credit_product
 
 logger = logging.getLogger(__name__)
 
-_SKIP_NOTIFY_TYPES = frozenset({"TEST", "CONSUMPTION_REQUEST"})
+_SKIP_NOTIFY_TYPES = frozenset({"TEST"})
 
 
 class AppleIapProcessorError(RuntimeError):
@@ -223,6 +223,85 @@ def _handle_refund_or_revoke(
     return out
 
 
+def _handle_refund_reversed(
+    *,
+    payload: dict[str, Any],
+    tenant_id: str | None,
+) -> dict[str, Any]:
+    """Re-apply credits or subscription after Apple REFUND_REVERSED."""
+    product_id = str(payload.get("productId") or "").strip()
+    transaction_id = str(payload.get("transactionId") or "").strip()
+    original_transaction_id = str(payload.get("originalTransactionId") or transaction_id).strip()
+    tid, _ = _resolve_tenant(tenant_id=tenant_id, payload=payload, source="assn")
+    out: dict[str, Any] = {"notification_type": "REFUND_REVERSED", "tenant_id": tid}
+    if is_credit_product(product_id):
+        out["credit_restore"] = grant_consumable_credits(
+            tenant_id=tid,
+            product_id=product_id,
+            transaction_id=transaction_id,
+            allow_regrant_after_reverse=True,
+        )
+        try:
+            txn_ledger.mark_applied(transaction_id, effect=out["credit_restore"])
+        except ValueError:
+            pass
+    else:
+        out["subscription"] = apply_subscription_effect(
+            tenant_id=tid,
+            product_id=product_id,
+            original_transaction_id=original_transaction_id,
+            status="active",
+            idempotency_key=f"apple:notify:REFUND_REVERSED:{transaction_id}",
+        )
+    return out
+
+
+def _handle_consumption_request(
+    *,
+    payload: dict[str, Any] | None,
+    related_transaction_id: str | None,
+) -> dict[str, Any]:
+    """Respond to ASSN CONSUMPTION_REQUEST via App Store Server API when configured."""
+    tid = str((payload or {}).get("transactionId") or related_transaction_id or "").strip()
+    if not tid:
+        return {"ack": "consumption_request", "sent": False, "reason": "missing_transaction_id"}
+    if not iap_credentials_configured():
+        return {"ack": "consumption_request", "sent": False, "reason": "iap_credentials_missing"}
+
+    from db.models.apple_billing import AppleCreditGrantRow
+
+    with whatsapp_session() as session:
+        grant = session.get(AppleCreditGrantRow, tid)
+    # Apple consumption statuses: 0 undeclared, 1 not consumed, 2 partially, 3 fully.
+    if grant is None:
+        consumption_status = 0
+        delivery_status = 0
+    elif grant.status == "reversed":
+        consumption_status = 1
+        delivery_status = 1
+    else:
+        consumption_status = 3
+        delivery_status = 1
+    body = {
+        "customerConsented": True,
+        "consumptionStatus": consumption_status,
+        "platform": 1,  # Apple
+        "sampleContentProvided": False,
+        "deliveryStatus": delivery_status,
+    }
+    try:
+        apple_app_store_client.send_consumption_info(tid, body)
+        return {"ack": "consumption_request", "sent": True, "transaction_id": tid, "body": body}
+    except Exception as exc:  # noqa: BLE001 — fail-soft; ASSN must still ACK
+        logger.warning("apple_consumption_info_failed tid=%s err=%s", tid, exc)
+        return {
+            "ack": "consumption_request",
+            "sent": False,
+            "transaction_id": tid,
+            "error": str(exc)[:200],
+        }
+
+
 def process_notification_v2(body: dict[str, Any]) -> dict[str, Any]:
     """Verify ASSN V2 signedPayload and apply idempotently by notificationUUID."""
     if not isinstance(body, dict):
@@ -275,15 +354,16 @@ def process_notification_v2(body: dict[str, Any]) -> dict[str, Any]:
         return {"ok": True, "duplicate": False, "notification_uuid": notification_uuid, **result}
 
     if notification_type == "CONSUMPTION_REQUEST":
-        result["ack"] = "consumption_request"
-        # Optional send_consumption_info when caller/ops enable it later.
+        result.update(
+            _handle_consumption_request(payload=txn_payload, related_transaction_id=related_tid)
+        )
         _record_notification(
             notification_uuid=notification_uuid,
             notification_type=notification_type,
             subtype=subtype,
             environment=environment,
             signed_payload_sha256=digest,
-            processing_status="ignored",
+            processing_status="applied",
             result=result,
             related_transaction_id=related_tid,
         )
@@ -292,23 +372,14 @@ def process_notification_v2(body: dict[str, Any]) -> dict[str, Any]:
     if txn_payload is None:
         raise AppleJwsError("signedTransactionInfo required for this notification type")
 
-    if notification_type in {"REFUND", "REVOKE", "REFUND_REVERSED"}:
-        if notification_type == "REFUND_REVERSED":
-            # Re-apply original grant path via signed transaction.
-            result["reapply"] = process_signed_transaction(
-                signed_transaction_jws=str(signed_txn),
-                tenant_id=None,
-                source=f"assn:{notification_type}",
-                notification_type="SUBSCRIBED",
-                decoded_payload=txn_payload,
-                skip_jws_verify=True,
-            )
-        else:
-            result["effect"] = _handle_refund_or_revoke(
-                payload=txn_payload,
-                tenant_id=None,
-                notification_type=notification_type,
-            )
+    if notification_type == "REFUND_REVERSED":
+        result["effect"] = _handle_refund_reversed(payload=txn_payload, tenant_id=None)
+    elif notification_type in {"REFUND", "REVOKE"}:
+        result["effect"] = _handle_refund_or_revoke(
+            payload=txn_payload,
+            tenant_id=None,
+            notification_type=notification_type,
+        )
     else:
         # Map renewal-status subtype for DID_CHANGE_RENEWAL_STATUS
         ntype = notification_type

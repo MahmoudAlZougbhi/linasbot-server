@@ -1,8 +1,11 @@
 """Apple billing + auth identity tables (additive Postgres SoT).
 
 Revision ID: 20260812_apple_billing
-Revises: 20260812_outbox_processing
+Revises: 20260812_credit_entitlements
 Create Date: 2026-08-12
+
+Note: Apple tables are intentionally chained BEFORE Customer Requests so
+managed PG can apply Apple identity/billing without applying Requests.
 
 Upgrade:
   - auth_external_identities, apple_app_account_tokens, apple_transactions,
@@ -24,7 +27,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "20260812_apple_billing"
-down_revision: str | None = "20260812_outbox_processing"
+down_revision: str | None = "20260812_credit_entitlements"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

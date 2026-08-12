@@ -156,6 +156,94 @@ def _import_auth_email(session: Session, tokens_dir: Path, dry_run: bool) -> int
     return count
 
 
+def _import_credit_ledger(session: Session, ledger_dir: Path, dry_run: bool) -> tuple[int, int]:
+    from services.credit_ledger_pg_store import import_balance, import_entry
+
+    balances = 0
+    entries = 0
+    if not ledger_dir.is_dir():
+        return 0, 0
+    for path in sorted(ledger_dir.glob("*.balance.json")):
+        tenant_id = path.name.replace(".balance.json", "")
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        if dry_run:
+            balances += 1
+        else:
+            import_balance(
+                session,
+                tenant_id,
+                int(data.get("available") or 0),
+                int(data.get("reserved") or 0),
+                float(data.get("updated_at") or 0),
+            )
+            balances += 1
+        log_path = ledger_dir / f"{tenant_id}.jsonl"
+        if log_path.is_file():
+            for line in log_path.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    entry = json.loads(line)
+                except Exception:
+                    continue
+                if not isinstance(entry, dict):
+                    continue
+                if dry_run:
+                    entries += 1
+                elif import_entry(session, entry):
+                    entries += 1
+    return balances, entries
+
+
+def _import_entitlements(session: Session, ents_dir: Path, dry_run: bool) -> tuple[int, int]:
+    from services.entitlements_pg_store import import_entitlement, import_processed_event
+
+    ents = 0
+    events = 0
+    if not ents_dir.is_dir():
+        return 0, 0
+    for path in sorted(ents_dir.glob("*.json")):
+        if path.parent.name == "processed_events":
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        if dry_run:
+            ents += 1
+        elif import_entitlement(session, data):
+            ents += 1
+    processed = ents_dir / "processed_events"
+    if processed.is_dir():
+        for path in sorted(processed.glob("*.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if not isinstance(data, dict):
+                continue
+            key = str(data.get("event_id") or path.stem).strip()
+            tenant_id = str(data.get("tenant_id") or "").strip() or "unknown"
+            if dry_run:
+                events += 1
+            elif import_processed_event(
+                session,
+                idempotency_key=key,
+                tenant_id=tenant_id,
+                created_at=float(data.get("ts") or 0),
+                meta=data,
+            ):
+                events += 1
+    return ents, events
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true", help="Count records only; no writes")
@@ -167,6 +255,8 @@ def main(argv: list[str] | None = None) -> int:
     admin_dir = root / "billing" / "admin_credit_idempotency"
     refresh_dir = root / "auth" / "mobile_refresh"
     email_dir = root / "auth" / "email_tokens"
+    credit_dir = root / "credit_ledger"
+    ents_dir = root / "entitlements"
 
     print(f"data_root={root} dry_run={args.dry_run}")
 
@@ -179,6 +269,8 @@ def main(argv: list[str] | None = None) -> int:
             admin = _import_admin_credit(session, admin_dir, args.dry_run)
             mobile = _import_mobile_refresh(session, refresh_dir, args.dry_run)
             email = _import_auth_email(session, email_dir, args.dry_run)
+            credit_balances, credit_entries = _import_credit_ledger(session, credit_dir, args.dry_run)
+            ents, ent_events = _import_entitlements(session, ents_dir, args.dry_run)
             if args.dry_run:
                 session.rollback()
     except WhatsAppDatabaseUnavailable as exc:
@@ -187,7 +279,9 @@ def main(argv: list[str] | None = None) -> int:
 
     print(
         f"wallets={wallets} ledger_lines={ledger} stripe_events={stripe} "
-        f"admin_credit_keys={admin} mobile_refresh={mobile} auth_email={email}"
+        f"admin_credit_keys={admin} mobile_refresh={mobile} auth_email={email} "
+        f"credit_balances={credit_balances} credit_entries={credit_entries} "
+        f"entitlements={ents} entitlement_events={ent_events}"
     )
     return 0
 

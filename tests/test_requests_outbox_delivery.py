@@ -241,10 +241,35 @@ def test_claim_pending_outbox_marks_processing_and_exclusive(req_db, monkeypatch
     assert len(claimed) == 1
     assert claimed[0].status == "processing"
     assert claimed[0].attempts == 1
+    assert claimed[0].claimed_at is not None
 
     again = repo.claim_pending_outbox(tenant_id="tenant-a", limit=10)
     assert again == []
 
+
+def test_claim_pending_outbox_reclaims_stale_processing(req_db, monkeypatch):
+    from datetime import UTC, datetime, timedelta
+
+    created = _create(req_db, monkeypatch, key="idem-claim-stale")
+    svc = CustomerRequestsService(req_db)
+    svc.repo.enqueue_outbox(
+        tenant_id="tenant-a",
+        request_id=created["request_id"],
+        idempotency_key="claim-stale",
+        channel="instagram_dm",
+        payload={"message": "hi"},
+    )
+    req_db.commit()
+    repo = svc.repo
+    claimed = repo.claim_pending_outbox(tenant_id="tenant-a", limit=10, reclaim_stale_seconds=0)
+    assert len(claimed) == 1
+    claimed[0].claimed_at = datetime.now(UTC) - timedelta(seconds=600)
+    req_db.flush()
+
+    reclaimed = repo.claim_pending_outbox(tenant_id="tenant-a", limit=10, reclaim_stale_seconds=60)
+    assert len(reclaimed) == 1
+    assert reclaimed[0].status == "processing"
+    assert int(reclaimed[0].attempts or 0) >= 2
 
 def test_redact_and_classify():
     assert "credential_or_auth_error" in redact_delivery_error("Authorization: Bearer SECRET")

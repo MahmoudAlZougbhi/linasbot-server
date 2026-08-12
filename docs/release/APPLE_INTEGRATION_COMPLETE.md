@@ -1,9 +1,8 @@
 # Apple Auth + StoreKit + IAP + Subscriptions — Integration Report
 
-**Branch:** `feat/apple-auth-billing` → merged into `chore/project-cleanup-reorg`  
-**Head SHA:** `2d287bbec08986f0424729f158b4a7cc6ae9aa24`  
+**Branch:** `chore/project-cleanup-reorg`  
+**Head SHA:** _(see `git rev-parse HEAD` — update on freeze)_  
 **PR:** [#240](https://github.com/MahmoudAlZougbhi/linasbot-server/pull/240)  
-**CI:** backend · frontend · mobile · secret-scan · deploy-readiness = **pass** (no merge to main; no deploy)  
 **Rules honored:** no merge to main · no production deploy · BOC off · Meta unchanged · no `.p8` committed
 
 ---
@@ -12,7 +11,7 @@
 
 | Code | Status |
 |------|--------|
-| **APPLE_CODE_READY_FOR_STORE_REVIEW** | **YES** for repository/code completeness (auth, StoreKit 2 client, ASSN V2, ledger, credits, refunds, tests, secrets wiring prepared) |
+| **APPLE_CODE_READY_FOR_STORE_REVIEW** | **YES** for repository/code completeness (auth, StoreKit 2 client, ASSN V2, ledger, credits, refunds, REFUND_REVERSED restore, CONSUMPTION_REQUEST, tests, secrets wiring prepared) |
 | **BLOCKED_EXTERNAL_REVIEW** | **YES** — Pro Yearly + Scale Yearly require Apple Higher Price Point approval before those two SKUs can go live at intended prices |
 | **BLOCKED_OWNER_ACTION** | **YES** — App Store Connect notification URL registration, Sandbox interactive runs on device/TestFlight, production secret deploy (authorized separately), Higher Price Point form submit |
 
@@ -33,7 +32,7 @@ Do **not** treat notification URLs as live until Mahmoud registers them in App S
 | IAP key path (local) | `~/.linasai-secrets/apple/SubscriptionKey_8H9SZG552B.p8` (mode 0600; **not** in git) |
 | Subscription group | Linas AI Subscriptions / `22305050` |
 
-Local `.p8` files verified present (paths/sizes/PEM headers only — private key material never logged).
+Local `.p8` files verified present (paths/sizes only — private key material never logged).
 
 ---
 
@@ -64,7 +63,7 @@ UI prices: StoreKit `displayPrice` only — no hardcoded checkout USD.
 - Rate limits on `POST /api/auth/mobile/apple`
 
 ### StoreKit 2 (mobile)
-- `react-native-iap` dependency (autolink on native prebuild/EAS; **not** listed as Expo config plugin — package has no `app.plugin.js` and breaks `expo export`)
+- `react-native-iap` dependency (autolink on native prebuild/EAS; **not** listed as Expo config plugin)
 - Verify-before-`finishTransaction`
 - Monthly/Yearly toggle, credit packs, restore, manage subscriptions, refund request sheet
 - Stable `appAccountToken` UUID from server
@@ -73,12 +72,17 @@ UI prices: StoreKit `displayPrice` only — no hardcoded checkout USD.
 - App Store Server API client (prod → sandbox lookup per Apple docs)
 - ASSN V2: `POST /webhooks/apple/app-store`, `POST /api/webhooks/apple/app-store`, alias `POST /api/entitlements/apple/notifications`
 - PG ledger: `apple_transactions`, `apple_notification_events`, `apple_credit_grants`, `apple_app_account_tokens`
-- Idempotent subscription + consumable grants; refund reverse-once
+- Idempotent subscription + consumable grants; refund reverse-once; **REFUND_REVERSED** restores credits/subscription
+- **CONSUMPTION_REQUEST** → `send_consumption_info` when IAP credentials configured (fail-soft)
 - Client verify requires matching `appAccountToken` (no free cross-tenant bind)
 - Missed-notification reconcile CLI: `scripts/apple_notification_reconcile.py`
-- Migration: `alembic/versions/20260812_apple_billing.py`
+- Migrations: `alembic/versions/20260812_credit_entitlements_pg.py`, `20260812_apple_billing.py` (Apple chained **before** Requests)
 
-### Security fixes applied in this branch
+### HA entitlements / credits (code; flags default file)
+- `LINAS_BILLING_BACKEND=postgres` covers credit ledger + tenant entitlements + processed-event idempotency (plus wallets/Stripe/admin)
+- Do **not** flip on production without import + soak approval
+
+### Security fixes
 - Client verify requires `appAccountToken`
 - First Apple registration uses token email only (no client-email squat)
 - Nonce SHA-256 contract aligned with Expo
@@ -96,34 +100,20 @@ Register **after** deploy of this code to an HTTPS host (not done in this task):
 | Production | `https://linasaibot.com/webhooks/apple/app-store` |
 | Production (alias) | `https://linasaibot.com/api/webhooks/apple/app-store` |
 | Production (legacy alias) | `https://linasaibot.com/api/entitlements/apple/notifications` |
-| Sandbox | Same paths (Apple sends Sandbox notifications to the Sandbox URL field — use the same host with Sandbox environment selected in ASC) |
+| Sandbox | Same paths (Apple Sandbox URL field — same host with Sandbox environment selected in ASC) |
 
-**Click path (App Store Connect):**  
-My Apps → Linas AI → App Information / App Store Server Notifications → edit Production + Sandbox URLs → Version 2 → Save → send TEST notification.
-
-TLS: production site already serves HTTPS. TEST notification result: **not run** until URLs are registered and secrets are on the server (owner action).
+**Click path:** My Apps → Linas AI → App Store Server Notifications → Version 2 → Save → send TEST notification.
 
 ---
 
 ## Higher Price Point — text for Mahmoud
 
-Suggested truthful answers for Apple’s Higher Price Point request (do not submit unless you choose to):
+1. **In-app refund request:** StoreKit refund request sheet from billing UI.
+2. **ASSN V2:** Implemented with JWS verification + idempotent renewals/expirations/refunds/revokes/REFUND_REVERSED/CONSUMPTION_REQUEST.
+3. **Refund / cancellation processing:** Reverse-once credits; REFUND_REVERSED restores; duplicates no-op.
+4. **Support / risk:** `appAccountToken` binding; server verify; PG transaction ledger; rate-limited SIWA; `support@linasaibot.com`.
 
-1. **In-app refund request:** Implemented via StoreKit refund request sheet from the subscription/purchase management UI (`iapPurchases` / Billing screen). Users initiate refunds through Apple’s native flow — not a fake Linas form.
-2. **App Store Server Notifications V2:** Implemented at `POST /webhooks/apple/app-store` with cryptographic JWS verification and idempotent processing for renewals, expirations, refunds, revokes, and related lifecycle events.
-3. **Refund / cancellation processing:** Refund and revoke notifications reverse consumable credit grants once (ledger + entitlement extra credits) and update subscription entitlement status; duplicates are no-ops.
-4. **Customer support / risk mitigation:** Account linking requires authenticated link; purchases bound via `appAccountToken`; server-side transaction verification; durable Postgres transaction ledger; rate-limited Apple sign-in; support reply-to `support@linasaibot.com`.
-
-After approval, configure **Pro Yearly** and **Scale Yearly** price points in ASC. Do **not** substitute lower fake yearly prices in the app.
-
----
-
-## Review materials (prepared, not submitted)
-
-- First subscription + group + credit consumables: product IDs above
-- Review Notes draft: “Sign in with Apple; subscriptions and credit packs via Apple IAP; prices from StoreKit; Sandbox tester required for purchase paths.”
-- Screenshots: capture after TestFlight build with live StoreKit UI (not invented here)
-- Rebuild required for mobile plugins (`usesAppleSignIn`, IAP native module)
+After approval, configure **Pro Yearly** and **Scale Yearly** in ASC. Do **not** substitute lower fake yearly prices.
 
 ---
 
@@ -140,8 +130,6 @@ After approval, configure **Pro Yearly** and **Scale Yearly** price points in AS
 
 ## Secret wiring (prepared — not deployed)
 
-Server env (both HA nodes when authorized):
-
 ```
 APPLE_TEAM_ID=55624L5UXL
 APPLE_BUNDLE_ID=com.linasai.app
@@ -152,36 +140,19 @@ APPLE_IAP_KEY_ID=8H9SZG552B
 APPLE_IAP_PRIVATE_KEY_PATH=<protected 0600 path>
 ```
 
-Aliases `APPLE_APP_STORE_*` accepted. Never expose paths to mobile.
-
----
-
-## Tests / gates
-
-| Gate | Result |
-|------|--------|
-| `tests/test_apple_sign_in.py` + `tests/test_apple_iap_processor.py` | 17 collected; passing |
-| Auth matrix + billing/membership related | Passing |
-| Mobile `npm test` | 108 pass |
-| Mobile typecheck / secret-scan | Pass |
-| LOC policy (`check_source_line_limit`) | Pass (≤400 checked roots; Apple modules ≤500) |
-| Ruff (Apple modules) | Pass |
-| `.p8` tracked | None |
-| Mobile private keys | None |
-
 ---
 
 ## OWNER_ACTIONS remaining
 
-1. Register ASSN V2 Production + Sandbox URLs in App Store Connect; send TEST notification  
-2. Deploy secrets to HA app nodes when release is authorized (not now)  
-3. Run interactive Sandbox matrix on TestFlight/dev client  
-4. Submit Higher Price Point request (optional now); then price Pro/Scale yearly  
-5. Capture App Review screenshots from real purchase UI  
-6. Apply Alembic `20260812_apple_billing` on Managed PG when infra cutover approved  
+1. Register ASSN V2 Production + Sandbox URLs in App Store Connect; send TEST notification
+2. Deploy secrets to HA app nodes when release is authorized (not now)
+3. Run interactive Sandbox matrix on TestFlight/dev client
+4. Submit Higher Price Point request; then price Pro/Scale yearly
+5. Capture App Review screenshots from real purchase UI
+6. Apply Alembic through `20260812_apple_billing` on Managed PG when infra cutover approved (Requests still owner-gated separately)
 
 ---
 
 ## Residual HA note
 
-Apple transaction/identity/credit-grant tables are Postgres SoT. Existing `entitlements_store` / `credit_ledger` file residual still used for entitlement application effects until the broader billing PG cutover — Apple ledger/idempotency does **not** reintroduce file-backed transaction SoT. Do not flip `LINAS_BILLING_BACKEND=postgres` without separate approval.
+Apple transaction/identity/credit-grant tables are Postgres SoT. Credit ledger + entitlements are **PG-capable** under `LINAS_BILLING_BACKEND=postgres` (default remains `file` until cutover). Do not flip billing/auth/registry flags on production without approval.

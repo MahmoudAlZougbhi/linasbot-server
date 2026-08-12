@@ -108,6 +108,7 @@ def grant_consumable_credits(
     tenant_id: str,
     product_id: str,
     transaction_id: str,
+    allow_regrant_after_reverse: bool = False,
 ) -> dict[str, Any]:
     credits = map_credit_product(product_id)
     with whatsapp_session() as session:
@@ -119,7 +120,7 @@ def grant_consumable_credits(
                 "credits": existing.credits,
                 "transaction_id": transaction_id,
             }
-        if existing is not None and existing.status == "reversed":
+        if existing is not None and existing.status == "reversed" and not allow_regrant_after_reverse:
             return {
                 "kind": "credits",
                 "duplicate": True,
@@ -127,13 +128,22 @@ def grant_consumable_credits(
                 "credits": existing.credits,
                 "transaction_id": transaction_id,
             }
+        prior_credits = int(existing.credits) if existing is not None else credits
 
+    # After REFUND_REVERSED, use a distinct ledger request_id so N→1 idempotency
+    # does not collide with the original grant_pack / reverse_pack pair.
+    ledger_request_id = (
+        f"{transaction_id}:refund_reversed_restore"
+        if allow_regrant_after_reverse
+        else transaction_id
+    )
+    grant_credits = prior_credits if allow_regrant_after_reverse else credits
     ledger = credit_ledger_service.grant_pack(
         tenant_id=tenant_id,
-        credits=credits,
-        request_id=transaction_id,
+        credits=grant_credits,
+        request_id=ledger_request_id,
         source="apple",
-        meta={"product_id": product_id},
+        meta={"product_id": product_id, "transaction_id": transaction_id},
     )
     now = time.time()
     with whatsapp_session() as session:
@@ -144,7 +154,7 @@ def grant_consumable_credits(
                     transaction_id=transaction_id,
                     tenant_id=tenant_id,
                     product_id=product_id,
-                    credits=credits,
+                    credits=grant_credits,
                     status="granted",
                     granted_at=now,
                     reversed_at=None,
@@ -152,16 +162,24 @@ def grant_consumable_credits(
                     meta={"source": "apple"},
                 )
             )
-        elif row.status != "granted":
+        else:
             row.status = "granted"
             row.granted_at = now
+            row.reversed_at = None
+            row.credits = grant_credits
             row.ledger_entry_id = str(ledger.get("ledger_entry_id") or row.ledger_entry_id)
+            meta = dict(row.meta or {})
+            if allow_regrant_after_reverse:
+                meta["refund_reversed_restore"] = True
+                meta["restore_ledger_request_id"] = ledger_request_id
+            row.meta = meta
     return {
         "kind": "credits",
         "duplicate": bool(ledger.get("duplicate")),
-        "credits": credits,
+        "credits": grant_credits,
         "transaction_id": transaction_id,
         "ledger": ledger,
+        "restored_after_refund_reversed": bool(allow_regrant_after_reverse),
     }
 
 

@@ -1,4 +1,7 @@
-"""Internal Linas credit ledger with reserve / capture / release for expensive jobs."""
+"""Internal Linas credit ledger with reserve / capture / release for expensive jobs.
+
+File SoT by default; Postgres when LINAS_BILLING_BACKEND=postgres.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +13,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from services.billing_backend import billing_uses_postgres
 from services.entitlements_service import entitlements_store
 from storage.persistent_storage import _DATA_ROOT
 
@@ -54,6 +58,10 @@ class CreditLedgerService:
         return self._root / f"{tenant_id}.jsonl"
 
     def get_balance(self, tenant_id: str) -> int:
+        if billing_uses_postgres():
+            from services.credit_ledger_pg_ops import pg_get_balance
+
+            return pg_get_balance(tenant_id)
         ent = entitlements_store.get(tenant_id)
         path = self._balance_path(tenant_id)
         with self._lock:
@@ -63,6 +71,10 @@ class CreditLedgerService:
         return int(ent.included_credits + ent.extra_credits)
 
     def get_reserved(self, tenant_id: str) -> int:
+        if billing_uses_postgres():
+            from services.credit_ledger_pg_ops import pg_get_reserved
+
+            return pg_get_reserved(tenant_id)
         path = self._balance_path(tenant_id)
         with self._lock:
             if not path.is_file():
@@ -81,6 +93,11 @@ class CreditLedgerService:
             fh.write(json.dumps(asdict(entry)) + "\n")
 
     def ensure_period_grant(self, tenant_id: str) -> None:
+        if billing_uses_postgres():
+            from services.credit_ledger_pg_ops import pg_ensure_period_grant
+
+            pg_ensure_period_grant(tenant_id)
+            return
         ent = entitlements_store.get(tenant_id)
         path = self._balance_path(tenant_id)
         with self._lock:
@@ -116,6 +133,16 @@ class CreditLedgerService:
     ) -> str:
         if credits <= 0:
             raise ValueError("credits must be positive")
+        if billing_uses_postgres():
+            from services.credit_ledger_pg_ops import pg_reserve
+
+            return pg_reserve(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                credits=credits,
+                operation_type=operation_type,
+                request_id=request_id,
+            )
         self.ensure_period_grant(tenant_id)
         with self._lock:
             data = json.loads(self._balance_path(tenant_id).read_text(encoding="utf-8"))
@@ -146,7 +173,6 @@ class CreditLedgerService:
             return reservation_id
 
     def _reservation_state(self, tenant_id: str, reservation_id: str) -> tuple[int, str | None]:
-        """Return (reserve_credits, terminal_op) where terminal_op is capture|release|None."""
         credits = 0
         terminal: str | None = None
         path = self._log_path(tenant_id)
@@ -170,6 +196,15 @@ class CreditLedgerService:
         provider_cost_usd: float | None,
         model_provider: str | None,
     ) -> dict[str, Any]:
+        if billing_uses_postgres():
+            from services.credit_ledger_pg_ops import pg_capture
+
+            return pg_capture(
+                tenant_id=tenant_id,
+                reservation_id=reservation_id,
+                provider_cost_usd=provider_cost_usd,
+                model_provider=model_provider,
+            )
         with self._lock:
             credits, terminal = self._reservation_state(tenant_id, reservation_id)
             if credits <= 0:
@@ -200,6 +235,10 @@ class CreditLedgerService:
             return {"duplicate": False, "op": "capture", "credits": credits}
 
     def release(self, *, tenant_id: str, reservation_id: str) -> dict[str, Any]:
+        if billing_uses_postgres():
+            from services.credit_ledger_pg_ops import pg_release
+
+            return pg_release(tenant_id=tenant_id, reservation_id=reservation_id)
         with self._lock:
             credits, terminal = self._reservation_state(tenant_id, reservation_id)
             if credits <= 0:
@@ -258,6 +297,12 @@ class CreditLedgerService:
         rid = str(request_id or "").strip()
         if not rid:
             raise ValueError("request_id required")
+        if billing_uses_postgres():
+            from services.credit_ledger_pg_ops import pg_grant_pack
+
+            return pg_grant_pack(
+                tenant_id=tenant_id, credits=credits, request_id=rid, source=source, meta=meta
+            )
         self.ensure_period_grant(tenant_id)
         with self._lock:
             prior = self._find_ops_by_request_id(tenant_id, rid)
@@ -304,24 +349,21 @@ class CreditLedgerService:
         credits: int,
         meta: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Idempotent reverse of a prior grant_pack.
-
-        If available balance is insufficient, balance floors at 0 and remaining
-        debt is returned in ``debt`` (never silent free credits).
-        """
+        """Idempotent reverse of a prior grant_pack."""
         if credits <= 0:
             raise ValueError("credits must be positive")
         rid = str(request_id or "").strip()
         if not rid:
             raise ValueError("request_id required")
+        if billing_uses_postgres():
+            from services.credit_ledger_pg_ops import pg_reverse_pack
+
+            return pg_reverse_pack(tenant_id=tenant_id, request_id=rid, credits=credits, meta=meta)
         self.ensure_period_grant(tenant_id)
         with self._lock:
             prior = self._find_ops_by_request_id(tenant_id, rid)
             if any(r.get("op") == "reverse_pack" for r in prior):
                 return {"duplicate": True, "op": "reverse_pack", "credits": credits, "request_id": rid}
-            if not any(r.get("op") == "grant_pack" for r in prior):
-                # Still reverse entitlements/balance if Apple says refund — record debt honestly.
-                pass
             data = json.loads(self._balance_path(tenant_id).read_text(encoding="utf-8"))
             available = int(data["available"])
             reserved = int(data["reserved"])

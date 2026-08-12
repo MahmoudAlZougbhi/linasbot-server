@@ -17,7 +17,7 @@
 | `config.py` `user_*` conversation dicts | MOVE_TO_REDIS | P0 | **Residual** (combine buffer / takeover / booking FSM) |
 | `handlers/text_handlers_*` delayed combine registries | MOVE_TO_REDIS | P0 | **Residual** |
 | `services/whatsapp_adapters/outbound_text_dedupe.py` in-memory | MOVE_TO_REDIS / enable FS dedupe | P0 | **Residual** |
-| Token wallet / credit ledger / entitlements JSON | MOVE_TO_POSTGRES | P0 | **Wallet+Stripe+admin idempotency PG in PR** (`LINAS_BILLING_BACKEND`); credit ledger + entitlements still file |
+| Token wallet / credit ledger / entitlements JSON | MOVE_TO_POSTGRES | P0 | **Wallet+Stripe+admin+credit ledger+entitlements PG in PR** (`LINAS_BILLING_BACKEND`); default file until cutover |
 | Stripe / admin-credit file idempotency | MOVE_TO_POSTGRES / REDIS | P0 | **PG path in PR** (default file until cutover) |
 | Smart messaging file queue + in-memory dict | MOVE_TO_POSTGRES / Redis | P0 | **Residual** (locks only prevent double cron ticks) |
 | Guest/session/mobile refresh/email token files | MOVE_TO_REDIS / POSTGRES | P0–P1 | **Mobile refresh + email tokens PG in PR** (`LINAS_AUTH_TOKEN_BACKEND`); guest residual |

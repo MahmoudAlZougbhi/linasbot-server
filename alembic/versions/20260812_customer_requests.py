@@ -1,7 +1,7 @@
 """Customer Requests domain tables (additive).
 
 Revision ID: 20260812_customer_requests
-Revises: 20260812_ha_billing_auth
+Revises: 20260812_apple_billing
 Create Date: 2026-08-12
 
 Upgrade:
@@ -24,7 +24,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "20260812_customer_requests"
-down_revision: str | None = "20260812_ha_billing_auth"
+down_revision: str | None = "20260812_apple_billing"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

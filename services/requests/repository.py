@@ -197,19 +197,48 @@ class CustomerRequestsRepository:
         )
         return list(self.session.execute(stmt).scalars().all())
 
+    def reclaim_stale_processing_outbox(self, *, older_than_seconds: int = 300) -> int:
+        """Reset stuck ``processing`` rows to ``pending`` after lease TTL (crash recovery)."""
+        ttl = max(30, int(older_than_seconds or 300))
+        cutoff = _now().timestamp() - ttl
+        # Compare via claimed_at when set; fall back to created_at for legacy rows.
+        rows = list(
+            self.session.execute(
+                select(CustomerRequestOutbox).where(CustomerRequestOutbox.status == "processing")
+            ).scalars().all()
+        )
+        reclaimed = 0
+        for row in rows:
+            claimed = row.claimed_at or row.created_at
+            if claimed is None:
+                continue
+            ts = claimed.timestamp() if hasattr(claimed, "timestamp") else float(claimed)
+            if ts > cutoff:
+                continue
+            row.status = "pending"
+            row.claimed_at = None
+            reclaimed += 1
+        if reclaimed:
+            self.session.flush()
+        return reclaimed
+
     def claim_pending_outbox(
         self,
         *,
         tenant_id: str | None = None,
         request_id: str | None = None,
         limit: int = 20,
+        reclaim_stale_seconds: int = 300,
     ) -> list[CustomerRequestOutbox]:
         """
         Atomically claim pending outbox rows for processing (multi-worker safe on Postgres).
 
         Postgres: SELECT … FOR UPDATE SKIP LOCKED, then pending → processing in same transaction.
         SQLite (tests): simple SELECT pending, still marks processing before return.
+        Stale ``processing`` rows older than reclaim_stale_seconds are reset to pending first.
         """
+        if reclaim_stale_seconds > 0:
+            self.reclaim_stale_processing_outbox(older_than_seconds=reclaim_stale_seconds)
         lim = max(1, min(int(limit or 20), 100))
         clauses = [CustomerRequestOutbox.status == "pending"]
         if tenant_id:
@@ -227,8 +256,10 @@ class CustomerRequestsRepository:
         if dialect_name == "postgresql":
             stmt = stmt.with_for_update(skip_locked=True)
         rows = list(self.session.execute(stmt).scalars().all())
+        now = _now()
         for row in rows:
             row.status = "processing"
+            row.claimed_at = now
             row.attempts = int(row.attempts or 0) + 1
         if rows:
             self.session.flush()

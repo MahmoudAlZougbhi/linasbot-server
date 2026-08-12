@@ -4,12 +4,15 @@ Env flags (default file for safety until HA cutover):
   - LINAS_BILLING_BACKEND=file|postgres
   - LINAS_AUTH_TOKEN_BACKEND=file|postgres
 
-Residual file-only in this pass:
-  - credit_ledger_service (balances/reservations/capture)
-  - entitlements_store
+When LINAS_BILLING_BACKEND=postgres:
+  - token wallets + wallet ledger
+  - Stripe / admin-credit idempotency
+  - credit_ledger balances + entries
+  - tenant entitlements + processed-event idempotency
 
-Token wallets, Stripe webhook idempotency, admin credit idempotency, mobile
-refresh tokens, and auth email tokens are PG-capable when flags are set.
+When LINAS_AUTH_TOKEN_BACKEND=postgres:
+  - mobile refresh tokens
+  - auth email tokens
 """
 
 from __future__ import annotations
