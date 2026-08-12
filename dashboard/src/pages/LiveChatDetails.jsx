@@ -308,14 +308,6 @@ export function LiveChatDetails(s) {
               <div className="whatsapp-info-card">
                 <h3 className="font-bold text-slate-800 mb-3">Quick Actions</h3>
                 <div className="space-y-2">
-                  <button className="w-full btn-ghost text-left text-sm">
-                    <UserGroupIcon className="w-4 h-4 mr-2" />
-                    Transfer to Another Operator
-                  </button>
-                  <button className="w-full btn-ghost text-left text-sm">
-                    <ExclamationCircleIcon className="w-4 h-4 mr-2" />
-                    Mark as Priority
-                  </button>
                   <button
                     onClick={() =>
                       handleEndConversation(
