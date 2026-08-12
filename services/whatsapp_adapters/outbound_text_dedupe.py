@@ -120,10 +120,7 @@ async def should_skip_outbound_text(resolved_recipient: str, message: str) -> bo
 
     claimed = await asyncio.to_thread(_redis_claim_outbound, k)
     if claimed is False:
-        print(
-            "⚠️ Outbound duplicate suppressed (redis): same text to same recipient "
-            f"within window={WINDOW_SEC}s"
-        )
+        print(f"⚠️ Outbound duplicate suppressed (redis): same text to same recipient within window={WINDOW_SEC}s")
         return True
 
     now = time.time()
