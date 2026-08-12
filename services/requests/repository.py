@@ -203,9 +203,9 @@ class CustomerRequestsRepository:
         cutoff = _now().timestamp() - ttl
         # Compare via claimed_at when set; fall back to created_at for legacy rows.
         rows = list(
-            self.session.execute(
-                select(CustomerRequestOutbox).where(CustomerRequestOutbox.status == "processing")
-            ).scalars().all()
+            self.session.execute(select(CustomerRequestOutbox).where(CustomerRequestOutbox.status == "processing"))
+            .scalars()
+            .all()
         )
         reclaimed = 0
         for row in rows:

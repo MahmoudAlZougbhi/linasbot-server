@@ -45,9 +45,7 @@ def test_pg_credit_reserve_capture_idempotent(pg_billing: Path) -> None:
     ledger = CreditLedgerService(root=pg_billing / "file_unused")
     from services.entitlements_service import entitlements_store
 
-    entitlements_store.set_plan(
-        tenant_id="t1", plan_id="starter", status="active", source="admin"
-    )
+    entitlements_store.set_plan(tenant_id="t1", plan_id="starter", status="active", source="admin")
     ledger.ensure_period_grant("t1")
     rid = ledger.reserve(
         tenant_id="t1",
@@ -57,12 +55,8 @@ def test_pg_credit_reserve_capture_idempotent(pg_billing: Path) -> None:
         request_id="job-1",
     )
     assert ledger.get_reserved("t1") == 10
-    first = ledger.capture(
-        tenant_id="t1", reservation_id=rid, provider_cost_usd=0.01, model_provider="x"
-    )
-    second = ledger.capture(
-        tenant_id="t1", reservation_id=rid, provider_cost_usd=0.01, model_provider="x"
-    )
+    first = ledger.capture(tenant_id="t1", reservation_id=rid, provider_cost_usd=0.01, model_provider="x")
+    second = ledger.capture(tenant_id="t1", reservation_id=rid, provider_cost_usd=0.01, model_provider="x")
     assert first["duplicate"] is False
     assert second["duplicate"] is True
     assert ledger.get_reserved("t1") == 0
@@ -72,9 +66,7 @@ def test_pg_grant_pack_idempotent_and_entitlement(pg_billing: Path) -> None:
     ledger = CreditLedgerService(root=pg_billing / "file_unused")
     from services.entitlements_service import entitlements_store
 
-    entitlements_store.set_plan(
-        tenant_id="t2", plan_id="starter", status="active", source="admin"
-    )
+    entitlements_store.set_plan(tenant_id="t2", plan_id="starter", status="active", source="admin")
     a = ledger.grant_pack(tenant_id="t2", credits=100, request_id="txn-1", source="apple")
     b = ledger.grant_pack(tenant_id="t2", credits=100, request_id="txn-1", source="apple")
     assert a["duplicate"] is False

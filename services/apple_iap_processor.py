@@ -354,9 +354,7 @@ def process_notification_v2(body: dict[str, Any]) -> dict[str, Any]:
         return {"ok": True, "duplicate": False, "notification_uuid": notification_uuid, **result}
 
     if notification_type == "CONSUMPTION_REQUEST":
-        result.update(
-            _handle_consumption_request(payload=txn_payload, related_transaction_id=related_tid)
-        )
+        result.update(_handle_consumption_request(payload=txn_payload, related_transaction_id=related_tid))
         _record_notification(
             notification_uuid=notification_uuid,
             notification_type=notification_type,

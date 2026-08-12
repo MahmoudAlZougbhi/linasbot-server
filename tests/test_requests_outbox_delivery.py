@@ -271,6 +271,7 @@ def test_claim_pending_outbox_reclaims_stale_processing(req_db, monkeypatch):
     assert reclaimed[0].status == "processing"
     assert int(reclaimed[0].attempts or 0) >= 2
 
+
 def test_redact_and_classify():
     assert "credential_or_auth_error" in redact_delivery_error("Authorization: Bearer SECRET")
     assert classify_platform_block(channel="instagram_dm", error_code=551, message="")

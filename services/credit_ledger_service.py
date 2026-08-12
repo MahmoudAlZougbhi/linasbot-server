@@ -300,9 +300,7 @@ class CreditLedgerService:
         if billing_uses_postgres():
             from services.credit_ledger_pg_ops import pg_grant_pack
 
-            return pg_grant_pack(
-                tenant_id=tenant_id, credits=credits, request_id=rid, source=source, meta=meta
-            )
+            return pg_grant_pack(tenant_id=tenant_id, credits=credits, request_id=rid, source=source, meta=meta)
         self.ensure_period_grant(tenant_id)
         with self._lock:
             prior = self._find_ops_by_request_id(tenant_id, rid)

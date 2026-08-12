@@ -79,9 +79,7 @@ def find_ops_by_request_id(session: Session, tenant_id: str, request_id: str) ->
 def reservation_state(session: Session, tenant_id: str, reservation_id: str) -> tuple[int, str | None]:
     credits = 0
     terminal: str | None = None
-    rows = session.scalars(
-        select(CreditLedgerEntryRow).where(CreditLedgerEntryRow.tenant_id == tenant_id)
-    ).all()
+    rows = session.scalars(select(CreditLedgerEntryRow).where(CreditLedgerEntryRow.tenant_id == tenant_id)).all()
     for row in rows:
         if row.id == reservation_id and row.op == "reserve":
             credits = int(row.credits)

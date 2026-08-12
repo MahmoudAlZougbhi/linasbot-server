@@ -132,11 +132,7 @@ def grant_consumable_credits(
 
     # After REFUND_REVERSED, use a distinct ledger request_id so N→1 idempotency
     # does not collide with the original grant_pack / reverse_pack pair.
-    ledger_request_id = (
-        f"{transaction_id}:refund_reversed_restore"
-        if allow_regrant_after_reverse
-        else transaction_id
-    )
+    ledger_request_id = f"{transaction_id}:refund_reversed_restore" if allow_regrant_after_reverse else transaction_id
     grant_credits = prior_credits if allow_regrant_after_reverse else credits
     ledger = credit_ledger_service.grant_pack(
         tenant_id=tenant_id,
