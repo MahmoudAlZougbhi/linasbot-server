@@ -15,10 +15,8 @@ export const OperatorStatusProvider = ({ children }) => {
 
 export const useOperatorStatus = () => {
   const ctx = useContext(OperatorStatusContext);
-  /** @type {OperatorStatusContextValue} */
-  const fallback = {
-    operatorStatus: 'available',
-    setOperatorStatus: () => {},
-  };
-  return ctx || fallback;
+  if (!ctx) {
+    throw new Error('useOperatorStatus must be used within OperatorStatusProvider');
+  }
+  return ctx;
 };
