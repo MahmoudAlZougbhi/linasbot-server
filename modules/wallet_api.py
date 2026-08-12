@@ -50,9 +50,10 @@ def _admin_credit_allowed(session_tenant: str, session_role: str) -> bool:
         return False
     if is_unlimited_tenant(session_tenant):
         return True
+    # Explicit allowlist only — no implicit founder-tenant default (fail closed).
     allow = {
         part.strip().lower()
-        for part in (os.getenv("TOKEN_WALLET_ADMIN_CREDIT_TENANT_IDS") or "linas").split(",")
+        for part in (os.getenv("TOKEN_WALLET_ADMIN_CREDIT_TENANT_IDS") or "").split(",")
         if part.strip()
     }
     return session_tenant.strip().lower() in allow
