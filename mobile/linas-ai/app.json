@@ -6,7 +6,10 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "scheme": "linasai",
+    "scheme": [
+      "linasai",
+      "com.googleusercontent.apps.513717053157-sp9fa5fqpg2f7pj5evbtkeucon1v4mm1"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.linasai.app",

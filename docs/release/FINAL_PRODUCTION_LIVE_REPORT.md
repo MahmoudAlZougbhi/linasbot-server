@@ -64,7 +64,8 @@ Note: first RC iOS attempt `bee0c9a6-…` failed (provisioning profile missing S
 | Local path | `artifacts/mobile/linas-ai-v1.0.0-vc24.aab` (~69 MB) |
 | Artifact URL | https://expo.dev/artifacts/eas/fHYmhWdhxJ9b99y7UD3kTPNR3kal4Zk5p3vEwSNnj4k.aab |
 | Play Internal upload | **BLOCKED_OWNER_ACTION** — EAS lacks Google Play service-account key (non-interactive setup refused) |
-| Follow-on AAB (Google Sign-In env) | EAS build `6f1e6d9f-0687-42b0-b018-e56fa2c74a54` versionCode **25** (in progress / supersedes for Google button) |
+| Native-client AAB (iOS+Android IDs) | EAS build `edad34e3-cb12-420e-9e74-0d367e55e880` versionCode **26** |
+| Native-client iOS TF | EAS build `6a89dd01-1141-47a8-a341-129ef4939187` build **44** |
 
 ---
 
@@ -74,7 +75,7 @@ Note: first RC iOS attempt `bee0c9a6-…` failed (provisioning profile missing S
 |---------|--------|
 | Email / password mobile auth | Live (PG token backend) |
 | Apple Sign In | Code + TestFlight build ready; ASC ASSN URL registration still owner UI |
-| Google Sign-In | Backend live (`/api/auth/mobile/google`); web client ID in prod env + EAS; **iOS/Android native OAuth clients still required for store reliability** |
+| Google Sign-In | **Wired** — Web+iOS+Android client IDs in EAS + `GOOGLE_OAUTH_CLIENT_IDS` on both nodes (no client secret required for ID-token verify); package `com.linasai.app`; Android SHA-1 `D7:26:3F:43:75:01:06:1F:58:6F:F7:3C:E6:79:4A:B3:E6:7B:9E:3D` |
 | Billing SoT | Postgres after import+parity; wallets/refresh/email tokens/credits matched |
 | Stripe / Apple IAP / Google Play RTDN | Code ready; Play products/RTDN still owner console |
 
@@ -82,19 +83,19 @@ Note: first RC iOS attempt `bee0c9a6-…` failed (provisioning profile missing S
 
 ## Remaining BLOCKED_OWNER_ACTION (exact click paths)
 
-### 1) Google Cloud — iOS + Android OAuth clients (OTP likely)
+### 1) Google Cloud — iOS + Android OAuth clients
 
-Project: **`linas-ai-bot`** (existing web client already wired).
+**DONE (existing clients wired; no new clients created).**
 
-1. https://console.cloud.google.com/apis/credentials?project=linas-ai-bot  
-2. **Create Credentials → OAuth client ID → iOS**  
-   - Bundle ID: `com.linasai.app`  
-   - Copy client ID → set as `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` in EAS + append to server `GOOGLE_OAUTH_CLIENT_IDS`  
-3. **Create Credentials → OAuth client ID → Android**  
-   - Package: `com.linasai.app`  
-   - SHA-1: from `eas credentials -p android` / Play App signing certificate  
-   - Copy client ID → `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` + append to `GOOGLE_OAUTH_CLIENT_IDS`  
-4. Rebuild TestFlight + Android Internal after client IDs land.
+| Platform | Client ID (public) |
+|----------|--------------------|
+| Web | `513717053157-bqn6moo5q15q4c54bnmcgct07hrn8e1g.apps.googleusercontent.com` |
+| Android | `513717053157-gegscca3fjh5e3qthacbs5k5a7gelrhn.apps.googleusercontent.com` |
+| iOS | `513717053157-sp9fa5fqpg2f7pj5evbtkeucon1v4mm1.apps.googleusercontent.com` |
+
+- Mobile: `EXPO_PUBLIC_GOOGLE_{WEB,IOS,ANDROID}_CLIENT_ID` in EAS production/testflight/preview  
+- Backend both nodes: `GOOGLE_OAUTH_CLIENT_IDS` = Web,iOS,Android (comma-separated); client secret **absent** (not required)  
+- iOS reverse scheme registered in `app.json` schemes  
 
 ### 2) Google Play — Internal Testing upload + API access
 
@@ -137,7 +138,7 @@ Project: **`linas-ai-bot`** (existing web client already wired).
 Ready for owner device tests once TestFlight processing finishes (~5–10 min) and Android Internal AAB is uploaded manually:
 
 - Account: email login + Apple SIWA (TestFlight)  
-- Google: backend ready; full native E2E after Google Cloud clients (§1)  
+- Google: native iOS/Android clients wired; test Google button on new TestFlight + Internal AAB after processing  
 - AI / Content / Social / Meta: production ready checks green  
 - Requests: code on servers; **DB migration not applied** (expected)  
 - Billing: PG SoT live; store purchase matrices need ASC/Play external steps  

@@ -23,7 +23,10 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://linasaibot.com",
-        "EXPO_PUBLIC_APP_ENV": "preview"
+        "EXPO_PUBLIC_APP_ENV": "preview",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "513717053157-bqn6moo5q15q4c54bnmcgct07hrn8e1g.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "513717053157-sp9fa5fqpg2f7pj5evbtkeucon1v4mm1.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "513717053157-gegscca3fjh5e3qthacbs5k5a7gelrhn.apps.googleusercontent.com"
       },
       "android": {
         "buildType": "apk"
@@ -39,7 +42,9 @@
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://linasaibot.com",
         "EXPO_PUBLIC_APP_ENV": "production",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "513717053157-bqn6moo5q15q4c54bnmcgct07hrn8e1g.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "513717053157-bqn6moo5q15q4c54bnmcgct07hrn8e1g.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "513717053157-sp9fa5fqpg2f7pj5evbtkeucon1v4mm1.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "513717053157-gegscca3fjh5e3qthacbs5k5a7gelrhn.apps.googleusercontent.com"
       },
       "android": {
         "buildType": "app-bundle"
@@ -55,7 +60,9 @@
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://linasaibot.com",
         "EXPO_PUBLIC_APP_ENV": "preview",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "513717053157-bqn6moo5q15q4c54bnmcgct07hrn8e1g.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "513717053157-bqn6moo5q15q4c54bnmcgct07hrn8e1g.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "513717053157-sp9fa5fqpg2f7pj5evbtkeucon1v4mm1.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "513717053157-gegscca3fjh5e3qthacbs5k5a7gelrhn.apps.googleusercontent.com"
       },
       "ios": {
         "resourceClass": "m-medium"
