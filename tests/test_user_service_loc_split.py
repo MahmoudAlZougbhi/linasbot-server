@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.user_service import AuthBackendUnavailableError, UserService, user_service
+import pytest
+
+from services.user_service import (
+    AuthBackendUnavailableError,
+    TenantIdRequiredError,
+    UserService,
+    user_service,
+)
 from services.user_service_auth import UserServiceAuthMixin
 
 
@@ -30,3 +37,23 @@ def test_user_service_preserves_public_api_via_mixin() -> None:
         "_hash_password",
     ):
         assert callable(getattr(user_service, name))
+
+
+def test_normalize_tenant_id_accepts_explicit_linas() -> None:
+    assert UserService._normalize_tenant_id("linas") == "linas"
+    assert UserService._normalize_tenant_id("LINAS") == "linas"
+
+
+def test_normalize_tenant_id_accepts_valid_tenant() -> None:
+    assert UserService._normalize_tenant_id("acme-co") == "acme-co"
+
+
+@pytest.mark.parametrize("value", [None, "", "   "])
+def test_normalize_tenant_id_rejects_missing(value: object) -> None:
+    with pytest.raises(TenantIdRequiredError, match="Tenant identifier is required"):
+        UserService._normalize_tenant_id(value)
+
+
+def test_normalize_tenant_id_rejects_invalid_format() -> None:
+    with pytest.raises(ValueError, match="Invalid tenant identifier"):
+        UserService._normalize_tenant_id("bad tenant!")

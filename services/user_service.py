@@ -24,6 +24,10 @@ class AuthBackendUnavailableError(RuntimeError):
     """Raised when auth storage (Firestore) is temporarily unavailable."""
 
 
+class TenantIdRequiredError(ValueError):
+    """Raised when tenant identifier is missing or empty."""
+
+
 class UserService(UserServiceAuthMixin):
     """Service for managing dashboard users in Firestore"""
 
@@ -34,7 +38,11 @@ class UserService(UserServiceAuthMixin):
 
     @staticmethod
     def _normalize_tenant_id(value: Any) -> str:
-        tenant_id = str(value or "linas").strip().lower()
+        if value is None:
+            raise TenantIdRequiredError("Tenant identifier is required")
+        tenant_id = str(value).strip().lower()
+        if not tenant_id:
+            raise TenantIdRequiredError("Tenant identifier is required")
         if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", tenant_id):
             raise ValueError("Invalid tenant identifier")
         return tenant_id
