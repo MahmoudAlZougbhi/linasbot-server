@@ -89,8 +89,8 @@ def _mock_meta_ok(monkeypatch, *, phone_id: str = TEST_PHONE, waba_id: str = TES
     async def _sub(**kwargs: Any) -> dict[str, Any]:
         return {"success": True}
 
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind.debug_token", _debug)
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind.fetch_waba_phone_numbers", _phones)
+    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.debug_token", _debug)
+    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.fetch_waba_phone_numbers", _phones)
     monkeypatch.setattr("services.whatsapp_cloud.app_review_bind.subscribe_waba_webhooks", _sub)
 
 
@@ -173,7 +173,7 @@ async def test_reject_expired_token_fail_closed(wa_db, monkeypatch):
     async def _bad(**kwargs: Any) -> dict[str, Any]:
         return {"is_valid": False}
 
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind.debug_token", _bad)
+    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.debug_token", _bad)
     with pytest.raises(AppReviewBindError) as exc:
         await bind_app_review_test_number(
             tenant_id="linas",
@@ -227,8 +227,8 @@ async def test_reject_phone_not_in_waba(wa_db, monkeypatch):
     async def _phones(**kwargs: Any) -> list[dict[str, Any]]:
         return [{"id": "999", "display_phone_number": "+1 555 000 0000"}]
 
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind.debug_token", _debug)
-    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind.fetch_waba_phone_numbers", _phones)
+    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.debug_token", _debug)
+    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.fetch_waba_phone_numbers", _phones)
     with pytest.raises(AppReviewBindError) as exc:
         await bind_app_review_test_number(
             tenant_id="linas",

@@ -94,10 +94,13 @@ def test_no_known_default_admin_password_in_user_service_source():
     from pathlib import Path
 
     src = Path("services/user_service.py").read_text(encoding="utf-8")
+    auth_src = Path("services/user_service_auth.py").read_text(encoding="utf-8")
     # Avoid embedding the banned default password literal in the test file (secret scan).
     banned = "admin" + "123"
     assert banned not in src
-    assert "ensure_default_admin is disabled" in src
+    assert banned not in auth_src
+    # ensure_default_admin lives on the auth mixin after LOC split.
+    assert "ensure_default_admin is disabled" in auth_src
 
 
 def test_no_http_bootstrap_and_cli_provisioning_exists():

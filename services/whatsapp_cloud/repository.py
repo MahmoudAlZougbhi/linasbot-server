@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 import uuid
-from datetime import timedelta
+from datetime import UTC, timedelta
 from typing import Any
 
 from sqlalchemy import select

@@ -49,6 +49,7 @@ WEBHOOK_FIELDS = [
     "phone_number_quality_update",
 ]
 
+@dataclass
 class AppReviewBindResult:
     success: bool
     action: str

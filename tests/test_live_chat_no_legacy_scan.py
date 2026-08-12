@@ -26,7 +26,7 @@ async def test_unified_chats_empty_index_sets_rebuild_flag_without_legacy():
     with (
         patch.object(svc, "_fallback_unified_chats_with_timeout", new_callable=AsyncMock) as legacy,
         patch.object(svc, "_cached_unified_response", return_value=None),
-        patch("services.live_chat_service.get_firestore_db", return_value=MagicMock()),
+        patch("services.live_chat_service_unified.get_firestore_db", return_value=MagicMock()),
         patch.object(svc, "_run_blocking_with_timeout", new_callable=AsyncMock, return_value=[]),
         patch.object(svc, "_index_collection", return_value=MagicMock()),
     ):
@@ -72,7 +72,7 @@ async def test_unified_chats_empty_index_sets_rebuild_flag_without_legacy():
             new_callable=AsyncMock,
             side_effect=AssertionError("legacy must not run"),
         ),
-        patch("services.live_chat_service.get_firestore_db", return_value=MagicMock()),
+        patch("services.live_chat_service_unified.get_firestore_db", return_value=MagicMock()),
         patch.object(svc, "_run_blocking_with_timeout", new_callable=AsyncMock, return_value=[]),
     ):
         result = await svc.get_unified_chats(search="", page=1, page_size=20, filter_state="all")
@@ -96,8 +96,8 @@ async def test_waiting_queue_empty_index_never_calls_source_scan():
             new_callable=AsyncMock,
             side_effect=AssertionError("source scan must not be called"),
         ),
-        patch("services.live_chat_service.get_firestore_db", return_value=MagicMock()),
-        patch("services.live_chat_service.asyncio.to_thread", new_callable=AsyncMock, return_value=[]),
+        patch("services.live_chat_service_history_api.get_firestore_db", return_value=MagicMock()),
+        patch("services.live_chat_service_history_api.asyncio.to_thread", new_callable=AsyncMock, return_value=[]),
     ):
         queue = await svc.get_waiting_queue()
     assert queue == []

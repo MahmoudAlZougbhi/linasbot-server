@@ -212,6 +212,9 @@ async def test_lina_app_b_activation_is_rejected_before_any_subscription(
 
     monkeypatch.setattr(meta_connections_api, "get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(meta_connections_api, "subscribe_binding_webhook", subscribe)
+    monkeypatch.setattr("modules.meta_connections_api_helpers.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("modules.meta_connections_api_lifecycle.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("modules.meta_connections_api_lifecycle.subscribe_binding_webhook", subscribe)
     with pytest.raises(HTTPException) as blocked:
         await meta_connections_api.activate_meta_connection(binding.binding_id, _request("linas"))
     assert blocked.value.status_code == 409
@@ -259,6 +262,10 @@ async def test_reconnect_atomically_replaces_provider_then_removes_old_subscript
     monkeypatch.setattr(meta_connections_api, "get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(meta_connections_api, "subscribe_binding_webhook", subscribe)
     monkeypatch.setattr(meta_connections_api, "unsubscribe_binding_webhook", unsubscribe)
+    monkeypatch.setattr("modules.meta_connections_api_helpers.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("modules.meta_connections_api_lifecycle.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("modules.meta_connections_api_lifecycle.subscribe_binding_webhook", subscribe)
+    monkeypatch.setattr("modules.meta_connections_api_lifecycle.unsubscribe_binding_webhook", unsubscribe)
     monkeypatch.setattr(cm_constants, "cm_runtime_mode", lambda: "published")
     monkeypatch.setattr(version_store, "load_published_content", lambda _tenant: ({}, {}))
 
@@ -311,6 +318,9 @@ async def test_reconnect_first_party_disconnected_binding(
 
     monkeypatch.setattr(meta_connections_api, "get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(meta_connections_api, "subscribe_binding_webhook", subscribe)
+    monkeypatch.setattr("modules.meta_connections_api_helpers.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("modules.meta_connections_api_lifecycle.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("modules.meta_connections_api_lifecycle.subscribe_binding_webhook", subscribe)
 
     response = await meta_connections_api.reconnect_meta_connection(
         disconnected.binding_id,
