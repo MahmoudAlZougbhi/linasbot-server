@@ -99,7 +99,9 @@ def main() -> int:
             for needle in ("redis", "postgres", "whatsapp", "meta", "data_root", "job_queue", "production"):
                 for ck, cv in (checks or {}).items():
                     if needle in str(ck).lower():
-                        print(f"ready_check {ck}={cv if not isinstance(cv, dict) else {k: cv.get(k) for k in list(cv)[:6]}}")
+                        print(
+                            f"ready_check {ck}={cv if not isinstance(cv, dict) else {k: cv.get(k) for k in list(cv)[:6]}}"
+                        )
         except Exception:
             print(f"ready_raw_prefix={ready[:300]}")
     return 0

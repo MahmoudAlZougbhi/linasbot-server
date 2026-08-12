@@ -257,7 +257,12 @@ def cert_worker_crash_requeue(r: Any) -> CertResult:
     return CertResult(
         "worker_crash_retry_dlq",
         unexplained == 0 and processed + drained == 100,
-        {"processed": processed, "requeued_drained": drained, "unexplained": unexplained, "pre_drain_remaining": remaining},
+        {
+            "processed": processed,
+            "requeued_drained": drained,
+            "unexplained": unexplained,
+            "pre_drain_remaining": remaining,
+        },
     )
 
 
@@ -293,11 +298,7 @@ def main() -> int:
         "results": [asdict(x) for x in results],
         "all_passed": all(x.passed for x in results),
         "unexplained_missing_events": next(
-            (
-                x.details.get("unexplained_missing_events")
-                for x in results
-                if x.name == "durable_ledger_reconcile"
-            ),
+            (x.details.get("unexplained_missing_events") for x in results if x.name == "durable_ledger_reconcile"),
             None,
         ),
     }
