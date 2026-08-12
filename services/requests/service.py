@@ -44,7 +44,13 @@ class CustomerRequestsService:
         self.session = session
         self.repo = CustomerRequestsRepository(session)
 
-    def create_from_ai(self, *, tenant_id: str, body: RequestCreateBody) -> dict[str, Any]:
+    def create_from_ai(
+        self,
+        *,
+        tenant_id: str,
+        body: RequestCreateBody,
+        include_sensitive: bool = False,
+    ) -> dict[str, Any]:
         if not body.customer_confirmed:
             raise CustomerRequestsError(
                 "CUSTOMER_CONFIRMATION_REQUIRED",
@@ -61,7 +67,7 @@ class CustomerRequestsService:
             row = self.repo.get_for_tenant(tenant_id=tenant_id, request_id=existing.request_id)
             if row is None:
                 raise CustomerRequestsError("IDEMPOTENCY_ORPHAN", "Idempotency points to missing request")
-            return serialize_request(row, include_sensitive=True)
+            return serialize_request(row, include_sensitive=include_sensitive)
 
         cfg_version = body.configuration_version or published_configuration_version(tenant_id)
         number = self.repo.allocate_request_number(tenant_id)
@@ -110,7 +116,7 @@ class CustomerRequestsService:
             request_id=row.id,
         )
         self.session.commit()
-        return serialize_request(row, include_sensitive=True)
+        return serialize_request(row, include_sensitive=include_sensitive)
 
     def get(self, *, tenant_id: str, request_id: str, include_sensitive: bool) -> dict[str, Any]:
         row = self.repo.get_for_tenant(tenant_id=tenant_id, request_id=request_id)
@@ -131,7 +137,10 @@ class CustomerRequestsService:
         assigned_user_id: str | None = None,
         q: str | None = None,
         cursor: str | None = None,
+        created_after: str | None = None,
+        created_on_or_before: str | None = None,
         limit: int = 25,
+        search_phone: bool = False,
     ) -> dict[str, Any]:
         created_before = None
         if cursor:
@@ -139,6 +148,18 @@ class CustomerRequestsService:
                 created_before = datetime.fromisoformat(cursor)
             except ValueError as exc:
                 raise CustomerRequestsError("INVALID_CURSOR", "Invalid pagination cursor") from exc
+        after_dt = None
+        on_or_before_dt = None
+        if created_after:
+            try:
+                after_dt = datetime.fromisoformat(created_after)
+            except ValueError as exc:
+                raise CustomerRequestsError("INVALID_DATE", "Invalid created_after") from exc
+        if created_on_or_before:
+            try:
+                on_or_before_dt = datetime.fromisoformat(created_on_or_before)
+            except ValueError as exc:
+                raise CustomerRequestsError("INVALID_DATE", "Invalid created_on_or_before") from exc
         rows = self.repo.list_requests(
             tenant_id=tenant_id,
             request_type=request_type.upper() if request_type else None,
@@ -147,7 +168,10 @@ class CustomerRequestsService:
             assigned_user_id=assigned_user_id,
             q=q,
             created_before=created_before,
+            created_after=after_dt,
+            created_on_or_before=on_or_before_dt,
             limit=limit + 1,
+            search_phone=search_phone,
         )
         has_more = len(rows) > limit
         page = rows[:limit]
@@ -259,6 +283,12 @@ class CustomerRequestsService:
     ) -> dict[str, Any]:
         existing = self.repo.get_idempotency(tenant_id=tenant_id, scope="final_action", key=idempotency_key)
         if existing and existing.request_id:
+            if existing.request_id != request_id:
+                raise CustomerRequestsError(
+                    "IDEMPOTENCY_KEY_REUSED",
+                    "idempotency_key already used for a different request",
+                    http_status=409,
+                )
             row = self.repo.get_for_tenant(tenant_id=tenant_id, request_id=existing.request_id)
             if row is None:
                 raise CustomerRequestsError("IDEMPOTENCY_ORPHAN", "Idempotency points to missing request")

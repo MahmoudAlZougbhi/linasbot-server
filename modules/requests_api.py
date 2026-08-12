@@ -81,6 +81,8 @@ def list_requests(
     assigned_user_id: str | None = None,
     q: str | None = None,
     cursor: str | None = None,
+    created_after: str | None = None,
+    created_on_or_before: str | None = None,
     limit: int = Query(default=25, ge=1, le=100),
 ) -> dict[str, Any]:
     session = require_requests_view(request)
@@ -95,7 +97,10 @@ def list_requests(
                 assigned_user_id=assigned_user_id,
                 q=q,
                 cursor=cursor,
+                created_after=created_after,
+                created_on_or_before=created_on_or_before,
                 limit=limit,
+                search_phone=can_view_sensitive(session),
             )
         except CustomerRequestsError as exc:
             raise _http(exc) from exc
@@ -123,7 +128,11 @@ def create_request(body: RequestCreateBody, request: Request) -> dict[str, Any]:
     tenant_id = _tenant(session)
     with _db_cm() as db:
         try:
-            return CustomerRequestsService(db).create_from_ai(tenant_id=tenant_id, body=body)
+            return CustomerRequestsService(db).create_from_ai(
+                tenant_id=tenant_id,
+                body=body,
+                include_sensitive=can_view_sensitive(session),
+            )
         except CustomerRequestsError as exc:
             raise _http(exc) from exc
 

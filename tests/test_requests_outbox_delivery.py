@@ -229,3 +229,28 @@ def test_redact_and_classify():
     assert classify_platform_block(channel="instagram_dm", error_code=551, message="")
     assert classify_platform_block(channel="whatsapp_cloud", error_code="131026", message="")
     assert not classify_platform_block(channel="whatsapp_cloud", error_code="500", message="timeout")
+
+
+def test_comment_linked_binding_resolves_facebook():
+    from types import SimpleNamespace
+
+    from services.requests.delivery import _meta_bindings_for_account
+
+    class _Reg:
+        def list_bindings(self, include_inactive=False):
+            return [
+                SimpleNamespace(
+                    tenant_id="tenant-a",
+                    channel="facebook",
+                    asset_id="page-fb-1",
+                    page_id="page-fb-1",
+                    instagram_account_id=None,
+                    active=True,
+                )
+            ]
+
+    found = _meta_bindings_for_account(
+        _Reg(), tenant_id="tenant-a", account="page-fb-1", meta_channels=("instagram", "facebook")
+    )
+    assert len(found) == 1
+    assert found[0].channel == "facebook"

@@ -31,7 +31,13 @@ class CustomerRequestsRepository:
         self.session = session
 
     def allocate_request_number(self, tenant_id: str) -> str:
-        row = self.session.get(CustomerRequestCounter, tenant_id)
+        # Row lock prevents duplicate request_number under concurrent creates (Postgres).
+        stmt = (
+            select(CustomerRequestCounter)
+            .where(CustomerRequestCounter.tenant_id == tenant_id)
+            .with_for_update()
+        )
+        row = self.session.execute(stmt).scalar_one_or_none()
         if row is None:
             row = CustomerRequestCounter(tenant_id=tenant_id, next_number=2)
             self.session.add(row)
@@ -210,7 +216,10 @@ class CustomerRequestsRepository:
         assigned_user_id: str | None = None,
         q: str | None = None,
         created_before: datetime | None = None,
+        created_after: datetime | None = None,
+        created_on_or_before: datetime | None = None,
         limit: int = 25,
+        search_phone: bool = False,
     ) -> list[CustomerRequest]:
         clauses = [CustomerRequest.tenant_id == tenant_id]
         if request_type:
@@ -223,18 +232,22 @@ class CustomerRequestsRepository:
             clauses.append(CustomerRequest.assigned_user_id == assigned_user_id)
         if created_before is not None:
             clauses.append(CustomerRequest.created_at < created_before)
+        if created_after is not None:
+            clauses.append(CustomerRequest.created_at >= created_after)
+        if created_on_or_before is not None:
+            clauses.append(CustomerRequest.created_at <= created_on_or_before)
         if q:
             like = f"%{q.strip()}%"
-            clauses.append(
-                or_(
-                    CustomerRequest.request_number.ilike(like),
-                    CustomerRequest.customer_name.ilike(like),
-                    CustomerRequest.customer_display_name.ilike(like),
-                    CustomerRequest.platform_username.ilike(like),
-                    CustomerRequest.phone_normalized.ilike(like),
-                    CustomerRequest.title.ilike(like),
-                )
-            )
+            search_cols = [
+                CustomerRequest.request_number.ilike(like),
+                CustomerRequest.customer_name.ilike(like),
+                CustomerRequest.customer_display_name.ilike(like),
+                CustomerRequest.platform_username.ilike(like),
+                CustomerRequest.title.ilike(like),
+            ]
+            if search_phone:
+                search_cols.append(CustomerRequest.phone_normalized.ilike(like))
+            clauses.append(or_(*search_cols))
         stmt = select(CustomerRequest).where(and_(*clauses)).order_by(CustomerRequest.created_at.desc()).limit(limit)
         return list(self.session.execute(stmt).scalars().all())
 

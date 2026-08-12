@@ -146,3 +146,44 @@ def test_permission_keys_include_requests():
         assert key in PERMISSION_KEYS
     assert required_permission_for("GET", "/api/requests") == "requests"
     assert required_permission_for("GET", "/api/requests/abc") == "requests"
+
+
+def test_list_created_after_filter(req_db, monkeypatch):
+    from datetime import UTC, datetime, timedelta
+
+    from db.models.requests import CustomerRequest
+
+    monkeypatch.setattr("services.requests.service.requests_capture_active", lambda _tid: True)
+    monkeypatch.setattr(
+        "services.requests.service.published_configuration_version",
+        lambda _tid: "v-test",
+    )
+    svc = CustomerRequestsService(req_db)
+    old = svc.create_from_ai(
+        tenant_id="tenant-a",
+        body=RequestCreateBody(
+            request_type="OTHER",
+            source_channel="instagram_dm",
+            customer_confirmed=True,
+            idempotency_key="idem-date-old",
+            title="old-item",
+        ),
+    )
+    row = req_db.get(CustomerRequest, old["request_id"])
+    assert row is not None
+    row.created_at = datetime.now(UTC) - timedelta(days=10)
+    req_db.commit()
+    svc.create_from_ai(
+        tenant_id="tenant-a",
+        body=RequestCreateBody(
+            request_type="OTHER",
+            source_channel="instagram_dm",
+            customer_confirmed=True,
+            idempotency_key="idem-date-new",
+            title="new-item",
+        ),
+    )
+    after = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+    listed = svc.list(tenant_id="tenant-a", created_after=after)
+    assert len(listed["items"]) == 1
+    assert listed["items"][0]["title"] == "new-item"

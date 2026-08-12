@@ -63,6 +63,35 @@ def _meta_channel_for_source(source_channel: str) -> str:
     return "instagram"
 
 
+def _meta_bindings_for_account(
+    registry: Any,
+    *,
+    tenant_id: str,
+    account: str,
+    meta_channels: tuple[str, ...],
+) -> list[Any]:
+    """Match active tenant bindings by asset/page/IG id within allowed Meta channels."""
+    bindings = registry.list_bindings(include_inactive=False)
+    exact = [
+        b
+        for b in bindings
+        if b.tenant_id == tenant_id
+        and b.channel in meta_channels
+        and b.asset_id == account
+        and b.active
+    ]
+    if exact:
+        return exact
+    return [
+        b
+        for b in bindings
+        if b.tenant_id == tenant_id
+        and b.channel in meta_channels
+        and account in {b.asset_id, b.page_id, b.instagram_account_id}
+        and b.active
+    ]
+
+
 async def deliver_whatsapp_cloud(
     *,
     tenant_id: str,
@@ -159,22 +188,17 @@ async def deliver_meta_dm(
         )
 
     registry = get_meta_app_registry()
-    meta_channel = _meta_channel_for_source(source_channel)
-    candidates = [
-        b
-        for b in registry.list_bindings(include_inactive=False)
-        if b.tenant_id == tenant_id and b.channel == meta_channel and b.asset_id == account and b.active
-    ]
-    if not candidates:
-        # Also match page_id / instagram_account_id without switching channel family.
-        candidates = [
-            b
-            for b in registry.list_bindings(include_inactive=False)
-            if b.tenant_id == tenant_id
-            and b.channel == meta_channel
-            and account in {b.asset_id, b.page_id, b.instagram_account_id}
-            and b.active
-        ]
+    if source_channel == SOURCE_CHANNEL_COMMENT_LINKED_DM:
+        # Resolve IG vs FB from tenant bindings by asset — never WhatsApp / never invent channel.
+        meta_channels: tuple[str, ...] = ("instagram", "facebook")
+        candidates = _meta_bindings_for_account(
+            registry, tenant_id=tenant_id, account=account, meta_channels=meta_channels
+        )
+    else:
+        meta_channel = _meta_channel_for_source(source_channel)
+        candidates = _meta_bindings_for_account(
+            registry, tenant_id=tenant_id, account=account, meta_channels=(meta_channel,)
+        )
     if not candidates:
         return DeliveryResult(
             status="failed",
@@ -182,6 +206,7 @@ async def deliver_meta_dm(
             channel_used=source_channel,
         )
     binding = candidates[0]
+    meta_channel = str(binding.channel)
     credential = registry.get_credential(binding)
     app_config = get_meta_app_configs().get(binding.app_key)
     settings = build_messaging_settings_for_binding(binding, credential=credential, app_config=app_config)
@@ -250,11 +275,10 @@ async def deliver_on_source_channel(
         SOURCE_CHANNEL_FACEBOOK_MESSENGER,
         SOURCE_CHANNEL_COMMENT_LINKED_DM,
     }:
-        # comment_linked_dm: Meta DM path for the linked asset — never WhatsApp.
-        meta_source = SOURCE_CHANNEL_INSTAGRAM_DM if ch == SOURCE_CHANNEL_COMMENT_LINKED_DM else ch
+        # comment_linked_dm: Meta DM via asset binding (IG or FB) — never WhatsApp.
         result = await deliver_meta_dm(
             tenant_id=tenant_id,
-            source_channel=meta_source,
+            source_channel=ch,
             source_account_id=source_account_id,
             external_customer_id=external_customer_id,
             text=text,

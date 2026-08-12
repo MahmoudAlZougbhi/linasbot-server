@@ -336,3 +336,99 @@ def test_viewer_lacks_requests_operator_has_base_keys():
     assert user_has_permission(operator, "requestsSensitive") is False
     assert SYSTEM_ROLE_PERMISSIONS["operator"]["requests"] is True
     assert resolve_permissions("viewer", None)["requests"] is False
+
+
+# --- Phase 11 reinspection fixes --------------------------------------------
+
+
+def test_create_omits_sensitive_by_default(req_db, monkeypatch):
+    created = _create(
+        req_db,
+        monkeypatch,
+        key="idem-p11-create-pii",
+        phone_normalized="+96171111111",
+        email="hide@example.com",
+        delivery_address="Secret St",
+    )
+    assert "phone_normalized" not in created
+    assert "email" not in created
+    assert "delivery_address" not in created
+    assert created["phone_present"] is True
+    assert created["email_present"] is True
+
+    svc = CustomerRequestsService(req_db)
+    with_sensitive = svc.create_from_ai(
+        tenant_id="tenant-a",
+        body=RequestCreateBody(
+            request_type="ORDER",
+            source_channel="instagram_dm",
+            customer_confirmed=True,
+            idempotency_key="idem-p11-create-pii",  # replay
+            title="Phase9 request",
+        ),
+        include_sensitive=True,
+    )
+    assert with_sensitive["phone_normalized"] == "+96171111111"
+
+
+def test_final_action_idempotency_bound_to_request(req_db, monkeypatch):
+    first = _create(req_db, monkeypatch, request_type="ORDER", channel="instagram_dm", key="idem-p11-fa-a")
+    second = _create(req_db, monkeypatch, request_type="ORDER", channel="instagram_dm", key="idem-p11-fa-b")
+    svc = CustomerRequestsService(req_db)
+
+    def _to_confirmed(created: dict) -> dict:
+        mid = svc.transition_status(
+            tenant_id="tenant-a",
+            request_id=created["request_id"],
+            actor_user_id="op-1",
+            to_status="IN_REVIEW",
+            row_version=created["row_version"],
+        )
+        return svc.transition_status(
+            tenant_id="tenant-a",
+            request_id=created["request_id"],
+            actor_user_id="op-1",
+            to_status="CONFIRMED",
+            row_version=mid["row_version"],
+        )
+
+    a = _to_confirmed(first)
+    b = _to_confirmed(second)
+    svc.final_action(
+        tenant_id="tenant-a",
+        request_id=a["request_id"],
+        actor_user_id="op-1",
+        action="mark_ready",
+        row_version=a["row_version"],
+        completion_message="ready",
+        idempotency_key="shared-final-key-p11",
+        send_notification=False,
+    )
+    with pytest.raises(CustomerRequestsError) as exc:
+        svc.final_action(
+            tenant_id="tenant-a",
+            request_id=b["request_id"],
+            actor_user_id="op-1",
+            action="mark_ready",
+            row_version=b["row_version"],
+            completion_message="ready",
+            idempotency_key="shared-final-key-p11",
+            send_notification=False,
+        )
+    assert exc.value.code == "IDEMPOTENCY_KEY_REUSED"
+    assert exc.value.http_status == 409
+
+
+def test_list_phone_search_requires_flag(req_db, monkeypatch):
+    _create(
+        req_db,
+        monkeypatch,
+        key="idem-p11-phone-q",
+        phone_normalized="+96172222222",
+        title="NoPhoneInTitle",
+    )
+    svc = CustomerRequestsService(req_db)
+    without = svc.list(tenant_id="tenant-a", q="+96172222222", search_phone=False)
+    assert without["items"] == []
+    with_phone = svc.list(tenant_id="tenant-a", q="+96172222222", search_phone=True)
+    assert len(with_phone["items"]) == 1
