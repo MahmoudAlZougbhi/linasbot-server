@@ -38,7 +38,8 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://linasaibot.com",
-        "EXPO_PUBLIC_APP_ENV": "production"
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "513717053157-bqn6moo5q15q4c54bnmcgct07hrn8e1g.apps.googleusercontent.com"
       },
       "android": {
         "buildType": "app-bundle"
@@ -53,7 +54,8 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://linasaibot.com",
-        "EXPO_PUBLIC_APP_ENV": "preview"
+        "EXPO_PUBLIC_APP_ENV": "preview",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "513717053157-bqn6moo5q15q4c54bnmcgct07hrn8e1g.apps.googleusercontent.com"
       },
       "ios": {
         "resourceClass": "m-medium"

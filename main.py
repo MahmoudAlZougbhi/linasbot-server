@@ -54,6 +54,7 @@ import modules.entitlements_api  # noqa: E402, F401
 import modules.event_handlers  # noqa: E402, F401
 import modules.feedback_api  # noqa: E402, F401
 import modules.flow_api  # noqa: E402, F401
+import modules.google_auth_api  # noqa: E402, F401
 import modules.guest_ai_api  # noqa: E402, F401
 import modules.instructions_api  # noqa: E402, F401
 import modules.live_chat_api  # noqa: E402, F401

@@ -1,19 +1,58 @@
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect } from 'react';
 
 import { StatusChip } from '../../components/StatusChip';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
 import { signInWithApple } from './appleSignIn';
+import {
+  completeGoogleSignIn,
+  isGoogleSignInConfigured,
+  useGoogleIdTokenAuthRequest,
+} from './googleSignIn';
 
 type Props = {
   onAppleSuccess?: () => void;
   onAppleError?: (message: string) => void;
+  onGoogleSuccess?: () => void;
+  onGoogleError?: (message: string) => void;
 };
 
-/** Google (soon) + Apple Sign In (iOS). */
-export function SocialAuthButtons({ onAppleSuccess, onAppleError }: Props) {
+/** Google Sign-In (when client IDs configured) + Apple Sign In (iOS). */
+export function SocialAuthButtons({
+  onAppleSuccess,
+  onAppleError,
+  onGoogleSuccess,
+  onGoogleError,
+}: Props) {
   const { tr } = useI18n();
   const appleEnabled = Platform.OS === 'ios';
+  const googleEnabled = isGoogleSignInConfigured();
+  const [googleRequest, googleResponse, promptGoogle] = useGoogleIdTokenAuthRequest();
+
+  useEffect(() => {
+    if (!googleResponse) return;
+    if (googleResponse.type === 'dismiss' || googleResponse.type === 'cancel') return;
+    if (googleResponse.type !== 'success') {
+      onGoogleError?.(tr('googleSignInFailed'));
+      return;
+    }
+    const idToken =
+      googleResponse.params.id_token ||
+      (googleResponse.authentication as { idToken?: string } | null)?.idToken;
+    void (async () => {
+      const result = await completeGoogleSignIn({ idToken: String(idToken || '') });
+      if (result.ok) {
+        onGoogleSuccess?.();
+        return;
+      }
+      if (result.code === 'link_required') {
+        onGoogleError?.(tr('googleLinkRequired'));
+        return;
+      }
+      onGoogleError?.(tr('googleSignInFailed'));
+    })();
+  }, [googleResponse, onGoogleError, onGoogleSuccess, tr]);
 
   async function onApple() {
     const result = await signInWithApple();
@@ -33,6 +72,18 @@ export function SocialAuthButtons({ onAppleSuccess, onAppleError }: Props) {
     onAppleError?.(tr('appleSignInFailed'));
   }
 
+  async function onGoogle() {
+    if (!googleEnabled || !googleRequest) {
+      onGoogleError?.(tr('googleSignInUnavailable'));
+      return;
+    }
+    try {
+      await promptGoogle();
+    } catch {
+      onGoogleError?.(tr('googleSignInFailed'));
+    }
+  }
+
   return (
     <View style={styles.wrap}>
       <View style={styles.dividerRow}>
@@ -40,10 +91,21 @@ export function SocialAuthButtons({ onAppleSuccess, onAppleError }: Props) {
         <Text style={styles.or}>{tr('socialContinueWith')}</Text>
         <View style={styles.line} />
       </View>
-      <Pressable style={styles.btn} disabled>
-        <Text style={styles.btnText}>{tr('socialContinueGoogle')}</Text>
-        <StatusChip label={tr('comingSoon')} tone="soon" />
-      </Pressable>
+      {googleEnabled ? (
+        <Pressable
+          style={[styles.btn, styles.btnEnabled]}
+          onPress={() => void onGoogle()}
+          accessibilityRole="button"
+          accessibilityLabel={tr('socialContinueGoogle')}
+        >
+          <Text style={styles.btnTextActive}>{tr('socialContinueGoogle')}</Text>
+        </Pressable>
+      ) : (
+        <Pressable style={styles.btn} disabled>
+          <Text style={styles.btnText}>{tr('socialContinueGoogle')}</Text>
+          <StatusChip label={tr('comingSoon')} tone="soon" />
+        </Pressable>
+      )}
       {appleEnabled ? (
         <Pressable
           style={[styles.btn, styles.btnEnabled]}
