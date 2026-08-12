@@ -151,9 +151,7 @@ async def receive_instagram_login_webhook(request: Request) -> Any:
                 continue
             event_id, queued = persist_meta_dm_accepted(resolved, global_key=global_key)
             if not queued:
-                _track_task(
-                    asyncio.create_task(_process_claimed(resolved, event_id=event_id, global_key=global_key))
-                )
+                _track_task(asyncio.create_task(_process_claimed(resolved, event_id=event_id, global_key=global_key)))
             accepted += 1
 
     comment_accepted = 0
@@ -178,9 +176,7 @@ async def receive_instagram_login_webhook(request: Request) -> Any:
             drop["skip_reasons"],
         )
 
-    async def _process_comment_claimed(
-        resolved: ResolvedMetaCommentEvent, *, event_id: str, global_key: str
-    ) -> None:
+    async def _process_comment_claimed(resolved: ResolvedMetaCommentEvent, *, event_id: str, global_key: str) -> None:
         from services.durable_event_claim import complete_event_claim, release_event_claim
         from services.scale.meta_ingress import mark_dm_completed, mark_dm_failed, mark_dm_processing
 

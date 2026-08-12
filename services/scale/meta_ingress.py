@@ -137,9 +137,7 @@ def persist_meta_comment_accepted(resolved: ResolvedMetaCommentEvent, *, global_
             "created_at": resolved.binding.created_at,
             "updated_at": resolved.binding.updated_at,
         },
-        conversation_key=(
-            f"{tenant_id}:comment:{resolved.binding.asset_id}:{resolved.event.get('comment_id')}"
-        ),
+        conversation_key=(f"{tenant_id}:comment:{resolved.binding.asset_id}:{resolved.event.get('comment_id')}"),
     )
     put_inbound_event(record)
     job_id = _try_enqueue(
