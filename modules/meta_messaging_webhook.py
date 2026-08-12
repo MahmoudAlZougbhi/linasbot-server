@@ -184,35 +184,41 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
     accepted = 0
     duplicates = 0
 
-    async def _process_claimed(resolved: ResolvedMetaEvent) -> None:
+    async def _process_claimed(resolved: ResolvedMetaEvent, *, event_id: str, global_key: str) -> None:
         from services.durable_event_claim import complete_event_claim, release_event_claim
+        from services.scale.meta_ingress import mark_dm_completed, mark_dm_failed, mark_dm_processing
 
         event = resolved.event
-        global_key = global_dm_claim_key(event)
         channel = str(event.get("channel") or "unknown").strip().lower()
         _runtime_logger.info(
-            "[meta-social] event_processing_started channel=%s app_key=%s",
+            "[meta-social] event_processing_started channel=%s app_key=%s event_id=%s",
             channel,
             resolved.settings.app_key,
+            event_id,
         )
+        mark_dm_processing(event_id)
         try:
             await process_meta_social_event(event, resolved.settings)
+            mark_dm_completed(event_id)
             await complete_event_claim(
                 GLOBAL_DM_CLAIM_NAMESPACE,
                 global_key,
                 firestore_collection="meta_social_dm_global_claims",
             )
             _runtime_logger.info(
-                "[meta-social] event_processing_completed channel=%s app_key=%s",
+                "[meta-social] event_processing_completed channel=%s app_key=%s event_id=%s",
                 channel,
                 resolved.settings.app_key,
+                event_id,
             )
         except Exception as exc:
             _runtime_logger.error(
-                "[meta-social] event_processing_failed channel=%s type=%s",
+                "[meta-social] event_processing_failed channel=%s type=%s event_id=%s",
                 channel,
                 type(exc).__name__,
+                event_id,
             )
+            mark_dm_failed(event_id, f"{type(exc).__name__}:{exc}")
             await release_event_claim(
                 GLOBAL_DM_CLAIM_NAMESPACE,
                 global_key,
@@ -229,6 +235,7 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
             duplicates += 1
             continue
         from services.durable_event_claim import try_claim_event
+        from services.scale.meta_ingress import persist_meta_dm_accepted
 
         claimed = await try_claim_event(
             GLOBAL_DM_CLAIM_NAMESPACE,
@@ -239,7 +246,11 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
         if not claimed:
             duplicates += 1
             continue
-        _track_task(asyncio.create_task(_process_claimed(resolved)))
+        event_id, queued = persist_meta_dm_accepted(resolved, global_key=global_key)
+        if not queued:
+            _track_task(
+                asyncio.create_task(_process_claimed(resolved, event_id=event_id, global_key=global_key))
+            )
         accepted += 1
 
     comment_accepted = 0
@@ -273,18 +284,23 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
                 drop["skip_reasons"],
             )
 
-    async def _process_comment_claimed(resolved: ResolvedMetaCommentEvent) -> None:
+    async def _process_comment_claimed(
+        resolved: ResolvedMetaCommentEvent, *, event_id: str, global_key: str
+    ) -> None:
         from services.durable_event_claim import complete_event_claim, release_event_claim
+        from services.scale.meta_ingress import mark_dm_completed, mark_dm_failed, mark_dm_processing
 
-        global_key = global_comment_claim_key(resolved.event)
         _runtime_logger.info(
-            "[meta-comment] event_processing_started channel=%s tenant=%s auth_flow=%s",
+            "[meta-comment] event_processing_started channel=%s tenant=%s auth_flow=%s event_id=%s",
             resolved.binding.channel,
             resolved.binding.tenant_id,
             resolved.binding.auth_flow,
+            event_id,
         )
+        mark_dm_processing(event_id)
         try:
             result = await process_meta_comment_event(resolved)
+            mark_dm_completed(event_id, outbound_status=f"{result.status}:{result.reason}")
             await complete_event_claim(
                 GLOBAL_COMMENT_CLAIM_NAMESPACE,
                 global_key,
@@ -303,6 +319,7 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
                 resolved.binding.channel,
                 type(exc).__name__,
             )
+            mark_dm_failed(event_id, f"{type(exc).__name__}:{exc}")
             await release_event_claim(
                 GLOBAL_COMMENT_CLAIM_NAMESPACE,
                 global_key,
@@ -318,6 +335,7 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
             comment_duplicates += 1
             continue
         from services.durable_event_claim import try_claim_event
+        from services.scale.meta_ingress import persist_meta_comment_accepted
 
         claimed = await try_claim_event(
             GLOBAL_COMMENT_CLAIM_NAMESPACE,
@@ -328,7 +346,13 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
         if not claimed:
             comment_duplicates += 1
             continue
-        _track_task(asyncio.create_task(_process_comment_claimed(resolved_comment)))
+        event_id, queued = persist_meta_comment_accepted(resolved_comment, global_key=global_key)
+        if not queued:
+            _track_task(
+                asyncio.create_task(
+                    _process_comment_claimed(resolved_comment, event_id=event_id, global_key=global_key)
+                )
+            )
         comment_accepted += 1
 
     channel_counts = {

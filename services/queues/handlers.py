@@ -127,10 +127,17 @@ async def handle_creative_expensive(job: QueueJob) -> dict[str, Any]:
     raise PermanentJobError(f"unsupported creative kind: {kind}")
 
 
+async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
+    from services.queues.meta_inbound_handler import handle_meta_inbound_process as _impl
+
+    return await _impl(job)
+
+
 HANDLERS: dict[str, Handler] = {
     "publish_scheduled": handle_publish_scheduled,
     "creative_image": handle_creative_expensive,
     "creative_video": handle_creative_expensive,
+    "meta_inbound_process": handle_meta_inbound_process,
 }
 
 

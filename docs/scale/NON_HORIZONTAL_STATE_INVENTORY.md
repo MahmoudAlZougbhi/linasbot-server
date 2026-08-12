@@ -11,8 +11,8 @@
 | Dispatcher / monitor / follow-up scheduler jobs | SINGLETON_JOB_NEEDS_DISTRIBUTED_LOCK | P0 | **Fixed:** Redis-preferred job locks |
 | `services/job_queue.py` file backend | REMOVE for prod scale | P0 | Redis path exists; activate with Valkey + `LINAS_REQUIRE_REDIS` |
 | `services/rate_limit_service.py` | ALREADY_DISTRIBUTED (redis) | P0 | Needs reachable Linas Valkey |
-| Meta IG/FB AI via `asyncio.create_task` (no Redis enqueue) | MOVE_TO_REDIS queue | P0 | **Residual — post-Valkey wave:** ingress enqueue → AI worker |
-| WA Cloud webhook awaits AI+send inline | MOVE_TO_REDIS queue | P0 | **Residual — post-Valkey wave:** split ingress / AI / outbound |
+| Meta IG/FB AI via `asyncio.create_task` (no Redis enqueue) | MOVE_TO_REDIS queue | P0 | **Fixed path:** durable ledger persist before ACK; Redis enqueue when `job_queue` production-ready; else local delivery of persisted record; reconcile watchdog |
+| WA Cloud webhook awaits AI+send inline | MOVE_TO_REDIS queue | P0 | **Inbound durable in Postgres** (`whatsapp_webhook_events` + messages before AI); AI/outbound async split residual post-Valkey |
 | Requests `process_pending_outbox` inline on API | MOVE_TO_REDIS / request worker | P0 | **Residual — post-Valkey wave** |
 | `config.py` `user_*` conversation dicts | MOVE_TO_REDIS | P0 | **Residual** (combine buffer / takeover / booking FSM) |
 | `handlers/text_handlers_*` delayed combine registries | MOVE_TO_REDIS | P0 | **Residual** |

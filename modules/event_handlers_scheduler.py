@@ -143,6 +143,16 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
         name="WhatsApp Smart Follow-Up Worker",
         replace_existing=True,
     )
+    from modules.inbound_event_reconcile_job import run_inbound_event_reconcile_job
+
+    scheduler.add_job(
+        run_inbound_event_reconcile_job,
+        "interval",
+        minutes=1,
+        id="inbound_event_reconcile",
+        name="Inbound Event Reconcile Watchdog",
+        replace_existing=True,
+    )
 
     scheduler.start()
 
@@ -150,6 +160,7 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
     asyncio.create_task(run_daily_template_dispatcher_job())
     print("✅ Initial dispatcher check queued")
     asyncio.create_task(run_smart_followup_worker_job())
+    asyncio.create_task(run_inbound_event_reconcile_job())
 
     print("✅ Smart Messaging Scheduler started successfully")
     print("📅 Scheduled jobs:")
@@ -157,6 +168,7 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
     print(f"   - Template dispatcher: Every {dispatcher_interval_minutes} minute(s)")
     print(f"   - Queue monitor/sender: Every {monitor_interval_minutes} minute(s)")
     print("   - Smart Follow-Up worker: Every 1 minute")
+    print("   - Inbound event reconcile: Every 1 minute")
     print("=" * 60)
 
     app_state.scheduler = scheduler

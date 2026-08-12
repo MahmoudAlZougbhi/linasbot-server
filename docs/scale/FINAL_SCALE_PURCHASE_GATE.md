@@ -2,74 +2,39 @@
 
 **Date:** 2026-08-12  
 **PR:** [#240](https://github.com/MahmoudAlZougbhi/linasbot-server/pull/240)  
-**Status:** `BLOCKED_OWNER_ACTION — DIGITALOCEAN SCALE RESOURCES`  
-**Do NOT purchase until owner approves. Do NOT merge. Do NOT deploy.**
+**Status:** `BLOCKED_OWNER_ACTION — DIGITALOCEAN TEAM HOLD (billing/lock)`  
+**Do NOT merge. Do NOT deploy new release. BOC OFF. Do NOT buy $15 single-node Valkey as final HA.**
+
+Companion: [`HA_PURCHASE_EXECUTION.md`](./HA_PURCHASE_EXECUTION.md)
+
+## Live reconciliation (2026-08-12 doctl)
+
+| Item | Live account | Verdict |
+|------|--------------|---------|
+| Valkey 8 lon1 `db-s-1vcpu-2gb` + 1 standby (2 nodes) | Available; HA nodeNums `[1,2,3]`; **~$60/mo** | MATCH |
+| Regional HTTP LB lon1 1 node | **~$12/mo** | MATCH |
+| Second app ≥2 vCPU / 4 GiB lon1 | Prefer **`s-2vcpu-4gb` @ $24/mo** (not $32 Intel-120GB) | MATCH |
+| Spaces | Local media path exists; **not required** for inbound HA correctness this wave | SKIP create |
+| Create Valkey/LB/droplet | **403 team hold / account locked** | **BLOCKED** |
+
+### HA new monthly (reconciled)
+
+**`$96/mo`** = Valkey HA $60 + LB $12 + `s-2vcpu-4gb` $24 (+ $0 Spaces).  
+Prior estimate `$104–$141` → accurate **`$96`** (or `$104` only if choosing `s-2vcpu-4gb-120gb-intel`).
 
 ## Recommendation
 
-Owner wants **HA that matters** and **low initial cost**, with scale-by-replicas later.
+Proceed with **HA** (not LEAN) as soon as DO unlocks the team:
 
-| Option | Valkey | Compute | LB | New monthly | When |
-|--------|--------|---------|----|-------------|------|
-| **LEAN** | `db-s-1vcpu-1gb` ×1 lon1 **$15** | keep 1 droplet | none | **~$15** | Lowest cost; **no Valkey HA** (1GB cannot add standby) |
-| **HA (recommended for HA goal)** | `db-s-1vcpu-2gb` ×**2** lon1 **$60** | 2× app droplets + LB | $12 + ~$64 | **~$136–$141** | Survives one app node + Valkey primary loss |
+1. Managed Valkey `linas-redis-prod` Valkey 8 lon1 `db-s-1vcpu-2gb` × **2 nodes** (~$60)
+2. Regional HTTP LB lon1 (~$12)
+3. Second app `s-2vcpu-4gb` lon1 (~$24)
+4. Trusted sources = Linas app nodes only (never SportBook Valkey)
 
-**Master recommendation:** Approve **HA Valkey + Regional LB + second app droplet** when ready for true HA.  
-If owner must minimize spend **this week**, approve **LEAN Valkey $15** only as an interim shared-state enabler — architecture already HA-ready in code — then upgrade Valkey to OPTION HA before calling the platform HA.
+## Why purchase is still required
 
-**Do not buy the prior “$15 only” as a final HA answer.** It cannot be multi-node.
+Production `/api/ready` historically shows Redis configured but unreachable. Without dedicated Linas Valkey + LB + peer node, multi-instance rate-limit, queues, locks, and failover certification cannot run on real infra.
 
----
+## Durability code (Phase B) — not blocked
 
-## Purchase table
-
-| Resource | Existing/New | Region | Size | Nodes | HA | Monthly Cost | Required Now? |
-|----------|--------------|--------|------|-------|----|--------------|---------------|
-| Valkey LEAN `linas-redis-prod` | **New** | lon1 | `db-s-1vcpu-1gb` | 1 | No | **$15** | Yes for shared RL/queues (if choosing LEAN) |
-| Valkey HA `linas-redis-prod` | **New** | lon1 | `db-s-1vcpu-2gb` | **2** | **Yes** | **$60** | Yes if choosing HA |
-| Regional HTTP LB | New | lon1 | 1 node | 1 | Yes | **$12** | Required for HA multi-droplet |
-| App droplet #1 | Existing | lon1 | `s-2vcpu-2gb-90gb-intel` (~$24) | 1 | No alone | existing | Keep |
-| App droplet #2 | New (HA) | lon1 | `s-2vcpu-4gb` (~$32) prefer | 1 | Yes w/ #1 | **~$32** | HA path |
-| Workers | Colocate initially | lon1 | — | — | — | $0 | Yes (systemd) |
-| Postgres | Existing Linas | — | — | — | No | existing | Resize later per DB plan |
-| Spaces | New if needed | lon1 | starter | — | — | ~$5 | Only if multi-node media |
-| SportBook Valkey | Existing | fra1 | 1GB | 1 | No | — | **Never reuse** |
-
-### Totals
-
-- **LEAN_LAUNCH_MONTHLY (new):** **~$15** (Valkey L)  
-- **HA_LAUNCH_MONTHLY (new):** **~$104–$141** depending on droplet sizes + Spaces  
-
----
-
-## Exact owner action (HA path)
-
-1. DigitalOcean → **Databases** → **Create** → Engine **Valkey 8**  
-2. Region **London (lon1)**  
-3. Plan **1 vCPU / 2 GiB** (`db-s-1vcpu-2gb`)  
-4. Standby nodes: **1** (total nodes **2**) → ~**$60/mo**  
-5. Name: `linas-redis-prod`  
-6. Create Regional Load Balancer lon1 (~**$12/mo**) targeting Linas droplets  
-7. Create/resize second app droplet as needed  
-8. Trusted sources: firewall Valkey to Linas droplets only  
-9. Return TLS URL to wire `REDIS_URL` / `RATE_LIMIT_REDIS_URL` (owner secret step) — **no live activate without separate go-ahead**
-
-CLI sketch (after approval only):
-
-```bash
-doctl databases create linas-redis-prod --engine valkey --region lon1 --size db-s-1vcpu-2gb --num-nodes 2 --version 8
-```
-
-## Exact owner action (LEAN interim)
-
-```bash
-doctl databases create linas-redis-prod --engine valkey --region lon1 --size db-s-1vcpu-1gb --num-nodes 1 --version 8
-```
-
-Cost **~$15/mo**. Not HA.
-
----
-
-## Why purchase is required
-
-Production `/api/ready` shows `redis_configured=true` but `redis_reachable=false`. Without a dedicated reachable Linas Valkey, distributed rate-limit, durable queues, conversation locks, and multi-instance webhook claims cannot be activated safely. SportBook Valkey must not be reused.
+Inbound Meta events now persist to durable ledger **before** ACK; Valkey queue is delivery, not sole authority; reconcile watchdog re-enqueues stuck events (`unexplained_missing_events=0` in unit proof).

@@ -45,12 +45,13 @@
 
 ## Constraints lock
 
-- [x] Do NOT purchase Valkey yet
+- [x] Do NOT purchase Valkey yet — **attempted; DO team hold 403**
 - [x] Do NOT merge PR #240
-- [x] Do NOT deploy production
+- [x] Do NOT deploy production / new release
 - [x] Do NOT reuse `sportbook-redis-prod`
 - [x] BOC stays OFF
 - [x] Meta VERIFY_AND_PRESERVE already passed (no disconnect)
+- [x] Do NOT buy $15 single-node Valkey as final HA
 
 ## Work log
 
@@ -73,3 +74,7 @@
 | 2026-08-12T15:32:07Z | Scale code+docs+loadtests complete; awaiting CI + purchase gate | BLOCKED_OWNER_ACTION |
 | 2026-08-12T15:37:35Z | CI green on PR #240 @ b7e2238; STOP purchase gate | BLOCKED_OWNER_ACTION — DIGITALOCEAN SCALE RESOURCES |
 | 2026-08-12T15:41:12Z | Late audit agents folded: daily_refresh lock + residual P0 inventory (Meta/WA queue wire post-Valkey) | DONE |
+| 2026-08-12T18:56:00Z | GO HA: live price reconcile MATCH ($96 new); DO team HOLD blocks create | BLOCKED_OWNER_ACTION |
+| 2026-08-12T18:56:00Z | Phase B durability: inbound ledger + Meta persist-before-ACK + reconcile job + tests | DONE |
+| 2026-08-12T18:56:00Z | Spaces: not created (media local-disk residual P1; inbound path independent) | DONE |
+| 2026-08-12T18:56:00Z | Phase C/D purchase+load cert deferred until DO unlock | BLOCKED_OWNER_ACTION |
