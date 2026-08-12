@@ -40,18 +40,18 @@ async def send_whatsapp_message(
     try:
         response = await whatsapp_api_client.post("/messages", headers=headers, json=payload)
         response.raise_for_status()
-        print(f"WhatsApp message sent to {to_number}. Response: {response.json()}")
+        print(f"WhatsApp message sent to {to_number[:6]}*** status={response.status_code}")
         return True
     except httpx.HTTPStatusError as e:
-        print(f"ERROR sending WhatsApp message (HTTP Status {e.response.status_code}): {e.response.text}")
+        print(f"ERROR sending WhatsApp message (HTTP Status {e.response.status_code})")
         log_report_event(
-            "whatsapp_send_failed", "System", "N/A", {"to": to_number, "error": e.response.text, "payload": payload}
+            "whatsapp_send_failed", "System", "N/A", {"to": to_number, "error": "http_status_error", "status": e.response.status_code}
         )
         return False
     except httpx.RequestError as e:
-        print(f"ERROR sending WhatsApp message (Request Error): {e}")
+        print(f"ERROR sending WhatsApp message (Request Error): {type(e).__name__}")
         log_report_event(
-            "whatsapp_send_failed", "System", "N/A", {"to": to_number, "error": str(e), "payload": payload}
+            "whatsapp_send_failed", "System", "N/A", {"to": to_number, "error": type(e).__name__}
         )
         return False
 

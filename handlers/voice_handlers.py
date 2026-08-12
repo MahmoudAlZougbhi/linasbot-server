@@ -48,7 +48,10 @@ async def handle_voice_message(
     """
     config.user_names[user_id] = user_name  # Ensure name is updated
 
-    tenant_id = str(user_data.get("tenant_id") or "linas").strip() or "linas"
+    tenant_id = str(user_data.get("tenant_id") or "").strip()
+    if not tenant_id:
+        print("ERROR: voice handler refused — tenant_id required")
+        return
     try:
         from services.cm.capability_gates import voice_processing_enabled
 

@@ -95,8 +95,11 @@ export const fetchLiveChatConversationMessages = async ({
 export const endLiveChatConversation = async ({
   conversationId,
   userId,
-  operatorId = "operator_001",
+  operatorId,
 }) => {
+  if (!operatorId) {
+    throw new Error("operatorId required");
+  }
   const baseURL = getApiAbsoluteBaseUrl();
   const response = await liveChatFetch(`${baseURL}/api/live-chat/end-conversation`, {
     method: "POST",
