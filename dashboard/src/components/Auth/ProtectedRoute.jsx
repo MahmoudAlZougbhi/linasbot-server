@@ -17,10 +17,10 @@ const ProtectedRoute = ({ children, requiredPermission }) => {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  // Check specific permission if provided
+  // Check specific permission if provided (fail-closed: admins included)
   if (requiredPermission) {
     const hasPermission = user.resolvedPermissions?.[requiredPermission] === true;
-    if (!hasPermission && user.role !== 'admin') {
+    if (!hasPermission) {
       const defaultPath = getDefaultPath(user);
       return <Navigate to={defaultPath} replace />;
     }

@@ -140,16 +140,6 @@ export function useApiLiveChat({ setLoading }) {
     }
   }, []);
 
-  const rebuildLiveChatIndex = useCallback(async () => {
-    const response = await api.post("/api/live-chat/rebuild-index", null, { timeout: 60000 });
-    return response.data;
-  }, []);
-
-  const simulateWebhook = useCallback(async (phone = "9613000000", text = "Hello") => {
-    const response = await api.post("/api/debug/simulate-webhook", { phone, text }, { timeout: 15000 });
-    return response.data;
-  }, []);
-
   /** Same axios as getUnifiedChats – use for loading conversation messages so request goes to same origin. */
   const getConversationMessages = useCallback(
     /**
@@ -352,8 +342,6 @@ export function useApiLiveChat({ setLoading }) {
     getLiveConversations,
     getWaitingQueue,
     getLiveChatStatus,
-    rebuildLiveChatIndex,
-    simulateWebhook,
     getConversationMessages,
     takeoverConversation,
     releaseConversation,

@@ -165,7 +165,7 @@ class FeedbackRequest(BaseModel):
     feedback_type: str
     correct_answer: str | None = None
     feedback_reason: str | None = None
-    operator_id: str | None = "operator_001"
+    operator_id: str  # required — no silent operator_001 default
     language: str = "ar"
 
 
@@ -173,7 +173,7 @@ class FeedbackRequest(BaseModel):
 class TakeoverRequest(BaseModel):
     conversation_id: str
     user_id: str
-    operator_id: str = "operator_001"
+    operator_id: str  # required — no silent operator_001 default; callers must supply session attribution
 
 
 class ReleaseRequest(BaseModel):

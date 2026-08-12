@@ -15,7 +15,7 @@ _ELEVATED_DEBUG_ROLES = frozenset({"admin", "platform_owner"})
 
 
 def _require_live_chat_debug_elevation(request: Request) -> None:
-    """liveChat alone is insufficient for debug-firestore / rebuild-index."""
+    """liveChat alone is insufficient for status / debug-firestore / rebuild-index."""
     session = require_session(request)
     role = (session.role or "").strip().lower()
     if role not in _ELEVATED_DEBUG_ROLES:
@@ -23,8 +23,9 @@ def _require_live_chat_debug_elevation(request: Request) -> None:
 
 
 @app.get("/api/live-chat/status")
-async def live_chat_status() -> Any:
-    """Quick status: index count, users count. If index empty but users exist, call rebuild-index."""
+async def live_chat_status(request: Request) -> Any:
+    """Quick status: index count, users count. Elevated roles only (same as debug-firestore/rebuild)."""
+    _require_live_chat_debug_elevation(request)
     try:
         from utils.utils import get_firestore_db
 

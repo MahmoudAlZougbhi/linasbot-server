@@ -90,4 +90,31 @@ describe("ProtectedRoute", () => {
     );
     expect(screen.getByText("dashboard-home")).toBeInTheDocument();
   });
+
+  it("denies admin without requiredPermission (fail-closed, no admin bypass)", () => {
+    mockUseAuth.mockReturnValue({
+      user: makeAuthUser({
+        role: "admin",
+        resolvedPermissions: { dashboard: true, liveChat: false, settings: true },
+      }),
+      loading: false,
+    });
+    render(
+      <MemoryRouter initialEntries={["/live-chat"]}>
+        <Routes>
+          <Route
+            path="/live-chat"
+            element={
+              <ProtectedRoute requiredPermission="liveChat">
+                <div>live-chat-page</div>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/app" element={<div>dashboard-home</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(screen.queryByText("live-chat-page")).not.toBeInTheDocument();
+    expect(screen.getByText("dashboard-home")).toBeInTheDocument();
+  });
 });
