@@ -111,7 +111,7 @@ def test_exchange_and_revoke_mock_urllib(auth_key: Path, monkeypatch: pytest.Mon
         def read(self) -> bytes:
             return self._raw
 
-        def __enter__(self) -> "_Resp":
+        def __enter__(self) -> _Resp:
             return self
 
         def __exit__(self, *args: object) -> None:

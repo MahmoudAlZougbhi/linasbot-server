@@ -8,7 +8,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from cryptography import x509
@@ -94,11 +94,11 @@ def _ec_public_key(cert: x509.Certificate) -> EllipticCurvePublicKey:
 
 def _assert_cert_validity(cert: x509.Certificate, now: datetime | None = None) -> None:
     """Require ``not_valid_before <= now <= not_valid_after`` (UTC-aware)."""
-    when = now if now is not None else datetime.now(timezone.utc)
+    when = now if now is not None else datetime.now(UTC)
     if when.tzinfo is None:
-        when = when.replace(tzinfo=timezone.utc)
+        when = when.replace(tzinfo=UTC)
     else:
-        when = when.astimezone(timezone.utc)
+        when = when.astimezone(UTC)
     before = cert.not_valid_before_utc
     after = cert.not_valid_after_utc
     if when < before:
@@ -116,7 +116,7 @@ def _verify_chain(
     """Validate leaf←…←Apple Root. ``skip_root_anchor`` is tests-only via env monkeypatch."""
     if not certs:
         raise AppleJwsError("empty certificate chain")
-    when = now if now is not None else datetime.now(timezone.utc)
+    when = now if now is not None else datetime.now(UTC)
     for cert in certs:
         _assert_cert_validity(cert, when)
     for i in range(len(certs) - 1):

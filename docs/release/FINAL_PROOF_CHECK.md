@@ -12,7 +12,7 @@
 | Field | Value |
 |-------|--------|
 | `AUDITED_FAIL_HEAD` | `12e00eb797cd0e774c6948ba5379bc0974837c91` (PROOF_FAILED_NOT_READY) |
-| `FINAL_RC_SHA` | `6afc54fe3650e74f31fd1bfb672fc85bf1d7bd89` |
+| `FINAL_RC_SHA` | `3d0bebdfb30c3856e182ef914cf2b5db862569dd` |
 | `PR_240` | open — CI re-run required on freeze SHA |
 | Prior CI @ `12e00eb` | all SUCCESS (backend · frontend · mobile · secret-scan · deploy-readiness) |
 
@@ -168,10 +168,10 @@ NODE_LOCAL_CRITICAL_STATE=NONE
 
 ```
 AUDITED_FAIL_HEAD=12e00eb797cd0e774c6948ba5379bc0974837c91
-FINAL_RC_SHA=6afc54fe3650e74f31fd1bfb672fc85bf1d7bd89
-PROOF_DOCS_SHA=a05401f081b852705ff642b9d452918df136e490
-PR_240_HEAD=a05401f081b852705ff642b9d452918df136e490
-PR_240_CI=pending_rerun_on_freeze
+FINAL_RC_SHA=3d0bebdfb30c3856e182ef914cf2b5db862569dd
+PROOF_DOCS_SHA=3d0bebdfb30c3856e182ef914cf2b5db862569dd
+PR_240_HEAD=3d0bebdfb30c3856e182ef914cf2b5db862569dd
+PR_240_CI=rerunning_after_ci_fix
 NODE_LOCAL_CRITICAL_STATE=NONE
 ```
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from cryptography import x509
@@ -34,7 +34,7 @@ def _forge_leaf(*, not_before: datetime, not_after: datetime) -> x509.Certificat
 
 
 def test_assert_cert_validity_accepts_current_window() -> None:
-    now = datetime(2020, 6, 1, tzinfo=timezone.utc)
+    now = datetime(2020, 6, 1, tzinfo=UTC)
     cert = _forge_leaf(
         not_before=now - timedelta(days=1),
         not_after=now + timedelta(days=1),
@@ -43,7 +43,7 @@ def test_assert_cert_validity_accepts_current_window() -> None:
 
 
 def test_assert_cert_validity_rejects_not_yet_valid() -> None:
-    now = datetime(2020, 6, 1, tzinfo=timezone.utc)
+    now = datetime(2020, 6, 1, tzinfo=UTC)
     cert = _forge_leaf(
         not_before=now + timedelta(days=1),
         not_after=now + timedelta(days=30),
@@ -53,7 +53,7 @@ def test_assert_cert_validity_rejects_not_yet_valid() -> None:
 
 
 def test_assert_cert_validity_rejects_expired() -> None:
-    now = datetime(2020, 6, 1, tzinfo=timezone.utc)
+    now = datetime(2020, 6, 1, tzinfo=UTC)
     cert = _forge_leaf(
         not_before=now - timedelta(days=30),
         not_after=now - timedelta(days=1),
@@ -63,7 +63,7 @@ def test_assert_cert_validity_rejects_expired() -> None:
 
 
 def test_verify_chain_rejects_expired_leaf() -> None:
-    now = datetime(2020, 6, 1, tzinfo=timezone.utc)
+    now = datetime(2020, 6, 1, tzinfo=UTC)
     expired = _forge_leaf(
         not_before=now - timedelta(days=30),
         not_after=now - timedelta(days=1),
@@ -73,7 +73,7 @@ def test_verify_chain_rejects_expired_leaf() -> None:
 
 
 def test_verify_chain_rejects_not_yet_valid_leaf() -> None:
-    now = datetime(2020, 6, 1, tzinfo=timezone.utc)
+    now = datetime(2020, 6, 1, tzinfo=UTC)
     future = _forge_leaf(
         not_before=now + timedelta(days=1),
         not_after=now + timedelta(days=30),
@@ -90,4 +90,4 @@ def test_apple_root_validity_window_checked() -> None:
         _assert_cert_validity(root, before)
     with pytest.raises(AppleJwsError, match="certificate expired"):
         _assert_cert_validity(root, after)
-    _assert_cert_validity(root, datetime(2020, 1, 1, tzinfo=timezone.utc))
+    _assert_cert_validity(root, datetime(2020, 1, 1, tzinfo=UTC))
