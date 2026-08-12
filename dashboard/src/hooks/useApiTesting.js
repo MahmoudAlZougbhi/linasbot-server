@@ -73,20 +73,9 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
         return response.data;
       } catch (error) {
         const code = getAxiosErrorCode(error);
-        // Handle network error with mock response
         if (code === "ERR_NETWORK") {
-          toastInfo("Backend offline - showing mock response");
-          return {
-            success: true,
-            input: message,
-            response:
-              "This is a mock response. The backend server is not running. Start the bot backend to get real responses.",
-            detected_language: language,
-            mode: "mock",
-            user_phone: userPhone,
-            response_time_ms: 100,
-            timestamp: Date.now(),
-          };
+          toast.error("Backend offline — cannot run test");
+          return { success: false, error: "Backend offline" };
         }
         throw error;
       } finally {
@@ -153,16 +142,9 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
         return response.data;
       } catch (error) {
         const code = getAxiosErrorCode(error);
-        // Handle network error with mock response
         if (code === "ERR_NETWORK") {
-          toastInfo("Backend offline - showing mock response");
-          return {
-            success: true,
-            bot_response:
-              "Mock image analysis: This appears to be a tattoo that can be removed with laser treatment. Estimated 6-8 sessions needed.",
-            response_time_ms: 1500,
-            analysis: "Mock analysis result",
-          };
+          toast.error("Backend offline — cannot run test");
+          return { success: false, error: "Backend offline" };
         }
         throw error;
       } finally {
@@ -198,17 +180,9 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
         return response.data;
       } catch (error) {
         const code = getAxiosErrorCode(error);
-        // Handle network error with mock response
         if (code === "ERR_NETWORK") {
-          toastInfo("Backend offline - showing mock response");
-          return {
-            success: true,
-            bot_response: `Mock image analysis from ${provider}: This appears to be a tattoo. ${
-              caption ? `Caption: ${caption}` : ""
-            }`,
-            response_time_ms: 1500,
-            provider,
-          };
+          toast.error("Backend offline — cannot run test");
+          return { success: false, error: "Backend offline" };
         }
         throw error;
       } finally {
@@ -237,15 +211,9 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
         return response.data;
       } catch (error) {
         const code = getAxiosErrorCode(error);
-        // Handle network error with mock response
         if (code === "ERR_NETWORK") {
-          toastInfo("Backend offline - showing mock response");
-          return {
-            success: true,
-            bot_response: `Mock voice response from ${provider}: I heard you say "${voiceText}". Here's my response...`,
-            response_time_ms: 800,
-            provider,
-          };
+          toast.error("Backend offline — cannot run test");
+          return { success: false, error: "Backend offline" };
         }
         throw error;
       } finally {
@@ -417,16 +385,9 @@ export function useApiTesting({ setLoading, currentProvider, setCurrentProvider,
         return response.data;
       } catch (error) {
         const code = getAxiosErrorCode(error);
-        // Handle network error with mock response
         if (code === "ERR_NETWORK") {
-          toastInfo("Backend offline - showing mock response");
-          return {
-            success: true,
-            bot_response: `Mock webhook response from ${provider}: ${message}`,
-            response_time_ms: 100,
-            provider,
-            webhook_payload: { mock: true },
-          };
+          toast.error("Backend offline — cannot run test");
+          return { success: false, error: "Backend offline" };
         }
         throw error;
       } finally {
