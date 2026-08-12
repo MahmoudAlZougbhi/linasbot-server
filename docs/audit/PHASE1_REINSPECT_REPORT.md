@@ -62,7 +62,7 @@ Executable Waves **1–13** largely applied on this branch (Wave 0 already DONE)
 | Item | Disposition | Why |
 |---|---|---|
 | `config/montymobile_templates.json` | **KEEP** (Wave 1 STOP) | Loaded by `montymobile_template_service` / preview settings; SEC-026 residual until Monty cutover |
-| `handlers/text_handlers_start.start_command` | **BLOCKED** | Still exported from `handlers/text_handlers.py`; WhatsApp path uses separate adapter |
+| `handlers/text_handlers_start.start_command` | **FIXED** (`f01ee0d`) | Dead export removed; barrel cleaned; file deleted |
 | Redis distributed rate limit (`rate_limit_service.py`) | **PARKED** | Known concern #9 — needs Redis/infra approval |
 | `config.py` defaults / welcome copy | **PARKED** | Infra/lock — owner approval |
 | Docker/nginx/compose/firestore index deploy | **PARKED** | Infra — not changed |
