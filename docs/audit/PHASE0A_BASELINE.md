@@ -27,3 +27,8 @@ Count of must-read files with line_count > 500: **0**
 ## Next
 
 Phase 0B file-by-file forensic review starting at sequence_number 1.
+
+## Phase 0C correction
+
+Live `git ls-files` at Phase 0A birth (`82152df` / parent `d4f16c55`) and at Phase 0C is **1544**, not 1539.
+Inventory SoT is **1544 rows = current tracked files including docs/audit**. App-only count excluding `docs/audit/**` is **1522**.

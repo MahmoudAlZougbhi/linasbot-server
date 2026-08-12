@@ -4,30 +4,33 @@ _Source: `docs/audit/FILE_INVENTORY.csv` after full Phase 0B + false-orphan corr
 
 **Audit-only.** Do **not** delete, fix, migrate, Meta-cutover, or deploy until Mahmoud approves Phase 1.
 
-- **Inventory parity:** 1544 / 1544
+- **Inventory parity:** 1544 / 1544 (Phase 0C reconciled; rows = current `git ls-files` incl. docs/audit)
 - **Review status:** all `COMPLETE`
 - **Fully read:** YES for text sources; NOT_APPLICABLE for binaries
-- **Quality:** careful seq 1–205; import-recheck; agent merges including 1101–1539.
+- **Quality:** Phase 0C full re-read of ranges 521–1100 + thin 206–520 gaps; 1101–1539 validated; security notes converted to SECURITY_FINDINGS.md
 
 ## Disposition totals
 
 | Disposition | Count |
 |---|---:|
-| KEEP_AS_IS | 1180 |
-| MOVE_TO_ARCHIVE | 130 |
+| KEEP_AS_IS | 1179 |
+| MOVE_TO_ARCHIVE | 100 |
 | BINARY_ASSET_REVIEW | 81 |
-| KEEP_FIX | 59 |
+| KEEP_FIX | 77 |
 | LANDING_KEEP | 35 |
-| DELETE_CANDIDATE | 23 |
+| DELETE_CANDIDATE | 35 |
+| KEEP_SECURITY_FIX | 16 |
 | KEEP_MOBILE_API | 16 |
-| KEEP_SECURITY_FIX | 15 |
 | KEEP_PERFORMANCE_FIX | 3 |
 | GENERATED_SKIP | 2 |
+
+
 
 ---
 
 ## Top priority — `KEEP_SECURITY_FIX`
 
+- **Seq 801** `modules/live_chat_api_debug.py` — Authenticated+liveChat via middleware but insufficient elevation: any liveChat operator can GET `/api/live-chat/debug-firestore` (dumps all conversation metadata) and POST `/api/live-chat/rebuild-index` | Registered via main→live_chat_api import; not public; non-linas tenants blocked | Unbounded Firestore streams — expensive
 - **Seq 6** `.github/workflows/dashboard-auth-secret-apply.yml` — Missing confirmation string gate on high-impact secret apply | NO confirmation input unlike sibling secret-apply workflows — anyone with Actions write on repo can rotate dashboard auth. Secret passed via envs to SSH (expected). | Fails if apply script missing
 - **Seq 7** `.github/workflows/deploy.yml` — Pin/update ssh-action version consistency; harden data backup path permissions; keep confirmation for emergency | Emergency bypass skips gate verification (documented). Uses appleboy/ssh-action@v1.0.3 while siblings use v1.2.0 (supply-chain version skew). data/ backup to /tmp/linasbot_data_backup_$$ then restore after hard reset — /tmp world-readable risk window if perms loose. | Restores data/ after reset so local data survives; relies on dep...
 - **Seq 8** `.github/workflows/instagram-login-secrets-apply.yml` — Secret apply without confirmation string | No typed confirmation; secrets via SSH envs; never logs values (stated) | Checks out script from origin/main each run
@@ -439,7 +442,7 @@ Zero external importers after module-path recheck (or orphan cluster / orphan te
 
 ---
 
-## Other substantive security notes (not KEEP_SECURITY_FIX)
+## Other substantive security notes (converted into SECURITY_FINDINGS.md in Phase 0C)
 
 Owner may elevate later. Excludes doc/planning/PII-jsonl boilerplate.
 
@@ -508,6 +511,20 @@ _Extra security notes listed: 52_
 - `GENERATED_SKIP`: 2
 
 ---
+
+
+---
+
+## Phase 0C addendum (integrity reconciliation)
+
+- Official security findings: **69** in `docs/audit/SECURITY_FINDINGS.md` (includes prior KEEP_SECURITY_FIX + converted extra notes + seq 801/870).
+- Known-concern reconciliation: `docs/audit/KNOWN_SECURITY_CONCERNS.md` (9/9 statuses assigned).
+- Over-500 matrix: `docs/audit/OVER_500_FILES.md` — **0** hand-written application files >500 LOC (LOC gate already clean; stale FILES_OVER_500.csv superseded).
+- Unmerged agent JSON reconciled: `_phase0b_batch_801_1100.json` + `_phase0b_batch_1101_1539_final.json` (hashes in PHASE0C_RECONCILIATION.md).
+- False positive: `services/cm/shadow_eval.py` eval() claim.
+- Blocked rows: **0**.
+- Do **not** start Phase 1 until Mahmoud approves.
+
 
 ## Gate — STOP for owner approval
 

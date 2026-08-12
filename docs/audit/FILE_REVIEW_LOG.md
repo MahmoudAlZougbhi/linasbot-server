@@ -6,10 +6,10 @@ Audit-only. Application source is not modified.
 
 | Metric | Value |
 |--------|-------|
-| Tracked files (`git ls-files`) | 1539 |
-| Inventory rows | 1539 |
-| COMPLETE | 205 |
-| UNREVIEWED | 1334 |
+| Tracked files (`git ls-files`) | 1544 |
+| Inventory rows | 1544 |
+| COMPLETE | 1544 |
+| UNREVIEWED | 0 |
 | IN_REVIEW | 0 |
 | Last batch | Batch 7 (seq 176–205) |
 | Last audit commit | `0497d78` |
@@ -309,4 +309,39 @@ COMPLETE **1544 / 1544**
 - Merged [Audit seq 1101-1539](d2369170-b96e-494e-b58f-b57873f675d3) from `docs/audit/_phase0b_batch_1101_1539_final.json` (439 records).
 - Disposition upgrades: 10; skipped downgrades: 5.
 - Agent summary: KEEP_FIX for linas-tenant defaults in multi-tenant services; DELETE_CANDIDATE confirmed for dead queue/monitoring services.
+
+---
+
+## Phase 0C — Integrity reconciliation (2026-08-12)
+
+### Scope
+
+- Freeze baseline vs current tracked counts (dual accounting documented in PHASE0C_RECONCILIATION.md).
+- Full re-read failed ranges **521–800** and **801–1100** (lead pass + subagent chunks).
+- Re-read thin evidence gaps in **206–520** (95 rows).
+- Validate **1101–1539** agent merge; rewrite thin rows 1175/1176/1302/1303/1319.
+- Reconcile untracked JSON batches; elevate seq **801** to KEEP_SECURITY_FIX; document seq **870**.
+- Publish `SECURITY_FINDINGS.md`, `OVER_500_FILES.md`, `KNOWN_SECURITY_CONCERNS.md`, `PHASE0C_RECONCILIATION.md`.
+
+### Files fully re-reviewed
+
+- Lead forensic pass targets: **675** (95 thin from 206–520 + 580 in 521–1100).
+- Additional thin 1101–1539 re-reads: **5**.
+- Spot verification: `modules/live_chat_api_debug.py`, `scripts/delete_all_conversations.py`, auth middleware, CORS, wallet admin-credit, rate limits, media path sanitize.
+
+### Key disposition changes
+
+- Seq 801 `modules/live_chat_api_debug.py`: KEEP_AS_IS → **KEEP_SECURITY_FIX**.
+- Multiple modules (818–845, 980): KEEP_AS_IS → KEEP_FIX (agent JSON verified).
+- Workflow-linked `scripts/prod_*` retained/restored **KEEP_AS_IS** when referenced by `.github/workflows/*`.
+- Orphan probes elevated/confirmed DELETE_CANDIDATE where appropriate.
+- Seq 870 remains **MOVE_TO_ARCHIVE** with official security finding SEC for destructive CLI.
+
+### Machine checks
+
+All PASS — see PHASE0C_RECONCILIATION.md.
+
+### Cumulative
+
+COMPLETE **1544 / 1544** (Phase 0C gate). STOP for owner approval — do not start Phase 1.
 
