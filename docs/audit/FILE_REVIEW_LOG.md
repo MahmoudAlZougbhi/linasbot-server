@@ -164,3 +164,18 @@ Mobile LiveChat view/audio, orphaned TrainingFileEditor cluster, UserManagement,
 ### Cumulative
 
 COMPLETE **145 / 1539**
+
+---
+
+## Follow-up — reconcile agent forensics (batches 3–5)
+
+Applied sharper dispositions from completed audit agents without changing COMPLETE count:
+
+- Seq 56 `Dockerfile.prod` → **KEEP_FIX** (Node 20 vs engines ≥22.19)
+- Seq 77–85 design JPGs → **BINARY_ASSET_REVIEW**
+- Seq 86–93 brand PNGs → **BINARY_ASSET_REVIEW** (`linasBrand.js` unused)
+- Seq 96 App.routes.test → **KEEP_FIX** (does not import App)
+- Seq 125 PermissionMatrix → **KEEP_FIX** (double-toggle)
+- Confirmed seq 118/119/126/131 findings already aligned
+
+Sources: agent audits for seq 56–85, 86–115, 116–145.
