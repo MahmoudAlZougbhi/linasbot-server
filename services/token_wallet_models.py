@@ -49,8 +49,16 @@ def unlimited_tenant_ids() -> frozenset[str]:
     return frozenset(ids or DEFAULT_UNLIMITED_TENANTS)
 
 
+def normalize_wallet_tenant_id(tenant_id: str | None) -> str:
+    """Normalize a request tenant_id; fail closed when missing or blank."""
+    tid = str(tenant_id or "").strip().lower()
+    if not tid:
+        raise ValueError("tenant_id required")
+    return tid
+
+
 def is_unlimited_tenant(tenant_id: str | None) -> bool:
-    tid = (tenant_id or "").strip().lower() or "linas"
+    tid = normalize_wallet_tenant_id(tenant_id)
     return tid in unlimited_tenant_ids()
 
 
