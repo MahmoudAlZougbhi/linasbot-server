@@ -25,8 +25,10 @@ export const en = {
   registerStepCredentials: 'First, set your email and password.',
   registerStepName: 'Tell us about your business.',
   registerStepGender: 'Optional — helps personalize how Linas addresses you.',
-  registerNeedCredentials: 'Enter a valid email and a password (6+ characters).',
+  registerNeedCredentials: 'Enter a valid email and a password (12+ characters).',
   registerNeedBusiness: 'Business name is required.',
+  registerFailed: 'Registration failed.',
+  networkError: 'Network error. Check your connection and try again.',
   registeredVerify: 'Registered. Verify your email, then log in.',
   chatEmptyTitle: "I'm Linas AI — your assistant in the app",
   chatEmptyBody:

@@ -10,13 +10,13 @@ import {
   EyeSlashIcon,
 } from '@heroicons/react/24/outline';
 import { SYSTEM_ROLES, DEFAULT_PERMISSIONS } from '../../constants/permissions';
-import { getCustomRoles, resolveUserPermissions } from '../../utils/permissions';
+import { resolveUserPermissions } from '../../utils/permissions';
 import PermissionMatrix from './PermissionMatrix';
 
 /** @param {{ user?: DashboardUser | null; onSubmit: (data: Record<string, unknown>) => Promise<void>; onClose: () => void }} props */
 const UserForm = ({ user, onSubmit, onClose }) => {
   const isEditing = !!user;
-  const allRoles = { ...SYSTEM_ROLES, ...getCustomRoles() };
+  const allRoles = SYSTEM_ROLES;
 
   const [formData, setFormData] = useState({
     name: '',

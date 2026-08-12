@@ -8,11 +8,10 @@ import {
   ClockIcon,
 } from '@heroicons/react/24/outline';
 import { SYSTEM_ROLES } from '../../constants/permissions';
-import { getCustomRoles } from '../../utils/permissions';
 
 /** @param {{ users: DashboardUser[]; currentUserId?: string; loading: boolean; onEdit: (user: DashboardUser) => void; onDelete: (userId: string) => void }} props */
 const UserList = ({ users, currentUserId, loading, onEdit, onDelete }) => {
-  const allRoles = { ...SYSTEM_ROLES, ...getCustomRoles() };
+  const allRoles = SYSTEM_ROLES;
 
   /** @param {string} roleId */
   const getRoleName = (roleId) => {

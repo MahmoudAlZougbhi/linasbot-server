@@ -15,14 +15,14 @@ Executable Waves **1–13** largely applied on this branch (Wave 0 already DONE)
 | 1 Deletes | DONE except `config/montymobile_templates.json` **reclassified KEEP** (live callers) |
 | 2 Security | DONE (+ second-pass `liveChatApi` operator default) |
 | 3 Tenant A+C | DONE (+ second-pass session load/revoke) |
-| 4 Handlers | DONE; `start_command` still exported → **BLOCKED** (barrel wired) |
-| 5 Dashboard product | DONE (plan defaults) |
+| 4 Handlers | DONE (`start_command` removed `f01ee0d`) |
+| 5 Dashboard product | DONE (+ hub tenant gate second pass) |
 | 6 GHA in-repo | DONE |
 | 7 Performance | DONE (`LoadingScreen`; `useApi` all-hooks park) |
-| 8 Monty harden | DONE inventory + adapter fail-closed; template service follow-on may still land |
+| 8 Monty harden | DONE inventory + text/media isolation fail-closed |
 | 9 Archive | PARTIAL (`archive/planning`, `archive/docs/cm_phase_evidence`); more MOVE_TO_ARCHIVE remain |
 | 10 Docs/root | PARTIAL (`ANALYTICS_LOGIC`, `CLAUDE_MEMORY` banner, `api_config` comment); infra parked |
-| 11 Mobile KEEP_FIX | PARTIAL (`guestSession`, `tokenStore`); Theme/Register/etc residual |
+| 11 Mobile KEEP_FIX | PARTIAL (`guestSession`, `tokenStore`, Theme throw, Register password); SideDrawer/i18n residual |
 | 12 API modules | PARTIAL (auth tenant, debug elevation, adapters logging); CORS/content_files ASKs remain |
 | 13 Services | PARTIAL (`import os` fixes); Redis rate limit **PARKED**; `legacy_isolation` ASK |
 
@@ -32,7 +32,7 @@ Executable Waves **1–13** largely applied on this branch (Wave 0 already DONE)
 
 - Mobile live-chat route `requiredPermission="liveChat"`
 - AuthContext fail-closed missing role/tenant; 401 clears; no admin cache restore
-- RoleManager client custom roles hidden
+- RoleManager + UserForm/UserList client custom roles hidden (system roles only)
 - Live-chat media uses authenticated operator (composer)
 - Debug rebuild/simulate UI removed from LiveChatSidebar
 - Settings / Sidebar missing tenant ≠ linas
@@ -56,6 +56,10 @@ Executable Waves **1–13** largely applied on this branch (Wave 0 already DONE)
 | `liveChatApi.jsx` default `operator_001` | require operatorId |
 | `modules/whatsapp_adapters.py` full response JSON print | redact status-only log |
 | Monty media sends bypassed `cloud_blocks_monty_send` (reinspect 6/8) | shared `_cloud_isolation_block()` on image/audio/document + redact media JSON dumps |
+| `Dashboard.jsx` hub missing linas tenant gate (reinspect 3/8) | mirror Sidebar hide `/live-chat` + `/activity-flow` |
+| `ThemeContext` fail-open `useTheme` (reinspect 7/8) | throw like `useI18n` |
+| `RegisterScreen` password min 6 + hard-coded errors (reinspect 7/8) | min 12 + i18n keys |
+| `UserForm`/`UserList` still merged `getCustomRoles` (reinspect 1/8) | system roles only |
 
 ### BLOCKED / OWNER_ASK / PARKED
 
@@ -72,7 +76,7 @@ Executable Waves **1–13** largely applied on this branch (Wave 0 already DONE)
 | APK in git / `data/*.jsonl` | **OWNER_ASK** | keep vs LFS vs untrack |
 | SEC-017 `delete_all_conversations.py` | **OWNER_ASK** | harden+archive vs archive-only; **never ran** |
 | Remaining MOVE_TO_ARCHIVE (~scripts/docs) | **PARTIAL** | First archive batches done; more batches remain |
-| Wave 11 ThemeContext/Register/SideDrawer/i18n | **PARTIAL** | Not all KEEP_FIX mobile paths completed |
+| Wave 11 SideDrawer / PrimaryButton theme / ChatScreen props / cmMedia / locale packs | **PARTIAL** | Theme+Register second-pass done; other KEEP_FIX remain |
 | SEC-028 admin ProtectedRoute bypass | **KEEP_AS_IS** | Wave 14 — left documented |
 | Untracked `mobile/live-chat-android/{.gradle,.jdk,...}` | **NOTE** | Local build caches not in git; empty leftover dirs OK to ignore |
 

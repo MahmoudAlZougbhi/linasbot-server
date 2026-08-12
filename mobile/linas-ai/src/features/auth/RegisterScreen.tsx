@@ -67,17 +67,17 @@ export function RegisterScreen({ onBack, onDone }: Props) {
         setStep(3);
         setMessage(tr('registeredVerify'));
       } else {
-        setMessage(result.error ?? 'Registration failed');
+        setMessage(result.error ?? tr('registerFailed'));
       }
     } catch (err) {
-      setMessage(err instanceof ApiError ? 'Registration failed' : 'Network error');
+      setMessage(err instanceof ApiError ? tr('registerFailed') : tr('networkError'));
     } finally {
       setLoading(false);
     }
   }
 
   function nextFromCredentials() {
-    if (!email.trim() || password.length < 6) {
+    if (!email.trim() || password.length < 12) {
       setMessage(tr('registerNeedCredentials'));
       return;
     }

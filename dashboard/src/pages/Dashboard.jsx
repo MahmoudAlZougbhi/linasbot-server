@@ -8,8 +8,14 @@ import { useAuth } from '../contexts/AuthContext';
  */
 const Dashboard = () => {
   const { user } = useAuth();
+  const tenantId = String(user?.tenantId || '').trim();
+  const linasOpsSurface = tenantId === 'linas';
   const items = SAAS_NAV_ITEMS.filter((item) => {
     if (item.href === '/app') return false;
+    // Mirror Sidebar: Live Chat + Interaction Logs are Linas ops surfaces.
+    if (!linasOpsSurface && (item.href === '/live-chat' || item.href === '/activity-flow')) {
+      return false;
+    }
     const key = item.permissionKey;
     if (!key) return true;
     return user?.resolvedPermissions?.[key] === true || user?.role === 'admin';

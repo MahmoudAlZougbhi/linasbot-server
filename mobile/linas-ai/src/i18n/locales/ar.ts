@@ -26,8 +26,10 @@ export const ar = {
   registerStepCredentials: 'أولاً، عيّن البريد وكلمة المرور.',
   registerStepName: 'أخبرنا عن نشاطك.',
   registerStepGender: 'اختياري — يساعد Linas على مخاطبتك بشكل أنسب.',
-  registerNeedCredentials: 'أدخل بريداً صالحاً وكلمة مرور (6 أحرف فأكثر).',
+  registerNeedCredentials: 'أدخل بريداً صالحاً وكلمة مرور (12 حرفاً فأكثر).',
   registerNeedBusiness: 'اسم النشاط مطلوب.',
+  registerFailed: 'فشل التسجيل.',
+  networkError: 'خطأ في الشبكة. تحقق من اتصالك وحاول مجدداً.',
   registeredVerify: 'تم التسجيل. تحقق من بريدك ثم سجّل الدخول.',
   chatEmptyTitle: 'أنا Linas AI — مساعدك داخل التطبيق',
   chatEmptyBody:
