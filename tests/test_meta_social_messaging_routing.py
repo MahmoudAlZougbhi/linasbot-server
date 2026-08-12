@@ -413,7 +413,8 @@ class SocialCanonicalAiPathTests(unittest.TestCase):
     def test_social_ai_excludes_crm_booking_tools(self):
         from pathlib import Path
 
-        source = Path("services/chat_response_service.py").read_text(encoding="utf-8")
+        source = Path("services/chat_response_runtime_gpt.py").read_text(encoding="utf-8")
+        prompt = Path("services/chat_response_runtime_prompt.py").read_text(encoding="utf-8")
         features = Path("services/product_features.py").read_text(encoding="utf-8")
         for blocked_tool in (
             "submit_booking_intent",
@@ -424,7 +425,7 @@ class SocialCanonicalAiPathTests(unittest.TestCase):
         ):
             self.assertIn(blocked_tool, features)
         self.assertIn("LEGACY_BOOKING_TOOL_NAMES", source)
-        self.assertIn("Never create, change, cancel, confirm, list, or check an appointment", source)
+        self.assertIn("Never create, change, cancel, confirm, list, or check an appointment", prompt)
 
 
 if __name__ == "__main__":
