@@ -39,9 +39,9 @@
 | 19 | Cost control | DONE | `COST_AND_AUTOSCALE_PLAN.md` |
 | 20 | Security / multi-tenant races | DONE | Multi-instance tests |
 | 21 | Final code requirements | DONE | Checklist |
-| 22 | PR #240 keep green | IN_PROGRESS | Focused commits + CI |
+| 22 | PR #240 keep green | DONE | Focused commits + CI |
 | 23 | Purchase gate | DONE | `FINAL_SCALE_PURCHASE_GATE.md` |
-| 24 | Final return | IN_PROGRESS | STOP for purchase |
+| 24 | Final return | DONE | STOP for purchase |
 
 ## Constraints lock
 
@@ -71,3 +71,4 @@
 
 
 | 2026-08-12T15:32:07Z | Scale code+docs+loadtests complete; awaiting CI + purchase gate | BLOCKED_OWNER_ACTION |
+| 2026-08-12T15:37:35Z | CI green on PR #240 @ b7e2238; STOP purchase gate | BLOCKED_OWNER_ACTION — DIGITALOCEAN SCALE RESOURCES |
