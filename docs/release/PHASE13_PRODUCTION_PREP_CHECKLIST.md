@@ -1,8 +1,15 @@
-# Phase 13 — Production preparation checklist (draft)
+# Phase 13 — Production preparation checklist
 
-**Status:** DRAFT while Phases 2–12 complete. Do not merge until this is READY.  
+**Status:** **BLOCKED_OWNER_ACTION** — Phases 11–12 application work may be green; owner must clear Redis / Meta / migration before merge.  
 **PR:** #240  
-**Rule:** Merging `main` triggers Quality Gates then Production Deploy.
+**Rule:** Merging `main` triggers Quality Gates then Production Deploy. **Do not merge** until the blocked list below is cleared by Mahmoud.
+
+## BLOCKED_OWNER_ACTION (exact)
+
+1. **Redis confirm or purchase:** Confirm existing DigitalOcean Redis for Linas production **or** approve paid purchase (product/region/size/cost/button). Wire `RATE_LIMIT_REDIS_URL` / `REDIS_URL` with TLS/auth; prod must fail-closed (no file/memory fallback).
+2. **Meta VERIFY_AND_PRESERVE:** Confirm Meta connection health. If Meta OTP / account-owner confirmation is required, complete it. Do **not** disconnect or rebuild.
+3. **Migration apply approval:** Approve applying additive Alembic `20260812_customer_requests` on production Postgres **after backup**. Not applied yet.
+4. **Merge approval:** Only after 1–3 and Phase 12 freeze green — then merge #240 (Quality Gates → Production Deploy).
 
 ---
 

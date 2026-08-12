@@ -24,15 +24,15 @@
 | 8 | BOC isolation (default OFF) | **DONE** |
 | 9 | Security/correctness/performance tests | **DONE** |
 | 10 | Independent review + PR closeout | **DONE** (CI green; no merge) |
-| 11 | Full file-by-file reinspection | **NOT STARTED** (mandatory before freeze) |
-| 12 | Final freeze | PENDING |
-| 13 | Production preparation | **BLOCKED_OWNER_ACTION** (see below) |
+| 11 | Full file-by-file reinspection | **DONE** |
+| 12 | Final freeze | **IN_PROGRESS** |
+| 13 | Production preparation | **BLOCKED_OWNER_ACTION** (after 11–12 green) |
 | 14 | Merge PR #240 + deploy | BLOCKED (needs 11–13) |
 | 15 | Live post-deploy smoke | PENDING |
 | 16 | Mobile distribution (EAS) | PENDING (will need Apple/Google 2FA) |
 | 17 | Final live revalidation | PENDING |
 | 20 | Final deliverables `docs/release/*` | IN_PROGRESS |
-| 21 | Verdict | **NOT_READY** |
+| 21 | Verdict | **NOT_READY** (Phase 12 freeze + Phase 13 owner) |
 
 ---
 
@@ -318,14 +318,39 @@ Do not enable `LINASLASER_BOC_BOOKING_ENABLED` in production.
 
 ---
 
-## Current stop (2026-08-12)
+## Phase 11 — Full file-by-file reinspection
 
-### Verdict: **NOT_READY**
+| Field | Value |
+|------|-------|
+| Status | **DONE** |
+| Resume from | `b2333e0a244716e5083902646e0e168ad657dd87` |
+| Deep-fix SHAs | `9c300ed`, `10e4912`, `5ad2e5a`, `adb0a5c`, `067c6fc` |
+| Inventory | `docs/release/FINAL_FILE_BY_FILE_INVENTORY.csv` — 1397 hand-written `fully_read=YES` / `COMPLETE`; 0 PENDING |
+| Review log | `docs/release/FINAL_FILE_BY_FILE_REVIEW_LOG.md` |
+| Problems | `docs/release/FINAL_PROBLEMS_AND_FIXES.md` — 0 open CRITICAL/HIGH/MEDIUM |
+| LOC >500 app source | **NONE** |
 
-Reasons:
-1. Phase 11 full file-by-file reinspection not executed on post-Requests tip (mandatory).
-2. Phase 12 final freeze gates not re-run as a freeze candidate after Phase 11.
-3. Phase 13 production prep cannot complete without Mahmoud:
+### Method
+
+- `git ls-files` inventory + five concurrent deep-review agents (Requests / auth / live-chat / CM-AI / mobile)
+- Full-read + automated skim for remaining hand-written paths
+- Fix loop closed in listed SHAs (not report-only)
+
+---
+
+## Phase 12 — Final freeze
+
+| Field | Value |
+|------|-------|
+| Status | **IN_PROGRESS** |
+| Candidate | tip after Phase 11 docs commit + push; CI must be green on PR #240 |
+| Rule | One application candidate SHA; repair until all gates green; clean tree |
+
+---
+
+## Current stop (2026-08-12 resume)
+
+### Verdict: **NOT_READY** (Phase 11 done; Phase 12 freeze + Phase 13 owner)
 
 ### BLOCKED_OWNER_ACTION (Phase 13 — do before any merge)
 
@@ -334,9 +359,9 @@ Reasons:
    - If **no**: approve purchase — product/region/size/cost (exact DO button) before provisioning.
 2. **Meta VERIFY_AND_PRESERVE:** Confirm Meta connection health; if Meta OTP / account-owner confirmation appears, complete it (do not disconnect/rebuild).
 3. **Migration apply approval:** Approve applying additive `20260812_customer_requests` on production Postgres after backup (not applied yet).
-4. **Merge approval:** Only after Phases 11–13 READY — merging `main` auto-runs Quality Gates → Production Deploy.
+4. **Merge approval:** Only after Phases 11–12 green **and** items 1–3 above — merging `main` auto-runs Quality Gates → Production Deploy.
 
 ### Resume
 
-Continue from Phase 11 in ledger. Do not merge PR #240 yet.
+Finish Phase 12 freeze CI green. Do **not** merge PR #240 until Phase 13 owner actions complete.
 
