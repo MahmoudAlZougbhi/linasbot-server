@@ -252,6 +252,25 @@ class MontyMobileTemplateService(MontyMobileTemplatePayloadMixin):
                     "success": False,
                     "error": "MONTYMOBILE_API_KEY is not configured",
                 }
+
+            # Fail closed: never send via Monty when this source number is Cloud-bound.
+            monty_source = str((self.api_config.get("source") or "")).strip()
+            try:
+                from services.whatsapp_cloud.legacy_isolation import cloud_blocks_monty_send
+
+                if monty_source and cloud_blocks_monty_send(monty_source):
+                    return {
+                        "success": False,
+                        "error": "cloud_bound_number",
+                        "message": "MontyMobile template send blocked for Cloud-bound WhatsApp number",
+                    }
+            except Exception as exc:
+                return {
+                    "success": False,
+                    "error": "legacy_isolation_check_failed",
+                    "message": f"MontyMobile template send refused: isolation check failed ({exc})",
+                }
+
             headers = {"Tenant": self.api_config["tenant"], "api-key": api_key, "Content-Type": "application/json"}
 
             # Send request (URL may override legacy montymobile_templates.json omni-apis paths)
@@ -308,12 +327,7 @@ class MontyMobileTemplateService(MontyMobileTemplatePayloadMixin):
                                     "phone_number": phone_number,
                                 }
                             print(f"✅ Template sent successfully! Message ID: {message_id}")
-                            to_used = None
-                            try:
-                                if isinstance(payload, dict):
-                                    to_used = payload.get("to")
-                            except Exception:
-                                pass
+                            to_used = payload.get("to") if isinstance(payload, dict) else None
                             return {
                                 "success": True,
                                 "message_id": message_id,
@@ -357,8 +371,11 @@ class MontyMobileTemplateService(MontyMobileTemplatePayloadMixin):
                             )
                             if isinstance(monty_message, list):
                                 monty_message = monty_message[0] if monty_message else None
-                    except Exception:
-                        pass
+                    except Exception as parse_err:
+                        print(
+                            f"⚠️ Monty template HTTP {response.status_code}: "
+                            f"could not parse error JSON: {parse_err}"
+                        )
                     if not monty_message and raw.strip():
                         monty_message = raw.strip()[:500]
 

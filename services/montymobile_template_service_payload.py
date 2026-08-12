@@ -62,7 +62,8 @@ class MontyMobileTemplatePayloadMixin:
                 # Includes env MONTY_/WHATSAPP_*, sidecar, dashboard JSON, default_header_component file
                 image_link = message_preview_service.get_template_header_image_url()
             except Exception as ex:
-                print(f"⚠️ Monty template header: could not read dashboard settings: {ex}")
+                print(f"❌ Monty template header: could not read header image URL settings: {ex}")
+                raise
 
         # IMAGE header: empty format + URL means "use default branded header for this template"
         if fmt in ("", "image", "img", "picture"):
