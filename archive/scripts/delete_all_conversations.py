@@ -12,10 +12,10 @@ Defaults to dry-run. Execute requires ALL of:
   like production / real credentials
 
 Usage:
-  python scripts/delete_all_conversations.py                  # dry-run (default)
-  python scripts/delete_all_conversations.py --dry-run         # explicit dry-run
+  python archive/scripts/delete_all_conversations.py                  # dry-run (default)
+  python archive/scripts/delete_all_conversations.py --dry-run         # explicit dry-run
   LINAS_ALLOW_DESTRUCTIVE_CONVERSATION_DELETE=1 \\
-    python scripts/delete_all_conversations.py --execute \\
+    python archive/scripts/delete_all_conversations.py --execute \\
       --i-understand-delete-all-conversations
 """
 
@@ -26,7 +26,9 @@ import os
 import sys
 from typing import Any
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# archive/scripts/<file> → repo root is two levels up from this file's directory
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, _REPO_ROOT)
 
 CONFIRM_PHRASE = "I_UNDERSTAND_DELETE_ALL_CONVERSATIONS"
 ALLOW_ENV = "LINAS_ALLOW_DESTRUCTIVE_CONVERSATION_DELETE"
@@ -68,11 +70,7 @@ def _has_real_looking_credentials(environ: dict[str, str] | None = None) -> bool
                 continue
             return True
     # Default service-account file used by this repo.
-    default_key = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "data",
-        "firebase_data.json",
-    )
+    default_key = os.path.join(_REPO_ROOT, "data", "firebase_data.json")
     return os.path.isfile(default_key)
 
 

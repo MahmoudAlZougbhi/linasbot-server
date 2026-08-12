@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "scripts" / "delete_all_conversations.py"
+SCRIPT = ROOT / "archive" / "scripts" / "delete_all_conversations.py"
 
 
 def _load_mod():
