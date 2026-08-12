@@ -3,8 +3,8 @@
 **Purpose:** Live / owner activation items only (repo may already be FIXED).  
 **Branch:** `chore/project-cleanup-reorg`  
 **Date:** 2026-08-12  
-**FINAL_CANDIDATE_SHA:** `1900bf59925c61e35e4defe41cdbcb557a719062`  
-**Freeze verdict:** **NOT_READY** (code gates) — activation still blocked regardless.  
+**FINAL_APPLICATION_CANDIDATE_SHA:** `72d1d439b589f4d111b0a4cc7cd61030ceaca677`  
+**Freeze verdict:** **READY_FOR_OWNER_REVIEW** (code gates PASS) — live activation still ☐ and not executed.  
 **Companion:** `docs/audit/FINAL_SECURITY_FINDINGS.md` · `FINAL_FREEZE_VERIFICATION.md`
 
 Do **not** treat these as “still broken in code” without checking FINAL SEC dispositions.  
@@ -36,7 +36,7 @@ Do **not** treat these as “still broken in code” without checking FINAL SEC 
 | A4 | Firestore composite indexes | infra P0 | `firestore.indexes.json` | Owner-approved `firebase deploy --only firestore:indexes` | **Yes** for Live Chat at scale | ☐ |
 | A5 | systemd non-root user | SEC-046 | Unit comments; still `User=root` in unit | Create `linasbot`; chown; set User/Group; restart | Strongly recommended | ☐ |
 | A6 | Booking env / scale | SEC-025 | `DEFAULT_*_ID` fail-closed in prod | Set booking env IDs; single- vs multi-instance store | **Yes** if booking on | ☐ |
-| A7 | Deploy app + rollback | security fix family | Branch commits incl. `5f1d1ea` | Deploy approved SHA only after gates green; smoke authz + `/api/ready` | **Yes** to realize fixes | ☐ |
+| A7 | Deploy app + rollback | security fix family | Branch commits incl. `72d1d43` | Deploy approved SHA only after gates green; smoke authz + `/api/ready` | **Yes** to realize fixes | ☐ |
 
 ---
 

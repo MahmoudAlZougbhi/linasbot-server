@@ -3,10 +3,10 @@
 **Agent:** C3 (SEC closeout) + FINAL FREEZE VERIFICATION reconcile  
 **Branch:** `chore/project-cleanup-reorg`  
 **Date:** 2026-08-12  
-**FINAL_CANDIDATE_SHA:** `1900bf59925c61e35e4defe41cdbcb557a719062`  
+**FINAL_APPLICATION_CANDIDATE_SHA:** `72d1d439b589f4d111b0a4cc7cd61030ceaca677`  
 **Sources:** `docs/audit/SECURITY_FINDINGS.md` + current code (`rg`/read) + Phase 1 / post–Phase-1 remediation commits + freeze re-check.  
 **Rule:** Exactly one disposition per SEC. Do not treat stale `Status: OPEN` text in `SECURITY_FINDINGS.md` as current truth without re-check.  
-**Freeze note:** Dispositions unchanged. ACCEPTED MEDIUM (038/041/048) remain explicit — not cleared by pytest PASS. Full accepted table: `FINAL_FREEZE_VERIFICATION.md` §4.
+**Freeze note:** SEC-038/041/048 closed to FIXED this freeze (`24096e3`). Full accepted table: `FINAL_FREEZE_VERIFICATION.md` §4.
 
 ### Allowed dispositions
 
@@ -24,8 +24,8 @@
 
 | Disposition | Count |
 |---|---:|
-| FIXED | 34 |
-| ACCEPTED_RISK_WITH_REASON | 32 |
+| FIXED | **37** |
+| ACCEPTED_RISK_WITH_REASON | **29** |
 | LIVE_ACTIVATION_PENDING | 4 |
 | FALSE_POSITIVE | 0 |
 | BLOCKED_EXTERNAL_DEPENDENCY | 0 |
@@ -74,17 +74,17 @@
 | SEC-035 | ACCEPTED_RISK_WITH_REASON | CSRF token in localStorage — accept vs httpOnly redesign |
 | SEC-036 | FIXED | simulate/rebuild UI removed; `useApiLiveChat` no longer exports simulate/rebuild; APIs elevated (`cb5498c`, hook return cleaned) |
 | SEC-037 | FIXED | Testing Lab offline no longer returns fake `success:true` for sends/provider switch (`71aec92`, `8a2eeae`) |
-| SEC-038 | ACCEPTED_RISK_WITH_REASON | ActivityFlow full JSON PII for entitled operators — intentional observability |
+| SEC-038 | FIXED | ActivityFlow technical JSON redacts phones/message bodies/CM raw (`24096e3`, `ActivityFlow.redact.js` + vitest) |
 | SEC-039 | FIXED | Dashboard SAAS nav filtered by permissions + linas ops gate (`fe6634a`, `e2746ad`) |
-| SEC-040 | FIXED | LiveChat route permission covered by ProtectedRoute / liveChat gates (SEC-008/014) |
-| SEC-041 | ACCEPTED_RISK_WITH_REASON | FAQ save-all-languages UI; server must authz — accept client surface |
+| SEC-040 | FIXED | LiveChat route permission covered by ProtectedRoute / liveChat gates (SEC-008/014); operator web Live Chat removed (`3b7e41d`) |
+| SEC-041 | FIXED | FAQ save-all-languages server authz + tenant tests (`24096e3`, `local_qa_api_faq.py`, `test_sec041_faq_write_authz.py`) |
 | SEC-042 | ACCEPTED_RISK_WITH_REASON | Thread renders server media URLs; attribution fixed upstream (SEC-012) — accept URL trust model |
 | SEC-043 | ACCEPTED_RISK_WITH_REASON | ResetPassword token in URL — standard email-link pattern; server enforces |
 | SEC-044 | LIVE_ACTIVATION_PENDING | Nginx privacy/OAuth/`deauthorize` synced in repo (`a924227`); live nginx reload/deploy pending |
 | SEC-045 | ACCEPTED_RISK_WITH_REASON | `nginx-privacy-log.conf` excludes `$request_uri`/`$args` — intentional hardening (already in tree) |
 | SEC-046 | LIVE_ACTIVATION_PENDING | Unit documents non-root `linasbot` user (`a924227`); live host still `User=root` until provisioned |
-| SEC-047 | FIXED | Phone/message-preview DEBUG prints removed (`2eb7214`, `test_text_handlers_message_sec047.py`) |
-| SEC-048 | ACCEPTED_RISK_WITH_REASON | Unauthorized human_handover coerce after cooldown — product rule; Wave 14 accept |
+| SEC-047 | FIXED | Phone/message-preview DEBUG prints removed (`2eb7214`, `test_text_handlers_message_sec047.py`); residual print scan (`8b529e2`) |
+| SEC-048 | FIXED | Unauthorized human_handover coerce → WhatsApp/wa.me handoff only (`24096e3`, `text_handlers_wa_me_handoff.py`, `test_sec048_unauthorized_handover_wa_me.py`) |
 | SEC-049 | ACCEPTED_RISK_WITH_REASON | `main.py` `access_log=False` + APK auth — defensive; monitor |
 | SEC-050 | ACCEPTED_RISK_WITH_REASON | Guest AI `FORBIDDEN_GUEST_TOOLS` denylist — by design; monitor |
 | SEC-051 | ACCEPTED_RISK_WITH_REASON | Meta App Registry OAuth secrets surface — server-side; authz required |

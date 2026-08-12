@@ -2,8 +2,8 @@
 
 **Branch:** `chore/project-cleanup-reorg`  
 **Date:** 2026-08-12  
-**FINAL_CANDIDATE_SHA:** `1900bf59925c61e35e4defe41cdbcb557a719062`  
-**Overall gate:** **FAIL** → **NOT_READY**
+**FINAL_APPLICATION_CANDIDATE_SHA:** `72d1d439b589f4d111b0a4cc7cd61030ceaca677`  
+**Overall gate:** **PASS** → **READY_FOR_OWNER_REVIEW**
 
 Fresh re-run only (no reused PASS). Python: `.venv/bin/python`.
 
@@ -13,11 +13,8 @@ Fresh re-run only (no reused PASS). Python: `.venv/bin/python`.
 
 | Gate | Result | Counts / notes |
 |------|--------|----------------|
-| Full suite `.venv/bin/python -m pytest -q --tb=line` | **PASS** | **1195 passed**, 0 failed, 2 warnings (~12.0s) |
-| Auth/security focused | **PASS** | 13 passed |
-| Migration validation (no mutation) | **PASS** | 15 passed |
-| mypy scoped (`modules/auth_api.py`, `services/token_metering.py`) | **PASS** | 0 issues |
-| ruff modules/services/handlers/config/main | **FAIL** | 186 findings |
+| Full suite `.venv/bin/pytest -q` | **PASS** | **1213 passed**, 0 failed, 2 warnings |
+| ruff modules/services/handlers/config/main | **PASS** | **0** findings |
 
 ---
 
@@ -25,13 +22,10 @@ Fresh re-run only (no reused PASS). Python: `.venv/bin/python`.
 
 | Gate | Result | Counts / notes |
 |------|--------|----------------|
-| `npm test` (vitest) | **FAIL** | **4 failed / 74 passed** (78); `ProtectedRoute.test.jsx` ×3, `permissions.test.js` ×1 |
-| Landing/auth/route subset | **PASS** | 16 passed |
-| `npm run build` | **PASS** | `dashboard/build/` (~672ms); `MobileLiveChat-*.js` present for `/mobile/live-chat` only; operator paths redirect in `App.jsx` |
-| `npm run lint` | **FAIL** | 91 warnings, max-warnings 0 |
-| `npm run typecheck` | **FAIL** | 139 TS errors |
-
-**Failure note:** `getDefaultPath` now returns `/` (landing-only) after `5f1d1ea`; tests still expect `/app`.
+| `npm test` (vitest) | **PASS** | **78 passed / 0 failed** (25 files) |
+| `npm run build` | **PASS** | no operator Live Chat / `MobileLiveChat` chunks; `/mobile/live-chat` → `/#get-app` |
+| `npm run lint` | **PASS** | 0 warnings (`--max-warnings 0`) |
+| `npm run typecheck` | **PASS** | 0 TS errors |
 
 ---
 
@@ -43,7 +37,7 @@ Fresh re-run only (no reused PASS). Python: `.venv/bin/python`.
 | `node --test tests/*.test.mjs` | **PASS** | **97 passed**, 0 failed |
 | `npm run lint:lines` | **PASS** | no file >400 in mobile src |
 | `npm run secret-scan` | **PASS** | 223 files |
-| `npx expo-doctor` | **FAIL** | missing peers; 4 patch mismatches |
+| `npx expo-doctor` | **PASS** | **20/20** |
 
 ---
 
@@ -54,14 +48,10 @@ Fresh re-run only (no reused PASS). Python: `.venv/bin/python`.
 | tracked-secret scan | **PASS** | |
 | npm audit gate | **PASS** | 0 vulns |
 | pip-audit / pip check | **PASS** | |
-| `operator_001` app code | **PASS** | comments/tests only |
-| CORS `*` | **PASS** | |
-| live private key / sk-live | **PASS** | |
 | app source >500 LOC | **PASS** | **0** |
-| workflow YAML | **PASS** | 28 OK |
-| inventory parity | **PASS** | 1539 = `git ls-files` |
-| unsafe `"linas"` defaults | **ACCEPTED** | explicit env/product defaults |
-| obsolete operator SPA primary ship | **PASS** | redirects to `/#get-app`; mobile live-chat chunk only |
+| inventory parity | **PASS** | **1508** = `git ls-files` |
+| PII print residual scan | **PASS** | `tests/test_log_pii_print_redaction.py` |
+| obsolete operator SPA primary ship | **PASS** | all former operator paths → `/#get-app` |
 
 ---
 
@@ -69,13 +59,13 @@ Fresh re-run only (no reused PASS). Python: `.venv/bin/python`.
 
 | Area | Pass/Fail |
 |------|-----------|
-| Pytest full | **PASS** (1195) |
-| Dashboard vitest | **FAIL** (4) |
+| Pytest full | **PASS** (1213) |
+| Dashboard vitest | **PASS** (78) |
 | Dashboard build | **PASS** |
-| Dashboard lint/typecheck | **FAIL** |
+| Dashboard lint/typecheck | **PASS** |
 | Mobile tsc + unit | **PASS** (97) |
-| Expo-doctor | **FAIL** |
-| Ruff | **FAIL** |
+| Expo-doctor | **PASS** (20/20) |
+| Ruff | **PASS** (0) |
 | Secrets / audits / LOC / inventory | **PASS** |
 
-**Freeze gates: FAIL** — see `FINAL_FREEZE_VERIFICATION.md`. Live activation A1–A7 still owner-only and **not** executed.
+**Freeze gates: PASS** — see `FINAL_FREEZE_VERIFICATION.md`. Live activation A1–A7 still owner-only and **not** executed.

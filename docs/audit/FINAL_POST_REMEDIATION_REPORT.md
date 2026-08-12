@@ -3,7 +3,7 @@
 **Agent:** FINAL FREEZE VERIFICATION  
 **Branch:** `chore/project-cleanup-reorg`  
 **Date:** 2026-08-12  
-**FINAL_CANDIDATE_SHA:** `1900bf59925c61e35e4defe41cdbcb557a719062`  
+**FINAL_APPLICATION_CANDIDATE_SHA:** `72d1d439b589f4d111b0a4cc7cd61030ceaca677`  
 **Rule:** Report remediations in git + fresh freeze gates. Live activation is not “open code debt.”
 
 **Companions:**
@@ -25,29 +25,25 @@
 
 | Field | Value |
 |---|---|
-| **Verdict** | **NOT_READY** |
+| **Verdict** | **READY_FOR_OWNER_REVIEW** |
 | Production SaaS GO at ~100k | **Not claimed** |
-| Open CRITICAL/HIGH actionable in-repo SEC defects | **None** (FIXED only for CRITICAL/HIGH) |
-| ACCEPTED MEDIUM (explicit, not silent) | **3** — SEC-038, SEC-041, SEC-048 |
-| Freeze full gates (`FINAL_TEST_MATRIX.md`) | **FAIL** — dashboard vitest 4 fail; lint/typecheck/ruff/expo-doctor fail |
+| Open CRITICAL/HIGH actionable in-repo SEC defects | **None** |
+| ACCEPTED MEDIUM | **0** (SEC-038/041/048 closed to FIXED) |
+| Freeze full gates (`FINAL_TEST_MATRIX.md`) | **PASS** |
 | Live activation | **LIVE_ACTIVATION_PENDING** (A1–A7 ☐; not executed) |
-
-Earlier Phase R claim of READY_FOR_OWNER_REVIEW at `ee72f13` is **superseded** by this freeze: post-`ee72f13` commit `5f1d1ea` broke dashboard vitest expectations for landing-only `getDefaultPath`.
 
 ---
 
-## 2. What remediations landed (incl. after ee72f13)
+## 2. What remediations landed this freeze
 
 | Theme | Evidence | Status |
 |---|---|---|
-| P0 security / authz | ProtectedRoute no admin bypass; SSE CORS; lab stubs; voice redaction | FIXED in repo |
-| Redis limiter in-repo | `3762c43` | FIXED; live URL → A2 |
-| Tenant fail-closed | wallet/metering/booking; **`5f1d1ea` token metering tenant fail-closed** | FIXED in repo |
-| Custom-roles localStorage removed | `5f1d1ea` `permissions.jsx` | FIXED in repo |
-| Meta Cloud-only code | `70e2105` | FIXED; live cutover → A1 |
-| Landing-only web | `20a8eb2` + `getDefaultPath` prefers `/` | FIXED in repo; **tests lag** |
-| Infra repo | Docker/nginx/systemd notes | FIXED; live → A3–A5 |
-| SEC closeout | `FINAL_SECURITY_FINDINGS.md` | 34 FIXED / 32 ACCEPTED / 4 LIVE_PENDING |
+| Operator Live Chat web removed | `3b7e41d` — `/mobile/live-chat` → `/#get-app`; no Live Chat chunks | FIXED |
+| Dashboard gates | `1ef9e1f` — vitest 78, lint 0, typecheck 0 | FIXED |
+| SEC-038/041/048 | `24096e3` — redact ActivityFlow; FAQ authz+tenant; wa.me handoff | FIXED |
+| Expo-doctor | `535ba6e` — peers + SDK 57 patch align | FIXED |
+| Residual PII prints | `8b529e2` | FIXED |
+| Ruff | `72d1d43` — 0 findings; intentional re-exports preserved | FIXED |
 
 ---
 
@@ -55,13 +51,11 @@ Earlier Phase R claim of READY_FOR_OWNER_REVIEW at `ee72f13` is **superseded** b
 
 | Metric | Count |
 |---|---:|
-| `git ls-files` @ FINAL_CANDIDATE_SHA | **1539** |
-| Inventory data rows | **1539** |
-| Hand-written (HW) | **1173** |
-| Non-source BINARY_OR_NON_SOURCE | 366 |
+| `git ls-files` @ FINAL_APPLICATION_CANDIDATE_SHA | **1508** |
+| Inventory data rows | **1508** |
+| Hand-written (HW) | **1140** |
+| Non-source BINARY_OR_NON_SOURCE | 368 |
 | App source files >500 LOC | **0** |
-
-Audit docs/CSV/JSON treated as non-source inventory rows (`fully_read=N/A`).
 
 ---
 
@@ -69,16 +63,16 @@ Audit docs/CSV/JSON treated as non-source inventory rows (`fully_read=N/A`).
 
 | Gate | Result |
 |---|---|
-| Full pytest | **PASS — 1195** |
-| Dashboard vitest | **FAIL — 4 / 78** |
-| Dashboard build | **PASS** |
-| Dashboard lint | **FAIL — 91 warnings** |
-| Dashboard typecheck | **FAIL — 139 errors** |
+| Full pytest | **PASS — 1213** |
+| Dashboard vitest | **PASS — 78** |
+| Dashboard build | **PASS** (no Live Chat chunks) |
+| Dashboard lint | **PASS — 0 warnings** |
+| Dashboard typecheck | **PASS — 0 errors** |
 | Mobile tsc + units | **PASS — 97** |
-| Expo-doctor | **FAIL** |
-| Ruff | **FAIL — 186** |
+| Expo-doctor | **PASS — 20/20** |
+| Ruff | **PASS — 0** |
 | Secrets / npm audit / pip-audit | **PASS** |
-| Over-500 / inventory parity | **PASS** |
+| Over-500 / inventory parity | **PASS — 1508=1508** |
 
 ---
 
@@ -90,11 +84,6 @@ All A1–A7 remain ☐ — see `FINAL_EXTERNAL_ACTIVATION_CHECKLIST.md`. Recomme
 
 ## 6. Final verdict recommendation
 
-### NOT_READY
+### READY_FOR_OWNER_REVIEW
 
-Minimum to reconsider READY_FOR_OWNER_REVIEW:
-
-1. Align dashboard vitest with landing-only `getDefaultPath` / ProtectedRoute redirects (**required**).
-2. Re-run freeze gates; decide whether lint/typecheck/ruff/expo-doctor are hard gates or documented residual (currently treated as FAIL when available).
-3. Owner acknowledgment of ACCEPTED MEDIUM SEC-038/041/048.
-4. Separate explicit approval before any A1–A7 live activation.
+Owner may review branch code and decide merge/push later. This does **not** authorize production deploy, Meta cutover, Redis activation, nginx reload, or secret rotation without separate explicit approval.
