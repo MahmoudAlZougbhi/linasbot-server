@@ -21,6 +21,14 @@ def _hash_token(raw: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def _require_tenant_id(tenant_id: str | None) -> str:
+    """Normalize tenant_id; fail closed when missing or blank."""
+    tid = str(tenant_id or "").strip()
+    if not tid:
+        raise ValueError("tenant_id required")
+    return tid
+
+
 @dataclass(frozen=True)
 class MobileRefreshRecord:
     user_id: str
@@ -47,7 +55,7 @@ class MobileRefreshRecord:
         return cls(
             user_id=str(data["user_id"]),
             email=str(data.get("email") or ""),
-            tenant_id=str(data.get("tenant_id") or "linas"),
+            tenant_id=_require_tenant_id(data.get("tenant_id")),
             session_id=str(data.get("session_id") or ""),
             created_at=float(data["created_at"]),
             expires_at=float(data["expires_at"]),
@@ -80,7 +88,7 @@ class MobileRefreshTokenService:
         record = MobileRefreshRecord(
             user_id=user_id,
             email=(email or "").strip().lower(),
-            tenant_id=tenant_id,
+            tenant_id=_require_tenant_id(tenant_id),
             session_id=session_id,
             created_at=now,
             expires_at=now + ttl,
