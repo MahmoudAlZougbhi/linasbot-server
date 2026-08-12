@@ -95,7 +95,7 @@ All Quality Gates + Security Checks SUCCESS on PR head. No merge.
 
 | Field | Value |
 |------|-------|
-| Ending SHA | `1c2716e80e8fa46c2c5761ddfc81212344b1b328` |
+| Ending SHA | `399646c4ca530628ce8dcce9585780e0ce77d322` (feat `1c2716e80e8fa46c2c5761ddfc81212344b1b328`) |
 | Status | **DONE** |
 | Tests | `tests/test_requests_ai_capture.py` + `tests/test_customer_requests.py` + social routing smoke |
 
