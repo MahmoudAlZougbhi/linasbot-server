@@ -218,3 +218,16 @@ ActivityFlow cluster, ContentManagers hub, Dashboard, auth pages, Live Chat page
 ### Cumulative
 
 COMPLETE **205 / 1539**
+
+---
+
+## Follow-up — reconcile agent forensics (batch 7)
+
+Merged sharper notes from completed agents (seq 176–205) into inventory without changing COMPLETE count:
+
+- Seq 189/191/194 → **KEEP_FIX** (unused-import / fragment debt)
+- Seq 197 MobileLiveChat → **KEEP_SECURITY_FIX** (route missing `requiredPermission=liveChat`)
+- Seq 203 Settings: keep **KEEP_SECURITY_FIX** tenantId default; append unused loaded-state fields
+- Confirmed 190 stub buttons, 192 simulateWebhook, 196 Login paths already aligned
+
+Sources: agent audits for seq 176–205 (duplicate agent runs).
