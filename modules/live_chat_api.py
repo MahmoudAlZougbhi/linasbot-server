@@ -14,7 +14,7 @@ from typing import Any
 from fastapi import Query, Request
 from fastapi.responses import StreamingResponse
 
-from modules.core import app
+from modules.core import app, cors_allow_origins
 from modules.live_chat_api_helpers import (  # noqa: F401
     _error_response,
     _log_sse,
@@ -39,6 +39,22 @@ from modules import live_chat_api_debug  # noqa: E402, F401
 _log = logging.getLogger(__name__)
 
 
+def _sse_response_headers(request: Request) -> dict[str, str]:
+    """SSE headers: reflect Origin only when it matches app CORS allowlist (never *)."""
+    headers = {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+        "Vary": "Origin",
+    }
+    origin = (request.headers.get("origin") or "").strip()
+    if origin and origin in cors_allow_origins():
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+    return headers
+
+
 # ============================================================
 # SSE (Server-Sent Events) for Real-Time Updates
 # ============================================================
@@ -60,17 +76,10 @@ async def live_chat_events(request: Request) -> Any:
     - heartbeat: Keep-alive ping every 30s
     """
     _log_sse("client_connect")
-    print("📡 [SSE] client connected")
     return StreamingResponse(
         live_chat_sse_broadcaster.stream(request),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-            "Access-Control-Allow-Origin": "*",
-        },
+        headers=_sse_response_headers(request),
     )
 
 
@@ -330,9 +339,7 @@ async def get_conversation_details(
 ) -> Any:
     """Get detailed conversation history. Initial: last 1 day. Load More: before=oldest_ts, day_window=1 for one more day."""
     _log.info(
-        "live_chat_api.get_conversation_details user_id=%s conversation_id=%s days=%s before=%s day_window=%s limit=%s",
-        user_id,
-        conversation_id,
+        "live_chat_api.get_conversation_details days=%s before=%s day_window=%s limit=%s",
         days,
         bool(before),
         day_window,
@@ -349,39 +356,7 @@ async def get_conversation_details(
             max_messages=limit,
         )
 
-    result = await _run_endpoint(_handler)
-    # #region agent log
-    try:
-        import json
-        import os
-
-        _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        _logpath = os.path.join(_root, ".cursor", "debug-420609.log")
-        os.makedirs(os.path.dirname(_logpath), exist_ok=True)
-        with open(_logpath, "a") as f:
-            f.write(
-                json.dumps(
-                    {
-                        "sessionId": "420609",
-                        "location": "live_chat_api:get_conversation_details",
-                        "message": "API response",
-                        "data": {
-                            "user_id": user_id,
-                            "conv_id": conversation_id,
-                            "success": result.get("success") if isinstance(result, dict) else False,
-                            "msg_count": len(result.get("messages", [])) if isinstance(result, dict) else 0,
-                            "error": result.get("error") if isinstance(result, dict) else None,
-                        },
-                        "timestamp": int(__import__("time").time() * 1000),
-                        "hypothesisId": "H1",
-                    }
-                )
-                + "\n"
-            )
-    except Exception as e:
-        print(f"[DEBUG] log write failed: {e}")
-    # #endregion
-    return result
+    return await _run_endpoint(_handler)
 
 
 @app.get("/api/live-chat/client/{user_id}/conversations")
