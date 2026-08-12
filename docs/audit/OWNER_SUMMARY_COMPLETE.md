@@ -2,7 +2,8 @@
 
 **Repo:** `/Users/alzoughbi/linasbot-server`  
 **Branch:** `chore/project-cleanup-reorg`  
-**Verified HEAD:** `ee72f137c3785ff2d08d9ff39f7f2cefdf7a8749` (`ee72f13`)  
+**Phase R READY commit (claimed):** `ee72f137c3785ff2d08d9ff39f7f2cefdf7a8749` (`ee72f13`) — verified with `git rev-parse HEAD` at summary start  
+**This summary commit:** see `git log -1 -- docs/audit/OWNER_SUMMARY_COMPLETE.md`  
 **Date:** 2026-08-12  
 **Purpose:** ملف واحد فيه الصورة الكبيرة. للتفاصيل العميقة افتح روابط قسم 8.
 
@@ -39,13 +40,15 @@
 | Item | Status |
 |---|---|
 | Branch | `chore/project-cleanup-reorg` |
-| HEAD (verified `git rev-parse HEAD`) | `ee72f137c3785ff2d08d9ff39f7f2cefdf7a8749` |
-| Ahead of `origin/main` | **153** commits |
+| Phase R READY SHA (verified at start) | `ee72f137c3785ff2d08d9ff39f7f2cefdf7a8749` |
+| Ahead of `origin/main` | **~153+** commits at Phase R tip; tip continues to grow with docs/fix commits على نفس الفرع |
 | Pushed to remote as this branch tip | **لا** — الفرع يتتبع `origin/main` وهو ahead محلياً؛ **ما انعمل push لهالشغل** |
 | Deployed to production | **لا** |
 | Live Redis / Meta cutover / nginx reload / Firestore indexes | **لا** |
 
-**Working tree note (مش جزء من `ee72f13`):** في تعديلات محلية غير مُلتزَمة على ملفات LiveChat dashboard + بعض خدمات metering — **ما دخلتش بهالملخص ولا بهالـ commit.** راجعها قبل أي قرار merge إذا لساتها موجودة.
+**SHA honesty:** `ee72f13` = commit إعلان Phase R gates PASS / READY_FOR_OWNER_REVIEW. بعده نزل على الأقل `5f1d1ea` (fail-closed metering / custom-roles cleanup) قبل هالملخص. راجع `git log ee72f13..HEAD --oneline` لأي شغل بعد الـ READY.
+
+**Working tree note:** قد تبقى تعديلات محلية غير مُلتزَمة (LiveChat dashboard / إلخ) — **مش جزء من ملخص الـ READY.** راجع `git status` قبل أي قرار merge.
 
 ---
 
