@@ -12,7 +12,7 @@ Audit-only. Application source is not modified.
 | UNREVIEWED | 1514 |
 | IN_REVIEW | 0 |
 | Last batch | Batch 1 (seq 1–25) |
-| Last audit commit | _(pending first commit)_ |
+| Last audit commit | 82152df2115a9d3bafb8d8aefa6c9d062c89a593 |
 
 ---
 
