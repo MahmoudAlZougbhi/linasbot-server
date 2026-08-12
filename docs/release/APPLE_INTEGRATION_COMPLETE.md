@@ -1,7 +1,8 @@
 # Apple Auth + StoreKit + IAP + Subscriptions — Integration Report
 
 **Branch:** `chore/project-cleanup-reorg`  
-**Head SHA:** `89651733b7ed8f02e44b933eb1073449ec093460`  
+**Head SHA:** `988900f40c2d162d84a106e82622d0a75a2c9956`  
+**CI:** backend · frontend · mobile · secret-scan · deploy-readiness = **pass** (no merge to main; no deploy)  
 **PR:** [#240](https://github.com/MahmoudAlZougbhi/linasbot-server/pull/240)  
 **Rules honored:** no merge to main · no production deploy · BOC off · Meta unchanged · no `.p8` committed
 
