@@ -120,12 +120,16 @@ class TestRBACHelpers:
 
 
 class TestMontySecretNotTracked:
-    def test_tracked_config_has_empty_api_key(self):
+    def test_monty_templates_json_removed(self):
         root = Path(__file__).resolve().parents[1]
-        data = json.loads((root / "config" / "montymobile_templates.json").read_text())
-        key = (data.get("api_config") or {}).get("api_key") or ""
-        assert key == ""
-        assert (data.get("api_config") or {}).get("api_key_env") == "MONTYMOBILE_API_KEY"
+        assert not (root / "config" / "montymobile_templates.json").exists()
+        cloud = root / "config" / "whatsapp_cloud_templates.json"
+        assert cloud.is_file()
+        data = json.loads(cloud.read_text())
+        api = data.get("api_config") or {}
+        assert "api_key" not in api
+        assert "tenant" not in api
+        assert "api_id" not in api
 
 
 class TestClientIpTrustedProxy:

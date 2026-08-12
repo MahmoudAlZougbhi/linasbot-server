@@ -18,8 +18,8 @@ async def deliver_scheduled_smart_whatsapp(
 ) -> dict[str, Any]:
     """
     Proactive smart messages must use WhatsApp-approved templates outside the 24h session window.
-    When the template exists in montymobile_templates.json, send via Monty template API;
-    otherwise fall back to session text (only works if the user messaged recently).
+    When the template exists in Cloud templates config, send via Meta Graph API;
+    otherwise fail closed (freeform session text is not allowed for scheduled/campaign sends).
     """
     from services.montymobile_template_service import montymobile_template_service
     from services.whatsapp_adapters.safe_send_adapter import _log_dry_run, _should_dry_run

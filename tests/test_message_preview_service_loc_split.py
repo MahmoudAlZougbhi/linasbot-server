@@ -19,15 +19,15 @@ def test_message_preview_service_modules_under_500_lines() -> None:
     assert _line_count("services/message_preview_service_queue.py") < 500
 
 
-def test_message_preview_service_preserves_public_api_and_monty_adapters() -> None:
+def test_message_preview_service_preserves_public_api_and_cloud_adapters() -> None:
     assert issubclass(MessagePreviewService, MessagePreviewSettingsMixin)
     assert issubclass(MessagePreviewService, MessagePreviewQueueMixin)
     assert isinstance(message_preview_service, MessagePreviewService)
     for name in (
         "get_template_header_image_url",
         "diagnose_template_header_image_sources",
-        "_montymobile_templates_config_path",
-        "_default_header_url_from_montymobile_templates_file",
+        "_whatsapp_cloud_templates_config_path",
+        "_default_header_url_from_cloud_templates_file",
         "add_to_preview_queue",
         "approve_message",
         "validate_message",

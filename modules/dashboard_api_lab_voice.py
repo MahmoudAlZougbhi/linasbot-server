@@ -38,14 +38,14 @@ async def test_voice(
         if audio is not None and audio.filename:
             # File upload mode - redirect to upload handler
             from modules.dashboard_api_lab_upload import test_voice_upload
-            return await test_voice_upload(audio, phone or "96176466674", provider or "montymobile")
+            return await test_voice_upload(audio, phone or "96176466674", provider or "meta")
 
         # Form data mode with voice_text (simulated transcription)
         if voice_text is None or voice_text.strip() == "":
             return {"success": False, "error": "Either audio file or voice_text is required"}
 
         request = TestVoiceRequest(
-            phone=phone or "96176466674", voice_text=voice_text, provider=provider or "montymobile"
+            phone=phone or "96176466674", voice_text=voice_text, provider=provider or "meta"
         )
         start_time = datetime.datetime.now()
 

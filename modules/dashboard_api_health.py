@@ -70,15 +70,32 @@ async def ready() -> Any:
     # social integration. This readiness signal is intentionally configuration-free.
     checks["whatsapp_inbound_ai"] = {"ok": True, "enabled": False}
 
-    # MontyMobile outbound key required when WhatsApp provider is montymobile in production
-    provider = (os.getenv("WHATSAPP_PROVIDER") or "montymobile").strip().lower()
-    monty_configured = bool((os.getenv("MONTYMOBILE_API_KEY") or "").strip())
-    if is_production_env() and provider == "montymobile":
-        checks["montymobile_api_key"] = {"ok": monty_configured, "configured": monty_configured}
-        if not monty_configured:
+    # Meta Cloud credentials required when WhatsApp is enabled in production (Cloud-only).
+    provider = (os.getenv("WHATSAPP_PROVIDER") or "meta").strip().lower() or "meta"
+    if provider in ("cloud",):
+        provider = "meta"
+    wa_disabled = (os.getenv("WHATSAPP_DISABLED") or "").strip().lower() in ("1", "true", "yes", "on")
+    token_ok = bool((os.getenv("WHATSAPP_API_TOKEN") or "").strip())
+    pnid_ok = bool((os.getenv("WHATSAPP_PHONE_NUMBER_ID") or "").strip())
+    cloud_ok = token_ok and pnid_ok
+    if is_production_env() and not wa_disabled and provider in ("meta", "cloud"):
+        checks["whatsapp_cloud_credentials"] = {
+            "ok": cloud_ok,
+            "configured": cloud_ok,
+            "token_configured": token_ok,
+            "phone_number_id_configured": pnid_ok,
+            "provider": "meta",
+        }
+        if not cloud_ok:
             overall_ok = False
     else:
-        checks["montymobile_api_key"] = {"ok": True, "configured": monty_configured, "required": False}
+        checks["whatsapp_cloud_credentials"] = {
+            "ok": True,
+            "configured": cloud_ok,
+            "required": False,
+            "provider": provider,
+            "whatsapp_disabled": wa_disabled,
+        }
 
     try:
         from utils.utils import get_firestore_db

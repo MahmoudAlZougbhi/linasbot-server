@@ -7,13 +7,13 @@ from datetime import datetime
 from typing import Any, cast
 
 from modules.core import app
-from modules.smart_messaging_api_templates import _monty_whatsapp_language_code
+from modules.smart_messaging_api_templates import _whatsapp_template_language_code
 from services.smart_messaging_catalog import normalize_template_id
 
 
 @app.post("/api/smart-messaging/send-test-template")
 async def send_test_template_message(request_data: dict[str, Any]) -> Any:
-    """Send a test message using MontyMobile template"""
+    """Send a test message using Meta Cloud WhatsApp template"""
     try:
         from services.montymobile_template_service import montymobile_template_service
         from services.user_persistence_service import user_persistence
@@ -46,7 +46,7 @@ async def send_test_template_message(request_data: dict[str, Any]) -> Any:
         else:
             user_language, language_source = user_persistence.resolve_language_for_phone(phone_number)
 
-        language = _monty_whatsapp_language_code(user_language)
+        language = _whatsapp_template_language_code(user_language)
 
         # Get template info to know which parameters it needs
         template_info = montymobile_template_service.get_template_info(template_id)
@@ -54,7 +54,7 @@ async def send_test_template_message(request_data: dict[str, Any]) -> Any:
         if not template_info:
             return {"success": False, "error": f"Template '{template_id}' not found"}
 
-        # Body variable names + count (must match montymobile_template_service / Meta {{1}}..{{n}})
+        # Body variable names + count (must match Cloud template service / Meta {{1}}..{{n}})
         effective_lang = montymobile_template_service.resolve_whatsapp_language_for_template(
             template_info, language, template_id_for_log=template_id
         )
@@ -120,9 +120,9 @@ async def send_test_template_message(request_data: dict[str, Any]) -> Any:
                 "test_correlation_id": _test_correlation_id,
             }
 
-        # Monty often accepts the HTTP request while **WhatsApp (Meta)** may not deliver a second
-        # template if the rendered body matches a very recent send to the same user (utility dedupe).
-        # A tiny per-click suffix keeps CRM-based values accurate but avoids byte-identical repeats.
+        # Meta may not deliver a second template if the rendered body matches a very recent send
+        # to the same user (utility dedupe). A tiny per-click suffix keeps CRM-based values accurate
+        # but avoids byte-identical repeats.
         # Send JSON `"vary_test_payload": false` to disable (strict pixel-perfect preview vs CRM only).
         _vary_raw = request_data.get("vary_test_payload", True)
         if isinstance(_vary_raw, str):
@@ -153,7 +153,7 @@ async def send_test_template_message(request_data: dict[str, Any]) -> Any:
 
         print(
             f"📤 Sending test template '{template_id}' to {phone_number} "
-            f"(user_lang={user_language} source={language_source} monty_lang={language})"
+            f"(user_lang={user_language} source={language_source} wa_lang={language})"
         )
 
         if not montymobile_template_service.templates_are_text_only():
@@ -257,6 +257,7 @@ async def send_test_template_message(request_data: dict[str, Any]) -> Any:
                             "monty_message_id": mid,
                             "template_language": effective_lang,
                             "recipient_to_monty": result.get("recipient_to_monty"),
+                            "transport": result.get("transport") or "meta_cloud",
                             "test_send": True,
                             "test_correlation_id": _test_correlation_id,
                             "placeholder_source": ph_meta.get("source"),
@@ -266,7 +267,7 @@ async def send_test_template_message(request_data: dict[str, Any]) -> Any:
                     print(f"⚠️ Test template: could not log to Firestore: {_fs_err}")
             else:
                 print(
-                    "⚠️ Test template: Monty reported success but no messageId — "
+                    "⚠️ Test template: Cloud reported success but no messageId — "
                     "not logging to Live Chat (WhatsApp delivery unconfirmed)."
                 )
 

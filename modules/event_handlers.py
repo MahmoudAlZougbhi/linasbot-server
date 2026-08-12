@@ -16,7 +16,7 @@ from modules import event_handlers_scheduler as event_handlers_scheduler  # noqa
 
 @app.on_event("startup")
 async def startup_event() -> None:
-    """Initialize MontyMobile as the default WhatsApp provider on startup"""
+    """Initialize Meta Cloud as the default WhatsApp provider on startup"""
     try:
         from services.whatsapp_cloud.legacy_isolation import assert_no_monty_cloud_dual_bind
 
@@ -33,13 +33,12 @@ async def startup_event() -> None:
         print("🚀 INITIALIZING WHATSAPP PROVIDER")
         print("=" * 60)
 
-        # Use MontyMobile as the default provider (new endpoint)
-        adapter = WhatsAppFactory.get_adapter("montymobile")
-        print(f"✅ MontyMobile adapter initialized: {type(adapter).__name__}")
+        adapter = WhatsAppFactory.get_adapter("meta")
+        print(f"✅ Meta Cloud adapter initialized: {type(adapter).__name__}")
         print(f"✅ Current provider: {WhatsAppFactory.get_current_provider()}")
         print("=" * 60)
     except Exception as e:
-        print(f"❌ ERROR initializing Qiscus adapter: {e}")
+        print(f"❌ ERROR initializing Meta Cloud adapter: {e}")
         print("⚠️ Bot will continue but WhatsApp functionality may not work")
         import traceback
 

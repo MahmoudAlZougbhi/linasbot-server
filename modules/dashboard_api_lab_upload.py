@@ -32,7 +32,7 @@ from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 
 @app.post("/api/test-voice-upload")
 async def test_voice_upload(
-    audio: UploadFile = File(...), phone: str = Form("96176466674"), provider: str = Form("montymobile")
+    audio: UploadFile = File(...), phone: str = Form("96176466674"), provider: str = Form("meta")
 ) -> Any:
     """Test voice message processing with actual audio file upload"""
     _refuse_disabled_lab_endpoint()
@@ -168,7 +168,7 @@ async def test_voice_upload(
 
 @app.post("/api/test-image-upload")
 async def test_image_upload(
-    image: UploadFile = File(...), phone: str = Form("96176466674"), provider: str = Form("montymobile")
+    image: UploadFile = File(...), phone: str = Form("96176466674"), provider: str = Form("meta")
 ) -> Any:
     """Test image analysis through the bot with file upload"""
     _refuse_disabled_lab_endpoint()

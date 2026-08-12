@@ -146,14 +146,18 @@ async def delete_message_template(template_id: str) -> Any:
         return {"success": False, "error": str(e)}
 
 
-def _monty_whatsapp_language_code(saved_lang: str) -> str:
-    """Map persisted user language to MontyMobile template language code."""
+def _whatsapp_template_language_code(saved_lang: str) -> str:
+    """Map persisted user language to WhatsApp template language code."""
     s = (saved_lang or "ar").strip().lower()
     if s == "franco":
         return "ar"
     if s in ("ar", "en", "fr"):
         return s
     return "ar"
+
+
+# Backward-compatible alias
+_monty_whatsapp_language_code = _whatsapp_template_language_code
 
 
 @app.get("/api/smart-messaging/user-language")
@@ -172,7 +176,7 @@ async def smart_messaging_resolve_user_language(phone: str) -> Any:
             "success": True,
             "language": user_lang,
             "language_source": source,
-            "template_language": _monty_whatsapp_language_code(user_lang),
+            "template_language": _whatsapp_template_language_code(user_lang),
             "normalized_phone": normalize_phone(raw),
         }
     except Exception as e:

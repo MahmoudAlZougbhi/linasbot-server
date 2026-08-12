@@ -202,8 +202,8 @@ class MontyMobileTemplatePayloadMixin:
             return None
         print(f"   phone_number (Monty 'to'): {to_digits!r}")
 
-        if not self.templates or not self.api_config:
-            print("❌ MontyMobile templates not loaded")
+        if not self.templates:
+            print("❌ WhatsApp Cloud templates not loaded")
             return None
         template = self.get_template_info(canonical_template_id)
         if not template:
@@ -235,35 +235,19 @@ class MontyMobileTemplatePayloadMixin:
         # (e.g. legacy internal ids map to JSON key sent_17_days_after_last_session_new).
         outbound_name = self._outbound_template_name(template, canonical_template_id)
 
+        # Meta Cloud payload core (messaging_product added by send_template_message).
+        # Do not attach Monty source/apiId — those fields are legacy-only.
         payload: dict[str, Any] = {
             "to": to_digits,
             "type": "template",
-            "source": self.api_config["source"],
             "template": {
                 "name": outbound_name,
                 "language": {"code": language},
                 "components": [],
             },
-            "apiId": self.api_config["api_id"],
         }
 
-        # Some Monty stacks resolve the channel template by dashboard IDs; if only `name` is sent
-        # and it drifts from Meta, you may get "Template Does Not Exist". Enable per-template.
-        if bool(template.get("include_monty_template_ids")):
-            wid = str(template.get("wa_message_id") or "").strip()
-            rg = str(template.get("record_guid") or "").strip()
-            if wid:
-                payload["waMessageId"] = wid
-            if rg:
-                payload["recordGuid"] = rg
-            if wid or rg:
-                print(
-                    f"   Monty template IDs on payload: waMessageId={wid!r} recordGuid={rg!r} "
-                    f"(include_monty_template_ids=true)"
-                )
-
         print(f"   Template Name (outbound): {outbound_name} (config name={template.get('name')!r})")
-        print(f"   Template WA ID: {template.get('wa_message_id', 'N/A')}")
         print(
             f"   Resolution: {self._describe_template_resolution(template_id, canonical_template_id)}; "
             f"config_key={self._resolve_template_config_key(canonical_template_id)!r}; "
@@ -290,7 +274,7 @@ class MontyMobileTemplatePayloadMixin:
         comps = t.get("components") or []
         has_header = any(str(c.get("type", "")).lower() == "header" for c in comps)
         print(
-            "[Monty template outbound] "
+            "[Cloud template outbound] "
             f"requested_template_id={requested_template_id!r} normalized_id={canonical_id!r} "
             f"payload_template_name={name!r} language={lang!r} "
             f"has_header_component={has_header} "
