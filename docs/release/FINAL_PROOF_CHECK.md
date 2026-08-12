@@ -13,7 +13,7 @@
 |-------|--------|
 | `AUDITED_FAIL_HEAD` | `12e00eb797cd0e774c6948ba5379bc0974837c91` (PROOF_FAILED_NOT_READY) |
 | `FINAL_RC_SHA` | `810fb88afb9b6d20620e072b0e2251af897ce2a5` |
-| `PR_240` | open — CI re-run required on freeze SHA |
+| `PR_240` | open — CI SUCCESS on freeze SHA |
 | Prior CI @ `12e00eb` | all SUCCESS (backend · frontend · mobile · secret-scan · deploy-readiness) |
 
 ### Focused tests (this proof)
