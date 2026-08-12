@@ -23,16 +23,16 @@
 | 7 | Channel delivery | **DONE** (outbox foundations) |
 | 8 | BOC isolation (default OFF) | **DONE** |
 | 9 | Security/correctness/performance tests | **DONE** |
-| 10 | Independent review + PR closeout | PENDING |
-| 11 | Full file-by-file reinspection | PENDING |
+| 10 | Independent review + PR closeout | **DONE** (CI green; no merge) |
+| 11 | Full file-by-file reinspection | **NOT STARTED** (mandatory before freeze) |
 | 12 | Final freeze | PENDING |
-| 13 | Production preparation | PENDING |
-| 14 | Merge PR #240 + deploy | PENDING |
+| 13 | Production preparation | **BLOCKED_OWNER_ACTION** (see below) |
+| 14 | Merge PR #240 + deploy | BLOCKED (needs 11–13) |
 | 15 | Live post-deploy smoke | PENDING |
-| 16 | Mobile distribution (EAS) | PENDING |
+| 16 | Mobile distribution (EAS) | PENDING (will need Apple/Google 2FA) |
 | 17 | Final live revalidation | PENDING |
-| 20 | Final deliverables `docs/release/*` | PENDING |
-| 21 | Verdict | PENDING |
+| 20 | Final deliverables `docs/release/*` | IN_PROGRESS |
+| 21 | Verdict | **NOT_READY** |
 
 ---
 
@@ -304,3 +304,39 @@ All Quality Gates + Security Checks SUCCESS on PR head. No merge.
 
 Continue Phases 10+. Do not merge until Phase 13 ready.
 Do not enable `LINASLASER_BOC_BOOKING_ENABLED` in production.
+
+---
+
+## Phase 10 — Independent review + PR closeout
+
+| Field | Value |
+|------|-------|
+| Status | **DONE** (review doc + green CI; **no merge**) |
+| Head SHA | `be8d82d37f7ca11870309729c23bd7a3c853f145` |
+| Artifact | `docs/release/FINAL_INDEPENDENT_PR_REVIEW.md` |
+| CI | backend/frontend/mobile/secret-scan/deploy-readiness all **pass** on PR #240 |
+
+---
+
+## Current stop (2026-08-12)
+
+### Verdict: **NOT_READY**
+
+Reasons:
+1. Phase 11 full file-by-file reinspection not executed on post-Requests tip (mandatory).
+2. Phase 12 final freeze gates not re-run as a freeze candidate after Phase 11.
+3. Phase 13 production prep cannot complete without Mahmoud:
+
+### BLOCKED_OWNER_ACTION (Phase 13 — do before any merge)
+
+1. **Redis:** Confirm whether a DigitalOcean Redis already exists for Linas production.
+   - If **yes**: provide/confirm URL secret name to set (`RATE_LIMIT_REDIS_URL` / `REDIS_URL`) with TLS/auth; ops can wire without purchase.
+   - If **no**: approve purchase — product/region/size/cost (exact DO button) before provisioning.
+2. **Meta VERIFY_AND_PRESERVE:** Confirm Meta connection health; if Meta OTP / account-owner confirmation appears, complete it (do not disconnect/rebuild).
+3. **Migration apply approval:** Approve applying additive `20260812_customer_requests` on production Postgres after backup (not applied yet).
+4. **Merge approval:** Only after Phases 11–13 READY — merging `main` auto-runs Quality Gates → Production Deploy.
+
+### Resume
+
+Continue from Phase 11 in ledger. Do not merge PR #240 yet.
+
