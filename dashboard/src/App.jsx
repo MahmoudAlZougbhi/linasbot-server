@@ -226,7 +226,7 @@ function App() {
             <Route
               path="/mobile/live-chat"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPermission="liveChat">
                   <MobileLiveChatRoute />
                 </ProtectedRoute>
               }
