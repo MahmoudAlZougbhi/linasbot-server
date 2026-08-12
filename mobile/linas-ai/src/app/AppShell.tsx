@@ -28,7 +28,6 @@ export function AppShell() {
   const [bootDone, setBootDone] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [hasAccess, setHasAccess] = useState(false);
-  const [isPlatformOwner, setIsPlatformOwner] = useState(false);
   const [resumeArea, setResumeArea] = useState<ControlArea | null>(null);
   const [authEpoch, setAuthEpoch] = useState(0);
   const [areaFocusNonce, bumpAreaFocus] = useAreaFocusNonce();
@@ -47,8 +46,7 @@ export function AppShell() {
   useEffect(() => {
     void (async () => {
       const access = await tokenStore.getAccessToken();
-      const user = await tokenStore.getUser();
-      setIsPlatformOwner(user?.role === 'platform_owner');
+      await tokenStore.getUser();
       setHasAccess(Boolean(access));
       setAuthReady(true);
       if (access) {
@@ -60,7 +58,6 @@ export function AppShell() {
   useEffect(() => {
     return onAuthCleared(() => {
       setHasAccess(false);
-      setIsPlatformOwner(false);
       bumpAuthEpoch();
     });
   }, [bumpAuthEpoch]);
@@ -157,8 +154,6 @@ export function AppShell() {
   }
 
   async function afterLogin() {
-    const user = await tokenStore.getUser();
-    setIsPlatformOwner(user?.role === 'platform_owner');
     setHasAccess(true);
     bumpAuthEpoch();
     void tryRegisterOwnerPushScaffold();
@@ -211,7 +206,6 @@ export function AppShell() {
       // Local clear still proceeds.
     }
     await tokenStore.clear();
-    setIsPlatformOwner(false);
     setHasAccess(false);
     setResumeArea(null);
     bumpAuthEpoch();
@@ -279,7 +273,6 @@ export function AppShell() {
           screen={screen}
           authEpoch={authEpoch}
           hasAccess={hasAccess}
-          isPlatformOwner={isPlatformOwner}
           showSubGate={showSubGate}
           subGateLoading={subGate.loading}
           onOpenArea={openArea}

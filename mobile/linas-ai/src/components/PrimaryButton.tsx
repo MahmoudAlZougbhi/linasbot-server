@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, type ViewStyle } from 'react-native';
 
-import { colors, fonts, radii, spacing } from '../theme';
+import { fonts, radii, spacing, useTheme } from '../theme';
 
 type Props = {
   label: string;
@@ -22,15 +22,24 @@ export function PrimaryButton({
   style,
   icon,
 }: Props) {
+  const { colors } = useTheme();
   const isPrimary = variant === 'primary';
   const isDanger = variant === 'danger';
   return (
     <Pressable
       style={[
         styles.base,
-        isPrimary && styles.primary,
-        variant === 'ghost' && styles.ghost,
-        isDanger && styles.danger,
+        isPrimary && { backgroundColor: colors.accent },
+        variant === 'ghost' && {
+          backgroundColor: colors.surface,
+          borderWidth: 1,
+          borderColor: colors.border,
+        },
+        isDanger && {
+          backgroundColor: 'transparent',
+          borderWidth: 1,
+          borderColor: colors.danger,
+        },
         (disabled || loading) && styles.disabled,
         style,
       ]}
@@ -45,9 +54,9 @@ export function PrimaryButton({
           <Text
             style={[
               styles.label,
-              isPrimary && styles.labelOnPrimary,
-              variant === 'ghost' && styles.labelGhost,
-              isDanger && styles.labelDanger,
+              isPrimary && { color: colors.onAccent, fontWeight: '700' },
+              variant === 'ghost' && { color: colors.text },
+              isDanger && { color: colors.danger, fontWeight: '700' },
             ]}
           >
             {label}
@@ -68,20 +77,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
-  primary: { backgroundColor: colors.accent },
-  ghost: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  danger: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.danger,
-  },
   disabled: { opacity: 0.5 },
   label: { fontFamily: fonts.bodyMedium, fontSize: 16 },
-  labelOnPrimary: { color: colors.onAccent, fontWeight: '700' },
-  labelGhost: { color: colors.text },
-  labelDanger: { color: colors.danger, fontWeight: '700' },
 });

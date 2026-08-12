@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, radii } from '../theme';
+import { radii, useTheme } from '../theme';
 
 type Props = {
   open: boolean;
@@ -22,8 +22,6 @@ type Props = {
   style?: ViewStyle;
 };
 
-const SCREEN_W = Dimensions.get('window').width;
-
 export function SideDrawer({
   open,
   side,
@@ -32,11 +30,20 @@ export function SideDrawer({
   widthRatio = 0.82,
   style,
 }: Props) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const width = Math.min(SCREEN_W * widthRatio, 360);
+  const [screenW, setScreenW] = useState(() => Dimensions.get('window').width);
+  const width = Math.min(screenW * widthRatio, 360);
   const closedX = side === 'left' ? -width : width;
   const anim = useRef(new Animated.Value(closedX)).current;
   const fade = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }) => {
+      setScreenW(window.width);
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -56,13 +63,9 @@ export function SideDrawer({
     ]).start();
   }, [open, anim, fade, closedX]);
 
-  if (!open) {
-    // Keep mounted briefly for close animation — still render when animating out.
-  }
-
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={open ? 'auto' : 'none'}>
-      <Animated.View style={[styles.scrim, { opacity: fade }]}>
+      <Animated.View style={[styles.scrim, { opacity: fade, backgroundColor: colors.overlay }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Animated.View>
       <Animated.View
@@ -72,9 +75,10 @@ export function SideDrawer({
           {
             width,
             paddingTop: insets.top + 8,
-            // Safe area only — no extra lift above the home indicator.
             paddingBottom: Math.max(insets.bottom, 4),
             transform: [{ translateX: anim }],
+            backgroundColor: colors.surfaceGlass,
+            borderColor: colors.border,
           },
           style,
         ]}
@@ -88,14 +92,11 @@ export function SideDrawer({
 const styles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: colors.overlay,
   },
   panel: {
     position: 'absolute',
     top: 0,
     bottom: 0,
-    backgroundColor: colors.surfaceGlass,
-    borderColor: colors.border,
     paddingHorizontal: 16,
   },
   left: {

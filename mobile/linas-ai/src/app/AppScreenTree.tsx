@@ -28,7 +28,6 @@ type Props = {
   screen: Screen;
   authEpoch: number;
   hasAccess: boolean;
-  isPlatformOwner: boolean;
   showSubGate: boolean;
   subGateLoading: boolean;
   onOpenArea: (area: ControlArea) => void;
@@ -45,7 +44,6 @@ export function AppScreenTree({
   screen,
   authEpoch,
   hasAccess,
-  isPlatformOwner,
   showSubGate,
   subGateLoading,
   onOpenArea,
@@ -86,7 +84,6 @@ export function AppScreenTree({
       <KeepMountedPane key={`chat-${authEpoch}`} active={chatActive}>
         <ChatScreen
           isAuthenticated={hasAccess}
-          isPlatformOwner={isPlatformOwner}
           onOpenArea={onOpenArea}
           onOpenCmReview={onOpenCmReview}
           onRequestLogin={() => setScreen({ name: 'login' })}
