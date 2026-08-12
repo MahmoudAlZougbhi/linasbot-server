@@ -220,6 +220,7 @@ async def takeover_conversation(request: TakeoverRequest, http_request: Request)
             user_id=request.user_id,
             operator_id=session.user_id,
             operator_name=session.email,
+            tenant_id=getattr(session, "tenant_id", None),
         )
         if result.get("success"):
             # Broadcast so all clients (including other tabs) refresh and move conv from Waiting to Active
@@ -231,16 +232,19 @@ async def takeover_conversation(request: TakeoverRequest, http_request: Request)
 
 @app.post("/api/live-chat/release")
 async def release_conversation(request: ReleaseRequest, http_request: Request) -> Any:
-    """Release conversation back to bot"""
+    """Release conversation back to bot (explicit Resume AI — clears server pause)."""
 
     async def _handler() -> Any:
         from modules.api_security import reject_social_operator_mutation, require_session
 
-        require_session(http_request)
+        session = require_session(http_request)
         reject_social_operator_mutation(request.user_id)
-        result = await live_chat_service.release_conversation(
+        # Same server-authoritative clear as /resume-ai so WA Cloud epoch cannot stay HUMAN_PAUSED.
+        result = await live_chat_service.resume_ai_conversation(
             conversation_id=request.conversation_id,
             user_id=request.user_id,
+            operator_id=session.user_id,
+            tenant_id=getattr(session, "tenant_id", None),
         )
         if result.get("success"):
             await broadcast_sse_event("conversations", {"trigger_refresh": True})
@@ -274,10 +278,13 @@ async def resume_ai_conversation(request: ResumeAiRequest, http_request: Request
 
 
 @app.post("/api/live-chat/mark-read")
-async def mark_conversation_read(request: MarkConversationReadRequest) -> Any:
+async def mark_conversation_read(request: MarkConversationReadRequest, http_request: Request) -> Any:
     """Mark conversation as read when operator opens it. Persists unread_count=0 in Firestore."""
 
     async def _handler() -> Any:
+        from modules.api_security import require_session
+
+        require_session(http_request)
         return await live_chat_service.mark_conversation_read(
             user_id=request.user_id,
             conversation_id=request.conversation_id,
@@ -314,12 +321,15 @@ async def send_operator_message(request: SendOperatorMessageRequest, http_reques
 
 
 @app.post("/api/live-chat/operator-status")
-async def update_operator_status(request: OperatorStatusRequest) -> Any:
-    """Update operator availability status"""
+async def update_operator_status(request: OperatorStatusRequest, http_request: Request) -> Any:
+    """Update operator availability status (actor from session — body operator_id ignored)."""
 
     async def _handler() -> Any:
+        from modules.api_security import require_session
+
+        session = require_session(http_request)
         return await live_chat_service.update_operator_status(
-            operator_id=request.operator_id,
+            operator_id=session.user_id,
             status=request.status,
         )
 
@@ -439,6 +449,15 @@ async def end_conversation(request: dict, http_request: Request) -> Any:
     reject_social_operator_mutation(user_id)
 
     async def _handler() -> Any:
+        # Clear server pause (Firestore + WA Cloud epoch) before resolving so AI is not stuck paused.
+        resume = await live_chat_service.resume_ai_conversation(
+            conversation_id=str(conversation_id),
+            user_id=str(user_id),
+            operator_id=session.user_id,
+            tenant_id=getattr(session, "tenant_id", None),
+        )
+        if not resume.get("success"):
+            print(f"⚠️ end-conversation: resume before end failed: {resume.get('error')}")
         adapter = WhatsAppFactory.get_adapter(WhatsAppFactory.get_current_provider())
         return await live_chat_service.end_conversation(
             conversation_id=str(conversation_id),

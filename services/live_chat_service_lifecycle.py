@@ -232,13 +232,21 @@ class LiveChatLifecycleMixin:
             print(f"⚠️ Error auto-archiving conversation: {e}")
 
     async def takeover_conversation(
-        self, conversation_id: str, user_id: str, operator_id: str, operator_name: str | None = None
+        self,
+        conversation_id: str,
+        user_id: str,
+        operator_id: str,
+        operator_name: str | None = None,
+        tenant_id: str | None = None,
+        request_id: str | None = None,
+        source_channel: str | None = None,
     ) -> dict[str, Any]:
-        """Operator takes over a conversation"""
+        """Operator takes over a conversation (server-authoritative AI pause)."""
         try:
             canonical_user_id, _ = get_canonical_user_id_and_phone(user_id)
             db = get_firestore_db()
             resolved_user_id = canonical_user_id
+            conv_ref = None
             if db:
                 users_coll = db.collection("artifacts").document(self.APP_ID).collection("users")
                 conv_ref = (
@@ -258,7 +266,36 @@ class LiveChatLifecycleMixin:
                         resolved_user_id = user_id
                 if not conv_snap.exists:
                     return {"success": False, "error": "Conversation not found. Check user_id and conversation_id."}
-            await set_human_takeover_status(resolved_user_id, conversation_id, True, operator_id, operator_name)
+
+            # Pause AI before operator owns the thread (Firestore + WA Cloud epoch when tenant bound).
+            from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+            from services.requests.manual_mode import activate_manual_mode
+
+            wa_cm = None
+            wa_session = None
+            try:
+                if tenant_id:
+                    try:
+                        wa_cm = whatsapp_session()
+                        wa_session = wa_cm.__enter__()
+                    except WhatsAppDatabaseUnavailable:
+                        wa_session = None
+                pause_result = await activate_manual_mode(
+                    conversation_id=conversation_id,
+                    user_id=resolved_user_id,
+                    actor_user_id=operator_id,
+                    tenant_id=tenant_id,
+                    operator_name=operator_name,
+                    request_id=request_id,
+                    source_channel=source_channel,
+                    session=wa_session,
+                )
+                if wa_session is not None:
+                    wa_session.commit()
+            finally:
+                if wa_cm is not None:
+                    wa_cm.__exit__(None, None, None)
+
             config.user_in_human_takeover_mode[resolved_user_id] = True
             self.operator_sessions[conversation_id] = operator_id
 
@@ -285,6 +322,8 @@ class LiveChatLifecycleMixin:
                 "message": "Conversation taken over successfully",
                 "conversation_id": conversation_id,
                 "operator_id": operator_id,
+                "manual_mode_activated": pause_result.activated,
+                "control_epoch": pause_result.control_epoch,
             }
 
         except Exception as e:

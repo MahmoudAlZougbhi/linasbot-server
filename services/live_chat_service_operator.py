@@ -270,23 +270,28 @@ class LiveChatOperatorMixin:
                     },
                 )
 
-                # Step 3: Send image via Qiscus
-                print(f"🖼️ Sending image via Qiscus to ...{str(user_id)[-4:]}...")
+                # Step 3: Send image via WhatsApp adapter
+                print(f"🖼️ Sending image via WhatsApp to ...{str(user_id)[-4:]}...")
                 try:
                     if storage_url:
-                        # Send as native image message (displays in gallery on phone, not just a link)
-                        await adapter.send_image_message(canonical_user_id, storage_url, caption="صورة من المشغل")
-                        print("✅ Sent image as native image message via Qiscus")
+                        send_result = await adapter.send_image_message(
+                            canonical_user_id, storage_url, caption="صورة من المشغل"
+                        )
+                        if isinstance(send_result, dict) and not send_result.get("success", True):
+                            err = send_result.get("error", "Unknown error")
+                            print(f"⚠️ WhatsApp image send failed: {err}")
+                            return {"success": False, "error": f"WhatsApp image send failed: {err}"}
+                        print("✅ Sent image as native image message via WhatsApp")
                     else:
-                        # Fallback: send text notification if storage upload failed
                         text_notification = "تم استلام صورة من المشغل. يرجى فتح لوحة المعلومات لعرضها."
                         await adapter.send_text_message(canonical_user_id, text_notification)
                         print("✅ Sent text notification (storage upload failed)")
                 except Exception as e:
-                    print(f"⚠️ Failed to send via Qiscus: {e}")
+                    print(f"⚠️ Failed to send image via WhatsApp: {e}")
                     import traceback
 
                     traceback.print_exc()
+                    return {"success": False, "error": f"Failed to send image: {str(e)}"}
 
                 print(f"✅ Image message processed and sent for ...{str(user_id)[-4:]}")
 
