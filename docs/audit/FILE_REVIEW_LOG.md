@@ -231,3 +231,16 @@ Merged sharper notes from completed agents (seq 176–205) into inventory withou
 - Confirmed 190 stub buttons, 192 simulateWebhook, 196 Login paths already aligned
 
 Sources: agent audits for seq 176–205 (duplicate agent runs).
+
+---
+
+## Follow-up — reconcile agent forensics (batch 6)
+
+Merged sharper notes from completed agent (seq 146–175) without changing COMPLETE count:
+
+- Seq 158 PermissionsContext → **KEEP_FIX** (`usePermissions` unused)
+- Seq 160 useApi → **KEEP_PERFORMANCE_FIX** (full facade for botStatus-only App use)
+- Seq 165 useApiQA → **KEEP_FIX** (dead QA exports; keep submitFeedback)
+- Kept stronger **KEEP_SECURITY_FIX** on Auth helpers defaults + `operator_001` media composer
+
+Source: agent audit for seq 146–175.
