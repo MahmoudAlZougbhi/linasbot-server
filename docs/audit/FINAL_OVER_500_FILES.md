@@ -3,7 +3,7 @@
 **Branch:** `chore/project-cleanup-reorg`  
 **Generated:** 2026-08-12  
 **FINAL_APPLICATION_CANDIDATE_SHA:** `72d1d439b589f4d111b0a4cc7cd61030ceaca677`  
-**FINAL_FREEZE_DOCS_SHA:** `__PENDING_FREEZE_DOCS_SHA__`  
+**FINAL_FREEZE_DOCS_SHA:** `a73373b2791024c91aafecb74ff64fd79c9abb09`  
 **Agent:** remediation C4
 
 ## Scope

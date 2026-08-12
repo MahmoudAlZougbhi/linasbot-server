@@ -4,7 +4,7 @@
 **Branch:** `chore/project-cleanup-reorg`  
 **Date:** 2026-08-12  
 **FINAL_APPLICATION_CANDIDATE_SHA:** `72d1d439b589f4d111b0a4cc7cd61030ceaca677`  
-**FINAL_FREEZE_DOCS_SHA:** `__PENDING_FREEZE_DOCS_SHA__`  
+**FINAL_FREEZE_DOCS_SHA:** `a73373b2791024c91aafecb74ff64fd79c9abb09`  
 **Verdict:** **READY_FOR_OWNER_REVIEW**
 
 > Freeze verification only. No deploy, push, merge to main, production mutation, Meta cutover, Redis activation, nginx reload, secret rotation, or Firestore index deploy was performed.
@@ -16,7 +16,7 @@
 | `72d1d439b589f4d111b0a4cc7cd61030ceaca677` | Immutable **FINAL_APPLICATION_CANDIDATE_SHA** (last app-source change) |
 | `d47ee7edbc56752672e1ea0056180d6ecb53573e` | Intermediate docs pin (parent of `f2e75f1`) |
 | `f2e75f1d8de9795f42350aa8dc497165ca9dfc33` | Supersedes `d47ee7e` (`d47ee7e` is ancestor of `f2e75f1`; merge-base = `d47ee7e`) |
-| `__PENDING_FREEZE_DOCS_SHA__` | **FINAL_FREEZE_DOCS_SHA** — single freeze-docs identity after this reconciliation |
+| `a73373b2791024c91aafecb74ff64fd79c9abb09` | **FINAL_FREEZE_DOCS_SHA** — single freeze-docs identity after this reconciliation |
 
 ---
 
