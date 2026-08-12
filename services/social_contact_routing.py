@@ -30,6 +30,7 @@ from services.social_contact_routing_detect import (  # noqa: F401
     clear_social_contact_flow,
     _ask_branch,
     _ask_gender,
+    _tenant_id_from_user_data,
     _explicit_handoff_intent,
     _explicit_preference_change,
     _is_cancel_handoff,
@@ -118,14 +119,21 @@ def route_social_contact_request(
             try:
                 from services.owner_alert_service import owner_alert_service
 
-                scope_tenant = str(user_data.get("tenant_id") or user_data.get("tenantId") or "linas")
-                scope_channel = str(user_data.get("channel") or "")
+                scope_tenant = str(
+                    user_data.get("tenant_id")
+                    or user_data.get("tenantId")
+                    or user_data.get("workspace_id")
+                    or ""
+                ).strip()
+                scope_channel = str(user_data.get("channel") or "").strip()
                 try:
                     scope = _flow_scope(user_data)
                     scope_tenant = scope.tenant_id
                     scope_channel = scope.channel
                 except SocialContactScopeError:
                     pass
+                if not scope_tenant:
+                    raise SocialContactScopeError("tenant_id required for social human alert")
                 social_uid = str(user_data.get("user_id") or "").strip()
                 if not social_uid:
                     phone = str(user_data.get("phone_number") or "")
@@ -261,7 +269,7 @@ def route_social_contact_request(
     env_name = f"SOCIAL_WHATSAPP_{branch.upper()}_{gender.upper()}"
     wa_phone = resolve_social_whatsapp_number(
         env_name,
-        tenant_id=str(user_data.get("tenant_id") or "linas"),
+        tenant_id=_tenant_id_from_user_data(user_data),
     )
     if not wa_phone:
         return SocialContactRouteResult(

@@ -131,6 +131,18 @@ class SocialContactScopeError(RuntimeError):
     """Raised when a social handoff cannot be isolated to one business and sender."""
 
 
+def _require_tenant_id(tenant_id: str | None, *, context: str = "social contact routing") -> str:
+    value = str(tenant_id or "").strip()
+    if not value:
+        raise SocialContactScopeError(f"tenant_id required for {context}")
+    return value
+
+
+def _tenant_id_from_user_data(user_data: dict) -> str:
+    raw = user_data.get("tenant_id") or user_data.get("tenantId") or user_data.get("workspace_id")
+    return _require_tenant_id(str(raw) if raw is not None else None)
+
+
 def is_social_channel(channel: str | None) -> bool:
     return str(channel or "").strip().lower() in SOCIAL_CHANNELS
 
@@ -175,7 +187,7 @@ def wa_me_url(phone: str) -> str:
     return f"https://wa.me/{phone_digits(phone)}"
 
 
-def resolve_social_whatsapp_number(env_name: str, *, tenant_id: str = "linas") -> str | None:
+def resolve_social_whatsapp_number(env_name: str, *, tenant_id: str) -> str | None:
     """Resolve public WhatsApp contact for a matrix key.
 
     Precedence:
@@ -184,7 +196,7 @@ def resolve_social_whatsapp_number(env_name: str, *, tenant_id: str = "linas") -
        (``env_name.lower()``) — never silently fall back to code defaults.
     3. Tracked ``DEFAULT_SOCIAL_WHATSAPP_CONTACTS`` (legacy mode only).
     """
-    tenant = (tenant_id or "linas").strip() or "linas"
+    tenant = _require_tenant_id(tenant_id, context="social WhatsApp contact resolution")
     override = (os.getenv(env_name) or "").strip() if tenant == "linas" else ""
     if override:
         return override
