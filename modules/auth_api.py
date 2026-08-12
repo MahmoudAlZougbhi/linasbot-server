@@ -488,11 +488,7 @@ async def change_password(body: ChangePasswordRequest, request: Request, respons
             )
         except Exception:
             pass
-        return {
-            "success": True,
-            "message": "Password changed successfully",
-            "csrf_token": record.csrf_token,
-        }
+        return {"success": True, "message": "Password changed successfully", "csrf_token": record.csrf_token}
     except ValueError as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
