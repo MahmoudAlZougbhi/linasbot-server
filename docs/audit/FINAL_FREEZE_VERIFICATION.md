@@ -4,10 +4,19 @@
 **Branch:** `chore/project-cleanup-reorg`  
 **Date:** 2026-08-12  
 **FINAL_APPLICATION_CANDIDATE_SHA:** `72d1d439b589f4d111b0a4cc7cd61030ceaca677`  
-**FINAL_FREEZE_DOCS_SHA:** `d47ee7edbc56752672e1ea0056180d6ecb53573e`  
+**FINAL_FREEZE_DOCS_SHA:** `__PENDING_FREEZE_DOCS_SHA__`  
 **Verdict:** **READY_FOR_OWNER_REVIEW**
 
 > Freeze verification only. No deploy, push, merge to main, production mutation, Meta cutover, Redis activation, nginx reload, secret rotation, or Firestore index deploy was performed.
+
+### SHA reconciliation (pre-push)
+
+| SHA | Role |
+|---|---|
+| `72d1d439b589f4d111b0a4cc7cd61030ceaca677` | Immutable **FINAL_APPLICATION_CANDIDATE_SHA** (last app-source change) |
+| `d47ee7edbc56752672e1ea0056180d6ecb53573e` | Intermediate docs pin (parent of `f2e75f1`) |
+| `f2e75f1d8de9795f42350aa8dc497165ca9dfc33` | Supersedes `d47ee7e` (`d47ee7e` is ancestor of `f2e75f1`; merge-base = `d47ee7e`) |
+| `__PENDING_FREEZE_DOCS_SHA__` | **FINAL_FREEZE_DOCS_SHA** — single freeze-docs identity after this reconciliation |
 
 ---
 
@@ -20,7 +29,7 @@
 | Prior freeze candidate | `1900bf59925c61e35e4defe41cdbcb557a719062` |
 | Prior freeze-docs tip | `c7772c7` |
 | Tracks | `origin/main` (ahead locally; **not pushed** this session) |
-| Working tree at application candidate | clean except untracked unrelated `docs/TIKTOK_MULTI_TENANT_CONNECTOR_HANDOFF.md` (not part of freeze candidate; not committed) |
+| Working tree at freeze docs tip | clean — unrelated `docs/TIKTOK_MULTI_TENANT_CONNECTOR_HANDOFF.md` preserved outside repo at `~/Documents/linas-handoffs/` (not on cleanup branch; not in cleanup PR) |
 
 ### Application commits since prior freeze (`1900bf5` / docs `c7772c7`)
 

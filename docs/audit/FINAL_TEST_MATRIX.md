@@ -3,6 +3,7 @@
 **Branch:** `chore/project-cleanup-reorg`  
 **Date:** 2026-08-12  
 **FINAL_APPLICATION_CANDIDATE_SHA:** `72d1d439b589f4d111b0a4cc7cd61030ceaca677`  
+**FINAL_FREEZE_DOCS_SHA:** `__PENDING_FREEZE_DOCS_SHA__`  
 **Overall gate:** **PASS** → **READY_FOR_OWNER_REVIEW**
 
 Fresh re-run only (no reused PASS). Python: `.venv/bin/python`.

@@ -3,7 +3,8 @@
 **Agent:** Phase R (docs)  
 **Branch:** `chore/project-cleanup-reorg`  
 **Date:** 2026-08-12  
-**HEAD (docs write base):** `c61daabc4736a2e82636782aa6c65c24067ff1f4`  
+**FINAL_APPLICATION_CANDIDATE_SHA:** `72d1d439b589f4d111b0a4cc7cd61030ceaca677`  
+**FINAL_FREEZE_DOCS_SHA:** `__PENDING_FREEZE_DOCS_SHA__`  
 **Rule:** Summarize only deletes/archives/disables that landed in git. Link caller-proof docs under `docs/audit/deletions/` where present. Do not invent removals.
 
 ---
