@@ -180,14 +180,14 @@ def change_request_status(request_id: str, body: RequestStatusBody, request: Req
 
 
 @app.post("/api/requests/{request_id}/final-action")
-def request_final_action(
+async def request_final_action(
     request_id: str, body: RequestFinalActionBody, request: Request
 ) -> dict[str, Any]:
     session = require_requests_notify(request)
     tenant_id = _tenant(session)
     with _db_cm() as db:
         try:
-            return CustomerRequestsService(db).final_action(
+            result = CustomerRequestsService(db).final_action(
                 tenant_id=tenant_id,
                 request_id=request_id,
                 actor_user_id=_actor(session),
@@ -199,17 +199,30 @@ def request_final_action(
             )
         except CustomerRequestsError as exc:
             raise _http(exc) from exc
+        if body.send_notification:
+            from services.requests.outbox import process_pending_outbox
+
+            await process_pending_outbox(db, tenant_id=tenant_id, request_id=request_id, limit=5)
+            try:
+                return CustomerRequestsService(db).get(
+                    tenant_id=tenant_id,
+                    request_id=request_id,
+                    include_sensitive=can_view_sensitive(session),
+                )
+            except CustomerRequestsError:
+                return result
+        return result
 
 
 @app.post("/api/requests/{request_id}/notify-retry")
-def retry_request_notification(
+async def retry_request_notification(
     request_id: str, body: RequestNotifyRetryBody, request: Request
 ) -> dict[str, Any]:
     session = require_requests_notify(request)
     tenant_id = _tenant(session)
     with _db_cm() as db:
         try:
-            return CustomerRequestsService(db).retry_notification(
+            result = CustomerRequestsService(db).retry_notification(
                 tenant_id=tenant_id,
                 request_id=request_id,
                 actor_user_id=_actor(session),
@@ -217,6 +230,17 @@ def retry_request_notification(
             )
         except CustomerRequestsError as exc:
             raise _http(exc) from exc
+        from services.requests.outbox import process_pending_outbox
+
+        await process_pending_outbox(db, tenant_id=tenant_id, request_id=request_id, limit=5)
+        try:
+            return CustomerRequestsService(db).get(
+                tenant_id=tenant_id,
+                request_id=request_id,
+                include_sensitive=can_view_sensitive(session),
+            )
+        except CustomerRequestsError:
+            return result
 
 
 @app.post("/api/requests/{request_id}/manual-mode/resume")

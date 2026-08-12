@@ -19,8 +19,8 @@
 | 3 | AI Setup Requests & Appointments | **DONE** |
 | 4 | Customer AI request flow | PENDING |
 | 5 | Mobile Requests module | **DONE** |
-| 6 | Chat with customer / manual mode | PENDING |
-| 7 | Channel delivery | PENDING |
+| 6 | Chat with customer / manual mode | **DONE** (foundations) |
+| 7 | Channel delivery | **DONE** (outbox foundations) |
 | 8 | BOC isolation (default OFF) | **DONE** |
 | 9 | Security/correctness/performance tests | PENDING |
 | 10 | Independent review + PR closeout | PENDING |
@@ -87,10 +87,56 @@ All Quality Gates + Security Checks SUCCESS on PR head. No merge.
 
 ### Still needed in Phase 2–7
 
-- AI create tool wiring, outbox delivery workers, channel send adapters
-- Mobile Requests UI
-- Manual chat pause/resume server authority
+- AI create tool wiring (Phase 4)
 - Remove forced wa.me appointment/order handoff when Requests capture active
+- Background outbox worker loop (foundations callable; schedule/ops TBD)
+
+---
+
+## Phase 6 — Chat with customer / manual mode
+
+| Field | Value |
+|------|-------|
+| Status | **DONE** (foundations) |
+| Ending SHA | `8719145c0459d4e8024648645c8371cceeabe09a` |
+| Tests | `tests/test_requests_manual_mode.py` + `tests/test_customer_requests.py` |
+
+### Landed
+
+- `services/requests/manual_mode.py` — pause on first authorized send; Resume AI clears pause; idempotent `manual_pause` / `manual_resume` audit
+- Live Chat: `send_operator_message` pauses AI before outbound (Firestore takeover + WA Cloud `control_epoch`)
+- `POST /api/live-chat/resume-ai` + `POST /api/requests/{id}/manual-mode/resume` + `POST /api/requests/{id}/manual-chat/send`
+- Permission: session actor + `requestsManualChat` on Requests routes; `liveChat` path gate for Live Chat
+- Race: WA AI path already rechecks epoch (`ai_bridge`); in-memory takeover flag set before Firestore write
+
+### Not changed
+
+- Automatic human takeover / waiting-queue escalation flows
+- Mobile UI screens (other ownership)
+- Production migrations
+
+---
+
+## Phase 7 — Channel delivery
+
+| Field | Value |
+|------|-------|
+| Status | **DONE** (outbox foundations) |
+| Ending SHA | *(see commit `feat(requests): channel notification outbox delivery`)* |
+| Tests | `tests/test_requests_outbox_delivery.py` |
+
+### Landed
+
+- `services/requests/delivery.py` — Meta IG/FB + WhatsApp Cloud text send on **original** channel only
+- `services/requests/outbox.py` — process pending rows; update `notification_status` sent/failed/blocked; redacted errors; reject cross-channel switch
+- Drain on `final-action` / `notify-retry` after enqueue
+- Platform blocked → `DELIVERY_BLOCKED_BY_PLATFORM` event
+
+### Not changed / blockers
+
+- No continuous background worker/cron yet (callable processor only)
+- `comment_linked_dm` Meta asset resolution assumes linked IG DM binding
+- Live Meta/WA network send not exercised in unit tests (injected deliver fn)
 
 ---
 
@@ -141,8 +187,6 @@ All Quality Gates + Security Checks SUCCESS on PR head. No merge.
 
 - Operator web SPA (not restored)
 - Server/infra/migrations
-- Manual chat pause/resume authority (Phase 6)
-- Channel delivery / outbox workers (Phase 7)
 
 ---
 
@@ -189,5 +233,5 @@ All Quality Gates + Security Checks SUCCESS on PR head. No merge.
 
 ## Resume notes
 
-Continue Phase 2 remaining + Phases 4–7, 9+. Do not merge until Phase 13 ready.
+Continue Phase 2 remaining + Phases 4, 9+. Do not merge until Phase 13 ready.
 Do not enable `LINASLASER_BOC_BOOKING_ENABLED` in production.

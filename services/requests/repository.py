@@ -43,9 +43,7 @@ class CustomerRequestsRepository:
         self.session.flush()
         return f"REQ-{n}"
 
-    def get_idempotency(
-        self, *, tenant_id: str, scope: str, key: str
-    ) -> CustomerRequestIdempotency | None:
+    def get_idempotency(self, *, tenant_id: str, scope: str, key: str) -> CustomerRequestIdempotency | None:
         stmt = select(CustomerRequestIdempotency).where(
             CustomerRequestIdempotency.tenant_id == tenant_id,
             CustomerRequestIdempotency.scope == scope,
@@ -110,9 +108,7 @@ class CustomerRequestsRepository:
         self.session.flush()
         return ev
 
-    def add_note(
-        self, *, tenant_id: str, request_id: str, author_user_id: str, body: str
-    ) -> CustomerRequestNote:
+    def add_note(self, *, tenant_id: str, request_id: str, author_user_id: str, body: str) -> CustomerRequestNote:
         note = CustomerRequestNote(
             id=_uuid(),
             tenant_id=tenant_id,
@@ -177,6 +173,33 @@ class CustomerRequestsRepository:
         self.session.flush()
         return row
 
+    def list_pending_outbox(
+        self,
+        *,
+        tenant_id: str | None = None,
+        request_id: str | None = None,
+        limit: int = 20,
+    ) -> list[CustomerRequestOutbox]:
+        lim = max(1, min(int(limit or 20), 100))
+        clauses = [CustomerRequestOutbox.status == "pending"]
+        if tenant_id:
+            clauses.append(CustomerRequestOutbox.tenant_id == tenant_id)
+        if request_id:
+            clauses.append(CustomerRequestOutbox.request_id == request_id)
+        stmt = (
+            select(CustomerRequestOutbox)
+            .where(and_(*clauses))
+            .order_by(CustomerRequestOutbox.created_at.asc())
+            .limit(lim)
+        )
+        return list(self.session.execute(stmt).scalars().all())
+
+    def get_outbox(self, *, tenant_id: str, outbox_id: str) -> CustomerRequestOutbox | None:
+        row = self.session.get(CustomerRequestOutbox, outbox_id)
+        if row is None or row.tenant_id != tenant_id:
+            return None
+        return row
+
     def list_requests(
         self,
         *,
@@ -212,12 +235,7 @@ class CustomerRequestsRepository:
                     CustomerRequest.title.ilike(like),
                 )
             )
-        stmt = (
-            select(CustomerRequest)
-            .where(and_(*clauses))
-            .order_by(CustomerRequest.created_at.desc())
-            .limit(limit)
-        )
+        stmt = select(CustomerRequest).where(and_(*clauses)).order_by(CustomerRequest.created_at.desc()).limit(limit)
         return list(self.session.execute(stmt).scalars().all())
 
     def status_counts(self, *, tenant_id: str) -> dict[str, int]:
