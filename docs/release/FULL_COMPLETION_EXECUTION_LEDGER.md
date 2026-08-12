@@ -87,9 +87,32 @@ All Quality Gates + Security Checks SUCCESS on PR head. No merge.
 
 ### Still needed in Phase 2–7
 
-- AI create tool wiring (Phase 4)
-- Remove forced wa.me appointment/order handoff when Requests capture active
 - Background outbox worker loop (foundations callable; schedule/ops TBD)
+
+---
+
+## Phase 4 — Customer AI request flow
+
+| Field | Value |
+|------|-------|
+| Ending SHA | `1c2716e80e8fa46c2c5761ddfc81212344b1b328` |
+| Status | **DONE** |
+| Tests | `tests/test_requests_ai_capture.py` + `tests/test_customer_requests.py` + social routing smoke |
+
+### Landed
+
+- `services/requests/ai_tool.py` — secured `create_customer_request` (tenant/channel/conversation binding, confirmation, idempotency, config version, required fields)
+- `services/requests/capture.py` / `intent.py` / `capture_tools_wire.py` / `capture_answer_loop.py`
+- Tool exposed only when `requests_capture_active(tenant)`; wired into chat_response tool loop + Customer Reply Answer path
+- Skip forced wa.me booking handoff when capture active (`social_contact_routing`, `customer_reply_v2/policy`, phase6 booking coerce)
+- Public comment → DM invite only (no PII collection); appointment pending-confirmation wording helper
+- Human-agent handoff may still run (generic / unrelated cases)
+
+### Not changed
+
+- Mobile UI / CM section registration / BOC product_features gate (other ownership)
+- Production migration apply
+- Monty / hidden booking fallbacks (none added)
 
 ---
 
@@ -233,5 +256,5 @@ All Quality Gates + Security Checks SUCCESS on PR head. No merge.
 
 ## Resume notes
 
-Continue Phase 2 remaining + Phases 4, 9+. Do not merge until Phase 13 ready.
+Continue Phase 9+. Do not merge until Phase 13 ready.
 Do not enable `LINASLASER_BOC_BOOKING_ENABLED` in production.

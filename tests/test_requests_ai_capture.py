@@ -1,4 +1,4 @@
-"""AI request capture tool + wa.me gate tests."""
+"""Phase 4: Requests AI capture tool + no forced wa.me when capture active."""
 
 from __future__ import annotations
 
@@ -12,12 +12,22 @@ os.environ["LINAS_WHATSAPP_ALLOW_SQLITE"] = "true"
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
-from services.requests.ai_tool import AiToolContext, execute_create_customer_request  # noqa: E402
+from services.requests.ai_tool import (  # noqa: E402
+    CREATE_CUSTOMER_REQUEST_TOOL_NAME,
+    AiToolContext,
+    appointment_pending_wording,
+    execute_create_customer_request,
+    tools_for_tenant,
+)
 from services.requests.capture import (  # noqa: E402
     appointment_pending_confirmation_message,
+    public_comment_dm_invite,
     skip_forced_booking_wa_me,
 )
-from services.requests.intent import is_appointment_or_order_intent, is_order_intent  # noqa: E402
+from services.requests.intent import (  # noqa: E402
+    looks_like_appointment_intent,
+    looks_like_order_intent,
+)
 
 
 @pytest.fixture()
@@ -35,76 +45,189 @@ def req_db(tmp_path, monkeypatch):
     reset_engine_for_tests()
 
 
-def test_appointment_pending_wording():
-    text = appointment_pending_confirmation_message("en")
-    assert "pending" in text.lower() or "confirm" in text.lower()
+def _ctx(**overrides) -> AiToolContext:
+    base = dict(
+        tenant_id="tenant-a",
+        source_channel="instagram_dm",
+        conversation_id="conv-1",
+        response_language="en",
+        public_comment=False,
+    )
+    base.update(overrides)
+    return AiToolContext(**base)
+
+
+def test_tools_for_tenant_empty_when_inactive(monkeypatch):
+    monkeypatch.setattr("services.requests.ai_tool.requests_capture_active", lambda _tid: False)
+    assert tools_for_tenant("tenant-a") == []
+
+
+def test_tools_for_tenant_exposes_create_when_active(monkeypatch):
+    monkeypatch.setattr("services.requests.ai_tool.requests_capture_active", lambda _tid: True)
+    tools = tools_for_tenant("tenant-a")
+    assert len(tools) == 1
+    assert tools[0]["function"]["name"] == CREATE_CUSTOMER_REQUEST_TOOL_NAME
+
+
+def test_appointment_pending_wording_helper():
+    en = appointment_pending_wording("en")
+    assert "pending" in en.lower()
+    assert "confirm" in en.lower()
+    assert appointment_pending_confirmation_message("en") == en
+    invite = public_comment_dm_invite("en")
+    assert "DM" in invite
+    assert "phone" not in invite.lower()
 
 
 def test_intent_helpers():
-    assert is_appointment_or_order_intent("I want to book an appointment tomorrow")
-    assert is_order_intent("I want to order the serum")
+    assert looks_like_appointment_intent("I want to book an appointment tomorrow")
+    assert looks_like_order_intent("I want to order the serum")
 
 
-def test_ai_tool_refuses_when_setup_inactive(req_db, monkeypatch):
-    monkeypatch.setattr("services.requests.ai_tool.requests_capture_active", lambda _t: False)
-    ctx = AiToolContext(
-        tenant_id="t1",
-        source_channel="instagram_dm",
-        conversation_id="c1",
-        external_customer_id="u1",
+def test_create_after_confirm(req_db, monkeypatch):
+    monkeypatch.setattr("services.requests.ai_tool.requests_capture_active", lambda _tid: True)
+    monkeypatch.setattr("services.requests.service.requests_capture_active", lambda _tid: True)
+    monkeypatch.setattr("services.requests.ai_tool.published_configuration_version", lambda _tid: "v-test")
+    monkeypatch.setattr("services.requests.service.published_configuration_version", lambda _tid: "v-test")
+    monkeypatch.setattr(
+        "services.requests.ai_tool.load_published_requests_config",
+        lambda _tid: {"module_enabled": True, "enabled_types": ["APPOINTMENT"], "fields": []},
     )
     out = execute_create_customer_request(
         {
             "request_type": "APPOINTMENT",
             "customer_confirmed": True,
-            "idempotency_key": "idem-ai-001",
-            "title": "Consult",
+            "idempotency_key": "idem-ai-0001",
+            "title": "Laser Friday",
+            "preferred_date": "2026-08-20",
+            "preferred_time": "afternoon",
         },
-        ctx,
+        _ctx(),
         session=req_db,
     )
-    assert out.get("ok") is False
-    assert out.get("error") == "REQUESTS_SETUP_REQUIRED"
+    assert out["ok"] is True
+    assert out["status"] == "NEW"
+    assert out["pending_confirmation"] is True
+    assert "pending" in out["customer_message_hint"].lower()
 
 
-def test_ai_tool_create_after_confirm(req_db, monkeypatch):
-    monkeypatch.setattr("services.requests.ai_tool.requests_capture_active", lambda _t: True)
-    monkeypatch.setattr("services.requests.service.requests_capture_active", lambda _t: True)
-    monkeypatch.setattr(
-        "services.requests.service.published_configuration_version",
-        lambda _t: "v1",
-    )
-    monkeypatch.setattr(
-        "services.requests.ai_tool.published_configuration_version",
-        lambda _t: "v1",
-    )
+def test_create_requires_customer_confirmation(req_db, monkeypatch):
+    monkeypatch.setattr("services.requests.ai_tool.requests_capture_active", lambda _tid: True)
     monkeypatch.setattr(
         "services.requests.ai_tool.load_published_requests_config",
-        lambda _t: {"module_enabled": True, "enabled_types": ["APPOINTMENT"], "fields": []},
+        lambda _tid: {"module_enabled": True, "enabled_types": ["ORDER"], "fields": []},
     )
-    ctx = AiToolContext(
-        tenant_id="t1",
-        source_channel="whatsapp_cloud",
-        conversation_id="c1",
-        external_customer_id="u1",
+    out = execute_create_customer_request(
+        {
+            "request_type": "ORDER",
+            "customer_confirmed": False,
+            "idempotency_key": "idem-ai-0002",
+            "title": "Serum",
+        },
+        _ctx(source_channel="whatsapp_cloud"),
+        session=req_db,
+    )
+    assert out["ok"] is False
+    assert out["error"] == "CUSTOMER_CONFIRMATION_REQUIRED"
+
+
+def test_setup_inactive_refusal(req_db, monkeypatch):
+    monkeypatch.setattr("services.requests.ai_tool.requests_capture_active", lambda _tid: False)
+    out = execute_create_customer_request(
+        {
+            "request_type": "ORDER",
+            "customer_confirmed": True,
+            "idempotency_key": "idem-ai-0003",
+            "title": "Serum",
+        },
+        _ctx(source_channel="whatsapp_cloud"),
+        session=req_db,
+    )
+    assert out["ok"] is False
+    assert out["error"] == "REQUESTS_SETUP_REQUIRED"
+
+
+def test_idempotency_replay(req_db, monkeypatch):
+    monkeypatch.setattr("services.requests.ai_tool.requests_capture_active", lambda _tid: True)
+    monkeypatch.setattr("services.requests.service.requests_capture_active", lambda _tid: True)
+    monkeypatch.setattr("services.requests.ai_tool.published_configuration_version", lambda _tid: "v-test")
+    monkeypatch.setattr("services.requests.service.published_configuration_version", lambda _tid: "v-test")
+    monkeypatch.setattr(
+        "services.requests.ai_tool.load_published_requests_config",
+        lambda _tid: {"module_enabled": True, "enabled_types": ["ORDER"], "fields": []},
     )
     args = {
-        "request_type": "APPOINTMENT",
+        "request_type": "ORDER",
         "customer_confirmed": True,
-        "idempotency_key": "idem-ai-002",
-        "title": "Preferred Friday",
-        "preferred_date": "2026-08-20",
-        "preferred_time": "afternoon",
+        "idempotency_key": "idem-ai-replay",
+        "title": "Cream",
     }
-    first = execute_create_customer_request(args, ctx, session=req_db)
-    assert first.get("ok") is True, first
-    second = execute_create_customer_request(args, ctx, session=req_db)
-    assert second.get("ok") is True
-    assert second.get("request", {}).get("request_id") == first.get("request", {}).get("request_id")
+    first = execute_create_customer_request(args, _ctx(source_channel="whatsapp_cloud"), session=req_db)
+    second = execute_create_customer_request(args, _ctx(source_channel="whatsapp_cloud"), session=req_db)
+    assert first["ok"] and second["ok"]
+    assert first["request_id"] == second["request_id"]
 
 
-def test_skip_forced_wa_me_when_capture_active(monkeypatch):
-    monkeypatch.setattr("services.requests.capture.requests_capture_active", lambda _t: True)
-    assert skip_forced_booking_wa_me("tenant-x") is True
-    monkeypatch.setattr("services.requests.capture.requests_capture_active", lambda _t: False)
-    assert skip_forced_booking_wa_me("tenant-x") is False
+def test_public_comment_refused(req_db, monkeypatch):
+    monkeypatch.setattr("services.requests.ai_tool.requests_capture_active", lambda _tid: True)
+    out = execute_create_customer_request(
+        {
+            "request_type": "APPOINTMENT",
+            "customer_confirmed": True,
+            "idempotency_key": "idem-ai-comment",
+            "title": "Book",
+        },
+        _ctx(public_comment=True),
+        session=req_db,
+    )
+    assert out["ok"] is False
+    assert out["error"] == "PUBLIC_COMMENT_REFUSED"
+
+
+def test_wa_me_not_forced_when_capture_active(monkeypatch):
+    from services.social_contact_routing import (
+        route_social_contact_request,
+        should_force_wa_me_booking_handoff,
+    )
+
+    monkeypatch.setattr("services.requests.capture.requests_capture_active", lambda _tid: True)
+    ud = {
+        "tenant_id": "tenant-a",
+        "channel": "instagram",
+        "meta_account_id": "17841413184256533",
+        "social_sender_id": "ig-sender-1",
+    }
+    assert skip_forced_booking_wa_me("tenant-a") is True
+    assert should_force_wa_me_booking_handoff("tenant-a", "book appointment") is False
+    out = route_social_contact_request("I want to book an appointment", ud, "en")
+    assert out is None
+
+
+def test_wa_me_booking_still_runs_when_capture_inactive(monkeypatch):
+    from services.social_contact_routing import route_social_contact_request
+
+    monkeypatch.setattr("services.requests.capture.requests_capture_active", lambda _tid: False)
+    ud = {
+        "tenant_id": "linas",
+        "channel": "instagram",
+        "meta_account_id": "17841413184256533",
+        "social_sender_id": "ig-sender-2",
+    }
+    out = route_social_contact_request("I want to book an appointment", ud, "en")
+    assert out is not None
+    assert out.intent == "booking"
+
+
+def test_human_handoff_still_allowed_when_capture_active(monkeypatch):
+    from services.social_contact_routing import route_social_contact_request
+
+    monkeypatch.setattr("services.requests.capture.requests_capture_active", lambda _tid: True)
+    ud = {
+        "tenant_id": "linas",
+        "channel": "instagram",
+        "meta_account_id": "17841413184256533",
+        "social_sender_id": "ig-sender-3",
+    }
+    out = route_social_contact_request("I want to speak with a human agent", ud, "en")
+    assert out is not None
+    assert out.intent == "human"
