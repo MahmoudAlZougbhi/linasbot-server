@@ -37,7 +37,14 @@ def resend_configured() -> bool:
 
 
 def default_from_address() -> str:
-    return (os.getenv("RESEND_FROM") or os.getenv("MAIL_FROM") or "Linas AI <no-reply@linasaibot.com>").strip()
+    explicit = (os.getenv("RESEND_FROM") or os.getenv("MAIL_FROM") or "").strip()
+    if explicit:
+        return explicit
+    email = (os.getenv("RESEND_FROM_EMAIL") or "no-reply@linasaibot.com").strip()
+    name = (os.getenv("RESEND_FROM_NAME") or "Linas AI").strip()
+    if name and email:
+        return f"{name} <{email}>"
+    return email or "Linas AI <no-reply@linasaibot.com>"
 
 
 def default_reply_to() -> str | None:
