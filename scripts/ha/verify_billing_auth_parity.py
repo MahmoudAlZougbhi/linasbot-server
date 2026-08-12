@@ -39,7 +39,6 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     root = _data_root()
 
-    from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
     from sqlalchemy import func, select
 
     from db.models.billing_auth import (
@@ -55,6 +54,7 @@ def main(argv: list[str] | None = None) -> int:
         EntitlementProcessedEventRow,
         TenantEntitlementRow,
     )
+    from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
 
     ents_dir = root / "entitlements"
     ents_n = 0
