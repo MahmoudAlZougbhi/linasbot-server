@@ -29,5 +29,7 @@ describe("AuthContext LOC split", () => {
     expect(buildUserData({ id: "1", email: "a@test.com", role: "admin" })).toBeNull();
     expect(buildUserData({ id: "1", email: "a@test.com", tenantId: "linas" })).toBeNull();
     expect(buildUserData({ id: "1", email: "a@test.com", role: "admin", tenantId: "linas" })?.tenantId).toBe("linas");
+    expect(buildUserData({ id: "1", email: "a@test.com", role: "admin", tenantId: "linas", emailVerified: true })?.emailVerified).toBe(true);
+    expect(buildUserData({ id: "1", email: "a@test.com", role: "admin", tenantId: "linas" })?.emailVerified).toBe(false);
   });
 });

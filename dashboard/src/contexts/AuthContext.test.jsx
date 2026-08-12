@@ -147,6 +147,7 @@ describe("AuthContext", () => {
     await waitFor(() => {
       expect(screen.getByTestId("user-email")).toHaveTextContent("none");
     });
+    expect(localStorage.getItem("auth_session")).toBeNull();
   });
 
   it("logs in with credentials include and stores csrf token", async () => {
@@ -252,5 +253,40 @@ describe("AuthContext", () => {
     });
     expect(localStorage.getItem("auth_session")).toBeNull();
     expect(localStorage.getItem("csrf_token")).toBeNull();
+  });
+
+  it("restores valid linas admin session from backend", async () => {
+    localStorage.setItem(
+      "auth_session",
+      JSON.stringify({
+        user: validSessionUser,
+        timestamp: new Date().toISOString(),
+      })
+    );
+    mockFetch(async (url) => {
+      if (String(url).includes("/session")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            user: {
+              id: "1",
+              email: "admin@linas.ai",
+              role: "admin",
+              tenantId: "linas",
+              status: "active",
+              emailVerified: true,
+            },
+          }),
+        };
+      }
+      return { ok: true, json: async () => ({ success: false }) };
+    });
+
+    renderAuth();
+    await waitFor(() => {
+      expect(screen.getByTestId("user-email")).toHaveTextContent("admin@linas.ai");
+    });
   });
 });
