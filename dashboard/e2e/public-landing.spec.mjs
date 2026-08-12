@@ -64,8 +64,12 @@ test.describe("public marketing landing smoke", () => {
     await expect(page.getByRole("heading", { name: /Welcome Back/i })).toBeVisible();
   });
 
-  test("dashboard app remains protected", async ({ page }) => {
+  test("dashboard app points operators to the mobile app", async ({ page }) => {
     await page.goto("/app");
-    await expect(page).toHaveURL(/\/login/);
+    // Locked product: /app is a public stub (not thin-auth /login, not dead operator SPA).
+    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page.getByRole("heading", { name: "Use the Linas AI mobile app" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Get the app" })).toHaveAttribute("href", "/#get-app");
+    await expect(page.getByText(/Operator tools/i)).toBeVisible();
   });
 });
