@@ -37,7 +37,6 @@ jobs:
             set -e
             cd /opt/linasbot
             git fetch origin main
-            git reset --hard origin/main
             git show origin/main:scripts/prod_whatsapp_cloud_phase1_ops.sh > /tmp/prod_whatsapp_cloud_phase1_ops.sh
             sudo install -m 0755 /tmp/prod_whatsapp_cloud_phase1_ops.sh /opt/linasbot/scripts/prod_whatsapp_cloud_phase1_ops.sh
             sudo MODE='${{ github.event.inputs.CONFIRM }}' bash /opt/linasbot/scripts/prod_whatsapp_cloud_phase1_ops.sh
