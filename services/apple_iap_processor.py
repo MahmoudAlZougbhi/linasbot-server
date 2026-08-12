@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
+from typing import Any, Literal
 
 from db.models.apple_billing import AppleNotificationEventRow
 from db.session import whatsapp_session
@@ -199,8 +199,8 @@ def _handle_refund_or_revoke(
     product_id = str(payload.get("productId") or "").strip()
     transaction_id = str(payload.get("transactionId") or "").strip()
     original_transaction_id = str(payload.get("originalTransactionId") or transaction_id).strip()
-    tid, _ = _resolve_tenant(tenant_id=tenant_id, payload=payload)
-    status = "refunded" if notification_type == "REFUND" else "revoked"
+    tid, _ = _resolve_tenant(tenant_id=tenant_id, payload=payload, source="assn")
+    status: Literal["refunded", "revoked"] = "refunded" if notification_type == "REFUND" else "revoked"
     out: dict[str, Any] = {"notification_type": notification_type, "tenant_id": tid}
     if is_credit_product(product_id):
         out["credit_reverse"] = reverse_consumable_credits(
@@ -239,7 +239,9 @@ def process_notification_v2(body: dict[str, Any]) -> dict[str, Any]:
     notification_uuid = str(outer.get("notificationUUID") or "").strip()
     notification_type = str(outer.get("notificationType") or "").strip().upper()
     subtype = str(outer.get("subtype") or "").strip() or None
-    environment = str(outer.get("data", {}).get("environment") or outer.get("environment") or "Unknown")
+    data_raw = outer.get("data")
+    data: dict[str, Any] = data_raw if isinstance(data_raw, dict) else {}
+    environment = str(data.get("environment") or outer.get("environment") or "Unknown")
     if not notification_uuid:
         raise AppleJwsError("notificationUUID required")
 
@@ -250,7 +252,6 @@ def process_notification_v2(body: dict[str, Any]) -> dict[str, Any]:
             logger.info("apple_assn_duplicate uuid=%s type=%s", notification_uuid, notification_type)
             return {"ok": True, "duplicate": True, "notification_uuid": notification_uuid}
 
-    data = outer.get("data") if isinstance(outer.get("data"), dict) else {}
     signed_txn = data.get("signedTransactionInfo")
     txn_payload: dict[str, Any] | None = None
     if isinstance(signed_txn, str) and signed_txn.strip():

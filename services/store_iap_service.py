@@ -146,14 +146,16 @@ def verify_apple_notification_payload(body: dict[str, Any]) -> dict[str, Any]:
     if not iap_credentials_configured():
         raise PermissionError("Apple IAP credentials not configured")
     result = process_notification_v2(body)
-    effect = result.get("effect") if isinstance(result.get("effect"), dict) else {}
-    nested = effect.get("effect") if isinstance(effect.get("effect"), dict) else effect
+    effect_raw = result.get("effect")
+    effect: dict[str, Any] = effect_raw if isinstance(effect_raw, dict) else {}
+    nested_raw = effect.get("effect")
+    nested: dict[str, Any] = nested_raw if isinstance(nested_raw, dict) else effect
     return {
-        "tenant_id": nested.get("tenant_id") or result.get("tenant_id") or "",
+        "tenant_id": str(nested.get("tenant_id") or result.get("tenant_id") or ""),
         "product_id": "",
-        "notification_type": result.get("notification_type") or "",
+        "notification_type": str(result.get("notification_type") or ""),
         "original_transaction_id": "",
-        "event_id": result.get("notification_uuid") or "",
+        "event_id": str(result.get("notification_uuid") or ""),
         "processor_result": result,
     }
 

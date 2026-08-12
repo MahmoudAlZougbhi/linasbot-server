@@ -11,8 +11,7 @@ import json
 from typing import Any
 
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives.asymmetric.ec import ECDSA
+from cryptography.hazmat.primitives.asymmetric.ec import ECDSA, EllipticCurvePublicKey
 from cryptography.hazmat.primitives.hashes import SHA256
 from cryptography.x509.oid import NameOID
 
@@ -85,6 +84,13 @@ def _certs_from_x5c(x5c: list[Any]) -> list[x509.Certificate]:
     return certs
 
 
+def _ec_public_key(cert: x509.Certificate) -> EllipticCurvePublicKey:
+    pub = cert.public_key()
+    if not isinstance(pub, EllipticCurvePublicKey):
+        raise AppleJwsError("expected EC public key in Apple certificate")
+    return pub
+
+
 def _verify_chain(certs: list[x509.Certificate], *, skip_root_anchor: bool = False) -> None:
     """Validate leaf←…←Apple Root. ``skip_root_anchor`` is tests-only via env monkeypatch."""
     if not certs:
@@ -92,21 +98,15 @@ def _verify_chain(certs: list[x509.Certificate], *, skip_root_anchor: bool = Fal
     for i in range(len(certs) - 1):
         child, parent = certs[i], certs[i + 1]
         try:
-            parent.public_key().verify(  # type: ignore[union-attr]
+            _ec_public_key(parent).verify(
                 child.signature,
                 child.tbs_certificate_bytes,
                 ECDSA(child.signature_hash_algorithm),  # type: ignore[arg-type]
             )
-        except Exception:
-            try:
-                parent.public_key().verify(  # type: ignore[union-attr]
-                    child.signature,
-                    child.tbs_certificate_bytes,
-                    padding.PKCS1v15(),
-                    child.signature_hash_algorithm,  # type: ignore[arg-type]
-                )
-            except Exception as exc:  # noqa: BLE001
-                raise AppleJwsError("x5c chain signature failed") from exc
+        except AppleJwsError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise AppleJwsError("x5c chain signature failed") from exc
     if skip_root_anchor:
         return
     root = _load_apple_root()
@@ -114,7 +114,7 @@ def _verify_chain(certs: list[x509.Certificate], *, skip_root_anchor: bool = Fal
     if leaf_root.fingerprint(SHA256()) != root.fingerprint(SHA256()):
         # Chain may omit root — verify last cert is signed by Apple root.
         try:
-            root.public_key().verify(  # type: ignore[union-attr]
+            _ec_public_key(root).verify(
                 leaf_root.signature,
                 leaf_root.tbs_certificate_bytes,
                 ECDSA(leaf_root.signature_hash_algorithm),  # type: ignore[arg-type]
@@ -124,9 +124,10 @@ def _verify_chain(certs: list[x509.Certificate], *, skip_root_anchor: bool = Fal
 
 
 def _verify_signature(leaf: x509.Certificate, signing_input: bytes, signature: bytes) -> None:
-    pub = leaf.public_key()
     try:
-        pub.verify(signature, signing_input, ECDSA(SHA256()))  # type: ignore[union-attr]
+        _ec_public_key(leaf).verify(signature, signing_input, ECDSA(SHA256()))
+    except AppleJwsError:
+        raise
     except Exception as exc:  # noqa: BLE001
         raise AppleJwsError("JWS signature verification failed") from exc
 

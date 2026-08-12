@@ -61,12 +61,13 @@ def find_by_apple_sub(sub: str) -> dict[str, Any] | None:
 
 
 def _find_any_apple_row(session: Any, sub: str) -> AuthExternalIdentityRow | None:
-    return session.execute(
+    row = session.execute(
         select(AuthExternalIdentityRow).where(
             AuthExternalIdentityRow.provider == PROVIDER_APPLE,
             AuthExternalIdentityRow.provider_subject == sub,
         )
     ).scalar_one_or_none()
+    return row if isinstance(row, AuthExternalIdentityRow) else None
 
 
 def link_apple_identity(
