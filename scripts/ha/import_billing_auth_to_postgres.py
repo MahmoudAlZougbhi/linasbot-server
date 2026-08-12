@@ -15,6 +15,10 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -27,7 +31,7 @@ def _data_root() -> Path:
     return Path(_DATA_ROOT)
 
 
-def _import_wallets(session, wallets_dir: Path, dry_run: bool) -> tuple[int, int]:
+def _import_wallets(session: Session, wallets_dir: Path, dry_run: bool) -> tuple[int, int]:
     from services.token_wallet_file_store import TokenWalletFileStore
     from services.token_wallet_pg_store import import_ledger_lines, upsert_wallet_from_file_dict
 
@@ -58,7 +62,7 @@ def _import_wallets(session, wallets_dir: Path, dry_run: bool) -> tuple[int, int
     return wallet_count, ledger_count
 
 
-def _import_stripe_events(session, events_dir: Path, dry_run: bool) -> int:
+def _import_stripe_events(session: Session, events_dir: Path, dry_run: bool) -> int:
     from services.billing_pg_store import import_stripe_event
 
     count = 0
@@ -83,7 +87,7 @@ def _import_stripe_events(session, events_dir: Path, dry_run: bool) -> int:
     return count
 
 
-def _import_admin_credit(session, idem_dir: Path, dry_run: bool) -> int:
+def _import_admin_credit(session: Session, idem_dir: Path, dry_run: bool) -> int:
     from services.billing_pg_store import import_admin_credit_key
 
     count = 0
@@ -108,7 +112,7 @@ def _import_admin_credit(session, idem_dir: Path, dry_run: bool) -> int:
     return count
 
 
-def _import_mobile_refresh(session, refresh_dir: Path, dry_run: bool) -> int:
+def _import_mobile_refresh(session: Session, refresh_dir: Path, dry_run: bool) -> int:
     from services.auth_token_pg_store import upsert_mobile_refresh
 
     count = 0
@@ -130,7 +134,7 @@ def _import_mobile_refresh(session, refresh_dir: Path, dry_run: bool) -> int:
     return count
 
 
-def _import_auth_email(session, tokens_dir: Path, dry_run: bool) -> int:
+def _import_auth_email(session: Session, tokens_dir: Path, dry_run: bool) -> int:
     from services.auth_token_pg_store import upsert_auth_email_token
 
     count = 0
