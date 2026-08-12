@@ -53,15 +53,8 @@ class MontyMobileAdapter(MontyMobileAdapterParseMixin, WhatsAppAdapter):
         print(f"   API ID: {api_id}")
         print(f"   Source: {source_number}")
 
-    async def send_text_message(self, to_number: str, message: str) -> dict[str, Any]:
-        """
-        Send a text message via MontyMobile
-
-        Args:
-            to_number: Destination phone number (can be room_id or phone)
-            message: Text message to send
-        """
-        # Fail closed: never send via Monty when this source number is Cloud-bound.
+    def _cloud_isolation_block(self) -> dict[str, Any] | None:
+        """Fail closed: never send via Monty when this source number is Cloud-bound."""
         try:
             from services.whatsapp_cloud.legacy_isolation import cloud_blocks_monty_send
 
@@ -77,6 +70,19 @@ class MontyMobileAdapter(MontyMobileAdapterParseMixin, WhatsAppAdapter):
                 "error": "legacy_isolation_check_failed",
                 "message": f"MontyMobile send refused: isolation check failed ({exc})",
             }
+        return None
+
+    async def send_text_message(self, to_number: str, message: str) -> dict[str, Any]:
+        """
+        Send a text message via MontyMobile
+
+        Args:
+            to_number: Destination phone number (can be room_id or phone)
+            message: Text message to send
+        """
+        blocked = self._cloud_isolation_block()
+        if blocked is not None:
+            return blocked
 
         phone_number = self._get_phone_from_room_id(to_number)
 
@@ -105,8 +111,7 @@ class MontyMobileAdapter(MontyMobileAdapterParseMixin, WhatsAppAdapter):
                 # Check if successful based on MontyMobile response format
                 if response.status_code == 200 and result.get("success"):
                     message_id = result.get("data", {}).get("messageId", "unknown")
-                    print(f"✅ SUCCESS: Message sent to {phone_number}")
-                    print(f"✅ Message ID: {message_id}")
+                    print(f"MONTYMOBILE text sent to {phone_number[:6]}*** message_id={message_id}")
                     return {"success": True, "data": result, "message_id": message_id}
                 else:
                     error_msg = result.get("message", "Unknown error")
@@ -143,6 +148,10 @@ class MontyMobileAdapter(MontyMobileAdapterParseMixin, WhatsAppAdapter):
             image_url: URL of the image to send
             caption:  caption for the image
         """
+        blocked = self._cloud_isolation_block()
+        if blocked is not None:
+            return blocked
+
         # NEW ENDPOINT
         url = f"{self.base_url}/api/v2/WhatsappApi/send-session"
 
@@ -158,40 +167,29 @@ class MontyMobileAdapter(MontyMobileAdapterParseMixin, WhatsAppAdapter):
         }
 
         try:
-            print(f"\n🔄 MONTYMOBILE: Sending image to {phone_number}")
-            print(f"📤 Image URL: {image_url}")
-            print(f"📤 Caption: {caption}")
-            print(f"📤 Payload: {json.dumps(payload, indent=2)}")
+            print(f"🔄 MONTYMOBILE: Sending image to {phone_number[:6]}***")
 
             t0 = time.time()
             response = await self.client.post(url, headers=self.headers, json=payload)
             elapsed_ms = (time.time() - t0) * 1000
 
-            print(f"⏱️  MONTYMOBILE IMAGE API TOOK: {elapsed_ms:.0f}ms")
-            print(f"📥 Status: {response.status_code}")
+            print(f"MONTYMOBILE IMAGE status={response.status_code} elapsed_ms={elapsed_ms:.0f}")
 
             try:
                 result = response.json()
-                print(f"📥 Response: {json.dumps(result, indent=2, ensure_ascii=False)}")
 
                 if response.status_code == 200 and result.get("success"):
-                    print("✅ Image sent successfully")
                     return {"success": True, "data": result}
                 else:
-                    print(f"❌ Image send failed: {result.get('message')}")
                     return {"success": False, "error": result.get("message")}
             except json.JSONDecodeError:
-                print(f"⚠️  Non-JSON response: {response.text[:200]}")
                 if response.status_code == 200:
                     return {"success": True, "message": "Image sent"}
                 else:
                     return {"success": False, "error": f"HTTP {response.status_code}"}
 
         except Exception as e:
-            print(f"❌ ERROR sending MontyMobile image: {e}")
-            import traceback
-
-            traceback.print_exc()
+            print(f"ERROR sending MontyMobile image: {type(e).__name__}")
             return {"success": False, "error": str(e)}
 
     async def send_audio_message(
@@ -206,15 +204,17 @@ class MontyMobileAdapter(MontyMobileAdapterParseMixin, WhatsAppAdapter):
             audio_url: URL of the audio file (Firebase Storage URL)
             audio_base64:  base64-encoded audio data (unused, kept for interface compat)
         """
+        blocked = self._cloud_isolation_block()
+        if blocked is not None:
+            return blocked
+
         phone_number = self._get_phone_from_room_id(to_number)
         send_url = f"{self.base_url}/api/v2/WhatsappApi/send-session"
 
         try:
-            print(f"\n🔄 MONTYMOBILE: Sending audio to {phone_number}")
-            print(f"📤 Audio URL: {audio_url}")
+            print(f"🔄 MONTYMOBILE: Sending audio to {phone_number[:6]}***")
 
             # Attempt 1: Send as DOCUMENT type with link (AUDIO type doesn't deliver)
-            print("📤 Attempt 1: Sending as DOCUMENT with link...")
             doc_payload = {
                 "to": phone_number,
                 "type": "DOCUMENT",
@@ -224,19 +224,15 @@ class MontyMobileAdapter(MontyMobileAdapterParseMixin, WhatsAppAdapter):
             t0 = time.time()
             response = await self.client.post(send_url, headers=self.headers, json=doc_payload)
             elapsed_ms = (time.time() - t0) * 1000
-            print(f"⏱️  MONTYMOBILE AUDIO API TOOK: {elapsed_ms:.0f}ms")
-            print(f"📥 Status: {response.status_code}")
+            print(f"MONTYMOBILE AUDIO status={response.status_code} elapsed_ms={elapsed_ms:.0f}")
             try:
                 result = response.json()
-                print(f"📥 Response: {json.dumps(result, indent=2, ensure_ascii=False)}")
                 if response.status_code == 200 and result.get("success"):
-                    print("✅ Audio sent as DOCUMENT type")
                     return {"success": True, "data": result}
             except json.JSONDecodeError:
                 pass
 
             # Attempt 3: Fallback to text with link
-            print("📤 Attempt 3: Fallback to text with link...")
             text_payload = {
                 "to": phone_number,
                 "type": "TEXT",
@@ -244,7 +240,7 @@ class MontyMobileAdapter(MontyMobileAdapterParseMixin, WhatsAppAdapter):
                 "text": {"body": f"🎙️ Voice message: {audio_url}"},
             }
             text_response = await self.client.post(send_url, headers=self.headers, json=text_payload)
-            print(f"📥 Text fallback status: {text_response.status_code}")
+            print(f"MONTYMOBILE AUDIO text-fallback status={text_response.status_code}")
 
             if text_response.status_code == 200:
                 return {"success": True, "message": "Audio sent as text link (fallback)", "method": "text_fallback"}
@@ -252,10 +248,7 @@ class MontyMobileAdapter(MontyMobileAdapterParseMixin, WhatsAppAdapter):
                 return {"success": False, "error": "All audio send methods failed"}
 
         except Exception as e:
-            print(f"❌ ERROR sending MontyMobile audio: {e}")
-            import traceback
-
-            traceback.print_exc()
+            print(f"ERROR sending MontyMobile audio: {type(e).__name__}")
             return {"success": False, "error": str(e)}
 
     async def send_document_message(
@@ -269,6 +262,10 @@ class MontyMobileAdapter(MontyMobileAdapterParseMixin, WhatsAppAdapter):
             document_url: URL of the document to send
             filename:  filename for the document
         """
+        blocked = self._cloud_isolation_block()
+        if blocked is not None:
+            return blocked
+
         # NEW ENDPOINT
         url = f"{self.base_url}/api/v2/WhatsappApi/send-session"
 
@@ -286,10 +283,10 @@ class MontyMobileAdapter(MontyMobileAdapterParseMixin, WhatsAppAdapter):
             response = await self.client.post(url, headers=self.headers, json=payload)
             response.raise_for_status()
             result = response.json()
-            print(f"MontyMobile document sent to {phone_number}. Response: {result}")
+            print(f"MontyMobile document sent to {phone_number[:6]}*** status=ok")
             return {"success": True, "data": result}
         except Exception as e:
-            print(f"ERROR sending MontyMobile document: {e}")
+            print(f"ERROR sending MontyMobile document: {type(e).__name__}")
             return {"success": False, "error": str(e)}
 
     async def send_button_message(self, to_number: str, text: str, buttons: list) -> dict[str, Any]:

@@ -55,6 +55,7 @@ Executable Waves **1–13** largely applied on this branch (Wave 0 already DONE)
 | `handlers/voice_handlers.py` tenant default linas | refuse without tenant |
 | `liveChatApi.jsx` default `operator_001` | require operatorId |
 | `modules/whatsapp_adapters.py` full response JSON print | redact status-only log |
+| Monty media sends bypassed `cloud_blocks_monty_send` (reinspect 6/8) | shared `_cloud_isolation_block()` on image/audio/document + redact media JSON dumps |
 
 ### BLOCKED / OWNER_ASK / PARKED
 
