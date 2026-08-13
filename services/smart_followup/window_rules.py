@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from services.smart_followup.constants import CUSTOMER_SERVICE_WINDOW, SAFETY_BUFFER
 from services.smart_followup.types import FollowUpConversationView

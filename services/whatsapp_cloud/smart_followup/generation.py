@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from services.smart_followup.generation import generate_followup_text as _generate_followup_text
 from services.smart_followup.generation import preview_prompt_for_goal
 
