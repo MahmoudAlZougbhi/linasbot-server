@@ -47,18 +47,23 @@ function DrawerModuleIcon({
   active: boolean;
 }) {
   if (modId === 'cm') {
+    if (!active) {
+      return <LinasSparkleIcon size={GRID_ICON_SIZE} color={colors.accentDeep} />;
+    }
+
     return (
       <View
         style={[
           styles.featuredIconWrap,
+          styles.featuredIconShadow,
           {
-            backgroundColor: active ? colors.mintSoft : colors.surface,
-            borderColor: active ? colors.accentSoft : colors.borderSoft,
+            backgroundColor: colors.mintSoft,
+            borderColor: colors.accentSoft,
             shadowColor: colors.accentDeep,
           },
         ]}
       >
-        <LinasSparkleIcon size={22} color={colors.text} />
+        <LinasSparkleIcon size={22} color={colors.accentDeep} />
       </View>
     );
   }
@@ -136,10 +141,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 2,
+  },
+  featuredIconShadow: {
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 4,
   },
   badge: {
     position: 'absolute',
@@ -154,10 +161,11 @@ const styles = StyleSheet.create({
   },
   badgeText: { fontFamily: fonts.bodyMedium, fontSize: 10, lineHeight: 12 },
   label: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 10.5,
-    letterSpacing: -0.15,
+    fontFamily: fonts.body,
+    fontWeight: '500',
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: -0.1,
     textAlign: 'center',
-    lineHeight: 13,
   },
 });
