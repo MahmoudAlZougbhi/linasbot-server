@@ -1,4 +1,5 @@
 import { appleAccountAr } from './appleAccountAr';
+import { integrationsDisplayAr } from './integrationsDisplayAr';
 import { subscriptionAr } from './subscriptionAr';
 import { smartFollowUpAr } from './smartFollowUpAr';
 import { whatsappAr } from './whatsappAr';
@@ -87,17 +88,6 @@ export const ar = {
   disconnectAccount: 'فصل الحساب',
   disconnectAccountConfirm:
     'سيؤدي هذا إلى فصل الحساب المرتبط وإيقاف ردود الرسائل والتعليقات لهذه القناة.',
-  integrationStatusConnected: 'الاتصال سليم',
-  integrationStatusNeedsReconnect: 'يحتاج إعادة ربط',
-  integrationStatusError: 'مشكلة في الاتصال',
-  integrationLastSynced: 'آخر مزامنة',
-  integrationReconnect: 'إعادة الربط',
-  integrationConnectedFeatures: 'الميزات المتصلة',
-  integrationMessengerReplies: 'ردود Messenger',
-  integrationDmReplies: 'ردود الرسائل',
-  integrationCommentReplies: 'ردود التعليقات',
-  integrationFeatureOn: 'مفعّل',
-  integrationFeatureOff: 'معطّل',
   integrationsLoadError: 'تعذر تحميل التكاملات.',
   integrationsActionError: 'تعذر تحديث الاتصال. حاول مجدداً.',
   integrationsToggleError: 'تعذر تحديث إعداد القناة. حاول مجدداً.',
@@ -238,7 +228,6 @@ export const ar = {
   notificationsMarkAll: 'تعليم الكل كمقروء',
   newChat: 'محادثة جديدة',
   searchChats: 'بحث في المحادثات',
-  drawerRecents: 'الأخيرة',
   searchConversationTitles: 'البحث في عناوين المحادثات',
   noChatsMatch: 'لا توجد محادثات تطابق بحثك.',
   noConversationsYet: 'لا توجد محادثات بعد.',
@@ -349,13 +338,6 @@ export const ar = {
   settingsHelpSupport: 'المساعدة والدعم',
   settingsHelpSupportNote: 'راسل support@linasai.com أو استخدم دردشة المالك',
   settingsAboutLegal: 'حول والتراخيص',
-  appUpdateForceTitle: 'التحديث مطلوب',
-  appUpdateForceBody:
-    'هذا الإصدار ({min}) لم يعد مدعوماً. ثبّت {latest} أو أحدث لمتابعة استخدام Linas AI.',
-  appUpdateAvailableTitle: 'تحديث متاح',
-  appUpdateAvailableBody: 'الإصدار {latest} متاح على App Store / Play Store.',
-  appUpdateOpenStore: 'التحديث من المتجر',
-  appUpdateDismiss: 'ليس الآن',
   navDashboard: 'لوحة التحكم',
   navContentManagement: 'إعداد الذكاء الاصطناعي',
   navLiveChat: 'الدردشة المباشرة',
@@ -372,6 +354,7 @@ export const ar = {
   googleSignInUnavailable: 'تسجيل الدخول عبر Google غير مُعد بعد.',
   googleLinkRequired: 'يوجد حساب بهذا البريد. سجّل الدخول ثم اربط Google.',
   ...appleAccountAr,
+  ...integrationsDisplayAr,
   ...subscriptionAr,
   ...whatsappAr,
   ...smartFollowUpAr,

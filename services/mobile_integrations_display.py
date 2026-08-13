@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from typing import Any, Literal
 
 from services.channel_capability_state import _binding_connection_healthy, canonical_channel_bindings

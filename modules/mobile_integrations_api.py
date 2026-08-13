@@ -23,12 +23,12 @@ from services.channel_capability_toggles import (
 )
 from services.credit_ledger_service import credit_ledger_service
 from services.integration_capabilities import list_tenant_integration_status
+from services.meta_app_registry import MetaRegistryError, get_meta_app_registry
+from services.meta_oauth import MetaOAuthError, disconnect_binding_webhook
 from services.mobile_integrations_display import (
     active_bindings_for_disconnect,
     enrich_mobile_integration_rows,
 )
-from services.meta_app_registry import MetaRegistryError, get_meta_app_registry
-from services.meta_oauth import MetaOAuthError, disconnect_binding_webhook
 
 ToggleKey = Literal["dm", "comments"]
 

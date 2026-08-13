@@ -1,4 +1,5 @@
 import { appleAccountEn } from './appleAccountEn';
+import { integrationsDisplayEn } from './integrationsDisplayEn';
 import { subscriptionEn } from './subscriptionEn';
 import { smartFollowUpEn } from './smartFollowUpEn';
 import { whatsappEn } from './whatsappEn';
@@ -122,17 +123,6 @@ export const en = {
   disconnectAccount: 'Disconnect Account',
   disconnectAccountConfirm:
     'This disconnects the linked account and turns off DM and comment replies for this channel.',
-  integrationStatusConnected: 'Connection healthy',
-  integrationStatusNeedsReconnect: 'Needs reconnect',
-  integrationStatusError: 'Connection issue',
-  integrationLastSynced: 'Last synced',
-  integrationReconnect: 'Reconnect',
-  integrationConnectedFeatures: 'Connected features',
-  integrationMessengerReplies: 'Messenger replies',
-  integrationDmReplies: 'DM replies',
-  integrationCommentReplies: 'Comment replies',
-  integrationFeatureOn: 'On',
-  integrationFeatureOff: 'Off',
   integrationsLoadError: 'Could not load integrations.',
   integrationsActionError: 'Could not update connection. Try again.',
   integrationsToggleError: 'Could not update channel setting. Try again.',
@@ -273,7 +263,6 @@ export const en = {
   notificationsMarkAll: 'Mark all read',
   newChat: 'New chat',
   searchChats: 'Search chats',
-  drawerRecents: 'Recents',
   searchConversationTitles: 'Search conversation titles',
   noChatsMatch: 'No chats match your search.',
   noConversationsYet: 'No conversations yet.',
@@ -351,13 +340,6 @@ export const en = {
   settingsHelpSupport: 'Help & Support',
   settingsHelpSupportNote: 'Email support@linasai.com or use Owner chat',
   settingsAboutLegal: 'About & Legal',
-  appUpdateForceTitle: 'Update required',
-  appUpdateForceBody:
-    'This version ({min}) is no longer supported. Install {latest} or newer to continue using Linas AI.',
-  appUpdateAvailableTitle: 'Update available',
-  appUpdateAvailableBody: 'Version {latest} is available on the App Store / Play Store.',
-  appUpdateOpenStore: 'Update in store',
-  appUpdateDismiss: 'Not now',
   navDashboard: 'Dashboard',
   navContentManagement: 'AI Setup',
   navLiveChat: 'Live Chat',
@@ -374,6 +356,7 @@ export const en = {
   googleSignInUnavailable: 'Google sign-in is not configured yet.',
   googleLinkRequired: 'An account with this email already exists. Sign in and link Google.',
   ...appleAccountEn,
+  ...integrationsDisplayEn,
   ...subscriptionEn,
   ...whatsappEn,
   ...smartFollowUpEn,
