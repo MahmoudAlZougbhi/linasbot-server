@@ -1,7 +1,12 @@
-"""Verify Sign in with Apple identity tokens (ES256 + Apple JWKS)."""
+"""Verify Sign in with Apple identity tokens (Apple JWKS).
+
+Apple publishes SIWA keys as RSA / RS256 at appleid.apple.com/auth/keys.
+ES256 is accepted only for offline tests / rare key types — not the live default.
+"""
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import threading
@@ -17,6 +22,8 @@ from services.apple_secrets import apple_bundle_id
 APPLE_ISS = "https://appleid.apple.com"
 APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys"
 _JWKS_TTL_SECONDS = 3600
+# Live Apple SIWA JWKS is RS256; keep ES256 for unit tests / compatibility.
+_ALLOWED_ALGS = ("RS256", "ES256")
 
 _lock = threading.RLock()
 _jwks_cache: dict[str, Any] | None = None
@@ -81,7 +88,7 @@ def _signing_key_for_token(identity_token: str) -> Any:
         raise AppleSignInError("Malformed identity token header") from exc
     kid = str(header.get("kid") or "").strip()
     alg = str(header.get("alg") or "").strip()
-    if alg != "ES256":
+    if alg not in _ALLOWED_ALGS:
         raise AppleSignInError("Unsupported identity token algorithm")
     if not kid:
         raise AppleSignInError("Identity token missing kid")
@@ -124,6 +131,29 @@ def _claim_bool(value: Any) -> bool | None:
     return None
 
 
+def _b64url_sha256(raw: str) -> str:
+    digest = hashlib.sha256(raw.encode("utf-8")).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
+def nonce_matches(*, raw_nonce: str, token_nonce: str) -> bool:
+    """
+    Client must SHA-256 the raw nonce before Apple (expo-apple-authentication
+    does not hash). Apple echoes that digest in the JWT ``nonce`` claim; the
+    API receives the raw nonce. Accept hex or base64url encodings of SHA-256(raw).
+    """
+    raw = (raw_nonce or "").strip()
+    claim = (token_nonce or "").strip()
+    if not raw or not claim:
+        return False
+    hex_digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    if claim.lower() == hex_digest.lower():
+        return True
+    if claim == _b64url_sha256(raw):
+        return True
+    return False
+
+
 def verify_identity_token(identity_token: str, *, nonce: str | None = None) -> dict[str, Any]:
     """
     Validate Apple identity token.
@@ -141,7 +171,7 @@ def verify_identity_token(identity_token: str, *, nonce: str | None = None) -> d
         claims = jwt.decode(
             token,
             key,
-            algorithms=["ES256"],
+            algorithms=list(_ALLOWED_ALGS),
             audience=audience,
             issuer=APPLE_ISS,
             options={"require": ["exp", "iss", "aud", "sub"]},
@@ -163,10 +193,8 @@ def verify_identity_token(identity_token: str, *, nonce: str | None = None) -> d
         raise AppleSignInError("Identity token missing sub")
 
     if nonce is not None and str(nonce).strip():
-        # Apple puts SHA-256(raw_nonce) (hex) in the identity token.
-        expected = hashlib.sha256(str(nonce).strip().encode("utf-8")).hexdigest()
         token_nonce = str(claims.get("nonce") or "").strip()
-        if not token_nonce or token_nonce.lower() != expected.lower():
+        if not nonce_matches(raw_nonce=str(nonce), token_nonce=token_nonce):
             raise AppleSignInError("Identity token nonce mismatch")
 
     email_raw = claims.get("email")

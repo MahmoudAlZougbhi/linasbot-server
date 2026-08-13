@@ -396,6 +396,13 @@ async def set_channel_toggle(
     if not action_id:
         raise ChannelToggleError("Unsupported toggle", status_code=400, code="UNKNOWN_TOGGLE")
 
+    if enabled and not canonical_channel_bindings(tenant_id, platform_key):
+        raise ChannelToggleError(
+            "Connect this channel before enabling messaging.",
+            status_code=409,
+            code="CONNECT_REQUIRED",
+        )
+
     if toggle == "comments" and enabled:
         from services.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
 

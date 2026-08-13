@@ -41,6 +41,7 @@ from services.meta_oauth import (
 async def disconnect_meta_connection(binding_id: str, request: Request) -> Any:
     session = require_permission(request, "settings")
     binding = _tenant_binding(binding_id, session.tenant_id)
+    platform = str(binding.channel or "").strip().lower()
     try:
         if binding.active:
             updated = await disconnect_binding_webhook(
@@ -56,6 +57,15 @@ async def disconnect_meta_connection(binding_id: str, request: Request) -> Any:
             )
     except (MetaOAuthError, MetaRegistryError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    # Force DM + Comments OFF once no active binding remains for this platform.
+    if platform in {"instagram", "facebook"}:
+        from services.channel_capability_disconnect import clear_channel_toggles_after_disconnect
+
+        await clear_channel_toggles_after_disconnect(
+            tenant_id=session.tenant_id,
+            platform=platform,
+            actor=session.user_id or session.email or "meta_disconnect",
+        )
     return {"success": True, "connection": updated.public_dict()}
 
 

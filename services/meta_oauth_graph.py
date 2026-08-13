@@ -11,6 +11,7 @@ from services.meta_app_registry import (
     META_CHANNEL_SCOPES,
     MetaAppRegistry,
     MetaAssetBinding,
+    MetaRegistryError,
     get_meta_app_configs,
     get_meta_app_registry,
 )
@@ -192,6 +193,25 @@ async def subscribe_binding_webhook(
             await http_client.aclose()
 
 
+def _other_active_binding_shares_page(binding: MetaAssetBinding, registry: MetaAppRegistry) -> bool:
+    """True when another active binding still needs this app's Page webhook subscription."""
+
+    page_id = str(binding.page_id or "").strip()
+    if not page_id:
+        return False
+    for other in registry.list_bindings(include_inactive=False, include_superseded=False):
+        if other.binding_id == binding.binding_id:
+            continue
+        if other.app_key != binding.app_key:
+            continue
+        if str(other.page_id or "").strip() != page_id:
+            continue
+        if other.auth_flow == "instagram_login":
+            continue
+        return True
+    return False
+
+
 async def disconnect_binding_webhook(
     binding: MetaAssetBinding,
     *,
@@ -199,17 +219,33 @@ async def disconnect_binding_webhook(
     registry: MetaAppRegistry | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> Any:
-    """Unsubscribe the Page, then retain an encrypted disconnected rollback record."""
+    """Mark the binding disconnected in-app; best-effort Meta Page unsubscribe.
+
+    Owner disconnect must succeed locally even when Meta Graph cleanup fails
+    (expired token, already unsubscribed, transient Graph errors). Instagram Login
+    bindings never use Page ``subscribed_apps``. Skip Meta unsubscribe when another
+    active non–Instagram-Login binding still shares the same app+Page subscription.
+    """
 
     current_registry = registry or get_meta_app_registry()
-    if binding.auth_flow != "instagram_login" and binding.page_id:
-        await unsubscribe_binding_webhook(binding, registry=current_registry, client=client)
-    return current_registry.set_binding_status(
+    updated = current_registry.set_binding_status(
         binding.binding_id,
         status="disconnected",
         actor_id=actor_id,
         expected_generation=binding.generation,
     )
+    should_unsubscribe = (
+        binding.auth_flow != "instagram_login"
+        and bool(str(binding.page_id or "").strip())
+        and not _other_active_binding_shares_page(binding, current_registry)
+    )
+    if should_unsubscribe:
+        try:
+            await unsubscribe_binding_webhook(binding, registry=current_registry, client=client)
+        except (MetaOAuthError, MetaRegistryError):
+            # Local disconnect already committed; Meta cleanup is best-effort only.
+            pass
+    return updated
 
 
 async def unsubscribe_binding_webhook(

@@ -187,3 +187,10 @@ mobile/releases/*.apk
 
 # Apple AuthKey / SubscriptionKey material — never commit
 *.p8
+
+# Google Play / GCP service-account JSON keys — never commit
+*google-play*.json
+*play-service-account*.json
+*-play-upload*.json
+**/google-play/**/*.json
+mobile/linas-ai/secrets/

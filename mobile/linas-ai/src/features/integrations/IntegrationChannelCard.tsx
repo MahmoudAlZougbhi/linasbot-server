@@ -159,6 +159,7 @@ export function IntegrationChannelCard({
                 toggles={defaultToggles(row)}
                 busyKey={busyToggleKey}
                 disabled={actionsDisabled}
+                lockedOff={!row.connected}
                 onToggle={onToggle}
               />
               {statusLabel ? <Text style={styles.statusHint}>{statusLabel}</Text> : null}

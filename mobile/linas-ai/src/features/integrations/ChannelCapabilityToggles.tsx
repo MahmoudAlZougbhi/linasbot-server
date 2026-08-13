@@ -12,26 +12,35 @@ type Props = {
   toggles: ChannelToggles;
   busyKey: 'dm' | 'comments' | null;
   disabled?: boolean;
+  /** When true, switches stay OFF and cannot be turned on (platform disconnected). */
+  lockedOff?: boolean;
   onToggle: (key: 'dm' | 'comments', value: boolean) => void;
 };
 
-export function ChannelCapabilityToggles({ toggles, busyKey, disabled, onToggle }: Props) {
+export function ChannelCapabilityToggles({
+  toggles,
+  busyKey,
+  disabled,
+  lockedOff,
+  onToggle,
+}: Props) {
   const { tr } = useI18n();
+  const forceOff = lockedOff === true;
 
   return (
     <View style={styles.wrap}>
       <ToggleRow
         label={tr('toggleDms')}
-        value={toggles.dm}
+        value={forceOff ? false : toggles.dm}
         busy={busyKey === 'dm'}
-        disabled={disabled || busyKey !== null}
+        disabled={forceOff || disabled || busyKey !== null}
         onValueChange={(v) => onToggle('dm', v)}
       />
       <ToggleRow
         label={tr('toggleComments')}
-        value={toggles.comments}
+        value={forceOff ? false : toggles.comments}
         busy={busyKey === 'comments'}
-        disabled={disabled || busyKey !== null}
+        disabled={forceOff || disabled || busyKey !== null}
         onValueChange={(v) => onToggle('comments', v)}
       />
     </View>

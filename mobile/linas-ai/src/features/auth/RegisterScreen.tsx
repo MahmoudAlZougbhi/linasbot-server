@@ -147,6 +147,8 @@ export function RegisterScreen({ onBack, onDone, onLoggedIn }: Props) {
               <SocialAuthButtons
                 onAppleSuccess={() => (onLoggedIn ? onLoggedIn() : onDone ? onDone() : onBack())}
                 onAppleError={(msg) => setMessage(msg)}
+                onGoogleSuccess={() => (onLoggedIn ? onLoggedIn() : onDone ? onDone() : onBack())}
+                onGoogleError={(msg) => setMessage(msg)}
               />
             </>
           ) : null}

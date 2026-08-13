@@ -162,6 +162,7 @@ _PUBLIC_EXACT: set[tuple[str, str]] = {
     ("POST", "/api/auth/mobile/login"),
     ("POST", "/api/auth/mobile/refresh"),
     ("POST", "/api/auth/mobile/apple"),
+    ("POST", "/api/auth/mobile/google"),
     ("GET", "/api/queue/ready"),
     ("POST", "/api/entitlements/apple/notifications"),
     ("POST", "/api/entitlements/google/notifications"),

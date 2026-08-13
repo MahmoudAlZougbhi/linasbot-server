@@ -332,3 +332,60 @@ async def test_reconnect_first_party_disconnected_binding(
     assert subscribed is True
     refreshed = next(item for item in registry.list_bindings() if item.binding_id == binding.binding_id)
     assert refreshed.status == "active"
+
+
+@pytest.mark.asyncio
+async def test_facebook_disconnect_succeeds_when_meta_unsubscribe_fails(
+    registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Owner disconnect must succeed even if Meta Page unsubscribe fails (FB bug)."""
+
+    from services.meta_oauth import MetaOAuthError
+    import services.meta_oauth_graph as graph
+
+    page_id = "378696005334409"
+    binding = registry.activate_binding(
+        tenant_id="linas",
+        channel="facebook",
+        asset_id=page_id,
+        page_id=page_id,
+        instagram_account_id="",
+        app_key=APP_A_KEY,
+        credential=MetaBindingCredential(
+            access_token="private-lina-page-token",
+            token_app_id="2963733803971681",
+            token_profile_id=page_id,
+            scopes=SCOPES,
+            expires_at=int(time.time()) + 3600,
+        ),
+        actor_id="owner",
+    )
+    cleared: list[str] = []
+
+    async def boom(*_args: Any, **_kwargs: Any) -> None:
+        raise MetaOAuthError("Meta webhook disconnect failed with HTTP 400")
+
+    async def clear_toggles(**kwargs: Any) -> bool:
+        cleared.append(str(kwargs.get("platform") or ""))
+        return True
+
+    monkeypatch.setattr(meta_connections_api, "get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("modules.meta_connections_api_helpers.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("modules.meta_connections_api_lifecycle.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr(graph, "get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr(graph, "unsubscribe_binding_webhook", boom)
+    monkeypatch.setattr(
+        "services.channel_capability_disconnect.clear_channel_toggles_after_disconnect",
+        clear_toggles,
+    )
+
+    response = await meta_connections_api.disconnect_meta_connection(
+        binding.binding_id,
+        _request("linas"),
+    )
+    assert response["success"] is True
+    assert response["connection"]["status"] == "disconnected"
+    refreshed = next(item for item in registry.list_bindings() if item.binding_id == binding.binding_id)
+    assert refreshed.status == "disconnected"
+    assert cleared == ["facebook"]

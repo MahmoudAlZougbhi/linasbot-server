@@ -10,6 +10,7 @@ import {
   mergeLatestWindow,
   prependOlderUnique,
 } from './ownerChatPaging';
+import { clearPreferFreshOwnerChat, isPreferFreshOwnerChat } from './preferFreshOwnerChat';
 
 const CreateConvSchema = z.object({
   success: z.literal(true),
@@ -148,8 +149,9 @@ export function useChatSession(enabled = true) {
           archived: Boolean(c.archived),
         })),
       );
+      const preferFresh = await isPreferFreshOwnerChat();
       const active = listed.conversations.find((c) => !c.archived) || listed.conversations[0];
-      if (active) {
+      if (active && !preferFresh) {
         const full = await apiFetch(conversationMessagesUrl(active.id), { schema: GetConvSchema });
         setConversationId(full.conversation.id);
         setTitle(full.conversation.title);
@@ -162,11 +164,18 @@ export function useChatSession(enabled = true) {
           body: JSON.stringify({ language: getStoredAppLanguage() }),
           schema: CreateConvSchema,
         });
+        if (preferFresh) {
+          await clearPreferFreshOwnerChat();
+        }
         setConversationId(created.conversation.id);
         setTitle(created.conversation.title);
         setMessages(created.conversation.messages);
         setHasMore(false);
-        setHistory([{ id: created.conversation.id, title: created.conversation.title }]);
+        setHistory((prev) =>
+          preferFresh && prev.length
+            ? [{ id: created.conversation.id, title: created.conversation.title }, ...prev]
+            : [{ id: created.conversation.id, title: created.conversation.title }],
+        );
         const seed = created.conversation.messages[0];
         setSeedTypewriterMessageId(
           seed?.role === 'assistant' && created.conversation.messages.length === 1 ? seed.id : null,
