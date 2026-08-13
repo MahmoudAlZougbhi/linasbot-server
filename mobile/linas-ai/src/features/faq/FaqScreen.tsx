@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ApiError } from '../../api/client';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -8,6 +8,7 @@ import type { CmProposalReview } from '../cm/cmProposalReview';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import { FaqCreateView } from './FaqCreateView';
 import { FaqDetailView } from './FaqDetailView';
+import { FaqLanguagePickerModal } from './FaqLanguagePickerModal';
 import { FaqListView } from './FaqListView';
 import {
   archiveFaq,
@@ -15,6 +16,7 @@ import {
   listFaq,
   patchFaqVariant,
   regenerateFaq,
+  saveSmartAnswerLanguages,
   type FaqEntitlement,
   type FaqGroup,
 } from './faqApi';
@@ -36,14 +38,16 @@ export function FaqScreen({ onAskLinas, proposalReview }: Props) {
   const [items, setItems] = useState<FaqGroup[]>([]);
   const [entitlement, setEntitlement] = useState<FaqEntitlement | null>(null);
   const [quotaDisplay, setQuotaDisplay] = useState<string | null>(null);
+  const [smartAnswerLanguages, setSmartAnswerLanguages] = useState<string[]>(['ar', 'en', 'fr', 'franco']);
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<Mode>('list');
   const [selected, setSelected] = useState<FaqGroup | null>(null);
   const [activeLang, setActiveLang] = useState<FaqLangId>('ar');
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
-  const [language, setLanguage] = useState<FaqLangId>('ar');
   const [savedFlash, setSavedFlash] = useState(false);
+  const [langPickerOpen, setLangPickerOpen] = useState(false);
+  const [pendingLangSave, setPendingLangSave] = useState<string[] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,6 +57,9 @@ export function FaqScreen({ onAskLinas, proposalReview }: Props) {
       setItems(data.items);
       setEntitlement(data.entitlement);
       setQuotaDisplay(data.quotaDisplay);
+      if (data.smartAnswerLanguages.length) {
+        setSmartAnswerLanguages(data.smartAnswerLanguages);
+      }
       setSelected((prev) => {
         if (!prev) return null;
         return data.items.find((g) => g.qa_group_id === prev.qa_group_id) || null;
@@ -88,7 +95,7 @@ export function FaqScreen({ onAskLinas, proposalReview }: Props) {
     setSaving(true);
     setError(null);
     try {
-      await createFaq({ question: q, answer: a, language });
+      await createFaq({ question: q, answer: a });
       setQuestion('');
       setAnswer('');
       setMode('list');
@@ -104,6 +111,44 @@ export function FaqScreen({ onAskLinas, proposalReview }: Props) {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function commitLanguageSave(languages: string[], translateExisting: boolean) {
+    setSaving(true);
+    setError(null);
+    try {
+      await saveSmartAnswerLanguages({ languages, translateExisting });
+      setLangPickerOpen(false);
+      setPendingLangSave(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : tr('faqCreateError'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleLanguageSave(languages: string[]) {
+    const added = languages.filter((lang) => !smartAnswerLanguages.includes(lang));
+    if (added.length && items.length > 0) {
+      setPendingLangSave(languages);
+      Alert.alert(
+        tr('faqTranslateExistingTitle'),
+        tr('faqTranslateExistingBody').replace('{lang}', added.join(', ')),
+        [
+          { text: tr('faqTranslateSkip'), style: 'cancel', onPress: () => void commitLanguageSave(languages, false) },
+          { text: tr('faqTranslateAll'), onPress: () => void commitLanguageSave(languages, true) },
+        ],
+      );
+      return;
+    }
+    void commitLanguageSave(languages, false);
+  }
+
+  function handleRemoveLanguage(langId: string) {
+    const next = smartAnswerLanguages.filter((x) => x !== langId);
+    if (next.length === 0) return;
+    void commitLanguageSave(next, false);
   }
 
   async function handleSaveVariant() {
@@ -186,21 +231,23 @@ export function FaqScreen({ onAskLinas, proposalReview }: Props) {
             items={items}
             entitlement={entitlement}
             quotaDisplay={quotaDisplay}
+            smartAnswerLanguages={smartAnswerLanguages}
             query={query}
             onQueryChange={setQuery}
             onCreate={() => {
               setQuestion('');
               setAnswer('');
-              setLanguage('ar');
               setMode('create');
             }}
             onAskLinas={() => onAskLinas?.()}
             onSelect={(group) => {
               setSelected(group);
-              setActiveLang('ar');
+              setActiveLang(smartAnswerLanguages[0] || 'en');
               setMode('detail');
             }}
             onRefresh={() => void load()}
+            onAddLanguage={() => setLangPickerOpen(true)}
+            onRemoveLanguage={handleRemoveLanguage}
             tr={tr}
           />
         ) : null}
@@ -208,11 +255,9 @@ export function FaqScreen({ onAskLinas, proposalReview }: Props) {
           <FaqCreateView
             question={question}
             answer={answer}
-            language={language}
             saving={saving}
             onQuestion={setQuestion}
             onAnswer={setAnswer}
-            onLanguage={setLanguage}
             onSave={() => void handleCreate()}
             onCancel={() => setMode('list')}
             tr={tr}
@@ -222,6 +267,7 @@ export function FaqScreen({ onAskLinas, proposalReview }: Props) {
           <FaqDetailView
             group={selected}
             activeLang={activeLang}
+            smartAnswerLanguages={smartAnswerLanguages}
             question={question}
             answer={answer}
             saving={saving}
@@ -239,6 +285,18 @@ export function FaqScreen({ onAskLinas, proposalReview }: Props) {
           />
         ) : null}
       </ScrollView>
+
+      <FaqLanguagePickerModal
+        visible={langPickerOpen}
+        selected={pendingLangSave || smartAnswerLanguages}
+        saving={saving}
+        onClose={() => {
+          setLangPickerOpen(false);
+          setPendingLangSave(null);
+        }}
+        onSave={handleLanguageSave}
+        tr={tr}
+      />
     </ScreenChrome>
   );
 }

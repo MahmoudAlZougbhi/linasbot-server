@@ -5,12 +5,13 @@ import type { StringKey } from '../../i18n';
 import { colors, fonts, radii, spacing } from '../../theme';
 import { Field } from '../cm/editors/Field';
 import type { FaqGroup } from './faqApi';
-import { FAQ_LANGS, type FaqLangId } from './faqLanguages';
+import { langLabel, type FaqLangId } from './faqLanguages';
 import { variantForLang } from './faqPreview';
 
 type Props = {
   group: FaqGroup;
   activeLang: FaqLangId;
+  smartAnswerLanguages: string[];
   question: string;
   answer: string;
   saving: boolean;
@@ -27,6 +28,7 @@ type Props = {
 export function FaqDetailView({
   group,
   activeLang,
+  smartAnswerLanguages,
   question,
   answer,
   saving,
@@ -44,19 +46,19 @@ export function FaqDetailView({
       <Text style={styles.section}>{tr('faqEditVariants')}</Text>
       <Text style={styles.sub}>
         {String(group.status || 'draft')}
-        {group.incomplete ? ` · ${tr('faqIncomplete')}` : ` · ${tr('faqFourLangs')}`}
+        {group.incomplete ? ` · ${tr('faqIncomplete')}` : ` · ${tr('faqTranslatedStatus')}`}
       </Text>
       <View style={styles.chips}>
-        {FAQ_LANGS.map((lang) => {
-          const active = activeLang === lang.id;
-          const has = Boolean(variantForLang(group, lang.id));
+        {smartAnswerLanguages.map((langId) => {
+          const active = activeLang === langId;
+          const has = Boolean(variantForLang(group, langId));
           return (
             <Pressable
-              key={lang.id}
-              onPress={() => onLang(lang.id)}
+              key={langId}
+              onPress={() => onLang(langId)}
               style={[styles.chip, active ? styles.chipOn : null, !has ? styles.chipMissing : null]}
             >
-              <Text style={[styles.chipText, active ? styles.chipTextOn : null]}>{tr(lang.labelKey)}</Text>
+              <Text style={[styles.chipText, active ? styles.chipTextOn : null]}>{langLabel(langId)}</Text>
             </Pressable>
           );
         })}

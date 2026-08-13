@@ -80,7 +80,7 @@ async def text_handlers_respond_phase1(ctx: dict) -> Any:
     # Update language variables
     current_preferred_lang = lang_result["detected_language"]
     response_language = lang_result["response_language"]
-    # Customer reply language is CM Languages policy only (not app Settings / owner profile).
+    # Customer reply language: multilingual detection (not limited by CM supported_languages).
     from services.cm.constants import DEFAULT_TENANT_ID as _LANG_DEFAULT_TENANT
     from services.cm.language_policy import resolve_customer_response_language
 
@@ -89,7 +89,7 @@ async def text_handlers_respond_phase1(ctx: dict) -> Any:
         tenant_id=_lang_tenant,
         detected_language=current_preferred_lang,
     )
-    router_reply_lang = response_language if response_language in ("ar", "en", "fr") else current_preferred_lang
+    router_reply_lang = response_language
 
     print(f"[_process_and_respond] 🌐 Language detected: {current_preferred_lang} → respond in: {response_language}")
     # =====================================

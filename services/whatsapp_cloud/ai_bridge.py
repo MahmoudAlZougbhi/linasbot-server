@@ -52,13 +52,19 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
 
     reply_text = ""
     try:
+        from services.cm.language_policy import detect_and_resolve_customer_languages
         from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
 
+        _lang = detect_and_resolve_customer_languages(
+            tenant_id=tenant_id,
+            message=text_body,
+            conversation_id=conversation_id,
+        )
         outcome = await run_customer_reply_v2_dm(
             tenant_id=tenant_id,
             message=text_body,
-            detected_language="",
-            response_language="",
+            detected_language=_lang["detected_language"],
+            response_language=_lang["response_language"],
             channel="whatsapp_dm",
             asset_id=connection_id,
             provider_sender_id=str(snapshot.get("customer_wa_id") or ""),

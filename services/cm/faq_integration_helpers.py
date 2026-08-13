@@ -11,8 +11,15 @@ from services.cm.storage import ConflictError, get_draft, put_draft
 from services.language_detection_service import language_detection_service
 
 FAQ_SECTION = "faq"
-FAQ_TARGET_LANGUAGES = ("ar", "en", "fr", "franco")
+FAQ_TARGET_LANGUAGES = ("ar", "en", "fr", "franco")  # legacy default; use load_faq_target_languages()
 _MAX_MIRROR_RETRIES = 5
+
+
+def load_faq_target_languages(*, tenant_id: str | None) -> list[str]:
+    """Tenant-selected Smart Answer languages (NOT customer reply languages)."""
+    from services.cm.smart_answer_languages import load_smart_answer_languages
+
+    return load_smart_answer_languages(tenant_id=tenant_id)
 
 
 class FaqIntegrationError(RuntimeError):

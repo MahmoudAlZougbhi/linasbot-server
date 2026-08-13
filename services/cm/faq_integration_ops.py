@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
 from services.cm.faq_integration_helpers import (
     FAQ_SECTION,
-    FAQ_TARGET_LANGUAGES,
     FaqIntegrationError,
     _answer_in_arabic_script,
     _mirror_faq_record_into_draft,
     _translate_to_arabic_script,
+    load_faq_target_languages,
 )
-from services.cm.schemas import FaqRecord, FaqSection, FaqVariant, LangCode
+from services.cm.schemas import FaqRecord, FaqSection, FaqVariant
 from services.cm.storage import get_draft, put_draft
 from services.language_detection_service import language_detection_service
 from services.local_qa_service import local_qa_service
@@ -30,6 +30,7 @@ def list_cm_faq(
     """List FAQ groups from the CM draft faq section with owner-friendly filters."""
     env = get_draft(FAQ_SECTION, tenant_id=tenant_id, create_default=True)
     section = FaqSection.model_validate(env.payload)
+    required_langs = load_faq_target_languages(tenant_id=tenant_id)
     query = (q or "").strip().lower()
     out: list[dict[str, Any]] = []
     for item in section.items:
@@ -55,7 +56,7 @@ def list_cm_faq(
             if query not in blob:
                 continue
         payload = item.model_dump(mode="json")
-        payload["incomplete"] = not item.is_complete_four_lang
+        payload["incomplete"] = not item.is_complete_for_languages(required_langs)
         out.append(payload)
     return out
 
@@ -63,10 +64,11 @@ def list_cm_faq(
 def get_cm_faq_group(*, qa_group_id: str, tenant_id: str | None = None) -> dict[str, Any] | None:
     env = get_draft(FAQ_SECTION, tenant_id=tenant_id, create_default=True)
     section = FaqSection.model_validate(env.payload)
+    required_langs = load_faq_target_languages(tenant_id=tenant_id)
     for item in section.items:
         if item.qa_group_id == qa_group_id:
             payload = item.model_dump(mode="json")
-            payload["incomplete"] = not item.is_complete_four_lang
+            payload["incomplete"] = not item.is_complete_for_languages(required_langs)
             return payload
     return None
 
@@ -179,7 +181,8 @@ async def update_cm_faq_variant(
                 pair["answer"] = answer
     local_qa_service.save_to_jsonl()
     payload = target.model_dump(mode="json")
-    payload["incomplete"] = not target.is_complete_four_lang
+    required_langs = load_faq_target_languages(tenant_id=tenant_id)
+    payload["incomplete"] = not target.is_complete_for_languages(required_langs)
     return {"success": True, "record": payload}
 
 
@@ -203,7 +206,7 @@ async def regenerate_cm_faq_variants(
     if src_variant is None or not src_variant.question or not src_variant.answer:
         raise FaqIntegrationError("Source language variant is incomplete; cannot regenerate")
 
-    targets = languages or list(FAQ_TARGET_LANGUAGES)
+    targets = languages or load_faq_target_languages(tenant_id=tenant_id)
     translation_result = await language_detection_service.translate_training_pair(
         question=src_variant.question,
         answer=src_variant.answer if _answer_in_arabic_script(src_variant.answer) else src_variant.answer,
@@ -227,25 +230,28 @@ async def regenerate_cm_faq_variants(
         a_text = answer_ar if lang in ("ar", "franco") else (translated.get("answer", "") or "")
         if not q_text or not a_text:
             continue
-        by_lang[cast(LangCode, lang)] = FaqVariant(
-            language=cast(LangCode, lang),
+        by_lang[lang] = FaqVariant(
+            language=lang,
             question=q_text,
             answer=a_text,
             reviewed=False,
             is_auto_translated=lang != src_lang,
         )
 
+    new_variants = list(by_lang.values())
     updated = record.model_copy(
         update={
-            "variants": list(by_lang.values()),
+            "variants": new_variants,
             "revision": record.revision + 1,
-            "source_language": cast(LangCode, src_lang),
-            "status": "draft" if len(by_lang) < 4 else record.status,
+            "source_language": src_lang,
+            "status": "draft"
+            if not record.model_copy(update={"variants": new_variants}).is_complete_for_languages(targets)
+            else record.status,
         }
     )
     _mirror_faq_record_into_draft(updated, tenant_id=tenant_id, updated_by=updated_by)
     payload = updated.model_dump(mode="json")
-    payload["incomplete"] = not updated.is_complete_four_lang
+    payload["incomplete"] = not updated.is_complete_for_languages(targets)
     return {"success": True, "record": payload}
 
 
@@ -276,3 +282,49 @@ def find_duplicate_faq_groups(
                     }
                 )
     return hits
+
+
+async def translate_existing_faq_groups_to_language(
+    *,
+    language: str,
+    tenant_id: str | None = None,
+    updated_by: str = "content_manager",
+) -> dict[str, Any]:
+    """Batch-translate all existing Smart Answers into one newly added language."""
+    lang = language_detection_service.normalize_training_language(language, default="")
+    if not lang:
+        raise FaqIntegrationError(f"Unsupported Smart Answer language: {language}")
+
+    env = get_draft(FAQ_SECTION, tenant_id=tenant_id, create_default=True)
+    section = FaqSection.model_validate(env.payload)
+    translated: list[str] = []
+    skipped: list[str] = []
+    errors: list[dict[str, str]] = []
+
+    for item in section.items:
+        if item.status == "archived":
+            continue
+        if any(v.language == lang and (v.question or "").strip() and (v.answer or "").strip() for v in item.variants):
+            skipped.append(item.qa_group_id)
+            continue
+        try:
+            await regenerate_cm_faq_variants(
+                qa_group_id=item.qa_group_id,
+                languages=[lang],
+                tenant_id=tenant_id,
+                updated_by=updated_by,
+            )
+            translated.append(item.qa_group_id)
+        except FaqIntegrationError as exc:
+            errors.append({"qa_group_id": item.qa_group_id, "error": str(exc)})
+
+    return {
+        "success": len(errors) == 0,
+        "language": lang,
+        "translated_count": len(translated),
+        "skipped_count": len(skipped),
+        "error_count": len(errors),
+        "translated": translated,
+        "skipped": skipped,
+        "errors": errors,
+    }

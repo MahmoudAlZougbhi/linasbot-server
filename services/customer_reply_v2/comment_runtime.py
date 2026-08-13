@@ -112,6 +112,16 @@ async def run_customer_reply_v2_comment(
     if not comments_enabled:
         return CustomerReplyOutcome(stop=True, reason="comments_toggle_off", reply=None)
 
+    from services.cm.language_policy import ensure_customer_languages
+
+    detected_language, response_language = ensure_customer_languages(
+        tenant_id=tenant_id,
+        message=comment_text,
+        detected_language=detected_language,
+        response_language=response_language,
+        conversation_id=f"comment:{tenant_id}:{channel}",
+    )
+
     revision, _ = get_cached_manifest(tenant_id)
     facts = load_customer_facts(
         tenant_id=tenant_id,

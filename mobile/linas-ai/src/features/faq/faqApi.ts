@@ -40,6 +40,18 @@ const ListSchema = z
     data: z.array(FaqGroupSchema).optional(),
     entitlement: EntitlementSchema.optional(),
     quota_display: z.string().optional(),
+    smart_answer_languages: z.array(z.string()).optional(),
+    catalog: z
+      .array(
+        z
+          .object({
+            id: z.string(),
+            label: z.string(),
+            native: z.string().optional(),
+          })
+          .passthrough(),
+      )
+      .optional(),
   })
   .passthrough();
 
@@ -64,6 +76,8 @@ export type FaqListResult = {
   items: FaqGroup[];
   entitlement: FaqEntitlement | null;
   quotaDisplay: string | null;
+  smartAnswerLanguages: string[];
+  catalog: Array<{ id: string; label: string; native?: string }>;
 };
 
 export async function listFaq(params?: {
@@ -83,7 +97,31 @@ export async function listFaq(params?: {
     items: Array.isArray(res.data) ? res.data : [],
     entitlement: res.entitlement ?? null,
     quotaDisplay: typeof res.quota_display === 'string' ? res.quota_display : res.entitlement?.quota_display ?? null,
+    smartAnswerLanguages: Array.isArray(res.smart_answer_languages) ? res.smart_answer_languages.map(String) : [],
+    catalog: Array.isArray(res.catalog) ? res.catalog : [],
   };
+}
+
+export async function saveSmartAnswerLanguages(input: {
+  languages: string[];
+  translateExisting?: boolean;
+}): Promise<void> {
+  await apiFetch('/api/cm/faq/smart-answer-languages', {
+    method: 'PUT',
+    schema: OkSchema,
+    body: JSON.stringify({
+      smart_answer_languages: input.languages,
+      translate_existing: Boolean(input.translateExisting),
+    }),
+  });
+}
+
+export async function translateExistingSmartAnswers(language: string): Promise<void> {
+  await apiFetch('/api/cm/faq/smart-answer-languages/translate-existing', {
+    method: 'POST',
+    schema: OkSchema,
+    body: JSON.stringify({ language }),
+  });
 }
 
 export async function createFaq(input: {
