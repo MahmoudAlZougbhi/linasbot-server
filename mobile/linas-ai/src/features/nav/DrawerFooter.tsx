@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   newChatBtn: {
-    flex: 1,
+    alignSelf: 'flex-start',
     minHeight: 34,
     borderRadius: radii.pill,
     flexDirection: 'row',

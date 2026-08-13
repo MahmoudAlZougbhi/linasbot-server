@@ -400,9 +400,11 @@ test('drawer search chrome is header icon; New chat + Settings in footer dock', 
   assert.match(easJson, /"appVersionSource":\s*"remote"/);
   assert.match(easJson, /"production"[\s\S]*"autoIncrement":\s*true/);
   assert.match(easJson, /"testflight"[\s\S]*"autoIncrement":\s*true/);
-  // Version centered below action row; New Chat is wide pill + Settings circle.
+  // Version centered below action row; New Chat is compact pill + Settings circle.
   assert.match(footer, /textAlign:\s*'center'/);
   assert.match(footer, /styles\.actionRow[\s\S]*newChatBtn[\s\S]*settingsBtn/);
+  assert.match(footer, /newChatBtn:[\s\S]*alignSelf:\s*'flex-start'/);
+  assert.doesNotMatch(footer, /newChatBtn:[\s\S]*flex:\s*1/);
   assert.match(footer, /APP_VERSION_LABEL/);
   assert.match(drawerHeader, /wordmark/);
   assert.match(drawerHeader, /DrawerFadeSeparator/);
