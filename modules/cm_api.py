@@ -17,6 +17,7 @@ from modules.api_security import require_permission, require_session
 from modules.core import app
 from services.cm.constants import CM_SECTIONS, PUBLISH_DISABLED_MESSAGE, cm_faq_canonical, cm_runtime_mode
 from services.cm.preview_packet import build_preview_packet, list_versions
+from services.cm.provenance_headers import sanitize_section_payload
 from services.cm.publish import (
     PublishBlockedError,
     RollbackTargetError,
@@ -25,7 +26,6 @@ from services.cm.publish import (
     rollback_to_version,
 )
 from services.cm.publish_gate import PublishDisabledError, ensure_publish_enabled, publish_status
-from services.cm.provenance_headers import sanitize_section_payload
 from services.cm.storage import ConflictError, UnknownSectionError, get_draft, put_draft
 from services.cm.validation import validate_cm
 from services.dashboard_session_service import SessionRecord
