@@ -8,6 +8,7 @@ export const LINAS_SPARKLE_PATH =
 export const LINAS_SPARKLE_VIEWBOX = '274 212 476 476';
 
 const SPARKLE_BY_COLOR: Record<string, ImageSourcePropType> = {
+  '#178f87': require('../../assets/linas-sparkle-light.png'),
   '#008b8b': require('../../assets/linas-sparkle-light.png'),
   '#006d6d': require('../../assets/linas-sparkle-light-deep.png'),
   '#2dd4bf': require('../../assets/linas-sparkle-dark.png'),

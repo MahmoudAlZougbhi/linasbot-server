@@ -63,10 +63,10 @@
           "image": "./assets/splash-native.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#0B3D34",
+          "backgroundColor": "#FBFAFA",
           "dark": {
             "image": "./assets/splash-native.png",
-            "backgroundColor": "#0B3D34"
+            "backgroundColor": "#FBFAFA"
           }
         }
       ],

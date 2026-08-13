@@ -183,14 +183,20 @@ test('App launches chat-first for guest and owner', () => {
 
 test('cold open is branded star splash then chat (no character mash / progress boot)', () => {
   const boot = read('features/boot/BootSplash.tsx');
+  const tokens = read('features/boot/bootSplashTokens.ts');
   const index = readFileSync(join(root, 'index.ts'), 'utf8');
   const appJson = readFileSync(join(root, 'app.json'), 'utf8');
   const chat = read('features/chat/ChatScreen.tsx');
   const login = read('features/auth/LoginScreen.tsx');
   assert.match(boot, /LinasSparkleMark/);
   assert.match(boot, /BootSplashAiLine/);
-  assert.match(boot, /lightColors\.bgElevated/);
-  assert.match(boot, /mintSoft/);
+  assert.match(boot, /bootSplashTokens/);
+  assert.match(boot, /#FBFAFA|bootSplashTokens/);
+  assert.match(tokens, /background:\s*'#FBFAFA'/);
+  assert.match(tokens, /glowColor:\s*'#DFF4F1'/);
+  assert.match(tokens, /minDisplayMs:\s*900/);
+  assert.match(tokens, /exitFadeMs:\s*220/);
+  assert.match(boot, /appReady/);
   assert.match(boot, /isReduceMotionEnabled|reduceMotionChanged/);
   assert.match(boot, /SplashScreen\.hideAsync/);
   assert.doesNotMatch(boot, /LinasAvatar/);
@@ -200,11 +206,12 @@ test('cold open is branded star splash then chat (no character mash / progress b
   assert.match(aiLine, /Animated\.loop/);
   assert.match(aiLine, /useNativeDriver:\s*true/);
   assert.match(aiLine, /reduceMotion/);
-  // Native splash must stay logo-free (solid emerald) so Android 12+ does not
+  assert.match(aiLine, /bootSplashTokens/);
+  // Native splash must stay logo-free (warm #FBFAFA) so Android 12+ does not
   // circular-mask splash-icon into a different first shape before BootSplash.
-  assert.match(boot, /splash-native|solid emerald|no logo/i);
+  assert.match(boot, /splash-native|logo-free|no logo/i);
   assert.match(index, /preventAutoHideAsync/);
-  assert.match(appJson, /"backgroundColor":\s*"#0B3D34"/);
+  assert.match(appJson, /"backgroundColor":\s*"#FBFAFA"/);
   assert.match(appJson, /splash-native\.png/);
   assert.doesNotMatch(
     appJson,
