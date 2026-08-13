@@ -138,15 +138,11 @@ const styles = StyleSheet.create({
   },
   sectionDash: {
     fontFamily: fonts.bodyMedium,
-    fontSize: 14,
-    lineHeight: 20,
     fontWeight: '500',
   },
   sectionTitle: {
     ...typography.chatAi,
     fontFamily: fonts.bodyMedium,
-    fontSize: 14,
-    lineHeight: 20,
     fontWeight: '500',
     flex: 1,
   },
@@ -159,7 +155,6 @@ const styles = StyleSheet.create({
   },
   bulletDot: {
     ...typography.chatAi,
-    lineHeight: 18,
     width: 12,
     textAlign: 'center',
   },

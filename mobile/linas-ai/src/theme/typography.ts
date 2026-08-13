@@ -62,16 +62,15 @@ export const typography = {
     fontSize: 14,
     letterSpacing: 0.3,
   } satisfies TextStyle,
-  /** Linas / AI reply body — smaller + lighter than header chrome. */
+  /** Chat message body — user bubble and AI plain text share one scale (ChatGPT-style). */
   chatAi: {
     fontFamily: body,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 16,
+    lineHeight: 23,
   } satisfies TextStyle,
-  /** Owner / user message body — intentionally larger than chatAi. */
   chatUser: {
-    fontFamily: bodyMedium,
-    fontSize: 20,
-    lineHeight: 29,
+    fontFamily: body,
+    fontSize: 16,
+    lineHeight: 23,
   } satisfies TextStyle,
 } as const;
