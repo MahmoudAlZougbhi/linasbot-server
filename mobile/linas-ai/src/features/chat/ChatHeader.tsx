@@ -19,10 +19,9 @@ type Props = {
   onSignIn?: () => void;
 };
 
-/** Header: menu | star+Linas | new-chat (auth) or Sign in (guest). */
+/** Header: menu | ✦ Linas AI | new-chat (auth) or Sign in (guest). */
 export function ChatHeader({
   isAuthenticated,
-  workspaceLabel,
   onOpenMenu,
   onNewChat,
   onSignIn,
@@ -30,7 +29,7 @@ export function ChatHeader({
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { tr } = useI18n();
-  const iconColor = colors.text;
+  const iconColor = colors.textMuted;
 
   return (
     <View
@@ -38,8 +37,7 @@ export function ChatHeader({
         styles.bar,
         {
           paddingTop: insets.top + HEADER_TOP_GAP,
-          borderBottomColor: colors.borderSoft,
-          backgroundColor: colors.bgElevated,
+          backgroundColor: colors.bg,
         },
       ]}
     >
@@ -54,12 +52,12 @@ export function ChatHeader({
       </Pressable>
 
       <View style={styles.center}>
-        <LinasStarMark labeled size={18} />
-        {isAuthenticated && workspaceLabel ? (
-          <Text style={[styles.workspace, { color: colors.textMuted }]} numberOfLines={1}>
-            {workspaceLabel}
-          </Text>
-        ) : null}
+        <LinasStarMark
+          labeled
+          size={16}
+          label="Linas AI"
+          labelColor={colors.accentDeep}
+        />
       </View>
 
       {isAuthenticated && onNewChat ? (
@@ -101,7 +99,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xs,
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   hit: {
     width: HEADER_HIT,
@@ -117,12 +114,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 8,
-    gap: 2,
-  },
-  workspace: {
-    fontFamily: fonts.body,
-    fontSize: 11,
-    maxWidth: 180,
   },
   signIn: {
     minWidth: HEADER_HIT,

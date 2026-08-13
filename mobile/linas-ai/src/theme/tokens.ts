@@ -42,7 +42,7 @@ export type ThemeColors = {
 };
 
 export const lightColors: ThemeColors = {
-  bg: '#F7FBFB',
+  bg: '#F9F9F9',
   bgElevated: '#FFFFFF',
   surface: '#FFFFFF',
   surfaceAlt: '#EEF6F5',
@@ -50,10 +50,10 @@ export const lightColors: ThemeColors = {
   text: '#10221A',
   textMuted: '#5B6B6A',
   textDim: '#8A9A98',
-  accent: '#0D9488',
+  accent: '#008B8B',
   accentSoft: '#CCFBF1',
-  accentGlow: 'rgba(13, 148, 136, 0.14)',
-  accentDeep: '#0F766E',
+  accentGlow: 'rgba(0, 139, 139, 0.12)',
+  accentDeep: '#006D6D',
   onAccent: '#FFFFFF',
   mint: '#0D9488',
   mintSoft: '#CCFBF1',
@@ -62,7 +62,7 @@ export const lightColors: ThemeColors = {
   border: '#D7E5E3',
   borderSoft: '#E8F1F0',
   input: '#F3F8F7',
-  bubbleUser: '#E6F7F4',
+  bubbleUser: '#E8F5F3',
   bubbleUserText: '#10221A',
   bubbleAi: '#FFFFFF',
   bubbleAiText: '#10221A',

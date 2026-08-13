@@ -37,6 +37,7 @@ export const en = {
   chatEmptyBody:
     'I can help with everything. This app is your AI community manager for your social media pages.',
   chatThinking: 'Thinking…',
+  chatYouLabel: 'You',
   guestChatEmptyTitle: 'Welcome to Linas AI',
   guestChatEmptyBody:
     'Ask what Linas AI offers for your business and social media pages. Guest chat is explanatory only.',
@@ -69,6 +70,8 @@ export const en = {
   linEffortTitle: '5.6 LIN',
   linEffortLow: 'Low',
   linEffortHigh: 'High',
+  linEffortFast: 'Fast',
+  linEffortHighSub: 'More powerful - Uses more credits.',
   linEffortCostsMore: 'Costs more',
   settings: 'Settings',
   settingsSub: 'Language, notifications, AI controls, legal & app info',
@@ -292,8 +295,8 @@ export const en = {
   welcomeChipCheckPlan: 'Check my subscription / plan',
   welcomeChipModeWork: 'Work · High',
   welcomeChipModeChat: 'Chat · Low',
-  composerPlaceholder: 'Chat with Linas AI',
-  composerPlaceholderChat: 'Chat with Linas AI',
+  composerPlaceholder: 'Message Linas AI',
+  composerPlaceholderChat: 'Message Linas AI',
   composerPlaceholderWork: 'Work with Linas AI',
   composerListening: 'Listening…',
   composerPaused: 'Paused',

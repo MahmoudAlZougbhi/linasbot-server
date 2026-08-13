@@ -223,6 +223,7 @@ export function ChatMessageList({
           return (
             <ChatBubble
               message={item}
+              userLabel={tr('chatYouLabel')}
               imageUris={rematched}
               typewriter={item.id === seedTypewriterMessageId}
               onTypewriterDone={

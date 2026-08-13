@@ -11,6 +11,7 @@ import {
   textDirectionStyle,
 } from '../../lib/textDirection';
 import { fonts, radii, spacing, typography, useTheme } from '../../theme';
+import { AiMessageBody } from './AiMessageBody';
 import { MessageActions } from './MessageActions';
 import { MessageImageThumbs } from './MessageImageThumbs';
 import { useOnceTypewriter } from './useWelcomeTypewriter';
@@ -20,6 +21,7 @@ type Props = {
   onRetry?: () => void;
   showActions?: boolean;
   imageUris?: string[];
+  userLabel?: string;
   /** One-shot type the seeded New Chat greeting into this bubble. */
   typewriter?: boolean;
   onTypewriterDone?: () => void;
@@ -30,6 +32,7 @@ export function ChatBubble({
   onRetry,
   showActions = true,
   imageUris,
+  userLabel = 'You',
   typewriter = false,
   onTypewriterDone,
 }: Props) {
@@ -63,34 +66,43 @@ export function ChatBubble({
         ]}
       >
         {isUser ? (
-          <Text style={[styles.userLabel, { color: colors.textDim }]}>You</Text>
+          <Text style={[styles.userLabel, { color: colors.textDim }]}>{userLabel}</Text>
         ) : (
           <View style={styles.aiLabelRow}>
-            <LinasStarMark size={12} labeled label="Linas" />
+            <LinasStarMark size={12} labeled label="Linas" labelColor={colors.accentDeep} />
           </View>
         )}
         <View
           style={[
             isUser
-              ? [styles.bubble, { backgroundColor: colors.bubbleUser, borderBottomRightRadius: 6 }]
+              ? [styles.bubble, { backgroundColor: colors.bubbleUser }]
               : styles.aiBody,
           ]}
         >
           {thumbs?.length ? <MessageImageThumbs uris={thumbs} /> : null}
           {hasText ? (
-            <Text
-              style={[
-                isUser ? styles.textUser : styles.textAi,
-                { color: isUser ? colors.bubbleUserText : colors.bubbleAiText },
-                dirStyle,
-              ]}
-              accessibilityLabel={message.content}
-            >
-              {displayText}
-              {animate && !done && cursorOn ? (
-                <Text style={{ color: colors.accent }}>|</Text>
-              ) : null}
-            </Text>
+            isUser ? (
+              <Text
+                style={[
+                  styles.textUser,
+                  { color: colors.bubbleUserText },
+                  dirStyle,
+                ]}
+                accessibilityLabel={message.content}
+              >
+                {displayText}
+              </Text>
+            ) : animate && !done ? (
+              <Text
+                style={[styles.textAi, { color: colors.bubbleAiText }, dirStyle]}
+                accessibilityLabel={message.content}
+              >
+                {displayText}
+                {cursorOn ? <Text style={{ color: colors.accent }}>|</Text> : null}
+              </Text>
+            ) : (
+              <AiMessageBody content={displayText} />
+            )
           ) : null}
         </View>
         {!isUser && showActions ? (
@@ -105,22 +117,22 @@ const styles = StyleSheet.create({
   row: {
     marginBottom: spacing.md,
   },
-  rowUser: { alignSelf: 'flex-end', maxWidth: '94%' },
+  rowUser: { alignSelf: 'flex-end', maxWidth: '88%' },
   col: { flexShrink: 1 },
   colUser: { alignItems: 'flex-end' },
   userLabel: {
     fontFamily: fonts.body,
-    fontSize: 11,
+    fontSize: 12,
     marginBottom: 4,
-    marginRight: 6,
+    marginRight: 4,
   },
   aiLabelRow: {
     marginBottom: 4,
   },
   bubble: {
     borderRadius: radii.bubble,
-    paddingHorizontal: spacing.lg - 2,
-    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md - 2,
   },
   aiBody: {
     paddingHorizontal: 2,
@@ -131,5 +143,7 @@ const styles = StyleSheet.create({
   },
   textUser: {
     ...typography.chatUser,
+    fontSize: 18,
+    lineHeight: 26,
   },
 });

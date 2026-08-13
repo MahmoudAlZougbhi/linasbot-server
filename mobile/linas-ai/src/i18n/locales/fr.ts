@@ -38,6 +38,7 @@ export const fr = {
   chatEmptyBody:
     'Je peux vous aider pour tout. Cette application est votre community manager IA pour vos pages sur les réseaux sociaux.',
   chatThinking: 'Réflexion…',
+  chatYouLabel: 'Vous',
   guestChatEmptyTitle: 'Bienvenue sur Linas AI',
   guestChatEmptyBody:
     'Demandez ce que Linas AI offre à votre entreprise et à vos pages sur les réseaux sociaux. Le chat invité est explicatif seulement.',
@@ -71,6 +72,8 @@ export const fr = {
   linEffortTitle: '5.6 LIN',
   linEffortLow: 'Low',
   linEffortHigh: 'High',
+  linEffortFast: 'Rapide',
+  linEffortHighSub: 'Plus puissant - Utilise plus de crédits.',
   linEffortCostsMore: 'Coûte plus',
   settings: 'Paramètres',
   settingsSub: 'Langue, notifications, contrôles IA, mentions légales et infos app',
@@ -295,8 +298,8 @@ export const fr = {
   welcomeChipCheckPlan: 'Vérifier mon abonnement',
   welcomeChipModeWork: 'Travail · Élevé',
   welcomeChipModeChat: 'Chat · Bas',
-  composerPlaceholder: 'Discuter avec Linas AI',
-  composerPlaceholderChat: 'Discuter avec Linas AI',
+  composerPlaceholder: 'Message Linas AI',
+  composerPlaceholderChat: 'Message Linas AI',
   composerPlaceholderWork: 'Travailler avec Linas AI',
   composerListening: 'Écoute…',
   composerPaused: 'En pause',

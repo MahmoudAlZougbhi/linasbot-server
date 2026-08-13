@@ -406,11 +406,15 @@ async def complete_meta_business_login(
         if not authorized_bindings:
             raise MetaOAuthError("Meta token granular targets are missing or include another asset")
         current_registry.archive_superseded_duplicate_bindings(actor_id=actor_id)
-        from services.channel_capability_toggles import sync_published_comment_assets_if_enabled
+        from services.channel_capability_toggles import enable_channel_defaults_after_connect
 
         for channel in sorted({binding.channel for binding in authorized_bindings}):
             try:
-                await sync_published_comment_assets_if_enabled(tenant_id=tenant_id, platform=channel)
+                await enable_channel_defaults_after_connect(
+                    tenant_id=tenant_id,
+                    platform=channel,
+                    actor=actor_id,
+                )
             except Exception:
                 pass
         return MetaOAuthResult(
