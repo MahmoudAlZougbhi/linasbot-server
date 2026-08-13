@@ -263,3 +263,40 @@ def lifecycle_invariants(records: list[AiReplyTurnRecord] | None = None) -> dict
 
 def new_reservation_request_id(logical_reply_id: str) -> str:
     return f"ai_turn:{logical_reply_id}"
+
+
+def list_all_turns() -> list[AiReplyTurnRecord]:
+    """Return all persisted AI reply turn records."""
+    items: list[AiReplyTurnRecord] = []
+    for path in _store_dir().glob("lr_*.json"):
+        try:
+            items.append(AiReplyTurnRecord.from_dict(json.loads(path.read_text(encoding="utf-8"))))
+        except Exception:
+            continue
+    return items
+
+
+def find_turn_for_inbound_event(inbound_event_id: str) -> AiReplyTurnRecord | None:
+    """Lookup turn by durable inbound event id."""
+    target = (inbound_event_id or "").strip()
+    if not target:
+        return None
+    for rec in list_all_turns():
+        if rec.inbound_event_id == target:
+            return rec
+    return None
+
+
+def find_turn_by_external_inbound(
+    *,
+    tenant_id: str,
+    channel: str,
+    external_inbound_id: str,
+) -> AiReplyTurnRecord | None:
+    """Lookup turn by stable logical id components."""
+    lid = stable_logical_reply_id(
+        tenant_id=tenant_id,
+        channel=channel,
+        external_inbound_id=external_inbound_id,
+    )
+    return get_turn(lid)
