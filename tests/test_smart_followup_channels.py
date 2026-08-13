@@ -235,12 +235,17 @@ def test_schedule_skips_disabled_channel(sfu_db):
         },
     )
     repo = WhatsAppCloudRepository(sfu_db)
-    conn = repo.create_connection(
+    conn = repo.create_connection_with_credential(
         tenant_id="tenant_off",
+        created_by_user_id="u1",
+        meta_app_key="linas_first_party",
+        meta_app_id="2963733803971681",
+        waba_id="waba-off",
         phone_number_id="pn-off",
         display_phone_number="+96170000002",
-        waba_id="waba-off",
-        business_account_id="ba-off",
+        verified_name="Off",
+        access_token="token-off",
+        scopes=["whatsapp_business_management", "whatsapp_business_messaging"],
     )
     conv = repo.get_or_create_conversation(
         tenant_id="tenant_off",
