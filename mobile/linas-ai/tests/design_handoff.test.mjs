@@ -369,7 +369,11 @@ test('drawer search chrome is header icon; New chat + Settings in footer dock', 
   assert.doesNotMatch(nav, /DRAWER_TOOL_ICONS\.newChat/);
   assert.doesNotMatch(footer, /DRAWER_TOOL_ICONS\.newChat/);
   assert.match(drawer, /Keyboard\.dismiss/);
+  assert.match(drawer, /pointerEvents=\{hitActive/);
+  assert.match(drawer, /DRAWER_CLOSE_MS/);
   assert.match(chat, /Keyboard\.dismiss/);
+  assert.match(chat, /composerInputRef\.current\?\.blur\(\)/);
+  assert.doesNotMatch(chat, /<ChatComposer[\s\S]*?autoFocus/);
   assert.match(overlays, /<NavDrawer[\s\S]*onNewChat=/);
 
   const modules = read('features/nav/moduleIcons.ts');

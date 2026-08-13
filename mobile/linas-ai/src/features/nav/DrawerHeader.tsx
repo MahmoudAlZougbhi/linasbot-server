@@ -95,7 +95,6 @@ const styles = StyleSheet.create({
   sparkle: { fontSize: 16, lineHeight: 18 },
   wordmark: {
     fontFamily: fonts.display,
-    fontWeight: '700',
     fontSize: 18,
     letterSpacing: -0.25,
   },

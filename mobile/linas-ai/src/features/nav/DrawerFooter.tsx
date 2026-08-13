@@ -70,8 +70,8 @@ export function DrawerFooter(props: Props) {
         <Pressable
           style={[styles.newChatBtn, { backgroundColor: colors.accentDeep }]}
           onPress={() => {
-            props.onNewChat();
             props.onClose();
+            props.onNewChat();
           }}
           accessibilityRole="button"
           accessibilityLabel={tr('newChat')}
@@ -126,9 +126,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   newChatText: {
-    fontFamily: fonts.display,
+    fontFamily: fonts.bodyMedium,
     fontSize: 13,
-    fontWeight: '700',
     letterSpacing: -0.15,
   },
   settingsBtn: {

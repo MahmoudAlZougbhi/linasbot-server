@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   },
   bold: {
     fontFamily: fonts.bodyMedium,
-    fontWeight: '700',
+    fontWeight: '500',
   },
   sectionRow: {
     flexDirection: 'row',
@@ -138,14 +138,16 @@ const styles = StyleSheet.create({
   },
   sectionDash: {
     fontFamily: fonts.bodyMedium,
-    fontSize: 18,
-    lineHeight: 27,
-    fontWeight: '700',
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500',
   },
   sectionTitle: {
     ...typography.chatAi,
     fontFamily: fonts.bodyMedium,
-    fontWeight: '700',
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500',
     flex: 1,
   },
   bulletRow: {
@@ -157,7 +159,7 @@ const styles = StyleSheet.create({
   },
   bulletDot: {
     ...typography.chatAi,
-    lineHeight: 27,
+    lineHeight: 18,
     width: 12,
     textAlign: 'center',
   },

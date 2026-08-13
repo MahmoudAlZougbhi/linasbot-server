@@ -13,6 +13,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { radii, useTheme } from '../theme';
 
+/** Keep in sync with close `Animated.timing` duration below (+ small buffer). */
+const DRAWER_CLOSE_MS = 260;
+
 type Props = {
   open: boolean;
   side: 'left' | 'right';
@@ -37,6 +40,7 @@ export function SideDrawer({
   const closedX = side === 'left' ? -width : width;
   const anim = useRef(new Animated.Value(closedX)).current;
   const fade = useRef(new Animated.Value(0)).current;
+  const [hitActive, setHitActive] = useState(open);
 
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }) => {
@@ -47,6 +51,7 @@ export function SideDrawer({
 
   useEffect(() => {
     if (open) {
+      setHitActive(true);
       Keyboard.dismiss();
     }
     Animated.parallel([
@@ -61,10 +66,14 @@ export function SideDrawer({
         useNativeDriver: true,
       }),
     ]).start();
+    if (!open) {
+      const t = setTimeout(() => setHitActive(false), DRAWER_CLOSE_MS);
+      return () => clearTimeout(t);
+    }
   }, [open, anim, fade, closedX]);
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents={open ? 'auto' : 'none'}>
+    <View style={StyleSheet.absoluteFill} pointerEvents={hitActive ? 'auto' : 'none'}>
       <Animated.View style={[styles.scrim, { opacity: fade, backgroundColor: colors.overlay }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Animated.View>

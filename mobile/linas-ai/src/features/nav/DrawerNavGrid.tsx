@@ -135,7 +135,6 @@ const styles = StyleSheet.create({
   featuredSparkle: {
     fontSize: 22,
     lineHeight: 24,
-    fontWeight: '700',
   },
   badge: {
     position: 'absolute',
@@ -148,11 +147,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { fontFamily: fonts.bodyMedium, fontSize: 10, lineHeight: 12, fontWeight: '700' },
+  badgeText: { fontFamily: fonts.bodyMedium, fontSize: 10, lineHeight: 12 },
   label: {
-    fontFamily: fonts.display,
+    fontFamily: fonts.bodyMedium,
     fontSize: 10.5,
-    fontWeight: '700',
     letterSpacing: -0.15,
     textAlign: 'center',
     lineHeight: 13,
