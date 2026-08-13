@@ -90,6 +90,11 @@ async def test_set_channel_toggle_comments_denied_on_lite(monkeypatch, tmp_path)
     monkeypatch.setattr(cg, "entitlements_store", store)
     monkeypatch.setenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", "linas")
     store.set_plan(tenant_id="biz2", plan_id="lite", status="active", source="admin")
+    # CONNECT_REQUIRED runs before plan gate — stub a connected channel.
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.canonical_channel_bindings",
+        lambda *_a, **_k: [{"asset_id": "ig-connected"}],
+    )
 
     with pytest.raises(ChannelToggleError) as exc:
         await set_channel_toggle(
