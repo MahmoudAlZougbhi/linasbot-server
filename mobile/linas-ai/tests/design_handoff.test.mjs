@@ -35,8 +35,8 @@ test('drawer AI Setup active tile uses light grey sparkle chrome', () => {
   assert.match(grid, /modId === 'cm'/);
   assert.match(grid, /colors\.featuredIconBg/);
   assert.match(grid, /colors\.featuredIconBorder/);
-  assert.match(tokens, /featuredIconBg:\s*'#F4F6F6'/);
-  assert.match(tokens, /featuredIconBorder:\s*'#E2E5E5'/);
+  assert.match(tokens, /featuredIconBg:\s*'#E0E4E4'/);
+  assert.match(tokens, /featuredIconBorder:\s*'#D0D4D4'/);
   assert.doesNotMatch(grid, /colors\.mintSoft/);
   assert.doesNotMatch(grid, /colors\.accentSoft/);
   assert.doesNotMatch(grid, /colors\.borderSoft/);
