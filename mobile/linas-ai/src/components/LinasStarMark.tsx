@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
+import { LinasSparkleIcon } from './LinasSparkleIcon';
 import { fonts, useTheme } from '../theme';
 
 type Props = {
@@ -26,7 +27,7 @@ export function LinasStarMark({
       accessibilityRole="image"
       accessibilityLabel={labeled ? label : 'Linas'}
     >
-      <Text style={{ color: colors.accent, fontSize: size, lineHeight: size + 2 }}>✦</Text>
+      <LinasSparkleIcon size={size} color={colors.accent} />
       {labeled ? (
         <Text
           style={[styles.label, { color: titleColor, fontSize: Math.max(15, size - 3) }]}
