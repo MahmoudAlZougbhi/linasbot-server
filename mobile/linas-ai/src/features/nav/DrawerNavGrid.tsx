@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '../../components/AppIcon';
+import { LinasSparkleIcon } from '../../components/LinasSparkleIcon';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { ThemeColors } from '../../theme';
 import { fonts, radii, spacing, useTheme } from '../../theme';
@@ -36,20 +37,28 @@ function badgeForModule(
   return null;
 }
 
-function DrawerModuleIcon({ modId, colors }: { modId: ControlArea; colors: ThemeColors }) {
+function DrawerModuleIcon({
+  modId,
+  colors,
+  active,
+}: {
+  modId: ControlArea;
+  colors: ThemeColors;
+  active: boolean;
+}) {
   if (modId === 'cm') {
     return (
       <View
         style={[
           styles.featuredIconWrap,
           {
-            backgroundColor: colors.surface,
-            borderColor: colors.borderSoft,
+            backgroundColor: active ? colors.mintSoft : colors.surface,
+            borderColor: active ? colors.accentSoft : colors.borderSoft,
             shadowColor: colors.accentDeep,
           },
         ]}
       >
-        <Text style={[styles.featuredSparkle, { color: colors.accentDeep }]}>✦</Text>
+        <LinasSparkleIcon size={22} color={colors.text} />
       </View>
     );
   }
@@ -89,7 +98,7 @@ export function DrawerNavGrid({ showUsers, activeArea, badges, onOpenArea }: Pro
                 <Text style={[styles.badgeText, { color: colors.onAccent }]}>{badge.label}</Text>
               </View>
             ) : null}
-            <DrawerModuleIcon modId={mod.id} colors={colors} />
+            <DrawerModuleIcon modId={mod.id} colors={colors} active={active} />
             <Text style={[styles.label, { color: colors.text }]} numberOfLines={2}>
               {tr(mod.titleKey)}
             </Text>
@@ -107,7 +116,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: TILE_GAP,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   tile: {
     width: '31.5%',
@@ -131,10 +140,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 4,
     elevation: 2,
-  },
-  featuredSparkle: {
-    fontSize: 22,
-    lineHeight: 24,
   },
   badge: {
     position: 'absolute',

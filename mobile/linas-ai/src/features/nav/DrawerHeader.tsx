@@ -2,6 +2,7 @@ import type { RefObject } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AppIcon } from '../../components/AppIcon';
+import { LinasSparkleIcon } from '../../components/LinasSparkleIcon';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, spacing, useTheme } from '../../theme';
 import { DrawerFadeSeparator } from './DrawerFadeSeparator';
@@ -63,7 +64,7 @@ export function DrawerHeader({
       ) : (
         <View style={styles.headerRow}>
           <View style={styles.brandRow} accessibilityRole="header">
-            <Text style={[styles.sparkle, { color: colors.accentDeep }]}>✦</Text>
+            <LinasSparkleIcon size={16} color={colors.text} />
             <Text style={[styles.wordmark, { color: colors.text }]}>Linas</Text>
           </View>
           <Pressable
@@ -78,7 +79,9 @@ export function DrawerHeader({
         </View>
       )}
 
-      {!searchOpen ? <DrawerFadeSeparator color={colors.accentDeep} /> : null}
+      {!searchOpen ? (
+        <DrawerFadeSeparator lineColor={colors.border} starColor={colors.text} />
+      ) : null}
     </View>
   );
 }
@@ -92,7 +95,6 @@ const styles = StyleSheet.create({
     minHeight: 36,
   },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sparkle: { fontSize: 16, lineHeight: 18 },
   wordmark: {
     fontFamily: fonts.display,
     fontSize: 18,

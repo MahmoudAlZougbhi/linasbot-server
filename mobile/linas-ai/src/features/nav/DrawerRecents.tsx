@@ -34,12 +34,12 @@ export function DrawerRecents(props: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { flexGrow: 1, gap: spacing.sm },
+  wrap: { flexGrow: 1, gap: spacing.md },
   separator: { height: StyleSheet.hairlineWidth, marginBottom: spacing.sm },
   heading: {
     fontFamily: fonts.bodyMedium,
     fontSize: 13,
     letterSpacing: -0.15,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
 });
