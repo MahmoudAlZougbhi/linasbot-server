@@ -1,28 +1,22 @@
 /**
- * ChatGPT-like cold open: branded star + wordmark, short hold, then chat.
+ * Branded cold open: sparkle mark + wordmark + AI shimmer line, short hold, then chat.
  *
- * Native splash (app.json) is solid emerald with no logo — Android 12+ would
- * otherwise circular-mask splash-icon.png into a different first shape. This
+ * Native splash (app.json) stays solid emerald with no logo — Android 12+ would
+ * otherwise circular-mask splash-icon into a different first shape. This
  * surface is the only logo the user should see.
  */
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useRef, useState } from 'react';
-import {
-  AccessibilityInfo,
-  Image,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
 
-import { fonts } from '../../theme';
+import { LinasSparkleMark } from '../../components/LinasSparkleMark';
+import { fonts, lightColors } from '../../theme';
+import { BootSplashAiLine } from './BootSplashAiLine';
 
 type Props = {
   onDone: () => void;
 };
 
-/** Matches native splash background (app.json / splash-native.png). */
-const BRAND_EMERALD = '#0B3D34';
 const HOLD_MS = 640;
 const HOLD_REDUCED_MS = 120;
 
@@ -58,7 +52,6 @@ export function BootSplash({ onDone }: Props) {
       onDone();
     };
 
-    // Fallback if onLayout is delayed; prefer onLayout so the star is painted first.
     const raf =
       typeof requestAnimationFrame === 'function'
         ? requestAnimationFrame(() => hideNativeSplash())
@@ -78,15 +71,12 @@ export function BootSplash({ onDone }: Props) {
       accessibilityLabel="Linas AI"
       onLayout={hideNativeSplash}
     >
-      <View style={styles.block}>
-        <Image
-          source={require('../../../assets/splash-icon.png')}
-          style={styles.logo}
-          resizeMode="contain"
-          accessibilityIgnoresInvertColors
-        />
-        <Text style={styles.word}>Linas AI</Text>
+      <View style={styles.glowWrap}>
+        <View style={styles.glow} />
+        <LinasSparkleMark size={58} color={lightColors.accent} dotColor={lightColors.accentMid} />
       </View>
+      <Text style={styles.word}>Linas AI</Text>
+      <BootSplashAiLine reduceMotion={reduceMotion} />
     </View>
   );
 }
@@ -96,18 +86,28 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: BRAND_EMERALD,
+    backgroundColor: lightColors.bgElevated,
   },
-  block: { alignItems: 'center', gap: 18 },
-  logo: {
-    width: 112,
-    height: 112,
-    borderRadius: 28,
+  glowWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 220,
+    height: 220,
+    marginBottom: 6,
+  },
+  glow: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: lightColors.mintSoft,
+    opacity: 0.42,
   },
   word: {
-    color: '#F2FAF8',
+    color: lightColors.text,
     fontFamily: fonts.display,
     fontSize: 28,
+    fontWeight: '700',
     letterSpacing: 0.2,
     textAlign: 'center',
   },
