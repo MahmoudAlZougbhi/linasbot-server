@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from handlers.text_handlers_respond_ctx import bootstrap_process_respond_ctx
 from handlers.text_handlers_respond_intent import (
     _booking_not_confirmed_safe_reply,
     _build_out_of_scope_reply,
@@ -84,6 +85,7 @@ async def _process_and_respond(
         "user_image_base64": user_image_base64,
         "user_image_format": user_image_format,
     }
+    bootstrap_process_respond_ctx(ctx)
     for phase in _PROCESS_PHASES:
         result = await phase(ctx)
         if result == _PHASE_HALT:
