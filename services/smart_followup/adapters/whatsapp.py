@@ -119,9 +119,14 @@ class WhatsAppFollowUpAdapter:
         if intent is None:
             return FollowUpSendResult(status="failed", reason="intent_create_failed")
         if not created and intent.dispatch_state in {"sent", "sending", "suppressed", "reconciliation_required"}:
-            status = "skipped" if intent.dispatch_state != "sent" else "sent"
+            if intent.dispatch_state == "sent":
+                return FollowUpSendResult(
+                    status="sent",
+                    reason="duplicate_outbound_intent",
+                    provider_message_id=intent.provider_wamid,
+                )
             return FollowUpSendResult(
-                status=status,
+                status="skipped",
                 reason="duplicate_outbound_intent",
                 provider_message_id=intent.provider_wamid,
             )
