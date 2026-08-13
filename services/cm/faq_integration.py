@@ -5,8 +5,8 @@ compatibility with the existing bot-matching path. The CM ``faq`` draft section 
 group metadata (qa_group_id + a variant preview + tags/notes) so AI Setup can author
 and audit FAQ without a second, divergent Q&A store.
 
-Preserves the frozen contract (plan §2.4/§8): 4 linked variants per group; Franco question
-stays Franco (Latin) while its answer is always Arabic script, same as the AR answer.
+Preserves Smart Answer groups with per-tenant ``smart_answer_languages`` (not always 4).
+Franco question stays Franco (Latin) while its answer is always Arabic script, same as the AR answer.
 
 Helpers/ops: faq_integration_helpers, faq_integration_ops (LOC split).
 """
@@ -14,7 +14,7 @@ Helpers/ops: faq_integration_helpers, faq_integration_ops (LOC split).
 from __future__ import annotations
 
 import uuid
-from typing import Any, cast
+from typing import Any
 
 from services.cm.faq_integration_helpers import (  # noqa: F401
     FAQ_SECTION,
@@ -24,6 +24,7 @@ from services.cm.faq_integration_helpers import (  # noqa: F401
     _build_entry,
     _mirror_faq_record_into_draft,
     _translate_to_arabic_script,
+    load_faq_target_languages,
 )
 from services.cm.faq_integration_ops import (  # noqa: F401
     archive_cm_faq_group,
@@ -31,9 +32,10 @@ from services.cm.faq_integration_ops import (  # noqa: F401
     get_cm_faq_group,
     list_cm_faq,
     regenerate_cm_faq_variants,
+    translate_existing_faq_groups_to_language,
     update_cm_faq_variant,
 )
-from services.cm.schemas import FaqRecord, FaqSection, FaqVariant, LangCode
+from services.cm.schemas import FaqRecord, FaqSection, FaqVariant
 from services.cm.storage import get_draft, put_draft
 from services.language_detection_service import language_detection_service
 from services.local_qa_service import local_qa_service
@@ -82,17 +84,18 @@ async def create_faq_pair(
         question=question,
         answer=answer_ar_canonical,
         source_language=detected_language,
-        target_languages=list(FAQ_TARGET_LANGUAGES),
+        target_languages=load_faq_target_languages(tenant_id=tenant_id),
     )
     if not translation_result.get("success"):
         raise FaqIntegrationError("Failed to auto-translate FAQ pair to all 4 languages")
 
     translations = translation_result.get("translations", {})
     qa_group_id = f"qa_{uuid.uuid4().hex[:10]}"
+    target_langs = load_faq_target_languages(tenant_id=tenant_id)
     created_entries: list[dict[str, Any]] = []
     variants: list[FaqVariant] = []
 
-    for lang in FAQ_TARGET_LANGUAGES:
+    for lang in target_langs:
         translated = translations.get(lang, {})
         q_text = translated.get("question", "") or question
         a_text = (
@@ -123,7 +126,7 @@ async def create_faq_pair(
                 tenant_id=tenant_id,
             )
         )
-        variants.append(FaqVariant(language=cast(LangCode, lang), question=q_text, answer=a_text))
+        variants.append(FaqVariant(language=lang, question=q_text, answer=a_text))
 
     if not created_entries:
         raise FaqIntegrationError("No FAQ variants could be created")
@@ -140,7 +143,7 @@ async def create_faq_pair(
         tags=list(tags or []),
         notes=None,
         status="draft",
-        source_language=cast(LangCode, detected_language),
+        source_language=detected_language,
         reviewed=False,
         provenance=f"cm_faq:{category}",
         revision=1,
@@ -154,7 +157,7 @@ async def create_faq_pair(
         "count_created": len(created_entries),
         "detected_language": detected_language,
         "record": record.model_dump(mode="json"),
-        "incomplete": not record.is_complete_four_lang,
+        "incomplete": not record.is_complete_for_languages(target_langs),
     }
 
 

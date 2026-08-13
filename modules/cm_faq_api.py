@@ -17,6 +17,7 @@ from services.cm.faq_integration import (
     get_cm_faq_group,
     list_cm_faq,
     regenerate_cm_faq_variants,
+    translate_existing_faq_groups_to_language,
     update_cm_faq_variant,
 )
 from services.dashboard_session_service import SessionRecord
@@ -55,12 +56,16 @@ async def cm_list_faq(
         include_archived=include_archived,
     )
     entitlement = get_faq_entitlement(tenant_id)
+    from services.cm.smart_answer_languages import smart_answer_languages_public
+
+    langs = smart_answer_languages_public(tenant_id=tenant_id)
     return {
         "success": True,
         "data": items,
         "count": len(items),
         "entitlement": entitlement,
         "quota_display": entitlement.get("quota_display"),
+        **langs,
     }
 
 
@@ -207,6 +212,73 @@ async def cm_regenerate_faq(
             languages=languages,
             updated_by=_actor(session),
             tenant_id=tenant_id,
+        )
+    except FaqIntegrationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return result
+
+
+@app.get("/api/cm/faq/smart-answer-languages")
+async def cm_get_smart_answer_languages(request: Request) -> Any:
+    session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
+    from services.cm.smart_answer_languages import smart_answer_languages_public
+
+    return {"success": True, **smart_answer_languages_public(tenant_id=tenant_id)}
+
+
+@app.put("/api/cm/faq/smart-answer-languages")
+async def cm_put_smart_answer_languages(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
+    session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
+    raw = body.get("smart_answer_languages") or body.get("languages")
+    if not isinstance(raw, list):
+        raise HTTPException(status_code=400, detail="smart_answer_languages array is required")
+    translate_existing = bool(body.get("translate_existing"))
+    from services.cm.faq_integration import FaqIntegrationError, translate_existing_faq_groups_to_language
+    from services.cm.smart_answer_languages import save_smart_answer_languages
+
+    try:
+        saved = save_smart_answer_languages(
+            tenant_id=tenant_id,
+            languages=[str(x) for x in raw],
+            updated_by=_actor(session),
+        )
+    except FaqIntegrationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    batch: dict[str, Any] | None = None
+    added = list(saved.get("added") or [])
+    if translate_existing and added:
+        batch_results = []
+        for lang in added:
+            batch_results.append(
+                await translate_existing_faq_groups_to_language(
+                    language=lang,
+                    tenant_id=tenant_id,
+                    updated_by=_actor(session),
+                )
+            )
+        batch = {"languages": added, "results": batch_results}
+    return {"success": True, **saved, "batch_translate": batch}
+
+
+@app.post("/api/cm/faq/smart-answer-languages/translate-existing")
+async def cm_translate_existing_smart_answers(
+    request: Request, body: dict[str, Any] = Body(default={})
+) -> Any:
+    session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
+    language = str(body.get("language") or "").strip()
+    if not language:
+        raise HTTPException(status_code=400, detail="language is required")
+    try:
+        from services.cm.faq_integration import FaqIntegrationError, translate_existing_faq_groups_to_language
+
+        result = await translate_existing_faq_groups_to_language(
+            language=language,
+            tenant_id=tenant_id,
+            updated_by=_actor(session),
         )
     except FaqIntegrationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

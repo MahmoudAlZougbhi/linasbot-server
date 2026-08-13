@@ -53,11 +53,11 @@ export function LanguagesEditor({ payload, onChange }: Props) {
   return (
     <View style={{ direction: isRtl ? 'rtl' : 'ltr' }}>
       <View style={cmFormStyles.card}>
-        <Text style={cmFormStyles.label}>Languages the AI uses</Text>
+        <Text style={cmFormStyles.label}>Content languages</Text>
         <Text style={cmFormStyles.hint}>
-          Toggle which languages are on. Customers are answered only in enabled languages. This is the
-          only control for Instagram/Facebook DM and comment reply language — app Settings language does
-          not change customer replies.
+          Languages for organizing published content and knowledge. Customer AI replies are multilingual
+          by default — not limited by these toggles. Smart Answer translation languages are on the Smart
+          Answers screen.
         </Text>
         <View style={cmFormStyles.chipRow}>
           {LANGS.map((lang) => {
@@ -76,10 +76,10 @@ export function LanguagesEditor({ payload, onChange }: Props) {
       </View>
 
       <View style={cmFormStyles.card}>
-        <Text style={cmFormStyles.label}>Answer language map (fixed)</Text>
+        <Text style={cmFormStyles.label}>Customer replies (automatic)</Text>
         <Text style={cmFormStyles.hint}>
-          These mapping rules are fixed by the product and cannot be changed. French-Arabic (Franco)
-          questions always get Arabic-script answers.
+          The AI detects each customer&apos;s language and replies in that language. Arabizi is understood
+          but replies are always Arabic script.
         </Text>
         {RESPONSE_ROWS.map((row) => (
           <View key={row.fromLabel} style={cmFormStyles.row}>

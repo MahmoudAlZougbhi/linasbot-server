@@ -224,7 +224,7 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "propose_cm_faq_upsert",
             "description": "Propose create/update of one FAQ group in CM. Does not write until "
             "owner confirms via approve_cm_patch (Approve→Live). For simple new Q&A pairs that "
-            "should auto-translate to ar/en/fr/franco, prefer propose_smart_answer.",
+            "should auto-translate into the tenant's selected Smart Answer languages, prefer propose_smart_answer.",
             "parameters": {
                 "type": "object",
                 "properties": {

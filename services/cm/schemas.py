@@ -191,7 +191,7 @@ class DynamicMessagesSection(CmBaseModel):
 
 
 class FaqVariant(CmBaseModel):
-    language: LangCode
+    language: str
     question: str = ""
     answer: str = ""
     reviewed: bool = False
@@ -204,19 +204,31 @@ class FaqRecord(CmBaseModel):
     tags: list[str] = Field(default_factory=list)
     notes: str | None = None
     status: Literal["draft", "active", "archived", "restricted", "needs_review"] = "draft"
-    source_language: LangCode | None = None
+    source_language: str | None = None
     reviewed: bool = False
     provenance: str | None = None
     revision: int = 1
 
+    def is_complete_for_languages(self, required: list[str] | tuple[str, ...]) -> bool:
+        required_set = {str(lang).strip().lower() for lang in required if str(lang).strip()}
+        if not required_set:
+            return True
+        langs = {
+            str(v.language).strip().lower()
+            for v in self.variants
+            if (v.question or "").strip() and (v.answer or "").strip()
+        }
+        return required_set <= langs
+
     @property
     def is_complete_four_lang(self) -> bool:
-        langs = {v.language for v in self.variants if (v.question or "").strip() and (v.answer or "").strip()}
-        return langs >= {"ar", "en", "fr", "franco"}
+        """Backward-compatible: complete for legacy 4-language default."""
+        return self.is_complete_for_languages(("ar", "en", "fr", "franco"))
 
 
 class FaqSection(CmBaseModel):
     items: list[FaqRecord] = Field(default_factory=list)
+    smart_answer_languages: list[str] = Field(default_factory=lambda: ["ar", "en", "fr", "franco"])
     notes: str | None = None
 
 

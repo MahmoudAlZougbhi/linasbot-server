@@ -40,7 +40,7 @@ const CmLanguagesPage = () => {
   return (
     <CmSectionShell
       title="Languages"
-      description="Enable or disable languages and set the default. The answer map (including Franco → Arabic) is fixed and cannot be edited."
+      description="Languages are used for Smart Answers and saved content translations — not customer reply language. Customer AI replies are multilingual by default."
       loading={draft.loading}
       dirty={draft.dirty}
       saving={draft.saving}
@@ -54,10 +54,11 @@ const CmLanguagesPage = () => {
     >
       <div className="space-y-4 max-w-3xl">
         <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
-          <h2 className="text-sm font-semibold text-slate-900">Supported languages</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Content languages</h2>
           <p className="text-xs text-slate-500">
-            You control which languages are on. Customers are answered only in enabled languages. App Settings
-            language does not change customer DM/comment replies.
+            Organize published content and knowledge by language. This does not limit which languages
+            customers receive in DMs or comments — the AI detects and replies in the customer&apos;s language.
+            Smart Answer translation languages are managed on the Smart Answers screen.
           </p>
           <div className="grid sm:grid-cols-2 gap-2">
             {LANGS.map((lang) => (
@@ -70,19 +71,19 @@ const CmLanguagesPage = () => {
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
-          <h2 className="text-sm font-semibold text-slate-900">Answer language map (fixed)</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Customer reply language (automatic)</h2>
+          <p className="text-xs text-slate-500">
+            Fixed product behavior: detect the customer&apos;s language and reply in that language.
+            Arabizi/Franco input is understood but replies are always Arabic script.
+          </p>
           <ul className="space-y-2 text-sm text-slate-700">
             {RESPONSE_ROWS.map((row) => (
               <li key={row.from} className="rounded-xl bg-slate-50 px-3 py-2">
-                <span className="font-medium">{row.fromLabel}</span> question →{" "}
-                <span className="font-medium">{row.toLabel}</span> answer
+                <span className="font-medium">{row.fromLabel}</span> detected →{" "}
+                <span className="font-medium">{row.toLabel}</span> reply
               </li>
             ))}
           </ul>
-          <p className="text-xs text-slate-500">
-            Fixed product policy — cannot be changed. Franco / Arabizi questions always get Arabic-script
-            answers. FAQ translation status is managed on the FAQ page.
-          </p>
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">

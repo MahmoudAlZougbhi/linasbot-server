@@ -24,20 +24,18 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
     "languages": {
         "title": "Languages",
         "purpose": (
-            "Customer reply language for DMs and comments. "
-            "Owners may enable/disable supported languages and set the default. "
-            "The answer language map is FIXED (sabtin) and cannot be changed: "
-            "English→English, Arabic→Arabic, French→French, Franco→Arabic. "
-            "App Settings language is UI-only and does not change customer replies."
+            "Content/knowledge language organization and default fallback — NOT customer reply language control. "
+            "Customer-facing AI replies are multilingual by default (auto-detect, reply in user's language). "
+            "Smart Answer translation languages are configured on the Smart Answers / FAQ screen."
         ),
-        "why": "Wrong enabled languages / default makes the AI reply in the wrong language.",
+        "why": "Default language and behavior notes still matter for content organization and unknown-language fallback.",
         "what_to_fill": ["supported_languages", "default_language"],
         "useful": (
             "mixed_language_behavior, unknown_language_behavior. "
-            "response_language_map is product-fixed — refuse edit requests; explain sabtin rules."
+            "supported_languages does NOT limit customer DM/comment reply languages."
         ),
         "app_path": "AI Setup → Languages",
-        "fixed_fields": ["response_language_map"],
+        "fixed_fields": ["response_language_map", "customer_reply_multilingual"],
         "editable_fields": ["supported_languages", "default_language"],
     },
     "style": {

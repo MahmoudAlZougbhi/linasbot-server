@@ -1,143 +1,103 @@
-"""Customer reply language follows AI Setup Languages policy."""
+"""Customer reply language policy — multilingual by default."""
 
 from __future__ import annotations
 
+import json
+
 from services.cm.language_policy import (
+    detect_and_resolve_customer_languages,
+    ensure_customer_languages,
     frozen_language_policy,
     frozen_response_language_map,
     language_policy_public_summary,
     resolve_customer_response_language,
 )
 from services.cm.schemas import LanguagePolicy
-from services.owner_ai_context import SYSTEM_PROMPT
-from services.owner_copilot_v2.brain_support import SYSTEM_V2
+from services.customer_reply_v2.answer_luna import build_answer_messages, effective_response_language
 
 
-def test_frozen_policy_matches_system_standard() -> None:
+def test_frozen_policy_defaults() -> None:
     pol = frozen_language_policy()
     assert pol.default_language == "ar"
     assert pol.response_language_map["franco"] == "ar"
-    assert resolve_customer_response_language(tenant_id=None, detected_language="franco") == "ar"
+
+
+def test_english_customer_english_reply() -> None:
     assert resolve_customer_response_language(tenant_id=None, detected_language="en") == "en"
+
+
+def test_arabic_customer_arabic_reply() -> None:
+    assert resolve_customer_response_language(tenant_id=None, detected_language="ar") == "ar"
+
+
+def test_french_customer_french_reply() -> None:
     assert resolve_customer_response_language(tenant_id=None, detected_language="fr") == "fr"
 
 
-def test_schema_coerces_custom_response_language_map() -> None:
-    pol = LanguagePolicy.model_validate(
-        {
-            "supported_languages": ["ar", "en", "fr", "franco"],
-            "response_language_map": {"ar": "en", "en": "fr", "fr": "ar", "franco": "en"},
-            "default_language": "ar",
-        }
-    )
-    assert pol.response_language_map == frozen_response_language_map()
-    assert pol.response_language_map["franco"] == "ar"
+def test_chinese_customer_chinese_reply() -> None:
+    assert resolve_customer_response_language(tenant_id=None, detected_language="zh") == "zh"
 
 
-def test_tenant_map_override_is_ignored_at_resolve() -> None:
-    """Even a malicious/stale policy object cannot change Franco→Arabic (or identity maps)."""
+def test_arabizi_customer_arabic_script_reply() -> None:
+    assert resolve_customer_response_language(tenant_id=None, detected_language="franco") == "ar"
+
+
+def test_tenant_supported_languages_do_not_force_arabic_replies() -> None:
     policy = LanguagePolicy(
-        supported_languages=("ar", "en", "fr", "franco"),
-        response_language_map={"ar": "en", "en": "ar", "fr": "en", "franco": "en"},
-        default_language="ar",
-    )
-    # Schema already coerces, but resolve also ignores any map field.
-    assert policy.response_language_map["franco"] == "ar"
-    assert (
-        resolve_customer_response_language(
-            tenant_id="any",
-            detected_language="franco",
-            policy=policy,
-        )
-        == "ar"
-    )
-    assert (
-        resolve_customer_response_language(
-            tenant_id="any",
-            detected_language="en",
-            policy=policy,
-        )
-        == "en"
-    )
-
-
-def test_supported_languages_clamp_uses_default() -> None:
-    policy = LanguagePolicy(
-        supported_languages=("ar", "franco"),
+        supported_languages=("ar",),
         response_language_map={"ar": "ar", "en": "en", "fr": "fr", "franco": "ar"},
         default_language="ar",
     )
     assert (
         resolve_customer_response_language(
-            tenant_id="any",
+            tenant_id="tenant-x",
             detected_language="en",
             policy=policy,
         )
-        == "ar"
+        == "en"
     )
     assert (
         resolve_customer_response_language(
-            tenant_id="any",
-            detected_language="franco",
+            tenant_id="tenant-x",
+            detected_language="fr",
             policy=policy,
         )
-        == "ar"
+        == "fr"
     )
 
 
 def test_unknown_detected_uses_default_language() -> None:
     policy = LanguagePolicy(
         supported_languages=("en", "fr"),
-        response_language_map={"ar": "ar", "en": "en", "fr": "fr", "franco": "ar"},
         default_language="en",
     )
     assert (
         resolve_customer_response_language(
             tenant_id="any",
-            detected_language="de",
+            detected_language="",
             policy=policy,
         )
         == "en"
     )
 
 
-def test_public_summary_marks_map_fixed() -> None:
+def test_public_summary_multilingual() -> None:
     summary = language_policy_public_summary(None)
-    assert summary["response_language_map_editable"] is False
-    assert summary["response_language_map"]["franco"] == "ar"
-    assert "response_language_map" in summary["fixed"]
-    assert "supported_languages" in summary["editable"]
+    assert summary["customer_reply_multilingual"] is True
+    assert summary["customer_reply_limited_by_supported_languages"] is False
+    assert summary["arabizi_reply_policy"] == "understand_only_reply_arabic_script"
 
 
-def test_owner_prompts_lock_customer_reply_language_to_cm() -> None:
-    for prompt in (SYSTEM_PROMPT, SYSTEM_V2):
-        lower = prompt.lower()
-        assert "ai setup" in lower or "languages" in lower
-        assert "settings" in lower
-        assert "preferred_language" in lower
-        assert "dm" in lower or "comment" in lower
-        assert "franco" in lower
-        assert "fixed" in lower or "sabtin" in lower
+def test_effective_response_language_never_arabizi() -> None:
+    assert effective_response_language(response_language="franco", fixed_context={}) == "ar"
+    assert effective_response_language(response_language="en", fixed_context={}) == "en"
 
 
-def test_languages_section_guide_marks_map_fixed() -> None:
-    from services.cm.section_guide import guide_for_section
-
-    guide = guide_for_section("languages")
-    assert guide is not None
-    assert "response_language_map" not in (guide.get("what_to_fill") or [])
-    assert "supported_languages" in (guide.get("what_to_fill") or [])
-    assert "response_language_map" in (guide.get("fixed_fields") or [])
-    purpose = str(guide.get("purpose") or "").lower()
-    assert "fixed" in purpose or "sabtin" in purpose
-
-
-def test_answer_luna_messages_include_cm_response_language() -> None:
-    from services.customer_reply_v2.answer_luna import build_answer_messages
+def test_answer_luna_messages_multilingual_rule() -> None:
     from services.customer_reply_v2.models import EvidenceRecord
 
     msgs = build_answer_messages(
-        message="hello",
+        message="bonjour",
         fixed_context={"ai_basics": {"advanced_instructions": "x"}, "style": {"style_body": "y"}},
         evidence=[EvidenceRecord("services:s1", "services", "S", "body", "v1")],
         evidence_status="sufficient",
@@ -149,9 +109,29 @@ def test_answer_luna_messages_include_cm_response_language() -> None:
         response_language="fr",
         detected_language="fr",
     )
-    blob = msgs[1]["content"]
-    if isinstance(blob, list):
-        blob = " ".join(str(part.get("text") or "") for part in blob if isinstance(part, dict))
+    blob = json.dumps(msgs, ensure_ascii=False)
     assert "response_language" in blob
     assert "fr" in blob
-    assert "AI Setup" in blob or "Languages" in blob
+    assert "Arabizi" in blob or "Arabic script" in blob
+
+
+def test_detect_and_resolve_franco() -> None:
+    out = detect_and_resolve_customer_languages(
+        tenant_id=None,
+        message="shu se3er l session",
+        conversation_id="test-franco",
+    )
+    assert out["detected_language"] in {"franco", "ar"}
+    assert out["response_language"] == "ar"
+
+
+def test_ensure_customer_languages_fills_missing() -> None:
+    detected, response = ensure_customer_languages(
+        tenant_id=None,
+        message="Hello, what are your hours?",
+        detected_language="",
+        response_language="",
+        conversation_id="test-ensure",
+    )
+    assert detected == "en"
+    assert response == "en"

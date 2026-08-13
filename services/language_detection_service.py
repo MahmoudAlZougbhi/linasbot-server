@@ -12,8 +12,8 @@ from language_resolver import LanguageResolver, system_language_instruction
 from services.llm_core_service import client as openai_client
 from services.user_persistence_service import user_persistence
 
-SUPPORTED_TRAINING_LANGUAGES = {"ar", "en", "fr", "franco"}
-TRAINING_LANGUAGE_ORDER = ["ar", "en", "fr", "franco"]
+SUPPORTED_TRAINING_LANGUAGES = {"ar", "en", "fr", "franco", "es", "de", "it", "pt", "zh", "tr", "ru"}
+TRAINING_LANGUAGE_ORDER = ["ar", "en", "fr", "franco", "es", "de", "it", "pt", "zh", "tr", "ru"]
 FRENCH_MARKERS = (
     "bonjour",
     "bonsoir",
@@ -120,10 +120,15 @@ class LanguageDetectionService:
     @staticmethod
     def normalize_training_language(language: str | None, default: str = "ar") -> str:
         """
-        Normalize language identifiers to project-standard codes.
+        Normalize language identifiers to project-standard codes (Smart Answers + legacy training).
         """
         if not language:
             return default
+        from services.cm.smart_answer_languages import normalize_smart_answer_language
+
+        normalized = normalize_smart_answer_language(language)
+        if normalized:
+            return normalized
         normalized = str(language).strip().lower()
         alias_map = {
             "arabic": "ar",
@@ -184,7 +189,7 @@ class LanguageDetectionService:
     ) -> dict:
         """
         Translate a Q&A pair from any supported source language into requested target languages.
-        Supported languages: ar, en, fr, franco.
+        Supported languages include ar, en, fr, franco, es, de, it, pt, zh, tr, ru (and more on request).
         """
         normalized_targets: list[str] = []
         requested_targets = target_languages or TRAINING_LANGUAGE_ORDER
@@ -221,6 +226,7 @@ class LanguageDetectionService:
             "- en must be natural English.\n"
             "- fr must be natural French.\n"
             "- franco must be Lebanese Arabic in Latin characters only (no Arabic script).\n"
+            "- es/de/it/pt/zh/tr/ru and other requested codes must be natural, fluent translations.\n"
             "- Do not use Fusha/classical Arabic for ar. Always use Lebanese colloquial.\n"
             "- Do not include markdown or extra keys."
         )

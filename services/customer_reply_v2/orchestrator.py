@@ -90,8 +90,8 @@ async def run_customer_reply_v2_dm(
     *,
     tenant_id: str,
     message: str,
-    detected_language: str,
-    response_language: str,
+    detected_language: str = "",
+    response_language: str = "",
     channel: str = "instagram_dm",
     asset_id: str = "",
     provider_sender_id: str = "",
@@ -105,6 +105,16 @@ async def run_customer_reply_v2_dm(
 ) -> CustomerReplyOutcome:
     """Canonical DM flow for Customer Reply AI V2 (sole production engine)."""
     started = time.perf_counter()
+
+    from services.cm.language_policy import ensure_customer_languages
+
+    detected_language, response_language = ensure_customer_languages(
+        tenant_id=tenant_id,
+        message=message,
+        detected_language=detected_language,
+        response_language=response_language,
+        conversation_id=conversation_id or None,
+    )
 
     try:
         revision, _manifest = get_cached_manifest(tenant_id)
