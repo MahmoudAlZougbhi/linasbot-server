@@ -7,9 +7,9 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from services.ai_reply_lifecycle import (
-    AiReplyTurnRecord,
     TERMINAL_BLOCKED,
     TERMINAL_DELIVERED,
+    AiReplyTurnRecord,
     find_turn_by_external_inbound,
     find_turn_for_inbound_event,
     list_all_turns,

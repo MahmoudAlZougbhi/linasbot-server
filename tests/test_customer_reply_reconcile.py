@@ -11,13 +11,13 @@ import pytest
 from services.ai_reply_credit_gate import capture_after_reply_persisted, reserve_before_ai
 from services.ai_reply_delivery import classify_send_result, record_delivery_outcome
 from services.ai_reply_lifecycle import begin_turn, get_turn, put_turn
+from services.credit_ledger_service import CreditLedgerService
 from services.customer_reply_reconcile_classify import (
     classify_event_turn,
     scan_reconcile_candidates,
     summarize_candidates,
 )
 from services.customer_reply_reconcile_worker import reconcile_customer_replies, reset_reconcile_metrics
-from services.credit_ledger_service import CreditLedgerService
 from services.durable_event_claim import _file_claim_path
 from services.entitlements_service import EntitlementsStore
 from services.scale.inbound_event_store import (
@@ -146,7 +146,6 @@ async def test_worker_crash_after_ai_retries_delivery_only(
     ledger_env: CreditLedgerService,
 ) -> None:
     ledger_env.ensure_period_grant("t1")
-    before = ledger_env.get_balance("t1")
     event = _seed_inbound(message_id="mid-crash-after-ai", state="failed")
     turn = begin_turn(
         tenant_id="t1",
@@ -232,7 +231,6 @@ async def test_replay_after_openai_outage(stores: Path, ledger_env: CreditLedger
 @pytest.mark.asyncio
 async def test_replay_after_meta_outage_delivery_only(stores: Path, ledger_env: CreditLedgerService) -> None:
     ledger_env.ensure_period_grant("t1")
-    before = ledger_env.get_balance("t1")
     event = _seed_inbound(message_id="mid-meta-outage", state="failed")
     turn = begin_turn(
         tenant_id="t1",
