@@ -329,7 +329,7 @@ def test_capability_manifest_freshness() -> None:
     assert manifest.exists()
     data = json.loads(manifest.read_text(encoding="utf-8"))
     assert data["owner_model"] == "gpt-5.6-sol"
-    assert data["guest_model"] == "gpt-5.6-luna"
+    assert data["guest_model"] == "gpt-5.6-sol"
     creative = next(c for c in data["capabilities"] if c["id"] == "creative_studio")
     assert creative["status"] == "unavailable"
     assert "create_creative_draft" not in data.get("active_tools", [])

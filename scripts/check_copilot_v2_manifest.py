@@ -21,8 +21,10 @@ def main() -> int:
     errors: list[str] = []
     if data.get("owner_model") != "gpt-5.6-sol":
         errors.append("owner_model must be gpt-5.6-sol")
-    if data.get("guest_model") != "gpt-5.6-luna":
-        errors.append("guest_model must be gpt-5.6-luna")
+    if data.get("guest_model") != "gpt-5.6-sol":
+        errors.append("guest_model must be gpt-5.6-sol")
+    if data.get("guest_reasoning_effort") != "low":
+        errors.append("guest_reasoning_effort must be low")
     if data.get("customer_hv_model") != "gpt-5.6-terra":
         errors.append("customer_hv_model must be gpt-5.6-terra")
     if data.get("customer_social_model") not in (None, "gpt-5.6-terra"):

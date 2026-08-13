@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, patch
@@ -169,6 +170,7 @@ def test_guest_question_limit_and_no_tools(guest_client):
 @pytest.mark.asyncio
 async def test_compose_guest_reply_uses_llm_not_canned_pitch():
     from services.guest_ai_service import FORBIDDEN_GUEST_TOOLS, compose_guest_reply
+    from services.model_policy import MODEL_OWNER_SOL
 
     async def _create(**kwargs: Any) -> _FakeResponse:
         assert kwargs.get("messages")
@@ -176,6 +178,8 @@ async def test_compose_guest_reply_uses_llm_not_canned_pitch():
         assert (
             "broken record" in kwargs["messages"][0]["content"] or "not a brochure" in kwargs["messages"][0]["content"]
         )
+        assert kwargs.get("model") == MODEL_OWNER_SOL
+        assert kwargs.get("reasoning_effort") == "low"
         return _FakeResponse("AI Setup lets you teach the AI your services and FAQs before publish.")
 
     fake = type(
@@ -188,6 +192,7 @@ async def test_compose_guest_reply_uses_llm_not_canned_pitch():
     assert result["tools_used"] == []
     assert FORBIDDEN_GUEST_TOOLS
     assert "AI Setup" in result["reply_text"]
+    assert result["model"] == MODEL_OWNER_SOL
     # Old canned sales intro must not be the reply body.
     assert not result["reply_text"].startswith("Linas AI is a business AI platform: connect channels")
 
@@ -268,6 +273,33 @@ async def test_guest_llm_uses_gpt5_safe_params_not_legacy_max_tokens():
     assert captured.get("reasoning_effort") == "low"
     assert "temperature" not in captured
     assert captured.get("model") == "gpt-5-mini"
+
+
+@pytest.mark.asyncio
+async def test_compose_guest_reply_default_sol_low_reasoning():
+    """Default guest path uses Sol + explicit low reasoning (text-only, no tool clamp)."""
+    from services.guest_ai_service import GUEST_REASONING_EFFORT, compose_guest_reply, guest_model_name
+    from services.model_policy import MODEL_OWNER_SOL
+
+    captured: dict[str, Any] = {}
+
+    async def _create(**kwargs: Any) -> _FakeResponse:
+        captured.update(kwargs)
+        return _FakeResponse("Linas AI connects Instagram and Facebook for automated DMs.")
+
+    fake = type(
+        "C",
+        (),
+        {"chat": type("Ch", (), {"completions": type("Co", (), {"create": AsyncMock(side_effect=_create)})()})()},
+    )()
+    with patch("services.llm_core_service.client", fake):
+        with patch.dict("os.environ", {}, clear=False):
+            os.environ.pop("LINAS_GUEST_MODEL", None)
+            result = await compose_guest_reply("What is Linas?", language="en")
+    assert guest_model_name() == MODEL_OWNER_SOL
+    assert captured.get("model") == MODEL_OWNER_SOL
+    assert captured.get("reasoning_effort") == GUEST_REASONING_EFFORT
+    assert result["model"] == MODEL_OWNER_SOL
 
 
 def test_build_chat_completion_kwargs_gpt5_vs_legacy():

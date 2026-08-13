@@ -42,7 +42,7 @@ def owner_model_name() -> str:
 
 
 def guest_model_name_v2() -> str:
-    return (os.getenv("LINAS_GUEST_MODEL") or "gpt-5.6-luna").strip() or "gpt-5.6-luna"
+    return (os.getenv("LINAS_GUEST_MODEL") or "gpt-5.6-sol").strip() or "gpt-5.6-sol"
 
 
 def owner_max_output_tokens(*, reasoning_effort: str | None = None) -> int:
