@@ -20,6 +20,7 @@ from services.smart_followup.constants import (
     CLAIM_BATCH_SIZE,
     CLAIM_STALE_SECONDS,
     DEFAULT_CHANNEL,
+    DEFAULT_CHANNELS_ENABLED,
     DEFAULT_STEPS,
     TERMINAL_JOB_STATUSES,
 )
@@ -60,6 +61,7 @@ class SmartFollowUpRepository:
                 business_hours_only=True,
                 billing_mode="customer_direct",
                 settings_version=1,
+                channels_enabled=dict(DEFAULT_CHANNELS_ENABLED),
             )
             self.session.add(settings)
             self.session.flush()

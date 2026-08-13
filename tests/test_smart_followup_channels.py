@@ -216,3 +216,47 @@ async def test_meta_worker_routes_to_deliver_meta_dm(sfu_db):
         assert out["processed"] == 1
         assert out["results"][0]["status"] == "sent"
         assert out["results"][0]["channel"] == SOURCE_CHANNEL_FACEBOOK_MESSENGER
+
+
+def test_schedule_skips_disabled_channel(sfu_db):
+    update_settings(
+        sfu_db,
+        tenant_id="tenant_off",
+        actor_user_id="u1",
+        payload={
+            "enabled": True,
+            "business_hours_only": False,
+            "channels_enabled": {
+                "whatsapp_cloud": False,
+                "instagram_dm": True,
+                "facebook_messenger": True,
+            },
+            "steps": [{"step_index": 1, "enabled": True, "delay_minutes": 30, "goal": "gentle_check_in"}],
+        },
+    )
+    repo = WhatsAppCloudRepository(sfu_db)
+    conn = repo.create_connection(
+        tenant_id="tenant_off",
+        phone_number_id="pn-off",
+        display_phone_number="+96170000002",
+        waba_id="waba-off",
+        business_account_id="ba-off",
+    )
+    conv = repo.get_or_create_conversation(
+        tenant_id="tenant_off",
+        connection_id=conn.id,
+        customer_wa_id="96171111111",
+    )
+    result = schedule_after_ai_reply(
+        sfu_db,
+        tenant_id="tenant_off",
+        connection_id=conn.id,
+        conversation_id=conv.id,
+        trigger_outbound_intent_id="intent-off",
+        control_epoch=int(conv.control_epoch),
+        trigger_ai_sent_at=datetime.now(UTC),
+        conversation=conv,
+        channel=SOURCE_CHANNEL_WHATSAPP_CLOUD,
+    )
+    assert result["scheduled"] is False
+    assert result["reason"] == "channel_disabled"

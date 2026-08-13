@@ -5,7 +5,23 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import TypedDict
 
-from services.requests.constants import SOURCE_CHANNEL_WHATSAPP_CLOUD
+from services.requests.constants import (
+    SOURCE_CHANNEL_FACEBOOK_MESSENGER,
+    SOURCE_CHANNEL_INSTAGRAM_DM,
+    SOURCE_CHANNEL_WHATSAPP_CLOUD,
+)
+
+FOLLOWUP_CHANNELS = (
+    SOURCE_CHANNEL_WHATSAPP_CLOUD,
+    SOURCE_CHANNEL_INSTAGRAM_DM,
+    SOURCE_CHANNEL_FACEBOOK_MESSENGER,
+)
+
+DEFAULT_CHANNELS_ENABLED: dict[str, bool] = {
+    SOURCE_CHANNEL_WHATSAPP_CLOUD: True,
+    SOURCE_CHANNEL_INSTAGRAM_DM: True,
+    SOURCE_CHANNEL_FACEBOOK_MESSENGER: True,
+}
 
 ENTITLEMENT_KEY = "smart_followup"
 BILLING_MODE_CUSTOMER_DIRECT = "customer_direct"

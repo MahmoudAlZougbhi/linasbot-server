@@ -11,6 +11,7 @@ from services.requests.constants import SOURCE_CHANNEL_WHATSAPP_CLOUD
 from services.smart_followup.channels import normalize_followup_channel
 from services.smart_followup.constants import DEFAULT_CHANNEL
 from services.smart_followup.repository import SmartFollowUpRepository
+from services.smart_followup.settings_service import channel_enabled_for_settings
 from services.smart_followup.types import FollowUpConversationView, FollowUpScheduleRequest
 from services.smart_followup.window_rules import safe_send_deadline
 from services.whatsapp_cloud.observability import emit_wa_event
@@ -83,6 +84,9 @@ def schedule_followup_sequence(
         return {"scheduled": False, "reason": "no_enabled_steps"}
 
     channel = normalize_followup_channel(request.channel or DEFAULT_CHANNEL)
+    if not channel_enabled_for_settings(settings, channel):
+        return {"scheduled": False, "reason": "channel_disabled"}
+
     sent_at = request.trigger_ai_sent_at or _utcnow()
     if sent_at.tzinfo is None:
         sent_at = sent_at.replace(tzinfo=UTC)
