@@ -57,9 +57,9 @@ function DrawerModuleIcon({
           styles.featuredIconWrap,
           styles.featuredIconShadow,
           {
-            backgroundColor: colors.mintSoft,
-            borderColor: colors.accentSoft,
-            shadowColor: colors.accentDeep,
+            backgroundColor: colors.featuredIconBg,
+            borderColor: colors.borderSoft,
+            shadowColor: colors.text,
           },
         ]}
       >
