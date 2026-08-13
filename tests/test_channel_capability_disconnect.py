@@ -52,9 +52,7 @@ async def test_clear_toggles_after_disconnect_forces_dm_off(monkeypatch) -> None
 
     from services.channel_capability_disconnect import clear_channel_toggles_after_disconnect
 
-    ok = await clear_channel_toggles_after_disconnect(
-        tenant_id="linas", platform="instagram", actor="test"
-    )
+    ok = await clear_channel_toggles_after_disconnect(tenant_id="linas", platform="instagram", actor="test")
     assert ok is True
     assert ("comments", False) in calls
     assert ("dm", False) in calls
@@ -84,8 +82,6 @@ async def test_clear_invalid_dm_when_disconnected(monkeypatch) -> None:
 
     from services.channel_capability_disconnect import clear_invalid_dm_enabled_state_async
 
-    ok = await clear_invalid_dm_enabled_state_async(
-        tenant_id="linas", platform="facebook", actor="test"
-    )
+    ok = await clear_invalid_dm_enabled_state_async(tenant_id="linas", platform="facebook", actor="test")
     assert ok is True
     assert calls == [("dm", False)]
