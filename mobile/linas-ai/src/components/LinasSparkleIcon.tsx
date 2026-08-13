@@ -1,4 +1,4 @@
-import Svg, { Path } from 'react-native-svg';
+import { Image, type ImageStyle } from 'react-native';
 
 /** Canonical four-point Linas sparkle from assets/linas-app-icon.svg */
 export const LINAS_SPARKLE_PATH =
@@ -7,6 +7,8 @@ export const LINAS_SPARKLE_PATH =
 /** Tight crop so the star fills its render box (full 1024 viewBox leaves ~54% padding). */
 export const LINAS_SPARKLE_VIEWBOX = '274 212 476 476';
 
+const SPARKLE_TEMPLATE = require('../../assets/linas-sparkle-template.png');
+
 type Props = {
   size?: number;
   color: string;
@@ -14,15 +16,18 @@ type Props = {
 
 /** Solid four-point sparkle — brand mark, not a 5-point star or Unicode glyph. */
 export function LinasSparkleIcon({ size = 16, color }: Props) {
+  const style: ImageStyle = {
+    width: size,
+    height: size,
+    tintColor: color,
+  };
+
   return (
-    <Svg
-      width={size}
-      height={size}
-      viewBox={LINAS_SPARKLE_VIEWBOX}
+    <Image
+      source={SPARKLE_TEMPLATE}
+      style={style}
       accessible={false}
       importantForAccessibility="no"
-    >
-      <Path d={LINAS_SPARKLE_PATH} fill={color} />
-    </Svg>
+    />
   );
 }

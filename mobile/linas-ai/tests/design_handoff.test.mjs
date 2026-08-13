@@ -15,6 +15,27 @@ function read(rel) {
   return readFileSync(src(...rel.split('/')), 'utf8');
 }
 
+test('brand sparkle renders without react-native-svg (no Uni placeholder)', () => {
+  const sparkle = read('components/LinasSparkleIcon.tsx');
+  const fade = read('features/nav/DrawerFadeSeparator.tsx');
+  const pkg = readFileSync(join(root, 'package.json'), 'utf8');
+  assert.match(sparkle, /linas-sparkle-template\.png/);
+  assert.match(sparkle, /tintColor:\s*color/);
+  assert.doesNotMatch(sparkle, /react-native-svg/);
+  assert.doesNotMatch(fade, /react-native-svg/);
+  assert.doesNotMatch(pkg, /react-native-svg/);
+  assert.ok(existsSync(join(root, 'assets/linas-sparkle-template.png')));
+});
+
+test('drawer AI Setup active tile uses mint sparkle chrome', () => {
+  const grid = read('features/nav/DrawerNavGrid.tsx');
+  const header = read('features/nav/DrawerHeader.tsx');
+  assert.match(grid, /modId === 'cm'/);
+  assert.match(grid, /colors\.mintSoft/);
+  assert.match(grid, /LinasSparkleIcon[\s\S]*color=\{colors\.accentDeep\}/);
+  assert.match(header, /LinasSparkleIcon size=\{16\} color=\{colors\.text\}/);
+});
+
 test('drawer module order matches binding product order', () => {
   const text = read('features/nav/drawerModules.ts');
   // AI Setup (cm) is featured separately; grid order is DRAWER_MODULES only.
