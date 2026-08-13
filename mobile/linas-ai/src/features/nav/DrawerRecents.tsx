@@ -38,7 +38,8 @@ const styles = StyleSheet.create({
   separator: { height: StyleSheet.hairlineWidth, marginBottom: spacing.sm },
   heading: {
     fontFamily: fonts.bodyMedium,
-    fontSize: 13,
+    fontSize: 14,
+    lineHeight: 18,
     letterSpacing: -0.15,
     marginBottom: spacing.sm,
   },

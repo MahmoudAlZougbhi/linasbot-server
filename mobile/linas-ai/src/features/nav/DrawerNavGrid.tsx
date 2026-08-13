@@ -162,10 +162,10 @@ const styles = StyleSheet.create({
   badgeText: { fontFamily: fonts.bodyMedium, fontSize: 10, lineHeight: 12 },
   label: {
     fontFamily: fonts.body,
-    fontWeight: '500',
-    fontSize: 12,
-    lineHeight: 16,
-    letterSpacing: -0.1,
+    fontWeight: '400',
+    fontSize: 16,
+    lineHeight: 22,
+    letterSpacing: -0.15,
     textAlign: 'center',
   },
 });

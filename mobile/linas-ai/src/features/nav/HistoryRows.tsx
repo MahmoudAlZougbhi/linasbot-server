@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   rowDrawer: {
-    minHeight: 36,
+    minHeight: 44,
     borderRadius: radii.md,
     marginBottom: 2,
     paddingHorizontal: 4,
@@ -254,9 +254,9 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   mainDrawer: {
-    paddingVertical: 6,
+    paddingVertical: 10,
     paddingHorizontal: 8,
-    minHeight: 32,
+    minHeight: 44,
   },
   rowTitle: {
     fontFamily: fonts.bodyMedium,
@@ -266,16 +266,16 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   rowTitleDrawer: {
-    fontFamily: fonts.bodyMedium,
+    fontFamily: fonts.body,
     fontWeight: '400',
-    fontSize: 10.5,
-    lineHeight: 13,
+    fontSize: 16,
+    lineHeight: 22,
     letterSpacing: -0.15,
   },
   emptyDrawer: {
     fontFamily: fonts.body,
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 14,
+    lineHeight: 20,
   },
   overflow: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   overflowDrawer: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
