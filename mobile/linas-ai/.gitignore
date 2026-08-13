@@ -34,6 +34,12 @@ yarn-error.*
 .env*.local
 data/
 
+# Google Play service-account keys (use EAS credentials / ~/.linasai-secrets)
+secrets/
+*google-play*.json
+*play-service-account*.json
+*-play-upload*.json
+
 # local preview APKs (build artifacts)
 *.apk
 *.aab

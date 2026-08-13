@@ -113,4 +113,17 @@ describe('appleAccount + Settings source wiring', () => {
     assert.match(signIn, /authorizationCode/);
     assert.match(signIn, /authorization_code/);
   });
+
+  it('hashes nonce for Apple request and sends raw nonce to backend', () => {
+    const signIn = read('features/auth/appleSignIn.ts');
+    const account = read('features/auth/appleAccount.ts');
+    const nonce = read('features/auth/appleNonce.ts');
+    assert.match(nonce, /sha256HexNonce/);
+    assert.match(nonce, /CryptoDigestAlgorithm\.SHA256/);
+    for (const src of [signIn, account]) {
+      assert.match(src, /sha256HexNonce/);
+      assert.match(src, /nonce: hashedNonce/);
+      assert.match(src, /nonce: rawNonce/);
+    }
+  });
 });

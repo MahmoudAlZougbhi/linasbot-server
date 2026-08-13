@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
 import json
 import os
 import time
@@ -11,7 +13,7 @@ from typing import Any
 
 import jwt
 import pytest
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from fastapi import HTTPException
 from sqlalchemy import create_engine, event
 
@@ -30,9 +32,22 @@ from services.apple_identity_service import (  # noqa: E402
 from services.apple_sign_in_service import (  # noqa: E402
     AppleSignInError,
     is_private_relay_email,
+    nonce_matches,
     reset_jwks_cache_for_tests,
     verify_identity_token,
 )
+
+
+def _ephemeral_rs256() -> tuple[rsa.RSAPrivateKey, dict[str, Any]]:
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    public_key = private_key.public_key()
+    from jwt.algorithms import RSAAlgorithm
+
+    jwk = json.loads(RSAAlgorithm.to_jwk(public_key))
+    jwk["kid"] = "test-kid-rs1"
+    jwk["use"] = "sig"
+    jwk["alg"] = "RS256"
+    return private_key, jwk
 
 
 def _ephemeral_es256() -> tuple[ec.EllipticCurvePrivateKey, dict[str, Any]]:
@@ -41,20 +56,23 @@ def _ephemeral_es256() -> tuple[ec.EllipticCurvePrivateKey, dict[str, Any]]:
     from jwt.algorithms import ECAlgorithm
 
     jwk = json.loads(ECAlgorithm.to_jwk(public_key))
-    jwk["kid"] = "test-kid-1"
+    jwk["kid"] = "test-kid-es1"
     jwk["use"] = "sig"
     jwk["alg"] = "ES256"
     return private_key, jwk
 
 
 def _mint_token(
-    private_key: ec.EllipticCurvePrivateKey,
+    private_key: Any,
     *,
+    alg: str = "RS256",
+    kid: str = "test-kid-rs1",
     aud: str = "com.linasai.app",
     iss: str = "https://appleid.apple.com",
     sub: str = "apple-sub-1",
     exp_delta: int = 600,
     nonce: str | None = None,
+    nonce_encoding: str = "hex",
     email: str | None = "user@example.com",
     extra: dict[str, Any] | None = None,
 ) -> str:
@@ -70,16 +88,32 @@ def _mint_token(
         payload["email"] = email
         payload["email_verified"] = "true"
     if nonce is not None:
-        import hashlib
-
-        payload["nonce"] = hashlib.sha256(str(nonce).encode("utf-8")).hexdigest()
+        digest = hashlib.sha256(str(nonce).encode("utf-8")).digest()
+        if nonce_encoding == "b64url":
+            payload["nonce"] = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+        else:
+            payload["nonce"] = digest.hex()
     if extra:
         payload.update(extra)
-    return jwt.encode(payload, private_key, algorithm="ES256", headers={"kid": "test-kid-1"})
+    return jwt.encode(payload, private_key, algorithm=alg, headers={"kid": kid, "alg": alg})
 
 
 @pytest.fixture()
-def apple_jwks(monkeypatch: pytest.MonkeyPatch) -> ec.EllipticCurvePrivateKey:
+def apple_jwks_rs(monkeypatch: pytest.MonkeyPatch) -> rsa.RSAPrivateKey:
+    private_key, jwk = _ephemeral_rs256()
+    reset_jwks_cache_for_tests()
+
+    def _fake_fetch() -> dict[str, Any]:
+        return {"keys": [jwk]}
+
+    monkeypatch.setattr(sign_in, "_fetch_jwks_uncached", _fake_fetch)
+    monkeypatch.setenv("APPLE_BUNDLE_ID", "com.linasai.app")
+    yield private_key
+    reset_jwks_cache_for_tests()
+
+
+@pytest.fixture()
+def apple_jwks_es(monkeypatch: pytest.MonkeyPatch) -> ec.EllipticCurvePrivateKey:
     private_key, jwk = _ephemeral_es256()
     reset_jwks_cache_for_tests()
 
@@ -115,28 +149,65 @@ def test_is_private_relay_email() -> None:
     assert is_private_relay_email(None) is False
 
 
-def test_verify_identity_token_success(apple_jwks: ec.EllipticCurvePrivateKey) -> None:
-    token = _mint_token(apple_jwks, nonce="n-1", email="a@privaterelay.appleid.com")
+def test_nonce_matches_hex_and_b64url() -> None:
+    raw = "raw-nonce-xyz"
+    hex_claim = hashlib.sha256(raw.encode()).hexdigest()
+    b64_claim = base64.urlsafe_b64encode(hashlib.sha256(raw.encode()).digest()).decode().rstrip("=")
+    assert nonce_matches(raw_nonce=raw, token_nonce=hex_claim) is True
+    assert nonce_matches(raw_nonce=raw, token_nonce=b64_claim) is True
+    assert nonce_matches(raw_nonce=raw, token_nonce="nope") is False
+
+
+def test_verify_identity_token_rs256_success(apple_jwks_rs: rsa.RSAPrivateKey) -> None:
+    token = _mint_token(apple_jwks_rs, nonce="n-1", email="a@privaterelay.appleid.com")
     claims = verify_identity_token(token, nonce="n-1")
     assert claims["sub"] == "apple-sub-1"
     assert claims["email"] == "a@privaterelay.appleid.com"
     assert claims["is_private_email"] is True
 
 
-def test_verify_identity_token_bad_aud(apple_jwks: ec.EllipticCurvePrivateKey) -> None:
-    token = _mint_token(apple_jwks, aud="com.other.app")
+def test_verify_identity_token_rs256_nonce_b64url(apple_jwks_rs: rsa.RSAPrivateKey) -> None:
+    token = _mint_token(apple_jwks_rs, nonce="n-2", nonce_encoding="b64url")
+    claims = verify_identity_token(token, nonce="n-2")
+    assert claims["sub"] == "apple-sub-1"
+
+
+def test_verify_identity_token_es256_still_accepted(apple_jwks_es: ec.EllipticCurvePrivateKey) -> None:
+    token = _mint_token(
+        apple_jwks_es,
+        alg="ES256",
+        kid="test-kid-es1",
+        nonce="n-es",
+    )
+    claims = verify_identity_token(token, nonce="n-es")
+    assert claims["sub"] == "apple-sub-1"
+
+
+def test_verify_rejects_unsupported_alg(apple_jwks_rs: rsa.RSAPrivateKey) -> None:
+    token = _mint_token(apple_jwks_rs)
+    header_b64, payload_b64, sig = token.split(".")
+    header = json.loads(base64.urlsafe_b64decode(header_b64 + "=="))
+    header["alg"] = "HS256"
+    new_header = base64.urlsafe_b64encode(json.dumps(header, separators=(",", ":")).encode()).decode().rstrip("=")
+    bad = f"{new_header}.{payload_b64}.{sig}"
+    with pytest.raises(AppleSignInError, match="algorithm"):
+        verify_identity_token(bad)
+
+
+def test_verify_identity_token_bad_aud(apple_jwks_rs: rsa.RSAPrivateKey) -> None:
+    token = _mint_token(apple_jwks_rs, aud="com.other.app")
     with pytest.raises(AppleSignInError, match="audience"):
         verify_identity_token(token)
 
 
-def test_verify_identity_token_bad_iss(apple_jwks: ec.EllipticCurvePrivateKey) -> None:
-    token = _mint_token(apple_jwks, iss="https://evil.example")
+def test_verify_identity_token_bad_iss(apple_jwks_rs: rsa.RSAPrivateKey) -> None:
+    token = _mint_token(apple_jwks_rs, iss="https://evil.example")
     with pytest.raises(AppleSignInError, match="issuer"):
         verify_identity_token(token)
 
 
-def test_verify_identity_token_expired(apple_jwks: ec.EllipticCurvePrivateKey) -> None:
-    token = _mint_token(apple_jwks, exp_delta=-120)
+def test_verify_identity_token_expired(apple_jwks_rs: rsa.RSAPrivateKey) -> None:
+    token = _mint_token(apple_jwks_rs, exp_delta=-120)
     with pytest.raises(AppleSignInError, match="expired"):
         verify_identity_token(token)
 
@@ -183,10 +254,10 @@ def test_unlink_requires_other_login(pg_env: Path, monkeypatch: pytest.MonkeyPat
     assert find_by_apple_sub("sub-y") is None
 
 
-def test_link_required_conflict_path(apple_jwks: ec.EllipticCurvePrivateKey, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_link_required_conflict_path(apple_jwks_rs: rsa.RSAPrivateKey, monkeypatch: pytest.MonkeyPatch) -> None:
     from modules import apple_auth_api
 
-    token = _mint_token(apple_jwks, email="taken@example.com")
+    token = _mint_token(apple_jwks_rs, email="taken@example.com")
     monkeypatch.setattr(apple_auth_api, "find_by_apple_sub", lambda _sub: None)
     monkeypatch.setattr(
         apple_auth_api.user_service,

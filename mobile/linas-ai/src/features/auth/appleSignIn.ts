@@ -1,11 +1,11 @@
 import { Platform } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import * as Crypto from 'expo-crypto';
 import { z } from 'zod';
 
 import { apiFetch, ApiError } from '../../api/client';
 import { MobileLoginResponseSchema } from '../../api/types';
 import { tokenStore } from '../../auth/tokenStore';
+import { randomAppleNonce, sha256HexNonce } from './appleNonce';
 
 export type AppleSignInResult =
   | { ok: true }
@@ -17,17 +17,6 @@ const LinkRequiredSchema = z
     email_hint: z.string().optional(),
   })
   .passthrough();
-
-function randomNonce(bytes = 32): string {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let out = '';
-  const arr = new Uint8Array(bytes);
-  Crypto.getRandomValues(arr);
-  for (let i = 0; i < arr.length; i++) {
-    out += alphabet[arr[i]! % alphabet.length];
-  }
-  return out;
-}
 
 function fullNameFromCredential(
   name: AppleAuthentication.AppleAuthenticationFullName | null,
@@ -50,9 +39,9 @@ export async function signInWithApple(): Promise<AppleSignInResult> {
     return { ok: false, code: 'unavailable', message: 'apple_sign_in_unavailable' };
   }
 
-  // Pass raw nonce; expo-apple-authentication SHA-256-hashes it before Apple.
-  // Server compares claims.nonce to SHA-256(rawNonce).
-  const rawNonce = randomNonce();
+  // Native SIWA expects SHA-256(hex) on the Apple request; server gets rawNonce.
+  const rawNonce = randomAppleNonce();
+  const hashedNonce = await sha256HexNonce(rawNonce);
 
   let credential: AppleAuthentication.AppleAuthenticationCredential;
   try {
@@ -61,7 +50,7 @@ export async function signInWithApple(): Promise<AppleSignInResult> {
         AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
         AppleAuthentication.AppleAuthenticationScope.EMAIL,
       ],
-      nonce: rawNonce,
+      nonce: hashedNonce,
     });
   } catch (err) {
     const code = (err as { code?: string })?.code;

@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from modules.api_security import require_permission, require_session, user_has_permission
 from modules.core import app
+from services.channel_capability_disconnect import clear_invalid_dm_enabled_state_async
 from services.channel_capability_toggles import (
     ChannelToggleError,
     attach_channel_toggles,
@@ -37,13 +38,22 @@ def _without_comment_capabilities(integrations: list[dict[str, Any]]) -> list[di
 @app.get("/api/mobile/integrations")
 async def mobile_integrations(request: Request) -> Any:
     session = require_session(request)
-    # Best-effort: clear false Comments enabled when Meta comment scopes are missing.
+    # Best-effort: clear stale DM/Comments when disconnected or permissions fail.
+    actor = session.user_id or session.email or "channel_state_reconcile"
     for platform in supported_platforms():
+        try:
+            await clear_invalid_dm_enabled_state_async(
+                tenant_id=session.tenant_id,
+                platform=platform,
+                actor=actor,
+            )
+        except Exception:
+            pass
         try:
             await clear_invalid_comments_enabled_state_async(
                 tenant_id=session.tenant_id,
                 platform=platform,
-                actor=session.user_id or session.email or "comments_state_reconcile",
+                actor=actor,
             )
         except Exception:
             pass

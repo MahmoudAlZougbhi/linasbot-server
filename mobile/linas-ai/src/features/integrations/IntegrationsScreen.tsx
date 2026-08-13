@@ -199,6 +199,12 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     const previous = defaultToggles(row as IntegrationRow);
     const platform = row.platform === 'facebook' ? 'facebook' : 'instagram';
 
+    if (value === true && !row.connected) {
+      setError(tr('commentsBlockerConnectFirst'));
+      await manageMetaAccess(platform);
+      return;
+    }
+
     if (key === 'comments' && value === true) {
       const blocker = commentsBlocker(row as IntegrationRow);
       if (blocker === 'missing_comment_permissions' || blocker === 'reauthorization_required') {

@@ -11,6 +11,7 @@ import { BootSplash } from '../features/boot/BootSplash';
 import type { CmProposalReview } from '../features/cm/cmProposalReview';
 import { isCmProposalSection } from '../features/cm/cmProposalReview';
 import type { ControlArea } from '../features/control/controlAreas';
+import { markPreferFreshOwnerChat } from '../features/chat/preferFreshOwnerChat';
 import { tryRegisterOwnerPushScaffold } from '../features/notifications/pushScaffold';
 import { ModuleNavProvider } from '../features/nav/ModuleNavContext';
 import { useTheme } from '../theme';
@@ -58,7 +59,7 @@ export function AppShell() {
   useEffect(() => {
     return onAuthCleared(() => {
       setHasAccess(false);
-      bumpAuthEpoch();
+      void markPreferFreshOwnerChat().finally(() => bumpAuthEpoch());
     });
   }, [bumpAuthEpoch]);
 
@@ -210,6 +211,7 @@ export function AppShell() {
       // Local clear still proceeds.
     }
     await tokenStore.clear();
+    await markPreferFreshOwnerChat();
     setHasAccess(false);
     setResumeArea(null);
     bumpAuthEpoch();

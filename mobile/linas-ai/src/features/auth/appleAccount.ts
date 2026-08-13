@@ -1,27 +1,16 @@
 import { Platform } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import * as Crypto from 'expo-crypto';
 import { z } from 'zod';
 
 import { apiFetch, ApiError } from '../../api/client';
 import { tokenStore } from '../../auth/tokenStore';
+import { randomAppleNonce, sha256HexNonce } from './appleNonce';
 
 export type AppleAccountResult =
   | { ok: true }
   | { ok: false; code: 'cancel' | 'unavailable' | 'error'; message?: string };
 
 const OkSchema = z.object({ success: z.boolean() }).passthrough();
-
-function randomNonce(bytes = 32): string {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let out = '';
-  const arr = new Uint8Array(bytes);
-  Crypto.getRandomValues(arr);
-  for (let i = 0; i < arr.length; i++) {
-    out += alphabet[arr[i]! % alphabet.length];
-  }
-  return out;
-}
 
 async function ensureAppleAvailable(): Promise<AppleAccountResult | null> {
   if (Platform.OS !== 'ios') {
@@ -39,7 +28,8 @@ export async function linkApple(): Promise<AppleAccountResult> {
   const gate = await ensureAppleAvailable();
   if (gate) return gate;
 
-  const rawNonce = randomNonce();
+  const rawNonce = randomAppleNonce();
+  const hashedNonce = await sha256HexNonce(rawNonce);
   let credential: AppleAuthentication.AppleAuthenticationCredential;
   try {
     credential = await AppleAuthentication.signInAsync({
@@ -47,7 +37,7 @@ export async function linkApple(): Promise<AppleAccountResult> {
         AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
         AppleAuthentication.AppleAuthenticationScope.EMAIL,
       ],
-      nonce: rawNonce,
+      nonce: hashedNonce,
     });
   } catch (err) {
     const code = (err as { code?: string })?.code;

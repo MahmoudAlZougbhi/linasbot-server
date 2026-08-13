@@ -122,6 +122,8 @@ async def mobile_apple_sign_in(body: AppleSignInRequest) -> Any:
     try:
         claims = verify_identity_token(body.identity_token, nonce=body.nonce)
     except AppleSignInError as exc:
+        # Safe ops signal only — never log identity_token / authorization_code.
+        logger.info("apple_sign_in_reject reason=%s", str(exc))
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
     sub = str(claims["sub"])

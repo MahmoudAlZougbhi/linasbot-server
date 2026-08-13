@@ -26,6 +26,7 @@ _SENSITIVE_MUTATION_PREFIXES = (
     "/api/auth/mobile/login",
     "/api/auth/mobile/refresh",
     "/api/auth/mobile/apple",
+    "/api/auth/mobile/google",
 )
 
 _AUTH_IDENTIFIER_PATHS = frozenset(
@@ -41,6 +42,7 @@ _AUTH_IDENTIFIER_PATHS = frozenset(
         "/api/auth/mobile/login",
         "/api/auth/mobile/refresh",
         "/api/auth/mobile/apple",
+        "/api/auth/mobile/google",
     }
 )
 
@@ -101,6 +103,8 @@ def _identifier_from_auth_body(path: str, body: dict[str, Any]) -> str | None:
         return _normalize_email_identifier(body.get("email") or body.get("new_email"))
     if path == "/api/auth/mobile/apple":
         return _token_fingerprint(body.get("identity_token"))
+    if path == "/api/auth/mobile/google":
+        return _token_fingerprint(body.get("identity_token"))
     if path in {"/api/auth/reset-password", "/api/auth/verify-email", "/api/auth/confirm-email-change"}:
         return _token_fingerprint(body.get("token"))
     if path == "/api/auth/mobile/refresh":
@@ -148,6 +152,10 @@ def auth_rate_limit_rules(path: str, ip: str, identifier: str | None = None) -> 
         rules.append((f"mobile-apple:{ip}", 10, 300))
         if identifier:
             rules.append((f"mobile-apple:id:{identifier}", 5, 300))
+    if path == "/api/auth/mobile/google":
+        rules.append((f"mobile-google:{ip}", 10, 300))
+        if identifier:
+            rules.append((f"mobile-google:id:{identifier}", 5, 300))
     if path == "/api/auth/mobile/refresh":
         rules.append((f"mobile-refresh:{ip}", 10, 300))
         if identifier:

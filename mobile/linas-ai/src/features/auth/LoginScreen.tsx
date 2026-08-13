@@ -105,6 +105,8 @@ export function LoginScreen({ onLoggedIn, onGoRegister, onBack }: Props) {
           <SocialAuthButtons
             onAppleSuccess={onLoggedIn}
             onAppleError={(message) => setError(message)}
+            onGoogleSuccess={onLoggedIn}
+            onGoogleError={(message) => setError(message)}
           />
           <View style={styles.legal}>
             <Text style={styles.legalText}>

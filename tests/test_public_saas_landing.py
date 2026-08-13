@@ -60,6 +60,12 @@ def test_nginx_proxies_oauth_and_deauthorize() -> None:
     assert "location ^~ /data-deletion/status/" in text
     assert "location = /privacy-policy" in text
     assert "location ^~ /webhook" in text
+    # DO LB TLS-terminates to :80 — compliance routes must exist in BOTH server blocks.
+    assert text.count("location = /privacy-policy") >= 2
+    assert text.count("location = /terms") >= 2
+    assert text.count("location = /data-deletion") >= 2
+    assert text.count("location ^~ /oauth/") >= 2
+    assert text.count("location = /meta/deauthorize") >= 2
 
 
 def test_register_creates_isolated_tenant(app_client: TestClient) -> None:
