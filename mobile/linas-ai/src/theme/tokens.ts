@@ -82,7 +82,7 @@ export const lightColors: ThemeColors = {
   activeRow: '#ECEEEE',
   activeIndicator: '#0D9488',
   drawerSurface: '#F2F4F4',
-  featuredIconBg: '#E0E4E4',
+  featuredIconBg: '#F4F6F6',
   featuredIconBorder: '#D0D4D4',
   lavender: '#CCFBF1',
 };
