@@ -75,6 +75,20 @@ async def _prepare_binding(
     return binding, credential
 
 
+def registry_auth_flow_for_webhook_object(payload_object: str) -> AuthFlow | None:
+    """Auth-flow filter for signed Meta webhooks on /webhook/meta-messaging.
+
+    Instagram object events may match an active Instagram Login binding or a
+    legacy Page-linked facebook_login binding. Restricting those events to
+    facebook_login drops Instagram Login DMs (parsed=0 / accepted=0).
+
+    Page object events stay facebook_login-only. Bindings remain separate;
+    the resolver still selects by tenant, asset/account ID, auth_flow, and
+    active status. None means both Instagram auth flows are eligible.
+    """
+    return None if str(payload_object or "").strip().lower() == "instagram" else "facebook_login"
+
+
 async def resolve_registry_events(
     payload: dict[str, Any],
     *,
