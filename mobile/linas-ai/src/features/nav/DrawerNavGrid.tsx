@@ -81,7 +81,7 @@ export function DrawerNavGrid({ showUsers, activeArea, badges, onOpenArea }: Pro
       {modules.map((mod) => {
         const badge = badgeForModule(mod, badges);
         const active = activeArea === mod.id;
-        const tileBg = active ? colors.activeRow : 'transparent';
+        const tileBg = active && mod.id !== 'cm' ? colors.activeRow : 'transparent';
 
         return (
           <Pressable
@@ -143,10 +143,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   featuredIconShadow: {
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 2,
   },
   badge: {
     position: 'absolute',
