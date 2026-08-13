@@ -62,7 +62,6 @@ type Props = {
   actionsDisabled: boolean;
   tr: (key: StringKey) => string;
   onToggle: (key: 'dm' | 'comments', value: boolean) => void;
-  onManageMetaAccess: () => void;
   onReconcileComments: () => void;
   onConnect: () => void;
   onDisconnect: () => void;
@@ -157,7 +156,6 @@ export function IntegrationChannelCard({
   actionsDisabled,
   tr,
   onToggle,
-  onManageMetaAccess,
   onReconcileComments,
   onConnect,
   onDisconnect,
@@ -169,16 +167,6 @@ export function IntegrationChannelCard({
   const chip = connectionStatusChip(row, tr);
   const accounts = accountList(row);
   const connectionStatus = row.connection_status ?? (row.connected ? 'connected' : 'disconnected');
-  const needsReconnect =
-    connectionStatus === 'needs_reconnect' ||
-    connectionStatus === 'error' ||
-    blocker === 'reauthorization_required' ||
-    blocker === 'connection_unhealthy';
-  const needsMetaAccess =
-    needsReconnect ||
-    blocker === 'missing_comment_permissions' ||
-    blocker === 'meta_approval_required' ||
-    (row.comments_state?.missing_scopes?.length ?? 0) > 0;
   const needsWebhook = blocker === 'missing_comment_webhook';
 
   return (
@@ -217,22 +205,6 @@ export function IntegrationChannelCard({
               />
               {statusLabel ? <Text style={styles.statusHint}>{statusLabel}</Text> : null}
               {blocker ? <Text style={styles.blocker}>{blockerCopy(blocker, tr)}</Text> : null}
-              {needsReconnect ? (
-                <PrimaryButton
-                  label={tr('integrationReconnect')}
-                  onPress={onManageMetaAccess}
-                  loading={busy}
-                  disabled={actionsDisabled}
-                />
-              ) : needsMetaAccess ? (
-                <PrimaryButton
-                  label={row.connected ? tr('manageMetaAccess') : tr('reconnectWithCommentAccess')}
-                  onPress={onManageMetaAccess}
-                  loading={busy}
-                  disabled={actionsDisabled}
-                  variant="ghost"
-                />
-              ) : null}
               {needsWebhook ? (
                 <PrimaryButton
                   label={tr('reconcileCommentWebhooks')}

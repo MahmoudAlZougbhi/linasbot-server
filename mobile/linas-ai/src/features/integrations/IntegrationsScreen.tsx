@@ -127,7 +127,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     return () => sub.remove();
   }, [load, tr]);
 
-  async function manageMetaAccess(platform: 'instagram' | 'facebook') {
+  async function connectPlatform(platform: 'instagram' | 'facebook') {
     setBusyPlatform(platform);
     setError(null);
     try {
@@ -200,7 +200,6 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
         const body = err.body as { message?: unknown; reauthorize_required?: unknown };
         const msg = body.message;
         setError(typeof msg === 'string' && msg.trim() ? msg : tr('integrationsActionError'));
-        if (body.reauthorize_required === true) await manageMetaAccess(platform);
       } else setError(tr('integrationsActionError'));
     } finally {
       setBusyPlatform(null);
@@ -213,7 +212,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
 
     if (value === true && !row.connected) {
       setError(tr('commentsBlockerConnectFirst'));
-      await manageMetaAccess(platform);
+      await connectPlatform(platform);
       return;
     }
 
@@ -223,10 +222,9 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
         const missing = row.comments_state?.missing_scopes?.filter(Boolean) ?? [];
         setError(
           missing.length
-            ? `${tr('commentsBlockerMissingPermissions')} Missing: ${missing.join(', ')}.`
-            : tr('commentsBlockerMissingPermissions'),
+            ? `${tr('commentsBlockerMissingPermissions')} Missing: ${missing.join(', ')}. ${tr('disconnectThenConnectHint')}`
+            : `${tr('commentsBlockerMissingPermissions')} ${tr('disconnectThenConnectHint')}`,
         );
-        await manageMetaAccess(platform);
         return;
       }
       if (blocker === 'meta_approval_required') {
@@ -239,7 +237,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
       }
       if (blocker === 'connect_channel_first') {
         setError(tr('commentsBlockerConnectFirst'));
-        await manageMetaAccess(platform);
+        await connectPlatform(platform);
         return;
       }
     }
@@ -288,7 +286,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
         const code = typeof body.error === 'string' ? body.error : '';
         setError(typeof msg === 'string' && msg.trim() ? msg : tr('integrationsToggleError'));
         if (body.reauthorize_required === true || code === 'COMMENT_SCOPES_MISSING') {
-          await manageMetaAccess(platform);
+          setError(`${typeof msg === 'string' && msg.trim() ? msg : tr('integrationsToggleError')} ${tr('disconnectThenConnectHint')}`);
         }
       } else setError(tr('integrationsToggleError'));
     } finally {
@@ -341,12 +339,9 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
               actionsDisabled={busyPlatform !== null || busyToggle !== null}
               tr={tr}
               onToggle={(key, value) => void setToggle(row, key, value)}
-              onManageMetaAccess={() =>
-                void manageMetaAccess(row.platform === 'facebook' ? 'facebook' : 'instagram')
-              }
               onReconcileComments={() => void reconcileComments(row)}
               onConnect={() =>
-                void manageMetaAccess(row.platform === 'facebook' ? 'facebook' : 'instagram')
+                void connectPlatform(row.platform === 'facebook' ? 'facebook' : 'instagram')
               }
               onDisconnect={() => void disconnectPlatform(row)}
             />

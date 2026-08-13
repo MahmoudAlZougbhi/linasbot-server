@@ -93,6 +93,7 @@ def load_state(session: Session) -> dict[str, Any]:
                 "aad": cred_row.aad,
                 "sealed": cred_row.sealed,
                 "created_at": float(cred_row.created_at or 0),
+                "archived_at": float(getattr(cred_row, "archived_at", 0) or 0),
             }
         for oauth_row in session.scalars(select(MetaOAuthStateRow)).all():
             payload = dict(oauth_row.payload or {})
@@ -162,6 +163,7 @@ def save_state(session: Session, state: dict[str, Any]) -> None:
                     sealed=str(raw["sealed"]),
                     aad=str(raw["aad"]),
                     created_at=float(raw.get("created_at") or 0),
+                    archived_at=float(raw.get("archived_at") or 0),
                 )
             )
 

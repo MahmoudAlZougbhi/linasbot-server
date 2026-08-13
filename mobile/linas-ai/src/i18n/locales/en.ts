@@ -132,21 +132,19 @@ export const en = {
   metaOAuthSuccess: 'Meta access updated. Refreshing connection status…',
   metaOAuthCancelled: 'Meta authorization was cancelled.',
 
-  metaOAuthFailed: 'Meta authorization failed. Try Manage Meta Access again.',
+  metaOAuthFailed: 'Meta authorization failed. Disconnect the channel, then Connect again.',
   toggleDms: 'Direct messages',
   toggleComments: 'Comments',
   commentsBlockerMissingPermissions:
-    'Facebook Comments need pages_read_user_content + pages_manage_engagement on App A Login Config. Instagram Login Comments need instagram_business_manage_comments (separate from Facebook Page scopes). Use Manage Meta Access after the right scopes are available — do not Disconnect.',
+    'Missing Meta comment permissions on this connection.',
   commentsBlockerConnectFirst: 'Connect this channel before enabling comments.',
   commentsBlockerMissingWebhook: 'Comment webhook subscription is not confirmed yet for this connection.',
   commentsBlockerMetaApproval:
     'Meta App Review approval is required before Comments can be enabled for customers.',
   commentsBlockerReauthorization:
-    'This connection needs reauthorization. Use Manage Meta Access — do not Disconnect Account.',
+    'This connection needs a fresh authorization. Disconnect this channel, then Connect again.',
   commentsBlockerGeneric: 'Comments are not ready on this connection yet.',
-  manageMetaAccess: 'Manage Meta Access',
-  manageCommentPermissions: 'Manage Meta Access',
-  reconnectWithCommentAccess: 'Reconnect with Comment Access',
+  disconnectThenConnectHint: 'Disconnect this channel, then Connect again.',
   reconcileCommentWebhooks: 'Fix comment webhooks',
   commentsStatusDisabled: 'Comments: Disabled',
   commentsStatusPermissionRequired: 'Comments: Permission Required',

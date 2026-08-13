@@ -42,8 +42,7 @@ ChannelPlatform = Literal["instagram", "facebook"]
 ToggleKey = Literal["dm", "comments"]
 
 _COMMENT_SCOPES_MISSING_MESSAGE = (
-    "Missing Meta comment permissions. Use Manage Meta Access / Reconnect with Comment Access "
-    "for the same Facebook Page / Instagram account (do not Disconnect Account)."
+    "Missing Meta comment permissions. Disconnect this channel, then Connect again to grant comment scopes."
 )
 
 __all__ = [

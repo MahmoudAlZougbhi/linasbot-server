@@ -147,11 +147,16 @@ async def mobile_disconnect_platform(platform: str, request: Request) -> Any:
             if binding.active:
                 await disconnect_binding_webhook(binding, actor_id=actor)
             else:
-                registry.set_binding_status(
+                updated = registry.set_binding_status(
                     binding.binding_id,
                     status="disconnected",
                     actor_id=actor,
                     expected_generation=binding.generation,
+                )
+                registry.archive_binding_credential(
+                    binding.binding_id,
+                    actor_id=actor,
+                    expected_generation=updated.generation,
                 )
         except (MetaOAuthError, MetaRegistryError) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc

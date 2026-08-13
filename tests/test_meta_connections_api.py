@@ -18,6 +18,7 @@ from services.meta_app_registry import (
     MetaAppRegistry,
     MetaBindingConflictError,
     MetaBindingCredential,
+    MetaCredentialError,
 )
 
 SCOPES = (
@@ -284,10 +285,12 @@ async def test_reconnect_atomically_replaces_provider_then_removes_old_subscript
 
 
 @pytest.mark.asyncio
-async def test_reconnect_first_party_disconnected_binding(
+async def test_reconnect_requires_fresh_oauth(
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from fastapi import HTTPException
+
     page_id = "378696005334409"
     binding = registry.activate_binding(
         tenant_id="linas",
@@ -310,6 +313,11 @@ async def test_reconnect_first_party_disconnected_binding(
         status="disconnected",
         actor_id="owner",
     )
+    registry.archive_binding_credential(
+        disconnected.binding_id,
+        actor_id="owner",
+        expected_generation=disconnected.generation,
+    )
     subscribed = False
 
     async def subscribe(*_args: Any, **_kwargs: Any) -> None:
@@ -322,16 +330,18 @@ async def test_reconnect_first_party_disconnected_binding(
     monkeypatch.setattr("modules.meta_connections_api_lifecycle.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr("modules.meta_connections_api_lifecycle.subscribe_binding_webhook", subscribe)
 
-    response = await meta_connections_api.reconnect_meta_connection(
-        disconnected.binding_id,
-        _request("linas"),
-    )
+    with pytest.raises(HTTPException) as blocked:
+        await meta_connections_api.reconnect_meta_connection(
+            disconnected.binding_id,
+            _request("linas"),
+        )
 
-    assert response["success"] is True
-    assert response["connection"]["status"] == "active"
-    assert subscribed is True
-    refreshed = next(item for item in registry.list_bindings() if item.binding_id == binding.binding_id)
-    assert refreshed.status == "active"
+    assert blocked.value.status_code == 409
+    assert "Disconnect" in str(blocked.value.detail)
+    assert subscribed is False
+    refreshed = next(item for item in registry.list_bindings() if item.binding_id == disconnected.binding_id)
+    with pytest.raises(MetaCredentialError):
+        registry.get_credential(refreshed)
 
 
 @pytest.mark.asyncio
