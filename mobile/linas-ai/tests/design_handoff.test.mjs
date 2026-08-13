@@ -187,12 +187,19 @@ test('cold open is branded star splash then chat (no character mash / progress b
   const appJson = readFileSync(join(root, 'app.json'), 'utf8');
   const chat = read('features/chat/ChatScreen.tsx');
   const login = read('features/auth/LoginScreen.tsx');
-  assert.match(boot, /splash-icon\.png/);
+  assert.match(boot, /LinasSparkleMark/);
+  assert.match(boot, /BootSplashAiLine/);
+  assert.match(boot, /lightColors\.bgElevated/);
+  assert.match(boot, /mintSoft/);
   assert.match(boot, /isReduceMotionEnabled|reduceMotionChanged/);
   assert.match(boot, /SplashScreen\.hideAsync/);
   assert.doesNotMatch(boot, /LinasAvatar/);
   assert.doesNotMatch(boot, /Opening Linas AI/);
-  assert.doesNotMatch(boot, /progressTrack|styles\.track/);
+  assert.doesNotMatch(boot, /progressTrack/);
+  const aiLine = read('features/boot/BootSplashAiLine.tsx');
+  assert.match(aiLine, /Animated\.loop/);
+  assert.match(aiLine, /useNativeDriver:\s*true/);
+  assert.match(aiLine, /reduceMotion/);
   // Native splash must stay logo-free (solid emerald) so Android 12+ does not
   // circular-mask splash-icon into a different first shape before BootSplash.
   assert.match(boot, /splash-native|solid emerald|no logo/i);
