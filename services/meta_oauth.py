@@ -339,9 +339,7 @@ async def complete_meta_business_login(
                 raise MetaOAuthError("Meta Page token profile does not match the selected Page")
             if str(page_debug.get("type") or "").upper() != "PAGE":
                 raise MetaOAuthError("Meta token is not a Page access token")
-            scopes = _scopes_for_facebook_page_binding(
-                _scope_tuple(page_debug) or _scope_tuple(integration_debug)
-            )
+            scopes = _scopes_for_facebook_page_binding(_scope_tuple(page_debug) or _scope_tuple(integration_debug))
             if set(scopes) & META_FORBIDDEN_SCOPES:
                 raise MetaOAuthError("Meta token includes a prohibited non-messaging permission")
             if flow_mode == "instagram" and not instagram_id:

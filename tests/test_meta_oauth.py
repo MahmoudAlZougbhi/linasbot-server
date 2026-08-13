@@ -96,9 +96,7 @@ def _transport(
                 data["profile_id"] = page_id
                 data["type"] = page_type
                 target_ids = [page_id, "000111222"] if extra_target else [page_id]
-                data["granular_scopes"] = [
-                    {"scope": scope, "target_ids": target_ids} for scope in SCOPES
-                ]
+                data["granular_scopes"] = [{"scope": scope, "target_ids": target_ids} for scope in SCOPES]
             return httpx.Response(200, json={"data": data})
         if path.endswith("/me/accounts"):
             return httpx.Response(
