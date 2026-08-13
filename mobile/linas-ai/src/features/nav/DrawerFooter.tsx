@@ -112,7 +112,8 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    justifyContent: 'space-between',
+    width: '100%',
   },
   newChatBtn: {
     alignSelf: 'flex-start',
