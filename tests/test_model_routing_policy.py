@@ -296,14 +296,14 @@ def test_sol_chat_completions_tools_force_none_effort() -> None:
         )
         == "low"
     )
-    # Terra keeps medium even with tools on chat.completions.
+    # Terra + function tools on chat.completions must force effort=none (OpenAI 400 otherwise).
     assert (
         effective_chat_completions_reasoning_effort(
             model=MODEL_CUSTOMER_TERRA,
             reasoning_effort="medium",
             has_function_tools=True,
         )
-        == "medium"
+        == "none"
     )
     kwargs = build_chat_completion_kwargs(
         model=MODEL_OWNER_SOL,
@@ -313,6 +313,14 @@ def test_sol_chat_completions_tools_force_none_effort() -> None:
         has_function_tools=True,
     )
     assert kwargs["reasoning_effort"] == "none"
+    terra_kwargs = build_chat_completion_kwargs(
+        model=MODEL_CUSTOMER_TERRA,
+        messages=[{"role": "user", "content": "x"}],
+        max_tokens=500,
+        reasoning_effort="medium",
+        has_function_tools=True,
+    )
+    assert terra_kwargs["reasoning_effort"] == "none"
 
 
 @pytest.mark.asyncio
