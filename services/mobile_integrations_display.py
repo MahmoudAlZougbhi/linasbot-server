@@ -151,5 +151,3 @@ def active_bindings_for_disconnect(tenant_id: str, platform: str) -> list[Any]:
     """Bindings that should be disconnected for a platform (canonical active set)."""
 
     return canonical_channel_bindings(tenant_id, (platform or "").strip().lower())
-
-
