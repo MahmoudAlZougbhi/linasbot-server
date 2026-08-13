@@ -62,11 +62,12 @@ export const typography = {
     fontSize: 14,
     letterSpacing: 0.3,
   } satisfies TextStyle,
-  /** Chat message body — user bubble and AI plain text share one scale (ChatGPT-style). */
+  /** Chat AI reply body — slightly larger than user bubble, regular weight. */
   chatAi: {
     fontFamily: body,
-    fontSize: 16,
-    lineHeight: 23,
+    fontSize: 17,
+    lineHeight: 24,
+    fontWeight: '400',
   } satisfies TextStyle,
   chatUser: {
     fontFamily: body,
