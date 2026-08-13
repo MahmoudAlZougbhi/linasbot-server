@@ -39,7 +39,11 @@ from services.meta_messaging import (
     parse_meta_messaging_events,
     verify_meta_signature,
 )
-from services.meta_multi_app_router import ResolvedMetaEvent, resolve_registry_events
+from services.meta_multi_app_router import (
+    ResolvedMetaEvent,
+    registry_auth_flow_for_webhook_object,
+    resolve_registry_events,
+)
 from services.social_messaging_processor import process_meta_social_event
 
 _message_deduper = InMemoryMessageDeduper(ttl_seconds=300.0)
@@ -165,7 +169,7 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
         resolved_events = await resolve_registry_events(
             payload,
             app_config=signed_app,
-            auth_flow="facebook_login",
+            auth_flow=registry_auth_flow_for_webhook_object(payload_object),
         )
     else:
         legacy_events = parse_meta_messaging_events(
@@ -276,9 +280,7 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
         # Do not restrict to facebook_login: a Direct Instagram Login binding for the
         # same IG professional account must be eligible when Meta delivers comments
         # on this callback. Selection still prefers a comments-ready instagram_login row.
-        from services.meta_instagram_login_config import AuthFlow
-
-        comment_auth_flow: AuthFlow | None = None if payload_object == "instagram" else "facebook_login"
+        comment_auth_flow = registry_auth_flow_for_webhook_object(payload_object)
         resolved_comment_events = resolve_registry_comment_events(
             payload,
             app_config=signed_app,
@@ -371,14 +373,16 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
         "facebook": sum(str(item.event.get("channel") or "") == "facebook" for item in resolved_events),
         "instagram": sum(str(item.event.get("channel") or "") == "instagram" for item in resolved_events),
     }
+    social_auth_flows = sorted({str(item.binding.auth_flow) for item in resolved_events})
     _runtime_logger.info(
-        "[meta-social] webhook_authenticated object=%s parsed=%d accepted=%d duplicates=%d facebook=%d instagram=%d",
+        "[meta-social] webhook_authenticated object=%s parsed=%d accepted=%d duplicates=%d facebook=%d instagram=%d auth_flows=%s",
         payload_object,
         len(resolved_events),
         accepted,
         duplicates,
         channel_counts["facebook"],
         channel_counts["instagram"],
+        ",".join(social_auth_flows) or "none",
     )
     if resolved_comment_events or raw_comment_changes:
         auth_flows = sorted({str(item.binding.auth_flow) for item in resolved_comment_events})

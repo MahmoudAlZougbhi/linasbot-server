@@ -25,7 +25,7 @@ from services.meta_instagram_login_subscription_recovery import (
     reconcile_pending_instagram_login_subscriptions,
     retry_instagram_login_webhook_subscription,
 )
-from services.meta_multi_app_router import resolve_registry_events
+from services.meta_multi_app_router import registry_auth_flow_for_webhook_object, resolve_registry_events
 from services.meta_social_publish import publish_instagram_post
 
 INSTAGRAM_ID = "17840000999900021"
@@ -216,3 +216,85 @@ def test_facebook_login_binding_ready_for_dm_when_no_direct_login(registry: Meta
     binding = _instagram_binding(registry, auth_flow="facebook_login")
     credential = registry.get_credential(binding)
     assert binding_ready_for_dm(binding, credential) is True
+
+
+def test_registry_auth_flow_unrestricted_for_instagram_object() -> None:
+    assert registry_auth_flow_for_webhook_object("instagram") is None
+    assert registry_auth_flow_for_webhook_object("page") == "facebook_login"
+
+
+def _instagram_dm_payload(account_id: str, *, mid: str = "mid-1") -> dict:
+    return {
+        "object": "instagram",
+        "entry": [
+            {
+                "id": account_id,
+                "messaging": [
+                    {
+                        "sender": {"id": "sender-1"},
+                        "recipient": {"id": account_id},
+                        "timestamp": 1_700_000_000_000,
+                        "message": {"mid": mid, "text": "hello"},
+                    }
+                ],
+            }
+        ],
+    }
+
+
+@pytest.mark.asyncio
+async def test_resolve_unrestricted_accepts_instagram_login_binding(registry: MetaAppRegistry) -> None:
+    from services.meta_app_registry import get_meta_app_configs
+
+    _instagram_binding(registry, auth_flow="instagram_login")
+    routed = await resolve_registry_events(
+        _instagram_dm_payload(INSTAGRAM_ID),
+        app_config=get_meta_app_configs()[APP_A_KEY],
+        registry=registry,
+        auth_flow=registry_auth_flow_for_webhook_object("instagram"),
+    )
+    assert len(routed) == 1
+    assert routed[0].binding.auth_flow == "instagram_login"
+
+
+@pytest.mark.asyncio
+async def test_resolve_unrestricted_accepts_facebook_login_legacy_binding(registry: MetaAppRegistry) -> None:
+    from services.meta_app_registry import get_meta_app_configs
+
+    _instagram_binding(registry, auth_flow="facebook_login")
+    routed = await resolve_registry_events(
+        _instagram_dm_payload(INSTAGRAM_ID),
+        app_config=get_meta_app_configs()[APP_A_KEY],
+        registry=registry,
+        auth_flow=registry_auth_flow_for_webhook_object("instagram"),
+    )
+    assert len(routed) == 1
+    assert routed[0].binding.auth_flow == "facebook_login"
+
+
+@pytest.mark.asyncio
+async def test_resolve_unrestricted_rejects_wrong_instagram_account(registry: MetaAppRegistry) -> None:
+    from services.meta_app_registry import get_meta_app_configs
+
+    _instagram_binding(registry, auth_flow="instagram_login")
+    routed = await resolve_registry_events(
+        _instagram_dm_payload("17840000000000000"),
+        app_config=get_meta_app_configs()[APP_A_KEY],
+        registry=registry,
+        auth_flow=registry_auth_flow_for_webhook_object("instagram"),
+    )
+    assert routed == []
+
+
+@pytest.mark.asyncio
+async def test_facebook_login_filter_drops_instagram_login_only_binding(registry: MetaAppRegistry) -> None:
+    from services.meta_app_registry import get_meta_app_configs
+
+    _instagram_binding(registry, auth_flow="instagram_login")
+    routed = await resolve_registry_events(
+        _instagram_dm_payload(INSTAGRAM_ID),
+        app_config=get_meta_app_configs()[APP_A_KEY],
+        registry=registry,
+        auth_flow="facebook_login",
+    )
+    assert routed == []

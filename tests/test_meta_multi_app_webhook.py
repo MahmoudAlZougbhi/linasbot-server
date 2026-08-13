@@ -135,8 +135,9 @@ async def test_receiving_app_and_asset_binding_route_exactly_once(
     async def release(_namespace: str, key: str, **_kwargs: Any) -> None:
         claimed.discard(key)
 
-    async def process(event: dict[str, Any], settings: Any) -> None:
+    async def process(event: dict[str, Any], settings: Any, **_kwargs: Any) -> dict[str, str]:
         processed.append((settings.app_key, settings.tenant_id, str(event["message_id"])))
+        return {"delivery": "delivered"}
 
     monkeypatch.setattr("services.durable_event_claim.try_claim_event", try_claim)
     monkeypatch.setattr("services.durable_event_claim.complete_event_claim", complete)
@@ -208,8 +209,9 @@ async def test_instagram_object_routes_only_linked_instagram_binding(
     async def finish(*_args: Any, **_kwargs: Any) -> None:
         return None
 
-    async def process(event: dict[str, Any], _settings: Any) -> None:
+    async def process(event: dict[str, Any], _settings: Any, **_kwargs: Any) -> dict[str, str]:
         processed.append(str(event["channel"]))
+        return {"delivery": "delivered"}
 
     monkeypatch.setattr("services.durable_event_claim.try_claim_event", claim)
     monkeypatch.setattr("services.durable_event_claim.complete_event_claim", finish)
