@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Animated,
   Keyboard,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -27,7 +26,7 @@ import {
 import { ComposerModelChip } from './ComposerModelChip';
 import { LinEffortSheet } from './LinEffortSheet';
 import type { OwnerChatMode } from './ownerChatMode';
-import { useComposerInputAutoGrow } from './useComposerInputAutoGrow';
+import { useComposerInputAutoGrow, COMPOSER_INPUT_LINE_HEIGHT, COMPOSER_INPUT_MIN_H } from './useComposerInputAutoGrow';
 import type { VoiceState } from './useVoiceDraft';
 import { VoiceComposerControls } from './VoiceComposerControls';
 
@@ -111,6 +110,9 @@ export function ChatComposer({
   const showVoiceControl = Boolean(showMic && onToggleVoice && !streamingStop);
   const chipTappable = Boolean(showModelChip && onOwnerModeChange);
   const draftDir = textDirectionStyle(draft);
+  const draftEmpty = !draft.trim();
+  const singleLine = inputHeight <= COMPOSER_INPUT_MIN_H;
+  const inputTextAlign = draftEmpty ? 'center' : draftDir.textAlign;
 
   function dismissKeyboard() {
     localInputRef.current?.blur();
@@ -195,13 +197,14 @@ export function ChatComposer({
         />
       ) : null}
 
-      <View style={styles.inputRow}>
+      <View style={[styles.inputRow, singleLine ? styles.inputRowSingle : styles.inputRowGrow]}>
         <View
           style={[
             styles.pill,
+            singleLine ? styles.pillSingle : styles.pillGrow,
             {
               backgroundColor: colors.surface,
-              borderColor: colors.borderSoft,
+              borderColor: colors.border,
             },
           ]}
         >
@@ -220,7 +223,15 @@ export function ChatComposer({
 
           <TextInput
             ref={assignInputRef}
-            style={[styles.input, { color: colors.text, height: inputHeight }, draftDir]}
+            style={[
+              styles.input,
+              {
+                color: colors.text,
+                height: inputHeight,
+                textAlign: inputTextAlign,
+                writingDirection: draftEmpty ? 'ltr' : draftDir.writingDirection,
+              },
+            ]}
             placeholder={placeholder}
             placeholderTextColor={colors.textDim}
             value={draft}
@@ -233,8 +244,7 @@ export function ChatComposer({
             editable={!voiceBusy}
             autoFocus={false}
             blurOnSubmit={false}
-            textAlign={draftDir.textAlign}
-            textAlignVertical={Platform.OS === 'android' ? 'center' : undefined}
+            textAlignVertical={singleLine ? 'center' : 'top'}
             accessibilityLabel={idlePlaceholder}
           />
 
@@ -257,7 +267,7 @@ export function ChatComposer({
 
         {streamingStop ? (
           <Pressable
-            style={[styles.sendOutside, { backgroundColor: colors.accentDeep }]}
+            style={[styles.sendOutside, singleLine ? styles.sendSingle : styles.sendGrow, { backgroundColor: colors.accentDeep }]}
             onPress={onStop}
             accessibilityLabel={tr('composerStop')}
           >
@@ -267,6 +277,7 @@ export function ChatComposer({
           <Pressable
             style={[
               styles.sendOutside,
+              singleLine ? styles.sendSingle : styles.sendGrow,
               { backgroundColor: colors.accentDeep },
               (sending || !canSend || voiceBusy) && styles.sendDisabled,
             ]}
@@ -308,26 +319,39 @@ const styles = StyleSheet.create({
   },
   inputRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
     gap: spacing.sm,
+  },
+  inputRowSingle: {
+    alignItems: 'center',
+  },
+  inputRowGrow: {
+    alignItems: 'flex-end',
   },
   pill: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
     borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 6,
     paddingHorizontal: 8,
     minHeight: 48,
   },
+  pillSingle: {
+    alignItems: 'center',
+  },
+  pillGrow: {
+    alignItems: 'flex-end',
+    paddingBottom: 8,
+  },
   input: {
     flex: 1,
+    minWidth: 0,
     fontFamily: fonts.body,
     fontSize: 16,
-    lineHeight: 22,
-    paddingHorizontal: 8,
+    lineHeight: COMPOSER_INPUT_LINE_HEIGHT,
+    paddingHorizontal: 6,
     paddingVertical: 0,
+    includeFontPadding: false,
   },
   iconHit: {
     width: COMPOSER_ACTION_SIZE,
@@ -342,6 +366,11 @@ const styles = StyleSheet.create({
     borderRadius: COMPOSER_SEND_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sendSingle: {
+    marginBottom: 0,
+  },
+  sendGrow: {
     marginBottom: 4,
   },
   sendDisabled: { opacity: 0.45 },

@@ -155,5 +155,5 @@ test('tenant Dashboard has no Platform Owner metrics stub', () => {
   assert.doesNotMatch(dashboard, /Platform metrics|Owner only|Owner access only|isPlatformOwner|\/api\/platform\/metrics/);
   assert.doesNotMatch(dashboard, /\bReady\b/);
   assert.doesNotMatch(dashboard, /0 \/ —/);
-  assert.match(dashboard, /\/api\/mobile\/dashboard|useTenantDashboard|WorkspaceStatusCard/);
+  assert.match(dashboard, /\/api\/mobile\/dashboard|useTenantDashboard|GrowthPlanCard/);
 });

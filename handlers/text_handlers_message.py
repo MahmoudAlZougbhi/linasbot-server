@@ -173,6 +173,28 @@ async def handle_message(
 
     current_conversation_id = user_data.get("current_conversation_id")
 
+    if not skip_firestore_save and current_conversation_id:
+        from services.social_contact_routing_detect import is_social_channel
+
+        if is_social_channel(user_data.get("channel")):
+            tenant_id = str(user_data.get("tenant_id") or "").strip()
+            if tenant_id:
+                try:
+                    from db.session import whatsapp_session
+                    from services.smart_followup.hooks import cancel_conversation_followups
+                    from services.smart_followup.opt_out import looks_like_opt_out
+
+                    cancel_reason = "opt_out" if looks_like_opt_out(raw_msg) else "customer_reply"
+                    with whatsapp_session() as session:
+                        cancel_conversation_followups(
+                            session,
+                            tenant_id=tenant_id,
+                            conversation_id=str(current_conversation_id),
+                            reason=cancel_reason,
+                        )
+                except Exception as exc:
+                    print(f"[smart_followup] social cancel skipped type={type(exc).__name__}")
+
     # Session-level greeting eligibility for this turn:
     # allowed only for truly new conversation or inactivity >= 12 hours.
     user_data["_greeting_eligible_this_turn"] = bool(

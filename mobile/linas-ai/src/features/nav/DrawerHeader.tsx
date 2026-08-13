@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppIcon } from '../../components/AppIcon';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, spacing, useTheme } from '../../theme';
+import { DrawerFadeSeparator } from './DrawerFadeSeparator';
 import { DRAWER_TOOL_ICONS } from './moduleIcons';
 
 type Props = {
@@ -35,7 +36,7 @@ export function DrawerHeader({
             { backgroundColor: colors.input, borderColor: colors.border },
           ]}
         >
-          <AppIcon icon={DRAWER_TOOL_ICONS.search} size={18} color={colors.accentDeep} />
+          <AppIcon icon={DRAWER_TOOL_ICONS.search} size={18} color={colors.text} />
           <TextInput
             ref={searchRef}
             value={query}
@@ -63,7 +64,7 @@ export function DrawerHeader({
         <View style={styles.headerRow}>
           <View style={styles.brandRow} accessibilityRole="header">
             <Text style={[styles.sparkle, { color: colors.accentDeep }]}>✦</Text>
-            <Text style={[styles.wordmark, { color: colors.accentDeep }]}>Linas</Text>
+            <Text style={[styles.wordmark, { color: colors.text }]}>Linas</Text>
           </View>
           <Pressable
             onPress={onOpenSearch}
@@ -72,18 +73,12 @@ export function DrawerHeader({
             hitSlop={10}
             style={styles.searchHit}
           >
-            <AppIcon icon={DRAWER_TOOL_ICONS.search} size={20} color={colors.accentDeep} />
+            <AppIcon icon={DRAWER_TOOL_ICONS.search} size={20} color={colors.text} />
           </Pressable>
         </View>
       )}
 
-      {!searchOpen ? (
-        <View style={styles.separatorRow}>
-          <View style={[styles.separatorLine, { backgroundColor: colors.border }]} />
-          <Text style={[styles.separatorSparkle, { color: colors.textDim }]}>✦</Text>
-          <View style={[styles.separatorLine, { backgroundColor: colors.border }]} />
-        </View>
-      ) : null}
+      {!searchOpen ? <DrawerFadeSeparator color={colors.accentDeep} /> : null}
     </View>
   );
 }
@@ -98,15 +93,13 @@ const styles = StyleSheet.create({
   },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   sparkle: { fontSize: 18, lineHeight: 20 },
-  wordmark: { fontFamily: fonts.bodyMedium, fontWeight: '700', fontSize: 20 },
-  searchHit: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  separatorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+  wordmark: {
+    fontFamily: fonts.display,
+    fontWeight: '700',
+    fontSize: 20,
+    letterSpacing: -0.3,
   },
-  separatorLine: { flex: 1, height: StyleSheet.hairlineWidth },
-  separatorSparkle: { fontSize: 10, lineHeight: 12 },
+  searchHit: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   searchExpanded: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -121,6 +114,7 @@ const styles = StyleSheet.create({
     minHeight: 36,
     paddingVertical: 6,
     fontSize: 15,
+    fontFamily: fonts.bodyMedium,
   },
   searchClear: {
     width: 28,

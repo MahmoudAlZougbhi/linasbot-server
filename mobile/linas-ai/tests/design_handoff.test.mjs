@@ -48,8 +48,8 @@ test('drawer and CM module tiles expose design handoff icons', () => {
   assert.match(modules, /integrations: mci\('power-plug-outline'\)/);
   assert.match(modules, /subscription: feather\('credit-card'\)/);
   assert.match(modules, /settings: feather\('settings'\)/);
-  assert.match(cm, /CM_SECTION_ICONS/);
-  assert.match(cmIcons, /ai_basics: feather\('book-open'\)/);
+  assert.match(cm, /AiSetupSectionGrid/);
+  assert.match(cmIcons, /ai_basics: mci\('robot-outline'\)/);
   assert.match(cmIcons, /languages: feather\('globe'\)/);
 });
 
@@ -294,6 +294,23 @@ test('LIN effort chip opens Low/High picker synced with Chat|Work', () => {
   assert.match(mode, /effortLabelForMode/);
 });
 
+test('composer bar matches design handoff (pill, grow, placeholders)', () => {
+  const composer = read('features/chat/ChatComposer.tsx');
+  const autoGrow = read('features/chat/useComposerInputAutoGrow.ts');
+  const en = read('i18n/locales/en.ts');
+  assert.match(composer, /styles\.pill/);
+  assert.match(composer, /PlusCircleGlyph/);
+  assert.match(composer, /SendArrowGlyph/);
+  assert.match(composer, /sendOutside/);
+  assert.match(composer, /scrollEnabled=\{atMaxHeight\}/);
+  assert.match(composer, /composerPlaceholderChat/);
+  assert.match(composer, /composerPlaceholderWork/);
+  assert.match(autoGrow, /COMPOSER_INPUT_MAX_LINES = 8/);
+  assert.match(autoGrow, /COMPOSER_INPUT_MAX_H = COMPOSER_INPUT_LINE_HEIGHT \* COMPOSER_INPUT_MAX_LINES/);
+  assert.match(en, /composerPlaceholderChat:\s*'Chat with Linas'/);
+  assert.match(en, /composerPlaceholderWork:\s*'Work with Linas'/);
+});
+
 test('Live Chat thread remains read-only', () => {
   const thread = read('features/livechat/LiveChatThread.tsx');
   assert.match(thread, /read-only/i);
@@ -314,7 +331,7 @@ test('drawer search chrome is header icon; New chat + Settings in footer dock', 
   assert.match(footer, /newChatBtn/);
   assert.match(footer, /settingsBtn/);
   assert.match(drawerHeader, /DRAWER_TOOL_ICONS\.search/);
-  assert.match(drawerHeader, /separatorSparkle/);
+  assert.match(drawerHeader, /DrawerFadeSeparator/);
   assert.match(drawerHeader, /searchConversationTitles/);
   assert.match(nav, /noChatsMatch/);
   assert.match(nav, /emptyLabel/);
@@ -337,15 +354,15 @@ test('drawer search chrome is header icon; New chat + Settings in footer dock', 
   assert.match(footer, /styles\.actionRow[\s\S]*newChatBtn[\s\S]*settingsBtn/);
   assert.match(footer, /APP_VERSION_LABEL/);
   assert.match(drawerHeader, /wordmark/);
-  assert.match(drawerHeader, /separatorSparkle/);
+  assert.match(drawerHeader, /DrawerFadeSeparator/);
   // Search mode hides module grid; filter starts at first character.
   assert.match(nav, /const searching = searchOpen \|\| queryTrimmed\.length > 0/);
   assert.match(nav, /\{\!searching \? \(/);
   assert.match(nav, /onChangeQuery=\{setQuery\}|onChangeText=\{setQuery\}/);
   assert.match(footer, /NewChatIcon/);
-  assert.match(footer, /<NewChatIcon color=\{colors\.onAccent\} size=\{18\}/);
+  assert.match(footer, /<NewChatIcon color=\{colors\.onAccent\} size=\{16\}/);
   assert.match(footer, /tr\('newChat'\)/);
-  assert.match(footer, /minHeight:\s*48/);
+  assert.match(footer, /minHeight:\s*40/);
   // Dock sits on safe area only — no extra lift above the home indicator.
   assert.match(drawer, /paddingBottom:\s*Math\.max\(insets\.bottom,\s*4\)/);
   assert.doesNotMatch(drawer, /insets\.bottom\s*\+\s*12/);
@@ -364,6 +381,15 @@ test('drawer search chrome is header icon; New chat + Settings in footer dock', 
   assert.match(headerIcons, /NEW_CHAT_ICON/);
   assert.match(headerIcons, /AppIcon/);
   assert.match(header, /<NewChatIcon color=\{iconColor\}/);
+});
+
+test('Settings hosts AI Limits only (no Actions)', () => {
+  const settings = read('features/settings/SettingsScreen.tsx');
+  const tree = read('app/AppScreenTree.tsx');
+  assert.match(settings, /onOpenAiLimits/);
+  assert.doesNotMatch(settings, /onOpenActions/);
+  assert.doesNotMatch(settings, /settingsActions/);
+  assert.doesNotMatch(tree, /section: 'actions'/);
 });
 
 test('Settings hosts Notifications and Logout; drawer does not', () => {

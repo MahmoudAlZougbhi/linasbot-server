@@ -57,6 +57,7 @@ class AiLimitsSection(CmBaseModel):
     # Capability switches (moved from Settings Features into AI Setup).
     voice_processing_enabled: bool = True
     image_analysis_enabled: bool = True
+    human_handoff_enabled: bool = True
     image_per_day: int = Field(default=20, ge=0)
     image_per_week: int = Field(default=100, ge=0)
     context_lines_per_day: int = Field(default=500, ge=0)

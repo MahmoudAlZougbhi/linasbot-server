@@ -10,7 +10,7 @@ const ActionSchema = z
 
 const AvailabilitySchema = z.enum(['ok', 'empty', 'error', 'unavailable']);
 
-export const DashboardPeriodIdSchema = z.enum(['billing', '7d', '30d']);
+export const DashboardPeriodIdSchema = z.enum(['billing', '7d', '30d', 'custom']);
 export type DashboardPeriodId = z.infer<typeof DashboardPeriodIdSchema>;
 
 const ChannelCardSchema = z.object({
@@ -42,6 +42,8 @@ export const TenantDashboardSchema = z.object({
     timezone: z.string(),
     start: z.string(),
     end: z.string(),
+    custom_start: z.string().nullable().optional(),
+    custom_end: z.string().nullable().optional(),
   }),
   workspace: z.object({
     tenant_id: z.string(),
@@ -192,6 +194,47 @@ export const TenantDashboardSchema = z.object({
       action: ActionSchema,
     }),
   ),
+  activity_summary: z
+    .object({
+      availability: AvailabilitySchema,
+      error_code: z.string().optional(),
+      message: z.string().optional(),
+      total_activity: z
+        .object({
+          messages_replied: z.number(),
+          comments_replied: z.number(),
+          smart_answers: z.number(),
+          requests: z.number(),
+        })
+        .optional(),
+      channels: z
+        .array(
+          z.object({
+            platform: z.string(),
+            connected: z.boolean(),
+            operational: z.boolean(),
+            coming_soon: z.boolean().optional(),
+            messages: z.number(),
+            comments: z.number(),
+            smart: z.number(),
+            requests: z.number(),
+            credits: z.number(),
+          }),
+        )
+        .optional(),
+      owner_copilot: z
+        .object({
+          credits: z.number(),
+          chats: z.number(),
+          users: z.number(),
+          interactions: z.number().optional(),
+          credits_source: z.string().optional(),
+        })
+        .optional(),
+      requests_source: z.string().optional(),
+      credits_by_channel_note: z.string().optional(),
+    })
+    .passthrough(),
   partial_failures: z.array(z.string()).optional(),
   privacy: z
     .object({

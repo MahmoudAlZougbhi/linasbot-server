@@ -1,3 +1,5 @@
+import { aiSetupAr } from './aiSetupAr';
+import { dashboardAr } from './dashboardAr';
 import { appleAccountAr } from './appleAccountAr';
 import { integrationsDisplayAr } from './integrationsDisplayAr';
 import { subscriptionAr } from './subscriptionAr';
@@ -247,11 +249,9 @@ export const ar = {
   untitledChat: 'بدون عنوان',
   settingsAiSection: 'تحكم الذكاء الاصطناعي',
   settingsLegalSection: 'قانوني',
-  settingsActions: 'الإجراءات',
-  settingsActionsSub: 'إنستغرام، فيسبوك، التحويل البشري، الصور والمزيد',
   settingsAiLimits: 'حدود الذكاء الاصطناعي',
-  settingsAiLimitsSub: 'حدود استخدام الصور والسياق',
-  faqTitle: 'الإجابات الذكية / الأسئلة الشائعة',
+  settingsAiLimitsSub: 'التحويل البشري، تحليل الصور، الصوت وحدود الاستخدام',
+  faqTitle: 'الإجابات الذكية',
   faqSub: 'أسئلة جاهزة — ترجمة تلقائية لأربع لغات',
   faqCreateNew: 'إضافة سؤال وجواب',
   faqSavedList: 'الإجابات الذكية المحفوظة',
@@ -293,9 +293,9 @@ export const ar = {
   welcomeChipCheckPlan: 'شو وضع الاشتراك / الخطة؟',
   welcomeChipModeWork: 'عمل · عالي',
   welcomeChipModeChat: 'محادثة · منخفض',
-  composerPlaceholder: 'Message Linas AI',
-  composerPlaceholderChat: 'Message Linas AI',
-  composerPlaceholderWork: 'اشتغل مع Linas AI',
+  composerPlaceholder: 'تحدث مع Linas',
+  composerPlaceholderChat: 'تحدث مع Linas',
+  composerPlaceholderWork: 'اشتغل مع Linas',
   composerListening: 'عم اسمع…',
   composerPaused: 'متوقف',
   composerTranscribing: 'جارٍ التحويل لنص…',
@@ -362,6 +362,8 @@ export const ar = {
   ...whatsappAr,
   ...smartFollowUpAr,
   ...requestsAr,
+  ...dashboardAr,
+  ...aiSetupAr,
 
   proposalChangeTitle: 'تعديل إعداد الذكاء الاصطناعي',
   proposalDeleteTitle: 'حذف من إعداد الذكاء الاصطناعي',

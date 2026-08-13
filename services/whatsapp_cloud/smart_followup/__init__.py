@@ -1,14 +1,14 @@
-"""Smart Follow-Up package — durable scheduler for المتابعة الذكية."""
+"""Backward-compatible re-exports for WhatsApp Cloud Smart Follow-Up."""
 
 from __future__ import annotations
 
-from services.whatsapp_cloud.smart_followup.hooks import (
+from services.smart_followup.hooks import (
     cancel_connection_followups,
     cancel_conversation_followups,
     cancel_tenant_followups,
     schedule_after_ai_reply,
 )
-from services.whatsapp_cloud.smart_followup.worker import process_due_followup_jobs
+from services.smart_followup.worker import process_due_followup_jobs
 
 __all__ = [
     "cancel_connection_followups",

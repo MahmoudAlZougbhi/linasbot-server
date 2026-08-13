@@ -7,12 +7,20 @@ import {
   TenantDashboardSchema,
   type DashboardNavigateTarget,
 } from './dashboardTypes';
+import type { DashboardPeriodSelection } from './dashboardFormat';
 
 export async function fetchTenantDashboard(
-  period: DashboardPeriodId,
+  period: DashboardPeriodSelection,
   tz: string,
 ): Promise<TenantDashboard> {
-  const params = new URLSearchParams({ period, tz });
+  const params = new URLSearchParams({ tz });
+  if (period.kind === 'custom') {
+    params.set('period', 'custom');
+    params.set('start', period.start);
+    params.set('end', period.end);
+  } else {
+    params.set('period', period.id);
+  }
   return apiFetch(`/api/mobile/dashboard?${params.toString()}`, {
     schema: TenantDashboardSchema,
   });

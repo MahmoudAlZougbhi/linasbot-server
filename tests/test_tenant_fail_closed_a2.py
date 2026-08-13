@@ -13,7 +13,7 @@ from fastapi import HTTPException
 from handlers import photo_handlers
 from services.ai_usage_limits import AiUsageLimitsService
 from services.auth_email_tokens import AuthEmailTokenRecord, AuthEmailTokenService
-from services.cm.capability_gates import image_analysis_enabled, voice_processing_enabled
+from services.cm.capability_gates import human_handoff_enabled, image_analysis_enabled, voice_processing_enabled
 from services.token_wallet_service import TokenWalletService
 from services.wallet_spend_analytics import _entry_matches_tenant, build_wallet_spend_analytics
 
@@ -199,6 +199,8 @@ def test_capability_gates_reject_missing_tenant(tenant_id: str | None) -> None:
         voice_processing_enabled(tenant_id)  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="tenant_id required"):
         image_analysis_enabled(tenant_id)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="tenant_id required"):
+        human_handoff_enabled(tenant_id)  # type: ignore[arg-type]
 
 
 def test_chat_runtime_prompt_refuses_missing_tenant(monkeypatch: pytest.MonkeyPatch) -> None:

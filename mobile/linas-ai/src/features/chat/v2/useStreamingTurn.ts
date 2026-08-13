@@ -9,7 +9,7 @@ import type { StreamCard, StreamChoice } from './useOwnerStream';
 import { useOwnerStream } from './useOwnerStream';
 
 type TurnHooks = {
-  onTerminal: () => Promise<void> | void;
+  onTerminal: (opts?: { expectReplyText?: string }) => Promise<boolean> | boolean | void;
   onTitleUpdated?: (title: string) => void;
   /** Sync LIN chip when stream reports High / CM tools (never auto-downgrades). */
   onOwnerModeHint?: (mode: 'chat' | 'work') => void;
@@ -134,8 +134,10 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
             setStatusRows([]);
             const finalText = String(payload.reply_text || '').trim();
             if (finalText) setLiveText(finalText);
-            void Promise.resolve(hooksRef.current.onTerminal()).finally(() => {
-              setLiveText('');
+            void Promise.resolve(
+              hooksRef.current.onTerminal({ expectReplyText: finalText || undefined }),
+            ).then((synced) => {
+              if (synced !== false) setLiveText('');
             });
           },
         },

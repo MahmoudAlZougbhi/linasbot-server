@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { TextInput } from 'react-native';
 
-/** Keep a real tap target; grow modestly like ChatGPT (≈4 lines). */
+/** Composer field line metrics — keep in sync with ChatComposer `styles.input`. */
+export const COMPOSER_INPUT_LINE_HEIGHT = 22;
+export const COMPOSER_INPUT_MAX_LINES = 8;
+/** Single-line height inside the 48px pill (padding + icons). */
 export const COMPOSER_INPUT_MIN_H = 36;
-export const COMPOSER_INPUT_MAX_H = 88;
+export const COMPOSER_INPUT_MAX_H = COMPOSER_INPUT_LINE_HEIGHT * COMPOSER_INPUT_MAX_LINES;
 
 /** RN multiline TextInput exposes ScrollView-like scrollToEnd at runtime. */
 type ScrollableTextInput = TextInput & {
@@ -11,8 +14,8 @@ type ScrollableTextInput = TextInput & {
 };
 
 /**
- * Auto-grow composer field up to maxHeight; once capped, scrollToEnd so the
- * caret / newest text stays visible (ChatGPT-like).
+ * Auto-grow composer field up to 8 lines; once capped, scrollToEnd so the
+ * caret / newest text stays visible.
  */
 export function useComposerInputAutoGrow(
   draft: string,

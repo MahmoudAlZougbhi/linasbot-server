@@ -150,12 +150,10 @@ async def prepare_response(
         )
 
     # Step 6 — Handoff only for explicit booking/human intent, only if not restricted.
-    from services.cm.actions import ACTION_HUMAN_HANDOFF, action_enabled
-    from services.cm.schemas import ActionsSection
+    from services.cm.capability_gates import human_handoff_enabled
 
     handoff_intent = _detect_booking_or_human(message)
-    actions_section = ActionsSection.model_validate(sections.get("actions") or {})
-    if handoff_intent and action_enabled(actions_section, ACTION_HUMAN_HANDOFF):
+    if handoff_intent and human_handoff_enabled(tenant_id):
         resolution = resolve_handoff(handoff_policy)
         if resolution.destination_value:
             return PipelineOutcome(

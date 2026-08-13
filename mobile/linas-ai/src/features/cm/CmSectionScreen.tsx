@@ -15,7 +15,7 @@ import { HandoffEditor } from './editors/HandoffEditor';
 import { LanguagesEditor } from './editors/LanguagesEditor';
 import { OffDaysEditor } from './editors/OffDaysEditor';
 import { OpeningHoursEditor } from './editors/OpeningHoursEditor';
-import { ActionsEditor, AiLimitsEditor, RestrictedEditor } from './editors/PolicyEditors';
+import { AiLimitsEditor, RestrictedEditor } from './editors/PolicyEditors';
 import { CommentsEditor } from './editors/CommentsEditor';
 import { PricesEditor } from './editors/PricesEditor';
 import { RequestsAppointmentsEditor } from './editors/RequestsAppointmentsEditor';
@@ -65,8 +65,6 @@ function SectionBody({
       return <RestrictedEditor payload={payload} onChange={onChange} />;
     case 'comments':
       return <CommentsEditor payload={payload} onChange={onChange} />;
-    case 'actions':
-      return <ActionsEditor payload={payload} onChange={onChange} />;
     case 'ai_limits':
       return <AiLimitsEditor payload={payload} onChange={onChange} />;
     case 'off_days':

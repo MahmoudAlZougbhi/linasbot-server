@@ -76,7 +76,7 @@ export function DrawerFooter(props: Props) {
           accessibilityRole="button"
           accessibilityLabel={tr('newChat')}
         >
-          <NewChatIcon color={colors.onAccent} size={18} />
+          <NewChatIcon color={colors.onAccent} size={16} />
           <Text style={[styles.newChatText, { color: colors.onAccent }]}>{tr('newChat')}</Text>
         </Pressable>
         <Pressable
@@ -116,19 +116,25 @@ const styles = StyleSheet.create({
   },
   newChatBtn: {
     flex: 1,
-    minHeight: 48,
+    minHeight: 40,
     borderRadius: radii.pill,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: spacing.lg,
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
   },
-  newChatText: { fontFamily: fonts.bodyMedium, fontSize: 16 },
+  newChatText: {
+    fontFamily: fonts.display,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
   settingsBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',

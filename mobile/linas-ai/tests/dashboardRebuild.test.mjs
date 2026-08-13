@@ -31,12 +31,12 @@ test('Dashboard rebuild uses typed mobile dashboard API', () => {
   const types = read('features/dashboard/dashboardTypes.ts');
   assert.match(api, /\/api\/mobile\/dashboard/);
   assert.match(types, /TenantDashboardSchema/);
-  assert.match(screen, /WorkspaceStatusCard/);
-  assert.match(screen, /PlanCreditsCard/);
-  assert.match(screen, /ChannelBreakdownCard/);
-  assert.match(screen, /ContentReadinessCard/);
-  assert.match(screen, /TeamCapacityCard/);
-  assert.match(screen, /AlertsCard/);
+  assert.match(types, /activity_summary/);
+  assert.match(screen, /DashboardHeader/);
+  assert.match(screen, /GrowthPlanCard/);
+  assert.match(screen, /TotalActivityGrid/);
+  assert.match(screen, /ChannelActivityTable/);
+  assert.match(screen, /OwnerCopilotCard/);
   assert.doesNotMatch(screen, /isPlatformOwner|Platform metrics|Owner only|Owner access only/);
   assert.doesNotMatch(screen, /JSON\.stringify/);
   assert.doesNotMatch(types, /\bany\b|@ts-ignore|@ts-nocheck/);
@@ -97,4 +97,11 @@ test('no OpenAI cost or profit fields in dashboard types/UI', () => {
   assert.doesNotMatch(corpus, /\bprofit\b/);
   assert.doesNotMatch(corpus, /\brevenue\b/);
   assert.doesNotMatch(corpus, /platform\/metrics/);
+});
+
+test('dashboard i18n covers en ar fr', () => {
+  assert.match(read('i18n/locales/en.ts'), /dashboardEn/);
+  assert.match(read('i18n/locales/ar.ts'), /dashboardAr/);
+  assert.match(read('i18n/locales/fr.ts'), /dashboardFr/);
+  assert.match(read('i18n/locales/dashboardEn.ts'), /dashGrowthPlan/);
 });

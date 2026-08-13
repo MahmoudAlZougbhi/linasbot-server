@@ -17,7 +17,6 @@ export type CmSectionId =
   | 'off_days'
   | 'requests_appointments'
   /** Settings-hosted (not listed in CM hub). */
-  | 'actions'
   | 'ai_limits';
 
 export type CmSectionCard = {
@@ -123,16 +122,9 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
     mobileSupported: true,
   },
   {
-    id: 'actions',
-    title: 'Actions',
-    description: 'Enable Instagram, Facebook, handoff, and more.',
-    mobileSupported: true,
-    showInCmHub: false,
-  },
-  {
     id: 'ai_limits',
     title: 'AI Limits',
-    description: 'Image and context usage limits.',
+    description: 'Handoff, photo analysis, voice, and usage limits.',
     mobileSupported: true,
     showInCmHub: false,
   },

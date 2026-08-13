@@ -37,9 +37,10 @@ const styles = StyleSheet.create({
   wrap: { flexGrow: 1, gap: spacing.sm },
   separator: { height: StyleSheet.hairlineWidth, marginBottom: spacing.sm },
   heading: {
-    fontFamily: fonts.bodyMedium,
+    fontFamily: fonts.display,
     fontWeight: '700',
     fontSize: 15,
+    letterSpacing: -0.2,
     marginBottom: spacing.xs,
   },
 });

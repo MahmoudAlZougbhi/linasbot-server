@@ -17,6 +17,8 @@ async def mobile_dashboard(
     request: Request,
     period: str = Query(default="billing"),
     timezone: str = Query(default="UTC", alias="tz"),
+    start: str | None = Query(default=None, description="Custom range start (YYYY-MM-DD)"),
+    end: str | None = Query(default=None, description="Custom range end (YYYY-MM-DD)"),
 ) -> Any:
     """Bearer-authenticated tenant Dashboard aggregate.
 
@@ -29,6 +31,8 @@ async def mobile_dashboard(
             user_id=session.user_id,
             period_raw=period,
             timezone_raw=timezone,
+            custom_start=start,
+            custom_end=end,
         )
     except PeriodValidationError as exc:
         raise HTTPException(status_code=400, detail={"code": exc.code, "message": str(exc)}) from exc
