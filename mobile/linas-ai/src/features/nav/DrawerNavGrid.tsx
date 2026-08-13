@@ -96,11 +96,22 @@ export function DrawerNavGrid({ showUsers, activeArea, badges, onOpenArea }: Pro
                 style={[
                   styles.badge,
                   badge.tone === 'teal'
-                    ? { backgroundColor: colors.accentDeep }
+                    ? {
+                        backgroundColor: colors.accentMid,
+                        borderWidth: 1,
+                        borderColor: '#FFFFFF',
+                      }
                     : { backgroundColor: colors.danger },
                 ]}
               >
-                <Text style={[styles.badgeText, { color: colors.onAccent }]}>{badge.label}</Text>
+                <Text
+                  style={[
+                    styles.badgeText,
+                    badge.tone === 'teal' ? { color: '#FFFFFF' } : { color: colors.onAccent },
+                  ]}
+                >
+                  {badge.label}
+                </Text>
               </View>
             ) : null}
             <DrawerModuleIcon modId={mod.id} colors={colors} active={active} />
