@@ -15,12 +15,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { textDirectionStyle } from '../../lib/textDirection';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../theme';
-import { COMPOSER_ACTION_SIZE, formatVoiceElapsed, StopGlyph } from './ComposerGlyphs';
+import { ComposerEditChip } from './ComposerEditChip';
+import {
+  COMPOSER_ACTION_SIZE,
+  COMPOSER_SEND_SIZE,
+  formatVoiceElapsed,
+  PlusCircleGlyph,
+  SendArrowGlyph,
+  StopGlyph,
+} from './ComposerGlyphs';
+import { ComposerModelChip } from './ComposerModelChip';
 import { LinEffortSheet } from './LinEffortSheet';
-import { OWNER_LIN_DISPLAY, type OwnerChatMode } from './ownerChatMode';
+import type { OwnerChatMode } from './ownerChatMode';
 import { useComposerInputAutoGrow } from './useComposerInputAutoGrow';
 import type { VoiceState } from './useVoiceDraft';
-import { ComposerEditChip } from './ComposerEditChip';
 import { VoiceComposerControls } from './VoiceComposerControls';
 
 type Props = {
@@ -46,15 +54,12 @@ type Props = {
   ownerMode?: OwnerChatMode;
   onOwnerModeChange?: (mode: OwnerChatMode) => void;
   showModelChip?: boolean;
-  /** Multitask-style Edit chip while revising a pending proposal bar. */
   editChipActive?: boolean;
   onClearEditChip?: () => void;
 };
 
 /**
- * ChatGPT-style pill: + | TextInput | chip | mic/send in one row.
- * Stacking the field above the toolbar let an empty multiline TextInput collapse
- * to a near-zero hit target (blank bar / “blocked” composer next to the Ok bubble).
+ * Design handoff composer: model chip above right, white pill (+ | input | mic), external send.
  */
 export function ChatComposer({
   draft,
@@ -88,7 +93,6 @@ export function ChatComposer({
   const [effortOpen, setEffortOpen] = useState(false);
   const pulse = useRef(new Animated.Value(1)).current;
   const ring = useRef(new Animated.Value(0.55)).current;
-  /** After Send, block one-shot autofocus / remount races from reopening the keyboard. */
   const suppressFocusRef = useRef(false);
   const {
     inputHeight,
@@ -104,13 +108,8 @@ export function ChatComposer({
   const voiceBusy = recording || paused || transcribing;
   const canSend = Boolean(draft.trim() || canSendWithAttachment);
   const streamingStop = Boolean(onStop && sending);
-  // Keep mic available with typed draft so voice can append (not replace).
   const showVoiceControl = Boolean(showMic && onToggleVoice && !streamingStop);
-  const showSend = streamingStop || (canSend && !voiceBusy);
   const chipTappable = Boolean(showModelChip && onOwnerModeChange);
-  const chipLabel = `${OWNER_LIN_DISPLAY} ${
-    ownerMode === 'work' ? tr('linEffortHigh') : tr('linEffortLow')
-  }`;
   const draftDir = textDirectionStyle(draft);
 
   function dismissKeyboard() {
@@ -144,8 +143,6 @@ export function ChatComposer({
     };
   }, [recording, pulse, ring]);
 
-  // One-shot open focus (ChatGPT-style). Avoid native autoFocus — draft-clear
-  // height shrink on Send can re-open the keyboard if the field stays focused.
   useEffect(() => {
     if (!autoFocus || suppressFocusRef.current) return;
     const t = setTimeout(() => {
@@ -160,7 +157,6 @@ export function ChatComposer({
     suppressFocusRef.current = true;
     dismissKeyboard();
     onSend();
-    // Draft clear + inputHeight shrink re-layout can leave the field focused.
     requestAnimationFrame(dismissKeyboard);
     setTimeout(dismissKeyboard, 80);
   }
@@ -181,78 +177,66 @@ export function ChatComposer({
         styles.wrap,
         {
           paddingBottom: Math.max(insets.bottom, 10),
-          // Match chat canvas — no elevated/green chrome slab above the pill.
           backgroundColor: colors.bg,
         },
       ]}
     >
       <ComposerEditChip active={Boolean(editChipActive)} onClear={onClearEditChip} />
-      <View
-        style={[
-          styles.pill,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        {showPlus && onPlus ? (
-          <Pressable
-            style={styles.iconHit}
-            onPress={onPlus}
-            accessibilityLabel={tr('composerMoreActions')}
-            hitSlop={6}
-          >
-            <Text style={{ color: colors.text, fontSize: 22, fontWeight: '500', lineHeight: 24 }}>
-              +
-            </Text>
-          </Pressable>
-        ) : (
-          <View style={styles.iconHit} />
-        )}
 
-        <TextInput
-          ref={assignInputRef}
-          style={[styles.input, { color: colors.text, height: inputHeight }, draftDir]}
-          placeholder={placeholder}
-          placeholderTextColor={colors.textDim}
-          value={draft}
-          onChangeText={(v) => handleChangeText(v, onChangeDraft)}
-          onContentSizeChange={(e) => {
-            handleContentSizeChange(e.nativeEvent.contentSize.height);
+      {showModelChip ? (
+        <ComposerModelChip
+          mode={ownerMode}
+          tappable={chipTappable}
+          open={effortOpen}
+          onOpen={() => {
+            dismissKeyboard();
+            setEffortOpen(true);
           }}
-          multiline
-          scrollEnabled={atMaxHeight}
-          editable={!voiceBusy}
-          autoFocus={false}
-          blurOnSubmit={false}
-          textAlign={draftDir.textAlign}
-          textAlignVertical={Platform.OS === 'android' ? 'center' : undefined}
-          accessibilityLabel={idlePlaceholder}
         />
+      ) : null}
 
-        <View style={styles.trailing}>
-          {showModelChip ? (
+      <View style={styles.inputRow}>
+        <View
+          style={[
+            styles.pill,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.borderSoft,
+            },
+          ]}
+        >
+          {showPlus && onPlus ? (
             <Pressable
-              style={[styles.chip, { backgroundColor: colors.surfaceAlt }]}
-              onPress={() => {
-                if (!chipTappable) return;
-                dismissKeyboard();
-                setEffortOpen(true);
-              }}
-              disabled={!chipTappable}
-              accessibilityRole="button"
-              accessibilityLabel={chipLabel}
-              accessibilityHint={chipTappable ? tr('composerChooseEffort') : undefined}
+              style={styles.iconHit}
+              onPress={onPlus}
+              accessibilityLabel={tr('composerMoreActions')}
+              hitSlop={6}
             >
-              {ownerMode === 'work' ? (
-                <Text style={[styles.chipBolt, { color: colors.text }]}>⚡</Text>
-              ) : null}
-              <Text style={[styles.chipText, { color: colors.text }]} numberOfLines={1}>
-                {chipLabel}
-              </Text>
+              <PlusCircleGlyph color={colors.textMuted} />
             </Pressable>
-          ) : null}
+          ) : (
+            <View style={styles.iconHit} />
+          )}
+
+          <TextInput
+            ref={assignInputRef}
+            style={[styles.input, { color: colors.text, height: inputHeight }, draftDir]}
+            placeholder={placeholder}
+            placeholderTextColor={colors.textDim}
+            value={draft}
+            onChangeText={(v) => handleChangeText(v, onChangeDraft)}
+            onContentSizeChange={(e) => {
+              handleContentSizeChange(e.nativeEvent.contentSize.height);
+            }}
+            multiline
+            scrollEnabled={atMaxHeight}
+            editable={!voiceBusy}
+            autoFocus={false}
+            blurOnSubmit={false}
+            textAlign={draftDir.textAlign}
+            textAlignVertical={Platform.OS === 'android' ? 'center' : undefined}
+            accessibilityLabel={idlePlaceholder}
+          />
 
           {showVoiceControl ? (
             <VoiceComposerControls
@@ -266,43 +250,45 @@ export function ChatComposer({
               onDiscardVoice={onDiscardVoice}
               onBeforeStart={dismissKeyboard}
             />
-          ) : null}
-
-          {showSend ? (
-            streamingStop ? (
-              <Pressable
-                style={[styles.sendIn, { backgroundColor: colors.accent }]}
-                onPress={onStop}
-                accessibilityLabel={tr('composerStop')}
-              >
-                <StopGlyph color={colors.onAccent} />
-              </Pressable>
-            ) : (
-              <Pressable
-                style={[
-                  styles.sendIn,
-                  { backgroundColor: colors.accent },
-                  (sending || voiceBusy) && styles.sendDisabled,
-                ]}
-                onPress={handleSend}
-                disabled={sending || !canSend || voiceBusy}
-                accessibilityLabel={tr('composerSend')}
-              >
-                {sending ? (
-                  <ActivityIndicator color={colors.onAccent} />
-                ) : (
-                  <Text style={{ color: colors.onAccent, fontSize: 18, fontWeight: '800' }}>↑</Text>
-                )}
-              </Pressable>
-            )
-          ) : null}
+          ) : (
+            <View style={styles.iconHit} />
+          )}
         </View>
+
+        {streamingStop ? (
+          <Pressable
+            style={[styles.sendOutside, { backgroundColor: colors.accentDeep }]}
+            onPress={onStop}
+            accessibilityLabel={tr('composerStop')}
+          >
+            <StopGlyph color={colors.onAccent} />
+          </Pressable>
+        ) : (
+          <Pressable
+            style={[
+              styles.sendOutside,
+              { backgroundColor: colors.accentDeep },
+              (sending || !canSend || voiceBusy) && styles.sendDisabled,
+            ]}
+            onPress={handleSend}
+            disabled={sending || !canSend || voiceBusy}
+            accessibilityLabel={tr('composerSend')}
+          >
+            {sending ? (
+              <ActivityIndicator color={colors.onAccent} size="small" />
+            ) : (
+              <SendArrowGlyph color={colors.onAccent} />
+            )}
+          </Pressable>
+        )}
       </View>
+
       {showDisclaimer ? (
         <Text style={[styles.disclaimer, { color: colors.textDim }]}>
           {tr('composerDisclaimer')}
         </Text>
       ) : null}
+
       {chipTappable ? (
         <LinEffortSheet
           open={effortOpen}
@@ -320,27 +306,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
   },
-  editChipRow: {
+  inputRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    alignItems: 'flex-end',
+    gap: spacing.sm,
   },
-  editChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  editChipText: { fontFamily: fonts.bodyMedium, fontSize: 13 },
-  editHint: { flex: 1, fontFamily: fonts.body, fontSize: 12 },
   pill: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radii.xl + 4,
+    borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 6,
     paddingHorizontal: 8,
@@ -354,12 +329,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 0,
   },
-  trailing: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexShrink: 0,
-  },
   iconHit: {
     width: COMPOSER_ACTION_SIZE,
     height: COMPOSER_ACTION_SIZE,
@@ -367,32 +336,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radii.pill,
-    maxWidth: 160,
-  },
-  chipBolt: { fontSize: 12 },
-  chipText: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 12,
-  },
-  sendIn: {
-    width: COMPOSER_ACTION_SIZE,
-    height: COMPOSER_ACTION_SIZE,
-    borderRadius: COMPOSER_ACTION_SIZE / 2,
+  sendOutside: {
+    width: COMPOSER_SEND_SIZE,
+    height: COMPOSER_SEND_SIZE,
+    borderRadius: COMPOSER_SEND_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 4,
   },
   sendDisabled: { opacity: 0.45 },
   disclaimer: {
     fontFamily: fonts.body,
     fontSize: 11,
     textAlign: 'center',
-    marginTop: 6,
+    marginTop: 8,
   },
 });

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -14,12 +15,15 @@ from services.channel_capability_toggles import (
     action_id_for,
     attach_channel_toggles,
     channel_toggle_states,
+    enable_channel_defaults_after_connect,
+    set_channel_toggle,
 )
 from services.cm.actions import (
     ACTION_FACEBOOK_COMMENTS,
     ACTION_FACEBOOK_DM,
     ACTION_INSTAGRAM_COMMENTS,
     ACTION_INSTAGRAM_DM,
+    published_action_enabled,
 )
 from services.meta_app_registry import APP_A_KEY
 
@@ -449,3 +453,151 @@ async def test_disable_comments_keeps_dm_requested(monkeypatch) -> None:
     assert all(c[0] != ACTION_FACEBOOK_DM for c in calls if isinstance(c[0], str))
     assert result["toggles"]["dm"] is True
     assert result["toggles"]["comments"] is False
+
+
+@pytest.mark.asyncio
+async def test_toggle_dm_off_preserves_comments_when_only_published_exists(monkeypatch, tmp_path) -> None:
+    """Regression: toggling one CM action must not reset the sibling action from schema defaults."""
+
+    from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test_content
+
+    install_mocked_openai_embeddings(monkeypatch)
+    monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path / "data"))
+    monkeypatch.setenv("CM_PUBLISH_ENABLED", "1")
+
+    tenant = "toggle_indep"
+    await publish_test_content(
+        tenant,
+        {
+            "actions": {
+                "items": [
+                    {"id": ACTION_FACEBOOK_DM, "enabled": True},
+                    {"id": ACTION_FACEBOOK_COMMENTS, "enabled": True},
+                    {"id": ACTION_INSTAGRAM_DM, "enabled": False},
+                    {"id": ACTION_INSTAGRAM_COMMENTS, "enabled": False},
+                ],
+            }
+        },
+    )
+
+    from services.cm.storage import draft_section_path
+
+    assert not draft_section_path(tenant, "actions").exists()
+
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.canonical_channel_bindings",
+        lambda *_a, **_k: [_fb_binding()],
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_toggles._sync_comment_assets",
+        AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.channel_toggle_states",
+        lambda *_a, **_k: {"dm": False, "comments": True},
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.comment_capability_state",
+        lambda *_a, **_k: {"effective_enabled": True, "requested_enabled": True},
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.dm_capability_state",
+        lambda *_a, **_k: {"effective_enabled": False, "requested_enabled": False},
+    )
+
+    await set_channel_toggle(
+        tenant_id=tenant,
+        platform="facebook",
+        toggle="dm",
+        enabled=False,
+        actor="test",
+    )
+
+    assert published_action_enabled(tenant, ACTION_FACEBOOK_COMMENTS) is True
+    assert published_action_enabled(tenant, ACTION_FACEBOOK_DM) is False
+
+
+@pytest.mark.asyncio
+async def test_toggle_comments_on_preserves_dm_when_only_published_exists(monkeypatch, tmp_path) -> None:
+    from tests.cm_test_helpers import install_mocked_openai_embeddings, publish_test_content
+
+    install_mocked_openai_embeddings(monkeypatch)
+    monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path / "data"))
+    monkeypatch.setenv("CM_PUBLISH_ENABLED", "1")
+
+    tenant = "linas"
+    await publish_test_content(
+        tenant,
+        {
+            "actions": {
+                "items": [
+                    {"id": ACTION_FACEBOOK_DM, "enabled": True},
+                    {"id": ACTION_FACEBOOK_COMMENTS, "enabled": False},
+                    {"id": ACTION_INSTAGRAM_DM, "enabled": False},
+                    {"id": ACTION_INSTAGRAM_COMMENTS, "enabled": False},
+                ],
+            }
+        },
+    )
+
+    from services.cm.storage import draft_section_path
+
+    assert not draft_section_path(tenant, "actions").exists()
+
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.canonical_channel_bindings",
+        lambda *_a, **_k: [_fb_binding()],
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_toggles._sync_comment_assets",
+        AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.comments_enable_blocker",
+        lambda *_a, **_k: None,
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.channel_toggle_states",
+        lambda *_a, **_k: {"dm": True, "comments": True},
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.comment_capability_state",
+        lambda *_a, **_k: {"effective_enabled": True, "requested_enabled": True},
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.dm_capability_state",
+        lambda *_a, **_k: {"effective_enabled": True, "requested_enabled": True},
+    )
+
+    await set_channel_toggle(
+        tenant_id=tenant,
+        platform="facebook",
+        toggle="comments",
+        enabled=True,
+        actor="test",
+    )
+
+    assert published_action_enabled(tenant, ACTION_FACEBOOK_DM) is True
+    assert published_action_enabled(tenant, ACTION_FACEBOOK_COMMENTS) is True
+
+
+@pytest.mark.asyncio
+async def test_enable_channel_defaults_after_connect_enables_both(monkeypatch) -> None:
+    calls: list[tuple[str, bool]] = []
+
+    async def _set(**kwargs):
+        calls.append((kwargs["toggle"], kwargs["enabled"]))
+        return {
+            "toggles": {"dm": True, "comments": True},
+            "comments_state": {},
+            "dm_state": {},
+        }
+
+    monkeypatch.setattr("services.channel_capability_toggles.set_channel_toggle", _set)
+
+    await enable_channel_defaults_after_connect(
+        tenant_id="linas",
+        platform="facebook",
+        actor="oauth",
+    )
+    assert calls == [("dm", True), ("comments", True)]

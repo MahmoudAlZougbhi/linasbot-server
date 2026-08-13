@@ -6,21 +6,31 @@ type Props = {
   size?: number;
   labeled?: boolean;
   label?: string;
+  labelColor?: string;
   style?: ViewStyle;
 };
 
 /** Static Linas star micro-mark — never animated / never a character avatar. */
-export function LinasStarMark({ size = 22, labeled = false, label = 'Linas', style }: Props) {
+export function LinasStarMark({
+  size = 22,
+  labeled = false,
+  label = 'Linas',
+  labelColor,
+  style,
+}: Props) {
   const { colors } = useTheme();
+  const titleColor = labelColor ?? colors.text;
   return (
     <View
       style={[styles.row, style]}
       accessibilityRole="image"
-      accessibilityLabel={labeled ? `Linas ${label}` : 'Linas'}
+      accessibilityLabel={labeled ? label : 'Linas'}
     >
       <Text style={{ color: colors.accent, fontSize: size, lineHeight: size + 2 }}>✦</Text>
       {labeled ? (
-        <Text style={[styles.label, { color: colors.text, fontSize: Math.max(15, size - 4) }]}>
+        <Text
+          style={[styles.label, { color: titleColor, fontSize: Math.max(15, size - 3) }]}
+        >
           {label}
         </Text>
       ) : null}

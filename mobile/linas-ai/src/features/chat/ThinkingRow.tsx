@@ -70,7 +70,7 @@ export function ThinkingRow({ label }: Props) {
     >
       <View style={[styles.col, aiMessageColStyle(label)]}>
         <View style={styles.aiLabelRow}>
-          <LinasStarMark size={12} labeled label="Linas" />
+          <LinasStarMark size={12} labeled label="Linas" labelColor={colors.accentDeep} />
         </View>
         <Animated.Text style={[styles.text, { color: colors.textMuted, opacity }, dirStyle]}>
           {label}

@@ -1,8 +1,9 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AppIcon, feather } from '../../components/AppIcon';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../theme';
-import type { OwnerChatMode } from './ownerChatMode';
+import { OWNER_LIN_DISPLAY, type OwnerChatMode } from './ownerChatMode';
 
 type Props = {
   open: boolean;
@@ -11,74 +12,80 @@ type Props = {
   onSelect: (mode: OwnerChatMode) => void;
 };
 
-function CloudGlyph({ color }: { color: string }) {
-  return (
-    <Text style={{ color, fontSize: 12, lineHeight: 14 }} accessibilityElementsHidden>
-      ☁
-    </Text>
-  );
-}
-
-/** Bottom sheet: Low / High effort (Chat ↔ Low, Work ↔ High). High shows costs-more affordance. */
+/** Floating card: 5.6 LIN Low / High with Fast / credits subtext. */
 export function LinEffortSheet({ open, mode, onClose, onSelect }: Props) {
   const { tr } = useI18n();
   const { colors } = useTheme();
 
-  const rows: { id: OwnerChatMode; title: string; costsMore?: boolean }[] = [
-    { id: 'chat', title: tr('linEffortLow') },
-    { id: 'work', title: tr('linEffortHigh'), costsMore: true },
+  const rows: {
+    id: OwnerChatMode;
+    title: string;
+    sub: string;
+    trailing: 'check' | 'bolt';
+  }[] = [
+    {
+      id: 'chat',
+      title: `${OWNER_LIN_DISPLAY} ${tr('linEffortLow')}`,
+      sub: tr('linEffortFast'),
+      trailing: 'check',
+    },
+    {
+      id: 'work',
+      title: `${OWNER_LIN_DISPLAY} ${tr('linEffortHigh')}`,
+      sub: tr('linEffortHighSub'),
+      trailing: 'bolt',
+    },
   ];
 
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={[styles.scrim, { backgroundColor: colors.overlay }]} onPress={onClose}>
-        <Pressable
-          style={[styles.sheet, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <Text style={[styles.title, { color: colors.text }]}>{tr('linEffortTitle')}</Text>
-          {rows.map((row) => {
-            const selected = mode === row.id;
-            return (
-              <Pressable
-                key={row.id}
-                style={[
-                  styles.row,
-                  {
-                    backgroundColor: selected ? colors.surfaceAlt : colors.bgElevated,
-                    borderColor: selected ? colors.accent : colors.borderSoft,
-                  },
-                ]}
-                onPress={() => {
-                  onSelect(row.id);
-                  onClose();
-                }}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                accessibilityLabel={
-                  row.costsMore
-                    ? `${row.title}, ${tr('linEffortCostsMore')}`
-                    : row.title
-                }
-              >
-                <View style={styles.rowMain}>
-                  <Text style={[styles.rowTitle, { color: colors.text }]}>{row.title}</Text>
-                  {row.costsMore ? (
-                    <View style={styles.costHint}>
-                      <CloudGlyph color={colors.textMuted} />
-                      <Text style={[styles.costText, { color: colors.textMuted }]}>
-                        {tr('linEffortCostsMore')}
-                      </Text>
-                    </View>
+      <Pressable style={styles.scrim} onPress={onClose}>
+        <View style={styles.anchor} pointerEvents="box-none">
+          <Pressable
+            style={[
+              styles.menu,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.borderSoft,
+                shadowColor: colors.text,
+              },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {rows.map((row, index) => {
+              const selected = mode === row.id;
+              return (
+                <View key={row.id}>
+                  {index > 0 ? (
+                    <View style={[styles.divider, { backgroundColor: colors.borderSoft }]} />
                   ) : null}
+                  <Pressable
+                    style={styles.row}
+                    onPress={() => {
+                      onSelect(row.id);
+                      onClose();
+                    }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={`${row.title}, ${row.sub}`}
+                  >
+                    <View style={styles.rowMain}>
+                      <Text style={[styles.rowTitle, { color: colors.text }]}>{row.title}</Text>
+                      <Text style={[styles.rowSub, { color: colors.textDim }]}>{row.sub}</Text>
+                    </View>
+                    {row.trailing === 'check' && selected ? (
+                      <AppIcon icon={feather('check')} size={18} color={colors.accent} />
+                    ) : row.trailing === 'bolt' ? (
+                      <Text style={[styles.bolt, { color: colors.accent }]} accessibilityElementsHidden>
+                        ⚡
+                      </Text>
+                    ) : null}
+                  </Pressable>
                 </View>
-                {selected ? (
-                  <Text style={[styles.check, { color: colors.accent }]}>✓</Text>
-                ) : null}
-              </Pressable>
-            );
-          })}
-        </Pressable>
+              );
+            })}
+          </Pressable>
+        </View>
       </Pressable>
     </Modal>
   );
@@ -87,31 +94,37 @@ export function LinEffortSheet({ open, mode, onClose, onSelect }: Props) {
 const styles = StyleSheet.create({
   scrim: {
     flex: 1,
+    backgroundColor: 'transparent',
     justifyContent: 'flex-end',
   },
-  sheet: {
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
-    padding: spacing.xl,
-    borderTopWidth: 1,
-    gap: spacing.sm,
+  anchor: {
+    alignItems: 'flex-end',
+    paddingHorizontal: spacing.md,
+    paddingBottom: 132,
   },
-  title: {
-    fontFamily: fonts.display,
-    fontSize: 18,
-    marginBottom: spacing.sm,
+  menu: {
+    minWidth: 248,
+    borderRadius: radii.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: spacing.md,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radii.md,
-    padding: spacing.lg,
-    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    gap: spacing.sm,
   },
-  rowMain: { flex: 1, paddingRight: 8, gap: 4 },
-  rowTitle: { fontFamily: fonts.bodyMedium, fontSize: 16 },
-  costHint: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
-  costText: { fontFamily: fonts.body, fontSize: 12 },
-  check: { fontFamily: fonts.bodyMedium, fontSize: 16 },
+  rowMain: { flex: 1, gap: 2 },
+  rowTitle: { fontFamily: fonts.bodyMedium, fontSize: 15, fontWeight: '700' },
+  rowSub: { fontFamily: fonts.body, fontSize: 12, lineHeight: 16 },
+  bolt: { fontSize: 16, lineHeight: 18 },
 });
-

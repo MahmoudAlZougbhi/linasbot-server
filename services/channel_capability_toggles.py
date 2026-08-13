@@ -18,10 +18,11 @@ from services.channel_capability_state import (
     dm_capability_state,
     supported_platforms,
 )
+from services.cm.actions import load_actions_section
 from services.cm.publish import PublishBlockedError, publish_draft_sections
 from services.cm.publish_gate import PublishDisabledError, ensure_publish_enabled
-from services.cm.schemas import ActionCapability, ActionsSection
-from services.cm.storage import ConflictError, get_draft, put_draft
+from services.cm.schemas import ActionCapability, ActionsSection, SectionDraftEnvelope
+from services.cm.storage import ConflictError, draft_section_path, get_draft, put_draft
 from services.cm.version_store import read_published_pointer
 from services.meta_app_registry import get_meta_app_configs, get_meta_app_registry
 from services.meta_comment_reply_settings import get_comment_reply_setting, set_comment_reply_setting
@@ -52,6 +53,7 @@ __all__ = [
     "clear_invalid_comments_enabled_state_async",
     "comment_capability_state",
     "comments_enable_blocker",
+    "enable_channel_defaults_after_connect",
     "reconcile_comment_webhooks_for_platform",
     "set_channel_toggle",
     "supported_platforms",
@@ -325,8 +327,28 @@ async def sync_published_comment_assets_if_enabled(*, tenant_id: str, platform: 
     await _sync_comment_assets(tenant_id=tenant_id, platform=platform_key, enabled=True)
 
 
+def _actions_draft_envelope(*, tenant_id: str, actor: str) -> SectionDraftEnvelope:
+    """Load actions draft; seed from published CM when no draft file exists yet."""
+
+    if draft_section_path(tenant_id, "actions").exists():
+        return get_draft("actions", tenant_id=tenant_id, create_default=False)
+
+    published = load_actions_section(tenant_id)
+    if published is not None:
+        return put_draft(
+            "actions",
+            payload=published.model_dump(),
+            if_match="*",
+            tenant_id=tenant_id,
+            updated_by=actor,
+            allow_create=True,
+        )
+
+    return get_draft("actions", tenant_id=tenant_id, create_default=True)
+
+
 def _set_action_in_draft(*, tenant_id: str, action_id: str, enabled: bool, actor: str) -> ActionsSection:
-    envelope = get_draft("actions", tenant_id=tenant_id, create_default=True)
+    envelope = _actions_draft_envelope(tenant_id=tenant_id, actor=actor)
     section = ActionsSection.model_validate(envelope.payload or {})
     items = list(section.items)
     found = False
@@ -377,6 +399,30 @@ async def _publish_actions(*, tenant_id: str, actor: str) -> None:
             status_code=422,
             code="PUBLISH_BLOCKED",
         ) from exc
+
+
+async def enable_channel_defaults_after_connect(
+    *,
+    tenant_id: str,
+    platform: str,
+    actor: str,
+) -> None:
+    """After Meta connect, turn on DM + Comments via CM Actions (connection unchanged on failure)."""
+
+    platform_key = (platform or "").strip().lower()
+    if platform_key not in supported_platforms():
+        return
+    for toggle in ("dm", "comments"):
+        try:
+            await set_channel_toggle(
+                tenant_id=tenant_id,
+                platform=platform_key,
+                toggle=toggle,  # type: ignore[arg-type]
+                enabled=True,
+                actor=actor,
+            )
+        except ChannelToggleError:
+            continue
 
 
 async def set_channel_toggle(

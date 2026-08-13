@@ -276,16 +276,18 @@ test('voice STT wires transcript into composer draft (no auto-send)', () => {
 
 test('LIN effort chip opens Low/High picker synced with Chat|Work', () => {
   const composer = read('features/chat/ChatComposer.tsx');
+  const chip = read('features/chat/ComposerModelChip.tsx');
   const sheet = read('features/chat/LinEffortSheet.tsx');
   const chat = read('features/chat/ChatScreen.tsx');
   const mode = read('features/chat/ownerChatMode.ts');
   assert.match(composer, /onOwnerModeChange/);
   assert.match(composer, /LinEffortSheet/);
-  assert.match(composer, /accessibilityRole="button"/);
+  assert.match(composer, /ComposerModelChip/);
+  assert.match(chip, /accessibilityRole="button"/);
   assert.match(sheet, /linEffortLow/);
   assert.match(sheet, /linEffortHigh/);
-  assert.match(sheet, /linEffortCostsMore/);
-  assert.match(sheet, /CloudGlyph/);
+  assert.match(sheet, /linEffortFast/);
+  assert.match(sheet, /linEffortHighSub/);
   assert.match(sheet, /id: 'chat'/);
   assert.match(sheet, /id: 'work'/);
   assert.match(chat, /onOwnerModeChange=\{setOwnerMode\}/);
@@ -402,7 +404,7 @@ test('theme tokens include light and dark parity keys', () => {
   const tokens = read('theme/tokens.ts');
   assert.match(tokens, /export const lightColors/);
   assert.match(tokens, /export const darkColors/);
-  assert.match(tokens, /accent: '#0D9488'/);
+  assert.match(tokens, /accent: '#008B8B'/);
 });
 
 test('no bottom tab navigator wiring', () => {
