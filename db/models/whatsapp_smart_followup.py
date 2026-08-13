@@ -116,9 +116,11 @@ class WhatsAppSmartFollowUpSequence(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    channel: Mapped[str] = mapped_column(String(32), nullable=False, server_default=text("'whatsapp_cloud'"))
     connection_id: Mapped[str] = mapped_column(String(36), nullable=False)
     conversation_id: Mapped[str] = mapped_column(String(36), nullable=False)
     trigger_outbound_intent_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    channel_context: Mapped[dict[str, Any]] = mapped_column(JsonType, nullable=False, server_default=text("'{}'"))
     trigger_ai_sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     control_epoch: Mapped[int] = mapped_column(Integer, nullable=False)
     settings_version: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -152,8 +154,10 @@ class WhatsAppSmartFollowUpJob(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     tenant_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    channel: Mapped[str] = mapped_column(String(32), nullable=False, server_default=text("'whatsapp_cloud'"))
     connection_id: Mapped[str] = mapped_column(String(36), nullable=False)
     conversation_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    channel_context: Mapped[dict[str, Any]] = mapped_column(JsonType, nullable=False, server_default=text("'{}'"))
     sequence_id: Mapped[str] = mapped_column(
         ForeignKey("whatsapp_smart_followup_sequences.id"),
         nullable=False,

@@ -46,6 +46,7 @@ def ledger_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> EntitlementsS
 
 def test_period_and_timezone_validation() -> None:
     assert parse_period("7d") == "7d"
+    assert parse_period("custom") == "custom"
     with pytest.raises(PeriodValidationError):
         parse_period("year")
     tz = parse_timezone("UTC")
@@ -54,6 +55,15 @@ def test_period_and_timezone_validation() -> None:
     window = resolve_period_window(period="7d", tz=tz, current_period_end=None)
     assert window["period"] == "7d"
     assert window["start_ts"] < window["end_ts"]
+    custom = resolve_period_window(
+        period="custom",
+        tz=tz,
+        current_period_end=None,
+        custom_start="2026-08-01",
+        custom_end="2026-08-13",
+    )
+    assert custom["period"] == "custom"
+    assert custom["start_ts"] < custom["end_ts"]
 
 
 def test_zero_credits_vs_missing_credit_data(ledger_env: EntitlementsStore, monkeypatch: pytest.MonkeyPatch) -> None:

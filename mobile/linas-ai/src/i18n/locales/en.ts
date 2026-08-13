@@ -1,3 +1,5 @@
+import { aiSetupEn } from './aiSetupEn';
+import { dashboardEn } from './dashboardEn';
 import { appleAccountEn } from './appleAccountEn';
 import { integrationsDisplayEn } from './integrationsDisplayEn';
 import { subscriptionEn } from './subscriptionEn';
@@ -77,11 +79,9 @@ export const en = {
   settingsSub: 'Language, notifications, AI controls, legal & app info',
   settingsAiSection: 'AI controls',
   settingsLegalSection: 'Legal',
-  settingsActions: 'Actions',
-  settingsActionsSub: 'Instagram, Facebook, handoff, photo & more',
   settingsAiLimits: 'AI Limits',
-  settingsAiLimitsSub: 'Image and context usage limits',
-  faqTitle: 'Smart Answers / FAQ',
+  settingsAiLimitsSub: 'Handoff, photo analysis, voice & usage limits',
+  faqTitle: 'Smart Answers',
   faqSub: 'Ready-made Q&A — auto-translate to 4 languages',
   faqCreateNew: 'Add Q&A',
   faqSavedList: 'Saved Smart Answers',
@@ -295,9 +295,9 @@ export const en = {
   welcomeChipCheckPlan: 'Check my subscription / plan',
   welcomeChipModeWork: 'Work · High',
   welcomeChipModeChat: 'Chat · Low',
-  composerPlaceholder: 'Message Linas AI',
-  composerPlaceholderChat: 'Message Linas AI',
-  composerPlaceholderWork: 'Work with Linas AI',
+  composerPlaceholder: 'Chat with Linas',
+  composerPlaceholderChat: 'Chat with Linas',
+  composerPlaceholderWork: 'Work with Linas',
   composerListening: 'Listening…',
   composerPaused: 'Paused',
   composerTranscribing: 'Transcribing…',
@@ -364,6 +364,8 @@ export const en = {
   ...whatsappEn,
   ...smartFollowUpEn,
   ...requestsEn,
+  ...dashboardEn,
+  ...aiSetupEn,
 
   proposalChangeTitle: 'AI Setup change',
   proposalDeleteTitle: 'Delete from AI Setup',

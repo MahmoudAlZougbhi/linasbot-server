@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '../../components/AppIcon';
 import { useI18n } from '../../i18n/LanguageContext';
+import type { ThemeColors } from '../../theme';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import type { ControlArea } from '../control/controlAreas';
 import { drawerGridModules, type DrawerModule } from './drawerModules';
@@ -14,6 +15,8 @@ type Props = {
   badges: DrawerBadges;
   onOpenArea: (area: ControlArea) => void;
 };
+
+const GRID_ICON_SIZE = 28;
 
 function badgeForModule(
   mod: DrawerModule,
@@ -33,6 +36,27 @@ function badgeForModule(
   return null;
 }
 
+function DrawerModuleIcon({ modId, colors }: { modId: ControlArea; colors: ThemeColors }) {
+  if (modId === 'cm') {
+    return (
+      <View
+        style={[
+          styles.featuredIconWrap,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.borderSoft,
+            shadowColor: colors.accentDeep,
+          },
+        ]}
+      >
+        <Text style={[styles.featuredSparkle, { color: colors.accentDeep }]}>✦</Text>
+      </View>
+    );
+  }
+
+  return <AppIcon icon={MODULE_ICONS[modId]} size={GRID_ICON_SIZE} color={colors.accentDeep} />;
+}
+
 export function DrawerNavGrid({ showUsers, activeArea, badges, onOpenArea }: Props) {
   const { colors } = useTheme();
   const { tr } = useI18n();
@@ -42,9 +66,8 @@ export function DrawerNavGrid({ showUsers, activeArea, badges, onOpenArea }: Pro
     <View style={styles.grid}>
       {modules.map((mod) => {
         const badge = badgeForModule(mod, badges);
-        const featured = mod.id === 'cm';
         const active = activeArea === mod.id;
-        const tileBg = featured || active ? colors.accentSoft : 'transparent';
+        const tileBg = active ? colors.activeRow : 'transparent';
 
         return (
           <Pressable
@@ -66,7 +89,7 @@ export function DrawerNavGrid({ showUsers, activeArea, badges, onOpenArea }: Pro
                 <Text style={[styles.badgeText, { color: colors.onAccent }]}>{badge.label}</Text>
               </View>
             ) : null}
-            <AppIcon icon={MODULE_ICONS[mod.id]} size={22} color={colors.accentDeep} />
+            <DrawerModuleIcon modId={mod.id} colors={colors} />
             <Text style={[styles.label, { color: colors.text }]} numberOfLines={2}>
               {tr(mod.titleKey)}
             </Text>
@@ -88,7 +111,7 @@ const styles = StyleSheet.create({
   },
   tile: {
     width: '31.5%',
-    minHeight: 88,
+    minHeight: 90,
     borderRadius: radii.md,
     paddingHorizontal: 4,
     paddingVertical: spacing.sm + 2,
@@ -96,6 +119,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     position: 'relative',
+  },
+  featuredIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  featuredSparkle: {
+    fontSize: 22,
+    lineHeight: 24,
+    fontWeight: '700',
   },
   badge: {
     position: 'absolute',
@@ -108,10 +148,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { fontFamily: fonts.bodyMedium, fontSize: 10, lineHeight: 12 },
+  badgeText: { fontFamily: fonts.bodyMedium, fontSize: 10, lineHeight: 12, fontWeight: '700' },
   label: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 11,
+    fontFamily: fonts.display,
+    fontSize: 11.5,
+    fontWeight: '700',
+    letterSpacing: -0.2,
     textAlign: 'center',
     lineHeight: 14,
   },

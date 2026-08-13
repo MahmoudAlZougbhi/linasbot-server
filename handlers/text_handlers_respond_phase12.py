@@ -147,4 +147,20 @@ async def text_handlers_respond_phase12(ctx: dict) -> Any:
             break  # Only log one service per message to avoid duplicates
 
     config.user_last_bot_response_time[user_id] = datetime.datetime.now()
+
+    try:
+        from services.smart_followup.social_schedule import maybe_schedule_social_followup_after_ai_reply
+
+        maybe_schedule_social_followup_after_ai_reply(
+            user_id=user_id,
+            user_name=user_name,
+            user_data=user_data,
+            conversation_id=current_conversation_id,
+            action=action,
+            sent_reply=sent_reply or bot_reply_text,
+            source_message_id=str(user_data.get("_source_message_id") or ""),
+        )
+    except Exception as exc:
+        print(f"[smart_followup] social schedule skipped type={type(exc).__name__}")
+
     return _PHASE_HALT

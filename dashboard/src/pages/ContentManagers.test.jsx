@@ -43,6 +43,7 @@ describe("ContentManagers", () => {
     );
     expect(screen.getByRole("link", { name: /AI Basics/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^FAQ/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Actions \/ Capabilities/i })).not.toBeInTheDocument();
 
     expectAccessibleControls([
       { role: "link", name: /Knowledge/i },

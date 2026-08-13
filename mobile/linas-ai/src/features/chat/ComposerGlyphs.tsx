@@ -11,7 +11,7 @@ export function PlusCircleGlyph({ color, size = 22 }: { color: string; size?: nu
         width: size,
         height: size,
         borderRadius: size / 2,
-        borderWidth: 1.5,
+        borderWidth: 1,
         borderColor: color,
         alignItems: 'center',
         justifyContent: 'center',

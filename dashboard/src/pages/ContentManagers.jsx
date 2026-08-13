@@ -35,7 +35,6 @@ const SECTION_ICONS = {
   "learning-inbox": InboxStackIcon,
   handoff: GlobeAltIcon,
   restricted: ExclamationTriangleIcon,
-  actions: WrenchScrewdriverIcon,
   "ai-limits": ClockIcon,
   "off-days": ClockIcon,
   sources: ClockIcon,
@@ -48,7 +47,8 @@ const ContentManagers = () => {
       <div>
         <h1 className="text-2xl font-bold text-slate-800">AI Setup</h1>
         <p className="text-slate-600 mt-1 max-w-3xl">
-          Configure your business AI: identity, languages, knowledge, handoff, limits, and actions.
+          Configure your business AI: identity, languages, knowledge, handoff, and limits.
+          Channel connections (Facebook, Instagram, WhatsApp) are managed in Integrations.
           Use the Setup Assistant or edit sections manually — both write the same drafts. Then Validate
           and Publish so customers get answers from your published version.
         </p>

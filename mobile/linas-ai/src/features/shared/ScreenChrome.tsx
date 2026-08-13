@@ -13,6 +13,8 @@ import { useModuleDrawerHistory } from '../nav/useModuleDrawerHistory';
 type Props = {
   title: string;
   subtitle?: string;
+  centerTitle?: boolean;
+  headerRight?: ReactNode;
   children: ReactNode;
 };
 
@@ -20,7 +22,7 @@ type Props = {
  * Module screen chrome: hamburger (same as Chat) opens the side drawer.
  * No Back chevron — return to chat via drawer New Chat / history.
  */
-export function ScreenChrome({ title, subtitle, children }: Props) {
+export function ScreenChrome({ title, subtitle, centerTitle, headerRight, children }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { tr } = useI18n();
@@ -31,7 +33,7 @@ export function ScreenChrome({ title, subtitle, children }: Props) {
   return (
     <GradientBackground>
       <View style={[styles.top, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.headerRow}>
+        <View style={[styles.headerRow, centerTitle && styles.headerRowCentered]}>
           <Pressable
             onPress={() => setDrawerOpen(true)}
             style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
@@ -41,8 +43,16 @@ export function ScreenChrome({ title, subtitle, children }: Props) {
           >
             <MenuIcon color={colors.text} />
           </Pressable>
-          <View style={styles.titleBlock}>
-            <Text style={[typography.title, { color: colors.text }]}>{title}</Text>
+          <View style={[styles.titleBlock, centerTitle && styles.titleBlockCentered]}>
+            <Text
+              style={[
+                centerTitle ? styles.centeredTitle : typography.title,
+                { color: colors.text },
+              ]}
+              numberOfLines={1}
+            >
+              {title}
+            </Text>
             {subtitle ? (
               <Text
                 style={{
@@ -50,12 +60,14 @@ export function ScreenChrome({ title, subtitle, children }: Props) {
                   fontFamily: fonts.body,
                   marginTop: 4,
                   fontSize: 14,
+                  textAlign: centerTitle ? 'center' : 'left',
                 }}
               >
                 {subtitle}
               </Text>
             ) : null}
           </View>
+          {headerRight ? <View style={styles.headerRight}>{headerRight}</View> : <View style={styles.hitSpacer} />}
         </View>
       </View>
       <View style={styles.body}>{children}</View>
@@ -105,8 +117,11 @@ const styles = StyleSheet.create({
   top: { paddingHorizontal: spacing.md, paddingBottom: spacing.md },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: spacing.sm,
+  },
+  headerRowCentered: {
+    alignItems: 'center',
   },
   hit: {
     width: HIT,
@@ -115,12 +130,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: -spacing.sm,
   },
+  hitSpacer: {
+    width: HIT,
+    height: HIT,
+  },
+  headerRight: {
+    width: HIT,
+    height: HIT,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: -spacing.sm,
+  },
   pressed: {
     opacity: 0.55,
   },
   titleBlock: {
     flex: 1,
     paddingTop: 10,
+  },
+  titleBlockCentered: {
+    paddingTop: 0,
+    alignItems: 'center',
+  },
+  centeredTitle: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 17,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   body: { flex: 1, paddingHorizontal: spacing.lg },
 });

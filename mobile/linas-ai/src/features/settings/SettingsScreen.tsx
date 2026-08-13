@@ -13,7 +13,6 @@ import { ScreenChrome } from '../shared/ScreenChrome';
 type Props = {
   onLogout: () => void;
   onOpenNotifications?: () => void;
-  onOpenActions?: () => void;
   onOpenAiLimits?: () => void;
 };
 
@@ -21,11 +20,10 @@ async function open(url: string) {
   await Linking.openURL(url);
 }
 
-/** Grouped Settings; Actions / AI Limits hosted here (not in CM hub). */
+/** Grouped Settings; AI Limits hosted here (not in CM hub). */
 export function SettingsScreen({
   onLogout,
   onOpenNotifications,
-  onOpenActions,
   onOpenAiLimits,
 }: Props) {
   const { tr, language, setLanguage } = useI18n();
@@ -181,23 +179,14 @@ export function SettingsScreen({
           ))}
         </View>
 
-        {onOpenActions || onOpenAiLimits ? (
+        {onOpenAiLimits ? (
           <>
             <Text style={[styles.group, { color: colors.textDim }]}>{tr('settingsAiSection')}</Text>
-            {onOpenActions ? (
-              <Row
-                title={tr('settingsActions')}
-                subtitle={tr('settingsActionsSub')}
-                onPress={onOpenActions}
-              />
-            ) : null}
-            {onOpenAiLimits ? (
-              <Row
-                title={tr('settingsAiLimits')}
-                subtitle={tr('settingsAiLimitsSub')}
-                onPress={onOpenAiLimits}
-              />
-            ) : null}
+            <Row
+              title={tr('settingsAiLimits')}
+              subtitle={tr('settingsAiLimitsSub')}
+              onPress={onOpenAiLimits}
+            />
           </>
         ) : null}
 

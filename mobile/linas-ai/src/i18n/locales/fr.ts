@@ -1,3 +1,5 @@
+import { aiSetupFr } from './aiSetupFr';
+import { dashboardFr } from './dashboardFr';
 import { appleAccountFr } from './appleAccountFr';
 import { integrationsDisplayFr } from './integrationsDisplayFr';
 import { subscriptionFr } from './subscriptionFr';
@@ -253,11 +255,9 @@ export const fr = {
   untitledChat: 'Sans titre',
   settingsAiSection: 'Contrôles IA',
   settingsLegalSection: 'Légal',
-  settingsActions: 'Actions',
-  settingsActionsSub: 'Instagram, Facebook, transfert humain, photo et plus',
   settingsAiLimits: 'Limites IA',
-  settingsAiLimitsSub: 'Limites d’usage images et contexte',
-  faqTitle: 'Réponses intelligentes / FAQ',
+  settingsAiLimitsSub: 'Transfert humain, analyse photo, voix et limites d’usage',
+  faqTitle: 'Réponses intelligentes',
   faqSub: 'Q&R prêtes — traduction auto en 4 langues',
   faqCreateNew: 'Ajouter une Q&R',
   faqSavedList: 'Réponses intelligentes enregistrées',
@@ -298,9 +298,9 @@ export const fr = {
   welcomeChipCheckPlan: 'Vérifier mon abonnement',
   welcomeChipModeWork: 'Travail · Élevé',
   welcomeChipModeChat: 'Chat · Bas',
-  composerPlaceholder: 'Message Linas AI',
-  composerPlaceholderChat: 'Message Linas AI',
-  composerPlaceholderWork: 'Travailler avec Linas AI',
+  composerPlaceholder: 'Discuter avec Linas',
+  composerPlaceholderChat: 'Discuter avec Linas',
+  composerPlaceholderWork: 'Travailler avec Linas',
   composerListening: 'Écoute…',
   composerPaused: 'En pause',
   composerTranscribing: 'Transcription…',
@@ -368,6 +368,8 @@ export const fr = {
   ...whatsappFr,
   ...smartFollowUpFr,
   ...requestsFr,
+  ...dashboardFr,
+  ...aiSetupFr,
 
   proposalChangeTitle: 'Modification Configuration IA',
   proposalDeleteTitle: 'Supprimer de la Configuration IA',

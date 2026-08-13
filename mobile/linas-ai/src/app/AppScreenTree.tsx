@@ -96,9 +96,6 @@ export function AppScreenTree({
         <SettingsScreen
           onLogout={() => void logout()}
           onOpenNotifications={() => setScreen({ name: 'notifications', backTo: 'settings' })}
-          onOpenActions={() =>
-            setScreen({ name: 'cm_section', section: 'actions', backTo: 'settings' })
-          }
           onOpenAiLimits={() =>
             setScreen({ name: 'cm_section', section: 'ai_limits', backTo: 'settings' })
           }

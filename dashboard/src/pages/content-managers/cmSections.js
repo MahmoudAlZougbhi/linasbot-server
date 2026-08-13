@@ -94,22 +94,10 @@ export const CM_SECTION_CARDS = [
     description: "Topics that must never be offered or handed off incorrectly.",
   },
   {
-    slug: "actions",
-    section: "actions",
-    name: "Actions / Capabilities",
-    description: "Enable or disable what the AI is allowed to do (DMs, comments, handoff, photo).",
-  },
-  {
-    slug: "comments",
-    section: "comments",
-    name: "Comments Policy",
-    description: "Keyword rules for comments: reply publicly, reply via DM, or ignore (optional post id).",
-  },
-  {
     slug: "ai-limits",
     section: "ai_limits",
     name: "AI Limits",
-    description: "Per-customer image and context usage limits for this business.",
+    description: "Human handoff, photo analysis, voice, and per-customer usage limits.",
   },
   {
     slug: "off-days",

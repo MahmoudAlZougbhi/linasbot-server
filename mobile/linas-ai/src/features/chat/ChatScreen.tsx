@@ -70,7 +70,7 @@ export function ChatScreen({
   const [ownerMode, setOwnerMode] = useState<OwnerChatMode>('chat');
   const promoteOwnerMode = useCallback((mode: OwnerChatMode) => { if (mode === 'work') setOwnerMode('work'); }, []);
   const turn = useStreamingTurn(owner.conversationId, {
-    onTerminal: () => owner.syncAfterTurn(),
+    onTerminal: (opts) => owner.syncAfterTurn(opts),
     onTitleUpdated: (title) => {
       if (owner.conversationId) {
         owner.applyConversationTitle(owner.conversationId, title, { onlyIfDefault: true });
@@ -111,7 +111,8 @@ export function ChatScreen({
 
   const loading = isAuthenticated ? owner.loading : guest.loading;
   const messages = isAuthenticated ? owner.messages : guest.messages;
-  const sending = isAuthenticated ? turn.streaming : guest.sending;
+  const sessionReady = isAuthenticated && !owner.loading && Boolean(owner.conversationId);
+  const sending = isAuthenticated ? turn.streaming || owner.loading : guest.sending;
   const error = isAuthenticated ? owner.error : guest.error;
   const listKey = isAuthenticated ? owner.conversationId || 'owner' : 'guest';
   // Greeting-seeded chats: show Chat|Work until first user message.
@@ -301,7 +302,7 @@ export function ChatScreen({
         <ChatComposer
           draft={draft}
           onChangeDraft={setDraft}
-          sending={sending || (!isAuthenticated && guest.gated)}
+          sending={sending || (!isAuthenticated && guest.gated) || (isAuthenticated && !sessionReady)}
           canSendWithAttachment={pendingFiles.length > 0}
           voiceState={authVoice?.voiceState ?? 'idle'}
           elapsedMs={authVoice?.elapsedMs ?? 0}

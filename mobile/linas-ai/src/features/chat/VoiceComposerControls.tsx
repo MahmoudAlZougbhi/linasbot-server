@@ -114,7 +114,7 @@ export function VoiceComposerControls({
           ) : recording ? (
             <StopGlyph color="#FFFFFF" />
           ) : (
-            <MicGlyph color={colors.text} />
+            <MicGlyph color={colors.textMuted} />
           )}
         </Pressable>
       </Animated.View>

@@ -263,10 +263,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   rowTitleDrawer: {
-    fontFamily: fonts.body,
-    fontWeight: '400',
+    fontFamily: fonts.bodyMedium,
+    fontWeight: '600',
     fontSize: 15,
     lineHeight: 20,
+    letterSpacing: -0.15,
   },
   overflow: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   overflowDrawer: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },

@@ -38,3 +38,16 @@ export function prependOlderUnique(prev: ChatMessage[], older: ChatMessage[]): C
   const fresh = older.filter((m) => !seen.has(m.id));
   return fresh.length ? [...fresh, ...prev] : prev;
 }
+
+/** Match streamed reply text to a persisted assistant message (prefix compare). */
+export function messagesIncludeAssistantReply(
+  messages: ChatMessage[],
+  replyText: string,
+): boolean {
+  const needle = replyText.trim().slice(0, 80);
+  if (!needle) return true;
+  const short = needle.slice(0, 40);
+  return messages.some(
+    (m) => m.role === 'assistant' && !m.id.startsWith('local-') && m.content.includes(short),
+  );
+}

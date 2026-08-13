@@ -15,6 +15,7 @@ from services.membership.plan_catalog import PLAN_CATALOG
 from services.owner_ai_account_state import compute_cm_progress
 from services.plan_economics import PLAN_PRICES_USD, recommend_allowance
 from services.platform_owner_service import PlatformOwnerService
+from services.tenant_mobile_dashboard.activity import build_activity_summary
 from services.tenant_mobile_dashboard.channels import build_channel_breakdown
 from services.tenant_mobile_dashboard.periods import (
     PeriodValidationError,
@@ -228,6 +229,8 @@ def build_tenant_mobile_dashboard(
     user_id: str,
     period_raw: str | None = None,
     timezone_raw: str | None = None,
+    custom_start: str | None = None,
+    custom_end: str | None = None,
 ) -> dict[str, Any]:
     generated_at_ts = time.time()
     generated_at = iso_z(generated_at_ts) or ""
@@ -243,7 +246,13 @@ def build_tenant_mobile_dashboard(
 
     plan = _plan_and_credits(tid)
     period_end_ts = plan.get("current_period_end_ts") if plan.get("availability") == "ok" else None
-    window = resolve_period_window(period=period, tz=tz, current_period_end=period_end_ts)
+    window = resolve_period_window(
+        period=period,
+        tz=tz,
+        current_period_end=period_end_ts,
+        custom_start=custom_start,
+        custom_end=custom_end,
+    )
 
     try:
         usage = aggregate_tenant_usage(tid, start_ts=float(window["start_ts"]), end_ts=float(window["end_ts"]))
@@ -373,6 +382,19 @@ def build_tenant_mobile_dashboard(
         # Honest error — never invent zero metrics when the API fails.
         smart_followup_section = _section_error("smart_followup_unavailable", str(exc))
 
+    try:
+        from services.integration_capabilities import list_tenant_integration_status
+
+        integration_rows = list_tenant_integration_status(tid)
+        activity_summary = build_activity_summary(
+            tid,
+            start_ts=float(window["start_ts"]),
+            end_ts=float(window["end_ts"]),
+            integrations=integration_rows,
+        )
+    except Exception as exc:
+        activity_summary = _section_error("activity_unavailable", str(exc))
+
     partial_failures = [
         key
         for key, section in {
@@ -382,6 +404,7 @@ def build_tenant_mobile_dashboard(
             "content_readiness": content,
             "team_capacity": team,
             "smart_followup": smart_followup_section,
+            "activity_summary": activity_summary,
         }.items()
         if section.get("availability") == "error"
     ]
@@ -395,6 +418,8 @@ def build_tenant_mobile_dashboard(
             "timezone": window["timezone"],
             "start": window["start"],
             "end": window["end"],
+            "custom_start": custom_start if period == "custom" else None,
+            "custom_end": custom_end if period == "custom" else None,
         },
         "workspace": _workspace_identity(tenant_id=tid, user_id=user_id),
         "workspace_status": workspace_status,
@@ -402,6 +427,7 @@ def build_tenant_mobile_dashboard(
         "usage_summary": usage_section,
         "usage_distribution": distribution,
         "channels": channels_section,
+        "activity_summary": activity_summary,
         "content_readiness": content,
         "team_capacity": team,
         "smart_followup": smart_followup_section,

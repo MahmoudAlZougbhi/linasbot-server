@@ -8,8 +8,16 @@ import {
   OWNER_MESSAGE_PAGE,
   conversationMessagesUrl,
   mergeLatestWindow,
+  messagesIncludeAssistantReply,
   prependOlderUnique,
 } from './ownerChatPaging';
+
+const SYNC_AFTER_TURN_RETRY_MS = [0, 150, 350, 700];
+
+export type SyncAfterTurnOptions = {
+  /** Retry until this streamed reply appears in persisted messages. */
+  expectReplyText?: string;
+};
 import { clearPreferFreshOwnerChat, isPreferFreshOwnerChat } from './preferFreshOwnerChat';
 
 const CreateConvSchema = z.object({
@@ -129,6 +137,8 @@ export function useChatSession(enabled = true) {
   const [seedTypewriterMessageId, setSeedTypewriterMessageId] = useState<string | null>(null);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
+  const conversationIdRef = useRef(conversationId);
+  conversationIdRef.current = conversationId;
   const hasMoreRef = useRef(hasMore);
   hasMoreRef.current = hasMore;
   const loadingMoreRef = useRef(false);
@@ -189,31 +199,62 @@ export function useChatSession(enabled = true) {
   }, [enabled]);
 
   /** Soft sync after a stream turn — refresh history + latest page; keep older prepended pages. */
-  const syncAfterTurn = useCallback(async () => {
-    if (!enabled) return;
-    const activeId = conversationId;
-    if (!activeId) return;
-    try {
-      const listed = await apiFetch('/api/owner-ai/conversations', { schema: ListConvSchema });
-      setHistory(
-        listed.conversations.map((c) => ({
-          id: c.id,
-          title: c.title,
-          archived: Boolean(c.archived),
-        })),
-      );
-      const full = await apiFetch(conversationMessagesUrl(activeId), { schema: GetConvSchema });
-      setConversationId((current) => {
-        if (current === activeId) {
+  const syncAfterTurn = useCallback(
+    async (opts?: SyncAfterTurnOptions): Promise<boolean> => {
+      if (!enabled) return false;
+      const activeId = conversationId;
+      if (!activeId) return false;
+      const expectReply = opts?.expectReplyText?.trim() || '';
+      try {
+        let synced = false;
+        for (let attempt = 0; attempt < SYNC_AFTER_TURN_RETRY_MS.length; attempt++) {
+          if (SYNC_AFTER_TURN_RETRY_MS[attempt] > 0) {
+            await new Promise((resolve) => setTimeout(resolve, SYNC_AFTER_TURN_RETRY_MS[attempt]));
+          }
+          const listed = await apiFetch('/api/owner-ai/conversations', { schema: ListConvSchema });
+          setHistory(
+            listed.conversations.map((c) => ({
+              id: c.id,
+              title: c.title,
+              archived: Boolean(c.archived),
+            })),
+          );
+          const full = await apiFetch(conversationMessagesUrl(activeId), { schema: GetConvSchema });
+          if (conversationIdRef.current !== activeId) return false;
+
+          const merged = mergeLatestWindow(messagesRef.current, full.conversation.messages);
           setTitle(full.conversation.title);
-          setMessages((prev) => mergeLatestWindow(prev, full.conversation.messages));
+          setMessages(merged);
+          messagesRef.current = merged;
+
+          if (!expectReply || messagesIncludeAssistantReply(merged, expectReply)) {
+            synced = true;
+            break;
+          }
         }
-        return current;
-      });
-    } catch {
-      /* keep optimistic UI; user can retry via error banner */
-    }
-  }, [conversationId, enabled]);
+        if (!synced && expectReply) {
+          setMessages((prev) => {
+            if (messagesIncludeAssistantReply(prev, expectReply)) return prev;
+            return [
+              ...prev,
+              {
+                id: `local-assistant-${Date.now()}`,
+                role: 'assistant',
+                content: expectReply,
+                created_at: Date.now() / 1000,
+              },
+            ];
+          });
+          synced = true;
+        }
+        return synced;
+      } catch {
+        /* keep live stream bubble; user can retry via error banner */
+        return false;
+      }
+    },
+    [conversationId, enabled],
+  );
 
   const applyConversationTitle = useCallback(
     (id: string, nextTitle: string, opts?: { onlyIfDefault?: boolean }) => {

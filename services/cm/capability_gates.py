@@ -35,3 +35,23 @@ def image_analysis_enabled(tenant_id: str) -> bool:
     if limits is None:
         return True
     return bool(limits.image_analysis_enabled)
+
+
+def human_handoff_enabled(tenant_id: str) -> bool:
+    """True when published AI Limits enable human handoff (falls back to legacy actions toggle)."""
+    limits = _load_ai_limits(tenant_id)
+    if limits is None:
+        return True
+    try:
+        _pointer, sections = load_published_content(tenant_id)
+    except PublishedVersionError:
+        sections = {}
+    raw_limits = sections.get("ai_limits") or {}
+    if isinstance(raw_limits, dict) and "human_handoff_enabled" in raw_limits:
+        return bool(raw_limits["human_handoff_enabled"])
+    from services.cm.actions import ACTION_HUMAN_HANDOFF, action_enabled, load_actions_section
+
+    actions = load_actions_section(tenant_id)
+    if actions is not None:
+        return action_enabled(actions, ACTION_HUMAN_HANDOFF)
+    return bool(limits.human_handoff_enabled)

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal, cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-DashboardPeriod = Literal["billing", "7d", "30d"]
+DashboardPeriod = Literal["billing", "7d", "30d", "custom"]
 
-VALID_PERIODS: frozenset[str] = frozenset({"billing", "7d", "30d"})
+VALID_PERIODS: frozenset[str] = frozenset({"billing", "7d", "30d", "custom"})
 
 
 class PeriodValidationError(ValueError):
@@ -34,18 +34,40 @@ def parse_timezone(raw: str | None) -> ZoneInfo:
         raise TimezoneValidationError(f"Unsupported timezone: {raw!r}") from exc
 
 
+def _parse_custom_date(raw: str | None, *, field: str) -> date:
+    text = (raw or "").strip()
+    if not text:
+        raise PeriodValidationError(f"Missing custom {field} date")
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError as exc:
+        raise PeriodValidationError(f"Invalid custom {field} date: {raw!r}") from exc
+
+
 def resolve_period_window(
     *,
     period: DashboardPeriod,
     tz: ZoneInfo,
     current_period_end: float | None,
     now: datetime | None = None,
+    custom_start: str | None = None,
+    custom_end: str | None = None,
 ) -> dict[str, Any]:
     """Return inclusive-start exclusive-end UTC window for the selected period."""
     now_utc = now.astimezone(UTC) if now else datetime.now(UTC)
     local_now = now_utc.astimezone(tz)
 
-    if period == "7d":
+    if period == "custom":
+        start_day = _parse_custom_date(custom_start, field="start")
+        end_day = _parse_custom_date(custom_end, field="end")
+        if end_day < start_day:
+            raise PeriodValidationError("Custom end date must be on or after start date")
+        start_local = datetime(start_day.year, start_day.month, start_day.day, tzinfo=tz)
+        end_local = datetime(end_day.year, end_day.month, end_day.day, tzinfo=tz) + timedelta(days=1)
+        if end_local > local_now + timedelta(days=1):
+            end_local = local_now
+        label = "Custom range"
+    elif period == "7d":
         start_local = local_now - timedelta(days=7)
         end_local = local_now
         label = "Last 7 days"

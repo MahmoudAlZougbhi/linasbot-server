@@ -146,7 +146,8 @@ test('composer and live chat wire the same helper', () => {
   const live = readFileSync(join(root, 'src/features/livechat/LiveChatMessageBubble.tsx'), 'utf8');
   const thinking = readFileSync(join(root, 'src/features/chat/ThinkingRow.tsx'), 'utf8');
   assert.match(composer, /textDirectionStyle\(draft\)/);
-  assert.match(composer, /textAlign=\{draftDir\.textAlign\}/);
+  assert.match(composer, /inputTextAlign/);
+  assert.match(composer, /draftEmpty \? 'center'/);
   assert.match(live, /textDirectionStyle\(body\)/);
   assert.match(thinking, /textDirectionStyle\(label\)/);
   assert.match(thinking, /aiMessageRowStyle\(label\)/);

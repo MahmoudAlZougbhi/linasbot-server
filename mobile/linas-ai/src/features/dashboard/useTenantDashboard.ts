@@ -5,7 +5,9 @@ import {
   dashboardErrorMessage,
   fetchTenantDashboard,
 } from './dashboardApi';
-import type { DashboardPeriodId, TenantDashboard } from './dashboardTypes';
+import type { DashboardPeriodSelection } from './dashboardFormat';
+import { monthStartIso, todayIso } from './dashboardFormat';
+import type { TenantDashboard } from './dashboardTypes';
 
 export type DashboardLoadState =
   | { kind: 'loading' }
@@ -27,8 +29,12 @@ function defaultTz(): string {
   }
 }
 
-export function useTenantDashboard(initialPeriod: DashboardPeriodId = 'billing') {
-  const [period, setPeriod] = useState<DashboardPeriodId>(initialPeriod);
+function defaultPeriod(): DashboardPeriodSelection {
+  return { kind: 'custom', start: monthStartIso(), end: todayIso() };
+}
+
+export function useTenantDashboard(initialPeriod?: DashboardPeriodSelection) {
+  const [period, setPeriod] = useState<DashboardPeriodSelection>(initialPeriod ?? defaultPeriod());
   const [state, setState] = useState<DashboardLoadState>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
   const snapshotRef = useRef<TenantDashboard | null>(null);

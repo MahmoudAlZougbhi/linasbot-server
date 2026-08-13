@@ -11,18 +11,6 @@ type EditorProps = {
   onChange: (next: Record<string, unknown>) => void;
 };
 
-const ACTION_LABELS: Record<string, string> = {
-  respond_facebook_dm: 'Facebook DMs',
-  respond_instagram_dm: 'Instagram DMs',
-  respond_facebook_comments: 'Facebook comments',
-  respond_instagram_comments: 'Instagram comments',
-  human_handoff: 'Human handoff',
-  photo_analysis: 'Photo analysis',
-  audio: 'Audio',
-  likes: 'Likes',
-  photo_animation: 'Photo animation',
-};
-
 export function RestrictedEditor({ payload, onChange }: EditorProps) {
   const topics = asRecordList(payload.topics);
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -95,45 +83,39 @@ export function RestrictedEditor({ payload, onChange }: EditorProps) {
   );
 }
 
-export function ActionsEditor({ payload, onChange }: EditorProps) {
-  const items = asRecordList(payload.items);
-  const toggle = (id: string) =>
-    onChange({
-      ...payload,
-      items: items.map((item) =>
-        String(item.id) === id ? { ...item, enabled: !item.enabled } : item,
-      ),
-    });
-
-  return (
-    <View style={cmFormStyles.card}>
-      {items.map((item) => {
-        const id = String(item.id);
-        return (
-          <Pressable key={id} style={cmFormStyles.row} onPress={() => toggle(id)}>
-            <Text style={cmFormStyles.rowTitle}>{ACTION_LABELS[id] || id}</Text>
-            <Text style={cmFormStyles.chipText}>{item.enabled ? 'On' : 'Off'}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
 export function AiLimitsEditor({ payload, onChange }: EditorProps) {
   const setNum = (key: string, value: string) => {
     const n = Number(value);
     onChange({ ...payload, [key]: Number.isFinite(n) ? n : 0 });
   };
   const toggle = (key: string) => onChange({ ...payload, [key]: !payload[key] });
+  const toggleDefaultTrue = (key: string) => {
+    const current = payload[key] !== false;
+    onChange({ ...payload, [key]: !current });
+  };
 
   return (
     <View style={cmFormStyles.card}>
+      <Text style={[cmFormStyles.label, { marginTop: 0 }]}>Capabilities</Text>
       {(
         [
-          ['unlimited', 'Unlimited'],
+          ['human_handoff_enabled', 'Human handoff'],
+          ['image_analysis_enabled', 'Photo analysis'],
           ['voice_processing_enabled', 'Voice / Audio'],
-          ['image_analysis_enabled', 'Image analysis'],
+        ] as const
+      ).map(([key, label]) => (
+        <Pressable key={key} style={cmFormStyles.row} onPress={() => toggleDefaultTrue(key)}>
+          <Text style={cmFormStyles.rowTitle}>{label}</Text>
+          <Text style={cmFormStyles.chipText}>{payload[key] !== false ? 'On' : 'Off'}</Text>
+        </Pressable>
+      ))}
+      <Text style={cmFormStyles.label}>Usage limits</Text>
+      <Pressable key="unlimited" style={cmFormStyles.row} onPress={() => toggle('unlimited')}>
+        <Text style={cmFormStyles.rowTitle}>Unlimited</Text>
+        <Text style={cmFormStyles.chipText}>{payload.unlimited ? 'On' : 'Off'}</Text>
+      </Pressable>
+      {(
+        [
           ['enforce_image_day', 'Enforce image/day'],
           ['enforce_image_week', 'Enforce image/week'],
           ['enforce_context_day', 'Enforce context/day'],
