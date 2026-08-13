@@ -85,3 +85,28 @@ async def test_clear_invalid_dm_when_disconnected(monkeypatch) -> None:
     ok = await clear_invalid_dm_enabled_state_async(tenant_id="linas", platform="facebook", actor="test")
     assert ok is True
     assert calls == [("dm", False)]
+
+
+@pytest.mark.asyncio
+async def test_clear_invalid_dm_keeps_on_when_unhealthy_but_connected(monkeypatch) -> None:
+    calls: list[tuple[str, bool]] = []
+
+    async def _set(**kwargs):
+        calls.append((kwargs["toggle"], kwargs["enabled"]))
+        return {}
+
+    monkeypatch.setattr(
+        "services.channel_capability_disconnect.dm_capability_state",
+        lambda *_a, **_k: {"requested_enabled": True, "connection_healthy": False},
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_disconnect.canonical_channel_bindings",
+        lambda *_a, **_k: [{"binding_id": "ig-1"}],
+    )
+    monkeypatch.setattr("services.channel_capability_disconnect.set_channel_toggle", _set)
+
+    from services.channel_capability_disconnect import clear_invalid_dm_enabled_state_async
+
+    ok = await clear_invalid_dm_enabled_state_async(tenant_id="linas", platform="instagram", actor="test")
+    assert ok is False
+    assert calls == []
