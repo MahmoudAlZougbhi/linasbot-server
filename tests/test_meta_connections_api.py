@@ -341,8 +341,8 @@ async def test_facebook_disconnect_succeeds_when_meta_unsubscribe_fails(
 ) -> None:
     """Owner disconnect must succeed even if Meta Page unsubscribe fails (FB bug)."""
 
-    from services.meta_oauth import MetaOAuthError
     import services.meta_oauth_graph as graph
+    from services.meta_oauth import MetaOAuthError
 
     page_id = "378696005334409"
     binding = registry.activate_binding(
