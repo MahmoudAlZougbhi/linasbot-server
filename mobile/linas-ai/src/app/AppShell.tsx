@@ -271,7 +271,7 @@ export function AppShell() {
     return (
       <SafeAreaProvider>
         <StatusBar style={resolved === 'dark' ? 'light' : 'dark'} />
-        <BootSplash onDone={finishBoot} />
+        <BootSplash appReady={authReady} onDone={finishBoot} />
       </SafeAreaProvider>
     );
   }

@@ -1,53 +1,93 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
 
-import { useTheme } from '../../theme';
-
-const LINE_WIDTH = 132;
-const LINE_HEIGHT = 2;
-const SEGMENTS = 14;
-const SHIMMER_WIDTH = 36;
+import { bootSplashTokens as t } from './bootSplashTokens';
 
 type Props = {
   reduceMotion?: boolean;
 };
 
-/** Teal fade line with a soft AI shimmer sweep — native-driver only. */
+const GRADIENT_STOPS = [
+  { flex: 0.35, color: t.lineGradientStart, opacity: 1 },
+  { flex: 0.35, color: t.lineGradientMid, opacity: 0.85 },
+  { flex: 0.3, color: t.lineGradientMid, opacity: 0 },
+] as const;
+
+function MovingSegment({ opacity }: { opacity: Animated.Value }) {
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.segmentWrap,
+        {
+          width: t.lineSegmentWidth,
+          opacity,
+          ...Platform.select({
+            ios: {
+              shadowColor: t.lineGlowColor,
+              shadowOpacity: t.lineGlowOpacity,
+              shadowRadius: t.lineGlowBlur,
+              shadowOffset: { width: 0, height: 0 },
+            },
+            android: { elevation: 2 },
+            default: {},
+          }),
+        },
+      ]}
+    >
+      <View style={styles.segmentRow}>
+        {GRADIENT_STOPS.map((stop, index) => (
+          <View
+            key={`grad-${index}`}
+            style={{
+              flex: stop.flex,
+              height: t.lineHeight,
+              backgroundColor: stop.color,
+              opacity: stop.opacity,
+              borderTopLeftRadius: index === 0 ? t.lineRadius : 0,
+              borderBottomLeftRadius: index === 0 ? t.lineRadius : 0,
+              borderTopRightRadius: index === GRADIENT_STOPS.length - 1 ? t.lineRadius : 0,
+              borderBottomRightRadius: index === GRADIENT_STOPS.length - 1 ? t.lineRadius : 0,
+            }}
+          />
+        ))}
+      </View>
+    </Animated.View>
+  );
+}
+
+/** Teal AI loading line — L→R sweep with soft glow and opacity pulse. */
 export function BootSplashAiLine({ reduceMotion = false }: Props) {
-  const { colors } = useTheme();
   const sweep = useRef(new Animated.Value(0)).current;
-  const breathe = useRef(new Animated.Value(0.88)).current;
+  const pulse = useRef(new Animated.Value(t.linePulseMin)).current;
 
   useEffect(() => {
     if (reduceMotion) {
-      sweep.setValue(0);
-      breathe.setValue(1);
+      sweep.setValue(0.35);
+      pulse.setValue(1);
       return;
     }
 
     const sweepLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(sweep, {
-          toValue: 1,
-          duration: 2200,
-          easing: Easing.inOut(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.delay(320),
-      ]),
+      Animated.timing(sweep, {
+        toValue: 1,
+        duration: t.lineSweepMs,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
     );
 
-    const breatheLoop = Animated.loop(
+    const pulseLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(breathe, {
-          toValue: 1,
-          duration: 1400,
+        Animated.timing(pulse, {
+          toValue: t.linePulseMax,
+          duration: t.linePulseMs / 2,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
-        Animated.timing(breathe, {
-          toValue: 0.82,
-          duration: 1400,
+        Animated.timing(pulse, {
+          toValue: t.linePulseMin,
+          duration: t.linePulseMs / 2,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
@@ -55,75 +95,66 @@ export function BootSplashAiLine({ reduceMotion = false }: Props) {
     );
 
     sweepLoop.start();
-    breatheLoop.start();
+    pulseLoop.start();
     return () => {
       sweepLoop.stop();
-      breatheLoop.stop();
+      pulseLoop.stop();
     };
-  }, [breathe, reduceMotion, sweep]);
+  }, [pulse, reduceMotion, sweep]);
 
-  const shimmerX = sweep.interpolate({
+  const sweepX = sweep.interpolate({
     inputRange: [0, 1],
-    outputRange: [-SHIMMER_WIDTH, LINE_WIDTH],
+    outputRange: [-t.lineSegmentWidth, t.lineWidth],
   });
 
-  const fadeSteps = Array.from({ length: SEGMENTS }, (_, index) =>
-    SEGMENTS <= 1 ? 1 : 1 - index / (SEGMENTS - 1),
-  );
-
   return (
-    <Animated.View style={[styles.wrap, { opacity: breathe }]}>
-      <View style={styles.track}>
-        {fadeSteps.map((opacity, index) => (
-          <View
-            key={`seg-${index}`}
-            style={[styles.segment, { backgroundColor: colors.accent, opacity }]}
-          />
-        ))}
-      </View>
-      {reduceMotion ? null : (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.shimmer,
-            {
-              width: SHIMMER_WIDTH,
-              backgroundColor: colors.accentMid,
-              transform: [{ translateX: shimmerX }],
-            },
-          ]}
-        />
+    <View style={styles.wrap}>
+      <View style={styles.track} />
+      {reduceMotion ? (
+        <View style={styles.staticLight}>
+          <MovingSegment opacity={pulse} />
+        </View>
+      ) : (
+        <Animated.View style={[styles.moving, { transform: [{ translateX: sweepX }] }]}>
+          <MovingSegment opacity={pulse} />
+        </Animated.View>
       )}
-    </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    width: LINE_WIDTH,
-    height: LINE_HEIGHT,
-    marginTop: 14,
+    width: t.lineWidth,
+    height: t.lineHeight,
     overflow: 'hidden',
-    borderRadius: LINE_HEIGHT,
+    borderRadius: t.lineRadius,
   },
   track: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: t.lineTrackColor,
+    borderRadius: t.lineRadius,
+  },
+  moving: {
     position: 'absolute',
+    top: 0,
     left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
+    height: t.lineHeight,
   },
-  segment: {
-    flex: 1,
-    height: LINE_HEIGHT,
-  },
-  shimmer: {
+  staticLight: {
     position: 'absolute',
     top: 0,
-    bottom: 0,
-    opacity: 0.55,
-    borderRadius: LINE_HEIGHT,
+    left: (t.lineWidth - t.lineSegmentWidth) * 0.28,
+    height: t.lineHeight,
+  },
+  segmentWrap: {
+    height: t.lineHeight,
+    borderRadius: t.lineRadius,
+    overflow: 'hidden',
+  },
+  segmentRow: {
+    flex: 1,
+    flexDirection: 'row',
+    height: t.lineHeight,
   },
 });
