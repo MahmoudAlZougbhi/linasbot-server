@@ -343,8 +343,7 @@ async def complete_meta_business_login(
             forbidden = sorted(set(scopes) & META_FORBIDDEN_SCOPES)
             if forbidden:
                 raise MetaOAuthError(
-                    "Meta token includes a prohibited non-messaging permission "
-                    f"({','.join(forbidden)})"
+                    f"Meta token includes a prohibited non-messaging permission ({','.join(forbidden)})"
                 )
             if flow_mode == "instagram" and not instagram_id:
                 raise MetaOAuthError("The selected Page has no linked professional Instagram account")
@@ -365,8 +364,7 @@ async def complete_meta_business_login(
                 missing = sorted(required - set(scopes))
                 if missing:
                     raise MetaOAuthError(
-                        "Meta token is missing required private-messaging permissions "
-                        f"({','.join(missing)})"
+                        f"Meta token is missing required private-messaging permissions ({','.join(missing)})"
                     )
             elif not channels_to_authorize:
                 continue
