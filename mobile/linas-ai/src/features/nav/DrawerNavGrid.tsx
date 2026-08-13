@@ -59,7 +59,7 @@ function DrawerModuleIcon({
           {
             backgroundColor: colors.featuredIconBg,
             borderColor: colors.featuredIconBorder,
-            shadowColor: colors.text,
+            shadowColor: colors.accentDeep,
           },
         ]}
       >
@@ -159,9 +159,9 @@ const styles = StyleSheet.create({
   },
   featuredIconShadow: {
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowOpacity: 0.14,
+    shadowRadius: 7,
+    elevation: 3,
   },
   badge: {
     position: 'absolute',
