@@ -66,7 +66,10 @@ async def clear_invalid_dm_enabled_state_async(
     platform: str,
     actor: str = "dm_state_reconcile",
 ) -> bool:
-    """Turn off CM DM when the platform is disconnected or unhealthy."""
+    """Turn off CM DM only when the platform has no remaining active bindings.
+
+    Unhealthy connections keep the owner's requested ON; status hints surface blockers.
+    """
 
     platform_key = (platform or "").strip().lower()
     if platform_key not in supported_platforms():
@@ -74,7 +77,7 @@ async def clear_invalid_dm_enabled_state_async(
     state = dm_capability_state(tenant_id, platform_key)
     if not state["requested_enabled"]:
         return False
-    if state["connection_healthy"] and canonical_channel_bindings(tenant_id, platform_key):
+    if canonical_channel_bindings(tenant_id, platform_key):
         return False
     try:
         await set_channel_toggle(
