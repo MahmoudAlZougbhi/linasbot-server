@@ -6,6 +6,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { onAuthCleared } from '../api/client';
 import { tokenStore } from '../auth/tokenStore';
 import { API_BASE } from '../config';
+import { AppUpdateBanner } from '../features/appVersion/AppUpdateBanner';
+import { AppUpdateGateScreen } from '../features/appVersion/AppUpdateGateScreen';
+import { useAppVersionCheck } from '../features/appVersion/useAppVersionCheck';
 import { useSubscriptionGate } from '../features/billing/useSubscriptionGate';
 import { BootSplash } from '../features/boot/BootSplash';
 import type { CmProposalReview } from '../features/cm/cmProposalReview';
@@ -31,8 +34,10 @@ export function AppShell() {
   const [hasAccess, setHasAccess] = useState(false);
   const [resumeArea, setResumeArea] = useState<ControlArea | null>(null);
   const [authEpoch, setAuthEpoch] = useState(0);
+  const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
   const [areaFocusNonce, bumpAreaFocus] = useAreaFocusNonce();
   const subGate = useSubscriptionGate(hasAccess);
+  const versionCheck = useAppVersionCheck(bootDone && authReady);
   const showSubGate =
     hasAccess &&
     subGate.blocked &&
@@ -271,9 +276,27 @@ export function AppShell() {
     );
   }
 
+  if (versionCheck.forceUpdate && versionCheck.result) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar style={resolved === 'dark' ? 'light' : 'dark'} />
+        <AppUpdateGateScreen check={versionCheck.result} />
+      </SafeAreaProvider>
+    );
+  }
+
+  const showUpdateBanner =
+    versionCheck.updateAvailable && versionCheck.result !== null && !updateBannerDismissed;
+
   return (
     <SafeAreaProvider>
       <StatusBar style={resolved === 'dark' ? 'light' : 'dark'} />
+      {showUpdateBanner ? (
+        <AppUpdateBanner
+          check={versionCheck.result!}
+          onDismiss={() => setUpdateBannerDismissed(true)}
+        />
+      ) : null}
       <ModuleNavProvider value={moduleNav}>
         <AppScreenTree
           screen={screen}

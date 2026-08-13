@@ -10,7 +10,7 @@ export type DrawerModule = {
   entitlement?: 'users';
 };
 
-/** Featured full-width tile above the module grid (not in DRAWER_MODULES). */
+/** AI Setup — first tile in the 3×3 grid (highlighted). */
 export const FEATURED_AI_SETUP: DrawerModule = {
   id: 'cm',
   titleKey: 'navContentManagement',
@@ -18,8 +18,10 @@ export const FEATURED_AI_SETUP: DrawerModule = {
 };
 
 /**
- * Binding product-module order.
- * AI Setup is featured separately (full width). Notifications and Logout live in Settings.
+ * 3×3 drawer grid order (Settings lives in footer).
+ * Row 1: AI Setup · Dashboard · Smart Follow-Up
+ * Row 2: FAQ · Live Chat · Requests
+ * Row 3: Integrations · Users · Subscription
  */
 export const DRAWER_MODULES: DrawerModule[] = [
   { id: 'dashboard', titleKey: 'navDashboard', guestVisible: true },
@@ -30,11 +32,15 @@ export const DRAWER_MODULES: DrawerModule[] = [
   { id: 'integrations', titleKey: 'integrations', guestVisible: true },
   { id: 'users', titleKey: 'usersTitle', guestVisible: true, entitlement: 'users' },
   { id: 'subscription', titleKey: 'navSubscription', guestVisible: true },
-  { id: 'settings', titleKey: 'settings', guestVisible: true },
 ];
 
 export function visibleDrawerModules(opts: {
   showUsers: boolean;
 }): DrawerModule[] {
   return DRAWER_MODULES.filter((m) => (m.entitlement === 'users' ? opts.showUsers : true));
+}
+
+/** Full 3×3 grid including featured AI Setup. */
+export function drawerGridModules(opts: { showUsers: boolean }): DrawerModule[] {
+  return [FEATURED_AI_SETUP, ...visibleDrawerModules(opts)];
 }

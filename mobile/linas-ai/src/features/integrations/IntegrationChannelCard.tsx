@@ -8,6 +8,10 @@ import {
   ChannelCapabilityToggles,
   type ChannelToggles,
 } from './ChannelCapabilityToggles';
+import {
+  IntegrationAccountSection,
+  type IntegrationAccountDisplay,
+} from './IntegrationAccountSection';
 
 export type CommentsState = {
   requested_enabled: boolean;
@@ -25,17 +29,28 @@ export type CommentsState = {
   last_checked_at?: number;
 };
 
+export type IntegrationFeatures = {
+  dm_replies: boolean;
+  comment_replies: boolean;
+};
+
+export type ConnectionDisplayStatus = 'connected' | 'needs_reconnect' | 'error' | 'disconnected';
+
 export type IntegrationRow = {
   platform: string;
   label: string;
   connected: boolean;
   coming_soon?: boolean;
   connectable?: boolean;
-  binding_ids?: string[];
   toggles?: ChannelToggles;
   comments_blocker?: string;
   comments_state?: CommentsState;
   dm_state?: CommentsState;
+  connection_status?: ConnectionDisplayStatus;
+  last_synced_at?: number | null;
+  account?: IntegrationAccountDisplay;
+  accounts?: IntegrationAccountDisplay[];
+  features?: IntegrationFeatures;
 };
 
 type Props = {
@@ -77,7 +92,6 @@ const STATUS_I18N: Record<string, StringKey> = {
   enabled: 'commentsStatusEnabled',
   live_verified: 'commentsStatusLiveVerified',
   error: 'commentsStatusError',
-  // Back-compat from PR #159
   ready_to_enable: 'commentsStatusReady',
   needs_webhook: 'commentsStatusWebhookSetupRequired',
   needs_permission: 'commentsStatusPermissionRequired',
@@ -111,6 +125,29 @@ function blockerCopy(blocker: string, tr: (key: StringKey) => string): string {
   }
 }
 
+function connectionStatusChip(
+  row: IntegrationRow,
+  tr: (key: StringKey) => string,
+): { label: string; tone: 'ok' | 'warn' | 'neutral' } {
+  const status = row.connection_status;
+  if (status === 'needs_reconnect') {
+    return { label: tr('integrationStatusNeedsReconnect'), tone: 'warn' };
+  }
+  if (status === 'error') {
+    return { label: tr('integrationStatusError'), tone: 'warn' };
+  }
+  if (row.connected) {
+    return { label: tr('connected'), tone: 'ok' };
+  }
+  return { label: tr('notConnected'), tone: 'neutral' };
+}
+
+function accountList(row: IntegrationRow): IntegrationAccountDisplay[] {
+  if (row.accounts?.length) return row.accounts;
+  if (row.account) return [row.account];
+  return [];
+}
+
 export function IntegrationChannelCard({
   row,
   title,
@@ -125,14 +162,22 @@ export function IntegrationChannelCard({
   onConnect,
   onDisconnect,
 }: Props) {
+  const platform = row.platform === 'facebook' ? 'facebook' : 'instagram';
   const showToggles = !soon && (row.platform === 'instagram' || row.platform === 'facebook');
   const blocker = commentsBlocker(row);
   const statusLabel = commentsStatusLabel(row, tr);
+  const chip = connectionStatusChip(row, tr);
+  const accounts = accountList(row);
+  const connectionStatus = row.connection_status ?? (row.connected ? 'connected' : 'disconnected');
+  const needsReconnect =
+    connectionStatus === 'needs_reconnect' ||
+    connectionStatus === 'error' ||
+    blocker === 'reauthorization_required' ||
+    blocker === 'connection_unhealthy';
   const needsMetaAccess =
+    needsReconnect ||
     blocker === 'missing_comment_permissions' ||
     blocker === 'meta_approval_required' ||
-    blocker === 'reauthorization_required' ||
-    blocker === 'connection_unhealthy' ||
     (row.comments_state?.missing_scopes?.length ?? 0) > 0;
   const needsWebhook = blocker === 'missing_comment_webhook';
 
@@ -143,32 +188,45 @@ export function IntegrationChannelCard({
         {soon ? (
           <StatusChip label={tr('comingSoon')} tone="soon" />
         ) : (
-          <StatusChip
-            label={row.connected ? tr('connected') : tr('notConnected')}
-            tone={row.connected ? 'ok' : 'neutral'}
-          />
+          <StatusChip label={chip.label} tone={chip.tone} />
         )}
       </View>
       {soon ? (
         <Text style={styles.soonHint}>{tr('comingSoon')}</Text>
       ) : (
         <>
+          {row.connected && accounts.length > 0 ? (
+            <IntegrationAccountSection
+              platform={platform}
+              accounts={accounts}
+              connectionStatus={connectionStatus}
+              lastSyncedAt={row.last_synced_at}
+              tr={tr}
+            />
+          ) : null}
           {showToggles ? (
             <>
               <ChannelCapabilityToggles
+                platform={platform}
                 toggles={defaultToggles(row)}
                 busyKey={busyToggleKey}
                 disabled={actionsDisabled}
                 lockedOff={!row.connected}
+                tr={tr}
                 onToggle={onToggle}
               />
               {statusLabel ? <Text style={styles.statusHint}>{statusLabel}</Text> : null}
               {blocker ? <Text style={styles.blocker}>{blockerCopy(blocker, tr)}</Text> : null}
-              {needsMetaAccess ? (
+              {needsReconnect ? (
                 <PrimaryButton
-                  label={
-                    row.connected ? tr('manageMetaAccess') : tr('reconnectWithCommentAccess')
-                  }
+                  label={tr('integrationReconnect')}
+                  onPress={onManageMetaAccess}
+                  loading={busy}
+                  disabled={actionsDisabled}
+                />
+              ) : needsMetaAccess ? (
+                <PrimaryButton
+                  label={row.connected ? tr('manageMetaAccess') : tr('reconnectWithCommentAccess')}
                   onPress={onManageMetaAccess}
                   loading={busy}
                   disabled={actionsDisabled}

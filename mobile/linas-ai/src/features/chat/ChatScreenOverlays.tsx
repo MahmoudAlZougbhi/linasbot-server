@@ -10,6 +10,7 @@ type Props = {
   drawerOpen: boolean;
   onCloseDrawer: () => void;
   isAuthenticated: boolean;
+  activeArea?: ControlArea | 'chat' | null;
   history: HistoryItem[];
   archivedIds: string[];
   pinnedIds: string[];
@@ -46,6 +47,7 @@ export function ChatScreenOverlays(props: Props) {
         onClose={props.onCloseDrawer}
         isAuthenticated={props.isAuthenticated}
         showUsers={props.isAuthenticated}
+        activeArea={props.activeArea ?? 'chat'}
         history={props.history}
         archivedIds={props.archivedIds}
         pinnedIds={props.pinnedIds}

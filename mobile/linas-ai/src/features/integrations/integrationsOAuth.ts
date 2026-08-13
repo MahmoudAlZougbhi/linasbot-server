@@ -10,6 +10,7 @@ export const StartSchema = z.object({
 
 export const DisconnectSchema = z.object({
   success: z.literal(true),
+  platform: z.string(),
 });
 
 const MOBILE_RETURN_SURFACE = 'mobile' as const;
@@ -23,7 +24,6 @@ export async function startMetaOAuth(platform: 'instagram' | 'facebook'): Promis
     platform === 'facebook'
       ? JSON.stringify({ channel: 'facebook', return_surface: MOBILE_RETURN_SURFACE })
       : JSON.stringify({ return_surface: MOBILE_RETURN_SURFACE });
-  // Instagram Connect must use Instagram Login only — never Facebook Login for Business.
   const started = await apiFetch(path, {
     method: 'POST',
     body,
@@ -32,11 +32,9 @@ export async function startMetaOAuth(platform: 'instagram' | 'facebook'): Promis
   await Linking.openURL(started.authorization_url);
 }
 
-export async function disconnectMetaBindings(bindingIds: string[]): Promise<void> {
-  for (const bindingId of bindingIds) {
-    await apiFetch(`/api/meta/connections/${encodeURIComponent(bindingId)}/disconnect`, {
-      method: 'POST',
-      schema: DisconnectSchema,
-    });
-  }
+export async function disconnectMetaPlatform(platform: 'instagram' | 'facebook'): Promise<void> {
+  await apiFetch(`/api/mobile/integrations/${encodeURIComponent(platform)}/disconnect`, {
+    method: 'POST',
+    schema: DisconnectSchema,
+  });
 }

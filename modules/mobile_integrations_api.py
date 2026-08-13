@@ -9,7 +9,10 @@ from fastapi.responses import JSONResponse
 
 from modules.api_security import require_permission, require_session, user_has_permission
 from modules.core import app
-from services.channel_capability_disconnect import clear_invalid_dm_enabled_state_async
+from services.channel_capability_disconnect import (
+    clear_channel_toggles_after_disconnect,
+    clear_invalid_dm_enabled_state_async,
+)
 from services.channel_capability_toggles import (
     ChannelToggleError,
     attach_channel_toggles,
@@ -20,6 +23,12 @@ from services.channel_capability_toggles import (
 )
 from services.credit_ledger_service import credit_ledger_service
 from services.integration_capabilities import list_tenant_integration_status
+from services.mobile_integrations_display import (
+    active_bindings_for_disconnect,
+    enrich_mobile_integration_rows,
+)
+from services.meta_app_registry import MetaRegistryError, get_meta_app_registry
+from services.meta_oauth import MetaOAuthError, disconnect_binding_webhook
 
 ToggleKey = Literal["dm", "comments"]
 
@@ -60,6 +69,7 @@ async def mobile_integrations(request: Request) -> Any:
     rows = list_tenant_integration_status(session.tenant_id)
     rows = _without_comment_capabilities(rows)
     rows = attach_channel_toggles(rows, tenant_id=session.tenant_id)
+    rows = enrich_mobile_integration_rows(rows, tenant_id=session.tenant_id)
     return {"success": True, "integrations": rows}
 
 
@@ -116,6 +126,47 @@ async def mobile_integration_toggles(
         "comments_state": result.get("comments_state"),
         "dm_state": result.get("dm_state"),
     }
+
+
+@app.post("/api/mobile/integrations/{platform}/disconnect")
+async def mobile_disconnect_platform(platform: str, request: Request) -> Any:
+    """Disconnect all active bindings for a Meta platform (no OAuth / scope changes)."""
+    session = require_permission(request, "settings")
+    platform_key = (platform or "").strip().lower()
+    if platform_key not in supported_platforms():
+        raise HTTPException(status_code=404, detail="Unknown platform")
+
+    bindings = active_bindings_for_disconnect(session.tenant_id, platform_key)
+    if not bindings:
+        raise HTTPException(status_code=404, detail="No active connection for this platform")
+
+    registry = get_meta_app_registry()
+    actor = session.user_id or session.email or "mobile_disconnect"
+    for binding in bindings:
+        try:
+            if binding.active:
+                await disconnect_binding_webhook(binding, actor_id=actor)
+            else:
+                registry.set_binding_status(
+                    binding.binding_id,
+                    status="disconnected",
+                    actor_id=actor,
+                    expected_generation=binding.generation,
+                )
+        except (MetaOAuthError, MetaRegistryError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    await clear_channel_toggles_after_disconnect(
+        tenant_id=session.tenant_id,
+        platform=platform_key,
+        actor=actor,
+    )
+    rows = list_tenant_integration_status(session.tenant_id)
+    rows = _without_comment_capabilities(rows)
+    rows = attach_channel_toggles(rows, tenant_id=session.tenant_id)
+    rows = enrich_mobile_integration_rows(rows, tenant_id=session.tenant_id)
+    row = next((item for item in rows if str(item.get("platform") or "") == platform_key), None)
+    return {"success": True, "platform": platform_key, "integration": row}
 
 
 @app.post("/api/mobile/integrations/{platform}/reconcile-comments")

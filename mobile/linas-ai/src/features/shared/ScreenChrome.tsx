@@ -65,6 +65,7 @@ export function ScreenChrome({ title, subtitle, children }: Props) {
         onClose={() => setDrawerOpen(false)}
         isAuthenticated={nav.isAuthenticated}
         showUsers={nav.isAuthenticated}
+        activeArea={nav.activeArea}
         history={drawer.history}
         archivedIds={drawer.archivedIds}
         pinnedIds={drawer.pinnedIds}

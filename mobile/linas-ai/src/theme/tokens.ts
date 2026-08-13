@@ -35,6 +35,8 @@ export type ThemeColors = {
   progressFill: string;
   activeRow: string;
   activeIndicator: string;
+  /** Side drawer panel background. */
+  drawerSurface: string;
   /** Legacy alias used by a few forms — maps to accentSoft. */
   lavender: string;
 };
@@ -70,8 +72,9 @@ export const lightColors: ThemeColors = {
   bannerBorder: '#D7E5E3',
   progressTrack: '#D7E5E3',
   progressFill: '#0D9488',
-  activeRow: '#E6F7F4',
+  activeRow: '#ECEEEE',
   activeIndicator: '#0D9488',
+  drawerSurface: '#F2F4F4',
   lavender: '#CCFBF1',
 };
 
@@ -106,8 +109,9 @@ export const darkColors: ThemeColors = {
   bannerBorder: '#2A3B39',
   progressTrack: '#2A3B39',
   progressFill: '#2DD4BF',
-  activeRow: '#134E4A',
+  activeRow: '#1E2C2A',
   activeIndicator: '#2DD4BF',
+  drawerSurface: '#121C1B',
   lavender: '#134E4A',
 };
 

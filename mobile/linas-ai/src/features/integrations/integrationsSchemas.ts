@@ -23,18 +23,36 @@ export const CapabilityStateSchema = z
   })
   .optional();
 
+export const AccountDisplaySchema = z.object({
+  display_name: z.string(),
+  username: z.string().nullable().optional(),
+  profile_image_url: z.string().nullable().optional(),
+  connection_status: z.enum(['connected', 'needs_reconnect', 'error', 'disconnected']).optional(),
+  last_synced_at: z.number().nullable().optional(),
+});
+
+export const FeaturesSchema = z
+  .object({
+    dm_replies: z.boolean(),
+    comment_replies: z.boolean(),
+  })
+  .optional();
+
 export const RowSchema = z.object({
   platform: z.string(),
   label: z.string(),
   connected: z.boolean(),
   coming_soon: z.boolean().optional(),
   connectable: z.boolean().optional(),
-  binding_ids: z.array(z.string()).optional(),
   toggles: TogglesSchema.optional(),
   comments_blocker: z.string().optional(),
   comments_state: CapabilityStateSchema,
   dm_state: CapabilityStateSchema,
-  capabilities: z.record(z.string(), z.unknown()).optional(),
+  connection_status: z.enum(['connected', 'needs_reconnect', 'error', 'disconnected']).optional(),
+  last_synced_at: z.number().nullable().optional(),
+  account: AccountDisplaySchema.optional(),
+  accounts: z.array(AccountDisplaySchema).optional(),
+  features: FeaturesSchema,
 });
 
 export const ListSchema = z.object({
@@ -48,6 +66,12 @@ export const ToggleResponseSchema = z.object({
   toggles: TogglesSchema,
   comments_state: CapabilityStateSchema,
   dm_state: CapabilityStateSchema,
+});
+
+export const DisconnectResponseSchema = z.object({
+  success: z.literal(true),
+  platform: z.string(),
+  integration: RowSchema.optional(),
 });
 
 export type IntegrationListRow = z.infer<typeof RowSchema>;

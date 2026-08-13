@@ -13,6 +13,7 @@ type Props = {
   activeId: string | null;
   archivedMode: boolean;
   emptyLabel: string;
+  variant?: 'default' | 'drawer';
   onOpen: (id: string) => void;
   onTogglePin: (id: string) => void;
   onArchive: (id: string) => void;
@@ -27,6 +28,7 @@ export function HistoryRows({
   activeId,
   archivedMode,
   emptyLabel,
+  variant = 'default',
   onOpen,
   onTogglePin,
   onArchive,
@@ -38,116 +40,139 @@ export function HistoryRows({
   const [menuId, setMenuId] = useState<string | null>(null);
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameText, setRenameText] = useState('');
+  const drawer = variant === 'drawer';
 
   const pinned = items.filter((h) => pinnedIds.includes(h.id));
   const rest = items.filter((h) => !pinnedIds.includes(h.id));
+  const drawerRows = drawer ? [...pinned, ...rest] : rest;
+
+  const renderRow = (item: HistoryItem) => {
+    const active = item.id === activeId;
+    return (
+      <View key={item.id}>
+        <View
+          style={[
+            styles.row,
+            drawer && styles.rowDrawer,
+            active && { backgroundColor: drawer ? colors.activeRow : colors.activeRow },
+          ]}
+        >
+          {!drawer && active ? (
+            <View style={[styles.indicator, { backgroundColor: colors.activeIndicator }]} />
+          ) : !drawer ? (
+            <View style={styles.indicatorSpacer} />
+          ) : null}
+          <Pressable
+            style={[styles.main, drawer && styles.mainDrawer]}
+            onPress={() => onOpen(item.id)}
+            onLongPress={() => setMenuId((m) => (m === item.id ? null : item.id))}
+            delayLongPress={350}
+            accessibilityRole="button"
+            accessibilityLabel={item.title || 'Untitled conversation'}
+            accessibilityHint="Long press to rename, pin, archive, or delete"
+          >
+            {!drawer && pinnedIds.includes(item.id) && !archivedMode ? (
+              <AppIcon icon={DRAWER_TOOL_ICONS.pin} size={14} color={colors.textDim} />
+            ) : null}
+            {renameId === item.id ? (
+              <TextInput
+                value={renameText}
+                onChangeText={setRenameText}
+                onSubmitEditing={() => {
+                  onRename(item.id, renameText);
+                  setRenameId(null);
+                }}
+                onBlur={() => {
+                  onRename(item.id, renameText);
+                  setRenameId(null);
+                }}
+                autoFocus
+                style={{ color: colors.text, flex: 1 }}
+              />
+            ) : (
+              <Text
+                style={[
+                  styles.rowTitle,
+                  drawer && styles.rowTitleDrawer,
+                  { color: colors.text },
+                ]}
+                numberOfLines={drawer ? 1 : 2}
+              >
+                {item.title || 'Untitled'}
+              </Text>
+            )}
+          </Pressable>
+          {drawer && active ? (
+            <Pressable
+              onPress={() => setMenuId((m) => (m === item.id ? null : item.id))}
+              accessibilityRole="button"
+              accessibilityLabel="Conversation actions"
+              hitSlop={8}
+              style={styles.overflowDrawer}
+            >
+              <AppIcon icon={DRAWER_TOOL_ICONS.overflow} size={18} color={colors.textMuted} />
+            </Pressable>
+          ) : !drawer ? (
+            <Pressable
+              onPress={() => setMenuId((m) => (m === item.id ? null : item.id))}
+              accessibilityRole="button"
+              accessibilityLabel="Conversation actions"
+              hitSlop={8}
+              style={styles.overflow}
+            >
+              <AppIcon icon={DRAWER_TOOL_ICONS.overflow} size={18} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
+        </View>
+        {menuId === item.id ? (
+          <View style={[styles.menu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {!archivedMode ? (
+              <MenuAction
+                label={pinnedIds.includes(item.id) ? 'Unpin' : 'Pin'}
+                onPress={() => {
+                  onTogglePin(item.id);
+                  setMenuId(null);
+                }}
+              />
+            ) : null}
+            <MenuAction
+              label="Rename"
+              onPress={() => {
+                setRenameId(item.id);
+                setRenameText(item.title || '');
+                setMenuId(null);
+              }}
+            />
+            <MenuAction
+              label={archivedMode ? 'Unarchive' : 'Archive'}
+              onPress={() => {
+                if (archivedMode) onUnarchive(item.id);
+                else onArchive(item.id);
+                setMenuId(null);
+              }}
+            />
+            <MenuAction
+              label="Delete"
+              danger
+              onPress={() => {
+                setMenuId(null);
+                onDelete(item.id);
+              }}
+            />
+          </View>
+        ) : null}
+      </View>
+    );
+  };
 
   const renderSection = (label: string, rows: HistoryItem[]) => {
     if (!rows.length) return null;
     return (
       <View key={label}>
-        <Text style={[styles.section, { color: colors.textDim }]}>{label}</Text>
-        {rows.map((item) => {
-          const active = item.id === activeId;
-          return (
-            <View key={item.id}>
-              <View
-                style={[
-                  styles.row,
-                  active && { backgroundColor: colors.activeRow },
-                ]}
-              >
-                {active ? (
-                  <View style={[styles.indicator, { backgroundColor: colors.activeIndicator }]} />
-                ) : (
-                  <View style={styles.indicatorSpacer} />
-                )}
-                <Pressable
-                  style={styles.main}
-                  onPress={() => onOpen(item.id)}
-                  onLongPress={() => setMenuId((m) => (m === item.id ? null : item.id))}
-                  delayLongPress={350}
-                  accessibilityRole="button"
-                  accessibilityLabel={item.title || 'Untitled conversation'}
-                  accessibilityHint="Long press to rename, pin, archive, or delete"
-                >
-                  {pinnedIds.includes(item.id) && !archivedMode ? (
-                    <AppIcon icon={DRAWER_TOOL_ICONS.pin} size={14} color={colors.textDim} />
-                  ) : null}
-                  {renameId === item.id ? (
-                    <TextInput
-                      value={renameText}
-                      onChangeText={setRenameText}
-                      onSubmitEditing={() => {
-                        onRename(item.id, renameText);
-                        setRenameId(null);
-                      }}
-                      onBlur={() => {
-                        onRename(item.id, renameText);
-                        setRenameId(null);
-                      }}
-                      autoFocus
-                      style={{ color: colors.text, flex: 1 }}
-                    />
-                  ) : (
-                    <Text
-                      style={[styles.rowTitle, { color: colors.text }]}
-                      numberOfLines={2}
-                    >
-                      {item.title || 'Untitled'}
-                    </Text>
-                  )}
-                </Pressable>
-                <Pressable
-                  onPress={() => setMenuId((m) => (m === item.id ? null : item.id))}
-                  accessibilityRole="button"
-                  accessibilityLabel="Conversation actions"
-                  hitSlop={8}
-                  style={styles.overflow}
-                >
-                  <AppIcon icon={DRAWER_TOOL_ICONS.overflow} size={18} color={colors.textMuted} />
-                </Pressable>
-              </View>
-              {menuId === item.id ? (
-                <View style={[styles.menu, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                  {!archivedMode ? (
-                    <MenuAction
-                      label={pinnedIds.includes(item.id) ? 'Unpin' : 'Pin'}
-                      onPress={() => {
-                        onTogglePin(item.id);
-                        setMenuId(null);
-                      }}
-                    />
-                  ) : null}
-                  <MenuAction
-                    label="Rename"
-                    onPress={() => {
-                      setRenameId(item.id);
-                      setRenameText(item.title || '');
-                      setMenuId(null);
-                    }}
-                  />
-                  <MenuAction
-                    label={archivedMode ? 'Unarchive' : 'Archive'}
-                    onPress={() => {
-                      if (archivedMode) onUnarchive(item.id);
-                      else onArchive(item.id);
-                      setMenuId(null);
-                    }}
-                  />
-                  <MenuAction
-                    label="Delete"
-                    danger
-                    onPress={() => {
-                      setMenuId(null);
-                      onDelete(item.id);
-                    }}
-                  />
-                </View>
-              ) : null}
-            </View>
-          );
-        })}
+        {!drawer ? (
+          <Text style={[styles.section, { color: colors.textDim }]}>{label}</Text>
+        ) : null}
+        {rows.map(renderRow)}
       </View>
     );
   };
@@ -155,13 +180,17 @@ export function HistoryRows({
   if (!items.length) {
     return (
       <Text
-        style={{ color: colors.textMuted, marginTop: spacing.md }}
+        style={{ color: colors.textMuted, marginTop: drawer ? 0 : spacing.md }}
         accessibilityRole="text"
         accessibilityLabel={emptyLabel}
       >
         {emptyLabel}
       </Text>
     );
+  }
+
+  if (drawer) {
+    return <View>{drawerRows.map(renderRow)}</View>;
   }
 
   return (
@@ -205,6 +234,12 @@ const styles = StyleSheet.create({
     minHeight: 48,
     marginBottom: 2,
   },
+  rowDrawer: {
+    minHeight: 42,
+    borderRadius: radii.md,
+    marginBottom: 4,
+    paddingHorizontal: 4,
+  },
   indicator: { width: 3, alignSelf: 'stretch', borderRadius: 2, marginRight: 8 },
   indicatorSpacer: { width: 3, marginRight: 8 },
   main: {
@@ -215,7 +250,11 @@ const styles = StyleSheet.create({
     gap: 8,
     minHeight: 44,
   },
-  /** Conversation titles: medium face at 500; size stepped down for denser drawer list. */
+  mainDrawer: {
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    minHeight: 38,
+  },
   rowTitle: {
     fontFamily: fonts.bodyMedium,
     fontWeight: '500',
@@ -223,7 +262,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  rowTitleDrawer: {
+    fontFamily: fonts.body,
+    fontWeight: '400',
+    fontSize: 15,
+    lineHeight: 20,
+  },
   overflow: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  overflowDrawer: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   menu: {
     marginLeft: 12,
     marginBottom: 8,
