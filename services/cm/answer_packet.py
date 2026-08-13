@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.cm.provenance_headers import sanitize_ai_basics_payload, sanitize_style_payload
 from services.cm.schemas import AiBasics, AnswerChunk, AnswerFact, AnswerPacket, StylePolicy
 
 #: Locked platform rules surfaced in every packet (code-level, never editable via CM draft).
@@ -29,8 +30,8 @@ def build_answer_packet(
     history_summary: str = "",
 ) -> AnswerPacket:
     """Build the grounded packet the caller's large-AI pipeline (and validator) will use."""
-    ai_basics_payload = sections.get("ai_basics") or {}
-    style_payload = sections.get("style") or {}
+    ai_basics_payload = sanitize_ai_basics_payload(sections.get("ai_basics") or {})
+    style_payload = sanitize_style_payload(sections.get("style") or {})
     identity = AiBasics.model_validate(ai_basics_payload) if ai_basics_payload else AiBasics()
     style = StylePolicy.model_validate(style_payload) if style_payload else StylePolicy()
 
