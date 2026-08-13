@@ -33,6 +33,12 @@ test('drawer AI Setup active tile uses mint sparkle chrome', () => {
   const fade = read('features/nav/DrawerFadeSeparator.tsx');
   assert.match(grid, /modId === 'cm'/);
   assert.match(grid, /colors\.mintSoft/);
+  assert.match(grid, /styles\.featuredIconShadow/);
+  assert.match(grid, /shadowOffset:\s*\{\s*width:\s*0,\s*height:\s*2\s*\}/);
+  assert.match(grid, /shadowOpacity:\s*0\.1/);
+  assert.match(grid, /shadowRadius:\s*6/);
+  assert.match(grid, /elevation:\s*2/);
+  assert.match(grid, /mod\.id !== 'cm'/);
   assert.match(grid, /LinasSparkleIcon[\s\S]*color=\{colors\.accentDeep\}/);
   assert.match(header, /LinasSparkleIcon size=\{20\} color=\{colors\.accentDeep\}/);
   assert.match(
