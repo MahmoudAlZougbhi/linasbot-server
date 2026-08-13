@@ -122,7 +122,6 @@ async def _delayed_process_messages(
                 mids = user_data.pop("_batch_inbound_mids", []) or []
                 bfps = user_data.pop("_batch_turn_body_fps", []) or []
                 claim_id = stable_ai_claim_identity(user_id, user_data.get("phone_number"))
-                from services.outbound_turn_idempotency import _claim_key_basis
                 from services.ai_reply_turn_runtime import (
                     ensure_turn_started,
                     finalize_delivery,
@@ -130,6 +129,7 @@ async def _delayed_process_messages(
                     retry_saved_reply_delivery,
                     try_reserve_for_ai,
                 )
+                from services.outbound_turn_idempotency import _claim_key_basis
 
                 key_basis = _claim_key_basis(claim_id, mids, bfps) if (mids or bfps) else ""
                 ensure_turn_started(user_data, claim_key_basis=key_basis or None)
@@ -306,3 +306,22 @@ async def _delayed_process_messages(
             except Exception as dash_err:
                 print(f"[_delayed_process_messages] Dashboard test error fallback send failed: {dash_err}")
         user_data.pop("_dashboard_test_turn_sticky", None)
+        try:
+            from services.ai_reply_turn_runtime import on_ai_failed
+
+            on_ai_failed({"user_data": user_data})
+        except Exception:
+            pass
+        try:
+            from services.outbound_turn_idempotency import _claim_key_basis, release_ai_turn_claim
+
+            mids = user_data.get("_batch_inbound_mids") or []
+            bfps = user_data.get("_batch_turn_body_fps") or []
+            if mids or bfps:
+                claim_id = stable_ai_claim_identity(user_id, user_data.get("phone_number"))
+                key_basis = _claim_key_basis(claim_id, mids, bfps)
+                if key_basis:
+                    await release_ai_turn_claim(key_basis)
+        except Exception:
+            pass
+        raise

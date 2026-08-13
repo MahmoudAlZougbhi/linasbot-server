@@ -66,7 +66,7 @@ def test_release_on_ai_failure_no_capture(ledger_env: CreditLedgerService, turn_
     ledger_env.ensure_period_grant("t1")
     before = ledger_env.get_balance("t1")
     turn = begin_turn(tenant_id="t1", channel="facebook", external_inbound_id="mid-2")
-    rid = reserve_before_ai(turn)
+    assert reserve_before_ai(turn)
     release_on_ai_failure(turn.logical_reply_id)
     assert ledger_env.get_balance("t1") == before
     assert ledger_env.get_reserved("t1") == 0

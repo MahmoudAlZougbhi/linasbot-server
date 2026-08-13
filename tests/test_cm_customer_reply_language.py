@@ -8,7 +8,6 @@ from services.cm.language_policy import (
     detect_and_resolve_customer_languages,
     ensure_customer_languages,
     frozen_language_policy,
-    frozen_response_language_map,
     language_policy_public_summary,
     resolve_customer_response_language,
 )

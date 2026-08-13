@@ -15,7 +15,6 @@ from services.ai_reply_lifecycle import (
     find_pending_delivery_turn,
     get_turn,
     persist_generated_reply,
-    put_turn,
 )
 
 
