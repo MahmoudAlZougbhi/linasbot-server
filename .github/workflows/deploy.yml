@@ -102,11 +102,11 @@ jobs:
             sudo bash /opt/linasbot/deploy.sh
             echo "[deploy] Deployment completed successfully on $(hostname)"
 
-            # Peer node via VPC (Actions SSH key is on node01 only).
+            # Peer node via VPC (Actions SSH key is on node01 only). Non-fatal if unreachable.
             PEER_HOST="${LINAS_HA_PEER_HOST:-10.106.0.4}"
             if ssh -o BatchMode=yes -o ConnectTimeout=8 "root@${PEER_HOST}" 'hostname' >/dev/null 2>&1; then
               echo "[deploy] Starting peer deploy on ${PEER_HOST}"
-              ssh -o BatchMode=yes "root@${PEER_HOST}" 'bash -s' <<'PEER_EOF'
+              if ! ssh -o BatchMode=yes "root@${PEER_HOST}" 'bash -s' <<'PEER_EOF'
             set -e
             cd /opt/linasbot
             umask 077
@@ -125,6 +125,9 @@ jobs:
             sudo bash /opt/linasbot/deploy.sh
             echo "[deploy] Peer deployment completed on $(hostname)"
             PEER_EOF
+              then
+                echo "::warning::Peer deploy failed on ${PEER_HOST} — node01 deploy succeeded"
+              fi
             else
               echo "::warning::Peer deploy skipped — no SSH to ${PEER_HOST}"
             fi
