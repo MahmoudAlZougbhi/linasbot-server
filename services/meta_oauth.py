@@ -340,8 +340,12 @@ async def complete_meta_business_login(
             if str(page_debug.get("type") or "").upper() != "PAGE":
                 raise MetaOAuthError("Meta token is not a Page access token")
             scopes = _scopes_for_facebook_page_binding(_scope_tuple(page_debug) or _scope_tuple(integration_debug))
-            if set(scopes) & META_FORBIDDEN_SCOPES:
-                raise MetaOAuthError("Meta token includes a prohibited non-messaging permission")
+            forbidden = sorted(set(scopes) & META_FORBIDDEN_SCOPES)
+            if forbidden:
+                raise MetaOAuthError(
+                    "Meta token includes a prohibited non-messaging permission "
+                    f"({','.join(forbidden)})"
+                )
             if flow_mode == "instagram" and not instagram_id:
                 raise MetaOAuthError("The selected Page has no linked professional Instagram account")
             if not _granular_targets_are_allowlisted(
@@ -358,8 +362,12 @@ async def complete_meta_business_login(
             )
             if flow_mode in {"facebook", "instagram"}:
                 required = META_CHANNEL_SCOPES[flow_mode]
-                if not required.issubset(scopes):
-                    raise MetaOAuthError("Meta token is missing required private-messaging permissions")
+                missing = sorted(required - set(scopes))
+                if missing:
+                    raise MetaOAuthError(
+                        "Meta token is missing required private-messaging permissions "
+                        f"({','.join(missing)})"
+                    )
             elif not channels_to_authorize:
                 continue
 
