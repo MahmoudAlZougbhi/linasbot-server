@@ -476,6 +476,20 @@ test('theme tokens include light and dark parity keys', () => {
   assert.match(tokens, /accent: '#008B8B'/);
 });
 
+test('chat user and AI message bodies share body-scale typography', () => {
+  const typography = read('theme/typography.ts');
+  const bubble = read('features/chat/ChatBubble.tsx');
+  const aiBody = read('features/chat/AiMessageBody.tsx');
+  assert.match(typography, /chatAi:[\s\S]*?fontSize:\s*16/);
+  assert.match(typography, /chatAi:[\s\S]*?lineHeight:\s*23/);
+  assert.match(typography, /chatUser:[\s\S]*?fontSize:\s*16/);
+  assert.match(typography, /chatUser:[\s\S]*?lineHeight:\s*23/);
+  assert.match(bubble, /textUser:[\s\S]*?typography\.chatUser/);
+  assert.doesNotMatch(bubble, /textUser:[\s\S]*?fontSize:\s*1[0-5]/);
+  assert.match(aiBody, /line:[\s\S]*?typography\.chatAi/);
+  assert.doesNotMatch(aiBody, /sectionTitle:[\s\S]*?fontSize:\s*1[0-5]/);
+});
+
 test('no bottom tab navigator wiring', () => {
   const app = readFileSync(join(root, 'App.tsx'), 'utf8');
   const shell = read('app/AppShell.tsx');

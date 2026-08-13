@@ -143,8 +143,5 @@ const styles = StyleSheet.create({
   },
   textUser: {
     ...typography.chatUser,
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '500',
   },
 });
