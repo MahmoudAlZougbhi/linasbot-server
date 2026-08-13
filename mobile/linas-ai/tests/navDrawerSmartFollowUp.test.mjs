@@ -72,16 +72,13 @@ describe('nav drawer Smart Follow-Up + AI Setup featured tile', () => {
     );
   });
 
-  it('Smart Follow-Up screen blocks fake Connected and routes to Integrations', () => {
+  it('Smart Follow-Up screen uses channels grid and save changes', () => {
     const screen = read('features/smartFollowUp/SmartFollowUpScreen.tsx');
-    assert.match(screen, /blockers\?\.whatsapp_connected === false|whatsapp_connected === false/);
-    assert.match(screen, /openArea\('integrations'\)/);
-    assert.match(screen, /sfuConnectedOnlyFromStatus/);
-    assert.doesNotMatch(screen, /deep.?link.*[Cc]onnected|Connected.*deep.?link/);
+    assert.match(screen, /SmartFollowUpChannelsCard/);
+    assert.match(screen, /channels_enabled/);
+    assert.match(screen, /sfuSaveChanges/);
     const api = read('features/smartFollowUp/smartFollowUpApi.ts');
     assert.match(api, /\/api\/whatsapp\/smart-followup\/settings/);
-    assert.match(api, /\/api\/whatsapp\/smart-followup\/analytics/);
-    assert.match(api, /\/api\/whatsapp\/smart-followup\/preview/);
   });
 
   it('i18n exposes Smart Follow-Up title keys in en/ar/fr', () => {

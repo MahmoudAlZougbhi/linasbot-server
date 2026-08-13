@@ -12,6 +12,14 @@ export type FollowUpGoal = (typeof FOLLOW_UP_GOALS)[number];
 
 export const DEFAULT_STEP_DELAYS = [30, 360, 1200] as const;
 
+const ChannelsEnabledSchema = z.object({
+  whatsapp_cloud: z.boolean(),
+  instagram_dm: z.boolean(),
+  facebook_messenger: z.boolean(),
+});
+
+export type FollowUpChannelsEnabled = z.infer<typeof ChannelsEnabledSchema>;
+
 const GoalSchema = z.enum(FOLLOW_UP_GOALS);
 
 const StepSchema = z.object({
@@ -43,6 +51,8 @@ export const SmartFollowUpSettingsSchema = z
     billing_manage_in_meta: z.boolean().optional(),
     settings_version: z.number().int(),
     updated_at: z.string().nullable().optional(),
+    channels_enabled: ChannelsEnabledSchema.optional(),
+    channels_supported: z.array(z.string()).optional(),
     steps: z.array(StepSchema).min(1).max(3),
     stop_rules: z.array(z.string()).optional(),
     message_policy: z
@@ -102,6 +112,7 @@ export type SettingsUpdatePayload = {
   enabled: boolean;
   business_hours_only: boolean;
   settings_version: number;
+  channels_enabled: FollowUpChannelsEnabled;
   steps: SmartFollowUpStep[];
 };
 

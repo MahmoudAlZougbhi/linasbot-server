@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from services.smart_followup.constants import (
     ALLOWED_BILLING_MODES,
     BILLING_MODE_CUSTOMER_DIRECT,
+    DEFAULT_CHANNELS_ENABLED,
+    FOLLOWUP_CHANNELS,
     GOALS,
     MAX_DELAY_MINUTES,
 )
@@ -20,6 +22,28 @@ class SmartFollowUpSettingsError(ValueError):
         super().__init__(message)
         self.code = code
         self.message = message
+
+
+def _normalize_channels_enabled(raw: Any) -> dict[str, bool]:
+    base = dict(DEFAULT_CHANNELS_ENABLED)
+    if not isinstance(raw, dict):
+        return base
+    for key in FOLLOWUP_CHANNELS:
+        if key in raw:
+            base[key] = bool(raw[key])
+    return base
+
+
+def channel_enabled_for_settings(settings: Any, channel: str) -> bool:
+    channels = _normalize_channels_enabled(getattr(settings, "channels_enabled", None))
+    return bool(channels.get(channel, False))
+
+
+def _validate_channels_enabled(raw: Any) -> dict[str, bool]:
+    cleaned = _normalize_channels_enabled(raw)
+    if not any(cleaned.values()):
+        raise SmartFollowUpSettingsError("no_enabled_channels", "Enable at least one channel")
+    return cleaned
 
 
 def _validate_steps(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -97,7 +121,8 @@ def settings_public_view(
         "billing_manage_in_meta": settings.billing_mode == BILLING_MODE_CUSTOMER_DIRECT,
         "settings_version": int(settings.settings_version),
         "updated_at": settings.updated_at.isoformat() if getattr(settings, "updated_at", None) else None,
-        "channels_supported": ["whatsapp_cloud", "instagram_dm", "facebook_messenger"],
+        "channels_supported": list(FOLLOWUP_CHANNELS),
+        "channels_enabled": _normalize_channels_enabled(getattr(settings, "channels_enabled", None)),
         "steps": [
             {
                 "step_index": int(s.step_index),
@@ -150,6 +175,9 @@ def update_settings(
             "version_conflict",
             "Settings were updated elsewhere — reload and retry",
         )
+
+    if "channels_enabled" in payload:
+        settings.channels_enabled = _validate_channels_enabled(payload.get("channels_enabled"))
 
     if "steps" in payload:
         cleaned = _validate_steps(list(payload.get("steps") or []))

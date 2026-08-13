@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { ApiError } from '../../api/client';
 import { isNetworkFailure } from '../../api/networkError';
@@ -18,15 +18,20 @@ import type { StringKey } from '../../i18n/locales/en';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import { useModuleNav } from '../nav/ModuleNavContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
-import { SmartFollowUpStepEditor } from './SmartFollowUpStepEditor';
+import { SmartFollowUpChannelsCard } from './SmartFollowUpChannelsCard';
+import { SmartFollowUpStepsCard } from './SmartFollowUpStepsCard';
+import { SFU_CARD_BORDER, SFU_TEAL, SFU_TEAL_SOFT } from './smartFollowUpDesign';
+import {
+  DEFAULT_CHANNELS_ENABLED,
+  type FollowUpChannelKey,
+  type FollowUpChannelsEnabled,
+  normalizeChannelsEnabled,
+  supportedChannelsSelected,
+} from './smartFollowUpOptions';
 import {
   DEFAULT_STEP_DELAYS,
   fetchSmartFollowUpSettings,
-  isAiDisabledBlocker,
-  isMetaSetupBlocker,
-  previewSmartFollowUp,
   saveSmartFollowUpSettings,
-  type FollowUpGoal,
   type SmartFollowUpSettings,
   type SmartFollowUpStep,
 } from './smartFollowUpApi';
@@ -46,7 +51,11 @@ function defaultSteps(): SmartFollowUpStep[] {
   ];
 }
 
-function validateLocal(steps: SmartFollowUpStep[]): StringKey | null {
+function validateLocal(
+  steps: SmartFollowUpStep[],
+  channels: FollowUpChannelsEnabled,
+): StringKey | null {
+  if (!supportedChannelsSelected(channels)) return 'sfuValidationNoChannels';
   const enabled = steps.filter((s) => s.enabled).sort((a, b) => a.step_index - b.step_index);
   if (enabled.length === 0) return 'sfuValidationNoSteps';
   let prev = 0;
@@ -65,12 +74,10 @@ export function SmartFollowUpScreen() {
   const [load, setLoad] = useState<LoadState>({ kind: 'loading' });
   const [enabled, setEnabled] = useState(false);
   const [businessHoursOnly, setBusinessHoursOnly] = useState(true);
+  const [channels, setChannels] = useState<FollowUpChannelsEnabled>(DEFAULT_CHANNELS_ENABLED);
   const [steps, setSteps] = useState<SmartFollowUpStep[]>(defaultSteps);
   const [settingsVersion, setSettingsVersion] = useState(0);
-  const [blockers, setBlockers] = useState<SmartFollowUpSettings['blockers']>();
-  const [stopRules, setStopRules] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [previewing, setPreviewing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [validationKey, setValidationKey] = useState<StringKey | null>(null);
@@ -78,10 +85,9 @@ export function SmartFollowUpScreen() {
   const applySettings = useCallback((data: SmartFollowUpSettings) => {
     setEnabled(data.enabled);
     setBusinessHoursOnly(data.business_hours_only);
+    setChannels(normalizeChannelsEnabled(data.channels_enabled));
     setSteps(data.steps.length ? [...data.steps].sort((a, b) => a.step_index - b.step_index) : defaultSteps());
     setSettingsVersion(data.settings_version);
-    setBlockers(data.blockers);
-    setStopRules(data.stop_rules ?? []);
   }, []);
 
   const reload = useCallback(async () => {
@@ -118,28 +124,24 @@ export function SmartFollowUpScreen() {
     }
   }, [nav.areaFocusNonce, nav.activeArea, reload]);
 
-  const waConnected = blockers?.whatsapp_connected === true;
-  const aiBlocker = blockers?.ai_blocker ?? null;
+  const formDisabled = useMemo(() => saving || load.kind !== 'ready', [load.kind, saving]);
 
-  const blockerBanner = useMemo(() => {
-    if (load.kind !== 'ready') return null;
-    if (blockers?.whatsapp_connected === false) {
-      return { key: 'wa' as const, text: tr('sfuWhatsAppDisconnected'), cta: tr('sfuOpenIntegrations') };
-    }
-    if (isAiDisabledBlocker(aiBlocker)) {
-      return { key: 'ai' as const, text: tr('sfuAiDisabled'), cta: null };
-    }
-    if (isMetaSetupBlocker(aiBlocker)) {
-      return { key: 'meta' as const, text: tr('sfuMetaSetupRequired'), cta: tr('sfuOpenIntegrations') };
-    }
-    if (aiBlocker === 'published_cm_missing' || aiBlocker === 'published_cm_unavailable') {
-      return { key: 'cm' as const, text: tr('sfuMetaSetupRequired'), cta: null };
-    }
-    return null;
-  }, [aiBlocker, blockers?.whatsapp_connected, load.kind, tr]);
+  function toggleChannel(channel: FollowUpChannelKey) {
+    setChannels((prev) => ({ ...prev, [channel]: !prev[channel] }));
+    setValidationKey(null);
+  }
+
+  function selectAllChannels() {
+    setChannels({
+      instagram_dm: true,
+      facebook_messenger: true,
+      whatsapp_cloud: true,
+    });
+    setValidationKey(null);
+  }
 
   async function onSave() {
-    const v = validateLocal(steps);
+    const v = validateLocal(steps, channels);
     if (v) {
       setValidationKey(v);
       setError(tr(v));
@@ -154,6 +156,7 @@ export function SmartFollowUpScreen() {
         enabled,
         business_hours_only: businessHoursOnly,
         settings_version: settingsVersion,
+        channels_enabled: channels,
         steps,
       });
       applySettings(data);
@@ -177,52 +180,9 @@ export function SmartFollowUpScreen() {
     }
   }
 
-  async function onPreview() {
-    const goal = (steps.find((s) => s.enabled)?.goal ?? 'gentle_check_in') as FollowUpGoal;
-    Alert.alert(tr('sfuPreviewTitle'), tr('sfuPreviewDisclose'), [
-      { text: tr('usersCancel'), style: 'cancel' },
-      {
-        text: tr('sfuPreviewRun'),
-        onPress: () => {
-          void (async () => {
-            setPreviewing(true);
-            setError(null);
-            setNotice(null);
-            try {
-              const result = await previewSmartFollowUp(goal);
-              if (!result.success) {
-                if (result.error === 'whatsapp_disconnected') {
-                  setError(tr('sfuWhatsAppDisconnected'));
-                } else if (result.error === 'insufficient_credits') {
-                  setError(tr('sfuPreviewCredits'));
-                } else {
-                  setError(result.message || tr('sfuPreviewError'));
-                }
-                return;
-              }
-              setNotice(result.preview_text || tr('sfuPreviewEmpty'));
-            } catch (err) {
-              if (isNetworkFailure(err)) setError(tr('sfuOffline'));
-              else if (err instanceof ApiError && err.status === 403) setError(tr('sfuPermissionDenied'));
-              else if (err instanceof ApiError && err.status === 409) setError(tr('sfuWhatsAppDisconnected'));
-              else if (err instanceof ApiError && err.status === 402) setError(tr('sfuPreviewCredits'));
-              else setError(tr('sfuPreviewError'));
-            } finally {
-              setPreviewing(false);
-            }
-          })();
-        },
-      },
-    ]);
-  }
-
-  const stopSummary = stopRules.length
-    ? stopRules.map((r) => r.replace(/_/g, ' ')).join(' · ')
-    : tr('sfuStopRulesDefault');
-
   return (
     <ScreenChrome title={tr('sfuTitle')} subtitle={tr('sfuSubtitle')}>
-      {load.kind === 'loading' ? <ActivityIndicator color={colors.accent} /> : null}
+      {load.kind === 'loading' ? <ActivityIndicator color={SFU_TEAL} /> : null}
 
       {load.kind === 'offline' ? (
         <EmptyState title={tr('sfuOffline')} body={tr('tapToRetry')} />
@@ -230,102 +190,72 @@ export function SmartFollowUpScreen() {
       {load.kind === 'forbidden' ? (
         <EmptyState title={tr('sfuPermissionDenied')} body={tr('sfuPermissionDeniedBody')} />
       ) : null}
-      {load.kind === 'error' ? (
-        <EmptyState title={tr('sfuLoadError')} body={load.message} />
-      ) : null}
+      {load.kind === 'error' ? <EmptyState title={tr('sfuLoadError')} body={load.message} /> : null}
 
       {(load.kind === 'offline' || load.kind === 'error') ? (
         <PrimaryButton label={tr('proposalRetry')} onPress={() => void reload()} variant="ghost" />
       ) : null}
       {load.kind === 'forbidden' ? (
-        <PrimaryButton
-          label={tr('loginOrRegister')}
-          onPress={() => nav.requestLogin()}
-          variant="ghost"
-        />
+        <PrimaryButton label={tr('loginOrRegister')} onPress={() => nav.requestLogin()} variant="ghost" />
       ) : null}
 
       {load.kind === 'ready' ? (
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          {blockerBanner ? (
-            <View style={[styles.banner, { backgroundColor: colors.banner, borderColor: colors.bannerBorder }]}>
-              <Text style={{ color: colors.warning, fontFamily: fonts.bodyMedium }}>{blockerBanner.text}</Text>
-              {blockerBanner.cta ? (
-                <PrimaryButton
-                  label={blockerBanner.cta}
-                  onPress={() => nav.openArea('integrations')}
-                  variant="ghost"
-                  style={styles.bannerCta}
-                />
-              ) : null}
-              {!waConnected ? (
-                <Text style={[styles.bannerNote, { color: colors.textMuted }]}>
-                  {tr('sfuConnectedOnlyFromStatus')}
-                </Text>
-              ) : null}
-            </View>
-          ) : null}
-
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: SFU_CARD_BORDER }]}>
             <View style={styles.rowBetween}>
-              <View style={styles.flex}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>{tr('sfuMasterToggle')}</Text>
-                <Text style={{ color: colors.textMuted, fontFamily: fonts.body, fontSize: 13 }}>
-                  {tr('sfuMasterToggleHint')}
-                </Text>
-              </View>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>{tr('sfuEnabledLabel')}</Text>
               <Switch
                 value={enabled}
                 onValueChange={setEnabled}
-                trackColor={{ false: colors.border, true: colors.accent }}
+                disabled={formDisabled}
+                trackColor={{ false: colors.border, true: SFU_TEAL }}
                 thumbColor={colors.surface}
-                accessibilityLabel={tr('sfuMasterToggle')}
+                accessibilityLabel={tr('sfuEnabledLabel')}
               />
             </View>
           </View>
 
-          {steps.map((step, index) => (
-            <SmartFollowUpStepEditor
-              key={step.step_index}
-              step={step}
-              defaultDelay={DEFAULT_STEP_DELAYS[Math.min(index, DEFAULT_STEP_DELAYS.length - 1)] ?? 30}
-              onChange={(next) => {
-                setSteps((prev) => prev.map((s) => (s.step_index === next.step_index ? next : s)));
-                setValidationKey(null);
-              }}
-            />
-          ))}
+          <SmartFollowUpChannelsCard
+            channels={channels}
+            disabled={formDisabled}
+            onToggle={toggleChannel}
+            onSelectAll={selectAllChannels}
+          />
 
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <SmartFollowUpStepsCard
+            steps={steps}
+            disabled={formDisabled}
+            onChange={(next) => {
+              setSteps((prev) => prev.map((s) => (s.step_index === next.step_index ? next : s)));
+              setValidationKey(null);
+            }}
+          />
+
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: SFU_CARD_BORDER }]}>
             <View style={styles.rowBetween}>
               <View style={styles.flex}>
                 <Text style={[styles.cardTitle, { color: colors.text }]}>{tr('sfuBusinessHours')}</Text>
-                <Text style={{ color: colors.textMuted, fontFamily: fonts.body, fontSize: 13 }}>
-                  {tr('sfuBusinessHoursHint')}
-                </Text>
+                <Text style={[styles.cardHint, { color: colors.textMuted }]}>{tr('sfuBusinessHoursHint')}</Text>
               </View>
               <Switch
                 value={businessHoursOnly}
                 onValueChange={setBusinessHoursOnly}
-                trackColor={{ false: colors.border, true: colors.accent }}
+                disabled={formDisabled}
+                trackColor={{ false: colors.border, true: SFU_TEAL }}
                 thumbColor={colors.surface}
                 accessibilityLabel={tr('sfuBusinessHours')}
               />
             </View>
           </View>
 
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>{tr('sfuAiWrites')}</Text>
-            <Text style={{ color: colors.textMuted, fontFamily: fonts.body, fontSize: 14, marginTop: 4 }}>
-              {tr('sfuAiWritesBody')}
-            </Text>
+          <View style={[styles.aiBox, { backgroundColor: SFU_TEAL_SOFT, borderColor: SFU_TEAL }]}>
+            <Ionicons name="sparkles" size={20} color={SFU_TEAL} />
+            <Text style={[styles.aiText, { color: colors.text }]}>{tr('sfuAiWritesBody')}</Text>
           </View>
 
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>{tr('sfuStopRules')}</Text>
-            <Text style={{ color: colors.textMuted, fontFamily: fonts.body, fontSize: 13, marginTop: 6 }}>
-              {stopSummary}
-            </Text>
+          <View style={styles.compliance}>
+            <Ionicons name="shield-checkmark-outline" size={16} color={colors.textMuted} />
+            <Text style={[styles.complianceText, { color: colors.textMuted }]}>{tr('sfuWindowCompliance')}</Text>
           </View>
 
           {validationKey ? (
@@ -334,13 +264,11 @@ export function SmartFollowUpScreen() {
           {error ? <Text style={{ color: colors.danger, fontFamily: fonts.body }}>{error}</Text> : null}
           {notice ? <Text style={{ color: colors.mint, fontFamily: fonts.body }}>{notice}</Text> : null}
 
-          <PrimaryButton label={tr('sfuSave')} onPress={() => void onSave()} loading={saving} />
           <PrimaryButton
-            label={tr('sfuPreview')}
-            onPress={() => void onPreview()}
-            loading={previewing}
-            variant="ghost"
-            disabled={!waConnected}
+            label={tr('sfuSaveChanges')}
+            onPress={() => void onSave()}
+            loading={saving}
+            style={styles.saveBtn}
           />
         </ScrollView>
       ) : null}
@@ -356,6 +284,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   cardTitle: { fontFamily: fonts.bodyMedium, fontSize: 16 },
+  cardHint: { fontFamily: fonts.body, fontSize: 13, marginTop: 4 },
   rowBetween: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -363,12 +292,33 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   flex: { flex: 1 },
-  banner: {
+  aiBox: {
     borderWidth: 1,
     borderRadius: radii.md,
     padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: spacing.sm,
   },
-  bannerCta: { alignSelf: 'flex-start' },
-  bannerNote: { fontFamily: fonts.body, fontSize: 12 },
+  aiText: {
+    flex: 1,
+    fontFamily: fonts.body,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  compliance: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 2,
+  },
+  complianceText: {
+    flex: 1,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  saveBtn: {
+    marginTop: spacing.xs,
+  },
 });

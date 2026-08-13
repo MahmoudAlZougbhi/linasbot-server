@@ -58,6 +58,13 @@ class WhatsAppSmartFollowUpSettings(Base):
     )
     updated_by_user_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     settings_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    channels_enabled: Mapped[dict[str, Any]] = mapped_column(
+        JsonType,
+        nullable=False,
+        server_default=text(
+            '\'{"whatsapp_cloud": true, "instagram_dm": true, "facebook_messenger": true}\''
+        ),
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
