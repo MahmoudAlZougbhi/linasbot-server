@@ -59,7 +59,9 @@ def maybe_schedule_social_followup_after_ai_reply(
     else:
         last_inbound_iso = datetime.now(UTC).isoformat()
 
-    trigger_ref = str(source_message_id or user_data.get("_source_message_id") or f"social:{conversation_id}:{last_inbound_iso}")
+    trigger_ref = str(
+        source_message_id or user_data.get("_source_message_id") or f"social:{conversation_id}:{last_inbound_iso}"
+    )
     sent_at = datetime.now(UTC)
     channel_context = {
         "user_id": user_id,
