@@ -57,12 +57,13 @@ def reasoning_effort_for_model(model: str) -> str | None:
 
 
 def chat_completions_allows_tools_with_effort(model: str) -> bool:
-    """gpt-5.6-sol rejects function tools + reasoning_effort on /v1/chat/completions.
+    """Models that reject function tools + reasoning_effort on /v1/chat/completions.
 
-    OpenAI requires either /v1/responses or reasoning_effort='none' for Sol tool calls.
-    Text-only Sol rounds may keep policy low|high. Terra tool calls are unaffected.
+    OpenAI requires either /v1/responses or reasoning_effort='none' for these tool calls.
+    Text-only rounds may keep policy low|medium|high.
     """
-    return "sol" not in _model_family(model)
+    m = _model_family(model)
+    return "sol" not in m and "terra" not in m
 
 
 def effective_chat_completions_reasoning_effort(

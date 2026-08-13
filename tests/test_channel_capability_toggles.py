@@ -75,7 +75,7 @@ def test_attach_toggles_only_on_meta_channels(monkeypatch) -> None:
         {"platform": "tiktok", "label": "TikTok", "connected": False, "coming_soon": True},
     ]
     out = attach_channel_toggles(rows, tenant_id="linas")
-    assert out[0]["toggles"] == {"dm": True, "comments": False}
+    assert out[0]["toggles"] == {"dm": True, "comments": False}  # comments uses requested in toggles
     assert out[0]["comments_blocker"] == "missing_comment_permissions"
     assert out[0]["comments_state"]["permission_present"] is False
     assert out[0]["comments_state"]["effective_enabled"] is False

@@ -3,7 +3,8 @@
 Mirrors AI Setup → Actions switches and, for comments, syncs the
 per-asset Meta comment-reply setting used at runtime.
 
-Mobile UI reads ``effective_enabled`` from the canonical capability matrix only.
+Mobile UI reads ``requested_enabled`` for toggle switches; ``effective_enabled`` and blockers
+live in ``dm_state`` / ``comments_state`` (status hints under the switches).
 """
 
 from __future__ import annotations
@@ -88,9 +89,9 @@ def channel_toggle_states(tenant_id: str, platform: str) -> dict[str, bool]:
     comments_state = comment_capability_state(tenant_id, platform)
     dm_state = dm_capability_state(tenant_id, platform)
     return {
-        # DMs: preserve existing CM toggle semantics (no false-OFF on empty field records).
+        # Mobile switches reflect CM *requested* state; effective gates live in *_state below.
         "dm": bool(dm_state["requested_enabled"]),
-        "comments": bool(comments_state["effective_enabled"]),
+        "comments": bool(comments_state["requested_enabled"]),
     }
 
 
@@ -165,7 +166,7 @@ def attach_channel_toggles(rows: list[dict[str, Any]], *, tenant_id: str) -> lis
             **row,
             "toggles": {
                 "dm": bool(dm_state["requested_enabled"]),
-                "comments": bool(state["effective_enabled"]),
+                "comments": bool(state["requested_enabled"]),
             },
             "comments_state": state,
             "dm_state": dm_state,
