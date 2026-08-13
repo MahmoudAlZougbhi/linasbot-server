@@ -15,6 +15,8 @@ export type ThemeColors = {
   accentSoft: string;
   accentGlow: string;
   accentDeep: string;
+  /** Medium seafoam teal — AI Setup drawer percent badge. */
+  accentMid: string;
   onAccent: string;
   mint: string;
   mintSoft: string;
@@ -54,6 +56,7 @@ export const lightColors: ThemeColors = {
   accentSoft: '#CCFBF1',
   accentGlow: 'rgba(0, 139, 139, 0.12)',
   accentDeep: '#006D6D',
+  accentMid: '#4A9B8E',
   onAccent: '#FFFFFF',
   mint: '#0D9488',
   mintSoft: '#CCFBF1',
@@ -91,6 +94,7 @@ export const darkColors: ThemeColors = {
   accentSoft: '#134E4A',
   accentGlow: 'rgba(45, 212, 191, 0.18)',
   accentDeep: '#5EEAD4',
+  accentMid: '#4A9B8E',
   onAccent: '#042F2E',
   mint: '#2DD4BF',
   mintSoft: '#134E4A',

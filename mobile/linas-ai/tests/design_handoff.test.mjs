@@ -51,6 +51,18 @@ test('drawer AI Setup active tile uses mint sparkle chrome', () => {
   assert.match(fade, /FADE_STEPS = 12/);
 });
 
+test('drawer AI Setup percent badge uses seafoam pill with white border', () => {
+  const grid = read('features/nav/DrawerNavGrid.tsx');
+  const tokens = read('theme/tokens.ts');
+  assert.match(grid, /badge\.tone === 'teal'/);
+  assert.match(grid, /backgroundColor:\s*colors\.accentMid/);
+  assert.match(grid, /borderWidth:\s*1/);
+  assert.match(grid, /borderColor:\s*'#FFFFFF'/);
+  assert.match(grid, /badge\.tone === 'teal'\s*\?\s*\{\s*color:\s*'#FFFFFF'\s*\}/);
+  assert.doesNotMatch(grid, /badge\.tone === 'teal'[\s\S]*?colors\.accentDeep/);
+  assert.match(tokens, /accentMid:\s*'#4A9B8E'/);
+});
+
 test('drawer module order matches binding product order', () => {
   const text = read('features/nav/drawerModules.ts');
   // AI Setup (cm) is featured separately; grid order is DRAWER_MODULES only.
