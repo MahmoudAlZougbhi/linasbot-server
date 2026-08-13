@@ -64,7 +64,7 @@ jobs:
             echo "Commit: $GITHUB_SHA"
           fi
 
-      - name: Deploy on production server
+      - name: Deploy on production server (node01)
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -100,4 +100,40 @@ jobs:
             fi
 
             sudo bash /opt/linasbot/deploy.sh
-            echo "[deploy] Deployment completed successfully"
+            echo "[deploy] Deployment completed successfully on $(hostname)"
+
+      - name: Deploy on production server (node02)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: 167.99.89.243
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 30m
+          script: |
+            set -e
+            echo "[deploy] Connected to $(hostname)"
+            cd /opt/linasbot
+
+            umask 077
+            DATA_BACKUP="/tmp/linasbot_data_backup_$$"
+            if [ -d data ]; then
+              echo "[deploy] Backing up data/ (knowledge, style, Q&A, settings, content files...)"
+              cp -a data "$DATA_BACKUP"
+              chmod 700 "$DATA_BACKUP"
+            fi
+
+            git fetch origin main
+            git reset --hard origin/main
+
+            if [ -d "$DATA_BACKUP" ]; then
+              echo "[deploy] Restoring user data..."
+              mkdir -p data
+              cp -a "$DATA_BACKUP"/* data/ 2>/dev/null || true
+              rm -rf "$DATA_BACKUP"
+              echo "[deploy] User data restored."
+            fi
+
+            sudo bash /opt/linasbot/deploy.sh
+            echo "[deploy] Deployment completed successfully on $(hostname)"

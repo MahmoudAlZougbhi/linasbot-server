@@ -13,6 +13,7 @@ from typing import Any
 from services.meta_comment_events import ResolvedMetaCommentEvent
 from services.meta_messaging import MetaMessagingSettings
 from services.meta_multi_app_router import ResolvedMetaEvent
+from services.queues.config import redis_required
 from services.scale.inbound_event_store import (
     InboundEventRecord,
     get_inbound_event,
@@ -38,7 +39,11 @@ def _try_enqueue(*, event_id: str, kind: str, tenant_id: str, conversation_key: 
     try:
         from services.job_queue import job_queue
 
-        if getattr(job_queue, "backend", None) != "redis" or not getattr(job_queue, "production_ready", False):
+        if (
+            getattr(job_queue, "backend", None) != "redis"
+            or not getattr(job_queue, "production_ready", False)
+            or not redis_required()
+        ):
             return None
         job = job_queue.enqueue(
             queue="high_priority",
