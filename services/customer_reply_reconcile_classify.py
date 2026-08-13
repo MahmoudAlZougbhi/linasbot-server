@@ -140,7 +140,9 @@ def classify_event_turn(
 ) -> ReconcileCandidate:
     """Map one inbound event + optional turn to A/B/C/D with a safe action."""
     claim_basis = turn.claim_key_basis if turn else None
-    stale_claim = bool(claim_basis and is_stale_file_claim("ai_turn_claims", claim_basis, ttl_seconds=claim_ttl_seconds))
+    stale_claim = bool(
+        claim_basis and is_stale_file_claim("ai_turn_claims", claim_basis, ttl_seconds=claim_ttl_seconds)
+    )
 
     base = ReconcileCandidate(
         inbound_event_id=event.event_id,
