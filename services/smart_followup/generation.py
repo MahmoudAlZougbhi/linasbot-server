@@ -47,8 +47,7 @@ async def generate_followup_text(
     prompt = GOAL_PROMPTS.get(goal) or GOAL_PROMPTS["gentle_check_in"]
     label = _CHANNEL_LABELS.get(normalized, "DM")
     message = (
-        f"[Smart Follow-Up / {goal}]\n{prompt}\n"
-        f"Respond with only the {label} message text to send to the customer."
+        f"[Smart Follow-Up / {goal}]\n{prompt}\nRespond with only the {label} message text to send to the customer."
     )
     cr_channel = normalized
     if normalized == "whatsapp_cloud":

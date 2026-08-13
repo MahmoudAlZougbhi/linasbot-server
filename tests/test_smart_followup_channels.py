@@ -102,7 +102,13 @@ def test_schedule_whatsapp_stores_default_channel(sfu_db):
         channel=SOURCE_CHANNEL_WHATSAPP_CLOUD,
     )
     assert result["scheduled"] is True
-    job = sfu_db.scalars(__import__("sqlalchemy").select(__import__("db.models.whatsapp_smart_followup", fromlist=["WhatsAppSmartFollowUpJob"]).WhatsAppSmartFollowUpJob)).first()
+    job = sfu_db.scalars(
+        __import__("sqlalchemy").select(
+            __import__(
+                "db.models.whatsapp_smart_followup", fromlist=["WhatsAppSmartFollowUpJob"]
+            ).WhatsAppSmartFollowUpJob
+        )
+    ).first()
     assert job.channel == SOURCE_CHANNEL_WHATSAPP_CLOUD
 
 
@@ -197,7 +203,9 @@ async def test_meta_worker_routes_to_deliver_meta_dm(sfu_db):
         ),
         patch(
             "services.requests.delivery.deliver_meta_dm",
-            new=AsyncMock(return_value=type("R", (), {"status": "sent", "provider_message_id": "mid-1", "error_redacted": None})()),
+            new=AsyncMock(
+                return_value=type("R", (), {"status": "sent", "provider_message_id": "mid-1", "error_redacted": None})()
+            ),
         ),
         patch("services.credit_ledger_service.credit_ledger_service.reserve", return_value="res-1"),
         patch("services.credit_ledger_service.credit_ledger_service.capture", return_value=None),

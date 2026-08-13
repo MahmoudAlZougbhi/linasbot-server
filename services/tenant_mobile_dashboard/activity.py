@@ -167,11 +167,7 @@ def build_activity_summary(
     tid = (tenant_id or "").strip().lower()
     start = datetime.fromtimestamp(start_ts, tz=UTC)
     end = datetime.fromtimestamp(end_ts, tz=UTC)
-    scoped = [
-        e
-        for e in (entries if entries is not None else _load_entries())
-        if _entry_matches_tenant(e, tid)
-    ]
+    scoped = [e for e in (entries if entries is not None else _load_entries()) if _entry_matches_tenant(e, tid)]
 
     platform_rows = {key: _empty_platform_row() for key in _ACTIVITY_PLATFORMS}
     owner_copilot_credits = 0
@@ -212,9 +208,7 @@ def build_activity_summary(
         platform_rows[platform]["requests"] = count
 
     connected = {
-        str(row.get("platform") or ""): bool(row.get("connected"))
-        for row in integrations
-        if isinstance(row, dict)
+        str(row.get("platform") or ""): bool(row.get("connected")) for row in integrations if isinstance(row, dict)
     }
 
     channels: list[dict[str, Any]] = []
