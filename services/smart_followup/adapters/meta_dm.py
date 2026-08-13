@@ -29,10 +29,7 @@ def _parse_iso(value: Any) -> datetime | None:
 
 
 def _channel_context(job: WhatsAppSmartFollowUpJob) -> dict[str, Any]:
-    ctx = dict(getattr(job, "channel_context", None) or {})
-    if not ctx and getattr(job, "sequence", None) is not None:
-        ctx = dict(getattr(job.sequence, "channel_context", None) or {})
-    return ctx
+    return dict(getattr(job, "channel_context", None) or {})
 
 
 async def _load_firestore_conversation(*, user_id: str, conversation_id: str) -> dict[str, Any]:
@@ -118,8 +115,12 @@ class MetaDmFollowUpAdapter:
         except Exception:
             return None, "firestore_unavailable"
 
-        state = payload.get("state") if isinstance(payload.get("state"), dict) else {}
-        history = payload.get("history") if isinstance(payload.get("history"), list) else []
+        state_raw = payload.get("state")
+        state: dict[str, Any] = state_raw if isinstance(state_raw, dict) else {}
+        history_raw = payload.get("history")
+        history: list[dict[str, Any]] = (
+            [row for row in history_raw if isinstance(row, dict)] if isinstance(history_raw, list) else []
+        )
         if bool(state.get("human_takeover_active")):
             return None, "conversation_paused"
 
