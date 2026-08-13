@@ -19,12 +19,24 @@ test('brand sparkle renders without react-native-svg (no Uni placeholder)', () =
   const sparkle = read('components/LinasSparkleIcon.tsx');
   const fade = read('features/nav/DrawerFadeSeparator.tsx');
   const pkg = readFileSync(join(root, 'package.json'), 'utf8');
-  assert.match(sparkle, /linas-sparkle-template\.png/);
-  assert.match(sparkle, /tintColor:\s*color/);
+  assert.match(sparkle, /linas-sparkle-light\.png/);
+  assert.match(sparkle, /linas-sparkle-light-deep\.png/);
+  assert.match(sparkle, /linas-sparkle-dark\.png/);
+  assert.match(sparkle, /linas-sparkle-dark-deep\.png/);
+  assert.match(sparkle, /sparkleSource\(color\)/);
+  assert.doesNotMatch(sparkle, /tintColor/);
   assert.doesNotMatch(sparkle, /react-native-svg/);
   assert.doesNotMatch(fade, /react-native-svg/);
   assert.doesNotMatch(pkg, /react-native-svg/);
   assert.ok(existsSync(join(root, 'assets/linas-sparkle-template.png')));
+  for (const name of [
+    'linas-sparkle-light.png',
+    'linas-sparkle-light-deep.png',
+    'linas-sparkle-dark.png',
+    'linas-sparkle-dark-deep.png',
+  ]) {
+    assert.ok(existsSync(join(root, 'assets', name)));
+  }
 });
 
 test('drawer AI Setup active tile uses light grey sparkle chrome', () => {
