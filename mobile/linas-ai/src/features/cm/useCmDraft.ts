@@ -7,6 +7,7 @@ import {
   type CmProposalReview,
 } from './cmProposalReview';
 import { getCmDraft, putCmDraft } from './cmApi';
+import { sanitizeCmSectionPayload } from './stripProvenanceHeaders';
 
 export function useCmDraft(section: string, proposalReview?: CmProposalReview | null) {
   const [loading, setLoading] = useState(true);
@@ -24,7 +25,7 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
     setConflict(null);
     try {
       const draft = await getCmDraft(section);
-      let next = draft.payload;
+      let next = sanitizeCmSectionPayload(section, draft.payload);
       let overlay = false;
       if (proposalReview && proposalReview.section === section) {
         if (proposalReview.proposedItem) {
@@ -83,7 +84,7 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
     setConflict(null);
     try {
       const draft = await putCmDraft(section, payload, etag);
-      setPayloadState(draft.payload);
+      setPayloadState(sanitizeCmSectionPayload(section, draft.payload));
       setEtag(draft.etag);
       setDirty(false);
       setProposalActive(false);

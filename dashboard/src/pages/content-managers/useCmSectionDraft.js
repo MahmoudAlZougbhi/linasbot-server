@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useApi } from "../../hooks/useApi";
 import { asRecord } from "./cmDraftHelpers";
+import { sanitizeCmSectionPayload } from "./cmProvenanceHeaders";
 
 /**
  * Shared draft load/save/validate for a CM section.
@@ -35,7 +36,7 @@ export function useCmSectionDraft(section) {
       }
       const envelope = /** @type {Record<string, unknown>} */ (draftRes.data);
       const raw = envelope.payload ?? envelope.data ?? {};
-      setPayload(asRecord(raw));
+      setPayload(sanitizeCmSectionPayload(section, asRecord(raw)));
       setEtag(
         typeof draftRes.etag === "string"
           ? draftRes.etag
@@ -97,7 +98,8 @@ export function useCmSectionDraft(section) {
       if (typeof res.etag === "string") setEtag(res.etag);
       if (res.data) {
         const envelope = /** @type {Record<string, unknown>} */ (res.data);
-        setPayload(asRecord(envelope.payload ?? envelope.data ?? body));
+        const saved = envelope.payload ?? envelope.data ?? body;
+        setPayload(sanitizeCmSectionPayload(section, asRecord(saved)));
       } else {
         setPayload(body);
       }

@@ -7,6 +7,7 @@ from typing import Any
 
 from services.cm.constants import CM_SECTIONS, DEFAULT_TENANT_ID
 from services.cm.paths import ensure_cm_dirs, published_pointer_path, versions_dir
+from services.cm.provenance_headers import sanitize_section_payload
 from services.cm.storage import get_draft
 
 
@@ -81,7 +82,7 @@ def build_preview_packet(
             "revision": env.revision,
             "etag": env.etag,
             "updated_at": env.updated_at.isoformat(),
-            "payload": env.payload,
+            "payload": sanitize_section_payload(name, env.payload),
         }
 
     return {

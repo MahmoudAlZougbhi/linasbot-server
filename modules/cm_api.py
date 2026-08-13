@@ -25,6 +25,7 @@ from services.cm.publish import (
     rollback_to_version,
 )
 from services.cm.publish_gate import PublishDisabledError, ensure_publish_enabled, publish_status
+from services.cm.provenance_headers import sanitize_section_payload
 from services.cm.storage import ConflictError, UnknownSectionError, get_draft, put_draft
 from services.cm.validation import validate_cm
 from services.dashboard_session_service import SessionRecord
@@ -48,6 +49,15 @@ def _envelope_dict(envelope: Any) -> dict[str, Any]:
         dumped = envelope.model_dump(mode="json")
         return dumped if isinstance(dumped, dict) else {"value": dumped}
     return dict(envelope)
+
+
+def _owner_sanitize_envelope(data: dict[str, Any], section: str) -> dict[str, Any]:
+    """Hide remigrate provenance markers from owner-facing draft responses."""
+    out = dict(data)
+    payload = out.get("payload")
+    if isinstance(payload, dict):
+        out["payload"] = sanitize_section_payload(section, payload)
+    return out
 
 
 def _session_tenant(session: SessionRecord) -> str:
@@ -97,7 +107,7 @@ async def cm_get_draft(section: str, request: Request) -> Any:
         envelope = get_draft(name, tenant_id=tenant_id, create_default=True)
     except UnknownSectionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    data = _envelope_dict(envelope)
+    data = _owner_sanitize_envelope(_envelope_dict(envelope), name)
     return JSONResponse(
         content={"success": True, "data": data},
         headers={"ETag": str(data.get("etag") or "")},
@@ -135,7 +145,11 @@ async def cm_put_draft(
     except UnknownSectionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ConflictError as exc:
-        current = _envelope_dict(exc.current) if exc.current is not None else {}
+        current = (
+            _owner_sanitize_envelope(_envelope_dict(exc.current), name)
+            if exc.current is not None
+            else {}
+        )
         current_etag = str(current.get("etag") or "")
         return JSONResponse(
             status_code=409,
@@ -149,7 +163,7 @@ async def cm_put_draft(
             headers={"ETag": current_etag} if current_etag else {},
         )
 
-    data = _envelope_dict(envelope)
+    data = _owner_sanitize_envelope(_envelope_dict(envelope), name)
     return JSONResponse(
         content={"success": True, "message": "Draft saved", "data": data},
         headers={"ETag": str(data.get("etag") or "")},
