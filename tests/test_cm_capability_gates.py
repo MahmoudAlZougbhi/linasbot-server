@@ -64,7 +64,6 @@ def test_human_handoff_enabled_prefers_ai_limits_field(monkeypatch: pytest.Monke
         return _Pointer(), {
             "ai_limits": {
                 "human_handoff_enabled": False,
-                "items": [],
             },
             "actions": {
                 "items": [{"id": "human_handoff", "enabled": True}],
@@ -83,8 +82,10 @@ def test_human_handoff_enabled_falls_back_to_actions_toggle(monkeypatch: pytest.
         index_version_id = "idx_test"
 
     def _load(_tid: str):
+        limits_data = AiLimitsSection().model_dump(mode="json")
+        limits_data.pop("human_handoff_enabled", None)
         return _Pointer(), {
-            "ai_limits": AiLimitsSection().model_dump(mode="json"),
+            "ai_limits": limits_data,
             "actions": {
                 "items": [{"id": "human_handoff", "enabled": False}],
             },
