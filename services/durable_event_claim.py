@@ -97,6 +97,35 @@ def _file_release(namespace: str, key: str) -> None:
         pass
 
 
+def get_file_claim_status(namespace: str, key: str) -> dict[str, Any] | None:
+    """Read durable file claim status for reconcile diagnostics."""
+    path = _file_claim_path(namespace, key)
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return dict(data) if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
+def is_stale_file_claim(
+    namespace: str,
+    key: str,
+    *,
+    ttl_seconds: float = 120.0,
+) -> bool:
+    """True when a claimed lock exists but is older than ttl (abandoned worker)."""
+    data = get_file_claim_status(namespace, key)
+    if not data:
+        return False
+    status = str(data.get("status") or "claimed")
+    if status == "completed":
+        return False
+    created = float(data.get("created_at") or 0)
+    return bool(created) and (time.time() - created) >= ttl_seconds
+
+
 def _file_complete(namespace: str, key: str) -> None:
     path = _file_claim_path(namespace, key)
     if not path.exists():

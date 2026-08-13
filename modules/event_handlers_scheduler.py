@@ -153,6 +153,16 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
         name="Inbound Event Reconcile Watchdog",
         replace_existing=True,
     )
+    from modules.customer_reply_reconcile_job import run_customer_reply_reconcile_job
+
+    scheduler.add_job(
+        run_customer_reply_reconcile_job,
+        "interval",
+        minutes=1,
+        id="customer_reply_reconcile",
+        name="Customer Reply Reconcile Worker",
+        replace_existing=True,
+    )
 
     scheduler.start()
 
@@ -161,6 +171,7 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
     print("✅ Initial dispatcher check queued")
     asyncio.create_task(run_smart_followup_worker_job())
     asyncio.create_task(run_inbound_event_reconcile_job())
+    asyncio.create_task(run_customer_reply_reconcile_job())
 
     print("✅ Smart Messaging Scheduler started successfully")
     print("📅 Scheduled jobs:")
@@ -169,6 +180,7 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
     print(f"   - Queue monitor/sender: Every {monitor_interval_minutes} minute(s)")
     print("   - Smart Follow-Up worker: Every 1 minute")
     print("   - Inbound event reconcile: Every 1 minute")
+    print("   - Customer reply reconcile: Every 1 minute")
     print("=" * 60)
 
     app_state.scheduler = scheduler
