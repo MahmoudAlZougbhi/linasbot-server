@@ -67,19 +67,40 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
             from services.social_messaging_processor import process_meta_social_event
 
             settings = _settings_from_snapshot(rec.settings_snapshot)
-            await process_meta_social_event(rec.payload, settings)
-            mark_inbound_state(
-                event_id,
-                state="completed",
-                ai_output_persisted=True,
-                outbound_status="sent_or_suppressed",
+            outcome = await process_meta_social_event(
+                rec.payload,
+                settings,
+                inbound_event_id=event_id,
             )
-            await complete_event_claim(
-                GLOBAL_DM_CLAIM_NAMESPACE,
-                rec.claim_key,
-                firestore_collection="meta_social_dm_global_claims",
-            )
-            return {"ok": True, "kind": "meta_dm", "event_id": event_id}
+            delivered = str((outcome or {}).get("delivery") or "") == "delivered"
+            if delivered:
+                mark_inbound_state(
+                    event_id,
+                    state="completed",
+                    ai_output_persisted=True,
+                    outbound_status="delivered",
+                )
+                await complete_event_claim(
+                    GLOBAL_DM_CLAIM_NAMESPACE,
+                    rec.claim_key,
+                    firestore_collection="meta_social_dm_global_claims",
+                )
+            else:
+                from services.durable_event_claim import release_event_claim
+
+                mark_inbound_state(
+                    event_id,
+                    state="failed",
+                    ai_output_persisted=bool((outcome or {}).get("logical_reply_id")),
+                    outbound_status=str((outcome or {}).get("delivery") or "delivery_pending"),
+                    last_error=f"delivery:{(outcome or {}).get('delivery')}",
+                )
+                await release_event_claim(
+                    GLOBAL_DM_CLAIM_NAMESPACE,
+                    rec.claim_key,
+                    firestore_collection="meta_social_dm_global_claims",
+                )
+            return {"ok": delivered, "kind": "meta_dm", "event_id": event_id, "outcome": outcome}
 
         if rec.kind == "meta_comment":
             from services.durable_event_claim import complete_event_claim

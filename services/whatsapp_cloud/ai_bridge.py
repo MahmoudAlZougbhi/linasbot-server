@@ -149,6 +149,29 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
             _release_reservation(tenant_id, reservation_id)
             return
 
+        repo.update_outbound_intent(
+            intent,
+            dispatch_state="reply_persisted",
+            control_epoch_at_send=int(conv.control_epoch),
+            error_detail=reply_text[:500],
+        )
+
+        # Capture credits once after valid reply is persisted — delivery retry must not re-charge.
+        try:
+            from services.credit_ledger_service import credit_ledger_service
+
+            credit_ledger_service.capture(
+                tenant_id=tenant_id,
+                reservation_id=reservation_id,
+                provider_cost_usd=None,
+                model_provider="whatsapp_cloud",
+            )
+            reservation_id = None  # captured — never release on delivery failure
+        except Exception as exc:
+            emit_wa_event("credit_capture_failed", error=type(exc).__name__)
+            _release_reservation(tenant_id, reservation_id)
+            return
+
         repo.update_outbound_intent(intent, dispatch_state="sending", control_epoch_at_send=int(conv.control_epoch))
         try:
             token = repo.load_access_token(conn)
@@ -176,10 +199,9 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
                 error_detail=exc.message[:255],
             )
             emit_wa_event("send_failure", code=exc.code, state=state)
-            _release_reservation(tenant_id, reservation_id)
             return
         except Exception as exc:
-            # Ambiguous delivery — do not resend.
+            # Ambiguous delivery — do not resend; credits already captured for saved reply.
             repo.update_outbound_intent(
                 intent,
                 dispatch_state="reconciliation_required",
@@ -187,7 +209,6 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
                 error_detail="ambiguous_after_submit",
             )
             emit_wa_event("send_ambiguous", error=type(exc).__name__)
-            _release_reservation(tenant_id, reservation_id)
             return
 
         messages = result.get("messages") if isinstance(result, dict) else None
@@ -208,17 +229,6 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
             meta={"source": "AI"},
         )
         conv.last_ai_outbound_at = datetime.now(UTC)
-        try:
-            from services.credit_ledger_service import credit_ledger_service
-
-            credit_ledger_service.capture(
-                tenant_id=tenant_id,
-                reservation_id=reservation_id,
-                provider_cost_usd=None,
-                model_provider="whatsapp_cloud",
-            )
-        except Exception as exc:
-            emit_wa_event("credit_capture_failed", error=type(exc).__name__)
         record_analytics_channel_usage(
             tenant_id=tenant_id,
             connection_id=connection_id,

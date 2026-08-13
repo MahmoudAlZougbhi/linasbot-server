@@ -58,6 +58,9 @@ async def _delayed_process_messages(
             )
 
         outbound_send = _guarded_send if text_turn_epoch is not None else send_message_func
+        from services.ai_reply_delivery import wrap_tracked_send
+
+        outbound_send = wrap_tracked_send(outbound_send, user_data)
 
         # A typing indicator is cosmetic. Meta (or any other provider) may reject
         # it transiently even while ordinary message delivery remains healthy;
@@ -119,12 +122,44 @@ async def _delayed_process_messages(
                 mids = user_data.pop("_batch_inbound_mids", []) or []
                 bfps = user_data.pop("_batch_turn_body_fps", []) or []
                 claim_id = stable_ai_claim_identity(user_id, user_data.get("phone_number"))
+                from services.outbound_turn_idempotency import _claim_key_basis
+                from services.ai_reply_turn_runtime import (
+                    ensure_turn_started,
+                    finalize_delivery,
+                    pending_delivery_for_claim,
+                    retry_saved_reply_delivery,
+                    try_reserve_for_ai,
+                )
+
+                key_basis = _claim_key_basis(claim_id, mids, bfps) if (mids or bfps) else ""
+                ensure_turn_started(user_data, claim_key_basis=key_basis or None)
+
+                pending = pending_delivery_for_claim(key_basis) if key_basis else None
+                if pending:
+                    delivered = await retry_saved_reply_delivery(
+                        user_data=user_data,
+                        send_message_func=outbound_send,
+                        user_id=user_id,
+                        pending=pending,
+                    )
+                    finalize_delivery({"user_data": user_data})
+                    if delivered:
+                        print(f"[ai-turn] trace_id={trace} delivery_retry=DELIVERED saved_reply")
+                    else:
+                        print(f"[ai-turn] trace_id={trace} delivery_retry=FAILED saved_reply")
+                    return
+
                 if (mids or bfps) and not await try_claim_ai_turn(claim_id, mids, inbound_body_fps=bfps):
                     print(
                         f"⚠️ [ai-turn] trace_id={trace} claim=DUPLICATE_SKIP "
                         f"user={user_id[:20]}… mids={len(mids)} bfps={len(bfps)} "
                         f"claim_key={claim_id[:16]}…"
                     )
+                    return
+                if not try_reserve_for_ai(user_data):
+                    from services.token_metering import RECHARGE_REQUIRED_MESSAGE
+
+                    await outbound_send(user_id, RECHARGE_REQUIRED_MESSAGE)
                     return
                 if mids or bfps:
                     print(
@@ -145,6 +180,15 @@ async def _delayed_process_messages(
                     send_message_func=outbound_send,
                     send_action_func=send_action_func,
                 )
+                delivery_summary = finalize_delivery({"user_data": user_data})
+                if delivery_summary.get("delivery") != "delivered" and key_basis:
+                    from services.outbound_turn_idempotency import release_ai_turn_claim
+
+                    await release_ai_turn_claim(key_basis)
+                elif delivery_summary.get("delivery") == "delivered" and key_basis:
+                    from services.outbound_turn_idempotency import complete_ai_turn_claim
+
+                    await complete_ai_turn_claim(key_basis)
             finally:
                 user_data.pop("_dashboard_test_turn_sticky", None)
             config.user_last_bot_response_time[user_id] = datetime.datetime.now()

@@ -57,32 +57,25 @@ async def try_claim_ai_turn(
     Return False if another worker already claimed the same inbound id batch (skip GPT).
     Empty mids and no body fingerprints: return True (fail-open).
 
-    When there is exactly one inbound message id but the provider also sent a stable
-    _webhook_text_body_fingerprint, we key by (identity + body_fp + 15s time slot) so two
-    parallel webhooks with *different* wamids for the same user text still share one claim.
-
-    Multiple combined user messages (len(mids) > 1) still key only on sorted message ids.
+    When a prior turn has a saved reply awaiting delivery, returns False so the caller
+    can retry delivery without regenerating (see pending_delivery_for_claim).
     """
     mids = sorted({str(m).strip() for m in (inbound_mids or []) if m and str(m).strip()})
     bfps = sorted({str(b).strip() for b in (inbound_body_fps or []) if b and str(b).strip()})
     if not mids and not bfps:
         return True
     sid = (stable_identity or "").strip()
+    key_basis = _claim_key_basis(sid, mids, bfps)
+    key_kind = _claim_key_kind(mids, bfps)
 
-    if len(mids) > 1:
-        key_basis = f"{sid}\0mids\0" + "|".join(mids)
-        key_kind = "mids_multi"
-    elif len(mids) == 1 and len(bfps) == 1:
-        slot = int(time.time() // 15)
-        key_basis = f"{sid}\0textbody\0{bfps[0]}\0slot{slot}"
-        key_kind = "textbody_slot"
-    elif mids:
-        key_basis = f"{sid}\0mids\0" + "|".join(mids)
-        key_kind = "mids"
-    else:
-        slot = int(time.time() // 15)
-        key_basis = f"{sid}\0textbody\0" + "|".join(bfps) + f"\0slot{slot}"
-        key_kind = "textbody_only_slot"
+    from services.ai_reply_turn_runtime import pending_delivery_for_claim
+
+    if pending_delivery_for_claim(key_basis):
+        print(
+            f"⚠️ ai_turn_claims pending_delivery — skip regeneration "
+            f"(kind={key_kind} mids={len(mids)} bfps={len(bfps)})"
+        )
+        return False
 
     doc_id = hashlib.sha256(key_basis.encode("utf-8")).hexdigest()
     db = get_firestore_db()
@@ -127,3 +120,39 @@ async def try_claim_ai_turn(
             f"(kind={key_kind} mids={len(mids)} bfps={len(bfps)})"
         )
     return claimed
+
+
+def _claim_key_basis(sid: str, mids: list[str], bfps: list[str]) -> str:
+    if len(mids) > 1:
+        return f"{sid}\0mids\0" + "|".join(mids)
+    if len(mids) == 1 and len(bfps) == 1:
+        slot = int(time.time() // 15)
+        return f"{sid}\0textbody\0{bfps[0]}\0slot{slot}"
+    if mids:
+        return f"{sid}\0mids\0" + "|".join(mids)
+    slot = int(time.time() // 15)
+    return f"{sid}\0textbody\0" + "|".join(bfps) + f"\0slot{slot}"
+
+
+def _claim_key_kind(mids: list[str], bfps: list[str]) -> str:
+    if len(mids) > 1:
+        return "mids_multi"
+    if len(mids) == 1 and len(bfps) == 1:
+        return "textbody_slot"
+    if mids:
+        return "mids"
+    return "textbody_only_slot"
+
+
+async def complete_ai_turn_claim(key_basis: str) -> None:
+    """Mark AI turn claim completed after successful delivery."""
+    from services.durable_event_claim import complete_event_claim
+
+    await complete_event_claim("ai_turn_claims", key_basis, firestore_collection="ai_turn_claims_file")
+
+
+async def release_ai_turn_claim(key_basis: str) -> None:
+    """Release claim on AI/delivery failure so reconcile can retry."""
+    from services.durable_event_claim import release_event_claim
+
+    await release_event_claim("ai_turn_claims", key_basis, firestore_collection="ai_turn_claims_file")

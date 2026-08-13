@@ -367,6 +367,8 @@ def log_interaction(
         entry["cost_basis"] = COST_BASIS_TOKEN_RATES
 
     # Meter prepaid wallets using the same token fields as Interaction Logs.
+    # Skip when lifecycle gate already captured (exactly-once guarantee).
+    skip_wallet_debit = bool(isinstance(user_data, dict) and user_data.get("_credit_captured_for_turn"))
     try:
         use_in = max(0, int(prompt_tokens or 0)) if isinstance(prompt_tokens, int) else 0
         use_out = max(0, int(completion_tokens or 0)) if isinstance(completion_tokens, int) else 0
@@ -376,20 +378,23 @@ def log_interaction(
         else:
             total_tokens = use_in + use_out
         if use_in > 0 or use_out > 0 or total_tokens > 0:
-            from services.token_metering import debit_ai_usage, resolve_tenant_id
+            if skip_wallet_debit:
+                pass
+            else:
+                from services.token_metering import debit_ai_usage, resolve_tenant_id
 
-            tid = resolve_tenant_id(user_data if isinstance(user_data, dict) else None)
-            debit_ai_usage(
-                tenant_id=tid,
-                prompt_tokens=use_in if use_in or use_out else None,
-                completion_tokens=use_out if use_in or use_out else None,
-                tokens=total_tokens if not (use_in or use_out) else None,
-                cost_usd=float(cost_usd) if isinstance(cost_usd, (int, float)) else None,
-                input_cost_usd=float(input_cost_usd) if isinstance(input_cost_usd, (int, float)) else None,
-                output_cost_usd=float(output_cost_usd) if isinstance(output_cost_usd, (int, float)) else None,
-                model=model,
-                reference=str(message_id) if message_id else None,
-            )
+                tid = resolve_tenant_id(user_data if isinstance(user_data, dict) else None)
+                debit_ai_usage(
+                    tenant_id=tid,
+                    prompt_tokens=use_in if use_in or use_out else None,
+                    completion_tokens=use_out if use_in or use_out else None,
+                    tokens=total_tokens if not (use_in or use_out) else None,
+                    cost_usd=float(cost_usd) if isinstance(cost_usd, (int, float)) else None,
+                    input_cost_usd=float(input_cost_usd) if isinstance(input_cost_usd, (int, float)) else None,
+                    output_cost_usd=float(output_cost_usd) if isinstance(output_cost_usd, (int, float)) else None,
+                    model=model,
+                    reference=str(message_id) if message_id else None,
+                )
     except Exception as exc:
         # Never break interaction logging because of wallet accounting.
         print(f"[interaction_flow] token debit skipped: {type(exc).__name__}", flush=True)

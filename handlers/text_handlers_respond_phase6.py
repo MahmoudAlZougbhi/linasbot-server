@@ -316,6 +316,19 @@ async def text_handlers_respond_phase6(ctx: dict) -> Any:
             reason="ai_human_handover_without_user_request",
         )
         escalation_reason_from_gpt = None
+
+    try:
+        from services.ai_reply_turn_runtime import on_ai_failed, on_ai_generated
+
+        if flow_meta.get("error") or flow_meta.get("ai_called") is False:
+            on_ai_failed(ctx)
+        elif (bot_reply_text or "").strip() and flow_meta.get("ai_called", True):
+            ctx["bot_reply_text"] = bot_reply_text
+            ctx["flow_meta"] = flow_meta
+            on_ai_generated(ctx)
+    except Exception as exc:
+        print(f"[_process_and_respond] ai_reply_lifecycle hook skipped: {type(exc).__name__}")
+
     _pack = [
         "_",
         "_clean_reply_text",

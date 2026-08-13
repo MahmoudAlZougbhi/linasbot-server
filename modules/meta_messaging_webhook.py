@@ -186,6 +186,7 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
 
     async def _process_claimed(resolved: ResolvedMetaEvent, *, event_id: str, global_key: str) -> None:
         from services.durable_event_claim import complete_event_claim, release_event_claim
+        from services.scale.inbound_event_store import mark_inbound_state
         from services.scale.meta_ingress import mark_dm_completed, mark_dm_failed, mark_dm_processing
 
         event = resolved.event
@@ -198,13 +199,28 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
         )
         mark_dm_processing(event_id)
         try:
-            await process_meta_social_event(event, resolved.settings)
-            mark_dm_completed(event_id)
-            await complete_event_claim(
-                GLOBAL_DM_CLAIM_NAMESPACE,
-                global_key,
-                firestore_collection="meta_social_dm_global_claims",
-            )
+            outcome = await process_meta_social_event(event, resolved.settings, inbound_event_id=event_id)
+            delivered = str((outcome or {}).get("delivery") or "") == "delivered"
+            if delivered:
+                mark_dm_completed(event_id, outbound_status="delivered")
+                await complete_event_claim(
+                    GLOBAL_DM_CLAIM_NAMESPACE,
+                    global_key,
+                    firestore_collection="meta_social_dm_global_claims",
+                )
+            else:
+                mark_inbound_state(
+                    event_id,
+                    state="failed",
+                    outbound_status=str((outcome or {}).get("delivery") or "delivery_pending"),
+                    ai_output_persisted=bool((outcome or {}).get("logical_reply_id")),
+                    last_error=f"delivery:{(outcome or {}).get('delivery')}",
+                )
+                await release_event_claim(
+                    GLOBAL_DM_CLAIM_NAMESPACE,
+                    global_key,
+                    firestore_collection="meta_social_dm_global_claims",
+                )
             _runtime_logger.info(
                 "[meta-social] event_processing_completed channel=%s app_key=%s event_id=%s",
                 channel,
