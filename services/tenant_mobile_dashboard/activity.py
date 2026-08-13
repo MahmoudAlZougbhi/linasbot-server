@@ -81,9 +81,10 @@ def _request_counts_by_platform(
     end: datetime,
 ) -> tuple[dict[str, int], int, str]:
     try:
-        from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
-        from db.models.requests import CustomerRequest
         from sqlalchemy import func, select
+
+        from db.models.requests import CustomerRequest
+        from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
 
         with whatsapp_session() as session:
             stmt = (
