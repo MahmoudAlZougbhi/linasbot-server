@@ -37,6 +37,8 @@ export type ThemeColors = {
   activeIndicator: string;
   /** Side drawer panel background. */
   drawerSurface: string;
+  /** AI Setup active tile icon square — neutral light grey, not mint. */
+  featuredIconBg: string;
   /** Legacy alias used by a few forms — maps to accentSoft. */
   lavender: string;
 };
@@ -75,6 +77,7 @@ export const lightColors: ThemeColors = {
   activeRow: '#ECEEEE',
   activeIndicator: '#0D9488',
   drawerSurface: '#F2F4F4',
+  featuredIconBg: '#F4F6F6',
   lavender: '#CCFBF1',
 };
 
@@ -112,6 +115,7 @@ export const darkColors: ThemeColors = {
   activeRow: '#1E2C2A',
   activeIndicator: '#2DD4BF',
   drawerSurface: '#121C1B',
+  featuredIconBg: '#1E2C2A',
   lavender: '#134E4A',
 };
 

@@ -27,12 +27,15 @@ test('brand sparkle renders without react-native-svg (no Uni placeholder)', () =
   assert.ok(existsSync(join(root, 'assets/linas-sparkle-template.png')));
 });
 
-test('drawer AI Setup active tile uses mint sparkle chrome', () => {
+test('drawer AI Setup active tile uses light grey sparkle chrome', () => {
   const grid = read('features/nav/DrawerNavGrid.tsx');
+  const tokens = read('theme/tokens.ts');
   const header = read('features/nav/DrawerHeader.tsx');
   const fade = read('features/nav/DrawerFadeSeparator.tsx');
   assert.match(grid, /modId === 'cm'/);
-  assert.match(grid, /colors\.mintSoft/);
+  assert.match(grid, /colors\.featuredIconBg/);
+  assert.match(tokens, /featuredIconBg:\s*'#F4F6F6'/);
+  assert.doesNotMatch(grid, /colors\.mintSoft/);
   assert.match(grid, /styles\.featuredIconShadow/);
   assert.match(grid, /shadowOffset:\s*\{\s*width:\s*0,\s*height:\s*2\s*\}/);
   assert.match(grid, /shadowOpacity:\s*0\.1/);
