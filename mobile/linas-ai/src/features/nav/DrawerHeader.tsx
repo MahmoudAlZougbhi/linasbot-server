@@ -64,7 +64,7 @@ export function DrawerHeader({
       ) : (
         <View style={styles.headerRow}>
           <View style={styles.brandRow} accessibilityRole="header">
-            <LinasSparkleIcon size={16} color={colors.text} />
+            <LinasSparkleIcon size={20} color={colors.accentDeep} />
             <Text style={[styles.wordmark, { color: colors.text }]}>Linas</Text>
           </View>
           <Pressable
@@ -80,14 +80,14 @@ export function DrawerHeader({
       )}
 
       {!searchOpen ? (
-        <DrawerFadeSeparator lineColor={colors.border} starColor={colors.text} />
+        <DrawerFadeSeparator lineColor={colors.accentDeep} starColor={colors.accentDeep} />
       ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginBottom: spacing.md, gap: spacing.md },
+  wrap: { marginBottom: spacing.md, gap: spacing.sm },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
