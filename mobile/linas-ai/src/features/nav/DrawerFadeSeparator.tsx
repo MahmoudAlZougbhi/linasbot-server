@@ -1,8 +1,9 @@
 import { StyleSheet, View } from 'react-native';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { LinasSparkleIcon } from '../../components/LinasSparkleIcon';
 
-const FADE_STEPS = 10;
+const GRADIENT_ID = 'drawerFadeLine';
 
 type Props = {
   lineColor: string;
@@ -11,48 +12,35 @@ type Props = {
 
 /** Horizontal rule that fades toward the edges with a centered Linas sparkle. */
 export function DrawerFadeSeparator({ lineColor, starColor }: Props) {
-  const opacities = Array.from({ length: FADE_STEPS }, (_, i) => (i + 1) / FADE_STEPS);
-
   return (
-    <View style={styles.row}>
-      <View style={styles.side}>
-        {opacities.map((opacity, index) => (
-          <View
-            key={`l-${index}`}
-            style={[styles.segment, { backgroundColor: lineColor, opacity }]}
-          />
-        ))}
+    <View style={styles.wrap}>
+      <View style={styles.lineTrack} pointerEvents="none">
+        <Svg width="100%" height={1} preserveAspectRatio="none">
+          <Defs>
+            <LinearGradient id={GRADIENT_ID} x1="0" y1="0" x2="1" y2="0">
+              <Stop offset="0" stopColor={lineColor} stopOpacity={0} />
+              <Stop offset="0.18" stopColor={lineColor} stopOpacity={0.4} />
+              <Stop offset="0.5" stopColor={lineColor} stopOpacity={0.9} />
+              <Stop offset="0.82" stopColor={lineColor} stopOpacity={0.4} />
+              <Stop offset="1" stopColor={lineColor} stopOpacity={0} />
+            </LinearGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100%" height="1" fill={`url(#${GRADIENT_ID})`} />
+        </Svg>
       </View>
       <LinasSparkleIcon size={10} color={starColor} />
-      <View style={styles.side}>
-        {opacities.map((opacity, index) => (
-          <View
-            key={`r-${index}`}
-            style={[
-              styles.segment,
-              { backgroundColor: lineColor, opacity: opacities[FADE_STEPS - 1 - index] },
-            ]}
-          />
-        ))}
-      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
+  wrap: {
+    height: 14,
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
   },
-  side: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: StyleSheet.hairlineWidth,
-  },
-  segment: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
+  lineTrack: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
   },
 });

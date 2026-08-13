@@ -266,10 +266,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   rowTitleDrawer: {
-    fontFamily: fonts.body,
-    fontSize: 12,
-    lineHeight: 16,
-    letterSpacing: -0.1,
+    fontFamily: fonts.bodyMedium,
+    fontWeight: '400',
+    fontSize: 10.5,
+    lineHeight: 13,
+    letterSpacing: -0.15,
   },
   emptyDrawer: {
     fontFamily: fonts.body,
