@@ -396,9 +396,12 @@ test('drawer search chrome is header icon; New chat + Settings in footer dock', 
   assert.match(nav, /\{\!searching \? \(/);
   assert.match(nav, /onChangeQuery=\{setQuery\}|onChangeText=\{setQuery\}/);
   assert.match(footer, /NewChatIcon/);
-  assert.match(footer, /<NewChatIcon color=\{colors\.onAccent\} size=\{16\}/);
+  assert.match(footer, /<NewChatIcon color=\{colors\.onAccent\} size=\{14\}/);
   assert.match(footer, /tr\('newChat'\)/);
-  assert.match(footer, /minHeight:\s*40/);
+  assert.match(footer, /minHeight:\s*34/);
+  assert.match(footer, /width:\s*32/);
+  assert.match(footer, /height:\s*32/);
+  assert.match(footer, /fontSize:\s*10/);
   // Dock sits on safe area only — no extra lift above the home indicator.
   assert.match(drawer, /paddingBottom:\s*Math\.max\(insets\.bottom,\s*4\)/);
   assert.doesNotMatch(drawer, /insets\.bottom\s*\+\s*12/);

@@ -76,7 +76,7 @@ export function DrawerFooter(props: Props) {
           accessibilityRole="button"
           accessibilityLabel={tr('newChat')}
         >
-          <NewChatIcon color={colors.onAccent} size={16} />
+          <NewChatIcon color={colors.onAccent} size={14} />
           <Text style={[styles.newChatText, { color: colors.onAccent }]}>{tr('newChat')}</Text>
         </Pressable>
         <Pressable
@@ -88,7 +88,7 @@ export function DrawerFooter(props: Props) {
           accessibilityRole="button"
           accessibilityLabel={tr('settings')}
         >
-          <AppIcon icon={DRAWER_TOOL_ICONS.settings} size={20} color={colors.accentDeep} />
+          <AppIcon icon={DRAWER_TOOL_ICONS.settings} size={16} color={colors.accentDeep} />
         </Pressable>
       </View>
 
@@ -105,49 +105,48 @@ export function DrawerFooter(props: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { paddingTop: spacing.sm, gap: spacing.sm },
+  wrap: { paddingTop: spacing.xs, gap: spacing.xs },
   authBlock: { gap: 2, marginBottom: spacing.xs },
   authRow: { minHeight: 36, justifyContent: 'center' },
   legalRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   newChatBtn: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 34,
     borderRadius: radii.pill,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
+    gap: 5,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
   },
   newChatText: {
     fontFamily: fonts.bodyMedium,
-    fontSize: 13,
+    fontSize: 12,
     letterSpacing: -0.15,
   },
   settingsBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
-    shadowRadius: 3,
+    shadowRadius: 2,
     elevation: 2,
   },
   version: {
     fontFamily: fonts.body,
-    fontSize: 11,
+    fontSize: 10,
     textAlign: 'center',
-    marginTop: 2,
   },
 });
 
