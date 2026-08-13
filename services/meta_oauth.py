@@ -56,6 +56,22 @@ MetaOAuthFlowMode = Literal["facebook", "instagram", "unified"]
 
 META_OAUTH_STATE_TTL_SECONDS = 10 * 60
 
+# App A also runs WhatsApp Embedded Signup. Meta often returns those scopes on the
+# same user's Page token during Facebook Business Login rerequest. They must not
+# block Page reconnect / comment-scope upgrades (strip before forbid + persist).
+_META_PAGE_TOKEN_COEXISTENCE_SCOPES = frozenset(
+    {
+        "whatsapp_business_management",
+        "whatsapp_business_messaging",
+    }
+)
+
+
+def _scopes_for_facebook_page_binding(scopes: tuple[str, ...]) -> tuple[str, ...]:
+    """Keep Page-binding scopes free of WhatsApp coexistence residue."""
+
+    return tuple(scope for scope in scopes if scope not in _META_PAGE_TOKEN_COEXISTENCE_SCOPES)
+
 
 @dataclass(frozen=True)
 class MetaOAuthResult:
@@ -323,7 +339,9 @@ async def complete_meta_business_login(
                 raise MetaOAuthError("Meta Page token profile does not match the selected Page")
             if str(page_debug.get("type") or "").upper() != "PAGE":
                 raise MetaOAuthError("Meta token is not a Page access token")
-            scopes = _scope_tuple(page_debug) or _scope_tuple(integration_debug)
+            scopes = _scopes_for_facebook_page_binding(
+                _scope_tuple(page_debug) or _scope_tuple(integration_debug)
+            )
             if set(scopes) & META_FORBIDDEN_SCOPES:
                 raise MetaOAuthError("Meta token includes a prohibited non-messaging permission")
             if flow_mode == "instagram" and not instagram_id:

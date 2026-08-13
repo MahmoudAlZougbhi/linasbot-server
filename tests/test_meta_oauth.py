@@ -72,6 +72,7 @@ def _transport(
     wrong_app: bool = False,
     extra_target: bool = False,
     page_type: str = "PAGE",
+    page_extra_scopes: tuple[str, ...] = (),
     observed_requests: list[httpx.Request] | None = None,
 ) -> httpx.MockTransport:
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -90,10 +91,14 @@ def _transport(
                 "user_id": "112233445566",
             }
             if inspected == "page-token-private":
+                page_scopes = list(SCOPES) + list(page_extra_scopes)
+                data["scopes"] = page_scopes
                 data["profile_id"] = page_id
                 data["type"] = page_type
                 target_ids = [page_id, "000111222"] if extra_target else [page_id]
-                data["granular_scopes"] = [{"scope": scope, "target_ids": target_ids} for scope in SCOPES]
+                data["granular_scopes"] = [
+                    {"scope": scope, "target_ids": target_ids} for scope in SCOPES
+                ]
             return httpx.Response(200, json={"data": data})
         if path.endswith("/me/accounts"):
             return httpx.Response(
@@ -279,6 +284,34 @@ async def test_external_page_login_inspects_encrypts_and_activates_with_subscrip
     assert any(request.url.path.endswith("/subscribed_apps") for request in observed_requests)
     token_exchange = next(request for request in observed_requests if request.url.path.endswith("/oauth/access_token"))
     assert token_exchange.method == "POST"
+
+
+@pytest.mark.asyncio
+async def test_facebook_page_login_strips_whatsapp_coexistence_scopes(
+    registry: MetaAppRegistry,
+) -> None:
+    """App A Page tokens often still list WA scopes; must not fail Manage Meta Access."""
+
+    state = _start_state(registry)
+    async with httpx.AsyncClient(
+        base_url="https://graph.facebook.com/v24.0/",
+        transport=_transport(
+            page_extra_scopes=(
+                "whatsapp_business_management",
+                "whatsapp_business_messaging",
+            ),
+        ),
+    ) as client:
+        result = await complete_meta_business_login(
+            code="single-use-code",
+            state=state,
+            registry=registry,
+            client=client,
+        )
+    credential = registry.get_credential(result.binding)
+    assert "whatsapp_business_management" not in credential.scopes
+    assert "whatsapp_business_messaging" not in credential.scopes
+    assert set(SCOPES).issubset(credential.scopes)
 
 
 @pytest.mark.asyncio
