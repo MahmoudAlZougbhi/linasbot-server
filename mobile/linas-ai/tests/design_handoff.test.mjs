@@ -34,14 +34,21 @@ test('drawer AI Setup active tile uses light grey sparkle chrome', () => {
   const fade = read('features/nav/DrawerFadeSeparator.tsx');
   assert.match(grid, /modId === 'cm'/);
   assert.match(grid, /colors\.featuredIconBg/);
+  assert.match(grid, /colors\.featuredIconBorder/);
   assert.match(tokens, /featuredIconBg:\s*'#F4F6F6'/);
+  assert.match(tokens, /featuredIconBorder:\s*'#E2E5E5'/);
   assert.doesNotMatch(grid, /colors\.mintSoft/);
+  assert.doesNotMatch(grid, /colors\.accentSoft/);
+  assert.doesNotMatch(grid, /colors\.borderSoft/);
+  assert.match(grid, /const isAiSetup = mod\.id === 'cm'/);
+  assert.match(grid, /active && !isAiSetup \? colors\.activeRow : 'transparent'/);
+  assert.match(grid, /isAiSetup \? styles\.aiSetupTile : null/);
+  assert.match(grid, /aiSetupTile:[\s\S]*backgroundColor:\s*'transparent'/);
   assert.match(grid, /styles\.featuredIconShadow/);
   assert.match(grid, /shadowOffset:\s*\{\s*width:\s*0,\s*height:\s*2\s*\}/);
   assert.match(grid, /shadowOpacity:\s*0\.1/);
   assert.match(grid, /shadowRadius:\s*6/);
   assert.match(grid, /elevation:\s*2/);
-  assert.match(grid, /mod\.id !== 'cm'/);
   assert.match(grid, /LinasSparkleIcon[\s\S]*color=\{colors\.accentDeep\}/);
   assert.match(header, /LinasSparkleIcon size=\{20\} color=\{colors\.accentDeep\}/);
   assert.match(

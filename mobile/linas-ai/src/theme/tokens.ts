@@ -41,6 +41,8 @@ export type ThemeColors = {
   drawerSurface: string;
   /** AI Setup active tile icon square — neutral light grey, not mint. */
   featuredIconBg: string;
+  /** AI Setup active icon square border — neutral grey, not teal borderSoft. */
+  featuredIconBorder: string;
   /** Legacy alias used by a few forms — maps to accentSoft. */
   lavender: string;
 };
@@ -81,6 +83,7 @@ export const lightColors: ThemeColors = {
   activeIndicator: '#0D9488',
   drawerSurface: '#F2F4F4',
   featuredIconBg: '#F4F6F6',
+  featuredIconBorder: '#E2E5E5',
   lavender: '#CCFBF1',
 };
 
@@ -120,6 +123,7 @@ export const darkColors: ThemeColors = {
   activeIndicator: '#2DD4BF',
   drawerSurface: '#121C1B',
   featuredIconBg: '#1E2C2A',
+  featuredIconBorder: '#2A3B39',
   lavender: '#134E4A',
 };
 

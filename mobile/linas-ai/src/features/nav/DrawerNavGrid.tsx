@@ -58,7 +58,7 @@ function DrawerModuleIcon({
           styles.featuredIconShadow,
           {
             backgroundColor: colors.featuredIconBg,
-            borderColor: colors.borderSoft,
+            borderColor: colors.featuredIconBorder,
             shadowColor: colors.text,
           },
         ]}
@@ -81,12 +81,13 @@ export function DrawerNavGrid({ showUsers, activeArea, badges, onOpenArea }: Pro
       {modules.map((mod) => {
         const badge = badgeForModule(mod, badges);
         const active = activeArea === mod.id;
-        const tileBg = active && mod.id !== 'cm' ? colors.activeRow : 'transparent';
+        const isAiSetup = mod.id === 'cm';
+        const tileBg = active && !isAiSetup ? colors.activeRow : 'transparent';
 
         return (
           <Pressable
             key={mod.id}
-            style={[styles.tile, { backgroundColor: tileBg }]}
+            style={[styles.tile, isAiSetup ? styles.aiSetupTile : null, { backgroundColor: tileBg }]}
             onPress={() => onOpenArea(mod.id)}
             accessibilityRole="button"
             accessibilityLabel={tr(mod.titleKey)}
@@ -144,6 +145,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     position: 'relative',
+  },
+  aiSetupTile: {
+    backgroundColor: 'transparent',
   },
   featuredIconWrap: {
     width: 42,
