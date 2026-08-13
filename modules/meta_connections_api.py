@@ -246,18 +246,29 @@ async def meta_oauth_callback(
 ) -> Any:
     """Public Meta redirect; one-time state is the authorization boundary."""
 
+    import logging
+
     from services.meta_oauth_return import resolve_error_return_surface
 
+    logger = logging.getLogger("meta_oauth.callback")
     state_text = _query_text(state)
+    code_text = _query_text(code)
+    error_text = _query_text(error)
     peeked = peek_return_surface_from_state(state_text)
-    if _query_text(error):
+    if error_text:
         surface = consume_return_surface_from_state(state_text) if state_text else peeked
+        logger.warning(
+            "meta_oauth_callback cancelled error=%s surface=%s has_state=%s",
+            error_text[:80],
+            surface,
+            bool(state_text),
+        )
         return oauth_completion_response(
             return_surface=surface,
             meta_connection="cancelled",
         )
     try:
-        result = await complete_meta_business_login(code=_query_text(code), state=state_text)
+        result = await complete_meta_business_login(code=code_text, state=state_text)
         return oauth_completion_response(
             return_surface=result.return_surface,
             meta_connection="connected",
@@ -269,6 +280,16 @@ async def meta_oauth_callback(
         )
     except (MetaOAuthError, MetaRegistryError) as exc:
         surface = resolve_error_return_surface(exc, state_text, peeked=peeked)
+        # Safe diagnostics only: never log code/state/tokens.
+        logger.warning(
+            "meta_oauth_callback failed type=%s msg=%s surface=%s has_code=%s has_state=%s peeked=%s",
+            type(exc).__name__,
+            str(exc)[:200],
+            surface,
+            bool(code_text),
+            bool(state_text),
+            peeked,
+        )
         return oauth_completion_response(
             return_surface=surface,
             meta_connection="failed",

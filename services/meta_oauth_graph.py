@@ -105,9 +105,17 @@ def _granular_targets_are_allowlisted(
     page_id: str,
     instagram_id: str,
 ) -> bool:
+    """Reject Page tokens scoped to another asset.
+
+    Callers already require ``profile_id == page_id``. When Meta omits
+    ``granular_scopes`` or leaves messaging scopes without ``target_ids``,
+    do not fail closed — that false negative blocks otherwise-valid
+    Facebook Page reconnects. Still reject explicit foreign ``target_ids``.
+    """
+
     granular = debug_data.get("granular_scopes")
     if not isinstance(granular, list):
-        return False
+        return True
     allowed_targets = {page_id}
     if instagram_id:
         allowed_targets.add(instagram_id)
@@ -117,6 +125,8 @@ def _granular_targets_are_allowlisted(
         for item in granular
         if isinstance(item, dict) and str(item.get("scope") or "") in META_CHANNEL_SCOPES["facebook"]
     ]
+    if not relevant:
+        return True
     for item in relevant:
         targets = item.get("target_ids")
         if not isinstance(targets, list) or not targets:
@@ -125,6 +135,8 @@ def _granular_targets_are_allowlisted(
         if not normalized.issubset(allowed_targets):
             return False
         observed_targets.update(normalized)
+    if not observed_targets:
+        return True
     return page_id in observed_targets
 
 

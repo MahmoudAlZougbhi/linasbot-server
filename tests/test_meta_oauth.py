@@ -73,6 +73,7 @@ def _transport(
     extra_target: bool = False,
     page_type: str = "PAGE",
     page_extra_scopes: tuple[str, ...] = (),
+    omit_granular_scopes: bool = False,
     observed_requests: list[httpx.Request] | None = None,
 ) -> httpx.MockTransport:
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -95,8 +96,9 @@ def _transport(
                 data["scopes"] = page_scopes
                 data["profile_id"] = page_id
                 data["type"] = page_type
-                target_ids = [page_id, "000111222"] if extra_target else [page_id]
-                data["granular_scopes"] = [{"scope": scope, "target_ids": target_ids} for scope in SCOPES]
+                if not omit_granular_scopes:
+                    target_ids = [page_id, "000111222"] if extra_target else [page_id]
+                    data["granular_scopes"] = [{"scope": scope, "target_ids": target_ids} for scope in SCOPES]
             return httpx.Response(200, json={"data": data})
         if path.endswith("/me/accounts"):
             return httpx.Response(
@@ -310,6 +312,27 @@ async def test_facebook_page_login_strips_whatsapp_coexistence_scopes(
     assert "whatsapp_business_management" not in credential.scopes
     assert "whatsapp_business_messaging" not in credential.scopes
     assert set(SCOPES).issubset(credential.scopes)
+
+
+@pytest.mark.asyncio
+async def test_facebook_page_login_allows_missing_granular_scopes(
+    registry: MetaAppRegistry,
+) -> None:
+    """Meta sometimes omits granular_scopes; profile_id match must still authorize."""
+
+    state = _start_state(registry, channel="facebook")
+    async with httpx.AsyncClient(
+        base_url="https://graph.facebook.com/v24.0/",
+        transport=_transport(omit_granular_scopes=True),
+    ) as client:
+        result = await complete_meta_business_login(
+            code="no-granular-code",
+            state=state,
+            registry=registry,
+            client=client,
+        )
+    assert result.binding.status == "active"
+    assert result.binding.channel == "facebook"
 
 
 @pytest.mark.asyncio
