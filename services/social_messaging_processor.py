@@ -97,7 +97,8 @@ async def process_meta_social_event(
     capture_send: SendFunc | None = None,
     simulation: bool = False,
     combine_delay: float | None = None,
-) -> None:
+    inbound_event_id: str | None = None,
+) -> dict[str, Any]:
     """
     Process one normalized Meta IG/FB event through the canonical AI path.
 
@@ -152,6 +153,8 @@ async def process_meta_social_event(
                 "_source_message_id": str(event.get("message_id") or ""),
             }
         )
+        if inbound_event_id:
+            user_data["_inbound_event_id"] = inbound_event_id
         if simulation:
             user_data["_meta_social_lab_simulation"] = True
         # Bounded handoff TTL: drop expired channel-scoped social_contact_flow blobs.
@@ -218,12 +221,12 @@ async def process_meta_social_event(
                     f"count={image_attachment_count} reason={image_quota.reason}",
                     flush=True,
                 )
-                return
+                return {"ok": False, "delivery": "blocked_quota", "reason": image_quota.reason}
 
         if not text and event.get("attachments"):
             text = "أرسلت صورة أو ملف. اكتبلي شو حابب تعرف عنه كرمال ساعدك."
         if not text:
-            return
+            return {"ok": True, "delivery": "no_text", "skipped": True}
 
         async def send_message(
             _namespaced_id: str,
@@ -243,6 +246,10 @@ async def process_meta_social_event(
             if message_text:
                 return await adapter.send_text_message(sender_id, message_text)
             return {"success": False, "error": "Only text replies are enabled for Meta social DMs"}
+
+        from services.ai_reply_delivery import wrap_tracked_send
+
+        send_message = wrap_tracked_send(send_message, user_data)
 
         async def send_action(_namespaced_id: str) -> Any:
             if simulation or adapter is None:
@@ -265,6 +272,15 @@ async def process_meta_social_event(
             message_combine_delay=message_combine_delay,
         )
         await _await_delayed_processing(user_id)
+        from services.ai_reply_turn_runtime import finalize_delivery
+
+        delivery_summary = finalize_delivery({"user_data": user_data})
+        return {
+            "ok": True,
+            "delivery": delivery_summary.get("delivery", "unknown"),
+            "logical_reply_id": delivery_summary.get("logical_reply_id"),
+            "credit_captured": delivery_summary.get("credit_captured"),
+        }
     finally:
         if adapter is not None:
             await adapter.close()

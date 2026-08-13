@@ -17,7 +17,6 @@ from services.cm.faq_integration import (
     get_cm_faq_group,
     list_cm_faq,
     regenerate_cm_faq_variants,
-    translate_existing_faq_groups_to_language,
     update_cm_faq_variant,
 )
 from services.dashboard_session_service import SessionRecord
