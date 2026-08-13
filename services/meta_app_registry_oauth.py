@@ -106,6 +106,8 @@ class MetaAppRegistryOAuthMixin:
             record = state["credentials"].get(binding.credential_id)
             if not isinstance(record, dict) or record.get("binding_id") != binding.binding_id:
                 raise MetaCredentialError("binding credential is unavailable")
+            if float(record.get("archived_at") or 0) > 0:
+                raise MetaCredentialError("binding credential is archived")
             aad = str(record.get("aad") or "")
             decoded = self._cipher.open(str(record.get("sealed") or ""), aad=aad)
         scopes = decoded.get("scopes")
@@ -123,6 +125,52 @@ class MetaAppRegistryOAuthMixin:
             auth_flow=cast(AuthFlow, decoded.get("auth_flow") or binding.auth_flow),
             declined_scopes=declined_scopes,
         )
+
+    def archive_binding_credential(
+        self,
+        binding_id: str,
+        *,
+        actor_id: str,
+        expected_generation: int | None = None,
+    ) -> MetaAssetBinding:
+        """Soft-archive the binding credential and clear active webhook metadata."""
+
+        with self._locked():
+            state = self._read_unlocked()
+            raw = state["bindings"].get(binding_id)
+            if not isinstance(raw, dict):
+                raise MetaBindingNotFoundError("binding not found")
+            binding = self._binding_from_dict(raw)
+            if expected_generation is not None and binding.generation != expected_generation:
+                raise MetaBindingConflictError("binding generation changed")
+            credential_id = str(binding.credential_id or "").strip()
+            if credential_id:
+                record = state["credentials"].get(credential_id)
+                if isinstance(record, dict) and record.get("binding_id") == binding_id:
+                    archived = dict(record)
+                    archived["archived_at"] = time.time()
+                    state["credentials"][credential_id] = archived
+            changed = dict(raw)
+            changed["webhook_subscribed_fields"] = []
+            changed["webhook_subscription_status"] = "unknown"
+            changed["webhook_subscription_error"] = ""
+            changed["webhook_subscription_checked_at"] = 0.0
+            changed["updated_at"] = time.time()
+            state["bindings"][binding_id] = changed
+            self._write_unlocked(state)
+            updated = self._binding_from_dict(changed)
+            self._append_audit(
+                {
+                    "event": "binding_credential_archived",
+                    "actor_id": actor_id,
+                    "tenant_id": updated.tenant_id,
+                    "channel": updated.channel,
+                    "asset_id": updated.asset_id,
+                    "app_key": updated.app_key,
+                    "binding_id": updated.binding_id,
+                }
+            )
+            return updated
 
     def revoke_authorization(
         self,

@@ -42,6 +42,7 @@ async def disconnect_meta_connection(binding_id: str, request: Request) -> Any:
     session = require_permission(request, "settings")
     binding = _tenant_binding(binding_id, session.tenant_id)
     platform = str(binding.channel or "").strip().lower()
+    registry = get_meta_app_registry()
     try:
         if binding.active:
             updated = await disconnect_binding_webhook(
@@ -49,11 +50,16 @@ async def disconnect_meta_connection(binding_id: str, request: Request) -> Any:
                 actor_id=session.user_id or session.email,
             )
         else:
-            updated = get_meta_app_registry().set_binding_status(
+            updated = registry.set_binding_status(
                 binding.binding_id,
                 status="disconnected",
                 actor_id=session.user_id or session.email,
                 expected_generation=binding.generation,
+            )
+            updated = registry.archive_binding_credential(
+                binding.binding_id,
+                actor_id=session.user_id or session.email,
+                expected_generation=updated.generation,
             )
     except (MetaOAuthError, MetaRegistryError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -94,58 +100,22 @@ async def retry_instagram_login_webhook_setup(binding_id: str, request: Request)
 
 @app.post("/api/meta/connections/{binding_id}/reconnect")
 async def reconnect_meta_connection(binding_id: str, request: Request) -> Any:
-    """Re-enable a disconnected first-party (App A) binding when its token is still valid."""
+    """Reconnect requires a fresh OAuth authorization — token reuse is not supported."""
 
     session = require_permission(request, "settings")
     binding = _tenant_binding(binding_id, session.tenant_id)
-    if binding.app_key != APP_A_KEY:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "Reconnect is only for stored Lina Meta app bindings. "
-                "Use Add / Manage Facebook & Instagram to authorize a Page again."
-            ),
-        )
-    if binding.auth_flow == "instagram_login":
-        raise HTTPException(
-            status_code=409,
-            detail="Reconnect Instagram Login connections with Connect Instagram.",
-        )
     if binding.status not in {"disconnected", "inactive"}:
         raise HTTPException(status_code=409, detail="Connection is already active or cannot be reconnected here")
-    registry = get_meta_app_registry()
-    try:
-        credential = registry.get_credential(binding)
-        now = int(time.time())
-        if credential.expires_at is not None and credential.expires_at <= now:
-            raise HTTPException(
-                status_code=409,
-                detail="Stored Meta token expired. Ask ops to re-apply App A credentials.",
-            )
-    except MetaRegistryError as exc:
+    channel = str(binding.channel or "").strip().lower()
+    if binding.auth_flow == "instagram_login" or channel == "instagram":
         raise HTTPException(
             status_code=409,
-            detail="Stored Meta token is unavailable. Ask ops to re-apply App A credentials.",
-        ) from exc
-    try:
-        previous = _active_conflict(binding)
-        if previous is not None:
-            raise HTTPException(status_code=409, detail="Another active binding owns this channel or asset")
-        staged = MetaAssetBinding(**{**binding.__dict__, "status": "active"})
-        await subscribe_binding_webhook(staged, registry=registry)
-        try:
-            updated = registry.set_binding_status(
-                binding.binding_id,
-                status="active",
-                actor_id=session.user_id or session.email,
-                expected_generation=binding.generation,
-            )
-        except MetaRegistryError:
-            await unsubscribe_binding_webhook(staged, registry=registry)
-            raise
-    except (MetaOAuthError, MetaRegistryError) as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return {"success": True, "connection": updated.public_dict()}
+            detail="Disconnect Instagram, then use Connect Instagram to authorize again.",
+        )
+    raise HTTPException(
+        status_code=409,
+        detail="Disconnect this channel, then use Connect to run a fresh Meta authorization.",
+    )
 
 
 @app.post("/api/meta/connections/{binding_id}/activate")
@@ -278,8 +248,8 @@ async def update_meta_comment_replies(
         raise HTTPException(
             status_code=409,
             detail=(
-                "Missing Meta comment permissions. Re-authorize with Manage Meta Access "
-                "(Facebook Connect uses the Facebook-only Login Configuration)."
+                "Missing Meta comment permissions. Disconnect this channel, then Connect again "
+                "to grant comment scopes."
             ),
         )
     if enabled:

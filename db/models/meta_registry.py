@@ -78,6 +78,7 @@ class MetaBindingCredentialRow(Base):
     sealed: Mapped[str] = mapped_column(Text, nullable=False)
     aad: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
+    archived_at: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
 
 
 class MetaOAuthStateRow(Base):

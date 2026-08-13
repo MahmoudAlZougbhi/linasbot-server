@@ -308,6 +308,7 @@ class MetaAppRegistryBindingsMixin:
             "aad": aad,
             "sealed": self._cipher.seal(credential.as_secret_dict(), aad=aad),
             "created_at": now,
+            "archived_at": 0.0,
         }
         return resolved_id
 

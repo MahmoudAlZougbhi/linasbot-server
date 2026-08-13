@@ -46,33 +46,30 @@ BLOCKER_MESSAGES: dict[str, str] = {
     "connect_channel_first": "Connect this channel before enabling the capability.",
     "missing_comment_permissions_facebook": (
         "Missing Facebook Page comment permissions on this token "
-        "(pages_read_user_content, pages_manage_engagement). Use Manage Meta Access "
-        "after App A's Login Configuration includes those Page scopes "
-        "(plus Advanced Access if required). Do not Disconnect Account."
+        "(pages_read_user_content, pages_manage_engagement). Disconnect this channel, "
+        "then Connect again to grant comment scopes."
     ),
     "missing_comment_permissions_instagram": (
-        "Missing Instagram comment permissions on this token. Direct Instagram Login "
-        "needs instagram_business_manage_comments; legacy Page-linked Instagram needs "
-        "instagram_manage_comments. Use Manage Meta Access / Instagram Login — "
-        "do not Disconnect Account."
+        "Missing Instagram comment permissions on this token. Disconnect Instagram, "
+        "then Connect Instagram again to grant comment scopes."
     ),
     "missing_comment_permissions": (
-        "Missing Meta comment permissions on this token. Use Manage Meta Access — do not Disconnect Account."
+        "Missing Meta comment permissions on this token. Disconnect this channel, then Connect again."
     ),
-    "missing_dm_permissions": "Missing Meta messaging permissions. Use Manage Meta Access to refresh access.",
+    "missing_dm_permissions": (
+        "Missing Meta messaging permissions. Disconnect this channel, then Connect again."
+    ),
     "missing_comment_webhook": "Comment webhook subscription is not confirmed yet for this connection.",
     "missing_dm_webhook": "Messaging webhook subscription is not confirmed yet for this connection.",
     "meta_approval_required": (
         "Meta App Review Advanced Access is required for comment permissions. "
-        "Manage Meta Access alone cannot grant comment scopes until Meta approves them. "
-        "Complete App Review for the platform's comment scopes, then Manage Meta Access again "
-        "(do not Disconnect Account)."
+        "Complete App Review for the platform's comment scopes, then Disconnect and Connect again."
     ),
     "reauthorization_required": (
-        "This connection needs reauthorization. Use Manage Meta Access — do not Disconnect Account."
+        "This connection needs a fresh authorization. Disconnect this channel, then Connect again."
     ),
     "connection_unhealthy": (
-        "Connection is not healthy (token missing or expired). Use Manage Meta Access to refresh."
+        "Connection is not healthy (token missing or expired). Disconnect this channel, then Connect again."
     ),
     "asset_action_off": "Channel action is on but the per-asset reply switch is still off.",
     "plan_comments_disabled": (

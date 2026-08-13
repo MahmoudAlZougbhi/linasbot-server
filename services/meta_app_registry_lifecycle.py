@@ -255,6 +255,7 @@ class MetaAppRegistryLifecycleMixin:
                 "aad": aad,
                 "sealed": self._cipher.seal(credential.as_secret_dict(), aad=aad),
                 "created_at": now,
+                "archived_at": 0.0,
             }
             state["bindings"][binding_id] = asdict(binding)
             self._write_unlocked(state)

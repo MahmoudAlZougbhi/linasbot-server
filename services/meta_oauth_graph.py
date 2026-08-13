@@ -231,7 +231,7 @@ async def disconnect_binding_webhook(
     registry: MetaAppRegistry | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> Any:
-    """Mark the binding disconnected in-app; best-effort Meta Page unsubscribe.
+    """Mark the binding disconnected, archive its credential, and best-effort unsubscribe.
 
     Owner disconnect must succeed locally even when Meta Graph cleanup fails
     (expired token, already unsubscribed, transient Graph errors). Instagram Login
@@ -240,12 +240,6 @@ async def disconnect_binding_webhook(
     """
 
     current_registry = registry or get_meta_app_registry()
-    updated = current_registry.set_binding_status(
-        binding.binding_id,
-        status="disconnected",
-        actor_id=actor_id,
-        expected_generation=binding.generation,
-    )
     should_unsubscribe = (
         binding.auth_flow != "instagram_login"
         and bool(str(binding.page_id or "").strip())
@@ -255,9 +249,19 @@ async def disconnect_binding_webhook(
         try:
             await unsubscribe_binding_webhook(binding, registry=current_registry, client=client)
         except (MetaOAuthError, MetaRegistryError):
-            # Local disconnect already committed; Meta cleanup is best-effort only.
+            # Unsubscribe is best-effort; local disconnect still proceeds.
             pass
-    return updated
+    updated = current_registry.set_binding_status(
+        binding.binding_id,
+        status="disconnected",
+        actor_id=actor_id,
+        expected_generation=binding.generation,
+    )
+    return current_registry.archive_binding_credential(
+        binding.binding_id,
+        actor_id=actor_id,
+        expected_generation=updated.generation,
+    )
 
 
 async def unsubscribe_binding_webhook(
