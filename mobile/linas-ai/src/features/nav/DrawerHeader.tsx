@@ -92,12 +92,12 @@ const styles = StyleSheet.create({
     minHeight: 36,
   },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sparkle: { fontSize: 18, lineHeight: 20 },
+  sparkle: { fontSize: 16, lineHeight: 18 },
   wordmark: {
     fontFamily: fonts.display,
     fontWeight: '700',
-    fontSize: 20,
-    letterSpacing: -0.3,
+    fontSize: 18,
+    letterSpacing: -0.25,
   },
   searchHit: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   searchExpanded: {
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 36,
     paddingVertical: 6,
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: fonts.bodyMedium,
   },
   searchClear: {

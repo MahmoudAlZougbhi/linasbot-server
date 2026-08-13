@@ -127,9 +127,9 @@ const styles = StyleSheet.create({
   },
   newChatText: {
     fontFamily: fonts.display,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
-    letterSpacing: -0.2,
+    letterSpacing: -0.15,
   },
   settingsBtn: {
     width: 42,
