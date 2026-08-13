@@ -180,7 +180,10 @@ export function HistoryRows({
   if (!items.length) {
     return (
       <Text
-        style={{ color: colors.textMuted, marginTop: drawer ? 0 : spacing.md }}
+        style={[
+          { color: colors.textMuted, marginTop: drawer ? 0 : spacing.md },
+          drawer && styles.emptyDrawer,
+        ]}
         accessibilityRole="text"
         accessibilityLabel={emptyLabel}
       >
@@ -235,9 +238,9 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   rowDrawer: {
-    minHeight: 42,
+    minHeight: 36,
     borderRadius: radii.md,
-    marginBottom: 4,
+    marginBottom: 2,
     paddingHorizontal: 4,
   },
   indicator: { width: 3, alignSelf: 'stretch', borderRadius: 2, marginRight: 8 },
@@ -251,9 +254,9 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   mainDrawer: {
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 8,
-    minHeight: 38,
+    minHeight: 32,
   },
   rowTitle: {
     fontFamily: fonts.bodyMedium,
@@ -263,11 +266,16 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   rowTitleDrawer: {
-    fontFamily: fonts.bodyMedium,
-    fontWeight: '600',
-    fontSize: 15,
-    lineHeight: 20,
-    letterSpacing: -0.15,
+    fontFamily: fonts.body,
+    fontWeight: '500',
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: -0.1,
+  },
+  emptyDrawer: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    lineHeight: 16,
   },
   overflow: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   overflowDrawer: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },

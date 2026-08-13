@@ -39,8 +39,8 @@ const styles = StyleSheet.create({
   heading: {
     fontFamily: fonts.display,
     fontWeight: '700',
-    fontSize: 15,
-    letterSpacing: -0.2,
+    fontSize: 13,
+    letterSpacing: -0.15,
     marginBottom: spacing.xs,
   },
 });
