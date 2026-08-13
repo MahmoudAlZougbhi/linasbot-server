@@ -1,4 +1,5 @@
 import { appleAccountAr } from './appleAccountAr';
+import { integrationsDisplayAr } from './integrationsDisplayAr';
 import { subscriptionAr } from './subscriptionAr';
 import { smartFollowUpAr } from './smartFollowUpAr';
 import { whatsappAr } from './whatsappAr';
@@ -85,6 +86,8 @@ export const ar = {
   connect: 'ربط',
   disconnect: 'فصل',
   disconnectAccount: 'فصل الحساب',
+  disconnectAccountConfirm:
+    'سيؤدي هذا إلى فصل الحساب المرتبط وإيقاف ردود الرسائل والتعليقات لهذه القناة.',
   integrationsLoadError: 'تعذر تحميل التكاملات.',
   integrationsActionError: 'تعذر تحديث الاتصال. حاول مجدداً.',
   integrationsToggleError: 'تعذر تحديث إعداد القناة. حاول مجدداً.',
@@ -351,6 +354,7 @@ export const ar = {
   googleSignInUnavailable: 'تسجيل الدخول عبر Google غير مُعد بعد.',
   googleLinkRequired: 'يوجد حساب بهذا البريد. سجّل الدخول ثم اربط Google.',
   ...appleAccountAr,
+  ...integrationsDisplayAr,
   ...subscriptionAr,
   ...whatsappAr,
   ...smartFollowUpAr,

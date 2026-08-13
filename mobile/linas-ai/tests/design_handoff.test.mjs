@@ -32,19 +32,18 @@ test('drawer module order matches binding product order', () => {
     'integrations',
     'users',
     'subscription',
-    'settings',
   ]);
 });
 
 test('drawer and CM module tiles expose design handoff icons', () => {
-  const nav = read('features/nav/NavDrawer.tsx');
+  const grid = read('features/nav/DrawerNavGrid.tsx');
   const modules = read('features/nav/moduleIcons.ts');
   const cm = read('features/cm/CmScreen.tsx');
   const cmIcons = read('features/cm/cmSectionIcons.ts');
-  assert.match(nav, /MODULE_ICONS/);
-  assert.match(nav, /AppIcon/);
+  assert.match(grid, /MODULE_ICONS/);
+  assert.match(grid, /AppIcon/);
   assert.match(modules, /dashboard: feather\('grid'\)/);
-  assert.match(modules, /cm: feather\('book-open'\)/);
+  assert.match(modules, /cm: ion\('sparkles-outline'\)/);
   assert.match(modules, /livechat: feather\('message-square'\)/);
   assert.match(modules, /integrations: mci\('power-plug-outline'\)/);
   assert.match(modules, /subscription: feather\('credit-card'\)/);
@@ -302,21 +301,21 @@ test('Live Chat thread remains read-only', () => {
   assert.doesNotMatch(thread, /function\s+takeover|pauseAi|humanTakeover/i);
 });
 
-test('drawer search chrome is header circle; New chat is compact bottom dock', () => {
+test('drawer search chrome is header icon; New chat + Settings in footer dock', () => {
   const nav = read('features/nav/NavDrawer.tsx');
-  const footer = read('features/nav/NavDrawerFooter.tsx');
+  const drawerHeader = read('features/nav/DrawerHeader.tsx');
+  const footer = read('features/nav/DrawerFooter.tsx');
   const chat = read('features/chat/ChatScreen.tsx');
   const overlays = read('features/chat/ChatScreenOverlays.tsx');
   const drawer = read('components/SideDrawer.tsx');
-  assert.match(nav, /NavDrawerFooter/);
-  assert.match(footer, /bottomDock/);
+  assert.match(nav, /DrawerFooter/);
   assert.match(footer, /newChatBtn/);
-  assert.match(nav, /searchCircle/);
-  assert.match(nav, /headerDivider/);
-  assert.match(nav, /searchConversationTitles/);
+  assert.match(footer, /settingsBtn/);
+  assert.match(drawerHeader, /DRAWER_TOOL_ICONS\.search/);
+  assert.match(drawerHeader, /separatorSparkle/);
+  assert.match(drawerHeader, /searchConversationTitles/);
   assert.match(nav, /noChatsMatch/);
   assert.match(nav, /emptyLabel/);
-  assert.match(footer, /VERSION_LABEL/);
   assert.match(footer, /APP_VERSION_LABEL/);
   const configSrc = read('config.ts');
   assert.match(configSrc, /Constants\.expoConfig\?\.version/);
@@ -331,23 +330,20 @@ test('drawer search chrome is header circle; New chat is compact bottom dock', (
   assert.match(easJson, /"appVersionSource":\s*"remote"/);
   assert.match(easJson, /"production"[\s\S]*"autoIncrement":\s*true/);
   assert.match(easJson, /"testflight"[\s\S]*"autoIncrement":\s*true/);
-  // Version + New Chat share one compact footer row (version left, New Chat right).
-  assert.match(footer, /justifyContent:\s*'space-between'/);
-  assert.match(footer, /textAlign:\s*'left'/);
-  assert.match(footer, /styles\.bottomRow[\s\S]*\{VERSION_LABEL\}[\s\S]*NewChatIcon/);
-  // Header keeps branded mark; bare tenant "Linas" must not duplicate VERSION_LABEL in the dock.
-  assert.match(nav, /<LinasStarMark labeled size=\{20\} \/>/);
-  assert.match(footer, /isBareLinasBrand/);
-  // Search mode hides Dashboard/Settings/module grid; filter starts at first character.
+  // Version centered below action row; New Chat is wide pill + Settings circle.
+  assert.match(footer, /textAlign:\s*'center'/);
+  assert.match(footer, /styles\.actionRow[\s\S]*newChatBtn[\s\S]*settingsBtn/);
+  assert.match(footer, /APP_VERSION_LABEL/);
+  assert.match(drawerHeader, /wordmark/);
+  assert.match(drawerHeader, /separatorSparkle/);
+  // Search mode hides module grid; filter starts at first character.
   assert.match(nav, /const searching = searchOpen \|\| queryTrimmed\.length > 0/);
   assert.match(nav, /\{\!searching \? \(/);
-  assert.match(nav, /onChangeText=\{setQuery\}/);
-  // Same NewChatIcon component as chat header (compose square+pencil), smaller size only.
+  assert.match(nav, /onChangeQuery=\{setQuery\}|onChangeText=\{setQuery\}/);
   assert.match(footer, /NewChatIcon/);
-  assert.match(footer, /<NewChatIcon color=\{colors\.onAccent\} size=\{16\}/);
-  assert.match(footer, /hitSlop=\{8\}/);
-  assert.match(footer, /width:\s*28/);
-  assert.match(footer, /height:\s*28/);
+  assert.match(footer, /<NewChatIcon color=\{colors\.onAccent\} size=\{18\}/);
+  assert.match(footer, /tr\('newChat'\)/);
+  assert.match(footer, /minHeight:\s*48/);
   // Dock sits on safe area only — no extra lift above the home indicator.
   assert.match(drawer, /paddingBottom:\s*Math\.max\(insets\.bottom,\s*4\)/);
   assert.doesNotMatch(drawer, /insets\.bottom\s*\+\s*12/);

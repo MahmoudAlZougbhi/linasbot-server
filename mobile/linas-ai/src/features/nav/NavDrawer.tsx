@@ -1,31 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-import { AppIcon } from '../../components/AppIcon';
-import { LinasStarMark } from '../../components/LinasStarMark';
 import { SideDrawer } from '../../components/SideDrawer';
 import { useI18n } from '../../i18n/LanguageContext';
-import { fonts, radii, spacing, useTheme } from '../../theme';
+import { spacing, useTheme } from '../../theme';
 import type { ControlArea } from '../control/controlAreas';
-import { FEATURED_AI_SETUP, visibleDrawerModules } from './drawerModules';
-import { HistoryRows, type HistoryItem } from './HistoryRows';
-import { DRAWER_TOOL_ICONS, MODULE_ICONS } from './moduleIcons';
-import { NavDrawerAiSetupTile } from './NavDrawerAiSetupTile';
-import { NavDrawerFooter } from './NavDrawerFooter';
+import { DrawerFooter } from './DrawerFooter';
+import { DrawerHeader } from './DrawerHeader';
+import { DrawerNavGrid } from './DrawerNavGrid';
+import { DrawerRecents } from './DrawerRecents';
+import type { HistoryItem } from './HistoryRows';
+import { useDrawerBadges } from './useDrawerBadges';
 
 type Props = {
   open: boolean;
   onClose: () => void;
   isAuthenticated: boolean;
   showUsers: boolean;
+  activeArea?: ControlArea | 'chat' | null;
   history: HistoryItem[];
   archivedIds: string[];
   pinnedIds: string[];
@@ -48,11 +40,9 @@ export function NavDrawer(props: Props) {
   const { tr } = useI18n();
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
   const searchRef = useRef<TextInput>(null);
-  const modules = visibleDrawerModules({ showUsers: props.showUsers });
+  const badges = useDrawerBadges(props.isAuthenticated, props.open);
   const queryTrimmed = query.trim();
-  /** Search mode: hide Dashboard/Settings/module grid; show only matching chats. */
   const searching = searchOpen || queryTrimmed.length > 0;
 
   useEffect(() => {
@@ -72,19 +62,12 @@ export function NavDrawer(props: Props) {
 
   const filtered = useMemo(() => {
     const q = queryTrimmed.toLowerCase();
-    const base = props.history.filter((h) =>
-      showArchived ? props.archivedIds.includes(h.id) : !props.archivedIds.includes(h.id),
-    );
-    // Live filter from the first typed character (no min-length gate).
+    const base = props.history.filter((h) => !props.archivedIds.includes(h.id));
     if (!q) return base;
     return base.filter((h) => (h.title || '').toLowerCase().includes(q));
-  }, [props.history, props.archivedIds, queryTrimmed, showArchived]);
+  }, [props.history, props.archivedIds, queryTrimmed]);
 
-  const emptyLabel = queryTrimmed
-    ? tr('noChatsMatch')
-    : showArchived
-      ? tr('noArchivedChats')
-      : tr('noConversationsYet');
+  const emptyLabel = queryTrimmed ? tr('noChatsMatch') : tr('noConversationsYet');
 
   const closeSearch = () => {
     setSearchOpen(false);
@@ -92,115 +75,50 @@ export function NavDrawer(props: Props) {
     searchRef.current?.blur();
   };
 
+  const openArea = (area: ControlArea) => {
+    props.onClose();
+    props.onOpenArea(area);
+  };
+
   return (
-    <SideDrawer open={props.open} side="left" onClose={props.onClose} widthRatio={0.88}>
-      <View style={styles.header}>
-        {searchOpen ? (
-          <View
-            style={[
-              styles.searchExpanded,
-              { backgroundColor: colors.input, borderColor: colors.border },
-            ]}
-          >
-            <AppIcon icon={DRAWER_TOOL_ICONS.search} size={16} color={colors.textDim} />
-            <TextInput
-              ref={searchRef}
-              value={query}
-              onChangeText={setQuery}
-              placeholder={tr('searchChats')}
-              placeholderTextColor={colors.textDim}
-              style={[styles.searchInput, { color: colors.text }]}
-              accessibilityLabel={tr('searchConversationTitles')}
-              returnKeyType="search"
-              clearButtonMode="while-editing"
-              autoCorrect={false}
-              autoCapitalize="none"
-            />
-            <Pressable
-              onPress={closeSearch}
-              accessibilityRole="button"
-              accessibilityLabel="Close search"
-              hitSlop={8}
-              style={styles.searchClear}
-            >
-              <AppIcon icon={DRAWER_TOOL_ICONS.close} size={16} color={colors.textMuted} />
-            </Pressable>
-          </View>
-        ) : (
-          <>
-            <LinasStarMark labeled size={20} />
-            <View style={styles.headerActions}>
-              <View style={[styles.headerDivider, { backgroundColor: colors.border }]} />
-              <Pressable
-                onPress={() => setSearchOpen(true)}
-                style={[
-                  styles.searchCircle,
-                  { borderColor: colors.border, backgroundColor: colors.surface },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel={tr('searchChats')}
-                hitSlop={4}
-              >
-                <AppIcon icon={DRAWER_TOOL_ICONS.search} size={16} color={colors.accentDeep} />
-              </Pressable>
-            </View>
-          </>
-        )}
-      </View>
+    <SideDrawer
+      open={props.open}
+      side="left"
+      onClose={props.onClose}
+      widthRatio={0.88}
+      style={{ backgroundColor: colors.drawerSurface, borderColor: colors.borderSoft }}
+    >
+      <DrawerHeader
+        searchOpen={searchOpen}
+        query={query}
+        searchRef={searchRef}
+        onOpenSearch={() => setSearchOpen(true)}
+        onCloseSearch={closeSearch}
+        onChangeQuery={setQuery}
+      />
 
       <ScrollView
         style={styles.scrollFlex}
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
       >
         {!searching ? (
-          <>
-            <NavDrawerAiSetupTile
-              onPress={() => {
-                props.onClose();
-                props.onOpenArea(FEATURED_AI_SETUP.id);
-              }}
-            />
-            <View style={styles.grid}>
-              {modules.map((m) => (
-                <Pressable
-                  key={m.id}
-                  style={[styles.tile, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  onPress={() => {
-                    props.onClose();
-                    props.onOpenArea(m.id);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={tr(m.titleKey)}
-                >
-                  <AppIcon icon={MODULE_ICONS[m.id]} size={20} color={colors.accentDeep} />
-                  <Text style={[styles.tileText, { color: colors.text }]} numberOfLines={2}>
-                    {tr(m.titleKey)}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <Pressable
-              onPress={() => setShowArchived((v) => !v)}
-              style={styles.archiveToggle}
-              accessibilityRole="button"
-              accessibilityLabel={showArchived ? tr('showRecent') : tr('archivedChats')}
-            >
-              <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>
-                {showArchived ? tr('showRecent') : tr('archivedChats')}
-              </Text>
-            </Pressable>
-          </>
+          <DrawerNavGrid
+            showUsers={props.showUsers}
+            activeArea={props.activeArea ?? null}
+            badges={badges}
+            onOpenArea={openArea}
+          />
         ) : null}
 
         {props.isAuthenticated ? (
-          <HistoryRows
+          <DrawerRecents
             items={filtered}
             pinnedIds={props.pinnedIds}
             activeId={props.activeId}
-            archivedMode={showArchived}
+            archivedMode={false}
             emptyLabel={emptyLabel}
             onOpen={(id) => {
               props.onOpenChat(id);
@@ -230,17 +148,29 @@ export function NavDrawer(props: Props) {
             }}
           />
         ) : (
-          <Text style={{ color: colors.textMuted, marginTop: spacing.md }}>
-            {tr('signInToKeepHistory')}
-          </Text>
+          <View style={{ marginTop: spacing.md }}>
+            <DrawerRecents
+              items={[]}
+              pinnedIds={[]}
+              activeId={null}
+              archivedMode={false}
+              emptyLabel={tr('signInToKeepHistory')}
+              onOpen={() => {}}
+              onTogglePin={() => {}}
+              onArchive={() => {}}
+              onUnarchive={() => {}}
+              onRename={() => {}}
+              onDelete={() => {}}
+            />
+          </View>
         )}
       </ScrollView>
 
-      <NavDrawerFooter
+      <DrawerFooter
         isAuthenticated={props.isAuthenticated}
-        workspaceLabel={props.workspaceLabel}
         onClose={props.onClose}
         onNewChat={props.onNewChat}
+        onOpenSettings={() => openArea('settings')}
         onLogin={props.onLogin}
         onRegister={props.onRegister}
       />
@@ -249,67 +179,6 @@ export function NavDrawer(props: Props) {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-    minHeight: 40,
-    gap: spacing.sm,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  headerDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 22,
-    borderRadius: 1,
-  },
-  searchCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  searchExpanded: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderRadius: radii.pill,
-    minHeight: 40,
-    paddingHorizontal: 12,
-  },
-  searchInput: {
-    flex: 1,
-    minHeight: 36,
-    paddingVertical: 6,
-    fontSize: 15,
-  },
-  searchClear: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   scrollFlex: { flex: 1 },
-  scroll: { paddingBottom: 12, gap: 8, flexGrow: 1 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tile: {
-    width: '47%',
-    minHeight: 52,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    justifyContent: 'center',
-    gap: 8,
-  },
-  tileText: { fontFamily: fonts.bodyMedium, fontSize: 13 },
-  archiveToggle: { minHeight: 40, justifyContent: 'center' },
+  scroll: { paddingBottom: 8, flexGrow: 1 },
 });

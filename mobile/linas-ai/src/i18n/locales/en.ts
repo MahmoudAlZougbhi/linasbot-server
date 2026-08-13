@@ -1,4 +1,5 @@
 import { appleAccountEn } from './appleAccountEn';
+import { integrationsDisplayEn } from './integrationsDisplayEn';
 import { subscriptionEn } from './subscriptionEn';
 import { smartFollowUpEn } from './smartFollowUpEn';
 import { whatsappEn } from './whatsappEn';
@@ -120,6 +121,8 @@ export const en = {
   connect: 'Connect',
   disconnect: 'Disconnect',
   disconnectAccount: 'Disconnect Account',
+  disconnectAccountConfirm:
+    'This disconnects the linked account and turns off DM and comment replies for this channel.',
   integrationsLoadError: 'Could not load integrations.',
   integrationsActionError: 'Could not update connection. Try again.',
   integrationsToggleError: 'Could not update channel setting. Try again.',
@@ -353,6 +356,7 @@ export const en = {
   googleSignInUnavailable: 'Google sign-in is not configured yet.',
   googleLinkRequired: 'An account with this email already exists. Sign in and link Google.',
   ...appleAccountEn,
+  ...integrationsDisplayEn,
   ...subscriptionEn,
   ...whatsappEn,
   ...smartFollowUpEn,

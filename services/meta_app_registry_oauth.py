@@ -265,16 +265,16 @@ class MetaAppRegistryOAuthMixin:
             state_store["bindings"][binding_id] = changed
             self._write_unlocked(state_store)
             updated = self._binding_from_dict(changed)
-        self._append_audit(
-            {
-                "event": "instagram_login_webhook_subscription",
-                "actor_id": actor_id,
-                "tenant_id": updated.tenant_id,
-                "binding_id": updated.binding_id,
-                "status": state.status,
-                "verified_fields": list(state.verified_fields),
-            }
-        )
+            self._append_audit(
+                {
+                    "event": "instagram_login_webhook_subscription",
+                    "actor_id": actor_id,
+                    "tenant_id": updated.tenant_id,
+                    "binding_id": updated.binding_id,
+                    "status": state.status,
+                    "verified_fields": list(state.verified_fields),
+                }
+            )
         return updated
 
     def peek_oauth_state(self, nonce_hash: str) -> dict[str, Any]:

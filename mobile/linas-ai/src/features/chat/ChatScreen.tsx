@@ -350,6 +350,7 @@ export function ChatScreen({
         drawerOpen={drawerOpen}
         onCloseDrawer={() => setDrawerOpen(false)}
         isAuthenticated={isAuthenticated}
+        activeArea="chat"
         history={owner.history}
         archivedIds={archivedIds}
         pinnedIds={pinnedIds}

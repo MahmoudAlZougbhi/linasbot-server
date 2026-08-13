@@ -32,18 +32,22 @@ describe('nav drawer Smart Follow-Up + AI Setup featured tile', () => {
       'integrations',
       'users',
       'subscription',
-      'settings',
     ]);
   });
 
-  it('NavDrawer renders full-width AI Setup tile then module grid', () => {
+  it('drawerGridModules puts AI Setup first in the 3×3 grid', () => {
+    const modules = read('features/nav/drawerModules.ts');
+    assert.match(modules, /drawerGridModules/);
+    assert.match(modules, /\[FEATURED_AI_SETUP, \.\.\.visibleDrawerModules/);
+  });
+
+  it('NavDrawer renders 3×3 grid via DrawerNavGrid', () => {
     const drawer = read('features/nav/NavDrawer.tsx');
-    assert.match(drawer, /NavDrawerAiSetupTile/);
-    assert.match(drawer, /FEATURED_AI_SETUP/);
-    assert.match(drawer, /styles\.grid/);
-    const aiIdx = drawer.indexOf('NavDrawerAiSetupTile');
-    const gridIdx = drawer.indexOf('styles.grid');
-    assert.ok(aiIdx > 0 && gridIdx > aiIdx, 'AI Setup tile should render before the grid');
+    assert.match(drawer, /DrawerNavGrid/);
+    assert.match(drawer, /DrawerHeader/);
+    assert.match(drawer, /DrawerRecents/);
+    assert.match(drawer, /DrawerFooter/);
+    assert.doesNotMatch(drawer, /NavDrawerAiSetupTile/);
   });
 
   it('AI Setup tile status helper covers continue / complete / needs attention', () => {

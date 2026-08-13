@@ -1,0 +1,22 @@
+/** Integrations account display + app version gate copy (ar). */
+export const integrationsDisplayAr = {
+  integrationStatusConnected: 'الاتصال سليم',
+  integrationStatusNeedsReconnect: 'يحتاج إعادة ربط',
+  integrationStatusError: 'مشكلة في الاتصال',
+  integrationLastSynced: 'آخر مزامنة',
+  integrationReconnect: 'إعادة الربط',
+  integrationConnectedFeatures: 'الميزات المتصلة',
+  integrationMessengerReplies: 'ردود Messenger',
+  integrationDmReplies: 'ردود الرسائل',
+  integrationCommentReplies: 'ردود التعليقات',
+  integrationFeatureOn: 'مفعّل',
+  integrationFeatureOff: 'معطّل',
+  drawerRecents: 'الأخيرة',
+  appUpdateForceTitle: 'التحديث مطلوب',
+  appUpdateForceBody:
+    'الإصدار ({min}) لم يعد مدعوماً. ثبّت {latest} أو أحدث لمتابعة استخدام Linas AI.',
+  appUpdateAvailableTitle: 'تحديث متاح',
+  appUpdateAvailableBody: 'الإصدار {latest} متاح على App Store / Play Store.',
+  appUpdateOpenStore: 'التحديث من المتجر',
+  appUpdateDismiss: 'ليس الآن',
+} as const;

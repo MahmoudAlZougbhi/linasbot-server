@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, Linking, ScrollView, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, Alert, AppState, Linking, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { ApiError, apiFetch } from '../../api/client';
 import { parseIntegrationsDeepLink } from '../../app/navigation';
@@ -17,7 +17,7 @@ import {
   defaultToggles,
   type IntegrationRow,
 } from './IntegrationChannelCard';
-import { disconnectMetaBindings, startMetaOAuth } from './integrationsOAuth';
+import { disconnectMetaPlatform, startMetaOAuth } from './integrationsOAuth';
 import {
   ListSchema,
   ToggleResponseSchema,
@@ -141,22 +141,34 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
   }
 
   async function disconnectPlatform(row: Row) {
-    const ids = row.binding_ids?.filter(Boolean) ?? [];
-    if (ids.length === 0) {
-      setError(tr('integrationsActionError'));
-      return;
-    }
-    setBusyPlatform(row.platform);
-    setError(null);
-    try {
-      await disconnectMetaBindings(ids);
-      await load();
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) setAuthGate(true);
-      else setError(tr('integrationsActionError'));
-    } finally {
-      setBusyPlatform(null);
-    }
+    const platform = row.platform === 'facebook' ? 'facebook' : 'instagram';
+    const accountName =
+      row.account?.display_name ||
+      row.accounts?.[0]?.display_name ||
+      (platform === 'facebook' ? tr('platformFacebook') : tr('platformInstagram'));
+
+    Alert.alert(tr('disconnectAccount'), `${accountName}\n${tr('disconnectAccountConfirm')}`, [
+      { text: tr('usersCancel'), style: 'cancel' },
+      {
+        text: tr('disconnect'),
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            setBusyPlatform(row.platform);
+            setError(null);
+            try {
+              await disconnectMetaPlatform(platform);
+              await load();
+            } catch (err) {
+              if (err instanceof ApiError && err.status === 401) setAuthGate(true);
+              else setError(tr('integrationsActionError'));
+            } finally {
+              setBusyPlatform(null);
+            }
+          })();
+        },
+      },
+    ]);
   }
 
   async function reconcileComments(row: Row) {

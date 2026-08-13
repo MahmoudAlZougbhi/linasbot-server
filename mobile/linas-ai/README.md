@@ -33,6 +33,24 @@ eas build:version:set -p ios
 eas build:version:set -p android
 ```
 
+## Server update gate
+
+Marketing version checks use server env (not build numbers):
+
+| Env | Purpose |
+| --- | --- |
+| `MOBILE_APP_LATEST_VERSION` | Newest semver shown to clients (`1.0.1`, …) |
+| `MOBILE_APP_MIN_SUPPORTED_VERSION` | Below this → `force_update` |
+| `MOBILE_APP_IOS_STORE_URL` | Optional App Store link |
+| `MOBILE_APP_ANDROID_STORE_URL` | Optional Play Store link |
+
+Public API:
+
+- `GET /api/public/app-version` — config
+- `POST /api/public/app-version/check` — body `{ "installed_version": "1.0.0" }` → `up_to_date` \| `update_available` \| `force_update`
+
+On cold start the app calls check with `expo.version` only. iOS `buildNumber` / Android `versionCode` stay separate (EAS remote `autoIncrement`).
+
 ## Config
 
 ```bash

@@ -1,4 +1,5 @@
 import { appleAccountFr } from './appleAccountFr';
+import { integrationsDisplayFr } from './integrationsDisplayFr';
 import { subscriptionFr } from './subscriptionFr';
 import { smartFollowUpFr } from './smartFollowUpFr';
 import { whatsappFr } from './whatsappFr';
@@ -87,6 +88,8 @@ export const fr = {
   connect: 'Connecter',
   disconnect: 'Déconnecter',
   disconnectAccount: 'Déconnecter le compte',
+  disconnectAccountConfirm:
+    'Cela déconnecte le compte lié et désactive les réponses DM et commentaires pour ce canal.',
   integrationsLoadError: 'Impossible de charger les intégrations.',
   integrationsActionError: 'Impossible de mettre à jour la connexion. Réessayez.',
   integrationsToggleError: 'Impossible de mettre à jour le réglage du canal. Réessayez.',
@@ -357,6 +360,7 @@ export const fr = {
   googleSignInUnavailable: 'La connexion Google n’est pas encore configurée.',
   googleLinkRequired: 'Un compte existe déjà avec cet e-mail. Connectez-vous puis liez Google.',
   ...appleAccountFr,
+  ...integrationsDisplayFr,
   ...subscriptionFr,
   ...whatsappFr,
   ...smartFollowUpFr,
