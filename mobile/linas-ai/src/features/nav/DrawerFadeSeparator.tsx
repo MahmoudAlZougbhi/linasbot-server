@@ -2,7 +2,10 @@ import { StyleSheet, View } from 'react-native';
 
 import { LinasSparkleIcon } from '../../components/LinasSparkleIcon';
 
-const FADE_STEPS = 10;
+const FADE_STEPS = 12;
+const SPARKLE_SIZE = 12;
+const SPARKLE_GAP = 6;
+const LINE_HEIGHT = 1;
 
 type Props = {
   lineColor: string;
@@ -11,7 +14,9 @@ type Props = {
 
 /** Horizontal rule that fades toward the edges with a centered Linas sparkle. */
 export function DrawerFadeSeparator({ lineColor, starColor }: Props) {
-  const opacities = Array.from({ length: FADE_STEPS }, (_, i) => (i + 1) / FADE_STEPS);
+  const opacities = Array.from({ length: FADE_STEPS }, (_, i) =>
+    FADE_STEPS <= 1 ? 1 : i / (FADE_STEPS - 1),
+  );
 
   return (
     <View style={styles.row}>
@@ -23,7 +28,7 @@ export function DrawerFadeSeparator({ lineColor, starColor }: Props) {
           />
         ))}
       </View>
-      <LinasSparkleIcon size={10} color={starColor} />
+      <LinasSparkleIcon size={SPARKLE_SIZE} color={starColor} />
       <View style={styles.side}>
         {opacities.map((opacity, index) => (
           <View
@@ -43,16 +48,16 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: SPARKLE_GAP,
   },
   side: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    height: StyleSheet.hairlineWidth,
+    height: LINE_HEIGHT,
   },
   segment: {
     flex: 1,
-    height: StyleSheet.hairlineWidth,
+    height: LINE_HEIGHT,
   },
 });

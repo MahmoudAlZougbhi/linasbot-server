@@ -30,10 +30,19 @@ test('brand sparkle renders without react-native-svg (no Uni placeholder)', () =
 test('drawer AI Setup active tile uses mint sparkle chrome', () => {
   const grid = read('features/nav/DrawerNavGrid.tsx');
   const header = read('features/nav/DrawerHeader.tsx');
+  const fade = read('features/nav/DrawerFadeSeparator.tsx');
   assert.match(grid, /modId === 'cm'/);
   assert.match(grid, /colors\.mintSoft/);
   assert.match(grid, /LinasSparkleIcon[\s\S]*color=\{colors\.accentDeep\}/);
-  assert.match(header, /LinasSparkleIcon size=\{16\} color=\{colors\.text\}/);
+  assert.match(header, /LinasSparkleIcon size=\{20\} color=\{colors\.accentDeep\}/);
+  assert.match(
+    header,
+    /DrawerFadeSeparator lineColor=\{colors\.accentDeep\} starColor=\{colors\.accentDeep\}/,
+  );
+  assert.match(fade, /SPARKLE_SIZE = 12/);
+  assert.match(fade, /SPARKLE_GAP = 6/);
+  assert.match(fade, /LINE_HEIGHT = 1/);
+  assert.match(fade, /FADE_STEPS = 12/);
 });
 
 test('drawer module order matches binding product order', () => {
