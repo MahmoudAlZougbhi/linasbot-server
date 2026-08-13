@@ -4,18 +4,25 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from sqlalchemy.orm import Session
+
 from db.models.whatsapp_cloud import WhatsAppConnection, WhatsAppConversation
 from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpJob, WhatsAppSmartFollowUpSettings
 from services.smart_followup.types import FollowUpConversationView
 from services.smart_followup.window_rules import (
     remaining_safe_seconds as _remaining_safe_seconds,
+)
+from services.smart_followup.window_rules import (
     safe_send_deadline as _safe_send_deadline,
+)
+from services.smart_followup.window_rules import (
     service_window_deadline as _service_window_deadline,
+)
+from services.smart_followup.window_rules import (
     window_allows_send as _window_allows_send,
 )
 from services.whatsapp_cloud.config import get_whatsapp_cloud_flags
 from services.whatsapp_cloud.entitlement import evaluate_ai_eligibility, tenant_has_whatsapp_pilot
-from sqlalchemy.orm import Session
 
 
 def _to_view(conv: WhatsAppConversation) -> FollowUpConversationView:
