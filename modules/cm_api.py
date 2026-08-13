@@ -145,11 +145,7 @@ async def cm_put_draft(
     except UnknownSectionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ConflictError as exc:
-        current = (
-            _owner_sanitize_envelope(_envelope_dict(exc.current), name)
-            if exc.current is not None
-            else {}
-        )
+        current = _owner_sanitize_envelope(_envelope_dict(exc.current), name) if exc.current is not None else {}
         current_etag = str(current.get("etag") or "")
         return JSONResponse(
             status_code=409,
