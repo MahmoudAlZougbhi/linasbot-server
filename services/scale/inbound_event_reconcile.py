@@ -6,6 +6,7 @@ import logging
 import time
 from typing import Any
 
+from services.queues.config import redis_required
 from services.scale.inbound_event_store import (
     InboundEventRecord,
     accountability_stats,
@@ -22,7 +23,11 @@ def _enqueue_or_mark(rec: InboundEventRecord) -> dict[str, Any]:
     try:
         from services.job_queue import job_queue
 
-        if getattr(job_queue, "backend", None) == "redis" and getattr(job_queue, "production_ready", False):
+        if (
+            getattr(job_queue, "backend", None) == "redis"
+            and getattr(job_queue, "production_ready", False)
+            and redis_required()
+        ):
             job = job_queue.enqueue(
                 queue="high_priority",
                 job_type="meta_inbound_process",
