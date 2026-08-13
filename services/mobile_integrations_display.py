@@ -114,7 +114,8 @@ def enrich_mobile_integration_row(row: dict[str, Any], *, tenant_id: str) -> dic
 
     dm_state = row.get("dm_state") if isinstance(row.get("dm_state"), dict) else None
     comments_state = row.get("comments_state") if isinstance(row.get("comments_state"), dict) else None
-    toggles = row.get("toggles") if isinstance(row.get("toggles"), dict) else {}
+    toggles_raw = row.get("toggles")
+    toggles: dict[str, Any] = toggles_raw if isinstance(toggles_raw, dict) else {}
     connected = bool(row.get("connected"))
 
     connection_status = _overall_connection_status(
