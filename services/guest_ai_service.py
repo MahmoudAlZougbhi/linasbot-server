@@ -11,6 +11,7 @@ from services.guest_chat_limits import (
     GUEST_MAX_WORDS,
     count_words,
 )
+from services.model_policy import MODEL_OWNER_SOL
 from services.response_formatting import RESPONSE_FORMATTING_RULES
 from services.system_knowledge_retrieval import (
     capabilities_as_prompt_block,
@@ -34,8 +35,9 @@ FORBIDDEN_GUEST_TOOLS = frozenset(
 
 MAX_HISTORY_MESSAGES = 12
 MAX_HISTORY_CHARS = 700
-# V2: guest product explainer on Luna. No silent mini fallback.
-DEFAULT_GUEST_MODEL = "gpt-5.6-luna"
+# V2: guest product explainer on Sol + low reasoning (text-only, no tools).
+DEFAULT_GUEST_MODEL = MODEL_OWNER_SOL
+GUEST_REASONING_EFFORT = "low"
 
 
 class GuestAIModelError(RuntimeError):
@@ -184,6 +186,7 @@ async def compose_guest_reply(
             messages=messages,
             max_tokens=900,
             temperature=0.65,
+            reasoning_effort=GUEST_REASONING_EFFORT,
         )
     except Exception as exc:  # noqa: BLE001 — surface provider/network failures honestly
         raise GuestAIModelError(f"guest_llm_unavailable:{type(exc).__name__}:{sanitize_llm_error(exc)}") from exc
