@@ -267,7 +267,6 @@ const styles = StyleSheet.create({
   },
   rowTitleDrawer: {
     fontFamily: fonts.body,
-    fontWeight: '500',
     fontSize: 12,
     lineHeight: 16,
     letterSpacing: -0.1,

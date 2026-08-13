@@ -91,8 +91,11 @@ export function ChatScreen({
 
   const startNewChat = useCallback(() => {
     if (!isAuthenticated) return;
+    Keyboard.dismiss();
+    composerInputRef.current?.blur();
     stickToBottomRef.current = true;
-    setOwnerMode('chat'); setReviseProposalId(null);
+    setOwnerMode('chat');
+    setReviseProposalId(null);
     if (turn.streaming) turn.stop();
     void owner.newChat();
   }, [isAuthenticated, owner, stickToBottomRef, turn]);
@@ -308,7 +311,6 @@ export function ChatScreen({
           elapsedMs={authVoice?.elapsedMs ?? 0}
           metering={authVoice?.metering ?? null}
           inputRef={composerInputRef}
-          autoFocus
           showPlus={isAuthenticated}
           showMic={isAuthenticated}
           showModelChip={isAuthenticated}
