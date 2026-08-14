@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { SideDrawer } from '../../components/SideDrawer';
 import { useI18n } from '../../i18n/LanguageContext';
-import { spacing, useTheme } from '../../theme';
+import { fonts, spacing, useTheme } from '../../theme';
 import type { ControlArea } from '../control/controlAreas';
-import { DrawerFooter } from './DrawerFooter';
 import { DrawerHeader } from './DrawerHeader';
 import { DrawerNavGrid } from './DrawerNavGrid';
 import { DrawerRecents } from './DrawerRecents';
@@ -80,6 +79,47 @@ export function NavDrawer(props: Props) {
     props.onOpenArea(area);
   };
 
+  const confirmDelete = (id: string) => {
+    const item = props.history.find((h) => h.id === id);
+    Alert.alert(
+      tr('deleteConversation'),
+      tr('deleteConversationConfirm').replace('{title}', item?.title || tr('untitledChat')),
+      [
+        { text: tr('usersCancel'), style: 'cancel' },
+        {
+          text: tr('usersDelete'),
+          style: 'destructive',
+          onPress: () => props.onDelete(id),
+        },
+      ],
+    );
+  };
+
+  const recents = props.isAuthenticated
+    ? {
+        items: filtered,
+        emptyLabel,
+        onOpen: (id: string) => {
+          props.onOpenChat(id);
+          props.onClose();
+        },
+        onTogglePin: props.onTogglePin,
+        onArchive: props.onArchive,
+        onUnarchive: props.onUnarchive,
+        onRename: props.onRename,
+        onDelete: confirmDelete,
+      }
+    : {
+        items: [] as HistoryItem[],
+        emptyLabel: tr('signInToKeepHistory'),
+        onOpen: () => {},
+        onTogglePin: () => {},
+        onArchive: () => {},
+        onUnarchive: () => {},
+        onRename: () => {},
+        onDelete: () => {},
+      };
+
   return (
     <SideDrawer
       open={props.open}
@@ -88,22 +128,17 @@ export function NavDrawer(props: Props) {
       widthRatio={0.88}
       style={{ backgroundColor: colors.drawerSurface, borderColor: colors.borderSoft }}
     >
-      <DrawerHeader
-        searchOpen={searchOpen}
-        query={query}
-        searchRef={searchRef}
-        onOpenSearch={() => setSearchOpen(true)}
-        onCloseSearch={closeSearch}
-        onChangeQuery={setQuery}
-      />
+      <View style={styles.body}>
+        <DrawerHeader
+          searchOpen={searchOpen}
+          query={query}
+          searchRef={searchRef}
+          onOpenSearch={() => setSearchOpen(true)}
+          onCloseSearch={closeSearch}
+          onChangeQuery={setQuery}
+          onOpenSettings={() => openArea('settings')}
+        />
 
-      <ScrollView
-        style={styles.scrollFlex}
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        showsVerticalScrollIndicator={false}
-      >
         {!searching ? (
           <DrawerNavGrid
             showUsers={props.showUsers}
@@ -113,72 +148,57 @@ export function NavDrawer(props: Props) {
           />
         ) : null}
 
-        {props.isAuthenticated ? (
-          <DrawerRecents
-            items={filtered}
-            pinnedIds={props.pinnedIds}
-            activeId={props.activeId}
-            archivedMode={false}
-            emptyLabel={emptyLabel}
-            onOpen={(id) => {
-              props.onOpenChat(id);
-              props.onClose();
-            }}
-            onTogglePin={props.onTogglePin}
-            onArchive={props.onArchive}
-            onUnarchive={props.onUnarchive}
-            onRename={props.onRename}
-            onDelete={(id) => {
-              const item = props.history.find((h) => h.id === id);
-              Alert.alert(
-                tr('deleteConversation'),
-                tr('deleteConversationConfirm').replace(
-                  '{title}',
-                  item?.title || tr('untitledChat'),
-                ),
-                [
-                  { text: tr('usersCancel'), style: 'cancel' },
-                  {
-                    text: tr('usersDelete'),
-                    style: 'destructive',
-                    onPress: () => props.onDelete(id),
-                  },
-                ],
-              );
-            }}
-          />
-        ) : (
-          <View style={{ marginTop: spacing.md }}>
-            <DrawerRecents
-              items={[]}
-              pinnedIds={[]}
-              activeId={null}
-              archivedMode={false}
-              emptyLabel={tr('signInToKeepHistory')}
-              onOpen={() => {}}
-              onTogglePin={() => {}}
-              onArchive={() => {}}
-              onUnarchive={() => {}}
-              onRename={() => {}}
-              onDelete={() => {}}
-            />
+        {!props.isAuthenticated ? (
+          <View style={styles.guestAuth}>
+            <Pressable
+              onPress={() => {
+                props.onClose();
+                props.onLogin?.();
+              }}
+              style={styles.guestRow}
+              accessibilityRole="button"
+              accessibilityLabel={tr('login')}
+            >
+              <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>{tr('login')}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                props.onClose();
+                props.onRegister?.();
+              }}
+              style={styles.guestRow}
+              accessibilityRole="button"
+              accessibilityLabel={tr('createAccount')}
+            >
+              <Text style={{ color: colors.text }}>{tr('createAccount')}</Text>
+            </Pressable>
           </View>
-        )}
-      </ScrollView>
+        ) : null}
 
-      <DrawerFooter
-        isAuthenticated={props.isAuthenticated}
-        onClose={props.onClose}
-        onNewChat={props.onNewChat}
-        onOpenSettings={() => openArea('settings')}
-        onLogin={props.onLogin}
-        onRegister={props.onRegister}
-      />
+        <DrawerRecents
+          items={recents.items}
+          pinnedIds={props.isAuthenticated ? props.pinnedIds : []}
+          activeId={props.isAuthenticated ? props.activeId : null}
+          archivedMode={false}
+          emptyLabel={recents.emptyLabel}
+          onNewChat={() => {
+            props.onClose();
+            props.onNewChat();
+          }}
+          onOpen={recents.onOpen}
+          onTogglePin={recents.onTogglePin}
+          onArchive={recents.onArchive}
+          onUnarchive={recents.onUnarchive}
+          onRename={recents.onRename}
+          onDelete={recents.onDelete}
+        />
+      </View>
     </SideDrawer>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollFlex: { flex: 1 },
-  scroll: { paddingBottom: 8, flexGrow: 1 },
+  body: { flex: 1, minHeight: 0 },
+  guestAuth: { gap: 2, marginBottom: spacing.xs },
+  guestRow: { minHeight: 36, justifyContent: 'center' },
 });
