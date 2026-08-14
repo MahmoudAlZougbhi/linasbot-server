@@ -23,7 +23,7 @@ import { ChatStatusBanners } from './ChatStatusBanners';
 import type { OwnerChatMode } from './ownerChatMode';
 import { resolveOwnerModeForOutgoing } from './ownerChatMode';
 import { PendingAttachmentsStrip } from './PendingAttachmentsStrip';
-import { savePendingGuestDraft } from './pendingGuestDraft';
+import { queueGuestDraft } from './pendingGuestDraft';
 import { buildApproveSendOpts, buildDiscardSendOpts } from './proposalBarActions';
 import { sendChatMessage } from './sendChatMessage';
 import { chatErrorLabelKey, retryAssistantMessage } from './chatRetryHandlers';
@@ -139,20 +139,13 @@ export function ChatScreen({
     followBottomIfStuck,
   ]);
 
-  function saveGuestDraft() {
-    void savePendingGuestDraft({ text: draft, createdAt: Date.now() });
-  }
-
   function openAuthPreservingDraft(hard = false) {
-    saveGuestDraft();
-    setHardLimit(hard);
-    setAuthGate(true);
+    queueGuestDraft(draft);
+    setHardLimit(hard); setAuthGate(true);
   }
-
-  /** Header / drawer Sign In — open login, do not present AuthGate Modal (iOS freeze). */
   function goToLoginPreservingDraft() {
     Keyboard.dismiss();
-    saveGuestDraft();
+    queueGuestDraft(draft);
     onRequestLogin();
   }
 
