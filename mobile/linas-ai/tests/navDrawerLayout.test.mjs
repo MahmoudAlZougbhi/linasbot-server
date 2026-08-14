@@ -69,12 +69,18 @@ describe('drawer layout and selected state', () => {
   it('history list fills remaining drawer height under Recent', () => {
     const recents = read('features/nav/DrawerRecents.tsx');
     const nav = read('features/nav/NavDrawer.tsx');
+    const drawer = read('components/SideDrawer.tsx');
     assert.match(recents, /wrap:\s*\{\s*flex:\s*1/);
     assert.match(recents, /list:\s*\{\s*flex:\s*1/);
     assert.match(recents, /<ScrollView/);
+    assert.match(recents, /paddingBottom:\s*Math\.max\(insets\.bottom,\s*8\)/);
     assert.match(nav, /body:\s*\{\s*flex:\s*1/);
     assert.match(nav, /DrawerNavGrid/);
     assert.match(nav, /DrawerRecents/);
     assert.doesNotMatch(nav, /<DrawerFooter/);
+    assert.doesNotMatch(nav, /APP_VERSION_LABEL/);
+    assert.match(drawer, /paddingBottom:\s*0/);
+    assert.match(drawer, /styles\.body/);
+    assert.doesNotMatch(drawer, /paddingBottom:\s*Math\.max\(insets\.bottom/);
   });
 });

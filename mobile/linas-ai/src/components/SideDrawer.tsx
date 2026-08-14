@@ -35,8 +35,9 @@ export function SideDrawer({
 }: Props) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const [screenW, setScreenW] = useState(() => Dimensions.get('window').width);
-  const width = Math.min(screenW * widthRatio, 360);
+  const [screen, setScreen] = useState(() => Dimensions.get('window'));
+  const width = Math.min(screen.width * widthRatio, 360);
+  const height = screen.height;
   const closedX = side === 'left' ? -width : width;
   const anim = useRef(new Animated.Value(closedX)).current;
   const fade = useRef(new Animated.Value(0)).current;
@@ -44,7 +45,7 @@ export function SideDrawer({
 
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }) => {
-      setScreenW(window.width);
+      setScreen(window);
     });
     return () => sub.remove();
   }, []);
@@ -83,8 +84,9 @@ export function SideDrawer({
           side === 'left' ? styles.left : styles.right,
           {
             width,
+            height,
             paddingTop: insets.top + 8,
-            paddingBottom: Math.max(insets.bottom, 4),
+            paddingBottom: 0,
             transform: [{ translateX: anim }],
             backgroundColor: colors.surfaceGlass,
             borderColor: colors.border,
@@ -92,7 +94,7 @@ export function SideDrawer({
           style,
         ]}
       >
-        {children}
+        <View style={styles.body}>{children}</View>
       </Animated.View>
     </View>
   );
@@ -105,9 +107,9 @@ const styles = StyleSheet.create({
   panel: {
     position: 'absolute',
     top: 0,
-    bottom: 0,
     paddingHorizontal: 16,
   },
+  body: { flex: 1, minHeight: 0 },
   left: {
     left: 0,
     borderRightWidth: 1,

@@ -483,8 +483,11 @@ test('drawer search chrome is header icon; Settings beside search; New chat on R
   assert.match(recents, /NEW_CHAT_ICON/);
   assert.match(recents, /accessibilityLabel=\{tr\('newChat'\)\}/);
   assert.doesNotMatch(recents, /newChatBtn/);
-  // Dock sits on safe area only — no extra lift above the home indicator.
-  assert.match(drawer, /paddingBottom:\s*Math\.max\(insets\.bottom,\s*4\)/);
+  // No footer dock / bottom padding strip — Recents fills to the screen bottom.
+  assert.match(drawer, /paddingBottom:\s*0/);
+  assert.match(drawer, /height/);
+  assert.match(drawer, /styles\.body/);
+  assert.doesNotMatch(drawer, /paddingBottom:\s*Math\.max\(insets\.bottom/);
   assert.doesNotMatch(drawer, /insets\.bottom\s*\+\s*12/);
   assert.doesNotMatch(nav, /DRAWER_TOOL_ICONS\.newChat/);
   assert.match(drawer, /Keyboard\.dismiss/);
