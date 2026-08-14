@@ -1,17 +1,15 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
 import { PrimaryButton } from '../../components/PrimaryButton';
-import { StatusChip } from '../../components/StatusChip';
 import type { StringKey } from '../../i18n/locales/en';
-import { colors, fonts, radii, spacing } from '../../theme';
+import { colors, fonts } from '../../theme';
 import {
   ChannelCapabilityToggles,
   type ChannelToggles,
 } from './ChannelCapabilityToggles';
-import {
-  IntegrationAccountSection,
-  type IntegrationAccountDisplay,
-} from './IntegrationAccountSection';
+import { IntegrationCardShell } from './IntegrationCardShell';
+import type { IntegrationAccountDisplay } from './IntegrationAccountSection';
+import type { IntegrationPlatform } from './IntegrationPlatformIcon';
 
 export type CommentsState = {
   requested_enabled: boolean;
@@ -64,7 +62,7 @@ type Props = {
   onToggle: (key: 'dm' | 'comments', value: boolean) => void;
   onReconcileComments: () => void;
   onConnect: () => void;
-  onDisconnect: () => void;
+  onOpenMenu: () => void;
 };
 
 export function defaultToggles(row: IntegrationRow): ChannelToggles {
@@ -78,32 +76,6 @@ export function commentsBlocker(row: IntegrationRow): string | null {
     row.comments_state?.blocker ??
     null
   );
-}
-
-const STATUS_I18N: Record<string, StringKey> = {
-  disabled: 'commentsStatusDisabled',
-  permission_required: 'commentsStatusPermissionRequired',
-  meta_approval_required: 'commentsStatusMetaApprovalRequired',
-  webhook_setup_required: 'commentsStatusWebhookSetupRequired',
-  reauthorization_required: 'commentsStatusReauthorizationRequired',
-  configuring: 'commentsStatusConfiguring',
-  ready: 'commentsStatusReady',
-  enabled: 'commentsStatusEnabled',
-  live_verified: 'commentsStatusLiveVerified',
-  error: 'commentsStatusError',
-  ready_to_enable: 'commentsStatusReady',
-  needs_webhook: 'commentsStatusWebhookSetupRequired',
-  needs_permission: 'commentsStatusPermissionRequired',
-  off: 'commentsStatusDisabled',
-};
-
-export function commentsStatusLabel(row: IntegrationRow, tr: (key: StringKey) => string): string | null {
-  const state = row.comments_state;
-  if (!state) return null;
-  if (state.live_verified) return tr('commentsStatusLiveVerified');
-  if (state.effective_enabled) return tr('commentsStatusEnabled');
-  const key = STATUS_I18N[state.status || ''];
-  return key ? tr(key) : null;
 }
 
 function blockerCopy(blocker: string, tr: (key: StringKey) => string): string {
@@ -124,27 +96,27 @@ function blockerCopy(blocker: string, tr: (key: StringKey) => string): string {
   }
 }
 
-function connectionStatusChip(
-  row: IntegrationRow,
-  tr: (key: StringKey) => string,
-): { label: string; tone: 'ok' | 'warn' | 'neutral' } {
-  const status = row.connection_status;
-  if (status === 'needs_reconnect') {
-    return { label: tr('integrationStatusNeedsReconnect'), tone: 'warn' };
-  }
-  if (status === 'error') {
-    return { label: tr('integrationStatusError'), tone: 'warn' };
-  }
-  if (row.connected) {
-    return { label: tr('connected'), tone: 'ok' };
-  }
-  return { label: tr('notConnected'), tone: 'neutral' };
-}
-
 function accountList(row: IntegrationRow): IntegrationAccountDisplay[] {
   if (row.accounts?.length) return row.accounts;
   if (row.account) return [row.account];
   return [];
+}
+
+export function channelSubtitle(row: IntegrationRow): string {
+  const acc = accountList(row)[0];
+  if (!acc) return '';
+  if (row.platform === 'instagram') {
+    const raw = (acc.username || acc.display_name || '').trim();
+    if (!raw) return '';
+    const handle = raw.replace(/^@/, '');
+    return `@${handle}`;
+  }
+  return acc.display_name || acc.username || '';
+}
+
+function asPlatform(platform: string): IntegrationPlatform {
+  if (platform === 'facebook' || platform === 'whatsapp' || platform === 'tiktok') return platform;
+  return 'instagram';
 }
 
 export function IntegrationChannelCard({
@@ -158,102 +130,61 @@ export function IntegrationChannelCard({
   onToggle,
   onReconcileComments,
   onConnect,
-  onDisconnect,
+  onOpenMenu,
 }: Props) {
-  const platform = row.platform === 'facebook' ? 'facebook' : 'instagram';
-  const showToggles = !soon && (row.platform === 'instagram' || row.platform === 'facebook');
+  const platform = asPlatform(row.platform);
+  const showToggles = !soon && (platform === 'instagram' || platform === 'facebook') && row.connected;
   const blocker = commentsBlocker(row);
-  const statusLabel = commentsStatusLabel(row, tr);
-  const chip = connectionStatusChip(row, tr);
-  const accounts = accountList(row);
-  const connectionStatus = row.connection_status ?? (row.connected ? 'connected' : 'disconnected');
   const needsWebhook = blocker === 'missing_comment_webhook';
+  const subtitle = channelSubtitle(row);
+  const healthy = row.connected && row.connection_status !== 'error' && row.connection_status !== 'needs_reconnect';
 
   return (
-    <View style={styles.card}>
-      <View style={styles.head}>
-        <Text style={styles.cardTitle}>{title}</Text>
-        {soon ? (
-          <StatusChip label={tr('comingSoon')} tone="soon" />
-        ) : (
-          <StatusChip label={chip.label} tone={chip.tone} />
-        )}
-      </View>
-      {soon ? (
-        <Text style={styles.soonHint}>{tr('comingSoon')}</Text>
-      ) : (
+    <IntegrationCardShell
+      platform={platform}
+      title={title}
+      subtitle={subtitle}
+      connected={row.connected}
+      soon={soon}
+      busy={busy}
+      connectLabel={tr('connect')}
+      connectedLabel={tr('connected')}
+      notConnectedLabel={tr('notConnected')}
+      comingSoonLabel={tr('comingSoon')}
+      healthLabel={tr('integrationStatusConnected')}
+      menuLabel={tr('disconnectAccount')}
+      showConnect={!soon && !row.connected}
+      showMenu={!soon && row.connected}
+      showHealth={!soon && row.connected && healthy}
+      onConnect={onConnect}
+      onMenu={onOpenMenu}
+    >
+      {showToggles ? (
         <>
-          {row.connected && accounts.length > 0 ? (
-            <IntegrationAccountSection
-              platform={platform}
-              accounts={accounts}
-              connectionStatus={connectionStatus}
-              lastSyncedAt={row.last_synced_at}
-              tr={tr}
-            />
-          ) : null}
-          {showToggles ? (
-            <>
-              <ChannelCapabilityToggles
-                platform={platform}
-                toggles={defaultToggles(row)}
-                busyKey={busyToggleKey}
-                disabled={actionsDisabled}
-                lockedOff={!row.connected}
-                tr={tr}
-                onToggle={onToggle}
-              />
-              {statusLabel ? <Text style={styles.statusHint}>{statusLabel}</Text> : null}
-              {blocker ? <Text style={styles.blocker}>{blockerCopy(blocker, tr)}</Text> : null}
-              {needsWebhook ? (
-                <PrimaryButton
-                  label={tr('reconcileCommentWebhooks')}
-                  onPress={onReconcileComments}
-                  loading={busy}
-                  disabled={actionsDisabled}
-                  variant="ghost"
-                />
-              ) : null}
-            </>
-          ) : null}
-          {row.connected ? (
+          <ChannelCapabilityToggles
+            toggles={defaultToggles(row)}
+            busyKey={busyToggleKey}
+            disabled={actionsDisabled}
+            messagesLabel={tr('integrationToggleMessages')}
+            commentsLabel={tr('toggleComments')}
+            onToggle={onToggle}
+          />
+          {blocker ? <Text style={styles.blocker}>{blockerCopy(blocker, tr)}</Text> : null}
+          {needsWebhook ? (
             <PrimaryButton
-              label={tr('disconnectAccount')}
-              onPress={onDisconnect}
+              label={tr('reconcileCommentWebhooks')}
+              onPress={onReconcileComments}
               loading={busy}
               disabled={actionsDisabled}
-              variant="danger"
+              variant="ghost"
             />
-          ) : (
-            <PrimaryButton
-              label={tr('connect')}
-              onPress={onConnect}
-              loading={busy}
-              disabled={actionsDisabled}
-            />
-          )}
+          ) : null}
         </>
-      )}
-    </View>
+      ) : null}
+    </IntegrationCardShell>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-    borderColor: colors.border,
-    borderWidth: 1,
-    gap: spacing.md,
-  },
-  head: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  cardTitle: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 17 },
-  soonHint: { color: colors.textDim, fontFamily: fonts.body, fontSize: 13 },
-  statusHint: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 12 },
   blocker: { color: colors.danger, fontFamily: fonts.body, fontSize: 13 },
 });

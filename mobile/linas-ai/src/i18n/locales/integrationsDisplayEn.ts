@@ -11,6 +11,11 @@ export const integrationsDisplayEn = {
   integrationCommentReplies: 'Comment replies',
   integrationFeatureOn: 'On',
   integrationFeatureOff: 'Off',
+  integrationToggleMessages: 'Messages',
+  integrationRefreshStatus: 'Refresh status',
+  integrationDisconnectAccount: 'Disconnect account',
+  integrationDisconnectHint: 'AI replies stop until you reconnect.',
+  integrationWhatsAppHandle: 'Business number',
   drawerRecents: 'Recents',
   appUpdateForceTitle: 'Update required',
   appUpdateForceBody:

@@ -62,6 +62,14 @@ export async function fetchWhatsAppCloudStatus(): Promise<WhatsAppCloudStatus> {
   return apiFetch('/api/whatsapp/cloud/status', { schema: WhatsAppStatusSchema });
 }
 
+export async function disconnectWhatsAppCloud(connectionId: string): Promise<void> {
+  await apiFetch(`/api/whatsapp/cloud/connections/${encodeURIComponent(connectionId)}/disconnect`, {
+    method: 'POST',
+    body: JSON.stringify({ confirm: 'DISCONNECT' }),
+    schema: OkSchema,
+  });
+}
+
 export async function setWhatsAppAiEnabled(connectionId: string, enabled: boolean): Promise<void> {
   const path = enabled
     ? `/api/whatsapp/cloud/connections/${encodeURIComponent(connectionId)}/ai/enable`

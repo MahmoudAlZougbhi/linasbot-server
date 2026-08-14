@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, Linking, ScrollView, StyleSheet, Text } from 'react-native';
+import { Alert, AppState, Linking, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { ApiError, apiFetch } from '../../api/client';
 import { parseIntegrationsDeepLink } from '../../app/navigation';
 import { tokenStore } from '../../auth/tokenStore';
-import { PrimaryButton } from '../../components/PrimaryButton';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { StringKey } from '../../i18n/locales/en';
 import { colors, fonts, spacing } from '../../theme';
@@ -12,21 +11,28 @@ import { AuthGateModal } from '../auth/AuthGateModal';
 import { useModuleNav } from '../nav/ModuleNavContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import {
+  IntegrationAccountSheet,
+  type IntegrationSheetTarget,
+} from './IntegrationAccountSheet';
+import {
   IntegrationChannelCard,
+  channelSubtitle,
   commentsBlocker,
   defaultToggles,
   type IntegrationRow,
 } from './IntegrationChannelCard';
+import { IntegrationRefreshButton } from './IntegrationRefreshButton';
 import { disconnectMetaPlatform, startMetaOAuth } from './integrationsOAuth';
 import {
   ListSchema,
   ToggleResponseSchema,
   type IntegrationListRow,
 } from './integrationsSchemas';
-import { WhatsAppCloudCard } from './WhatsAppCloudCard';
+import { WhatsAppCloudCard, whatsappCardSubtitle } from './WhatsAppCloudCard';
 import { useWhatsAppIntegrations } from './useWhatsAppIntegrations';
 
 type Row = IntegrationListRow;
+type SheetState = IntegrationSheetTarget & { kind: 'meta' | 'whatsapp' };
 
 type Props = {
   onRequestLogin?: () => void;
@@ -42,7 +48,6 @@ const PLATFORM_LABEL: Record<string, StringKey> = {
 
 function isComingSoon(row: Row): boolean {
   if (row.coming_soon === true) return true;
-  if (row.connectable === false) return true;
   return row.platform === 'tiktok' || row.platform === 'snapchat';
 }
 
@@ -58,6 +63,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
   const [notice, setNotice] = useState<string | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [authGate, setAuthGate] = useState(false);
+  const [sheet, setSheet] = useState<SheetState | null>(null);
   const wa = useWhatsAppIntegrations({
     onAuthGate: () => setAuthGate(true),
     onError: setError,
@@ -299,54 +305,124 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     return key ? tr(key) : row.label;
   }
 
+  function openMetaSheet(row: Row) {
+    const platform = row.platform === 'facebook' ? 'facebook' : 'instagram';
+    setSheet({
+      kind: 'meta',
+      platform,
+      title: platformTitle(row),
+      subtitle: channelSubtitle(row as IntegrationRow),
+    });
+  }
+
+  function onSheetDisconnect() {
+    const target = sheet;
+    setSheet(null);
+    if (!target) return;
+    if (target.kind === 'whatsapp') {
+      Alert.alert(tr('disconnectAccount'), `${target.title}\n${tr('disconnectAccountConfirm')}`, [
+        { text: tr('usersCancel'), style: 'cancel' },
+        {
+          text: tr('disconnect'),
+          style: 'destructive',
+          onPress: () => void wa.disconnectWhatsApp(load),
+        },
+      ]);
+      return;
+    }
+    const row = rows.find((r) => r.platform === target.platform);
+    if (row) void disconnectPlatform(row);
+  }
+
+  const metaRows = rows.filter((row) => row.platform === 'instagram' || row.platform === 'facebook');
+  const tiktokRow = rows.find((row) => row.platform === 'tiktok');
+
   return (
-    <ScreenChrome title={tr('integrations')} subtitle={tr('integrationsSub')}>
-      {loading ? <ActivityIndicator color={colors.accent} /> : null}
+    <ScreenChrome
+      title={tr('integrations')}
+      subtitle={tr('integrationsSub')}
+      headerRight={
+        <IntegrationRefreshButton
+          onRefresh={() => void load()}
+          refreshing={loading}
+          accessibilityLabel={tr('refreshConnectionStatus')}
+        />
+      }
+    >
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <PrimaryButton
-        label={tr('refreshConnectionStatus')}
-        onPress={() => void load()}
-        loading={loading}
-        variant="ghost"
-      />
-      <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: spacing.md }}>
-        {tr('refreshConnectionStatusHint')}
-      </Text>
       <ScrollView contentContainerStyle={styles.list}>
+        {metaRows.map((row) => (
+          <IntegrationChannelCard
+            key={row.platform}
+            row={row as IntegrationRow}
+            title={platformTitle(row)}
+            soon={isComingSoon(row)}
+            busy={busyPlatform === row.platform}
+            busyToggleKey={busyToggle?.platform === row.platform ? busyToggle.key : null}
+            actionsDisabled={busyPlatform !== null || busyToggle !== null}
+            tr={tr}
+            onToggle={(key, value) => void setToggle(row, key, value)}
+            onReconcileComments={() => void reconcileComments(row)}
+            onConnect={() =>
+              void connectPlatform(row.platform === 'facebook' ? 'facebook' : 'instagram')
+            }
+            onOpenMenu={() => openMetaSheet(row)}
+          />
+        ))}
         <WhatsAppCloudCard
           status={wa.waStatus}
           loading={loading}
           busy={wa.waBusy}
           onRefresh={() => void load()}
           onConnect={() => void wa.connectWhatsApp()}
+          onOpenMenu={() =>
+            setSheet({
+              kind: 'whatsapp',
+              platform: 'whatsapp',
+              title: tr('platformWhatsApp'),
+              subtitle: whatsappCardSubtitle(wa.waStatus, tr('integrationWhatsAppHandle')),
+            })
+          }
           onEnableAi={(id) => void wa.setWhatsAppAi(id, true, load)}
           onDisableAi={(id) => void wa.setWhatsAppAi(id, false, load)}
           onBusyChange={wa.setWaBusy}
           onError={setError}
           onNotice={setNotice}
         />
-        {rows
-          .filter((row) => row.platform === 'instagram' || row.platform === 'facebook')
-          .map((row) => (
-            <IntegrationChannelCard
-              key={row.platform}
-              row={row as IntegrationRow}
-              title={platformTitle(row)}
-              soon={isComingSoon(row)}
-              busy={busyPlatform === row.platform}
-              busyToggleKey={busyToggle?.platform === row.platform ? busyToggle.key : null}
-              actionsDisabled={busyPlatform !== null || busyToggle !== null}
-              tr={tr}
-              onToggle={(key, value) => void setToggle(row, key, value)}
-              onReconcileComments={() => void reconcileComments(row)}
-              onConnect={() =>
-                void connectPlatform(row.platform === 'facebook' ? 'facebook' : 'instagram')
-              }
-              onDisconnect={() => void disconnectPlatform(row)}
-            />
-          ))}
+        {tiktokRow ? (
+          <IntegrationChannelCard
+            key="tiktok"
+            row={tiktokRow as IntegrationRow}
+            title={platformTitle(tiktokRow)}
+            soon={isComingSoon(tiktokRow)}
+            busy={false}
+            busyToggleKey={null}
+            actionsDisabled
+            tr={tr}
+            onToggle={() => undefined}
+            onReconcileComments={() => undefined}
+            onConnect={() => undefined}
+            onOpenMenu={() => undefined}
+          />
+        ) : null}
       </ScrollView>
+
+      <IntegrationAccountSheet
+        target={sheet}
+        connectedLabel={tr('connected')}
+        refreshLabel={tr('integrationRefreshStatus')}
+        disconnectLabel={tr('integrationDisconnectAccount')}
+        disconnectHint={tr('integrationDisconnectHint')}
+        cancelLabel={tr('usersCancel')}
+        closeLabel={tr('usersCancel')}
+        onRefresh={() => {
+          setSheet(null);
+          void load();
+        }}
+        onDisconnect={onSheetDisconnect}
+        onClose={() => setSheet(null)}
+      />
 
       <AuthGateModal
         visible={authGate}
@@ -368,7 +444,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
 }
 
 const styles = StyleSheet.create({
-  list: { paddingBottom: 40, gap: spacing.md },
+  list: { paddingBottom: 40, gap: 14 },
   notice: { color: colors.accent, marginBottom: spacing.md, fontFamily: fonts.body },
   error: { color: colors.danger, marginBottom: spacing.md, fontFamily: fonts.body },
 });

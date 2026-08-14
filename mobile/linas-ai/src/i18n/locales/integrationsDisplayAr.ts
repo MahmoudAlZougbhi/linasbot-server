@@ -11,6 +11,11 @@ export const integrationsDisplayAr = {
   integrationCommentReplies: 'ردود التعليقات',
   integrationFeatureOn: 'مفعّل',
   integrationFeatureOff: 'معطّل',
+  integrationToggleMessages: 'الرسائل',
+  integrationRefreshStatus: 'تحديث الحالة',
+  integrationDisconnectAccount: 'فصل الحساب',
+  integrationDisconnectHint: 'تتوقف ردود الذكاء الاصطناعي حتى تعيد الربط.',
+  integrationWhatsAppHandle: 'رقم الأعمال',
   drawerRecents: 'الأخيرة',
   appUpdateForceTitle: 'التحديث مطلوب',
   appUpdateForceBody:
