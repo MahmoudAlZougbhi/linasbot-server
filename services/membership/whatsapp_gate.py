@@ -22,9 +22,7 @@ def assert_whatsapp_plan_allowed(tenant_id: str) -> None:
         return
     ent = entitlements_store.get(tenant_id)
     if ent.status not in {"active", "trial", "grace"} or ent.plan_id in {"", "none"}:
-        raise WhatsAppPlanDenied(
-            f"WhatsApp requires an active paid plan (plan={ent.plan_id}, status={ent.status})."
-        )
+        raise WhatsAppPlanDenied(f"WhatsApp requires an active paid plan (plan={ent.plan_id}, status={ent.status}).")
     features = PLAN_FEATURES.get(ent.plan_id) or ent.features or {}
     if not features.get("whatsapp"):
         raise WhatsAppPlanDenied(f"WhatsApp is not included on plan={ent.plan_id}. Upgrade required.")
