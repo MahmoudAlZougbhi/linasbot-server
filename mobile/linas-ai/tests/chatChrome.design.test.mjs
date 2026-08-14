@@ -162,3 +162,31 @@ test('bubbles: You / Linas labels, mint user bubble, teal AI bullets', () => {
   assert.match(body, /kind: 'section'/);
   assert.match(body, /kind: 'bullet'/);
 });
+
+test('composer plus opens Photos and Files popover above the +', () => {
+  const menu = read('features/chat/ComposerPlusMenu.tsx');
+  const overlays = read('features/chat/ChatScreenOverlays.tsx');
+  const handle = read('features/chat/handlePlusAction.ts');
+  const pick = read('features/chat/v2/pickAttachment.ts');
+  const en = read('i18n/locales/en.ts');
+  const ar = read('i18n/locales/ar.ts');
+  const fr = read('i18n/locales/fr.ts');
+  assert.match(overlays, /ComposerPlusMenu/);
+  assert.match(menu, /tr\('photos'\)/);
+  assert.match(menu, /tr\('files'\)/);
+  assert.match(menu, /attach_image/);
+  assert.match(menu, /attach_document/);
+  assert.match(menu, /borderRadius: radii\.lg/);
+  assert.doesNotMatch(menu, /attach_camera|Plugins|thinkHarder|Think harder/);
+  assert.match(handle, /pickImageAttachments/);
+  assert.match(handle, /pickDocumentAttachment/);
+  assert.match(pick, /requestMediaLibraryPermissionsAsync/);
+  assert.match(pick, /getDocumentAsync/);
+  assert.doesNotMatch(pick, /launchCameraAsync/);
+  assert.match(en, /photos:\s*'Photos'/);
+  assert.match(en, /files:\s*'Files'/);
+  assert.match(ar, /photos:\s*'الصور'/);
+  assert.match(ar, /files:\s*'الملفات'/);
+  assert.match(fr, /photos:\s*'Photos'/);
+  assert.match(fr, /files:\s*'Fichiers'/);
+});
