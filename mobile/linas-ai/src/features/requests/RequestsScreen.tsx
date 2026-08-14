@@ -57,6 +57,7 @@ export function RequestsScreen({ onOpenLiveChat }: Props) {
         list={list}
         onOpen={(item: RequestCard) => setSelectedId(item.request_id)}
         onOpenAiSetup={() => nav.openArea('cm')}
+        onOpenLiveChat={onOpenLiveChat}
       />
     </ScreenChrome>
   );

@@ -39,6 +39,15 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+def _csv(value: str | None, *, upper: bool = False) -> list[str] | None:
+    if not value:
+        return None
+    parts = [p.strip() for p in value.split(",") if p.strip()]
+    if upper:
+        parts = [p.upper() for p in parts]
+    return parts or None
+
+
 class CustomerRequestsService:
     def __init__(self, session: Session) -> None:
         self.session = session
@@ -141,6 +150,7 @@ class CustomerRequestsService:
         created_on_or_before: str | None = None,
         limit: int = 25,
         search_phone: bool = False,
+        include_sensitive: bool = False,
     ) -> dict[str, Any]:
         created_before = None
         if cursor:
@@ -160,18 +170,23 @@ class CustomerRequestsService:
                 on_or_before_dt = datetime.fromisoformat(created_on_or_before)
             except ValueError as exc:
                 raise CustomerRequestsError("INVALID_DATE", "Invalid created_on_or_before") from exc
+        statuses = _csv(status, upper=True)
+        channels = _csv(source_channel)
+        filter_kw: dict[str, Any] = {
+            "tenant_id": tenant_id,
+            "request_type": request_type.upper() if request_type else None,
+            "statuses": statuses,
+            "source_channels": channels,
+            "assigned_user_id": assigned_user_id,
+            "q": q,
+            "created_after": after_dt,
+            "created_on_or_before": on_or_before_dt,
+            "search_phone": search_phone,
+        }
         rows = self.repo.list_requests(
-            tenant_id=tenant_id,
-            request_type=request_type.upper() if request_type else None,
-            status=status.upper() if status else None,
-            source_channel=source_channel,
-            assigned_user_id=assigned_user_id,
-            q=q,
+            **filter_kw,
             created_before=created_before,
-            created_after=after_dt,
-            created_on_or_before=on_or_before_dt,
             limit=limit + 1,
-            search_phone=search_phone,
         )
         has_more = len(rows) > limit
         page = rows[:limit]
@@ -179,9 +194,10 @@ class CustomerRequestsService:
         if has_more and page and page[-1].created_at is not None:
             next_cursor = page[-1].created_at.isoformat()
         return {
-            "items": [serialize_card(r) for r in page],
+            "items": [serialize_card(r, include_sensitive=include_sensitive) for r in page],
             "next_cursor": next_cursor,
             "counts": self.repo.status_counts(tenant_id=tenant_id),
+            "matched": self.repo.count_requests(**filter_kw),
         }
 
     def assign(

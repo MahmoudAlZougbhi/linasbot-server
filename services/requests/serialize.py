@@ -73,9 +73,9 @@ def serialize_request(
     return data
 
 
-def serialize_card(row: CustomerRequest) -> dict[str, Any]:
-    """List card — no full phone/address."""
-    return {
+def serialize_card(row: CustomerRequest, *, include_sensitive: bool = False) -> dict[str, Any]:
+    """List card. Full phone only when the caller may view sensitive fields."""
+    data: dict[str, Any] = {
         "request_id": row.id,
         "request_number": row.request_number,
         "request_type": row.request_type,
@@ -86,11 +86,22 @@ def serialize_card(row: CustomerRequest) -> dict[str, Any]:
         "title": row.title,
         "preferred_date": row.preferred_date,
         "preferred_time": row.preferred_time,
+        "requested_branch": row.requested_branch,
+        "requested_items": row.requested_items,
+        "collected_fields": row.collected_fields,
+        "fulfillment_preference": row.fulfillment_preference,
+        "customer_notes": row.customer_notes,
         "assigned_user_id": row.assigned_user_id,
+        "conversation_id": row.conversation_id,
+        "external_customer_id": row.external_customer_id,
         "notification_status": row.notification_status,
         "created_at": _dt(row.created_at),
         "row_version": row.row_version,
+        "phone_present": bool(row.phone_normalized),
     }
+    if include_sensitive:
+        data["phone_normalized"] = row.phone_normalized
+    return data
 
 
 def serialize_event(ev: CustomerRequestEvent) -> dict[str, Any]:

@@ -1,96 +1,139 @@
+import { useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Pressable,
   RefreshControl,
-  ScrollView,
+  Share,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 
-import { AppIcon, feather } from '../../components/AppIcon';
 import { EmptyState } from '../../components/EmptyState';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useI18n } from '../../i18n/LanguageContext';
-import type { StringKey } from '../../i18n/locales/en';
-import { HIT, fonts, radii, spacing, useTheme } from '../../theme';
+import { fonts, spacing, useTheme } from '../../theme';
 import { RequestCardRow } from './RequestCardRow';
-import type { RequestsListState } from './useRequestsList';
+import { RequestFilterSheet } from './RequestFilterSheet';
+import { RequestSearchBar } from './RequestSearchBar';
+import { RequestSummaryCards } from './RequestSummaryCards';
 import {
-  COUNTER_STATUSES,
-  REQUEST_STATUSES,
-  SOURCE_CHANNELS,
-  STATUS_LABEL_KEYS,
-  CHANNEL_LABEL_KEYS,
-  type DatePreset,
-  type RequestCard,
-  type TypeFilter,
-} from './requestsTypes';
+  assignRequest,
+  changeRequestStatus,
+  getRequest,
+} from './requestsApi';
+import {
+  canManageRequests,
+  canViewSensitiveRequests,
+} from './requestsPermissions';
+import { formatPrintSlip, nextStatusForBucket, statusBucket } from './requestsFormat';
+import type { RequestCard, StatusBucket } from './requestsTypes';
+import type { RequestsListState } from './useRequestsList';
+
+type LiveChatTarget = { userId: string; conversationId: string };
 
 type Props = {
   list: RequestsListState;
   onOpen: (item: RequestCard) => void;
   onOpenAiSetup: () => void;
+  onOpenLiveChat: (target: LiveChatTarget) => void;
 };
 
-type Chip = { id: string; labelKey: StringKey };
-
-const TYPE_CHIPS: { id: TypeFilter; labelKey: StringKey }[] = [
-  { id: 'all', labelKey: 'reqFilterAll' },
-  { id: 'ORDER', labelKey: 'reqFilterOrders' },
-  { id: 'APPOINTMENT', labelKey: 'reqFilterAppointments' },
-  { id: 'OTHER', labelKey: 'reqFilterOther' },
-];
-
-const DATE_CHIPS: { id: DatePreset; labelKey: StringKey }[] = [
-  { id: 'all', labelKey: 'reqDateAll' },
-  { id: 'today', labelKey: 'reqDateToday' },
-  { id: 'last7', labelKey: 'reqDateLast7' },
-  { id: 'last30', labelKey: 'reqDateLast30' },
-];
-
-function ChipRow({
-  chips,
-  selected,
-  onSelect,
-}: {
-  chips: Chip[];
-  selected: string | null;
-  onSelect: (id: string | null) => void;
-}) {
-  const { colors } = useTheme();
-  const { tr } = useI18n();
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-      {chips.map((chip) => {
-        const active = selected === chip.id;
-        return (
-          <Pressable
-            key={chip.id}
-            onPress={() => onSelect(active && chip.id !== 'all' ? null : chip.id)}
-            style={[
-              styles.chip,
-              {
-                backgroundColor: active ? colors.accentSoft : colors.surfaceAlt,
-                borderColor: active ? colors.accent : colors.border,
-              },
-            ]}
-          >
-            <Text style={{ color: active ? colors.accent : colors.textMuted, fontFamily: fonts.bodyMedium, fontSize: 12 }}>
-              {tr(chip.labelKey)}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
-  );
+function filtersActive(list: RequestsListState): boolean {
+  const f = list.filters;
+  return f.platforms.length > 0 || Boolean(f.dateFrom || f.dateTo || f.assignedUserId);
 }
 
-export function RequestsHome({ list, onOpen, onOpenAiSetup }: Props) {
+function filterSummary(list: RequestsListState): string {
+  const f = list.filters;
+  const platforms = f.platforms.length ? f.platforms.length === 1 ? '1 platform' : `${f.platforms.length} platforms` : 'All platforms';
+  const date =
+    f.dateFrom || f.dateTo ? [f.dateFrom, f.dateTo].filter(Boolean).join(' – ') : 'Any date';
+  const user = f.assignedUserId
+    ? list.staff.find((s) => s.id === f.assignedUserId)?.label || 'Assigned'
+    : 'All users';
+  return `${platforms} · ${date} · ${user}`;
+}
+
+export function RequestsHome({ list, onOpen, onOpenAiSetup, onOpenLiveChat }: Props) {
   const { colors } = useTheme();
-  const { tr } = useI18n();
+  const { tr, language } = useI18n();
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  async function withItem(item: RequestCard, fn: () => Promise<void>) {
+    setBusyId(item.request_id);
+    setActionError(null);
+    try {
+      await fn();
+    } catch {
+      setActionError(tr('reqActionError'));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function assigneeLabel(item: RequestCard): string {
+    if (!item.assigned_user_id) return 'Assign';
+    return list.staff.find((s) => s.id === item.assigned_user_id)?.label || 'Assign';
+  }
+
+  async function onStatus(item: RequestCard, bucket: StatusBucket) {
+    const next = nextStatusForBucket(item, bucket);
+    if (!next) {
+      if (statusBucket(item.status) !== bucket) setActionError(tr('reqStatusInvalid'));
+      return;
+    }
+    if (!canManageRequests(list.user)) return;
+    await withItem(item, async () => {
+      const updated = await changeRequestStatus(item.request_id, {
+        to_status: next,
+        row_version: item.row_version,
+      });
+      list.patchItem({ ...item, ...updated });
+    });
+  }
+
+  async function onAssign(item: RequestCard, userId: string | null) {
+    if (!canManageRequests(list.user)) return;
+    await withItem(item, async () => {
+      const updated = await assignRequest(item.request_id, {
+        assigned_user_id: userId,
+        row_version: item.row_version,
+      });
+      list.patchItem({ ...item, ...updated });
+    });
+  }
+
+  async function onChat(item: RequestCard) {
+    let userId = item.external_customer_id;
+    let conversationId = item.conversation_id;
+    if (!userId || !conversationId) {
+      try {
+        const detail = await getRequest(item.request_id);
+        userId = detail.external_customer_id;
+        conversationId = detail.conversation_id;
+      } catch {
+        setActionError(tr('reqChatUnavailable'));
+        return;
+      }
+    }
+    if (userId && conversationId) {
+      onOpenLiveChat({ userId, conversationId });
+      return;
+    }
+    setActionError(tr('reqChatUnavailable'));
+  }
+
+  async function onPrint(item: RequestCard) {
+    await withItem(item, async () => {
+      const detail = await getRequest(item.request_id);
+      const phone = canViewSensitiveRequests(list.user) ? detail.phone_normalized : item.phone_normalized;
+      const message = formatPrintSlip(detail, phone);
+      await Share.share({ message, title: `Request #${detail.request_number}` });
+    });
+  }
 
   if (list.loading) {
     return (
@@ -99,7 +142,6 @@ export function RequestsHome({ list, onOpen, onOpenAiSetup }: Props) {
       </View>
     );
   }
-
   if (list.errorKind === 'forbidden') {
     return <EmptyState title={tr('reqPermissionTitle')} body={tr('reqPermissionBody')} />;
   }
@@ -132,93 +174,39 @@ export function RequestsHome({ list, onOpen, onOpenAiSetup }: Props) {
     );
   }
 
-  const statusChips: Chip[] = [
-    { id: '', labelKey: 'reqStatusAny' },
-    ...REQUEST_STATUSES.map((s) => ({ id: s, labelKey: STATUS_LABEL_KEYS[s] })),
-  ];
-  const channelChips: Chip[] = [
-    { id: '', labelKey: 'reqChannelAny' },
-    ...SOURCE_CHANNELS.map((c) => ({ id: c, labelKey: CHANNEL_LABEL_KEYS[c] })),
-  ];
-
   return (
     <View style={styles.flex}>
-      {list.setupRequired ? (
-        <View style={[styles.setup, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}>
-          <Text style={[styles.setupTitle, { color: colors.text }]}>{tr('reqSetupRequiredTitle')}</Text>
-          <Text style={[styles.setupBody, { color: colors.textMuted }]}>{tr('reqSetupRequiredBody')}</Text>
-          <PrimaryButton label={tr('reqOpenAiSetup')} onPress={onOpenAiSetup} style={styles.setupBtn} />
-        </View>
-      ) : null}
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.counters}>
-        {COUNTER_STATUSES.map((status) => (
-          <Pressable
-            key={status}
-            onPress={() => list.setStatusFilter(list.statusFilter === status ? null : status)}
-            style={[
-              styles.counter,
-              {
-                backgroundColor: list.statusFilter === status ? colors.accentSoft : colors.surface,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <Text style={[styles.counterN, { color: colors.text }]}>{list.counts[status] ?? 0}</Text>
-            <Text style={[styles.counterL, { color: colors.textMuted }]}>
-              {tr(STATUS_LABEL_KEYS[status])}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-
-      <View style={[styles.searchWrap, { backgroundColor: colors.input, borderColor: colors.border }]}>
-        <AppIcon icon={feather('search')} size={16} color={colors.textDim} />
-        <TextInput
-          value={list.search}
-          onChangeText={list.setSearch}
-          placeholder={tr('reqSearchPlaceholder')}
-          placeholderTextColor={colors.textDim}
-          style={[styles.search, { color: colors.text }]}
-          accessibilityLabel={tr('reqSearchPlaceholder')}
-          autoCorrect={false}
-          autoCapitalize="none"
-        />
-      </View>
-
-      <ChipRow
-        chips={TYPE_CHIPS}
-        selected={list.typeFilter}
-        onSelect={(id) => list.setTypeFilter((id as TypeFilter) || 'all')}
+      <RequestSummaryCards
+        counts={list.counts}
+        selected={list.statusBucket}
+        onSelect={list.setStatusBucket}
       />
-      <ChipRow
-        chips={statusChips}
-        selected={list.statusFilter ?? ''}
-        onSelect={(id) => list.setStatusFilter(id || null)}
+      <RequestSearchBar
+        value={list.search}
+        onChange={list.setSearch}
+        filterActive={filtersActive(list)}
+        onOpenFilter={() => setFilterOpen(true)}
       />
-      <ChipRow
-        chips={channelChips}
-        selected={list.channelFilter ?? ''}
-        onSelect={(id) => list.setChannelFilter(id || null)}
-      />
-      <ChipRow
-        chips={[
-          { id: 'all', labelKey: 'reqAssigneeAll' },
-          { id: 'me', labelKey: 'reqAssigneeMe' },
-        ]}
-        selected={list.assigneeFilter}
-        onSelect={(id) => list.setAssigneeFilter(id === 'me' ? 'me' : 'all')}
-      />
-      <ChipRow
-        chips={DATE_CHIPS}
-        selected={list.datePreset}
-        onSelect={(id) => list.setDatePreset((id as DatePreset) || 'all')}
-      />
+      <Text style={[styles.summaryLine, { color: colors.textDim }]}>{filterSummary(list)}</Text>
+      {actionError ? <Text style={[styles.err, { color: colors.danger }]}>{actionError}</Text> : null}
 
       <FlatList
         data={list.items}
         keyExtractor={(item) => item.request_id}
-        renderItem={({ item }) => <RequestCardRow item={item} onPress={() => onOpen(item)} />}
+        renderItem={({ item }) => (
+          <RequestCardRow
+            item={item}
+            assigneeLabel={assigneeLabel(item)}
+            staff={list.staff}
+            busy={busyId === item.request_id}
+            language={language}
+            onOpen={() => onOpen(item)}
+            onStatus={(bucket) => void onStatus(item, bucket)}
+            onAssign={(userId) => void onAssign(item, userId)}
+            onChat={() => void onChat(item)}
+            onPrint={() => void onPrint(item)}
+          />
+        )}
         contentContainerStyle={styles.list}
         refreshControl={
           <RefreshControl refreshing={list.refreshing} onRefresh={() => void list.refresh()} tintColor={colors.accent} />
@@ -230,6 +218,15 @@ export function RequestsHome({ list, onOpen, onOpenAiSetup }: Props) {
           list.loadingMore ? <ActivityIndicator color={colors.accent} style={{ marginVertical: 12 }} /> : null
         }
       />
+
+      <RequestFilterSheet
+        visible={filterOpen}
+        applied={list.filters}
+        staff={list.staff}
+        search={list.search}
+        onClose={() => setFilterOpen(false)}
+        onApply={list.applyFilters}
+      />
     </View>
   );
 }
@@ -238,27 +235,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   centerPad: { flex: 1, justifyContent: 'center', padding: spacing.xl, gap: spacing.md },
-  setup: { marginHorizontal: spacing.lg, marginBottom: spacing.md, borderWidth: 1, borderRadius: radii.lg, padding: spacing.lg },
-  setupTitle: { fontFamily: fonts.bodyMedium, fontSize: 15 },
-  setupBody: { fontFamily: fonts.body, fontSize: 13, marginTop: 6, marginBottom: spacing.md },
-  setupBtn: { alignSelf: 'flex-start' },
-  counters: { paddingHorizontal: spacing.lg, gap: spacing.sm, paddingBottom: spacing.sm },
-  counter: { minWidth: 72, borderRadius: radii.md, borderWidth: 1, paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
-  counterN: { fontFamily: fonts.bodyMedium, fontSize: 18 },
-  counterL: { fontFamily: fonts.body, fontSize: 11, marginTop: 2 },
-  searchWrap: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderRadius: radii.md,
-    minHeight: HIT - 4,
-    paddingHorizontal: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  search: { flex: 1, fontFamily: fonts.body, fontSize: 15, paddingVertical: 8 },
-  chips: { paddingHorizontal: spacing.lg, gap: 8, paddingBottom: spacing.sm },
-  chip: { borderWidth: 1, borderRadius: radii.pill, paddingHorizontal: 12, paddingVertical: 6 },
-  list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, flexGrow: 1 },
+  summaryLine: { fontFamily: fonts.body, fontSize: 13, marginBottom: spacing.sm },
+  list: { paddingBottom: spacing.xl, flexGrow: 1 },
+  err: { fontFamily: fonts.body, fontSize: 13, marginBottom: 6 },
 });

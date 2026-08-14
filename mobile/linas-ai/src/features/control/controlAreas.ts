@@ -41,7 +41,7 @@ export const CONTROL_ITEMS: ControlItem[] = [
   {
     id: 'requests',
     title: 'Requests',
-    subtitle: 'Customer orders & appointments',
+    subtitle: 'See confirmed orders and appointment bookings in one place.',
     group: 'operate',
   },
   { id: 'integrations', title: 'Integrations', subtitle: 'Instagram & Facebook', group: 'operate' },

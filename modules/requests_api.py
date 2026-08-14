@@ -101,6 +101,7 @@ def list_requests(
                 created_on_or_before=created_on_or_before,
                 limit=limit,
                 search_phone=can_view_sensitive(session),
+                include_sensitive=can_view_sensitive(session),
             )
         except CustomerRequestsError as exc:
             raise _http(exc) from exc

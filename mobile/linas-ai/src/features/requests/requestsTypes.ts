@@ -32,9 +32,7 @@ export const COUNTER_STATUSES = [
   'COMPLETED',
 ] as const;
 
-export type TypeFilter = 'all' | RequestType;
-export type DatePreset = 'all' | 'today' | 'last7' | 'last30';
-export type AssigneeFilter = 'all' | 'me';
+export type StatusBucket = 'new' | 'in_progress' | 'done';
 
 export const RequestCardSchema = z.object({
   request_id: z.string(),
@@ -47,10 +45,19 @@ export const RequestCardSchema = z.object({
   title: z.string().nullable().optional(),
   preferred_date: z.string().nullable().optional(),
   preferred_time: z.string().nullable().optional(),
+  requested_branch: z.string().nullable().optional(),
+  requested_items: z.unknown().optional(),
+  collected_fields: z.unknown().optional(),
+  fulfillment_preference: z.string().nullable().optional(),
+  customer_notes: z.string().nullable().optional(),
   assigned_user_id: z.string().nullable().optional(),
+  conversation_id: z.string().nullable().optional(),
+  external_customer_id: z.string().nullable().optional(),
   notification_status: z.string().nullable().optional(),
   created_at: z.string().nullable().optional(),
   row_version: z.number(),
+  phone_present: z.boolean().optional(),
+  phone_normalized: z.string().nullable().optional(),
 });
 
 export const RequestNoteSchema = z.object({
@@ -72,16 +79,9 @@ export const RequestEventSchema = z.object({
 export const RequestDetailSchema = RequestCardSchema.extend({
   tenant_id: z.string().optional(),
   source_account_id: z.string().nullable().optional(),
-  external_customer_id: z.string().nullable().optional(),
   customer_name: z.string().nullable().optional(),
-  conversation_id: z.string().nullable().optional(),
   originating_message_id: z.string().nullable().optional(),
   originating_comment_id: z.string().nullable().optional(),
-  collected_fields: z.unknown().optional(),
-  requested_items: z.unknown().optional(),
-  requested_branch: z.string().nullable().optional(),
-  fulfillment_preference: z.string().nullable().optional(),
-  customer_notes: z.string().nullable().optional(),
   configuration_version: z.string().nullable().optional(),
   last_notification_error: z.string().nullable().optional(),
   completion_message: z.string().nullable().optional(),
@@ -92,10 +92,8 @@ export const RequestDetailSchema = RequestCardSchema.extend({
   ready_at: z.string().nullable().optional(),
   completed_at: z.string().nullable().optional(),
   cancelled_at: z.string().nullable().optional(),
-  phone_normalized: z.string().nullable().optional(),
   email: z.string().nullable().optional(),
   delivery_address: z.string().nullable().optional(),
-  phone_present: z.boolean().optional(),
   email_present: z.boolean().optional(),
   delivery_address_present: z.boolean().optional(),
   notes: z.array(RequestNoteSchema).optional(),
@@ -106,6 +104,7 @@ export const RequestListSchema = z.object({
   items: z.array(RequestCardSchema),
   next_cursor: z.string().nullable().optional(),
   counts: z.record(z.string(), z.number()).optional(),
+  matched: z.number().optional(),
 });
 
 export const SetupStatusSchema = z.object({
@@ -144,6 +143,7 @@ export const CHANNEL_LABEL_KEYS: Record<string, StringKey> = {
   facebook_messenger: 'reqChannelFacebook',
   whatsapp_cloud: 'reqChannelWhatsApp',
   comment_linked_dm: 'reqChannelCommentDm',
+  tiktok: 'reqChannelTikTok',
 };
 
 export const FINAL_ACTION_BY_TYPE: Record<string, { action: string; labelKey: StringKey }> = {
@@ -152,28 +152,8 @@ export const FINAL_ACTION_BY_TYPE: Record<string, { action: string; labelKey: St
   OTHER: { action: 'complete_request', labelKey: 'reqActionComplete' },
 };
 
-export function cardSummary(card: RequestCard): string {
-  if (card.request_type === 'APPOINTMENT') {
-    const parts = [card.preferred_date, card.preferred_time].filter(Boolean);
-    if (parts.length) return parts.join(' · ');
-  }
-  return (card.title || '').trim();
-}
-
 export function idempotencyKey(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-}
-
-/** ISO bound for server-side list filter (`created_after`). */
-export function createdAfterForPreset(preset: DatePreset): string | null {
-  if (preset === 'all') return null;
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  if (preset === 'today') return startOfToday.toISOString();
-  const now = Date.now();
-  if (preset === 'last7') return new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
-  if (preset === 'last30') return new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
-  return null;
 }
 
 export function formatWhen(iso: string | null | undefined, locale: string): string {
