@@ -16,7 +16,6 @@ import { useI18n } from '../../i18n/LanguageContext';
 import { useTheme } from '../../theme';
 import { ComposerEditChip } from './ComposerEditChip';
 import {
-  formatVoiceElapsed,
   PlusCircleGlyph,
   SendArrowGlyph,
   StopGlyph,
@@ -200,9 +199,9 @@ export function ChatComposer({
   const idlePlaceholder =
     ownerMode === 'work' ? tr('composerPlaceholderWork') : tr('composerPlaceholderChat');
   const placeholder = recording
-    ? `${tr('composerListening')} ${formatVoiceElapsed(elapsedMs)}`
+    ? tr('composerListening')
     : paused
-      ? `${tr('composerPaused')} · ${formatVoiceElapsed(elapsedMs)}`
+      ? tr('composerPaused')
       : transcribing
         ? tr('composerTranscribing')
         : idlePlaceholder;
