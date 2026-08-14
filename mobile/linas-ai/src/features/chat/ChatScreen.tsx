@@ -117,7 +117,7 @@ export function ChatScreen({
   const sessionReady = isAuthenticated && !owner.loading && Boolean(owner.conversationId);
   const sending = isAuthenticated ? turn.streaming || owner.loading : guest.sending;
   const error = isAuthenticated ? owner.error : guest.error;
-  const listKey = isAuthenticated ? owner.conversationId || 'owner' : 'guest';
+  const listKey = isAuthenticated ? owner.conversationId || 'owner' : guest.guestId || 'guest';
   // Greeting-seeded chats: show Chat|Work until first user message.
   const hasUserMessage = messages.some((m) => m.role === 'user');
   const showModeToggle = isAuthenticated && !hasUserMessage && !turn.liveText && !turn.streaming;

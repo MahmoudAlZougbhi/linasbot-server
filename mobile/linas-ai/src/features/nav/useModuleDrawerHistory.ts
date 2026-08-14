@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { apiFetch } from '../../api/client';
 import { ConversationSummarySchema } from '../../api/types';
 import { tokenStore } from '../../auth/tokenStore';
+import { listedHistoryEntries } from '../chat/chatHistoryVisibility';
 import type { HistoryItem } from './HistoryRows';
 import { usePinnedChats } from '../chat/usePinnedChats';
 
@@ -31,7 +32,7 @@ export function useModuleDrawerHistory(enabled: boolean, drawerOpen: boolean) {
     }
     try {
       const listed = await apiFetch('/api/owner-ai/conversations', { schema: ListConvSchema });
-      setHistory(listed.conversations.map((c) => ({ id: c.id, title: c.title })));
+      setHistory(listedHistoryEntries(listed.conversations));
       setArchivedIds(listed.conversations.filter((c) => c.archived).map((c) => c.id));
     } catch {
       /* keep last good list */

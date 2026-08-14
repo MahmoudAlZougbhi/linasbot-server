@@ -11,6 +11,12 @@ import {
   type ProposedPatch,
 } from './chatSessionSchemas';
 import {
+  listedHistoryEntries,
+  upsertStartedHistoryEntry,
+  dropUnstartedHistoryEntry,
+  type HistoryEntry,
+} from './chatHistoryVisibility';
+import {
   autoTitleFromFirstMessage,
   isDefaultConversationTitle,
 } from './chatSessionTitle';
@@ -21,7 +27,6 @@ import {
   messagesIncludeAssistantReply,
   prependOlderUnique,
 } from './ownerChatPaging';
-import { clearPreferFreshOwnerChat, isPreferFreshOwnerChat } from './preferFreshOwnerChat';
 
 const SYNC_AFTER_TURN_RETRY_MS = [0, 150, 350, 700];
 
@@ -31,9 +36,21 @@ export type SyncAfterTurnOptions = {
 };
 
 export type { ProposedPatch } from './chatSessionSchemas';
+export type { HistoryEntry } from './chatHistoryVisibility';
 export { autoTitleFromFirstMessage, isDefaultConversationTitle } from './chatSessionTitle';
 
-export type HistoryEntry = { id: string; title: string; archived?: boolean };
+async function createOwnerConversation() {
+  return apiFetch('/api/owner-ai/conversations', {
+    method: 'POST',
+    body: JSON.stringify({ language: getStoredAppLanguage() }),
+    schema: CreateConvSchema,
+  });
+}
+
+function seedTypewriterId(messages: ChatMessage[]): string | null {
+  const seed = messages[0];
+  return seed?.role === 'assistant' && messages.length === 1 ? seed.id : null;
+}
 
 export function useChatSession(enabled = true) {
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -61,51 +78,27 @@ export function useChatSession(enabled = true) {
   const bootstrap = useCallback(async () => {
     if (!enabled) {
       setLoading(false);
+      setConversationId(null);
+      setTitle('Linas AI');
+      setMessages([]);
+      setHistory([]);
+      setHasMore(false);
+      setSeedTypewriterMessageId(null);
+      setPendingConfirm(null);
+      setProposedPatch(null);
       return;
     }
     setLoading(true);
     setError(null);
     try {
       const listed = await apiFetch('/api/owner-ai/conversations', { schema: ListConvSchema });
-      setHistory(
-        listed.conversations.map((c) => ({
-          id: c.id,
-          title: c.title,
-          archived: Boolean(c.archived),
-        })),
-      );
-      const preferFresh = await isPreferFreshOwnerChat();
-      const active = listed.conversations.find((c) => !c.archived) || listed.conversations[0];
-      if (active && !preferFresh) {
-        const full = await apiFetch(conversationMessagesUrl(active.id), { schema: GetConvSchema });
-        setConversationId(full.conversation.id);
-        setTitle(full.conversation.title);
-        setMessages(full.conversation.messages);
-        setHasMore(Boolean(full.conversation.has_more));
-        setSeedTypewriterMessageId(null);
-      } else {
-        const created = await apiFetch('/api/owner-ai/conversations', {
-          method: 'POST',
-          body: JSON.stringify({ language: getStoredAppLanguage() }),
-          schema: CreateConvSchema,
-        });
-        if (preferFresh) {
-          await clearPreferFreshOwnerChat();
-        }
-        setConversationId(created.conversation.id);
-        setTitle(created.conversation.title);
-        setMessages(created.conversation.messages);
-        setHasMore(false);
-        setHistory((prev) =>
-          preferFresh && prev.length
-            ? [{ id: created.conversation.id, title: created.conversation.title }, ...prev]
-            : [{ id: created.conversation.id, title: created.conversation.title }],
-        );
-        const seed = created.conversation.messages[0];
-        setSeedTypewriterMessageId(
-          seed?.role === 'assistant' && created.conversation.messages.length === 1 ? seed.id : null,
-        );
-      }
+      setHistory(listedHistoryEntries(listed.conversations));
+      const created = await createOwnerConversation();
+      setConversationId(created.conversation.id);
+      setTitle(created.conversation.title);
+      setMessages(created.conversation.messages);
+      setHasMore(false);
+      setSeedTypewriterMessageId(seedTypewriterId(created.conversation.messages));
     } catch {
       setError('retry');
     } finally {
@@ -127,13 +120,7 @@ export function useChatSession(enabled = true) {
             await new Promise((resolve) => setTimeout(resolve, SYNC_AFTER_TURN_RETRY_MS[attempt]));
           }
           const listed = await apiFetch('/api/owner-ai/conversations', { schema: ListConvSchema });
-          setHistory(
-            listed.conversations.map((c) => ({
-              id: c.id,
-              title: c.title,
-              archived: Boolean(c.archived),
-            })),
-          );
+          setHistory(listedHistoryEntries(listed.conversations));
           const full = await apiFetch(conversationMessagesUrl(activeId), { schema: GetConvSchema });
           if (conversationIdRef.current !== activeId) return false;
 
@@ -175,13 +162,13 @@ export function useChatSession(enabled = true) {
     (id: string, nextTitle: string, opts?: { onlyIfDefault?: boolean }) => {
       const cleaned = (nextTitle || '').trim();
       if (!cleaned) return;
-      setHistory((prev) =>
-        prev.map((h) => {
-          if (h.id !== id) return h;
-          if (opts?.onlyIfDefault && !isDefaultConversationTitle(h.title)) return h;
-          return { ...h, title: cleaned };
-        }),
-      );
+      setHistory((prev) => {
+        const current = prev.find((h) => h.id === id);
+        if (current && opts?.onlyIfDefault && !isDefaultConversationTitle(current.title)) {
+          return prev;
+        }
+        return upsertStartedHistoryEntry(prev, { id, title: cleaned, archived: current?.archived });
+      });
       setConversationId((current) => {
         if (current === id) {
           setTitle((prevTitle) => {
@@ -228,20 +215,12 @@ export function useChatSession(enabled = true) {
     setPendingConfirm(null);
     setProposedPatch(null);
     setSeedTypewriterMessageId(null);
-    const created = await apiFetch('/api/owner-ai/conversations', {
-      method: 'POST',
-      body: JSON.stringify({ language: getStoredAppLanguage() }),
-      schema: CreateConvSchema,
-    });
+    const created = await createOwnerConversation();
     setConversationId(created.conversation.id);
     setTitle(created.conversation.title);
     setMessages(created.conversation.messages);
     setHasMore(false);
-    setHistory((prev) => [{ id: created.conversation.id, title: created.conversation.title }, ...prev]);
-    const seed = created.conversation.messages[0];
-    setSeedTypewriterMessageId(
-      seed?.role === 'assistant' && created.conversation.messages.length === 1 ? seed.id : null,
-    );
+    setSeedTypewriterMessageId(seedTypewriterId(created.conversation.messages));
   }
 
   const loadOlder = useCallback(async () => {
@@ -295,7 +274,11 @@ export function useChatSession(enabled = true) {
 
   function appendOptimisticUser(content: string, localImageUris?: string[]) {
     const id = `local-${Date.now()}`;
+    const activeId = conversationId;
     setSeedTypewriterMessageId(null);
+    if (activeId) {
+      setHistory((prev) => upsertStartedHistoryEntry(prev, { id: activeId, title }));
+    }
     setMessages((prev) => [
       ...prev,
       {
@@ -310,7 +293,12 @@ export function useChatSession(enabled = true) {
   }
 
   function removeOptimisticUser(id: string) {
-    setMessages((prev) => prev.filter((m) => m.id !== id));
+    const activeId = conversationId;
+    setMessages((prev) => {
+      const next = prev.filter((m) => m.id !== id);
+      setHistory((h) => dropUnstartedHistoryEntry(h, activeId, next));
+      return next;
+    });
   }
 
   const clearSeedTypewriter = useCallback(() => {

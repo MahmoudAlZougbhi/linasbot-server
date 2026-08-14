@@ -4,6 +4,7 @@ import { Linking } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { onAuthCleared } from '../api/client';
+import { rotateGuestSessionId, rotateGuestSessionOnAppLaunch } from '../auth/guestSession';
 import { tokenStore } from '../auth/tokenStore';
 import { API_BASE } from '../config';
 import { AppUpdateBanner } from '../features/appVersion/AppUpdateBanner';
@@ -14,7 +15,6 @@ import { BootSplash } from '../features/boot/BootSplash';
 import type { CmProposalReview } from '../features/cm/cmProposalReview';
 import { isCmProposalSection } from '../features/cm/cmProposalReview';
 import type { ControlArea } from '../features/control/controlAreas';
-import { markPreferFreshOwnerChat } from '../features/chat/preferFreshOwnerChat';
 import { tryRegisterOwnerPushScaffold } from '../features/notifications/pushScaffold';
 import { ModuleNavProvider } from '../features/nav/ModuleNavContext';
 import { useTheme } from '../theme';
@@ -51,6 +51,7 @@ export function AppShell() {
 
   useEffect(() => {
     void (async () => {
+      await rotateGuestSessionOnAppLaunch();
       const access = await tokenStore.getAccessToken();
       await tokenStore.getUser();
       setHasAccess(Boolean(access));
@@ -63,8 +64,10 @@ export function AppShell() {
 
   useEffect(() => {
     return onAuthCleared(() => {
-      setHasAccess(false);
-      void markPreferFreshOwnerChat().finally(() => bumpAuthEpoch());
+      void rotateGuestSessionId().then(() => {
+        setHasAccess(false);
+        bumpAuthEpoch();
+      });
     });
   }, [bumpAuthEpoch]);
 
@@ -216,7 +219,7 @@ export function AppShell() {
       // Local clear still proceeds.
     }
     await tokenStore.clear();
-    await markPreferFreshOwnerChat();
+    await rotateGuestSessionId();
     setHasAccess(false);
     setResumeArea(null);
     bumpAuthEpoch();
