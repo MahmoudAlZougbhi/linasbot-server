@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 
 import { apiFetch } from '../../api/client';
@@ -7,6 +7,11 @@ import { tokenStore } from '../../auth/tokenStore';
 import { listedHistoryEntries } from '../chat/chatHistoryVisibility';
 import type { HistoryItem } from './HistoryRows';
 import { usePinnedChats } from '../chat/usePinnedChats';
+import {
+  clearDrawerSessionCache,
+  getCachedDrawerRecents,
+  replaceDrawerRecents,
+} from './drawerSessionCache';
 
 const ListConvSchema = z.object({
   success: z.literal(true),
@@ -15,14 +20,16 @@ const ListConvSchema = z.object({
 
 /**
  * Lightweight conversation list for module-screen drawers.
- * Does not bootstrap an active chat session (ChatScreen owns that).
+ * Seeds from session cache so titles paint before the open-refetch returns.
  */
 export function useModuleDrawerHistory(enabled: boolean, drawerOpen: boolean) {
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [archivedIds, setArchivedIds] = useState<string[]>([]);
+  const cached = getCachedDrawerRecents();
+  const [history, setHistory] = useState<HistoryItem[]>(cached.history);
+  const [archivedIds, setArchivedIds] = useState<string[]>(cached.archivedIds);
   const [userId, setUserId] = useState<string | null>(null);
   const [workspaceLabel, setWorkspaceLabel] = useState<string | null>(null);
   const { pinnedIds, togglePin } = usePinnedChats(userId);
+  const inFlight = useRef<Promise<void> | null>(null);
 
   const refresh = useCallback(async () => {
     if (!enabled) {
@@ -30,13 +37,22 @@ export function useModuleDrawerHistory(enabled: boolean, drawerOpen: boolean) {
       setArchivedIds([]);
       return;
     }
-    try {
-      const listed = await apiFetch('/api/owner-ai/conversations', { schema: ListConvSchema });
-      setHistory(listedHistoryEntries(listed.conversations));
-      setArchivedIds(listed.conversations.filter((c) => c.archived).map((c) => c.id));
-    } catch {
-      /* keep last good list */
-    }
+    if (inFlight.current) return inFlight.current;
+    inFlight.current = (async () => {
+      try {
+        const listed = await apiFetch('/api/owner-ai/conversations', { schema: ListConvSchema });
+        const nextHistory = listedHistoryEntries(listed.conversations);
+        const nextArchived = listed.conversations.filter((c) => c.archived).map((c) => c.id);
+        setHistory(nextHistory);
+        setArchivedIds(nextArchived);
+        replaceDrawerRecents(nextHistory, nextArchived);
+      } catch {
+        /* keep last good list */
+      }
+    })().finally(() => {
+      inFlight.current = null;
+    });
+    return inFlight.current;
   }, [enabled]);
 
   useEffect(() => {
@@ -45,13 +61,20 @@ export function useModuleDrawerHistory(enabled: boolean, drawerOpen: boolean) {
       setWorkspaceLabel(null);
       setHistory([]);
       setArchivedIds([]);
+      clearDrawerSessionCache();
       return;
+    }
+    const seeded = getCachedDrawerRecents();
+    if (seeded.history.length) {
+      setHistory(seeded.history);
+      setArchivedIds(seeded.archivedIds);
     }
     void tokenStore.getUser().then((u) => {
       setUserId(u?.id ?? null);
       setWorkspaceLabel(u?.tenantId || u?.tenant_id || u?.email || null);
     });
-  }, [enabled]);
+    void refresh();
+  }, [enabled, refresh]);
 
   useEffect(() => {
     if (enabled && drawerOpen) {

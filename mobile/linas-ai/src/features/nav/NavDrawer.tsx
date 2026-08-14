@@ -9,6 +9,7 @@ import { DrawerHeader } from './DrawerHeader';
 import { DrawerNavGrid } from './DrawerNavGrid';
 import { DrawerRecents } from './DrawerRecents';
 import type { HistoryItem } from './HistoryRows';
+import { rememberDrawerRecents } from './drawerSessionCache';
 import { useDrawerBadges } from './useDrawerBadges';
 import { visibleRecentItems } from './visibleRecentItems';
 
@@ -52,6 +53,11 @@ export function NavDrawer(props: Props) {
       searchRef.current?.blur();
     }
   }, [props.open]);
+
+  useEffect(() => {
+    if (!props.isAuthenticated) return;
+    rememberDrawerRecents(props.history, props.archivedIds);
+  }, [props.isAuthenticated, props.history, props.archivedIds]);
 
   useEffect(() => {
     if (searchOpen && props.open) {

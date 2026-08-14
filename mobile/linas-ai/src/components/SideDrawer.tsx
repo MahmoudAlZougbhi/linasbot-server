@@ -15,6 +15,8 @@ import { radii, useTheme } from '../theme';
 
 /** Keep in sync with close `Animated.timing` duration below (+ small buffer). */
 const DRAWER_CLOSE_MS = 260;
+/** Above ChatHeader (20) and ChatModeToggle (15) so chat chrome cannot leak on the panel. */
+export const DRAWER_Z = 40;
 
 type Props = {
   open: boolean;
@@ -74,11 +76,15 @@ export function SideDrawer({
   }, [open, anim, fade, closedX]);
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents={hitActive ? 'auto' : 'none'}>
+    <View
+      pointerEvents={hitActive ? 'auto' : 'none'}
+      style={[StyleSheet.absoluteFill, styles.layer]}
+    >
       <Animated.View style={[styles.scrim, { opacity: fade, backgroundColor: colors.overlay }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Animated.View>
       <Animated.View
+        collapsable={false}
         style={[
           styles.panel,
           side === 'left' ? styles.left : styles.right,
@@ -88,7 +94,7 @@ export function SideDrawer({
             paddingTop: insets.top + 8,
             paddingBottom: 0,
             transform: [{ translateX: anim }],
-            backgroundColor: colors.surfaceGlass,
+            backgroundColor: colors.drawerSurface,
             borderColor: colors.border,
           },
           style,
@@ -101,6 +107,10 @@ export function SideDrawer({
 }
 
 const styles = StyleSheet.create({
+  layer: {
+    zIndex: DRAWER_Z,
+    elevation: DRAWER_Z,
+  },
   scrim: {
     ...StyleSheet.absoluteFill,
   },
