@@ -370,6 +370,7 @@ class LiveChatUnifiedMixin:
                     ),
                     "conversation_state": state,
                     "operator_id": data.get("operator_id"),
+                    "operator_name": data.get("operator_name"),
                     # Exposed for dashboard: after release, last_message may still be waiting-queue text — UI must not re-classify as waiting.
                     "human_takeover_active": data.get("human_takeover_active"),
                     "post_release_escalation_suppressed_until": data.get("post_release_escalation_suppressed_until"),

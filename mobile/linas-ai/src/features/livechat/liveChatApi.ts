@@ -85,14 +85,14 @@ async function operatorId(): Promise<string> {
   return user?.id || 'operator';
 }
 
-export async function takeoverConversation(chat: LiveChatItem) {
+export async function takeoverConversation(chat: LiveChatItem, assignToUserId?: string) {
   try {
     return await apiFetch('/api/live-chat/takeover', {
       method: 'POST',
       body: JSON.stringify({
         conversation_id: chat.conversation_id,
         user_id: chat.user_id,
-        operator_id: await operatorId(),
+        operator_id: assignToUserId || (await operatorId()),
       }),
       schema: ActionResultSchema,
     });

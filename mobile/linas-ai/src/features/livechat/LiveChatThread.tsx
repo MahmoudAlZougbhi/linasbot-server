@@ -3,18 +3,21 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
 import { EmptyState } from '../../components/EmptyState';
-import { StatusChip } from '../../components/StatusChip';
-import { AppIcon, feather } from '../../components/AppIcon';
 import { useI18n } from '../../i18n/LanguageContext';
-import { colors, fonts, radii, spacing } from '../../theme';
+import { colors, fonts, spacing } from '../../theme';
 import { LikeFeedbackModal } from './LikeFeedbackModal';
+import { LiveChatAssignSheet } from './LiveChatAssignSheet';
+import { LiveChatComposer } from './LiveChatComposer';
 import { LiveChatMessageBubble } from './LiveChatMessageBubble';
+import { LiveChatThreadActions } from './LiveChatThreadActions';
 import { saveFaqFromLiveChat } from './liveChatApi';
 import {
   type LiveChatItem,
@@ -22,10 +25,7 @@ import {
   isLikeableAiReply,
   messageBody,
   messageKey,
-  normalizeStatus,
   previousUserQuestion,
-  statusLabel,
-  statusTone,
 } from './liveChatTypes';
 import { useLiveChatThread } from './useLiveChatThread';
 
@@ -37,18 +37,12 @@ type Props = {
 export function LiveChatThread({ chat, onChatUpdated }: Props) {
   const { tr } = useI18n();
   const thread = useLiveChatThread(chat, onChatUpdated);
-  const status = normalizeStatus({ ...chat, status: thread.localStatus });
-
+  const [assignOpen, setAssignOpen] = useState(false);
   const [likeTarget, setLikeTarget] = useState<LiveChatMessage | null>(null);
   const [likeBusy, setLikeBusy] = useState(false);
   const [likeError, setLikeError] = useState<string | null>(null);
 
-  // V2: Live Chat is strictly read-only — no composer, takeover, release, or end.
-  const readOnlyReason =
-    'Live Chat is read-only. Use System Copilot for diagnosis and AI Setup fixes.';
-
   const listData = useMemo(() => [...thread.messages].reverse(), [thread.messages]);
-
   const likeInitialQuestion = likeTarget
     ? previousUserQuestion(thread.messages, likeTarget)
     : '';
@@ -74,22 +68,22 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
   };
 
   return (
-    <View style={styles.flex}>
-      <View style={styles.toolbar}>
-        <View style={styles.chips}>
-          <StatusChip label={statusLabel(status)} tone={statusTone(status)} />
-          <View style={styles.readOnlyChip}>
-            <AppIcon icon={feather('lock')} size={12} color={colors.textMuted} />
-            <StatusChip label="Read-only" tone="soon" />
-          </View>
-        </View>
-      </View>
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={88}
+    >
+      <LiveChatThreadActions
+        chat={chat}
+        localStatus={thread.localStatus}
+        busy={thread.busy}
+        social={thread.social}
+        onTakeover={() => void thread.takeover()}
+        onRelease={() => void thread.release()}
+        onAssign={() => setAssignOpen(true)}
+      />
 
       {thread.error ? <Text style={styles.error}>{thread.error}</Text> : null}
-      <View style={styles.readOnlyBannerRow} accessibilityLabel={readOnlyReason}>
-        <AppIcon icon={feather('lock')} size={14} color={colors.textMuted} />
-        <Text style={styles.readOnlyBanner}>{readOnlyReason}</Text>
-      </View>
 
       {thread.loading && !thread.messages.length ? (
         <View style={styles.center}>
@@ -140,6 +134,23 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
         />
       )}
 
+      {!thread.social ? (
+        <LiveChatComposer
+          onSend={(text) => thread.sendText(text)}
+          busy={thread.busy}
+        />
+      ) : null}
+
+      <LiveChatAssignSheet
+        visible={assignOpen}
+        busy={thread.busy}
+        onClose={() => setAssignOpen(false)}
+        onPick={(staff) => {
+          setAssignOpen(false);
+          void thread.takeover(staff.id);
+        }}
+      />
+
       <LikeFeedbackModal
         visible={Boolean(likeTarget)}
         initialQuestion={likeInitialQuestion}
@@ -153,37 +164,12 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
         }}
         onSubmit={(q, a) => void submitLikeFaq(q, a)}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  toolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: spacing.sm,
-    paddingBottom: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' },
-  readOnlyChip: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  actionBtn: {
-    borderRadius: radii.md,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  primary: { backgroundColor: colors.accent },
-  ghost: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  danger: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.danger },
-  primaryLabel: { color: colors.onAccent, fontFamily: fonts.bodyMedium, fontSize: 13 },
-  ghostLabel: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 13 },
-  dangerLabel: { color: colors.danger, fontFamily: fonts.bodyMedium, fontSize: 13 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   messages: { flexGrow: 1, paddingVertical: spacing.sm },
   olderSpinner: { marginVertical: 12 },
@@ -196,16 +182,4 @@ const styles = StyleSheet.create({
   },
   emptyFlip: { transform: [{ scaleY: -1 }] },
   error: { color: colors.danger, fontFamily: fonts.body, fontSize: 13, marginBottom: spacing.sm },
-  readOnlyBannerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginBottom: spacing.sm,
-  },
-  readOnlyBanner: {
-    flex: 1,
-    color: colors.textMuted,
-    fontFamily: fonts.body,
-    fontSize: 12,
-  },
 });

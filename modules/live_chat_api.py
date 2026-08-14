@@ -22,6 +22,7 @@ from modules.live_chat_api_helpers import (  # noqa: F401
     _log_sse,
     _run_endpoint,
     broadcast_sse_event,
+    resolve_takeover_assignee,
 )
 from modules.models import (
     EditMessageRequest,
@@ -215,11 +216,12 @@ async def takeover_conversation(request: TakeoverRequest, http_request: Request)
 
         session = require_session(http_request)
         reject_social_operator_mutation(request.user_id)
+        operator_id, operator_name = resolve_takeover_assignee(session, request.operator_id)
         result = await live_chat_service.takeover_conversation(
             conversation_id=request.conversation_id,
             user_id=request.user_id,
-            operator_id=session.user_id,
-            operator_name=session.email,
+            operator_id=operator_id,
+            operator_name=operator_name,
             tenant_id=getattr(session, "tenant_id", None),
         )
         if result.get("success"):

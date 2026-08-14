@@ -133,7 +133,11 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
   }, [chat, hasMore, messages]);
 
   async function runAction(fn: () => Promise<{ success: boolean; error?: string; message?: string; status?: string }>) {
-    if (!chat || social) return;
+    if (!chat) return;
+    if (social) {
+      setError('Operator mutations are not allowed for Instagram/Facebook conversations');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -161,11 +165,16 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     setError,
     reload: () => load('initial'),
     loadOlder,
-    takeover: () => runAction(() => takeoverConversation(chat!)),
+    takeover: (assignToUserId?: string) =>
+      runAction(() => takeoverConversation(chat!, assignToUserId)),
     release: () => runAction(() => releaseConversation(chat!)),
     end: () => runAction(() => endConversation(chat!)),
     sendText: async (text: string) => {
-      if (!chat || social || !text.trim()) return false;
+      if (!chat || !text.trim()) return false;
+      if (social) {
+        setError('Operator mutations are not allowed for Instagram/Facebook conversations');
+        return false;
+      }
       setBusy(true);
       setError(null);
       try {

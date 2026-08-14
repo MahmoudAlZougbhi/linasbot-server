@@ -1,11 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { classifyLiveChatError, fetchUnifiedChats, setOperatorAvailable } from './liveChatApi';
-import {
-  type InboxFilter,
-  type LiveChatItem,
-  normalizeStatus,
-} from './liveChatTypes';
+import { type InboxFilter, type LiveChatItem } from './liveChatTypes';
 
 const POLL_MS = 20_000;
 const PAGE_SIZE = 30;
@@ -112,25 +108,8 @@ export function useLiveChatInbox() {
     return () => clearInterval(id);
   }, [load]);
 
-  const sections = useMemo(() => {
-    if (filter !== 'all') {
-      return [{ key: filter, title: null as string | null, data: chats }];
-    }
-    const waiting = chats.filter((c) => normalizeStatus(c) === 'waiting_human');
-    const human = chats.filter((c) => normalizeStatus(c) === 'human');
-    const bot = chats.filter((c) => normalizeStatus(c) === 'bot');
-    const closed = chats.filter((c) => normalizeStatus(c) === 'closed');
-    const out: { key: string; title: string | null; data: LiveChatItem[] }[] = [];
-    if (waiting.length) out.push({ key: 'waiting', title: 'Waiting for human', data: waiting });
-    if (human.length) out.push({ key: 'human', title: 'With operator', data: human });
-    if (bot.length) out.push({ key: 'bot', title: 'AI handling', data: bot });
-    if (closed.length) out.push({ key: 'closed', title: 'Closed', data: closed });
-    return out;
-  }, [chats, filter]);
-
   return {
     chats,
-    sections,
     loading,
     refreshing,
     loadingMore,

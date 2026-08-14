@@ -69,7 +69,7 @@ export function LiveChatScreen({ initialOpen = null }: Props) {
   }
 
   return (
-    <ScreenChrome title="Live Chat" subtitle="Inbox — WhatsApp, Instagram, Facebook">
+    <ScreenChrome title="Live Chat" subtitle="All customer conversations">
       <LiveChatInbox
         inbox={inbox}
         onOpenChat={(chat) => {
