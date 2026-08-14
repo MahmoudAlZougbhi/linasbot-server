@@ -7,6 +7,18 @@ import type { ChatMessage } from '../../api/types';
 import { getOrCreateGuestSessionId } from '../../auth/guestSession';
 import { useI18n } from '../../i18n/LanguageContext';
 
+function clearGuestState(
+  setGuestId: (v: string | null) => void,
+  setMessages: (v: ChatMessage[]) => void,
+  setGated: (v: boolean) => void,
+  setGateText: (v: string | null) => void,
+) {
+  setGuestId(null);
+  setMessages([]);
+  setGated(false);
+  setGateText(null);
+}
+
 export function useGuestChatSession(enabled = true) {
   const { language, tr } = useI18n();
   const [guestId, setGuestId] = useState<string | null>(null);
@@ -20,6 +32,7 @@ export function useGuestChatSession(enabled = true) {
   const bootstrap = useCallback(async () => {
     if (!enabled) {
       setLoading(false);
+      clearGuestState(setGuestId, setMessages, setGated, setGateText);
       return;
     }
     setLoading(true);
@@ -111,6 +124,7 @@ export function useGuestChatSession(enabled = true) {
 
   return {
     title: 'Linas AI',
+    guestId,
     messages,
     loading,
     sending,

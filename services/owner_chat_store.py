@@ -16,6 +16,13 @@ DEFAULT_CONVERSATION_TITLE = "New chat"
 _AUTO_TITLE_MAX_LEN = 60
 
 
+def messages_include_user_turn(messages: Any) -> bool:
+    """True once the owner has sent at least one real user message."""
+    if not isinstance(messages, list):
+        return False
+    return any(isinstance(m, dict) and str(m.get("role") or "") == "user" for m in messages)
+
+
 def is_default_conversation_title(title: str | None) -> bool:
     cleaned = (title or "").strip()
     return not cleaned or cleaned in {DEFAULT_CONVERSATION_TITLE, "Chat", "Untitled"}
@@ -103,7 +110,31 @@ class OwnerChatStore:
             ],
         )
         self._write(conv)
+        self.discard_unstarted_conversations(tenant_id=tenant_id, user_id=user_id, keep_id=conv.id)
         return conv
+
+    def discard_unstarted_conversations(self, *, tenant_id: str, user_id: str, keep_id: str) -> int:
+        """Soft-delete greeting-only threads so new-chat / cold start does not pile up empties."""
+        removed = 0
+        with self._lock:
+            for path in self._tenant_dir(tenant_id).glob("*.json"):
+                try:
+                    data = json.loads(path.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                if str(data.get("user_id")) != user_id:
+                    continue
+                if data.get("deleted"):
+                    continue
+                if str(data.get("id")) == keep_id:
+                    continue
+                if messages_include_user_turn(data.get("messages")):
+                    continue
+                data["deleted"] = True
+                data["updated_at"] = time.time()
+                path.write_text(json.dumps(data), encoding="utf-8")
+                removed += 1
+        return removed
 
     def list_conversations(self, *, tenant_id: str, user_id: str) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
@@ -117,6 +148,8 @@ class OwnerChatStore:
                     continue
                 if data.get("deleted"):
                     continue
+                if not messages_include_user_turn(data.get("messages")):
+                    continue
                 items.append(
                     {
                         "id": data["id"],
@@ -124,6 +157,7 @@ class OwnerChatStore:
                         "created_at": data.get("created_at"),
                         "updated_at": data.get("updated_at"),
                         "archived": bool(data.get("archived")),
+                        "has_user_message": True,
                     }
                 )
         items.sort(key=lambda x: float(x.get("updated_at") or 0), reverse=True)

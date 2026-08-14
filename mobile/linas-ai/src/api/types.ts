@@ -30,6 +30,7 @@ export const ConversationSummarySchema = z.object({
   created_at: z.number(),
   updated_at: z.number(),
   archived: z.boolean().optional(),
+  has_user_message: z.boolean().optional(),
 });
 
 export const ChatMessageSchema = z.object({
