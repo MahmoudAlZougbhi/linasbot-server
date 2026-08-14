@@ -1,5 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 
+import { SECURE_STORE_OPTIONS } from './secureStoreOptions';
+
 const GUEST_ID_KEY = 'linas_guest_session_id';
 
 /** One rotate per JS process so Fast Refresh does not wipe an in-progress guest chat. */
@@ -17,17 +19,17 @@ function randomId(): string {
 
 /** Idempotent guest session id persisted in SecureStore for this app session. */
 export async function getOrCreateGuestSessionId(): Promise<string> {
-  const existing = await SecureStore.getItemAsync(GUEST_ID_KEY);
+  const existing = await SecureStore.getItemAsync(GUEST_ID_KEY, SECURE_STORE_OPTIONS);
   if (existing && existing.length >= 8) {
     return existing;
   }
   const id = randomId();
-  await SecureStore.setItemAsync(GUEST_ID_KEY, id);
+  await SecureStore.setItemAsync(GUEST_ID_KEY, id, SECURE_STORE_OPTIONS);
   return id;
 }
 
 export async function clearGuestSessionId(): Promise<void> {
-  await SecureStore.deleteItemAsync(GUEST_ID_KEY);
+  await SecureStore.deleteItemAsync(GUEST_ID_KEY, SECURE_STORE_OPTIONS);
 }
 
 /** Mint a new guest id so the next guest bootstrap cannot reopen a prior thread. */

@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { onAuthCleared } from '../api/client';
 import { rotateGuestSessionId, rotateGuestSessionOnAppLaunch } from '../auth/guestSession';
+import { bootPersistedAuth } from '../auth/restoreOwnerSession';
 import { tokenStore } from '../auth/tokenStore';
 import { API_BASE } from '../config';
 import { AppUpdateBanner } from '../features/appVersion/AppUpdateBanner';
@@ -52,11 +53,9 @@ export function AppShell() {
   useEffect(() => {
     void (async () => {
       try {
-        await rotateGuestSessionOnAppLaunch();
-        const access = await tokenStore.getAccessToken();
-        await tokenStore.getUser();
-        setHasAccess(Boolean(access));
-        if (access) {
+        const has = await bootPersistedAuth(tokenStore, rotateGuestSessionOnAppLaunch);
+        setHasAccess(has);
+        if (has) {
           void tryRegisterOwnerPushScaffold();
         }
       } finally {
