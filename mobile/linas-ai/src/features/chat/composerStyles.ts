@@ -3,58 +3,60 @@ import { StyleSheet } from 'react-native';
 import { fonts, radii, spacing } from '../../theme';
 import { COMPOSER_ACTION_SIZE, COMPOSER_SEND_SIZE } from './ComposerGlyphs';
 import {
+  COMPOSER_ACTION_ROW_H,
   COMPOSER_INPUT_LINE_HEIGHT,
-  COMPOSER_INPUT_MIN_H,
   COMPOSER_PILL_MIN_H,
   COMPOSER_PILL_PAD_V,
 } from './composerInputHeight';
 
-/** Compact single-row pill (+ | field | mic | send). Idle height is 44pt. */
+/** Compact idle row, or stacked focused bar (text top, icons bottom). */
 export const composerStyles = StyleSheet.create({
   wrap: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     direction: 'ltr',
+    alignSelf: 'stretch',
+    flexShrink: 0,
   },
   pill: {
-    flexDirection: 'row',
-    borderRadius: radii.pill,
-    paddingVertical: COMPOSER_PILL_PAD_V,
+    alignSelf: 'stretch',
     paddingLeft: 6,
     paddingRight: 6,
     minHeight: COMPOSER_PILL_MIN_H,
-    gap: 2,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
   },
-  pillSingle: {
+  pillCompact: {
+    flexDirection: 'row',
     alignItems: 'center',
     height: COMPOSER_PILL_MIN_H,
+    borderRadius: radii.pill,
+    paddingVertical: COMPOSER_PILL_PAD_V,
+    gap: 2,
   },
-  pillGrow: {
-    alignItems: 'flex-end',
-    paddingBottom: COMPOSER_PILL_PAD_V,
+  pillStacked: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    borderRadius: radii.xl,
+    paddingTop: 10,
+    paddingBottom: 6,
+    gap: 4,
   },
   inputSlot: {
     flex: 1,
     minWidth: 0,
     justifyContent: 'center',
   },
-  /** In-flow label — iOS absolute overlay cannot center in an implicit-height slot. */
-  placeholderWrap: {
-    justifyContent: 'center',
-    paddingHorizontal: 8,
+  inputSlotStacked: {
+    alignSelf: 'stretch',
     width: '100%',
-  },
-  placeholderText: {
-    fontFamily: fonts.body,
-    fontSize: 16,
-    lineHeight: COMPOSER_INPUT_LINE_HEIGHT,
-    includeFontPadding: false,
+    minWidth: 0,
+    justifyContent: 'flex-start',
   },
   input: {
+    width: '100%',
     fontFamily: fonts.body,
     fontSize: 16,
     lineHeight: COMPOSER_INPUT_LINE_HEIGHT,
@@ -62,9 +64,19 @@ export const composerStyles = StyleSheet.create({
     paddingVertical: 0,
     includeFontPadding: false,
   },
-  /** Idle field sits on top of the in-flow placeholder without driving slot height. */
-  inputIdle: {
-    ...StyleSheet.absoluteFillObject,
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: COMPOSER_ACTION_ROW_H,
+    width: '100%',
+    flexShrink: 0,
+  },
+  actionRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    flexShrink: 0,
   },
   iconHit: {
     width: COMPOSER_ACTION_SIZE,

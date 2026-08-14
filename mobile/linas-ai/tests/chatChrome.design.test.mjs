@@ -76,8 +76,10 @@ test('composer: pill with plus, placeholder, mic, in-pill send, disclaimer', () 
   assert.match(glyphs, /feather\('mic'\)/);
   assert.match(composer, /backgroundColor=\{colors\.featuredIconBg\}/);
   assert.match(composer, /borderColor=\{colors\.featuredIconBorder\}/);
-  assert.match(composer, /placeholderWrap/);
+  assert.match(composer, /placeholder=\{placeholder\}/);
+  assert.match(composer, /value=\{draft\}/);
   assert.match(pill, /justifyContent:\s*'center'/);
+  assert.match(pill, /actionRow/);
   assert.match(pill, /minHeight:\s*COMPOSER_PILL_MIN_H/);
   assert.match(height, /COMPOSER_PILL_MIN_H = 44/);
   assert.doesNotMatch(pill, /minHeight:\s*52/);

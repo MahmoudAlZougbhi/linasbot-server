@@ -39,9 +39,14 @@ test('idle pill is compact 44pt; send uses sparkle accent', () => {
   assert.doesNotMatch(composer, /backgroundColor: colors\.accentDeep/);
   assert.match(bubble, /labelColor=\{colors\.text\}/);
   assert.match(mark, /fontSize:\s*size/);
-  assert.match(styles, /inputIdle/);
-  assert.match(styles, /placeholderWrap/);
-  assert.match(styles, /placeholderWrap:\s*\{[^}]*justifyContent:\s*'center'/);
+  assert.match(styles, /flexDirection:\s*'row'/);
+  assert.match(styles, /flexDirection:\s*'column'/);
+  assert.match(styles, /actionRow/);
+  assert.match(composer, /placeholder=\{placeholder\}/);
+  assert.match(composer, /value=\{draft\}/);
+  assert.doesNotMatch(composer, /inputIdle/);
+  assert.doesNotMatch(styles, /absoluteFillObject/);
+  assert.doesNotMatch(composer, /placeholderWrap/);
   assert.doesNotMatch(composer, /sendDisabled/);
   assert.doesNotMatch(styles, /opacity:\s*0\.45/);
 });
@@ -72,15 +77,33 @@ test('auto-grow stays single-line for short text and iOS contentSize bounce', ()
 
   const growTarget = targetComposerInputHeight(44, 'hello there friend');
   const first = debounceComposerHeight(growTarget, COMPOSER_INPUT_MIN_H, null);
-  assert.equal(first.height, COMPOSER_INPUT_MIN_H);
-  const second = debounceComposerHeight(growTarget, first.height, first.pending);
-  assert.equal(second.height, twoLine);
+  assert.equal(first.height, twoLine);
 });
 
 test('auto-grow caps at max lines and honors explicit newlines', () => {
   const maxH = COMPOSER_INPUT_MAX_H;
   assert.equal(targetComposerInputHeight(400, 'long wrap'), maxH);
   assert.equal(COMPOSER_INPUT_MAX_LINES, 8);
+  assert.equal(
+    COMPOSER_INPUT_MAX_H,
+    COMPOSER_INPUT_MIN_H + COMPOSER_INPUT_LINE_HEIGHT * 7,
+  );
   const twoLine = COMPOSER_INPUT_MIN_H + COMPOSER_INPUT_LINE_HEIGHT;
   assert.equal(targetComposerInputHeight(22, 'a\nb'), twoLine);
+});
+
+test('focused bar stacks text above a bottom icon row; empty stays one compact row', () => {
+  const composer = read('features/chat/ChatComposer.tsx');
+  const styles = read('features/chat/composerStyles.ts');
+  const screen = read('features/chat/ChatScreen.tsx');
+  assert.match(composer, /stacked \? styles\.pillStacked : styles\.pillCompact/);
+  assert.match(composer, /textAlignVertical=\{stacked \? 'top' : 'center'\}/);
+  assert.match(composer, /scrollEnabled=\{atMaxHeight\}/);
+  assert.match(styles, /pillCompact:\s*\{[^}]*flexDirection:\s*'row'/);
+  assert.match(styles, /pillStacked:\s*\{[^}]*flexDirection:\s*'column'/);
+  assert.match(styles, /actionRow:\s*\{[^}]*justifyContent:\s*'space-between'/);
+  assert.match(styles, /inputSlot:\s*\{[^}]*flex:\s*1/);
+  assert.match(styles, /minWidth:\s*0/);
+  assert.match(screen, /KeyboardAvoidingView/);
+  assert.match(screen, /behavior=\{Platform\.OS === 'ios' \? 'padding'/);
 });
