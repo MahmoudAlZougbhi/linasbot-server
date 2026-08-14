@@ -18,6 +18,7 @@ test('inbox is a flat list with All/Human filters and no section headers', () =>
   assert.doesNotMatch(hook, /Waiting for human|With operator|AI handling/);
   assert.doesNotMatch(inbox, /section\.title|kind === 'header'/);
   assert.match(inbox, /InboxSearchBar/);
+  assert.match(inbox, /InboxChannelChips/);
   assert.match(inbox, /InboxFilterPills/);
   assert.match(inbox, /data=\{chats\}/);
 });

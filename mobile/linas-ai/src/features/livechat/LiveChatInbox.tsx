@@ -10,6 +10,7 @@ import {
 import { EmptyState } from '../../components/EmptyState';
 import { colors, fonts, spacing, useTheme } from '../../theme';
 import { ConversationRow } from './ConversationRow';
+import { InboxChannelChips } from './InboxChannelChips';
 import { InboxFilterPills } from './InboxFilterPills';
 import { InboxSearchBar } from './InboxSearchBar';
 import type { LiveChatItem } from './liveChatTypes';
@@ -33,6 +34,8 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
     setSearch,
     filter,
     setFilter,
+    channel,
+    setChannel,
     hasMore,
     refresh,
     loadMore,
@@ -64,9 +67,11 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
   return (
     <View style={styles.flex}>
       <InboxSearchBar value={search} onChange={setSearch} />
+      <InboxChannelChips selected={channel} onSelect={setChannel} />
       <InboxFilterPills selected={filter} onSelect={setFilter} />
       {error ? <Text style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
       <FlatList
+        style={styles.flex}
         data={chats}
         keyExtractor={(item) => item.conversation_id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
@@ -77,8 +82,12 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
         onEndReachedThreshold={0.4}
         ListEmptyComponent={
           <EmptyState
-            title="No conversations yet"
-            body="When customers message on WhatsApp, Instagram, or Messenger, they appear here. Pull to refresh."
+            title={channel === 'tiktok' ? 'No TikTok conversations' : 'No conversations yet'}
+            body={
+              channel === 'tiktok'
+                ? 'TikTok threads appear here when TikTok is connected. None are created as placeholders.'
+                : 'When customers message on WhatsApp, Instagram, or Messenger, they appear here. Pull to refresh.'
+            }
           />
         }
         ListFooterComponent={
