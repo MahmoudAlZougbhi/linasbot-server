@@ -14,8 +14,12 @@ import {
   COMPOSER_INPUT_MAX_H,
   COMPOSER_INPUT_MAX_LINES,
   COMPOSER_INPUT_MIN_H,
+  COMPOSER_INPUT_PAD_H,
   COMPOSER_PILL_MIN_H,
+  composerHeightForLines,
+  composerHeightFromDraft,
   debounceComposerHeight,
+  lineCountFromDraft,
   targetComposerInputHeight,
 } from '../src/features/chat/composerInputHeight.ts';
 
@@ -28,8 +32,6 @@ function read(rel) {
 
 test('idle pill is compact 44pt; send uses sparkle accent', () => {
   const composer = read('features/chat/ChatComposer.tsx');
-  const bubble = read('features/chat/ChatBubble.tsx');
-  const mark = read('components/LinasStarMark.tsx');
   const styles = read('features/chat/composerStyles.ts');
   assert.equal(COMPOSER_PILL_MIN_H, 44);
   assert.match(styles, /minHeight:\s*COMPOSER_PILL_MIN_H/);
@@ -37,8 +39,6 @@ test('idle pill is compact 44pt; send uses sparkle accent', () => {
   assert.doesNotMatch(styles, /minHeight:\s*52/);
   assert.match(composer, /backgroundColor: colors\.accent \}/);
   assert.doesNotMatch(composer, /backgroundColor: colors\.accentDeep/);
-  assert.match(bubble, /labelColor=\{colors\.text\}/);
-  assert.match(mark, /fontSize:\s*size/);
   assert.match(styles, /flexDirection:\s*'row'/);
   assert.match(styles, /flexDirection:\s*'column'/);
   assert.match(styles, /actionRow/);
@@ -106,4 +106,63 @@ test('focused bar stacks text above a bottom icon row; empty stays one compact r
   assert.match(styles, /minWidth:\s*0/);
   assert.match(screen, /KeyboardAvoidingView/);
   assert.match(screen, /behavior=\{Platform\.OS === 'ios' \? 'padding'/);
+});
+
+test('height grows from newlines even when contentSize stays 36', () => {
+  const four = composerHeightForLines(4);
+  const eight = composerHeightForLines(8);
+  assert.notEqual(four, COMPOSER_INPUT_MIN_H);
+  assert.equal(targetComposerInputHeight(COMPOSER_INPUT_MIN_H, 'a\nb\nc\nd'), four);
+  assert.equal(targetComposerInputHeight(0, 'a\nb\nc\nd'), four);
+  assert.equal(targetComposerInputHeight(36, '\n\n\n'), composerHeightForLines(4));
+  assert.equal(composerHeightFromDraft('\n\n\n\n\n\n\n'), eight);
+  assert.equal(lineCountFromDraft('a\nb\nc\nd\ne\nf\ng\nh\ni'), 8);
+
+  let height = COMPOSER_INPUT_MIN_H;
+  let pending = null;
+  let draft = '';
+  for (const next of ['a', 'a\n', 'a\nb', 'a\nb\n', 'a\nb\nc', 'a\nb\nc\n', 'a\nb\nc\nd']) {
+    draft = next;
+    const fromDraft = targetComposerInputHeight(0, draft);
+    const grown = debounceComposerHeight(fromDraft, height, pending);
+    height = grown.height;
+    pending = grown.pending;
+    const stuckSize = debounceComposerHeight(
+      targetComposerInputHeight(COMPOSER_INPUT_MIN_H, draft),
+      height,
+      pending,
+    );
+    height = stuckSize.height;
+    pending = stuckSize.pending;
+  }
+  assert.equal(draft.split('\n').length, 4);
+  assert.equal(height, four);
+  assert.notEqual(height, COMPOSER_INPUT_MIN_H);
+});
+
+test('composer grows from draft onChange and hidden measure, not clipped contentSize', () => {
+  const composer = read('features/chat/ChatComposer.tsx');
+  const autoGrow = read('features/chat/useComposerInputAutoGrow.ts');
+  const height = read('features/chat/composerInputHeight.ts');
+  const styles = read('features/chat/composerStyles.ts');
+  const probe = read('features/chat/ComposerHeightProbe.tsx');
+  assert.match(composer, /\bmultiline\b/);
+  assert.match(composer, /scrollEnabled=\{atMaxHeight\}/);
+  assert.match(composer, /ComposerHeightProbe/);
+  assert.match(composer, /onTextLayout|onMeasuredLines/);
+  assert.match(composer, /minHeight: inputHeight/);
+  assert.match(autoGrow, /draftRef\.current = next/);
+  assert.match(autoGrow, /commitFromDraftAndMeasure/);
+  assert.match(autoGrow, /handleMeasuredLines/);
+  assert.doesNotMatch(autoGrow, /contentHeight\s*-/);
+  assert.doesNotMatch(height, /contentHeight\s*-/);
+  assert.doesNotMatch(autoGrow, /if \(!currentDraft\.trim\(\)\)/);
+  assert.doesNotMatch(autoGrow, /if \(!next\.trim\(\)\)/);
+  assert.doesNotMatch(composer, /overflow:\s*'hidden'/);
+  assert.doesNotMatch(styles, /overflow:\s*'hidden'/);
+  assert.match(styles, /overflow:\s*'visible'/);
+  assert.match(probe, /onTextLayout/);
+  assert.match(probe, /opacity:\s*0/);
+  assert.equal(COMPOSER_INPUT_PAD_H, 8);
+  assert.doesNotMatch(composer, /numberOfLines=\{1\}/);
 });

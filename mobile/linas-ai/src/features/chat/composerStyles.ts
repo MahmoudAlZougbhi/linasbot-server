@@ -48,12 +48,14 @@ export const composerStyles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     justifyContent: 'center',
+    overflow: 'visible',
   },
   inputSlotStacked: {
     alignSelf: 'stretch',
     width: '100%',
     minWidth: 0,
     justifyContent: 'flex-start',
+    overflow: 'visible',
   },
   input: {
     width: '100%',
@@ -63,6 +65,7 @@ export const composerStyles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 0,
     includeFontPadding: false,
+    overflow: 'visible',
   },
   actionRow: {
     flexDirection: 'row',

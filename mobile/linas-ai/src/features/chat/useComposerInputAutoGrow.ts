@@ -27,8 +27,11 @@ type ScrollableTextInput = TextInput & {
 
 /**
  * Auto-grow composer field up to 8 lines; once capped, scrollToEnd so the
- * caret / newest text stays visible. Height stays on a single-line bucket
- * until content actually wraps — iOS contentSize bounce is debounced.
+ * caret / newest text stays visible.
+ *
+ * Height is driven from the draft (newlines) and a hidden measure Text, not
+ * from iOS `onContentSizeChange` alone. A fixed 36pt TextInput makes iOS
+ * report contentSize === 36 forever, so waiting on that event never grows.
  */
 export function useComposerInputAutoGrow(
   draft: string,
@@ -38,6 +41,7 @@ export function useComposerInputAutoGrow(
   const localInputRef = useRef<TextInput | null>(null);
   const heightRef = useRef(COMPOSER_INPUT_MIN_H);
   const pendingRef = useRef<number | null>(null);
+  const measuredLinesRef = useRef(1);
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const atMaxHeight = inputHeight >= COMPOSER_INPUT_MAX_H;
@@ -63,33 +67,56 @@ export function useComposerInputAutoGrow(
     }
   }
 
-  function handleContentSizeChange(contentHeight: number) {
+  function commitFromDraftAndMeasure() {
     const currentDraft = draftRef.current;
-    if (!currentDraft.trim()) {
+    if (currentDraft.length === 0) {
       pendingRef.current = null;
+      measuredLinesRef.current = 1;
       commitHeight(COMPOSER_INPUT_MIN_H);
       return;
     }
-    const target = targetComposerInputHeight(contentHeight, currentDraft);
+    const target = targetComposerInputHeight(0, currentDraft, measuredLinesRef.current);
+    pendingRef.current = null;
+    commitHeight(target);
+  }
+
+  function handleContentSizeChange(contentHeight: number) {
+    const currentDraft = draftRef.current;
+    if (currentDraft.length === 0) {
+      commitFromDraftAndMeasure();
+      return;
+    }
+    const target = targetComposerInputHeight(
+      contentHeight,
+      currentDraft,
+      measuredLinesRef.current,
+    );
+    if (target > heightRef.current) {
+      pendingRef.current = null;
+      commitHeight(target);
+      return;
+    }
     const next = debounceComposerHeight(target, heightRef.current, pendingRef.current);
     pendingRef.current = next.pending;
     commitHeight(next.height);
   }
 
+  function handleMeasuredLines(measuredLines: number) {
+    measuredLinesRef.current = Math.max(1, measuredLines);
+    commitFromDraftAndMeasure();
+  }
+
   function handleChangeText(next: string, onChangeDraft: (v: string) => void) {
+    draftRef.current = next;
     onChangeDraft(next);
-    if (!next.trim()) {
-      pendingRef.current = null;
-      commitHeight(COMPOSER_INPUT_MIN_H);
+    commitFromDraftAndMeasure();
+    if (heightRef.current >= COMPOSER_INPUT_MAX_H) {
+      requestAnimationFrame(scrollComposerToEnd);
     }
-    if (atMaxHeight) requestAnimationFrame(scrollComposerToEnd);
   }
 
   useEffect(() => {
-    if (!draft.trim()) {
-      pendingRef.current = null;
-      commitHeight(COMPOSER_INPUT_MIN_H);
-    }
+    commitFromDraftAndMeasure();
   }, [draft]);
 
   return {
@@ -99,5 +126,6 @@ export function useComposerInputAutoGrow(
     assignInputRef,
     handleContentSizeChange,
     handleChangeText,
+    handleMeasuredLines,
   };
 }

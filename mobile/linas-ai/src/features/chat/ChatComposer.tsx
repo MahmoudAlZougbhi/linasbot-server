@@ -21,7 +21,12 @@ import {
   SendArrowGlyph,
   StopGlyph,
 } from './ComposerGlyphs';
+import { ComposerHeightProbe } from './ComposerHeightProbe';
 import { ComposerModelChip } from './ComposerModelChip';
+import {
+  COMPOSER_INPUT_MAX_H,
+  COMPOSER_INPUT_PAD_H,
+} from './composerInputHeight';
 import { composerStyles as styles } from './composerStyles';
 import { LinEffortSheet } from './LinEffortSheet';
 import type { OwnerChatMode } from './ownerChatMode';
@@ -94,6 +99,7 @@ export function ChatComposer({
   const [effortOpen, setEffortOpen] = useState(false);
   const [focused, setFocused] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [slotWidth, setSlotWidth] = useState(0);
   const pulse = useRef(new Animated.Value(1)).current;
   const ring = useRef(new Animated.Value(0.55)).current;
   const suppressFocusRef = useRef(false);
@@ -104,6 +110,7 @@ export function ChatComposer({
     assignInputRef,
     handleContentSizeChange,
     handleChangeText,
+    handleMeasuredLines,
   } = useComposerInputAutoGrow(draft, inputRef);
   const recording = voiceState === 'recording';
   const paused = voiceState === 'paused';
@@ -292,16 +299,29 @@ export function ChatComposer({
         <View
           style={[
             stacked ? styles.inputSlotStacked : styles.inputSlot,
-            { height: inputHeight },
+            { height: inputHeight, minHeight: inputHeight },
           ]}
+          onLayout={(e) => {
+            const w = Math.round(e.nativeEvent.layout.width);
+            if (w > 0 && w !== slotWidth) setSlotWidth(w);
+          }}
         >
+          <ComposerHeightProbe
+            draft={draft}
+            width={Math.max(0, slotWidth - COMPOSER_INPUT_PAD_H * 2)}
+            textAlign={inputTextAlign}
+            writingDirection={draftEmpty ? idleWriting : draftDir.writingDirection}
+            onMeasuredLines={handleMeasuredLines}
+          />
           <TextInput
             ref={assignInputRef}
             style={[
               styles.input,
               {
                 color: colors.text,
+                minHeight: inputHeight,
                 height: inputHeight,
+                maxHeight: COMPOSER_INPUT_MAX_H,
                 textAlign: inputTextAlign,
                 writingDirection: draftEmpty ? idleWriting : draftDir.writingDirection,
                 paddingTop: stacked ? 2 : Platform.OS === 'ios' ? COMPOSER_IOS_PAD_TOP : 0,
