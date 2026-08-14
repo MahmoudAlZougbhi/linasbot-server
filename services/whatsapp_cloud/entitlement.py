@@ -35,6 +35,12 @@ def assert_whatsapp_connection_allowed(session: Session, tenant_id: str) -> None
             "WHATSAPP_EMBEDDED_SIGNUP_CONFIG_MISSING",
             "META_WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID is not configured",
         )
+    from services.membership.whatsapp_gate import WhatsAppPlanDenied, assert_whatsapp_plan_allowed
+
+    try:
+        assert_whatsapp_plan_allowed(tenant_id)
+    except WhatsAppPlanDenied as exc:
+        raise WhatsAppEntitlementError(exc.code, str(exc)) from exc
     # Phase 2: central public switch opens connect for all eligible tenants (config-only).
     if flags.public_availability:
         return
@@ -67,6 +73,12 @@ def evaluate_ai_eligibility(session: Session, conn: WhatsAppConnection) -> tuple
         return False, "scopes_missing"
     if flags.require_pilot_entitlement and not tenant_has_whatsapp_pilot(session, conn.tenant_id):
         return False, "pilot_required"
+    from services.membership.whatsapp_gate import WhatsAppPlanDenied, assert_whatsapp_plan_allowed
+
+    try:
+        assert_whatsapp_plan_allowed(conn.tenant_id)
+    except WhatsAppPlanDenied:
+        return False, "whatsapp_plan_denied"
     if conn.history_sync_status in {"pending", "syncing"} and not flags.history_sync_enabled:
         # History still pending is OK for AI if history sync flag is off (skip sync).
         pass

@@ -25,6 +25,8 @@ class PlanDefinition:
     faq_capacity: int  # non-deleted Q&A pairs (storage capacity)
     additional_seats: SeatLimit  # owner does not count; None = unlimited
     comment_automation: bool
+    whatsapp: bool
+    tiktok: bool
     public_sale: bool
     catalog_version: str
 
@@ -41,6 +43,16 @@ _PLAN_ROWS: Final[tuple[tuple[PlanId, str, int, int, int, SeatLimit, bool], ...]
 )
 
 
+def _whatsapp_for(plan_id: PlanId) -> bool:
+    """WhatsApp messages: Lite excluded; Starter and above included."""
+    return plan_id != "lite"
+
+
+def _tiktok_for(plan_id: PlanId) -> bool:
+    """TikTok DMs + comments: Pro and Max only (channel ships behind this flag)."""
+    return plan_id in {"pro", "max"}
+
+
 def _build_catalog() -> dict[str, PlanDefinition]:
     out: dict[str, PlanDefinition] = {}
     for plan_id, name, price_micro, credits, faq, seats, comments in _PLAN_ROWS:
@@ -53,6 +65,8 @@ def _build_catalog() -> dict[str, PlanDefinition]:
             faq_capacity=faq,
             additional_seats=seats,
             comment_automation=comments,
+            whatsapp=_whatsapp_for(plan_id),
+            tiktok=_tiktok_for(plan_id),
             public_sale=True,
             catalog_version=CATALOG_VERSION,
         )
@@ -89,6 +103,8 @@ def plan_features(plan_id: str) -> dict[str, bool]:
         "basic_integrations": True,
         "faq_enabled": True,
         "comment_automation": plan.comment_automation,
+        "whatsapp": plan.whatsapp,
+        "tiktok": plan.tiktok,
         "tenant_analytics": True,
         "instagram_dm": True,
         "facebook_dm": True,
@@ -116,6 +132,8 @@ def public_plan_matrix() -> list[dict[str, Any]]:
                 "additional_seats": p.additional_seats,
                 "additional_seats_unlimited": p.additional_seats is None,
                 "comment_automation": p.comment_automation,
+                "whatsapp": p.whatsapp,
+                "tiktok": p.tiktok,
                 "features": plan_features(p.plan_id),
                 "catalog_version": p.catalog_version,
                 "public_sale": p.public_sale,

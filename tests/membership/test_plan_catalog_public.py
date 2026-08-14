@@ -29,6 +29,10 @@ def test_public_matrix_is_five_plans_lite_to_max() -> None:
 def test_catalog_features_gate_comments_and_creative() -> None:
     assert plan_features("lite")["comment_automation"] is False
     assert plan_features("starter")["comment_automation"] is True
+    assert plan_features("lite")["whatsapp"] is False
+    assert plan_features("starter")["whatsapp"] is True
+    assert plan_features("growth")["tiktok"] is False
+    assert plan_features("pro")["tiktok"] is True
     assert PLAN_FEATURES["pro"]["image_generation"] is True
     assert PLAN_FEATURES["growth"]["image_generation"] is False
     assert recommend_allowance("lite").included_credits == 7000

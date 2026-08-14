@@ -583,3 +583,62 @@ test('no bottom tab navigator wiring', () => {
   assert.doesNotMatch(shell, /createBottomTabNavigator|BottomTab|Tab\.Navigator/);
   assert.doesNotMatch(tree, /createBottomTabNavigator|BottomTab|Tab\.Navigator/);
 });
+
+test('Subscription current plan matches design handoff', () => {
+  const current = read('features/billing/CurrentPlanScreen.tsx');
+  const hero = read('features/billing/CurrentPlanHeroCard.tsx');
+  const chrome = read('features/shared/ScreenChrome.tsx');
+  const billing = read('features/billing/BillingScreen.tsx');
+  assert.match(billing, /navSubscription/);
+  assert.match(billing, /subCurrentSubtitle/);
+  assert.match(chrome, /MenuIcon/);
+  assert.match(hero, /subCurrentPlanKicker/);
+  assert.match(hero, /subAvailableCredits/);
+  assert.match(hero, /subBuyCredits/);
+  assert.match(current, /subWhatIncludes/);
+  assert.match(current, /SmartAnswersInfo/);
+  assert.match(current, /PlanNotIncluded/);
+  assert.match(current, /subUpgradePlan/);
+  assert.match(current, /subCreditsRefreshNote/);
+  assert.match(hero, /borderColor:\s*colors\.accent/);
+});
+
+test('Subscription choose-a-plan matches design handoff', () => {
+  const choose = read('features/billing/ChoosePlanScreen.tsx');
+  const chips = read('features/billing/PlanChipRow.tsx');
+  const detail = read('features/billing/PlanDetailCard.tsx');
+  const toggle = read('features/billing/BillingPeriodToggle.tsx');
+  const billing = read('features/billing/BillingScreen.tsx');
+  assert.match(billing, /subChooseTitle/);
+  assert.match(billing, /onBack/);
+  assert.match(choose, /BillingPeriodToggle/);
+  assert.match(choose, /PlanChipRow/);
+  assert.match(choose, /PlanDetailCard/);
+  assert.match(choose, /subCtaChooseLite|PLAN_CHOOSE_CTA/);
+  assert.match(chips, /PLAN_ORDER\.map/);
+  assert.match(chips, /subYourPlan/);
+  assert.match(chips, /subTapToCompare/);
+  assert.match(toggle, /subPeriodMonthly/);
+  assert.match(toggle, /subPeriodYearly/);
+  assert.match(toggle, /borderColor:\s*active \? colors\.accent/);
+  assert.match(detail, /PLAN_BADGE_KEY/);
+  assert.match(detail, /LinasSparkleIcon/);
+  assert.match(detail, /subAiCreditsIncluded/);
+  assert.match(detail, /SmartAnswersInfo/);
+});
+
+test('Buy credits sheet matches design handoff', () => {
+  const sheet = read('features/billing/BuyCreditsSheet.tsx');
+  const en = read('i18n/locales/subscriptionEn.ts');
+  assert.match(sheet, /subBuyCredits/);
+  assert.match(sheet, /subChooseCreditPack/);
+  assert.match(sheet, /accessibilityRole="radio"/);
+  assert.match(sheet, /DEFAULT_CREDIT_PACK/);
+  assert.match(sheet, /subBuyCreditsCta/);
+  assert.match(sheet, /subPurchasedNoExpire/);
+  assert.match(sheet, /subFooterStore/);
+  assert.match(sheet, /subCancel/);
+  assert.match(en, /Buy \{n\} credits • \{price\}/);
+  assert.match(en, /Payment is completed securely through the App Store or Google Play/);
+  assert.match(en, /Purchased credits do not expire/);
+});

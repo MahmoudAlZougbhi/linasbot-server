@@ -54,6 +54,8 @@ async def list_plans() -> Any:
                 "customer_dm_automation",
                 "faq_enabled",
                 "comment_automation",
+                "whatsapp",
+                "tiktok",
                 "tenant_analytics",
                 "instagram_dm",
                 "facebook_dm",
@@ -70,6 +72,8 @@ async def list_plans() -> Any:
                 "faq_capacity": plan.faq_capacity,
                 "included_credits": allowance.included_credits,
                 "comment_automation": bool(features.get("comment_automation")),
+                "whatsapp": bool(features.get("whatsapp")),
+                "tiktok": bool(features.get("tiktok")),
                 "additional_seats": PLAN_ADDITIONAL_SEATS.get(plan_id),
                 "additional_seats_unlimited": PLAN_ADDITIONAL_SEATS.get(plan_id) is None,
             }

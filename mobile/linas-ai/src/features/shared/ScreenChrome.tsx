@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AppIcon, feather } from '../../components/AppIcon';
 import { GradientBackground } from '../../components/GradientBackground';
 import { useI18n } from '../../i18n/LanguageContext';
 import { HIT, fonts, spacing, typography, useTheme } from '../../theme';
@@ -17,12 +18,14 @@ type Props = {
   iconColor?: string;
   centerTitle?: boolean;
   headerRight?: ReactNode;
+  /** When set, leading control is a back chevron instead of the hamburger. */
+  onBack?: () => void;
   children: ReactNode;
 };
 
 /**
- * Module screen chrome: hamburger (same as Chat) opens the side drawer.
- * No Back chevron — return to chat via drawer New Chat / history.
+ * Module screen chrome: hamburger opens the side drawer.
+ * Pass onBack to show a back chevron instead (Choose a plan).
  */
 export function ScreenChrome({
   title,
@@ -31,6 +34,7 @@ export function ScreenChrome({
   iconColor,
   centerTitle,
   headerRight,
+  onBack,
   children,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -45,13 +49,17 @@ export function ScreenChrome({
       <View style={[styles.top, { paddingTop: insets.top + 8 }]}>
         <View style={[styles.headerRow, centerTitle && styles.headerRowCentered]}>
           <Pressable
-            onPress={() => setDrawerOpen(true)}
+            onPress={() => (onBack ? onBack() : setDrawerOpen(true))}
             style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
-            accessibilityLabel={tr('openMenu')}
+            accessibilityLabel={onBack ? tr('back') : tr('openMenu')}
             accessibilityRole="button"
             hitSlop={4}
           >
-            <MenuIcon color={iconColor ?? colors.text} />
+            {onBack ? (
+              <AppIcon icon={feather('chevron-left')} size={26} color={iconColor ?? colors.text} />
+            ) : (
+              <MenuIcon color={iconColor ?? colors.text} />
+            )}
           </Pressable>
           <View style={[styles.titleBlock, centerTitle && styles.titleBlockCentered]}>
             <Text

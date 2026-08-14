@@ -25,6 +25,8 @@ async def public_plans() -> Any:
                 "additional_seats": row["additional_seats"],
                 "additional_seats_unlimited": row["additional_seats_unlimited"],
                 "comment_automation": row["comment_automation"],
+                "whatsapp": row["whatsapp"],
+                "tiktok": row["tiktok"],
                 "features": {
                     k: v
                     for k, v in row["features"].items()
@@ -35,6 +37,8 @@ async def public_plans() -> Any:
                         "customer_dm_automation",
                         "faq_enabled",
                         "comment_automation",
+                        "whatsapp",
+                        "tiktok",
                         "tenant_analytics",
                         "instagram_dm",
                         "facebook_dm",

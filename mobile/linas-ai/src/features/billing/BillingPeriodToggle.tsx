@@ -13,10 +13,7 @@ type Props = {
 export function BillingPeriodToggle({ period, onChange, tr }: Props) {
   const { colors } = useTheme();
   return (
-    <View
-      style={[styles.wrap, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
-      accessibilityRole="tablist"
-    >
+    <View style={styles.wrap} accessibilityRole="tablist">
       {(['monthly', 'yearly'] as const).map((p) => {
         const active = period === p;
         return (
@@ -25,7 +22,10 @@ export function BillingPeriodToggle({ period, onChange, tr }: Props) {
             onPress={() => onChange(p)}
             style={[
               styles.tab,
-              active && { backgroundColor: colors.surface, borderColor: colors.accent },
+              {
+                borderColor: active ? colors.accent : colors.border,
+                backgroundColor: colors.surface,
+              },
             ]}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
@@ -34,7 +34,7 @@ export function BillingPeriodToggle({ period, onChange, tr }: Props) {
             <Text
               style={[
                 styles.label,
-                { color: active ? colors.accentDeep : colors.textMuted },
+                { color: active ? colors.accent : colors.textMuted },
               ]}
             >
               {p === 'monthly' ? tr('subPeriodMonthly') : tr('subPeriodYearly')}
@@ -49,18 +49,14 @@ export function BillingPeriodToggle({ period, onChange, tr }: Props) {
 const styles = StyleSheet.create({
   wrap: {
     flexDirection: 'row',
-    borderRadius: radii.md,
-    borderWidth: 1,
-    padding: 4,
-    gap: 4,
+    gap: 10,
   },
   tab: {
     flex: 1,
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    paddingVertical: 12,
     alignItems: 'center',
   },
-  label: { fontFamily: fonts.bodyMedium, fontSize: 14 },
+  label: { fontFamily: fonts.bodyMedium, fontSize: 15, fontWeight: '600' },
 });
