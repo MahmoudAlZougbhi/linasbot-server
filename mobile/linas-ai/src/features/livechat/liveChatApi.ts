@@ -6,6 +6,7 @@ import {
   ActionResultSchema,
   ConversationDetailsSchema,
   type InboxFilter,
+  type ChannelFilter,
   type LiveChatItem,
   UnifiedChatsSchema,
   idempotencyKey,
@@ -35,6 +36,7 @@ export async function fetchUnifiedChats(opts: {
   pageSize?: number;
   cursor?: string | null;
   filter?: InboxFilter;
+  channel?: ChannelFilter;
 }) {
   const params = new URLSearchParams();
   if (opts.search?.trim()) params.set('search', opts.search.trim());
@@ -42,6 +44,7 @@ export async function fetchUnifiedChats(opts: {
   params.set('page_size', String(opts.pageSize ?? 30));
   if (opts.cursor) params.set('cursor', opts.cursor);
   if (opts.filter && opts.filter !== 'all') params.set('filter', opts.filter);
+  if (opts.channel && opts.channel !== 'all') params.set('channel', opts.channel);
   try {
     return await apiFetch(`/api/live-chat/unified-chats?${params}`, { schema: UnifiedChatsSchema });
   } catch (err) {

@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { classifyLiveChatError, fetchUnifiedChats, setOperatorAvailable } from './liveChatApi';
-import { type InboxFilter, type LiveChatItem } from './liveChatTypes';
+import {
+  type InboxFilter,
+  type ChannelFilter,
+  type LiveChatItem,
+} from './liveChatTypes';
 
 const POLL_MS = 20_000;
 const PAGE_SIZE = 30;
@@ -15,6 +19,7 @@ export function useLiveChatInbox() {
   const [errorKind, setErrorKind] = useState<'forbidden' | 'auth' | 'other' | null>(null);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<InboxFilter>('all');
+  const [channel, setChannel] = useState<ChannelFilter>('all');
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
@@ -39,6 +44,7 @@ export function useLiveChatInbox() {
           page: 1,
           pageSize: PAGE_SIZE,
           filter,
+          channel,
         });
         if (!data.success && data.error) {
           throw new Error(data.error);
@@ -67,7 +73,7 @@ export function useLiveChatInbox() {
         setRefreshing(false);
       }
     },
-    [debouncedSearch, filter],
+    [debouncedSearch, filter, channel],
   );
 
   const loadMore = useCallback(async () => {
@@ -80,6 +86,7 @@ export function useLiveChatInbox() {
         pageSize: PAGE_SIZE,
         cursor: nextCursor,
         filter,
+        channel,
       });
       setChats((prev) => {
         const seen = new Set(prev.map((c) => c.conversation_id));
@@ -96,7 +103,7 @@ export function useLiveChatInbox() {
     } finally {
       setLoadingMore(false);
     }
-  }, [debouncedSearch, filter, hasMore, loadingMore, nextCursor]);
+  }, [debouncedSearch, filter, channel, hasMore, loadingMore, nextCursor]);
 
   useEffect(() => {
     void setOperatorAvailable();
@@ -119,6 +126,8 @@ export function useLiveChatInbox() {
     setSearch,
     filter,
     setFilter,
+    channel,
+    setChannel,
     hasMore,
     total,
     refresh: () => void load('refresh'),
