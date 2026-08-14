@@ -38,12 +38,12 @@ describe('Requests mobile module', () => {
     assert.doesNotMatch(api, /mockSuccess|fakeSuccess|SecureStore/);
   });
 
-  it('cards omit full phone and address fields', () => {
+  it('cards may show phone when present and omit address', () => {
     const card = read('features/requests/RequestCardRow.tsx');
-    assert.doesNotMatch(card, /phone_normalized|delivery_address/);
-    assert.match(card, /reqNotifyFailed/);
-    const types = read('features/requests/requestsTypes.ts');
-    assert.match(types, /function cardSummary/);
+    assert.match(card, /phone_normalized/);
+    assert.doesNotMatch(card, /delivery_address/);
+    const format = read('features/requests/requestsFormat.ts');
+    assert.match(format, /function cardSummary/);
   });
 
   it('detail supports chat link, final actions, notes, and notify retry', () => {
@@ -62,7 +62,7 @@ describe('Requests mobile module', () => {
 
   it('home covers counters, filters, setup-required, and pagination hooks', () => {
     const home = read('features/requests/RequestsHome.tsx');
-    assert.match(home, /COUNTER_STATUSES/);
+    assert.match(home, /RequestSummaryCards/);
     assert.match(home, /reqSetupRequiredTitle/);
     assert.match(home, /errorKind === 'setup'/);
     assert.match(home, /onEndReached/);
@@ -70,10 +70,11 @@ describe('Requests mobile module', () => {
     const hook = read('features/requests/useRequestsList.ts');
     assert.match(hook, /fetchRequestsSetupStatus/);
     assert.match(hook, /listRequests/);
-    assert.match(hook, /createdAfterForPreset/);
     assert.match(hook, /createdAfter:/);
+    assert.match(hook, /createdOnOrBefore:/);
     const api = read('features/requests/requestsApi.ts');
     assert.match(api, /created_after/);
+    assert.match(api, /created_on_or_before/);
   });
 
   it('permission labels include requests keys', () => {

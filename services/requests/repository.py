@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from db.models.requests import CustomerRequest, CustomerRequestCounter
@@ -271,29 +271,30 @@ class CustomerRequestsRepository:
             return None
         return row
 
-    def list_requests(
+    def _list_clauses(
         self,
         *,
         tenant_id: str,
         request_type: str | None = None,
-        status: str | None = None,
-        source_channel: str | None = None,
+        statuses: list[str] | None = None,
+        source_channels: list[str] | None = None,
         assigned_user_id: str | None = None,
         q: str | None = None,
         created_before: datetime | None = None,
         created_after: datetime | None = None,
         created_on_or_before: datetime | None = None,
-        limit: int = 25,
         search_phone: bool = False,
-    ) -> list[CustomerRequest]:
-        clauses = [CustomerRequest.tenant_id == tenant_id]
+    ) -> list[Any]:
+        clauses: list[Any] = [CustomerRequest.tenant_id == tenant_id]
         if request_type:
             clauses.append(CustomerRequest.request_type == request_type)
-        if status:
-            clauses.append(CustomerRequest.status == status)
-        if source_channel:
-            clauses.append(CustomerRequest.source_channel == source_channel)
-        if assigned_user_id:
+        if statuses:
+            clauses.append(CustomerRequest.status.in_(statuses))
+        if source_channels:
+            clauses.append(CustomerRequest.source_channel.in_(source_channels))
+        if assigned_user_id == "unassigned":
+            clauses.append(CustomerRequest.assigned_user_id.is_(None))
+        elif assigned_user_id:
             clauses.append(CustomerRequest.assigned_user_id == assigned_user_id)
         if created_before is not None:
             clauses.append(CustomerRequest.created_at < created_before)
@@ -313,12 +314,70 @@ class CustomerRequestsRepository:
             if search_phone:
                 search_cols.append(CustomerRequest.phone_normalized.ilike(like))
             clauses.append(or_(*search_cols))
+        return clauses
+
+    def list_requests(
+        self,
+        *,
+        tenant_id: str,
+        request_type: str | None = None,
+        status: str | None = None,
+        statuses: list[str] | None = None,
+        source_channel: str | None = None,
+        source_channels: list[str] | None = None,
+        assigned_user_id: str | None = None,
+        q: str | None = None,
+        created_before: datetime | None = None,
+        created_after: datetime | None = None,
+        created_on_or_before: datetime | None = None,
+        limit: int = 25,
+        search_phone: bool = False,
+    ) -> list[CustomerRequest]:
+        status_list = statuses or ([status] if status else None)
+        channel_list = source_channels or ([source_channel] if source_channel else None)
+        clauses = self._list_clauses(
+            tenant_id=tenant_id,
+            request_type=request_type,
+            statuses=status_list,
+            source_channels=channel_list,
+            assigned_user_id=assigned_user_id,
+            q=q,
+            created_before=created_before,
+            created_after=created_after,
+            created_on_or_before=created_on_or_before,
+            search_phone=search_phone,
+        )
         stmt = select(CustomerRequest).where(and_(*clauses)).order_by(CustomerRequest.created_at.desc()).limit(limit)
         return list(self.session.execute(stmt).scalars().all())
 
-    def status_counts(self, *, tenant_id: str) -> dict[str, int]:
-        from sqlalchemy import func
+    def count_requests(
+        self,
+        *,
+        tenant_id: str,
+        request_type: str | None = None,
+        statuses: list[str] | None = None,
+        source_channels: list[str] | None = None,
+        assigned_user_id: str | None = None,
+        q: str | None = None,
+        created_after: datetime | None = None,
+        created_on_or_before: datetime | None = None,
+        search_phone: bool = False,
+    ) -> int:
+        clauses = self._list_clauses(
+            tenant_id=tenant_id,
+            request_type=request_type,
+            statuses=statuses,
+            source_channels=source_channels,
+            assigned_user_id=assigned_user_id,
+            q=q,
+            created_after=created_after,
+            created_on_or_before=created_on_or_before,
+            search_phone=search_phone,
+        )
+        stmt = select(func.count()).select_from(CustomerRequest).where(and_(*clauses))
+        return int(self.session.execute(stmt).scalar_one())
 
+    def status_counts(self, *, tenant_id: str) -> dict[str, int]:
         stmt = (
             select(CustomerRequest.status, func.count())
             .where(CustomerRequest.tenant_id == tenant_id)

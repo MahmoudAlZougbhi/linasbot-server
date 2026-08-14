@@ -187,3 +187,63 @@ def test_list_created_after_filter(req_db, monkeypatch):
     listed = svc.list(tenant_id="tenant-a", created_after=after)
     assert len(listed["items"]) == 1
     assert listed["items"][0]["title"] == "new-item"
+
+
+def test_list_card_includes_chat_fields_and_csv_filters(req_db, monkeypatch):
+    monkeypatch.setattr("services.requests.service.requests_capture_active", lambda _tid: True)
+    monkeypatch.setattr(
+        "services.requests.service.published_configuration_version",
+        lambda _tid: "v-test",
+    )
+    svc = CustomerRequestsService(req_db)
+    wa = svc.create_from_ai(
+        tenant_id="tenant-a",
+        body=RequestCreateBody(
+            request_type="APPOINTMENT",
+            source_channel="whatsapp_cloud",
+            customer_confirmed=True,
+            idempotency_key="idem-card-wa",
+            title="Laser underarms",
+            preferred_date="Tomorrow",
+            preferred_time="6:30 PM",
+            requested_branch="Beirut",
+            customer_name="Sarah",
+            conversation_id="conv-wa",
+            phone_normalized="+96171234567",
+        ),
+        include_sensitive=True,
+    )
+    svc.create_from_ai(
+        tenant_id="tenant-a",
+        body=RequestCreateBody(
+            request_type="ORDER",
+            source_channel="instagram_dm",
+            customer_confirmed=True,
+            idempotency_key="idem-card-ig",
+            title="Full service package ×1",
+            customer_name="Omar",
+            conversation_id="conv-ig",
+        ),
+    )
+    public = svc.list(tenant_id="tenant-a")
+    assert "phone_normalized" not in public["items"][0]
+    assert public["items"][0]["phone_present"] is True or public["items"][1].get("phone_present") is True
+    assert public["matched"] == 2
+    private = svc.list(tenant_id="tenant-a", include_sensitive=True)
+    phones = [row.get("phone_normalized") for row in private["items"]]
+    assert "+96171234567" in phones
+    assert any(row.get("conversation_id") == "conv-wa" for row in private["items"])
+    assert any(row.get("requested_branch") == "Beirut" for row in private["items"])
+
+    multi = svc.list(
+        tenant_id="tenant-a",
+        source_channel="whatsapp_cloud,instagram_dm",
+        status="NEW,IN_REVIEW",
+    )
+    assert multi["matched"] == 2
+    tiktok = svc.list(tenant_id="tenant-a", source_channel="tiktok")
+    assert tiktok["items"] == []
+    assert tiktok["matched"] == 0
+    in_progress = svc.list(tenant_id="tenant-a", status="IN_REVIEW,WAITING_FOR_CUSTOMER,CONFIRMED,READY")
+    assert in_progress["matched"] == 0
+    assert wa["conversation_id"] == "conv-wa"

@@ -1,89 +1,86 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AppIcon, feather } from '../../components/AppIcon';
-import { StatusChip } from '../../components/StatusChip';
-import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../theme';
-import {
-  CHANNEL_LABEL_KEYS,
-  STATUS_LABEL_KEYS,
-  TYPE_LABEL_KEYS,
-  cardSummary,
-  formatWhen,
-  type RequestCard,
-} from './requestsTypes';
+import { PlatformChannelIcon } from '../livechat/PlatformChannelIcon';
+import { RequestCardActions } from './RequestCardActions';
+import { cardSummary, formatPhone, formatRequestWhen, requestChannel } from './requestsFormat';
+import type { RequestCard, StatusBucket } from './requestsTypes';
+import type { StaffPick } from './useRequestsList';
 
 type Props = {
   item: RequestCard;
-  onPress: () => void;
+  assigneeLabel: string;
+  staff: StaffPick[];
+  busy: boolean;
+  language: string;
+  onOpen: () => void;
+  onStatus: (bucket: StatusBucket) => void;
+  onAssign: (userId: string | null) => void;
+  onChat: () => void;
+  onPrint: () => void;
 };
 
-function statusTone(status: string): 'neutral' | 'ok' | 'warn' | 'soon' {
-  if (status === 'COMPLETED' || status === 'CONFIRMED' || status === 'READY') return 'ok';
-  if (status === 'NEW' || status === 'WAITING_FOR_CUSTOMER') return 'warn';
-  if (status === 'CANCELLED') return 'soon';
-  return 'neutral';
-}
-
-export function RequestCardRow({ item, onPress }: Props) {
+export function RequestCardRow({
+  item,
+  assigneeLabel,
+  staff,
+  busy,
+  language,
+  onOpen,
+  onStatus,
+  onAssign,
+  onChat,
+  onPrint,
+}: Props) {
   const { colors } = useTheme();
-  const { tr, language } = useI18n();
   const name =
     item.customer_display_name?.trim() ||
     item.platform_username?.trim() ||
     item.request_number;
-  const typeKey = TYPE_LABEL_KEYS[item.request_type];
-  const statusKey = STATUS_LABEL_KEYS[item.status];
-  const channelKey = item.source_channel ? CHANNEL_LABEL_KEYS[item.source_channel] : null;
+  const phone = formatPhone(item.phone_normalized);
+  const when = formatRequestWhen(item.created_at, language);
+  const meta = [phone, when].filter(Boolean).join(' · ');
   const summary = cardSummary(item);
-  const notifyFailed = item.notification_status === 'failed';
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={onOpen}
       style={({ pressed }) => [
         styles.card,
-        {
-          backgroundColor: colors.surface,
-          borderColor: colors.border,
-          opacity: pressed ? 0.92 : 1,
-        },
+        { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.96 : 1 },
       ]}
       accessibilityRole="button"
       accessibilityLabel={name}
     >
-      <View style={styles.top}>
-        <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
-          {name}
-        </Text>
-        {notifyFailed ? (
-          <View style={styles.failRow}>
-            <AppIcon icon={feather('alert-circle')} size={14} color={colors.warning} />
-            <Text style={[styles.fail, { color: colors.warning }]}>{tr('reqNotifyFailed')}</Text>
-          </View>
-        ) : null}
+      <Text style={[styles.number, { color: colors.accent }]}>{`Request #${item.request_number}`}</Text>
+      <View style={styles.identity}>
+        <PlatformChannelIcon channel={requestChannel(item.source_channel)} size={36} />
+        <View style={styles.identityText}>
+          <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
+            {name}
+          </Text>
+          {meta ? (
+            <Text style={[styles.meta, { color: colors.textMuted }]} numberOfLines={1}>
+              {meta}
+            </Text>
+          ) : null}
+        </View>
       </View>
-      <View style={styles.chips}>
-        {channelKey ? <StatusChip label={tr(channelKey)} /> : null}
-        {typeKey ? <StatusChip label={tr(typeKey)} /> : null}
-        {statusKey ? <StatusChip label={tr(statusKey)} tone={statusTone(item.status)} /> : null}
-      </View>
-      <Text style={[styles.meta, { color: colors.textMuted }]} numberOfLines={1}>
-        {tr('reqNumber')}: {item.request_number}
-      </Text>
       {summary ? (
         <Text style={[styles.summary, { color: colors.text }]} numberOfLines={2}>
           {summary}
         </Text>
       ) : null}
-      <View style={styles.footer}>
-        <Text style={[styles.meta, { color: colors.textDim }]}>
-          {formatWhen(item.created_at, language)}
-        </Text>
-        <Text style={[styles.meta, { color: colors.textDim }]} numberOfLines={1}>
-          {item.assigned_user_id ? item.assigned_user_id.slice(0, 8) : tr('reqUnassigned')}
-        </Text>
-      </View>
+      <RequestCardActions
+        item={item}
+        assigneeLabel={assigneeLabel}
+        staff={staff}
+        busy={busy}
+        onStatus={onStatus}
+        onAssign={onAssign}
+        onChat={onChat}
+        onPrint={onPrint}
+      />
     </Pressable>
   );
 }
@@ -91,17 +88,15 @@ export function RequestCardRow({ item, onPress }: Props) {
 const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
-    borderRadius: radii.lg,
-    padding: spacing.lg,
+    borderRadius: radii.sm,
+    padding: spacing.md,
     marginBottom: spacing.md,
-    gap: spacing.sm,
+    gap: 8,
   },
-  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  name: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 16 },
-  failRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  fail: { fontFamily: fonts.body, fontSize: 11 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  number: { fontFamily: fonts.bodyMedium, fontSize: 13, fontWeight: '600' },
+  identity: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  identityText: { flex: 1, minWidth: 0, gap: 2 },
+  name: { fontFamily: fonts.bodyMedium, fontSize: 16, fontWeight: '700' },
+  meta: { fontFamily: fonts.body, fontSize: 13 },
   summary: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20 },
-  meta: { fontFamily: fonts.body, fontSize: 12 },
-  footer: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
 });

@@ -12,26 +12,32 @@ const SPEC: Record<ChatChannel, { icon: AppIconName; color: string; bg: string }
 
 type Props = {
   channel: ChatChannel;
+  size?: number;
 };
 
-/** Brand-accurate circular platform mark for the Live Chat inbox row. */
-export function PlatformChannelIcon({ channel }: Props) {
+/** Brand-accurate circular platform mark for inbox rows and request cards. */
+export function PlatformChannelIcon({ channel, size = 48 }: Props) {
   const spec = SPEC[channel] ?? SPEC.whatsapp;
   return (
     <View
-      style={[styles.wrap, { backgroundColor: spec.bg }]}
+      style={[
+        styles.wrap,
+        {
+          backgroundColor: spec.bg,
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+        },
+      ]}
       accessibilityLabel={channel}
     >
-      <AppIcon icon={spec.icon} size={22} color={spec.color} />
+      <AppIcon icon={spec.icon} size={Math.round(size * 0.46)} color={spec.color} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
