@@ -394,6 +394,7 @@ test('Live Chat inbox matches design handoff (search, All/Human, platform row)',
   const inbox = read('features/livechat/LiveChatInbox.tsx');
   const search = read('features/livechat/InboxSearchBar.tsx');
   const pills = read('features/livechat/InboxFilterPills.tsx');
+  const chips = read('features/livechat/InboxChannelChips.tsx');
   const row = read('features/livechat/ConversationRow.tsx');
   const icon = read('features/livechat/PlatformChannelIcon.tsx');
   const types = read('features/livechat/liveChatTypes.ts');
@@ -408,6 +409,10 @@ test('Live Chat inbox matches design handoff (search, All/Human, platform row)',
   assert.match(pills, /colors\.accentSoft/);
   assert.match(pills, /active \? colors\.text : colors\.textMuted/);
   assert.doesNotMatch(pills, /Waiting|Closed/);
+  assert.match(chips, /id: 'whatsapp'/);
+  assert.match(chips, /id: 'instagram'/);
+  assert.match(chips, /id: 'facebook'/);
+  assert.match(chips, /id: 'tiktok'/);
   assert.match(row, /PlatformChannelIcon/);
   assert.match(row, /assigneeLabel/);
   assert.match(row, /unread/);

@@ -3,6 +3,10 @@ import { z } from 'zod';
 export const InboxFilterSchema = z.enum(['all', 'waiting', 'with_operator', 'bot', 'closed']);
 export type InboxFilter = z.infer<typeof InboxFilterSchema>;
 
+export type ChatChannel = 'whatsapp' | 'instagram' | 'facebook' | 'tiktok';
+export const ChannelFilterSchema = z.enum(['all', 'whatsapp', 'instagram', 'facebook', 'tiktok']);
+export type ChannelFilter = z.infer<typeof ChannelFilterSchema>;
+
 export const LastMessageSchema = z.union([
   z.string(),
   z
@@ -17,8 +21,8 @@ export const LastMessageSchema = z.union([
 
 export const LiveChatItemSchema = z
   .object({
-    conversation_id: z.string(),
-    user_id: z.string(),
+    conversation_id: z.preprocess((v) => (v == null ? undefined : String(v)), z.string().min(1)),
+    user_id: z.preprocess((v) => (v == null ? undefined : String(v)), z.string().min(1)),
     user_name: z.string().optional().nullable(),
     user_phone: z.string().optional().nullable(),
     phone_number: z.string().optional().nullable(),
@@ -43,10 +47,20 @@ export const LiveChatItemSchema = z
 
 export type LiveChatItem = z.infer<typeof LiveChatItemSchema>;
 
+function parseLiveChatItems(rows: unknown): LiveChatItem[] {
+  if (!Array.isArray(rows)) return [];
+  const out: LiveChatItem[] = [];
+  for (const row of rows) {
+    const parsed = LiveChatItemSchema.safeParse(row);
+    if (parsed.success) out.push(parsed.data);
+  }
+  return out;
+}
+
 export const UnifiedChatsSchema = z
   .object({
     success: z.boolean(),
-    chats: z.array(LiveChatItemSchema).default([]),
+    chats: z.unknown().optional().transform(parseLiveChatItems),
     total: z.number().optional(),
     page: z.number().optional(),
     page_size: z.number().optional(),
@@ -171,16 +185,24 @@ export function chatPreview(item: LiveChatItem): string {
   return text;
 }
 
-export type ChatChannel = 'whatsapp' | 'instagram' | 'facebook' | 'tiktok';
+function blobHasChannelToken(blob: string, token: string): boolean {
+  return blob.includes(`${token}:`) || blob.split(/[\s|/]+/).includes(token);
+}
 
 /** Infer platform from API channel or user_id prefix. Never invents TikTok rows. */
 export function chatChannel(item: LiveChatItem): ChatChannel {
-  const ch = String(item.channel || '').toLowerCase();
-  const id = String(item.user_id || '').toLowerCase();
-  if (ch === 'tiktok' || id.includes('tiktok:')) return 'tiktok';
-  if (ch === 'instagram' || id.includes('instagram:')) return 'instagram';
-  if (ch === 'facebook' || ch === 'messenger' || id.includes('facebook:')) return 'facebook';
-  if (ch === 'whatsapp') return 'whatsapp';
+  const ch = String(item.channel || '').toLowerCase().trim();
+  if (ch === 'tiktok') return 'tiktok';
+  if (ch === 'instagram' || ch === 'instagram_dm' || ch === 'ig') return 'instagram';
+  if (ch === 'facebook' || ch === 'messenger' || ch === 'facebook_messenger') return 'facebook';
+  if (ch === 'whatsapp' || ch === 'whatsapp_cloud' || ch === 'wa') return 'whatsapp';
+  const blob = [item.channel, item.user_id, item.user_phone, item.phone_number, item.phone_clean]
+    .map((v) => String(v || '').toLowerCase())
+    .join(' ');
+  if (blobHasChannelToken(blob, 'tiktok')) return 'tiktok';
+  if (blobHasChannelToken(blob, 'instagram')) return 'instagram';
+  if (blobHasChannelToken(blob, 'facebook') || blobHasChannelToken(blob, 'messenger')) return 'facebook';
+  if (blobHasChannelToken(blob, 'whatsapp')) return 'whatsapp';
   return 'whatsapp';
 }
 
