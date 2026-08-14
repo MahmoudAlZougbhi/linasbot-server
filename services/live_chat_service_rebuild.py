@@ -256,6 +256,7 @@ class LiveChatRebuildMixin:
             "human_takeover_active": bool(conv_data.get("human_takeover_active")),
             "post_release_escalation_suppressed_until": conv_data.get("post_release_escalation_suppressed_until"),
             "operator_id": conv_data.get("operator_id"),
+            "operator_name": conv_data.get("operator_name"),
             "unread_count": unread_count,
             "sentiment": sentiment,
             "is_live": is_live,

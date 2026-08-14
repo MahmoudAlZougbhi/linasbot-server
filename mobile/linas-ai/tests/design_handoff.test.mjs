@@ -396,13 +396,38 @@ test('composer bar matches design handoff (pill, grow, placeholders)', () => {
   assert.match(en, /composerPlaceholderWork:\s*'Work with Linas'/);
 });
 
-test('Live Chat thread remains read-only', () => {
+test('Live Chat inbox matches design handoff (search, All/Human, platform row)', () => {
+  const screen = read('features/livechat/LiveChatScreen.tsx');
+  const inbox = read('features/livechat/LiveChatInbox.tsx');
+  const search = read('features/livechat/InboxSearchBar.tsx');
+  const pills = read('features/livechat/InboxFilterPills.tsx');
+  const row = read('features/livechat/ConversationRow.tsx');
+  const icon = read('features/livechat/PlatformChannelIcon.tsx');
+  const types = read('features/livechat/liveChatTypes.ts');
   const thread = read('features/livechat/LiveChatThread.tsx');
-  assert.match(thread, /read-only/i);
-  assert.match(thread, /StatusChip label="Read-only"/);
-  assert.doesNotMatch(thread, /LiveChatComposer/);
-  assert.doesNotMatch(thread, /onSendMessage/);
-  assert.doesNotMatch(thread, /function\s+takeover|pauseAi|humanTakeover/i);
+  assert.match(screen, /subtitle="All customer conversations"/);
+  assert.match(search, /borderRadius:\s*radii\.pill/);
+  assert.match(search, /placeholder="Search conversations"/);
+  assert.doesNotMatch(search, /feather\('filter'\)/);
+  assert.match(pills, /label:\s*'All'/);
+  assert.match(pills, /label:\s*'Human'/);
+  assert.match(pills, /id:\s*'with_operator'/);
+  assert.match(pills, /colors\.accentSoft/);
+  assert.match(pills, /active \? colors\.text : colors\.textMuted/);
+  assert.doesNotMatch(pills, /Waiting|Closed/);
+  assert.match(row, /PlatformChannelIcon/);
+  assert.match(row, /assigneeLabel/);
+  assert.match(row, /unread/);
+  assert.match(row, /colors\.accentDeep/);
+  assert.match(icon, /logo-whatsapp/);
+  assert.match(icon, /logo-instagram/);
+  assert.match(icon, /facebook-messenger/);
+  assert.match(icon, /logo-tiktok/);
+  assert.match(types, /hour12:\s*true/);
+  assert.match(thread, /LiveChatComposer/);
+  assert.match(thread, /LiveChatAssignSheet/);
+  assert.match(thread, /onTakeover/);
+  assert.doesNotMatch(thread, /Read-only/);
 });
 
 test('drawer search chrome is header icon; New chat + Settings in footer dock', () => {

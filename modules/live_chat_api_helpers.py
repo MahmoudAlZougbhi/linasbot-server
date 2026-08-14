@@ -34,6 +34,27 @@ async def broadcast_sse_event(event_type: str, data: dict) -> None:
     await live_chat_sse_broadcaster.publish(event_type, data)
 
 
+def resolve_takeover_assignee(session: Any, requested_operator_id: str | None) -> tuple[str, str | None]:
+    """Session is the actor; requested_operator_id may assign another same-tenant staff member."""
+    from fastapi import HTTPException
+
+    from services.user_service import user_service
+
+    session_id = str(getattr(session, "user_id", "") or "").strip()
+    requested = str(requested_operator_id or "").strip()
+    if not requested or requested == session_id:
+        return session_id, getattr(session, "email", None)
+
+    user = user_service.get_user_by_id(requested)
+    if not user:
+        raise HTTPException(status_code=400, detail="Staff member not found")
+    tenant = str(user.get("tenantId") or "").strip()
+    if tenant != str(getattr(session, "tenant_id", "") or "").strip():
+        raise HTTPException(status_code=403, detail="Cannot assign to a user in another workspace")
+    name = user.get("name") or user.get("displayName") or user.get("email")
+    return requested, str(name) if name else getattr(session, "email", None)
+
+
 def _error_response(message: str) -> Any:
     return {"success": False, "error": str(message)}
 

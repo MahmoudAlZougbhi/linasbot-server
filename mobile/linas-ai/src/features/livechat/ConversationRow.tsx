@@ -1,15 +1,15 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, fonts } from '../../theme';
+import { fonts, useTheme } from '../../theme';
+import { PlatformChannelIcon } from './PlatformChannelIcon';
 import {
   type LiveChatItem,
-  channelLabel,
-  chatAvatarLetter,
+  assigneeLabel,
+  chatChannel,
   chatLastAt,
   chatPreview,
   chatTitle,
   formatInboxTime,
-  normalizeStatus,
 } from './liveChatTypes';
 
 type Props = {
@@ -18,37 +18,42 @@ type Props = {
 };
 
 export function ConversationRow({ item, onPress }: Props) {
+  const { colors } = useTheme();
   const unread = item.unread_count ?? 0;
-  const status = normalizeStatus(item);
   const time = formatInboxTime(chatLastAt(item));
-  const waiting = status === 'waiting_human';
+  const assignee = assigneeLabel(item);
+  const badge = unread > 0 ? (unread > 99 ? '99+' : String(unread)) : null;
 
   return (
-    <Pressable style={styles.row} onPress={onPress}>
-      <View style={[styles.avatar, waiting && styles.avatarWaiting]}>
-        <Text style={styles.avatarText}>{chatAvatarLetter(item)}</Text>
+    <Pressable
+      style={[styles.row, { borderBottomColor: colors.borderSoft }]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={chatTitle(item)}
+    >
+      <PlatformChannelIcon channel={chatChannel(item)} />
+      <View style={styles.middle}>
+        <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
+          {chatTitle(item)}
+        </Text>
+        <Text style={[styles.preview, { color: colors.textMuted }]} numberOfLines={1}>
+          {chatPreview(item)}
+        </Text>
       </View>
-      <View style={styles.body}>
-        <View style={styles.top}>
-          <Text style={[styles.title, unread > 0 && styles.titleUnread]} numberOfLines={1}>
-            {chatTitle(item)}
-          </Text>
-          {time ? (
-            <Text style={[styles.time, unread > 0 && styles.timeUnread]}>{time}</Text>
-          ) : null}
-        </View>
-        <View style={styles.bottom}>
-          <Text style={[styles.preview, unread > 0 && styles.previewUnread]} numberOfLines={1}>
-            {chatPreview(item)}
-          </Text>
-          {unread > 0 ? (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{unread > 99 ? '99+' : unread}</Text>
-            </View>
-          ) : (
-            <Text style={styles.channel}>{channelLabel(item)}</Text>
-          )}
-        </View>
+      <View style={styles.meta}>
+        {time ? (
+          <Text style={[styles.time, { color: colors.textDim }]}>{time}</Text>
+        ) : null}
+        {badge ? (
+          <View style={[styles.badge, { backgroundColor: colors.accentDeep }]}>
+            <Text style={[styles.badgeText, { color: colors.onAccent }]}>{badge}</Text>
+          </View>
+        ) : (
+          <View style={styles.badgeSpacer} />
+        )}
+        <Text style={[styles.assignee, { color: colors.textDim }]} numberOfLines={1}>
+          {assignee}
+        </Text>
       </View>
     </Pressable>
   );
@@ -59,39 +64,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 4,
+    paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
   },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.accentSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarWaiting: { backgroundColor: '#FDE68A' },
-  avatarText: { color: colors.accentDeep, fontFamily: fonts.bodyMedium, fontSize: 18 },
-  body: { flex: 1, minWidth: 0, gap: 3 },
-  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  title: { flex: 1, color: colors.text, fontFamily: fonts.body, fontSize: 16 },
-  titleUnread: { fontFamily: fonts.bodyMedium },
-  time: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12 },
-  timeUnread: { color: colors.accent, fontFamily: fonts.bodyMedium },
-  bottom: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  preview: { flex: 1, color: colors.textMuted, fontFamily: fonts.body, fontSize: 14 },
-  previewUnread: { color: colors.text, fontFamily: fonts.bodyMedium },
-  channel: { color: colors.textDim, fontFamily: fonts.body, fontSize: 11 },
+  middle: { flex: 1, minWidth: 0, gap: 4, justifyContent: 'center' },
+  name: { fontFamily: fonts.bodyMedium, fontSize: 16, fontWeight: '700' },
+  preview: { fontFamily: fonts.body, fontSize: 14 },
+  meta: { alignItems: 'flex-end', justifyContent: 'center', gap: 4, minWidth: 56 },
+  time: { fontFamily: fonts.body, fontSize: 12 },
   badge: {
     minWidth: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 6,
   },
-  badgeText: { color: colors.onAccent, fontFamily: fonts.bodyMedium, fontSize: 11 },
+  badgeText: { fontFamily: fonts.bodyMedium, fontSize: 11 },
+  badgeSpacer: { height: 4 },
+  assignee: { fontFamily: fonts.body, fontSize: 12, maxWidth: 88 },
 });

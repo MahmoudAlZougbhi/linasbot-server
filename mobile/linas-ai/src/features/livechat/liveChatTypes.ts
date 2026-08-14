@@ -30,6 +30,7 @@ export const LiveChatItemSchema = z
     status: z.string().optional().nullable(),
     channel: z.string().optional().nullable(),
     operator_id: z.string().optional().nullable(),
+    operator_name: z.string().optional().nullable(),
     human_takeover_active: z.boolean().optional().nullable(),
     unread_count: z.number().optional().nullable(),
     language: z.string().optional().nullable(),
@@ -170,14 +171,43 @@ export function chatPreview(item: LiveChatItem): string {
   return text;
 }
 
-export function channelLabel(item: LiveChatItem): string {
+export type ChatChannel = 'whatsapp' | 'instagram' | 'facebook' | 'tiktok';
+
+/** Infer platform from API channel or user_id prefix. Never invents TikTok rows. */
+export function chatChannel(item: LiveChatItem): ChatChannel {
   const ch = String(item.channel || '').toLowerCase();
   const id = String(item.user_id || '').toLowerCase();
-  if (ch === 'instagram' || id.includes('instagram:')) return 'Instagram';
-  if (ch === 'facebook' || id.includes('facebook:')) return 'Facebook';
-  if (ch === 'whatsapp') return 'WhatsApp';
-  if (isSocialChannelUser(item.user_id, item.channel)) return 'Social';
+  if (ch === 'tiktok' || id.includes('tiktok:')) return 'tiktok';
+  if (ch === 'instagram' || id.includes('instagram:')) return 'instagram';
+  if (ch === 'facebook' || ch === 'messenger' || id.includes('facebook:')) return 'facebook';
+  if (ch === 'whatsapp') return 'whatsapp';
+  return 'whatsapp';
+}
+
+export function channelLabel(item: LiveChatItem): string {
+  const ch = chatChannel(item);
+  if (ch === 'instagram') return 'Instagram';
+  if (ch === 'facebook') return 'Messenger';
+  if (ch === 'tiktok') return 'TikTok';
   return 'WhatsApp';
+}
+
+/** First token of a name, or local-part of an email — matches inbox "Mohammad" / "AI". */
+export function assigneeFirstName(raw: string | null | undefined): string {
+  const value = String(raw || '').trim();
+  if (!value) return '';
+  const local = value.includes('@') ? value.split('@')[0] : value;
+  const token = local.split(/[\s._-]+/).filter(Boolean)[0] || local;
+  return token.charAt(0).toUpperCase() + token.slice(1);
+}
+
+export function assigneeLabel(item: LiveChatItem): string {
+  const status = normalizeStatus(item);
+  if (status === 'bot' || status === 'closed') return 'AI';
+  const named = assigneeFirstName(item.operator_name);
+  if (named) return named;
+  if (status === 'human' || status === 'waiting_human' || item.operator_id) return 'Human';
+  return 'AI';
 }
 
 export function messageBody(msg: LiveChatMessage): string {
@@ -227,7 +257,7 @@ export function formatInboxTime(value: string | null | undefined): string {
   const startMsg = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const dayDiff = Math.round((startToday.getTime() - startMsg.getTime()) / 86_400_000);
   if (dayDiff === 0) {
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
   }
   if (dayDiff === 1) return 'Yesterday';
   if (dayDiff < 7) return d.toLocaleDateString([], { weekday: 'short' });
