@@ -21,19 +21,12 @@ import {
   SendArrowGlyph,
   StopGlyph,
 } from './ComposerGlyphs';
-import { ComposerHeightProbe } from './ComposerHeightProbe';
+import { ComposerDraftField } from './ComposerDraftField';
 import { ComposerModelChip } from './ComposerModelChip';
-import {
-  COMPOSER_INPUT_MAX_H,
-  COMPOSER_INPUT_PAD_H,
-} from './composerInputHeight';
 import { composerStyles as styles } from './composerStyles';
 import { LinEffortSheet } from './LinEffortSheet';
 import type { OwnerChatMode } from './ownerChatMode';
-import {
-  useComposerInputAutoGrow,
-  COMPOSER_IOS_PAD_TOP,
-} from './useComposerInputAutoGrow';
+import { useComposerInputAutoGrow } from './useComposerInputAutoGrow';
 import type { VoiceState } from './useVoiceDraft';
 import { VoiceComposerControls } from './VoiceComposerControls';
 
@@ -98,6 +91,7 @@ export function ChatComposer({
   const { tr, isRtl } = useI18n();
   const [effortOpen, setEffortOpen] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [slotWidth, setSlotWidth] = useState(0);
   const pulse = useRef(new Animated.Value(1)).current;
@@ -106,11 +100,12 @@ export function ChatComposer({
   const {
     inputHeight,
     atMaxHeight,
+    showExpandControl,
     localInputRef,
     assignInputRef,
-    handleContentSizeChange,
     handleChangeText,
     handleMeasuredLines,
+    scrollComposerToEnd,
   } = useComposerInputAutoGrow(draft, inputRef);
   const recording = voiceState === 'recording';
   const paused = voiceState === 'paused';
@@ -122,7 +117,8 @@ export function ChatComposer({
   const chipTappable = Boolean(showModelChip && onOwnerModeChange);
   const draftDir = textDirectionStyle(draft);
   const draftEmpty = !draft.trim();
-  const stacked = focused || !draftEmpty || voiceBusy;
+  const stacked = expanded || focused || !draftEmpty || voiceBusy;
+  const showExpand = expanded || showExpandControl;
   const idleAlign = isRtl ? 'right' : 'left';
   const idleWriting = isRtl ? 'rtl' : 'ltr';
   const inputTextAlign = draftEmpty ? idleAlign : draftDir.textAlign;
@@ -157,6 +153,20 @@ export function ChatComposer({
       ringLoop.stop();
     };
   }, [recording, pulse, ring]);
+
+  useEffect(() => {
+    if (draft.length === 0 && expanded) setExpanded(false);
+  }, [draft, expanded]);
+
+  function toggleExpand() {
+    if (expanded) {
+      setExpanded(false);
+      requestAnimationFrame(scrollComposerToEnd);
+      return;
+    }
+    setExpanded(true);
+    requestAnimationFrame(() => localInputRef.current?.focus());
+  }
 
   useEffect(() => {
     if (!autoFocus || suppressFocusRef.current) return;
@@ -264,16 +274,19 @@ export function ChatComposer({
   return (
     <View
       style={[
-        styles.wrap,
+        expanded ? styles.expandOverlay : styles.wrap,
         {
+          paddingTop: expanded ? insets.top + 8 : undefined,
           paddingBottom: keyboardOpen ? 8 : Math.max(insets.bottom, 10),
-          backgroundColor: colors.bg,
+          backgroundColor: expanded ? colors.overlay : colors.bg,
         },
       ]}
     >
-      <ComposerEditChip active={Boolean(editChipActive)} onClear={onClearEditChip} />
+      {expanded ? null : (
+        <ComposerEditChip active={Boolean(editChipActive)} onClear={onClearEditChip} />
+      )}
 
-      {showModelChip ? (
+      {showModelChip && !expanded ? (
         <ComposerModelChip
           mode={ownerMode}
           tappable={chipTappable}
@@ -287,8 +300,8 @@ export function ChatComposer({
 
       <View
         style={[
-          styles.pill,
-          stacked ? styles.pillStacked : styles.pillCompact,
+          expanded ? styles.expandSheet : styles.pill,
+          expanded ? null : stacked ? styles.pillStacked : styles.pillCompact,
           {
             backgroundColor: colors.surface,
             shadowColor: colors.text,
@@ -296,55 +309,33 @@ export function ChatComposer({
         ]}
       >
         {!stacked && plusBtn}
-        <View
-          style={[
-            stacked ? styles.inputSlotStacked : styles.inputSlot,
-            { height: inputHeight, minHeight: inputHeight },
-          ]}
-          onLayout={(e) => {
-            const w = Math.round(e.nativeEvent.layout.width);
-            if (w > 0 && w !== slotWidth) setSlotWidth(w);
-          }}
-        >
-          <ComposerHeightProbe
-            draft={draft}
-            width={Math.max(0, slotWidth - COMPOSER_INPUT_PAD_H * 2)}
-            textAlign={inputTextAlign}
-            writingDirection={draftEmpty ? idleWriting : draftDir.writingDirection}
-            onMeasuredLines={handleMeasuredLines}
-          />
-          <TextInput
-            ref={assignInputRef}
-            style={[
-              styles.input,
-              {
-                color: colors.text,
-                minHeight: inputHeight,
-                height: inputHeight,
-                maxHeight: COMPOSER_INPUT_MAX_H,
-                textAlign: inputTextAlign,
-                writingDirection: draftEmpty ? idleWriting : draftDir.writingDirection,
-                paddingTop: stacked ? 2 : Platform.OS === 'ios' ? COMPOSER_IOS_PAD_TOP : 0,
-              },
-            ]}
-            placeholder={placeholder}
-            placeholderTextColor={colors.textDim}
-            value={draft}
-            onChangeText={(v) => handleChangeText(v, onChangeDraft)}
-            onContentSizeChange={(e) => {
-              handleContentSizeChange(e.nativeEvent.contentSize.height);
-            }}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            multiline
-            scrollEnabled={atMaxHeight}
-            editable={!voiceBusy}
-            autoFocus={false}
-            blurOnSubmit={false}
-            textAlignVertical={stacked ? 'top' : 'center'}
-            accessibilityLabel={idlePlaceholder}
-          />
-        </View>
+        <ComposerDraftField
+          draft={draft}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textDim}
+          textColor={colors.text}
+          inputHeight={inputHeight}
+          fillHeight={expanded}
+          stacked={stacked}
+          atMaxHeight={atMaxHeight}
+          showExpand={showExpand}
+          expanded={expanded}
+          onToggleExpand={toggleExpand}
+          expandLabel={expanded ? tr('composerCollapse') : tr('composerExpand')}
+          expandBg={colors.featuredIconBg}
+          expandIcon={colors.textMuted}
+          assignInputRef={assignInputRef}
+          onChangeText={(v) => handleChangeText(v, onChangeDraft)}
+          onMeasuredLines={handleMeasuredLines}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          textAlign={inputTextAlign}
+          writingDirection={draftEmpty ? idleWriting : draftDir.writingDirection}
+          editable={!voiceBusy}
+          accessibilityLabel={idlePlaceholder}
+          slotWidth={slotWidth}
+          onSlotWidth={setSlotWidth}
+        />
         {stacked ? (
           <View style={styles.actionRow}>
             {plusBtn}
@@ -355,7 +346,7 @@ export function ChatComposer({
         )}
       </View>
 
-      {showDisclaimer ? (
+      {showDisclaimer && !expanded ? (
         <Text style={[styles.disclaimer, { color: colors.textDim }]}>
           {tr('composerDisclaimer')}
         </Text>

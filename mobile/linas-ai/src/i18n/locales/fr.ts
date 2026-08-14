@@ -254,6 +254,8 @@ export const fr = {
   composerSend: 'Envoyer le message',
   composerStop: 'Arrêter la génération',
   composerChooseEffort: 'Choisir Bas ou Élevé',
+  composerExpand: 'Agrandir le champ',
+  composerCollapse: 'Réduire le champ',
   offlineDraftPreserved: 'Hors ligne — votre brouillon est conservé. Réessayez une fois connecté.',
   tapToRetry: 'Appuyer pour réessayer',
   guestHowCanHelp: 'Comment Linas peut-il aider ?',

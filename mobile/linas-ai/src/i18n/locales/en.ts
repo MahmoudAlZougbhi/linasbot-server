@@ -250,6 +250,8 @@ export const en = {
   composerSend: 'Send message',
   composerStop: 'Stop generating',
   composerChooseEffort: 'Choose Low or High',
+  composerExpand: 'Expand composer',
+  composerCollapse: 'Collapse composer',
   offlineDraftPreserved: 'Offline — your draft is preserved. Retry when connected.',
   tapToRetry: 'Tap to retry',
   guestHowCanHelp: 'How can Linas help?',

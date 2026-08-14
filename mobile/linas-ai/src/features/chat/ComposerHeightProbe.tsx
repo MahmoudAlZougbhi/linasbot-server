@@ -1,7 +1,10 @@
 import { Text, type TextStyle } from 'react-native';
 
 import { fonts } from '../../theme';
-import { COMPOSER_INPUT_LINE_HEIGHT } from './composerInputHeight';
+import {
+  COMPOSER_INPUT_LINE_HEIGHT,
+  COMPOSER_MIN_PROBE_WIDTH,
+} from './composerInputHeight';
 
 type Props = {
   draft: string;
@@ -26,8 +29,8 @@ const probeStyle: TextStyle = {
 };
 
 /**
- * Hidden Text with the same type metrics as the composer field. iOS
- * `onContentSizeChange` reports the clipped 36pt view; this reports real wraps.
+ * Hidden Text with the same type metrics as the composer field.
+ * Reports wrap buckets only. iOS contentSize is not used for height.
  */
 export function ComposerHeightProbe({
   draft,
@@ -36,7 +39,7 @@ export function ComposerHeightProbe({
   writingDirection,
   onMeasuredLines,
 }: Props) {
-  if (width <= 0) return null;
+  if (width < COMPOSER_MIN_PROBE_WIDTH) return null;
   const body = draft.endsWith('\n') ? `${draft}\u200b` : draft || ' ';
   return (
     <Text

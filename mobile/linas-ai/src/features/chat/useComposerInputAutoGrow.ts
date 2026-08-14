@@ -3,13 +3,16 @@ import { TextInput } from 'react-native';
 
 import {
   COMPOSER_INPUT_MAX_H,
+  COMPOSER_INPUT_MAX_LINES,
   COMPOSER_INPUT_MIN_H,
-  debounceComposerHeight,
-  targetComposerInputHeight,
+  composerExceedsMaxLines,
+  composerHeightForLines,
+  composerLineBucketChanged,
+  resolveComposerLineCount,
+  visibleComposerLines,
 } from './composerInputHeight';
 
 export {
-  COMPOSER_GROW_SLACK,
   COMPOSER_INPUT_LINE_HEIGHT,
   COMPOSER_INPUT_MAX_H,
   COMPOSER_INPUT_MAX_LINES,
@@ -26,25 +29,25 @@ type ScrollableTextInput = TextInput & {
 };
 
 /**
- * Auto-grow composer field up to 8 lines; once capped, scrollToEnd so the
- * caret / newest text stays visible.
- *
- * Height is driven from the draft (newlines) and a hidden measure Text, not
- * from iOS `onContentSizeChange` alone. A fixed 36pt TextInput makes iOS
- * report contentSize === 36 forever, so waiting on that event never grows.
+ * Auto-grow composer by integer line buckets (1…8). Wrap count comes from the
+ * hidden measure Text only — iOS `onContentSizeChange` is ignored so view-height
+ * echo cannot cascade the bar to 8 or jitter every keystroke.
  */
 export function useComposerInputAutoGrow(
   draft: string,
   inputRef?: RefObject<TextInput | null>,
 ) {
   const [inputHeight, setInputHeight] = useState(COMPOSER_INPUT_MIN_H);
+  const [totalLines, setTotalLines] = useState(1);
   const localInputRef = useRef<TextInput | null>(null);
   const heightRef = useRef(COMPOSER_INPUT_MIN_H);
-  const pendingRef = useRef<number | null>(null);
-  const measuredLinesRef = useRef(1);
+  const totalLinesRef = useRef(1);
+  const measuredWrapsRef = useRef(1);
   const draftRef = useRef(draft);
   draftRef.current = draft;
-  const atMaxHeight = inputHeight >= COMPOSER_INPUT_MAX_H;
+  const visibleLines = visibleComposerLines(totalLines);
+  const atMaxHeight = visibleLines >= COMPOSER_INPUT_MAX_LINES;
+  const showExpandControl = composerExceedsMaxLines(totalLines);
 
   function assignInputRef(node: TextInput | null) {
     localInputRef.current = node;
@@ -58,74 +61,62 @@ export function useComposerInputAutoGrow(
     node?.scrollToEnd?.({ animated: false });
   }
 
-  function commitHeight(next: number) {
-    if (next === heightRef.current) return;
-    heightRef.current = next;
-    setInputHeight(next);
-    if (next >= COMPOSER_INPUT_MAX_H) {
+  function commitTotalLines(nextTotal: number) {
+    const n = Math.max(1, nextTotal);
+    if (!composerLineBucketChanged(totalLinesRef.current, n)) return;
+    totalLinesRef.current = n;
+    setTotalLines(n);
+    const nextH = composerHeightForLines(visibleComposerLines(n));
+    if (nextH !== heightRef.current) {
+      heightRef.current = nextH;
+      setInputHeight(nextH);
+    }
+    if (nextH >= COMPOSER_INPUT_MAX_H) {
       requestAnimationFrame(scrollComposerToEnd);
     }
   }
 
-  function commitFromDraftAndMeasure() {
+  function commitFromDraftAndWraps() {
     const currentDraft = draftRef.current;
     if (currentDraft.length === 0) {
-      pendingRef.current = null;
-      measuredLinesRef.current = 1;
-      commitHeight(COMPOSER_INPUT_MIN_H);
+      measuredWrapsRef.current = 1;
+      commitTotalLines(1);
       return;
     }
-    const target = targetComposerInputHeight(0, currentDraft, measuredLinesRef.current);
-    pendingRef.current = null;
-    commitHeight(target);
+    commitTotalLines(resolveComposerLineCount(currentDraft, measuredWrapsRef.current));
   }
 
-  function handleContentSizeChange(contentHeight: number) {
-    const currentDraft = draftRef.current;
-    if (currentDraft.length === 0) {
-      commitFromDraftAndMeasure();
-      return;
-    }
-    const target = targetComposerInputHeight(
-      contentHeight,
-      currentDraft,
-      measuredLinesRef.current,
-    );
-    if (target > heightRef.current) {
-      pendingRef.current = null;
-      commitHeight(target);
-      return;
-    }
-    const next = debounceComposerHeight(target, heightRef.current, pendingRef.current);
-    pendingRef.current = next.pending;
-    commitHeight(next.height);
-  }
-
-  function handleMeasuredLines(measuredLines: number) {
-    measuredLinesRef.current = Math.max(1, measuredLines);
-    commitFromDraftAndMeasure();
+  function handleMeasuredLines(measuredWraps: number) {
+    const wraps = Math.max(1, Math.floor(measuredWraps));
+    if (wraps === measuredWrapsRef.current) return;
+    measuredWrapsRef.current = wraps;
+    commitFromDraftAndWraps();
   }
 
   function handleChangeText(next: string, onChangeDraft: (v: string) => void) {
     draftRef.current = next;
     onChangeDraft(next);
-    commitFromDraftAndMeasure();
+    commitFromDraftAndWraps();
     if (heightRef.current >= COMPOSER_INPUT_MAX_H) {
       requestAnimationFrame(scrollComposerToEnd);
     }
   }
 
   useEffect(() => {
-    commitFromDraftAndMeasure();
+    draftRef.current = draft;
+    commitFromDraftAndWraps();
   }, [draft]);
 
   return {
     inputHeight,
+    totalLines,
+    visibleLines,
     atMaxHeight,
+    showExpandControl,
     localInputRef,
     assignInputRef,
-    handleContentSizeChange,
     handleChangeText,
     handleMeasuredLines,
+    scrollComposerToEnd,
   };
 }

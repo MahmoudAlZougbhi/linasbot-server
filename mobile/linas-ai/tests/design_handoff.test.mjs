@@ -377,11 +377,12 @@ test('composer bar matches design handoff (pill, grow, placeholders)', () => {
   const height = read('features/chat/composerInputHeight.ts');
   const autoGrow = read('features/chat/useComposerInputAutoGrow.ts');
   const en = read('i18n/locales/en.ts');
+  const field = read('features/chat/ComposerDraftField.tsx');
   assert.match(composer, /styles\.pill/);
   assert.match(composer, /PlusCircleGlyph/);
   assert.match(composer, /SendArrowGlyph/);
   assert.match(composer, /sendInside/);
-  assert.match(composer, /scrollEnabled=\{atMaxHeight\}/);
+  assert.match(field, /scrollEnabled=\{fillHeight \|\| atMaxHeight\}/);
   assert.match(composer, /composerPlaceholderChat/);
   assert.match(composer, /composerPlaceholderWork/);
   assert.match(styles, /minHeight:\s*COMPOSER_PILL_MIN_H/);
@@ -390,7 +391,7 @@ test('composer bar matches design handoff (pill, grow, placeholders)', () => {
   assert.match(height, /COMPOSER_PILL_MIN_H = 44/);
   assert.match(height, /COMPOSER_INPUT_MAX_LINES = 8/);
   assert.match(height, /COMPOSER_INPUT_MAX_H =/);
-  assert.match(autoGrow, /debounceComposerHeight/);
+  assert.match(autoGrow, /composerLineBucketChanged/);
   assert.match(en, /composerPlaceholderChat:\s*'Chat with Linas'/);
   assert.match(en, /composerPlaceholderWork:\s*'Work with Linas'/);
   assert.match(composer, /placeholder=\{placeholder\}/);

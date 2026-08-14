@@ -6,11 +6,8 @@ export const COMPOSER_INPUT_PAD_H = 8;
 export const COMPOSER_INPUT_MIN_H = 36;
 export const COMPOSER_INPUT_MAX_H =
   COMPOSER_INPUT_MIN_H + COMPOSER_INPUT_LINE_HEIGHT * (COMPOSER_INPUT_MAX_LINES - 1);
-/**
- * iOS often reports `contentSize.height ===` the clipped view (36). That is not
- * a wrap. Only treat contentSize as extra lines when it clearly exceeds min+slack.
- */
-export const COMPOSER_GROW_SLACK = 6;
+/** Hidden wrap probe must have a real field width; ignore layout before that. */
+export const COMPOSER_MIN_PROBE_WIDTH = 80;
 /** Idle compact pill: pad 4 + 36pt actions + pad 4. */
 export const COMPOSER_PILL_MIN_H = 44;
 export const COMPOSER_PILL_PAD_V = 4;
@@ -24,61 +21,49 @@ export function composerHeightForLines(lines: number): number {
   return COMPOSER_INPUT_MIN_H + COMPOSER_INPUT_LINE_HEIGHT * (n - 1);
 }
 
-/** Visible rows from `\n`, including a trailing newline (caret on a new line). */
-export function lineCountFromDraft(draft: string): number {
+/** Uncapped rows from `\n`, including a trailing newline (caret on a new line). */
+export function newlineCount(draft: string): number {
   if (draft.length === 0) return 1;
-  return Math.min(COMPOSER_INPUT_MAX_LINES, Math.max(1, draft.split('\n').length));
+  return Math.max(1, draft.split('\n').length);
+}
+
+/** Visible bar rows — never more than 8. */
+export function visibleComposerLines(totalLines: number): number {
+  return Math.min(COMPOSER_INPUT_MAX_LINES, Math.max(1, totalLines));
+}
+
+export function composerExceedsMaxLines(totalLines: number): boolean {
+  return totalLines > COMPOSER_INPUT_MAX_LINES;
+}
+
+/** Capped bar row count from explicit newlines (1…8). */
+export function lineCountFromDraft(draft: string): number {
+  return visibleComposerLines(newlineCount(draft));
 }
 
 export function composerHeightFromDraft(draft: string): number {
-  return composerHeightForLines(lineCountFromDraft(draft));
-}
-
-/** Map unconstrained content height to lines. Do not subtract padding (that zeroes the delta). */
-export function linesFromContentHeight(contentHeight: number): number {
-  const raw = Math.round(contentHeight);
-  if (raw <= COMPOSER_INPUT_MIN_H + COMPOSER_GROW_SLACK) return 1;
-  return Math.min(
-    COMPOSER_INPUT_MAX_LINES,
-    Math.max(2, Math.round(raw / COMPOSER_INPUT_LINE_HEIGHT)),
-  );
-}
-
-export function resolveComposerLineCount(
-  draft: string,
-  measuredLines = 1,
-  contentHeight = 0,
-): number {
-  if (draft.length === 0) return 1;
-  const fromNewlines = lineCountFromDraft(draft);
-  if (!draft.trim() && fromNewlines === 1) return 1;
-  if (!draft.trim()) return fromNewlines;
-  return Math.min(
-    COMPOSER_INPUT_MAX_LINES,
-    Math.max(fromNewlines, Math.max(1, measuredLines), linesFromContentHeight(contentHeight)),
-  );
-}
-
-/** Map measured text height + draft to a discrete line-bucket height. */
-export function targetComposerInputHeight(
-  contentHeight: number,
-  draft: string,
-  measuredLines = 1,
-): number {
-  return composerHeightForLines(resolveComposerLineCount(draft, measuredLines, contentHeight));
+  return composerHeightForLines(visibleComposerLines(newlineCount(draft)));
 }
 
 /**
- * Grow immediately so wrapped characters stay visible. Debounce shrink only —
- * iOS contentSize bounce must not flap the bar back down mid-keystroke.
+ * Integer line buckets from explicit newlines and wrap measure only.
+ * Do not feed iOS `contentSize` here — the clipped view height echoes the
+ * current bar and `round(height / 22)` cascades 2→3→…→8 every keystroke.
  */
-export function debounceComposerHeight(
-  target: number,
-  current: number,
-  pending: number | null,
-): { height: number; pending: number | null } {
-  if (target === current) return { height: current, pending: null };
-  if (target > current) return { height: target, pending: null };
-  if (pending === target) return { height: target, pending: null };
-  return { height: current, pending: target };
+export function resolveComposerLineCount(draft: string, measuredWraps = 1): number {
+  if (draft.length === 0) return 1;
+  const fromNewlines = newlineCount(draft);
+  if (!draft.trim()) return fromNewlines;
+  const wraps = Math.max(1, Math.floor(measuredWraps));
+  return Math.max(fromNewlines, wraps);
+}
+
+export function targetComposerInputHeight(draft: string, measuredWraps = 1): number {
+  return composerHeightForLines(
+    visibleComposerLines(resolveComposerLineCount(draft, measuredWraps)),
+  );
+}
+
+export function composerLineBucketChanged(prevLines: number, nextLines: number): boolean {
+  return Math.max(1, prevLines) !== Math.max(1, nextLines);
 }
