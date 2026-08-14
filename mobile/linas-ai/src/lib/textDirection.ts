@@ -90,7 +90,15 @@ export function aiMessageRowStyle(text: string | null | undefined): ViewStyle {
   };
 }
 
-/** Label / actions / text column: pack toward the script's physical start edge. */
+/** Body / actions: pack toward the script's physical start edge. Not the brand header. */
 export function aiMessageColStyle(text: string | null | undefined): ViewStyle {
   return { alignItems: contentStartAlign(text) };
 }
+
+/**
+ * Sparkle + Linas name: always physical left / LTR, never follows message RTL.
+ */
+export const aiMessageHeaderStyle: ViewStyle = {
+  alignSelf: 'flex-start',
+  direction: 'ltr',
+};
