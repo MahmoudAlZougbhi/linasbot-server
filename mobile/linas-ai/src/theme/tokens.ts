@@ -69,7 +69,7 @@ export const lightColors: ThemeColors = {
   border: '#D7E5E3',
   borderSoft: '#E8F1F0',
   input: '#F3F8F7',
-  bubbleUser: '#E8F5F3',
+  bubbleUser: '#E8F2F0',
   bubbleUserText: '#10221A',
   bubbleAi: '#FFFFFF',
   bubbleAiText: '#10221A',

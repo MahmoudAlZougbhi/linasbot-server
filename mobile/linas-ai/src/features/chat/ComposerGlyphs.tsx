@@ -2,25 +2,11 @@ import { Text, View } from 'react-native';
 
 /** Shared + / mic / send touch target in the chat composer bar. */
 export const COMPOSER_ACTION_SIZE = 36;
-export const COMPOSER_SEND_SIZE = 40;
+export const COMPOSER_SEND_SIZE = 32;
 
-export function PlusCircleGlyph({ color, size = 22 }: { color: string; size?: number }) {
+export function PlusCircleGlyph({ color, size = 24 }: { color: string; size?: number }) {
   return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        borderWidth: 1,
-        borderColor: color,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <Text style={{ color, fontSize: size * 0.55, fontWeight: '500', lineHeight: size * 0.6 }}>
-        +
-      </Text>
-    </View>
+    <Text style={{ color, fontSize: size, fontWeight: '400', lineHeight: size + 1 }}>+</Text>
   );
 }
 

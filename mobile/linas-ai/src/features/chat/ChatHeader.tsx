@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinasStarMark } from '../../components/LinasStarMark';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, spacing, useTheme } from '../../theme';
-import { MenuIcon, NewChatIcon } from './ChatHeaderIcons';
+import { HeaderIconBox, MenuIcon, NewChatIcon } from './ChatHeaderIcons';
 
 /** Compact header row; 44pt meets Apple HIG while shrinking chrome. */
 const HEADER_HIT = 44;
@@ -19,7 +19,7 @@ type Props = {
   onSignIn?: () => void;
 };
 
-/** Header: menu | ✦ Linas AI | new-chat (auth) or Sign in (guest). */
+/** Header: menu square | ✦ Linas AI | new-chat square (auth) or Sign in (guest). */
 export function ChatHeader({
   isAuthenticated,
   onOpenMenu,
@@ -29,7 +29,7 @@ export function ChatHeader({
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { tr } = useI18n();
-  const iconColor = colors.textMuted;
+  const iconColor = colors.text;
 
   return (
     <View
@@ -38,6 +38,7 @@ export function ChatHeader({
         {
           paddingTop: insets.top + HEADER_TOP_GAP,
           backgroundColor: colors.bg,
+          borderBottomColor: colors.borderSoft,
         },
       ]}
     >
@@ -48,7 +49,9 @@ export function ChatHeader({
         accessibilityRole="button"
         hitSlop={4}
       >
-        <MenuIcon color={iconColor} />
+        <HeaderIconBox backgroundColor={colors.featuredIconBg} borderColor={colors.featuredIconBorder}>
+          <MenuIcon color={iconColor} />
+        </HeaderIconBox>
       </Pressable>
 
       <View style={styles.center}>
@@ -68,7 +71,9 @@ export function ChatHeader({
           accessibilityRole="button"
           hitSlop={4}
         >
-          <NewChatIcon color={iconColor} />
+          <HeaderIconBox backgroundColor={colors.featuredIconBg} borderColor={colors.featuredIconBorder}>
+            <NewChatIcon color={iconColor} size={18} />
+          </HeaderIconBox>
         </Pressable>
       ) : !isAuthenticated ? (
         <Pressable
@@ -96,9 +101,11 @@ export function ChatHeader({
 const styles = StyleSheet.create({
   bar: {
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.xs,
+    paddingBottom: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
+    direction: 'ltr',
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   hit: {
     width: HEADER_HIT,
