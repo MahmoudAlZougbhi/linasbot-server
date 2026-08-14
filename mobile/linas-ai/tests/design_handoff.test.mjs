@@ -192,12 +192,10 @@ test('cold open is branded star splash then chat (no character mash / progress b
   const chat = read('features/chat/ChatScreen.tsx');
   const login = read('features/auth/LoginScreen.tsx');
   const authChrome = read('features/auth/AuthChrome.tsx');
-  assert.match(boot, /LinasSparkleMark/);
-  assert.match(boot, /BootSplashAiLine/);
+  assert.match(boot, /splash-native\.png/);
   assert.match(boot, /bootSplashTokens/);
-  assert.match(boot, /#FBFAFA|bootSplashTokens/);
-  assert.match(tokens, /background:\s*'#FBFAFA'/);
-  assert.match(tokens, /glowColor:\s*'#DFF4F1'/);
+  assert.match(tokens, /background:\s*'#083A37'/);
+  assert.match(tokens, /markSize:\s*220/);
   assert.match(tokens, /minDisplayMs:\s*900/);
   assert.match(tokens, /exitFadeMs:\s*220/);
   assert.match(boot, /appReady/);
@@ -206,17 +204,14 @@ test('cold open is branded star splash then chat (no character mash / progress b
   assert.doesNotMatch(boot, /LinasAvatar/);
   assert.doesNotMatch(boot, /Opening Linas AI/);
   assert.doesNotMatch(boot, /progressTrack/);
-  const aiLine = read('features/boot/BootSplashAiLine.tsx');
-  assert.match(aiLine, /Animated\.loop/);
-  assert.match(aiLine, /useNativeDriver:\s*true/);
-  assert.match(aiLine, /reduceMotion/);
-  assert.match(aiLine, /bootSplashTokens/);
-  // Native splash must stay logo-free (warm #FBFAFA) so Android 12+ does not
-  // circular-mask splash-icon into a different first shape before BootSplash.
-  assert.match(boot, /splash-native|logo-free|no logo/i);
+  assert.doesNotMatch(boot, /BootSplashAiLine/);
+  assert.doesNotMatch(boot, /Linas AI/);
+  assert.equal(existsSync(join(root, 'src/features/boot/BootSplashAiLine.tsx')), false);
   assert.match(index, /preventAutoHideAsync/);
-  assert.match(appJson, /"backgroundColor":\s*"#FBFAFA"/);
+  assert.match(appJson, /"backgroundColor":\s*"#083A37"/);
+  assert.match(appJson, /"imageWidth":\s*220/);
   assert.match(appJson, /splash-native\.png/);
+  assert.doesNotMatch(appJson, /#FBFAFA/);
   assert.doesNotMatch(
     appJson,
     /expo-splash-screen[\s\S]*"image":\s*"\.\/assets\/splash-icon\.png"/,

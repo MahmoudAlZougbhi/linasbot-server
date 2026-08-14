@@ -273,7 +273,7 @@ export function AppShell() {
   if (!bootDone || !authReady || screen.name === 'boot') {
     return (
       <SafeAreaProvider>
-        <StatusBar style={resolved === 'dark' ? 'light' : 'dark'} />
+        <StatusBar style="light" />
         <BootSplash appReady={authReady} onDone={finishBoot} />
       </SafeAreaProvider>
     );
