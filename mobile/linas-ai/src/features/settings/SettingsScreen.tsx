@@ -10,6 +10,7 @@ import { deleteAccount } from '../auth/appleAccount';
 import { useModuleNav } from '../nav/ModuleNavContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import {
+  SETTINGS_CANVAS,
   SETTINGS_ICONS,
   SettingsAppearanceToggle,
   SettingsDeleteCard,
@@ -148,7 +149,7 @@ export function SettingsScreen({
   }
 
   return (
-    <ScreenChrome title={tr('settings')}>
+    <ScreenChrome title={tr('settings')} stackedHeader canvasColor={SETTINGS_CANVAS[resolved]}>
       <ScrollView
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}

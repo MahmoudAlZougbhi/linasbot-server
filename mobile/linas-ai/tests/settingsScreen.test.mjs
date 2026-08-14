@@ -69,6 +69,32 @@ test('Settings handoff sections and rows match the iOS mock', () => {
   assert.match(fr, /Alertes chats et demandes/);
 });
 
+test('Settings visual handoff: stacked title, inset hairline, pale canvas, light icon wash', () => {
+  const screen = read('features/settings/SettingsScreen.tsx');
+  const chrome = read('features/settings/SettingsChrome.tsx');
+  const shared = read('features/shared/ScreenChrome.tsx');
+  const live = read('features/livechat/LiveChatScreen.tsx');
+
+  assert.match(screen, /stackedHeader/);
+  assert.match(screen, /canvasColor=\{SETTINGS_CANVAS\[resolved\]\}/);
+  assert.match(screen, /settingsAiLimits/);
+  assert.doesNotMatch(screen, /settingsAboutLinas|SettingsAboutSheet|linkApple|unlinkApple/);
+
+  assert.match(chrome, /SETTINGS_ICON_WASH/);
+  assert.match(chrome, /rgba\(0, 139, 139, 0\.08\)/);
+  assert.match(chrome, /SETTINGS_CANVAS/);
+  assert.match(chrome, /#F2F4F4/);
+  assert.doesNotMatch(chrome, /iconBg = danger \? .*: colors\.accentSoft/);
+
+  assert.match(shared, /stackedHeader/);
+  assert.match(shared, /styles\.menuRow/);
+  assert.match(shared, /styles\.stackedTitle/);
+  assert.match(shared, /styles\.titleRule/);
+  assert.match(shared, /marginHorizontal: spacing\.lg/);
+  assert.match(shared, /height: StyleSheet\.hairlineWidth/);
+  assert.doesNotMatch(live, /stackedHeader/);
+});
+
 test('Settings still hosts Notifications and Logout; drawer does not', () => {
   const settings = read('features/settings/SettingsScreen.tsx');
   const nav = read('features/nav/NavDrawer.tsx');
