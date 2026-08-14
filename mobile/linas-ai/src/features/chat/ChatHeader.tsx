@@ -4,17 +4,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useI18n } from '../../i18n/LanguageContext';
 import { spacing, useTheme } from '../../theme';
 import { HeaderIconBox, MenuIcon } from './ChatHeaderIcons';
+import { ChatTopFade } from './ChatTopFade';
 
 /** Compact 44pt hit around the 36pt silver menu square. */
 const HEADER_HIT = 44;
 /** Extra space below status bar / notch (on top of safe-area inset). */
 const HEADER_TOP_GAP = 2;
+/** List padding below the status bar so the first message clears the hamburger. */
+export const CHAT_LIST_TOP_CLEARANCE = HEADER_HIT + HEADER_TOP_GAP;
 
 type Props = {
   onOpenMenu: () => void;
 };
 
-/** Overlay hamburger only — no title, sparkle, or new-chat. Messages stay full-bleed. */
+/** Overlay hamburger + light top fade — no title, sparkle, or new-chat. */
 export function ChatHeader({ onOpenMenu }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -25,6 +28,7 @@ export function ChatHeader({ onOpenMenu }: Props) {
       pointerEvents="box-none"
       style={[styles.overlay, { paddingTop: insets.top + HEADER_TOP_GAP }]}
     >
+      <ChatTopFade insetTop={insets.top} color={colors.bg} />
       <Pressable
         onPress={onOpenMenu}
         style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
@@ -45,6 +49,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
+    right: 0,
     zIndex: 20,
     paddingHorizontal: spacing.md,
     direction: 'ltr',

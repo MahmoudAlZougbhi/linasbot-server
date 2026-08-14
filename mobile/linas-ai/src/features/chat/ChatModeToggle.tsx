@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import type { OwnerChatMode } from './ownerChatMode';
@@ -11,6 +12,7 @@ type Props = {
 /** Segmented Chat | Work control on a new thread. Work = high, Chat = low. */
 export function ChatModeToggle({ mode, onChange }: Props) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   return (
     <View
       style={[
@@ -19,6 +21,7 @@ export function ChatModeToggle({ mode, onChange }: Props) {
           backgroundColor: colors.bgElevated,
           borderColor: colors.borderSoft,
           shadowColor: colors.text,
+          marginTop: insets.top + spacing.sm,
         },
       ]}
       accessibilityRole="tablist"
@@ -59,7 +62,6 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 3,
-    marginTop: spacing.sm,
     marginBottom: spacing.sm,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,

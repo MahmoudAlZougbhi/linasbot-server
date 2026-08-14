@@ -8,11 +8,14 @@ import {
   View,
 } from 'react-native';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import type { ChatMessage } from '../../api/types';
 import { useI18n } from '../../i18n/LanguageContext';
 import { useTheme } from '../../theme';
 import type { CmProposalReview } from '../cm/cmProposalReview';
 import { ChatBubble } from './ChatBubble';
+import { CHAT_LIST_TOP_CLEARANCE } from './ChatHeader';
 import { chatScreenStyles as styles } from './chatScreenStyles';
 import { ChatStreamFooter } from './ChatStreamFooter';
 import { GuestEmptyState } from './GuestEmptyState';
@@ -87,6 +90,7 @@ export function ChatMessageList({
 }: Props) {
   const { tr } = useI18n();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const [showJump, setShowJump] = useState(false);
   const loadGateRef = useRef(false);
   /** True from finger-down through momentum end — blocks onScroll from re-arming stick. */
@@ -183,7 +187,11 @@ export function ChatMessageList({
         style={styles.flex}
         data={messages}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[
+          styles.list,
+          { paddingTop: insets.top + CHAT_LIST_TOP_CLEARANCE },
+        ]}
+        contentInsetAdjustmentBehavior="never"
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         scrollEventThrottle={16}

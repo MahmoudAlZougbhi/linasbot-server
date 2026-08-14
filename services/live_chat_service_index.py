@@ -7,6 +7,7 @@ import os
 from typing import Any
 
 import config
+from services.live_chat_channel import resolve_live_chat_channel
 from services.live_chat_contracts import (
     parse_timestamp_utc,
     utc_now,
@@ -153,6 +154,7 @@ class LiveChatIndexMixin:
         out["last_message"] = (
             {"content": last_text, "timestamp": last_at, "is_user": False} if last_text or last_at else None
         )
+        out["channel"] = resolve_live_chat_channel(chat.get("user_id"), chat)
         return out
 
     def _index_collection(self, db: Any) -> Any:

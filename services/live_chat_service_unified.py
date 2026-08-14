@@ -5,6 +5,11 @@ from typing import Any
 from google.cloud import firestore
 
 import config
+from services.live_chat_channel import (
+    live_chat_channel_matches,
+    normalize_live_chat_channel,
+    resolve_live_chat_channel,
+)
 from services.live_chat_contracts import (
     normalize_conversation_document,
     utc_now,
@@ -12,7 +17,6 @@ from services.live_chat_contracts import (
 from services.live_chat_service_common import (
     _live_chat_display_name,
 )
-from utils.phone_utils import phone_match_key
 from utils.utils import (
     get_firestore_db,
 )
@@ -182,26 +186,35 @@ class LiveChatUnifiedMixin:
         page_size: int = 30,
         filter_state: str = "all",
         cursor: str | None = None,
+        channel: str = "",
     ) -> Any:
         """
         WhatsApp-style inbox driven ONLY by live_chat_index.
         - Single master list ordered by last_message_at desc
         -  filter by conversation_state badge
+        - Optional channel filter (whatsapp|instagram|facebook|tiktok); default all
         - Cursor-based pagination (last_message_at + conversation_id)
         - Search by name / phone against index documents
         """
         search_val = (search or "").strip().lower()
         safe_size = max(1, min(int(page_size), 100))
         state_values = self._state_filter_values(filter_state)
+        wanted_channel = normalize_live_chat_channel(channel)
         page_num = max(1, int(page))
         can_use_stale_cache = (
-            page_num == 1 and not search_val and not cursor and not state_values and bool(self._unified_chats_cache)
+            page_num == 1
+            and not search_val
+            and not cursor
+            and not state_values
+            and not wanted_channel
+            and bool(self._unified_chats_cache)
         )
         use_cache_fallback = (
             page_num == 1
             and not search_val
             and not cursor
             and not state_values
+            and not wanted_channel
             and bool(self._unified_chats_cache)
             and (self._unified_chats_cache_page_size is None or self._unified_chats_cache_page_size == safe_size)
         )
@@ -257,7 +270,7 @@ class LiveChatUnifiedMixin:
             # Stale index rows can still match Firestore equality on conversation_state; we post-filter
             # by normalized state, so over-fetch when a state filter is active (not "all").
             fetch_limit = safe_size + 1  # fetch one extra to know if there's more
-            if state_values and not search_val:
+            if (state_values or wanted_channel) and not search_val:
                 fetch_limit = min(max((safe_size + 1) * 15, 150), 500)
 
             def _stream_page(q: Any, after_doc: Any | None = None) -> Any:
@@ -342,6 +355,9 @@ class LiveChatUnifiedMixin:
                         continue
                 customer_info = data.get("customer_info") or {}
                 user_id = data.get("user_id")
+                row_channel = resolve_live_chat_channel(user_id, data)
+                if wanted_channel and row_channel != wanted_channel:
+                    continue
                 user_name = _live_chat_display_name(
                     data.get("user_name"),
                     customer_info.get("name"),
@@ -381,6 +397,7 @@ class LiveChatUnifiedMixin:
                     "sentiment": data.get("sentiment", "neutral"),
                     "message_count": data.get("message_count", 0),
                     "is_new_customer": data.get("is_new_customer", False),
+                    "channel": row_channel,
                 }
                 chats.append(chat_entry)
 
@@ -392,6 +409,8 @@ class LiveChatUnifiedMixin:
                     or search_val in str(c.get("phone_number", "")).lower()
                     or search_val in str(c.get("phone_clean", "")).lower()
                 ]
+            if wanted_channel:
+                chats = [c for c in chats if live_chat_channel_matches(c, wanted_channel)]
 
             # Always order by last_message_at desc (already sorted by query)
             chats.sort(key=lambda c: (c.get("last_message_at", ""), c.get("conversation_id", "")), reverse=True)
@@ -469,11 +488,3 @@ class LiveChatUnifiedMixin:
             if isinstance(empty, dict):
                 empty["requires_index_rebuild"] = True
             return empty
-
-    def _identity_keys_for_index_chat(self, user_id: Any, phone_full: str, phone_clean: str) -> set:
-        keys = set()
-        for part in (user_id, phone_full, phone_clean):
-            k = phone_match_key(part)
-            if k:
-                keys.add(k)
-        return keys

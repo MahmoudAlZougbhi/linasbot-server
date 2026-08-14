@@ -8,8 +8,6 @@ import {
   View,
 } from 'react-native';
 
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import { GradientBackground } from '../../components/GradientBackground';
 import { useI18n } from '../../i18n/LanguageContext';
 import { useTheme } from '../../theme';
@@ -58,7 +56,6 @@ export function ChatScreen({
 }: Props) {
   const { tr, language } = useI18n();
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const owner = useChatSession(isAuthenticated);
   const guest = useGuestChatSession(!isAuthenticated);
   const [draft, setDraft] = useState('');
@@ -182,7 +179,7 @@ export function ChatScreen({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
       >
-        <View style={[styles.flex, { paddingTop: insets.top }]}>
+        <View style={styles.flex}>
         {showModeToggle ? <ChatModeToggle mode={ownerMode} onChange={setOwnerMode} /> : null}
 
         <ChatStatusBanners
