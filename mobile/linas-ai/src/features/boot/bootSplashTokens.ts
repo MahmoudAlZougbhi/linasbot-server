@@ -7,4 +7,21 @@ export const bootSplashTokens = {
   minDisplayMs: 900,
   minDisplayReducedMs: 320,
   exitFadeMs: 220,
+  /**
+   * Hard cap: leave splash even if auth/SecureStore never settles.
+   * Chat may still be hydrating; do not block the first screen on API.
+   */
+  maxHoldMs: 2500,
 } as const;
+
+/** Delay until the branded splash may unmount. Never exceeds maxHoldMs. */
+export function splashExitDelayMs(
+  appReady: boolean,
+  elapsedMs: number,
+  minDisplayMs: number,
+  maxHoldMs: number,
+): number {
+  const minWait = Math.max(0, minDisplayMs - elapsedMs);
+  const maxWait = Math.max(0, maxHoldMs - elapsedMs);
+  return appReady ? minWait : maxWait;
+}

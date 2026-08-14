@@ -51,13 +51,16 @@ export function AppShell() {
 
   useEffect(() => {
     void (async () => {
-      await rotateGuestSessionOnAppLaunch();
-      const access = await tokenStore.getAccessToken();
-      await tokenStore.getUser();
-      setHasAccess(Boolean(access));
-      setAuthReady(true);
-      if (access) {
-        void tryRegisterOwnerPushScaffold();
+      try {
+        await rotateGuestSessionOnAppLaunch();
+        const access = await tokenStore.getAccessToken();
+        await tokenStore.getUser();
+        setHasAccess(Boolean(access));
+        if (access) {
+          void tryRegisterOwnerPushScaffold();
+        }
+      } finally {
+        setAuthReady(true);
       }
     })();
   }, []);
@@ -95,15 +98,13 @@ export function AppShell() {
 
   const finishBoot = useCallback(() => {
     setBootDone(true);
-    if (!authReady) return;
-    setScreen({ name: 'chat' });
-  }, [authReady]);
+    setScreen((current) => (current.name === 'boot' ? { name: 'chat' } : current));
+  }, []);
 
   useEffect(() => {
-    if (bootDone && authReady) {
-      setScreen({ name: 'chat' });
-    }
-  }, [bootDone, authReady]);
+    if (!bootDone) return;
+    setScreen((current) => (current.name === 'boot' ? { name: 'chat' } : current));
+  }, [bootDone]);
 
   function openAreaAuthed(area: ControlArea) {
     bumpAreaFocus();
@@ -270,7 +271,7 @@ export function AppShell() {
     screen,
   });
 
-  if (!bootDone || !authReady || screen.name === 'boot') {
+  if (!bootDone) {
     return (
       <SafeAreaProvider>
         <StatusBar style="light" />

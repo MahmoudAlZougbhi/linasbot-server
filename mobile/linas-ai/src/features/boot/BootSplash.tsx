@@ -3,6 +3,9 @@
  *
  * Native splash (app.json) uses the same splash-native.png on #083A37 so the
  * first paint does not flash a different (warm cream) screen.
+ *
+ * Always dismisses: min display, then auth-ready, or maxHoldMs — whichever
+ * comes first after the minimum. Never wait on network.
  */
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useRef, useState } from 'react';
@@ -14,7 +17,7 @@ import {
   StyleSheet,
 } from 'react-native';
 
-import { bootSplashTokens as t } from './bootSplashTokens';
+import { bootSplashTokens as t, splashExitDelayMs } from './bootSplashTokens';
 import splashMark from '../../../assets/splash-native.png';
 
 type Props = {
@@ -28,6 +31,7 @@ export function BootSplash({ appReady, onDone }: Props) {
   const hidden = useRef(false);
   const mountedAt = useRef(Date.now());
   const exiting = useRef(false);
+  const finished = useRef(false);
   const screenOpacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -50,28 +54,53 @@ export function BootSplash({ appReady, onDone }: Props) {
     });
   }
 
+  function complete() {
+    if (finished.current) return;
+    finished.current = true;
+    hideNativeSplash();
+    onDone();
+  }
+
   useEffect(() => {
-    if (!appReady || exiting.current) return;
+    // If onLayout never fires (some native views), still release the OS splash.
+    const fallback = setTimeout(() => hideNativeSplash(), 80);
+    return () => clearTimeout(fallback);
+  }, []);
+
+  useEffect(() => {
+    if (exiting.current) return;
 
     const minMs = reduceMotion ? t.minDisplayReducedMs : t.minDisplayMs;
     const elapsed = Date.now() - mountedAt.current;
-    const waitMs = Math.max(0, minMs - elapsed);
+    const waitMs = splashExitDelayMs(appReady, elapsed, minMs, t.maxHoldMs);
 
+    let failsafe: ReturnType<typeof setTimeout> | undefined;
     const timer = setTimeout(() => {
       if (exiting.current) return;
       exiting.current = true;
+      hideNativeSplash();
+
+      const fadeMs = reduceMotion ? 0 : t.exitFadeMs;
+      if (fadeMs <= 0) {
+        complete();
+        return;
+      }
 
       Animated.timing(screenOpacity, {
         toValue: 0,
-        duration: t.exitFadeMs,
+        duration: fadeMs,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (finished) onDone();
+      }).start(() => {
+        complete();
       });
+      failsafe = setTimeout(complete, fadeMs + 80);
     }, waitMs);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      if (failsafe) clearTimeout(failsafe);
+    };
   }, [appReady, onDone, reduceMotion, screenOpacity]);
 
   return (
