@@ -394,8 +394,9 @@ test('composer bar matches design handoff (pill, grow, placeholders)', () => {
   assert.match(composer, /composerPlaceholderWork/);
   assert.match(autoGrow, /COMPOSER_INPUT_MAX_LINES = 8/);
   assert.match(autoGrow, /COMPOSER_INPUT_MAX_H = COMPOSER_INPUT_LINE_HEIGHT \* COMPOSER_INPUT_MAX_LINES/);
-  assert.match(en, /composerPlaceholderChat:\s*'Message Linas AI'/);
-  assert.match(en, /composerPlaceholderWork:\s*'Message Linas AI'/);
+  assert.match(en, /composerPlaceholderChat:\s*'Chat with Linas'/);
+  assert.match(en, /composerPlaceholderWork:\s*'Work with Linas'/);
+  assert.match(composer, /placeholderWrap/);
 });
 
 test('Live Chat inbox matches design handoff (search, All/Human, platform row)', () => {
