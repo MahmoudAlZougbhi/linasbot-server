@@ -12,7 +12,7 @@ type Props = {
   onSelect: (mode: OwnerChatMode) => void;
 };
 
-/** Floating card: 5.6 LIN Low / High with Fast / credits subtext. */
+/** Floating card: 5.6 LIN Low / High with Fast / More powerful. */
 export function LinEffortSheet({ open, mode, onClose, onSelect }: Props) {
   const { tr } = useI18n();
   const { colors } = useTheme();
@@ -73,12 +73,10 @@ export function LinEffortSheet({ open, mode, onClose, onSelect }: Props) {
                       <Text style={[styles.rowTitle, { color: colors.text }]}>{row.title}</Text>
                       <Text style={[styles.rowSub, { color: colors.textDim }]}>{row.sub}</Text>
                     </View>
-                    {row.trailing === 'check' && selected ? (
+                    {selected ? (
                       <AppIcon icon={feather('check')} size={18} color={colors.accent} />
                     ) : row.trailing === 'bolt' ? (
-                      <Text style={[styles.bolt, { color: colors.accent }]} accessibilityElementsHidden>
-                        ⚡
-                      </Text>
+                      <AppIcon icon={feather('zap')} size={18} color={colors.accent} />
                     ) : null}
                   </Pressable>
                 </View>
@@ -101,6 +99,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: spacing.md,
     paddingBottom: 132,
+    direction: 'ltr',
   },
   menu: {
     minWidth: 248,
@@ -111,6 +110,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 12,
     elevation: 8,
+    direction: 'ltr',
   },
   divider: {
     height: StyleSheet.hairlineWidth,
@@ -126,5 +126,4 @@ const styles = StyleSheet.create({
   rowMain: { flex: 1, gap: 2 },
   rowTitle: { fontFamily: fonts.bodyMedium, fontSize: 15, fontWeight: '700' },
   rowSub: { fontFamily: fonts.body, fontSize: 12, lineHeight: 16 },
-  bolt: { fontSize: 16, lineHeight: 18 },
 });

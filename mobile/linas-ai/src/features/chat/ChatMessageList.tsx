@@ -176,7 +176,7 @@ export function ChatMessageList({
   );
 
   return (
-    <View style={styles.flex}>
+    <View style={[styles.flex, styles.ltr]}>
       <FlatList
         key={listKey}
         ref={listRef}
@@ -224,6 +224,7 @@ export function ChatMessageList({
             <ChatBubble
               message={item}
               userLabel={tr('chatYouLabel')}
+              linasLabel={tr('chatLinasLabel')}
               imageUris={rematched}
               typewriter={item.id === seedTypewriterMessageId}
               onTypewriterDone={

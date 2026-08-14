@@ -4,12 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { ChatMessage } from '../../api/types';
 import { LinasStarMark } from '../../components/LinasStarMark';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
-import {
-  aiMessageColStyle,
-  aiMessageRowStyle,
-  isRtlText,
-  textDirectionStyle,
-} from '../../lib/textDirection';
+import { textDirectionStyle } from '../../lib/textDirection';
 import { fonts, radii, spacing, typography, useTheme } from '../../theme';
 import { AiMessageBody } from './AiMessageBody';
 import { MessageActions } from './MessageActions';
@@ -22,6 +17,7 @@ type Props = {
   showActions?: boolean;
   imageUris?: string[];
   userLabel?: string;
+  linasLabel?: string;
   /** One-shot type the seeded New Chat greeting into this bubble. */
   typewriter?: boolean;
   onTypewriterDone?: () => void;
@@ -33,6 +29,7 @@ export function ChatBubble({
   showActions = true,
   imageUris,
   userLabel = 'You',
+  linasLabel = 'Linas',
   typewriter = false,
   onTypewriterDone,
 }: Props) {
@@ -42,7 +39,6 @@ export function ChatBubble({
   const thumbs = imageUris?.length ? imageUris : message.local_image_uris;
   const hasText = Boolean(message.content?.trim());
   const dirStyle = hasText ? textDirectionStyle(message.content) : null;
-  const aiRtl = !isUser && isRtlText(message.content);
   const animate = Boolean(typewriter && !isUser && hasText && !reduceMotion);
   const { shown, done, cursorOn } = useOnceTypewriter(message.content, animate);
   const displayText = animate && !done ? shown : message.content;
@@ -53,23 +49,13 @@ export function ChatBubble({
   }, [done, onTypewriterDone, reduceMotion, typewriter]);
 
   return (
-    <View
-      style={[
-        styles.row,
-        isUser ? styles.rowUser : aiMessageRowStyle(message.content),
-      ]}
-    >
-      <View
-        style={[
-          styles.col,
-          isUser ? styles.colUser : aiMessageColStyle(message.content),
-        ]}
-      >
+    <View style={[styles.row, isUser ? styles.rowUser : styles.rowAi]}>
+      <View style={[styles.col, isUser ? styles.colUser : styles.colAi]}>
         {isUser ? (
           <Text style={[styles.userLabel, { color: colors.textDim }]}>{userLabel}</Text>
         ) : (
           <View style={styles.aiLabelRow}>
-            <LinasStarMark size={12} labeled label="Linas" labelColor={colors.accentDeep} />
+            <LinasStarMark size={12} labeled label={linasLabel} labelColor={colors.accentDeep} />
           </View>
         )}
         <View
@@ -106,7 +92,7 @@ export function ChatBubble({
           ) : null}
         </View>
         {!isUser && showActions ? (
-          <MessageActions text={message.content} onRetry={onRetry} edgeRtl={aiRtl} />
+          <MessageActions text={message.content} onRetry={onRetry} />
         ) : null}
       </View>
     </View>
@@ -118,8 +104,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   rowUser: { alignSelf: 'flex-end', maxWidth: '88%' },
+  rowAi: { alignSelf: 'flex-start', maxWidth: '88%' },
   col: { flexShrink: 1 },
   colUser: { alignItems: 'flex-end' },
+  colAi: { alignItems: 'flex-start' },
   userLabel: {
     fontFamily: fonts.body,
     fontSize: 12,

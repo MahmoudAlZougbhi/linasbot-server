@@ -2,11 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-native';
 
 import { LinasStarMark } from '../../components/LinasStarMark';
-import {
-  aiMessageColStyle,
-  aiMessageRowStyle,
-  textDirectionStyle,
-} from '../../lib/textDirection';
+import { textDirectionStyle } from '../../lib/textDirection';
 import { fonts, spacing, typography, useTheme } from '../../theme';
 
 type Props = {
@@ -63,12 +59,12 @@ export function ThinkingRow({ label }: Props) {
 
   return (
     <View
-      style={[styles.row, aiMessageRowStyle(label)]}
+      style={[styles.row, styles.rowAi]}
       accessibilityLiveRegion="polite"
       accessibilityRole="text"
       accessibilityLabel={label}
     >
-      <View style={[styles.col, aiMessageColStyle(label)]}>
+      <View style={[styles.col, styles.colAi]}>
         <View style={styles.aiLabelRow}>
           <LinasStarMark size={12} labeled label="Linas" labelColor={colors.accentDeep} />
         </View>
@@ -84,7 +80,9 @@ const styles = StyleSheet.create({
   row: {
     marginBottom: spacing.md,
   },
+  rowAi: { alignSelf: 'flex-start', maxWidth: '88%' },
   col: { flexShrink: 1 },
+  colAi: { alignItems: 'flex-start' },
   aiLabelRow: {
     marginBottom: 4,
   },

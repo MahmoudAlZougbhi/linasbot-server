@@ -87,7 +87,13 @@ export function AiMessageBody({ content }: Props) {
       {blocks.map((block, index) => {
         if (block.kind === 'section') {
           return (
-            <View key={`s-${index}`} style={styles.sectionRow}>
+            <View
+              key={`s-${index}`}
+              style={[
+                styles.sectionRow,
+                { flexDirection: dirStyle.writingDirection === 'rtl' ? 'row-reverse' : 'row' },
+              ]}
+            >
               <Text style={[styles.sectionDash, { color: colors.accent }]}>—</Text>
               <Text style={[styles.sectionTitle, { color: colors.bubbleAiText }, dirStyle]}>
                 {block.title}
@@ -105,7 +111,7 @@ export function AiMessageBody({ content }: Props) {
                 { flexDirection: dirStyle.writingDirection === 'rtl' ? 'row-reverse' : 'row' },
               ]}
             >
-              <Text style={[styles.bulletDot, { color: colors.bubbleAiText }]}>•</Text>
+              <Text style={[styles.bulletDot, { color: colors.accent }]}>•</Text>
               <RichLine text={block.text} />
             </View>
           );
