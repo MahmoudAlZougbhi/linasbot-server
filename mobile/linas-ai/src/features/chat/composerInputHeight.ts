@@ -10,10 +10,12 @@ export const COMPOSER_INPUT_MAX_H =
  * few px more. Stay single-line until content clearly needs another line.
  */
 export const COMPOSER_GROW_SLACK = 6;
-/** Idle pill: pad 4 + 36pt actions + pad 4. */
+/** Idle compact pill: pad 4 + 36pt actions + pad 4. */
 export const COMPOSER_PILL_MIN_H = 44;
 export const COMPOSER_PILL_PAD_V = 4;
-/** Stable iOS vertical center for one line inside MIN_H. Never toggle per keystroke. */
+/** Bottom icon row in the focused/stacked ChatGPT-style bar. */
+export const COMPOSER_ACTION_ROW_H = 36;
+/** Stable iOS vertical center for one line inside the compact pill. */
 export const COMPOSER_IOS_PAD_TOP = (COMPOSER_INPUT_MIN_H - COMPOSER_INPUT_LINE_HEIGHT) / 2;
 
 export function composerHeightForLines(lines: number): number {
@@ -35,8 +37,8 @@ export function targetComposerInputHeight(contentHeight: number, draft: string):
 }
 
 /**
- * Require two consecutive same-bucket measurements before growing or shrinking
- * so iOS contentSize bounce cannot flap the bar on each keystroke.
+ * Grow immediately so wrapped characters stay visible. Debounce shrink only —
+ * iOS contentSize bounce must not flap the bar back down mid-keystroke.
  */
 export function debounceComposerHeight(
   target: number,
@@ -44,6 +46,7 @@ export function debounceComposerHeight(
   pending: number | null,
 ): { height: number; pending: number | null } {
   if (target === current) return { height: current, pending: null };
+  if (target > current) return { height: target, pending: null };
   if (pending === target) return { height: target, pending: null };
   return { height: current, pending: target };
 }

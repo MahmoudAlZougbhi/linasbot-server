@@ -27,7 +27,6 @@ import { LinEffortSheet } from './LinEffortSheet';
 import type { OwnerChatMode } from './ownerChatMode';
 import {
   useComposerInputAutoGrow,
-  COMPOSER_INPUT_MIN_H,
   COMPOSER_IOS_PAD_TOP,
 } from './useComposerInputAutoGrow';
 import type { VoiceState } from './useVoiceDraft';
@@ -61,7 +60,7 @@ type Props = {
 };
 
 /**
- * Design handoff composer: model chip above right, white pill (+ | input | mic | send).
+ * Compact idle pill; focused/growing stacks text on top and pins + / mic / send below.
  */
 export function ChatComposer({
   draft,
@@ -93,6 +92,8 @@ export function ChatComposer({
   const { colors } = useTheme();
   const { tr, isRtl } = useI18n();
   const [effortOpen, setEffortOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const pulse = useRef(new Animated.Value(1)).current;
   const ring = useRef(new Animated.Value(0.55)).current;
   const suppressFocusRef = useRef(false);
@@ -114,7 +115,7 @@ export function ChatComposer({
   const chipTappable = Boolean(showModelChip && onOwnerModeChange);
   const draftDir = textDirectionStyle(draft);
   const draftEmpty = !draft.trim();
-  const singleLine = inputHeight <= COMPOSER_INPUT_MIN_H;
+  const stacked = focused || !draftEmpty || voiceBusy;
   const idleAlign = isRtl ? 'right' : 'left';
   const idleWriting = isRtl ? 'rtl' : 'ltr';
   const inputTextAlign = draftEmpty ? idleAlign : draftDir.textAlign;
@@ -158,6 +159,17 @@ export function ChatComposer({
     }, 120);
     return () => clearTimeout(t);
   }, [autoFocus]);
+
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvt, () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener(hideEvt, () => setKeyboardOpen(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   function handleSend() {
     if (sending || !canSend || voiceBusy) return;
@@ -205,12 +217,49 @@ export function ChatComposer({
     </Pressable>
   );
 
+  const plusBtn =
+    showPlus && onPlus ? (
+      <Pressable
+        style={styles.iconHit}
+        onPress={onPlus}
+        accessibilityLabel={tr('composerMoreActions')}
+        hitSlop={6}
+      >
+        <PlusCircleGlyph
+          color={colors.text}
+          backgroundColor={colors.featuredIconBg}
+          borderColor={colors.featuredIconBorder}
+        />
+      </Pressable>
+    ) : stacked ? (
+      <View style={styles.iconHit} />
+    ) : null;
+
+  const trailing = (
+    <>
+      {showVoiceControl ? (
+        <VoiceComposerControls
+          voiceState={voiceState}
+          elapsedMs={elapsedMs}
+          pulse={pulse}
+          ring={ring}
+          onToggleVoice={onToggleVoice}
+          onResumeVoice={onResumeVoice}
+          onConfirmVoice={onConfirmVoice}
+          onDiscardVoice={onDiscardVoice}
+          onBeforeStart={dismissKeyboard}
+        />
+      ) : null}
+      {sendBtn}
+    </>
+  );
+
   return (
     <View
       style={[
         styles.wrap,
         {
-          paddingBottom: Math.max(insets.bottom, 10),
+          paddingBottom: keyboardOpen ? 8 : Math.max(insets.bottom, 10),
           backgroundColor: colors.bg,
         },
       ]}
@@ -232,88 +281,58 @@ export function ChatComposer({
       <View
         style={[
           styles.pill,
-          singleLine ? styles.pillSingle : styles.pillGrow,
+          stacked ? styles.pillStacked : styles.pillCompact,
           {
             backgroundColor: colors.surface,
             shadowColor: colors.text,
           },
         ]}
       >
-        {showPlus && onPlus ? (
-          <Pressable
-            style={styles.iconHit}
-            onPress={onPlus}
-            accessibilityLabel={tr('composerMoreActions')}
-            hitSlop={6}
-          >
-            <PlusCircleGlyph
-              color={colors.text}
-              backgroundColor={colors.featuredIconBg}
-              borderColor={colors.featuredIconBorder}
-            />
-          </Pressable>
-        ) : null}
-
-        <View style={[styles.inputSlot, { height: singleLine ? COMPOSER_INPUT_MIN_H : inputHeight }]}>
-          {draftEmpty ? (
-            <View pointerEvents="none" style={styles.placeholderWrap}>
-              <Text
-                style={[
-                  styles.placeholderText,
-                  { color: colors.textDim, textAlign: idleAlign },
-                ]}
-              >
-                {placeholder}
-              </Text>
-            </View>
-          ) : null}
+        {!stacked && plusBtn}
+        <View
+          style={[
+            stacked ? styles.inputSlotStacked : styles.inputSlot,
+            { height: inputHeight },
+          ]}
+        >
           <TextInput
             ref={assignInputRef}
             style={[
               styles.input,
-              draftEmpty && styles.inputIdle,
               {
                 color: colors.text,
-                height: draftEmpty ? COMPOSER_INPUT_MIN_H : inputHeight,
+                height: inputHeight,
                 textAlign: inputTextAlign,
                 writingDirection: draftEmpty ? idleWriting : draftDir.writingDirection,
-                paddingTop: Platform.OS === 'ios' && singleLine ? COMPOSER_IOS_PAD_TOP : 0,
+                paddingTop: stacked ? 2 : Platform.OS === 'ios' ? COMPOSER_IOS_PAD_TOP : 0,
               },
             ]}
-            placeholder=""
+            placeholder={placeholder}
+            placeholderTextColor={colors.textDim}
             value={draft}
             onChangeText={(v) => handleChangeText(v, onChangeDraft)}
             onContentSizeChange={(e) => {
-              if (draftEmpty) return;
-              let h = e.nativeEvent.contentSize.height;
-              if (Platform.OS === 'ios' && singleLine) h -= COMPOSER_IOS_PAD_TOP;
-              handleContentSizeChange(h);
+              handleContentSizeChange(e.nativeEvent.contentSize.height);
             }}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
             multiline
             scrollEnabled={atMaxHeight}
             editable={!voiceBusy}
             autoFocus={false}
             blurOnSubmit={false}
-            textAlignVertical={singleLine ? 'center' : 'top'}
+            textAlignVertical={stacked ? 'top' : 'center'}
             accessibilityLabel={idlePlaceholder}
           />
         </View>
-
-        {showVoiceControl ? (
-          <VoiceComposerControls
-            voiceState={voiceState}
-            elapsedMs={elapsedMs}
-            pulse={pulse}
-            ring={ring}
-            onToggleVoice={onToggleVoice}
-            onResumeVoice={onResumeVoice}
-            onConfirmVoice={onConfirmVoice}
-            onDiscardVoice={onDiscardVoice}
-            onBeforeStart={dismissKeyboard}
-          />
-        ) : null}
-
-        {sendBtn}
+        {stacked ? (
+          <View style={styles.actionRow}>
+            {plusBtn}
+            <View style={styles.actionRight}>{trailing}</View>
+          </View>
+        ) : (
+          trailing
+        )}
       </View>
 
       {showDisclaimer ? (

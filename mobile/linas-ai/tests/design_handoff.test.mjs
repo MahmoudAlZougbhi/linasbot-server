@@ -393,7 +393,9 @@ test('composer bar matches design handoff (pill, grow, placeholders)', () => {
   assert.match(autoGrow, /debounceComposerHeight/);
   assert.match(en, /composerPlaceholderChat:\s*'Chat with Linas'/);
   assert.match(en, /composerPlaceholderWork:\s*'Work with Linas'/);
-  assert.match(composer, /placeholderWrap/);
+  assert.match(composer, /placeholder=\{placeholder\}/);
+  assert.match(composer, /pillStacked/);
+  assert.match(styles, /actionRow/);
 });
 
 test('Live Chat inbox matches design handoff (search, All/Human, platform row)', () => {
