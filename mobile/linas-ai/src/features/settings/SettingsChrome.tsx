@@ -13,7 +13,7 @@ export const SETTINGS_ICONS = {
   globe: feather('globe'),
   appearance: mci('circle-half-full'),
   help: mci('comment-question-outline'),
-  about: feather('info'),
+  limits: feather('sliders'),
   terms: feather('file-text'),
   data: mci('shield-check-outline'),
   trash: feather('trash-2'),

@@ -32,7 +32,13 @@ test('Settings handoff sections and rows match the iOS mock', () => {
   assert.match(screen, /settingsAppearance/);
   assert.match(screen, /SettingsAppearanceToggle/);
   assert.match(screen, /settingsHelpSupport/);
-  assert.match(screen, /settingsAboutLinas/);
+  assert.match(screen, /settingsAiLimits/);
+  assert.match(screen, /onOpenAiLimits/);
+  assert.doesNotMatch(screen, /settingsAboutLinas/);
+  assert.doesNotMatch(screen, /SettingsAboutSheet/);
+  assert.doesNotMatch(screen, /settingsBusinessProfile/);
+  assert.doesNotMatch(screen, /linkApple/);
+  assert.doesNotMatch(screen, /unlinkApple/);
   assert.match(screen, /settingsTermsPrivacy/);
   assert.match(screen, /dataDeletion/);
   assert.match(screen, /SettingsDeleteCard/);
@@ -55,9 +61,10 @@ test('Settings handoff sections and rows match the iOS mock', () => {
   assert.match(chrome, /settingsDeleteAccount/);
   assert.match(chrome, /settingsVersionFooter/);
   assert.match(en, /Chats & request alerts/);
-  assert.match(en, /About Linas AI/);
+  assert.doesNotMatch(en, /About Linas AI/);
   assert.match(en, /Terms & Privacy/);
   assert.match(en, /Support & Legal/);
+  assert.match(read('i18n/locales/en.ts'), /settingsAiLimits: 'AI Limits'/);
   assert.match(ar, /تنبيهات الدردشات والطلبات/);
   assert.match(fr, /Alertes chats et demandes/);
 });

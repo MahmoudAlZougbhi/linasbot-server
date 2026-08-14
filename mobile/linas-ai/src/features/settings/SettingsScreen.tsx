@@ -6,10 +6,9 @@ import { tokenStore } from '../../auth/tokenStore';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { AppLanguage } from '../../i18n';
 import { spacing, useTheme } from '../../theme';
-import { deleteAccount, linkApple, unlinkApple } from '../auth/appleAccount';
+import { deleteAccount } from '../auth/appleAccount';
 import { useModuleNav } from '../nav/ModuleNavContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
-import { SettingsAboutSheet } from './SettingsAboutSheet';
 import {
   SETTINGS_ICONS,
   SettingsAppearanceToggle,
@@ -34,7 +33,7 @@ type Props = {
   onOpenAiLimits?: () => void;
 };
 
-type Sheet = 'none' | 'name' | 'email' | 'language' | 'about';
+type Sheet = 'none' | 'name' | 'email' | 'language';
 
 async function open(url: string) {
   await Linking.openURL(url);
@@ -58,7 +57,7 @@ export function SettingsScreen({
   const [sheet, setSheet] = useState<Sheet>('none');
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
-  const [appleBusy, setAppleBusy] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [nameBusy, setNameBusy] = useState(false);
   const [emailBusy, setEmailBusy] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -84,38 +83,8 @@ export function SettingsScreen({
     void loadProfile();
   }, [loadProfile, nav.areaFocusNonce]);
 
-  async function runLinkApple() {
-    if (appleBusy) return;
-    setAppleBusy(true);
-    try {
-      const result = await linkApple();
-      if (result.ok) {
-        Alert.alert(tr('settingsLinkApple'), tr('settingsAppleLinkOk'));
-      } else if (result.code !== 'cancel') {
-        Alert.alert(tr('settingsLinkApple'), tr('settingsAppleLinkError'));
-      }
-    } finally {
-      setAppleBusy(false);
-    }
-  }
-
-  async function runUnlinkApple() {
-    if (appleBusy) return;
-    setAppleBusy(true);
-    try {
-      const result = await unlinkApple();
-      if (result.ok) {
-        Alert.alert(tr('settingsUnlinkApple'), tr('settingsAppleUnlinkOk'));
-      } else {
-        Alert.alert(tr('settingsUnlinkApple'), tr('settingsAppleUnlinkError'));
-      }
-    } finally {
-      setAppleBusy(false);
-    }
-  }
-
   function confirmDeleteAccount() {
-    if (appleBusy) return;
+    if (deleteBusy) return;
     Alert.alert(tr('settingsDeleteAccountTitle'), tr('settingsDeleteAccountConfirm'), [
       { text: tr('settingsAppleCancel'), style: 'cancel' },
       {
@@ -127,8 +96,8 @@ export function SettingsScreen({
   }
 
   async function runDeleteAccount() {
-    if (appleBusy) return;
-    setAppleBusy(true);
+    if (deleteBusy) return;
+    setDeleteBusy(true);
     try {
       const result = await deleteAccount();
       if (result.ok) {
@@ -137,7 +106,7 @@ export function SettingsScreen({
       }
       Alert.alert(tr('settingsDeleteAccount'), tr('settingsAppleDeleteError'));
     } finally {
-      setAppleBusy(false);
+      setDeleteBusy(false);
     }
   }
 
@@ -243,9 +212,9 @@ export function SettingsScreen({
             onPress={() => void open(LEGAL_URLS.supportMailto)}
           />
           <SettingsRow
-            icon={SETTINGS_ICONS.about}
-            label={tr('settingsAboutLinas')}
-            onPress={() => setSheet('about')}
+            icon={SETTINGS_ICONS.limits}
+            label={tr('settingsAiLimits')}
+            onPress={onOpenAiLimits}
           />
           <SettingsRow
             icon={SETTINGS_ICONS.terms}
@@ -286,15 +255,6 @@ export function SettingsScreen({
         language={language}
         onClose={() => setSheet('none')}
         onSelect={setLanguage}
-      />
-      <SettingsAboutSheet
-        visible={sheet === 'about'}
-        appleBusy={appleBusy}
-        onClose={() => setSheet('none')}
-        onOpenAiLimits={onOpenAiLimits}
-        onOpenBusinessProfile={nav.goChat}
-        onLinkApple={() => void runLinkApple()}
-        onUnlinkApple={() => void runUnlinkApple()}
       />
     </ScreenChrome>
   );
