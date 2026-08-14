@@ -15,6 +15,7 @@ type Props = {
   onOpenSearch: () => void;
   onCloseSearch: () => void;
   onChangeQuery: (value: string) => void;
+  onOpenSettings: () => void;
 };
 
 export function DrawerHeader({
@@ -24,6 +25,7 @@ export function DrawerHeader({
   onOpenSearch,
   onCloseSearch,
   onChangeQuery,
+  onOpenSettings,
 }: Props) {
   const { colors } = useTheme();
   const { tr } = useI18n();
@@ -67,15 +69,26 @@ export function DrawerHeader({
             <LinasSparkleIcon size={20} color={colors.accentDeep} />
             <Text style={[styles.wordmark, { color: colors.text }]}>Linas</Text>
           </View>
-          <Pressable
-            onPress={onOpenSearch}
-            accessibilityRole="button"
-            accessibilityLabel={tr('searchChats')}
-            hitSlop={10}
-            style={styles.searchHit}
-          >
-            <AppIcon icon={DRAWER_TOOL_ICONS.search} size={20} color={colors.text} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={onOpenSearch}
+              accessibilityRole="button"
+              accessibilityLabel={tr('searchChats')}
+              hitSlop={10}
+              style={styles.toolHit}
+            >
+              <AppIcon icon={DRAWER_TOOL_ICONS.search} size={20} color={colors.text} />
+            </Pressable>
+            <Pressable
+              onPress={onOpenSettings}
+              accessibilityRole="button"
+              accessibilityLabel={tr('settings')}
+              hitSlop={10}
+              style={styles.toolHit}
+            >
+              <AppIcon icon={DRAWER_TOOL_ICONS.settings} size={20} color={colors.text} />
+            </Pressable>
+          </View>
         </View>
       )}
 
@@ -100,7 +113,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     letterSpacing: -0.25,
   },
-  searchHit: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  headerActions: { flexDirection: 'row', alignItems: 'center' },
+  toolHit: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   searchExpanded: {
     flexDirection: 'row',
     alignItems: 'center',
