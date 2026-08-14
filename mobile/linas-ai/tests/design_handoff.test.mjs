@@ -505,13 +505,16 @@ test('drawer search chrome is header icon; Settings beside search; New chat on R
 
 test('Settings hosts AI Limits only (no Actions)', () => {
   const settings = read('features/settings/SettingsScreen.tsx');
-  const about = read('features/settings/SettingsAboutSheet.tsx');
   const tree = read('app/AppScreenTree.tsx');
   assert.match(settings, /onOpenAiLimits/);
-  assert.match(about, /settingsAiLimits/);
+  assert.match(settings, /settingsAiLimits/);
+  assert.doesNotMatch(settings, /SettingsAboutSheet/);
+  assert.doesNotMatch(settings, /settingsAboutLinas/);
   assert.doesNotMatch(settings, /onOpenActions/);
   assert.doesNotMatch(settings, /settingsActions/);
   assert.doesNotMatch(tree, /section: 'actions'/);
+  assert.match(tree, /section: 'ai_limits'/);
+  assert.match(tree, /backTo: 'settings'/);
 });
 
 test('Settings hosts Notifications and Logout; drawer does not', () => {
@@ -534,12 +537,17 @@ test('Settings hosts Notifications and Logout; drawer does not', () => {
 });
 
 test('Settings does not duplicate AI Basics CM store', () => {
-  const about = read('features/settings/SettingsAboutSheet.tsx');
-  assert.match(about, /settingsBusinessProfileNote/);
-  assert.doesNotMatch(about, /MFA/);
-  assert.doesNotMatch(about, /Passkey/);
+  const settings = read('features/settings/SettingsScreen.tsx');
+  const chrome = read('features/settings/SettingsChrome.tsx');
+  assert.doesNotMatch(settings, /settingsBusinessProfile/);
+  assert.doesNotMatch(settings, /settingsLinkApple/);
+  assert.doesNotMatch(settings, /settingsUnlinkApple/);
+  assert.doesNotMatch(settings, /MFA/);
+  assert.doesNotMatch(settings, /Passkey/);
+  assert.doesNotMatch(chrome, /MFA/);
   const en = read('i18n/locales/en.ts');
-  assert.match(en, /Open AI Setup → AI Basics/);
+  assert.doesNotMatch(en, /Open AI Setup → AI Basics/);
+  assert.doesNotMatch(en, /settingsBusinessProfile/);
 });
 
 test('Integrations header refresh is customer-facing', () => {

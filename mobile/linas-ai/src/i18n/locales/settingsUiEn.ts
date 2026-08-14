@@ -11,7 +11,6 @@ export const settingsUiEn = {
   settingsEmailSaveError: 'Could not request an email change. Try again.',
   settingsNotificationsHint: 'Chats & request alerts',
   settingsSupportLegal: 'Support & Legal',
-  settingsAboutLinas: 'About Linas AI',
   settingsTermsPrivacy: 'Terms & Privacy',
   settingsAppearanceLight: 'Light',
   settingsAppearanceDark: 'Dark',

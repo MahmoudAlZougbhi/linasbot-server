@@ -6,6 +6,18 @@ import { AppIcon, feather, ion, mci, type AppIconName } from '../../components/A
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 
+/** Pale teal wash — lighter than accentSoft so icon squares match the Settings handoff. */
+export const SETTINGS_ICON_WASH = {
+  light: 'rgba(0, 139, 139, 0.08)',
+  dark: 'rgba(45, 212, 191, 0.14)',
+} as const;
+
+/** Settings page canvas — pale gray against white cards (screenshot). */
+export const SETTINGS_CANVAS = {
+  light: '#F2F4F4',
+  dark: '#0B1413',
+} as const;
+
 export const SETTINGS_ICONS = {
   name: feather('user'),
   email: feather('mail'),
@@ -13,7 +25,7 @@ export const SETTINGS_ICONS = {
   globe: feather('globe'),
   appearance: mci('circle-half-full'),
   help: mci('comment-question-outline'),
-  about: feather('info'),
+  limits: feather('sliders'),
   terms: feather('file-text'),
   data: mci('shield-check-outline'),
   trash: feather('trash-2'),
@@ -28,7 +40,9 @@ export function SettingsSection({ title, children }: { title: string; children: 
   const { colors } = useTheme();
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: colors.textDim }]}>{title}</Text>
+      <Text style={[styles.sectionTitle, { color: colors.textDim }]} maxFontSizeMultiplier={1.2}>
+        {title}
+      </Text>
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {children}
       </View>
@@ -59,10 +73,12 @@ export function SettingsRow({
   onPress,
   accessory,
 }: RowProps) {
-  const { colors } = useTheme();
+  const { colors, resolved } = useTheme();
   const danger = tone === 'danger';
   const iconFg = danger ? colors.danger : colors.accent;
-  const iconBg = danger ? 'rgba(220, 38, 38, 0.10)' : colors.accentSoft;
+  const iconBg = danger
+    ? 'rgba(220, 38, 38, 0.10)'
+    : SETTINGS_ICON_WASH[resolved];
   const labelColor = danger ? colors.danger : colors.text;
   const inner = (
     <View style={styles.rowInner}>
@@ -265,9 +281,10 @@ export function SettingsSheet({
 const styles = StyleSheet.create({
   section: { marginBottom: spacing.lg },
   sectionTitle: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 12,
-    letterSpacing: 0.9,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    lineHeight: 14,
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
     marginBottom: spacing.sm,
     marginLeft: 4,

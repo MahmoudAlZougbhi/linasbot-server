@@ -11,7 +11,6 @@ export const settingsUiFr = {
   settingsEmailSaveError: 'Impossible de demander le changement d’e-mail. Réessayez.',
   settingsNotificationsHint: 'Alertes chats et demandes',
   settingsSupportLegal: 'Assistance & Légal',
-  settingsAboutLinas: 'À propos de Linas AI',
   settingsTermsPrivacy: 'Conditions & Confidentialité',
   settingsAppearanceLight: 'Clair',
   settingsAppearanceDark: 'Sombre',

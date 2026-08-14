@@ -18,6 +18,9 @@ type Props = {
   iconColor?: string;
   centerTitle?: boolean;
   headerRight?: ReactNode;
+  /** Settings handoff: title under the hamburger, inset hairline, optional pale canvas. */
+  stackedHeader?: boolean;
+  canvasColor?: string;
   /** When set, leading control is a back chevron instead of the hamburger. */
   onBack?: () => void;
   children: ReactNode;
@@ -34,6 +37,8 @@ export function ScreenChrome({
   iconColor,
   centerTitle,
   headerRight,
+  stackedHeader,
+  canvasColor,
   onBack,
   children,
 }: Props) {
@@ -43,50 +48,73 @@ export function ScreenChrome({
   const nav = useModuleNav();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawer = useModuleDrawerHistory(nav.isAuthenticated, drawerOpen);
+  const leadColor = iconColor ?? colors.text;
+  const menu = (
+    <Pressable
+      onPress={() => (onBack ? onBack() : setDrawerOpen(true))}
+      style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
+      accessibilityLabel={onBack ? tr('back') : tr('openMenu')}
+      accessibilityRole="button"
+      hitSlop={4}
+    >
+      {onBack ? (
+        <AppIcon icon={feather('chevron-left')} size={26} color={leadColor} />
+      ) : (
+        <MenuIcon color={leadColor} />
+      )}
+    </Pressable>
+  );
 
   return (
-    <GradientBackground>
-      <View style={[styles.top, { paddingTop: insets.top + 8 }]}>
-        <View style={[styles.headerRow, centerTitle && styles.headerRowCentered]}>
-          <Pressable
-            onPress={() => (onBack ? onBack() : setDrawerOpen(true))}
-            style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
-            accessibilityLabel={onBack ? tr('back') : tr('openMenu')}
-            accessibilityRole="button"
-            hitSlop={4}
-          >
-            {onBack ? (
-              <AppIcon icon={feather('chevron-left')} size={26} color={iconColor ?? colors.text} />
-            ) : (
-              <MenuIcon color={iconColor ?? colors.text} />
-            )}
-          </Pressable>
-          <View style={[styles.titleBlock, centerTitle && styles.titleBlockCentered]}>
+    <GradientBackground style={canvasColor ? { backgroundColor: canvasColor } : undefined}>
+      <View
+        style={[
+          styles.top,
+          stackedHeader && styles.topStacked,
+          { paddingTop: insets.top + 8 },
+        ]}
+      >
+        {stackedHeader ? (
+          <>
+            <View style={styles.menuRow}>{menu}</View>
             <Text
-              style={[
-                centerTitle ? styles.centeredTitle : typography.title,
-                { color: titleColor ?? colors.text },
-              ]}
+              style={[typography.title, styles.stackedTitle, { color: titleColor ?? colors.text }]}
               numberOfLines={1}
             >
               {title}
             </Text>
-            {subtitle ? (
+            <View style={[styles.titleRule, { backgroundColor: colors.border }]} />
+          </>
+        ) : (
+          <View style={[styles.headerRow, centerTitle && styles.headerRowCentered]}>
+            {menu}
+            <View style={[styles.titleBlock, centerTitle && styles.titleBlockCentered]}>
               <Text
-                style={{
-                  color: colors.textMuted,
-                  fontFamily: fonts.body,
-                  marginTop: 4,
-                  fontSize: 14,
-                  textAlign: centerTitle ? 'center' : 'left',
-                }}
+                style={[
+                  centerTitle ? styles.centeredTitle : typography.title,
+                  { color: titleColor ?? colors.text },
+                ]}
+                numberOfLines={1}
               >
-                {subtitle}
+                {title}
               </Text>
-            ) : null}
+              {subtitle ? (
+                <Text
+                  style={{
+                    color: colors.textMuted,
+                    fontFamily: fonts.body,
+                    marginTop: 4,
+                    fontSize: 14,
+                    textAlign: centerTitle ? 'center' : 'left',
+                  }}
+                >
+                  {subtitle}
+                </Text>
+              ) : null}
+            </View>
+            {headerRight ? <View style={styles.headerRight}>{headerRight}</View> : <View style={styles.hitSpacer} />}
           </View>
-          {headerRight ? <View style={styles.headerRight}>{headerRight}</View> : <View style={styles.hitSpacer} />}
-        </View>
+        )}
       </View>
       <View style={styles.body}>{children}</View>
 
@@ -133,6 +161,10 @@ export function ScreenChrome({
 
 const styles = StyleSheet.create({
   top: { paddingHorizontal: spacing.md, paddingBottom: spacing.md },
+  topStacked: { paddingHorizontal: 0, paddingBottom: spacing.sm },
+  menuRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md },
+  stackedTitle: { paddingHorizontal: spacing.lg, marginTop: 2, marginBottom: spacing.sm },
+  titleRule: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.lg },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
