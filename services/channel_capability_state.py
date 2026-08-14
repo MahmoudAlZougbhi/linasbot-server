@@ -56,9 +56,7 @@ BLOCKER_MESSAGES: dict[str, str] = {
     "missing_comment_permissions": (
         "Missing Meta comment permissions on this token. Disconnect this channel, then Connect again."
     ),
-    "missing_dm_permissions": (
-        "Missing Meta messaging permissions. Disconnect this channel, then Connect again."
-    ),
+    "missing_dm_permissions": ("Missing Meta messaging permissions. Disconnect this channel, then Connect again."),
     "missing_comment_webhook": "Comment webhook subscription is not confirmed yet for this connection.",
     "missing_dm_webhook": "Messaging webhook subscription is not confirmed yet for this connection.",
     "meta_approval_required": (

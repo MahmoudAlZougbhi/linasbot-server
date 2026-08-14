@@ -24,7 +24,5 @@ def test_try_enqueue_when_durable_queues_activated(monkeypatch: pytest.MonkeyPat
     job = SimpleNamespace(id="job-1")
     fake_queue = SimpleNamespace(backend="redis", production_ready=True, enqueue=MagicMock(return_value=job))
     with patch("services.job_queue.job_queue", fake_queue):
-        assert (
-            _try_enqueue(event_id="evt-2", kind="meta_dm", tenant_id="linas", conversation_key="k") == "job-1"
-        )
+        assert _try_enqueue(event_id="evt-2", kind="meta_dm", tenant_id="linas", conversation_key="k") == "job-1"
     fake_queue.enqueue.assert_called_once()

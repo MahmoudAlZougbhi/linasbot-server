@@ -263,9 +263,7 @@ async def cm_put_smart_answer_languages(request: Request, body: dict[str, Any] =
 
 
 @app.post("/api/cm/faq/smart-answer-languages/translate-existing")
-async def cm_translate_existing_smart_answers(
-    request: Request, body: dict[str, Any] = Body(default={})
-) -> Any:
+async def cm_translate_existing_smart_answers(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
     session = require_permission(request, "contentManagers")
     tenant_id = _session_tenant(session)
     language = str(body.get("language") or "").strip()

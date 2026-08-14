@@ -248,8 +248,7 @@ async def update_meta_comment_replies(
         raise HTTPException(
             status_code=409,
             detail=(
-                "Missing Meta comment permissions. Disconnect this channel, then Connect again "
-                "to grant comment scopes."
+                "Missing Meta comment permissions. Disconnect this channel, then Connect again to grant comment scopes."
             ),
         )
     if enabled:

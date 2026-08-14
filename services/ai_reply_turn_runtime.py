@@ -156,7 +156,7 @@ async def retry_saved_reply_delivery(
     user_data["_last_outbound_delivery"] = evidence
     record_delivery_outcome(str(pending["logical_reply_id"]), evidence)
     if evidence.get("success"):
-        basis = (get_turn(str(pending["logical_reply_id"])) or None)
+        basis = get_turn(str(pending["logical_reply_id"])) or None
         if basis and basis.claim_key_basis:
             await complete_ai_turn_claim(basis.claim_key_basis)
         return True
