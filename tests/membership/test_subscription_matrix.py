@@ -35,7 +35,7 @@ def test_frozen_matrix_exact_values() -> None:
         assert plan.comment_automation is comments
         assert PLAN_FEATURES[pid]["comment_automation"] is comments
         assert plan.whatsapp is (pid != "lite")
-        assert plan.tiktok is (pid in {"pro", "max"})
+        assert plan.tiktok is (pid in {"growth", "pro", "max"})
     assert CATALOG_VERSION.startswith("membership-v1")
     assert len(public_plan_matrix()) == 5
 

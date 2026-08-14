@@ -15,7 +15,7 @@ export type PlanDefinition = {
   commentAutomation: boolean;
   /** WhatsApp messages — Lite excluded; Starter and above included. */
   whatsapp: boolean;
-  /** TikTok DMs + comments — Pro and Max only. */
+  /** TikTok DMs + comments — Growth, Pro, and Max. */
   tiktok: boolean;
   recommended?: boolean;
   /**
@@ -61,7 +61,7 @@ export const PLAN_CATALOG: Record<PlanId, PlanDefinition> = {
     additionalSeats: 5,
     commentAutomation: true,
     whatsapp: true,
-    tiktok: false,
+    tiktok: true,
     recommended: true,
     appleProductId: 'com.linasai.subscription.growth.monthly',
     googleProductId: 'linas_ai_growth_monthly',
