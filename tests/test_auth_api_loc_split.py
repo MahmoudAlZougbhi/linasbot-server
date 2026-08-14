@@ -20,6 +20,7 @@ def test_auth_api_modules_under_500_lines() -> None:
     assert _line_count("modules/auth_api.py") < 500
     assert _line_count("modules/auth_api_common.py") < 500
     assert _line_count("modules/auth_users_api.py") < 500
+    assert _line_count("modules/auth_users_roles_api.py") < 500
 
 
 def test_auth_api_preserves_public_imports_and_provisioning_contract() -> None:

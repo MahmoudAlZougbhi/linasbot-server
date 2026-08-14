@@ -135,8 +135,8 @@ const styles = StyleSheet.create({
     height: HIT,
   },
   headerRight: {
-    width: HIT,
-    height: HIT,
+    minWidth: HIT,
+    minHeight: HIT,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: -spacing.sm,

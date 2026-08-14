@@ -45,7 +45,7 @@ export const CONTROL_ITEMS: ControlItem[] = [
     group: 'operate',
   },
   { id: 'integrations', title: 'Integrations', subtitle: 'Instagram & Facebook', group: 'operate' },
-  { id: 'users', title: 'Users', subtitle: 'Members & permissions', group: 'account' },
+  { id: 'users', title: 'Users', subtitle: 'Manage team access', group: 'account' },
   { id: 'subscription', title: 'Subscription', subtitle: 'Plans & billing', group: 'account' },
   { id: 'settings', title: 'Settings', subtitle: 'Preferences & legal', group: 'account' },
   {

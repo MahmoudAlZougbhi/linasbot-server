@@ -26,9 +26,10 @@ describe('whatsapp cloud mobile return + card', () => {
 
   it('IntegrationsScreen wires WhatsApp card and deep-link refetch', () => {
     const screen = read('features/integrations/IntegrationsScreen.tsx');
+    const load = read('features/integrations/useIntegrationsLoad.ts');
     assert.match(screen, /WhatsAppCloudCard/);
     assert.match(screen, /useWhatsAppIntegrations/);
-    assert.match(screen, /wa_connection|waConnection|waOAuthSuccess/);
+    assert.match(load, /wa_connection|waConnection|waOAuthSuccess/);
   });
 
   it('WhatsApp card never asks for pasted tokens', () => {

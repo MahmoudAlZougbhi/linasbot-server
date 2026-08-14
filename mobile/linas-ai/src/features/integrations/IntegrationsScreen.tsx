@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Alert, AppState, Linking, ScrollView, StyleSheet, Text } from 'react-native';
+import { useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { ApiError, apiFetch } from '../../api/client';
-import { parseIntegrationsDeepLink } from '../../app/navigation';
-import { tokenStore } from '../../auth/tokenStore';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { StringKey } from '../../i18n/locales/en';
 import { colors, fonts, spacing } from '../../theme';
@@ -23,11 +21,8 @@ import {
 } from './IntegrationChannelCard';
 import { IntegrationRefreshButton } from './IntegrationRefreshButton';
 import { disconnectMetaPlatform, startMetaOAuth } from './integrationsOAuth';
-import {
-  ListSchema,
-  ToggleResponseSchema,
-  type IntegrationListRow,
-} from './integrationsSchemas';
+import { ToggleResponseSchema, type IntegrationListRow } from './integrationsSchemas';
+import { useIntegrationsLoad } from './useIntegrationsLoad';
 import { WhatsAppCloudCard, whatsappCardSubtitle } from './WhatsAppCloudCard';
 import { useWhatsAppIntegrations } from './useWhatsAppIntegrations';
 
@@ -54,84 +49,25 @@ function isComingSoon(row: Row): boolean {
 export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props) {
   const { tr } = useI18n();
   const nav = useModuleNav();
-  const [loading, setLoading] = useState(true);
   const [busyPlatform, setBusyPlatform] = useState<string | null>(null);
   const [busyToggle, setBusyToggle] = useState<{ platform: string; key: 'dm' | 'comments' } | null>(
     null,
   );
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [rows, setRows] = useState<Row[]>([]);
   const [authGate, setAuthGate] = useState(false);
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const wa = useWhatsAppIntegrations({
     onAuthGate: () => setAuthGate(true),
-    onError: setError,
+    onError: (message) => setError(message),
   });
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const access = await tokenStore.getAccessToken();
-      if (!access) {
-        setAuthGate(true);
-        setRows([]);
-        setError(null);
-        return;
-      }
-      const data = await apiFetch('/api/mobile/integrations', { schema: ListSchema });
-      setRows(data.integrations);
-      await wa.refreshWhatsApp();
-      setError(null);
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        setAuthGate(true);
-        setError(null);
-      } else {
-        setError(tr('integrationsLoadError'));
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [tr, wa.refreshWhatsApp]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    if (nav.activeArea === 'integrations') {
-      void load();
-    }
-  }, [nav.areaFocusNonce, nav.activeArea, load]);
-
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void load();
-    });
-    return () => sub.remove();
-  }, [load]);
-
-  useEffect(() => {
-    const applyMetaResult = (url: string | null) => {
-      const parsed = parseIntegrationsDeepLink(url);
-      if (!parsed) return;
-      if (parsed.waConnection === 'success' || parsed.metaConnection === 'success') {
-        setNotice(parsed.waConnection === 'success' ? tr('waOAuthSuccess') : tr('metaOAuthSuccess'));
-        setError(null);
-      } else if (parsed.waConnection === 'cancelled' || parsed.metaConnection === 'cancelled') {
-        setNotice(null);
-        setError(parsed.waConnection === 'cancelled' ? tr('waOAuthCancelled') : tr('metaOAuthCancelled'));
-      } else if (parsed.waConnection === 'failed' || parsed.metaConnection === 'failed') {
-        setNotice(null);
-        setError(parsed.waConnection === 'failed' ? tr('waOAuthFailed') : tr('metaOAuthFailed'));
-      }
-      void load();
-    };
-    void Linking.getInitialURL().then(applyMetaResult);
-    const sub = Linking.addEventListener('url', (event) => applyMetaResult(event.url));
-    return () => sub.remove();
-  }, [load, tr]);
+  const { loading, notice, setNotice, rows, setRows, load } = useIntegrationsLoad({
+    tr,
+    refreshWhatsApp: wa.refreshWhatsApp,
+    activeArea: nav.activeArea,
+    areaFocusNonce: nav.areaFocusNonce,
+    setError,
+    setAuthGate,
+  });
 
   async function connectPlatform(platform: 'instagram' | 'facebook') {
     setBusyPlatform(platform);

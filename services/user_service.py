@@ -104,6 +104,7 @@ class UserService(UserServiceAuthMixin):
             role = assert_assignable_role(
                 str(user_data.get("role") or "viewer"),
                 created_by=created_by,
+                custom_role_ids=user_data.get("_custom_role_ids"),
             )
         except RoleAssignmentError as exc:
             raise ValueError(str(exc)) from exc
@@ -328,6 +329,7 @@ class UserService(UserServiceAuthMixin):
                         "role": assert_assignable_role(
                             str(updates["role"]),
                             created_by=updates.get("_role_created_by"),
+                            custom_role_ids=updates.get("_custom_role_ids"),
                         ),
                     }
                 except RoleAssignmentError as exc:

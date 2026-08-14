@@ -10,6 +10,7 @@ from modules.api_security import require_session
 from modules.auth_api_common import CreateUserRequest, UpdateUserRequest
 from modules.core import app
 from services.dashboard_session_service import session_service
+from services.tenant_custom_roles import tenant_custom_roles
 from services.user_service import user_service
 
 
@@ -70,6 +71,7 @@ async def create_user(body: CreateUserRequest, request: Request) -> Any:
                 "permissions": body.permissions,
                 "tenantId": session.tenant_id,
                 "status": body.status,
+                "_custom_role_ids": tenant_custom_roles.role_ids(session.tenant_id),
             },
             created_by=session.user_id,
         )
@@ -95,6 +97,7 @@ async def update_user(user_id: str, body: UpdateUserRequest, request: Request) -
             updates["name"] = body.name
         if body.role is not None:
             updates["role"] = body.role
+            updates["_custom_role_ids"] = tenant_custom_roles.role_ids(session.tenant_id)
         if body.permissions is not None:
             updates["permissions"] = body.permissions
         if body.status is not None:

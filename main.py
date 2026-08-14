@@ -42,6 +42,7 @@ import modules.apple_iap_client_api  # noqa: E402, F401
 import modules.apple_store_webhook_api  # noqa: E402, F401
 import modules.auth_api  # noqa: E402, F401
 import modules.auth_email_change_api  # noqa: E402, F401
+import modules.auth_users_roles_api  # noqa: E402, F401
 import modules.chat_history_api  # noqa: E402, F401
 import modules.cm_api  # noqa: E402, F401
 import modules.cm_faq_api  # noqa: E402, F401
