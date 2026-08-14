@@ -7,7 +7,7 @@ import os
 from typing import Any
 
 import config
-from services.live_chat_channel import resolve_live_chat_channel
+from services.live_chat_channel import coerce_live_chat_user_id, resolve_live_chat_channel
 from services.live_chat_contracts import (
     parse_timestamp_utc,
     utc_now,
@@ -147,14 +147,22 @@ class LiveChatIndexMixin:
         state = chat.get("conversation_state", self.STATE_BOT_ACTIVE)
         last_text = chat.get("last_message_text", "")
         last_at = chat.get("last_message_at", "")
+        if last_at is not None and hasattr(last_at, "isoformat") and not isinstance(last_at, str):
+            last_at = last_at.isoformat()
+        else:
+            last_at = str(last_at or "")
         out = dict(chat)
+        conv_id = str(chat.get("conversation_id") or "").strip()
+        out["conversation_id"] = conv_id
+        out["user_id"] = coerce_live_chat_user_id(out, conversation_id=conv_id)
         out["status"] = self._conversation_state_to_status(state)
         out["user_phone"] = chat.get("user_phone") or chat.get("phone_number", "")
         out["last_activity"] = last_at
+        out["last_message_at"] = last_at
         out["last_message"] = (
-            {"content": last_text, "timestamp": last_at, "is_user": False} if last_text or last_at else None
+            {"content": str(last_text or ""), "timestamp": last_at, "is_user": False} if last_text or last_at else None
         )
-        out["channel"] = resolve_live_chat_channel(chat.get("user_id"), chat)
+        out["channel"] = resolve_live_chat_channel(out.get("user_id"), out)
         return out
 
     def _index_collection(self, db: Any) -> Any:
@@ -329,7 +337,7 @@ class LiveChatIndexMixin:
         self, page: int, page_size: int, filter_state: str, search: str, source: str
     ) -> dict[str, Any]:
         is_legitimate_empty = source in {"index_empty"}
-        return {
+        payload: dict[str, Any] = {
             "success": is_legitimate_empty,
             "chats": [],
             "total": 0,
@@ -342,6 +350,9 @@ class LiveChatIndexMixin:
             "search": search,
             "source": source,
         }
+        if not is_legitimate_empty:
+            payload["error"] = "Could not load conversations."
+        return payload
 
     async def _run_blocking_with_timeout(self, fn: Any, timeout_seconds: float) -> Any:
         timeout = max(0.1, float(timeout_seconds or 0))

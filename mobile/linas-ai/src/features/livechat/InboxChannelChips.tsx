@@ -1,6 +1,7 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { fonts, radii, useTheme } from '../../theme';
+import { AppIcon, feather } from '../../components/AppIcon';
+import { radii, useTheme } from '../../theme';
 import { PlatformChannelIcon } from './PlatformChannelIcon';
 import type { ChannelFilter, ChatChannel } from './liveChatTypes';
 
@@ -47,14 +48,18 @@ export function InboxChannelChips({ selected, onSelect }: Props) {
               accessibilityLabel={`Channel ${chip.label}`}
               accessibilityState={{ selected: active }}
             >
-              {chip.id !== 'all' ? (
-                <View style={styles.icon}>
-                  <PlatformChannelIcon channel={chip.id as ChatChannel} size={22} />
+              {chip.id === 'all' ? (
+                <View
+                  style={[
+                    styles.allIcon,
+                    { backgroundColor: active ? colors.accentSoft : colors.input },
+                  ]}
+                >
+                  <AppIcon icon={feather('globe')} size={16} color={colors.text} />
                 </View>
-              ) : null}
-              <Text style={[styles.label, { color: active ? colors.text : colors.textMuted }]}>
-                {chip.label}
-              </Text>
+              ) : (
+                <PlatformChannelIcon channel={chip.id as ChatChannel} size={28} />
+              )}
             </Pressable>
           );
         })}
@@ -63,20 +68,25 @@ export function InboxChannelChips({ selected, onSelect }: Props) {
   );
 }
 
+const CHIP_ROW_H = 44;
+
 const styles = StyleSheet.create({
-  wrap: { flexGrow: 0, flexShrink: 0, marginBottom: 8 },
-  scroll: { flexGrow: 0 },
+  wrap: { height: CHIP_ROW_H, flexGrow: 0, flexShrink: 0, marginBottom: 8, overflow: 'hidden' },
+  scroll: { height: CHIP_ROW_H, flexGrow: 0, flexShrink: 0 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 8 },
   chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    width: 44,
+    height: 44,
     borderRadius: radii.pill,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    minHeight: 36,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  icon: { width: 22, height: 22, overflow: 'hidden', borderRadius: 11 },
-  label: { fontFamily: fonts.bodyMedium, fontSize: 13 },
+  allIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

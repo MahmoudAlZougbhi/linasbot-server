@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from services.live_chat_channel import (
+    coerce_live_chat_user_id,
     live_chat_channel_matches,
     normalize_live_chat_channel,
     resolve_live_chat_channel,
@@ -94,6 +95,8 @@ def test_unified_chats_api_declares_channel_query() -> None:
     assert "wanted_channel" in unified
     assert '"channel": row_channel' in unified
     assert "if not search_val and not cursor and not state_values and not wanted_channel:" in unified
+    api = Path("modules/live_chat_api.py").read_text(encoding="utf-8")
+    assert '"error": "request_failed"' in api
     assert "tiktok" in Path("services/live_chat_channel.py").read_text(encoding="utf-8")
 
 
@@ -105,3 +108,51 @@ def test_unlabeled_index_rows_stay_visible_on_all() -> None:
     assert live_chat_channel_matches(ig, "all") is True
     assert live_chat_channel_matches(ig, "instagram") is True
     assert live_chat_channel_matches(ig, "tiktok") is False
+
+
+def test_frontend_format_fills_missing_user_id() -> None:
+    from services.live_chat_channel import coerce_live_chat_user_id
+
+    assert coerce_live_chat_user_id({}, conversation_id="wa-orphan") == "wa-orphan"
+    formatted = live_chat_service._to_frontend_chat_format(
+        {
+            "conversation_id": "wa-orphan",
+            "last_message_text": "hi",
+            "last_message_at": utc_now(),
+            "conversation_state": live_chat_service.STATE_BOT_ACTIVE,
+        }
+    )
+    assert formatted["user_id"] == "wa-orphan"
+    assert formatted["conversation_id"] == "wa-orphan"
+    assert isinstance(formatted["last_message_at"], str)
+    assert formatted["last_message"]["timestamp"] == formatted["last_message_at"]
+
+
+def test_coerce_user_id_never_blank_for_real_threads() -> None:
+    assert (
+        coerce_live_chat_user_id(
+            {"user_id": None, "phone_number": "+96170123456"},
+            conversation_id="conv-wa",
+        )
+        == "+96170123456"
+    )
+    assert (
+        coerce_live_chat_user_id(
+            {"customer_info": {"channel": "instagram", "phone_full": "instagram:99"}},
+            conversation_id="conv-ig",
+        )
+        == "instagram:99"
+    )
+    formatted = live_chat_service._to_frontend_chat_format(
+        {
+            "conversation_id": "conv-fb",
+            "user_id": None,
+            "phone_number": "facebook:55",
+            "last_message_text": "yo",
+            "last_message_at": utc_now().isoformat(),
+            "conversation_state": live_chat_service.STATE_BOT_ACTIVE,
+        }
+    )
+    assert formatted["user_id"] == "facebook:55"
+    assert formatted["channel"] == "facebook"
+    assert formatted["conversation_id"] == "conv-fb"

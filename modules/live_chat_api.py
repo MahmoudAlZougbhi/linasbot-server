@@ -115,7 +115,7 @@ async def get_unified_chats(
             channel=channel,
         )
 
-    fallback = {"success": False, "chats": [], "total": 0, "has_more": False}
+    fallback = {"success": False, "chats": [], "total": 0, "has_more": False, "error": "request_failed"}
     return await _run_endpoint(_handler, fallback=fallback)
 
 
