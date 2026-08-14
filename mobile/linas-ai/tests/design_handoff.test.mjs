@@ -42,29 +42,19 @@ test('brand sparkle renders without react-native-svg (no Uni placeholder)', () =
   }
 });
 
-test('drawer AI Setup active tile uses light grey sparkle chrome', () => {
+test('drawer AI Setup active tile uses the same selected chrome as other modules', () => {
   const grid = read('features/nav/DrawerNavGrid.tsx');
-  const tokens = read('theme/tokens.ts');
   const header = read('features/nav/DrawerHeader.tsx');
   const fade = read('features/nav/DrawerFadeSeparator.tsx');
   assert.match(grid, /modId === 'cm'/);
-  assert.match(grid, /colors\.featuredIconBg/);
-  assert.match(grid, /colors\.featuredIconBorder/);
-  assert.match(tokens, /featuredIconBg:\s*'#F4F6F6'/);
-  assert.match(tokens, /featuredIconBorder:\s*'#D0D4D4'/);
+  assert.match(grid, /const active = activeArea === mod\.id/);
+  assert.match(grid, /const tileBg = active \? colors\.activeRow : 'transparent'/);
+  assert.doesNotMatch(grid, /isAiSetup/);
+  assert.doesNotMatch(grid, /aiSetupTile/);
+  assert.doesNotMatch(grid, /featuredIconWrap/);
+  assert.doesNotMatch(grid, /featuredIconShadow/);
   assert.doesNotMatch(grid, /colors\.mintSoft/);
   assert.doesNotMatch(grid, /colors\.accentSoft/);
-  assert.doesNotMatch(grid, /colors\.borderSoft/);
-  assert.match(grid, /const isAiSetup = mod\.id === 'cm'/);
-  assert.match(grid, /active && !isAiSetup \? colors\.activeRow : 'transparent'/);
-  assert.match(grid, /isAiSetup \? styles\.aiSetupTile : null/);
-  assert.match(grid, /aiSetupTile:[\s\S]*backgroundColor:\s*'transparent'/);
-  assert.match(grid, /styles\.featuredIconShadow/);
-  assert.match(grid, /shadowColor:\s*colors\.accentDeep/);
-  assert.match(grid, /shadowOffset:\s*\{\s*width:\s*0,\s*height:\s*2\s*\}/);
-  assert.match(grid, /shadowOpacity:\s*0\.14/);
-  assert.match(grid, /shadowRadius:\s*7/);
-  assert.match(grid, /elevation:\s*3/);
   assert.match(grid, /LinasSparkleIcon[\s\S]*color=\{colors\.accentDeep\}/);
   assert.match(header, /LinasSparkleIcon size=\{20\} color=\{colors\.accentDeep\}/);
   assert.match(
@@ -432,22 +422,26 @@ test('Live Chat inbox matches design handoff (search, All/Human, platform row)',
   assert.doesNotMatch(thread, /Read-only/);
 });
 
-test('drawer search chrome is header icon; New chat + Settings in footer dock', () => {
+test('drawer search chrome is header icon; Settings beside search; New chat on Recent row', () => {
   const nav = read('features/nav/NavDrawer.tsx');
   const drawerHeader = read('features/nav/DrawerHeader.tsx');
-  const footer = read('features/nav/DrawerFooter.tsx');
+  const recents = read('features/nav/DrawerRecents.tsx');
   const chat = read('features/chat/ChatScreen.tsx');
   const overlays = read('features/chat/ChatScreenOverlays.tsx');
   const drawer = read('components/SideDrawer.tsx');
-  assert.match(nav, /DrawerFooter/);
-  assert.match(footer, /newChatBtn/);
-  assert.match(footer, /settingsBtn/);
+  assert.doesNotMatch(nav, /DrawerFooter/);
   assert.match(drawerHeader, /DRAWER_TOOL_ICONS\.search/);
+  assert.match(drawerHeader, /DRAWER_TOOL_ICONS\.settings/);
+  assert.match(drawerHeader, /onOpenSettings/);
+  assert.match(drawerHeader, /headerActions/);
   assert.match(drawerHeader, /DrawerFadeSeparator/);
   assert.match(drawerHeader, /searchConversationTitles/);
+  assert.match(recents, /NEW_CHAT_ICON/);
+  assert.match(recents, /onNewChat/);
+  assert.match(recents, /headingRow/);
+  assert.doesNotMatch(recents, /tr\('newChat'\)[\s\S]*Text/);
   assert.match(nav, /noChatsMatch/);
   assert.match(nav, /emptyLabel/);
-  assert.match(footer, /APP_VERSION_LABEL/);
   const configSrc = read('config.ts');
   assert.match(configSrc, /Constants\.expoConfig\?\.version/);
   assert.match(configSrc, /APP_VERSION_LABEL/);
@@ -465,32 +459,19 @@ test('drawer search chrome is header icon; New chat + Settings in footer dock', 
   assert.match(easJson, /"appVersionSource":\s*"remote"/);
   assert.match(easJson, /"production"[\s\S]*"autoIncrement":\s*true/);
   assert.match(easJson, /"testflight"[\s\S]*"autoIncrement":\s*true/);
-  // Version centered below action row; New Chat left, Settings right, spread full width.
-  assert.match(footer, /textAlign:\s*'center'/);
-  assert.match(footer, /actionRow:[\s\S]*justifyContent:\s*'space-between'/);
-  assert.match(footer, /actionRow:[\s\S]*width:\s*'100%'/);
-  assert.match(footer, /styles\.actionRow[\s\S]*newChatBtn[\s\S]*settingsBtn/);
-  assert.match(footer, /newChatBtn:[\s\S]*alignSelf:\s*'flex-start'/);
-  assert.doesNotMatch(footer, /newChatBtn:[\s\S]*flex:\s*1/);
-  assert.match(footer, /APP_VERSION_LABEL/);
   assert.match(drawerHeader, /wordmark/);
   assert.match(drawerHeader, /DrawerFadeSeparator/);
   // Search mode hides module grid; filter starts at first character.
   assert.match(nav, /const searching = searchOpen \|\| queryTrimmed\.length > 0/);
   assert.match(nav, /\{\!searching \? \(/);
   assert.match(nav, /onChangeQuery=\{setQuery\}|onChangeText=\{setQuery\}/);
-  assert.match(footer, /NewChatIcon/);
-  assert.match(footer, /<NewChatIcon color=\{colors\.onAccent\} size=\{14\}/);
-  assert.match(footer, /tr\('newChat'\)/);
-  assert.match(footer, /minHeight:\s*34/);
-  assert.match(footer, /width:\s*32/);
-  assert.match(footer, /height:\s*32/);
-  assert.match(footer, /fontSize:\s*10/);
+  assert.match(recents, /NEW_CHAT_ICON/);
+  assert.match(recents, /accessibilityLabel=\{tr\('newChat'\)\}/);
+  assert.doesNotMatch(recents, /newChatBtn/);
   // Dock sits on safe area only — no extra lift above the home indicator.
   assert.match(drawer, /paddingBottom:\s*Math\.max\(insets\.bottom,\s*4\)/);
   assert.doesNotMatch(drawer, /insets\.bottom\s*\+\s*12/);
   assert.doesNotMatch(nav, /DRAWER_TOOL_ICONS\.newChat/);
-  assert.doesNotMatch(footer, /DRAWER_TOOL_ICONS\.newChat/);
   assert.match(drawer, /Keyboard\.dismiss/);
   assert.match(drawer, /pointerEvents=\{hitActive/);
   assert.match(drawer, /DRAWER_CLOSE_MS/);
@@ -500,16 +481,8 @@ test('drawer search chrome is header icon; New chat + Settings in footer dock', 
   assert.match(overlays, /<NavDrawer[\s\S]*onNewChat=/);
 
   const modules = read('features/nav/moduleIcons.ts');
-  const headerIcons = read('features/chat/ChatHeaderIcons.tsx');
-  const header = read('features/chat/ChatHeader.tsx');
   assert.match(modules, /NEW_CHAT_ICON\s*=\s*ion\('create-outline'\)/);
   assert.doesNotMatch(modules, /newChat:\s*feather\('plus'\)/);
-  assert.match(headerIcons, /export function NewChatIcon/);
-  assert.match(headerIcons, /NEW_CHAT_ICON/);
-  assert.match(headerIcons, /AppIcon/);
-  assert.doesNotMatch(header, /NewChatIcon/);
-  assert.doesNotMatch(header, /onNewChat/);
-  assert.match(header, /position:\s*'absolute'/);
 });
 
 test('Settings hosts AI Limits only (no Actions)', () => {

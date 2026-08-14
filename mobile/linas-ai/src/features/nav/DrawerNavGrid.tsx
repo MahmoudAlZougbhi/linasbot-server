@@ -40,32 +40,12 @@ function badgeForModule(
 function DrawerModuleIcon({
   modId,
   colors,
-  active,
 }: {
   modId: ControlArea;
   colors: ThemeColors;
-  active: boolean;
 }) {
   if (modId === 'cm') {
-    if (!active) {
-      return <LinasSparkleIcon size={GRID_ICON_SIZE} color={colors.accentDeep} />;
-    }
-
-    return (
-      <View
-        style={[
-          styles.featuredIconWrap,
-          styles.featuredIconShadow,
-          {
-            backgroundColor: colors.featuredIconBg,
-            borderColor: colors.featuredIconBorder,
-            shadowColor: colors.accentDeep,
-          },
-        ]}
-      >
-        <LinasSparkleIcon size={22} color={colors.accentDeep} />
-      </View>
-    );
+    return <LinasSparkleIcon size={GRID_ICON_SIZE} color={colors.accentDeep} />;
   }
 
   return <AppIcon icon={MODULE_ICONS[modId]} size={GRID_ICON_SIZE} color={colors.accentDeep} />;
@@ -81,13 +61,12 @@ export function DrawerNavGrid({ showUsers, activeArea, badges, onOpenArea }: Pro
       {modules.map((mod) => {
         const badge = badgeForModule(mod, badges);
         const active = activeArea === mod.id;
-        const isAiSetup = mod.id === 'cm';
-        const tileBg = active && !isAiSetup ? colors.activeRow : 'transparent';
+        const tileBg = active ? colors.activeRow : 'transparent';
 
         return (
           <Pressable
             key={mod.id}
-            style={[styles.tile, isAiSetup ? styles.aiSetupTile : null, { backgroundColor: tileBg }]}
+            style={[styles.tile, { backgroundColor: tileBg }]}
             onPress={() => onOpenArea(mod.id)}
             accessibilityRole="button"
             accessibilityLabel={tr(mod.titleKey)}
@@ -115,7 +94,7 @@ export function DrawerNavGrid({ showUsers, activeArea, badges, onOpenArea }: Pro
                 </Text>
               </View>
             ) : null}
-            <DrawerModuleIcon modId={mod.id} colors={colors} active={active} />
+            <DrawerModuleIcon modId={mod.id} colors={colors} />
             <Text style={[styles.label, { color: colors.text }]} numberOfLines={2}>
               {tr(mod.titleKey)}
             </Text>
@@ -145,23 +124,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     position: 'relative',
-  },
-  aiSetupTile: {
-    backgroundColor: 'transparent',
-  },
-  featuredIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  featuredIconShadow: {
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.14,
-    shadowRadius: 7,
-    elevation: 3,
   },
   badge: {
     position: 'absolute',
