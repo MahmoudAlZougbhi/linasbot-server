@@ -180,6 +180,7 @@ def _build_messages(
     context: dict[str, Any],
     user_text: str,
     attachment_ids: list[str] | None = None,
+    tenant_id: str | None = None,
 ) -> list[dict[str, Any]]:
     recent, summary = pack_recent_messages(
         context.get("recent_messages_raw") or context.get("recent_messages"),
@@ -202,7 +203,10 @@ def _build_messages(
     if summary:
         parts.append(summary)
     if attachment_ids:
-        parts.append(f"User attached files: {attachment_ids}. Use extract_price_list when appropriate.")
+        parts.append(
+            "User attached files are included in this user message "
+            f"(ids={attachment_ids}). Read them. Use extract_price_list only for structured price-list import."
+        )
     revise = context.get("proposal_revise")
     if isinstance(revise, dict) and revise:
         parts.append(
@@ -216,5 +220,14 @@ def _build_messages(
     out: list[dict[str, Any]] = [{"role": "system", "content": "\n".join(p for p in parts if p)}]
     for m in recent:
         out.append({"role": m["role"], "content": m["content"]})
-    out.append({"role": "user", "content": user_text})
+    user_content: str | list[dict[str, Any]] = user_text
+    if attachment_ids and tenant_id:
+        from services.owner_copilot_v2.attachment_prompt import user_content_with_attachments
+
+        user_content = user_content_with_attachments(
+            tenant_id=tenant_id,
+            user_text=user_text,
+            attachment_ids=attachment_ids,
+        )
+    out.append({"role": "user", "content": user_content})
     return out

@@ -20,10 +20,33 @@ ALLOWED_MIME = frozenset(
         "application/pdf",
         "text/plain",
         "text/markdown",
+        "text/csv",
+        "text/comma-separated-values",
         "application/json",
+        "application/msword",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     }
 )
 MAX_BYTES = 12 * 1024 * 1024  # 12 MiB
+
+_EXT_MIME = {
+    ".heic": "image/heic",
+    ".heif": "image/heif",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".pdf": "application/pdf",
+    ".txt": "text/plain",
+    ".md": "text/plain",
+    ".json": "application/json",
+    ".csv": "text/csv",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".doc": "application/msword",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xls": "application/vnd.ms-excel",
+}
 
 
 def _root() -> Path:
@@ -45,24 +68,13 @@ def validate_upload(*, filename: str, content_type: str | None, size: int) -> di
         return {"ok": False, "error": "empty_file"}
     if size > MAX_BYTES:
         return {"ok": False, "error": "file_too_large", "max_bytes": MAX_BYTES}
-    if mime not in ALLOWED_MIME:
-        # HEIC sometimes arrives as application/octet-stream — allow by extension
-        ext = Path(filename).suffix.lower()
-        if ext in {".heic", ".heif"} and mime in {"", "application/octet-stream"}:
-            mime = "image/heic"
-        elif ext in {".jpg", ".jpeg"} and mime in {"", "application/octet-stream"}:
-            mime = "image/jpeg"
-        elif ext == ".png" and mime in {"", "application/octet-stream"}:
-            mime = "image/png"
-        elif ext == ".pdf" and mime in {"", "application/octet-stream"}:
-            mime = "application/pdf"
-        elif ext in {".txt", ".md"} and mime in {"", "application/octet-stream", "text/plain"}:
-            mime = "text/plain"
-        elif ext == ".json" and mime in {"", "application/octet-stream", "application/json"}:
-            mime = "application/json"
-        else:
-            return {"ok": False, "error": "unsupported_mime", "mime": mime}
-    return {"ok": True, "mime": mime}
+    if mime in ALLOWED_MIME:
+        return {"ok": True, "mime": mime}
+    ext = Path(filename).suffix.lower()
+    mapped = _EXT_MIME.get(ext)
+    if mapped and mime in {"", "application/octet-stream", "text/plain"}:
+        return {"ok": True, "mime": mapped}
+    return {"ok": False, "error": "unsupported_mime", "mime": mime}
 
 
 def store_attachment(
@@ -129,4 +141,8 @@ def supported_attachment_types() -> list[dict[str, str]]:
         {"mime": "image/heic", "ext": ".heic"},
         {"mime": "image/heif", "ext": ".heif"},
         {"mime": "application/pdf", "ext": ".pdf"},
+        {"mime": "text/plain", "ext": ".txt"},
+        {"mime": "text/csv", "ext": ".csv"},
+        {"mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "ext": ".docx"},
+        {"mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "ext": ".xlsx"},
     ]
