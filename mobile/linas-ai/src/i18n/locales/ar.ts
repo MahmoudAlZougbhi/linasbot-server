@@ -252,6 +252,8 @@ export const ar = {
   composerSend: 'إرسال الرسالة',
   composerStop: 'إيقاف التوليد',
   composerChooseEffort: 'اختر منخفض أو عالي',
+  composerExpand: 'توسيع حقل الكتابة',
+  composerCollapse: 'طي حقل الكتابة',
   offlineDraftPreserved: 'بدون إنترنت — المسودة محفوظة. أعد المحاولة عند الاتصال.',
   tapToRetry: 'اضغط لإعادة المحاولة',
   guestHowCanHelp: 'كيف فيني أساعد؟',

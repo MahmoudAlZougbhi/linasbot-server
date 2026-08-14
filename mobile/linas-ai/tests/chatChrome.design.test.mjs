@@ -78,8 +78,9 @@ test('composer: pill with plus, placeholder, mic, in-pill send, disclaimer', () 
   assert.match(glyphs, /feather\('mic'\)/);
   assert.match(composer, /backgroundColor=\{colors\.featuredIconBg\}/);
   assert.match(composer, /borderColor=\{colors\.featuredIconBorder\}/);
+  const field = read('features/chat/ComposerDraftField.tsx');
   assert.match(composer, /placeholder=\{placeholder\}/);
-  assert.match(composer, /value=\{draft\}/);
+  assert.match(field, /value=\{draft\}/);
   assert.match(pill, /justifyContent:\s*'center'/);
   assert.match(pill, /actionRow/);
   assert.match(pill, /minHeight:\s*COMPOSER_PILL_MIN_H/);
