@@ -10,8 +10,10 @@ import { ChatTopFade } from './ChatTopFade';
 const HEADER_HIT = 44;
 /** Extra space below status bar / notch (on top of safe-area inset). */
 const HEADER_TOP_GAP = 2;
-/** List padding below the status bar so the first message clears the hamburger. */
-export const CHAT_LIST_TOP_CLEARANCE = HEADER_HIT + HEADER_TOP_GAP;
+/** Small gap under the hamburger / fade so the first bubble is not cramped into them. */
+const LIST_BELOW_OVERLAY_GAP = spacing.md;
+/** List padding so the first message sits just below the overlay, not in the notch. */
+export const CHAT_LIST_TOP_CLEARANCE = HEADER_HIT + HEADER_TOP_GAP + LIST_BELOW_OVERLAY_GAP;
 
 type Props = {
   onOpenMenu: () => void;
