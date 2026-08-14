@@ -38,7 +38,9 @@ export function RequestSummaryCards({ counts, selected, onSelect }: Props) {
             accessibilityLabel={`${bucket.label} ${buckets[bucket.id]}`}
             accessibilityState={{ selected: active }}
           >
-            <Text style={[styles.count, { color: colors.accent }]}>{buckets[bucket.id]}</Text>
+            <View style={[styles.countWrap, { backgroundColor: colors.accentSoft }]}>
+              <Text style={[styles.count, { color: colors.accent }]}>{buckets[bucket.id]}</Text>
+            </View>
             <Text style={[styles.label, { color: colors.textMuted }]}>{bucket.label}</Text>
           </Pressable>
         );
@@ -53,11 +55,19 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderRadius: radii.sm,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 72,
+    minHeight: 88,
+    gap: 6,
   },
-  count: { fontFamily: fonts.display, fontSize: 28, fontWeight: '700', lineHeight: 34 },
-  label: { fontFamily: fonts.body, fontSize: 13, marginTop: 2 },
+  countWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  count: { fontFamily: fonts.display, fontSize: 22, fontWeight: '700', lineHeight: 26 },
+  label: { fontFamily: fonts.body, fontSize: 13 },
 });

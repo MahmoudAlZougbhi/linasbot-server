@@ -22,7 +22,10 @@ test('requests list matches inbox screenshot chrome', () => {
   assert.match(search, /filterActive/);
   assert.match(summary, /In progress/);
   assert.match(summary, /Done/);
+  assert.match(summary, /countWrap/);
+  assert.match(summary, /borderRadius: 22/);
   assert.match(screen, /reqSubtitle/);
+  assert.match(screen, /titleColor=\{colors\.accent\}/);
   assert.doesNotMatch(home, /ChipRow|TYPE_CHIPS|DATE_CHIPS/);
 });
 
@@ -47,7 +50,12 @@ test('filter sheet has platforms date assignee reset and show count', () => {
   assert.match(sheet, /Assigned user/);
   assert.match(sheet, /Reset/);
   assert.match(sheet, /Show \$\{matched\} requests/);
+  assert.match(sheet, /RequestDateField/);
+  assert.match(sheet, /accentSoft/);
   assert.match(sheet, /tiktok/);
+  const cal = read('features/requests/RequestDatePicker.tsx');
+  assert.match(cal, /feather\('calendar'\)/);
+  assert.match(cal, /Previous month/);
   assert.match(format, /whatsapp_cloud/);
   assert.match(format, /instagram_dm/);
   assert.match(format, /FILTER_PLATFORMS/);
