@@ -1,0 +1,23 @@
+export const faqUiEn = {
+  faqCreateBannerTitle: 'Add a ready-made answer',
+  faqCreateBannerBody:
+    'Write the question and answer in one language. We translate to Arabic, English, French, and Franco.',
+  faqSaveTranslate: 'Save & translate',
+  faqCreateFooter: 'Saved answers reply instantly and use fewer AI credits.',
+  faqTranslatedStatus: 'Translated',
+  faqLangPickerTitle: 'Languages',
+  faqLangPickerSub: 'Choose which languages this Smart Answer should cover.',
+  faqLangSearch: 'Search languages',
+  faqLangSelected: 'selected',
+  faqLangAutoTranslate: 'Missing languages are auto-translated on save.',
+  faqLangSave: 'Save languages',
+  faqLangSection: 'Languages',
+  faqAddLanguage: 'Add language',
+  faqLangHint: 'Customers get the matching language automatically.',
+  faqAnswersCount: 'answers',
+  faqEmptyQuestion: '(no question)',
+  faqTranslateExistingTitle: 'Translate existing answers?',
+  faqTranslateExistingBody: 'Translate current Smart Answers into {lang}?',
+  faqTranslateSkip: 'Skip',
+  faqTranslateAll: 'Translate all',
+} as const;

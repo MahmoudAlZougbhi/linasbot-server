@@ -247,9 +247,9 @@ async def process_meta_social_event(
                 return await adapter.send_text_message(sender_id, message_text)
             return {"success": False, "error": "Only text replies are enabled for Meta social DMs"}
 
-        from services.ai_reply_delivery import wrap_tracked_send
+        from services.ai_reply_delivery import SendFunc, wrap_tracked_send
 
-        send_message = wrap_tracked_send(send_message, user_data)
+        send_tracked: SendFunc = wrap_tracked_send(send_message, user_data)
 
         async def send_action(_namespaced_id: str) -> Any:
             if simulation or adapter is None:
@@ -266,7 +266,7 @@ async def process_meta_social_event(
             user_name=display_name,
             user_input_text=text,
             user_data=user_data,
-            send_message_func=send_message,
+            send_message_func=send_tracked,
             send_action_func=send_action,
             skip_firestore_save=skip_firestore_save,
             message_combine_delay=message_combine_delay,
