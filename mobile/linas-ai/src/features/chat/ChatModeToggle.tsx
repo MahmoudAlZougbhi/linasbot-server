@@ -8,7 +8,7 @@ type Props = {
   onChange: (mode: OwnerChatMode) => void;
 };
 
-/** Segmented Chat | Work control under logo on new chat. Work = high, Chat = low. */
+/** Segmented Chat | Work control on a new thread. Work = high, Chat = low. */
 export function ChatModeToggle({ mode, onChange }: Props) {
   const { colors } = useTheme();
   return (

@@ -1,71 +1,67 @@
-import { Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+
+import { AppIcon, feather, ion } from '../../components/AppIcon';
 
 /** Shared + / mic / send touch target in the chat composer bar. */
 export const COMPOSER_ACTION_SIZE = 36;
-export const COMPOSER_SEND_SIZE = 32;
+export const COMPOSER_SEND_SIZE = 36;
+export const COMPOSER_PLUS_DISK = 32;
+const PLUS_STROKE = 1.75;
+const PLUS_ARM = 13;
 
-export function PlusCircleGlyph({ color, size = 24 }: { color: string; size?: number }) {
+/** Thin plus on a light-gray disk — matches the screenshot composer, not a font “+”. */
+export function PlusCircleGlyph({
+  color,
+  backgroundColor,
+  borderColor,
+  size = COMPOSER_PLUS_DISK,
+}: {
+  color: string;
+  backgroundColor: string;
+  borderColor: string;
+  size?: number;
+}) {
   return (
-    <Text style={{ color, fontSize: size, fontWeight: '400', lineHeight: size + 1 }}>+</Text>
-  );
-}
-
-export function SendArrowGlyph({ color, size = 18 }: { color: string; size?: number }) {
-  return (
-    <Text style={{ color, fontSize: size, fontWeight: '800', lineHeight: size + 2 }}>↑</Text>
-  );
-}
-
-export function MicGlyph({ color, size = 20 }: { color: string; size?: number }) {
-  const headW = size * 0.38;
-  const headH = size * 0.52;
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <View
-        style={{
-          width: headW,
-          height: headH,
-          borderRadius: headW / 2,
-          borderWidth: 2,
-          borderColor: color,
-          backgroundColor: 'transparent',
-        }}
-      />
-      <View
-        style={{
-          position: 'absolute',
-          bottom: size * 0.18,
-          width: size * 0.55,
-          height: size * 0.28,
-          borderWidth: 2,
-          borderTopWidth: 0,
-          borderColor: color,
-          borderBottomLeftRadius: size * 0.28,
-          borderBottomRightRadius: size * 0.28,
-        }}
-      />
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
       <View
         style={{
           position: 'absolute',
-          bottom: size * 0.08,
-          width: 2,
-          height: size * 0.14,
-          backgroundColor: color,
+          width: PLUS_ARM,
+          height: PLUS_STROKE,
           borderRadius: 1,
+          backgroundColor: color,
         }}
       />
       <View
         style={{
           position: 'absolute',
-          bottom: size * 0.06,
-          width: size * 0.28,
-          height: 2,
-          backgroundColor: color,
+          width: PLUS_STROKE,
+          height: PLUS_ARM,
           borderRadius: 1,
+          backgroundColor: color,
         }}
       />
     </View>
   );
+}
+
+export function SendArrowGlyph({ color, size = 18 }: { color: string; size?: number }) {
+  return <AppIcon icon={ion('arrow-up')} size={size} color={color} />;
+}
+
+export function MicGlyph({ color, size = 20 }: { color: string; size?: number }) {
+  return <AppIcon icon={feather('mic')} size={size} color={color} />;
 }
 
 export function StopGlyph({ color }: { color: string }) {

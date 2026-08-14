@@ -15,21 +15,32 @@ function read(rel) {
   return readFileSync(src(...rel.split('/')), 'utf8');
 }
 
-test('chat header: hamburger + new-chat in light-gray squares, sparkle title', () => {
+test('chat header: overlay hamburger only in light-gray square', () => {
   const header = read('features/chat/ChatHeader.tsx');
   const icons = read('features/chat/ChatHeaderIcons.tsx');
+  const chat = read('features/chat/ChatScreen.tsx');
+  const footer = read('features/nav/DrawerFooter.tsx');
   assert.match(header, /HeaderIconBox/);
   assert.match(header, /colors\.featuredIconBg/);
   assert.match(header, /colors\.featuredIconBorder/);
-  assert.match(header, /label="Linas AI"/);
-  assert.match(header, /LinasStarMark/);
   assert.match(header, /MenuIcon/);
-  assert.match(header, /NewChatIcon/);
+  assert.match(header, /position:\s*'absolute'/);
+  assert.match(header, /pointerEvents="box-none"/);
   assert.match(header, /direction:\s*'ltr'/);
-  assert.match(header, /borderBottomWidth:\s*StyleSheet\.hairlineWidth/);
+  assert.doesNotMatch(header, /LinasStarMark/);
+  assert.doesNotMatch(header, /label="Linas AI"/);
+  assert.doesNotMatch(header, /NewChatIcon/);
+  assert.doesNotMatch(header, /onNewChat/);
+  assert.doesNotMatch(header, /borderBottomWidth/);
   assert.match(icons, /export function HeaderIconBox/);
   assert.match(icons, /HEADER_ICON_BOX/);
-  assert.match(icons, /NEW_CHAT_ICON/);
+  assert.match(chat, /<ChatHeader[\s\S]*onOpenMenu=/);
+  assert.doesNotMatch(chat, /<ChatHeader[\s\S]{0,180}onNewChat=/);
+  assert.match(chat, /paddingTop: insets\.top/);
+  const listStyles = read('features/chat/chatScreenStyles.ts');
+  assert.match(listStyles, /paddingTop:\s*44/);
+  assert.match(footer, /tr\('newChat'\)/);
+  assert.match(footer, /<NewChatIcon /);
 });
 
 test('composer: pill with plus, placeholder, mic, in-pill send, disclaimer', () => {
@@ -45,7 +56,13 @@ test('composer: pill with plus, placeholder, mic, in-pill send, disclaimer', () 
   assert.doesNotMatch(composer, /sendOutside/);
   assert.match(composer, /tr\('composerDisclaimer'\)/);
   assert.match(composer, /direction:\s*'ltr'/);
-  assert.match(glyphs, /COMPOSER_SEND_SIZE = 32/);
+  assert.match(glyphs, /COMPOSER_SEND_SIZE = 36/);
+  assert.match(glyphs, /COMPOSER_PLUS_DISK = 32/);
+  assert.match(glyphs, /ion\('add'\)/);
+  assert.match(glyphs, /ion\('arrow-up'\)/);
+  assert.match(glyphs, /ion\('mic-outline'\)/);
+  assert.match(composer, /backgroundColor=\{colors\.featuredIconBg\}/);
+  assert.match(composer, /minHeight:\s*52/);
   assert.match(en, /composerPlaceholder:\s*'Message Linas AI'/);
   assert.match(en, /composerDisclaimer:\s*'Linas can make mistakes\. Check important info\.'/);
   assert.match(ar, /composerPlaceholder:\s*'راسل Linas AI'/);

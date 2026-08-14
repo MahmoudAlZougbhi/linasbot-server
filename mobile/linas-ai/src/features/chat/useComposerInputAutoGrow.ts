@@ -4,7 +4,7 @@ import { TextInput } from 'react-native';
 /** Composer field line metrics — keep in sync with ChatComposer `styles.input`. */
 export const COMPOSER_INPUT_LINE_HEIGHT = 22;
 export const COMPOSER_INPUT_MAX_LINES = 8;
-/** Single-line height inside the 48px pill (padding + icons). */
+/** Single-line height inside the 52px pill (padding + icons). */
 export const COMPOSER_INPUT_MIN_H = 36;
 export const COMPOSER_INPUT_MAX_H = COMPOSER_INPUT_LINE_HEIGHT * COMPOSER_INPUT_MAX_LINES;
 
