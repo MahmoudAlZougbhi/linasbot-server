@@ -116,3 +116,44 @@ def test_mobile_google_sign_in_link_required(monkeypatch: pytest.MonkeyPatch) ->
     import asyncio
 
     asyncio.run(_run())
+
+
+def test_mobile_google_sign_in_existing_social_account_logs_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    from modules import google_auth_api as api
+
+    social_user = {
+        "id": "u-social",
+        "email": "taken@example.com",
+        "status": "active",
+        "passwordLoginEnabled": False,
+        "createdBy": "google-sign-in",
+        "tenantId": "t1",
+    }
+
+    async def _run() -> None:
+        monkeypatch.setattr(
+            api,
+            "verify_identity_token",
+            lambda *_a, **_k: {
+                "sub": "g-sub",
+                "email": "taken@example.com",
+                "email_verified": True,
+                "name": "Taken",
+            },
+        )
+        monkeypatch.setattr(api, "find_by_google_sub", lambda _s: None)
+        monkeypatch.setattr(api.user_service, "get_user_by_email", lambda _e: social_user)
+        monkeypatch.setattr(api, "link_google_identity", lambda **_kw: {"id": "gid"})
+        monkeypatch.setattr(
+            api,
+            "issue_mobile_tokens",
+            lambda user: {"access_token": "access", "refresh_token": "refresh", "user": user},
+        )
+        body = api.GoogleSignInRequest(identity_token="x" * 20)
+        result = await api.mobile_google_sign_in(body)
+        assert result["access_token"] == "access"
+        assert result["user"]["id"] == "u-social"
+
+    import asyncio
+
+    asyncio.run(_run())

@@ -25,6 +25,7 @@ from services.apple_revoke_outbox import maybe_store_refresh_from_authorization_
 from services.apple_sign_in_service import AppleSignInError, is_private_relay_email, verify_identity_token
 from services.dashboard_session_service import session_service
 from services.mobile_refresh_token_service import mobile_refresh_token_service
+from services.social_account_sign_in import is_social_only_account
 from services.tenant_registration_service import allocate_tenant_id
 from services.user_service import user_service
 
@@ -164,6 +165,24 @@ async def mobile_apple_sign_in(body: AppleSignInRequest) -> Any:
 
     existing = user_service.get_user_by_email(email)
     if existing is not None:
+        if is_social_only_account(existing):
+            try:
+                link_apple_identity(
+                    tenant_id=str(existing.get("tenantId") or ""),
+                    user_id=str(existing["id"]),
+                    sub=sub,
+                    email=email,
+                    is_private_relay=relay,
+                    display_name=display_name,
+                )
+            except AppleIdentityError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            maybe_store_refresh_from_authorization_code(
+                user_id=str(existing["id"]),
+                sub=sub,
+                authorization_code=body.authorization_code,
+            )
+            return _issue_with_app_account_token(existing)
         raise HTTPException(
             status_code=409,
             detail={

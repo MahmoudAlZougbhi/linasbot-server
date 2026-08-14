@@ -23,7 +23,7 @@ import { ChatStatusBanners } from './ChatStatusBanners';
 import type { OwnerChatMode } from './ownerChatMode';
 import { resolveOwnerModeForOutgoing } from './ownerChatMode';
 import { PendingAttachmentsStrip } from './PendingAttachmentsStrip';
-import { savePendingGuestDraft } from './pendingGuestDraft';
+import { queueGuestDraft } from './pendingGuestDraft';
 import { buildApproveSendOpts, buildDiscardSendOpts } from './proposalBarActions';
 import { sendChatMessage } from './sendChatMessage';
 import { chatErrorLabelKey, retryAssistantMessage } from './chatRetryHandlers';
@@ -140,8 +140,13 @@ export function ChatScreen({
   ]);
 
   function openAuthPreservingDraft(hard = false) {
-    void savePendingGuestDraft({ text: draft, createdAt: Date.now() });
+    queueGuestDraft(draft);
     setHardLimit(hard); setAuthGate(true);
+  }
+  function goToLoginPreservingDraft() {
+    Keyboard.dismiss();
+    queueGuestDraft(draft);
+    onRequestLogin();
   }
 
   useSetupHandoff({
@@ -182,7 +187,7 @@ export function ChatScreen({
             setDrawerOpen(true);
           }}
           onNewChat={startNewChat}
-          onSignIn={() => openAuthPreservingDraft(false)}
+          onSignIn={goToLoginPreservingDraft}
         />
 
         {showModeToggle ? <ChatModeToggle mode={ownerMode} onChange={setOwnerMode} /> : null}
@@ -370,7 +375,7 @@ export function ChatScreen({
         onUnarchive={(id) => void owner.setArchived(id, false)}
         onRename={(id, title) => void owner.renameConversation(id, title)}
         onDelete={(id) => void owner.deleteConversation(id)}
-        onLogin={() => openAuthPreservingDraft(false)}
+        onLogin={goToLoginPreservingDraft}
         onRegister={onRequestRegister}
         plusOpen={plusOpen}
         onClosePlus={() => setPlusOpen(false)}
