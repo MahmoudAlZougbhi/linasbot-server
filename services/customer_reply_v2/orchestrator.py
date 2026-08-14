@@ -102,9 +102,18 @@ async def run_customer_reply_v2_dm(
     scripted_retrieval: list[Any] | None = None,
     fixture_answer: dict[str, Any] | None = None,
     now_ts: float | None = None,
+    apply_customer_usage_limits: bool = True,
 ) -> CustomerReplyOutcome:
     """Canonical DM flow for Customer Reply AI V2 (sole production engine)."""
     started = time.perf_counter()
+    word_notice: str | None = None
+
+    def _out(**kwargs: Any) -> CustomerReplyOutcome:
+        outcome = CustomerReplyOutcome(**kwargs)
+        if word_notice:
+            body = (outcome.reply or "").strip()
+            outcome.reply = f"{word_notice}\n\n{body}".strip() if body else word_notice
+        return outcome
 
     from services.cm.language_policy import ensure_customer_languages
 
@@ -119,7 +128,7 @@ async def run_customer_reply_v2_dm(
     try:
         revision, _manifest = get_cached_manifest(tenant_id)
     except PublishedVersionError:
-        return CustomerReplyOutcome(
+        return _out(
             stop=True,
             reply=_safe_failure_reply(response_language, kind="insufficient"),
             reason="no_published_version",
@@ -127,6 +136,42 @@ async def run_customer_reply_v2_dm(
             metadata={"classic_fallback": False, "flags": flags_snapshot()},
             error="no_published_version",
         )
+
+    if apply_customer_usage_limits:
+        from services.ai_limits_enforcement import (
+            apply_inbound_word_limit,
+            customer_reply_limit_message,
+            enforce_text_reply_quota,
+        )
+
+        limit_user = {
+            "tenant_id": tenant_id,
+            "social_sender_id": provider_sender_id or user_id,
+            "user_preferred_lang": response_language,
+        }
+        message, word_notice = apply_inbound_word_limit(
+            user_id=user_id or provider_sender_id or "unknown",
+            user_data=limit_user,
+            text=message,
+        )
+        reply_quota = enforce_text_reply_quota(
+            user_id=user_id or provider_sender_id or "unknown",
+            user_data=limit_user,
+            consume=True,
+        )
+        if not reply_quota.allowed:
+            return _out(
+                stop=True,
+                reply=customer_reply_limit_message(reply_quota),
+                reason=reply_quota.reason or "ai_reply_limit",
+                evidence_status="policy_stop",
+                metadata={
+                    "ai_limits": reply_quota.to_public_dict(),
+                    "flags": flags_snapshot(),
+                    "ai_called": False,
+                    "cost_status": "none",
+                },
+            )
 
     facts = load_customer_facts(
         tenant_id=tenant_id,
@@ -164,7 +209,7 @@ async def run_customer_reply_v2_dm(
             latency_ms=(time.perf_counter() - started) * 1000,
             stage="policy",
         )
-        return CustomerReplyOutcome(
+        return _out(
             stop=True,
             reply=policy["reply"],
             reason=policy["reason"],
@@ -210,7 +255,7 @@ async def run_customer_reply_v2_dm(
             latency_ms=(time.perf_counter() - started) * 1000,
             stage="faq",
         )
-        return CustomerReplyOutcome(
+        return _out(
             stop=True,
             reply=faq.answer,
             reason=faq.reason,
@@ -219,7 +264,7 @@ async def run_customer_reply_v2_dm(
         )
 
     if not customer_semantic_retrieval_enabled():
-        return CustomerReplyOutcome(
+        return _out(
             stop=True,
             reply=_safe_failure_reply(response_language, kind="model"),
             reason="semantic_retrieval_disabled",
@@ -232,7 +277,7 @@ async def run_customer_reply_v2_dm(
         retrieval_model = customer_retrieval_model_name()
         answer_model = customer_answer_model_name()
     except Exception as exc:
-        return CustomerReplyOutcome(
+        return _out(
             stop=True,
             reply=_safe_failure_reply(response_language, kind="model"),
             reason="model_misconfigured",
@@ -249,7 +294,7 @@ async def run_customer_reply_v2_dm(
         scripted_tool_calls=scripted_retrieval,
     )
     if retrieval.error and retrieval.error.startswith("retrieval_model_blocker:"):
-        return CustomerReplyOutcome(
+        return _out(
             stop=True,
             reply=_safe_failure_reply(response_language, kind="model"),
             reason="retrieval_model_blocker",
@@ -368,7 +413,7 @@ async def run_customer_reply_v2_dm(
         total_tokens=total_tokens or None,
     )
 
-    return CustomerReplyOutcome(
+    return _out(
         stop=True,
         reply=reply_text,
         reason="v2_generated" if validation_ok else "v2_validation_failed",

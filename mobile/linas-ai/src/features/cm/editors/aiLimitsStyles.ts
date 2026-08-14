@@ -1,0 +1,133 @@
+import { StyleSheet } from 'react-native';
+
+import { fonts, radii, spacing } from '../../../theme';
+
+export const aiLimitsStyles = StyleSheet.create({
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#D8F3EE',
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.md,
+  },
+  bannerText: {
+    flex: 1,
+    color: '#1F6B63',
+    fontFamily: fonts.body,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#D8F3EE',
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  infoTitle: {
+    color: '#145C56',
+    fontFamily: fonts.bodyMedium,
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  infoBody: {
+    color: '#3A6F6A',
+    fontFamily: fonts.body,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 2,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: '#E4EEEC',
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: spacing.md,
+  },
+  cardTitle: {
+    color: '#10221A',
+    fontFamily: fonts.bodyMedium,
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: spacing.md,
+  },
+  rowLabel: {
+    flex: 1,
+    color: '#10221A',
+    fontFamily: fonts.body,
+    fontSize: 15,
+  },
+  periodLabel: {
+    color: '#10221A',
+    fontFamily: fonts.body,
+    fontSize: 15,
+    marginBottom: spacing.sm,
+  },
+  periodRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  periodCol: {
+    flex: 1,
+  },
+  periodCaption: {
+    color: '#7A8A88',
+    fontFamily: fonts.body,
+    fontSize: 12,
+    marginBottom: 6,
+  },
+  field: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF3F2',
+    borderRadius: radii.pill,
+    paddingHorizontal: 14,
+    minHeight: 44,
+  },
+  fieldWide: {
+    minWidth: 148,
+    maxWidth: 180,
+  },
+  input: {
+    flex: 1,
+    color: '#10221A',
+    fontFamily: fonts.bodyMedium,
+    fontSize: 15,
+    paddingVertical: 10,
+    paddingRight: 6,
+  },
+  suffix: {
+    color: '#5B6B6A',
+    fontFamily: fonts.body,
+    fontSize: 13,
+    marginRight: 6,
+  },
+  applyHint: {
+    color: '#8A9A98',
+    fontFamily: fonts.body,
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    marginBottom: spacing.xl,
+  },
+});

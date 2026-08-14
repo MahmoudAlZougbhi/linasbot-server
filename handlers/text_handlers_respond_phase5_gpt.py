@@ -50,6 +50,16 @@ async def text_handlers_respond_phase5_gpt(pctx: dict) -> Any:
     user_name = cast(Any, pctx.get("user_name"))
     is_reschedule_intent = cast(Any, pctx.get("is_reschedule_intent"))
     is_price_intent = cast(Any, pctx.get("is_price_intent"))
+
+    from services.ai_limits_enforcement import customer_reply_limit_message, enforce_text_reply_quota
+
+    reply_quota = enforce_text_reply_quota(user_id=user_id, user_data=user_data, consume=True)
+    if not reply_quota.allowed:
+        limit_msg = customer_reply_limit_message(reply_quota)
+        await send_message_func(user_id, limit_msg)
+        pctx["_PHASE_HALT"] = True
+        return None
+
     if ai_primary_mode:
         print("[_process_and_respond] 🧠 AI-primary mode ON. No FAQ match >=90%, continuing AI-normal flow.")
     if is_reschedule_intent:
@@ -124,21 +134,6 @@ async def text_handlers_respond_phase5_gpt(pctx: dict) -> Any:
         )
         custom_context = merged if merged else None
         print(f"[_process_and_respond] ✅ Selector ran: action={_act}, context_len={len(custom_context or '')}")
-        if custom_context:
-            from services.ai_limits_enforcement import enforce_context_line_budget
-
-            custom_context, ctx_decision = enforce_context_line_budget(
-                user_id=user_id,
-                user_data=user_data,
-                text=custom_context,
-                consume=True,
-            )
-            if not custom_context and not ctx_decision.allowed:
-                custom_context = None
-                print(
-                    f"[_process_and_respond] context_lines_blocked reason={ctx_decision.reason}",
-                    flush=True,
-                )
 
     # Phase 3: Build operational context when resuming (Plan §10)
     operational_context = None
