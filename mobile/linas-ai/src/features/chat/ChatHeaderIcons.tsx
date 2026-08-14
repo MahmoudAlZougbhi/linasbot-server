@@ -1,4 +1,5 @@
-import { StyleSheet, View, type ReactNode } from 'react-native';
+import type { ReactNode } from 'react';
+import { StyleSheet, View } from 'react-native';
 
 import { AppIcon } from '../../components/AppIcon';
 import { radii } from '../../theme';
