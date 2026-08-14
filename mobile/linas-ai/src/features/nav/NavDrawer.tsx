@@ -10,6 +10,7 @@ import { DrawerNavGrid } from './DrawerNavGrid';
 import { DrawerRecents } from './DrawerRecents';
 import type { HistoryItem } from './HistoryRows';
 import { useDrawerBadges } from './useDrawerBadges';
+import { visibleRecentItems } from './visibleRecentItems';
 
 type Props = {
   open: boolean;
@@ -61,7 +62,7 @@ export function NavDrawer(props: Props) {
 
   const filtered = useMemo(() => {
     const q = queryTrimmed.toLowerCase();
-    const base = props.history.filter((h) => !props.archivedIds.includes(h.id));
+    const base = visibleRecentItems(props.history, props.archivedIds);
     if (!q) return base;
     return base.filter((h) => (h.title || '').toLowerCase().includes(q));
   }, [props.history, props.archivedIds, queryTrimmed]);
