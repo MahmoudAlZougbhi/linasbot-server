@@ -8,17 +8,45 @@ function makeId(): string {
   return `pf_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function mimeFromName(name: string, fallback: string): string {
+  const ext = name.split('.').pop()?.toLowerCase() || '';
+  const byExt: Record<string, string> = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    heic: 'image/heic',
+    heif: 'image/heif',
+    pdf: 'application/pdf',
+    txt: 'text/plain',
+    md: 'text/markdown',
+    csv: 'text/csv',
+    json: 'application/json',
+    doc: 'application/msword',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xls: 'application/vnd.ms-excel',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  };
+  return byExt[ext] || fallback;
+}
+
+function resolveMime(name: string, raw: string | null | undefined, fallback: string): string {
+  const mime = (raw || '').trim();
+  if (!mime || mime === 'application/octet-stream') return mimeFromName(name, fallback);
+  return mime;
+}
+
 function assetToPending(asset: {
   uri: string;
   fileName?: string | null;
   mimeType?: string | null;
   name?: string | null;
 }): PendingFile {
+  const name = asset.fileName || asset.name || 'photo.jpg';
   return {
     id: makeId(),
     uri: asset.uri,
-    name: asset.fileName || asset.name || 'photo.jpg',
-    mimeType: asset.mimeType || 'image/jpeg',
+    name,
+    mimeType: resolveMime(name, asset.mimeType, 'image/jpeg'),
   };
 }
 
@@ -53,23 +81,20 @@ export async function pickDocumentAttachment(): Promise<PendingFile | null> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const DocumentPicker = require('expo-document-picker') as typeof import('expo-document-picker');
+    // '*/*' — a MIME array with invalid iOS UTIs (e.g. text/markdown) makes
+    // getDocumentAsync throw, which this helper used to swallow as a no-op.
     const picked = await DocumentPicker.getDocumentAsync({
-      type: [
-        'application/pdf',
-        'image/*',
-        'text/plain',
-        'text/markdown',
-        'application/json',
-      ],
+      type: '*/*',
       copyToCacheDirectory: true,
     });
     if (picked.canceled || !picked.assets?.[0]) return null;
     const asset = picked.assets[0];
+    const name = asset.name || 'document.pdf';
     return {
       id: makeId(),
       uri: asset.uri,
-      name: asset.name || 'document.pdf',
-      mimeType: asset.mimeType || 'application/pdf',
+      name,
+      mimeType: resolveMime(name, asset.mimeType, 'application/octet-stream'),
     };
   } catch {
     return null;

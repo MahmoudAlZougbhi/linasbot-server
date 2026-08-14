@@ -238,7 +238,12 @@ async def iter_owner_turn_v2_events(
     if attachment_ids:
         tool_args = {**(tool_args or {}), "attachment_id": attachment_ids[0]}
 
-    chat_messages = _build_messages(context=context, user_text=text, attachment_ids=attachment_ids)
+    chat_messages = _build_messages(
+        context=context,
+        user_text=text,
+        attachment_ids=attachment_ids,
+        tenant_id=tenant_id,
+    )
     tool_calls_acc: list[dict[str, Any]] = []
     cards_acc: list[dict[str, Any]] = []
     choices_acc: list[dict[str, Any]] = []
