@@ -93,4 +93,15 @@ def test_unified_chats_api_declares_channel_query() -> None:
     unified = Path("services/live_chat_service_unified.py").read_text(encoding="utf-8")
     assert "wanted_channel" in unified
     assert '"channel": row_channel' in unified
+    assert "if not search_val and not cursor and not state_values and not wanted_channel:" in unified
     assert "tiktok" in Path("services/live_chat_channel.py").read_text(encoding="utf-8")
+
+
+def test_unlabeled_index_rows_stay_visible_on_all() -> None:
+    unlabeled = {"user_id": "+96170123456", "last_message_text": "hi"}
+    assert live_chat_channel_matches(unlabeled, "all") is True
+    assert live_chat_channel_matches(unlabeled, "whatsapp") is True
+    ig = {"user_id": "psid", "customer_info": {"channel": "instagram_dm"}}
+    assert live_chat_channel_matches(ig, "all") is True
+    assert live_chat_channel_matches(ig, "instagram") is True
+    assert live_chat_channel_matches(ig, "tiktok") is False

@@ -41,7 +41,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint:lines": "node ../../scripts/check_source_line_limit.mjs mobile/linas-ai/src mobile/linas-ai/App.tsx",
-    "test": "npm run typecheck && node --test tests/*.test.mjs",
+    "test": "npm run typecheck && node --experimental-strip-types --test tests/*.test.mjs",
     "prebuild:check": "npm run typecheck && npm run lint:lines",
     "secret-scan": "node ../../scripts/scan_mobile_bundle_secrets.mjs"
   },

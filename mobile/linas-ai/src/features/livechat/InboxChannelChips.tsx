@@ -20,54 +20,61 @@ type Props = {
 export function InboxChannelChips({ selected, onSelect }: Props) {
   const { colors } = useTheme();
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.row}
-      accessibilityRole="tablist"
-    >
-      {CHIPS.map((chip) => {
-        const active = selected === chip.id;
-        return (
-          <Pressable
-            key={chip.id}
-            onPress={() => onSelect(chip.id)}
-            style={[
-              styles.chip,
-              {
-                backgroundColor: active ? colors.accentSoft : colors.surface,
-                borderColor: active ? colors.accent : colors.border,
-              },
-            ]}
-            accessibilityRole="tab"
-            accessibilityLabel={`Channel ${chip.label}`}
-            accessibilityState={{ selected: active }}
-          >
-            {chip.id !== 'all' ? (
-              <View style={styles.icon}>
-                <PlatformChannelIcon channel={chip.id as ChatChannel} size={22} />
-              </View>
-            ) : null}
-            <Text style={[styles.label, { color: active ? colors.text : colors.textMuted }]}>
-              {chip.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
+    <View style={styles.wrap}>
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+        showsHorizontalScrollIndicator={false}
+        style={styles.scroll}
+        contentContainerStyle={styles.row}
+        accessibilityRole="tablist"
+      >
+        {CHIPS.map((chip) => {
+          const active = selected === chip.id;
+          return (
+            <Pressable
+              key={chip.id}
+              onPress={() => onSelect(chip.id)}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor: active ? colors.accentSoft : colors.surface,
+                  borderColor: active ? colors.accent : colors.border,
+                },
+              ]}
+              accessibilityRole="tab"
+              accessibilityLabel={`Channel ${chip.label}`}
+              accessibilityState={{ selected: active }}
+            >
+              {chip.id !== 'all' ? (
+                <View style={styles.icon}>
+                  <PlatformChannelIcon channel={chip.id as ChatChannel} size={22} />
+                </View>
+              ) : null}
+              <Text style={[styles.label, { color: active ? colors.text : colors.textMuted }]}>
+                {chip.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 8, paddingBottom: 8 },
+  wrap: { flexGrow: 0, flexShrink: 0, marginBottom: 8 },
+  scroll: { flexGrow: 0 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 8 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     borderRadius: radii.pill,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     minHeight: 36,
   },
   icon: { width: 22, height: 22, overflow: 'hidden', borderRadius: 11 },

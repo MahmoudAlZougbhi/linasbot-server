@@ -49,7 +49,7 @@ export function useLiveChatInbox() {
         if (!data.success && data.error) {
           throw new Error(data.error);
         }
-        setChats(data.chats);
+        setChats(data.chats ?? []);
         setHasMore(Boolean(data.has_more));
         setNextCursor(data.next_cursor ?? null);
         setTotal(typeof data.total === 'number' ? data.total : data.chats.length);

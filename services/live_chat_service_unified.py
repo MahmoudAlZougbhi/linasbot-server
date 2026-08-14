@@ -441,7 +441,7 @@ class LiveChatUnifiedMixin:
                 next_cursor = f"{last.get('last_message_at', '')}|{last.get('conversation_id', '')}"
 
             total_returned = len(paged)
-            if not search_val and not cursor and not state_values:
+            if not search_val and not cursor and not state_values and not wanted_channel:
                 self._unified_chats_cache = paged
                 self._unified_chats_cache_time = utc_now()
                 self._unified_chats_cache_has_more = has_more

@@ -14,6 +14,7 @@ import { InboxChannelChips } from './InboxChannelChips';
 import { InboxFilterPills } from './InboxFilterPills';
 import { InboxSearchBar } from './InboxSearchBar';
 import type { LiveChatItem } from './liveChatTypes';
+import { matchesChannelFilter } from './liveChatTypes';
 import { useLiveChatInbox } from './useLiveChatInbox';
 
 type Props = {
@@ -41,14 +42,6 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
     loadMore,
   } = inbox;
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.accent} />
-      </View>
-    );
-  }
-
   if (errorKind === 'forbidden') {
     return (
       <EmptyState
@@ -64,15 +57,19 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
     );
   }
 
+  const visibleChats = chats.filter((item) => matchesChannelFilter(item, channel));
+
   return (
     <View style={styles.flex}>
-      <InboxSearchBar value={search} onChange={setSearch} />
-      <InboxChannelChips selected={channel} onSelect={setChannel} />
-      <InboxFilterPills selected={filter} onSelect={setFilter} />
-      {error ? <Text style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
+      <View style={styles.toolbar}>
+        <InboxSearchBar value={search} onChange={setSearch} />
+        <InboxChannelChips selected={channel} onSelect={setChannel} />
+        <InboxFilterPills selected={filter} onSelect={setFilter} />
+        {error ? <Text style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
+      </View>
       <FlatList
         style={styles.flex}
-        data={chats}
+        data={visibleChats}
         keyExtractor={(item) => item.conversation_id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
         contentContainerStyle={styles.list}
@@ -81,14 +78,20 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
         }}
         onEndReachedThreshold={0.4}
         ListEmptyComponent={
-          <EmptyState
-            title={channel === 'tiktok' ? 'No TikTok conversations' : 'No conversations yet'}
-            body={
-              channel === 'tiktok'
-                ? 'TikTok threads appear here when TikTok is connected. None are created as placeholders.'
-                : 'When customers message on WhatsApp, Instagram, or Messenger, they appear here. Pull to refresh.'
-            }
-          />
+          loading ? (
+            <View style={styles.center}>
+              <ActivityIndicator color={colors.accent} />
+            </View>
+          ) : (
+            <EmptyState
+              title={channel === 'tiktok' ? 'No TikTok conversations' : 'No conversations yet'}
+              body={
+                channel === 'tiktok'
+                  ? 'TikTok threads appear here when TikTok is connected. None are created as placeholders.'
+                  : 'When customers message on WhatsApp, Instagram, or Messenger, they appear here. Pull to refresh.'
+              }
+            />
+          )
         }
         ListFooterComponent={
           loadingMore ? (
@@ -105,7 +108,8 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  toolbar: { flexGrow: 0, flexShrink: 0 },
+  center: { paddingVertical: 48, alignItems: 'center', justifyContent: 'center' },
   list: { paddingBottom: 40, flexGrow: 1 },
   footer: { marginVertical: 12 },
   error: { fontFamily: fonts.body, marginBottom: spacing.sm, fontSize: 13 },
