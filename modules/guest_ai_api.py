@@ -104,7 +104,7 @@ async def ensure_guest_session(body: GuestSessionBody, request: Request) -> Any:
     try:
         session = guest_chat_store.get_or_create(
             body.guest_session_id,
-            greeting=build_guest_greeting(language=lang),
+            greeting=build_guest_greeting(language=lang, session_id=body.guest_session_id),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -184,7 +184,7 @@ async def send_guest_message(body: GuestMessageBody, request: Request) -> Any:
         )
         session = guest_chat_store.get_or_create(
             body.guest_session_id,
-            greeting=build_guest_greeting(language=lang0),
+            greeting=build_guest_greeting(language=lang0, session_id=body.guest_session_id),
         )
 
     if session.questions_used >= GUEST_MAX_QUESTIONS:

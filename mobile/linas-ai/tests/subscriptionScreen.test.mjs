@@ -196,6 +196,7 @@ test('planEntitlements maps included/not-included from catalog flags', () => {
   assert.match(src, /excluded\.push\('tiktok'\)/);
   assert.match(catalog, /lite:[\s\S]*?whatsapp:\s*false[\s\S]*?tiktok:\s*false/);
   assert.match(catalog, /starter:[\s\S]*?whatsapp:\s*true[\s\S]*?tiktok:\s*false/);
+  assert.match(catalog, /growth:[\s\S]*?whatsapp:\s*true[\s\S]*?tiktok:\s*true/);
   assert.match(catalog, /pro:[\s\S]*?whatsapp:\s*true[\s\S]*?tiktok:\s*true/);
   assert.match(catalog, /max:[\s\S]*?whatsapp:\s*true[\s\S]*?tiktok:\s*true/);
 });

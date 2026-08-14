@@ -15,7 +15,7 @@ def test_whatsapp_tiktok_matrix_matches_product() -> None:
     assert PLAN_CATALOG["starter"].whatsapp is True
     assert PLAN_CATALOG["starter"].tiktok is False
     assert PLAN_CATALOG["growth"].whatsapp is True
-    assert PLAN_CATALOG["growth"].tiktok is False
+    assert PLAN_CATALOG["growth"].tiktok is True
     assert PLAN_CATALOG["pro"].whatsapp is True
     assert PLAN_CATALOG["pro"].tiktok is True
     assert PLAN_CATALOG["max"].whatsapp is True
