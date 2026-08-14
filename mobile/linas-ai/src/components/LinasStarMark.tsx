@@ -8,6 +8,8 @@ type Props = {
   labeled?: boolean;
   label?: string;
   labelColor?: string;
+  /** Name size when labeled. Sparkle stays `size` so the mark can be slightly larger. */
+  labelSize?: number;
   style?: ViewStyle;
 };
 
@@ -17,10 +19,13 @@ export function LinasStarMark({
   labeled = false,
   label = 'Linas',
   labelColor,
+  labelSize,
   style,
 }: Props) {
   const { colors } = useTheme();
   const titleColor = labelColor ?? colors.text;
+  const nameSize = labelSize ?? size;
+  const nameLineHeight = Math.ceil(nameSize * 1.4);
   return (
     <View
       style={[styles.row, style]}
@@ -32,7 +37,7 @@ export function LinasStarMark({
         <Text
           style={[
             styles.label,
-            { color: titleColor, fontSize: size, lineHeight: size },
+            { color: titleColor, fontSize: nameSize, lineHeight: nameLineHeight },
           ]}
         >
           {label}
@@ -43,6 +48,12 @@ export function LinasStarMark({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    direction: 'ltr',
+    overflow: 'visible',
+  },
   label: { fontFamily: fonts.bodyMedium, fontWeight: '700' },
 });

@@ -4,7 +4,12 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { ChatMessage } from '../../api/types';
 import { LinasStarMark } from '../../components/LinasStarMark';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
-import { aiMessageColStyle, aiMessageRowStyle, textDirectionStyle } from '../../lib/textDirection';
+import {
+  aiMessageColStyle,
+  aiMessageHeaderStyle,
+  aiMessageRowStyle,
+  textDirectionStyle,
+} from '../../lib/textDirection';
 import { fonts, radii, spacing, typography, useTheme } from '../../theme';
 import { AiMessageBody } from './AiMessageBody';
 import { MessageActions } from './MessageActions';
@@ -55,29 +60,24 @@ export function ChatBubble({
         isUser ? styles.rowUser : [styles.rowAi, aiMessageRowStyle(message.content)],
       ]}
     >
-      <View
-        style={[
-          styles.col,
-          isUser ? styles.colUser : [styles.colAi, aiMessageColStyle(message.content)],
-        ]}
-      >
+      <View style={[styles.col, isUser ? styles.colUser : styles.colAi]}>
         {isUser ? (
           <Text style={[styles.userLabel, { color: colors.textDim }]}>{userLabel}</Text>
         ) : (
-          <View style={styles.aiLabelRow}>
-            <LinasStarMark size={12} labeled label={linasLabel} labelColor={colors.text} />
+          <View style={[styles.aiLabelRow, aiMessageHeaderStyle]}>
+            <LinasStarMark
+              size={16}
+              labelSize={13}
+              labeled
+              label={linasLabel}
+              labelColor={colors.text}
+            />
           </View>
         )}
-        <View
-          style={[
-            isUser
-              ? [styles.bubble, { backgroundColor: colors.bubbleUser }]
-              : styles.aiBody,
-          ]}
-        >
-          {thumbs?.length ? <MessageImageThumbs uris={thumbs} /> : null}
-          {hasText ? (
-            isUser ? (
+        {isUser ? (
+          <View style={[styles.bubble, { backgroundColor: colors.bubbleUser }]}>
+            {thumbs?.length ? <MessageImageThumbs uris={thumbs} /> : null}
+            {hasText ? (
               <Text
                 style={[
                   styles.textUser,
@@ -88,22 +88,29 @@ export function ChatBubble({
               >
                 {displayText}
               </Text>
-            ) : animate && !done ? (
-              <Text
-                style={[styles.textAi, { color: colors.bubbleAiText }, dirStyle]}
-                accessibilityLabel={message.content}
-              >
-                {displayText}
-                {cursorOn ? <Text style={{ color: colors.accent }}>|</Text> : null}
-              </Text>
-            ) : (
-              <AiMessageBody content={displayText} />
-            )
-          ) : null}
-        </View>
-        {!isUser && showActions ? (
-          <MessageActions text={message.content} onRetry={onRetry} />
-        ) : null}
+            ) : null}
+          </View>
+        ) : (
+          <View style={[styles.aiBodyCol, aiMessageColStyle(message.content)]}>
+            <View style={styles.aiBody}>
+              {thumbs?.length ? <MessageImageThumbs uris={thumbs} /> : null}
+              {hasText ? (
+                animate && !done ? (
+                  <Text
+                    style={[styles.textAi, { color: colors.bubbleAiText }, dirStyle]}
+                    accessibilityLabel={message.content}
+                  >
+                    {displayText}
+                    {cursorOn ? <Text style={{ color: colors.accent }}>|</Text> : null}
+                  </Text>
+                ) : (
+                  <AiMessageBody content={displayText} />
+                )
+              ) : null}
+            </View>
+            {showActions ? <MessageActions text={message.content} onRetry={onRetry} /> : null}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -117,7 +124,7 @@ const styles = StyleSheet.create({
   rowAi: { alignSelf: 'flex-start', maxWidth: '88%' },
   col: { flexShrink: 1 },
   colUser: { alignItems: 'flex-end' },
-  colAi: { alignItems: 'flex-start' },
+  colAi: { width: '100%' },
   userLabel: {
     fontFamily: fonts.body,
     fontSize: 12,
@@ -125,7 +132,15 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   aiLabelRow: {
+    alignSelf: 'flex-start',
+    paddingTop: 4,
+    paddingBottom: 2,
     marginBottom: 4,
+    overflow: 'visible',
+  },
+  aiBodyCol: {
+    width: '100%',
+    alignSelf: 'stretch',
   },
   bubble: {
     borderRadius: radii.bubble,

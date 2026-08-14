@@ -116,7 +116,7 @@ test('model chip maps chat/work to existing 5.6 LIN Low/High ids', () => {
   assert.match(en, /linEffortHighSub:\s*'More powerful'/);
 });
 
-test('chat thread starts high; sparkle matches Linas name; send is sparkle teal', () => {
+test('chat thread starts high; sparkle slightly larger than Linas name; send is sparkle teal', () => {
   const screen = read('features/chat/ChatScreen.tsx');
   const scroll = read('features/chat/useChatListScroll.ts');
   const toggle = read('features/chat/ChatModeToggle.tsx');
@@ -130,8 +130,11 @@ test('chat thread starts high; sparkle matches Linas name; send is sparkle teal'
   assert.match(toggle, /position:\s*'absolute'/);
   assert.match(bubble, /labelColor=\{colors\.text\}/);
   assert.match(drawer, /styles\.wordmark, \{ color: colors\.text \}/);
-  assert.match(mark, /fontSize:\s*size/);
-  assert.match(mark, /lineHeight:\s*size/);
+  assert.match(bubble, /size=\{16\}/);
+  assert.match(bubble, /labelSize=\{13\}/);
+  assert.match(mark, /labelSize/);
+  assert.match(mark, /direction:\s*'ltr'/);
+  assert.doesNotMatch(mark, /lineHeight:\s*size/);
   assert.match(composer, /backgroundColor: colors\.accent \}/);
   assert.match(composer, /isRtl/);
 });
