@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Animated,
   Keyboard,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -183,7 +184,11 @@ export function ChatComposer({
     </Pressable>
   ) : (
     <Pressable
-      style={[styles.sendInside, { backgroundColor: colors.accentDeep }]}
+      style={[
+        styles.sendInside,
+        { backgroundColor: colors.accentDeep },
+        (sending || !canSend || voiceBusy) && styles.sendDisabled,
+      ]}
       onPress={handleSend}
       disabled={sending || !canSend || voiceBusy}
       accessibilityLabel={tr('composerSend')}
@@ -238,7 +243,7 @@ export function ChatComposer({
             hitSlop={6}
           >
             <PlusCircleGlyph
-              color={colors.textMuted}
+              color={colors.text}
               backgroundColor={colors.featuredIconBg}
               borderColor={colors.featuredIconBorder}
             />
@@ -262,6 +267,10 @@ export function ChatComposer({
                 height: inputHeight,
                 textAlign: inputTextAlign,
                 writingDirection: draftEmpty ? 'ltr' : draftDir.writingDirection,
+                paddingTop:
+                  Platform.OS === 'ios' && singleLine
+                    ? Math.max(0, (COMPOSER_INPUT_MIN_H - COMPOSER_INPUT_LINE_HEIGHT) / 2)
+                    : 0,
               },
             ]}
             placeholder=""
@@ -380,6 +389,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
+  sendDisabled: { opacity: 0.45 },
   disclaimer: {
     fontFamily: fonts.body,
     fontSize: 11,

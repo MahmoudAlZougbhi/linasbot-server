@@ -62,9 +62,10 @@ test('composer: pill with plus, placeholder, mic, in-pill send, disclaimer', () 
   assert.match(glyphs, /ion\('arrow-up'\)/);
   assert.match(glyphs, /feather\('mic'\)/);
   assert.match(composer, /backgroundColor=\{colors\.featuredIconBg\}/);
-  assert.match(composer, /minHeight:\s*52/);
+  assert.match(composer, /borderColor=\{colors\.featuredIconBorder\}/);
   assert.match(composer, /placeholderWrap/);
   assert.match(composer, /justifyContent:\s*'center'/);
+  assert.match(composer, /minHeight:\s*52/);
   assert.match(en, /composerPlaceholder:\s*'Chat with Linas'/);
   assert.match(en, /composerPlaceholderChat:\s*'Chat with Linas'/);
   assert.match(en, /composerPlaceholderWork:\s*'Work with Linas'/);

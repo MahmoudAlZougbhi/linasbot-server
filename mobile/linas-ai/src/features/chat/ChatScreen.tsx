@@ -346,13 +346,13 @@ export function ChatScreen({
           }
         />
         </View>
-        <ChatHeader
-          onOpenMenu={() => {
-            Keyboard.dismiss();
-            setDrawerOpen(true);
-          }}
-        />
       </KeyboardAvoidingView>
+      <ChatHeader
+        onOpenMenu={() => {
+          Keyboard.dismiss();
+          setDrawerOpen(true);
+        }}
+      />
 
       <ChatScreenOverlays
         drawerOpen={drawerOpen}
