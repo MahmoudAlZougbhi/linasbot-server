@@ -25,6 +25,8 @@ test('chat header: overlay hamburger only in light-gray square', () => {
   assert.match(header, /colors\.featuredIconBorder/);
   assert.match(header, /MenuIcon/);
   assert.match(header, /ChatTopFade/);
+  assert.match(header, /LIST_BELOW_OVERLAY_GAP = spacing\.md \+ spacing\.sm/);
+  assert.match(header, /CHAT_LIST_TOP_CLEARANCE = HEADER_HIT \+ HEADER_TOP_GAP \+ LIST_BELOW_OVERLAY_GAP/);
   assert.match(header, /position:\s*'absolute'/);
   assert.match(header, /pointerEvents="box-none"/);
   assert.match(header, /right:\s*0/);
