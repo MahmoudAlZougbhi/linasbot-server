@@ -58,15 +58,21 @@ test('composer: pill with plus, placeholder, mic, in-pill send, disclaimer', () 
   assert.match(composer, /direction:\s*'ltr'/);
   assert.match(glyphs, /COMPOSER_SEND_SIZE = 36/);
   assert.match(glyphs, /COMPOSER_PLUS_DISK = 32/);
-  assert.match(glyphs, /ion\('add'\)/);
+  assert.match(glyphs, /PLUS_STROKE = 1\.75/);
   assert.match(glyphs, /ion\('arrow-up'\)/);
-  assert.match(glyphs, /ion\('mic-outline'\)/);
+  assert.match(glyphs, /feather\('mic'\)/);
   assert.match(composer, /backgroundColor=\{colors\.featuredIconBg\}/);
+  assert.match(composer, /borderColor=\{colors\.featuredIconBorder\}/);
+  assert.match(composer, /placeholderWrap/);
   assert.match(composer, /minHeight:\s*52/);
-  assert.match(en, /composerPlaceholder:\s*'Message Linas AI'/);
+  assert.match(en, /composerPlaceholder:\s*'Chat with Linas'/);
+  assert.match(en, /composerPlaceholderChat:\s*'Chat with Linas'/);
+  assert.match(en, /composerPlaceholderWork:\s*'Work with Linas'/);
   assert.match(en, /composerDisclaimer:\s*'Linas can make mistakes\. Check important info\.'/);
-  assert.match(ar, /composerPlaceholder:\s*'راسل Linas AI'/);
-  assert.match(fr, /composerPlaceholder:\s*'Messagez Linas AI'/);
+  assert.match(ar, /composerPlaceholderChat:\s*'دردش مع Linas'/);
+  assert.match(ar, /composerPlaceholderWork:\s*'اعمل مع Linas'/);
+  assert.match(fr, /composerPlaceholderChat:\s*'Discutez avec Linas'/);
+  assert.match(fr, /composerPlaceholderWork:\s*'Travaillez avec Linas'/);
 });
 
 test('model chip maps chat/work to existing 5.6 LIN Low/High ids', () => {
