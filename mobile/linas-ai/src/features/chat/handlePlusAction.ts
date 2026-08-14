@@ -1,4 +1,4 @@
-import type { PlusAction } from './ComposerPlusSheet';
+import type { PlusAction } from './ComposerPlusMenu';
 import {
   MAX_IMAGES,
   pickDocumentAttachment,
