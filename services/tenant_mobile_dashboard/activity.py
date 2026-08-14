@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from typing import Any
 
+from services.tenant_mobile_dashboard.copilot import build_owner_copilot_summary
 from services.tenant_mobile_dashboard.usage import _is_failure, _load_entries, _normalize_usage_bucket
 from services.wallet_spend_analytics import _entry_matches_tenant, _parse_ts
 
@@ -112,50 +112,6 @@ def _request_counts_by_platform(
         return {key: 0 for key in _ACTIVITY_PLATFORMS}, 0, "unavailable"
 
 
-def _owner_copilot_stats(
-    tenant_id: str,
-    *,
-    start_ts: float,
-    end_ts: float,
-    owner_copilot_interactions: int,
-    owner_copilot_credits: int,
-) -> dict[str, Any]:
-    chats = 0
-    users: set[str] = set()
-    try:
-        from pathlib import Path
-
-        from services.owner_chat_store import OwnerChatStore
-
-        store = OwnerChatStore()
-        tenant_dir: Path = store._tenant_dir(tenant_id)
-        for path in tenant_dir.glob("*.json"):
-            try:
-                data = json.loads(path.read_text(encoding="utf-8"))
-            except Exception:
-                continue
-            if data.get("deleted"):
-                continue
-            updated = float(data.get("updated_at") or 0)
-            created = float(data.get("created_at") or 0)
-            active_at = max(updated, created)
-            if active_at < start_ts or active_at >= end_ts:
-                continue
-            chats += 1
-            uid = str(data.get("user_id") or "").strip()
-            if uid:
-                users.add(uid)
-    except Exception:
-        pass
-    return {
-        "credits": owner_copilot_credits,
-        "chats": chats,
-        "users": len(users),
-        "interactions": owner_copilot_interactions,
-        "credits_source": "interaction_logs_estimate" if owner_copilot_credits else "none",
-    }
-
-
 def build_activity_summary(
     tenant_id: str,
     *,
@@ -170,8 +126,9 @@ def build_activity_summary(
     scoped = [e for e in (entries if entries is not None else _load_entries()) if _entry_matches_tenant(e, tid)]
 
     platform_rows = {key: _empty_platform_row() for key in _ACTIVITY_PLATFORMS}
-    owner_copilot_credits = 0
     owner_copilot_interactions = 0
+    log_credits_by_conversation: dict[str, int] = {}
+    log_credits_unmapped = 0
 
     for entry in scoped:
         ts = _parse_ts(entry.get("timestamp"))
@@ -187,7 +144,11 @@ def build_activity_summary(
 
         if bucket == "owner_copilot":
             owner_copilot_interactions += 1
-            owner_copilot_credits += credits
+            cid = str(entry.get("conversation_id") or "").strip()
+            if cid:
+                log_credits_by_conversation[cid] = log_credits_by_conversation.get(cid, 0) + credits
+            else:
+                log_credits_unmapped += credits
             continue
 
         if platform not in platform_rows:
@@ -215,8 +176,6 @@ def build_activity_summary(
     for platform in _ACTIVITY_PLATFORMS:
         is_connected = bool(connected.get(platform))
         coming_soon = platform == "tiktok" and not is_connected
-        if platform == "tiktok" and not is_connected:
-            continue
         row = platform_rows[platform]
         channels.append(
             {
@@ -241,12 +200,13 @@ def build_activity_summary(
             "requests": req_total,
         },
         "channels": channels,
-        "owner_copilot": _owner_copilot_stats(
+        "owner_copilot": build_owner_copilot_summary(
             tid,
             start_ts=start_ts,
             end_ts=end_ts,
-            owner_copilot_interactions=owner_copilot_interactions,
-            owner_copilot_credits=owner_copilot_credits,
+            log_credits_by_conversation=log_credits_by_conversation,
+            log_credits_unmapped=log_credits_unmapped,
+            log_interactions=owner_copilot_interactions,
         ),
         "requests_source": req_source,
         "credits_by_channel_note": (

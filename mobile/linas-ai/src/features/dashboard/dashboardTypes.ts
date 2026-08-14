@@ -227,6 +227,17 @@ export const TenantDashboardSchema = z.object({
           credits: z.number(),
           chats: z.number(),
           users: z.number(),
+          by_user: z
+            .array(
+              z.object({
+                user_id: z.string().nullable().optional(),
+                name: z.string().nullable().optional(),
+                chats: z.number(),
+                credits: z.number(),
+                unattributed: z.boolean().optional(),
+              }),
+            )
+            .optional(),
           interactions: z.number().optional(),
           credits_source: z.string().optional(),
         })

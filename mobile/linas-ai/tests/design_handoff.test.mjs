@@ -655,6 +655,46 @@ test('Buy credits sheet matches design handoff', () => {
   assert.match(en, /Purchased credits do not expire/);
 });
 
+test('Dashboard sections match design handoff', () => {
+  const screen = read('features/dashboard/DashboardScreen.tsx');
+  const header = read('features/dashboard/sections/DashboardHeader.tsx');
+  const plan = read('features/dashboard/sections/GrowthPlanCard.tsx');
+  const grid = read('features/dashboard/sections/TotalActivityGrid.tsx');
+  const table = read('features/dashboard/sections/ChannelActivityTable.tsx');
+  const copilot = read('features/dashboard/sections/OwnerCopilotCard.tsx');
+  const chrome = read('features/dashboard/dashboardChrome.ts');
+  const en = read('i18n/locales/dashboardEn.ts');
+  const ar = read('i18n/locales/dashboardAr.ts');
+  const fr = read('i18n/locales/dashboardFr.ts');
+  assert.match(chrome, /DASH_FOREST = '#064E3B'/);
+  assert.match(chrome, /DASH_MINT = '#4ADE80'/);
+  assert.match(chrome, /DASH_CARD_RADIUS = 16/);
+  assert.match(chrome, /DASH_BAR_HEIGHT = 6/);
+  assert.match(screen, /BuyCreditsSheet/);
+  assert.match(screen, /useBuyCreditsFlow/);
+  assert.match(screen, /onBuyCredits=\{\(\) => credits\.setOpen\(true\)\}/);
+  assert.match(screen, /onUpgrade=\{\(\) => onNavigate\('subscription'\)\}/);
+  assert.doesNotMatch(screen, /centerTitle/);
+  assert.match(header, /calendar-outline/);
+  assert.match(header, /dashCustomRange/);
+  assert.match(header, /chevron-down/);
+  assert.match(plan, /dashPlanTitle/);
+  assert.match(plan, /dashBuyCredits/);
+  assert.match(plan, /DASH_MINT/);
+  assert.match(plan, /buyBtn/);
+  assert.match(grid, /dashTotalActivity/);
+  assert.match(grid, /bag-handle-outline/);
+  assert.match(grid, /DASH_ICON_BG/);
+  assert.match(table, /dashActivityByChannel/);
+  assert.match(table, /IntegrationPlatformIcon/);
+  assert.match(copilot, /dashOwnerCopilot/);
+  assert.match(copilot, /by_user/);
+  assert.match(copilot, /dashCopilotUserMeta/);
+  assert.match(en, /Owner Copilot/);
+  assert.match(ar, /مساعد المالك/);
+  assert.match(fr, /Copilote propriétaire/);
+});
+
 test('Customer AI Limits screen matches design handoff', () => {
   const editor = read('features/cm/editors/AiLimitsEditor.tsx');
   const field = read('features/cm/editors/AiLimitsPencilField.tsx');

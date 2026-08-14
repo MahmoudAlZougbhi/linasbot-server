@@ -4,7 +4,10 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, T
 import { EmptyState } from '../../components/EmptyState';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, spacing, useTheme } from '../../theme';
+import { BuyCreditsSheet } from '../billing/BuyCreditsSheet';
+import { useBuyCreditsFlow } from '../billing/useBuyCreditsFlow';
 import { ScreenChrome } from '../shared/ScreenChrome';
+import { DASH_CANVAS } from './dashboardChrome';
 import type { DashboardNavigateTarget } from './dashboardTypes';
 import { ChannelActivityTable } from './sections/ChannelActivityTable';
 import { DashboardHeader } from './sections/DashboardHeader';
@@ -32,11 +35,12 @@ export function DashboardScreen({ onNavigate }: Props) {
   const { tr, language } = useI18n();
   const { period, setPeriod, state, refreshing, refresh } = useTenantDashboard();
   const [copilotExpanded, setCopilotExpanded] = useState(false);
+  const credits = useBuyCreditsFlow(refresh);
 
   return (
     <ScreenChrome
       title={tr('dashTitle')}
-      centerTitle
+      canvasColor={DASH_CANVAS}
       headerRight={<DashboardRefreshButton onRefresh={refresh} refreshing={refreshing} />}
     >
       {state.kind === 'loading' ? (
@@ -91,7 +95,7 @@ export function DashboardScreen({ onNavigate }: Props) {
           <GrowthPlanCard
             plan={state.data.plan_and_credits}
             locale={language === 'ar' ? 'ar' : language === 'fr' ? 'fr' : 'en'}
-            onBuyCredits={() => onNavigate('buy_credits')}
+            onBuyCredits={() => credits.setOpen(true)}
             onUpgrade={() => onNavigate('subscription')}
           />
 
@@ -113,12 +117,22 @@ export function DashboardScreen({ onNavigate }: Props) {
           />
         </ScrollView>
       ) : null}
+
+      <BuyCreditsSheet
+        visible={credits.open}
+        prices={credits.prices}
+        purchasing={credits.purchasing}
+        locale={credits.locale}
+        tr={credits.tr}
+        onClose={() => credits.setOpen(false)}
+        onBuy={(pack) => void credits.buy(pack)}
+      />
     </ScreenChrome>
   );
 }
 
 const styles = StyleSheet.create({
-  list: { paddingBottom: 48, gap: spacing.md },
+  list: { paddingBottom: 48, gap: 14 },
   center: { paddingVertical: spacing.xl, alignItems: 'center' },
   banner: {
     borderWidth: 1,

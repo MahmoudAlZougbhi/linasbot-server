@@ -1,9 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useI18n } from '../../../i18n/LanguageContext';
 import type { StringKey } from '../../../i18n/locales/en';
-import { fonts, radii, spacing, useTheme } from '../../../theme';
+import { fonts, spacing, useTheme } from '../../../theme';
+import { IntegrationPlatformIcon } from '../../integrations/IntegrationPlatformIcon';
+import { DASH_CARD_RADIUS } from '../dashboardChrome';
 import { formatCount } from '../dashboardFormat';
 import type { TenantDashboard } from '../dashboardTypes';
 
@@ -19,13 +20,6 @@ const PLATFORM_LABEL: Record<string, StringKey> = {
   facebook: 'platformFacebook',
   tiktok: 'platformTikTok',
   whatsapp: 'platformWhatsApp',
-};
-
-const PLATFORM_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
-  instagram: 'logo-instagram',
-  facebook: 'logo-facebook',
-  tiktok: 'logo-tiktok',
-  whatsapp: 'logo-whatsapp',
 };
 
 const ACTIVE_DOT = '#22C55E';
@@ -58,16 +52,18 @@ export function ChannelActivityTable({ channels, unavailable }: Props) {
         </Text>
       ) : (
         rows.map((row) => (
-          <View
-            key={row.platform}
-            style={[styles.dataRow, { borderBottomColor: colors.borderSoft }]}
-          >
+          <View key={row.platform} style={[styles.dataRow, { borderBottomColor: colors.borderSoft }]}>
             <View style={styles.nameCol}>
               <View style={styles.logoWrap}>
-                <Ionicons
-                  name={PLATFORM_ICON[row.platform] ?? 'globe-outline'}
-                  size={22}
-                  color={colors.text}
+                <IntegrationPlatformIcon
+                  platform={
+                    row.platform === 'facebook' ||
+                    row.platform === 'whatsapp' ||
+                    row.platform === 'tiktok'
+                      ? row.platform
+                      : 'instagram'
+                  }
+                  size={28}
                 />
                 {row.connected ? <View style={[styles.dot, { backgroundColor: ACTIVE_DOT }]} /> : null}
               </View>
@@ -97,10 +93,7 @@ function HeaderCell({
   wide?: boolean;
 }) {
   return (
-    <Text
-      style={[styles.headerCell, wide && styles.wideCell, { color: colors.textDim }]}
-      numberOfLines={1}
-    >
+    <Text style={[styles.headerCell, wide && styles.wideCell, { color: colors.textDim }]} numberOfLines={1}>
       {label}
     </Text>
   );
@@ -123,18 +116,18 @@ function DataCell({
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: radii.lg, borderWidth: 1, padding: spacing.lg, gap: spacing.sm },
+  card: { borderRadius: DASH_CARD_RADIUS, borderWidth: 1, padding: spacing.lg, gap: spacing.sm },
   title: { fontFamily: fonts.bodyMedium, fontSize: 16, fontWeight: '700', marginBottom: 4 },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     paddingBottom: spacing.sm,
   },
   dataRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     paddingVertical: spacing.sm + 2,
   },
   nameCol: { flex: 1.35, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minWidth: 0 },
@@ -150,17 +143,7 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
   },
   platformName: { fontFamily: fonts.bodyMedium, fontSize: 14, flexShrink: 1 },
-  headerCell: {
-    flex: 0.55,
-    fontFamily: fonts.body,
-    fontSize: 11,
-    textAlign: 'right',
-  },
-  dataCell: {
-    flex: 0.55,
-    fontFamily: fonts.bodyMedium,
-    fontSize: 13,
-    textAlign: 'right',
-  },
+  headerCell: { flex: 0.55, fontFamily: fonts.body, fontSize: 11, textAlign: 'right' },
+  dataCell: { flex: 0.55, fontFamily: fonts.bodyMedium, fontSize: 13, textAlign: 'right' },
   wideCell: { flex: 0.75 },
 });

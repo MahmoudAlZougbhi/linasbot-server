@@ -271,6 +271,28 @@ class OwnerChatStore:
         self._write(conv)
         return True
 
+    def iter_tenant_conversation_meta(self, tenant_id: str) -> list[dict[str, Any]]:
+        """Tenant-wide conversation index (no message bodies) for Dashboard Copilot stats."""
+        items: list[dict[str, Any]] = []
+        with self._lock:
+            for path in self._tenant_dir(tenant_id).glob("*.json"):
+                try:
+                    data = json.loads(path.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                if data.get("deleted"):
+                    continue
+                items.append(
+                    {
+                        "id": str(data.get("id") or path.stem),
+                        "user_id": str(data.get("user_id") or "").strip(),
+                        "created_at": float(data.get("created_at") or 0),
+                        "updated_at": float(data.get("updated_at") or 0),
+                        "has_user_message": messages_include_user_turn(data.get("messages")),
+                    }
+                )
+        return items
+
     def soft_delete(self, *, tenant_id: str, user_id: str, conversation_id: str) -> bool:
         conv = self.get_conversation(tenant_id=tenant_id, user_id=user_id, conversation_id=conversation_id)
         if conv is None:
