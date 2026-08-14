@@ -49,8 +49,8 @@ def _whatsapp_for(plan_id: PlanId) -> bool:
 
 
 def _tiktok_for(plan_id: PlanId) -> bool:
-    """TikTok DMs + comments: Pro and Max only (channel ships behind this flag)."""
-    return plan_id in {"pro", "max"}
+    """TikTok DMs + comments: Growth, Pro, and Max (channel ships behind this flag)."""
+    return plan_id in {"growth", "pro", "max"}
 
 
 def _build_catalog() -> dict[str, PlanDefinition]:
