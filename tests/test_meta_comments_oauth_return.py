@@ -223,12 +223,12 @@ def test_mobile_integrations_oauth_and_deeplink_source_contract() -> None:
 
     root = Path(__file__).resolve().parents[1] / "mobile" / "linas-ai" / "src"
     oauth = (root / "features/integrations/integrationsOAuth.ts").read_text(encoding="utf-8")
-    screen = (root / "features/integrations/IntegrationsScreen.tsx").read_text(encoding="utf-8")
+    load = (root / "features/integrations/useIntegrationsLoad.ts").read_text(encoding="utf-8")
     nav = (root / "app/navigation.ts").read_text(encoding="utf-8")
     shell = (root / "app/AppShell.tsx").read_text(encoding="utf-8")
     assert "return_surface: MOBILE_RETURN_SURFACE" in oauth or "return_surface: 'mobile'" in oauth
-    assert "AppState.addEventListener" in screen
-    assert "parseIntegrationsDeepLink" in screen
+    assert "AppState.addEventListener" in load
+    assert "parseIntegrationsDeepLink" in load
     assert "parseIntegrationsDeepLink" in nav
     assert "linasai://" in nav or "integrations" in nav
     assert "parseIntegrationsDeepLink" in shell
