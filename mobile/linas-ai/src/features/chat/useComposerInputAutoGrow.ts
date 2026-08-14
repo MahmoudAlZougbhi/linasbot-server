@@ -1,12 +1,23 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { TextInput } from 'react-native';
 
-/** Composer field line metrics — keep in sync with ChatComposer `styles.input`. */
-export const COMPOSER_INPUT_LINE_HEIGHT = 22;
-export const COMPOSER_INPUT_MAX_LINES = 8;
-/** Single-line height inside the 52px pill (padding + icons). */
-export const COMPOSER_INPUT_MIN_H = 36;
-export const COMPOSER_INPUT_MAX_H = COMPOSER_INPUT_LINE_HEIGHT * COMPOSER_INPUT_MAX_LINES;
+import {
+  COMPOSER_INPUT_MAX_H,
+  COMPOSER_INPUT_MIN_H,
+  debounceComposerHeight,
+  targetComposerInputHeight,
+} from './composerInputHeight';
+
+export {
+  COMPOSER_GROW_SLACK,
+  COMPOSER_INPUT_LINE_HEIGHT,
+  COMPOSER_INPUT_MAX_H,
+  COMPOSER_INPUT_MAX_LINES,
+  COMPOSER_INPUT_MIN_H,
+  COMPOSER_IOS_PAD_TOP,
+  COMPOSER_PILL_MIN_H,
+  COMPOSER_PILL_PAD_V,
+} from './composerInputHeight';
 
 /** RN multiline TextInput exposes ScrollView-like scrollToEnd at runtime. */
 type ScrollableTextInput = TextInput & {
@@ -15,7 +26,8 @@ type ScrollableTextInput = TextInput & {
 
 /**
  * Auto-grow composer field up to 8 lines; once capped, scrollToEnd so the
- * caret / newest text stays visible.
+ * caret / newest text stays visible. Height stays on a single-line bucket
+ * until content actually wraps — iOS contentSize bounce is debounced.
  */
 export function useComposerInputAutoGrow(
   draft: string,
@@ -23,6 +35,10 @@ export function useComposerInputAutoGrow(
 ) {
   const [inputHeight, setInputHeight] = useState(COMPOSER_INPUT_MIN_H);
   const localInputRef = useRef<TextInput | null>(null);
+  const heightRef = useRef(COMPOSER_INPUT_MIN_H);
+  const pendingRef = useRef<number | null>(null);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const atMaxHeight = inputHeight >= COMPOSER_INPUT_MAX_H;
 
   function assignInputRef(node: TextInput | null) {
@@ -37,27 +53,42 @@ export function useComposerInputAutoGrow(
     node?.scrollToEnd?.({ animated: false });
   }
 
-  function handleContentSizeChange(contentHeight: number) {
-    const contentH = Math.ceil(contentHeight);
-    const next = Math.min(
-      COMPOSER_INPUT_MAX_H,
-      Math.max(COMPOSER_INPUT_MIN_H, contentH),
-    );
+  function commitHeight(next: number) {
+    if (next === heightRef.current) return;
+    heightRef.current = next;
     setInputHeight(next);
-    if (contentH >= COMPOSER_INPUT_MAX_H) {
+    if (next >= COMPOSER_INPUT_MAX_H) {
       requestAnimationFrame(scrollComposerToEnd);
     }
   }
 
+  function handleContentSizeChange(contentHeight: number) {
+    const currentDraft = draftRef.current;
+    if (!currentDraft.trim()) {
+      pendingRef.current = null;
+      commitHeight(COMPOSER_INPUT_MIN_H);
+      return;
+    }
+    const target = targetComposerInputHeight(contentHeight, currentDraft);
+    const next = debounceComposerHeight(target, heightRef.current, pendingRef.current);
+    pendingRef.current = next.pending;
+    commitHeight(next.height);
+  }
+
   function handleChangeText(next: string, onChangeDraft: (v: string) => void) {
     onChangeDraft(next);
-    // Voice append / paste can grow past the cap without a fresh size event
-    // on the same frame — keep the caret end visible once capped.
+    if (!next.trim()) {
+      pendingRef.current = null;
+      commitHeight(COMPOSER_INPUT_MIN_H);
+    }
     if (atMaxHeight) requestAnimationFrame(scrollComposerToEnd);
   }
 
   useEffect(() => {
-    if (!draft.trim()) setInputHeight(COMPOSER_INPUT_MIN_H);
+    if (!draft.trim()) {
+      pendingRef.current = null;
+      commitHeight(COMPOSER_INPUT_MIN_H);
+    }
   }, [draft]);
 
   return {

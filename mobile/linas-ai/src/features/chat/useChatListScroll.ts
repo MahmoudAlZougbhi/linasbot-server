@@ -14,7 +14,7 @@ import { FlatList, Keyboard, Platform } from 'react-native';
  */
 export function useChatListScroll() {
   const listRef = useRef<FlatList>(null);
-  const stickToBottomRef = useRef(true);
+  const stickToBottomRef = useRef(false);
 
   /** Pin to latest and scroll — send, FAB, open chat, etc. */
   const scrollToBottom = useCallback((animated = true) => {
@@ -33,7 +33,15 @@ export function useChatListScroll() {
     });
   }, []);
 
-  const armOpenAtLatest = useCallback(() => {
+  const armOpenAtLatest = useCallback((opts?: { pinToLatest?: boolean }) => {
+    if (opts?.pinToLatest === false) {
+      stickToBottomRef.current = false;
+      const run = () => listRef.current?.scrollToOffset({ offset: 0, animated: false });
+      requestAnimationFrame(run);
+      setTimeout(run, 50);
+      setTimeout(run, 180);
+      return;
+    }
     stickToBottomRef.current = true;
     const run = (animated: boolean) => listRef.current?.scrollToEnd({ animated });
     requestAnimationFrame(() => run(false));

@@ -56,6 +56,8 @@ test('chat header: overlay hamburger only in light-gray square', () => {
 
 test('composer: pill with plus, placeholder, mic, in-pill send, disclaimer', () => {
   const composer = read('features/chat/ChatComposer.tsx');
+  const pill = read('features/chat/composerStyles.ts');
+  const height = read('features/chat/composerInputHeight.ts');
   const glyphs = read('features/chat/ComposerGlyphs.tsx');
   const en = read('i18n/locales/en.ts');
   const ar = read('i18n/locales/ar.ts');
@@ -66,7 +68,7 @@ test('composer: pill with plus, placeholder, mic, in-pill send, disclaimer', () 
   assert.match(composer, /sendInside/);
   assert.doesNotMatch(composer, /sendOutside/);
   assert.match(composer, /tr\('composerDisclaimer'\)/);
-  assert.match(composer, /direction:\s*'ltr'/);
+  assert.match(pill, /direction:\s*'ltr'/);
   assert.match(glyphs, /COMPOSER_SEND_SIZE = 36/);
   assert.match(glyphs, /COMPOSER_PLUS_DISK = 32/);
   assert.match(glyphs, /PLUS_STROKE = 1\.75/);
@@ -75,8 +77,10 @@ test('composer: pill with plus, placeholder, mic, in-pill send, disclaimer', () 
   assert.match(composer, /backgroundColor=\{colors\.featuredIconBg\}/);
   assert.match(composer, /borderColor=\{colors\.featuredIconBorder\}/);
   assert.match(composer, /placeholderWrap/);
-  assert.match(composer, /justifyContent:\s*'center'/);
-  assert.match(composer, /minHeight:\s*52/);
+  assert.match(pill, /justifyContent:\s*'center'/);
+  assert.match(pill, /minHeight:\s*COMPOSER_PILL_MIN_H/);
+  assert.match(height, /COMPOSER_PILL_MIN_H = 44/);
+  assert.doesNotMatch(pill, /minHeight:\s*52/);
   assert.match(en, /composerPlaceholder:\s*'Chat with Linas'/);
   assert.match(en, /composerPlaceholderChat:\s*'Chat with Linas'/);
   assert.match(en, /composerPlaceholderWork:\s*'Work with Linas'/);
@@ -108,6 +112,26 @@ test('model chip maps chat/work to existing 5.6 LIN Low/High ids', () => {
   assert.match(en, /linEffortHigh:\s*'High'/);
   assert.match(en, /linEffortFast:\s*'Fast'/);
   assert.match(en, /linEffortHighSub:\s*'More powerful'/);
+});
+
+test('chat thread starts high; sparkle matches Linas name; send is sparkle teal', () => {
+  const screen = read('features/chat/ChatScreen.tsx');
+  const scroll = read('features/chat/useChatListScroll.ts');
+  const toggle = read('features/chat/ChatModeToggle.tsx');
+  const bubble = read('features/chat/ChatBubble.tsx');
+  const mark = read('components/LinasStarMark.tsx');
+  const composer = read('features/chat/ChatComposer.tsx');
+  const drawer = read('features/nav/DrawerHeader.tsx');
+  assert.match(screen, /armOpenAtLatest\(\{ pinToLatest: hasUserMessage \}\)/);
+  assert.match(scroll, /pinToLatest === false/);
+  assert.match(scroll, /scrollToOffset\(\{ offset: 0/);
+  assert.match(toggle, /position:\s*'absolute'/);
+  assert.match(bubble, /labelColor=\{colors\.text\}/);
+  assert.match(drawer, /styles\.wordmark, \{ color: colors\.text \}/);
+  assert.match(mark, /fontSize:\s*size/);
+  assert.match(mark, /lineHeight:\s*size/);
+  assert.match(composer, /backgroundColor: colors\.accent \}/);
+  assert.match(composer, /isRtl/);
 });
 
 test('bubbles: You / Linas labels, mint user bubble, teal AI bullets', () => {

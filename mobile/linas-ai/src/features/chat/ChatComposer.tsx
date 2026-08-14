@@ -5,7 +5,6 @@ import {
   Keyboard,
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -14,20 +13,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { textDirectionStyle } from '../../lib/textDirection';
 import { useI18n } from '../../i18n/LanguageContext';
-import { fonts, radii, spacing, useTheme } from '../../theme';
+import { useTheme } from '../../theme';
 import { ComposerEditChip } from './ComposerEditChip';
 import {
-  COMPOSER_ACTION_SIZE,
-  COMPOSER_SEND_SIZE,
   formatVoiceElapsed,
   PlusCircleGlyph,
   SendArrowGlyph,
   StopGlyph,
 } from './ComposerGlyphs';
 import { ComposerModelChip } from './ComposerModelChip';
+import { composerStyles as styles } from './composerStyles';
 import { LinEffortSheet } from './LinEffortSheet';
 import type { OwnerChatMode } from './ownerChatMode';
-import { useComposerInputAutoGrow, COMPOSER_INPUT_LINE_HEIGHT, COMPOSER_INPUT_MIN_H } from './useComposerInputAutoGrow';
+import {
+  useComposerInputAutoGrow,
+  COMPOSER_INPUT_MIN_H,
+  COMPOSER_IOS_PAD_TOP,
+} from './useComposerInputAutoGrow';
 import type { VoiceState } from './useVoiceDraft';
 import { VoiceComposerControls } from './VoiceComposerControls';
 
@@ -89,7 +91,7 @@ export function ChatComposer({
 }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const { tr } = useI18n();
+  const { tr, isRtl } = useI18n();
   const [effortOpen, setEffortOpen] = useState(false);
   const pulse = useRef(new Animated.Value(1)).current;
   const ring = useRef(new Animated.Value(0.55)).current;
@@ -113,7 +115,9 @@ export function ChatComposer({
   const draftDir = textDirectionStyle(draft);
   const draftEmpty = !draft.trim();
   const singleLine = inputHeight <= COMPOSER_INPUT_MIN_H;
-  const inputTextAlign = draftEmpty ? 'left' : draftDir.textAlign;
+  const idleAlign = isRtl ? 'right' : 'left';
+  const idleWriting = isRtl ? 'rtl' : 'ltr';
+  const inputTextAlign = draftEmpty ? idleAlign : draftDir.textAlign;
 
   function dismissKeyboard() {
     localInputRef.current?.blur();
@@ -176,7 +180,7 @@ export function ChatComposer({
 
   const sendBtn = streamingStop ? (
     <Pressable
-      style={[styles.sendInside, { backgroundColor: colors.accentDeep }]}
+      style={[styles.sendInside, { backgroundColor: colors.accent }]}
       onPress={onStop}
       accessibilityLabel={tr('composerStop')}
     >
@@ -186,8 +190,8 @@ export function ChatComposer({
     <Pressable
       style={[
         styles.sendInside,
-        { backgroundColor: colors.accentDeep },
-        (sending || !canSend || voiceBusy) && styles.sendDisabled,
+        { backgroundColor: colors.accent },
+        sending && styles.sendBusy,
       ]}
       onPress={handleSend}
       disabled={sending || !canSend || voiceBusy}
@@ -250,10 +254,15 @@ export function ChatComposer({
           </Pressable>
         ) : null}
 
-        <View style={styles.inputSlot}>
+        <View style={[styles.inputSlot, { height: singleLine ? COMPOSER_INPUT_MIN_H : inputHeight }]}>
           {draftEmpty ? (
             <View pointerEvents="none" style={styles.placeholderWrap}>
-              <Text style={[styles.placeholderText, { color: colors.textDim }]}>
+              <Text
+                style={[
+                  styles.placeholderText,
+                  { color: colors.textDim, textAlign: idleAlign },
+                ]}
+              >
                 {placeholder}
               </Text>
             </View>
@@ -262,22 +271,23 @@ export function ChatComposer({
             ref={assignInputRef}
             style={[
               styles.input,
+              draftEmpty && styles.inputIdle,
               {
                 color: colors.text,
-                height: inputHeight,
+                height: draftEmpty ? COMPOSER_INPUT_MIN_H : inputHeight,
                 textAlign: inputTextAlign,
-                writingDirection: draftEmpty ? 'ltr' : draftDir.writingDirection,
-                paddingTop:
-                  Platform.OS === 'ios' && singleLine
-                    ? Math.max(0, (COMPOSER_INPUT_MIN_H - COMPOSER_INPUT_LINE_HEIGHT) / 2)
-                    : 0,
+                writingDirection: draftEmpty ? idleWriting : draftDir.writingDirection,
+                paddingTop: Platform.OS === 'ios' && singleLine ? COMPOSER_IOS_PAD_TOP : 0,
               },
             ]}
             placeholder=""
             value={draft}
             onChangeText={(v) => handleChangeText(v, onChangeDraft)}
             onContentSizeChange={(e) => {
-              handleContentSizeChange(e.nativeEvent.contentSize.height);
+              if (draftEmpty) return;
+              let h = e.nativeEvent.contentSize.height;
+              if (Platform.OS === 'ios' && singleLine) h -= COMPOSER_IOS_PAD_TOP;
+              handleContentSizeChange(h);
             }}
             multiline
             scrollEnabled={atMaxHeight}
@@ -323,77 +333,3 @@ export function ChatComposer({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    direction: 'ltr',
-  },
-  pill: {
-    flexDirection: 'row',
-    borderRadius: radii.pill,
-    paddingVertical: 8,
-    paddingLeft: 8,
-    paddingRight: 8,
-    minHeight: 52,
-    gap: 2,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  pillSingle: {
-    alignItems: 'center',
-  },
-  pillGrow: {
-    alignItems: 'flex-end',
-    paddingBottom: 8,
-  },
-  inputSlot: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: COMPOSER_INPUT_MIN_H,
-    justifyContent: 'center',
-  },
-  placeholderWrap: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-  },
-  placeholderText: {
-    fontFamily: fonts.body,
-    fontSize: 16,
-    lineHeight: COMPOSER_INPUT_LINE_HEIGHT,
-  },
-  input: {
-    fontFamily: fonts.body,
-    fontSize: 16,
-    lineHeight: COMPOSER_INPUT_LINE_HEIGHT,
-    paddingHorizontal: 8,
-    paddingVertical: 0,
-    includeFontPadding: false,
-  },
-  iconHit: {
-    width: COMPOSER_ACTION_SIZE,
-    height: COMPOSER_ACTION_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  sendInside: {
-    width: COMPOSER_SEND_SIZE,
-    height: COMPOSER_SEND_SIZE,
-    borderRadius: COMPOSER_SEND_SIZE / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  sendDisabled: { opacity: 0.45 },
-  disclaimer: {
-    fontFamily: fonts.body,
-    fontSize: 11,
-    textAlign: 'center',
-    marginTop: 8,
-  },
-});

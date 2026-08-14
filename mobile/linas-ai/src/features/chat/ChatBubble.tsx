@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { ChatMessage } from '../../api/types';
 import { LinasStarMark } from '../../components/LinasStarMark';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
-import { textDirectionStyle } from '../../lib/textDirection';
+import { aiMessageColStyle, aiMessageRowStyle, textDirectionStyle } from '../../lib/textDirection';
 import { fonts, radii, spacing, typography, useTheme } from '../../theme';
 import { AiMessageBody } from './AiMessageBody';
 import { MessageActions } from './MessageActions';
@@ -49,13 +49,23 @@ export function ChatBubble({
   }, [done, onTypewriterDone, reduceMotion, typewriter]);
 
   return (
-    <View style={[styles.row, isUser ? styles.rowUser : styles.rowAi]}>
-      <View style={[styles.col, isUser ? styles.colUser : styles.colAi]}>
+    <View
+      style={[
+        styles.row,
+        isUser ? styles.rowUser : [styles.rowAi, aiMessageRowStyle(message.content)],
+      ]}
+    >
+      <View
+        style={[
+          styles.col,
+          isUser ? styles.colUser : [styles.colAi, aiMessageColStyle(message.content)],
+        ]}
+      >
         {isUser ? (
           <Text style={[styles.userLabel, { color: colors.textDim }]}>{userLabel}</Text>
         ) : (
           <View style={styles.aiLabelRow}>
-            <LinasStarMark size={12} labeled label={linasLabel} labelColor={colors.accentDeep} />
+            <LinasStarMark size={12} labeled label={linasLabel} labelColor={colors.text} />
           </View>
         )}
         <View

@@ -14,18 +14,18 @@ export function ChatModeToggle({ mode, onChange }: Props) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   return (
-    <View
-      style={[
-        styles.wrap,
-        {
-          backgroundColor: colors.bgElevated,
-          borderColor: colors.borderSoft,
-          shadowColor: colors.text,
-          marginTop: insets.top + spacing.sm,
-        },
-      ]}
-      accessibilityRole="tablist"
-    >
+    <View pointerEvents="box-none" style={[styles.overlay, { paddingTop: insets.top + spacing.sm }]}>
+      <View
+        style={[
+          styles.wrap,
+          {
+            backgroundColor: colors.bgElevated,
+            borderColor: colors.borderSoft,
+            shadowColor: colors.text,
+          },
+        ]}
+        accessibilityRole="tablist"
+      >
       {(['chat', 'work'] as const).map((id) => {
         const selected = mode === id;
         return (
@@ -51,18 +51,25 @@ export function ChatModeToggle({ mode, onChange }: Props) {
           </Pressable>
         );
       })}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 15,
+    alignItems: 'center',
+  },
   wrap: {
-    alignSelf: 'center',
     flexDirection: 'row',
     borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 3,
-    marginBottom: spacing.sm,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 3,
