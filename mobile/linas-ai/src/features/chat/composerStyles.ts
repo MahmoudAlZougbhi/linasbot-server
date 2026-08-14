@@ -31,6 +31,7 @@ export const composerStyles = StyleSheet.create({
   },
   pillSingle: {
     alignItems: 'center',
+    height: COMPOSER_PILL_MIN_H,
   },
   pillGrow: {
     alignItems: 'flex-end',
@@ -39,22 +40,19 @@ export const composerStyles = StyleSheet.create({
   inputSlot: {
     flex: 1,
     minWidth: 0,
-    minHeight: COMPOSER_INPUT_MIN_H,
     justifyContent: 'center',
   },
+  /** In-flow label — iOS absolute overlay cannot center in an implicit-height slot. */
   placeholderWrap: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
     justifyContent: 'center',
     paddingHorizontal: 8,
+    width: '100%',
   },
   placeholderText: {
     fontFamily: fonts.body,
     fontSize: 16,
     lineHeight: COMPOSER_INPUT_LINE_HEIGHT,
+    includeFontPadding: false,
   },
   input: {
     fontFamily: fonts.body,
@@ -63,6 +61,10 @@ export const composerStyles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 0,
     includeFontPadding: false,
+  },
+  /** Idle field sits on top of the in-flow placeholder without driving slot height. */
+  inputIdle: {
+    ...StyleSheet.absoluteFillObject,
   },
   iconHit: {
     width: COMPOSER_ACTION_SIZE,

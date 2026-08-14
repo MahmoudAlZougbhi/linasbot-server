@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-native';
 
 import { LinasStarMark } from '../../components/LinasStarMark';
-import { textDirectionStyle } from '../../lib/textDirection';
+import { aiMessageColStyle, aiMessageRowStyle, textDirectionStyle } from '../../lib/textDirection';
 import { fonts, spacing, typography, useTheme } from '../../theme';
 
 type Props = {
@@ -59,14 +59,14 @@ export function ThinkingRow({ label }: Props) {
 
   return (
     <View
-      style={[styles.row, styles.rowAi]}
+      style={[styles.row, styles.rowAi, aiMessageRowStyle(label)]}
       accessibilityLiveRegion="polite"
       accessibilityRole="text"
       accessibilityLabel={label}
     >
-      <View style={[styles.col, styles.colAi]}>
+      <View style={[styles.col, styles.colAi, aiMessageColStyle(label)]}>
         <View style={styles.aiLabelRow}>
-          <LinasStarMark size={12} labeled label="Linas" labelColor={colors.accentDeep} />
+          <LinasStarMark size={12} labeled label="Linas" labelColor={colors.text} />
         </View>
         <Animated.Text style={[styles.text, { color: colors.textMuted, opacity }, dirStyle]}>
           {label}

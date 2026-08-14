@@ -114,6 +114,26 @@ test('model chip maps chat/work to existing 5.6 LIN Low/High ids', () => {
   assert.match(en, /linEffortHighSub:\s*'More powerful'/);
 });
 
+test('chat thread starts high; sparkle matches Linas name; send is sparkle teal', () => {
+  const screen = read('features/chat/ChatScreen.tsx');
+  const scroll = read('features/chat/useChatListScroll.ts');
+  const toggle = read('features/chat/ChatModeToggle.tsx');
+  const bubble = read('features/chat/ChatBubble.tsx');
+  const mark = read('components/LinasStarMark.tsx');
+  const composer = read('features/chat/ChatComposer.tsx');
+  const drawer = read('features/nav/DrawerHeader.tsx');
+  assert.match(screen, /armOpenAtLatest\(\{ pinToLatest: hasUserMessage \}\)/);
+  assert.match(scroll, /pinToLatest === false/);
+  assert.match(scroll, /scrollToOffset\(\{ offset: 0/);
+  assert.match(toggle, /position:\s*'absolute'/);
+  assert.match(bubble, /labelColor=\{colors\.text\}/);
+  assert.match(drawer, /styles\.wordmark, \{ color: colors\.text \}/);
+  assert.match(mark, /fontSize:\s*size/);
+  assert.match(mark, /lineHeight:\s*size/);
+  assert.match(composer, /backgroundColor: colors\.accent \}/);
+  assert.match(composer, /isRtl/);
+});
+
 test('bubbles: You / Linas labels, mint user bubble, teal AI bullets', () => {
   const bubble = read('features/chat/ChatBubble.tsx');
   const body = read('features/chat/AiMessageBody.tsx');

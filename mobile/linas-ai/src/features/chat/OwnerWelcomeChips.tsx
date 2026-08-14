@@ -18,11 +18,12 @@ type Props = {
 
 /** Tappable questions under the seeded owner welcome message. */
 export function OwnerWelcomeChips({ disabled, onPick }: Props) {
-  const { tr } = useI18n();
+  const { tr, isRtl } = useI18n();
   const { colors } = useTheme();
+  const align = isRtl ? 'right' : 'left';
   return (
     <View style={styles.wrap} accessibilityRole="menu">
-      <Text style={[styles.hint, { color: colors.textDim }]}>{tr('welcomeQuickStart')}</Text>
+      <Text style={[styles.hint, { color: colors.textDim, textAlign: align }]}>{tr('welcomeQuickStart')}</Text>
       {OWNER_WELCOME_CHIPS.map((chip) => {
         const label = tr(chip.labelKey);
         return (
@@ -41,8 +42,8 @@ export function OwnerWelcomeChips({ disabled, onPick }: Props) {
               },
             ]}
           >
-            <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
-            <Text style={{ color: colors.textDim }}>
+            <Text style={[styles.label, { color: colors.text, textAlign: align }]}>{label}</Text>
+            <Text style={{ color: colors.textDim, textAlign: align }}>
               {chip.mode === 'work' ? tr('welcomeChipModeWork') : tr('welcomeChipModeChat')}
             </Text>
           </Pressable>

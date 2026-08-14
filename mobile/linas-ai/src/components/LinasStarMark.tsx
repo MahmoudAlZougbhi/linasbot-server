@@ -30,7 +30,10 @@ export function LinasStarMark({
       <LinasSparkleIcon size={size} color={colors.accent} />
       {labeled ? (
         <Text
-          style={[styles.label, { color: titleColor, fontSize: Math.max(15, size - 3) }]}
+          style={[
+            styles.label,
+            { color: titleColor, fontSize: size, lineHeight: size },
+          ]}
         >
           {label}
         </Text>
@@ -40,6 +43,6 @@ export function LinasStarMark({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   label: { fontFamily: fonts.bodyMedium, fontWeight: '700' },
 });

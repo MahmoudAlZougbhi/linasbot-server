@@ -124,8 +124,8 @@ export function ChatScreen({
 
   useEffect(() => {
     if (loading) return;
-    armOpenAtLatest();
-  }, [armOpenAtLatest, loading, listKey]);
+    armOpenAtLatest({ pinToLatest: hasUserMessage });
+  }, [armOpenAtLatest, hasUserMessage, loading, listKey]);
 
   useEffect(() => {
     followBottomIfStuck(false);

@@ -91,7 +91,7 @@ export function ChatComposer({
 }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const { tr } = useI18n();
+  const { tr, isRtl } = useI18n();
   const [effortOpen, setEffortOpen] = useState(false);
   const pulse = useRef(new Animated.Value(1)).current;
   const ring = useRef(new Animated.Value(0.55)).current;
@@ -115,7 +115,9 @@ export function ChatComposer({
   const draftDir = textDirectionStyle(draft);
   const draftEmpty = !draft.trim();
   const singleLine = inputHeight <= COMPOSER_INPUT_MIN_H;
-  const inputTextAlign = draftEmpty ? 'left' : draftDir.textAlign;
+  const idleAlign = isRtl ? 'right' : 'left';
+  const idleWriting = isRtl ? 'rtl' : 'ltr';
+  const inputTextAlign = draftEmpty ? idleAlign : draftDir.textAlign;
 
   function dismissKeyboard() {
     localInputRef.current?.blur();
@@ -178,7 +180,7 @@ export function ChatComposer({
 
   const sendBtn = streamingStop ? (
     <Pressable
-      style={[styles.sendInside, { backgroundColor: colors.accentDeep }]}
+      style={[styles.sendInside, { backgroundColor: colors.accent }]}
       onPress={onStop}
       accessibilityLabel={tr('composerStop')}
     >
@@ -188,7 +190,7 @@ export function ChatComposer({
     <Pressable
       style={[
         styles.sendInside,
-        { backgroundColor: colors.accentDeep },
+        { backgroundColor: colors.accent },
         sending && styles.sendBusy,
       ]}
       onPress={handleSend}
@@ -252,10 +254,15 @@ export function ChatComposer({
           </Pressable>
         ) : null}
 
-        <View style={styles.inputSlot}>
+        <View style={[styles.inputSlot, { height: singleLine ? COMPOSER_INPUT_MIN_H : inputHeight }]}>
           {draftEmpty ? (
             <View pointerEvents="none" style={styles.placeholderWrap}>
-              <Text style={[styles.placeholderText, { color: colors.textDim }]}>
+              <Text
+                style={[
+                  styles.placeholderText,
+                  { color: colors.textDim, textAlign: idleAlign },
+                ]}
+              >
                 {placeholder}
               </Text>
             </View>
@@ -264,11 +271,12 @@ export function ChatComposer({
             ref={assignInputRef}
             style={[
               styles.input,
+              draftEmpty && styles.inputIdle,
               {
                 color: colors.text,
-                height: inputHeight,
+                height: draftEmpty ? COMPOSER_INPUT_MIN_H : inputHeight,
                 textAlign: inputTextAlign,
-                writingDirection: draftEmpty ? 'ltr' : draftDir.writingDirection,
+                writingDirection: draftEmpty ? idleWriting : draftDir.writingDirection,
                 paddingTop: Platform.OS === 'ios' && singleLine ? COMPOSER_IOS_PAD_TOP : 0,
               },
             ]}
@@ -276,6 +284,7 @@ export function ChatComposer({
             value={draft}
             onChangeText={(v) => handleChangeText(v, onChangeDraft)}
             onContentSizeChange={(e) => {
+              if (draftEmpty) return;
               let h = e.nativeEvent.contentSize.height;
               if (Platform.OS === 'ios' && singleLine) h -= COMPOSER_IOS_PAD_TOP;
               handleContentSizeChange(h);

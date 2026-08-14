@@ -130,14 +130,14 @@ test('RTL app: contentStartAlign still maps to physical EN-left / AR-right', () 
   });
 });
 
-test('ChatBubble uses content direction; AI stays left, user stays right', () => {
+test('ChatBubble uses content direction; AI hugs script start, user stays right', () => {
   const bubble = readFileSync(join(root, 'src/features/chat/ChatBubble.tsx'), 'utf8');
   assert.match(bubble, /textDirectionStyle/);
   assert.match(bubble, /styles\.rowAi/);
   assert.match(bubble, /styles\.rowUser/);
   assert.match(bubble, /lib\/textDirection/);
-  assert.doesNotMatch(bubble, /aiMessageRowStyle/);
-  assert.doesNotMatch(bubble, /aiMessageColStyle/);
+  assert.match(bubble, /aiMessageRowStyle/);
+  assert.match(bubble, /aiMessageColStyle/);
   assert.doesNotMatch(bubble, /isRtl\s*\|\|/);
   assert.doesNotMatch(bubble, /useI18n/);
   assert.doesNotMatch(bubble, /detectRtl/);
@@ -149,7 +149,8 @@ test('composer and live chat wire the same helper', () => {
   const thinking = readFileSync(join(root, 'src/features/chat/ThinkingRow.tsx'), 'utf8');
   assert.match(composer, /textDirectionStyle\(draft\)/);
   assert.match(composer, /inputTextAlign/);
-  assert.match(composer, /draftEmpty \? 'left'/);
+  assert.match(composer, /draftEmpty \? idleAlign/);
+  assert.match(composer, /isRtl \? 'right' : 'left'/);
   assert.match(live, /textDirectionStyle\(body\)/);
   assert.match(thinking, /textDirectionStyle\(label\)/);
   assert.match(thinking, /styles\.rowAi/);

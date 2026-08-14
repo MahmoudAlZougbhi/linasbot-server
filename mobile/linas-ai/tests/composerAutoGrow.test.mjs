@@ -26,15 +26,22 @@ function read(rel) {
   return readFileSync(src(...rel.split('/')), 'utf8');
 }
 
-test('idle pill is compact 44pt; send uses Linas name token', () => {
+test('idle pill is compact 44pt; send uses sparkle accent', () => {
   const composer = read('features/chat/ChatComposer.tsx');
   const bubble = read('features/chat/ChatBubble.tsx');
+  const mark = read('components/LinasStarMark.tsx');
   const styles = read('features/chat/composerStyles.ts');
   assert.equal(COMPOSER_PILL_MIN_H, 44);
   assert.match(styles, /minHeight:\s*COMPOSER_PILL_MIN_H/);
+  assert.match(styles, /height:\s*COMPOSER_PILL_MIN_H/);
   assert.doesNotMatch(styles, /minHeight:\s*52/);
-  assert.match(composer, /backgroundColor: colors\.accentDeep/);
-  assert.match(bubble, /labelColor=\{colors\.accentDeep\}/);
+  assert.match(composer, /backgroundColor: colors\.accent \}/);
+  assert.doesNotMatch(composer, /backgroundColor: colors\.accentDeep/);
+  assert.match(bubble, /labelColor=\{colors\.text\}/);
+  assert.match(mark, /fontSize:\s*size/);
+  assert.match(styles, /inputIdle/);
+  assert.match(styles, /placeholderWrap/);
+  assert.match(styles, /placeholderWrap:\s*\{[^}]*justifyContent:\s*'center'/);
   assert.doesNotMatch(composer, /sendDisabled/);
   assert.doesNotMatch(styles, /opacity:\s*0\.45/);
 });
