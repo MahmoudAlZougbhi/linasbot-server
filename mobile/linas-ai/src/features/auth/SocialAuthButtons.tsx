@@ -18,16 +18,11 @@ type Props = {
   onGoogleError?: (message: string) => void;
 };
 
-/** Google Sign-In (when client IDs configured) + Apple Sign In (iOS). */
-export function SocialAuthButtons({
-  onAppleSuccess,
-  onAppleError,
+function GoogleAuthButton({
   onGoogleSuccess,
   onGoogleError,
-}: Props) {
+}: Pick<Props, 'onGoogleSuccess' | 'onGoogleError'>) {
   const { tr } = useI18n();
-  const appleEnabled = Platform.OS === 'ios';
-  const googleEnabled = isGoogleSignInConfigured();
   const [googleRequest, googleResponse, promptGoogle] = useGoogleIdTokenAuthRequest();
 
   useEffect(() => {
@@ -54,6 +49,41 @@ export function SocialAuthButtons({
     })();
   }, [googleResponse, onGoogleError, onGoogleSuccess, tr]);
 
+  async function onGoogle() {
+    if (!googleRequest) {
+      onGoogleError?.(tr('googleSignInUnavailable'));
+      return;
+    }
+    try {
+      await promptGoogle();
+    } catch {
+      onGoogleError?.(tr('googleSignInFailed'));
+    }
+  }
+
+  return (
+    <Pressable
+      style={[styles.btn, styles.btnEnabled]}
+      onPress={() => void onGoogle()}
+      accessibilityRole="button"
+      accessibilityLabel={tr('socialContinueGoogle')}
+    >
+      <Text style={styles.btnTextActive}>{tr('socialContinueGoogle')}</Text>
+    </Pressable>
+  );
+}
+
+/** Google Sign-In (when client IDs configured) + Apple Sign In (iOS). */
+export function SocialAuthButtons({
+  onAppleSuccess,
+  onAppleError,
+  onGoogleSuccess,
+  onGoogleError,
+}: Props) {
+  const { tr } = useI18n();
+  const appleEnabled = Platform.OS === 'ios';
+  const googleEnabled = isGoogleSignInConfigured();
+
   async function onApple() {
     const result = await signInWithApple();
     if (result.ok) {
@@ -72,18 +102,6 @@ export function SocialAuthButtons({
     onAppleError?.(tr('appleSignInFailed'));
   }
 
-  async function onGoogle() {
-    if (!googleEnabled || !googleRequest) {
-      onGoogleError?.(tr('googleSignInUnavailable'));
-      return;
-    }
-    try {
-      await promptGoogle();
-    } catch {
-      onGoogleError?.(tr('googleSignInFailed'));
-    }
-  }
-
   return (
     <View style={styles.wrap}>
       <View style={styles.dividerRow}>
@@ -92,14 +110,7 @@ export function SocialAuthButtons({
         <View style={styles.line} />
       </View>
       {googleEnabled ? (
-        <Pressable
-          style={[styles.btn, styles.btnEnabled]}
-          onPress={() => void onGoogle()}
-          accessibilityRole="button"
-          accessibilityLabel={tr('socialContinueGoogle')}
-        >
-          <Text style={styles.btnTextActive}>{tr('socialContinueGoogle')}</Text>
-        </Pressable>
+        <GoogleAuthButton onGoogleSuccess={onGoogleSuccess} onGoogleError={onGoogleError} />
       ) : (
         <Pressable style={styles.btn} disabled>
           <Text style={styles.btnText}>{tr('socialContinueGoogle')}</Text>
