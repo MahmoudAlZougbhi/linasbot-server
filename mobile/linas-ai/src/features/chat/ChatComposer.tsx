@@ -183,11 +183,7 @@ export function ChatComposer({
     </Pressable>
   ) : (
     <Pressable
-      style={[
-        styles.sendInside,
-        { backgroundColor: colors.accentDeep },
-        (sending || !canSend || voiceBusy) && styles.sendDisabled,
-      ]}
+      style={[styles.sendInside, { backgroundColor: colors.accentDeep }]}
       onPress={handleSend}
       disabled={sending || !canSend || voiceBusy}
       accessibilityLabel={tr('composerSend')}
@@ -195,7 +191,7 @@ export function ChatComposer({
       {sending ? (
         <ActivityIndicator color={colors.onAccent} size="small" />
       ) : (
-        <SendArrowGlyph color={colors.onAccent} size={16} />
+        <SendArrowGlyph color={colors.onAccent} size={18} />
       )}
     </Pressable>
   );
@@ -241,11 +237,9 @@ export function ChatComposer({
             accessibilityLabel={tr('composerMoreActions')}
             hitSlop={6}
           >
-            <PlusCircleGlyph color={colors.textMuted} />
+            <PlusCircleGlyph color={colors.textMuted} backgroundColor={colors.featuredIconBg} />
           </Pressable>
-        ) : (
-          <View style={styles.iconHit} />
-        )}
+        ) : null}
 
         <TextInput
           ref={assignInputRef}
@@ -286,9 +280,7 @@ export function ChatComposer({
             onDiscardVoice={onDiscardVoice}
             onBeforeStart={dismissKeyboard}
           />
-        ) : (
-          <View style={styles.iconHit} />
-        )}
+        ) : null}
 
         {sendBtn}
       </View>
@@ -320,14 +312,15 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: 'row',
     borderRadius: radii.pill,
-    paddingVertical: 6,
-    paddingLeft: 6,
-    paddingRight: 6,
-    minHeight: 48,
+    paddingVertical: 8,
+    paddingLeft: 8,
+    paddingRight: 8,
+    minHeight: 52,
+    gap: 2,
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   pillSingle: {
     alignItems: 'center',
@@ -342,7 +335,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 16,
     lineHeight: COMPOSER_INPUT_LINE_HEIGHT,
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     paddingVertical: 0,
     includeFontPadding: false,
   },
@@ -361,7 +354,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
-  sendDisabled: { opacity: 0.45 },
   disclaimer: {
     fontFamily: fonts.body,
     fontSize: 11,

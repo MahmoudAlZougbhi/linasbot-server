@@ -6,7 +6,7 @@ export const chatScreenStyles = StyleSheet.create({
   flex: { flex: 1 },
   ltr: { direction: 'ltr' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  list: { padding: 16, paddingBottom: 28, flexGrow: 1 },
+  list: { padding: 16, paddingTop: 44, paddingBottom: 28, flexGrow: 1 },
   error: {
     color: colors.danger,
     fontFamily: fonts.body,

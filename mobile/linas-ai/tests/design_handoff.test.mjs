@@ -507,7 +507,9 @@ test('drawer search chrome is header icon; New chat + Settings in footer dock', 
   assert.match(headerIcons, /export function NewChatIcon/);
   assert.match(headerIcons, /NEW_CHAT_ICON/);
   assert.match(headerIcons, /AppIcon/);
-  assert.match(header, /<NewChatIcon color=\{iconColor\}/);
+  assert.doesNotMatch(header, /NewChatIcon/);
+  assert.doesNotMatch(header, /onNewChat/);
+  assert.match(header, /position:\s*'absolute'/);
 });
 
 test('Settings hosts AI Limits only (no Actions)', () => {

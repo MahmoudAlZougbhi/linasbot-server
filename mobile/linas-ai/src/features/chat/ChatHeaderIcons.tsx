@@ -5,7 +5,7 @@ import { AppIcon } from '../../components/AppIcon';
 import { radii } from '../../theme';
 import { NEW_CHAT_ICON } from '../nav/moduleIcons';
 
-/** Light-gray rounded square behind header hamburger / new-chat. */
+/** Light-gray rounded square behind the overlay hamburger. */
 export const HEADER_ICON_BOX = 36;
 
 export function HeaderIconBox({
@@ -37,7 +37,7 @@ export function MenuIcon({ color }: { color: string }) {
 
 /**
  * Shared ChatGPT-style “new chat” compose mark (square + pencil).
- * Used by chat header and drawer bottom New Chat — same artwork, optional size.
+ * Used by the drawer New Chat control — same artwork, optional size.
  */
 export function NewChatIcon({ color, size = 20 }: { color: string; size?: number }) {
   return <AppIcon icon={NEW_CHAT_ICON} size={size} color={color} />;
