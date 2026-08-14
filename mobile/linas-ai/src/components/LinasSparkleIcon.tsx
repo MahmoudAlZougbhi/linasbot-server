@@ -1,4 +1,12 @@
-import { Image, type ImageSourcePropType, type ImageStyle } from 'react-native';
+import { Image, View, type ImageStyle, type ImageURISource } from 'react-native';
+
+import {
+  SPARKLE_DARK_DEEP_URI,
+  SPARKLE_DARK_URI,
+  SPARKLE_LIGHT_DEEP_URI,
+  SPARKLE_LIGHT_URI,
+  SPARKLE_PNG_SIZE,
+} from './linasSparklePng';
 
 /** Canonical four-point Linas sparkle from assets/linas-app-icon.svg */
 export const LINAS_SPARKLE_PATH =
@@ -7,23 +15,22 @@ export const LINAS_SPARKLE_PATH =
 /** Tight crop so the star fills its render box (full 1024 viewBox leaves ~54% padding). */
 export const LINAS_SPARKLE_VIEWBOX = '274 212 476 476';
 
-const SPARKLE_BY_COLOR: Record<string, ImageSourcePropType> = {
-  '#178f87': require('../../assets/linas-sparkle-light.png'),
-  '#008b8b': require('../../assets/linas-sparkle-light.png'),
-  '#006d6d': require('../../assets/linas-sparkle-light-deep.png'),
-  '#2dd4bf': require('../../assets/linas-sparkle-dark.png'),
-  '#5eead4': require('../../assets/linas-sparkle-dark-deep.png'),
+const SPARKLE_BY_COLOR: Record<string, string> = {
+  '#178f87': SPARKLE_LIGHT_URI,
+  '#008b8b': SPARKLE_LIGHT_URI,
+  '#006d6d': SPARKLE_LIGHT_DEEP_URI,
+  '#2dd4bf': SPARKLE_DARK_URI,
+  '#5eead4': SPARKLE_DARK_DEEP_URI,
 };
-
-const DEFAULT_SPARKLE = SPARKLE_BY_COLOR['#008b8b'];
 
 type Props = {
   size?: number;
   color: string;
 };
 
-function sparkleSource(color: string): ImageSourcePropType {
-  return SPARKLE_BY_COLOR[color.toLowerCase()] ?? DEFAULT_SPARKLE;
+function sparkleSource(color: string): ImageURISource {
+  const uri = SPARKLE_BY_COLOR[color.toLowerCase()] ?? SPARKLE_LIGHT_URI;
+  return { uri, width: SPARKLE_PNG_SIZE, height: SPARKLE_PNG_SIZE };
 }
 
 /** Solid four-point sparkle — brand mark, not a 5-point star or Unicode glyph. */
@@ -34,12 +41,15 @@ export function LinasSparkleIcon({ size = 16, color }: Props) {
   };
 
   return (
-    <Image
-      source={sparkleSource(color)}
-      style={style}
-      resizeMode="contain"
-      accessible={false}
-      importantForAccessibility="no"
-    />
+    <View collapsable={false} pointerEvents="none" style={style}>
+      <Image
+        source={sparkleSource(color)}
+        style={style}
+        resizeMode="contain"
+        fadeDuration={0}
+        accessible={false}
+        importantForAccessibility="no"
+      />
+    </View>
   );
 }

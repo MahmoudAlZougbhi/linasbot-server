@@ -17,14 +17,17 @@ function read(rel) {
 
 test('brand sparkle renders without react-native-svg (no Uni placeholder)', () => {
   const sparkle = read('components/LinasSparkleIcon.tsx');
+  const png = read('components/linasSparklePng.ts');
   const fade = read('features/nav/DrawerFadeSeparator.tsx');
   const pkg = readFileSync(join(root, 'package.json'), 'utf8');
-  assert.match(sparkle, /linas-sparkle-light\.png/);
-  assert.match(sparkle, /linas-sparkle-light-deep\.png/);
-  assert.match(sparkle, /linas-sparkle-dark\.png/);
-  assert.match(sparkle, /linas-sparkle-dark-deep\.png/);
+  assert.match(sparkle, /SPARKLE_LIGHT_URI/);
+  assert.match(sparkle, /SPARKLE_LIGHT_DEEP_URI/);
+  assert.match(sparkle, /SPARKLE_DARK_URI/);
+  assert.match(sparkle, /SPARKLE_DARK_DEEP_URI/);
   assert.match(sparkle, /sparkleSource\(color\)/);
+  assert.match(png, /data:image\/png;base64,/);
   assert.doesNotMatch(sparkle, /tintColor/);
+  assert.doesNotMatch(sparkle, /require\(/);
   assert.doesNotMatch(sparkle, /react-native-svg/);
   assert.doesNotMatch(fade, /react-native-svg/);
   assert.doesNotMatch(pkg, /react-native-svg/);
