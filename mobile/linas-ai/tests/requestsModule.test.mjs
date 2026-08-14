@@ -78,11 +78,14 @@ describe('Requests mobile module', () => {
   });
 
   it('permission labels include requests keys', () => {
-    const modal = read('features/users/UserFormModal.tsx');
-    assert.match(modal, /requests:\s*'permRequests'/);
-    assert.match(modal, /requestsSensitive:\s*'permRequestsSensitive'/);
+    const access = read('features/users/usersAccess.ts');
+    assert.match(access, /view: \['requests'\]/);
+    assert.match(access, /requestsManage/);
     const perms = read('features/users/usersPermissions.ts');
     assert.match(perms, /'requests'/);
     assert.match(perms, /'requestsManage'/);
+    const ui = read('i18n/locales/usersUiEn.ts');
+    assert.match(ui, /permRequests:/);
+    assert.match(ui, /permRequestsSensitive:/);
   });
 });

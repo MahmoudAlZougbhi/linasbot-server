@@ -149,6 +149,17 @@ export function canManageUsers(user: PublicUser | null | undefined): boolean {
   return resolved.userManagement === true;
 }
 
-export function isAssignableRole(role: string): role is AssignableRole {
-  return (ASSIGNABLE_ROLES as readonly string[]).includes(role);
+export function isAssignableRole(role: string): boolean {
+  if (role === 'platform_owner') return false;
+  if ((ASSIGNABLE_ROLES as readonly string[]).includes(role)) return true;
+  return /^[a-z][a-z0-9_-]{1,39}$/.test(role);
+}
+
+export function permissionsFromRecord(raw: Record<string, boolean> | null | undefined): PermissionMap {
+  const next = emptyPermissions();
+  if (!raw) return next;
+  for (const key of PERMISSION_KEYS) {
+    if (typeof raw[key] === 'boolean') next[key] = raw[key];
+  }
+  return next;
 }

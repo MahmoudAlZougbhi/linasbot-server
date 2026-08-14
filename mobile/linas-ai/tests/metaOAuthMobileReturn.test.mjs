@@ -26,10 +26,12 @@ describe('meta oauth mobile return surface', () => {
   it('AppShell routes integrations deep link and IntegrationsScreen refetches', () => {
     const shell = read('app/AppShell.tsx');
     const screen = read('features/integrations/IntegrationsScreen.tsx');
+    const load = read('features/integrations/useIntegrationsLoad.ts');
     assert.match(shell, /parseIntegrationsDeepLink/);
     assert.match(shell, /setScreen\(\{\s*name:\s*'integrations'/);
-    assert.match(screen, /AppState\.addEventListener/);
-    assert.match(screen, /parseIntegrationsDeepLink/);
-    assert.match(screen, /Linking\.addEventListener/);
+    assert.match(screen, /useIntegrationsLoad/);
+    assert.match(load, /AppState\.addEventListener/);
+    assert.match(load, /parseIntegrationsDeepLink/);
+    assert.match(load, /Linking\.addEventListener/);
   });
 });
