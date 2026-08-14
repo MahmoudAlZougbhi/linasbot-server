@@ -9,6 +9,7 @@ import { faqUiFr } from './faqUiFr';
 import { requestsFr } from './requestsFr';
 import { usersUiFr } from './usersUiFr';
 import { authFlowFr } from './authFlowFr';
+import { settingsUiFr } from './settingsUiFr';
 import type { StringKey } from './en';
 
 export const fr = {
@@ -307,6 +308,7 @@ export const fr = {
   googleSignInUnavailable: 'La connexion Google n’est pas encore configurée.',
   googleLinkRequired: 'Un compte existe déjà avec cet e-mail. Connectez-vous puis liez Google.',
   ...authFlowFr,
+  ...settingsUiFr,
   ...appleAccountFr,
   ...integrationsDisplayFr,
   ...subscriptionFr,

@@ -1,0 +1,73 @@
+/**
+ * Settings iOS handoff — sections, copy, logout, version, existing destinations.
+ */
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import test from 'node:test';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+function read(rel) {
+  return readFileSync(join(root, 'src', rel), 'utf8');
+}
+
+test('Settings handoff sections and rows match the iOS mock', () => {
+  const screen = read('features/settings/SettingsScreen.tsx');
+  const chrome = read('features/settings/SettingsChrome.tsx');
+  const en = read('i18n/locales/settingsUiEn.ts');
+  const ar = read('i18n/locales/settingsUiAr.ts');
+  const fr = read('i18n/locales/settingsUiFr.ts');
+
+  assert.match(screen, /groupAccount/);
+  assert.match(screen, /settingsPreferences/);
+  assert.match(screen, /settingsSupportLegal/);
+  assert.match(screen, /settingsChangeName/);
+  assert.match(screen, /changeEmail/);
+  assert.match(screen, /notificationsTitle/);
+  assert.match(screen, /settingsNotificationsHint/);
+  assert.match(screen, /SettingsNotifySwitch/);
+  assert.match(screen, /language/);
+  assert.match(screen, /settingsAppearance/);
+  assert.match(screen, /SettingsAppearanceToggle/);
+  assert.match(screen, /settingsHelpSupport/);
+  assert.match(screen, /settingsAboutLinas/);
+  assert.match(screen, /settingsTermsPrivacy/);
+  assert.match(screen, /dataDeletion/);
+  assert.match(screen, /SettingsDeleteCard/);
+  assert.match(screen, /SettingsLogoutButton/);
+  assert.match(screen, /onLogout/);
+  assert.match(screen, /SettingsFooter/);
+  assert.match(screen, /APP_VERSION/);
+  assert.match(screen, /APP_BUILD_LABEL/);
+  assert.match(screen, /LEGAL_URLS\.supportMailto/);
+  assert.match(screen, /LEGAL_URLS\.terms/);
+  assert.match(screen, /LEGAL_URLS\.dataDeletion/);
+  assert.match(screen, /onOpenNotifications/);
+  assert.match(screen, /setLanguage/);
+  assert.match(screen, /setMode/);
+  assert.match(screen, /patchOwnerDisplayName/);
+  assert.match(screen, /requestOwnerEmailChange/);
+
+  assert.match(chrome, /SettingsLogoutButton/);
+  assert.match(chrome, /tr\('logout'\)/);
+  assert.match(chrome, /settingsDeleteAccount/);
+  assert.match(chrome, /settingsVersionFooter/);
+  assert.match(en, /Chats & request alerts/);
+  assert.match(en, /About Linas AI/);
+  assert.match(en, /Terms & Privacy/);
+  assert.match(en, /Support & Legal/);
+  assert.match(ar, /تنبيهات الدردشات والطلبات/);
+  assert.match(fr, /Alertes chats et demandes/);
+});
+
+test('Settings still hosts Notifications and Logout; drawer does not', () => {
+  const settings = read('features/settings/SettingsScreen.tsx');
+  const nav = read('features/nav/NavDrawer.tsx');
+  assert.match(settings, /onOpenNotifications/);
+  assert.match(settings, /notificationsTitle/);
+  assert.match(settings, /SettingsLogoutButton/);
+  assert.doesNotMatch(nav, /onOpenNotifications/);
+  assert.doesNotMatch(nav, /onLogout/);
+});

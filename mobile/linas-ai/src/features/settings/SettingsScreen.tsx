@@ -1,14 +1,32 @@
-import { useState } from 'react';
-import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, Linking, ScrollView, StyleSheet } from 'react-native';
 
-import { PrimaryButton } from '../../components/PrimaryButton';
 import { APP_BUILD_LABEL, APP_VERSION, LEGAL_URLS } from '../../config';
+import { tokenStore } from '../../auth/tokenStore';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { AppLanguage } from '../../i18n';
-import { fonts, radii, spacing, useTheme } from '../../theme';
+import { spacing, useTheme } from '../../theme';
 import { deleteAccount, linkApple, unlinkApple } from '../auth/appleAccount';
 import { useModuleNav } from '../nav/ModuleNavContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
+import { SettingsAboutSheet } from './SettingsAboutSheet';
+import {
+  SETTINGS_ICONS,
+  SettingsAppearanceToggle,
+  SettingsDeleteCard,
+  SettingsFooter,
+  SettingsLogoutButton,
+  SettingsNotifySwitch,
+  SettingsRow,
+  SettingsSection,
+} from './SettingsChrome';
+import { SettingsEmailSheet, SettingsLanguageSheet, SettingsNameSheet } from './SettingsEditors';
+import {
+  fetchOwnerSettingsProfile,
+  patchOwnerDisplayName,
+  requestOwnerEmailChange,
+  settingsApiErrorMessage,
+} from './settingsProfileApi';
 
 type Props = {
   onLogout: () => void;
@@ -16,21 +34,55 @@ type Props = {
   onOpenAiLimits?: () => void;
 };
 
+type Sheet = 'none' | 'name' | 'email' | 'language' | 'about';
+
 async function open(url: string) {
   await Linking.openURL(url);
 }
 
-/** Grouped Settings; AI Limits hosted here (not in CM hub). */
+function languageLabel(lang: AppLanguage, tr: (key: 'settingsLangEn' | 'settingsLangAr' | 'settingsLangFr') => string) {
+  if (lang === 'ar') return tr('settingsLangAr');
+  if (lang === 'fr') return tr('settingsLangFr');
+  return tr('settingsLangEn');
+}
+
+/** iOS Settings handoff — ACCOUNT / PREFERENCES / SUPPORT & LEGAL cards. */
 export function SettingsScreen({
   onLogout,
   onOpenNotifications,
   onOpenAiLimits,
 }: Props) {
   const { tr, language, setLanguage } = useI18n();
-  const { colors, mode, setMode } = useTheme();
+  const { resolved, setMode } = useTheme();
   const nav = useModuleNav();
+  const [sheet, setSheet] = useState<Sheet>('none');
+  const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
   const [appleBusy, setAppleBusy] = useState(false);
-  const showAppleAccount = Platform.OS === 'ios';
+  const [nameBusy, setNameBusy] = useState(false);
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailNotice, setEmailNotice] = useState<string | null>(null);
+
+  const loadProfile = useCallback(async () => {
+    const stored = await tokenStore.getUser();
+    if (stored) {
+      setDisplayName(stored.displayName || stored.name || '');
+      setEmail(stored.email);
+    }
+    try {
+      const profile = await fetchOwnerSettingsProfile();
+      setDisplayName(profile.displayName);
+      if (profile.email) setEmail(profile.email);
+    } catch {
+      /* signed-in cache already applied; guest / 401 leaves fields empty */
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadProfile();
+  }, [loadProfile, nav.areaFocusNonce]);
 
   async function runLinkApple() {
     if (appleBusy) return;
@@ -89,188 +141,165 @@ export function SettingsScreen({
     }
   }
 
+  async function saveName(next: string) {
+    const cleaned = next.trim();
+    if (!cleaned) {
+      setNameError(tr('settingsNameRequired'));
+      return;
+    }
+    setNameBusy(true);
+    setNameError(null);
+    try {
+      const profile = await patchOwnerDisplayName(cleaned);
+      setDisplayName(profile.displayName);
+      setSheet('none');
+    } catch (err) {
+      setNameError(settingsApiErrorMessage(err, tr('settingsNameSaveError')));
+    } finally {
+      setNameBusy(false);
+    }
+  }
+
+  async function saveEmail(nextEmail: string, password: string) {
+    setEmailBusy(true);
+    setEmailError(null);
+    setEmailNotice(null);
+    try {
+      const message = await requestOwnerEmailChange(nextEmail, password);
+      setEmailNotice(message || tr('settingsEmailChangeSent'));
+    } catch (err) {
+      setEmailError(settingsApiErrorMessage(err, tr('settingsEmailSaveError')));
+    } finally {
+      setEmailBusy(false);
+    }
+  }
+
+  function openNotifications() {
+    onOpenNotifications?.();
+  }
+
   return (
-    <ScreenChrome title={tr('settings')} subtitle={tr('settingsSub')}>
+    <ScreenChrome title={tr('settings')}>
       <ScrollView
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[styles.meta, { color: colors.textMuted }]}>
-          Linas AI {APP_VERSION} · build {APP_BUILD_LABEL}
-        </Text>
-
-        <Text style={[styles.group, { color: colors.textDim }]}>{tr('groupAccount')}</Text>
-        <Row
-          title={tr('settingsSignedInProfile')}
-          subtitle={tr('settingsSignedInProfileSub')}
-          onPress={() => undefined}
-          disabled
-        />
-        <Row
-          title={tr('settingsBusinessProfile')}
-          subtitle={tr('settingsBusinessProfileSub')}
-          onPress={nav.goChat}
-          note={tr('settingsBusinessProfileNote')}
-        />
-        {showAppleAccount ? (
-          <>
-            <Row
-              title={tr('settingsLinkApple')}
-              subtitle={tr('settingsLinkAppleSub')}
-              onPress={() => void runLinkApple()}
-              disabled={appleBusy}
-            />
-            <Row
-              title={tr('settingsUnlinkApple')}
-              subtitle={tr('settingsUnlinkAppleSub')}
-              onPress={() => void runUnlinkApple()}
-              disabled={appleBusy}
-            />
-          </>
-        ) : null}
-        <Row
-          title={tr('settingsDeleteAccount')}
-          subtitle={tr('settingsDeleteAccountSub')}
-          onPress={confirmDeleteAccount}
-          disabled={appleBusy}
-        />
-        {onOpenNotifications ? (
-          <Row
-            title={tr('notificationsTitle')}
-            subtitle={tr('notificationsSub')}
-            onPress={onOpenNotifications}
+        <SettingsSection title={tr('groupAccount')}>
+          <SettingsRow
+            icon={SETTINGS_ICONS.name}
+            label={tr('settingsChangeName')}
+            value={displayName}
+            onPress={() => {
+              setNameError(null);
+              setSheet('name');
+            }}
           />
-        ) : null}
+          <SettingsRow
+            icon={SETTINGS_ICONS.email}
+            label={tr('changeEmail')}
+            value={email}
+            onPress={() => {
+              setEmailError(null);
+              setEmailNotice(null);
+              setSheet('email');
+            }}
+          />
+          <SettingsRow
+            icon={SETTINGS_ICONS.bell}
+            label={tr('notificationsTitle')}
+            hint={tr('settingsNotificationsHint')}
+            showChevron={false}
+            last
+            onPress={onOpenNotifications ? openNotifications : undefined}
+            accessory={
+              onOpenNotifications ? (
+                <SettingsNotifySwitch value onValueChange={() => openNotifications()} />
+              ) : null
+            }
+          />
+        </SettingsSection>
 
-        <Text style={[styles.group, { color: colors.textDim }]}>{tr('settingsPreferences')}</Text>
-        <Text style={[styles.label, { color: colors.textMuted }]}>{tr('language')}</Text>
-        <View style={styles.chips}>
-          {(['en', 'ar', 'fr'] as AppLanguage[]).map((lang) => (
-            <Pressable
-              key={lang}
-              style={[
-                styles.chip,
-                { borderColor: colors.border, backgroundColor: colors.bgElevated },
-                language === lang && { borderColor: colors.accent, backgroundColor: colors.surfaceAlt },
-              ]}
-              onPress={() => setLanguage(lang)}
-              accessibilityLabel={`${tr('language')} ${lang}`}
-            >
-              <Text style={{ color: colors.text, fontFamily: fonts.bodyMedium }}>{lang.toUpperCase()}</Text>
-            </Pressable>
-          ))}
-        </View>
-        <Text style={[styles.label, { color: colors.textMuted }]}>{tr('settingsAppearance')}</Text>
-        <View style={styles.chips}>
-          {(['system', 'light', 'dark'] as const).map((m) => (
-            <Pressable
-              key={m}
-              style={[
-                styles.chip,
-                { borderColor: colors.border, backgroundColor: colors.bgElevated },
-                mode === m && { borderColor: colors.accent, backgroundColor: colors.surfaceAlt },
-              ]}
-              onPress={() => setMode(m)}
-              accessibilityLabel={`${tr('settingsAppearance')} ${m}`}
-            >
-              <Text style={{ color: colors.text, fontFamily: fonts.bodyMedium }}>{m}</Text>
-            </Pressable>
-          ))}
-        </View>
+        <SettingsSection title={tr('settingsPreferences')}>
+          <SettingsRow
+            icon={SETTINGS_ICONS.globe}
+            label={tr('language')}
+            value={languageLabel(language, tr)}
+            onPress={() => setSheet('language')}
+          />
+          <SettingsRow
+            icon={SETTINGS_ICONS.appearance}
+            label={tr('settingsAppearance')}
+            showChevron={false}
+            last
+            accessory={<SettingsAppearanceToggle resolved={resolved} onSelect={setMode} />}
+          />
+        </SettingsSection>
 
-        {onOpenAiLimits ? (
-          <>
-            <Text style={[styles.group, { color: colors.textDim }]}>{tr('settingsAiSection')}</Text>
-            <Row
-              title={tr('settingsAiLimits')}
-              subtitle={tr('settingsAiLimitsSub')}
-              onPress={onOpenAiLimits}
-            />
-          </>
-        ) : null}
+        <SettingsSection title={tr('settingsSupportLegal')}>
+          <SettingsRow
+            icon={SETTINGS_ICONS.help}
+            label={tr('settingsHelpSupport')}
+            onPress={() => void open(LEGAL_URLS.supportMailto)}
+          />
+          <SettingsRow
+            icon={SETTINGS_ICONS.about}
+            label={tr('settingsAboutLinas')}
+            onPress={() => setSheet('about')}
+          />
+          <SettingsRow
+            icon={SETTINGS_ICONS.terms}
+            label={tr('settingsTermsPrivacy')}
+            onPress={() => void open(LEGAL_URLS.terms)}
+          />
+          <SettingsRow
+            icon={SETTINGS_ICONS.data}
+            label={tr('dataDeletion')}
+            last
+            onPress={() => void open(LEGAL_URLS.dataDeletion)}
+          />
+        </SettingsSection>
 
-        <Text style={[styles.group, { color: colors.textDim }]}>{tr('settingsSecuritySupport')}</Text>
-        <Row title={tr('settingsPrivacyData')} onPress={() => void open(LEGAL_URLS.privacy)} />
-        <Row
-          title={tr('settingsHelpSupport')}
-          onPress={() => void open(LEGAL_URLS.supportMailto)}
-          note={tr('settingsHelpSupportNote')}
-        />
-        <Row title={tr('settingsAboutLegal')} onPress={() => void open(LEGAL_URLS.terms)} />
-        <Row title={tr('terms')} onPress={() => void open(LEGAL_URLS.terms)} />
-        <Row title={tr('privacy')} onPress={() => void open(LEGAL_URLS.privacy)} />
-        <Row title={tr('dataDeletion')} onPress={() => void open(LEGAL_URLS.dataDeletion)} />
-
-        <View style={styles.logout}>
-          <PrimaryButton label={tr('logout')} variant="danger" onPress={onLogout} />
-        </View>
+        <SettingsDeleteCard onPress={confirmDeleteAccount} />
+        <SettingsLogoutButton onPress={onLogout} />
+        <SettingsFooter version={APP_VERSION} build={APP_BUILD_LABEL} />
       </ScrollView>
+
+      <SettingsNameSheet
+        visible={sheet === 'name'}
+        initialName={displayName}
+        busy={nameBusy}
+        error={nameError}
+        onClose={() => setSheet('none')}
+        onSave={(name) => void saveName(name)}
+      />
+      <SettingsEmailSheet
+        visible={sheet === 'email'}
+        busy={emailBusy}
+        error={emailError}
+        notice={emailNotice}
+        onClose={() => setSheet('none')}
+        onSave={(next, password) => void saveEmail(next, password)}
+      />
+      <SettingsLanguageSheet
+        visible={sheet === 'language'}
+        language={language}
+        onClose={() => setSheet('none')}
+        onSelect={setLanguage}
+      />
+      <SettingsAboutSheet
+        visible={sheet === 'about'}
+        appleBusy={appleBusy}
+        onClose={() => setSheet('none')}
+        onOpenAiLimits={onOpenAiLimits}
+        onOpenBusinessProfile={nav.goChat}
+        onLinkApple={() => void runLinkApple()}
+        onUnlinkApple={() => void runUnlinkApple()}
+      />
     </ScreenChrome>
   );
 }
 
-function Row({
-  title,
-  subtitle,
-  note,
-  onPress,
-  disabled,
-}: {
-  title: string;
-  subtitle?: string;
-  note?: string;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      style={[
-        styles.row,
-        { backgroundColor: colors.surface, borderColor: colors.border, opacity: disabled ? 0.55 : 1 },
-      ]}
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityLabel={title}
-    >
-      <Text style={{ color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 16 }}>{title}</Text>
-      {subtitle ? (
-        <Text style={{ color: colors.textMuted, marginTop: 4, fontSize: 12 }}>{subtitle}</Text>
-      ) : null}
-      {note ? <Text style={{ color: colors.textDim, marginTop: 4, fontSize: 11 }}>{note}</Text> : null}
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  list: { paddingBottom: spacing.lg },
-  meta: { fontFamily: fonts.body, marginBottom: spacing.lg },
-  group: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 12,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  label: { fontFamily: fonts.body, fontSize: 12, marginBottom: spacing.sm },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md },
-  chip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  row: {
-    borderRadius: radii.md,
-    padding: spacing.lg,
-    borderWidth: 1,
-    marginBottom: spacing.sm,
-    minHeight: 48,
-    justifyContent: 'center',
-  },
-  logout: { marginTop: spacing.xxl, marginBottom: spacing.xxl },
+  list: { paddingBottom: spacing.lg, paddingTop: spacing.sm },
 });
