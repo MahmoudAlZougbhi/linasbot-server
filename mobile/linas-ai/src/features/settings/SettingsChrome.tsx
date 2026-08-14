@@ -40,7 +40,9 @@ export function SettingsSection({ title, children }: { title: string; children: 
   const { colors } = useTheme();
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: colors.textDim }]}>{title}</Text>
+      <Text style={[styles.sectionTitle, { color: colors.textDim }]} maxFontSizeMultiplier={1.2}>
+        {title}
+      </Text>
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {children}
       </View>
@@ -279,9 +281,10 @@ export function SettingsSheet({
 const styles = StyleSheet.create({
   section: { marginBottom: spacing.lg },
   sectionTitle: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 12,
-    letterSpacing: 0.9,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    lineHeight: 14,
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
     marginBottom: spacing.sm,
     marginLeft: 4,
