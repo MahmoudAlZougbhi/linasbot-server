@@ -48,4 +48,7 @@ test('unified chats parse keeps valid rows when one item is malformed', () => {
   const types = read('features/livechat/liveChatTypes.ts');
   assert.match(types, /function parseLiveChatItems/);
   assert.match(types, /LiveChatItemSchema\.safeParse/);
+  assert.match(types, /customer_info/);
+  assert.match(types, /matchesChannelFilter/);
+  assert.match(types, /if \(filter === 'all'\) return true/);
 });

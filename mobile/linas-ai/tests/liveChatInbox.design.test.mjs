@@ -20,7 +20,12 @@ test('inbox is a flat list with All/Human filters and no section headers', () =>
   assert.match(inbox, /InboxSearchBar/);
   assert.match(inbox, /InboxChannelChips/);
   assert.match(inbox, /InboxFilterPills/);
-  assert.match(inbox, /data=\{chats\}/);
+  assert.match(inbox, /<FlatList/);
+  assert.match(inbox, /data=\{visibleChats\}/);
+  assert.match(inbox, /styles\.toolbar/);
+  assert.doesNotMatch(inbox, /if \(loading\) \{/);
+  const chips = read('features/livechat/InboxChannelChips.tsx');
+  assert.match(chips, /flexGrow:\s*0/);
 });
 
 test('row layout is icon / name+preview / time+badge+assignee', () => {
