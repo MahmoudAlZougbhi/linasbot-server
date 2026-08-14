@@ -99,9 +99,10 @@ describe('appleAccount + Settings source wiring', () => {
 
   it('Settings Account section wires link / unlink / delete with confirm', () => {
     const settings = read('features/settings/SettingsScreen.tsx');
+    const about = read('features/settings/SettingsAboutSheet.tsx');
     assert.match(settings, /linkApple|unlinkApple|deleteAccount/);
-    assert.match(settings, /settingsLinkApple/);
-    assert.match(settings, /settingsUnlinkApple/);
+    assert.match(about, /settingsLinkApple/);
+    assert.match(about, /settingsUnlinkApple/);
     assert.match(settings, /settingsDeleteAccount/);
     assert.match(settings, /Alert\.alert/);
     assert.match(settings, /onLogout/);

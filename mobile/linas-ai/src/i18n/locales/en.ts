@@ -9,6 +9,7 @@ import { faqUiEn } from './faqUiEn';
 import { requestsEn } from './requestsEn';
 import { usersUiEn } from './usersUiEn';
 import { authFlowEn } from './authFlowEn';
+import { settingsUiEn } from './settingsUiEn';
 
 export const en = {
   appName: 'Linas AI',
@@ -302,6 +303,7 @@ export const en = {
   googleSignInUnavailable: 'Google sign-in is not configured yet.',
   googleLinkRequired: 'An account with this email already exists. Sign in and link Google.',
   ...authFlowEn,
+  ...settingsUiEn,
   ...appleAccountEn,
   ...integrationsDisplayEn,
   ...subscriptionEn,

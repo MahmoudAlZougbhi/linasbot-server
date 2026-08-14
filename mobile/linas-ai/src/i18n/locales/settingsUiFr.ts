@@ -1,0 +1,22 @@
+/** Settings screen copy (fr) — iOS handoff labels. */
+export const settingsUiFr = {
+  settingsChangeName: 'Changer le nom',
+  settingsNamePlaceholder: 'Votre nom',
+  settingsNameRequired: 'Entrez un nom.',
+  settingsNameSaveError: 'Impossible de mettre à jour le nom. Réessayez.',
+  settingsSave: 'Enregistrer',
+  settingsNewEmail: 'Nouvel e-mail',
+  settingsCurrentPassword: 'Mot de passe actuel',
+  settingsEmailChangeSent: 'Si l’adresse peut être utilisée, un e-mail de confirmation a été envoyé.',
+  settingsEmailSaveError: 'Impossible de demander le changement d’e-mail. Réessayez.',
+  settingsNotificationsHint: 'Alertes chats et demandes',
+  settingsSupportLegal: 'Assistance & Légal',
+  settingsAboutLinas: 'À propos de Linas AI',
+  settingsTermsPrivacy: 'Conditions & Confidentialité',
+  settingsAppearanceLight: 'Clair',
+  settingsAppearanceDark: 'Sombre',
+  settingsLangEn: 'Anglais',
+  settingsLangAr: 'Arabe',
+  settingsLangFr: 'Français',
+  settingsVersionFooter: 'Linas AI • Version {version} ({build})',
+};

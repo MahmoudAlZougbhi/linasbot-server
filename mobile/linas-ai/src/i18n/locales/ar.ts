@@ -9,6 +9,7 @@ import { faqUiAr } from './faqUiAr';
 import { requestsAr } from './requestsAr';
 import { usersUiAr } from './usersUiAr';
 import { authFlowAr } from './authFlowAr';
+import { settingsUiAr } from './settingsUiAr';
 import type { StringKey } from './en';
 
 export const ar = {
@@ -304,6 +305,7 @@ export const ar = {
   googleSignInUnavailable: 'تسجيل الدخول عبر Google غير مُعد بعد.',
   googleLinkRequired: 'يوجد حساب بهذا البريد. سجّل الدخول ثم اربط Google.',
   ...authFlowAr,
+  ...settingsUiAr,
   ...appleAccountAr,
   ...integrationsDisplayAr,
   ...subscriptionAr,

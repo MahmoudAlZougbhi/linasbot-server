@@ -453,9 +453,13 @@ test('drawer search chrome is header icon; New chat + Settings in footer dock', 
   assert.match(configSrc, /APP_VERSION_LABEL/);
   assert.match(configSrc, /APP_BUILD_LABEL/);
   const settings = read('features/settings/SettingsScreen.tsx');
+  const settingsChrome = read('features/settings/SettingsChrome.tsx');
+  const settingsEn = read('i18n/locales/settingsUiEn.ts');
   assert.match(settings, /APP_VERSION/);
   assert.match(settings, /APP_BUILD_LABEL/);
-  assert.match(settings, /build \{APP_BUILD_LABEL\}/);
+  assert.match(settings, /SettingsFooter version=\{APP_VERSION\} build=\{APP_BUILD_LABEL\}/);
+  assert.match(settingsChrome, /settingsVersionFooter/);
+  assert.match(settingsEn, /Linas AI • Version \{version\} \(\{build\}\)/);
   // EAS: remote version source + autoIncrement so each TF/store ship bumps build without a commit.
   const easJson = readFileSync(join(root, 'eas.json'), 'utf8');
   assert.match(easJson, /"appVersionSource":\s*"remote"/);
@@ -508,8 +512,10 @@ test('drawer search chrome is header icon; New chat + Settings in footer dock', 
 
 test('Settings hosts AI Limits only (no Actions)', () => {
   const settings = read('features/settings/SettingsScreen.tsx');
+  const about = read('features/settings/SettingsAboutSheet.tsx');
   const tree = read('app/AppScreenTree.tsx');
   assert.match(settings, /onOpenAiLimits/);
+  assert.match(about, /settingsAiLimits/);
   assert.doesNotMatch(settings, /onOpenActions/);
   assert.doesNotMatch(settings, /settingsActions/);
   assert.doesNotMatch(tree, /section: 'actions'/);
@@ -517,12 +523,15 @@ test('Settings hosts AI Limits only (no Actions)', () => {
 
 test('Settings hosts Notifications and Logout; drawer does not', () => {
   const settings = read('features/settings/SettingsScreen.tsx');
+  const chrome = read('features/settings/SettingsChrome.tsx');
   const nav = read('features/nav/NavDrawer.tsx');
   const chat = read('features/chat/ChatScreen.tsx');
   const tree = read('app/AppScreenTree.tsx');
   assert.match(settings, /onOpenNotifications/);
   assert.match(settings, /notificationsTitle/);
-  assert.match(settings, /tr\('logout'\)/);
+  assert.match(settings, /SettingsLogoutButton/);
+  assert.match(settings, /onLogout/);
+  assert.match(chrome, /tr\('logout'\)/);
   assert.doesNotMatch(nav, /onOpenNotifications/);
   assert.doesNotMatch(nav, /onLogout/);
   assert.doesNotMatch(nav, /Notifications/);
@@ -532,10 +541,10 @@ test('Settings hosts Notifications and Logout; drawer does not', () => {
 });
 
 test('Settings does not duplicate AI Basics CM store', () => {
-  const settings = read('features/settings/SettingsScreen.tsx');
-  assert.match(settings, /settingsBusinessProfileNote/);
-  assert.doesNotMatch(settings, /MFA/);
-  assert.doesNotMatch(settings, /Passkey/);
+  const about = read('features/settings/SettingsAboutSheet.tsx');
+  assert.match(about, /settingsBusinessProfileNote/);
+  assert.doesNotMatch(about, /MFA/);
+  assert.doesNotMatch(about, /Passkey/);
   const en = read('i18n/locales/en.ts');
   assert.match(en, /Open AI Setup → AI Basics/);
 });
