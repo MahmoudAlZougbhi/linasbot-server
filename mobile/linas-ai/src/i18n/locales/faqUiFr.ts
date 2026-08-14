@@ -1,0 +1,23 @@
+export const faqUiFr = {
+  faqCreateBannerTitle: 'Ajouter une réponse prête',
+  faqCreateBannerBody:
+    'Rédigez la question et la réponse dans une langue. Nous traduisons en arabe, anglais, français et franco.',
+  faqSaveTranslate: 'Enregistrer et traduire',
+  faqCreateFooter: 'Les réponses enregistrées répondent instantanément et utilisent moins de crédits IA.',
+  faqTranslatedStatus: 'Traduit',
+  faqLangPickerTitle: 'Langues',
+  faqLangPickerSub: 'Choisissez les langues couvertes par cette réponse intelligente.',
+  faqLangSearch: 'Rechercher une langue',
+  faqLangSelected: 'sélectionnée(s)',
+  faqLangAutoTranslate: 'Les langues manquantes sont traduites automatiquement à l’enregistrement.',
+  faqLangSave: 'Enregistrer les langues',
+  faqLangSection: 'Langues',
+  faqAddLanguage: 'Ajouter une langue',
+  faqLangHint: 'Le client reçoit automatiquement la langue correspondante.',
+  faqAnswersCount: 'réponses',
+  faqEmptyQuestion: '(aucune question)',
+  faqTranslateExistingTitle: 'Traduire les réponses existantes ?',
+  faqTranslateExistingBody: 'Traduire les réponses intelligentes actuelles vers {lang} ?',
+  faqTranslateSkip: 'Ignorer',
+  faqTranslateAll: 'Tout traduire',
+} as const;

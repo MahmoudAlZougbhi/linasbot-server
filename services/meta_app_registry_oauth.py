@@ -170,7 +170,7 @@ class MetaAppRegistryOAuthMixin:
                     "binding_id": updated.binding_id,
                 }
             )
-            return updated
+            return cast(MetaAssetBinding, updated)
 
     def revoke_authorization(
         self,

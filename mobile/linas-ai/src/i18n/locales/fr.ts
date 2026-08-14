@@ -5,6 +5,7 @@ import { integrationsDisplayFr } from './integrationsDisplayFr';
 import { subscriptionFr } from './subscriptionFr';
 import { smartFollowUpFr } from './smartFollowUpFr';
 import { whatsappFr } from './whatsappFr';
+import { faqUiFr } from './faqUiFr';
 import { requestsFr } from './requestsFr';
 import type { StringKey } from './en';
 
@@ -100,7 +101,6 @@ export const fr = {
   integrationsToggleError: 'Impossible de mettre à jour le réglage du canal. Réessayez.',
   metaOAuthSuccess: 'Accès Meta mis à jour. Actualisation du statut…',
   metaOAuthCancelled: 'Autorisation Meta annulée.',
-  
   metaOAuthFailed: 'Échec de l’autorisation Meta. Réessayez via Gérer l’accès Meta.',
   toggleDms: 'Messages privés',
   toggleComments: 'Commentaires',
@@ -153,27 +153,6 @@ export const fr = {
   smartAnswers: 'Réponses intelligentes',
   faqQuota: 'Quota FAQ',
   faqQuotaUpgrade: 'Quota de réponses intelligentes atteint. Passez à un plan supérieur.',
-  faqCreateBannerTitle: 'Ajouter une réponse prête',
-  faqCreateBannerBody:
-    'Rédigez la question et la réponse dans une langue. Nous traduisons en arabe, anglais, français et franco.',
-  faqSaveTranslate: 'Enregistrer et traduire',
-  faqCreateFooter: 'Les réponses enregistrées répondent instantanément et utilisent moins de crédits IA.',
-  faqTranslatedStatus: 'Traduit',
-  faqLangPickerTitle: 'Langues',
-  faqLangPickerSub: 'Choisissez les langues couvertes par cette réponse intelligente.',
-  faqLangSearch: 'Rechercher une langue',
-  faqLangSelected: 'sélectionnée(s)',
-  faqLangAutoTranslate: 'Les langues manquantes sont traduites automatiquement à l’enregistrement.',
-  faqLangSave: 'Enregistrer les langues',
-  faqLangSection: 'Langues',
-  faqAddLanguage: 'Ajouter une langue',
-  faqLangHint: 'Le client reçoit automatiquement la langue correspondante.',
-  faqAnswersCount: 'réponses',
-  faqEmptyQuestion: '(aucune question)',
-  faqTranslateExistingTitle: 'Traduire les réponses existantes ?',
-  faqTranslateExistingBody: 'Traduire les réponses intelligentes actuelles vers {lang} ?',
-  faqTranslateSkip: 'Ignorer',
-  faqTranslateAll: 'Tout traduire',
   likeFaqAction: 'J’aime',
   likeFaqTitle: 'Enregistrer dans la FAQ (4 langues)',
   likeFaqHint:
@@ -389,6 +368,7 @@ export const fr = {
   ...subscriptionFr,
   ...whatsappFr,
   ...smartFollowUpFr,
+  ...faqUiFr,
   ...requestsFr,
   ...dashboardFr,
   ...aiSetupFr,

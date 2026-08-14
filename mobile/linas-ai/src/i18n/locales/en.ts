@@ -5,6 +5,7 @@ import { integrationsDisplayEn } from './integrationsDisplayEn';
 import { subscriptionEn } from './subscriptionEn';
 import { smartFollowUpEn } from './smartFollowUpEn';
 import { whatsappEn } from './whatsappEn';
+import { faqUiEn } from './faqUiEn';
 import { requestsEn } from './requestsEn';
 
 export const en = {
@@ -110,27 +111,6 @@ export const en = {
   faqRemaining: 'remaining',
   faqQuota: 'FAQ quota',
   faqQuotaUpgrade: 'Smart Answers quota reached. Upgrade your plan for a higher limit.',
-  faqCreateBannerTitle: 'Add a ready-made answer',
-  faqCreateBannerBody:
-    'Write the question and answer in one language. We translate to Arabic, English, French, and Franco.',
-  faqSaveTranslate: 'Save & translate',
-  faqCreateFooter: 'Saved answers reply instantly and use fewer AI credits.',
-  faqTranslatedStatus: 'Translated',
-  faqLangPickerTitle: 'Languages',
-  faqLangPickerSub: 'Choose which languages this Smart Answer should cover.',
-  faqLangSearch: 'Search languages',
-  faqLangSelected: 'selected',
-  faqLangAutoTranslate: 'Missing languages are auto-translated on save.',
-  faqLangSave: 'Save languages',
-  faqLangSection: 'Languages',
-  faqAddLanguage: 'Add language',
-  faqLangHint: 'Customers get the matching language automatically.',
-  faqAnswersCount: 'answers',
-  faqEmptyQuestion: '(no question)',
-  faqTranslateExistingTitle: 'Translate existing answers?',
-  faqTranslateExistingBody: 'Translate current Smart Answers into {lang}?',
-  faqTranslateSkip: 'Skip',
-  faqTranslateAll: 'Translate all',
   logout: 'Log out',
   privacy: 'Privacy Policy',
   terms: 'Terms',
@@ -382,6 +362,7 @@ export const en = {
   ...subscriptionEn,
   ...whatsappEn,
   ...smartFollowUpEn,
+  ...faqUiEn,
   ...requestsEn,
   ...dashboardEn,
   ...aiSetupEn,

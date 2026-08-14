@@ -5,6 +5,7 @@ import { integrationsDisplayAr } from './integrationsDisplayAr';
 import { subscriptionAr } from './subscriptionAr';
 import { smartFollowUpAr } from './smartFollowUpAr';
 import { whatsappAr } from './whatsappAr';
+import { faqUiAr } from './faqUiAr';
 import { requestsAr } from './requestsAr';
 import type { StringKey } from './en';
 
@@ -149,26 +150,6 @@ export const ar = {
   smartAnswers: 'الإجابات الذكية',
   faqQuota: 'حصة الأسئلة الشائعة',
   faqQuotaUpgrade: 'تم بلوغ حد الإجابات الذكية. قم بترقية خطتك لحد أعلى.',
-  faqCreateBannerTitle: 'أضف جواباً جاهزاً',
-  faqCreateBannerBody: 'اكتب السؤال والجواب بلغة واحدة. نترجم إلى العربي والإنجليزي والفرنسي والفرانكو.',
-  faqSaveTranslate: 'حفظ وترجمة',
-  faqCreateFooter: 'الإجابات المحفوظة ترد فوراً وتستهلك رصيد ذكاء أقل.',
-  faqTranslatedStatus: 'مترجم',
-  faqLangPickerTitle: 'اللغات',
-  faqLangPickerSub: 'اختر اللغات التي يغطيها هذا الجواب الذكي.',
-  faqLangSearch: 'ابحث عن لغة',
-  faqLangSelected: 'محدد',
-  faqLangAutoTranslate: 'اللغات الناقصة تُترجم تلقائياً عند الحفظ.',
-  faqLangSave: 'حفظ اللغات',
-  faqLangSection: 'اللغات',
-  faqAddLanguage: 'إضافة لغة',
-  faqLangHint: 'يحصل الزبون على اللغة المناسبة تلقائياً.',
-  faqAnswersCount: 'أجوبة',
-  faqEmptyQuestion: '(بدون سؤال)',
-  faqTranslateExistingTitle: 'ترجمة الإجابات الحالية؟',
-  faqTranslateExistingBody: 'ترجمة الإجابات الذكية الحالية إلى {lang}؟',
-  faqTranslateSkip: 'تخطي',
-  faqTranslateAll: 'ترجمة الكل',
   likeFaqAction: 'إعجاب',
   likeFaqTitle: 'حفظ في الأسئلة الشائعة (4 لغات)',
   likeFaqHint:
@@ -383,6 +364,7 @@ export const ar = {
   ...subscriptionAr,
   ...whatsappAr,
   ...smartFollowUpAr,
+  ...faqUiAr,
   ...requestsAr,
   ...dashboardAr,
   ...aiSetupAr,
