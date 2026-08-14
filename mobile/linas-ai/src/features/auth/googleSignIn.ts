@@ -1,5 +1,6 @@
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
 import { z } from 'zod';
 
 import { apiFetch, ApiError } from '../../api/client';
@@ -12,6 +13,8 @@ export type GoogleSignInResult =
   | { ok: true }
   | { ok: false; code: 'cancel' | 'unavailable' | 'link_required' | 'error'; message?: string; emailHint?: string };
 
+export type GoogleClientIds = { web: string; ios: string; android: string };
+
 const LinkRequiredSchema = z
   .object({
     code: z.literal('link_required'),
@@ -19,19 +22,36 @@ const LinkRequiredSchema = z
   })
   .passthrough();
 
-function clientIds() {
+function clientIds(): GoogleClientIds {
   const web = (process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '').trim();
   const ios = (process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '').trim();
   const android = (process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '').trim();
   return { web, ios, android };
 }
 
-/** True when a web client id is configured (required for ID-token Google Sign-In). */
-export function isGoogleSignInConfigured(): boolean {
-  return Boolean(clientIds().web);
+/**
+ * expo-auth-session throws if the platform client id is missing
+ * (`iosClientId` on iOS, `androidClientId` on Android). Web still needs `clientId`.
+ */
+export function isGoogleAuthConfiguredForPlatform(
+  ids: GoogleClientIds,
+  platform: string,
+): boolean {
+  if (!ids.web) return false;
+  if (platform === 'ios') return Boolean(ids.ios);
+  if (platform === 'android') return Boolean(ids.android);
+  return true;
 }
 
-/** Call from a React component — returns AuthSession Google ID-token request triple. */
+/** True when Google Sign-In can run on this OS without throwing. */
+export function isGoogleSignInConfigured(): boolean {
+  return isGoogleAuthConfiguredForPlatform(clientIds(), Platform.OS);
+}
+
+/**
+ * Call only from a component mounted when `isGoogleSignInConfigured()` is true.
+ * expo-auth-session requires the platform client id and throws otherwise.
+ */
 export function useGoogleIdTokenAuthRequest() {
   const { web, ios, android } = clientIds();
   return Google.useIdTokenAuthRequest({
