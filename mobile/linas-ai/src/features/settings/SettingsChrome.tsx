@@ -13,7 +13,7 @@ export const SETTINGS_ICONS = {
   globe: feather('globe'),
   appearance: mci('circle-half-full'),
   help: mci('comment-question-outline'),
-  about: feather('info'),
+  limits: feather('sliders'),
   terms: feather('file-text'),
   data: mci('shield-check-outline'),
   trash: feather('trash-2'),
@@ -62,7 +62,7 @@ export function SettingsRow({
   const { colors } = useTheme();
   const danger = tone === 'danger';
   const iconFg = danger ? colors.danger : colors.accent;
-  const iconBg = danger ? 'rgba(220, 38, 38, 0.10)' : colors.accentSoft;
+  const iconBg = danger ? 'rgba(220, 38, 38, 0.10)' : colors.accentGlow;
   const labelColor = danger ? colors.danger : colors.text;
   const inner = (
     <View style={styles.rowInner}>

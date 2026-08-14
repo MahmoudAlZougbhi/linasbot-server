@@ -11,7 +11,6 @@ export const settingsUiAr = {
   settingsEmailSaveError: 'تعذّر طلب تغيير البريد. حاول مرة أخرى.',
   settingsNotificationsHint: 'تنبيهات الدردشات والطلبات',
   settingsSupportLegal: 'الدعم والقانونية',
-  settingsAboutLinas: 'حول Linas AI',
   settingsTermsPrivacy: 'الشروط والخصوصية',
   settingsAppearanceLight: 'فاتح',
   settingsAppearanceDark: 'داكن',

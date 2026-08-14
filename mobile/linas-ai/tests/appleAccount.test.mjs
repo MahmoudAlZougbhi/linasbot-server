@@ -97,16 +97,14 @@ describe('appleAccount + Settings source wiring', () => {
     assert.match(src, /tokenStore\.clear/);
   });
 
-  it('Settings Account section wires link / unlink / delete with confirm', () => {
+  it('Settings Account section wires delete with confirm; no Apple link/unlink', () => {
     const settings = read('features/settings/SettingsScreen.tsx');
-    const about = read('features/settings/SettingsAboutSheet.tsx');
-    assert.match(settings, /linkApple|unlinkApple|deleteAccount/);
-    assert.match(about, /settingsLinkApple/);
-    assert.match(about, /settingsUnlinkApple/);
+    assert.match(settings, /deleteAccount/);
+    assert.doesNotMatch(settings, /linkApple/);
+    assert.doesNotMatch(settings, /unlinkApple/);
     assert.match(settings, /settingsDeleteAccount/);
     assert.match(settings, /Alert\.alert/);
     assert.match(settings, /onLogout/);
-    assert.match(settings, /tokenStore|deleteAccount/);
   });
 
   it('sign-in sends authorization_code when Apple provides it', () => {
