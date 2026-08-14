@@ -59,7 +59,7 @@ export function WhatsAppCloudCard({
     (!connectable && !connected && !status?.pilot_entitled && status?.public_availability !== true);
   const conn = status?.connection;
   const subtitle = whatsappCardSubtitle(status, tr('integrationWhatsAppHandle'));
-  const healthy = connected && lifecycle !== 'needs_attention' && lifecycle !== 'failed';
+  const healthy = connected;
   const aiOn = Boolean(conn?.ai_eligible && conn?.ai_default_enabled);
 
   return (
