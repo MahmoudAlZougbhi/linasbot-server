@@ -13,6 +13,8 @@ import { useModuleDrawerHistory } from '../nav/useModuleDrawerHistory';
 type Props = {
   title: string;
   subtitle?: string;
+  titleColor?: string;
+  iconColor?: string;
   centerTitle?: boolean;
   headerRight?: ReactNode;
   children: ReactNode;
@@ -22,7 +24,15 @@ type Props = {
  * Module screen chrome: hamburger (same as Chat) opens the side drawer.
  * No Back chevron — return to chat via drawer New Chat / history.
  */
-export function ScreenChrome({ title, subtitle, centerTitle, headerRight, children }: Props) {
+export function ScreenChrome({
+  title,
+  subtitle,
+  titleColor,
+  iconColor,
+  centerTitle,
+  headerRight,
+  children,
+}: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { tr } = useI18n();
@@ -41,13 +51,13 @@ export function ScreenChrome({ title, subtitle, centerTitle, headerRight, childr
             accessibilityRole="button"
             hitSlop={4}
           >
-            <MenuIcon color={colors.text} />
+            <MenuIcon color={iconColor ?? colors.text} />
           </Pressable>
           <View style={[styles.titleBlock, centerTitle && styles.titleBlockCentered]}>
             <Text
               style={[
                 centerTitle ? styles.centeredTitle : typography.title,
-                { color: colors.text },
+                { color: titleColor ?? colors.text },
               ]}
               numberOfLines={1}
             >

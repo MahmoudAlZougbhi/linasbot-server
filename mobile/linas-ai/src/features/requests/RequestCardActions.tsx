@@ -59,15 +59,15 @@ export function RequestCardActions({
       <Pressable
         onPress={() => setAssignOpen(true)}
         disabled={busy}
-        style={styles.assign}
+        style={[styles.assign, { borderColor: colors.border, backgroundColor: colors.surface }]}
         accessibilityRole="button"
         accessibilityLabel={assigneeLabel}
       >
-        <AppIcon icon={feather('user')} size={14} color={colors.textMuted} />
-        <Text style={[styles.assignText, { color: colors.text }]} numberOfLines={1}>
+        <AppIcon icon={feather('user')} size={14} color={colors.accent} />
+        <Text style={[styles.assignText, { color: colors.accent }]} numberOfLines={1}>
           {assigneeLabel}
         </Text>
-        <AppIcon icon={feather('chevron-down')} size={14} color={colors.textMuted} />
+        <AppIcon icon={feather('chevron-down')} size={14} color={colors.accent} />
       </Pressable>
       <OutlineBtn label="Chat" icon="message-circle" onPress={onChat} disabled={busy} />
       <OutlineBtn label="Print" icon="printer" onPress={onPrint} disabled={busy} />
@@ -130,7 +130,17 @@ const styles = StyleSheet.create({
     minHeight: 36,
   },
   statusText: { fontFamily: fonts.bodyMedium, fontSize: 13 },
-  assign: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 8, minHeight: 36, maxWidth: 110 },
+  assign: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minHeight: 36,
+    maxWidth: 118,
+    borderWidth: 1,
+    borderRadius: radii.sm,
+  },
   assignText: { fontFamily: fonts.bodyMedium, fontSize: 13, flexShrink: 1 },
   outline: {
     flexDirection: 'row',

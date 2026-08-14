@@ -5,7 +5,8 @@ import { AppIcon, feather } from '../../components/AppIcon';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import { PlatformChannelIcon } from '../livechat/PlatformChannelIcon';
 import type { ChatChannel } from '../livechat/liveChatTypes';
-import { FILTER_PLATFORMS, formatShortDate } from './requestsFormat';
+import { RequestDateField } from './RequestDatePicker';
+import { FILTER_PLATFORMS } from './requestsFormat';
 import { RequestPickSheet } from './RequestPickSheet';
 import type { RequestFilters, StaffPick } from './useRequestsList';
 import { previewMatchedCount } from './useRequestsList';
@@ -18,12 +19,6 @@ type Props = {
   onClose: () => void;
   onApply: (next: RequestFilters) => void;
 };
-
-function shiftDay(ymd: string | null, delta: number): string {
-  const base = ymd ? new Date(`${ymd.slice(0, 10)}T12:00:00`) : new Date();
-  base.setDate(base.getDate() + delta);
-  return base.toISOString().slice(0, 10);
-}
 
 export function RequestFilterSheet({ visible, applied, staff, search, onClose, onApply }: Props) {
   const { colors } = useTheme();
@@ -98,7 +93,7 @@ export function RequestFilterSheet({ visible, applied, staff, search, onClose, o
                     styles.chip,
                     {
                       borderColor: selected ? colors.accent : colors.border,
-                      backgroundColor: colors.surface,
+                      backgroundColor: selected ? colors.accentSoft : colors.surface,
                     },
                   ]}
                 >
@@ -110,7 +105,7 @@ export function RequestFilterSheet({ visible, applied, staff, search, onClose, o
                   <Text style={[styles.chipLabel, { color: colors.text }]}>
                     {p.id === 'all' ? 'All' : p.channel === 'facebook' ? 'Facebook' : labelFor(p.channel)}
                   </Text>
-                  {selected && p.id !== 'all' ? (
+                  {selected ? (
                     <AppIcon icon={feather('check')} size={14} color={colors.accent} />
                   ) : null}
                 </Pressable>
@@ -120,15 +115,15 @@ export function RequestFilterSheet({ visible, applied, staff, search, onClose, o
 
           <Text style={[styles.section, { color: colors.textMuted }]}>Date range</Text>
           <View style={styles.dates}>
-            <DateField
-              placeholder="From"
+            <RequestDateField
+              label="From"
               value={draft.dateFrom}
-              onShift={(d) => setDraft((prev) => ({ ...prev, dateFrom: shiftDay(prev.dateFrom, d) }))}
+              onChange={(ymd) => setDraft((prev) => ({ ...prev, dateFrom: ymd }))}
             />
-            <DateField
-              placeholder="To"
+            <RequestDateField
+              label="To"
               value={draft.dateTo}
-              onShift={(d) => setDraft((prev) => ({ ...prev, dateTo: shiftDay(prev.dateTo, d) }))}
+              onChange={(ymd) => setDraft((prev) => ({ ...prev, dateTo: ymd }))}
             />
           </View>
 
@@ -181,30 +176,6 @@ function labelFor(channel: string): string {
   return 'Facebook';
 }
 
-function DateField({
-  placeholder,
-  value,
-  onShift,
-}: {
-  placeholder: string;
-  value: string | null;
-  onShift: (delta: number) => void;
-}) {
-  const { colors } = useTheme();
-  return (
-    <Pressable
-      onPress={() => onShift(value ? 1 : 0)}
-      onLongPress={() => onShift(-1)}
-      style={[styles.dateField, { borderColor: colors.border }]}
-    >
-      <Text style={{ color: value ? colors.text : colors.textDim, fontFamily: fonts.body, fontSize: 14, flex: 1 }}>
-        {value ? formatShortDate(value, 'en') : placeholder}
-      </Text>
-      <AppIcon icon={feather('calendar')} size={16} color={colors.textMuted} />
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: {
@@ -229,16 +200,6 @@ const styles = StyleSheet.create({
   },
   chipLabel: { fontFamily: fonts.bodyMedium, fontSize: 13 },
   dates: { flexDirection: 'row', gap: 8, marginBottom: spacing.md },
-  dateField: {
-    flex: 1,
-    minHeight: 44,
-    borderWidth: 1,
-    borderRadius: radii.sm,
-    paddingHorizontal: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
   assign: {
     minHeight: 44,
     borderWidth: 1,
