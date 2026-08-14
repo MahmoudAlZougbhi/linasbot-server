@@ -8,6 +8,7 @@ import { whatsappFr } from './whatsappFr';
 import { faqUiFr } from './faqUiFr';
 import { requestsFr } from './requestsFr';
 import { usersUiFr } from './usersUiFr';
+import { authFlowFr } from './authFlowFr';
 import type { StringKey } from './en';
 
 export const fr = {
@@ -30,9 +31,9 @@ export const fr = {
   languageInSettings: 'La langue se change à tout moment dans Réglages.',
   createAccount: 'Créer un compte',
   startWorkspace: 'Démarrez votre espace IA professionnel',
-  registerStepCredentials: 'D’abord, e-mail et mot de passe.',
+  registerStepCredentials: 'Entrez vos identifiants.',
   registerStepName: 'Parlez-nous de votre activité.',
-  registerStepGender: 'Optionnel — aide Linas à vous adresser correctement.',
+  registerStepGender: 'Choisissez ce qui vous convient. Vous pourrez changer plus tard.',
   registerNeedCredentials: 'Saisissez un e-mail valide et un mot de passe (12+ caractères).',
   registerNeedBusiness: 'Le nom de l’entreprise est requis.',
   registerFailed: 'Échec de l’inscription.',
@@ -264,9 +265,9 @@ export const fr = {
   guestStarterDmSub: 'Voir le flux de réponse sûr et d’audit.',
   guestStarterConnectTitle: 'Comment connecter mon activité ?',
   guestStarterConnectSub: 'Les étapes avant de vous connecter.',
-  loginWelcome: 'Bienvenue sur Linas AI',
-  loginTagline: 'Pensez. Demandez. Linas a la réponse.',
-  forgotPassword: 'Mot de passe oublié',
+  loginWelcome: 'Bon retour',
+  loginTagline: 'Connectez-vous à Linas AI',
+  forgotPassword: 'Mot de passe oublié ?',
   loginLegalAgree: 'En continuant, vous acceptez nos Conditions d’utilisation et notre Politique de confidentialité.',
   loginFailed: 'Échec de connexion. Vérifiez e-mail et mot de passe.',
   loginGenericError: 'Une erreur s’est produite. Réessayez.',
@@ -297,7 +298,7 @@ export const fr = {
   navUsage: 'Usage & Crédits',
   pinnedChats: 'Épinglés',
   recentChats: 'Récents',
-  socialContinueWith: 'ou continuer avec',
+  socialContinueWith: 'ou',
   socialContinueGoogle: 'Continuer avec Google',
   socialContinueApple: 'Continuer avec Apple',
   appleSignInFailed: 'Échec de la connexion Apple. Réessayez.',
@@ -305,6 +306,7 @@ export const fr = {
   googleSignInFailed: 'Échec de la connexion Google. Réessayez.',
   googleSignInUnavailable: 'La connexion Google n’est pas encore configurée.',
   googleLinkRequired: 'Un compte existe déjà avec cet e-mail. Connectez-vous puis liez Google.',
+  ...authFlowFr,
   ...appleAccountFr,
   ...integrationsDisplayFr,
   ...subscriptionFr,

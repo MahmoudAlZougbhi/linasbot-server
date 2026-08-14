@@ -2,6 +2,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { LoginScreen } from '../features/auth/LoginScreen';
 import { RegisterScreen } from '../features/auth/RegisterScreen';
+import { ForgotPasswordScreen } from '../features/auth/ForgotPasswordScreen';
 import { BillingScreen } from '../features/billing/BillingScreen';
 import { SubscriptionGateScreen } from '../features/billing/SubscriptionGateScreen';
 import { ChatScreen } from '../features/chat/ChatScreen';
@@ -64,14 +65,20 @@ export function AppScreenTree({
         <LoginScreen
           onLoggedIn={() => void afterLogin()}
           onGoRegister={() => setScreen({ name: 'register' })}
+          onForgotPassword={() => setScreen({ name: 'forgot_password' })}
           onBack={() => setScreen({ name: 'chat' })}
         />
       ) : null}
       {name === 'register' ? (
         <RegisterScreen
           onBack={() => setScreen({ name: 'login' })}
-          onDone={() => setScreen({ name: 'login' })}
           onLoggedIn={() => void afterLogin()}
+        />
+      ) : null}
+      {name === 'forgot_password' ? (
+        <ForgotPasswordScreen
+          onBack={() => setScreen({ name: 'login' })}
+          onDone={() => setScreen({ name: 'login' })}
         />
       ) : null}
       {showSubGate ? (

@@ -8,6 +8,7 @@ import { whatsappEn } from './whatsappEn';
 import { faqUiEn } from './faqUiEn';
 import { requestsEn } from './requestsEn';
 import { usersUiEn } from './usersUiEn';
+import { authFlowEn } from './authFlowEn';
 
 export const en = {
   appName: 'Linas AI',
@@ -29,9 +30,9 @@ export const en = {
   languageInSettings: 'Language can be changed anytime in Settings.',
   createAccount: 'Create account',
   startWorkspace: 'Start your business AI workspace',
-  registerStepCredentials: 'First, set your email and password.',
+  registerStepCredentials: 'Enter your login details.',
   registerStepName: 'Tell us about your business.',
-  registerStepGender: 'Optional — helps personalize how Linas addresses you.',
+  registerStepGender: 'Choose what feels right. You can change this later.',
   registerNeedCredentials: 'Enter a valid email and a password (12+ characters).',
   registerNeedBusiness: 'Business name is required.',
   registerFailed: 'Registration failed.',
@@ -259,9 +260,9 @@ export const en = {
   guestStarterDmSub: 'See the safe reply and audit workflow.',
   guestStarterConnectTitle: 'How do I connect my business?',
   guestStarterConnectSub: 'Learn the steps before signing in.',
-  loginWelcome: 'Welcome to Linas AI',
-  loginTagline: 'Think it. Ask it. Linas has it.',
-  forgotPassword: 'Forgot password',
+  loginWelcome: 'Welcome back',
+  loginTagline: 'Log in to Linas AI',
+  forgotPassword: 'Forgot password?',
   loginLegalAgree: 'By continuing you agree to our Terms of Service and Privacy Policy.',
   loginFailed: 'Login failed. Check your email and password.',
   loginGenericError: 'Something went wrong. Please try again.',
@@ -292,7 +293,7 @@ export const en = {
   navUsage: 'Usage & Credits',
   pinnedChats: 'Pinned',
   recentChats: 'Recent',
-  socialContinueWith: 'or continue with',
+  socialContinueWith: 'or',
   socialContinueGoogle: 'Continue with Google',
   socialContinueApple: 'Continue with Apple',
   appleSignInFailed: 'Apple sign-in failed. Please try again.',
@@ -300,6 +301,7 @@ export const en = {
   googleSignInFailed: 'Google sign-in failed. Please try again.',
   googleSignInUnavailable: 'Google sign-in is not configured yet.',
   googleLinkRequired: 'An account with this email already exists. Sign in and link Google.',
+  ...authFlowEn,
   ...appleAccountEn,
   ...integrationsDisplayEn,
   ...subscriptionEn,

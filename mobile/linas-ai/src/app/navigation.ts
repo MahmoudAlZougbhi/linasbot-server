@@ -8,6 +8,7 @@ export type Screen =
   | { name: 'boot' }
   | { name: 'login' }
   | { name: 'register' }
+  | { name: 'forgot_password' }
   | { name: 'chat' }
   | { name: 'settings' }
   | { name: 'integrations' }

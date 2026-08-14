@@ -81,10 +81,13 @@ describe('SocialAuthButtons Google hook gating', () => {
   it('login and register still mount social + email/password forms', () => {
     const login = read('features/auth/LoginScreen.tsx');
     const register = read('features/auth/RegisterScreen.tsx');
+    const creds = read('features/auth/SignupCredentialsStep.tsx');
     assert.match(login, /SocialAuthButtons/);
     assert.match(login, /mobileLogin/);
-    assert.match(register, /SocialAuthButtons/);
+    assert.match(creds, /SocialAuthButtons/);
     assert.match(register, /password/);
+    assert.doesNotMatch(login, /comingSoon/);
+    assert.doesNotMatch(creds, /comingSoon/);
   });
 });
 
