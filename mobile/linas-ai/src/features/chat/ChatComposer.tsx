@@ -237,36 +237,48 @@ export function ChatComposer({
             accessibilityLabel={tr('composerMoreActions')}
             hitSlop={6}
           >
-            <PlusCircleGlyph color={colors.textMuted} backgroundColor={colors.featuredIconBg} />
+            <PlusCircleGlyph
+              color={colors.textMuted}
+              backgroundColor={colors.featuredIconBg}
+              borderColor={colors.featuredIconBorder}
+            />
           </Pressable>
         ) : null}
 
-        <TextInput
-          ref={assignInputRef}
-          style={[
-            styles.input,
-            {
-              color: colors.text,
-              height: inputHeight,
-              textAlign: inputTextAlign,
-              writingDirection: draftEmpty ? 'ltr' : draftDir.writingDirection,
-            },
-          ]}
-          placeholder={placeholder}
-          placeholderTextColor={colors.textDim}
-          value={draft}
-          onChangeText={(v) => handleChangeText(v, onChangeDraft)}
-          onContentSizeChange={(e) => {
-            handleContentSizeChange(e.nativeEvent.contentSize.height);
-          }}
-          multiline
-          scrollEnabled={atMaxHeight}
-          editable={!voiceBusy}
-          autoFocus={false}
-          blurOnSubmit={false}
-          textAlignVertical={singleLine ? 'center' : 'top'}
-          accessibilityLabel={idlePlaceholder}
-        />
+        <View style={styles.inputSlot}>
+          {draftEmpty ? (
+            <View pointerEvents="none" style={styles.placeholderWrap}>
+              <Text style={[styles.placeholderText, { color: colors.textDim }]}>
+                {placeholder}
+              </Text>
+            </View>
+          ) : null}
+          <TextInput
+            ref={assignInputRef}
+            style={[
+              styles.input,
+              {
+                color: colors.text,
+                height: inputHeight,
+                textAlign: inputTextAlign,
+                writingDirection: draftEmpty ? 'ltr' : draftDir.writingDirection,
+              },
+            ]}
+            placeholder=""
+            value={draft}
+            onChangeText={(v) => handleChangeText(v, onChangeDraft)}
+            onContentSizeChange={(e) => {
+              handleContentSizeChange(e.nativeEvent.contentSize.height);
+            }}
+            multiline
+            scrollEnabled={atMaxHeight}
+            editable={!voiceBusy}
+            autoFocus={false}
+            blurOnSubmit={false}
+            textAlignVertical={singleLine ? 'center' : 'top'}
+            accessibilityLabel={idlePlaceholder}
+          />
+        </View>
 
         {showVoiceControl ? (
           <VoiceComposerControls
@@ -329,9 +341,23 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingBottom: 8,
   },
-  input: {
+  inputSlot: {
     flex: 1,
     minWidth: 0,
+    minHeight: COMPOSER_INPUT_MIN_H,
+    justifyContent: 'center',
+  },
+  placeholderWrap: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  placeholderText: {
+    fontFamily: fonts.body,
+    fontSize: 16,
+    lineHeight: COMPOSER_INPUT_LINE_HEIGHT,
+  },
+  input: {
     fontFamily: fonts.body,
     fontSize: 16,
     lineHeight: COMPOSER_INPUT_LINE_HEIGHT,
