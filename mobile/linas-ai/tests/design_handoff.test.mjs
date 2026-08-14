@@ -335,7 +335,9 @@ test('voice STT wires transcript into composer draft (no auto-send)', () => {
   assert.match(composer, /tr\('composerListening'\)/);
   assert.match(composer, /tr\('composerPaused'\)/);
   assert.match(composer, /tr\('composerTranscribing'\)/);
-  assert.match(composer, /formatVoiceElapsed/);
+  assert.doesNotMatch(composer, /formatVoiceElapsed/);
+  assert.match(controls, /formatVoiceElapsed\(elapsedMs\)/);
+  assert.match(controls, /timerBeside/);
   assert.match(composer, /StopGlyph/);
   const en = read('i18n/locales/en.ts');
   assert.match(en, /composerListening:\s*'Listening…'/);
