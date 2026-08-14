@@ -8,7 +8,7 @@ import {
   WhatsAppConnectError,
   type WhatsAppCloudStatus,
 } from './WhatsAppCloudCard';
-import { setWhatsAppAiEnabled } from './whatsappCloudApi';
+import { disconnectWhatsAppCloud, setWhatsAppAiEnabled } from './whatsappCloudApi';
 
 type Opts = {
   onAuthGate: () => void;
@@ -60,6 +60,21 @@ export function useWhatsAppIntegrations({ onAuthGate, onError }: Opts) {
     }
   }
 
+  async function disconnectWhatsApp(after?: () => Promise<void>) {
+    const connectionId = waStatus?.connection?.connection_id;
+    if (!connectionId || waBusy) return;
+    setWaBusy(true);
+    try {
+      await disconnectWhatsAppCloud(connectionId);
+      await after?.();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) onAuthGate();
+      else onError(tr('integrationsActionError'));
+    } finally {
+      setWaBusy(false);
+    }
+  }
+
   async function setWhatsAppAi(connectionId: string, enabled: boolean, after?: () => Promise<void>) {
     if (waBusy) return;
     setWaBusy(true);
@@ -81,6 +96,7 @@ export function useWhatsAppIntegrations({ onAuthGate, onError }: Opts) {
     setWaStatus,
     refreshWhatsApp,
     connectWhatsApp,
+    disconnectWhatsApp,
     setWhatsAppAi,
   };
 }

@@ -1,9 +1,10 @@
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { ApiError } from '../../api/client';
-import { PrimaryButton } from '../../components/PrimaryButton';
 import { useI18n } from '../../i18n/LanguageContext';
-import { colors, fonts, spacing } from '../../theme';
+import { colors, fonts } from '../../theme';
+import { ChannelCapabilityToggles } from './ChannelCapabilityToggles';
+import { IntegrationCardShell } from './IntegrationCardShell';
 import { WhatsAppCloudOpsPanel } from './WhatsAppCloudOpsPanel';
 import {
   fetchWhatsAppCloudStatus,
@@ -21,6 +22,7 @@ type Props = {
   busy?: boolean;
   onRefresh: () => void;
   onConnect: () => void;
+  onOpenMenu?: () => void;
   onEnableAi?: (connectionId: string) => void;
   onDisableAi?: (connectionId: string) => void;
   onBusyChange?: (busy: boolean) => void;
@@ -28,12 +30,20 @@ type Props = {
   onNotice?: (message: string) => void;
 };
 
+export function whatsappCardSubtitle(status: WhatsAppCloudStatus | null, fallback: string): string {
+  const conn = status?.connection;
+  if (status?.lifecycle_status === 'connected' && conn) {
+    if (conn.verified_name?.trim()) return conn.verified_name.trim();
+    if (conn.display_phone_last4) return `••••${conn.display_phone_last4}`;
+  }
+  return fallback;
+}
+
 export function WhatsAppCloudCard({
   status,
-  loading,
   busy,
-  onRefresh,
   onConnect,
+  onOpenMenu,
   onEnableAi,
   onDisableAi,
   onBusyChange,
@@ -48,53 +58,51 @@ export function WhatsAppCloudCard({
     status?.awaiting_meta_approval === true ||
     (!connectable && !connected && !status?.pilot_entitled && status?.public_availability !== true);
   const conn = status?.connection;
-  const last4 = conn?.display_phone_last4 ? `••••${conn.display_phone_last4}` : null;
-
-  let stateLabel = tr('waStateDisconnected');
-  if (awaitingMeta && !connected) stateLabel = tr('waStateAwaitingMetaApproval');
-  else if (lifecycle === 'awaiting_meta' || lifecycle === 'starting') stateLabel = tr('waStateAwaitingMeta');
-  else if (lifecycle === 'provisioning' || lifecycle === 'syncing_history') stateLabel = tr('waStateProvisioning');
-  else if (lifecycle === 'needs_attention') stateLabel = tr('waStateNeedsAttention');
-  else if (lifecycle === 'failed') stateLabel = tr('waStateFailed');
-  else if (connected) stateLabel = tr('waStateConnected');
+  const subtitle = whatsappCardSubtitle(status, tr('integrationWhatsAppHandle'));
+  const healthy = connected && lifecycle !== 'needs_attention' && lifecycle !== 'failed';
+  const aiOn = Boolean(conn?.ai_eligible && conn?.ai_default_enabled);
 
   return (
-    <View style={styles.card} accessibilityRole="summary">
-      <Text style={styles.title}>{tr('platformWhatsApp')}</Text>
-      <Text style={styles.sub}>{tr('waCoexistenceHint')}</Text>
-      {loading ? <ActivityIndicator color={colors.accent} /> : null}
-      <Text style={styles.state}>{stateLabel}</Text>
-      {awaitingMeta && !connected ? (
-        <Text style={styles.warn}>
-          {status?.blocker_message?.trim() || tr('waAwaitingMetaApprovalBody')}
-        </Text>
-      ) : null}
-      {last4 ? (
-        <Text style={styles.meta}>
-          {tr('waNumberLabel')}: {last4}
-          {conn?.verified_name ? ` · ${conn.verified_name}` : ''}
-        </Text>
-      ) : null}
-      {conn?.coexistence_mode ? <Text style={styles.meta}>{tr('waCoexistenceOn')}</Text> : null}
-      {connected ? (
-        <Text style={styles.meta}>
-          {tr('waAiLabel')}:{' '}
-          {conn?.ai_eligible && conn?.ai_default_enabled ? tr('waAiOn') : tr('waAiPausedOrOff')}
-        </Text>
-      ) : null}
-      {status?.blocker_code && !awaitingMeta ? (
-        <Text style={styles.warn}>{status.blocker_code}</Text>
-      ) : null}
-      {conn?.rollout_blocked_reason ? <Text style={styles.warn}>{conn.rollout_blocked_reason}</Text> : null}
-      {!connected && connectable ? (
-        <PrimaryButton label={tr('waConnect')} onPress={onConnect} loading={busy} />
-      ) : null}
-      {connected && conn?.connection_id && onEnableAi && !conn.ai_default_enabled ? (
-        <PrimaryButton label={tr('waEnableAi')} onPress={() => onEnableAi(conn.connection_id)} variant="ghost" />
-      ) : null}
-      {connected && conn?.connection_id && onDisableAi && conn.ai_default_enabled ? (
-        <PrimaryButton label={tr('waDisableAi')} onPress={() => onDisableAi(conn.connection_id)} variant="ghost" />
-      ) : null}
+    <View accessibilityRole="summary" style={styles.wrap}>
+      <IntegrationCardShell
+        platform="whatsapp"
+        title={tr('platformWhatsApp')}
+        subtitle={subtitle}
+        connected={connected}
+        busy={busy}
+        connectLabel={tr('connect')}
+        connectedLabel={tr('connected')}
+        notConnectedLabel={tr('notConnected')}
+        comingSoonLabel={tr('comingSoon')}
+        healthLabel={tr('integrationStatusConnected')}
+        menuLabel={tr('disconnectAccount')}
+        showConnect={!connected && connectable}
+        showMenu={connected}
+        showHealth={healthy}
+        onConnect={onConnect}
+        onMenu={onOpenMenu}
+      >
+        {awaitingMeta && !connected ? (
+          <Text style={styles.warn}>
+            {status?.blocker_message?.trim() || tr('waAwaitingMetaApprovalBody')}
+          </Text>
+        ) : null}
+        {status?.blocker_code && !awaitingMeta ? <Text style={styles.warn}>{status.blocker_code}</Text> : null}
+        {conn?.rollout_blocked_reason ? <Text style={styles.warn}>{conn.rollout_blocked_reason}</Text> : null}
+        {connected && conn?.connection_id && onEnableAi && onDisableAi ? (
+          <ChannelCapabilityToggles
+            toggles={{ dm: aiOn, comments: false }}
+            busyKey={busy ? 'dm' : null}
+            showComments={false}
+            messagesLabel={tr('integrationToggleMessages')}
+            commentsLabel={tr('toggleComments')}
+            onToggle={(_key, value) => {
+              if (value) onEnableAi(conn.connection_id);
+              else onDisableAi(conn.connection_id);
+            }}
+          />
+        ) : null}
+      </IntegrationCardShell>
       {connected && conn?.connection_id ? (
         <WhatsAppCloudOpsPanel
           connectionId={conn.connection_id}
@@ -104,7 +112,6 @@ export function WhatsAppCloudCard({
           onNotice={onNotice}
         />
       ) : null}
-      <PrimaryButton label={tr('refreshConnectionStatus')} onPress={onRefresh} variant="ghost" loading={loading} />
     </View>
   );
 }
@@ -114,15 +121,6 @@ export function isWhatsAppApiError(err: unknown): err is ApiError {
 }
 
 const styles = StyleSheet.create({
-  card: {
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  title: { color: colors.text, fontFamily: fonts.display, fontSize: 18 },
-  sub: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
-  state: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 15 },
-  meta: { color: colors.textMuted, fontSize: 13 },
-  warn: { color: colors.danger, fontSize: 12, lineHeight: 17 },
+  wrap: { gap: 14 },
+  warn: { color: colors.danger, fontSize: 12, lineHeight: 17, fontFamily: fonts.body },
 });

@@ -11,6 +11,11 @@ export const integrationsDisplayFr = {
   integrationCommentReplies: 'Réponses aux commentaires',
   integrationFeatureOn: 'Activé',
   integrationFeatureOff: 'Désactivé',
+  integrationToggleMessages: 'Messages',
+  integrationRefreshStatus: 'Actualiser le statut',
+  integrationDisconnectAccount: 'Déconnecter le compte',
+  integrationDisconnectHint: 'Les réponses IA s’arrêtent jusqu’à la reconnexion.',
+  integrationWhatsAppHandle: 'Numéro professionnel',
   drawerRecents: 'Récents',
   appUpdateForceTitle: 'Mise à jour requise',
   appUpdateForceBody:

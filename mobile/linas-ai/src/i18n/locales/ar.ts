@@ -85,7 +85,7 @@ export const ar = {
   controlCenter: 'مركز التحكم',
   comingSoon: 'قريباً',
   integrations: 'التكاملات',
-  integrationsSub: 'اربط قنواتك',
+  integrationsSub: 'اربط قنواتك وأدرها',
   connected: 'متصل',
   notConnected: 'غير متصل',
   connect: 'ربط',
@@ -107,7 +107,8 @@ export const ar = {
   commentsBlockerConnectFirst: 'اربط هذه القناة قبل تفعيل التعليقات.',
   commentsBlockerMissingWebhook: 'اشتراك ويبهوك التعليقات غير مؤكد بعد لهذا الاتصال.',
   commentsBlockerMetaApproval: 'موافقة مراجعة تطبيق Meta مطلوبة قبل تفعيل التعليقات للعملاء.',
-  commentsBlockerReauthorization: 'هذا الاتصال يحتاج إعادة تفويض. استخدم إدارة وصول Meta — بدون فصل الحساب.',
+  commentsBlockerReauthorization:
+    'هذا الاتصال يحتاج تفويضاً جديداً. افصل هذه القناة ثم اربطها مجدداً.',
   commentsBlockerGeneric: 'التعليقات غير جاهزة على هذا الاتصال بعد.',
   disconnectThenConnectHint: 'افصل هذه القناة، ثم اربطها من جديد.',
   manageMetaAccess: 'إدارة وصول Meta',

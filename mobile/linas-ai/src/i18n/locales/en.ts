@@ -139,7 +139,7 @@ export const en = {
   controlCenter: 'Control Center',
   comingSoon: 'Coming soon',
   integrations: 'Integrations',
-  integrationsSub: 'Connect your channels',
+  integrationsSub: 'Connect and manage your channels',
   connected: 'Connected',
   notConnected: 'Not connected',
   connect: 'Connect',

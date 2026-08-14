@@ -87,7 +87,7 @@ export const fr = {
   controlCenter: 'Centre de contrôle',
   comingSoon: 'Bientôt',
   integrations: 'Intégrations',
-  integrationsSub: 'Connectez vos canaux',
+  integrationsSub: 'Connectez et gérez vos canaux',
   connected: 'Connecté',
   notConnected: 'Non connecté',
   connect: 'Connecter',
@@ -112,7 +112,7 @@ export const fr = {
   commentsBlockerMetaApproval:
     'L’approbation Meta App Review est requise avant d’activer les commentaires pour les clients.',
   commentsBlockerReauthorization:
-    'Cette connexion doit être réautorisée. Utilisez Gérer l’accès Meta — ne déconnectez pas le compte.',
+    'Cette connexion doit être réautorisée. Déconnectez ce canal, puis reconnectez-le.',
   commentsBlockerGeneric: 'Les commentaires ne sont pas encore prêts sur cette connexion.',
   disconnectThenConnectHint: 'Déconnectez ce canal, puis reconnectez-le.',
   manageMetaAccess: 'Gérer l’accès Meta',

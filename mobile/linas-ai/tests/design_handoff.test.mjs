@@ -538,10 +538,11 @@ test('Settings does not duplicate AI Basics CM store', () => {
   assert.match(en, /Open AI Setup → AI Basics/);
 });
 
-test('Integrations refresh is customer-facing and IG/FB only', () => {
+test('Integrations header refresh is customer-facing', () => {
   const integ = read('features/integrations/IntegrationsScreen.tsx');
+  assert.match(integ, /IntegrationRefreshButton/);
   assert.match(integ, /tr\('refreshConnectionStatus'\)/);
-  assert.match(integ, /tr\('refreshConnectionStatusHint'\)/);
+  assert.doesNotMatch(integ, /refreshConnectionStatusHint/);
   assert.doesNotMatch(integ, /App A only/);
   assert.doesNotMatch(integ, /webhooks/);
   assert.match(integ, /platform === 'instagram' \|\| row\.platform === 'facebook'/);
