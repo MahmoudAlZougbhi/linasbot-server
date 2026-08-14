@@ -52,11 +52,43 @@ export const LiveChatItemSchema = z
 
 export type LiveChatItem = z.infer<typeof LiveChatItemSchema>;
 
+function firstText(...vals: unknown[]): string | undefined {
+  for (const value of vals) {
+    if (value == null || typeof value === 'object') continue;
+    const text = String(value).trim();
+    if (text && text !== 'null' && text !== 'undefined') return text;
+  }
+  return undefined;
+}
+
+/** Keep existing rows even when user_id is missing; never invents conversations. */
+function coerceInboxRow(row: unknown): unknown {
+  if (!row || typeof row !== 'object') return row;
+  const rec = row as Record<string, unknown>;
+  const info =
+    rec.customer_info && typeof rec.customer_info === 'object'
+      ? (rec.customer_info as Record<string, unknown>)
+      : {};
+  const conversation_id = firstText(rec.conversation_id, rec.conversationId, rec.id);
+  const user_id = firstText(
+    rec.user_id,
+    rec.userId,
+    info.user_id,
+    rec.phone_clean,
+    rec.phone_number,
+    rec.user_phone,
+    info.phone_full,
+    info.phone_clean,
+    conversation_id,
+  );
+  return { ...rec, conversation_id, user_id };
+}
+
 export function parseLiveChatItems(rows: unknown): LiveChatItem[] {
   if (!Array.isArray(rows)) return [];
   const out: LiveChatItem[] = [];
   for (const row of rows) {
-    const parsed = LiveChatItemSchema.safeParse(row);
+    const parsed = LiveChatItemSchema.safeParse(coerceInboxRow(row));
     if (parsed.success) out.push(parsed.data);
   }
   return out;
@@ -65,7 +97,10 @@ export function parseLiveChatItems(rows: unknown): LiveChatItem[] {
 export const UnifiedChatsSchema = z
   .object({
     success: z.boolean().optional().catch(undefined),
-    chats: z.unknown().transform(parseLiveChatItems),
+    chats: z
+      .unknown()
+      .optional()
+      .transform((v) => parseLiveChatItems(v)),
     total: optionalNum,
     page: optionalNum,
     page_size: optionalNum,
@@ -73,8 +108,25 @@ export const UnifiedChatsSchema = z
     next_cursor: optionalText,
     filter: optionalText,
     error: optionalText,
+    source: optionalText,
+    index_empty: optionalBool,
+    requires_index_rebuild: optionalBool,
   })
   .passthrough();
+
+export type UnifiedChats = z.infer<typeof UnifiedChatsSchema>;
+
+/** Never throws — show whatever valid rows exist, even if the envelope is messy. */
+export function parseUnifiedChatsResponse(body: unknown): UnifiedChats {
+  const parsed = UnifiedChatsSchema.safeParse(body);
+  if (parsed.success) return parsed.data;
+  const rec = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+  return {
+    success: rec.success === true,
+    chats: parseLiveChatItems(rec.chats),
+    error: typeof rec.error === 'string' ? rec.error : 'Could not load conversations.',
+  };
+}
 
 export const LiveChatMessageSchema = z
   .object({

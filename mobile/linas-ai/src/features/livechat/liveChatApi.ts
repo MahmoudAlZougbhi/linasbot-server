@@ -8,7 +8,7 @@ import {
   type InboxFilter,
   type ChannelFilter,
   type LiveChatItem,
-  UnifiedChatsSchema,
+  parseUnifiedChatsResponse,
   idempotencyKey,
 } from './liveChatTypes';
 
@@ -44,9 +44,11 @@ export async function fetchUnifiedChats(opts: {
   params.set('page_size', String(opts.pageSize ?? 30));
   if (opts.cursor) params.set('cursor', opts.cursor);
   if (opts.filter && opts.filter !== 'all') params.set('filter', opts.filter);
+  // Only send channel when not All. Missing/unknown query params must not hide rows.
   if (opts.channel && opts.channel !== 'all') params.set('channel', opts.channel);
   try {
-    return await apiFetch(`/api/live-chat/unified-chats?${params}`, { schema: UnifiedChatsSchema });
+    const body = await apiFetch(`/api/live-chat/unified-chats?${params}`, { schema: z.unknown() });
+    return parseUnifiedChatsResponse(body);
   } catch (err) {
     rethrow(err, 'Could not load conversations.');
   }

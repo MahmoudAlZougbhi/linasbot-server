@@ -6,6 +6,7 @@ from google.cloud import firestore
 
 import config
 from services.live_chat_channel import (
+    coerce_live_chat_user_id,
     live_chat_channel_matches,
     normalize_live_chat_channel,
     resolve_live_chat_channel,
@@ -354,7 +355,7 @@ class LiveChatUnifiedMixin:
                     if not data.get("operator_id"):
                         continue
                 customer_info = data.get("customer_info") or {}
-                user_id = data.get("user_id")
+                user_id = coerce_live_chat_user_id(data, conversation_id=doc.id)
                 row_channel = resolve_live_chat_channel(user_id, data)
                 if wanted_channel and row_channel != wanted_channel:
                     continue

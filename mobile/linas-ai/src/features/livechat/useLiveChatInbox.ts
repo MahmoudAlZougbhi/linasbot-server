@@ -23,6 +23,7 @@ export function useLiveChatInbox() {
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
+  const [indexRebuild, setIndexRebuild] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -46,13 +47,16 @@ export function useLiveChatInbox() {
           filter,
           channel,
         });
-        if (!data.success && data.error) {
-          throw new Error(data.error);
+        const rows = data.chats ?? [];
+        // Show whatever rows exist. success:false with no chats is a load error, not empty.
+        if (rows.length === 0 && data.success === false) {
+          throw new Error(data.error || 'Could not load conversations.');
         }
-        setChats(data.chats ?? []);
+        setChats(rows);
         setHasMore(Boolean(data.has_more));
         setNextCursor(data.next_cursor ?? null);
-        setTotal(typeof data.total === 'number' ? data.total : data.chats.length);
+        setTotal(typeof data.total === 'number' ? data.total : rows.length);
+        setIndexRebuild(Boolean(data.requires_index_rebuild || data.index_empty));
         setError(null);
         setErrorKind(null);
       } catch (err) {
@@ -66,7 +70,7 @@ export function useLiveChatInbox() {
                 ? err.message
                 : 'Could not load conversations.',
           );
-          setChats([]);
+          if (mode === 'initial') setChats([]);
         }
       } finally {
         setLoading(false);
@@ -130,6 +134,7 @@ export function useLiveChatInbox() {
     setChannel,
     hasMore,
     total,
+    indexRebuild,
     refresh: () => void load('refresh'),
     loadMore,
     reloadQuiet: () => void load('poll'),

@@ -77,3 +77,25 @@ def live_chat_channel_matches(chat: dict[str, Any], channel_filter: str) -> bool
     if not wanted:
         return True
     return resolve_live_chat_channel(chat.get("user_id"), chat) == wanted
+
+
+def coerce_live_chat_user_id(payload: dict[str, Any] | None, *, conversation_id: Any = None) -> str:
+    """Never emit a blank user_id — mobile Zod drops those inbox rows."""
+    data = payload or {}
+    customer = data.get("customer_info") if isinstance(data.get("customer_info"), dict) else {}
+    for raw in (
+        data.get("user_id"),
+        data.get("userId"),
+        customer.get("user_id"),
+        data.get("user_phone"),
+        data.get("phone_number"),
+        data.get("phone_clean"),
+        customer.get("phone_full"),
+        customer.get("phone_clean"),
+        conversation_id,
+        data.get("conversation_id"),
+    ):
+        value = str(raw or "").strip()
+        if value and value.lower() not in {"none", "null", "undefined"}:
+            return value
+    return ""
