@@ -180,7 +180,9 @@ export function ChatScreen({
         keyboardVerticalOffset={0}
       >
         <View style={styles.flex}>
-        {showModeToggle ? <ChatModeToggle mode={ownerMode} onChange={setOwnerMode} /> : null}
+        {showModeToggle && !drawerOpen ? (
+          <ChatModeToggle mode={ownerMode} onChange={setOwnerMode} />
+        ) : null}
 
         <ChatStatusBanners
           offline={offline}
@@ -344,12 +346,14 @@ export function ChatScreen({
         />
         </View>
       </KeyboardAvoidingView>
-      <ChatHeader
-        onOpenMenu={() => {
-          Keyboard.dismiss();
-          setDrawerOpen(true);
-        }}
-      />
+      {!drawerOpen ? (
+        <ChatHeader
+          onOpenMenu={() => {
+            Keyboard.dismiss();
+            setDrawerOpen(true);
+          }}
+        />
+      ) : null}
 
       <ChatScreenOverlays
         drawerOpen={drawerOpen}

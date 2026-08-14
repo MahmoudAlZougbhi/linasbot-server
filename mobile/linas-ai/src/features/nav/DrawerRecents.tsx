@@ -53,6 +53,7 @@ export function DrawerRecents(props: Props) {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews={false}
       >
         <HistoryRows
           items={props.items}
