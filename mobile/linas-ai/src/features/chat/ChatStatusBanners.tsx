@@ -1,4 +1,5 @@
-import { Pressable, Text } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useI18n } from '../../i18n/LanguageContext';
 import { useTheme } from '../../theme';
@@ -14,8 +15,10 @@ type Props = {
 export function ChatStatusBanners({ offline, errorLabel, voiceError, onRetry }: Props) {
   const { colors } = useTheme();
   const { tr } = useI18n();
+  const insets = useSafeAreaInsets();
+  if (!offline && !errorLabel && !voiceError) return null;
   return (
-    <>
+    <View style={{ paddingTop: insets.top }}>
       {offline ? (
         <Text style={[styles.error, { color: colors.warning }]}>{tr('offlineDraftPreserved')}</Text>
       ) : null}
@@ -27,6 +30,6 @@ export function ChatStatusBanners({ offline, errorLabel, voiceError, onRetry }: 
         </Pressable>
       ) : null}
       {voiceError ? <Text style={styles.error}>{voiceError}</Text> : null}
-    </>
+    </View>
   );
 }
