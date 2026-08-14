@@ -165,26 +165,52 @@ def dispatch_template_email(
     return out
 
 
-def send_verify_email(*, to_email: str, raw_token: str, locale: str | None = None, user_id: str = "") -> DispatchResult:
+def _otp_extra_line(locale: str | None, otp_code: str) -> str:
+    loc = (locale or "en").strip().lower()[:2]
+    code = (otp_code or "").strip()
+    if loc == "ar":
+        return f"رمز التحقق المكون من 6 أرقام: {code}"
+    if loc == "fr":
+        return f"Votre code à 6 chiffres : {code}"
+    return f"Your 6-digit code: {code}"
+
+
+def send_verify_email(
+    *,
+    to_email: str,
+    raw_token: str,
+    locale: str | None = None,
+    user_id: str = "",
+    otp_code: str = "",
+) -> DispatchResult:
+    extra = [_otp_extra_line(locale, otp_code)] if (otp_code or "").strip() else None
     return dispatch_template_email(
         template_id="verify_email",
         to_email=to_email,
         locale=locale,
         action_path="/verify-email",
         action_token=raw_token,
+        extra_lines=extra,
         idempotency_key=f"verify:{user_id}:{hashlib.sha256(raw_token.encode()).hexdigest()[:24]}",
     )
 
 
 def send_reset_password_email(
-    *, to_email: str, raw_token: str, locale: str | None = None, user_id: str = ""
+    *,
+    to_email: str,
+    raw_token: str,
+    locale: str | None = None,
+    user_id: str = "",
+    otp_code: str = "",
 ) -> DispatchResult:
+    extra = [_otp_extra_line(locale, otp_code)] if (otp_code or "").strip() else None
     return dispatch_template_email(
         template_id="reset_password",
         to_email=to_email,
         locale=locale,
         action_path="/reset-password",
         action_token=raw_token,
+        extra_lines=extra,
         idempotency_key=f"reset:{user_id}:{hashlib.sha256(raw_token.encode()).hexdigest()[:24]}",
     )
 

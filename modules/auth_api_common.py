@@ -112,10 +112,12 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
+    email: str | None = None
 
 
 class VerifyEmailRequest(BaseModel):
     token: str
+    email: str | None = None
 
 
 class ResendVerificationRequest(BaseModel):

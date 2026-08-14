@@ -191,6 +191,7 @@ test('cold open is branded star splash then chat (no character mash / progress b
   const appJson = readFileSync(join(root, 'app.json'), 'utf8');
   const chat = read('features/chat/ChatScreen.tsx');
   const login = read('features/auth/LoginScreen.tsx');
+  const authChrome = read('features/auth/AuthChrome.tsx');
   assert.match(boot, /LinasSparkleMark/);
   assert.match(boot, /BootSplashAiLine/);
   assert.match(boot, /bootSplashTokens/);
@@ -231,7 +232,8 @@ test('cold open is branded star splash then chat (no character mash / progress b
     /if \(loading\) \{\s*return \(\s*<GradientBackground>\s*<View style=\{styles\.center\}>/,
   );
   assert.match(chat, /loading \? \(/);
-  assert.match(login, /BrandMark/);
+  assert.match(login, /AuthChrome/);
+  assert.match(authChrome, /LinasSparkleIcon/);
   assert.doesNotMatch(login, /linasAssets|authHero|LinasAvatar|avatarAssets/);
 });
 

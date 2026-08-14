@@ -8,6 +8,7 @@ import { whatsappAr } from './whatsappAr';
 import { faqUiAr } from './faqUiAr';
 import { requestsAr } from './requestsAr';
 import { usersUiAr } from './usersUiAr';
+import { authFlowAr } from './authFlowAr';
 import type { StringKey } from './en';
 
 export const ar = {
@@ -30,9 +31,9 @@ export const ar = {
   languageInSettings: 'يمكن تغيير اللغة في أي وقت من الإعدادات.',
   createAccount: 'إنشاء حساب',
   startWorkspace: 'ابدأ مساحة عمل ذكاء أعمالك',
-  registerStepCredentials: 'أولاً، عيّن البريد وكلمة المرور.',
+  registerStepCredentials: 'أدخل بيانات تسجيل الدخول.',
   registerStepName: 'أخبرنا عن نشاطك.',
-  registerStepGender: 'اختياري — يساعد Linas على مخاطبتك بشكل أنسب.',
+  registerStepGender: 'اختر ما يناسبك. يمكنك تغيير ذلك لاحقاً.',
   registerNeedCredentials: 'أدخل بريداً صالحاً وكلمة مرور (12 حرفاً فأكثر).',
   registerNeedBusiness: 'اسم النشاط مطلوب.',
   registerFailed: 'فشل التسجيل.',
@@ -261,9 +262,9 @@ export const ar = {
   guestStarterDmSub: 'شوف مسار الرد الآمن والتدقيق.',
   guestStarterConnectTitle: 'كيف بوصل البزنس؟',
   guestStarterConnectSub: 'اعرف الخطوات قبل ما تسجّل دخول.',
-  loginWelcome: 'أهلاً بك في Linas AI',
-  loginTagline: 'فكّر. اسأل. Linas عنده الجواب.',
-  forgotPassword: 'نسيت كلمة المرور',
+  loginWelcome: 'مرحباً بعودتك',
+  loginTagline: 'تسجيل الدخول إلى Linas AI',
+  forgotPassword: 'نسيت كلمة المرور؟',
   loginLegalAgree: 'بالمتابعة، أنت توافق على شروط الخدمة وسياسة الخصوصية.',
   loginFailed: 'فشل تسجيل الدخول. تحقق من البريد وكلمة المرور.',
   loginGenericError: 'حصل خطأ. حاول مرة تانية.',
@@ -294,7 +295,7 @@ export const ar = {
   navUsage: 'الاستخدام والرصيد',
   pinnedChats: 'مثبّت',
   recentChats: 'الأخيرة',
-  socialContinueWith: 'أو تابع عبر',
+  socialContinueWith: 'أو',
   socialContinueGoogle: 'المتابعة مع Google',
   socialContinueApple: 'المتابعة مع Apple',
   appleSignInFailed: 'فشل تسجيل الدخول عبر Apple. حاول مرة أخرى.',
@@ -302,6 +303,7 @@ export const ar = {
   googleSignInFailed: 'فشل تسجيل الدخول عبر Google. حاول مرة أخرى.',
   googleSignInUnavailable: 'تسجيل الدخول عبر Google غير مُعد بعد.',
   googleLinkRequired: 'يوجد حساب بهذا البريد. سجّل الدخول ثم اربط Google.',
+  ...authFlowAr,
   ...appleAccountAr,
   ...integrationsDisplayAr,
   ...subscriptionAr,

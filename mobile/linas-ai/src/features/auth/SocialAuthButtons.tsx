@@ -1,9 +1,9 @@
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useEffect } from 'react';
 
-import { StatusChip } from '../../components/StatusChip';
+import { AppIcon, ion } from '../../components/AppIcon';
 import { useI18n } from '../../i18n/LanguageContext';
-import { colors, fonts, radii, spacing } from '../../theme';
+import { colors, fonts } from '../../theme';
 import { signInWithApple } from './appleSignIn';
 import {
   completeGoogleSignIn,
@@ -16,6 +16,7 @@ type Props = {
   onAppleError?: (message: string) => void;
   onGoogleSuccess?: () => void;
   onGoogleError?: (message: string) => void;
+  showDivider?: boolean;
 };
 
 function GoogleAuthButton({
@@ -63,28 +64,33 @@ function GoogleAuthButton({
 
   return (
     <Pressable
-      style={[styles.btn, styles.btnEnabled]}
+      style={styles.circle}
       onPress={() => void onGoogle()}
       accessibilityRole="button"
       accessibilityLabel={tr('socialContinueGoogle')}
     >
-      <Text style={styles.btnTextActive}>{tr('socialContinueGoogle')}</Text>
+      <AppIcon icon={ion('logo-google')} size={22} color="#4285F4" />
     </Pressable>
   );
 }
 
-/** Google Sign-In (when client IDs configured) + Apple Sign In (iOS). */
+/** Circular Google + Apple — Google stays live when client IDs are configured. */
 export function SocialAuthButtons({
   onAppleSuccess,
   onAppleError,
   onGoogleSuccess,
   onGoogleError,
+  showDivider = true,
 }: Props) {
   const { tr } = useI18n();
   const appleEnabled = Platform.OS === 'ios';
   const googleEnabled = isGoogleSignInConfigured();
 
   async function onApple() {
+    if (!appleEnabled) {
+      onAppleError?.(tr('appleSignInUnavailable'));
+      return;
+    }
     const result = await signInWithApple();
     if (result.ok) {
       onAppleSuccess?.();
@@ -104,56 +110,59 @@ export function SocialAuthButtons({
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.dividerRow}>
-        <View style={styles.line} />
-        <Text style={styles.or}>{tr('socialContinueWith')}</Text>
-        <View style={styles.line} />
-      </View>
-      {googleEnabled ? (
-        <GoogleAuthButton onGoogleSuccess={onGoogleSuccess} onGoogleError={onGoogleError} />
-      ) : (
-        <Pressable style={styles.btn} disabled>
-          <Text style={styles.btnText}>{tr('socialContinueGoogle')}</Text>
-          <StatusChip label={tr('comingSoon')} tone="soon" />
-        </Pressable>
-      )}
-      {appleEnabled ? (
+      {showDivider ? (
+        <View style={styles.dividerRow}>
+          <View style={styles.line} />
+          <Text style={styles.or}>{tr('socialContinueWith')}</Text>
+          <View style={styles.line} />
+        </View>
+      ) : null}
+      <View style={styles.row}>
+        {googleEnabled ? (
+          <GoogleAuthButton onGoogleSuccess={onGoogleSuccess} onGoogleError={onGoogleError} />
+        ) : (
+          <Pressable
+            style={styles.circle}
+            onPress={() => onGoogleError?.(tr('googleSignInUnavailable'))}
+            accessibilityRole="button"
+            accessibilityLabel={tr('socialContinueGoogle')}
+          >
+            <AppIcon icon={ion('logo-google')} size={22} color="#4285F4" />
+          </Pressable>
+        )}
         <Pressable
-          style={[styles.btn, styles.btnEnabled]}
+          style={styles.circle}
           onPress={() => void onApple()}
           accessibilityRole="button"
           accessibilityLabel={tr('socialContinueApple')}
         >
-          <Text style={styles.btnTextActive}>{tr('socialContinueApple')}</Text>
+          <AppIcon icon={ion('logo-apple')} size={24} color={colors.text} />
         </Pressable>
-      ) : (
-        <Pressable style={styles.btn} disabled>
-          <Text style={styles.btnText}>{tr('socialContinueApple')}</Text>
-          <StatusChip label={tr('comingSoon')} tone="soon" />
-        </Pressable>
-      )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginTop: spacing.xl, gap: spacing.sm },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: spacing.sm },
-  line: { flex: 1, height: 1, backgroundColor: colors.border },
-  or: { color: colors.textDim, fontFamily: fonts.body, fontSize: 12 },
-  btn: {
+  wrap: { marginTop: 8, alignItems: 'center' },
+  dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: radii.md,
+    gap: 12,
+    marginBottom: 20,
+    alignSelf: 'stretch',
+  },
+  line: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
+  or: { color: colors.textDim, fontFamily: fonts.body, fontSize: 14 },
+  row: { flexDirection: 'row', justifyContent: 'center', gap: 20 },
+  circle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md + 2,
-    opacity: 0.72,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  btnEnabled: { opacity: 1 },
-  btnText: { color: colors.textMuted, fontFamily: fonts.bodyMedium, fontSize: 15 },
-  btnTextActive: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 15 },
 });
