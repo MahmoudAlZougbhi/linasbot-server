@@ -6,6 +6,11 @@ import { z } from 'zod';
 import { apiFetch, ApiError } from '../../api/client';
 import { MobileLoginResponseSchema } from '../../api/types';
 import { tokenStore } from '../../auth/tokenStore';
+import {
+  GOOGLE_ANDROID_CLIENT_ID,
+  GOOGLE_IOS_CLIENT_ID,
+  GOOGLE_WEB_CLIENT_ID,
+} from '../../config';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -23,10 +28,11 @@ const LinkRequiredSchema = z
   .passthrough();
 
 function clientIds(): GoogleClientIds {
-  const web = (process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '').trim();
-  const ios = (process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '').trim();
-  const android = (process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '').trim();
-  return { web, ios, android };
+  return {
+    web: GOOGLE_WEB_CLIENT_ID,
+    ios: GOOGLE_IOS_CLIENT_ID,
+    android: GOOGLE_ANDROID_CLIENT_ID,
+  };
 }
 
 /**

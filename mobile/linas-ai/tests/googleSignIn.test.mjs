@@ -97,4 +97,49 @@ describe('googleSignIn source contracts', () => {
     assert.match(src, /isGoogleAuthConfiguredForPlatform\(clientIds\(\), Platform\.OS\)/);
     assert.doesNotMatch(src, /fake.*iosClientId|dummy.*iosClientId/i);
   });
+
+  it('reads the real Google client IDs from extra / EAS env / iOS URL scheme', () => {
+    const src = read('features/auth/googleSignIn.ts');
+    const cfg = read('config.ts');
+    const app = JSON.parse(readFileSync(join(root, 'app.json'), 'utf8'));
+    const eas = JSON.parse(readFileSync(join(root, 'eas.json'), 'utf8'));
+    const extra = app.expo.extra;
+    const previewEnv = eas.build.preview.env;
+    assert.match(src, /GOOGLE_IOS_CLIENT_ID/);
+    assert.match(src, /GOOGLE_WEB_CLIENT_ID/);
+    assert.match(cfg, /extra\.googleIosClientId/);
+    assert.match(cfg, /EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID/);
+    assert.match(cfg, /iosClientIdFromExpoScheme/);
+    assert.ok(extra.googleWebClientId);
+    assert.ok(extra.googleIosClientId);
+    assert.ok(extra.googleAndroidClientId);
+    assert.equal(extra.googleWebClientId, previewEnv.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID);
+    assert.equal(extra.googleIosClientId, previewEnv.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID);
+    assert.equal(extra.googleAndroidClientId, previewEnv.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID);
+    const reversed = (app.expo.scheme || []).find((s) =>
+      String(s).startsWith('com.googleusercontent.apps.'),
+    );
+    assert.ok(reversed);
+    const nativeId = String(reversed).slice('com.googleusercontent.apps.'.length);
+    assert.equal(extra.googleIosClientId, `${nativeId}.apps.googleusercontent.com`);
+  });
+
+  it('development EAS profile also has Google client IDs for USB/dev client', () => {
+    const eas = JSON.parse(readFileSync(join(root, 'eas.json'), 'utf8'));
+    assert.ok(eas.build.development.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID);
+    assert.ok(eas.build.development.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID);
+  });
+});
+
+describe('guest Sign In navigation', () => {
+  it('header Sign In goes to login instead of AuthGate modal', () => {
+    const chat = read('features/chat/ChatScreen.tsx');
+    assert.match(chat, /function goToLoginPreservingDraft/);
+    assert.match(chat, /onSignIn=\{goToLoginPreservingDraft\}/);
+    assert.match(chat, /onLogin=\{goToLoginPreservingDraft\}/);
+    const signInLine = chat.split('\n').find((line) => line.includes('onSignIn='));
+    assert.ok(signInLine);
+    assert.doesNotMatch(signInLine, /openAuthPreservingDraft/);
+    assert.match(chat, /onRequestLogin\(\)/);
+  });
 });

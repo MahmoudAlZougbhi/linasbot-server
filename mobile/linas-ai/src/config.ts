@@ -1,7 +1,45 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-const extra = (Constants.expoConfig?.extra ?? {}) as { apiBaseUrl?: string };
+type Extra = {
+  apiBaseUrl?: string;
+  googleWebClientId?: string;
+  googleIosClientId?: string;
+  googleAndroidClientId?: string;
+};
+
+const extra = (Constants.expoConfig?.extra ?? {}) as Extra;
+
+/** Reverse iOS URL scheme already in app.json (`com.googleusercontent.apps.<id>`). */
+function iosClientIdFromExpoScheme(): string {
+  const scheme = Constants.expoConfig?.scheme;
+  const schemes = Array.isArray(scheme) ? scheme : scheme ? [scheme] : [];
+  const prefix = 'com.googleusercontent.apps.';
+  for (const raw of schemes) {
+    const value = String(raw);
+    if (!value.startsWith(prefix)) continue;
+    const id = value.slice(prefix.length).trim();
+    if (id) return `${id}.apps.googleusercontent.com`;
+  }
+  return '';
+}
+
+/** Existing Google OAuth clients (docs/release/GOOGLE_SIGN_IN_WIRING.md). Public client IDs only. */
+export const GOOGLE_WEB_CLIENT_ID = (
+  process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
+  extra.googleWebClientId ||
+  ''
+).trim();
+export const GOOGLE_IOS_CLIENT_ID = (
+  process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ||
+  extra.googleIosClientId ||
+  iosClientIdFromExpoScheme()
+).trim();
+export const GOOGLE_ANDROID_CLIENT_ID = (
+  process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ||
+  extra.googleAndroidClientId ||
+  ''
+).trim();
 
 /** Public API origin only — never embed provider/server secrets. */
 export const API_BASE =

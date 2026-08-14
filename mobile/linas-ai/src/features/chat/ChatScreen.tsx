@@ -139,9 +139,21 @@ export function ChatScreen({
     followBottomIfStuck,
   ]);
 
-  function openAuthPreservingDraft(hard = false) {
+  function saveGuestDraft() {
     void savePendingGuestDraft({ text: draft, createdAt: Date.now() });
-    setHardLimit(hard); setAuthGate(true);
+  }
+
+  function openAuthPreservingDraft(hard = false) {
+    saveGuestDraft();
+    setHardLimit(hard);
+    setAuthGate(true);
+  }
+
+  /** Header / drawer Sign In — open login, do not present AuthGate Modal (iOS freeze). */
+  function goToLoginPreservingDraft() {
+    Keyboard.dismiss();
+    saveGuestDraft();
+    onRequestLogin();
   }
 
   useSetupHandoff({
@@ -182,7 +194,7 @@ export function ChatScreen({
             setDrawerOpen(true);
           }}
           onNewChat={startNewChat}
-          onSignIn={() => openAuthPreservingDraft(false)}
+          onSignIn={goToLoginPreservingDraft}
         />
 
         {showModeToggle ? <ChatModeToggle mode={ownerMode} onChange={setOwnerMode} /> : null}
@@ -370,7 +382,7 @@ export function ChatScreen({
         onUnarchive={(id) => void owner.setArchived(id, false)}
         onRename={(id, title) => void owner.renameConversation(id, title)}
         onDelete={(id) => void owner.deleteConversation(id)}
-        onLogin={() => openAuthPreservingDraft(false)}
+        onLogin={goToLoginPreservingDraft}
         onRegister={onRequestRegister}
         plusOpen={plusOpen}
         onClosePlus={() => setPlusOpen(false)}

@@ -275,6 +275,36 @@ def test_link_required_conflict_path(apple_jwks_rs: rsa.RSAPrivateKey, monkeypat
     assert "email_hint" in detail
 
 
+def test_existing_social_apple_account_logs_in(
+    apple_jwks_rs: rsa.RSAPrivateKey, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from modules import apple_auth_api
+
+    token = _mint_token(apple_jwks_rs, email="taken@example.com")
+    social_user = {
+        "id": "existing-apple",
+        "email": "taken@example.com",
+        "status": "active",
+        "passwordLoginEnabled": False,
+        "createdBy": "apple-sign-in",
+        "tenantId": "t1",
+    }
+    monkeypatch.setattr(apple_auth_api, "find_by_apple_sub", lambda _sub: None)
+    monkeypatch.setattr(apple_auth_api.user_service, "get_user_by_email", lambda _email: social_user)
+    monkeypatch.setattr(apple_auth_api, "link_apple_identity", lambda **_kw: {"id": "aid"})
+    monkeypatch.setattr(apple_auth_api, "maybe_store_refresh_from_authorization_code", lambda **_kw: None)
+    monkeypatch.setattr(
+        apple_auth_api,
+        "_issue_with_app_account_token",
+        lambda user: {"access_token": "access", "refresh_token": "refresh", "user": user},
+    )
+
+    body = apple_auth_api.AppleSignInRequest(identity_token=token, email="taken@example.com")
+    result = asyncio.run(apple_auth_api.mobile_apple_sign_in(body))
+    assert result["access_token"] == "access"
+    assert result["user"]["id"] == "existing-apple"
+
+
 def test_secrets_status_no_key_material(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from services import apple_secrets
 
