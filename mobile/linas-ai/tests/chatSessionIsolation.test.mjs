@@ -14,14 +14,19 @@ describe('chat session isolation', () => {
   it('logout and cold start rotate guest session before guest UI', () => {
     const shell = read('app/AppShell.tsx');
     const guest = read('auth/guestSession.ts');
+    const boot = read('auth/restoreOwnerSession.ts');
     assert.match(guest, /export async function rotateGuestSessionId/);
     assert.match(guest, /export async function rotateGuestSessionOnAppLaunch/);
     assert.match(shell, /rotateGuestSessionOnAppLaunch/);
+    assert.match(boot, /await restoreOwnerSession/);
+    const restoreAt = boot.indexOf('await restoreOwnerSession');
+    const rotateAt = boot.indexOf('await rotateGuest()');
+    assert.ok(restoreAt >= 0 && rotateAt > restoreAt, 'owner restore must run before guest rotate');
     assert.match(shell, /await rotateGuestSessionId\(\)/);
     const logout = shell.slice(shell.indexOf('async function logout'));
-    const rotateAt = logout.indexOf('await rotateGuestSessionId()');
+    const logoutRotateAt = logout.indexOf('await rotateGuestSessionId()');
     const accessAt = logout.indexOf('setHasAccess(false)');
-    assert.ok(rotateAt >= 0 && accessAt > rotateAt, 'logout must rotate guest id before guest screen');
+    assert.ok(logoutRotateAt >= 0 && accessAt > logoutRotateAt, 'logout must rotate guest id before guest screen');
     const cleared = shell.slice(shell.indexOf('onAuthCleared'));
     assert.ok(
       cleared.indexOf('rotateGuestSessionId') < cleared.indexOf('setHasAccess(false)'),
