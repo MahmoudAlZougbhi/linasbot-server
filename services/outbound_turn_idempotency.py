@@ -72,8 +72,7 @@ async def try_claim_ai_turn(
 
     if pending_delivery_for_claim(key_basis):
         print(
-            f"⚠️ ai_turn_claims pending_delivery — skip regeneration "
-            f"(kind={key_kind} mids={len(mids)} bfps={len(bfps)})"
+            f"⚠️ ai_turn_claims pending_delivery — skip regeneration (kind={key_kind} mids={len(mids)} bfps={len(bfps)})"
         )
         return False
 

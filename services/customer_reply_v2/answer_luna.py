@@ -55,6 +55,7 @@ Return a single JSON object (no markdown):
 }}
 """
 
+
 def effective_response_language(*, response_language: str, fixed_context: dict[str, Any] | None = None) -> str:
     """Normalize reply language — Franco/Arabizi is never a reply language (Arabic script only)."""
     _ = fixed_context  # kept for call-site compatibility

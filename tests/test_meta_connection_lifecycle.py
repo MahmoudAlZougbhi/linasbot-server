@@ -114,6 +114,7 @@ async def test_disconnect_archives_credential_and_clears_webhooks(
     monkeypatch.setattr("modules.meta_connections_api_lifecycle.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(graph, "get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(graph, "unsubscribe_binding_webhook", unsubscribe)
+
     async def clear_toggles(**_kwargs: Any) -> bool:
         return True
 
