@@ -5,7 +5,6 @@ import {
   Keyboard,
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -14,20 +13,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { textDirectionStyle } from '../../lib/textDirection';
 import { useI18n } from '../../i18n/LanguageContext';
-import { fonts, radii, spacing, useTheme } from '../../theme';
+import { useTheme } from '../../theme';
 import { ComposerEditChip } from './ComposerEditChip';
 import {
-  COMPOSER_ACTION_SIZE,
-  COMPOSER_SEND_SIZE,
   formatVoiceElapsed,
   PlusCircleGlyph,
   SendArrowGlyph,
   StopGlyph,
 } from './ComposerGlyphs';
 import { ComposerModelChip } from './ComposerModelChip';
+import { composerStyles as styles } from './composerStyles';
 import { LinEffortSheet } from './LinEffortSheet';
 import type { OwnerChatMode } from './ownerChatMode';
-import { useComposerInputAutoGrow, COMPOSER_INPUT_LINE_HEIGHT, COMPOSER_INPUT_MIN_H } from './useComposerInputAutoGrow';
+import {
+  useComposerInputAutoGrow,
+  COMPOSER_INPUT_MIN_H,
+  COMPOSER_IOS_PAD_TOP,
+} from './useComposerInputAutoGrow';
 import type { VoiceState } from './useVoiceDraft';
 import { VoiceComposerControls } from './VoiceComposerControls';
 
@@ -187,7 +189,7 @@ export function ChatComposer({
       style={[
         styles.sendInside,
         { backgroundColor: colors.accentDeep },
-        (sending || !canSend || voiceBusy) && styles.sendDisabled,
+        sending && styles.sendBusy,
       ]}
       onPress={handleSend}
       disabled={sending || !canSend || voiceBusy}
@@ -267,17 +269,16 @@ export function ChatComposer({
                 height: inputHeight,
                 textAlign: inputTextAlign,
                 writingDirection: draftEmpty ? 'ltr' : draftDir.writingDirection,
-                paddingTop:
-                  Platform.OS === 'ios' && singleLine
-                    ? Math.max(0, (COMPOSER_INPUT_MIN_H - COMPOSER_INPUT_LINE_HEIGHT) / 2)
-                    : 0,
+                paddingTop: Platform.OS === 'ios' && singleLine ? COMPOSER_IOS_PAD_TOP : 0,
               },
             ]}
             placeholder=""
             value={draft}
             onChangeText={(v) => handleChangeText(v, onChangeDraft)}
             onContentSizeChange={(e) => {
-              handleContentSizeChange(e.nativeEvent.contentSize.height);
+              let h = e.nativeEvent.contentSize.height;
+              if (Platform.OS === 'ios' && singleLine) h -= COMPOSER_IOS_PAD_TOP;
+              handleContentSizeChange(h);
             }}
             multiline
             scrollEnabled={atMaxHeight}
@@ -323,77 +324,3 @@ export function ChatComposer({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    direction: 'ltr',
-  },
-  pill: {
-    flexDirection: 'row',
-    borderRadius: radii.pill,
-    paddingVertical: 8,
-    paddingLeft: 8,
-    paddingRight: 8,
-    minHeight: 52,
-    gap: 2,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  pillSingle: {
-    alignItems: 'center',
-  },
-  pillGrow: {
-    alignItems: 'flex-end',
-    paddingBottom: 8,
-  },
-  inputSlot: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: COMPOSER_INPUT_MIN_H,
-    justifyContent: 'center',
-  },
-  placeholderWrap: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-  },
-  placeholderText: {
-    fontFamily: fonts.body,
-    fontSize: 16,
-    lineHeight: COMPOSER_INPUT_LINE_HEIGHT,
-  },
-  input: {
-    fontFamily: fonts.body,
-    fontSize: 16,
-    lineHeight: COMPOSER_INPUT_LINE_HEIGHT,
-    paddingHorizontal: 8,
-    paddingVertical: 0,
-    includeFontPadding: false,
-  },
-  iconHit: {
-    width: COMPOSER_ACTION_SIZE,
-    height: COMPOSER_ACTION_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  sendInside: {
-    width: COMPOSER_SEND_SIZE,
-    height: COMPOSER_SEND_SIZE,
-    borderRadius: COMPOSER_SEND_SIZE / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  sendDisabled: { opacity: 0.45 },
-  disclaimer: {
-    fontFamily: fonts.body,
-    fontSize: 11,
-    textAlign: 'center',
-    marginTop: 8,
-  },
-});
