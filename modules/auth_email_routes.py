@@ -91,9 +91,7 @@ async def reset_password(body: ResetPasswordRequest, response: Response) -> Any:
     except ValueError as e:
         return {"success": False, "error": str(e)}
 
-    record = auth_email_token_service.consume_link_or_otp(
-        token, "password_reset", email=body.email
-    )
+    record = auth_email_token_service.consume_link_or_otp(token, "password_reset", email=body.email)
     if record is None:
         return {"success": False, "error": "Invalid or expired reset link"}
 
