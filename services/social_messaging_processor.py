@@ -222,6 +222,27 @@ async def process_meta_social_event(
                     flush=True,
                 )
                 return {"ok": False, "delivery": "blocked_quota", "reason": image_quota.reason}
+            if image_quota.truncated:
+                keep = int(image_quota.allowed_amount or 0)
+                if isinstance(attachments, list):
+                    kept: list[Any] = []
+                    seen = 0
+                    for item in attachments:
+                        is_image = bool(item) and (
+                            not isinstance(item, dict) or str(item.get("type") or "").lower() == "image"
+                        )
+                        if is_image:
+                            if seen < keep:
+                                kept.append(item)
+                            seen += 1
+                        else:
+                            kept.append(item)
+                    event["attachments"] = kept
+                if image_quota.customer_message:
+                    if capture_send is not None:
+                        await capture_send(user_id, image_quota.customer_message, None, None)
+                    elif adapter is not None:
+                        await adapter.send_text_message(sender_id, image_quota.customer_message)
 
         if not text and event.get("attachments"):
             text = "أرسلت صورة أو ملف. اكتبلي شو حابب تعرف عنه كرمال ساعدك."

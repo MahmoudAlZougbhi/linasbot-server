@@ -640,3 +640,34 @@ test('Buy credits sheet matches design handoff', () => {
   assert.match(en, /Payment is completed securely through the App Store or Google Play/);
   assert.match(en, /Purchased credits do not expire/);
 });
+
+test('Customer AI Limits screen matches design handoff', () => {
+  const editor = read('features/cm/editors/AiLimitsEditor.tsx');
+  const field = read('features/cm/editors/AiLimitsPencilField.tsx');
+  const screen = read('features/cm/CmSectionScreen.tsx');
+  const en = read('i18n/locales/aiSetupEn.ts');
+  const ar = read('i18n/locales/aiSetupAr.ts');
+  const fr = read('i18n/locales/aiSetupFr.ts');
+  assert.match(screen, /tr\('aiLimitsTitle'\)/);
+  assert.match(screen, /tr\('aiLimitsSubtitle'\)/);
+  assert.match(editor, /aiLimitsBanner/);
+  assert.match(editor, /aiLimitsTextChat/);
+  assert.match(editor, /aiLimitsPhotos/);
+  assert.match(editor, /aiLimitsVoice/);
+  assert.match(editor, /aiLimitsReadPerMessage/);
+  assert.match(editor, /aiLimitsPhotosPerMessage/);
+  assert.match(editor, /aiLimitsMinutesPerMessage/);
+  assert.match(editor, /text_replies_per_day/);
+  assert.match(editor, /image_per_month/);
+  assert.match(editor, /voice_minutes_per_month/);
+  assert.match(editor, /aiLimitsAutoTitle/);
+  assert.match(editor, /aiLimitsSave/);
+  assert.match(editor, /aiLimitsApplyNow/);
+  assert.match(field, /feather\('edit-2'\)/);
+  assert.doesNotMatch(editor, /human_handoff_enabled/);
+  assert.doesNotMatch(editor, /TikTok/);
+  assert.match(en, /Customer AI Limits/);
+  assert.match(en, /Protect credits by limiting each customer/);
+  assert.match(ar, /حدود الذكاء الاصطناعي للزبائن/);
+  assert.match(fr, /Limites IA clients/);
+});

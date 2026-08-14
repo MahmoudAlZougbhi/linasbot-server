@@ -31,7 +31,7 @@ def test_public_schemas_import_still_exposes_content_and_runtime() -> None:
     assert LocalizedLabels(en="Hello").en == "Hello"
     assert AiBasics().assistant_name == ""
     assert CommentsSection().default_action == "reply_comment"
-    assert AiLimitsSection().image_per_day == 20
+    assert AiLimitsSection().image_per_day == 5
     branch = BranchRecord(id="b1", street="Main", building="2")
     assert branch.composed_address() == "Main, 2"
     payload = default_section_payload("ai_basics")

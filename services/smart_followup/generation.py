@@ -68,6 +68,7 @@ async def generate_followup_text(
         provider_display_name=profile_name or "",
         user_id=user_id or customer_sender_id,
         conversation_id=conversation_id,
+        apply_customer_usage_limits=False,
     )
     reply_text = str(
         getattr(outcome, "reply", None) or getattr(outcome, "answer", None) or getattr(outcome, "text", None) or ""

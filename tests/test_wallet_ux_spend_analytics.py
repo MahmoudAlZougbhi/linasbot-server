@@ -119,8 +119,9 @@ def test_settings_wallet_removed_and_ai_limits_in_cm() -> None:
     assert cm_limits.is_file()
     limits_text = cm_limits.read_text(encoding="utf-8")
     assert "ai_limits" in limits_text
-    assert "voice_processing_enabled" in limits_text
-    assert "image_analysis_enabled" in limits_text
+    assert "text_words_per_message" in limits_text
+    assert "photos_per_message" in limits_text
+    assert "voice_minutes_per_day" in limits_text
 
 
 def test_dual_balance_credit_debit(wallet_svc: TokenWalletService) -> None:

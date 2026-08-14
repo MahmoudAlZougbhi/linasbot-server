@@ -160,6 +160,10 @@ async def cm_put_draft(
         )
 
     data = _owner_sanitize_envelope(_envelope_dict(envelope), name)
+    if name == "ai_limits":
+        from services.ai_limits_source import sync_enforcement_from_payload
+
+        sync_enforcement_from_payload(tenant_id, envelope.payload if hasattr(envelope, "payload") else payload)
     return JSONResponse(
         content={"success": True, "message": "Draft saved", "data": data},
         headers={"ETag": str(data.get("etag") or "")},

@@ -192,6 +192,26 @@ async def handle_voice_message(
     try:
         # pydub expects a file-like object, audio_data_bytes is already io.BytesIO
         audio = AudioSegment.from_file(audio_data_bytes, format="ogg")  # Assuming WhatsApp sends OGG
+        audio_duration_seconds = len(audio) / 1000.0
+        from services.ai_limits_enforcement import (
+            customer_voice_limit_message,
+            enforce_voice_minutes_quota,
+        )
+
+        voice_quota = enforce_voice_minutes_quota(
+            user_id=user_id,
+            user_data=user_data,
+            duration_seconds=audio_duration_seconds,
+            consume=True,
+        )
+        if not voice_quota.allowed:
+            await send_message_func(user_id, customer_voice_limit_message(voice_quota))
+            return
+        allowed_ms = int(voice_quota.allowed_amount or 0) * 60 * 1000
+        if allowed_ms > 0 and len(audio) > allowed_ms:
+            audio = audio[:allowed_ms]
+            if voice_quota.customer_message:
+                await send_message_func(user_id, voice_quota.customer_message)
 
         mp3_buffer = io.BytesIO()
         audio.export(mp3_buffer, format="mp3")

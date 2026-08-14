@@ -34,7 +34,7 @@ def test_cm_sections_include_actions_limits_off_days() -> None:
     photo = next(i for i in actions.items if i.id == "photo_analysis")
     assert photo.enabled is False
     limits = AiLimitsSection.model_validate(default_section_payload("ai_limits"))
-    assert limits.image_per_day == 20
+    assert limits.image_per_day == 5
     off_days = OffDaysSection.model_validate(default_section_payload("off_days"))
     assert off_days.rules == []
     opening = OpeningHoursSection.model_validate(default_section_payload("opening_hours"))
