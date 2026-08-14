@@ -1,9 +1,8 @@
 /**
- * Branded cold open: sparkle mark + wordmark + AI loading line.
+ * Cold open: dark forest green + centered white sparkle + mint dot.
  *
- * Native splash (app.json) stays logo-free warm #FBFAFA — Android 12+ would
- * otherwise circular-mask splash-icon into a different first shape. This
- * surface is the only logo the user should see.
+ * Native splash (app.json) uses the same splash-native.png on #083A37 so the
+ * first paint does not flash a different (warm cream) screen.
  */
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useRef, useState } from 'react';
@@ -11,16 +10,12 @@ import {
   AccessibilityInfo,
   Animated,
   Easing,
-  Platform,
+  Image,
   StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
 } from 'react-native';
 
-import { LinasSparkleMark } from '../../components/LinasSparkleMark';
-import { BootSplashAiLine } from './BootSplashAiLine';
 import { bootSplashTokens as t } from './bootSplashTokens';
+import splashMark from '../../../assets/splash-native.png';
 
 type Props = {
   /** True once auth/session init has finished (token + user hydration). */
@@ -28,23 +23,12 @@ type Props = {
   onDone: () => void;
 };
 
-const displayFont = Platform.select({
-  ios: 'System',
-  android: 'sans-serif-medium',
-  default: 'System',
-});
-
 export function BootSplash({ appReady, onDone }: Props) {
-  const { height: windowHeight } = useWindowDimensions();
   const [reduceMotion, setReduceMotion] = useState(false);
   const hidden = useRef(false);
   const mountedAt = useRef(Date.now());
   const exiting = useRef(false);
-
   const screenOpacity = useRef(new Animated.Value(1)).current;
-  const contentOpacity = useRef(new Animated.Value(0)).current;
-  const contentScale = useRef(new Animated.Value(t.entranceScaleFrom)).current;
-  const lineOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     let cancelled = false;
@@ -57,43 +41,6 @@ export function BootSplash({ appReady, onDone }: Props) {
       sub.remove();
     };
   }, []);
-
-  useEffect(() => {
-    const opacityAnim = Animated.timing(contentOpacity, {
-      toValue: 1,
-      duration: t.entranceOpacityMs,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    });
-    const scaleAnim = Animated.timing(contentScale, {
-      toValue: 1,
-      duration: t.entranceScaleMs,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    });
-    const lineAnim = Animated.timing(lineOpacity, {
-      toValue: 1,
-      duration: t.entranceOpacityMs,
-      delay: t.loadingDelayMs,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    });
-
-    if (reduceMotion) {
-      contentOpacity.setValue(1);
-      contentScale.setValue(1);
-      lineOpacity.setValue(1);
-      return;
-    }
-
-    Animated.parallel([opacityAnim, scaleAnim]).start();
-    lineAnim.start();
-    return () => {
-      opacityAnim.stop();
-      scaleAnim.stop();
-      lineAnim.stop();
-    };
-  }, [contentOpacity, contentScale, lineOpacity, reduceMotion]);
 
   function hideNativeSplash() {
     if (hidden.current) return;
@@ -127,8 +74,6 @@ export function BootSplash({ appReady, onDone }: Props) {
     return () => clearTimeout(timer);
   }, [appReady, onDone, reduceMotion, screenOpacity]);
 
-  const logoTop = windowHeight * t.logoCenterYRatio - t.sparkleHeight / 2;
-
   return (
     <Animated.View
       style={[styles.root, { opacity: screenOpacity }]}
@@ -142,82 +87,27 @@ export function BootSplash({ appReady, onDone }: Props) {
         }
       }}
     >
-      <Animated.View
-        style={[
-          styles.content,
-          {
-            top: logoTop,
-            opacity: contentOpacity,
-            transform: [{ scale: contentScale }],
-          },
-        ]}
-      >
-        <View style={styles.glowWrap}>
-          <View style={styles.glow} />
-          <LinasSparkleMark
-            size={t.sparkleWidth}
-            color={t.sparkleColor}
-            dotColor={t.onlineDotColor}
-            dotSize={t.onlineDotSize}
-            dotGap={t.onlineDotGap}
-          />
-        </View>
-        <Text style={styles.word}>Linas AI</Text>
-        <Animated.View style={[styles.lineWrap, { opacity: lineOpacity }]}>
-          <BootSplashAiLine reduceMotion={reduceMotion} />
-        </Animated.View>
-      </Animated.View>
+      <Image
+        source={splashMark}
+        style={styles.mark}
+        resizeMode="contain"
+        fadeDuration={0}
+        accessible={false}
+        importantForAccessibility="no"
+      />
     </Animated.View>
   );
 }
-
-const glowDiameter = (t.glowBlurMin + t.glowBlurMax) / 2 * 2;
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: t.background,
-  },
-  content: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  glowWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: glowDiameter,
-    height: glowDiameter,
   },
-  glow: {
-    position: 'absolute',
-    width: glowDiameter,
-    height: glowDiameter,
-    borderRadius: glowDiameter / 2,
-    backgroundColor: t.glowColor,
-    opacity: t.glowOpacity,
-    ...Platform.select({
-      ios: {
-        shadowColor: t.glowColor,
-        shadowOpacity: 0.55,
-        shadowRadius: (t.glowBlurMin + t.glowBlurMax) / 2,
-        shadowOffset: { width: 0, height: 0 },
-      },
-      android: { elevation: 0 },
-      default: {},
-    }),
-  },
-  word: {
-    marginTop: t.nameBelowLogo,
-    color: t.appNameColor,
-    fontFamily: displayFont,
-    fontSize: t.appNameSize,
-    fontWeight: t.appNameWeight,
-    letterSpacing: t.appNameLetterSpacing,
-    textAlign: 'center',
-  },
-  lineWrap: {
-    marginTop: t.lineBelowName,
+  mark: {
+    width: t.markSize,
+    height: t.markSize,
   },
 });
