@@ -461,6 +461,7 @@ async def run_customer_reply_v2_dm(
             "flags": flags_snapshot(),
             "authoritative_selector": "retrieval_luna",
             "classic_fallback": False,
+            "active_product_id": retrieval.active_product_id,
         },
         error=retrieval.error,
     )

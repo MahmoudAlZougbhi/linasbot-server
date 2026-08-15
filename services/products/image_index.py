@@ -1,12 +1,16 @@
-"""Tenant-scoped product image index — checksum, phash, local vector search."""
+"""Tenant-scoped product image index — PostgreSQL SoT for multi-server HA."""
 
 from __future__ import annotations
 
-import json
 import os
-from pathlib import Path
+import uuid
+from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
+
+from db.models.products import ProductImageFingerprint
 from services.products.image_fingerprint import (
     combined_image_similarity,
     compute_color_histogram,
@@ -18,34 +22,16 @@ TOP_K_DEFAULT = 8
 SIMILARITY_THRESHOLD = float(os.getenv("LINAS_PRODUCT_IMAGE_SIMILARITY_THRESHOLD", "0.85"))
 
 
-def _index_path(tenant_id: str) -> Path:
-    from services.products.paths import tenant_products_root
-
-    return tenant_products_root(tenant_id) / "image_index.json"
+def _uuid() -> str:
+    return str(uuid.uuid4())
 
 
-def _load_index(tenant_id: str) -> dict[str, Any]:
-    path = _index_path(tenant_id)
-    if not path.is_file():
-        return {"entries": []}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {"entries": []}
-    if not isinstance(data, dict):
-        return {"entries": []}
-    if not isinstance(data.get("entries"), list):
-        data["entries"] = []
-    return data
-
-
-def _save_index(tenant_id: str, data: dict[str, Any]) -> None:
-    path = _index_path(tenant_id)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+def _now() -> datetime:
+    return datetime.now(UTC)
 
 
 def upsert_product_image_index(
+    session: Session,
     *,
     tenant_id: str,
     product_id: str,
@@ -54,33 +40,65 @@ def upsert_product_image_index(
     fingerprint: dict[str, str],
     histogram: list[float],
 ) -> dict[str, Any]:
-    data = _load_index(tenant_id)
-    entries = [
-        e
-        for e in data.get("entries", [])
-        if e.get("media_id") != media_id and e.get("product_image_id") != product_image_id
-    ]
-    entry = {
-        "product_id": product_id,
-        "product_image_id": product_image_id,
-        "media_id": media_id,
-        "sha256": fingerprint.get("sha256"),
-        "phash": fingerprint.get("phash"),
-        "histogram": histogram,
+    stmt = select(ProductImageFingerprint).where(
+        ProductImageFingerprint.tenant_id == tenant_id,
+        ProductImageFingerprint.media_id == media_id,
+    )
+    row = session.execute(stmt).scalar_one_or_none()
+    if row is None:
+        row = ProductImageFingerprint(
+            id=_uuid(),
+            tenant_id=tenant_id,
+            product_id=product_id,
+            product_image_id=product_image_id,
+            media_id=media_id,
+            sha256=str(fingerprint.get("sha256") or ""),
+            phash=str(fingerprint.get("phash") or ""),
+            histogram=list(histogram),
+            created_at=_now(),
+        )
+        session.add(row)
+    else:
+        row.product_id = product_id
+        row.product_image_id = product_image_id
+        row.sha256 = str(fingerprint.get("sha256") or "")
+        row.phash = str(fingerprint.get("phash") or "")
+        row.histogram = list(histogram)
+    session.flush()
+    return _row_to_entry(row)
+
+
+def remove_product_from_index(session: Session, *, tenant_id: str, product_id: str) -> None:
+    stmt = delete(ProductImageFingerprint).where(
+        ProductImageFingerprint.tenant_id == tenant_id,
+        ProductImageFingerprint.product_id == product_id,
+    )
+    session.execute(stmt)
+    session.flush()
+
+
+def remove_media_from_index(session: Session, *, tenant_id: str, media_id: str) -> None:
+    stmt = delete(ProductImageFingerprint).where(
+        ProductImageFingerprint.tenant_id == tenant_id,
+        ProductImageFingerprint.media_id == media_id,
+    )
+    session.execute(stmt)
+    session.flush()
+
+
+def _row_to_entry(row: ProductImageFingerprint) -> dict[str, Any]:
+    return {
+        "product_id": row.product_id,
+        "product_image_id": row.product_image_id,
+        "media_id": row.media_id,
+        "sha256": row.sha256,
+        "phash": row.phash,
+        "histogram": list(row.histogram or []),
     }
-    entries.append(entry)
-    data["entries"] = entries
-    _save_index(tenant_id, data)
-    return entry
-
-
-def remove_product_from_index(*, tenant_id: str, product_id: str) -> None:
-    data = _load_index(tenant_id)
-    data["entries"] = [e for e in data.get("entries", []) if e.get("product_id") != product_id]
-    _save_index(tenant_id, data)
 
 
 def find_image_candidates(
+    session: Session,
     *,
     tenant_id: str,
     query_bytes: bytes,
@@ -90,8 +108,10 @@ def find_image_candidates(
     threshold = similarity_threshold if similarity_threshold is not None else SIMILARITY_THRESHOLD
     fp = compute_fingerprint(query_bytes)
     hist = compute_color_histogram(query_bytes)
+    stmt = select(ProductImageFingerprint).where(ProductImageFingerprint.tenant_id == tenant_id)
     scored: list[tuple[float, dict[str, Any]]] = []
-    for entry in _load_index(tenant_id).get("entries", []):
+    for row in session.execute(stmt).scalars().all():
+        entry = _row_to_entry(row)
         sim = combined_image_similarity(query_fp=fp, query_hist=hist, entry=entry)
         if sim >= threshold:
             scored.append((sim, {**entry, "similarity": sim}))
@@ -101,6 +121,7 @@ def find_image_candidates(
 
 
 def build_index_from_media(
+    session: Session,
     *,
     tenant_id: str,
     product_id: str,
@@ -113,6 +134,7 @@ def build_index_from_media(
     fp = compute_fingerprint(content)
     hist = compute_color_histogram(content)
     return upsert_product_image_index(
+        session,
         tenant_id=tenant_id,
         product_id=product_id,
         product_image_id=product_image_id,

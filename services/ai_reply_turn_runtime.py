@@ -16,6 +16,7 @@ from services.ai_reply_lifecycle import (
     get_turn,
     persist_generated_reply,
 )
+from services.products.outbound_hook import maybe_record_product_outbound
 
 _TURN_RUNTIME_KEYS = (
     "_logical_reply_id",
@@ -146,6 +147,11 @@ def finalize_delivery(ctx: dict[str, Any]) -> dict[str, Any]:
         evidence = {"success": True, "reason": "implicit_ok"}
     if evidence:
         record_delivery_outcome(str(lid), evidence)
+    if evidence.get("success"):
+        maybe_record_product_outbound(
+            user_data,
+            provider_message_id=str(evidence.get("provider_message_id") or ""),
+        )
     turn = get_turn(str(lid))
     if turn is None:
         return {"delivery": "unknown"}

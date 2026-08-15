@@ -220,6 +220,7 @@ def crv2_find_product_by_image(
     conversation_id: str | None = None,
 ) -> dict[str, Any]:
     candidates = find_image_candidates(
+        session,
         tenant_id=tenant_id,
         query_bytes=image_bytes,
         top_k=min(max(top_k, TOP_K_DEFAULT), 8),

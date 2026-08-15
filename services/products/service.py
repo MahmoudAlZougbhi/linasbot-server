@@ -63,7 +63,7 @@ class ProductsService:
         if row is None:
             raise ProductsError(code="NOT_FOUND", message="product_not_found", http_status=404)
         self._validate_images(tenant_id=tenant_id, images=body.images)
-        remove_product_from_index(tenant_id=tenant_id, product_id=product_id)
+        remove_product_from_index(self.session, tenant_id=tenant_id, product_id=product_id)
         self.repo.update_product(row, fields=self._product_fields(body))
         self.repo.replace_images(
             tenant_id=tenant_id,
@@ -87,7 +87,7 @@ class ProductsService:
         if row is None:
             raise ProductsError(code="NOT_FOUND", message="product_not_found", http_status=404)
         media_ids = self.repo.delete_product(row)
-        remove_product_from_index(tenant_id=tenant_id, product_id=product_id)
+        remove_product_from_index(self.session, tenant_id=tenant_id, product_id=product_id)
         clear_context_for_product(self.session, tenant_id=tenant_id, product_id=product_id)
         clear_reply_for_product(self.session, tenant_id=tenant_id, product_id=product_id)
         return media_ids
@@ -139,6 +139,7 @@ class ProductsService:
                 continue
             product_image_id = next((row.id for row in image_rows if row.media_id == media_id), media_id)
             build_index_from_media(
+                self.session,
                 tenant_id=tenant_id,
                 product_id=product_id,
                 product_image_id=product_image_id,

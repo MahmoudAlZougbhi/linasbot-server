@@ -34,6 +34,7 @@ from db.models.products import (
     Product,
     ProductConversationContext,
     ProductImage,
+    ProductImageFingerprint,
     ProductLink,
     ProductSentMessage,
 )
@@ -90,6 +91,7 @@ __all__ = [
     "Product",
     "ProductConversationContext",
     "ProductImage",
+    "ProductImageFingerprint",
     "ProductLink",
     "ProductSentMessage",
     "ServiceOption",
