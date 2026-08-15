@@ -31,6 +31,8 @@ def normalize_greeting_item(raw: dict[str, Any]) -> dict[str, Any]:
         item["keywords"] = [k for k in (_text(x) for x in keywords) if k]
     if not _text(item.get("en")) and _text(item.get("notes")):
         item["en"] = _text(item.get("notes"))
+    if not _text(item.get("notes")) and _text(item.get("en")):
+        item["notes"] = _text(item.get("en"))
     return item
 
 

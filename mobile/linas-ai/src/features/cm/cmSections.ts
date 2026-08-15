@@ -60,14 +60,16 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
   {
     id: 'dynamic_messages',
     title: 'Greetings',
-    description: 'Multiple greeting rules with trigger conditions.',
+    description: 'Greeting rules with title and custom note (edited inside AI Basics).',
     mobileSupported: true,
+    showInCmHub: false,
   },
   {
     id: 'services',
     title: 'Services',
-    description: 'Service catalog: name, note, available.',
+    description: 'Legacy service catalog (name, note, available).',
     mobileSupported: true,
+    showInCmHub: false,
   },
   {
     id: 'branches',
@@ -84,8 +86,8 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
   },
   {
     id: 'prices',
-    title: 'Services & Prices',
-    description: 'Services with machine, body part, staff options and prices.',
+    title: 'Service',
+    description: 'Service name with priced options (machine, body part, staff, price).',
     mobileSupported: true,
   },
   {
@@ -141,6 +143,8 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
 export const CM_HUB_PROGRESS_EXCLUDED: CmSectionId[] = [
   'languages',
   'style',
+  'dynamic_messages',
+  'services',
   'opening_hours',
   'off_days',
   'care',

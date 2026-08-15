@@ -31,9 +31,10 @@ type Props = {
 
 function AiBasicsComposite({ proposalReview }: { proposalReview?: CmProposalReview | null }) {
   const { tr } = useI18n();
-  const multi = useCmMultiDraft(['ai_basics', 'style'], proposalReview);
+  const multi = useCmMultiDraft(['ai_basics', 'style', 'dynamic_messages'], proposalReview);
   const basics = multi.drafts.ai_basics?.payload ?? {};
   const style = multi.drafts.style?.payload ?? {};
+  const greetings = multi.drafts.dynamic_messages?.payload ?? {};
 
   return (
     <>
@@ -44,8 +45,10 @@ function AiBasicsComposite({ proposalReview }: { proposalReview?: CmProposalRevi
         <AiBasicsEditor
           basicsPayload={basics}
           stylePayload={style}
+          greetingsPayload={greetings}
           onBasicsChange={(next) => multi.setPayload('ai_basics', next)}
           onStyleChange={(next) => multi.setPayload('style', next)}
+          onGreetingsChange={(next) => multi.setPayload('dynamic_messages', next)}
         />
       ) : null}
       {!multi.loading ? (
@@ -133,7 +136,7 @@ export function CmSectionScreen({ section, proposalReview, onBack }: Props) {
   const { tr } = useI18n();
   const [savedFlash, setSavedFlash] = useState(false);
   const isAiLimits = section === 'ai_limits';
-  const isAiBasics = section === 'ai_basics' || section === 'style';
+  const isAiBasics = section === 'ai_basics' || section === 'style' || section === 'dynamic_messages';
   const isLanguagesRemoved = section === 'languages';
 
   async function handleSave() {
