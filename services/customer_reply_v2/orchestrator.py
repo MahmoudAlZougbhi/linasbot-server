@@ -98,6 +98,7 @@ async def run_customer_reply_v2_dm(
     provider_display_name: str = "",
     user_id: str = "",
     conversation_id: str = "",
+    reply_to_message_id: str = "",
     injected_history: list[dict[str, Any]] | None = None,
     scripted_retrieval: list[Any] | None = None,
     fixture_answer: dict[str, Any] | None = None,
@@ -304,6 +305,9 @@ async def run_customer_reply_v2_dm(
         customer_profile=profile,
         dm_window=[{"role": m["role"], "content": m["content"]} for m in history_for_model],
         scripted_tool_calls=scripted_retrieval,
+        conversation_id=conversation_id or None,
+        channel=channel,
+        reply_to_message_id=reply_to_message_id or None,
     )
     if retrieval.error and retrieval.error.startswith("retrieval_model_blocker:"):
         return _out(

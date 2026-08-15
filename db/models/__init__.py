@@ -30,7 +30,13 @@ from db.models.meta_registry import (
     MetaOAuthStateRow,
     MetaRegistryAuditEvent,
 )
-from db.models.products import Product, ProductImage, ProductLink
+from db.models.products import (
+    Product,
+    ProductConversationContext,
+    ProductImage,
+    ProductLink,
+    ProductSentMessage,
+)
 from db.models.requests import CustomerRequest, CustomerRequestCounter
 from db.models.requests_support import (
     CustomerRequestEvent,
@@ -81,8 +87,10 @@ __all__ = [
     "MetaRegistryAuditEvent",
     "MobileRefreshTokenRow",
     "Product",
+    "ProductConversationContext",
     "ProductImage",
     "ProductLink",
+    "ProductSentMessage",
     "StripeProcessedEventRow",
     "TenantEntitlementRow",
     "TokenWalletLedgerRow",

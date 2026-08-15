@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from services.products.availability import AVAILABILITY_IN_STOCK, normalize_availability
 
 MAX_IMAGES = 3
 
@@ -27,8 +28,14 @@ class ProductWriteBody(BaseModel):
     sizes: list[str] = Field(default_factory=list)
     colors: list[str] = Field(default_factory=list)
     note: str | None = None
+    availability: str = Field(default=AVAILABILITY_IN_STOCK, max_length=32)
     images: list[ProductImageInput] = Field(default_factory=list)
     links: list[ProductLinkInput] = Field(default_factory=list)
+
+    @field_validator("availability")
+    @classmethod
+    def validate_availability(cls, value: str) -> str:
+        return normalize_availability(value)
 
     @field_validator("images")
     @classmethod
@@ -58,11 +65,16 @@ class ProductImportBody(BaseModel):
     csv_text: str = Field(min_length=1)
 
 
+class ProductXlsxImportBody(BaseModel):
+    file_base64: str = Field(min_length=1)
+
+
 def normalize_product_name(name: str) -> str:
     return " ".join(str(name or "").strip().lower().split())
 
 
 def product_to_dict(row: Any) -> dict[str, Any]:
+    availability = normalize_availability(getattr(row, "availability", None))
     return {
         "id": row.id,
         "name": row.name,
@@ -70,12 +82,9 @@ def product_to_dict(row: Any) -> dict[str, Any]:
         "sizes": list(row.sizes or []),
         "colors": list(row.colors or []),
         "note": row.note,
+        "availability": availability,
         "images": [
-            {
-                "id": img.id,
-                "media_id": img.media_id,
-                "sort_order": img.sort_order,
-            }
+            {"id": img.id, "media_id": img.media_id, "sort_order": img.sort_order}
             for img in sorted(row.images or [], key=lambda i: i.sort_order)
         ],
         "links": [

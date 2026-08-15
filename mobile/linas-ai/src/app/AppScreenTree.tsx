@@ -10,6 +10,7 @@ import { queueSetupHandoff } from '../features/chat/pendingSetupHandoff';
 import { CmScreen } from '../features/cm/CmScreen';
 import { CmSectionScreen } from '../features/cm/CmSectionScreen';
 import { AddProductScreen } from '../features/products/AddProductScreen';
+import { ProductsImportScreen } from '../features/products/ProductsImportScreen';
 import { ProductsScreen } from '../features/products/ProductsScreen';
 import type { CmProposalReview } from '../features/cm/cmProposalReview';
 import type { ControlArea } from '../features/control/controlAreas';
@@ -190,9 +191,16 @@ export function AppScreenTree({
         <ProductsScreen
           onBack={screen.backTo === 'cm' ? () => setScreen({ name: 'cm' }) : undefined}
           onAdd={() => setScreen({ name: 'products_add', backTo: 'products' })}
+          onImport={() => setScreen({ name: 'products_import', backTo: 'products' })}
           onEdit={(productId) =>
             setScreen({ name: 'products_edit', productId, backTo: 'products' })
           }
+        />
+      ) : null}
+      {name === 'products_import' ? (
+        <ProductsImportScreen
+          onBack={() => setScreen({ name: 'products', backTo: screen.backTo })}
+          onImported={() => setScreen({ name: 'products', backTo: screen.backTo })}
         />
       ) : null}
       {name === 'products_add' ? (

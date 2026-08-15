@@ -20,6 +20,7 @@ export type Screen =
   | { name: 'notifications'; backTo?: 'chat' | 'settings' }
   | { name: 'cm' }
   | { name: 'products'; backTo?: 'cm' }
+  | { name: 'products_import'; backTo?: 'products' }
   | { name: 'products_add'; backTo?: 'products' }
   | { name: 'products_edit'; productId: string; backTo?: 'products' }
   | {
