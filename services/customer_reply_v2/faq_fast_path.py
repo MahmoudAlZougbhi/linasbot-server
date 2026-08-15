@@ -97,7 +97,8 @@ async def try_faq_fast_path(
     from services.cm.version_store import read_published_pointer
 
     pointer = read_published_pointer(tenant_id)
-    if not pointer or not pointer.index_version_id:
+    index_id = pointer.index_version_id if pointer else None
+    if not index_id:
         return FaqFastPathResult(hit=False, reason="index_unavailable")
 
     async def _semantic_hits(*, language: str | None) -> list[dict[str, Any]]:

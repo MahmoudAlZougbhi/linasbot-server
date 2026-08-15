@@ -17,7 +17,6 @@ from services.live_chat_service_common import _env_bool, _env_float, _env_int
 from services.live_chat_service_details import LiveChatDetailsMixin
 from services.live_chat_service_history import LiveChatHistoryMixin
 from services.live_chat_service_history_api import LiveChatHistoryApiMixin
-from services.live_chat_service_index import LiveChatIndexMixin
 from services.live_chat_service_lifecycle import LiveChatLifecycleMixin
 from services.live_chat_service_operator import LiveChatOperatorMixin
 from services.live_chat_service_phone import LiveChatPhoneMixin
@@ -27,7 +26,6 @@ from services.live_chat_service_unified import LiveChatUnifiedMixin
 
 
 class LiveChatService(
-    LiveChatIndexMixin,
     LiveChatRebuildMixin,
     LiveChatHistoryMixin,
     LiveChatUnifiedMixin,

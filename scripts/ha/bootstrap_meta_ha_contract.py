@@ -2846,9 +2846,9 @@ def _combined_plan(args: argparse.Namespace) -> tuple[dict[str, Any], bytes, str
         raise RuntimeError("nodes do not observe one identical authoritative PostgreSQL registry")
     if node01["pg"]["state_sha256"] != args.expected_pg_state_sha256:
         raise RuntimeError("PostgreSQL Meta state differs from the owner-authorized digest")
-    if _nested_evidence.portable_content_identity(node01["nested_runtime"]) != _nested_evidence.portable_content_identity(
-        node02["nested_runtime"]
-    ):
+    if _nested_evidence.portable_content_identity(
+        node01["nested_runtime"]
+    ) != _nested_evidence.portable_content_identity(node02["nested_runtime"]):
         raise RuntimeError("nodes do not share one identical nested runtime authority")
     lb = _lb_owner_attestation(
         args.lb_ready_attestation,

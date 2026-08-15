@@ -11,7 +11,7 @@ from services.owner_copilot_v2.turn_results import owner_result_from_done_payloa
 
 
 async def run_owner_turn_v2(**kwargs: Any) -> OwnerV2TurnResult:
-    from services.owner_copilot_v2.brain import iter_owner_turn_v2_events
+    from services.owner_copilot_v2.brain_credit import iter_owner_turn_v2_events
 
     final: OwnerV2TurnResult | None = None
     async with aclosing(iter_owner_turn_v2_events(**kwargs)) as stream:

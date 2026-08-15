@@ -192,9 +192,7 @@ def test_do_lb_ready_projection_digest_matches_across_consumers() -> None:
         (lambda projection: projection.update({"extra_field": True}), "incomplete or unknown"),
     ],
 )
-def test_do_lb_ready_projection_rejects_mutated_shapes_without_put(
-    mutator: object, pattern: str
-) -> None:
+def test_do_lb_ready_projection_rejects_mutated_shapes_without_put(mutator: object, pattern: str) -> None:
     ready = _ready_projection_from_observed()
     mutator(ready)  # type: ignore[operator]
     with pytest.raises(RuntimeError, match=pattern):

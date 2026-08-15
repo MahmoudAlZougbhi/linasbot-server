@@ -474,6 +474,7 @@ test('Live Chat inbox matches design handoff (search, All/Human, platform row)',
   const row = read('features/livechat/ConversationRow.tsx');
   const icon = read('features/livechat/PlatformChannelIcon.tsx');
   const types = read('features/livechat/liveChatTypes.ts');
+  const formatters = read('features/livechat/liveChatFormatters.ts');
   const thread = read('features/livechat/LiveChatThread.tsx');
   assert.match(screen, /subtitle="All customer conversations"/);
   assert.match(search, /borderRadius:\s*radii\.pill/);
@@ -497,7 +498,7 @@ test('Live Chat inbox matches design handoff (search, All/Human, platform row)',
   assert.match(icon, /logo-instagram/);
   assert.match(icon, /facebook-messenger/);
   assert.match(icon, /logo-tiktok/);
-  assert.match(types, /hour12:\s*true/);
+  assert.match(formatters, /hour12:\s*true/);
   assert.match(thread, /LiveChatComposer/);
   assert.match(thread, /LiveChatAssignSheet/);
   assert.match(thread, /onTakeover/);
@@ -692,8 +693,8 @@ test('Subscription choose-a-plan matches design handoff', () => {
   assert.match(choose, /BillingPeriodToggle/);
   assert.match(choose, /PlanChipRow/);
   assert.match(choose, /PlanDetailCard/);
-  assert.match(choose, /subCtaChooseLite|PLAN_CHOOSE_CTA/);
-  assert.match(chips, /PLAN_ORDER\.map/);
+  assert.match(choose, /ctaLabelKey/);
+  assert.match(chips, /plans\.map|visiblePlans \?\? PLAN_ORDER/);
   assert.match(chips, /subYourPlan/);
   assert.match(chips, /subTapToCompare/);
   assert.match(toggle, /subPeriodMonthly/);

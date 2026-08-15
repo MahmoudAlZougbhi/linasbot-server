@@ -84,7 +84,11 @@ def validate_observed_get_routing(load_balancer: dict[str, Any]) -> None:
 
 
 def validate_forwarding_rules(forwarding: Any) -> None:
-    if not isinstance(forwarding, list) or len(forwarding) != 2 or any(not isinstance(rule, dict) for rule in forwarding):
+    if (
+        not isinstance(forwarding, list)
+        or len(forwarding) != 2
+        or any(not isinstance(rule, dict) for rule in forwarding)
+    ):
         raise RuntimeError("DigitalOcean ready projection forwarding rules are invalid")
     http_rules = [rule for rule in forwarding if rule.get("entry_protocol") == "http"]
     https_rules = [rule for rule in forwarding if rule.get("entry_protocol") == "https"]

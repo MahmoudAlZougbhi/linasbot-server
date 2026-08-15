@@ -52,6 +52,11 @@ def test_contrast_ratio_order_independent() -> None:
     assert contrast_ratio("#000000", "#FFFFFF") == pytest.approx(contrast_ratio("#FFFFFF", "#000000"))
 
 
+def test_normalize_appearance_partial_identity() -> None:
+    out = normalize_appearance({"identity": {"display_name": "Support"}})
+    assert out["identity"]["display_name"] == "Support"
+
+
 def test_integration_mode_normalization() -> None:
     assert normalize_integration_mode("custom_chat") == "custom_chat"
     assert normalize_integration_mode("unknown") == "linas_widget"

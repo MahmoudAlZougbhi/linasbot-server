@@ -359,7 +359,9 @@ def test_bootstrap_wires_nested_runtime_authority() -> None:
     combined = source[source.index("def _combined_plan") : source.index("def _confirmation")]
     verify = source[source.index("def _node_verify") : source.index("def _quiesce_and_disable_units")]
     rollback = source[source.index("def _node_rollback") : source.index("def _node_admit_rollback")]
-    commit = source[source.index("def _bootstrap_commit_proof_payload") : source.index("def _read_bootstrap_commit_proof")]
+    commit = source[
+        source.index("def _bootstrap_commit_proof_payload") : source.index("def _read_bootstrap_commit_proof")
+    ]
     assert "_nested.publish_authority(" in prepare
     assert "_nested.apply_quarantine(" in drain
     assert "portable_content_identity(" in combined

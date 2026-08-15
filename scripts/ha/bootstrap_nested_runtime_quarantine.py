@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -30,11 +31,11 @@ SECURE_ROOT_OWNER = (0, 0)
 
 
 def _canonical(value: Any) -> bytes:
-    return _evidence._canonical(value)
+    return json.dumps(value, allow_nan=False, separators=(",", ":"), sort_keys=True).encode()
 
 
 def _digest(value: Any) -> str:
-    return _evidence._digest(value)
+    return hashlib.sha256(_canonical(value)).hexdigest()
 
 
 def _fsync_dir(path: Path) -> None:
@@ -107,7 +108,10 @@ def probe_evidence(repo_dir: Path) -> dict[str, Any]:
     live = nested_runtime_path(repo_dir)
     if not live.exists() and not live.is_symlink():
         return absent_evidence()
-    return _evidence.collect_present(live)
+    observed = _evidence.collect_present(live)
+    if not isinstance(observed, dict):
+        raise NestedRuntimeQuarantineError("nested runtime evidence is invalid")
+    return observed
 
 
 def assert_matches(repo_dir: Path, expected: dict[str, Any]) -> None:
@@ -193,15 +197,18 @@ def _atomic_authority_write(path: Path, payload: bytes) -> None:
 
 
 def _write_authority(backup: Path, *, tx_id: str, evidence: dict[str, Any], destination_name: str) -> None:
-    payload = _canonical(
-        {
-            "schema": SCHEMA,
-            "tx_id": tx_id,
-            "evidence": evidence,
-            "quarantine_name": destination_name,
-            "evidence_sha256": digest_evidence(evidence),
-        }
-    ) + b"\n"
+    payload = (
+        _canonical(
+            {
+                "schema": SCHEMA,
+                "tx_id": tx_id,
+                "evidence": evidence,
+                "quarantine_name": destination_name,
+                "evidence_sha256": digest_evidence(evidence),
+            }
+        )
+        + b"\n"
+    )
     _atomic_authority_write(authority_path(backup), payload)
 
 

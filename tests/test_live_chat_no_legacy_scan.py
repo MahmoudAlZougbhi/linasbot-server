@@ -65,6 +65,8 @@ async def test_unified_chats_empty_index_sets_rebuild_flag_without_legacy():
             pass
 
     # Real path: patch stream to return [] and ensure legacy not called
+    svc._unified_chats_cache = []
+    svc._unified_chats_cache_time = None
     with (
         patch.object(
             svc,
@@ -72,6 +74,7 @@ async def test_unified_chats_empty_index_sets_rebuild_flag_without_legacy():
             new_callable=AsyncMock,
             side_effect=AssertionError("legacy must not run"),
         ),
+        patch.object(svc, "_cached_unified_response", return_value=None),
         patch("services.live_chat_service_unified.get_firestore_db", return_value=MagicMock()),
         patch.object(svc, "_run_blocking_with_timeout", new_callable=AsyncMock, return_value=[]),
     ):

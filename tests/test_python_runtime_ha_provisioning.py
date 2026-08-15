@@ -179,10 +179,9 @@ def test_bootstrap_nested_runtime_modules_load_from_closed_control_tree_only(tmp
         destination = control_root / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes((ROOT / relative).read_bytes())
-    evil = (
-        f"from pathlib import Path\nPath({str(sentinel)!r}).write_text('executed')\n"
-        + (ROOT / "scripts/ha/bootstrap_nested_runtime_evidence.py").read_text(encoding="utf-8")
-    )
+    evil = f"from pathlib import Path\nPath({str(sentinel)!r}).write_text('executed')\n" + (
+        ROOT / "scripts/ha/bootstrap_nested_runtime_evidence.py"
+    ).read_text(encoding="utf-8")
     (checkout / "scripts/ha").mkdir(parents=True)
     (checkout / "scripts/ha/bootstrap_nested_runtime_evidence.py").write_text(evil, encoding="utf-8")
     spec = importlib.util.spec_from_file_location(
