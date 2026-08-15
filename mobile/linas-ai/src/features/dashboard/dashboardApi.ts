@@ -6,17 +6,22 @@ import {
   TenantDashboardSchema,
   type DashboardNavigateTarget,
 } from './dashboardTypes';
-import { dashboardQueryRange, type DashboardPeriodSelection } from './dashboardFormat';
+import { dashboardQueryRange, isTodayPeriod, type DashboardPeriodSelection } from './dashboardFormat';
 
 export async function fetchTenantDashboard(
   period: DashboardPeriodSelection,
   tz: string,
 ): Promise<TenantDashboard> {
   const params = new URLSearchParams({ tz });
-  const range = dashboardQueryRange(period);
-  params.set('period', 'custom');
-  params.set('start', range.start);
-  params.set('end', range.end);
+  if (isTodayPeriod(period)) {
+    // Tenant-local calendar day via tz — do not send same-day start/end (exclusive end is empty).
+    params.set('period', 'today');
+  } else {
+    const range = dashboardQueryRange(period);
+    params.set('period', 'custom');
+    params.set('start', range.start);
+    params.set('end', range.end);
+  }
   return apiFetch(`/api/mobile/dashboard?${params.toString()}`, {
     schema: TenantDashboardSchema,
   });
