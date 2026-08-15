@@ -5,8 +5,11 @@ import {
   dashboardErrorMessage,
   fetchTenantDashboard,
 } from './dashboardApi';
-import type { DashboardPeriodSelection } from './dashboardFormat';
-import { monthStartIso, todayIso } from './dashboardFormat';
+import {
+  DEFAULT_DASHBOARD_PERIOD,
+  isAllTimePeriod,
+  type DashboardPeriodSelection,
+} from './dashboardFormat';
 import type { TenantDashboard } from './dashboardTypes';
 
 export type DashboardLoadState =
@@ -29,24 +32,25 @@ function defaultTz(): string {
   }
 }
 
-function defaultPeriod(): DashboardPeriodSelection {
-  return { kind: 'custom', start: monthStartIso(), end: todayIso() };
-}
-
 export function useTenantDashboard(initialPeriod?: DashboardPeriodSelection) {
-  const [period, setPeriod] = useState<DashboardPeriodSelection>(initialPeriod ?? defaultPeriod());
+  const [period, setPeriod] = useState<DashboardPeriodSelection>(
+    initialPeriod ?? DEFAULT_DASHBOARD_PERIOD,
+  );
   const [state, setState] = useState<DashboardLoadState>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
   const snapshotRef = useRef<TenantDashboard | null>(null);
+  const requestIdRef = useRef(0);
   const tz = defaultTz();
 
   const load = useCallback(
     async (opts?: { soft?: boolean }) => {
+      const requestId = ++requestIdRef.current;
       const soft = Boolean(opts?.soft);
       if (soft) setRefreshing(true);
       else if (!snapshotRef.current) setState({ kind: 'loading' });
       try {
         const data = await fetchTenantDashboard(period, tz);
+        if (requestId !== requestIdRef.current) return;
         snapshotRef.current = data;
         setState({
           kind: 'ready',
@@ -56,6 +60,7 @@ export function useTenantDashboard(initialPeriod?: DashboardPeriodSelection) {
           refreshErrorCode: null,
         });
       } catch (err) {
+        if (requestId !== requestIdRef.current) return;
         const code = classifyDashboardError(err);
         const message = dashboardErrorMessage(err);
         if (code === 'forbidden' && !snapshotRef.current) {
@@ -74,7 +79,7 @@ export function useTenantDashboard(initialPeriod?: DashboardPeriodSelection) {
         }
         setState({ kind: 'error', message, code });
       } finally {
-        setRefreshing(false);
+        if (requestId === requestIdRef.current) setRefreshing(false);
       }
     },
     [period, tz],
@@ -84,9 +89,14 @@ export function useTenantDashboard(initialPeriod?: DashboardPeriodSelection) {
     void load();
   }, [load]);
 
+  const resetToDefaultPeriod = useCallback(() => {
+    setPeriod((prev) => (isAllTimePeriod(prev) ? prev : DEFAULT_DASHBOARD_PERIOD));
+  }, []);
+
   return {
     period,
     setPeriod,
+    resetToDefaultPeriod,
     state,
     refreshing,
     refresh: () => load({ soft: true }),

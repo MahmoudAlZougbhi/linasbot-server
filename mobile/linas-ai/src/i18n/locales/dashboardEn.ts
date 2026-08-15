@@ -3,6 +3,7 @@ export const dashboardEn = {
   dashRefresh: 'Refresh dashboard',
   dashCustomRange: 'Custom range',
   dashCustom: 'Custom',
+  dashAllTime: 'All time',
   dashToday: 'Today',
   dashLastMonth: 'Last month',
   dashLast6Months: 'Last 6 months',

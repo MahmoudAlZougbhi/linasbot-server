@@ -1,8 +1,14 @@
-export type DashboardPresetId = 'today' | 'last_month' | 'last_6m' | 'last_year';
+export type DashboardPresetId = 'all_time' | 'today' | 'last_month' | 'last_6m' | 'last_year';
 
 export type DashboardPeriodSelection =
   | { kind: 'preset'; id: DashboardPresetId }
   | { kind: 'custom'; start: string; end: string };
+
+export const DEFAULT_DASHBOARD_PERIOD: DashboardPeriodSelection = { kind: 'preset', id: 'all_time' };
+
+export function isAllTimePeriod(period: DashboardPeriodSelection): boolean {
+  return period.kind === 'preset' && period.id === 'all_time';
+}
 
 export function ymdFromDate(date: Date): string {
   const y = date.getFullYear();
@@ -33,6 +39,7 @@ export function resolvePresetRange(
   date = new Date(),
 ): { start: string; end: string } {
   const end = todayIso(date);
+  if (id === 'all_time') return { start: '1970-01-01', end }; // existing custom window; API has no `all` period
   if (id === 'today') return { start: end, end };
   if (id === 'last_month') return lastCalendarMonthRange(date);
   if (id === 'last_6m') {

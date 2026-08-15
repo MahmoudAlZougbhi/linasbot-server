@@ -17,10 +17,11 @@ type Props = {
 
 type Preset = {
   id: DashboardPresetId;
-  labelKey: 'dashToday' | 'dashLastMonth' | 'dashLast6Months' | 'dashLastYear';
+  labelKey: 'dashAllTime' | 'dashToday' | 'dashLastMonth' | 'dashLast6Months' | 'dashLastYear';
 };
 
 const PRESETS: Preset[] = [
+  { id: 'all_time', labelKey: 'dashAllTime' },
   { id: 'today', labelKey: 'dashToday' },
   { id: 'last_month', labelKey: 'dashLastMonth' },
   { id: 'last_6m', labelKey: 'dashLast6Months' },

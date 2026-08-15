@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState } from '../../components/EmptyState';
@@ -19,6 +19,7 @@ import { useTenantDashboard } from './useTenantDashboard';
 
 type Props = {
   onNavigate: (target: DashboardNavigateTarget) => void;
+  active?: boolean;
 };
 
 function periodRangeIso(data: { period: { start: string; end: string } }): { start: string; end: string } {
@@ -30,12 +31,16 @@ function periodRangeIso(data: { period: { start: string; end: string } }): { sta
   };
 }
 
-export function DashboardScreen({ onNavigate }: Props) {
+export function DashboardScreen({ onNavigate, active = true }: Props) {
   const { colors } = useTheme();
   const { tr, language } = useI18n();
-  const { period, setPeriod, state, refreshing, refresh } = useTenantDashboard();
+  const { period, setPeriod, resetToDefaultPeriod, state, refreshing, refresh } = useTenantDashboard();
   const [copilotExpanded, setCopilotExpanded] = useState(false);
   const credits = useBuyCreditsFlow(refresh);
+
+  useEffect(() => {
+    if (active) resetToDefaultPeriod();
+  }, [active, resetToDefaultPeriod]);
 
   return (
     <ScreenChrome

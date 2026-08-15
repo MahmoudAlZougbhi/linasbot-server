@@ -6,7 +6,7 @@ import { useI18n } from '../../../i18n/LanguageContext';
 import { fonts, spacing, useTheme } from '../../../theme';
 import { DASH_CARD_RADIUS } from '../dashboardChrome';
 import type { DashboardPeriodSelection } from '../dashboardFormat';
-import { formatDashboardRangeLabel } from '../dashboardFormat';
+import { formatDashboardRangeLabel, isAllTimePeriod } from '../dashboardFormat';
 import { DashboardDateRangeSheet } from './DashboardDateRangeSheet';
 
 type Props = {
@@ -26,9 +26,12 @@ export function DashboardHeader({
   const { tr, language } = useI18n();
   const [sheetOpen, setSheetOpen] = useState(false);
   const locale = language === 'ar' ? 'ar' : language === 'fr' ? 'fr' : 'en';
-  const rangeLabel = formatDashboardRangeLabel(rangeStart, rangeEnd, locale);
-  const subtitle =
-    period.kind === 'custom'
+  const rangeLabel = isAllTimePeriod(period)
+    ? tr('dashAllTime')
+    : formatDashboardRangeLabel(rangeStart, rangeEnd, locale);
+  const subtitle = isAllTimePeriod(period)
+    ? tr('dashAllTime')
+    : period.kind === 'custom'
       ? tr('dashCustomRange')
       : period.id === 'today'
         ? tr('dashToday')

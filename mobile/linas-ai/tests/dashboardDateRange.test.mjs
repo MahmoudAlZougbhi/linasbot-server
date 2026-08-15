@@ -28,8 +28,9 @@ function lastCalendarMonth(date) {
   return { start: ymd(start), end: ymd(end) };
 }
 
-test('date sheet presets are Today, Last month, Last 6 months, Last year, Custom', () => {
+test('date sheet presets are All time, Today, Last month, Last 6 months, Last year, Custom', () => {
   const sheet = read('features/dashboard/sections/DashboardDateRangeSheet.tsx');
+  assert.match(sheet, /id: 'all_time'/);
   assert.match(sheet, /id: 'today'/);
   assert.match(sheet, /id: 'last_month'/);
   assert.match(sheet, /id: 'last_6m'/);
@@ -78,15 +79,43 @@ test('presets resolve to custom start/end for activity queries', () => {
   assert.match(format, /getMonth\(\) - 12/);
 });
 
+test('default period is All time encoded as custom 1970-01-01 through today', () => {
+  const hook = read('features/dashboard/useTenantDashboard.ts');
+  const format = read('features/dashboard/dashboardFormat.ts');
+  const api = read('features/dashboard/dashboardApi.ts');
+  assert.match(format, /DEFAULT_DASHBOARD_PERIOD/);
+  assert.match(format, /id: 'all_time'/);
+  assert.match(format, /id === 'all_time'/);
+  assert.match(format, /start: '1970-01-01'/);
+  assert.match(hook, /initialPeriod \?\? DEFAULT_DASHBOARD_PERIOD/);
+  assert.match(hook, /resetToDefaultPeriod/);
+  assert.match(api, /dashboardQueryRange/);
+  assert.match(api, /params\.set\('period', 'custom'\)/);
+  assert.doesNotMatch(hook, /monthStartIso|todayIso/);
+});
+
+test('refresh keeps the last snapshot and does not treat missing activity as zero', () => {
+  const hook = read('features/dashboard/useTenantDashboard.ts');
+  const grid = read('features/dashboard/sections/TotalActivityGrid.tsx');
+  assert.match(hook, /if \(soft\) setRefreshing\(true\)/);
+  assert.match(hook, /else if \(!snapshotRef\.current\) setState\(\{ kind: 'loading' \}\)/);
+  assert.match(hook, /refresh: \(\) => load\(\{ soft: true \}\)/);
+  assert.match(hook, /if \(snapshotRef\.current\)/);
+  assert.match(hook, /requestId !== requestIdRef\.current/);
+  assert.match(grid, /unavailable \|\| value == null \? '—' : formatCount\(value\)/);
+  assert.doesNotMatch(grid, /unavailable \|\| !activity \? 0/);
+});
+
 test('date filter i18n covers EN AR FR and drops billing / last 30 days', () => {
   const en = read('i18n/locales/dashboardEn.ts');
   const ar = read('i18n/locales/dashboardAr.ts');
   const fr = read('i18n/locales/dashboardFr.ts');
-  for (const [src, today, lastMonth, last6, lastYear, custom] of [
-    [en, 'Today', 'Last month', 'Last 6 months', 'Last year', 'Custom'],
-    [ar, 'اليوم', 'الشهر الماضي', 'آخر 6 أشهر', 'السنة الماضية', 'مخصص'],
-    [fr, 'Aujourd’hui', 'Mois dernier', '6 derniers mois', 'Année dernière', 'Personnalisé'],
+  for (const [src, allTime, today, lastMonth, last6, lastYear, custom] of [
+    [en, 'All time', 'Today', 'Last month', 'Last 6 months', 'Last year', 'Custom'],
+    [ar, 'كل الوقت', 'اليوم', 'الشهر الماضي', 'آخر 6 أشهر', 'السنة الماضية', 'مخصص'],
+    [fr, 'Tout le temps', 'Aujourd’hui', 'Mois dernier', '6 derniers mois', 'Année dernière', 'Personnalisé'],
   ]) {
+    assert.match(src, new RegExp(allTime));
     assert.match(src, new RegExp(today));
     assert.match(src, new RegExp(lastMonth));
     assert.match(src, new RegExp(last6));
