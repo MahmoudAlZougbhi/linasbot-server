@@ -4,6 +4,7 @@ import { ApiError } from '../../api/client';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts } from '../../theme';
 import { ChannelCapabilityToggles } from './ChannelCapabilityToggles';
+import { IntegrationCardLoading } from './IntegrationCardLoading';
 import { IntegrationCardShell } from './IntegrationCardShell';
 import { WhatsAppCloudOpsPanel } from './WhatsAppCloudOpsPanel';
 import {
@@ -41,6 +42,7 @@ export function whatsappCardSubtitle(status: WhatsAppCloudStatus | null, fallbac
 
 export function WhatsAppCloudCard({
   status,
+  loading,
   busy,
   onConnect,
   onOpenMenu,
@@ -51,6 +53,11 @@ export function WhatsAppCloudCard({
   onNotice,
 }: Props) {
   const { tr } = useI18n();
+
+  if (loading && !status) {
+    return <IntegrationCardLoading platform="whatsapp" />;
+  }
+
   const lifecycle = status?.lifecycle_status || 'disconnected';
   const connected = lifecycle === 'connected';
   const connectable = status?.connectable === true;

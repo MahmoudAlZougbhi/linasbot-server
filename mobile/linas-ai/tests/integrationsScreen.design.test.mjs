@@ -85,9 +85,17 @@ test('TikTok card is shown from product list without faking a connection', () =>
 
 test('initial load avoids header spinner and web chat misleading disconnected state', () => {
   const screen = read('features/integrations/IntegrationsScreen.tsx');
+  const loadHook = read('features/integrations/useIntegrationsLoad.ts');
   const web = read('features/integrations/WebChatCard.tsx');
+  const wa = read('features/integrations/WhatsAppCloudCard.tsx');
   assert.match(screen, /headerRefreshing/);
   assert.match(screen, /refreshing=\{headerRefreshing\}/);
+  assert.match(screen, /hasLoadedOnce/);
+  assert.match(loadHook, /skipNextAreaFocusLoad/);
   assert.match(web, /IntegrationCardLoading/);
+  assert.match(web, /if \(!ready\)/);
+  assert.match(web, /webChatCardCache/);
   assert.doesNotMatch(web, /busy=\{/);
+  assert.match(wa, /loading && !status/);
+  assert.match(wa, /IntegrationCardLoading/);
 });
