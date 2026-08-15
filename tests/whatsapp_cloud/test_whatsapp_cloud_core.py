@@ -301,10 +301,11 @@ def test_concurrent_duplicate_inbound_claims(wa_db, monkeypatch):
     )
     repo.mark_connection_connected(conn, webhook_fields=["messages"])
     wa_db.commit()
+    connection_id = conn.id
+    engine = wa_db.get_bind()
 
     def claim_once(i: int) -> bool:
         # Each thread needs its own session against same DB file.
-        engine = wa_db.get_bind()
         Session = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
         s = Session()
         try:
@@ -314,7 +315,7 @@ def test_concurrent_duplicate_inbound_claims(wa_db, monkeypatch):
                 event_kind="inbound_message",
                 payload_hash="abc",
                 tenant_id="tenant_a",
-                connection_id=conn.id,
+                connection_id=connection_id,
             )
             s.commit()
             return is_new
