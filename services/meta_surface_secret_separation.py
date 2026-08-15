@@ -1,8 +1,11 @@
 """Fail closed when Instagram and Facebook Meta secrets are identical.
 
-Compares signing secrets and webhook verify tokens only when both sides of a
-pair are present. Missing/legacy empty values are not collisions. Messages and
-reason codes never include secret values.
+Compares every simultaneously present Facebook signing alias against every
+present Instagram signing alias, and every present Facebook verify alias
+against every present Instagram verify alias. Simultaneously present Facebook
+aliases must also agree with each other. First-present precedence is not used.
+Missing/empty values are not collisions. Messages and reason codes never
+include secret values.
 """
 
 from __future__ import annotations
@@ -17,9 +20,13 @@ FACEBOOK_SIGNING_KEYS = ("META_APP_A_SECRET", "META_APP_SECRET")
 FACEBOOK_VERIFY_KEYS = ("META_APP_A_WEBHOOK_VERIFY_TOKEN", "META_WEBHOOK_VERIFY_TOKEN")
 INSTAGRAM_SIGNING_KEY = "META_INSTAGRAM_LOGIN_APP_SECRET"
 INSTAGRAM_VERIFY_KEY = "META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN"
+INSTAGRAM_SIGNING_KEYS = (INSTAGRAM_SIGNING_KEY,)
+INSTAGRAM_VERIFY_KEYS = (INSTAGRAM_VERIFY_KEY,)
 SIGNING_COLLISION = "instagram_signing_matches_facebook"
 VERIFY_COLLISION = "instagram_verify_matches_facebook"
-COLLISION_EXIT = "instagram and facebook secrets must be distinct"
+FACEBOOK_SIGNING_ALIAS_MISMATCH = "facebook_signing_aliases_disagree"
+FACEBOOK_VERIFY_ALIAS_MISMATCH = "facebook_verify_aliases_disagree"
+COLLISION_EXIT = "meta surface secret policy failed"
 CONFIG_COLLISION_KEY = "META_INSTAGRAM_FACEBOOK_SECRET_COLLISION"
 
 
@@ -29,18 +36,29 @@ class MetaSurfaceSecretSeparation:
     collisions: tuple[str, ...]
 
 
-def _first_present(values: Mapping[str, str], keys: tuple[str, ...]) -> str:
-    for key in keys:
-        raw = str(values.get(key) or "").strip().strip("'").strip('"')
-        if raw:
-            return raw
-    return ""
+def _normalized_secret(values: Mapping[str, str], key: str) -> str:
+    return str(values.get(key) or "").strip().strip("'").strip('"')
+
+
+def _present_secrets(values: Mapping[str, str], keys: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(secret for key in keys if (secret := _normalized_secret(values, key)))
 
 
 def _secrets_equal(left: str, right: str) -> bool:
     if not left or not right or len(left) != len(right):
         return False
     return hmac.compare_digest(left, right)
+
+
+def _facebook_aliases_agree(secrets: tuple[str, ...]) -> bool:
+    if len(secrets) < 2:
+        return True
+    first = secrets[0]
+    return all(_secrets_equal(first, other) for other in secrets[1:])
+
+
+def _cross_surface_collision(left: tuple[str, ...], right: tuple[str, ...]) -> bool:
+    return any(_secrets_equal(facebook, instagram) for facebook in left for instagram in right)
 
 
 def env_file_values(path: Path) -> dict[str, str]:
@@ -62,8 +80,8 @@ def environ_secret_values() -> dict[str, str]:
     keys = (
         *FACEBOOK_SIGNING_KEYS,
         *FACEBOOK_VERIFY_KEYS,
-        INSTAGRAM_SIGNING_KEY,
-        INSTAGRAM_VERIFY_KEY,
+        *INSTAGRAM_SIGNING_KEYS,
+        *INSTAGRAM_VERIFY_KEYS,
     )
     return {key: (os.getenv(key) or "") for key in keys}
 
@@ -71,16 +89,22 @@ def environ_secret_values() -> dict[str, str]:
 def evaluate_meta_surface_secret_separation(
     values: Mapping[str, str],
 ) -> MetaSurfaceSecretSeparation:
-    facebook_signing = _first_present(values, FACEBOOK_SIGNING_KEYS)
-    facebook_verify = _first_present(values, FACEBOOK_VERIFY_KEYS)
-    instagram_signing = _first_present(values, (INSTAGRAM_SIGNING_KEY,))
-    instagram_verify = _first_present(values, (INSTAGRAM_VERIFY_KEY,))
+    facebook_signing = _present_secrets(values, FACEBOOK_SIGNING_KEYS)
+    facebook_verify = _present_secrets(values, FACEBOOK_VERIFY_KEYS)
     collisions: list[str] = []
-    if _secrets_equal(instagram_signing, facebook_signing):
+    if not _facebook_aliases_agree(facebook_signing):
+        collisions.append(FACEBOOK_SIGNING_ALIAS_MISMATCH)
+    if not _facebook_aliases_agree(facebook_verify):
+        collisions.append(FACEBOOK_VERIFY_ALIAS_MISMATCH)
+    if _cross_surface_collision(facebook_signing, _present_secrets(values, INSTAGRAM_SIGNING_KEYS)):
         collisions.append(SIGNING_COLLISION)
-    if _secrets_equal(instagram_verify, facebook_verify):
+    if _cross_surface_collision(facebook_verify, _present_secrets(values, INSTAGRAM_VERIFY_KEYS)):
         collisions.append(VERIFY_COLLISION)
     return MetaSurfaceSecretSeparation(ok=not collisions, collisions=tuple(collisions))
+
+
+def runtime_meta_surface_secret_separation() -> MetaSurfaceSecretSeparation:
+    return evaluate_meta_surface_secret_separation(environ_secret_values())
 
 
 def require_separated_meta_surface_secrets(values: Mapping[str, str]) -> None:

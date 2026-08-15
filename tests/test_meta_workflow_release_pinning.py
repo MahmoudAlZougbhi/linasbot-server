@@ -224,6 +224,8 @@ def test_ha_verifier_proves_live_api_and_worker_processes() -> None:
         'required != {"node01", "node02"}',
         "META_REGISTRY_BACKEND",
         'registry_backend != "postgres"',
+        "evaluate_meta_surface_secret_separation",
+        "COLLISION_EXIT",
     ):
         assert contract in source
     assert ("META_APP_" + "REGISTRY_BACKEND") not in source

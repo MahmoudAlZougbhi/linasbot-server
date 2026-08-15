@@ -247,6 +247,10 @@ async def complete_instagram_login(
     registry: MetaAppRegistry | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> InstagramLoginOAuthResult:
+    status = instagram_login_config_status()
+    if not status.configured:
+        missing = ", ".join(status.missing)
+        raise MetaOAuthError(f"Instagram Login is not configured. Missing: {missing}")
     if not code or not state:
         raise MetaOAuthStateError("OAuth code and state are required")
     current_registry = registry or get_meta_app_registry()

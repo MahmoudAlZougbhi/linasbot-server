@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import hmac
 import html
 import os
 from dataclasses import dataclass
@@ -46,6 +45,10 @@ from services.meta_subject_deletion_guard import (
     MetaSubjectDeletionGuardError,
     acquire_meta_deauthorization_subject_guard,
     meta_deletion_subject_hmac,
+)
+from services.meta_surface_secret_separation import (
+    environ_secret_values,
+    evaluate_meta_surface_secret_separation,
 )
 from services.rate_limit_service import rate_limit_service
 
@@ -200,15 +203,9 @@ def _instagram_callback_context() -> _MetaCallbackContext:
 
 def _load_callback_context(*, instagram_login: bool) -> _MetaCallbackContext:
     try:
-        context = _instagram_callback_context() if instagram_login else _app_a_callback_context()
-        other_secret = (
-            (os.getenv("META_APP_A_SECRET") or os.getenv("META_APP_SECRET") or "").strip()
-            if instagram_login
-            else instagram_login_app_secret()
-        )
-        if other_secret and hmac.compare_digest(context.app_secret, other_secret):
+        if not evaluate_meta_surface_secret_separation(environ_secret_values()).ok:
             raise MetaSignedRequestError("Meta callback signing secrets must be distinct")
-        return context
+        return _instagram_callback_context() if instagram_login else _app_a_callback_context()
     except MetaSignedRequestError:
         raise HTTPException(status_code=503, detail="Meta callback is not configured") from None
 

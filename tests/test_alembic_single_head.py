@@ -7,14 +7,18 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSIONS = ROOT / "alembic" / "versions"
-MERGE_ID = "20260815_merge_sfu_and_meta_credential"
+MERGE_ID = "20260815_merge_sfu_meta_cred"
 PARENTS = frozenset(
     {
         "20260813_sfu_channels_enabled",
         "20260814_meta_credential_archived_at",
     }
 )
-MERGE_PATH = VERSIONS / "20260815_merge_sfu_and_meta_credential.py"
+MERGE_PATH = VERSIONS / "20260815_merge_sfu_meta_cred.py"
+ALEMBIC_VERSION_NUM_MAX = 32
+LIVE_LONG_REVISION_ID = "20260814_meta_credential_archived_at"
+WIDEN_ID = "20260814_widen_ver_num"
+WIDEN_PATH = VERSIONS / "20260814_widen_ver_num.py"
 
 
 def _constant_strings(node: ast.AST) -> tuple[str, ...]:
@@ -55,6 +59,24 @@ def test_alembic_has_exactly_one_head() -> None:
     referenced = {parent for parents in revisions.values() for parent in parents}
     heads = sorted(revision for revision in revisions if revision not in referenced)
     assert heads == [MERGE_ID]
+
+
+def test_every_path_to_the_long_revision_goes_through_the_short_widen() -> None:
+    revisions = _revisions()
+    assert revisions[WIDEN_ID] == ("20260812_meta_app_registry",)
+    assert len(WIDEN_ID) <= ALEMBIC_VERSION_NUM_MAX
+    assert revisions[LIVE_LONG_REVISION_ID] == (WIDEN_ID,)
+    assert len(LIVE_LONG_REVISION_ID) == 36
+    long_ids = sorted(revision for revision in revisions if len(revision) > ALEMBIC_VERSION_NUM_MAX)
+    assert long_ids == [LIVE_LONG_REVISION_ID]
+    assert revisions["20260812_ha_billing_auth"] == ("20260812_meta_app_registry",)
+
+
+def test_widen_revision_alters_version_num_to_varchar_64() -> None:
+    source = WIDEN_PATH.read_text(encoding="utf-8")
+    assert "VARCHAR(64)" in source
+    assert "ALTER TABLE alembic_version" in source
+    assert "cannot shrink alembic_version.version_num while a long revision is stamped" in source
 
 
 def test_merge_revision_joins_both_previous_heads() -> None:

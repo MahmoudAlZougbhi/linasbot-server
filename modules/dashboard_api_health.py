@@ -99,6 +99,16 @@ async def ready() -> Any:
     if not openai_ok:
         overall_ok = False
 
+    from services.meta_surface_secret_separation import runtime_meta_surface_secret_separation
+
+    separation = runtime_meta_surface_secret_separation()
+    checks["meta_surface_secret_separation"] = {
+        "ok": separation.ok,
+        "collisions": list(separation.collisions),
+    }
+    if not separation.ok:
+        overall_ok = False
+
     from services.meta_app_registry import get_meta_registry_readiness, meta_multi_app_registry_enabled
     from services.meta_messaging import get_meta_messaging_readiness, get_meta_messaging_settings
 
