@@ -87,7 +87,7 @@ export const en = {
   settingsAiLimitsSub: 'Protect credits by limiting each customer’s AI usage',
   faqTitle: 'Smart Q&A',
   faqSub: 'Ready-made Q&A — auto-translate to 4 languages',
-  faqCreateNew: 'Add Q&A',
+  faqCreateNew: 'Create Q&A',
   faqSavedList: 'Saved Smart Q&A',
   faqEmpty: 'No Smart Q&A yet.',
   faqCreateHint:
@@ -95,9 +95,9 @@ export const en = {
   faqSaved: 'Saved in 4 languages.',
   faqLoadError: 'Could not load FAQ.',
   faqCreateError: 'Could not create FAQ.',
-  faqWhyTitle: 'Why Smart Q&A',
+  faqWhyTitle: 'Save credits with Smart Q&A',
   faqWhyBody:
-    'Save ready-made Q&A here. When a customer asks the same question or same meaning, Linas replies from FAQ automatically — no full AI generation, lower cost.',
+    'When a customer asks the same or a similar question, Linas uses your saved answer instead of generating a new one.',
   faqAskLinas: 'Ask Linas',
   faqSearchPlaceholder: 'Search questions or answers',
   faqSourceLanguage: 'Source language',

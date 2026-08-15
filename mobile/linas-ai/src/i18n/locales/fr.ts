@@ -204,7 +204,7 @@ export const fr = {
   settingsAiLimitsSub: 'Protégez les crédits en limitant l’usage IA de chaque client',
   faqTitle: 'Q&R intelligentes',
   faqSub: 'Q&R prêtes — traduction auto en 4 langues',
-  faqCreateNew: 'Ajouter une Q&R',
+  faqCreateNew: 'Créer une Q&R',
   faqSavedList: 'Q&R intelligentes enregistrées',
   faqEmpty: 'Aucune Q&R intelligente pour le moment.',
   faqCreateHint:
@@ -212,9 +212,9 @@ export const fr = {
   faqSaved: 'Enregistré en 4 langues.',
   faqLoadError: 'Impossible de charger la FAQ.',
   faqCreateError: 'Impossible de créer la FAQ.',
-  faqWhyTitle: 'Pourquoi les Q&R intelligentes',
+  faqWhyTitle: 'Économisez des crédits avec les Q&R intelligentes',
   faqWhyBody:
-    'Enregistrez des Q&R prêtes ici. Quand un client pose la même question ou le même sens, Linas répond depuis la FAQ automatiquement — sans génération IA complète, à moindre coût.',
+    'Lorsqu’un client pose la même question ou une question similaire, Linas utilise votre réponse enregistrée au lieu d’en générer une nouvelle.',
   faqAskLinas: 'Demander à Linas',
   faqSearchPlaceholder: 'Rechercher questions ou réponses',
   faqSourceLanguage: 'Langue source',
