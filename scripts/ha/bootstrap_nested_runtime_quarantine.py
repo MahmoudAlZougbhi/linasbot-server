@@ -75,7 +75,11 @@ def _fsync_tree(root: Path) -> None:
         directory = Path(current)
         directories.append(directory)
         for name in filenames:
-            _fsync_regular(directory / name)
+            path = directory / name
+            info = path.lstat()
+            if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+                continue
+            _fsync_regular(path)
         for name in dirnames:
             if stat.S_ISLNK((directory / name).lstat().st_mode):
                 raise NestedRuntimeQuarantineError("nested runtime tree contains an unsafe link")
@@ -318,11 +322,12 @@ def _transition_root_metadata(
         raise NestedRuntimeQuarantineError(f"nested runtime {direction} root identity changed")
     current_owner = (info.st_uid, info.st_gid)
     current_mode = stat.S_IMODE(info.st_mode)
-    if current_owner == source_owner and current_mode == source_mode:
-        os.chown(path, target_owner[0], target_owner[1])
-        os.chmod(path, target_mode)
-    elif current_owner != target_owner or current_mode != target_mode:
+    if current_owner not in {source_owner, target_owner} or current_mode not in {source_mode, target_mode}:
         raise NestedRuntimeQuarantineError(f"nested runtime {direction} partial root metadata is invalid")
+    if current_owner != target_owner:
+        os.chown(path, target_owner[0], target_owner[1])
+    if current_mode != target_mode:
+        os.chmod(path, target_mode)
     final = path.lstat()
     if (final.st_uid, final.st_gid) != target_owner or stat.S_IMODE(final.st_mode) != target_mode:
         raise NestedRuntimeQuarantineError(f"nested runtime {direction} root metadata is not exact")

@@ -5,9 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
-import stat
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -28,18 +26,6 @@ quarantine = _load(MODULE_PATH, "bootstrap_nested_runtime_quarantine_test")
 bootstrap = _load(BOOTSTRAP_PATH, "bootstrap_meta_ha_contract_nested_test")
 
 
-def _build_tree(repo: Path, *, monkeypatch: pytest.MonkeyPatch | None = None) -> dict[str, object]:
-    nested = repo / quarantine.NESTED_RUNTIME_NAME
-    nested.mkdir(parents=True)
-    (nested / "main.py").write_text("print('legacy')\n", encoding="utf-8")
-    (nested / "venv").mkdir()
-    (nested / "venv" / "bin").mkdir(parents=True)
-    (nested / "venv" / "bin" / "python").write_bytes(b"#!/bin/sh\necho py\n")
-    cache = nested / "pkg" / "__pycache__"
-    cache.mkdir(parents=True)
-    (cache / "module.cpython-313.pyc").write_bytes(b"bytecode")
-    os.symlink("main.py", nested / "alias.py")
-    nested.chmod(0o755)
 def _patch_chown(monkeypatch: pytest.MonkeyPatch) -> None:
     owners: dict[Path, tuple[int, int]] = {}
 
@@ -52,13 +38,39 @@ def _patch_chown(monkeypatch: pytest.MonkeyPatch) -> None:
         result = real_lstat(path, *args, **kwargs)  # type: ignore[arg-type]
         owner = owners.get(Path(path))
         if owner is not None:
-            return result._replace(st_uid=owner[0], st_gid=owner[1])
+            return os.stat_result(
+                (
+                    result.st_mode,
+                    result.st_ino,
+                    result.st_dev,
+                    result.st_nlink,
+                    owner[0],
+                    owner[1],
+                    result.st_size,
+                    result.st_atime,
+                    result.st_mtime,
+                    result.st_ctime,
+                )
+            )
         return result
 
     monkeypatch.setattr(quarantine.os, "chown", fake_chown)
     monkeypatch.setattr(quarantine.os, "lstat", fake_lstat)
     monkeypatch.setattr(quarantine.Path, "lstat", lambda self, *args, **kwargs: fake_lstat(self, *args, **kwargs))
-        os.chown(nested, 1001, 1002)
+
+
+def _build_tree(repo: Path) -> dict[str, object]:
+    nested = repo / quarantine.NESTED_RUNTIME_NAME
+    nested.mkdir(parents=True)
+    (nested / "main.py").write_text("print('legacy')\n", encoding="utf-8")
+    (nested / "venv").mkdir()
+    (nested / "venv" / "bin").mkdir(parents=True)
+    (nested / "venv" / "bin" / "python").write_bytes(b"#!/bin/sh\necho py\n")
+    cache = nested / "pkg" / "__pycache__"
+    cache.mkdir(parents=True)
+    (cache / "module.cpython-313.pyc").write_bytes(b"bytecode")
+    os.symlink("main.py", nested / "alias.py")
+    nested.chmod(0o755)
     return quarantine.probe_evidence(repo)
 
 
@@ -86,8 +98,8 @@ def test_synthetic_tree_quarantine_commit_and_rollback(
     backup = tmp_path / "backup"
     backup.mkdir()
     tx_id = "mb_" + "b" * 28
-    monkeypatch.setattr(quarantine.os, "chown", lambda *_args, **_kwargs: None)
-    expected = _build_tree(repo, monkeypatch=monkeypatch)
+    _patch_chown(monkeypatch)
+    expected = _build_tree(repo)
     assert expected["present"] is True
     assert expected["file_count"] == 3
     assert expected["symlink_count"] == 1
@@ -102,10 +114,7 @@ def test_synthetic_tree_quarantine_commit_and_rollback(
     assert not quarantine.quarantine_destination(repo, tx_id).exists()
 
 
-@pytest.mark.parametrize(
-    ("failpoint",),
-    (("rename",), ("chown",)),
-)
+@pytest.mark.parametrize("failpoint", ("rename", "chown"))
 def test_quarantine_replays_rename_and_chown_ack_loss(
     failpoint: str,
     monkeypatch: pytest.MonkeyPatch,
@@ -116,12 +125,10 @@ def test_quarantine_replays_rename_and_chown_ack_loss(
     backup = tmp_path / "backup"
     backup.mkdir()
     tx_id = "mb_" + "c" * 28
-    monkeypatch.setattr(quarantine.os, "chown", lambda *_args, **_kwargs: None)
-    expected = _build_tree(repo, monkeypatch=monkeypatch)
-    live = quarantine.nested_runtime_path(repo)
-    quar = quarantine.quarantine_destination(repo, tx_id)
+    _patch_chown(monkeypatch)
+    expected = _build_tree(repo)
     real_rename = os.rename
-    real_chown = os.chown
+    real_chown = quarantine.os.chown
     injected = False
 
     def interrupted_rename(old: Path, new: Path) -> None:
@@ -157,8 +164,8 @@ def test_mutation_during_transaction_fails_closed(
     backup = tmp_path / "backup"
     backup.mkdir()
     tx_id = "mb_" + "d" * 28
-    monkeypatch.setattr(quarantine.os, "chown", lambda *_args, **_kwargs: None)
-    expected = _build_tree(repo, monkeypatch=monkeypatch)
+    _patch_chown(monkeypatch)
+    expected = _build_tree(repo)
     (quarantine.nested_runtime_path(repo) / "main.py").write_text("mutated\n", encoding="utf-8")
     with pytest.raises(quarantine.NestedRuntimeQuarantineError, match="evidence changed"):
         quarantine.apply_quarantine(repo, backup, expected, tx_id)
@@ -185,33 +192,43 @@ def test_special_file_and_cross_device_and_collision_reject(
     tx_id = "mb_" + "e" * 28
     quar = quarantine.quarantine_destination(repo, tx_id)
     quar.mkdir()
+    _patch_chown(monkeypatch)
     with pytest.raises(quarantine.NestedRuntimeQuarantineError, match="collides"):
         quarantine.apply_quarantine(repo, backup, evidence, tx_id)
 
     quar.rmdir()
     other_parent = tmp_path / "other-parent"
     other_parent.mkdir()
-    quar = other_parent / quar.name
 
     def fake_destination(_repo_dir: Path, bound_tx_id: str) -> Path:
         return other_parent / f".quarantine-nested-runtime-{bound_tx_id}"
 
     monkeypatch.setattr(quarantine, "quarantine_destination", fake_destination)
-    monkeypatch.setattr(quarantine.os, "chown", lambda *_args, **_kwargs: None)
+    live = quarantine.nested_runtime_path(repo)
     real_stat = os.stat
 
     def fake_stat(path: os.PathLike[str] | str, *args: object, **kwargs: object) -> os.stat_result:
         result = real_stat(path, *args, **kwargs)  # type: ignore[arg-type]
-        if Path(path) == repo:
-            return result._replace(st_dev=result.st_dev + 1)
+        if Path(path) == live:
+            return os.stat_result(
+                (
+                    result.st_mode,
+                    result.st_ino,
+                    result.st_dev + 1,
+                    result.st_nlink,
+                    result.st_uid,
+                    result.st_gid,
+                    result.st_size,
+                    result.st_atime,
+                    result.st_mtime,
+                    result.st_ctime,
+                )
+            )
         return result
 
     monkeypatch.setattr(quarantine.os, "stat", fake_stat)
-    try:
-        with pytest.raises(quarantine.NestedRuntimeQuarantineError, match="cross devices"):
-            quarantine.apply_quarantine(repo, backup, evidence, tx_id)
-    finally:
-        pass
+    with pytest.raises(quarantine.NestedRuntimeQuarantineError, match="cross devices"):
+        quarantine.apply_quarantine(repo, backup, evidence, tx_id)
 
 
 def test_repo_bytecode_manifest_excludes_nested_runtime_tree(
@@ -233,7 +250,7 @@ def test_repo_bytecode_manifest_excludes_nested_runtime_tree(
     assert not any(str(path).startswith(f"{quarantine.NESTED_RUNTIME_NAME}/") for path in paths)
 
 
-def test_bootstrap_wires_nested_runtime_authority(tmp_path: Path) -> None:
+def test_bootstrap_wires_nested_runtime_authority() -> None:
     source = BOOTSTRAP_PATH.read_text(encoding="utf-8")
     drain = source[source.index("def _node_drain") : source.index("def _transition_historical_env")]
     verify = source[source.index("def _node_verify") : source.index("def _quiesce_and_disable_units")]
