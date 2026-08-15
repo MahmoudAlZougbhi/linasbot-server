@@ -89,6 +89,8 @@ test('Settings visual handoff: stacked title, inset hairline, pale canvas, light
   assert.match(shared, /stackedHeader/);
   assert.match(shared, /styles\.menuRow/);
   assert.match(shared, /styles\.stackedTitle/);
+  assert.match(shared, /typography\.sectionTitle/);
+  assert.match(shared, /sectionTitleStyle \|\| stackedHeader/);
   assert.match(shared, /styles\.titleRule/);
   assert.match(shared, /marginHorizontal: spacing\.lg/);
   assert.match(shared, /height: StyleSheet\.hairlineWidth/);

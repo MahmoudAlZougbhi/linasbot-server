@@ -20,6 +20,8 @@ type Props = {
   headerRight?: ReactNode;
   /** Settings handoff: title under the hamburger, inset hairline, optional pale canvas. */
   stackedHeader?: boolean;
+  /** Section-style title (16px) — Dashboard “Total activity” parity for Settings sub-screens. */
+  sectionTitle?: boolean;
   canvasColor?: string;
   /** When set, leading control is a back chevron instead of the hamburger. */
   onBack?: () => void;
@@ -38,6 +40,7 @@ export function ScreenChrome({
   centerTitle,
   headerRight,
   stackedHeader,
+  sectionTitle: sectionTitleStyle,
   canvasColor,
   onBack,
   children,
@@ -49,6 +52,7 @@ export function ScreenChrome({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawer = useModuleDrawerHistory(nav.isAuthenticated, drawerOpen);
   const leadColor = iconColor ?? colors.text;
+  const headerTitleStyle = sectionTitleStyle || stackedHeader ? typography.sectionTitle : typography.title;
   const menu = onBack ? (
     <Pressable
       onPress={onBack}
@@ -76,7 +80,7 @@ export function ScreenChrome({
           <>
             <View style={styles.menuRow}>{menu}</View>
             <Text
-              style={[typography.title, styles.stackedTitle, { color: titleColor ?? colors.text }]}
+              style={[headerTitleStyle, styles.stackedTitle, { color: titleColor ?? colors.text }]}
               numberOfLines={1}
             >
               {title}
@@ -101,7 +105,7 @@ export function ScreenChrome({
             >
               <Text
                 style={[
-                  centerTitle ? styles.centeredTitle : typography.title,
+                  centerTitle ? styles.centeredTitle : headerTitleStyle,
                   { color: titleColor ?? colors.text },
                 ]}
                 numberOfLines={1}

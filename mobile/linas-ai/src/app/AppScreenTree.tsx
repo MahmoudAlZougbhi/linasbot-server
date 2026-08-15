@@ -145,6 +145,7 @@ export function AppScreenTree({
       <KeepMountedPane key={`notifications-${authEpoch}`} active={name === 'notifications'}>
         <NotificationsScreen
           isAuthenticated={hasAccess}
+          sectionTitle={name === 'notifications' && screen.backTo === 'settings'}
           onDismissGate={() => {
             if (name === 'notifications' && screen.backTo === 'settings') {
               setScreen({ name: 'settings' });

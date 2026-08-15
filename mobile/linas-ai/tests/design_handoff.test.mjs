@@ -775,6 +775,7 @@ test('Customer AI Limits screen matches design handoff', () => {
   const fr = read('i18n/locales/aiSetupFr.ts');
   assert.match(screen, /tr\('aiLimitsTitle'\)/);
   assert.match(screen, /tr\('aiLimitsSubtitle'\)/);
+  assert.match(screen, /sectionTitle=\{isAiLimits\}/);
   assert.match(editor, /aiLimitsBanner/);
   assert.match(editor, /aiLimitsTextChat/);
   assert.match(editor, /aiLimitsPhotos/);
@@ -791,6 +792,9 @@ test('Customer AI Limits screen matches design handoff', () => {
   assert.match(field, /feather\('edit-2'\)/);
   assert.doesNotMatch(editor, /human_handoff_enabled/);
   assert.doesNotMatch(editor, /TikTok/);
+  assert.match(read('theme/typography.ts'), /sectionTitle:[\s\S]*?fontSize:\s*16/);
+  assert.match(read('features/cm/editors/aiLimitsStyles.ts'), /typography\.sectionTitle/);
+  assert.doesNotMatch(read('features/cm/editors/aiLimitsStyles.ts'), /cardTitle:[\s\S]*?fontSize:\s*17/);
   assert.match(en, /Customer AI Limits/);
   assert.match(en, /Protect credits by limiting each customer/);
   assert.match(ar, /حدود الذكاء الاصطناعي للزبائن/);
