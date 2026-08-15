@@ -109,6 +109,7 @@ export const TenantDashboardSchema = z.object({
       facebook_dms: z.number().nullable().optional(),
       instagram_comments: z.number().nullable().optional(),
       facebook_comments: z.number().nullable().optional(),
+      web_dms: z.number().nullable().optional(),
       owner_copilot: z.number().nullable().optional(),
       content_management_ai: z.number().nullable().optional(),
       time_series: z

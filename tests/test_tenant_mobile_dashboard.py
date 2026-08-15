@@ -331,6 +331,12 @@ def test_usage_buckets_and_empty(tmp_path: Path) -> None:
                 "source": "gpt",
             },
             {
+                "timestamp": (now - timedelta(hours=2, minutes=30)).isoformat().replace("+00:00", "Z"),
+                "tenant_id": "acme",
+                "channel": "web",
+                "source": "web_chat",
+            },
+            {
                 "timestamp": (now - timedelta(hours=3)).isoformat().replace("+00:00", "Z"),
                 "tenant_id": "other",
                 "channel": "facebook",
@@ -344,6 +350,7 @@ def test_usage_buckets_and_empty(tmp_path: Path) -> None:
     assert usage["status"] == "ok"
     assert usage["instagram_dms"] == 1
     assert usage["instagram_comments"] == 1
+    assert usage["web_dms"] == 1
     assert usage["facebook_dms"] == 0
     assert usage["credits_by_bucket_available"] is False
 

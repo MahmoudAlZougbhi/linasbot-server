@@ -24,6 +24,16 @@ def _empty_platform_row() -> dict[str, int]:
     return {"messages": 0, "comments": 0, "smart": 0, "requests": 0, "credits": 0}
 
 
+_BUCKET_PLATFORM_MAP = {
+    "instagram_dm": "instagram",
+    "facebook_dm": "facebook",
+    "whatsapp_dm": "whatsapp",
+    "web_dm": "web",
+    "instagram_comments": "instagram",
+    "facebook_comments": "facebook",
+}
+
+
 def _normalize_platform(channel: Any) -> str | None:
     ch = str(channel or "").strip().lower()
     if ch in {"instagram", "ig"}:
@@ -143,7 +153,7 @@ def build_activity_summary(
             continue
 
         bucket = _normalize_usage_bucket(entry)
-        platform = _normalize_platform(entry.get("channel"))
+        platform = _normalize_platform(entry.get("channel")) or _BUCKET_PLATFORM_MAP.get(bucket)
         source = str(entry.get("source") or "").strip().lower()
         credits = _entry_credits_estimate(entry)
 
