@@ -19,8 +19,6 @@ function read(rel) {
 const SAMPLE_TILES = [
   { id: 'knowledge', title: 'Knowledge', description: 'd', mobileSupported: true },
   { id: 'ai_basics', title: 'AI Basics', description: 'd', mobileSupported: true },
-  { id: 'dynamic_messages', title: 'Greetings', description: 'd', mobileSupported: true },
-  { id: 'services', title: 'Services', description: 'd', mobileSupported: true },
   { id: 'branches', title: 'Branches', description: 'd', mobileSupported: true },
   { id: 'prices', title: 'Service', description: 'd', mobileSupported: true },
   { id: 'comments', title: 'Comments', description: 'd', mobileSupported: true },
@@ -40,24 +38,21 @@ describe('AI Setup hub layout', () => {
   it('chunks remaining sections into big + two-small mosaic rows with Products at the end', () => {
     const rows = buildAiSetupHubRows(SAMPLE_TILES, true);
     const mosaic = rows.filter((r) => r.type === 'mosaic');
-    assert.equal(mosaic.length, 3);
+    assert.equal(mosaic.length, 2);
 
     assert.equal(mosaic[0].big.kind, 'section');
     assert.equal(mosaic[0].big.tile.id, 'ai_basics');
     assert.deepEqual(
-      mosaic[0].smalls.map((s) => (s.kind === 'products' ? 'products' : s.tile.id)),
-      ['dynamic_messages', 'services'],
+      mosaic[0].smalls.map((s) => s.tile.id),
+      ['branches', 'comments'],
     );
 
     assert.equal(mosaic[1].big.kind, 'section');
-    assert.equal(mosaic[1].big.tile.id, 'branches');
+    assert.equal(mosaic[1].big.tile.id, 'requests_appointments');
     assert.deepEqual(
-      mosaic[1].smalls.map((s) => s.tile.id),
-      ['comments', 'requests_appointments'],
+      mosaic[1].smalls.map((s) => (s.kind === 'products' ? 'products' : s.tile.id)),
+      ['products'],
     );
-
-    assert.equal(mosaic[2].big.kind, 'products');
-    assert.equal(mosaic[2].smalls.length, 0);
   });
 
   it('CmScreen renders AiSetupHubSections instead of split product grids', () => {

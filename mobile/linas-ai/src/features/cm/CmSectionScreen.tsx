@@ -147,21 +147,6 @@ export function CmSectionScreen({ section, proposalReview, onBack }: Props) {
     }
   }
 
-  const title = isAiLimits
-    ? tr('aiLimitsTitle')
-    : isAiBasics
-      ? tr('aiSetupSec_ai_basics')
-      : section === 'dynamic_messages'
-        ? tr('aiSetupSec_dynamic_messages')
-        : (meta?.title ?? section);
-  const subtitle = isAiLimits
-    ? tr('aiLimitsSubtitle')
-    : isAiBasics
-      ? tr('aiSetupBasicsSubtitle')
-      : section === 'dynamic_messages'
-        ? tr('aiSetupGreetingsSubtitle')
-        : meta?.description;
-
   if (isAiBasics) {
     return (
       <ScreenChrome title={tr('aiSetupSec_ai_basics')} subtitle={tr('aiSetupBasicsSubtitle')} onBack={onBack}>
@@ -181,6 +166,9 @@ export function CmSectionScreen({ section, proposalReview, onBack }: Props) {
       </ScreenChrome>
     );
   }
+
+  const title = isAiLimits ? tr('aiLimitsTitle') : (meta?.title ?? section);
+  const subtitle = isAiLimits ? tr('aiLimitsSubtitle') : meta?.description;
 
   return (
     <ScreenChrome title={title} subtitle={subtitle} sectionTitle={isAiLimits} onBack={onBack}>
