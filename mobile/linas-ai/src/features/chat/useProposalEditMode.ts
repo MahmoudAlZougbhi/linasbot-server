@@ -14,7 +14,7 @@ type SendFn = (
     owner_mode?: OwnerChatMode;
     reply_language?: 'en' | 'ar' | 'fr';
   },
-) => Promise<'done' | 'error' | 'network_error' | 'cancelled' | 'skipped'>;
+) => Promise<'done' | 'error' | 'network_error' | 'cancelled' | 'skipped' | 'credits_paused'>;
 
 /** Owns composer Edit-chip state + revise_proposal_id for pending proposal bars. */
 export function useProposalEditMode(
