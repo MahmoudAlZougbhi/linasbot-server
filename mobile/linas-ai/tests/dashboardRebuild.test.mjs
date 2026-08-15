@@ -154,6 +154,12 @@ test('Dashboard Upgrade navigates to Choose a plan, not Current plan', () => {
   assert.match(current, /showUpgrade \?/);
 });
 
+test('Channel activity table includes Website chat row', () => {
+  const channels = read('features/dashboard/sections/ChannelActivityTable.tsx');
+  assert.match(channels, /platformWeb/);
+  assert.match(channels, /row\.platform === 'web'/);
+});
+
 test('Growth plan header divider and Total activity card stroke match siblings', () => {
   const growth = read('features/dashboard/sections/GrowthPlanCard.tsx');
   const grid = read('features/dashboard/sections/TotalActivityGrid.tsx');

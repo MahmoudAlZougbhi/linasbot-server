@@ -190,7 +190,7 @@ export const en = {
   platformFacebook: 'Facebook',
   platformWhatsApp: 'WhatsApp',
   platformTikTok: 'TikTok',
-  platformWeb: 'Website',
+  platformWeb: 'Website chat',
   platformSnapchat: 'Snapchat',
   retry: 'Could not load chat. Tap Retry.',
   messageFailed: 'Message failed. You can retry.',

@@ -141,7 +141,98 @@ def _copilot_reply(ts: datetime, *, tenant_id: str = "acme", conversation_id: st
     }
 
 
-def test_facebook_and_copilot_counts_change_with_period_window() -> None:
+def _web_reply(ts: datetime, *, tenant_id: str = "acme") -> dict:
+    return {
+        "timestamp": ts.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+        "tenant_id": tenant_id,
+        "channel": "web",
+        "source": "web_chat",
+        "bot_to_user": True,
+    }
+
+
+def test_web_channel_zero_row_always_present() -> None:
+    now = datetime(2026, 8, 15, 12, 35, tzinfo=parse_timezone("Asia/Beirut"))
+    payload = build_activity_summary(
+        "acme",
+        start_ts=now.timestamp() - 100,
+        end_ts=now.timestamp() + 100,
+        integrations=[{"platform": "instagram", "connected": True}],
+        entries=[],
+    )
+    platforms = [row["platform"] for row in payload["channels"]]
+    assert platforms == ["instagram", "facebook", "tiktok", "whatsapp", "web"]
+    web = next(row for row in payload["channels"] if row["platform"] == "web")
+    assert web["messages"] == 0
+    assert web["comments"] == 0
+    assert web["smart"] == 0
+    assert web["requests"] == 0
+    assert web["credits"] == 0
+
+
+def test_web_channel_messages_respect_period_window() -> None:
+    tz = parse_timezone("Asia/Beirut")
+    now = datetime(2026, 8, 15, 12, 35, tzinfo=tz)
+    entries = [
+        _web_reply(datetime(2026, 7, 10, 12, 0, tzinfo=tz)),
+        _web_reply(datetime(2026, 8, 10, 12, 0, tzinfo=tz)),
+    ]
+    integrations = [{"platform": "web", "connected": True}]
+
+    last_month = resolve_period_window(period="last_month", tz=tz, current_period_end=None, now=now)
+    july_payload = build_activity_summary(
+        "acme",
+        start_ts=last_month["start_ts"],
+        end_ts=last_month["end_ts"],
+        integrations=integrations,
+        entries=entries,
+    )
+    custom = resolve_period_window(
+        period="custom",
+        tz=tz,
+        current_period_end=None,
+        now=now,
+        custom_start="2026-08-01",
+        custom_end="2026-08-15",
+    )
+    august_payload = build_activity_summary(
+        "acme",
+        start_ts=custom["start_ts"],
+        end_ts=custom["end_ts"],
+        integrations=integrations,
+        entries=entries,
+    )
+
+    july_web = next(row for row in july_payload["channels"] if row["platform"] == "web")
+    aug_web = next(row for row in august_payload["channels"] if row["platform"] == "web")
+    assert july_web["messages"] == 1
+    assert aug_web["messages"] == 1
+    assert july_payload["total_activity"]["messages_replied"] == 1
+    assert august_payload["total_activity"]["messages_replied"] == 1
+
+
+def test_web_channel_counts_handler_only_logs() -> None:
+    tz = parse_timezone("UTC")
+    now = datetime(2026, 8, 15, 12, 0, tzinfo=tz)
+    payload = build_activity_summary(
+        "acme",
+        start_ts=now.timestamp() - 100,
+        end_ts=now.timestamp() + 100,
+        integrations=[{"platform": "web", "connected": True}],
+        entries=[
+            {
+                "timestamp": now.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+                "tenant_id": "acme",
+                "handler_path": "services/web_chat/processor.py",
+                "source": "web_chat",
+                "bot_to_user": True,
+            }
+        ],
+    )
+    web = next(row for row in payload["channels"] if row["platform"] == "web")
+    assert web["messages"] == 1
+
+
     tz = parse_timezone("Asia/Beirut")
     now = datetime(2026, 8, 15, 12, 35, tzinfo=tz)
     entries = [

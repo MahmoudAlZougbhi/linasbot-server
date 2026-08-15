@@ -146,6 +146,7 @@ def aggregate_tenant_usage(
         "facebook_dms": by_bucket["facebook_dm"]["interactions"],
         "instagram_comments": by_bucket["instagram_comments"]["interactions"],
         "facebook_comments": by_bucket["facebook_comments"]["interactions"],
+        "web_dms": by_bucket["web_dm"]["interactions"],
         "owner_copilot": by_bucket["owner_copilot"]["interactions"],
         "content_management_ai": by_bucket["content_management_ai"]["interactions"],
         "other": by_bucket["other"]["interactions"],
