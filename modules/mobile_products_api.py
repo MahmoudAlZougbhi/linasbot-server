@@ -108,6 +108,19 @@ async def mobile_delete_product(product_id: str, request: Request) -> Any:
     return {"success": True, "deleted": True, "product_id": product_id}
 
 
+@app.post("/api/mobile/products/import/preview")
+async def mobile_preview_products_import(request: Request, body: ProductImportBody) -> Any:
+    session = require_session(request)
+    _session_tenant(session)
+    with _db_session() as db:
+        svc = ProductsService(db)
+        try:
+            result = svc.preview_csv(csv_text=body.csv_text)
+        except ProductsError as exc:
+            raise _http(exc) from exc
+    return {"success": True, **result}
+
+
 @app.post("/api/mobile/products/import")
 async def mobile_import_products(request: Request, body: ProductImportBody) -> Any:
     session = require_session(request)

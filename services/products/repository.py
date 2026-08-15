@@ -165,3 +165,28 @@ class ProductsRepository:
             .options(selectinload(Product.images), selectinload(Product.links))
         )
         return list(self.session.execute(stmt).scalars().all())
+
+    def find_by_link_url(self, *, tenant_id: str, normalized_url: str) -> Product | None:
+        from urllib.parse import urlparse
+
+        needle = str(normalized_url or "").strip().lower()
+        if not needle:
+            return None
+        stmt = (
+            select(Product)
+            .join(ProductLink, ProductLink.product_id == Product.id)
+            .where(Product.tenant_id == tenant_id, ProductLink.tenant_id == tenant_id)
+            .options(selectinload(Product.images), selectinload(Product.links))
+        )
+        for row in self.session.execute(stmt).scalars().all():
+            for link in row.links or []:
+                raw = str(link.url or "").strip()
+                if not raw:
+                    continue
+                parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+                host = (parsed.netloc or "").removeprefix("www.")
+                path = (parsed.path or "").rstrip("/")
+                candidate = f"{host}{path}".lower()
+                if candidate == needle or needle in candidate or candidate in needle:
+                    return row
+        return None

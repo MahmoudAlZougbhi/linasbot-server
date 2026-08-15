@@ -24,11 +24,20 @@ describe('AI Products Phase 1 mobile', () => {
   it('registers products navigation screens', () => {
     const nav = read('app/navigation.ts');
     assert.match(nav, /name: 'products'/);
+    assert.match(nav, /name: 'products_import'/);
     assert.match(nav, /name: 'products_add'/);
     assert.match(nav, /name: 'products_edit'/);
     const tree = read('app/AppScreenTree.tsx');
     assert.match(tree, /ProductsScreen/);
+    assert.match(tree, /ProductsImportScreen/);
     assert.match(tree, /AddProductScreen/);
+  });
+
+  it('mobile API client targets import preview', () => {
+    const api = read('features/products/productsApi.ts');
+    assert.match(api, /\/api\/mobile\/products\/import\/preview/);
+    assert.match(api, /previewProductsImport/);
+    assert.match(api, /importProducts/);
   });
 
   it('mobile API client targets /api/mobile/products', () => {
@@ -44,6 +53,7 @@ describe('AI Products Phase 1 mobile', () => {
       assert.match(src, /productsTitle/);
       assert.match(src, /productsAddImage/);
       assert.match(src, /productsMaxImages/);
+      assert.match(src, /productsImport/);
     }
   });
 });
