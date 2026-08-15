@@ -6,6 +6,7 @@ import { parseIntegrationsDeepLink } from '../../app/navigation';
 import { tokenStore } from '../../auth/tokenStore';
 import type { StringKey } from '../../i18n/locales/en';
 import { ListSchema, type IntegrationListRow } from './integrationsSchemas';
+import { hasWebChatCardSnapshot, prefetchWebChatCardSnapshot } from './webChatCardLoader';
 
 type Args = {
   tr: (key: StringKey) => string;
@@ -28,6 +29,7 @@ export function useIntegrationsLoad({
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [rows, setRows] = useState<IntegrationListRow[]>([]);
+  const [webChatReady, setWebChatReady] = useState(hasWebChatCardSnapshot);
   const skipNextAreaFocusLoad = useRef(false);
 
   const load = useCallback(async () => {
@@ -37,12 +39,14 @@ export function useIntegrationsLoad({
       if (!access) {
         setAuthGate(true);
         setRows([]);
+        setWebChatReady(true);
         setError(null);
         return;
       }
       const data = await apiFetch('/api/mobile/integrations', { schema: ListSchema });
       setRows(data.integrations);
-      await refreshWhatsApp();
+      await Promise.all([refreshWhatsApp(), prefetchWebChatCardSnapshot()]);
+      setWebChatReady(true);
       setError(null);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -51,6 +55,7 @@ export function useIntegrationsLoad({
       } else {
         setError(tr('integrationsLoadError'));
       }
+      setWebChatReady(true);
     } finally {
       setLoading(false);
       setHasLoadedOnce(true);
@@ -99,5 +104,5 @@ export function useIntegrationsLoad({
     return () => sub.remove();
   }, [load, tr, setError]);
 
-  return { loading, hasLoadedOnce, notice, setNotice, rows, setRows, load };
+  return { loading, hasLoadedOnce, webChatReady, notice, setNotice, rows, setRows, load };
 }

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
@@ -11,6 +10,7 @@ import {
 
 import type { PublicUser } from '../../api/types';
 import { AppModal } from '../../components/AppModal';
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { ModalScrim } from '../../components/ModalScrim';
 import { EmptyState } from '../../components/EmptyState';
 import { tokenStore } from '../../auth/tokenStore';
@@ -259,7 +259,7 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
         ) : undefined
       }
     >
-      {loading ? <ActivityIndicator color={colors.accent} style={styles.spinner} /> : null}
+      {loading ? <LinasLoadingIndicator variant="screen" style={styles.spinner} /> : null}
       {!loading && authGate ? <EmptyState title={tr('authGateTitle')} body={tr('usersAuthBody')} /> : null}
       {!loading && gate === 'forbidden' ? (
         <EmptyState title={tr('usersForbiddenTitle')} body={tr('usersForbiddenBody')} />
