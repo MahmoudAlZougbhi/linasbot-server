@@ -14,7 +14,7 @@ type Props = {
   onSelect: (mode: OwnerChatMode) => void;
 };
 
-/** Floating card: 5.6 LIN Low / High with Fast / More powerful. */
+/** Floating card: 5.6 LIN Low / High with Fast / More powerful + credits hint on High. */
 export function LinEffortSheet({ open, mode, onClose, onSelect }: Props) {
   const { tr } = useI18n();
   const { colors } = useTheme();
@@ -23,6 +23,7 @@ export function LinEffortSheet({ open, mode, onClose, onSelect }: Props) {
     id: OwnerChatMode;
     title: string;
     sub: string;
+    hint?: string;
     trailing: 'check' | 'bolt';
   }[] = [
     {
@@ -35,6 +36,7 @@ export function LinEffortSheet({ open, mode, onClose, onSelect }: Props) {
       id: 'work',
       title: `${OWNER_LIN_DISPLAY} ${tr('linEffortHigh')}`,
       sub: tr('linEffortHighSub'),
+      hint: tr('linEffortCostsMore'),
       trailing: 'bolt',
     },
   ];
@@ -69,11 +71,14 @@ export function LinEffortSheet({ open, mode, onClose, onSelect }: Props) {
                     }}
                     accessibilityRole="button"
                     accessibilityState={{ selected }}
-                    accessibilityLabel={`${row.title}, ${row.sub}`}
+                    accessibilityLabel={`${row.title}, ${row.sub}${row.hint ? `, ${row.hint}` : ''}`}
                   >
                     <View style={styles.rowMain}>
                       <Text style={[styles.rowTitle, { color: colors.text }]}>{row.title}</Text>
                       <Text style={[styles.rowSub, { color: colors.textDim }]}>{row.sub}</Text>
+                      {row.hint ? (
+                        <Text style={[styles.rowHint, { color: colors.textDim }]}>{row.hint}</Text>
+                      ) : null}
                     </View>
                     {selected ? (
                       <AppIcon icon={feather('check')} size={18} color={colors.accent} />
@@ -128,4 +133,5 @@ const styles = StyleSheet.create({
   rowMain: { flex: 1, gap: 2 },
   rowTitle: { fontFamily: fonts.bodyMedium, fontSize: 15, fontWeight: '700' },
   rowSub: { fontFamily: fonts.body, fontSize: 12, lineHeight: 16 },
+  rowHint: { fontFamily: fonts.body, fontSize: 11, lineHeight: 14 },
 });

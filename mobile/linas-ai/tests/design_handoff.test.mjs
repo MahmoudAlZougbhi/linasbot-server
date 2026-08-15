@@ -419,6 +419,8 @@ test('LIN effort chip opens Low/High picker synced with Chat|Work', () => {
   assert.match(sheet, /linEffortHigh/);
   assert.match(sheet, /linEffortFast/);
   assert.match(sheet, /linEffortHighSub/);
+  assert.match(sheet, /linEffortCostsMore/);
+  assert.match(sheet, /rowHint/);
   assert.match(sheet, /id: 'chat'/);
   assert.match(sheet, /id: 'work'/);
   assert.match(chat, /onOwnerModeChange=\{c\.setOwnerMode\}/);

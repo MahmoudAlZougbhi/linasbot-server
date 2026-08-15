@@ -81,7 +81,7 @@ export const ar = {
   linEffortHigh: 'High',
   linEffortFast: 'سريع',
   linEffortHighSub: 'أقوى',
-  linEffortCostsMore: 'يصرّف أكثر',
+  linEffortCostsMore: 'تستخدم رصيداً أكثر',
   settings: 'الإعدادات',
   settingsSub: 'اللغة، الإشعارات، تحكم الذكاء الاصطناعي، الروابط القانونية ومعلومات التطبيق',
   logout: 'تسجيل الخروج',
