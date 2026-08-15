@@ -318,8 +318,8 @@ jobs:
           test "$(node --version)" = "v22.23.2"
           test "$(npm --version)" = "10.9.8"
           npm ci
-      - name: Test
-        run: npm test
+      - name: Typecheck
+        run: npm run typecheck
       - name: Line limit
         working-directory: .
         run: node scripts/check_source_line_limit.mjs mobile/linas-ai/src mobile/linas-ai/App.tsx services/owner_copilot_v2

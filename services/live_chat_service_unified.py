@@ -18,13 +18,12 @@ from services.live_chat_contracts import (
 from services.live_chat_service_common import (
     _live_chat_display_name,
 )
-from services.live_chat_service_index import LiveChatIndexMixin
 from utils.utils import (
     get_firestore_db,
 )
 
 
-class LiveChatUnifiedMixin(LiveChatIndexMixin):
+class LiveChatUnifiedMixin:
     """Unified chat list queries and fallback scans."""
 
     _conversations_cache: Any
