@@ -1,11 +1,15 @@
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 
+import { useI18n } from '../../../i18n/LanguageContext';
 import { cmFormStyles } from '../cmFormStyles';
+import { AiBasicsStyleSection } from './AiBasicsStyleSection';
 import { Field } from './Field';
 
 type Props = {
-  payload: Record<string, unknown>;
-  onChange: (next: Record<string, unknown>) => void;
+  basicsPayload: Record<string, unknown>;
+  stylePayload: Record<string, unknown>;
+  onBasicsChange: (next: Record<string, unknown>) => void;
+  onStyleChange: (next: Record<string, unknown>) => void;
 };
 
 function str(payload: Record<string, unknown>, key: string): string {
@@ -13,25 +17,44 @@ function str(payload: Record<string, unknown>, key: string): string {
   return typeof v === 'string' ? v : v == null ? '' : String(v);
 }
 
-export function AiBasicsEditor({ payload, onChange }: Props) {
-  const set = (key: string, value: string) => onChange({ ...payload, [key]: value });
+export function AiBasicsEditor({ basicsPayload, stylePayload, onBasicsChange, onStyleChange }: Props) {
+  const { tr } = useI18n();
+  const setBasics = (key: string, value: string) =>
+    onBasicsChange({ ...basicsPayload, [key]: value });
 
   return (
-    <View style={cmFormStyles.card}>
-      <Field label="AI role" value={str(payload, 'ai_role')} onChange={(v) => set('ai_role', v)} />
-      <Field
-        label="Business purpose"
-        value={str(payload, 'business_purpose')}
-        onChange={(v) => set('business_purpose', v)}
-        multiline
-        hint="Maps to business_purpose in the CM draft schema."
-      />
-      <Field
-        label="Short introduction"
-        value={str(payload, 'short_introduction')}
-        onChange={(v) => set('short_introduction', v)}
-        multiline
-      />
+    <View>
+      <View style={cmFormStyles.card}>
+        <Text style={cmFormStyles.rowTitle}>{tr('aiSetupBasicsIdentityHeading')}</Text>
+        <Field
+          label={tr('aiSetupBusinessName')}
+          value={str(basicsPayload, 'clinic_name')}
+          onChange={(v) => setBasics('clinic_name', v)}
+        />
+        <Field
+          label={tr('aiSetupAiName')}
+          value={str(basicsPayload, 'assistant_name')}
+          onChange={(v) => setBasics('assistant_name', v)}
+        />
+        <Field
+          label={tr('aiSetupAiRole')}
+          value={str(basicsPayload, 'ai_role')}
+          onChange={(v) => setBasics('ai_role', v)}
+        />
+        <Field
+          label={tr('aiSetupBusinessPurpose')}
+          value={str(basicsPayload, 'business_purpose')}
+          onChange={(v) => setBasics('business_purpose', v)}
+          multiline
+        />
+        <Field
+          label={tr('aiSetupShortIntro')}
+          value={str(basicsPayload, 'short_introduction')}
+          onChange={(v) => setBasics('short_introduction', v)}
+          multiline
+        />
+      </View>
+      <AiBasicsStyleSection payload={stylePayload} onChange={onStyleChange} />
     </View>
   );
 }

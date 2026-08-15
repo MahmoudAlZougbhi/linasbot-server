@@ -187,7 +187,16 @@ def resolve_branch_facts(branches: BranchesSection | dict[str, Any], branch_id: 
                     source_id=f"branch:{branch.id}:maps",
                 )
             )
-        if branch.hours.summary:
+        schedule_summary = branch.weekly_schedule.summary_line(branch.schedule_title())
+        if schedule_summary and schedule_summary != branch.schedule_title():
+            facts.append(
+                AnswerFact(
+                    kind="branch_hours",
+                    value=schedule_summary,
+                    source_id=f"branch:{branch.id}:weekly_schedule",
+                )
+            )
+        elif branch.hours.summary:
             facts.append(AnswerFact(kind="branch_hours", value=branch.hours.summary, source_id=f"branch:{branch.id}"))
         if branch.notes:
             facts.append(AnswerFact(kind="branch_notes", value=branch.notes, source_id=f"branch:{branch.id}:notes"))

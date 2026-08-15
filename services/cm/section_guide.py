@@ -11,12 +11,13 @@ from services.cm.setup_chat import SECTION_PROMPTS
 SECTION_GUIDE: dict[str, dict[str, Any]] = {
     "ai_basics": {
         "title": "AI Basics",
-        "purpose": "Business identity and persona the customer AI speaks as.",
+        "purpose": "Business identity, AI name, and embedded style/tone the customer AI speaks as.",
         "why": "Without name + role/purpose, replies feel generic and can invent the wrong business.",
         "what_to_fill": [
             "clinic_name (business display name)",
             "assistant_name",
             "ai_role / business_purpose / short_introduction",
+            "style tone/formality/emoji + style_body note (edited in same screen)",
         ],
         "useful": "identity_summary, greeting_behavior, advanced_instructions for edge cases.",
         "app_path": "AI Setup → AI Basics",
@@ -47,12 +48,15 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
         "app_path": "AI Setup → Style & Tone",
     },
     "dynamic_messages": {
-        "title": "Dynamic Messages",
-        "purpose": "Greeting and reusable system message templates.",
-        "why": "Controls first-touch greetings instead of ad-hoc text.",
-        "what_to_fill": ["items[] with name + ar/en/fr text"],
-        "useful": "Per-language greeting variants.",
-        "app_path": "AI Setup → Dynamic Messages",
+        "title": "Greetings",
+        "purpose": "Multiple conditional greeting rules (title, trigger, greeting text).",
+        "why": "Different openings (hi vs hello vs session start) need different greetings.",
+        "what_to_fill": [
+            "items[] rules: name, trigger_mode, trigger_pattern/keywords, ar/en/fr text",
+            "section notes for overall greeting guidance",
+        ],
+        "useful": "enabled per rule; legacy single items migrate to one always rule.",
+        "app_path": "AI Setup → Greetings",
     },
     "services": {
         "title": "Services",
@@ -63,12 +67,16 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
         "app_path": "AI Setup → Services",
     },
     "branches": {
-        "title": "Locations",
-        "purpose": "Branches / stores / offices the AI can mention.",
-        "why": "Customers ask where you are; empty locations force vague or wrong answers.",
-        "what_to_fill": ["items[] with id, labels, address/street", "or policy_text if none"],
-        "useful": "maps_url, per-branch hours, availability.",
-        "app_path": "AI Setup → Locations",
+        "title": "Location and Opening Hours",
+        "purpose": "Branches with address, map link, and per-day opening hours / off days.",
+        "why": "Customers ask where you are and when you are open; weak data forces vague answers.",
+        "what_to_fill": [
+            "items[] branch name, maps_url",
+            "weekly_schedule per weekday: enabled, open/close or off_day, optional day note",
+            "specific_off_rules for holiday closures (optional)",
+        ],
+        "useful": "timezone, policy_text, branch notes.",
+        "app_path": "AI Setup → Location and Opening Hours",
     },
     "opening_hours": {
         "title": "Opening Hours",

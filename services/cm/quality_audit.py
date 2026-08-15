@@ -321,16 +321,20 @@ def _scan_improve_opportunities(tenant_id: str, summary: dict[str, Any]) -> list
             )
 
     if "branches" in done and "opening_hours" not in done:
-        out.append(
-            _finding(
-                category="improve",
-                severity="medium",
-                section="opening_hours",
-                title="Locations without opening hours",
-                detail="Locations are filled but hours are not — customers will ask when you are open.",
-                hint="Add named Mon–Sun schedules.",
+        from services.cm.branch_schedule import branches_section_has_unified_schedule
+
+        branches_payload = _payload(tenant_id, "branches") or {}
+        if not branches_section_has_unified_schedule(branches_payload):
+            out.append(
+                _finding(
+                    category="improve",
+                    severity="medium",
+                    section="opening_hours",
+                    title="Locations without opening hours",
+                    detail="Locations are filled but hours are not — customers will ask when you are open.",
+                    hint="Add per-day schedules in Location and Opening Hours.",
+                )
             )
-        )
     return out
 
 

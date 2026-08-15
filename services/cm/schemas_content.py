@@ -106,25 +106,80 @@ class BranchHours(CmBaseModel):
     summary: str = ""
 
 
+class BranchDaySchedule(CmBaseModel):
+    """Per-weekday row in unified Location & Opening Hours."""
+
+    enabled: bool = False
+    open: str = ""
+    close: str = ""
+    off_day: bool = False
+    note: str | None = None
+
+
+class BranchWeeklySchedule(CmBaseModel):
+    monday: BranchDaySchedule = Field(default_factory=BranchDaySchedule)
+    tuesday: BranchDaySchedule = Field(default_factory=BranchDaySchedule)
+    wednesday: BranchDaySchedule = Field(default_factory=BranchDaySchedule)
+    thursday: BranchDaySchedule = Field(default_factory=BranchDaySchedule)
+    friday: BranchDaySchedule = Field(default_factory=BranchDaySchedule)
+    saturday: BranchDaySchedule = Field(default_factory=BranchDaySchedule)
+    sunday: BranchDaySchedule = Field(default_factory=BranchDaySchedule)
+
+    def summary_line(self, title: str) -> str:
+        days = (
+            ("Mon", self.monday),
+            ("Tue", self.tuesday),
+            ("Wed", self.wednesday),
+            ("Thu", self.thursday),
+            ("Fri", self.friday),
+            ("Sat", self.saturday),
+            ("Sun", self.sunday),
+        )
+        parts: list[str] = []
+        for label, day in days:
+            if not day.enabled:
+                continue
+            if day.off_day:
+                part = f"{label}: closed"
+            elif (day.open or "").strip() and (day.close or "").strip():
+                part = f"{label}: {day.open.strip()}-{day.close.strip()}"
+            else:
+                continue
+            if day.note and (day.note or "").strip():
+                part = f"{part} ({day.note.strip()})"
+            parts.append(part)
+        head = (title or "").strip()
+        if not parts:
+            return head
+        return f"{head}: " + "; ".join(parts) if head else "; ".join(parts)
+
+
 class BranchRecord(CmBaseModel):
     id: str
     labels: LocalizedLabels = Field(default_factory=LocalizedLabels)
-    address: str = ""  # Legacy / composed display line used by answer facts.
+    address: str = ""
     street: str = ""
     building: str = ""
     floor: str = ""
     country: str = ""
     maps_url: str = ""
     hours: BranchHours = Field(default_factory=BranchHours)
+    weekly_schedule: BranchWeeklySchedule = Field(default_factory=BranchWeeklySchedule)
     available: bool = True
     notes: str | None = None
 
     def composed_address(self) -> str:
-        """Prefer structured parts when present; fall back to legacy address."""
         parts = [p.strip() for p in (self.street, self.building, self.floor, self.country) if p and p.strip()]
         if parts:
             return ", ".join(parts)
         return (self.address or "").strip()
+
+    def schedule_title(self) -> str:
+        for key in ("en", "ar", "fr", "franco"):
+            text = (self.labels.model_dump().get(key) or "").strip()
+            if text:
+                return text
+        return self.id
 
 
 class PriceRecord(CmBaseModel):

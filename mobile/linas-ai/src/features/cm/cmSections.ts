@@ -34,7 +34,7 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
   {
     id: 'ai_basics',
     title: 'AI Basics',
-    description: 'Role, business purpose, and short introduction.',
+    description: 'Business name, AI name, role, and style.',
     mobileSupported: true,
   },
   {
@@ -42,17 +42,19 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
     title: 'Languages',
     description: 'Enable Arabic, English, French, Franco-Arabic.',
     mobileSupported: true,
+    showInCmHub: false,
   },
   {
     id: 'style',
     title: 'Style & Tone',
     description: 'Tone, formality, and emoji level.',
     mobileSupported: true,
+    showInCmHub: false,
   },
   {
     id: 'dynamic_messages',
-    title: 'Greetings & Messages',
-    description: 'Greeting and system message templates.',
+    title: 'Greetings',
+    description: 'Multiple greeting rules with trigger conditions.',
     mobileSupported: true,
   },
   {
@@ -135,8 +137,16 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
   },
 ];
 
-/** Hub sections excluded from progress/badge calculations (hidden from AI Setup hub). */
-export const CM_HUB_PROGRESS_EXCLUDED: CmSectionId[] = ['care', 'handoff', 'restricted'];
+/** Hub sections excluded from progress/badge calculations (hidden or merged in hub). */
+export const CM_HUB_PROGRESS_EXCLUDED: CmSectionId[] = [
+  'languages',
+  'style',
+  'opening_hours',
+  'off_days',
+  'care',
+  'handoff',
+  'restricted',
+];
 
 export const CM_HUB_CARDS: CmSectionCard[] = CM_SECTION_CARDS.filter(
   (c) => c.showInCmHub !== false,

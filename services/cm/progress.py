@@ -30,13 +30,20 @@ def list_section_fill_status(
       - gaps / summary: why still needed
     """
     rows: list[dict[str, Any]] = []
+    branches_payload: dict[str, Any] | None = None
     for section in CM_SECTIONS:
         draft_present = draft_section_path(tenant_id, section).exists()
         env = get_draft(section, tenant_id=tenant_id, create_default=create_missing)
         payload = env.payload if isinstance(env.payload, dict) else None
-        # No on-disk draft and not materializing → treat as missing defaults.
+        if section == "branches" and isinstance(payload, dict):
+            branches_payload = payload
         is_default = (not draft_present and not create_missing) or section_is_default(payload, section)
-        quality = assess_section_fill(section, payload, is_default=is_default)
+        quality = assess_section_fill(
+            section,
+            payload,
+            is_default=is_default,
+            branches_payload=branches_payload,
+        )
         fill = str(quality["fill"])
         is_done = bool(quality["is_done"])
         rows.append(

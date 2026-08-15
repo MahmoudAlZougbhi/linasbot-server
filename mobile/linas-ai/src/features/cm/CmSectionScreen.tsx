@@ -10,28 +10,64 @@ import { cmFormStyles } from './cmFormStyles';
 import { getCmSection, type CmSectionId } from './cmSections';
 import { AiBasicsEditor } from './editors/AiBasicsEditor';
 import { ArticlesEditor } from './editors/ArticlesEditor';
-import { BranchesEditor } from './editors/BranchesEditor';
-import { DynamicMessagesEditor } from './editors/DynamicMessagesEditor';
+import { LocationOpeningHoursEditor } from './editors/LocationOpeningHoursEditor';
+import { GreetingsEditor } from './editors/GreetingsEditor';
 import { HandoffEditor } from './editors/HandoffEditor';
-import { LanguagesEditor } from './editors/LanguagesEditor';
 import { OffDaysEditor } from './editors/OffDaysEditor';
-import { OpeningHoursEditor } from './editors/OpeningHoursEditor';
 import { AiLimitsEditor } from './editors/AiLimitsEditor';
 import { RestrictedEditor } from './editors/PolicyEditors';
 import { CommentsEditor } from './editors/CommentsEditor';
 import { PricesEditor } from './editors/PricesEditor';
 import { RequestsAppointmentsEditor } from './editors/RequestsAppointmentsEditor';
 import { ServicesEditor } from './editors/ServicesEditor';
-import { StyleEditor } from './editors/StyleEditor';
 import { useCmDraft } from './useCmDraft';
+import { useCmMultiDraft } from './useCmMultiDraft';
 
 type Props = {
   section: CmSectionId;
-  /** Local overlay of a chat proposal — shown dirty, not auto-saved. */
   proposalReview?: CmProposalReview | null;
-  /** When set, header shows back chevron instead of the hamburger. */
   onBack?: () => void;
 };
+
+function AiBasicsComposite({ proposalReview }: { proposalReview?: CmProposalReview | null }) {
+  const { tr } = useI18n();
+  const multi = useCmMultiDraft(['ai_basics', 'style'], proposalReview);
+  const basics = multi.drafts.ai_basics?.payload ?? {};
+  const style = multi.drafts.style?.payload ?? {};
+
+  return (
+    <>
+      {multi.loading ? <ActivityIndicator color={colors.accent} /> : null}
+      {multi.error ? <Text style={cmFormStyles.error}>{multi.error}</Text> : null}
+      {multi.conflict ? <Text style={cmFormStyles.warn}>{multi.conflict}</Text> : null}
+      {!multi.loading ? (
+        <AiBasicsEditor
+          basicsPayload={basics}
+          stylePayload={style}
+          onBasicsChange={(next) => multi.setPayload('ai_basics', next)}
+          onStyleChange={(next) => multi.setPayload('style', next)}
+        />
+      ) : null}
+      {!multi.loading ? (
+        <View style={cmFormStyles.actions}>
+          <PrimaryButton
+            label={multi.dirty ? tr('aiSetupSaveDraft') : tr('aiSetupSaved')}
+            onPress={() => void multi.save()}
+            loading={multi.saving}
+            disabled={!multi.dirty || !multi.canSave}
+            style={{ flex: 1 }}
+          />
+          <PrimaryButton
+            label={tr('aiSetupReload')}
+            variant="ghost"
+            onPress={() => void multi.load()}
+            style={{ flex: 1 }}
+          />
+        </View>
+      ) : null}
+    </>
+  );
+}
 
 function SectionBody({
   section,
@@ -51,12 +87,6 @@ function SectionBody({
   canSave?: boolean;
 }) {
   switch (section) {
-    case 'ai_basics':
-      return <AiBasicsEditor payload={payload} onChange={onChange} />;
-    case 'languages':
-      return <LanguagesEditor payload={payload} onChange={onChange} />;
-    case 'style':
-      return <StyleEditor payload={payload} onChange={onChange} />;
     case 'services':
       return <ServicesEditor payload={payload} onChange={onChange} />;
     case 'prices':
@@ -68,11 +98,11 @@ function SectionBody({
     case 'handoff':
       return <HandoffEditor payload={payload} onChange={onChange} />;
     case 'dynamic_messages':
-      return <DynamicMessagesEditor payload={payload} onChange={onChange} />;
+      return <GreetingsEditor payload={payload} onChange={onChange} />;
     case 'branches':
-      return <BranchesEditor payload={payload} onChange={onChange} />;
+      return <LocationOpeningHoursEditor payload={payload} onChange={onChange} />;
     case 'opening_hours':
-      return <OpeningHoursEditor payload={payload} onChange={onChange} />;
+      return <LocationOpeningHoursEditor payload={payload} onChange={onChange} />;
     case 'restricted':
       return <RestrictedEditor payload={payload} onChange={onChange} />;
     case 'comments':
@@ -103,6 +133,8 @@ export function CmSectionScreen({ section, proposalReview, onBack }: Props) {
   const { tr } = useI18n();
   const [savedFlash, setSavedFlash] = useState(false);
   const isAiLimits = section === 'ai_limits';
+  const isAiBasics = section === 'ai_basics' || section === 'style';
+  const isLanguagesRemoved = section === 'languages';
 
   async function handleSave() {
     const ok = await draft.save();
@@ -112,8 +144,40 @@ export function CmSectionScreen({ section, proposalReview, onBack }: Props) {
     }
   }
 
-  const title = isAiLimits ? tr('aiLimitsTitle') : (meta?.title ?? section);
-  const subtitle = isAiLimits ? tr('aiLimitsSubtitle') : meta?.description;
+  const title = isAiLimits
+    ? tr('aiLimitsTitle')
+    : isAiBasics
+      ? tr('aiSetupSec_ai_basics')
+      : section === 'dynamic_messages'
+        ? tr('aiSetupSec_dynamic_messages')
+        : (meta?.title ?? section);
+  const subtitle = isAiLimits
+    ? tr('aiLimitsSubtitle')
+    : isAiBasics
+      ? tr('aiSetupBasicsSubtitle')
+      : section === 'dynamic_messages'
+        ? tr('aiSetupGreetingsSubtitle')
+        : meta?.description;
+
+  if (isAiBasics) {
+    return (
+      <ScreenChrome title={tr('aiSetupSec_ai_basics')} subtitle={tr('aiSetupBasicsSubtitle')} onBack={onBack}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
+          <AiBasicsComposite proposalReview={proposalReview} />
+        </ScrollView>
+      </ScreenChrome>
+    );
+  }
+
+  if (isLanguagesRemoved) {
+    return (
+      <ScreenChrome title={tr('aiSetupSec_languages')} subtitle={tr('aiSetupLanguagesRemovedBody')} onBack={onBack}>
+        <View style={cmFormStyles.card}>
+          <Text style={cmFormStyles.hint}>{tr('aiSetupLanguagesRemovedBody')}</Text>
+        </View>
+      </ScreenChrome>
+    );
+  }
 
   return (
     <ScreenChrome title={title} subtitle={subtitle} sectionTitle={isAiLimits} onBack={onBack}>
@@ -125,7 +189,7 @@ export function CmSectionScreen({ section, proposalReview, onBack }: Props) {
           AI proposal preview — not saved yet. Approve in chat, or tap Save draft here.
         </Text>
       ) : null}
-      {savedFlash && !isAiLimits ? <Text style={cmFormStyles.ok}>Draft saved.</Text> : null}
+      {savedFlash && !isAiLimits ? <Text style={cmFormStyles.ok}>{tr('aiSetupDraftSaved')}</Text> : null}
       {!draft.loading ? (
         <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
           <SectionBody
@@ -140,14 +204,14 @@ export function CmSectionScreen({ section, proposalReview, onBack }: Props) {
           {isAiLimits ? null : (
             <View style={cmFormStyles.actions}>
               <PrimaryButton
-                label={draft.dirty ? 'Save draft' : 'Saved'}
+                label={draft.dirty ? tr('aiSetupSaveDraft') : tr('aiSetupSaved')}
                 onPress={() => void handleSave()}
                 loading={draft.saving}
                 disabled={!draft.dirty || !draft.etag}
                 style={{ flex: 1 }}
               />
               <PrimaryButton
-                label="Reload"
+                label={tr('aiSetupReload')}
                 variant="ghost"
                 onPress={() => void draft.load()}
                 style={{ flex: 1 }}
