@@ -35,14 +35,14 @@ describe('drawer recents render when history exists', () => {
     assert.equal(rows[0].title, 'Pricing help');
   });
 
-  it('passes those items into HistoryRows inside the Recents ScrollView', () => {
+  it('passes those items into HistoryRows inside the Recents block', () => {
     const recents = read('features/nav/DrawerRecents.tsx');
     const nav = read('features/nav/NavDrawer.tsx');
     const rows = read('features/nav/HistoryRows.tsx');
     assert.match(nav, /visibleRecentItems\(props\.history, props\.archivedIds\)/);
     assert.match(recents, /items=\{props\.items\}/);
-    assert.match(recents, /<ScrollView/);
     assert.match(recents, /<HistoryRows/);
+    assert.doesNotMatch(recents, /ScrollView/);
     assert.match(rows, /if \(!items\.length\)/);
     assert.match(rows, /drawerRows\.map\(renderRow\)/);
   });
