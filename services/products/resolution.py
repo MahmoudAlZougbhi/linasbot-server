@@ -181,9 +181,7 @@ def resolve_product_priority(
                     resolve_product_titles_with_luna(session, tenant_id=tenant_id, query=name_hint),
                 ).result(timeout=45)
         except RuntimeError:
-            luna_matches = asyncio.run(
-                resolve_product_titles_with_luna(session, tenant_id=tenant_id, query=name_hint)
-            )
+            luna_matches = asyncio.run(resolve_product_titles_with_luna(session, tenant_id=tenant_id, query=name_hint))
         if len(luna_matches) == 1:
             result.update(resolver="luna_title_match", match=luna_matches[0], matches=luna_matches)
         elif luna_matches:
