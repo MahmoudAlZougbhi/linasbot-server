@@ -38,9 +38,11 @@ test('resolveWebPlanAllowed allows when entitlements grant despite stale members
 test('WebChatCard uses unified webPlanAllowed for banner and enable', () => {
   const src = read('features/integrations/WebChatCard.tsx');
   assert.match(src, /resolveWebPlanAllowed/);
-  assert.match(src, /const planBlocked = !loading && !webPlanAllowed/);
+  assert.match(src, /const planBlocked = hasLoadedOnce\.current && !webPlanAllowed/);
+  assert.match(src, /IntegrationCardLoading/);
   assert.doesNotMatch(src, /membership_allows === false/);
   assert.doesNotMatch(src, /!settings\?\.membership_allows/);
+  assert.doesNotMatch(src, /busy=\{loading\}/);
 });
 
 test('max plan catalog includes website chat', () => {
