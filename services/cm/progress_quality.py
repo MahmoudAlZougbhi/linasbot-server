@@ -158,8 +158,8 @@ def assess_section_fill(
                 "gaps": [],
                 "summary": "Optional — add request rules when you want customer capture.",
             }
-        rules = payload.get("rules") or []
-        if not isinstance(rules, list) or not rules:
+        request_rules = payload.get("rules") or []
+        if not isinstance(request_rules, list) or not request_rules:
             return {
                 "fill": "filled",
                 "is_done": True,
