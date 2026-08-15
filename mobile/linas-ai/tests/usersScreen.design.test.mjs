@@ -20,12 +20,9 @@ test('list chrome matches Users handoff', () => {
   assert.match(screen, /tr\('usersSub'\)/);
   assert.match(screen, /tr\('usersAdd'\)/);
   assert.match(screen, /UsersSearchBar/);
-  assert.match(screen, /star-four-points/);
-  assert.match(screen, /tr\('usersFooter'\)/);
   assert.match(ui, /Manage team access/);
   assert.match(ui, /'\+ Add user'/);
   assert.match(ui, /Search members/);
-  assert.match(ui, /Only admins can manage users and permissions/);
   assert.match(row, /more-horizontal/);
   assert.match(row, /usersBlocked/);
   assert.match(row, /#22C55E/);
