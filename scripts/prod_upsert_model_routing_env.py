@@ -6,7 +6,7 @@ from __future__ import annotations
 import os
 import sys
 
-# Ensure app import path when invoked from deploy.sh
+# Ensure the app import path when invoked by the reviewed HA release coordinator.
 _app = os.environ.get("CM_PRESERVE_APP_DIR") or "/opt/linasbot"
 if _app not in sys.path:
     sys.path.insert(0, _app)

@@ -73,15 +73,17 @@ META_REGISTRY_BACKEND=postgres
 
 ## 2. Exact deployment order
 
-Merge to `main` automatically drives:
+Merge to `main` builds the immutable release authority; production remains a
+separate manual transaction:
 
 ```text
 push/merge → main
   → workflow "Quality Gates" (.github/workflows/quality-gates.yml)
-    → on success → workflow "Deploy to Production" (.github/workflows/deploy.yml)
-      → SSH → /opt/linasbot
-      → backup data/ → git fetch origin main → git reset --hard origin/main
-      → sudo bash /opt/linasbot/deploy.sh
+    → immutable exact-SHA release artifact
+      → protected manual deploy.yml steady/reconcile_exact
+        → node02 then node01 activated while drained
+          → protected manual deploy.yml commit_exact with fresh LB evidence
+            → both nodes admitted only after exact target parity
 ```
 
 **Operator sequence (exact):**
@@ -90,13 +92,13 @@ push/merge → main
 |------|--------|------|
 | A | Merge #240 (§1) | PR merged |
 | B | Watch **Quality Gates** on `main` for the merge SHA | All jobs SUCCESS |
-| C | Watch **Deploy to Production** (`workflow_run` after gates) | SSH Deploy SUCCESS |
+| C | Dispatch the protected **Deploy to Production** exact-artifact transaction, then its separate `commit_exact` operation | both-node parity and commit SUCCESS |
 | D | Confirm both LB backends healthy | `https://linasaibot.com/api/health` → 200; LB target health green |
 | E | Confirm exact canonical env parity; Meta explicitly `postgres` | §0.7 + Meta HA runbook |
 | F | Apply Alembic **only through Apple** (§3) on Managed PG | `alembic current` = `20260812_apple_billing` |
 | G | Billing/auth import per their runbooks; Meta PG backup + read-only deep verify (§3) | no Meta file import |
 | H | Billing/auth cutover per their runbooks; keep explicit `META_REGISTRY_BACKEND=postgres` on both nodes (never `dual`) | env updated |
-| I | Restart app on both nodes (`systemctl restart linasbot` or redeploy) | `/api/ready` ok |
+| I | Apply any runtime/env restart only through its reviewed two-node coordinator | `/api/ready` ok on both nodes |
 | J | Post-deploy smoke (§6) | all checks pass |
 | K | Soak window (owner-chosen duration; recommend ≥24h of normal traffic) | no financial/auth regressions |
 | L | Post-soak production flags (§4) | Redis require / fail-closed only after soak GO |
@@ -105,7 +107,7 @@ push/merge → main
 
 **Forbidden in this release window:**
 
-- `workflow_dispatch` emergency deploy unless incident (`EMERGENCY_DEPLOY_CONFIRM=I_UNDERSTAND_SKIPPING_GATES`)
+- Any emergency gate bypass or direct per-node application release; product break glass is disabled
 - Droplet resize / delete / NFS removal (`docs/scale/RUNBOOK_RESIZE_REPLACE_NODE01_PREPARE.md` stays prepare-only)
 - Requests Alembic past Apple (§3 “do not run”)
 - `LINASLASER_BOC_BOOKING_ENABLED=true`
@@ -227,16 +229,14 @@ Order: enable `LINAS_FAIL_CLOSED_REDIS_CLAIMS` first (or together), confirm `/ap
 
 ## 5. Exact rollback steps
 
-### A. Application code rollback (fast)
+### A. Application code rollback
 
-```bash
-# On each prod node (or let a follow-up deploy land the prior SHA):
-cd /opt/linasbot
-PREVIOUS_PROD_SHA=<sha recorded in §0.6>
-git fetch origin
-git reset --hard "$PREVIOUS_PROD_SHA"
-sudo bash /opt/linasbot/deploy.sh
-```
+Never reset or restart a production node directly. If a deployment journal is
+active, use the protected `recover_exact` rollback decision bound to that exact
+journal. If the bad release was already committed, land a reviewed revert on
+`main`, wait for its successful Quality Gates artifact, and release that new
+exact SHA through the normal two-node `steady` transaction and separate
+`commit_exact` operation.
 
 Confirm: `https://linasaibot.com/api/health` and `/api/ready`.
 

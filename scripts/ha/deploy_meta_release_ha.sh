@@ -2,9 +2,10 @@
 # Transactional, fail-closed two-node production release deployment.
 #
 # This file is executed from the exact authorized Git object by deploy.yml.  It
-# deliberately keeps both nodes out of the load balancer from the first runtime
-# mutation until both nodes run the same verified release.  The load balancer
-# owner must first attest that its health check is exactly /api/ready.
+# deliberately keeps every changed node out of the load balancer, then keeps
+# both nodes drained once target parity is reached and until a separately
+# confirmed commit admits them. The load balancer owner must first attest that
+# its health check is exactly /api/ready.
 
 set -euo pipefail
 umask 077
@@ -92,6 +93,10 @@ PYTHON_LIBPYTHON=$PYTHON_RUNTIME_ROOT/lib/libpython3.13.so.1.0
 PYTHON_LIBPYTHON_SHA256=965dcc1afd5934923b5a930e54afcaafc572485394ae33c35d27038bd943dcc5
 REQUIRED_PIP_VERSION=26.2.1
 DEFAULT_PEER_HOST=10.106.0.4
+# Protocol fence for coordinator-to-node RPC. This is deliberately not a
+# secret and is not a security boundary against root; it prevents legacy or
+# accidental direct use of the helper's single-node implementation phases.
+INTERNAL_NODE_DISPATCH_CONFIRM=LINAS_HA_COORDINATOR_INTERNAL_NODE_RPC_V1
 VERIFY_API_UNIT=linasbot-ha-verify.service
 VERIFY_READINESS_UNIT=linasbot-ha-readiness-probe.service
 WORKER_QUEUES=(high_priority interactive background expensive)
@@ -110,6 +115,11 @@ log() {
 die() {
   printf '[ha-deploy] ERROR: %s\n' "$*" >&2
   exit 1
+}
+
+require_internal_node_dispatch() {
+  test "${1:-}" = "$INTERNAL_NODE_DISPATCH_CONFIRM" || \
+    die "single-node release phases are internal-only; use a two-node coordinator operation"
 }
 
 run_system_python_control() {
@@ -8135,7 +8145,8 @@ remote_node() {
   ssh "${SSH_OPTIONS[@]}" "root@${peer_host}" \
     /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
     PATH=/usr/sbin:/usr/bin:/sbin:/bin \
-    /bin/bash --noprofile --norc -s -- node "$@" <"$0"
+    /bin/bash --noprofile --norc -s -- node \
+    "$INTERNAL_NODE_DISPATCH_CONFIRM" "$@" <"$0"
 }
 
 prepare_remote_exact_helper() {
@@ -8228,7 +8239,8 @@ install_release_bundle_cluster() {
     /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
     PATH=/usr/sbin:/usr/bin:/sbin:/bin \
     /bin/bash --noprofile --norc "$remote_helper" install-release-bundle \
-    node02 "$remote_incoming" "$target_sha" "$artifact_id" "$artifact_api_sha" \
+    "$INTERNAL_NODE_DISPATCH_CONFIRM" node02 "$remote_incoming" "$target_sha" \
+    "$artifact_id" "$artifact_api_sha" \
     "$manifest_sha" "$run_id" "$run_attempt" "$control_sha" "$source_sha" \
     "$target_tree_sha" "$confirmation"
   rc=$?
@@ -8287,8 +8299,9 @@ install_lb_ready_attestation_cluster() {
     /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
     PATH=/usr/sbin:/usr/bin:/sbin:/bin \
     /bin/bash --noprofile --norc "$remote_helper" install-lb-attestation \
-    node02 "$operation" "$target_sha" "$attestation_sha" "$ready_projection_sha" \
-    "$journal_digest" "$confirmation" "$owner_confirmation" <"$attestation_path"
+    "$INTERNAL_NODE_DISPATCH_CONFIRM" node02 "$operation" "$target_sha" \
+    "$attestation_sha" "$ready_projection_sha" "$journal_digest" "$confirmation" \
+    "$owner_confirmation" <"$attestation_path"
   rc=$?
   set -e
   if [ "$rc" = 0 ]; then
@@ -9378,9 +9391,10 @@ orchestrate() {
 
 case "${1:-}" in
   install-release-bundle)
+    require_internal_node_dispatch "${2:-}"
     install_release_bundle \
-      "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" "${7:-}" \
-      "${8:-}" "${9:-}" "${10:-}" "${11:-}" "${12:-}" "${13:-}"
+      "${3:-}" "${4:-}" "${5:-}" "${6:-}" "${7:-}" "${8:-}" \
+      "${9:-}" "${10:-}" "${11:-}" "${12:-}" "${13:-}" "${14:-}"
     ;;
   install-release-bundle-cluster)
     install_release_bundle_cluster \
@@ -9388,8 +9402,9 @@ case "${1:-}" in
       "${8:-}" "${9:-}" "${10:-}" "${11:-}" "${12:-}"
     ;;
   install-lb-attestation)
+    require_internal_node_dispatch "${2:-}"
     install_lb_ready_attestation \
-      "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" "${7:-}" "${8:-}" "${9:-}"
+      "${3:-}" "${4:-}" "${5:-}" "${6:-}" "${7:-}" "${8:-}" "${9:-}" "${10:-}"
     ;;
   install-lb-attestation-cluster)
     install_lb_ready_attestation_cluster \
@@ -9420,6 +9435,8 @@ case "${1:-}" in
     deployment_recovery_status "${2:-}" "${3:-}" "${4:-}" "${5:-}"
     ;;
   node)
+    shift
+    require_internal_node_dispatch "${1:-}"
     shift
     node_dispatch "$@"
     ;;
