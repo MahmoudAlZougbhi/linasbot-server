@@ -184,7 +184,19 @@ export function AppScreenTree({
       </KeepMountedPane>
 
       {name === 'cm_section' ? (
-        <CmSectionScreen section={screen.section} proposalReview={screen.proposalReview ?? null} />
+        <CmSectionScreen
+          section={screen.section}
+          proposalReview={screen.proposalReview ?? null}
+          onBack={
+            screen.backTo === 'settings'
+              ? () => setScreen({ name: 'settings' })
+              : screen.backTo === 'cm'
+                ? () => setScreen({ name: 'cm' })
+                : screen.backTo === 'chat'
+                  ? () => setScreen({ name: 'chat' })
+                  : undefined
+          }
+        />
       ) : null}
       {name === 'resource' ? (
         <SimpleResourceScreen title={screen.title} path={screen.path} />
