@@ -30,9 +30,9 @@ test('inbox is a flat list with All/Human filters and no section headers', () =>
   assert.match(chips, /height:\s*CHIP_ROW_H/);
   assert.match(inbox, /minHeight:\s*0/);
   assert.match(inbox, /ConversationRow/);
-  assert.doesNotMatch(chips, /styles\.label/);
-  assert.doesNotMatch(chips, /<Text /);
-  assert.match(chips, /accessibilityLabel=\{`Channel \$\{chip.label\}`\}/);
+  assert.match(chips, /reqFilterAll/);
+  assert.match(chips, /styles\.allLabel/);
+  assert.match(chips, /chip\.id === 'all'/);
   assert.match(chips, /PlatformChannelIcon/);
 });
 
