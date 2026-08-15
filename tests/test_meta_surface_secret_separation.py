@@ -89,13 +89,14 @@ def test_valid_simultaneous_agreeing_aliases_are_ok() -> None:
 
 def test_distinct_app_b_allowed_without_matching_app_a() -> None:
     values = _values(
-        META_APP_SECRET=FB_LEGACY_SIGN,
+        META_APP_A_SECRET=FB_CANON_SIGN,
+        META_APP_SECRET=FB_CANON_SIGN,
         META_APP_B_SECRET=FB_APP_B_SIGN,
         META_APP_B_WEBHOOK_VERIFY_TOKEN=FB_APP_B_VERIFY,
     )
     result = evaluate_meta_surface_secret_separation(values)
-    assert result.ok is False
-    assert result.collisions == (FACEBOOK_SIGNING_ALIAS_MISMATCH,)
+    assert result.ok is True
+    assert result.collisions == ()
 
 
 def test_app_b_signing_collision_with_instagram_is_fail_closed() -> None:
