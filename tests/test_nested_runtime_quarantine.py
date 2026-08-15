@@ -12,6 +12,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "scripts" / "ha" / "bootstrap_nested_runtime_quarantine.py"
+EVIDENCE_PATH = ROOT / "scripts" / "ha" / "bootstrap_nested_runtime_evidence.py"
 BOOTSTRAP_PATH = ROOT / "scripts" / "ha" / "bootstrap_meta_ha_contract.py"
 
 
@@ -24,6 +25,7 @@ def _load(path: Path, name: str):  # type: ignore[no-untyped-def]
 
 
 quarantine = _load(MODULE_PATH, "bootstrap_nested_runtime_quarantine_test")
+evidence = _load(EVIDENCE_PATH, "bootstrap_nested_runtime_evidence_test")
 bootstrap = _load(BOOTSTRAP_PATH, "bootstrap_meta_ha_contract_nested_test")
 
 
@@ -115,8 +117,8 @@ def test_synthetic_tree_quarantine_commit_and_rollback(
     assert not quarantine.quarantine_destination(repo, tx_id).exists()
 
 
-@pytest.mark.parametrize("failpoint", ("rename", "chown"))
-def test_quarantine_replays_rename_and_chown_ack_loss(
+@pytest.mark.parametrize("failpoint", ("rename", "chown", "chmod"))
+def test_quarantine_replays_rename_and_metadata_ack_loss(
     failpoint: str,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -130,6 +132,7 @@ def test_quarantine_replays_rename_and_chown_ack_loss(
     expected = _build_tree(repo)
     real_rename = os.rename
     real_chown = quarantine.os.chown
+    real_chmod = quarantine.os.chmod
     injected = False
 
     def interrupted_rename(old: Path, new: Path) -> None:
@@ -146,8 +149,16 @@ def test_quarantine_replays_rename_and_chown_ack_loss(
             injected = True
             raise OSError("injected chown acknowledgement loss")
 
+    def interrupted_chmod(path: Path, mode: int, **_kwargs: object) -> None:
+        nonlocal injected
+        real_chmod(path, mode)
+        if failpoint == "chmod" and not injected:
+            injected = True
+            raise OSError("injected chmod acknowledgement loss")
+
     monkeypatch.setattr(quarantine.os, "rename", interrupted_rename)
     monkeypatch.setattr(quarantine.os, "chown", interrupted_chown)
+    monkeypatch.setattr(quarantine.os, "chmod", interrupted_chmod)
     with pytest.raises(OSError, match="injected"):
         quarantine.apply_quarantine(repo, backup, expected, tx_id)
     quarantine.apply_quarantine(repo, backup, expected, tx_id)
@@ -242,15 +253,14 @@ def test_unsafe_absolute_symlink_rejects_probe_and_apply(
     nested.mkdir()
     (nested / "main.py").write_text("print('legacy')\n", encoding="utf-8")
     os.symlink("/etc/passwd", nested / "escape")
-    with pytest.raises(quarantine.NestedRuntimeQuarantineError, match="escapes"):
+    with pytest.raises(quarantine.NestedRuntimeQuarantineError, match="not relocatable"):
         quarantine.probe_evidence(repo)
 
     shutil.rmtree(nested)
     nested.mkdir()
     (nested / "main.py").write_text("print('legacy')\n", encoding="utf-8")
     os.symlink("../outside", nested / "relative-escape")
-    outside = repo / "outside"
-    outside.mkdir()
+    (repo / "outside").mkdir()
     with pytest.raises(quarantine.NestedRuntimeQuarantineError, match="escapes"):
         quarantine.probe_evidence(repo)
 
@@ -281,6 +291,48 @@ def test_internal_directory_symlink_apply_and_rollback(
     quarantine.assert_live_matches(repo, expected)
 
 
+def test_portable_content_identity_ignores_node_local_root_metadata(tmp_path: Path) -> None:
+    repo_a = tmp_path / "repo-a"
+    repo_b = tmp_path / "repo-b"
+    repo_a.mkdir()
+    repo_b.mkdir()
+    for repo in (repo_a, repo_b):
+        nested = repo / quarantine.NESTED_RUNTIME_NAME
+        nested.mkdir()
+        (nested / "main.py").write_text("print('legacy')\n", encoding="utf-8")
+    left = quarantine.probe_evidence(repo_a)
+    right = quarantine.probe_evidence(repo_b)
+    assert left != right
+    assert evidence.portable_content_identity(left) == evidence.portable_content_identity(right)
+
+
+def test_publish_authority_before_drain_allows_safe_rollback_without_quarantine(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    backup = tmp_path / "backup"
+    backup.mkdir()
+    tx_id = "mb_" + "9" * 28
+    _patch_chown(monkeypatch)
+    expected = _build_tree(repo)
+    quarantine.publish_authority(repo, backup, expected, tx_id)
+    quarantine.restore_quarantine(repo, backup, expected, tx_id)
+    quarantine.assert_live_matches(repo, expected)
+
+
+def test_authority_write_replays_after_partial_prefix(tmp_path: Path) -> None:
+    backup = tmp_path / "backup"
+    backup.mkdir()
+    payload = evidence._canonical({"schema": 1, "tx_id": "mb_" + "a" * 28, "evidence": {"present": False}}) + b"\n"
+    path = quarantine.authority_path(backup)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(payload[: len(payload) // 2])
+    quarantine._atomic_authority_write(path, payload)
+    assert path.read_bytes() == payload
+
+
 def test_repo_bytecode_manifest_excludes_nested_runtime_tree(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -302,11 +354,15 @@ def test_repo_bytecode_manifest_excludes_nested_runtime_tree(
 
 def test_bootstrap_wires_nested_runtime_authority() -> None:
     source = BOOTSTRAP_PATH.read_text(encoding="utf-8")
+    prepare = source[source.index("def _node_prepare") : source.index("def _node_abort_prepare")]
     drain = source[source.index("def _node_drain") : source.index("def _transition_historical_env")]
+    combined = source[source.index("def _combined_plan") : source.index("def _confirmation")]
     verify = source[source.index("def _node_verify") : source.index("def _quiesce_and_disable_units")]
     rollback = source[source.index("def _node_rollback") : source.index("def _node_admit_rollback")]
     commit = source[source.index("def _bootstrap_commit_proof_payload") : source.index("def _read_bootstrap_commit_proof")]
+    assert "_nested.publish_authority(" in prepare
     assert "_nested.apply_quarantine(" in drain
+    assert "portable_content_identity(" in combined
     assert "_nested.assert_quarantined(" in verify
     assert "_nested.restore_quarantine(" in rollback
     assert '"nested_runtime_present"' in commit

@@ -173,6 +173,11 @@ def test_do_lb_ready_projection_digest_matches_across_consumers() -> None:
         (lambda projection: projection.update({"network": "EXTERNAL"}), "forbidden network"),
         (lambda projection: projection.update({"network": None}), "forbidden network"),
         (lambda projection: projection.update({"firewall": None}), "incomplete or unknown"),
+        (lambda projection: projection.update({"http_idle_timeout_seconds": 61}), "idle timeout"),
+        (
+            lambda projection: projection["forwarding_rules"][0].update({"extra": True}),
+            "forwarding rules",
+        ),
         (lambda projection: projection.update({"network_stack": "IPV4"}), "routing identity"),
         (lambda projection: projection.update({"size_unit": 2}), "routing identity"),
         (lambda projection: projection.update({"enable_proxy_protocol": True}), "routing identity"),
@@ -234,6 +239,11 @@ def test_do_lb_plan_and_apply_validate_ready_projection_before_any_put(
         (lambda projection: projection.update({"network": "EXTERNAL"}), "forbidden network"),
         (lambda projection: projection.update({"network": None}), "forbidden network"),
         (lambda projection: projection.update({"firewall": None}), "incomplete or unknown"),
+        (lambda projection: projection.update({"http_idle_timeout_seconds": 61}), "idle timeout"),
+        (
+            lambda projection: projection["forwarding_rules"][0].update({"extra": True}),
+            "forwarding rules",
+        ),
         (lambda projection: projection.update({"network_stack": "IPV4"}), "routing identity"),
         (lambda projection: projection.update({"size_unit": 2}), "routing identity"),
         (lambda projection: projection.update({"enable_proxy_protocol": True}), "routing identity"),
@@ -401,7 +411,7 @@ def test_do_lb_restore_uses_a_second_authenticated_get_before_zero_put(
         expected_current_sha256=desired_sha,
         confirm=lb.restore_confirmation(before_sha),
     )
-    with pytest.raises(RuntimeError, match="changed during restore confirmation"):
+    with pytest.raises(RuntimeError, match="routing/safety contract changed"):
         lb._restore(args)
     assert requests == []
 

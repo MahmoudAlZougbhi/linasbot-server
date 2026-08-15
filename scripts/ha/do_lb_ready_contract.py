@@ -11,8 +11,20 @@ LB_SUBNET_UUID = "2415d1ce-b8e6-4707-bc89-56e234548d60"
 LB_VPC_UUID = "d0e11d67-3fba-4966-b2db-6a471307df85"
 LB_NETWORK_STACK = "DUALSTACK"
 LB_SIZE_UNIT = 1
+LB_IDLE_TIMEOUT_SECONDS = 60
 OLD_HEALTH_PATH = "/api/health"
 READY_HEALTH_PATH = "/api/ready"
+
+LB_FORWARDING_HTTP_KEYS = frozenset({"entry_protocol", "entry_port", "target_protocol", "target_port"})
+LB_FORWARDING_HTTPS_KEYS = frozenset(
+    {"entry_protocol", "entry_port", "target_protocol", "target_port", "certificate_id"}
+)
+LB_FORWARDING_HTTP_RULE = {
+    "entry_protocol": "http",
+    "entry_port": 80,
+    "target_protocol": "http",
+    "target_port": 80,
+}
 
 LB_READY_PROJECTION_KEYS = frozenset(
     {
@@ -60,7 +72,7 @@ def validate_observed_get_routing(load_balancer: dict[str, Any]) -> None:
         or load_balancer.get("enable_backend_keepalive") is not True
         or load_balancer.get("disable_lets_encrypt_dns_records") is not False
         or load_balancer.get("enable_proxy_protocol") is not False
-        or not 30 <= int(load_balancer.get("http_idle_timeout_seconds") or 0) <= 600
+        or load_balancer.get("http_idle_timeout_seconds") != LB_IDLE_TIMEOUT_SECONDS
         or load_balancer.get("network_stack") != LB_NETWORK_STACK
         or load_balancer.get("type") != "REGIONAL"
         or load_balancer.get("subnet_uuid") != LB_SUBNET_UUID
@@ -68,6 +80,27 @@ def validate_observed_get_routing(load_balancer: dict[str, Any]) -> None:
         or load_balancer.get("sticky_sessions") != {"type": "none"}
     ):
         raise RuntimeError("DigitalOcean load-balancer routing/safety contract changed")
+    validate_forwarding_rules(load_balancer.get("forwarding_rules"))
+
+
+def validate_forwarding_rules(forwarding: Any) -> None:
+    if not isinstance(forwarding, list) or len(forwarding) != 2 or any(not isinstance(rule, dict) for rule in forwarding):
+        raise RuntimeError("DigitalOcean ready projection forwarding rules are invalid")
+    http_rules = [rule for rule in forwarding if rule.get("entry_protocol") == "http"]
+    https_rules = [rule for rule in forwarding if rule.get("entry_protocol") == "https"]
+    if http_rules != [LB_FORWARDING_HTTP_RULE]:
+        raise RuntimeError("DigitalOcean ready projection forwarding rules changed")
+    if len(https_rules) != 1 or set(https_rules[0]) != LB_FORWARDING_HTTPS_KEYS:
+        raise RuntimeError("DigitalOcean ready projection HTTPS forwarding rule shape changed")
+    https_rule = https_rules[0]
+    if (
+        https_rule.get("entry_port") != 443
+        or https_rule.get("target_protocol") != "http"
+        or https_rule.get("target_port") != 80
+        or not isinstance(https_rule.get("certificate_id"), str)
+        or not https_rule["certificate_id"]
+    ):
+        raise RuntimeError("DigitalOcean ready projection HTTPS certificate is missing")
 
 
 def validate_ready_projection_keyset(projection: dict[str, Any]) -> None:
@@ -102,7 +135,7 @@ def validate_mutable_projection_routing_values(projection: dict[str, Any]) -> No
     ):
         raise RuntimeError("DigitalOcean ready projection routing identity changed")
     idle = projection.get("http_idle_timeout_seconds")
-    if isinstance(idle, bool) or not isinstance(idle, int) or not 30 <= idle <= 600:
+    if idle != LB_IDLE_TIMEOUT_SECONDS:
         raise RuntimeError("DigitalOcean ready projection idle timeout is invalid")
     try:
         droplet_ids = sorted(int(value) for value in projection.get("droplet_ids") or [])
@@ -113,24 +146,4 @@ def validate_mutable_projection_routing_values(projection: dict[str, Any]) -> No
     health = projection.get("health_check")
     if health not in (LB_HEALTH_CONTRACT_OLD, LB_HEALTH_CONTRACT_READY):
         raise RuntimeError("DigitalOcean projection health check is not authorized")
-    forwarding = projection.get("forwarding_rules")
-    if (
-        not isinstance(forwarding, list)
-        or len(forwarding) != 2
-        or any(not isinstance(rule, dict) for rule in forwarding)
-    ):
-        raise RuntimeError("DigitalOcean ready projection forwarding rules are invalid")
-    normalized = {
-        (
-            rule.get("entry_protocol"),
-            rule.get("entry_port"),
-            rule.get("target_protocol"),
-            rule.get("target_port"),
-        )
-        for rule in forwarding
-    }
-    if normalized != {("http", 80, "http", 80), ("https", 443, "http", 80)}:
-        raise RuntimeError("DigitalOcean ready projection forwarding rules changed")
-    https_rule = next(rule for rule in forwarding if rule.get("entry_protocol") == "https")
-    if not isinstance(https_rule.get("certificate_id"), str) or not https_rule["certificate_id"]:
-        raise RuntimeError("DigitalOcean ready projection HTTPS certificate is missing")
+    validate_forwarding_rules(projection.get("forwarding_rules"))

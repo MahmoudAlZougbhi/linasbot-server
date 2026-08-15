@@ -75,6 +75,7 @@ def test_control_plane_allowlists_and_workflow_bridge_are_closed() -> None:
     assert set(release.CONTROL_PLANE_FILES) == launcher.CONTROL_FILES == ingest_contract.CONTROL_FILES
     required = {
         "scripts/ha/bootstrap_nested_runtime_quarantine.py",
+        "scripts/ha/bootstrap_nested_runtime_evidence.py",
         "scripts/ha/do_lb_ready_contract.py",
     }
     assert required <= set(release.CONTROL_PLANE_FILES)

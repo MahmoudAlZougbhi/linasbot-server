@@ -286,6 +286,7 @@ RUNTIME_CONTROL_FILES = {
     "requirements.lock",
     "scripts/ha/bootstrap_meta_ha_contract.py",
     "scripts/ha/bootstrap_nested_runtime_quarantine.py",
+    "scripts/ha/bootstrap_nested_runtime_evidence.py",
     "scripts/ha/do_lb_ready_contract.py",
     "scripts/ha/python_runtime_archive_contract.py",
     "scripts/ha/python_runtime_provision_contract.py",
@@ -2837,7 +2838,9 @@ def _combined_plan(args: argparse.Namespace) -> tuple[dict[str, Any], bytes, str
         raise RuntimeError("nodes do not observe one identical authoritative PostgreSQL registry")
     if node01["pg"]["state_sha256"] != args.expected_pg_state_sha256:
         raise RuntimeError("PostgreSQL Meta state differs from the owner-authorized digest")
-    if node01["nested_runtime"] != node02["nested_runtime"]:
+    if _nested.portable_content_identity(node01["nested_runtime"]) != _nested.portable_content_identity(
+        node02["nested_runtime"]
+    ):
         raise RuntimeError("nodes do not share one identical nested runtime authority")
     lb = _lb_owner_attestation(
         args.lb_ready_attestation,
@@ -2931,6 +2934,7 @@ def _node_prepare(
         write_or_verify(backup / "linas_ai_bot.service.before", legacy_payload)
     _backup_git_metadata(backup, probe["git_metadata"])
     write_or_verify(backup / "probe.before.json", _canonical(probe) + b"\n")
+    _nested.publish_authority(REPO_DIR, backup, probe["nested_runtime"], tx_id)
     _backup_live_units(backup, probe["live_units"])
     _prepare_probe_environment(backup / "runtime-probe", probe["runtime_authority"])
     prepared = {
