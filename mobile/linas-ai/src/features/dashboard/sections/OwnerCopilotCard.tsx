@@ -90,8 +90,8 @@ const styles = StyleSheet.create({
   },
   top: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   body: { flex: 1, gap: 2 },
-  title: { fontFamily: fonts.bodyMedium, fontSize: 15, fontWeight: '700' },
-  meta: { fontFamily: fonts.body, fontSize: 12 },
+  title: { fontFamily: fonts.bodyMedium, fontSize: 16 },
+  meta: { fontFamily: fonts.body, fontSize: 13 },
   expand: { gap: 0, paddingLeft: 36 },
   userRow: {
     borderTopWidth: StyleSheet.hairlineWidth,

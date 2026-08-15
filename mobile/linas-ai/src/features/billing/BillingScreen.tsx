@@ -77,8 +77,7 @@ export function BillingScreen(_props: Props = {}) {
   };
   const storeReady = (id: PlanId) => Boolean(store.storePrices[id]?.available);
 
-  const onBack =
-    view === 'choose' ? () => (hasSub ? setBrowsePlans(false) : nav.goChat()) : undefined;
+  const onBack = view === 'choose' && hasSub ? () => setBrowsePlans(false) : undefined;
 
   const periodEnd = entitlement.periodEnd;
   const renewsDate =

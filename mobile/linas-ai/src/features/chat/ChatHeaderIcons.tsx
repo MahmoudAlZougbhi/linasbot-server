@@ -1,12 +1,14 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppIcon } from '../../components/AppIcon';
-import { radii } from '../../theme';
+import { radii, useTheme } from '../../theme';
 import { NEW_CHAT_ICON } from '../nav/moduleIcons';
 
 /** Light-gray rounded square behind the overlay hamburger. */
 export const HEADER_ICON_BOX = 36;
+/** Compact 44pt hit around the 36pt silver menu square. */
+export const HEADER_HIT = 44;
 
 export function HeaderIconBox({
   children,
@@ -32,6 +34,30 @@ export function MenuIcon({ color }: { color: string }) {
       <View style={[styles.menuBar, { backgroundColor: color }]} />
       <View style={[styles.menuBar, { backgroundColor: color }]} />
     </View>
+  );
+}
+
+/** Silver rounded-square hamburger used by Copilot chat and every ScreenChrome module. */
+export function HeaderMenuButton({
+  onPress,
+  accessibilityLabel,
+}: {
+  onPress: () => void;
+  accessibilityLabel: string;
+}) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      hitSlop={4}
+    >
+      <HeaderIconBox backgroundColor={colors.featuredIconBg} borderColor={colors.featuredIconBorder}>
+        <MenuIcon color={colors.text} />
+      </HeaderIconBox>
+    </Pressable>
   );
 }
 
@@ -61,5 +87,14 @@ const styles = StyleSheet.create({
     height: 1.75,
     borderRadius: 1,
     width: '100%',
+  },
+  hit: {
+    width: HEADER_HIT,
+    height: HEADER_HIT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressed: {
+    opacity: 0.55,
   },
 });

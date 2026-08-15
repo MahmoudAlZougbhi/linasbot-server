@@ -1,13 +1,11 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useI18n } from '../../i18n/LanguageContext';
 import { spacing, useTheme } from '../../theme';
-import { HeaderIconBox, MenuIcon } from './ChatHeaderIcons';
+import { HEADER_HIT, HeaderMenuButton } from './ChatHeaderIcons';
 import { ChatTopFade } from './ChatTopFade';
 
-/** Compact 44pt hit around the 36pt silver menu square. */
-const HEADER_HIT = 44;
 /** Extra space below status bar / notch (on top of safe-area inset). */
 const HEADER_TOP_GAP = 2;
 /** Gap under the hamburger / fade so the first bubble is not cramped into them. */
@@ -31,17 +29,7 @@ export function ChatHeader({ onOpenMenu }: Props) {
       style={[styles.overlay, { paddingTop: insets.top + HEADER_TOP_GAP }]}
     >
       <ChatTopFade insetTop={insets.top} color={colors.bg} />
-      <Pressable
-        onPress={onOpenMenu}
-        style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
-        accessibilityLabel={tr('openMenu')}
-        accessibilityRole="button"
-        hitSlop={4}
-      >
-        <HeaderIconBox backgroundColor={colors.featuredIconBg} borderColor={colors.featuredIconBorder}>
-          <MenuIcon color={colors.text} />
-        </HeaderIconBox>
-      </Pressable>
+      <HeaderMenuButton onPress={onOpenMenu} accessibilityLabel={tr('openMenu')} />
     </View>
   );
 }
@@ -55,14 +43,5 @@ const styles = StyleSheet.create({
     zIndex: 20,
     paddingHorizontal: spacing.md,
     direction: 'ltr',
-  },
-  hit: {
-    width: HEADER_HIT,
-    height: HEADER_HIT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pressed: {
-    opacity: 0.55,
   },
 });

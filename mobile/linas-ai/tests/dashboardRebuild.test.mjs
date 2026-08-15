@@ -39,6 +39,8 @@ test('Dashboard rebuild uses typed mobile dashboard API', () => {
   assert.match(screen, /OwnerCopilotCard/);
   assert.match(screen, /BuyCreditsSheet/);
   assert.match(screen, /credits\.setOpen\(true\)/);
+  assert.match(screen, /headerRight/);
+  assert.doesNotMatch(screen, /stackedHeader/);
   assert.doesNotMatch(screen, /isPlatformOwner|Platform metrics|Owner only|Owner access only/);
   assert.doesNotMatch(screen, /JSON\.stringify/);
   assert.doesNotMatch(types, /\bany\b|@ts-ignore|@ts-nocheck/);

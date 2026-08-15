@@ -81,6 +81,6 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.85 },
   pillText: { flex: 1, gap: 2 },
-  range: { fontFamily: fonts.bodyMedium, fontSize: 15, fontWeight: '700' },
-  sub: { fontFamily: fonts.body, fontSize: 12 },
+  range: { fontFamily: fonts.body, fontSize: 14 },
+  sub: { fontFamily: fonts.body, fontSize: 13 },
 });
