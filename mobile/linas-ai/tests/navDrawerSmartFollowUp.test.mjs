@@ -81,17 +81,20 @@ describe('nav drawer Smart Follow-Up + AI Setup featured tile', () => {
     assert.match(api, /\/api\/whatsapp\/smart-followup\/settings/);
   });
 
-  it('drawer tile copy is short Follow up; screen title stays Smart Follow-Up', () => {
+  it('drawer tile and screen header both use short Follow up', () => {
     const en = readFileSync(join(root, 'src/i18n/locales/smartFollowUpEn.ts'), 'utf8');
     const ar = readFileSync(join(root, 'src/i18n/locales/smartFollowUpAr.ts'), 'utf8');
     const fr = readFileSync(join(root, 'src/i18n/locales/smartFollowUpFr.ts'), 'utf8');
     assert.match(en, /navSmartFollowUp:\s*'Follow up',/);
-    assert.match(en, /sfuTitle:\s*'Smart Follow-Up',/);
+    assert.match(en, /sfuTitle:\s*'Follow up',/);
     assert.doesNotMatch(en, /navSmartFollowUp:\s*'Smart Follow-Up'/);
+    assert.doesNotMatch(en, /sfuTitle:\s*'Smart Follow-Up'/);
     assert.match(ar, /navSmartFollowUp:\s*'المتابعة',/);
-    assert.match(ar, /sfuTitle:\s*'المتابعة الذكية',/);
+    assert.match(ar, /sfuTitle:\s*'المتابعة',/);
+    assert.doesNotMatch(ar, /sfuTitle:\s*'المتابعة الذكية'/);
     assert.match(fr, /navSmartFollowUp:\s*'Relance',/);
-    assert.match(fr, /sfuTitle:\s*'Relance intelligente',/);
+    assert.match(fr, /sfuTitle:\s*'Relance',/);
+    assert.doesNotMatch(fr, /sfuTitle:\s*'Relance intelligente'/);
     assert.match(read('features/nav/drawerModules.ts'), /titleKey:\s*'navSmartFollowUp'/);
     assert.match(read('i18n/locales/en.ts'), /smartFollowUpEn/);
     assert.match(read('i18n/locales/ar.ts'), /smartFollowUpAr/);

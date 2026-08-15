@@ -3,7 +3,7 @@ export const smartFollowUpAr = {
   aiSetupStatusContinue: 'متابعة الإعداد',
   aiSetupStatusComplete: 'اكتمل الإعداد',
   aiSetupStatusNeedsAttention: 'يحتاج انتباهاً',
-  sfuTitle: 'المتابعة الذكية',
+  sfuTitle: 'المتابعة',
   sfuSubtitle: 'تابع عندما يتوقف الزبائن عن الرد.',
   sfuChannelsTitle: 'القنوات',
   sfuChannelInstagram: 'إنستغرام',
