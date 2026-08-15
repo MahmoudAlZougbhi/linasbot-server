@@ -145,7 +145,7 @@ export const subscriptionEn = {
   subFeatDmComments: 'Instagram & Facebook DMs + comments',
   subFeatWhatsApp: 'WhatsApp messages',
   subFeatTikTok: 'TikTok DMs + comments',
-  subFeatWeb: 'Website chat widget',
+  subFeatWeb: 'Website chat',
   subFeatSmartAnswers: '{n} saved Smart Q&A',
   subFeatOwnerAccount: '1 owner account',
   subFeatExtraSeats: '{n} additional team members',

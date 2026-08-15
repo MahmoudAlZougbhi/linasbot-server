@@ -59,8 +59,8 @@ async def web_chat_sdk_docs() -> PlainTextResponse:
         "Use your public integration ID (widget_key) with the browser endpoints:\n\n"
         "1. POST /api/web-chat/session — bootstrap visitor session\n"
         "2. POST /api/web-chat/session/messages — send a visitor message\n"
-        "3. GET /api/web-chat/config?widget_key=... — read public widget config\n"
-        "4. POST /api/web-chat/heartbeat — report installation (widget mode)\n\n"
+        "3. GET /api/web-chat/config?widget_key=... — read public chat config\n"
+        "4. POST /api/web-chat/heartbeat — report installation (built-in chat mode)\n\n"
         "Always send the Origin header from your allowed domain. "
         "Server-to-server keys are planned; use the public integration ID for browser clients only.\n"
     )
