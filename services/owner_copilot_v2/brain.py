@@ -5,9 +5,10 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator, Callable
 from typing import Any, Literal
 
-from services.owner_copilot_v2.brain_stream_body import _iter_owner_turn_v2_events_body
+from services.owner_copilot_v2.brain_stream_body import _iter_owner_turn_v2_events_body, MAX_TOOL_ROUNDS
 from services.owner_copilot_v2.flags import owner_copilot_v2_enabled
 from services.owner_copilot_v2.models import StreamEvent
+from services.owner_copilot_v2.provider import iter_sol_text_deltas, iter_sol_tool_round
 
 CancelCheck = Callable[[], bool]
 
