@@ -183,6 +183,13 @@ def test_security_check_context_is_unique_for_branch_protection() -> None:
     assert "name: security-secret-scan" not in (WORKFLOW_DIR / "quality-gates.yml").read_text(encoding="utf-8")
 
 
+def test_required_checks_run_for_every_pull_request_and_push_only_on_main() -> None:
+    for name in ("quality-gates.yml", "security-checks.yml"):
+        source = (WORKFLOW_DIR / name).read_text(encoding="utf-8")
+        trigger = source.split("\n\n", 2)[1]
+        assert trigger == "on:\n  pull_request:\n  push:\n    branches: [main]", name
+
+
 def test_remote_production_workflow_inventory_is_closed() -> None:
     found = {workflow.name for workflow in _workflows() if REMOTE_ACCESS.search(workflow.read_text(encoding="utf-8"))}
     assert found == REMOTE_WORKFLOWS

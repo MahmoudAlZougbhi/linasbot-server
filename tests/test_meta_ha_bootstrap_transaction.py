@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import importlib.util
 import json
 import os
@@ -78,6 +79,18 @@ def _observed_lb() -> dict[str, object]:
     }
 
 
+def _provider_observed_lb() -> dict[str, object]:
+    observed = copy.deepcopy(_observed_lb())
+    rules = observed["forwarding_rules"]
+    assert isinstance(rules, list)
+    for rule in rules:
+        assert isinstance(rule, dict)
+        rule["tls_passthrough"] = False
+        if rule["entry_protocol"] == "http":
+            rule["certificate_id"] = ""
+    return observed
+
+
 def test_do_lb_update_is_full_projection_cas_and_changes_only_health_path() -> None:
     observed = _observed_lb()
     before = lb.validate_observed_identity(observed)
@@ -102,6 +115,128 @@ def test_do_lb_update_is_full_projection_cas_and_changes_only_health_path() -> N
     old_health = dict(before["health_check"])
     new_health = dict(desired["health_check"])
     assert {**new_health, "path": old_health["path"]} == old_health
+
+
+def test_do_lb_current_provider_get_shape_normalizes_to_the_existing_canonical_digest() -> None:
+    canonical = lb.validate_observed_identity(_observed_lb())
+    provider = lb.validate_observed_identity(_provider_observed_lb())
+    reordered = _provider_observed_lb()
+    reordered_rules = reordered["forwarding_rules"]
+    assert isinstance(reordered_rules, list)
+    reordered["forwarding_rules"] = list(reversed(reordered_rules))
+
+    assert provider == canonical
+    assert lb.validate_observed_identity(reordered) == canonical
+    assert lb._digest(provider) == lb._digest(canonical)
+    assert provider["forwarding_rules"] == [
+        {
+            "entry_protocol": "http",
+            "entry_port": 80,
+            "target_protocol": "http",
+            "target_port": 80,
+        },
+        {
+            "entry_protocol": "https",
+            "entry_port": 443,
+            "target_protocol": "http",
+            "target_port": 80,
+            "certificate_id": "ccd5-observed",
+        },
+    ]
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    [
+        lambda rules: rules[0].update({"unknown": True}),
+        lambda rules: rules[0].update({"tls_passthrough": True}),
+        lambda rules: rules[1].update({"tls_passthrough": True}),
+        lambda rules: rules[0].update({"certificate_id": "unexpected"}),
+        lambda rules: rules[1].update({"certificate_id": ""}),
+        lambda rules: rules[1].pop("certificate_id"),
+        lambda rules: rules[0].update({"entry_port": True}),
+        lambda rules: rules[1].update({"target_port": "80"}),
+    ],
+)
+def test_do_lb_provider_get_shape_rejects_unknown_or_unsafe_defaults(mutator: object) -> None:
+    observed = _provider_observed_lb()
+    rules = observed["forwarding_rules"]
+    assert isinstance(rules, list)
+    mutator(rules)  # type: ignore[operator]
+
+    with pytest.raises(RuntimeError, match="DigitalOcean (?:observed|ready projection)"):
+        lb.validate_observed_identity(observed)
+
+
+def test_do_lb_provider_defaults_are_get_only_not_part_of_ready_attestation_projection() -> None:
+    ready = _ready_projection_from_observed()
+    rules = ready["forwarding_rules"]
+    assert isinstance(rules, list)
+    for rule in rules:
+        assert isinstance(rule, dict)
+        rule["tls_passthrough"] = False
+        rule.setdefault("certificate_id", "")
+
+    with pytest.raises(RuntimeError, match="forwarding rules"):
+        contract.validate_ready_projection_values(ready)
+
+
+def test_do_lb_current_provider_shape_works_for_plan_readback_and_attestation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider_old = _provider_observed_lb()
+    canonical_old = lb.validate_observed_identity(_observed_lb())
+    canonical_ready = lb.desired_projection(canonical_old)
+    provider_ready = _provider_observed_lb()
+    provider_ready["health_check"] = dict(contract.LB_HEALTH_CONTRACT_READY)
+    state_root = tmp_path / "operator-state"
+
+    monkeypatch.setattr(lb, "_get_load_balancer", lambda: provider_old)
+    assert lb._plan(SimpleNamespace(state_dir=state_root)) == 0
+
+    monkeypatch.setattr(lb, "_get_load_balancer", lambda: provider_ready)
+    assert lb._wait_projection(canonical_ready, attempts=1) is True
+
+    ready_sha = lb._digest(canonical_ready)
+    args = SimpleNamespace(
+        state_dir=state_root,
+        expected_current_sha256=ready_sha,
+        confirm=lb.attest_confirmation(ready_sha),
+    )
+    assert lb._attest(args) == 0
+    path = lb.attestation_path_for(ready_sha, state_root)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["ready_projection"] == canonical_ready
+    lb._validate_attestation(payload, ready_sha)
+
+
+def test_do_lb_apply_rejects_unsafe_provider_defaults_before_any_put(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed = _provider_observed_lb()
+    rules = observed["forwarding_rules"]
+    assert isinstance(rules, list) and isinstance(rules[1], dict)
+    rules[1]["tls_passthrough"] = True
+    requests: list[tuple[str, object]] = []
+    monkeypatch.setattr(lb, "_get_load_balancer", lambda: observed)
+
+    def request(method: str, *, payload: object = None) -> dict[str, object]:
+        requests.append((method, payload))
+        return {}
+
+    monkeypatch.setattr(lb, "_request", request)
+    args = SimpleNamespace(
+        state_dir=tmp_path / "operator-state",
+        expected_before_sha256="0" * 64,
+        snapshot=tmp_path / "never-used.json",
+        confirm="never-used",
+    )
+
+    with pytest.raises(RuntimeError, match="TLS passthrough"):
+        lb._apply(args)
+    assert requests == []
 
 
 def test_do_lb_immutable_network_shape_is_validated_and_preserved_in_full_put() -> None:

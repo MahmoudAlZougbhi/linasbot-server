@@ -3,7 +3,7 @@ name: Quality Gates
 on:
   pull_request:
   push:
-    branches: [main, fix/**, feat/**]
+    branches: [main]
 
 env:
   LINAS_PYTHON_RUNTIME_NAME: cpython-3.13.15+20260814-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz

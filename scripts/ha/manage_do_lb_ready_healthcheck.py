@@ -42,6 +42,7 @@ _contract = importlib.util.module_from_spec(_contract_spec)
 _contract_spec.loader.exec_module(_contract)
 LB_HEALTH_CONTRACT = _contract.LB_HEALTH_CONTRACT
 LB_READY_PROJECTION_KEYS = _contract.LB_READY_PROJECTION_KEYS
+normalize_observed_forwarding_rules = _contract.normalize_observed_forwarding_rules
 validate_observed_get_routing = _contract.validate_observed_get_routing
 validate_ready_projection_keyset = _contract.validate_ready_projection_keyset
 validate_ready_projection_values = _contract.validate_ready_projection_values
@@ -221,6 +222,8 @@ def update_projection(load_balancer: dict[str, Any]) -> dict[str, Any]:
     if unknown:
         raise RuntimeError("DigitalOcean load balancer has unhandled fields; refusing full update")
     projection = {key: load_balancer[key] for key in UPDATE_KEYS if key in load_balancer}
+    if "forwarding_rules" in projection:
+        projection["forwarding_rules"] = normalize_observed_forwarding_rules(projection["forwarding_rules"])
     if "droplet_ids" in projection:
         projection["droplet_ids"] = sorted(int(value) for value in projection["droplet_ids"])
     region = projection.get("region")

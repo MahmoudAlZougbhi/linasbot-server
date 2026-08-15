@@ -19,6 +19,7 @@ LB_FORWARDING_HTTP_KEYS = frozenset({"entry_protocol", "entry_port", "target_pro
 LB_FORWARDING_HTTPS_KEYS = frozenset(
     {"entry_protocol", "entry_port", "target_protocol", "target_port", "certificate_id"}
 )
+LB_FORWARDING_PROVIDER_KEYS = LB_FORWARDING_HTTPS_KEYS | {"tls_passthrough"}
 LB_FORWARDING_HTTP_RULE = {
     "entry_protocol": "http",
     "entry_port": 80,
@@ -80,7 +81,58 @@ def validate_observed_get_routing(load_balancer: dict[str, Any]) -> None:
         or load_balancer.get("sticky_sessions") != {"type": "none"}
     ):
         raise RuntimeError("DigitalOcean load-balancer routing/safety contract changed")
-    validate_forwarding_rules(load_balancer.get("forwarding_rules"))
+    normalize_observed_forwarding_rules(load_balancer.get("forwarding_rules"))
+
+
+def normalize_observed_forwarding_rules(forwarding: Any) -> list[dict[str, Any]]:
+    """Normalize only the provider GET compatibility fields out of exact rules."""
+
+    if (
+        not isinstance(forwarding, list)
+        or len(forwarding) != 2
+        or any(not isinstance(rule, dict) for rule in forwarding)
+    ):
+        raise RuntimeError("DigitalOcean observed forwarding rules are invalid")
+    by_protocol: dict[str, dict[str, Any]] = {}
+    for rule in forwarding:
+        protocol = rule.get("entry_protocol")
+        if type(protocol) is not str or protocol not in {"http", "https"} or protocol in by_protocol:
+            raise RuntimeError("DigitalOcean observed forwarding protocol changed")
+        by_protocol[protocol] = rule
+    if set(by_protocol) != {"http", "https"}:
+        raise RuntimeError("DigitalOcean observed forwarding protocol changed")
+
+    http_rule = by_protocol["http"]
+    https_rule = by_protocol["https"]
+    canonical_shape = set(http_rule) == LB_FORWARDING_HTTP_KEYS and set(https_rule) == LB_FORWARDING_HTTPS_KEYS
+    provider_shape = set(http_rule) == LB_FORWARDING_PROVIDER_KEYS and set(https_rule) == LB_FORWARDING_PROVIDER_KEYS
+    if not canonical_shape and not provider_shape:
+        raise RuntimeError("DigitalOcean observed forwarding rule shape changed")
+
+    if provider_shape:
+        if http_rule.get("tls_passthrough") is not False or https_rule.get("tls_passthrough") is not False:
+            raise RuntimeError("DigitalOcean observed TLS passthrough is not authorized")
+        certificate_id = http_rule.get("certificate_id")
+        if type(certificate_id) is not str or certificate_id != "":
+            raise RuntimeError("DigitalOcean observed HTTP certificate default changed")
+
+    normalized = [
+        {
+            "entry_protocol": http_rule["entry_protocol"],
+            "entry_port": http_rule["entry_port"],
+            "target_protocol": http_rule["target_protocol"],
+            "target_port": http_rule["target_port"],
+        },
+        {
+            "entry_protocol": https_rule["entry_protocol"],
+            "entry_port": https_rule["entry_port"],
+            "target_protocol": https_rule["target_protocol"],
+            "target_port": https_rule["target_port"],
+            "certificate_id": https_rule["certificate_id"],
+        },
+    ]
+    validate_forwarding_rules(normalized)
+    return normalized
 
 
 def validate_forwarding_rules(forwarding: Any) -> None:
@@ -92,19 +144,27 @@ def validate_forwarding_rules(forwarding: Any) -> None:
         raise RuntimeError("DigitalOcean ready projection forwarding rules are invalid")
     http_rules = [rule for rule in forwarding if rule.get("entry_protocol") == "http"]
     https_rules = [rule for rule in forwarding if rule.get("entry_protocol") == "https"]
-    if http_rules != [LB_FORWARDING_HTTP_RULE]:
+    if (
+        len(http_rules) != 1
+        or set(http_rules[0]) != LB_FORWARDING_HTTP_KEYS
+        or http_rules[0] != LB_FORWARDING_HTTP_RULE
+        or type(http_rules[0].get("entry_port")) is not int
+        or type(http_rules[0].get("target_port")) is not int
+    ):
         raise RuntimeError("DigitalOcean ready projection forwarding rules changed")
     if len(https_rules) != 1 or set(https_rules[0]) != LB_FORWARDING_HTTPS_KEYS:
         raise RuntimeError("DigitalOcean ready projection HTTPS forwarding rule shape changed")
     https_rule = https_rules[0]
     if (
-        https_rule.get("entry_port") != 443
+        type(https_rule.get("entry_port")) is not int
+        or https_rule["entry_port"] != 443
         or https_rule.get("target_protocol") != "http"
-        or https_rule.get("target_port") != 80
-        or not isinstance(https_rule.get("certificate_id"), str)
+        or type(https_rule.get("target_port")) is not int
+        or https_rule["target_port"] != 80
+        or type(https_rule.get("certificate_id")) is not str
         or not https_rule["certificate_id"]
     ):
-        raise RuntimeError("DigitalOcean ready projection HTTPS certificate is missing")
+        raise RuntimeError("DigitalOcean ready projection HTTPS forwarding rule changed")
 
 
 def validate_ready_projection_keyset(projection: dict[str, Any]) -> None:
