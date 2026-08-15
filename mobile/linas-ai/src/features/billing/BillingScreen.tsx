@@ -36,7 +36,7 @@ export function BillingScreen({ openChoosePlan = false }: Props) {
   const [period, setPeriod] = useState<BillingPeriod>('monthly');
   const store = useBillingStorePrices(period, locale);
   const [purchasing, setPurchasing] = useState(false);
-  const [browsePlans, setBrowsePlans] = useState(false);
+  const [browsePlans, setBrowsePlans] = useState(openChoosePlan);
   const [browseMode, setBrowseMode] = useState<BrowseMode>('upgrade');
   const [selected, setSelected] = useState<PlanId>('lite');
   const [creditsOpen, setCreditsOpen] = useState(false);
@@ -136,11 +136,18 @@ export function BillingScreen({ openChoosePlan = false }: Props) {
   const chooseTitle = browseMode === 'downgrade' ? tr('subDowngradeTitle') : tr('subChooseTitle');
   const chooseSubtitle =
     browseMode === 'downgrade' ? tr('subDowngradeSubtitle') : tr('subChooseSubtitle');
+  const showChooseChrome = !entitlement.loading && view === 'choose';
+  const screenTitle = showChooseChrome ? chooseTitle : tr('navSubscription');
+  const screenSubtitle = showChooseChrome
+    ? chooseSubtitle
+    : view === 'current'
+      ? tr('subCurrentSubtitle')
+      : undefined;
 
   return (
     <ScreenChrome
-      title={view === 'current' ? tr('navSubscription') : chooseTitle}
-      subtitle={view === 'current' ? tr('subCurrentSubtitle') : chooseSubtitle}
+      title={screenTitle}
+      subtitle={screenSubtitle}
       onBack={onBack}
     >
       {entitlement.error ? (
