@@ -24,6 +24,12 @@ export function isAllTimePeriod(period: DashboardPeriodSelection): boolean {
   return period.kind === 'preset' && period.id === 'all_time';
 }
 
+/** Stable cache key so dashboard data never bleeds across date ranges. */
+export function dashboardPeriodKey(period: DashboardPeriodSelection): string {
+  if (period.kind === 'custom') return `custom:${period.start}:${period.end}`;
+  return `preset:${period.id}`;
+}
+
 export function namedDashboardApiPeriod(
   period: DashboardPeriodSelection,
 ): DashboardNamedApiPeriod | null {

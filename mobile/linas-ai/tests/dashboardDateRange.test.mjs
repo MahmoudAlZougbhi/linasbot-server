@@ -136,15 +136,33 @@ test('default period is All time encoded as custom 1970-01-01 through today', ()
 
 test('refresh keeps the last snapshot and does not treat missing activity as zero', () => {
   const hook = read('features/dashboard/useTenantDashboard.ts');
+  const format = read('features/dashboard/dashboardFormat.ts');
   const grid = read('features/dashboard/sections/TotalActivityGrid.tsx');
-  assert.match(hook, /if \(soft\) setRefreshing\(true\)/);
-  assert.match(hook, /else if \(!snapshotRef\.current\) setState\(\{ kind: 'loading' \}\)/);
+  assert.match(format, /dashboardPeriodKey/);
+  assert.match(hook, /snapshotPeriodKeyRef/);
+  assert.match(hook, /hasMatchingSnapshot/);
+  assert.match(hook, /const soft = Boolean\(opts\?\.soft\) && hasMatchingSnapshot/);
+  assert.match(hook, /snapshotPeriodKeyRef\.current = selectedKey/);
   assert.match(hook, /refresh: \(\) => load\(\{ soft: true \}\)/);
   assert.match(hook, /periodRef\.current/);
-  assert.match(hook, /if \(snapshotRef\.current\)/);
   assert.match(hook, /requestId !== requestIdRef\.current/);
+  assert.match(hook, /\[load, periodKey\]/);
   assert.match(grid, /unavailable \|\| value == null \? '—' : formatCount\(value\)/);
   assert.doesNotMatch(grid, /unavailable \|\| !activity \? 0/);
+});
+
+test('changing the date range clears the snapshot and refetches for the new key', () => {
+  const hook = read('features/dashboard/useTenantDashboard.ts');
+  const format = read('features/dashboard/dashboardFormat.ts');
+  assert.match(format, /export function dashboardPeriodKey/);
+  assert.match(format, /custom:\$\{period\.start\}:\$\{period\.end\}/);
+  assert.match(format, /preset:\$\{period\.id\}/);
+  assert.match(hook, /if \(!hasMatchingSnapshot\)/);
+  assert.match(hook, /snapshotRef\.current = null/);
+  assert.match(hook, /snapshotPeriodKeyRef\.current = null/);
+  assert.match(hook, /setState\(\{ kind: 'loading' \}\)/);
+  assert.match(hook, /const periodKey = dashboardPeriodKey\(period\)/);
+  assert.doesNotMatch(hook, /else if \(!snapshotRef\.current\) setState/);
 });
 
 test('date filter i18n covers EN AR FR and drops billing / last 30 days', () => {
