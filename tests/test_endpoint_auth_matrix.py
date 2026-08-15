@@ -225,15 +225,18 @@ class TestRouteInventory:
             ("POST", "/api/guest-ai/session/messages"),
             ("POST", "/api/web-chat/session"),
             ("POST", "/api/web-chat/session/messages"),
+            ("GET", "/api/web-chat/config"),
+            ("POST", "/api/web-chat/heartbeat"),
+            ("GET", "/api/web-chat/sdk-docs"),
         }
         assert counts["total_api_routes"] >= 229
-        assert counts["public"] >= 23
+        assert counts["public"] >= 26
         assert counts["protected"] >= 208
         assert expected_public.issubset(public_set)
         # When only the matrix module set is loaded, public set must match exactly.
         if counts["total_api_routes"] in {229, 230, 231}:
             assert expected_public.issubset(public_set)
-            assert counts["public"] >= 23
+            assert counts["public"] >= 26
             assert counts["protected"] >= 208
         assert ("POST", "/api/auth/request-email-change") in set(auth_matrix["protected"])
         assert ("POST", "/api/webhooks/resend") in public_set

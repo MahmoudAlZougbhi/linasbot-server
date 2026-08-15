@@ -5,6 +5,7 @@ import { integrationsDisplayEn } from './integrationsDisplayEn';
 import { subscriptionEn } from './subscriptionEn';
 import { smartFollowUpEn } from './smartFollowUpEn';
 import { whatsappEn } from './whatsappEn';
+import { webChatUiEn } from './webChatUiEn';
 import { faqUiEn } from './faqUiEn';
 import { requestsEn } from './requestsEn';
 import { usersUiEn } from './usersUiEn';
@@ -324,6 +325,7 @@ export const en = {
   ...integrationsDisplayEn,
   ...subscriptionEn,
   ...whatsappEn,
+  ...webChatUiEn,
   ...smartFollowUpEn,
   ...faqUiEn,
   ...requestsEn,

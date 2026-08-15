@@ -1,17 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ApiError } from '../../api/client';
 import { useI18n } from '../../i18n/LanguageContext';
-import { colors, fonts, radii, spacing } from '../../theme';
+import { colors, fonts, spacing } from '../../theme';
 import { IntegrationCardShell } from './IntegrationCardShell';
-import {
-  fetchWebChatSettings,
-  rotateWebChatKey,
-  saveWebChatSettings,
-  type WebChatSettings,
-} from './webChatApi';
+import { WebsiteIntegrationScreen } from './WebsiteIntegrationScreen';
+import { fetchWebChatSettings, type WebChatSettings } from './webChatApi';
 import {
   fetchWebChannelEntitledFromEntitlements,
   resolveWebPlanAllowed,
@@ -22,13 +17,19 @@ type Props = {
   onNotice?: (message: string) => void;
 };
 
+function statusKey(status: WebChatSettings['installation_status'] | undefined) {
+  if (status === 'connected') return 'webChatStatusConnected';
+  if (status === 'domain_mismatch') return 'webChatStatusDomainMismatch';
+  if (status === 'disabled') return 'webChatStatusDisabled';
+  return 'webChatStatusWaiting';
+}
+
 export function WebChatCard({ onError, onNotice }: Props) {
   const { tr } = useI18n();
   const [settings, setSettings] = useState<WebChatSettings | null>(null);
   const [entitlementWeb, setEntitlementWeb] = useState<boolean | null>(null);
-  const [siteUrl, setSiteUrl] = useState('');
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const webPlanAllowed = resolveWebPlanAllowed(settings, entitlementWeb);
   const planBlocked = !webPlanAllowed;
@@ -42,7 +43,6 @@ export function WebChatCard({ onError, onNotice }: Props) {
       ]);
       setSettings(data);
       setEntitlementWeb(entitled);
-      setSiteUrl(data.site_url || '');
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) return;
       onError?.(tr('integrationsActionError'));
@@ -55,127 +55,47 @@ export function WebChatCard({ onError, onNotice }: Props) {
     void load();
   }, [load]);
 
-  async function save(enabled?: boolean) {
-    if (planBlocked) {
-      onError?.(settings?.membership_message || tr('webChatPlanRequired'));
-      return;
-    }
-    setBusy(true);
-    try {
-      const data = await saveWebChatSettings({
-        site_url: siteUrl.trim(),
-        enabled: enabled ?? settings?.enabled,
-      });
-      setSettings(data);
-      setSiteUrl(data.site_url || '');
-      onNotice?.(tr('webChatSaved'));
-    } catch (err) {
-      if (err instanceof ApiError && err.body && typeof err.body === 'object') {
-        const body = err.body as { message?: unknown };
-        const msg = typeof body.message === 'string' ? body.message : tr('integrationsActionError');
-        onError?.(msg);
-      } else {
-        onError?.(tr('integrationsActionError'));
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function copyEmbed() {
-    if (!settings?.embed_snippet) return;
-    await Clipboard.setStringAsync(settings.embed_snippet);
-    onNotice?.(tr('webChatEmbedCopied'));
-  }
-
-  async function onRotateKey() {
-    Alert.alert(tr('webChatRotateKey'), tr('webChatRotateKeyConfirm'), [
-      { text: tr('usersCancel'), style: 'cancel' },
-      {
-        text: tr('webChatRotateKeyAction'),
-        style: 'destructive',
-        onPress: () => {
-          void (async () => {
-            setBusy(true);
-            try {
-              const data = await rotateWebChatKey();
-              setSettings(data);
-              onNotice?.(tr('webChatKeyRotated'));
-            } catch {
-              onError?.(tr('integrationsActionError'));
-            } finally {
-              setBusy(false);
-            }
-          })();
-        },
-      },
-    ]);
+  if (detailOpen) {
+    return (
+      <WebsiteIntegrationScreen
+        onBack={() => {
+          setDetailOpen(false);
+          void load();
+        }}
+        onError={onError}
+        onNotice={onNotice}
+      />
+    );
   }
 
   const connected = Boolean(settings?.connected);
-  const operational = Boolean(settings?.operational);
+  const statusLabel = tr(statusKey(settings?.installation_status));
 
   return (
     <View accessibilityRole="summary" style={styles.wrap}>
       <IntegrationCardShell
         platform="web"
         title={tr('platformWeb')}
-        subtitle={connected ? siteUrl || tr('platformWeb') : tr('webChatSubtitle')}
+        subtitle={connected ? settings?.site_url || tr('platformWeb') : tr('webChatSubtitle')}
         connected={connected}
-        busy={busy || loading}
-        connectLabel={tr('webChatEnable')}
+        busy={loading}
+        connectLabel={tr('webChatOpenSettings')}
         connectedLabel={tr('connected')}
         notConnectedLabel={tr('notConnected')}
         comingSoonLabel={tr('comingSoon')}
-        healthLabel={operational ? tr('integrationStatusConnected') : tr('notConnected')}
-        menuLabel={tr('webChatRotateKey')}
-        showConnect={!connected && !planBlocked}
-        showMenu={connected}
-        showHealth={operational}
-        onConnect={() => void save(true)}
-        onMenu={onRotateKey}
+        healthLabel={statusLabel}
+        menuLabel={tr('webChatOpenSettings')}
+        showConnect={!planBlocked}
+        showMenu={connected && !planBlocked}
+        showHealth={connected}
+        onConnect={() => setDetailOpen(true)}
+        onMenu={() => setDetailOpen(true)}
       >
         {planBlocked ? <Text style={styles.warn}>{tr('webChatPlanRequired')}</Text> : null}
         {!planBlocked ? (
-          <>
-            <Text style={styles.label}>{tr('webChatSiteUrl')}</Text>
-            <TextInput
-              value={siteUrl}
-              onChangeText={setSiteUrl}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              placeholder="https://yourbusiness.com"
-              placeholderTextColor={colors.textMuted}
-              style={styles.input}
-              editable={!busy}
-            />
-            <View style={styles.row}>
-              <Pressable
-                disabled={busy}
-                onPress={() => void save()}
-                style={[styles.btn, { backgroundColor: colors.accent }]}
-              >
-                <Text style={styles.btnText}>{tr('webChatSave')}</Text>
-              </Pressable>
-              {settings?.enabled ? (
-                <Pressable disabled={busy} onPress={() => void save(false)} style={styles.linkBtn}>
-                  <Text style={styles.linkText}>{tr('webChatDisable')}</Text>
-                </Pressable>
-              ) : null}
-            </View>
-            {settings?.embed_snippet ? (
-              <>
-                <Text style={styles.label}>{tr('webChatEmbedTitle')}</Text>
-                <Text selectable style={styles.code}>
-                  {settings.embed_snippet}
-                </Text>
-                <Pressable disabled={busy} onPress={() => void copyEmbed()} style={styles.linkBtn}>
-                  <Text style={styles.linkText}>{tr('webChatCopyEmbed')}</Text>
-                </Pressable>
-              </>
-            ) : null}
-          </>
+          <Pressable onPress={() => setDetailOpen(true)} style={styles.openBtn}>
+            <Text style={styles.openText}>{tr('webChatOpenSettings')}</Text>
+          </Pressable>
         ) : null}
       </IntegrationCardShell>
     </View>
@@ -185,30 +105,6 @@ export function WebChatCard({ onError, onNotice }: Props) {
 const styles = StyleSheet.create({
   wrap: { marginBottom: spacing.md },
   warn: { fontFamily: fonts.body, fontSize: 13, color: colors.warning, marginBottom: spacing.sm },
-  label: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.text, marginBottom: 6 },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 10,
-    fontFamily: fonts.body,
-    fontSize: 14,
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
-  btn: { borderRadius: radii.sm, paddingHorizontal: spacing.md, paddingVertical: 10 },
-  btnText: { fontFamily: fonts.bodyMedium, color: '#fff', fontSize: 14 },
-  linkBtn: { paddingVertical: 6 },
-  linkText: { fontFamily: fonts.bodyMedium, color: colors.accent, fontSize: 14 },
-  code: {
-    fontFamily: fonts.body,
-    fontSize: 12,
-    color: colors.textMuted,
-    backgroundColor: colors.input,
-    padding: spacing.sm,
-    borderRadius: radii.sm,
-    marginBottom: spacing.xs,
-  },
+  openBtn: { paddingVertical: 4 },
+  openText: { fontFamily: fonts.bodyMedium, color: colors.accent, fontSize: 14 },
 });

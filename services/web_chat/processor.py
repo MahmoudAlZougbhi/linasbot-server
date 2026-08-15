@@ -53,7 +53,12 @@ def evaluate_web_ai_eligibility(tenant_id: str, widget: WebChatWidgetConfig) -> 
     return True, None
 
 
-def default_greeting(language: str | None = None) -> str:
+def default_greeting(language: str | None = None, widget: WebChatWidgetConfig | None = None) -> str:
+    if widget is not None:
+        identity = widget.appearance.get("identity") if isinstance(widget.appearance, dict) else {}
+        custom = str((identity or {}).get("welcome_message") or "").strip()
+        if custom:
+            return custom
     lang = (language or "en").strip().lower()[:2]
     messages = {
         "ar": "مرحباً! كيف بقدر ساعدك اليوم؟",
