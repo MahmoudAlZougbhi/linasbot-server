@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useI18n } from '../../../i18n/LanguageContext';
-import { fonts, spacing } from '../../../theme';
+import { fonts, spacing, useTheme } from '../../../theme';
 import {
   DASH_BAR_HEIGHT,
   DASH_BTN_RADIUS,
@@ -12,7 +12,7 @@ import {
   DASH_TRACK,
 } from '../dashboardChrome';
 import { isHighestPlan, isPlanId } from '../../billing/planCatalog';
-import { planNameOnForest } from '../../billing/planColors';
+import { planNameColor } from '../../billing/planColors';
 import { formatCount, formatRenewDate } from '../dashboardFormat';
 import type { TenantDashboard } from '../dashboardTypes';
 
@@ -27,9 +27,10 @@ type Props = {
 
 export function GrowthPlanCard({ plan, locale, onBuyCredits, onUpgrade }: Props) {
   const { tr } = useI18n();
+  const { resolved } = useTheme();
   const planName = (plan.plan_name || plan.plan_id || '').trim();
   const planId = isPlanId(plan.plan_id) ? plan.plan_id : null;
-  const planNameColor = planId ? planNameOnForest(planId) : DASH_MINT;
+  const planNameTint = planId ? planNameColor(planId, resolved) : DASH_MINT;
 
   if (plan.availability !== 'ok') {
     const fallbackTitle = planName
@@ -61,7 +62,7 @@ export function GrowthPlanCard({ plan, locale, onBuyCredits, onUpgrade }: Props)
         <View style={styles.planRow}>
           <Text style={styles.title}>
             {planName
-              ? renderPlanTitle(tr('dashPlanTitle'), planName, planNameColor)
+              ? renderPlanTitle(tr('dashPlanTitle'), planName, planNameTint)
               : tr('dashNoPlan')}
           </Text>
           {active ? (
