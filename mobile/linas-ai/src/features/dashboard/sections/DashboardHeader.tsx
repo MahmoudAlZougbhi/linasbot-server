@@ -30,11 +30,13 @@ export function DashboardHeader({
   const subtitle =
     period.kind === 'custom'
       ? tr('dashCustomRange')
-      : period.id === '7d'
-        ? tr('dashLast7Days')
-        : period.id === '30d'
-          ? tr('dashLast30Days')
-          : tr('dashBillingPeriod');
+      : period.id === 'today'
+        ? tr('dashToday')
+        : period.id === 'last_month'
+          ? tr('dashLastMonth')
+          : period.id === 'last_6m'
+            ? tr('dashLast6Months')
+            : tr('dashLastYear');
 
   return (
     <>

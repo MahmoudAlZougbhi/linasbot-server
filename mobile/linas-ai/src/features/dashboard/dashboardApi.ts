@@ -2,25 +2,21 @@ import { ApiError, apiFetch } from '../../api/client';
 import { isNetworkFailure } from '../../api/networkError';
 
 import {
-  DashboardPeriodId,
   TenantDashboard,
   TenantDashboardSchema,
   type DashboardNavigateTarget,
 } from './dashboardTypes';
-import type { DashboardPeriodSelection } from './dashboardFormat';
+import { dashboardQueryRange, type DashboardPeriodSelection } from './dashboardFormat';
 
 export async function fetchTenantDashboard(
   period: DashboardPeriodSelection,
   tz: string,
 ): Promise<TenantDashboard> {
   const params = new URLSearchParams({ tz });
-  if (period.kind === 'custom') {
-    params.set('period', 'custom');
-    params.set('start', period.start);
-    params.set('end', period.end);
-  } else {
-    params.set('period', period.id);
-  }
+  const range = dashboardQueryRange(period);
+  params.set('period', 'custom');
+  params.set('start', range.start);
+  params.set('end', range.end);
   return apiFetch(`/api/mobile/dashboard?${params.toString()}`, {
     schema: TenantDashboardSchema,
   });

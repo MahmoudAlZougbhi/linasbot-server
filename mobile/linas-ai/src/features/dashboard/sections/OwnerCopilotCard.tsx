@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { LinasSparkleIcon } from '../../../components/LinasSparkleIcon';
 import type { StringKey } from '../../../i18n';
 import { useI18n } from '../../../i18n/LanguageContext';
 import { fonts, spacing, useTheme } from '../../../theme';
-import { DASH_CARD_RADIUS, DASH_FOREST } from '../dashboardChrome';
+import { DASH_CARD_RADIUS } from '../dashboardChrome';
 import { formatCount } from '../dashboardFormat';
 import type { TenantDashboard } from '../dashboardTypes';
 
@@ -37,7 +38,7 @@ export function OwnerCopilotCard({ copilot, expanded, onToggle, onOpenChat }: Pr
       style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
     >
       <View style={styles.top}>
-        <Ionicons name="sparkles" size={20} color={DASH_FOREST} />
+        <LinasSparkleIcon size={20} color={colors.accentDeep} />
         <View style={styles.body}>
           <Text style={[styles.title, { color: colors.text }]}>{tr('dashOwnerCopilot')}</Text>
           <Text style={[styles.meta, { color: colors.textMuted }]}>{meta}</Text>

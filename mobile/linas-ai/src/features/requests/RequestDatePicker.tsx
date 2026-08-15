@@ -21,6 +21,12 @@ type PickerProps = {
   onClose: () => void;
 };
 
+type MonthCalendarProps = {
+  value: string | null;
+  onPick: (ymd: string) => void;
+  locale?: string;
+};
+
 function toYmd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -69,20 +75,71 @@ export function RequestDateField({ label, value, onChange }: FieldProps) {
   );
 }
 
-export function RequestDatePicker({ visible, title, value, onPick, onClose }: PickerProps) {
+/** Month grid from the existing request picker — day + month + year via month chevrons. */
+export function RequestMonthCalendar({ value, onPick, locale = 'en-US' }: MonthCalendarProps) {
   const { colors } = useTheme();
   const initial = value ? parseYmd(value) : new Date();
   const [cursor, setCursor] = useState(initial);
 
   useEffect(() => {
-    if (visible) setCursor(value ? parseYmd(value) : new Date());
-  }, [visible, value]);
+    setCursor(value ? parseYmd(value) : new Date());
+  }, [value]);
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
   const cells = useMemo(() => monthCells(year, month), [year, month]);
-  const heading = cursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  const selected = value;
+  const heading = cursor.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
+
+  return (
+    <View>
+      <View style={styles.monthRow}>
+        <Pressable
+          onPress={() => setCursor(new Date(year, month - 1, 1))}
+          accessibilityRole="button"
+          accessibilityLabel="Previous month"
+        >
+          <AppIcon icon={feather('chevron-left')} size={20} color={colors.accent} />
+        </Pressable>
+        <Text style={[styles.month, { color: colors.text }]}>{heading}</Text>
+        <Pressable
+          onPress={() => setCursor(new Date(year, month + 1, 1))}
+          accessibilityRole="button"
+          accessibilityLabel="Next month"
+        >
+          <AppIcon icon={feather('chevron-right')} size={20} color={colors.accent} />
+        </Pressable>
+      </View>
+      <View style={styles.grid} accessibilityLabel="Date calendar">
+        {DOW.map((d, i) => (
+          <Text key={`${d}-${i}`} style={[styles.dow, { color: colors.textMuted }]}>
+            {d}
+          </Text>
+        ))}
+        {cells.map((day, i) => {
+          if (day == null) return <View key={`e-${i}`} style={styles.cell} />;
+          const ymd = toYmd(new Date(year, month, day));
+          const on = ymd === value;
+          return (
+            <Pressable
+              key={ymd}
+              onPress={() => onPick(ymd)}
+              style={[styles.cell, on && { backgroundColor: colors.accent, borderRadius: 18 }]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+            >
+              <Text style={{ color: on ? colors.onAccent : colors.text, fontFamily: fonts.bodyMedium }}>
+                {day}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+export function RequestDatePicker({ visible, title, value, onPick, onClose }: PickerProps) {
+  const { colors } = useTheme();
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -92,48 +149,7 @@ export function RequestDatePicker({ visible, title, value, onPick, onClose }: Pi
           onPress={(e) => e.stopPropagation()}
         >
           <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
-          <View style={styles.monthRow}>
-            <Pressable
-              onPress={() => setCursor(new Date(year, month - 1, 1))}
-              accessibilityRole="button"
-              accessibilityLabel="Previous month"
-            >
-              <AppIcon icon={feather('chevron-left')} size={20} color={colors.accent} />
-            </Pressable>
-            <Text style={[styles.month, { color: colors.text }]}>{heading}</Text>
-            <Pressable
-              onPress={() => setCursor(new Date(year, month + 1, 1))}
-              accessibilityRole="button"
-              accessibilityLabel="Next month"
-            >
-              <AppIcon icon={feather('chevron-right')} size={20} color={colors.accent} />
-            </Pressable>
-          </View>
-          <View style={styles.grid}>
-            {DOW.map((d, i) => (
-              <Text key={`${d}-${i}`} style={[styles.dow, { color: colors.textMuted }]}>
-                {d}
-              </Text>
-            ))}
-            {cells.map((day, i) => {
-              if (day == null) return <View key={`e-${i}`} style={styles.cell} />;
-              const ymd = toYmd(new Date(year, month, day));
-              const on = ymd === selected;
-              return (
-                <Pressable
-                  key={ymd}
-                  onPress={() => onPick(ymd)}
-                  style={[styles.cell, on && { backgroundColor: colors.accent, borderRadius: 18 }]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                >
-                  <Text style={{ color: on ? colors.onAccent : colors.text, fontFamily: fonts.bodyMedium }}>
-                    {day}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <RequestMonthCalendar key={visible ? 'open' : 'closed'} value={value} onPick={onPick} />
         </Pressable>
       </Pressable>
     </Modal>
