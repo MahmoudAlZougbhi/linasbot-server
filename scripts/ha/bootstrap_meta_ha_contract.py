@@ -41,6 +41,14 @@ if _nested_spec is None or _nested_spec.loader is None:
     raise RuntimeError("nested runtime quarantine module is missing")
 _nested = importlib.util.module_from_spec(_nested_spec)
 _nested_spec.loader.exec_module(_nested)
+_nested_evidence_spec = importlib.util.spec_from_file_location(
+    "bootstrap_nested_runtime_evidence",
+    Path(__file__).with_name("bootstrap_nested_runtime_evidence.py"),
+)
+if _nested_evidence_spec is None or _nested_evidence_spec.loader is None:
+    raise RuntimeError("nested runtime evidence module is missing")
+_nested_evidence = importlib.util.module_from_spec(_nested_evidence_spec)
+_nested_evidence_spec.loader.exec_module(_nested_evidence)
 _lb_contract_spec = importlib.util.spec_from_file_location(
     "do_lb_ready_contract",
     Path(__file__).with_name("do_lb_ready_contract.py"),
@@ -2838,7 +2846,7 @@ def _combined_plan(args: argparse.Namespace) -> tuple[dict[str, Any], bytes, str
         raise RuntimeError("nodes do not observe one identical authoritative PostgreSQL registry")
     if node01["pg"]["state_sha256"] != args.expected_pg_state_sha256:
         raise RuntimeError("PostgreSQL Meta state differs from the owner-authorized digest")
-    if _nested.portable_content_identity(node01["nested_runtime"]) != _nested.portable_content_identity(
+    if _nested_evidence.portable_content_identity(node01["nested_runtime"]) != _nested_evidence.portable_content_identity(
         node02["nested_runtime"]
     ):
         raise RuntimeError("nodes do not share one identical nested runtime authority")

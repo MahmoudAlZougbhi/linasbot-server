@@ -44,6 +44,16 @@ def _digest(value: Any) -> str:
 
 
 def portable_content_identity(evidence: dict[str, Any]) -> dict[str, Any]:
+    if evidence.get("present") is False:
+        return {
+            "schema": SCHEMA,
+            "present": False,
+            "file_count": 0,
+            "symlink_count": 0,
+            "directory_count": 0,
+            "total_bytes": 0,
+            "aggregate_sha256": _digest_bytes(_canonical([])),
+        }
     return {key: evidence[key] for key in _CONTENT_KEYS}
 
 

@@ -363,6 +363,7 @@ def test_bootstrap_wires_nested_runtime_authority() -> None:
     assert "_nested.publish_authority(" in prepare
     assert "_nested.apply_quarantine(" in drain
     assert "portable_content_identity(" in combined
+    assert "_nested_evidence" in source
     assert "_nested.assert_quarantined(" in verify
     assert "_nested.restore_quarantine(" in rollback
     assert '"nested_runtime_present"' in commit
