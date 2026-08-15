@@ -126,6 +126,22 @@ export const subscriptionFr = {
   subPurchasedNoExpire: 'Les crédits achetés n’expirent pas.',
   subCancel: 'Annuler',
   subUpgradePlan: 'Mettre à niveau',
+  subDowngradePlan: 'Rétrograder le forfait',
+  subDowngradeTitle: 'Rétrograder le forfait',
+  subDowngradeSubtitle: 'Choisissez un forfait inférieur pour le prochain renouvellement',
+  subDowngradeHint:
+    'Seuls les forfaits inférieurs à votre forfait actuel sont affichés. Le changement prend effet au prochain renouvellement.',
+  subDowngradeConfirmTitle: 'Confirmer la rétrogradation',
+  subDowngradeConfirmBody:
+    'Votre forfait passera à {plan} le {date}. Aucun remboursement. Le renouvellement automatique continue au nouveau prix.',
+  subDowngradeConfirmNote:
+    'Le renouvellement automatique passe au forfait inférieur à la prochaine période — pas aujourd’hui.',
+  subDowngradeConfirmCta: 'Planifier la rétrogradation',
+  subDowngradeScheduled: 'Rétrogradation planifiée pour votre prochain renouvellement.',
+  subDowngradeCanceled: 'Rétrogradation en attente annulée.',
+  subPendingDowngradeTitle: 'Changement de forfait planifié',
+  subPendingDowngradeBody: 'À partir du {date}, votre forfait passera à {plan}.',
+  subCancelPendingDowngrade: 'Annuler la rétrogradation',
   subCreditsRefreshNote: 'Les crédits inclus se renouvellent à chaque période de facturation.',
   subWhatIncludes: 'Ce que {plan} inclut',
   subIncluded: 'Inclus',

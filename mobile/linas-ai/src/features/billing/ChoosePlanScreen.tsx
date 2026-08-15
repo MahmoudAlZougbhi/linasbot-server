@@ -8,16 +8,20 @@ import { PlanChipRow } from './PlanChipRow';
 import { PlanDetailCard } from './PlanDetailCard';
 import type { BillingPeriod } from './appleProductIds';
 import type { PlanId } from './planCatalog';
-import { PLAN_CHOOSE_CTA } from './planEntitlements';
 import { accentForPlan, planOnAccent } from './planColors';
+import type { CtaKind } from './subscriptionCta';
 
 type Props = {
   selected: PlanId;
   currentPlan: PlanId | null;
+  visiblePlans: PlanId[];
+  mode: 'choose' | 'upgrade' | 'downgrade';
   period: BillingPeriod;
   priceLabel: string;
   ctaEnabled: boolean;
   purchasing: boolean;
+  ctaKind: CtaKind;
+  ctaLabelKey: StringKey;
   locale: string;
   tr: (key: StringKey) => string;
   onSelect: (id: PlanId) => void;
@@ -28,10 +32,14 @@ type Props = {
 export function ChoosePlanScreen({
   selected,
   currentPlan,
+  visiblePlans,
+  mode,
   period,
   priceLabel,
   ctaEnabled,
   purchasing,
+  ctaKind,
+  ctaLabelKey,
   locale,
   tr,
   onSelect,
@@ -41,17 +49,21 @@ export function ChoosePlanScreen({
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const isCurrent = currentPlan === selected;
-  const ctaLabel = isCurrent ? tr('subYourPlan') : tr(PLAN_CHOOSE_CTA[selected]);
+  const ctaLabel = isCurrent ? tr('subYourPlan') : tr(ctaLabelKey);
   const periodSuffix = period === 'yearly' ? tr('subPricePerYear') : tr('subPricePerMonth');
   const ctaAccent = accentForPlan(selected);
+  const ctaDisabled = !ctaEnabled || purchasing || isCurrent || ctaKind === 'disabled' || ctaKind === 'current';
 
   return (
     <View style={styles.root}>
       <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
-        <BillingPeriodToggle period={period} onChange={onPeriod} tr={tr} />
+        {mode !== 'downgrade' ? (
+          <BillingPeriodToggle period={period} onChange={onPeriod} tr={tr} />
+        ) : null}
         <PlanChipRow
           selected={selected}
           currentPlan={currentPlan}
+          visiblePlans={visiblePlans}
           tr={tr}
           onSelect={onSelect}
         />
@@ -66,15 +78,15 @@ export function ChoosePlanScreen({
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <Pressable
           onPress={onChoose}
-          disabled={!ctaEnabled || purchasing || isCurrent}
+          disabled={ctaDisabled}
           accessibilityRole="button"
-          accessibilityState={{ disabled: !ctaEnabled || isCurrent }}
+          accessibilityState={{ disabled: ctaDisabled }}
           accessibilityLabel={ctaLabel}
           style={({ pressed }) => [
             styles.cta,
             {
-              backgroundColor: ctaEnabled && !isCurrent ? ctaAccent : colors.surfaceAlt,
-              opacity: pressed && ctaEnabled && !isCurrent ? 0.88 : 1,
+              backgroundColor: ctaEnabled && !ctaDisabled ? ctaAccent : colors.surfaceAlt,
+              opacity: pressed && ctaEnabled && !ctaDisabled ? 0.88 : 1,
             },
           ]}
         >
@@ -82,8 +94,7 @@ export function ChoosePlanScreen({
             style={[
               styles.ctaText,
               {
-                color:
-                  ctaEnabled && !isCurrent ? planOnAccent(selected) : colors.textMuted,
+                color: ctaEnabled && !ctaDisabled ? planOnAccent(selected) : colors.textMuted,
               },
             ]}
           >

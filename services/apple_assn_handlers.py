@@ -81,6 +81,7 @@ def handle_refund_or_revoke(
             original_transaction_id=original_transaction_id,
             status=status,
             idempotency_key=f"apple:notify:{notification_type}:{transaction_id}",
+            notification_type=notification_type,
         )
     return out
 
@@ -114,6 +115,7 @@ def handle_refund_reversed(
             original_transaction_id=original_transaction_id,
             status="active",
             idempotency_key=f"apple:notify:REFUND_REVERSED:{transaction_id}",
+            notification_type="REFUND_REVERSED",
         )
     return out
 
@@ -269,6 +271,7 @@ def handle_apply_txn(
         original_transaction_id=original_transaction_id,
         status=status,
         idempotency_key=f"apple:notify:{notification_type}:{transaction_id}:{status}",
+        notification_type=notification_type,
     )
     expires = txn_payload.get("expiresDate")
     try:

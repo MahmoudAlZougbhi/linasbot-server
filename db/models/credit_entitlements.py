@@ -71,6 +71,10 @@ class TenantEntitlementRow(Base):
     features: Mapped[dict[str, Any]] = mapped_column(JsonType, nullable=False, server_default=text("'{}'"))
     updated_at: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
     store_original_transaction_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    pending_plan_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    pending_plan_effective_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pending_plan_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    pending_plan_effective_at: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class EntitlementProcessedEventRow(Base):

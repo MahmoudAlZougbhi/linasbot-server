@@ -12,7 +12,7 @@ import {
   DASH_TRACK,
 } from '../dashboardChrome';
 import { isHighestPlan, isPlanId } from '../../billing/planCatalog';
-import { planNameColor } from '../../billing/planColors';
+import { planNameOnForest } from '../../billing/planColors';
 import { formatCount, formatRenewDate } from '../dashboardFormat';
 import type { TenantDashboard } from '../dashboardTypes';
 
@@ -29,7 +29,7 @@ export function GrowthPlanCard({ plan, locale, onBuyCredits, onUpgrade }: Props)
   const { tr } = useI18n();
   const planName = (plan.plan_name || plan.plan_id || '').trim();
   const planId = isPlanId(plan.plan_id) ? plan.plan_id : null;
-  const tierNameColor = planId ? planNameColor(planId, 'forest') : DASH_MINT;
+  const planNameColor = planId ? planNameOnForest(planId) : DASH_MINT;
 
   if (plan.availability !== 'ok') {
     const fallbackTitle = planName
@@ -61,7 +61,7 @@ export function GrowthPlanCard({ plan, locale, onBuyCredits, onUpgrade }: Props)
         <View style={styles.planRow}>
           <Text style={styles.title}>
             {planName
-              ? renderPlanTitle(tr('dashPlanTitle'), planName, tierNameColor)
+              ? renderPlanTitle(tr('dashPlanTitle'), planName, planNameColor)
               : tr('dashNoPlan')}
           </Text>
           {active ? (

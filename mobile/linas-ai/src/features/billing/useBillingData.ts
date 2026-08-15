@@ -6,6 +6,7 @@ import { apiFetch } from '../../api/client';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { BillingPeriod } from './appleProductIds';
 import { isPlanId, type PlanId } from './planCatalog';
+import { parsePendingDowngrade, type PendingDowngrade } from './planChangeApi';
 import {
   loadStorePrices,
   previewCatalogPrices,
@@ -25,6 +26,7 @@ export type BillingEntitlementState = {
   includedCredits: number | null;
   purchasedCredits: number | null;
   creditBalance: number | null;
+  pendingDowngrade: PendingDowngrade | null;
   raw: string;
 };
 
@@ -39,6 +41,7 @@ export function useBillingEntitlement() {
     includedCredits: null,
     purchasedCredits: null,
     creditBalance: null,
+    pendingDowngrade: null,
     raw: '',
   });
 
@@ -69,6 +72,7 @@ export function useBillingEntitlement() {
       } catch {
         creditBalance = null;
       }
+      const pendingDowngrade = parsePendingDowngrade(entitlement.pending_downgrade);
       setState({
         loading: false,
         error: null,
@@ -84,6 +88,7 @@ export function useBillingEntitlement() {
             : null,
         purchasedCredits: purchased,
         creditBalance,
+        pendingDowngrade,
         raw: __DEV__ ? JSON.stringify(data, null, 2) : '',
       });
     } catch {
@@ -96,6 +101,7 @@ export function useBillingEntitlement() {
         includedCredits: null,
         purchasedCredits: null,
         creditBalance: null,
+        pendingDowngrade: null,
         raw: '',
       });
     }
