@@ -30,6 +30,54 @@ def test_catalog_includes_urdu() -> None:
     assert len(ids) >= 180
 
 
+def test_purge_smart_answer_language_deletes_variants_and_runtime_rows(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("storage.persistent_storage.get_data_root", lambda: str(tmp_path))
+    from services.cm.faq_integration_ops import purge_smart_answer_language_data
+    from services.cm.schemas import FaqRecord, FaqVariant
+    from services.cm.storage import ensure_defaults, get_draft, put_draft
+    from services.local_qa_service import local_qa_service
+
+    tenant_id = "purge_lang_test"
+    ensure_defaults(tenant_id=tenant_id)
+    env = get_draft(FAQ_SECTION, tenant_id=tenant_id, create_default=True)
+    section = FaqSection.model_validate(env.payload)
+    record = FaqRecord(
+        qa_group_id="qa_purge",
+        variants=[
+            FaqVariant(language="en", question="Q", answer="A"),
+            FaqVariant(language="ur", question="سوال", answer="جواب"),
+        ],
+        status="draft",
+    )
+    put_draft(
+        FAQ_SECTION,
+        payload=FaqSection(
+            items=[record],
+            notes=section.notes,
+            smart_answer_languages=["en", "ur", "ar"],
+        ).model_dump(mode="json"),
+        if_match=env.etag,
+        tenant_id=tenant_id,
+        updated_by="test",
+    )
+    local_qa_service.qa_pairs = [
+        {"tenant_id": tenant_id, "language": "ur", "question": "سوال", "answer": "جواب", "qa_group_id": "qa_purge"},
+        {"tenant_id": tenant_id, "language": "en", "question": "Q", "answer": "A", "qa_group_id": "qa_purge"},
+    ]
+
+    result = purge_smart_answer_language_data(language="ur", tenant_id=tenant_id, updated_by="test")
+    assert result["variants_removed"] == 1
+    assert result["deleted_runtime_rows"] == 1
+    assert "ur" not in result["smart_answer_languages"]
+
+    env2 = get_draft(FAQ_SECTION, tenant_id=tenant_id, create_default=True)
+    section2 = FaqSection.model_validate(env2.payload)
+    assert section2.smart_answer_languages == ["en", "ar"]
+    langs = {v.language for v in section2.items[0].variants}
+    assert langs == {"en"}
+    assert all(pair.get("language") != "ur" for pair in local_qa_service.qa_pairs)
+
+
 def test_faq_section_schema_has_smart_answer_languages() -> None:
     section = FaqSection.model_validate({"items": [], "smart_answer_languages": ["en", "ar"]})
     assert section.smart_answer_languages == ["en", "ar"]
