@@ -69,9 +69,25 @@ def _plan() -> tuple[dict[str, Any], str]:
 
 
 def test_control_plane_allowlists_and_workflow_bridge_are_closed() -> None:
+    from scripts.ha import bootstrap_meta_ha_contract as bootstrap
     from scripts.ha import python_runtime_provision_ingest_contract as ingest_contract
 
     assert set(release.CONTROL_PLANE_FILES) == launcher.CONTROL_FILES == ingest_contract.CONTROL_FILES
+    required = {
+        "scripts/ha/bootstrap_nested_runtime_quarantine.py",
+        "scripts/ha/bootstrap_nested_runtime_evidence.py",
+        "scripts/ha/bootstrap_nested_runtime_safety.py",
+        "scripts/ha/do_lb_ready_contract.py",
+    }
+    nested_runtime_authority = {
+        "scripts/ha/bootstrap_nested_runtime_evidence.py",
+        "scripts/ha/bootstrap_nested_runtime_quarantine.py",
+        "scripts/ha/bootstrap_nested_runtime_safety.py",
+    }
+    assert required <= set(release.CONTROL_PLANE_FILES)
+    assert required <= bootstrap.RUNTIME_CONTROL_FILES
+    assert nested_runtime_authority <= bootstrap.RUNTIME_CONTROL_FILES
+    assert nested_runtime_authority <= set(release.CONTROL_PLANE_FILES)
     assert "scripts/ha/python_runtime_provision_workflow_bootstrap.py" in launcher.CONTROL_FILES
     workflow = (ROOT / ".github/workflows/provision-python-runtime-ha.yml").read_text(encoding="utf-8")
     bridge = ROOT / "scripts/ha/python_runtime_provision_workflow_bootstrap.py"
@@ -105,6 +121,86 @@ def test_actual_control_archive_contains_every_trusted_import(tmp_path: Path) ->
     for relative in release.CONTROL_PLANE_FILES:
         if relative.endswith(".py"):
             compile((source / relative).read_bytes(), relative, "exec")
+
+
+def test_control_plane_archive_imports_bootstrap_dependencies(tmp_path: Path) -> None:
+    import importlib.util
+    import sys
+
+    control_root = tmp_path / "control"
+    for relative in release.CONTROL_PLANE_FILES:
+        destination = control_root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes((ROOT / relative).read_bytes())
+    inserted = str(control_root)
+    if inserted not in sys.path:
+        sys.path.insert(0, inserted)
+    spec = importlib.util.spec_from_file_location(
+        "bootstrap_meta_ha_contract_import_test",
+        control_root / "scripts/ha/bootstrap_meta_ha_contract.py",
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module._nested.NESTED_RUNTIME_NAME == "linaslaserbot-2.7.22"
+    assert module._nested_evidence.NESTED_RUNTIME_NAME == "linaslaserbot-2.7.22"
+    assert Path(module._nested_evidence.__file__) == Path(module._nested._evidence.__file__)
+    assert module._lb_contract.LB_NETWORK_STACK == "DUALSTACK"
+    absent = module._nested_evidence.portable_content_identity({"schema": 1, "present": False})
+    assert absent["present"] is False and absent["file_count"] == 0
+
+
+def test_nested_runtime_authenticated_dependencies_are_closed_and_non_circular() -> None:
+    from scripts.ha import bootstrap_meta_ha_contract as bootstrap
+
+    evidence_source = (ROOT / "scripts/ha/bootstrap_nested_runtime_evidence.py").read_text(encoding="utf-8")
+    quarantine_source = (ROOT / "scripts/ha/bootstrap_nested_runtime_quarantine.py").read_text(encoding="utf-8")
+    safety_source = (ROOT / "scripts/ha/bootstrap_nested_runtime_safety.py").read_text(encoding="utf-8")
+    bootstrap_source = (ROOT / "scripts/ha/bootstrap_meta_ha_contract.py").read_text(encoding="utf-8")
+    nested_runtime_authority = {
+        "scripts/ha/bootstrap_nested_runtime_evidence.py",
+        "scripts/ha/bootstrap_nested_runtime_quarantine.py",
+        "scripts/ha/bootstrap_nested_runtime_safety.py",
+    }
+    assert nested_runtime_authority <= bootstrap.RUNTIME_CONTROL_FILES
+    assert len(evidence_source.splitlines()) <= 500
+    assert len(quarantine_source.splitlines()) <= 500
+    assert len(safety_source.splitlines()) <= 500
+    assert "bootstrap_nested_runtime_quarantine" not in evidence_source
+    assert "from scripts.ha" not in quarantine_source
+    assert 'Path(__file__).with_name("bootstrap_nested_runtime_evidence.py")' in quarantine_source
+    assert 'Path(__file__).with_name("bootstrap_nested_runtime_safety.py")' in quarantine_source
+    assert 'Path(__file__).with_name("bootstrap_nested_runtime_safety.py")' in evidence_source
+    assert "_nested_evidence_spec" in bootstrap_source
+    assert "bootstrap_nested_runtime_evidence.py" in bootstrap_source
+
+
+def test_bootstrap_nested_runtime_modules_load_from_closed_control_tree_only(tmp_path: Path) -> None:
+    import importlib.util
+
+    control_root = tmp_path / "control"
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    sentinel = tmp_path / "checkout-evidence-executed"
+    for relative in release.CONTROL_PLANE_FILES:
+        destination = control_root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes((ROOT / relative).read_bytes())
+    evil = f"from pathlib import Path\nPath({str(sentinel)!r}).write_text('executed')\n" + (
+        ROOT / "scripts/ha/bootstrap_nested_runtime_evidence.py"
+    ).read_text(encoding="utf-8")
+    (checkout / "scripts/ha").mkdir(parents=True)
+    (checkout / "scripts/ha/bootstrap_nested_runtime_evidence.py").write_text(evil, encoding="utf-8")
+    spec = importlib.util.spec_from_file_location(
+        "bootstrap_meta_ha_contract_closed_tree_test",
+        control_root / "scripts/ha/bootstrap_meta_ha_contract.py",
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert not sentinel.exists()
+    assert module._nested_evidence.NESTED_RUNTIME_NAME == "linaslaserbot-2.7.22"
+    assert module._nested._safety.READ_CHUNK == 1024 * 1024
 
 
 def test_remote_stage_materializes_full_bundle_control_and_launcher_receipt(

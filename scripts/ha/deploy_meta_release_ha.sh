@@ -63,6 +63,7 @@ PRODUCTION_GUARD_REPO_PATH=scripts/ha/production_mutation_guard.py
 RELEASE_VERIFY_REPO_PATH=scripts/ha/release_verify_server.py
 RELEASE_READINESS_REPO_PATH=scripts/ha/release_readiness_probe.py
 LB_MANAGER_REPO_PATH=scripts/ha/manage_do_lb_ready_healthcheck.py
+LB_CONTRACT_REPO_PATH=scripts/ha/do_lb_ready_contract.py
 RELEASE_ARTIFACT_CONTRACT_REPO_PATH=scripts/ha/release_artifact_contract.py
 RELEASE_ARCHIVE_CONTRACT_REPO_PATH=scripts/ha/release_archive_contract.py
 REQUIREMENTS_LOCK_REPO_PATH=requirements.lock
@@ -1342,7 +1343,8 @@ keys = {
     "wheelhouse_archive_sha256", "wheelhouse_tree_sha256", "wheelhouse_file_count",
     "wheelhouse_total_size", "requirements_lock_sha256", "runtime_tree_sha256",
     "target_unit_contract_sha256", "legacy_bytecode_manifest_sha256",
-    "repo_bytecode_absent",
+    "repo_bytecode_absent", "nested_runtime_present", "nested_runtime_evidence_sha256",
+    "nested_runtime_quarantined",
 }
 if not isinstance(payload, dict) or set(payload) != keys:
     raise SystemExit("bootstrap commit proof schema is invalid")
@@ -1367,6 +1369,7 @@ if not re.fullmatch(r"pyr_[0-9a-f]{32}", str(payload.get("runtime_transaction_id
 digest_keys = keys - {
     "schema", "format", "tx_id", "node_id", "status", "runtime_transaction_id",
     "wheelhouse_file_count", "wheelhouse_total_size", "repo_bytecode_absent",
+    "nested_runtime_present", "nested_runtime_quarantined",
 }
 for key in digest_keys:
     if not re.fullmatch(r"[0-9a-f]{64}", str(payload.get(key) or "")):
@@ -1374,6 +1377,11 @@ for key in digest_keys:
 for key in ("wheelhouse_file_count", "wheelhouse_total_size"):
     if type(payload.get(key)) is not int or payload[key] <= 0:
         raise SystemExit(f"bootstrap commit proof count is invalid: {key}")
+for key in ("nested_runtime_present", "nested_runtime_quarantined"):
+    if type(payload.get(key)) is not bool:
+        raise SystemExit(f"bootstrap commit proof flag is invalid: {key}")
+if not re.fullmatch(r"[0-9a-f]{64}", str(payload.get("nested_runtime_evidence_sha256") or "")):
+    raise SystemExit("bootstrap commit proof nested runtime digest is invalid")
 if payload.get("runtime_cluster_receipt_sha256") != expected_runtime_cluster:
     raise SystemExit("bootstrap proof runtime certificate differs from the live committed certificate")
 print(payload["plan_sha256"])
@@ -1579,21 +1587,24 @@ cleanup_cluster_env_helper() {
 
 materialize_lb_manager() {
   local source_sha="$1"
-  local helper_root destination object actual_object
+  local helper_root destination path object actual_object
   validate_sha "$source_sha"
   helper_root="$(mktemp -d -p /run linasbot-lb-validator.XXXXXXXX)"
   test "$(stat -c '%u:%g:%a' "$helper_root")" = "0:0:700" || \
     die "LB validator temporary root is unsafe"
-  destination="$helper_root/manage_do_lb_ready_healthcheck.py"
-  object="$(git -C "$REPO_DIR" rev-parse "$source_sha:$LB_MANAGER_REPO_PATH")"
-  test "$(git -C "$REPO_DIR" cat-file -t "$object")" = blob || \
-    die "authorized LB validator object is not a blob"
-  git -C "$REPO_DIR" cat-file blob "$object" | \
-    /usr/bin/dd of="$destination" bs=65536 status=none conv=fsync oflag=excl,nofollow
-  chmod 0600 "$destination"
-  actual_object="$(git -C "$REPO_DIR" hash-object "$destination")"
-  test "$actual_object" = "$object" || \
-    die "materialized LB validator differs from the authorized Git blob"
+  mkdir -m 0700 "$helper_root/scripts" "$helper_root/scripts/ha"
+  for path in "$LB_MANAGER_REPO_PATH" "$LB_CONTRACT_REPO_PATH"; do
+    destination="$helper_root/$path"
+    object="$(git -C "$REPO_DIR" rev-parse "$source_sha:$path")"
+    test "$(git -C "$REPO_DIR" cat-file -t "$object")" = blob || \
+      die "authorized LB validator object is not a blob"
+    git -C "$REPO_DIR" cat-file blob "$object" | \
+      /usr/bin/dd of="$destination" bs=65536 status=none conv=fsync oflag=excl,nofollow
+    chmod 0600 "$destination"
+    actual_object="$(git -C "$REPO_DIR" hash-object "$destination")"
+    test "$actual_object" = "$object" || \
+      die "materialized LB validator differs from the authorized Git blob"
+  done
   printf '%s\n' "$helper_root"
 }
 
@@ -1601,7 +1612,9 @@ cleanup_lb_manager() {
   local helper_root="$1"
   [[ "$helper_root" =~ ^/run/linasbot-lb-validator\.[A-Za-z0-9]{8}$ ]] || \
     die "LB validator cleanup path is invalid"
-  unlink "$helper_root/manage_do_lb_ready_healthcheck.py"
+  unlink "$helper_root/scripts/ha/manage_do_lb_ready_healthcheck.py"
+  unlink "$helper_root/scripts/ha/do_lb_ready_contract.py"
+  rmdir "$helper_root/scripts/ha" "$helper_root/scripts"
   rmdir "$helper_root"
 }
 
@@ -2465,7 +2478,7 @@ assert_fresh_lb_ready_attestation() {
   helper_root="$(materialize_lb_manager "$source_sha")"
   if observed_at="$(
     run_system_python_control - \
-      "$helper_root/manage_do_lb_ready_healthcheck.py" "$path" \
+      "$helper_root/scripts/ha/manage_do_lb_ready_healthcheck.py" "$path" \
       "$attestation_sha" "$ready_projection_sha" <<'PY'
 import hashlib
 import importlib.util
@@ -2531,35 +2544,10 @@ if (
     or set(projection) != module.LB_READY_PROJECTION_KEYS
 ):
     raise SystemExit("LB attestation is not the exact reviewed full projection")
-if (
-    projection.get("name") != module.LB_NAME
-    or projection.get("region") != "lon1"
-    or projection.get("project_id") != "70160077-6e21-4fc7-9c81-45e6b60d8919"
-    or projection.get("network") != "EXTERNAL"
-    or projection.get("network_stack") != "IPV4"
-    or projection.get("type") != "REGIONAL"
-    or projection.get("size_unit") != 2
-    or projection.get("sticky_sessions") != {"type": "none"}
-    or projection.get("redirect_http_to_https") is not True
-    or projection.get("enable_backend_keepalive") is not True
-    or projection.get("disable_lets_encrypt_dns_records") is not False
-    or projection.get("http_idle_timeout_seconds") != 60
-    or not isinstance(projection.get("vpc_uuid"), str)
-    or not projection["vpc_uuid"]
-    or sorted(projection.get("droplet_ids") or []) != module.EXPECTED_DROPLET_IDS
-):
-    raise SystemExit("LB attestation routing identity differs from the reviewed contract")
-expected_health = {
-    "protocol": "http",
-    "port": 8003,
-    "path": "/api/ready",
-    "check_interval_seconds": 5,
-    "response_timeout_seconds": 3,
-    "healthy_threshold": 2,
-    "unhealthy_threshold": 3,
-}
-if projection.get("health_check") != expected_health:
-    raise SystemExit("LB attestation does not bind direct :8003 /api/ready")
+try:
+    module.validate_ready_projection_values(projection)
+except RuntimeError as exc:
+    raise SystemExit("LB attestation routing identity differs from the reviewed contract") from exc
 rules = projection.get("forwarding_rules")
 if not isinstance(rules, list) or len(rules) != 2 or any(not isinstance(rule, dict) for rule in rules):
     raise SystemExit("LB attestation forwarding rules are invalid")

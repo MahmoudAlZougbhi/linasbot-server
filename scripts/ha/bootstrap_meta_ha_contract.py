@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -31,6 +32,31 @@ from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+_nested_spec = importlib.util.spec_from_file_location(
+    "bootstrap_nested_runtime_quarantine",
+    Path(__file__).with_name("bootstrap_nested_runtime_quarantine.py"),
+)
+if _nested_spec is None or _nested_spec.loader is None:
+    raise RuntimeError("nested runtime quarantine module is missing")
+_nested = importlib.util.module_from_spec(_nested_spec)
+_nested_spec.loader.exec_module(_nested)
+_nested_evidence_spec = importlib.util.spec_from_file_location(
+    "bootstrap_nested_runtime_evidence",
+    Path(__file__).with_name("bootstrap_nested_runtime_evidence.py"),
+)
+if _nested_evidence_spec is None or _nested_evidence_spec.loader is None:
+    raise RuntimeError("nested runtime evidence module is missing")
+_nested_evidence = importlib.util.module_from_spec(_nested_evidence_spec)
+_nested_evidence_spec.loader.exec_module(_nested_evidence)
+_lb_contract_spec = importlib.util.spec_from_file_location(
+    "do_lb_ready_contract",
+    Path(__file__).with_name("do_lb_ready_contract.py"),
+)
+if _lb_contract_spec is None or _lb_contract_spec.loader is None:
+    raise RuntimeError("DigitalOcean ready contract module is missing")
+_lb_contract = importlib.util.module_from_spec(_lb_contract_spec)
+_lb_contract_spec.loader.exec_module(_lb_contract)
 
 REPO_DIR = Path("/opt/linasbot")
 ENV_PATH = REPO_DIR / ".env"
@@ -111,33 +137,8 @@ LB_IP = "157.245.31.104"
 LB_DROPLETS = [510629908, 591901417]
 LB_READY_ATTESTATION_SCHEMA = 2
 LB_PROJECT_ID = "70160077-6e21-4fc7-9c81-45e6b60d8919"
-LB_READY_PROJECTION_KEYS = {
-    "disable_lets_encrypt_dns_records",
-    "droplet_ids",
-    "enable_backend_keepalive",
-    "forwarding_rules",
-    "health_check",
-    "http_idle_timeout_seconds",
-    "name",
-    "network",
-    "network_stack",
-    "project_id",
-    "redirect_http_to_https",
-    "region",
-    "size_unit",
-    "sticky_sessions",
-    "type",
-    "vpc_uuid",
-}
-LB_HEALTH_CONTRACT = {
-    "protocol": "http",
-    "port": 8003,
-    "path": "/api/ready",
-    "check_interval_seconds": 5,
-    "response_timeout_seconds": 3,
-    "healthy_threshold": 2,
-    "unhealthy_threshold": 3,
-}
+LB_READY_PROJECTION_KEYS = _lb_contract.LB_READY_PROJECTION_KEYS
+LB_HEALTH_CONTRACT = _lb_contract.LB_HEALTH_CONTRACT_READY
 CONTRACT_KEYS = {
     "META_DELETION_REQUIRED_NODES": "node01,node02",
     "META_REGISTRY_BACKEND": "postgres",
@@ -292,6 +293,10 @@ RUNTIME_CONTROL_FILES = {
     "deploy/systemd/linasbot.service",
     "requirements.lock",
     "scripts/ha/bootstrap_meta_ha_contract.py",
+    "scripts/ha/bootstrap_nested_runtime_quarantine.py",
+    "scripts/ha/bootstrap_nested_runtime_evidence.py",
+    "scripts/ha/bootstrap_nested_runtime_safety.py",
+    "scripts/ha/do_lb_ready_contract.py",
     "scripts/ha/python_runtime_archive_contract.py",
     "scripts/ha/python_runtime_provision_contract.py",
     "scripts/ha/python_runtime_provision_ingest_contract.py",
@@ -1761,12 +1766,16 @@ def _assert_live_units(live: dict[str, dict[str, Any]]) -> None:
 
 
 def _repo_bytecode_manifest() -> list[dict[str, Any]]:
-    excluded_roots = {".git", ".venv", "venv"}
+    excluded_roots = {".git", ".venv", "venv", "linaslaserbot-2.7.22"}
     manifest: list[dict[str, Any]] = []
     total_size = 0
     for current, dirnames, filenames in os.walk(REPO_DIR, topdown=True, followlinks=False):
         directory = Path(current)
         relative_directory = directory.relative_to(REPO_DIR)
+        if relative_directory.parts[:1] == ("linaslaserbot-2.7.22",):
+            dirnames[:] = []
+            filenames.clear()
+            continue
         if not relative_directory.parts:
             dirnames[:] = [name for name in dirnames if name not in excluded_roots]
         if relative_directory.parts[:2] in {("dashboard", "node_modules"), ("dashboard", "build")}:
@@ -2570,6 +2579,7 @@ def _node_probe(
     target_units = _target_unit_contract(runtime_authority)
     repo_bytecode = _repo_bytecode_manifest()
     git_metadata = _git_metadata_evidence()
+    nested_runtime = _nested.probe_evidence(REPO_DIR)
     return {
         "node_id": node_id,
         "hostname": FIXED_NODES[node_id]["hostname"],
@@ -2591,6 +2601,7 @@ def _node_probe(
         "live_units": live_units,
         "target_units": target_units,
         "repo_bytecode": repo_bytecode,
+        "nested_runtime": nested_runtime,
         "git_metadata": git_metadata,
         "legacy": (
             {
@@ -2620,58 +2631,11 @@ def _parse_utc(value: Any, label: str) -> datetime:
 
 
 def _validate_lb_ready_projection(projection: Any, expected_ready_sha256: str) -> dict[str, Any]:
-    if not isinstance(projection, dict) or set(projection) != LB_READY_PROJECTION_KEYS:
+    if not isinstance(projection, dict):
         raise RuntimeError("DigitalOcean ready attestation has an incomplete or unknown full projection")
     if _digest(projection) != expected_ready_sha256:
         raise RuntimeError("DigitalOcean ready attestation projection digest changed")
-    if (
-        projection.get("name") != LB_NAME
-        or projection.get("region") != "lon1"
-        or projection.get("project_id") != LB_PROJECT_ID
-        or projection.get("network") != "EXTERNAL"
-        or projection.get("network_stack") != "IPV4"
-        or projection.get("type") != "REGIONAL"
-        or projection.get("size_unit") != 2
-        or projection.get("sticky_sessions") != {"type": "none"}
-        or projection.get("redirect_http_to_https") is not True
-        or projection.get("enable_backend_keepalive") is not True
-        or projection.get("disable_lets_encrypt_dns_records") is not False
-        or not isinstance(projection.get("vpc_uuid"), str)
-        or not projection.get("vpc_uuid")
-    ):
-        raise RuntimeError("DigitalOcean ready attestation routing identity changed")
-    idle = projection.get("http_idle_timeout_seconds")
-    if isinstance(idle, bool) or not isinstance(idle, int) or not 30 <= idle <= 600:
-        raise RuntimeError("DigitalOcean ready attestation idle timeout is invalid")
-    try:
-        droplet_ids = sorted(int(value) for value in projection.get("droplet_ids") or [])
-    except (TypeError, ValueError) as exc:
-        raise RuntimeError("DigitalOcean ready attestation backend membership is invalid") from exc
-    if droplet_ids != LB_DROPLETS:
-        raise RuntimeError("DigitalOcean ready attestation backend membership changed")
-    if projection.get("health_check") != LB_HEALTH_CONTRACT:
-        raise RuntimeError("DigitalOcean ready attestation does not prove direct :8003 /api/ready")
-    forwarding = projection.get("forwarding_rules")
-    if (
-        not isinstance(forwarding, list)
-        or len(forwarding) != 2
-        or any(not isinstance(rule, dict) for rule in forwarding)
-    ):
-        raise RuntimeError("DigitalOcean ready attestation forwarding rules are invalid")
-    normalized = {
-        (
-            rule.get("entry_protocol"),
-            rule.get("entry_port"),
-            rule.get("target_protocol"),
-            rule.get("target_port"),
-        )
-        for rule in forwarding
-    }
-    if normalized != {("http", 80, "http", 80), ("https", 443, "http", 80)}:
-        raise RuntimeError("DigitalOcean ready attestation forwarding rules changed")
-    https_rule = next(rule for rule in forwarding if rule.get("entry_protocol") == "https")
-    if not isinstance(https_rule.get("certificate_id"), str) or not https_rule["certificate_id"]:
-        raise RuntimeError("DigitalOcean ready attestation HTTPS certificate is missing")
+    _lb_contract.validate_ready_projection_values(projection)
     return projection
 
 
@@ -2883,6 +2847,10 @@ def _combined_plan(args: argparse.Namespace) -> tuple[dict[str, Any], bytes, str
         raise RuntimeError("nodes do not observe one identical authoritative PostgreSQL registry")
     if node01["pg"]["state_sha256"] != args.expected_pg_state_sha256:
         raise RuntimeError("PostgreSQL Meta state differs from the owner-authorized digest")
+    if _nested_evidence.portable_content_identity(
+        node01["nested_runtime"]
+    ) != _nested_evidence.portable_content_identity(node02["nested_runtime"]):
+        raise RuntimeError("nodes do not share one identical nested runtime authority")
     lb = _lb_owner_attestation(
         args.lb_ready_attestation,
         args.expected_lb_attestation_sha256,
@@ -2975,6 +2943,7 @@ def _node_prepare(
         write_or_verify(backup / "linas_ai_bot.service.before", legacy_payload)
     _backup_git_metadata(backup, probe["git_metadata"])
     write_or_verify(backup / "probe.before.json", _canonical(probe) + b"\n")
+    _nested.publish_authority(REPO_DIR, backup, probe["nested_runtime"], tx_id)
     _backup_live_units(backup, probe["live_units"])
     _prepare_probe_environment(backup / "runtime-probe", probe["runtime_authority"])
     prepared = {
@@ -3286,6 +3255,7 @@ def _node_drain(tx_id: str, plan_sha256: str) -> None:
         _install_legacy_retirement()
     if _port_listening(8003):
         raise RuntimeError("direct LB port 8003 remains available while drained")
+    _nested.apply_quarantine(REPO_DIR, backup, probe["nested_runtime"], tx_id)
     _write_journal(backup, {"schema": 1, "tx_id": tx_id, "status": "drained", "plan_sha256": plan_sha256})
 
 
@@ -3559,6 +3529,7 @@ def _node_verify(node_id: str, tx_id: str, plan_sha256: str, expected_pg_state: 
     _assert_normalized_git_metadata(backup, probe["git_metadata"])
     _assert_target_units(probe["runtime_authority"])
     _assert_repo_bytecode_absent()
+    _nested.assert_quarantined(REPO_DIR, probe["nested_runtime"], tx_id)
     result = _assert_env_contract(
         node_id,
         expected_pg_state,
@@ -3797,6 +3768,7 @@ def _node_rollback(node_id: str, tx_id: str, plan_sha256: str) -> None:
         raise RuntimeError("canonical environment rollback backup changed")
     _restore_live_units(backup, probe["live_units"])
     _restore_repo_bytecode(backup, probe["repo_bytecode"])
+    _nested.restore_quarantine(REPO_DIR, backup, probe["nested_runtime"], tx_id)
     _atomic_write(ENV_PATH, before, mode=int(probe["env"]["mode"]))
     os.chown(ENV_PATH, int(probe["env"]["uid"]), int(probe["env"]["gid"]))
     for entry in probe["historical_env"]:
@@ -3840,6 +3812,7 @@ def _node_admit_rollback(tx_id: str, plan_sha256: str) -> None:
     _assert_live_units(probe["live_units"])
     if _repo_bytecode_manifest() != probe["repo_bytecode"]:
         raise RuntimeError("repository Python bytecode rollback baseline is not exact")
+    _nested.assert_live_matches(REPO_DIR, probe["nested_runtime"])
     _quiesce_and_disable_units(states)
     _clear_bootstrap_runtime_guard()
     _start_units_disabled({API_UNIT: states[API_UNIT]})
@@ -3890,6 +3863,9 @@ def _bootstrap_commit_proof_payload(
         "target_unit_contract_sha256": _digest(probe["target_units"]),
         "legacy_bytecode_manifest_sha256": _digest(probe["repo_bytecode"]),
         "repo_bytecode_absent": True,
+        "nested_runtime_present": bool(probe["nested_runtime"]["present"]),
+        "nested_runtime_evidence_sha256": _nested.digest_evidence(probe["nested_runtime"]),
+        "nested_runtime_quarantined": bool(probe["nested_runtime"]["present"]),
     }
 
 
@@ -3926,6 +3902,7 @@ def _node_commit_proof(tx_id: str, plan_sha256: str) -> None:
         raise RuntimeError("Python runtime authority changed before bootstrap commit proof")
     _assert_target_units(probe["runtime_authority"])
     _assert_repo_bytecode_absent()
+    _nested.assert_quarantined(REPO_DIR, probe["nested_runtime"], tx_id)
     _assert_process_contract(node_id, require_enabled=True)
     _assert_controlled_failover_guard_contract()
     _assert_bootstrap_runtime_guard()
