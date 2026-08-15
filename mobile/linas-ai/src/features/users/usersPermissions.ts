@@ -112,7 +112,7 @@ export function emptyPermissions(): PermissionMap {
 }
 
 export function permissionsForRole(role: string): PermissionMap {
-  if (role === 'admin' || role === 'platform_owner') {
+  if (role === 'admin' || role === 'owner' || role === 'platform_owner') {
     return { ...ROLE_PERMISSIONS.admin };
   }
   if (role === 'operator') {
@@ -126,7 +126,7 @@ export function resolvePermissions(
   custom: Record<string, boolean> | null | undefined,
 ): PermissionMap {
   const base = permissionsForRole(role || 'viewer');
-  if (role === 'admin' || role === 'platform_owner') {
+  if (role === 'admin' || role === 'owner' || role === 'platform_owner') {
     return { ...ROLE_PERMISSIONS.admin };
   }
   if (!custom) {
@@ -141,10 +141,10 @@ export function resolvePermissions(
   return next;
 }
 
-/** Same gate as web Settings + AuthContext (admin or userManagement). */
+/** Same gate as web Settings + AuthContext (userManagement or privileged owner roles). */
 export function canManageUsers(user: PublicUser | null | undefined): boolean {
   if (!user) return false;
-  if (user.role === 'admin' || user.role === 'platform_owner') return true;
+  if (user.role === 'platform_owner' || user.role === 'owner') return true;
   const resolved = resolvePermissions(user.role, user.permissions ?? null);
   return resolved.userManagement === true;
 }

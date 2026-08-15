@@ -45,7 +45,11 @@ async def test_user_list_is_filtered_to_session_tenant(monkeypatch: pytest.Monke
         {"id": "a", "email": "a@example.com", "tenantId": "tenant-a"},
         {"id": "b", "email": "b@example.com", "tenantId": "tenant-b"},
     ]
-    monkeypatch.setattr(auth_api.user_service, "get_all_users", lambda: users)
+    monkeypatch.setattr(
+        auth_api.user_service,
+        "get_users_for_tenant",
+        lambda tenant_id: [u for u in users if u.get("tenantId") == tenant_id],
+    )
 
     response = await auth_api.get_users(_request())
 
