@@ -24,10 +24,6 @@ def _sanitize_section_payload(section: str, payload: dict[str, object]) -> dict[
         from services.cm.greeting_rules import sanitize_dynamic_messages_payload
 
         return sanitize_dynamic_messages_payload(payload)  # type: ignore[arg-type]
-    if section == "branches":
-        from services.cm.branch_schedule import normalize_branches_payload
-
-        return normalize_branches_payload(payload)  # type: ignore[arg-type]
     return payload
 
 
@@ -138,27 +134,10 @@ def get_draft(
 
     with tenant_server_lock(tid):
         if path.exists():
-            envelope = _envelope_from_dict(read_json_object(path))
-        else:
-            envelope = build_default_envelope(tid, name)
-            if create_default:
-                _write_envelope(path, envelope)
-            return envelope
-        if name == "branches":
-            from services.cm.branch_schedule import enrich_branches_from_legacy_drafts
-
-            merged = enrich_branches_from_legacy_drafts(tid, envelope.payload)
-            if merged != envelope.payload:
-                envelope = SectionDraftEnvelope(
-                    tenant_id=envelope.tenant_id,
-                    section=envelope.section,
-                    revision=envelope.revision,
-                    etag=envelope.etag,
-                    updated_at=envelope.updated_at,
-                    updated_by=envelope.updated_by,
-                    payload=merged,
-                    schema_version=envelope.schema_version,
-                )
+            return _envelope_from_dict(read_json_object(path))
+        envelope = build_default_envelope(tid, name)
+        if create_default:
+            _write_envelope(path, envelope)
         return envelope
 
 
