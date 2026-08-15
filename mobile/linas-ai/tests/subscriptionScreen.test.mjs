@@ -211,7 +211,12 @@ test('planColors defines distinct premium palette per tier', () => {
   }
   assert.match(src, /accentForPlan/);
   assert.match(src, /planNameColor/);
-  assert.match(src, /planNameOnForest/);
+  assert.match(src, /PlanNameContext/);
+  assert.match(src, /nameLight: '#64748B'/);
+  assert.match(src, /nameLight: '#008B8B'/);
+  assert.match(src, /nameLight: '#059669'/);
+  assert.match(src, /nameLight: '#6366F1'/);
+  assert.match(src, /nameLight: '#D97706'/);
   assert.match(src, /lite:[\s\S]*?#64748B/);
   assert.match(src, /starter:[\s\S]*?#008B8B/);
   assert.match(src, /growth:[\s\S]*?#059669/);
@@ -227,7 +232,7 @@ test('billing surfaces tint plan names from planColors', () => {
     ['features/billing/CurrentPlanHeroCard.tsx', /planNameColor/],
     ['features/billing/CurrentPlanSummary.tsx', /planNameColor/],
     ['features/billing/ChoosePlanScreen.tsx', /accentForPlan/],
-    ['features/dashboard/sections/GrowthPlanCard.tsx', /planNameOnForest/],
+    ['features/dashboard/sections/GrowthPlanCard.tsx', /planNameColor\([^,]+,\s*'forest'\)/],
   ]) {
     assert.match(read(file), pattern, file);
   }
