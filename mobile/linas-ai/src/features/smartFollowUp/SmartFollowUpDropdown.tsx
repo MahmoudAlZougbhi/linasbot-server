@@ -12,6 +12,7 @@ type Props = {
   options: DropdownOption[];
   onChange: (value: string) => void;
   disabled?: boolean;
+  flex?: number;
   accessibilityLabel: string;
 };
 
@@ -20,6 +21,7 @@ export function SmartFollowUpDropdown({
   options,
   onChange,
   disabled,
+  flex = 1,
   accessibilityLabel,
 }: Props) {
   const { colors } = useTheme();
@@ -34,6 +36,7 @@ export function SmartFollowUpDropdown({
         style={[
           styles.trigger,
           {
+            flex,
             borderColor: SFU_CARD_BORDER,
             backgroundColor: colors.surface,
             opacity: disabled ? 0.55 : 1,
@@ -46,7 +49,7 @@ export function SmartFollowUpDropdown({
         <Text style={[styles.triggerText, { color: colors.text }]} numberOfLines={1}>
           {selected?.label ?? '—'}
         </Text>
-        <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
+        <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
       </Pressable>
 
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
@@ -85,20 +88,19 @@ export function SmartFollowUpDropdown({
 
 const styles = StyleSheet.create({
   trigger: {
-    flex: 1,
     minHeight: 40,
     borderWidth: 1,
-    borderRadius: radii.sm,
+    borderRadius: 10,
     paddingHorizontal: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 6,
+    gap: 4,
   },
   triggerText: {
     flex: 1,
-    fontFamily: fonts.body,
-    fontSize: 14,
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
   },
   backdrop: {
     flex: 1,
