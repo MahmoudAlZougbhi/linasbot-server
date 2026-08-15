@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, Callable
 from typing import Any, Literal
 
 from services.model_policy import emit_model_policy_trace, owner_stream_route_payload, resolve_owner_policy
@@ -32,6 +32,7 @@ MAX_TOOL_ROUNDS = 10
 
 
 async def iter_owner_turn_v2_events(
+    *,
     tenant_id: str,
     user_id: str,
     role: str,
@@ -47,7 +48,7 @@ async def iter_owner_turn_v2_events(
     reply_language: str | None = None,
     revise_proposal_id: str | None = None,
     is_cancelled: CancelCheck | None = None,
-) -> AsyncIterator[StreamEvent]:
+) -> AsyncGenerator[StreamEvent, None]:
     if not owner_copilot_v2_enabled():
         yield StreamEvent(type="error", payload={"message": "OWNER_COPILOT_V2 disabled"})
         return
@@ -373,3 +374,11 @@ async def iter_owner_turn_v2_events(
                 "retryable": True,
             },
         )
+
+
+def __getattr__(name: str) -> Any:
+    if name == "run_owner_turn_v2":
+        from services.owner_copilot_v2.brain_run import run_owner_turn_v2 as _run_owner_turn_v2
+
+        return _run_owner_turn_v2
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

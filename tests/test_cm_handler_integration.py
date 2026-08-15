@@ -17,6 +17,15 @@ def _openai_published_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
     install_mocked_openai_embeddings(monkeypatch, published_mode=True)
 
 
+@pytest.fixture(autouse=True)
+def _cm_handler_credit_entitlement(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests exercise CM routing, not credit policy."""
+    monkeypatch.setattr(
+        "services.credit_ai_gate.ai_generation_blocked",
+        lambda *_a, **_k: False,
+    )
+
+
 @pytest.mark.asyncio
 async def test_no_published_version_returns_honest_failure_not_exception() -> None:
     reply, metadata = await _handle_published_cm_runtime(
@@ -129,6 +138,30 @@ async def test_v2_generated_reply_never_calls_classic_generate() -> None:
     assert reply == "A friendly, on-language answer with no invented facts."
     assert metadata["requested_model_retrieval"] == "gpt-5.6-luna"
     assert metadata["requested_model_answer"] == "gpt-5.6-terra"
+
+
+@pytest.mark.asyncio
+async def test_insufficient_credits_short_circuits_without_classic_generate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = "cm_handler_test_no_credits"
+    await publish_test_content(tenant_id)
+    monkeypatch.setattr(
+        "services.credit_ai_gate.ai_generation_blocked",
+        lambda *_a, **_k: True,
+    )
+
+    with patch("services.cm.answer_generation.generate_answer_with_usage", new_callable=AsyncMock) as mock_gen:
+        reply, metadata = await _handle_published_cm_runtime(
+            tenant_id=tenant_id,
+            message="How much does it cost?",
+            detected_language="en",
+            response_language="en",
+        )
+    mock_gen.assert_not_awaited()
+    assert metadata["reason"] == "insufficient_credits"
+    assert reply == ""
+    assert metadata.get("classic_fallback") is False
 
 
 @pytest.mark.asyncio
