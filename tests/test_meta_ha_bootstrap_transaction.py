@@ -338,9 +338,9 @@ def test_bootstrap_consumes_exact_protected_lb_attestation_without_provider_cred
         bootstrap._lb_owner_attestation(ready_sha)
 
     stale_payload = dict(payload)
-    stale_payload["observed_at"] = (datetime.now(UTC) - timedelta(minutes=6)).isoformat(
-        timespec="seconds"
-    ).replace("+00:00", "Z")
+    stale_payload["observed_at"] = (
+        (datetime.now(UTC) - timedelta(minutes=6)).isoformat(timespec="seconds").replace("+00:00", "Z")
+    )
     stale_raw = bootstrap._canonical(stale_payload) + b"\n"
     path.write_bytes(stale_raw)
     with pytest.raises(RuntimeError, match="not fresh enough"):
@@ -522,13 +522,9 @@ def test_bootstrap_legacy_retirement_is_durable_and_exactly_rollback_safe() -> N
     assert disable < guard_publish < marker_publish
     assert install.index('["systemctl", "daemon-reload"]') < install.index('b"legacy-linas-ai-bot-retired\\n"')
     assert "bootstrap.active" in bootstrap.LEGACY_RETIREMENT_GUARD_BYTES.decode()
-    rollback = source[
-        source.index("def _remove_legacy_retirement_for_rollback") : source.index("def _node_apply")
-    ]
+    rollback = source[source.index("def _remove_legacy_retirement_for_rollback") : source.index("def _node_apply")]
     assert "marker_exists != guard_exists" not in rollback
-    assert rollback.index('"disable", "--now", "linas_ai_bot.service"') < rollback.index(
-        "if marker_exists:"
-    )
+    assert rollback.index('"disable", "--now", "linas_ai_bot.service"') < rollback.index("if marker_exists:")
 
 
 def test_bootstrap_boot_guards_are_fail_closed_at_every_publish_and_reboot_boundary() -> None:
@@ -579,14 +575,11 @@ def test_bootstrap_installs_permanent_controlled_failover_guards_only_while_quie
         "ConditionPathExists=!/var/lib/linasbot/meta-ha/controlled-failover.runtime.guard\n"
     )
     install = source[
-        source.index("def _install_controlled_failover_guard_contract") :
-        source.index("def _install_nginx_override")
+        source.index("def _install_controlled_failover_guard_contract") : source.index("def _install_nginx_override")
     ]
     assert install.index('"is-active", unit') < install.index("for path in CONTROLLED_FAILOVER_GUARDS")
     assert install.index('"is-enabled", unit') < install.index("for path in CONTROLLED_FAILOVER_GUARDS")
-    assert install.index("for path in CONTROLLED_FAILOVER_GUARDS") < install.index(
-        '["systemctl", "daemon-reload"]'
-    )
+    assert install.index("for path in CONTROLLED_FAILOVER_GUARDS") < install.index('["systemctl", "daemon-reload"]')
     admit = source[source.index("def _node_admit(") : source.index("def _node_redrain")]
     quiesce = admit.index("_quiesce_and_disable_units(states)")
     static_install = admit.index("_install_controlled_failover_guard_contract()")
@@ -603,8 +596,7 @@ def test_bootstrap_requires_and_proves_all_four_durable_worker_processes() -> No
     commit = source[source.index("def _node_commit_proof") : source.index("def _node_finalize")]
     values = {"REDIS_URL": "redis://private", "LINAS_REQUIRE_REDIS": "true"}
     states = {
-        unit: {"active": "active", "enabled": "enabled"}
-        for unit in (bootstrap.API_UNIT, *bootstrap.WORKER_UNITS)
+        unit: {"active": "active", "enabled": "enabled"} for unit in (bootstrap.API_UNIT, *bootstrap.WORKER_UNITS)
     }
 
     bootstrap._assert_durable_worker_preconditions(values, states)
@@ -616,10 +608,10 @@ def test_bootstrap_requires_and_proves_all_four_durable_worker_processes() -> No
     assert '"scripts/run_queue_worker.py", "--queue", queue' in process
     assert 'Path(os.path.realpath(proc / "cwd")) != REPO_DIR' in process
     assert '(proc / "environ").read_bytes()' in process
-    assert 'process_values.get(key) != value' in process
-    assert 'stable_pid != pid' in process
-    assert 'canonical process is not active before maintenance clear' in process
-    assert 'canonical process is not enabled before maintenance clear' in process
+    assert "process_values.get(key) != value" in process
+    assert "stable_pid != pid" in process
+    assert "canonical process is not active before maintenance clear" in process
+    assert "canonical process is not enabled before maintenance clear" in process
     assert "_assert_process_contract(node_id, require_enabled=True)" in commit
     rollback = source[source.index("def _node_admit_rollback") : source.index("def _node_commit_proof")]
     assert rollback.index(
@@ -866,9 +858,7 @@ def test_bootstrap_durable_decision_recovery_survives_finalize_ack_loss() -> Non
     publish = source[source.index("def _publish_commit_decision") : source.index("def _parse_env")]
     assert "bootstrap.coordinator.json" in source
     assert apply.index('update_coordinator("planned")') < apply.index('_node_call_local("prepare"')
-    assert publish.index('_write_coordinator_journal(candidate)') < publish.index(
-        '_read_current_coordinator_journal()'
-    )
+    assert publish.index("_write_coordinator_journal(candidate)") < publish.index("_read_current_coordinator_journal()")
     assert apply.index("coordinator = _publish_commit_decision(coordinator)") < apply.index(
         'update_coordinator("node02-admit-started")'
     )
@@ -894,9 +884,7 @@ def test_bootstrap_refuses_controlled_failover_and_registry_nfs_retirement() -> 
     assert "REGISTRY_NFS_RETIRE_ACTIVE.exists()" in probe
     assert "PYTHON_RUNTIME_PROVISION_ACTIVE.exists()" in probe
     assert "PYTHON_RUNTIME_PROVISION_COORDINATOR.exists()" in probe
-    installer = source[
-        source.index("def _install_lb_ready_attestation") : source.index("def _lb_owner_attestation")
-    ]
+    installer = source[source.index("def _install_lb_ready_attestation") : source.index("def _lb_owner_attestation")]
     assert "PYTHON_RUNTIME_PROVISION_ACTIVE" in installer
     assert "PYTHON_RUNTIME_PROVISION_COORDINATOR" in installer
 
@@ -916,11 +904,14 @@ def test_bootstrap_no_replace_authority_adopts_the_post_link_crash_state(tmp_pat
     os.link(temporary, final)
     assert final.stat().st_nlink == 2
 
-    assert bootstrap._read_authority_file(
-        final,
-        expected_uid=os.getuid(),
-        expected_gid=os.getgid(),
-    ) == payload
+    assert (
+        bootstrap._read_authority_file(
+            final,
+            expected_uid=os.getuid(),
+            expected_gid=os.getgid(),
+        )
+        == payload
+    )
     assert final.stat().st_nlink == 1
     assert not temporary.exists()
 
@@ -993,9 +984,7 @@ def test_bootstrap_runtime_launcher_and_probe_never_execute_the_legacy_venv(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = BOOTSTRAP_PATH.read_text(encoding="utf-8")
-    probe = source[
-        source.index("def _prepare_probe_environment") : source.index("def _service_state")
-    ]
+    probe = source[source.index("def _prepare_probe_environment") : source.index("def _service_state")]
     assert "wheelhouse.tar" in probe
     assert 'str(SYSTEM_PYTHON), "-B", "-I", "-m", "venv"' in probe
     assert 'str(SYSTEM_PYTHON),\n            "-B",\n            "-I",\n            "-m",\n            "pip"' in probe
@@ -1024,10 +1013,7 @@ def test_bootstrap_runtime_launcher_and_probe_never_execute_the_legacy_venv(
     monkeypatch.setattr(
         bootstrap.subprocess,
         "run",
-        lambda command, **_kwargs: (
-            observed.append(command)
-            or SimpleNamespace(returncode=0, stdout=b"{}\n")
-        ),
+        lambda command, **_kwargs: observed.append(command) or SimpleNamespace(returncode=0, stdout=b"{}\n"),
     )
     assert bootstrap._remote("10.106.0.4", helper, helper_sha, ["node-probe"]) == "{}\n"
     command = observed[0]
@@ -1094,9 +1080,7 @@ def test_bootstrap_git_metadata_migration_replays_chown_chmod_crash_boundaries(
         ],
         key=lambda entry: os.fsencode(str(entry["path"])),
     )
-    (backup / "git-metadata.before.json").write_bytes(
-        bootstrap._canonical({"schema": 1, "entries": entries}) + b"\n"
-    )
+    (backup / "git-metadata.before.json").write_bytes(bootstrap._canonical({"schema": 1, "entries": entries}) + b"\n")
     state = {str(entry["path"]): dict(entry) for entry in entries}
 
     def collect() -> list[dict[str, object]]:
@@ -1125,9 +1109,7 @@ def test_bootstrap_git_metadata_migration_replays_chown_chmod_crash_boundaries(
     state["git/config"].update(uid=0, gid=0, mode=0o644)
     bootstrap._normalize_git_metadata(backup, expected)
     assert all(
-        (entry["uid"], entry["gid"], entry["mode"])
-        == bootstrap._normalized_git_metadata(entry)
-        for entry in collect()
+        (entry["uid"], entry["gid"], entry["mode"]) == bootstrap._normalized_git_metadata(entry) for entry in collect()
     )
 
     # Exact reverse state after rollback chown and before rollback chmod.

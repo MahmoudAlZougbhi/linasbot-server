@@ -25,55 +25,19 @@ from services.owner_copilot_v2.models import ChatChoice, OwnerV2TurnResult, Stre
 from services.owner_copilot_v2.proposal_revise import load_proposal_revise_context, supersede_revised_proposal
 from services.owner_copilot_v2.provider import iter_sol_text_deltas, iter_sol_tool_round
 from services.owner_copilot_v2.tool_dispatch import dispatch_v2_tool, tool_result_for_model
+from services.owner_copilot_v2.turn_results import owner_result_from_done_payload, record_owner_v2_usage
 
 CancelCheck = Callable[[], bool]
 # Full CM walks need enough rounds to cover every section + article/FAQ chunk continuation.
 MAX_TOOL_ROUNDS = 10
 
 
-def _record_owner_v2_usage(kwargs: dict[str, Any], result: OwnerV2TurnResult) -> None:
-    """Write V2 turns to the existing owner-chat usage file (same store as V1)."""
-    try:
-        from services.owner_ai_model_router import RouteDecision, owner_chat_usage_tracker
-
-        reply = result.reply_text or ""
-        owner_chat_usage_tracker.record(
-            tenant_id=str(kwargs.get("tenant_id") or ""),
-            user_id=str(kwargs.get("user_id") or ""),
-            conversation_id=str(kwargs.get("conversation_id") or ""),
-            route=RouteDecision(
-                kind="owner_help",
-                model=str(result.model or ""),
-                reason="owner_copilot_v2",
-                max_context_tokens=0,
-            ),
-            prompt_tokens=int(result.context_tokens or 0),
-            completion_tokens=max(1, len(reply) // 4),
-            meta={"source": "owner_copilot_v2", "ok": True},
-        )
-    except Exception:
-        return
-
-
 async def run_owner_turn_v2(**kwargs: Any) -> OwnerV2TurnResult:
     final: OwnerV2TurnResult | None = None
     async for ev in iter_owner_turn_v2_events(**kwargs):
         if ev.type == "done":
-            p = ev.payload
-            final = OwnerV2TurnResult(
-                reply_text=str(p.get("reply_text") or ""),
-                tool_calls=list(p.get("tool_calls") or []),
-                cards=list(p.get("cards") or []),
-                choices=list(p.get("choices") or []),
-                pending_confirmation=p.get("pending_confirmation"),
-                proposed_patch=p.get("proposed_patch"),
-                route=p.get("route"),
-                context_tokens=int(p.get("context_tokens") or 0),
-                setup_stage=p.get("setup_stage"),
-                quick_actions=list(p.get("quick_actions") or []),
-                model=p.get("model"),
-            )
-            _record_owner_v2_usage(kwargs, final)
+            final = owner_result_from_done_payload(ev.payload)
+            record_owner_v2_usage(kwargs, final)
         elif ev.type == "cancelled":
             return OwnerV2TurnResult(
                 reply_text=str(ev.payload.get("reply_text") or ""),

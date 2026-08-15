@@ -60,6 +60,7 @@ MetaOAuthFlowMode = Literal["facebook", "instagram", "unified"]
 
 META_OAUTH_STATE_TTL_SECONDS = 10 * 60
 
+
 @dataclass(frozen=True)
 class MetaOAuthResult:
     bindings: tuple[MetaAssetBinding, ...]

@@ -458,9 +458,7 @@ def test_runtime_process_projection_requires_complete_exact_verification_authori
         )
     process.write_bytes(
         (
-            common
-            + "LINAS_HA_VERIFY_ONLY=true\0"
-            + f"LINAS_HA_VERIFY_RELEASE_SHA={'a' * 40}\0DISABLE_API_DOCS=1\0"
+            common + "LINAS_HA_VERIFY_ONLY=true\0" + f"LINAS_HA_VERIFY_RELEASE_SHA={'a' * 40}\0DISABLE_API_DOCS=1\0"
         ).encode()
     )
     verify_process_environment(

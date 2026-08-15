@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from functools import partial
 from typing import Any
 
 from services.queues.config import redis_required
@@ -108,18 +109,15 @@ def reconcile_stuck_inbound_events(*, older_than_seconds: float = 45.0) -> dict[
 
         namespace, collection = _claim_contract(rec)
         claim_handle = run_claim_coroutine_blocking(
-            lambda: try_claim_event_handle(
+            partial(
+                try_claim_event_handle,
                 namespace,
                 rec.claim_key,
                 ttl_seconds=300.0,
                 firestore_collection=collection,
                 firestore_claim_metadata={
                     "binding_id_sha256": meta_claim_binding_digest(
-                        str(
-                            rec.binding_snapshot.get("binding_id")
-                            or rec.settings_snapshot.get("binding_id")
-                            or ""
-                        )
+                        str(rec.binding_snapshot.get("binding_id") or rec.settings_snapshot.get("binding_id") or "")
                     ),
                     "inbound_event_id": rec.event_id,
                 },
@@ -138,7 +136,8 @@ def reconcile_stuck_inbound_events(*, older_than_seconds: float = 45.0) -> dict[
                 last_error=rec.last_error or "max_reconcile_attempts",
             )
             run_claim_coroutine_blocking(
-                lambda: complete_event_claim(
+                partial(
+                    complete_event_claim,
                     namespace,
                     rec.claim_key,
                     firestore_collection=collection,

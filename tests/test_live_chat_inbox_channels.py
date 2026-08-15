@@ -38,6 +38,18 @@ def test_resolve_channel_from_customer_info_not_user_id() -> None:
     )
 
 
+def test_non_mapping_nested_channel_data_falls_back_safely() -> None:
+    assert (
+        resolve_live_chat_channel(
+            "unlabeled",
+            {"customer_info": None, "recent_messages": [{"metadata": None}]},
+        )
+        == "whatsapp"
+    )
+    assert resolve_live_chat_channel("unlabeled", {"customer_info": [], "messages": [None]}) == "whatsapp"
+    assert coerce_live_chat_user_id({"customer_info": None}, conversation_id="conv-1") == "conv-1"
+
+
 def test_never_invents_tiktok_for_whatsapp_or_meta() -> None:
     assert resolve_live_chat_channel("+96170123456") != "tiktok"
     assert resolve_live_chat_channel("instagram:1") != "tiktok"

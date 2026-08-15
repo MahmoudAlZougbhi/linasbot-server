@@ -256,14 +256,20 @@ def _validate_stored_identity(
         notice_keys = {"image_quota_notice_text", "image_quota_notice_sha256"}
         if notice_required and not notice_keys.issubset(current):
             raise MetaOutboundAttemptStoreError("Meta outbound-attempt quota notice changed")
+        stored_notice_text = current.get("image_quota_notice_text", "")
+        stored_notice_sha256 = current.get("image_quota_notice_sha256", "")
+        if type(stored_notice_text) is not str or type(stored_notice_sha256) is not str:
+            raise MetaOutboundAttemptStoreError("Meta outbound-attempt quota notice changed")
+        if notice_required and _SHA256_RE.fullmatch(stored_notice_sha256) is None:
+            raise MetaOutboundAttemptStoreError("Meta outbound-attempt quota notice changed")
         try:
             quota_context = _validate_quota_context(
                 purpose,
                 disposition,
                 current["image_quota_allowed_amount"],
                 current["image_quota_phase"],
-                current.get("image_quota_notice_text", ""),
-                current.get("image_quota_notice_sha256", ""),
+                stored_notice_text,
+                stored_notice_sha256,
             )
         except ValueError as exc:
             raise MetaOutboundAttemptStoreError("Meta outbound-attempt quota context changed") from exc

@@ -139,14 +139,14 @@ def test_manual_reconciliation_cannot_bypass_quality_gates_or_bootstrap_proof() 
         '[ "$RUN_CONCLUSION" = success ]',
         "RUN_WORKFLOW_ID",
         "EXPECTED_QG_WORKFLOW_ID",
-        'actions/workflows/quality-gates.yml',
+        "actions/workflows/quality-gates.yml",
         '[ "$RUN_WORKFLOW_ID" = "$EXPECTED_QG_WORKFLOW_ID" ]',
         '[ "$RUN_WORKFLOW_PATH" = .github/workflows/quality-gates.yml ]',
         '[ "$RUN_EVENT" = push ]',
         '[ "$TARGET_SHA" = "$DISPATCH_SHA" ]',
         "environment: meta-social-cutover",
         "META_HA_PROTECTED_ENVIRONMENT_APPROVED",
-        'environments/meta-social-cutover',
+        "environments/meta-social-cutover",
         'select(.type == "required_reviewers")',
         "PREVENT_SELF_REVIEW",
         "I_CONFIRMED_META_SOCIAL_CUTOVER_HAS_REQUIRED_REVIEWERS",
@@ -167,19 +167,18 @@ def test_manual_reconciliation_cannot_bypass_quality_gates_or_bootstrap_proof() 
         'elif [ "$DEPLOY_OPERATION" = reconcile_exact ]'
     )
     steady_gate = source[
-        source.index('if [ "$DEPLOY_OPERATION" = steady ]') :
-        source.index('elif [ "$DEPLOY_OPERATION" = reconcile_exact ]')
+        source.index('if [ "$DEPLOY_OPERATION" = steady ]') : source.index(
+            'elif [ "$DEPLOY_OPERATION" = reconcile_exact ]'
+        )
     ]
     assert '[[ "$BOOTSTRAP_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]]' in steady_gate
     assert '[ -z "$RECONCILE_CONFIRM$RECOVERY_JOURNAL_SHA256" ]' in steady_gate
     steady_call = source[
-        source.index('"$HELPER_PATH" orchestrate-confirmed') :
-        source.index('elif [ "$DEPLOY_OPERATION" = reconcile_exact ]', source.index('"$HELPER_PATH" orchestrate-confirmed'))
+        source.index('"$HELPER_PATH" orchestrate-confirmed') : source.index(
+            'elif [ "$DEPLOY_OPERATION" = reconcile_exact ]', source.index('"$HELPER_PATH" orchestrate-confirmed')
+        )
     ]
-    assert (
-        '"$NODE02_BASELINE_SHA" \\\n'
-        '                "$BOOTSTRAP_PLAN_SHA256" "$DEPLOY_CONFIRM"'
-    ) in steady_call
+    assert ('"$NODE02_BASELINE_SHA" \\\n                "$BOOTSTRAP_PLAN_SHA256" "$DEPLOY_CONFIRM"') in steady_call
 
 
 def test_same_name_alternate_workflow_cannot_authorize_deployment() -> None:

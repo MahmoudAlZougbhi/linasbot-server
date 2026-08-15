@@ -965,10 +965,7 @@ def test_worker_inventory_is_durable_before_disable_and_survives_reboot(
     tmp_path: Path,
 ) -> None:
     state_root = _state_root(tmp_path / "state")
-    original = {
-        unit: {"enabled": index % 2 == 0, "active": index < 3}
-        for index, unit in enumerate(sync.WORKER_UNITS)
-    }
+    original = {unit: {"enabled": index % 2 == 0, "active": index < 3} for index, unit in enumerate(sync.WORKER_UNITS)}
     runtime = {unit: dict(value) for unit, value in original.items()}
     first_disable = True
 
@@ -1150,8 +1147,7 @@ def test_worker_restore_resumes_after_crash_at_every_systemd_boundary(
 ) -> None:
     state_root = _state_root(tmp_path / "state")
     original = {
-        unit: {"enabled": index % 2 == 0, "active": index % 3 != 0}
-        for index, unit in enumerate(sync.WORKER_UNITS)
+        unit: {"enabled": index % 2 == 0, "active": index % 3 != 0} for index, unit in enumerate(sync.WORKER_UNITS)
     }
     runtime = {unit: {"enabled": False, "active": False} for unit in sync.WORKER_UNITS}
     worker_state = sync._worker_state_payload(

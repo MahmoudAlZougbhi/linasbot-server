@@ -495,10 +495,7 @@ class MetaCommentResultPolicyTests(unittest.IsolatedAsyncioTestCase):
             return httpx.Response(
                 200,
                 json={
-                    "data": [
-                        {"id": f"reply-{index}", "from": {"id": f"customer-{index}"}}
-                        for index in range(10)
-                    ],
+                    "data": [{"id": f"reply-{index}", "from": {"id": f"customer-{index}"}} for index in range(10)],
                     "paging": {
                         "cursors": {"after": "cursor-1"},
                         "next": "https://graph.facebook.com/v24.0/comment-1/comments?after=cursor-1",

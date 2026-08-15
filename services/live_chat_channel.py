@@ -48,8 +48,9 @@ def resolve_live_chat_channel(user_id: Any, payload: dict[str, Any] | None = Non
     WhatsApp / Instagram / Facebook / TikTok for inbox rows.
     TikTok only when the payload or user_id actually says TikTok — never as a default.
     """
-    data = payload or {}
-    customer = data.get("customer_info") if isinstance(data.get("customer_info"), dict) else {}
+    data: dict[str, Any] = payload or {}
+    customer_value = data.get("customer_info")
+    customer: dict[str, Any] = customer_value if isinstance(customer_value, dict) else {}
     for raw in (
         data.get("channel"),
         customer.get("channel"),
@@ -64,8 +65,9 @@ def resolve_live_chat_channel(user_id: Any, payload: dict[str, Any] | None = Non
         return from_id
     messages = data.get("recent_messages") or data.get("messages") or []
     if isinstance(messages, list) and messages:
-        last = messages[-1] if isinstance(messages[-1], dict) else {}
-        meta = last.get("metadata") if isinstance(last.get("metadata"), dict) else {}
+        last: dict[str, Any] = messages[-1] if isinstance(messages[-1], dict) else {}
+        metadata_value = last.get("metadata")
+        meta: dict[str, Any] = metadata_value if isinstance(metadata_value, dict) else {}
         ch = normalize_live_chat_channel(meta.get("channel") or last.get("channel"))
         if ch:
             return ch
@@ -81,8 +83,9 @@ def live_chat_channel_matches(chat: dict[str, Any], channel_filter: str) -> bool
 
 def coerce_live_chat_user_id(payload: dict[str, Any] | None, *, conversation_id: Any = None) -> str:
     """Never emit a blank user_id — mobile Zod drops those inbox rows."""
-    data = payload or {}
-    customer = data.get("customer_info") if isinstance(data.get("customer_info"), dict) else {}
+    data: dict[str, Any] = payload or {}
+    customer_value = data.get("customer_info")
+    customer: dict[str, Any] = customer_value if isinstance(customer_value, dict) else {}
     for raw in (
         data.get("user_id"),
         data.get("userId"),

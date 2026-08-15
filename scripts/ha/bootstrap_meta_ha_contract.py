@@ -50,9 +50,7 @@ PYTHON_RUNTIME_TRANSACTIONS = STATE_ROOT / "python-runtime-transactions"
 PYTHON_RUNTIME_LAUNCHER_RECEIPTS = STATE_ROOT / "python-runtime-provision-launchers"
 PYTHON_RUNTIME_ROOT = Path("/opt/linasbot-runtime/cpython-3.13.15")
 SYSTEM_PYTHON = PYTHON_RUNTIME_ROOT / "bin/python3.13"
-PYTHON_RUNTIME_ARTIFACT_NAME = (
-    "cpython-3.13.15+20260814-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"
-)
+PYTHON_RUNTIME_ARTIFACT_NAME = "cpython-3.13.15+20260814-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"
 RUNTIME_RELEASE_BUNDLE_FILES = frozenset(
     {
         "release-manifest.json",
@@ -149,12 +147,40 @@ CONTRACT_KEYS = {
 }
 FORBIDDEN_EXECUTION_ENV_KEYS = frozenset(
     {
-        "BASHOPTS", "BASH_ENV", "CDPATH", "ENV", "GCONV_PATH", "GLOBIGNORE", "GLIBC_TUNABLES",
-        "HOSTALIASES", "IFS", "JAVA_TOOL_OPTIONS", "LD_LIBRARY_PATH", "LD_PRELOAD", "LOCPATH",
-        "NODE_OPTIONS", "NODE_PATH", "OPENSSL_CONF", "OPENSSL_MODULES", "PATH", "PERL5LIB",
-        "PERL5OPT", "PROMPT_COMMAND", "PYTHONBREAKPOINT", "PYTHONHOME", "PYTHONINSPECT",
-        "PYTHONPATH", "PYTHONSTARTUP", "PYTHONUSERBASE", "PYTHONWARNINGS", "RUBYLIB", "RUBYOPT",
-        "SHELLOPTS", "SSLKEYLOGFILE", "TZDIR", "_JAVA_OPTIONS",
+        "BASHOPTS",
+        "BASH_ENV",
+        "CDPATH",
+        "ENV",
+        "GCONV_PATH",
+        "GLOBIGNORE",
+        "GLIBC_TUNABLES",
+        "HOSTALIASES",
+        "IFS",
+        "JAVA_TOOL_OPTIONS",
+        "LD_LIBRARY_PATH",
+        "LD_PRELOAD",
+        "LOCPATH",
+        "NODE_OPTIONS",
+        "NODE_PATH",
+        "OPENSSL_CONF",
+        "OPENSSL_MODULES",
+        "PATH",
+        "PERL5LIB",
+        "PERL5OPT",
+        "PROMPT_COMMAND",
+        "PYTHONBREAKPOINT",
+        "PYTHONHOME",
+        "PYTHONINSPECT",
+        "PYTHONPATH",
+        "PYTHONSTARTUP",
+        "PYTHONUSERBASE",
+        "PYTHONWARNINGS",
+        "RUBYLIB",
+        "RUBYOPT",
+        "SHELLOPTS",
+        "SSLKEYLOGFILE",
+        "TZDIR",
+        "_JAVA_OPTIONS",
     }
 )
 FORBIDDEN_EXECUTION_ENV_PREFIXES = (
@@ -241,9 +267,9 @@ RUNTIME_NODE_RECEIPT_KEYS = {
     "qg_artifact_api_sha256",
     "qg_manifest_sha256",
 }
-RUNTIME_CLUSTER_RECEIPT_KEYS = (
-    RUNTIME_NODE_RECEIPT_KEYS - {"node_id", "python_executable_sha256"}
-) | {"node_receipt_sha256"}
+RUNTIME_CLUSTER_RECEIPT_KEYS = (RUNTIME_NODE_RECEIPT_KEYS - {"node_id", "python_executable_sha256"}) | {
+    "node_receipt_sha256"
+}
 RUNTIME_LAUNCHER_RECEIPT_KEYS = {
     "schema",
     "format",
@@ -315,9 +341,7 @@ def _assert_authenticated_entry(node_id: str) -> dict[str, Any]:
         or not sys.flags.dont_write_bytecode
         or any(name.startswith(("PYTHON", "GIT_")) for name in os.environ)
     ):
-        raise RuntimeError(
-            "bootstrap must enter through the OS-authenticated runtime launcher with -B -I -S"
-        )
+        raise RuntimeError("bootstrap must enter through the OS-authenticated runtime launcher with -B -I -S")
     return _runtime_authority(node_id)
 
 
@@ -426,10 +450,7 @@ def _repair_no_replace_publication(
     aliases[0].unlink()
     _fsync_dir(path.parent)
     repaired = path.lstat()
-    if (
-        (repaired.st_dev, repaired.st_ino) != (info.st_dev, info.st_ino)
-        or repaired.st_nlink != 1
-    ):
+    if (repaired.st_dev, repaired.st_ino) != (info.st_dev, info.st_ino) or repaired.st_nlink != 1:
         raise RuntimeError(f"bootstrap authority publication could not be reconciled: {path}")
     return repaired
 
@@ -815,8 +836,7 @@ def _runtime_authority(
         or launcher_receipt.get("run_id") != local.get("qg_run_id")
         or launcher_receipt.get("run_attempt") != local.get("qg_run_attempt")
         or launcher_receipt.get("target_sha") != local.get("qg_target_sha")
-        or launcher_receipt.get("control_plane_archive_sha256")
-        != plan.get("control_plane_archive_sha256")
+        or launcher_receipt.get("control_plane_archive_sha256") != plan.get("control_plane_archive_sha256")
         or launcher_receipt.get("control_plane_tree_sha256") != plan.get("control_plane_tree_sha256")
     ):
         raise RuntimeError("runtime launcher receipt differs from the provision authority")
@@ -1249,11 +1269,7 @@ def _git_control_path(label: str) -> Path:
         return REPO_DIR / ".git"
     if label.startswith("git/"):
         relative = label.removeprefix("git/")
-        if (
-            not relative
-            or relative.startswith("/")
-            or any(part in {"", ".", ".."} for part in relative.split("/"))
-        ):
+        if not relative or relative.startswith("/") or any(part in {"", ".", ".."} for part in relative.split("/")):
             raise RuntimeError("Git metadata path is invalid")
         return REPO_DIR / ".git" / relative
     raise RuntimeError("Git metadata path is outside the canonical control roots")
@@ -1264,9 +1280,7 @@ def _collect_git_metadata() -> list[dict[str, Any]]:
 
     def append(label: str, path: Path) -> None:
         info = path.lstat()
-        if stat.S_ISLNK(info.st_mode) or not (
-            stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)
-        ):
+        if stat.S_ISLNK(info.st_mode) or not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)):
             raise RuntimeError("Git control metadata contains an unsafe object")
         if stat.S_ISREG(info.st_mode) and info.st_nlink != 1:
             raise RuntimeError("Git control metadata contains a hard-linked file")
@@ -1620,12 +1634,7 @@ def _live_unit_contract() -> dict[str, dict[str, Any]]:
         ("linasbot-worker@.service", WORKER_TEMPLATE_PATH),
     ):
         payload, info = _read_regular_any_owner(path)
-        if (
-            info.st_uid != 0
-            or info.st_gid != 0
-            or stat.S_IMODE(info.st_mode) != 0o644
-            or info.st_nlink != 1
-        ):
+        if info.st_uid != 0 or info.st_gid != 0 or stat.S_IMODE(info.st_mode) != 0o644 or info.st_nlink != 1:
             raise RuntimeError("live canonical unit is not root-owned mode 0644")
         result[name] = {
             "destination": str(path),
@@ -2415,9 +2424,7 @@ def _pg_probe(
         else:
             child_env[key] = value
     runner = (
-        "import sys;"
-        "sys.path.insert(0,sys.argv[1]);"
-        "exec(compile(sys.stdin.read(),'<authenticated-pg-probe>','exec'))"
+        "import sys;sys.path.insert(0,sys.argv[1]);exec(compile(sys.stdin.read(),'<authenticated-pg-probe>','exec'))"
     )
     try:
         result = subprocess.run(
@@ -2603,9 +2610,7 @@ def _node_probe(
 
 
 def _parse_utc(value: Any, label: str) -> datetime:
-    if not isinstance(value, str) or re.fullmatch(
-        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z", value
-    ) is None:
+    if not isinstance(value, str) or re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z", value) is None:
         raise RuntimeError(f"{label} is not an exact UTC timestamp")
     try:
         parsed = datetime.fromisoformat(value[:-1] + "+00:00")
@@ -2647,8 +2652,10 @@ def _validate_lb_ready_projection(projection: Any, expected_ready_sha256: str) -
     if projection.get("health_check") != LB_HEALTH_CONTRACT:
         raise RuntimeError("DigitalOcean ready attestation does not prove direct :8003 /api/ready")
     forwarding = projection.get("forwarding_rules")
-    if not isinstance(forwarding, list) or len(forwarding) != 2 or any(
-        not isinstance(rule, dict) for rule in forwarding
+    if (
+        not isinstance(forwarding, list)
+        or len(forwarding) != 2
+        or any(not isinstance(rule, dict) for rule in forwarding)
     ):
         raise RuntimeError("DigitalOcean ready attestation forwarding rules are invalid")
     normalized = {
@@ -2928,9 +2935,7 @@ def _node_prepare(
     _validate_digest(expected_probe_sha256, "owner-authorized node probe")
     if _digest(probe) != expected_probe_sha256:
         raise RuntimeError("node state changed after the owner-authorized bootstrap plan")
-    active_payload = _canonical(
-        {"schema": 1, "tx_id": tx_id, "plan_sha256": plan_sha256, "node_id": node_id}
-    ) + b"\n"
+    active_payload = _canonical({"schema": 1, "tx_id": tx_id, "plan_sha256": plan_sha256, "node_id": node_id}) + b"\n"
     _secure_dir(STATE_ROOT, create=True)
     # Publish the exact transaction identity before creating any backup
     # artifact. A SIGKILL at every later prepare boundary is therefore
@@ -3139,9 +3144,7 @@ def _assert_controlled_failover_guard_contract() -> None:
         ):
             raise RuntimeError("controlled failover static guard contract changed")
     for unit in (API_UNIT, *WORKER_UNITS):
-        if _run(
-            ["systemctl", "show", unit, "--property=NeedDaemonReload", "--value"]
-        ).stdout.strip() != "no":
+        if _run(["systemctl", "show", unit, "--property=NeedDaemonReload", "--value"]).stdout.strip() != "no":
             raise RuntimeError("controlled failover static guard contract is not loaded")
 
 
@@ -3311,10 +3314,7 @@ def _transition_historical_env(
         raise RuntimeError(f"historical environment {direction} location is ambiguous")
     current = source if source_exists else destination
     payload, info = _read_regular_any_owner(current)
-    if (
-        _digest_bytes(payload) != entry["sha256"]
-        or len(payload) != int(entry["size"])
-    ):
+    if _digest_bytes(payload) != entry["sha256"] or len(payload) != int(entry["size"]):
         raise RuntimeError(f"historical environment {direction} bytes changed")
     current_owner = (info.st_uid, info.st_gid)
     current_mode = stat.S_IMODE(info.st_mode)
@@ -3693,20 +3693,14 @@ def _assert_process_contract(
             raise RuntimeError(f"canonical process is not active before maintenance clear: {unit}")
         if require_enabled and _run(["systemctl", "is-enabled", unit], check=False).returncode != 0:
             raise RuntimeError(f"canonical process is not enabled before maintenance clear: {unit}")
-        working_directory = _run(
-            ["systemctl", "show", unit, "--property=WorkingDirectory", "--value"]
-        ).stdout.strip()
+        working_directory = _run(["systemctl", "show", unit, "--property=WorkingDirectory", "--value"]).stdout.strip()
         if working_directory != str(REPO_DIR):
             raise RuntimeError(f"canonical process unit has the wrong working directory: {unit}")
         pid = _run(["systemctl", "show", unit, "--property=MainPID", "--value"]).stdout.strip()
         if not pid.isdigit() or int(pid) <= 0:
             raise RuntimeError(f"canonical process has no live MainPID: {unit}")
         proc = Path("/proc") / pid
-        argv = [
-            part.decode("utf-8", errors="strict")
-            for part in (proc / "cmdline").read_bytes().split(b"\0")
-            if part
-        ]
+        argv = [part.decode("utf-8", errors="strict") for part in (proc / "cmdline").read_bytes().split(b"\0") if part]
         if argv != expected_argv:
             raise RuntimeError(f"canonical process argv is not exact: {unit}")
         if Path(os.path.realpath(proc / "cwd")) != REPO_DIR:
@@ -4614,9 +4608,7 @@ def _recover_decided_node(
         raise RuntimeError("commit recovery found a node that was never prepared")
     if status["state"] == "released":
         expected_status = (
-            "committed"
-            if decision == "commit"
-            else {"aborted_before_drain", "rolled_back", "recovery_rolled_back"}
+            "committed" if decision == "commit" else {"aborted_before_drain", "rolled_back", "recovery_rolled_back"}
         )
         if (isinstance(expected_status, str) and status["status"] != expected_status) or (
             isinstance(expected_status, set) and status["status"] not in expected_status
@@ -4624,11 +4616,7 @@ def _recover_decided_node(
             raise RuntimeError("released bootstrap node has the wrong durable decision")
         return
     if status["state"] == "release-pending":
-        expected_status = (
-            "committed"
-            if decision == "commit"
-            else {"rolled_back", "recovery_rolled_back"}
-        )
+        expected_status = "committed" if decision == "commit" else {"rolled_back", "recovery_rolled_back"}
         if (isinstance(expected_status, str) and status["status"] != expected_status) or (
             isinstance(expected_status, set) and status["status"] not in expected_status
         ):

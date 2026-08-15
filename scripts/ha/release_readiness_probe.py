@@ -56,9 +56,7 @@ def _assert_authority() -> str:
             continue
         if key == "JOURNAL_STREAM" and re.fullmatch(r"[0-9]+:[0-9]+", value):
             continue
-        if key in {"SYSTEMD_EXEC_PID", "WATCHDOG_PID", "WATCHDOG_USEC"} and re.fullmatch(
-            r"[1-9][0-9]*", value
-        ):
+        if key in {"SYSTEMD_EXEC_PID", "WATCHDOG_PID", "WATCHDOG_USEC"} and re.fullmatch(r"[1-9][0-9]*", value):
             continue
         if key == "MEMORY_PRESSURE_WATCH" and value.startswith("/sys/fs/cgroup/"):
             continue

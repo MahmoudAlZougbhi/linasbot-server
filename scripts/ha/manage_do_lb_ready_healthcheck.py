@@ -574,11 +574,7 @@ def _validate_attestation(payload: dict[str, Any], ready_sha256: str) -> None:
     if payload.get("ready_mutable_sha256") != ready_sha256:
         raise RuntimeError("ready attestation names a different projection digest")
     ready = payload.get("ready_projection")
-    if (
-        not isinstance(ready, dict)
-        or set(ready) != LB_READY_PROJECTION_KEYS
-        or _digest(ready) != ready_sha256
-    ):
+    if not isinstance(ready, dict) or set(ready) != LB_READY_PROJECTION_KEYS or _digest(ready) != ready_sha256:
         raise RuntimeError("ready attestation projection digest is invalid")
     health = ready.get("health_check")
     if not isinstance(health, dict) or payload.get("health_check") != {
@@ -897,9 +893,7 @@ def _attest_failover(args: argparse.Namespace) -> int:
     current = validate_observed_identity(_get_load_balancer())
     if _digest(current) != expected or current["health_check"].get("path") != READY_HEALTH_PATH:
         raise RuntimeError("DigitalOcean is not in the exact owner-authorized /api/ready state")
-    confirmation = failover_attest_confirmation(
-        expected, args.transaction_id, manifest, args.phase, args.observation
-    )
+    confirmation = failover_attest_confirmation(expected, args.transaction_id, manifest, args.phase, args.observation)
     if args.confirm != confirmation:
         raise PermissionError("exact transaction-bound failover LB attestation confirmation is missing")
     # A second authenticated GET is the observation bound into the immutable

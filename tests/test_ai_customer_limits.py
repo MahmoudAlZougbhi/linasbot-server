@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -95,8 +96,23 @@ def test_voice_minutes_cap(limits_svc: AiUsageLimitsService) -> None:
     assert third.reason == "voice_day_limit"
 
 
+def test_counter_timestamp_metadata_does_not_pollute_metric_counts(
+    limits_svc: AiUsageLimitsService,
+) -> None:
+    path = limits_svc._counter_path("clinic-a", "u1", "day:2026-08-15")
+    counters = {"images": 1, "context_lines": 2, "replies": 3, "voice_minutes": 4}
+
+    limits_svc._write_counter(path, counters)
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert isinstance(payload["updated_at"], float)
+    assert limits_svc._read_counter(path) == counters
+
+
 def test_period_window_auto_resets(limits_svc: AiUsageLimitsService) -> None:
-    limits_svc.save_settings("clinic-a", {"text_replies_per_day": 1, "text_replies_per_week": 10, "text_replies_per_month": 30})
+    limits_svc.save_settings(
+        "clinic-a", {"text_replies_per_day": 1, "text_replies_per_week": 10, "text_replies_per_month": 30}
+    )
     day = datetime(2026, 8, 15, 10, 0, tzinfo=UTC)
     first = limits_svc.consume_replies("clinic-a", "u1", amount=1, now=day)
     blocked = limits_svc.consume_replies("clinic-a", "u1", amount=1, now=day)

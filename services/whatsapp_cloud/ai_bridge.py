@@ -56,9 +56,7 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
     )
     message_type = str(snapshot.get("message_type") or "").lower()
     if message_type == "image":
-        image_quota = enforce_image_analysis_quota(
-            user_id=uid, user_data=limit_user, amount=1, consume=True
-        )
+        image_quota = enforce_image_analysis_quota(user_id=uid, user_data=limit_user, amount=1, consume=True)
         if not image_quota.allowed:
             await _send_quota_notice(
                 tenant_id=tenant_id,
@@ -70,9 +68,7 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
             return
         if image_quota.truncated and image_quota.customer_message:
             word_notice = (
-                f"{image_quota.customer_message}\n\n{word_notice}"
-                if word_notice
-                else image_quota.customer_message
+                f"{image_quota.customer_message}\n\n{word_notice}" if word_notice else image_quota.customer_message
             )
     elif message_type == "audio":
         voice_quota = enforce_voice_minutes_quota(
@@ -92,9 +88,7 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
             return
         if voice_quota.truncated and voice_quota.customer_message:
             word_notice = (
-                f"{voice_quota.customer_message}\n\n{word_notice}"
-                if word_notice
-                else voice_quota.customer_message
+                f"{voice_quota.customer_message}\n\n{word_notice}" if word_notice else voice_quota.customer_message
             )
     reply_precheck = enforce_text_reply_quota(
         user_id=uid,
@@ -203,9 +197,9 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
             _release_reservation(tenant_id, reservation_id)
             return
 
-        eligible, reason = evaluate_ai_eligibility(session, conn)
+        eligible, eligibility_reason = evaluate_ai_eligibility(session, conn)
         if not eligible:
-            emit_wa_event("ai_became_ineligible", reason=reason)
+            emit_wa_event("ai_became_ineligible", reason=eligibility_reason)
             _release_reservation(tenant_id, reservation_id)
             return
 

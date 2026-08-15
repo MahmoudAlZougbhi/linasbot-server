@@ -1018,7 +1018,12 @@ async def test_fence_after_quota_consume_records_truth_and_blocks_provider(
         ("image_quota_phase", "unknown", "quota context"),
         ("image_quota_notice_text", "mutated system notice", "quota context"),
         ("image_quota_notice_sha256", "0" * 64, "quota context"),
-        ("image_quota_notice_sha256", "", "quota context"),
+        ("image_quota_notice_sha256", "", "quota notice"),
+        ("image_quota_notice_sha256", None, "quota notice"),
+        ("image_quota_notice_sha256", False, "quota notice"),
+        ("image_quota_notice_sha256", 64, "quota notice"),
+        ("image_quota_notice_sha256", "A" * 64, "quota notice"),
+        ("missing:image_quota_notice_sha256", None, "quota notice"),
     ),
 )
 @pytest.mark.asyncio
@@ -1052,7 +1057,10 @@ async def test_mutated_v2_notice_quota_authority_fails_closed(
         .collection("meta_outbound_attempts")
         .document(document_id)
     )
-    reference.update({field: mutated})
+    if field.startswith("missing:"):
+        reference.data.pop(field.removeprefix("missing:"))
+    else:
+        reference.update({field: mutated})
 
     with pytest.raises(attempts.MetaOutboundAttemptStoreError, match=match):
         await attempts.execute_guarded_meta_send(

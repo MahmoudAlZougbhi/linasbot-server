@@ -8,13 +8,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from services.meta_messaging import MetaMessagingSettings
+from services.scale.inbound_event_reconcile import _enqueue_or_mark
 from services.scale.meta_ingress import (
     _settings_snapshot,
     _try_enqueue,
     persist_meta_comment_accepted,
     persist_meta_dm_accepted,
 )
-from services.scale.inbound_event_reconcile import _enqueue_or_mark
 
 
 def test_settings_snapshot_never_persists_meta_credentials() -> None:

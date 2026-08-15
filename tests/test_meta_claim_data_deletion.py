@@ -88,9 +88,7 @@ def test_shared_claim_deletion_refuses_live_provider_attempt() -> None:
     app = db.collection("artifacts").document("linas-ai-bot-backend")
     binding_id = "binding-live-send"
     event_id = "ibe_" + "d" * 40
-    app.collection("inbound_events").document(event_id).set(
-        _inbound(binding_id, event_id, "facebook:page:mid")
-    )
+    app.collection("inbound_events").document(event_id).set(_inbound(binding_id, event_id, "facebook:page:mid"))
     app.collection("meta_outbound_attempts").document(event_id).set(
         {
             "status": "sending",

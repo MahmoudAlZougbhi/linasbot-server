@@ -41,12 +41,10 @@ def _context(*, now: datetime | None = None) -> dict[str, object]:
             "lb_ready_projection_sha256": "d" * 64,
             "minimum_drain_seconds": 30,
             "manifest_start": (now + timedelta(minutes=3)).isoformat(timespec="seconds").replace("+00:00", "Z"),
-            "manifest_initial_cutoff": (now + timedelta(minutes=8)).isoformat(timespec="seconds").replace(
-                "+00:00", "Z"
-            ),
-            "manifest_final_cutoff": (now + timedelta(minutes=15)).isoformat(timespec="seconds").replace(
-                "+00:00", "Z"
-            ),
+            "manifest_initial_cutoff": (now + timedelta(minutes=8))
+            .isoformat(timespec="seconds")
+            .replace("+00:00", "Z"),
+            "manifest_final_cutoff": (now + timedelta(minutes=15)).isoformat(timespec="seconds").replace("+00:00", "Z"),
             "helper_sha256": "e" * 64,
         }
     )
@@ -147,14 +145,16 @@ def test_plan_parser_builds_manifest_start_context_end_to_end(monkeypatch: pytes
     monkeypatch.setattr(
         producer,
         "_remote",
-        lambda _context, action: {
-            "node_id": "node02",
-            "release_sha": "a" * 40,
-            "helper_sha256": "e" * 64,
-            "machine_id_sha256": "2" * 64,
-        }
-        if action == "preflight"
-        else None,
+        lambda _context, action: (
+            {
+                "node_id": "node02",
+                "release_sha": "a" * 40,
+                "helper_sha256": "e" * 64,
+                "machine_id_sha256": "2" * 64,
+            }
+            if action == "preflight"
+            else None
+        ),
     )
 
     plan, context = producer._plan(args)
@@ -188,12 +188,8 @@ def test_lb_helper_attestation_is_the_exact_importable_canonical_shape(
         phase="initial",
         observation="pre",
         manifest_start=manifest_start,
-        manifest_initial_cutoff=(now + timedelta(minutes=8)).isoformat(timespec="seconds").replace(
-            "+00:00", "Z"
-        ),
-        manifest_final_cutoff=(now + timedelta(minutes=15)).isoformat(timespec="seconds").replace(
-            "+00:00", "Z"
-        ),
+        manifest_initial_cutoff=(now + timedelta(minutes=8)).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        manifest_final_cutoff=(now + timedelta(minutes=15)).isoformat(timespec="seconds").replace("+00:00", "Z"),
         require_fresh=True,
     )
     assert path.name == f"{lb.LB_ID}.failover.{transaction_id}.{manifest_sha}.initial.pre.json"
@@ -234,12 +230,8 @@ def test_stale_or_wrong_manifest_lb_observation_cannot_authorize_plan(
             phase="initial",
             observation="pre",
             manifest_start=manifest_start,
-            manifest_initial_cutoff=(now + timedelta(minutes=8)).isoformat(timespec="seconds").replace(
-                "+00:00", "Z"
-            ),
-            manifest_final_cutoff=(now + timedelta(minutes=15)).isoformat(timespec="seconds").replace(
-                "+00:00", "Z"
-            ),
+            manifest_initial_cutoff=(now + timedelta(minutes=8)).isoformat(timespec="seconds").replace("+00:00", "Z"),
+            manifest_final_cutoff=(now + timedelta(minutes=15)).isoformat(timespec="seconds").replace("+00:00", "Z"),
             require_fresh=True,
         )
     with pytest.raises(RuntimeError, match="binding"):
@@ -272,9 +264,7 @@ def test_each_failover_phase_requires_distinct_fresh_provider_pre_and_post_obser
             manifest_sha256=manifest_sha,
             phase="initial",
             observation=observation,
-            confirm=lb.failover_attest_confirmation(
-                ready_sha, transaction_id, manifest_sha, "initial", observation
-            ),
+            confirm=lb.failover_attest_confirmation(ready_sha, transaction_id, manifest_sha, "initial", observation),
         )
 
     monkeypatch.setattr(lb, "_get_load_balancer", lambda: observed)
@@ -316,9 +306,7 @@ def test_same_second_post_lb_observation_is_not_transition_authority(
         lambda *_args, **_kwargs: ("1" * 64, "2026-08-14T12:00:30.100000Z"),
     )
     with pytest.raises(producer.AwaitingPostLBAttestation, match="strictly follow"):
-        producer._post_transition_lb_binding(
-            _context(), phase, "2026-08-14T12:00:30.100000Z"
-        )
+        producer._post_transition_lb_binding(_context(), phase, "2026-08-14T12:00:30.100000Z")
     assert "." in producer._now() and "." in lb._now()
 
 
@@ -475,10 +463,7 @@ def test_drain_crash_after_worker_stop_is_recoverable_because_markers_precede_mu
         index for index, event in enumerate(events) if event.startswith(("disable:", "stop:"))
     )
     assert (
-        events.index("runtime-guard")
-        < events.index("maintenance")
-        < events.index("volatile")
-        < first_process_mutation
+        events.index("runtime-guard") < events.index("maintenance") < events.index("volatile") < first_process_mutation
     )
 
     enabled = False
@@ -662,9 +647,7 @@ def test_process_proof_rejects_wrong_live_worker_queue(monkeypatch: pytest.Monke
         "--queue",
         fault_queue,
     ]
-    (proc_root / fault_pid / "cmdline").write_bytes(
-        b"\0".join(item.encode() for item in correct_argv) + b"\0"
-    )
+    (proc_root / fault_pid / "cmdline").write_bytes(b"\0".join(item.encode() for item in correct_argv) + b"\0")
     with (proc_root / fault_pid / "environ").open("ab") as handle:
         handle.write(b"LD_AUDIT=/outside/libaudit.so\0")
     with pytest.raises(RuntimeError, match="execution-control"):
@@ -674,9 +657,7 @@ def test_process_proof_rejects_wrong_live_worker_queue(monkeypatch: pytest.Monke
 def test_closed_readiness_schema_rejects_arbitrary_200_and_accepts_exact_maintenance() -> None:
     with pytest.raises(RuntimeError, match="closed schema"):
         producer._assert_ready_payload({"ok": True, "role": "readiness", "checks": {}, "extra": True}, 200)
-    producer._assert_ready_payload(
-        {"ok": False, "role": "readiness", "checks": {"maintenance": {"ok": False}}}, 503
-    )
+    producer._assert_ready_payload({"ok": False, "role": "readiness", "checks": {"maintenance": {"ok": False}}}, 503)
 
 
 def test_collision_set_includes_every_other_meta_mutation_family() -> None:
@@ -751,7 +732,10 @@ def test_abort_authority_is_durable_before_restore_and_release(monkeypatch: pyte
         ("abort-release", "node01"),
         ("aborted", "journal"),
     ]
-    assert "abort-release" in producer.build_parser()._subparsers._group_actions[0].choices["node-phase"]._actions[1].choices
+    assert (
+        "abort-release"
+        in producer.build_parser()._subparsers._group_actions[0].choices["node-phase"]._actions[1].choices
+    )
 
 
 @pytest.mark.parametrize("key", ["PYTHONPATH", "PYTHONHOME", "LD_PRELOAD", "LD_AUDIT", "BASH_ENV", "NODE_OPTIONS"])

@@ -172,7 +172,7 @@ def _patch_deletion_stores(
     monkeypatch.setattr(
         durable_claims,
         "_claims_dir",
-        lambda: (claims_root / "durable_claims"),
+        lambda: claims_root / "durable_claims",
     )
     monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
     monkeypatch.setattr(deletion_service, "_LOCK_DIR", tmp_path / "deletion_runtime")

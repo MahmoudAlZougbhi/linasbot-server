@@ -123,7 +123,7 @@ class AiUsageLimitsService:
             return empty
 
     def _write_counter(self, path: Path, data: dict[str, int]) -> None:
-        payload = {key: int(data.get(key) or 0) for key in _COUNTER_KEYS}
+        payload: dict[str, int | float] = {key: int(data.get(key) or 0) for key in _COUNTER_KEYS}
         payload["updated_at"] = time.time()
         path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
@@ -214,10 +214,10 @@ class AiUsageLimitsService:
             binding_period, binding_limit, binding_used = "month", month_limit, used_month
 
         truncated = remaining < amount
-        msg = None
-        reset = None
+        truncation_message: str | None = None
+        reset: str | None = None
         if truncated and binding_period:
-            msg = customer_window_limit_message(kind=kind, period=binding_period, lang=lang, now=now)
+            truncation_message = customer_window_limit_message(kind=kind, period=binding_period, lang=lang, now=now)
             reset = reset_iso(binding_period, now)
         return QuotaDecision(
             allowed=True,
@@ -227,7 +227,7 @@ class AiUsageLimitsService:
             used=binding_used,
             period=binding_period,
             allowed_amount=remaining,
-            customer_message=msg,
+            customer_message=truncation_message,
             reset_at=reset,
             truncated=truncated,
         )

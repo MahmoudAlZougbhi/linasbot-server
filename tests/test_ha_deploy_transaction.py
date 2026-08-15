@@ -84,7 +84,7 @@ def test_workflow_runs_only_the_helper_from_the_exact_authorized_blob() -> None:
     assert "os.fchmod(destination_fd, mode)" in script
     assert "os.fchown(destination_fd, 0, 0)" in script
     assert "while view:" in script and "view = view[written:]" in script
-    assert 'digest.hexdigest() != expected_sha' in script
+    assert "digest.hexdigest() != expected_sha" in script
     assert 'sudo unlink "$HELPER_PATH"' in script
 
 
@@ -158,9 +158,7 @@ def test_workflow_authenticates_inline_authorities_before_loading_release_code(
         "schema": "linasbot-release-manifest-v1",
         "repository": repository,
         "workflow_path": ".github/workflows/quality-gates.yml",
-        "workflow_ref": (
-            f"{repository}/.github/workflows/quality-gates.yml@refs/heads/main"
-        ),
+        "workflow_ref": (f"{repository}/.github/workflows/quality-gates.yml@refs/heads/main"),
         "run_id": 17,
         "run_attempt": 2,
         "target_sha": target,
@@ -180,9 +178,7 @@ def test_workflow_authenticates_inline_authorities_before_loading_release_code(
             "python_runtime": {},
         },
     }
-    manifest_raw = (
-        json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
-    ).encode()
+    manifest_raw = (json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode()
     (bundle / "release-manifest.json").write_bytes(manifest_raw)
     for name in (
         "wheelhouse.tar",
@@ -671,23 +667,17 @@ def test_guard_publication_and_rollback_admission_are_reboot_safe() -> None:
     assert mark.index('capture_service_state "$tx_dir/predrain-service-state"') < mark.index(
         'arm_deploy_node_sentinel "$tx_dir"'
     )
-    assert mark.index('install_maintenance_boot_guard "$tx_dir"') < mark.index(
-        'arm_deploy_node_sentinel "$tx_dir"'
-    )
+    assert mark.index('install_maintenance_boot_guard "$tx_dir"') < mark.index('arm_deploy_node_sentinel "$tx_dir"')
     assert mark.index('arm_deploy_node_sentinel "$tx_dir"') < mark.index("disable_runtime_autostart")
     assert mark.index('install_maintenance_boot_guard "$tx_dir"') < mark.index("arm_maintenance_markers")
-    assert ensure.index('install_maintenance_boot_guard "$tx_dir"') < ensure.index(
-        'arm_deploy_node_sentinel "$tx_dir"'
-    )
+    assert ensure.index('install_maintenance_boot_guard "$tx_dir"') < ensure.index('arm_deploy_node_sentinel "$tx_dir"')
     assert ensure.index('arm_deploy_node_sentinel "$tx_dir"') < ensure.index("disable_runtime_autostart")
     assert ensure.index('install_maintenance_boot_guard "$tx_dir"') < ensure.index("arm_maintenance_markers")
     assert 'systemctl disable "${units[@]}"' in disable
-    assert 'systemctl disable linasbot.service' not in disable
+    assert "systemctl disable linasbot.service" not in disable
 
     capture = source[source.index("capture_service_state() {") : source.index("archive_path() {")]
-    durable_dir = source[
-        source.index("ensure_transaction_dir_durable() {") : source.index("python_bin() {")
-    ]
+    durable_dir = source[source.index("ensure_transaction_dir_durable() {") : source.index("python_bin() {")]
     assert 'test "$(realpath -e /var/backups)" = /var/backups' in durable_dir
     assert 'test "$(realpath -e "$BACKUP_ROOT")" = "$BACKUP_ROOT"' in durable_dir
     assert 'test "$(realpath -e "$tx_dir")" = "$tx_dir"' in durable_dir
@@ -708,9 +698,7 @@ def test_guard_publication_and_rollback_admission_are_reboot_safe() -> None:
     assert mark.index("validate_service_state_file") < mark.index("disable_runtime_autostart")
 
     guard_publish = source[
-        source.index("publish_boot_guard_atomic() {") : source.index(
-            "install_maintenance_boot_guard() {"
-        )
+        source.index("publish_boot_guard_atomic() {") : source.index("install_maintenance_boot_guard() {")
     ]
     assert "tempfile.mkstemp" in guard_publish
     assert "os.fsync(descriptor)" in guard_publish
@@ -719,9 +707,7 @@ def test_guard_publication_and_rollback_admission_are_reboot_safe() -> None:
     assert "expected.startswith(current)" in guard_publish
     assert "unknown maintenance boot guard already exists" in guard_publish
     install_guard = source[
-        source.index("install_maintenance_boot_guard() {") : source.index(
-            "assert_maintenance_boot_guard_loaded() {"
-        )
+        source.index("install_maintenance_boot_guard() {") : source.index("assert_maintenance_boot_guard_loaded() {")
     ]
     assert 'publish_boot_guard_atomic "$candidate" "$destination"' in install_guard
     assert 'install -o root -g root -m 0644 "$candidate" "$destination"' not in install_guard
@@ -759,9 +745,7 @@ def test_guard_publication_and_rollback_admission_are_reboot_safe() -> None:
     restore_enable = rollback.index('restore_saved_autostart "$rollback_state_file"')
     proof = rollback.index('write_admission_proof "$tx_dir" "$admission_sha"')
     sentinel_clear = rollback.index('clear_deploy_node_sentinel "$tx_dir"')
-    saved_start = source[
-        source.index("start_saved_runtime_disabled() {") : source.index("rollback_impl() {")
-    ]
+    saved_start = source[source.index("start_saved_runtime_disabled() {") : source.index("rollback_impl() {")]
     assert 'install_maintenance_boot_guard "$tx_dir"' in saved_start
     assert disable < remove_guard < start_disabled < restore_enable < clear_marker
     assert clear_marker < proof < sentinel_clear
@@ -774,10 +758,10 @@ def test_guard_publication_and_rollback_admission_are_reboot_safe() -> None:
 
 def test_per_node_deploy_sentinel_is_transaction_bound_and_last_to_leave() -> None:
     source = _helper()
-    sentinel = source[
-        source.index("assert_deploy_node_sentinel() {") : source.index("admission_proof_is_exact() {")
+    sentinel = source[source.index("assert_deploy_node_sentinel() {") : source.index("admission_proof_is_exact() {")]
+    drained = source[
+        source.index("node_assert_runtime_drained() {") : source.index("start_admitted_target_runtime() {")
     ]
-    drained = source[source.index("node_assert_runtime_drained() {") : source.index("start_admitted_target_runtime() {")]
     clear = source[source.index("node_clear_maintenance() {") : source.index("node_assert_release_drained() {")]
     ready = source[source.index("node_assert_release_ready() {") : source.index("node_assert_exact_head() {")]
     dispatch = source[source.index("node_dispatch() {") : source.index("reject_self_peer() {")]
@@ -788,9 +772,7 @@ def test_per_node_deploy_sentinel_is_transaction_bound_and_last_to_leave() -> No
     assert "os.replace(temporary, path)" in sentinel
     assert 'test "$(stat -c \'%h\' "$DEPLOY_NODE_ACTIVE_FILE")" = "1"' in sentinel
     assert 'assert_deploy_node_sentinel "$tx_dir"' in drained
-    assert clear.index('assert_deploy_node_sentinel "$tx_dir"') < clear.index(
-        'remove_maintenance_boot_guard "$tx_dir"'
-    )
+    assert clear.index('assert_deploy_node_sentinel "$tx_dir"') < clear.index('remove_maintenance_boot_guard "$tx_dir"')
     assert clear.index('write_admission_proof "$tx_dir" "$admission_sha"') < clear.index(
         'clear_deploy_node_sentinel "$tx_dir"'
     )
@@ -885,11 +867,9 @@ assert 'storage.migrate_bootstrap' not in sys.modules
 
 def test_precommit_readiness_probe_is_bounded_collectable_and_non_routable() -> None:
     source = _helper()
-    probe = source[
-        source.index("run_target_readiness_probe() {") : source.index("assert_ready() {")
-    ]
-    assert "systemctl stop \"$VERIFY_READINESS_UNIT\"" in probe
-    assert "systemctl reset-failed \"$VERIFY_READINESS_UNIT\"" in probe
+    probe = source[source.index("run_target_readiness_probe() {") : source.index("assert_ready() {")]
+    assert 'systemctl stop "$VERIFY_READINESS_UNIT"' in probe
+    assert 'systemctl reset-failed "$VERIFY_READINESS_UNIT"' in probe
     assert "LoadState" in probe and '"not-found"' in probe
     assert "--property=RuntimeMaxSec=45s" in probe
     assert "--property=TimeoutStartSec=45s" in probe
@@ -901,9 +881,7 @@ def test_precommit_readiness_probe_is_bounded_collectable_and_non_routable() -> 
 def test_release_artifact_parity_hashes_venv_bytes_and_requires_hashed_lock() -> None:
     source = _helper()
     manifest = source[
-        source.index("write_installed_distribution_manifest() {") : source.index(
-            "release_artifact_evidence() {"
-        )
+        source.index("write_installed_distribution_manifest() {") : source.index("release_artifact_evidence() {")
     ]
     stage = source[source.index("backup_live_node() {") : source.index("normalize_prequiesced_activation_prefix() {")]
     activation = source[source.index("activate_impl() {") : source.index("start_saved_runtime_disabled() {")]
@@ -911,7 +889,7 @@ def test_release_artifact_parity_hashes_venv_bytes_and_requires_hashed_lock() ->
     assert '"venv_tree_sha256"' in manifest
     assert '"python_executable_sha256"' in manifest
     assert "file_hash.update(chunk)" in manifest
-    assert 'os.readlink(path)' in manifest
+    assert "os.readlink(path)" in manifest
     assert "requirements.lock" in source
     assert stage.count("--require-hashes") >= 1
     assert "--require-hashes" in activation
@@ -1004,9 +982,7 @@ def test_interrupted_target_reset_has_durable_rollback_authority() -> None:
         'git -C "$REPO_DIR" diff --quiet "$previous_sha" --',
         activation.index("dashboard-moved"),
     )
-    clean_index = activation.index(
-        'git -C "$REPO_DIR" diff --cached --quiet "$previous_sha" --', clean_worktree
-    )
+    clean_index = activation.index('git -C "$REPO_DIR" diff --cached --quiet "$previous_sha" --', clean_worktree)
     reset_authority = activation.index("target-reset-started", clean_index)
     stale_lock_recovery = activation.index(
         'recover_transaction_git_locks "$tx_dir" "$generation" target-reset', reset_authority
@@ -1018,10 +994,7 @@ def test_interrupted_target_reset_has_durable_rollback_authority() -> None:
     assert '"dashboard-moved": "target-reset-started"' in state
     assert '"target-reset-started": "target-installed"' in state
     assert "forward = phases[:6]" in state
-    assert (
-        "quiesced | venv-moved | dashboard-moved | target-reset-started | "
-        "target-installed | activated"
-    ) in rollback
+    assert ("quiesced | venv-moved | dashboard-moved | target-reset-started | target-installed | activated") in rollback
     dirty_case = rollback.index('case "$phase" in')
     dirty_guard = rollback[dirty_case : rollback.index("\n  esac", dirty_case)]
     # Once target-reset-started is durable, HEAD may still be the baseline while
@@ -1029,9 +1002,7 @@ def test_interrupted_target_reset_has_durable_rollback_authority() -> None:
     # authority instead of requiring that interrupted tree to be clean.
     assert "target-reset-started" not in dirty_guard
     rollback_reset = rollback.index('git -C "$REPO_DIR" reset --hard "$previous_sha"')
-    assert rollback.index(
-        'recover_transaction_git_locks "$tx_dir" "$generation" rollback-reset'
-    ) < rollback_reset
+    assert rollback.index('recover_transaction_git_locks "$tx_dir" "$generation" rollback-reset') < rollback_reset
 
 
 def test_git_reset_lock_recovery_archives_closed_locks_across_repeated_kills(
@@ -1152,9 +1123,7 @@ def test_git_common_directory_attribute_authority_is_rejected(tmp_path: Path) ->
     with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as payload:
         assert payload.getnames() == ["keep.txt"]
 
-    trust = _helper()[
-        _helper().index("assert_git_repository_trust() {") : _helper().index("current_head() {")
-    ]
+    trust = _helper()[_helper().index("assert_git_repository_trust() {") : _helper().index("current_head() {")]
     assert '"$REPO_DIR/.git/commondir"' in trust
     assert "rev-parse --path-format=absolute --git-common-dir" in trust
     assert "rev-parse --git-path info/attributes" in trust
@@ -1182,8 +1151,8 @@ def test_release_import_ref_lock_recovery_is_repeatable_and_closed(tmp_path: Pat
     python = python.replace(".st_gid != 0", ".st_gid != expected_gid")
     python = python.replace("os.chown(directory, 0, 0)", "os.chown(directory, expected_uid, expected_gid)")
     python = python.replace(
-        'lock_fd = int(sys.argv[5])',
-        'lock_fd = int(sys.argv[5])\nexpected_uid = int(sys.argv[6])\nexpected_gid = int(sys.argv[7])',
+        "lock_fd = int(sys.argv[5])",
+        "lock_fd = int(sys.argv[5])\nexpected_uid = int(sys.argv[6])\nexpected_gid = int(sys.argv[7])",
     )
 
     def recover() -> subprocess.CompletedProcess[str]:
@@ -1251,13 +1220,9 @@ def test_release_import_fsync_is_absolute_from_any_working_directory(tmp_path: P
 
 def test_forward_and_rollback_admission_prove_exact_process_queue_and_live_env() -> None:
     source = _helper()
-    proof = source[
-        source.index("assert_exact_runtime_process_contract() {") : source.index("assert_ready() {")
-    ]
+    proof = source[source.index("assert_exact_runtime_process_contract() {") : source.index("assert_ready() {")]
     preflight = source[source.index("node_preflight() {") : source.index("capture_service_state() {")]
-    rollback_start = source[
-        source.index("start_saved_runtime_disabled() {") : source.index("rollback_impl() {")
-    ]
+    rollback_start = source[source.index("start_saved_runtime_disabled() {") : source.index("rollback_impl() {")]
     target_start = source[
         source.index("start_admitted_target_runtime() {") : source.index("node_clear_maintenance() {")
     ]
@@ -1270,7 +1235,7 @@ def test_forward_and_rollback_admission_prove_exact_process_queue_and_live_env()
     assert 'Path(os.path.realpath(proc / "exe"))' in proof
     assert "stable_pid != main_pid" in proof
     assert 'need_reload != "no"' in proof
-    assert 'payload != {' in proof and '"role": "queue_readiness"' in proof
+    assert "payload != {" in proof and '"role": "queue_readiness"' in proof
     assert "assert_exact_runtime_process_contract enabled" in preflight
     assert "assert_exact_runtime_process_contract disabled" in rollback_start
     assert "assert_exact_runtime_process_contract disabled" in target_start
@@ -1306,9 +1271,7 @@ def test_deploy_proves_full_cluster_runtime_env_and_never_derives_node_local_val
     activation = source[source.index("activate_impl() {") : source.index("start_saved_runtime_disabled() {")]
     orchestrate = source[source.index("orchestrate() {") : source.index('case "${1:-}" in')]
     recovery = source[source.index("recover_deployment() {") : source.index("retry_distinct_reconciliation() {")]
-    helper_runner = source[
-        source.index("materialize_cluster_env_helper() {") : source.index("current_head() {")
-    ]
+    helper_runner = source[source.index("materialize_cluster_env_helper() {") : source.index("current_head() {")]
 
     assert '"META_DELETION_NODE_ID"' in projection
     assert '"LINAS_HA_PEER_HOST"' in projection
@@ -1317,7 +1280,7 @@ def test_deploy_proves_full_cluster_runtime_env_and_never_derives_node_local_val
     assert 'FORMAT = "linas-cluster-runtime-env-v1"' in projection
     assert 'remote_node "$peer_host" env-evidence' in helper_runner
     assert "compare_cluster_runtime_env_evidence" in helper_runner
-    assert 'mktemp -d -p /run linasbot-cluster-env.XXXXXXXX' in helper_runner
+    assert "mktemp -d -p /run linasbot-cluster-env.XXXXXXXX" in helper_runner
     assert 'git -C "$REPO_DIR" rev-parse "$source_sha:$path"' in helper_runner
     assert 'git -C "$REPO_DIR" hash-object "$destination"' in helper_runner
     assert "run_system_python_control" in helper_runner
@@ -1331,9 +1294,7 @@ def test_deploy_proves_full_cluster_runtime_env_and_never_derives_node_local_val
     preflight = source[source.index("node_preflight() {") : source.index("capture_service_state() {")]
     assert 'assert_active_runtime_process_env_contract "$target_sha" "$target_sha" "$expected_node_id"' in preflight
     both_preflights = orchestrate.index('if [ "$local_preflight_rc" -ne 0 ]')
-    env_parity = orchestrate.index(
-        'assert_cluster_runtime_env_parity "$peer_host" "$target_sha" "$target_sha"'
-    )
+    env_parity = orchestrate.index('assert_cluster_runtime_env_parity "$peer_host" "$target_sha" "$target_sha"')
     transaction_start = orchestrate.index("transaction_started=1")
     assert both_preflights < env_parity < transaction_start
 
@@ -1342,9 +1303,7 @@ def test_deploy_rejects_canonical_code_loader_environment_in_preflight_and_proce
     source = _helper()
     projection = CLUSTER_ENV_HELPER.read_text(encoding="utf-8")
     guard = PRODUCTION_GUARD.read_text(encoding="utf-8")
-    process = source[
-        source.index("assert_exact_runtime_process_contract() {") : source.index("assert_ready() {")
-    ]
+    process = source[source.index("assert_exact_runtime_process_contract() {") : source.index("assert_ready() {")]
     for blocker in ("PYTHONPATH", "PYTHONHOME", "LD_PRELOAD", '"LD_"', "BASH_ENV", "NODE_OPTIONS"):
         assert blocker in projection or blocker in guard
         assert blocker in process
@@ -1392,9 +1351,7 @@ def test_deploy_has_durable_digest_bound_recovery_for_kill_and_ack_loss() -> Non
 def test_distinct_drained_rollback_has_an_exact_retryable_reconciliation_path() -> None:
     source = _helper()
     recover = source[source.index("recover_deployment() {") : source.index("retry_distinct_reconciliation() {")]
-    retry = source[
-        source.index("retry_distinct_reconciliation() {") : source.index("deployment_recovery_status() {")
-    ]
+    retry = source[source.index("retry_distinct_reconciliation() {") : source.index("deployment_recovery_status() {")]
     status = source[source.index("deployment_recovery_status() {") : source.index("orchestrate() {")]
     dispatch = source[source.index('case "${1:-}" in') :]
     workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -1463,20 +1420,16 @@ def test_explicit_reconciliation_supports_distinct_exact_baselines_only_once() -
     ) in source
     assert "bootstrap.last-committed.json" in source
     assert 'validate_digest "$expected_bootstrap_plan"' in orchestrate
-    steady = orchestrate[
-        orchestrate.index("steady-confirmed)") : orchestrate.index("reconcile)")
-    ]
+    steady = orchestrate[orchestrate.index("steady-confirmed)") : orchestrate.index("reconcile)")]
     assert 'validate_digest "$expected_bootstrap_plan"' in steady
     assert 'test -z "$reconcile_confirmation"' in steady
     assert 'test -z "$expected_bootstrap_plan$reconcile_confirmation"' not in steady
-    assert orchestrate.count('extract_contract_value BOOTSTRAP_PLAN_SHA') == 2
+    assert orchestrate.count("extract_contract_value BOOTSTRAP_PLAN_SHA") == 2
     assert 'rollback_impl "$previous_sha" "$tx_dir"' in orchestrate
     assert 'remote_node "$peer_host" rollback "$peer_previous_sha" "$tx_dir"' in orchestrate
     assert "both remain drained to prevent mixed-SHA serving" in orchestrate
     assert "orchestrate-reconcile)" in dispatch
-    steady_dispatch = dispatch[
-        dispatch.index("orchestrate-confirmed)") : dispatch.index("orchestrate-reconcile)")
-    ]
+    steady_dispatch = dispatch[dispatch.index("orchestrate-confirmed)") : dispatch.index("orchestrate-reconcile)")]
     assert 'orchestrate "${2:-}" steady-confirmed "${3:-}" "${4:-}" "${5:-}" "" "${6:-}"' in steady_dispatch
 
 
@@ -1518,10 +1471,10 @@ def test_deploy_accepts_only_the_exact_bootstrap_v2_proof_bound_to_runtime(
         **{key: "e" * 64 for key in digest_keys},
     }
 
-    def verify(candidate: dict[str, object], expected_runtime: str = runtime_cluster_sha) -> subprocess.CompletedProcess[str]:
-        proof_path.write_bytes(
-            json.dumps(candidate, sort_keys=True, separators=(",", ":")).encode() + b"\n"
-        )
+    def verify(
+        candidate: dict[str, object], expected_runtime: str = runtime_cluster_sha
+    ) -> subprocess.CompletedProcess[str]:
+        proof_path.write_bytes(json.dumps(candidate, sort_keys=True, separators=(",", ":")).encode() + b"\n")
         proof_path.chmod(0o600)
         return subprocess.run(
             [

@@ -71,13 +71,9 @@ def enforce_image_analysis_quota(
     per_msg = int(settings.photos_per_message)
     capped = min(requested, per_msg)
     if consume:
-        decision = ai_usage_limits_service.consume_images(
-            tenant_id, end_user, amount=capped, lang=lang
-        )
+        decision = ai_usage_limits_service.consume_images(tenant_id, end_user, amount=capped, lang=lang)
     else:
-        decision = ai_usage_limits_service.check_image_quota(
-            tenant_id, end_user, amount=capped, lang=lang
-        )
+        decision = ai_usage_limits_service.check_image_quota(tenant_id, end_user, amount=capped, lang=lang)
     if requested > per_msg and decision.allowed:
         decision.truncated = True
         notice = customer_photos_truncated_message(photo_limit=per_msg, lang=lang)
@@ -142,8 +138,7 @@ def apply_inbound_word_limit(
     clipped = truncate_text_to_words(str(text or ""), limit)
     notice = customer_words_truncated_message(word_limit=limit, lang=_lang(user_data))
     print(
-        f"[ai_limits] words_truncated tenant={tenant_id} user={end_user[-8:]} "
-        f"requested={words} allowed={limit}",
+        f"[ai_limits] words_truncated tenant={tenant_id} user={end_user[-8:]} requested={words} allowed={limit}",
         flush=True,
     )
     return clipped, notice
@@ -171,13 +166,9 @@ def enforce_voice_minutes_quota(
     settings = ai_usage_limits_service.get_settings(tenant_id)
     per_msg = int(settings.voice_minutes_per_message)
     if consume:
-        decision = ai_usage_limits_service.consume_voice_minutes(
-            tenant_id, end_user, amount=requested, lang=lang
-        )
+        decision = ai_usage_limits_service.consume_voice_minutes(tenant_id, end_user, amount=requested, lang=lang)
     else:
-        decision = ai_usage_limits_service.check_voice_quota(
-            tenant_id, end_user, amount=requested, lang=lang
-        )
+        decision = ai_usage_limits_service.check_voice_quota(tenant_id, end_user, amount=requested, lang=lang)
     if requested > per_msg and decision.allowed:
         decision.truncated = True
         notice = customer_voice_truncated_message(minute_limit=decision.allowed_amount, lang=lang)
