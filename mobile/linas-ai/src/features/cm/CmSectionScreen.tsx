@@ -114,7 +114,7 @@ export function CmSectionScreen({ section, proposalReview }: Props) {
   const subtitle = isAiLimits ? tr('aiLimitsSubtitle') : meta?.description;
 
   return (
-    <ScreenChrome title={title} subtitle={subtitle}>
+    <ScreenChrome title={title} subtitle={subtitle} sectionTitle={isAiLimits}>
       {draft.loading ? <ActivityIndicator color={colors.accent} /> : null}
       {draft.error ? <Text style={cmFormStyles.error}>{draft.error}</Text> : null}
       {draft.conflict ? <Text style={cmFormStyles.warn}>{draft.conflict}</Text> : null}

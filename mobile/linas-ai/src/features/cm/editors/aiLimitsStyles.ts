@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native';
 
-import { fonts, radii, spacing } from '../../../theme';
+import { fonts, radii, spacing, typography } from '../../../theme';
 
 export const aiLimitsStyles = StyleSheet.create({
   banner: {
@@ -59,10 +59,8 @@ export const aiLimitsStyles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   cardTitle: {
+    ...typography.sectionTitle,
     color: '#10221A',
-    fontFamily: fonts.bodyMedium,
-    fontSize: 17,
-    fontWeight: '700',
   },
   row: {
     flexDirection: 'row',

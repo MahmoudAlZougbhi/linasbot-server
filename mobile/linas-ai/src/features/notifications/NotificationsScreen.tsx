@@ -36,6 +36,8 @@ type Props = {
   onRequestLogin?: () => void;
   onRequestRegister?: () => void;
   isAuthenticated: boolean;
+  /** Dashboard section-title parity when opened from Settings. */
+  sectionTitle?: boolean;
 };
 
 type Gate = 'none' | 'auth' | 'forbidden';
@@ -68,6 +70,7 @@ export function NotificationsScreen({
   onRequestLogin,
   onRequestRegister,
   isAuthenticated,
+  sectionTitle,
 }: Props) {
   const { tr, language } = useI18n();
   const nav = useModuleNav();
@@ -143,7 +146,7 @@ export function NotificationsScreen({
 
   if (gate === 'auth') {
     return (
-      <ScreenChrome title={tr('notificationsTitle')} subtitle={tr('notificationsSub')}>
+      <ScreenChrome title={tr('notificationsTitle')} subtitle={tr('notificationsSub')} sectionTitle={sectionTitle}>
         <AuthGateModal
           visible
           reason={tr('notificationsAuthBody')}
@@ -157,14 +160,14 @@ export function NotificationsScreen({
 
   if (gate === 'forbidden') {
     return (
-      <ScreenChrome title={tr('notificationsTitle')} subtitle={tr('notificationsSub')}>
+      <ScreenChrome title={tr('notificationsTitle')} subtitle={tr('notificationsSub')} sectionTitle={sectionTitle}>
         <EmptyState title={tr('notificationsForbiddenTitle')} body={tr('notificationsForbiddenBody')} />
       </ScreenChrome>
     );
   }
 
   return (
-    <ScreenChrome title={tr('notificationsTitle')} subtitle={tr('notificationsSub')}>
+    <ScreenChrome title={tr('notificationsTitle')} subtitle={tr('notificationsSub')} sectionTitle={sectionTitle}>
       {loading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
       ) : (

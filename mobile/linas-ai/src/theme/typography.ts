@@ -37,6 +37,11 @@ export const typography = {
     fontSize: 26,
     letterSpacing: 0.2,
   } satisfies TextStyle,
+  /** Card/section heading — matches Dashboard “Total activity” titles. */
+  sectionTitle: {
+    fontFamily: bodyMedium,
+    fontSize: 16,
+  } satisfies TextStyle,
   subtitle: {
     fontFamily: body,
     fontSize: 16,
