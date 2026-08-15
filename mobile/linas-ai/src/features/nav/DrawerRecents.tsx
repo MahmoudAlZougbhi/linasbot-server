@@ -1,5 +1,4 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '../../components/AppIcon';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -25,7 +24,6 @@ type Props = {
 export function DrawerRecents(props: Props) {
   const { colors } = useTheme();
   const { tr } = useI18n();
-  const insets = useSafeAreaInsets();
 
   return (
     <View style={styles.wrap}>
@@ -44,45 +42,32 @@ export function DrawerRecents(props: Props) {
           <AppIcon icon={NEW_CHAT_ICON} size={20} color={colors.text} />
         </Pressable>
       </View>
-      <ScrollView
-        style={styles.list}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingBottom: Math.max(insets.bottom, 8) },
-        ]}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        showsVerticalScrollIndicator={false}
-        removeClippedSubviews={false}
-      >
-        <HistoryRows
-          items={props.items}
-          pinnedIds={props.pinnedIds}
-          activeId={props.activeId}
-          archivedMode={props.archivedMode}
-          emptyLabel={props.emptyLabel}
-          variant="drawer"
-          onOpen={props.onOpen}
-          onTogglePin={props.onTogglePin}
-          onArchive={props.onArchive}
-          onUnarchive={props.onUnarchive}
-          onRename={props.onRename}
-          onDelete={props.onDelete}
-        />
-      </ScrollView>
+      <HistoryRows
+        items={props.items}
+        pinnedIds={props.pinnedIds}
+        activeId={props.activeId}
+        archivedMode={props.archivedMode}
+        emptyLabel={props.emptyLabel}
+        variant="drawer"
+        onOpen={props.onOpen}
+        onTogglePin={props.onTogglePin}
+        onArchive={props.onArchive}
+        onUnarchive={props.onUnarchive}
+        onRename={props.onRename}
+        onDelete={props.onDelete}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, minHeight: 0, gap: spacing.md },
-  separator: { height: StyleSheet.hairlineWidth, marginBottom: spacing.sm, flexShrink: 0 },
+  wrap: { gap: spacing.md },
+  separator: { height: StyleSheet.hairlineWidth, marginBottom: spacing.sm },
   headingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.sm,
-    flexShrink: 0,
   },
   heading: {
     fontFamily: fonts.display,
@@ -90,6 +75,4 @@ const styles = StyleSheet.create({
     letterSpacing: -0.25,
   },
   newChatHit: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  list: { flex: 1, minHeight: 0 },
-  listContent: { flexGrow: 1 },
 });

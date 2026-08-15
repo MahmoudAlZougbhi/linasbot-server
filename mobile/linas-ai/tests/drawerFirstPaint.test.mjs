@@ -114,11 +114,11 @@ describe('drawer paints cache immediately and hides chat chrome', () => {
 
   it('keeps drawer search/settings in the menu header', () => {
     const header = read('features/nav/DrawerHeader.tsx');
-    const recents = read('features/nav/DrawerRecents.tsx');
+    const nav = read('features/nav/NavDrawer.tsx');
     assert.match(header, /DRAWER_TOOL_ICONS\.search/);
     assert.match(header, /DRAWER_TOOL_ICONS\.settings/);
     assert.match(header, /wordmark/);
-    assert.match(recents, /removeClippedSubviews=\{false\}/);
-    assert.match(recents, /paddingBottom:\s*Math\.max\(insets\.bottom,\s*8\)/);
+    assert.match(nav, /removeClippedSubviews=\{false\}/);
+    assert.match(nav, /paddingBottom:\s*Math\.max\(insets\.bottom,\s*8\)/);
   });
 });

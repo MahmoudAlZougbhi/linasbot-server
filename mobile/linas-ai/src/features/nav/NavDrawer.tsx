@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SideDrawer } from '../../components/SideDrawer';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -39,6 +40,7 @@ type Props = {
 export function NavDrawer(props: Props) {
   const { colors } = useTheme();
   const { tr } = useI18n();
+  const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef<TextInput>(null);
@@ -135,7 +137,14 @@ export function NavDrawer(props: Props) {
       widthRatio={0.88}
       style={{ backgroundColor: colors.drawerSurface, borderColor: colors.borderSoft }}
     >
-      <View style={styles.body}>
+      <ScrollView
+        style={styles.body}
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 8) }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews={false}
+      >
         <DrawerHeader
           searchOpen={searchOpen}
           query={query}
@@ -199,7 +208,7 @@ export function NavDrawer(props: Props) {
           onRename={recents.onRename}
           onDelete={recents.onDelete}
         />
-      </View>
+      </ScrollView>
     </SideDrawer>
   );
 }

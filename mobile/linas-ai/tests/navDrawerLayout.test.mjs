@@ -66,19 +66,21 @@ describe('drawer layout and selected state', () => {
     assert.doesNotMatch(nav, /DrawerFooter/);
   });
 
-  it('history list fills remaining drawer height under Recent', () => {
+  it('drawer body is one ScrollView; Recents is not a nested flex-1 scroller', () => {
     const recents = read('features/nav/DrawerRecents.tsx');
     const nav = read('features/nav/NavDrawer.tsx');
     const drawer = read('components/SideDrawer.tsx');
-    assert.match(recents, /wrap:\s*\{\s*flex:\s*1/);
-    assert.match(recents, /list:\s*\{\s*flex:\s*1/);
-    assert.match(recents, /<ScrollView/);
-    assert.match(recents, /paddingBottom:\s*Math\.max\(insets\.bottom,\s*8\)/);
-    assert.match(nav, /body:\s*\{\s*flex:\s*1/);
+    assert.match(nav, /<ScrollView/);
+    assert.match(nav, /<DrawerHeader/);
     assert.match(nav, /DrawerNavGrid/);
     assert.match(nav, /DrawerRecents/);
+    assert.match(nav, /paddingBottom:\s*Math\.max\(insets\.bottom,\s*8\)/);
+    assert.match(nav, /body:\s*\{\s*flex:\s*1/);
     assert.doesNotMatch(nav, /<DrawerFooter/);
     assert.doesNotMatch(nav, /APP_VERSION_LABEL/);
+    assert.doesNotMatch(recents, /ScrollView/);
+    assert.doesNotMatch(recents, /flex:\s*1/);
+    assert.match(recents, /<HistoryRows/);
     assert.match(drawer, /paddingBottom:\s*0/);
     assert.match(drawer, /styles\.body/);
     assert.doesNotMatch(drawer, /paddingBottom:\s*Math\.max\(insets\.bottom/);
