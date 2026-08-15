@@ -94,7 +94,7 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "list_cm_faq",
-            "description": "List FAQ / Smart Answer groups in CM (metadata only). Paginated.",
+            "description": "List FAQ / Smart Q&A groups in CM (metadata only). Paginated.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -109,7 +109,7 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "read_cm_faq",
-            "description": "Read one FAQ / Smart Answer group with all language variants.",
+            "description": "Read one FAQ / Smart Q&A group with all language variants.",
             "parameters": {
                 "type": "object",
                 "properties": {"qa_group_id": {"type": "string"}},
@@ -224,7 +224,7 @@ OWNER_V2_CM_TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "propose_cm_faq_upsert",
             "description": "Propose create/update of one FAQ group in CM. Does not write until "
             "owner confirms via approve_cm_patch (Approve→Live). For simple new Q&A pairs that "
-            "should auto-translate into the tenant's selected Smart Answer languages, prefer propose_smart_answer.",
+            "should auto-translate into the tenant's selected Smart Q&A languages, prefer propose_smart_answer.",
             "parameters": {
                 "type": "object",
                 "properties": {

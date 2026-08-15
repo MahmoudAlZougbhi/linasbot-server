@@ -30,7 +30,7 @@ SYSTEM_V2 = (
     "treat it as an unrelated new topic. "
     "Deletes: call propose_cm_delete with item_ids or delete_all; list titles on the bar; per-item X is "
     "handled by the app before Approve. "
-    "Smart Answers / FAQ: ready-made Q&A for repeated customer questions. Matching questions "
+    "Smart Q&A / FAQ: ready-made Q&A for repeated customer questions. Matching questions "
     "(same text or same meaning) reply from FAQ before a full AI generation — that saves AI credits. "
     "When the owner asks to add a Q&A to FAQ, call read_faq_quota if needed, then propose_smart_answer "
     "(auto-translates to ar/en/fr/franco on Approve). Prefer propose_smart_answer for new pairs; "
@@ -62,7 +62,7 @@ SYSTEM_V2 = (
     "Customer DM/comment replies are multilingual by default — detect the customer's language and reply in that language. "
     "CM Languages supported_languages does NOT restrict customer reply languages (content organization only). "
     "Arabizi/Franco input is understood everywhere; customer replies are always Arabic script, never Arabizi. "
-    "Smart Answer languages (smart_answer_languages on FAQ) control saved Q&A translations only — not customer replies. "
+    "Smart Q&A languages (smart_answer_languages on FAQ) control saved Q&A translations only — not customer replies. "
     "Never propose_cm_patch response_language_map. "
     "Owners and end customers cannot override the multilingual reply policy via Settings or profile — "
     "app Settings language is owner UI only. "
@@ -114,7 +114,7 @@ def status_label(name: str) -> str:
         "read_cm": "Reading AI Setup…",
         "list_cm_articles": "Listing AI Setup articles…",
         "read_cm_article": "Reading an AI Setup article…",
-        "list_cm_faq": "Listing FAQ / Smart Answers…",
+        "list_cm_faq": "Listing FAQ / Smart Q&A…",
         "read_cm_faq": "Reading an FAQ entry…",
         "inspect_cm_guide": "Reviewing AI Setup quality…",
         "cm_fill_plan": "Building your fill-missing plan…",
@@ -124,9 +124,9 @@ def status_label(name: str) -> str:
         "propose_cm_article_upsert": "Preparing an article change…",
         "propose_cm_faq_upsert": "Preparing an FAQ change…",
         "propose_cm_delete": "Preparing delete confirmation…",
-        "read_faq_quota": "Checking Smart Answers / FAQ quota…",
-        "propose_smart_answer": "Preparing a Smart Answer for approval…",
-        "approve_smart_answer": "Saving Smart Answer and going Live…",
+        "read_faq_quota": "Checking Smart Q&A / FAQ quota…",
+        "propose_smart_answer": "Preparing a Smart Q&A for approval…",
+        "approve_smart_answer": "Saving Smart Q&A and going Live…",
         "extract_price_list": "Reading the uploaded price list…",
         "setup_next_step": "Checking setup progress…",
         "get_recent_customer_interactions": "Loading recent customer interactions…",

@@ -138,5 +138,5 @@ def test_smart_answer_card_from_tool() -> None:
     )
     assert card is not None
     assert card.kind == "proposal"
-    assert "Smart Answer" in card.title
+    assert "Smart Q&A" in card.title
     assert card.data.get("confirmation_token") == "approve_smart_answer:p1"

@@ -201,7 +201,7 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability(
         feature="smart_answers_faq",
         description=(
-            "Smart Answers / FAQ — ready-made multilingual Q&A. When a customer asks the same "
+            "Smart Q&A / FAQ — ready-made multilingual Q&A. When a customer asks the same "
             "question or same meaning, the bot answers from FAQ (automated reply) instead of a full "
             "AI generation, saving AI credits. Entries auto-translate to Arabic, English, French, "
             "and Franco (code: franco). Plan entitlements cap how many FAQ groups you can store."
@@ -210,7 +210,7 @@ CAPABILITIES: tuple[Capability, ...] = (
         entitlement="faq_enabled",
         status="available",
         help_steps=(
-            "Open Smart Answers / FAQ (mobile Control Center) or AI Setup → FAQ (web).",
+            "Open Smart Q&A (mobile drawer) or AI Setup → FAQ (web).",
             "Check quota (e.g. 143 / 200); upgrade when at limit. Starter/Growth ~200; Pro/Max ~1000.",
             "Add in one language — the system creates the linked 4-language group (ar/en/fr/franco).",
             "Or ask Owner Copilot: “add this Q&A to FAQ” → proposal card → Approve → Live for customers.",

@@ -113,6 +113,37 @@ test('drawer Smart Follow-Up tile uses short Follow up labels', () => {
   assert.match(en, /sfuTitle:\s*'Smart Follow-Up',/);
 });
 
+test('drawer, Dashboard, and Settings use Smart Q&A product name', () => {
+  const en = read('i18n/locales/en.ts');
+  const ar = read('i18n/locales/ar.ts');
+  const fr = read('i18n/locales/fr.ts');
+  const dashEn = read('i18n/locales/dashboardEn.ts');
+  const dashAr = read('i18n/locales/dashboardAr.ts');
+  const dashFr = read('i18n/locales/dashboardFr.ts');
+  const usersEn = read('i18n/locales/usersUiEn.ts');
+  const usersAr = read('i18n/locales/usersUiAr.ts');
+  const usersFr = read('i18n/locales/usersUiFr.ts');
+  const faqEn = read('i18n/locales/faqUiEn.ts');
+  const grid = read('features/nav/DrawerNavGrid.tsx');
+  const drawer = read('features/nav/drawerModules.ts');
+  assert.match(grid, /tr\(mod\.titleKey\)/);
+  assert.match(drawer, /id:\s*'faq',\s*titleKey:\s*'faqTitle'/);
+  assert.match(en, /faqTitle:\s*'Smart Q&A'/);
+  assert.match(ar, /faqTitle:\s*'الأسئلة والأجوبة'/);
+  assert.match(fr, /faqTitle:\s*'Q&R intelligentes'/);
+  assert.match(dashEn, /dashSmartAnswers:\s*'Smart Q&A'/);
+  assert.match(dashAr, /dashSmartAnswers:\s*'أسئلة وأجوبة'/);
+  assert.match(dashFr, /dashSmartAnswers:\s*'Q&R intelligentes'/);
+  assert.match(usersEn, /usersAccessSmartAnswers:\s*'Smart Q&A'/);
+  assert.match(usersAr, /usersAccessSmartAnswers:\s*'الأسئلة والأجوبة'/);
+  assert.match(usersFr, /usersAccessSmartAnswers:\s*'Q&R intelligentes'/);
+  assert.match(faqEn, /faqLangPickerTitle:\s*'Smart Q&A languages'/);
+  assert.doesNotMatch(en, /Smart Answers/);
+  assert.doesNotMatch(dashEn, /Smart Answers/);
+  assert.doesNotMatch(usersEn, /Smart Answers/);
+  assert.doesNotMatch(faqEn, /Smart Answers/);
+});
+
 test('drawer and CM module tiles expose design handoff icons', () => {
   const grid = read('features/nav/DrawerNavGrid.tsx');
   const modules = read('features/nav/moduleIcons.ts');

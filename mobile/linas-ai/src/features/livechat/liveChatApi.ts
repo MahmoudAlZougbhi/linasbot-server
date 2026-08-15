@@ -238,7 +238,7 @@ export async function saveFaqFromLiveChat(input: {
       const entitlementMsg = entitlementDetailMessage(err.body);
       if (entitlementMsg) throw new Error(entitlementMsg);
       if (err.status === 402 || err.status === 403) {
-        throw new Error(errorMessage(err, 'Smart Answers quota reached. Upgrade your plan.'));
+        throw new Error(errorMessage(err, 'Smart Q&A quota reached. Upgrade your plan.'));
       }
     }
     rethrow(err, 'Could not save to FAQ.');

@@ -150,7 +150,7 @@ async def tool_propose_smart_answer(
             "language": lang,
             "proposed_value": proposed_text,
             "impact": (
-                "Smart Answers / FAQ: when a customer asks the same question (or same meaning), "
+                "Smart Q&A / FAQ: when a customer asks the same question (or same meaning), "
                 "the bot replies from this ready-made Q&A instead of a full AI generation — saving credits."
             ),
         },
@@ -164,7 +164,7 @@ async def tool_propose_smart_answer(
         data=data,
         requires_confirmation=True,
         confirmation_token=str(data["confirmation_token"]),
-        error="Confirmation required before saving Smart Answer",
+        error="Confirmation required before saving Smart Q&A",
     )
 
 

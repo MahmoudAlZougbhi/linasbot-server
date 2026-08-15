@@ -152,7 +152,7 @@ def _scan_faq_duplicates(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 section="faq",
                 title="Duplicate FAQ questions",
                 detail=f"Same {lang or 'any'} question in groups {', '.join(uniq[:4])}: “{q[:80]}”.",
-                hint="Merge or delete duplicates — Smart Answers may match unpredictably.",
+                hint="Merge or delete duplicates — Smart Q&A may match unpredictably.",
             )
         )
         if len(out) >= 5:

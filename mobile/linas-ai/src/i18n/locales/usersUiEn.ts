@@ -59,7 +59,7 @@ export const usersUiEn = {
   usersAccessLiveChat: 'Live Chat',
   usersAccessRequests: 'Requests',
   usersAccessAiSetup: 'AI Setup',
-  usersAccessSmartAnswers: 'Smart Answers',
+  usersAccessSmartAnswers: 'Smart Q&A',
   usersAccessSmartFollowUp: 'Smart Follow-Up',
   usersAccessIntegrations: 'Integrations',
   usersAccessUsers: 'Users',

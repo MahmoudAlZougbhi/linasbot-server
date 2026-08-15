@@ -183,9 +183,9 @@ def card_from_tool(name: str, data: dict[str, Any], *, ok: bool) -> ChatCard | N
             q = str(preview.get("question") or "").strip()
             a = str(preview.get("answer") or "").strip()
             lang = str(preview.get("language") or "").strip()
-            body = f"Q ({lang}): {q}\nA: {a}".strip() if (q or a) else "Review this Smart Answer, then Approve."
+            body = f"Q ({lang}): {q}\nA: {a}".strip() if (q or a) else "Review this Smart Q&A, then Approve."
         return proposal_card(
-            title="Smart Answer / FAQ",
+            title="Smart Q&A",
             body=body[:1200],
             proposal_id=str(payload["proposal_id"]),
             preview=preview,

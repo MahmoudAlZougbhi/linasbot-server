@@ -59,7 +59,7 @@ export const usersUiAr: Record<keyof typeof import('./usersUiEn').usersUiEn, str
   usersAccessLiveChat: 'الدردشة المباشرة',
   usersAccessRequests: 'الطلبات',
   usersAccessAiSetup: 'إعداد الذكاء الاصطناعي',
-  usersAccessSmartAnswers: 'الإجابات الذكية',
+  usersAccessSmartAnswers: 'الأسئلة والأجوبة',
   usersAccessSmartFollowUp: 'المتابعة الذكية',
   usersAccessIntegrations: 'الربط',
   usersAccessUsers: 'المستخدمون',
