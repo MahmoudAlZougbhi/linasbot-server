@@ -374,8 +374,13 @@ for value in (release_artifact_api_sha, release_manifest_sha):
         raise SystemExit("deployment release artifact digest is invalid")
 if not re.fullmatch(r"[0-9a-f]{40}", release_target_tree_sha):
     raise SystemExit("deployment release target tree is invalid")
-if bootstrap and not re.fullmatch(r"[0-9a-f]{64}", bootstrap):
-    raise SystemExit("deployment bootstrap digest is invalid")
+if not re.fullmatch(r"[0-9a-f]{64}", bootstrap):
+    raise SystemExit("deployment bootstrap digest is required")
+if mode == "steady-confirmed":
+    if node01_old != node02_old:
+        raise SystemExit("steady deployment journal contract is invalid")
+elif node01_old == node02_old:
+    raise SystemExit("reconciliation deployment journal contract is invalid")
 if peer != "10.106.0.4" or not re.fullmatch(
     rf"/var/backups/linasbot-ha/{target}-[0-9]{{14}}-[0-9]+", tx_dir
 ):
@@ -8392,12 +8397,12 @@ if not re.fullmatch(
 if payload.get("deploy_mode") not in {"steady-confirmed", "reconcile"}:
     raise SystemExit("deployment journal mode is invalid")
 bootstrap = str(payload.get("bootstrap_plan_sha256") or "")
+if not re.fullmatch(r"[0-9a-f]{64}", bootstrap):
+    raise SystemExit("deployment bootstrap digest is required")
 if payload["deploy_mode"] == "steady-confirmed":
-    if bootstrap or payload["node01_previous_sha"] != payload["node02_previous_sha"]:
+    if payload["node01_previous_sha"] != payload["node02_previous_sha"]:
         raise SystemExit("steady deployment journal contract is invalid")
-elif not re.fullmatch(r"[0-9a-f]{64}", bootstrap) or (
-    payload["node01_previous_sha"] == payload["node02_previous_sha"]
-):
+elif payload["node01_previous_sha"] == payload["node02_previous_sha"]:
     raise SystemExit("reconciliation deployment journal contract is invalid")
 if not isinstance(payload.get("drain_seconds"), int) or not 30 <= payload["drain_seconds"] <= 300:
     raise SystemExit("deployment journal drain interval is invalid")

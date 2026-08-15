@@ -33,14 +33,14 @@ test('inbox defaults to All channels, not WhatsApp-only', () => {
 });
 
 test('chatChannel maps IG/FB/WA/TikTok and never invents TikTok', () => {
-  const types = read('features/livechat/liveChatTypes.ts');
-  assert.match(types, /Never invents TikTok rows/);
-  assert.match(types, /ch === 'tiktok'/);
-  assert.match(types, /instagram_dm/);
-  assert.match(types, /facebook_messenger/);
-  assert.match(types, /blobHasChannelToken\(blob, 'tiktok'\)/);
-  assert.match(types, /return 'whatsapp'/);
-  assert.doesNotMatch(types, /fakeTikTok|placeholderTikTok|tiktokThreads\s*=\s*\[/);
+  const helpers = read('features/livechat/liveChatHelpers.ts');
+  assert.match(helpers, /Never invents TikTok rows/);
+  assert.match(helpers, /ch === 'tiktok'/);
+  assert.match(helpers, /instagram_dm/);
+  assert.match(helpers, /facebook_messenger/);
+  assert.match(helpers, /blobHasChannelToken\(blob, 'tiktok'\)/);
+  assert.match(helpers, /return 'whatsapp'/);
+  assert.doesNotMatch(helpers, /fakeTikTok|placeholderTikTok|tiktokThreads\s*=\s*\[/);
   const inbox = read('features/livechat/LiveChatInbox.tsx');
   assert.match(inbox, /No TikTok conversations/);
   assert.match(inbox, /None are created as placeholders/);
@@ -49,9 +49,10 @@ test('chatChannel maps IG/FB/WA/TikTok and never invents TikTok', () => {
 
 test('unified chats parse keeps valid rows when one item is malformed', () => {
   const types = read('features/livechat/liveChatTypes.ts');
+  const helpers = read('features/livechat/liveChatHelpers.ts');
   assert.match(types, /function parseLiveChatItems/);
   assert.match(types, /LiveChatItemSchema\.safeParse/);
   assert.match(types, /customer_info/);
-  assert.match(types, /matchesChannelFilter/);
-  assert.match(types, /if \(filter === 'all'\) return true/);
+  assert.match(helpers, /matchesChannelFilter/);
+  assert.match(helpers, /if \(filter === 'all'\) return true/);
 });

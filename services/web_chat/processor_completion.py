@@ -7,6 +7,7 @@ from typing import Any
 from services.web_chat.credit_fsm import WebChatCreditHandle
 from services.web_chat.operation import (
     OperationRuntime,
+    abandon_operation_lease,
     reconcile_billing_pending,
     refresh_operation_runtime,
     try_advance_operation,
@@ -98,6 +99,7 @@ async def _capture_then_mark_captured(
             result=turn_result,
             released=False,
         )
+        abandon_operation_lease(runtime)
         raise WebChatError("credit_capture_failed", "Could not finalize credits.", status_code=503) from exc
 
     _, won_capture = try_advance_operation(
@@ -192,6 +194,7 @@ async def complete_web_chat_turn(
                 operation_key=operation_key,
                 reply_text=replay,
             )
+        abandon_operation_lease(runtime)
         raise WebChatError("credit_capture_failed", "Could not finalize credits.", status_code=503)
 
     if current_state == OperationState.REPLY_READY:
@@ -266,6 +269,7 @@ async def complete_web_chat_turn(
                 operation_key=operation_key,
                 reply_text=replay,
             )
+        abandon_operation_lease(runtime)
         raise WebChatError("credit_capture_failed", "Could not finalize credits.", status_code=503)
 
     if current_state == OperationState.DURABLE_VISIBLE:

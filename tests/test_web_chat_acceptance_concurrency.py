@@ -348,8 +348,8 @@ def test_same_key_followup_barrier_then_sequential_retry(tmp_path, monkeypatch, 
     monkeypatch.setattr(
         "services.web_chat.followup_delivery.persist_web_chat_message",
         AsyncMock(
-            return_value=__import__("services.web_chat.persistence", fromlist=["PersistResult"]).PersistResult(
-                outcome=__import__("services.web_chat.persistence", fromlist=["PersistOutcome"]).PersistOutcome.CREATED,
+            return_value=PersistResult(
+                outcome=PersistOutcome.CREATED,
                 conversation_id=conversation_id,
             )
         ),

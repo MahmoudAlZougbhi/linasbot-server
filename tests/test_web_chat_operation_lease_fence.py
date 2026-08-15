@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from services.web_chat.credit_fsm import CreditFsmState, WebChatCreditHandle
 from services.web_chat.operation import (
+    abandon_operation_lease,
     advance_operation,
     begin_operation,
     build_turn_payload,
@@ -56,6 +57,7 @@ def _operation_snapshot(*, tenant_id: str, operation_key: str) -> dict[str, obje
             "lease_generation": int(row.lease_generation or 1),
             "released": bool(row.released),
             "reservation_id": row.reservation_id,
+            "lease_expires_at": row.lease_expires_at,
         }
 
 
@@ -91,6 +93,190 @@ def _reserved_runtime_pair(
     assert runtime.record is not None
     assert runtime.record.state == OperationState.RESERVED
     return runtime, credit, operation_key
+
+
+def _runtime_at_state(
+    *,
+    tenant_id: str,
+    visitor_id: str,
+    client_key: str,
+    widget,
+    bundle,
+    target_state: OperationState,
+) -> tuple[object, str]:
+    runtime, credit, operation_key = _reserved_runtime_pair(
+        tenant_id=tenant_id,
+        visitor_id=visitor_id,
+        client_key=client_key,
+        widget=widget,
+        bundle=bundle,
+    )
+    turn_result = {"reply_text": "fence late-state probe"}
+    advance_operation(runtime, OperationState.REPLY_READY, result=turn_result)
+    if target_state == OperationState.RESERVED:
+        return runtime, operation_key
+    advance_operation(runtime, OperationState.DURABLE_VISIBLE, result=turn_result)
+    if target_state == OperationState.DURABLE_VISIBLE:
+        return runtime, operation_key
+    if target_state == OperationState.BILLING_PENDING:
+        advance_operation(
+            runtime,
+            OperationState.BILLING_PENDING,
+            result=turn_result,
+            reservation_id=credit.reservation_id,
+        )
+        return runtime, operation_key
+    if target_state == OperationState.CAPTURED:
+        advance_operation(
+            runtime,
+            OperationState.CAPTURED,
+            result=turn_result,
+            reservation_id=credit.reservation_id,
+        )
+        return runtime, operation_key
+    raise AssertionError(f"unsupported target state: {target_state}")
+
+
+@pytest.mark.parametrize(
+    "target_state",
+    [
+        OperationState.DURABLE_VISIBLE,
+        OperationState.CAPTURED,
+        OperationState.BILLING_PENDING,
+    ],
+)
+def test_active_lease_cannot_be_stolen_in_late_nonterminal_states(
+    tmp_path,
+    monkeypatch,
+    acceptance_pg_ha_env,
+    target_state: OperationState,
+) -> None:
+    """Active DURABLE_VISIBLE/CAPTURED/BILLING_PENDING leases must fence concurrent claimers."""
+    monkeypatch.setenv("WEB_CHAT_PUBLIC_AVAILABILITY", "true")
+    patch_acceptance_eligibility(monkeypatch, tmp_path)
+    store = WebChatPgStore()
+    patch_web_chat_store(monkeypatch, store)
+    widget, visitor, bundle = _widget_and_visitor(store)
+    tenant_id = widget.tenant_id
+    visitor_id = visitor.id
+    client_key = f"lease-fence-late-{target_state.value}"
+
+    runtime_a, operation_key = _runtime_at_state(
+        tenant_id=tenant_id,
+        visitor_id=visitor_id,
+        client_key=client_key,
+        widget=widget,
+        bundle=bundle,
+        target_state=target_state,
+    )
+    owner_a = runtime_a.lease_owner
+    generation_a = runtime_a.lease_generation
+
+    snapshot = verified_session_snapshot(
+        widget=widget,
+        session_id=visitor_id,
+        authority_hash=bundle.authority_hash,
+    )
+    payload = build_turn_payload(session_id=visitor_id, content="fence probe")
+    with pytest.raises(OperationFsmError) as exc:
+        begin_operation(
+            tenant_id=tenant_id,
+            operation_key=operation_key,
+            payload=payload,
+            snapshot=snapshot,
+        )
+    assert exc.value.code == "operation_in_progress"
+
+    row = _operation_snapshot(tenant_id=tenant_id, operation_key=operation_key)
+    assert row["state"] == target_state.value
+    assert row["lease_owner"] == owner_a
+    assert row["lease_generation"] == generation_a
+
+
+def test_expired_durable_visible_lease_is_reclaimable(tmp_path, monkeypatch, acceptance_pg_ha_env) -> None:
+    """Expired late-state leases remain reclaimable for crash recovery."""
+    monkeypatch.setenv("WEB_CHAT_PUBLIC_AVAILABILITY", "true")
+    patch_acceptance_eligibility(monkeypatch, tmp_path)
+    store = WebChatPgStore()
+    patch_web_chat_store(monkeypatch, store)
+    widget, visitor, bundle = _widget_and_visitor(store)
+    tenant_id = widget.tenant_id
+    visitor_id = visitor.id
+    client_key = "lease-fence-late-expired"
+
+    runtime_a, operation_key = _runtime_at_state(
+        tenant_id=tenant_id,
+        visitor_id=visitor_id,
+        client_key=client_key,
+        widget=widget,
+        bundle=bundle,
+        target_state=OperationState.DURABLE_VISIBLE,
+    )
+    _expire_operation_lease(tenant_id=tenant_id, operation_key=operation_key)
+
+    snapshot = verified_session_snapshot(
+        widget=widget,
+        session_id=visitor_id,
+        authority_hash=bundle.authority_hash,
+    )
+    payload = build_turn_payload(session_id=visitor_id, content="fence probe")
+    runtime_b = begin_operation(
+        tenant_id=tenant_id,
+        operation_key=operation_key,
+        payload=payload,
+        snapshot=snapshot,
+    )
+    assert runtime_b.lease_owner != runtime_a.lease_owner
+    assert runtime_b.lease_generation == runtime_a.lease_generation + 1
+    assert runtime_b.record is not None
+    assert runtime_b.record.state == OperationState.DURABLE_VISIBLE
+
+
+def test_stale_worker_abandon_does_not_touch_successor_lease(
+    tmp_path, monkeypatch, acceptance_pg_ha_env
+) -> None:
+    """Stale runtime A cannot expire B's lease via abandon_operation_lease after reclaim."""
+    monkeypatch.setenv("WEB_CHAT_PUBLIC_AVAILABILITY", "true")
+    patch_acceptance_eligibility(monkeypatch, tmp_path)
+    store = WebChatPgStore()
+    patch_web_chat_store(monkeypatch, store)
+    widget, visitor, bundle = _widget_and_visitor(store)
+    tenant_id = widget.tenant_id
+    visitor_id = visitor.id
+
+    runtime_a, _credit_a, operation_key = _reserved_runtime_pair(
+        tenant_id=tenant_id,
+        visitor_id=visitor_id,
+        client_key="lease-fence-stale-abandon",
+        widget=widget,
+        bundle=bundle,
+    )
+    _expire_operation_lease(tenant_id=tenant_id, operation_key=operation_key)
+
+    snapshot = verified_session_snapshot(
+        widget=widget,
+        session_id=visitor_id,
+        authority_hash=bundle.authority_hash,
+    )
+    payload = build_turn_payload(session_id=visitor_id, content="fence probe")
+    runtime_b = begin_operation(
+        tenant_id=tenant_id,
+        operation_key=operation_key,
+        payload=payload,
+        snapshot=snapshot,
+    )
+    before = _operation_snapshot(tenant_id=tenant_id, operation_key=operation_key)
+    assert before["lease_owner"] == runtime_b.lease_owner
+    assert before["lease_generation"] == runtime_b.lease_generation
+    assert before["lease_expires_at"] is not None
+    assert before["lease_expires_at"] > datetime.now(UTC)
+
+    abandon_operation_lease(runtime_a)
+
+    after = _operation_snapshot(tenant_id=tenant_id, operation_key=operation_key)
+    assert after["lease_owner"] == runtime_b.lease_owner
+    assert after["lease_generation"] == runtime_b.lease_generation
+    assert after["lease_expires_at"] == before["lease_expires_at"]
 
 
 def test_stale_worker_reserved_reclaim_blocks_release_and_external_effects(

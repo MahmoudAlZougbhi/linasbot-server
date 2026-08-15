@@ -167,7 +167,9 @@ class WebChatOperationRepository:
             OperationState.CAPTURED,
             OperationState.BILLING_PENDING,
         }:
-            if not lease_active(row) or row.lease_owner != lease_owner:
+            if lease_active(row) and row.lease_owner != lease_owner:
+                return OperationClaimResult(status="in_progress", record=record, message="Operation in progress.")
+            if not lease_active(row):
                 handoff_lease(row, lease_owner=lease_owner)
             return OperationClaimResult(status="resume", record=_row_to_record(row))
         if lease_active(row) and row.lease_owner != lease_owner:
