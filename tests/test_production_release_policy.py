@@ -9,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 DEPLOY_WORKFLOW = WORKFLOW_DIR / "deploy.yml"
+SECURITY_WORKFLOW = WORKFLOW_DIR / "security-checks.yml"
 HA_HELPER = ROOT / "scripts" / "ha" / "deploy_meta_release_ha.sh"
 BREAK_GLASS = ROOT / "scripts" / "ha" / "release_break_glass.sh"
 
@@ -169,6 +170,16 @@ def _minimal_env() -> dict[str, str]:
 
 def test_official_workflow_inventory_is_closed() -> None:
     assert {workflow.name for workflow in _workflows()} == ALL_WORKFLOWS
+
+
+def test_security_check_context_is_unique_for_branch_protection() -> None:
+    source = SECURITY_WORKFLOW.read_text(encoding="utf-8")
+    assert re.search(
+        r"^  secret-scan:\n    name: security-secret-scan$",
+        source,
+        flags=re.MULTILINE,
+    )
+    assert "name: security-secret-scan" not in (WORKFLOW_DIR / "quality-gates.yml").read_text(encoding="utf-8")
 
 
 def test_remote_production_workflow_inventory_is_closed() -> None:
