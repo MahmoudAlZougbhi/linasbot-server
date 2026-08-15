@@ -134,3 +134,14 @@ test('Growth plan header divider and Total activity card stroke match siblings',
   assert.match(grid, /borderColor: colors\.border/);
   assert.match(channels, /borderWidth: 1/);
 });
+
+test('Total activity Smart Q&A uses the drawer FAQ glyph, not sparkles', () => {
+  const grid = read('features/dashboard/sections/TotalActivityGrid.tsx');
+  const modules = read('features/nav/moduleIcons.ts');
+  const channels = read('features/dashboard/sections/ChannelActivityTable.tsx');
+  assert.match(modules, /faq: feather\('help-circle'\)/);
+  assert.match(grid, /MODULE_ICONS\.faq/);
+  assert.match(grid, /DASH_ICON_BG/);
+  assert.doesNotMatch(grid, /sparkles-outline/);
+  assert.doesNotMatch(channels, /sparkles-outline/);
+});

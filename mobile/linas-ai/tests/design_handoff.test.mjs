@@ -153,6 +153,7 @@ test('drawer and CM module tiles expose design handoff icons', () => {
   assert.match(grid, /AppIcon/);
   assert.match(modules, /dashboard: feather\('grid'\)/);
   assert.match(modules, /cm: ion\('sparkles-outline'\)/);
+  assert.match(modules, /faq: feather\('help-circle'\)/);
   assert.match(modules, /livechat: feather\('message-square'\)/);
   assert.match(modules, /integrations: mci\('power-plug-outline'\)/);
   assert.match(modules, /subscription: feather\('credit-card'\)/);
@@ -732,8 +733,10 @@ test('Dashboard sections match design handoff', () => {
   assert.match(grid, /dashTotalActivity/);
   assert.match(grid, /briefcase-outline/);
   assert.match(grid, /chatbox-ellipses-outline/);
+  assert.match(grid, /MODULE_ICONS\.faq/);
   assert.match(grid, /DASH_ICON_BG/);
   assert.match(grid, /DASH_NAVY/);
+  assert.doesNotMatch(grid, /sparkles-outline/);
   assert.doesNotMatch(grid, /bag-handle-outline/);
   assert.doesNotMatch(grid, /fontWeight:\s*'700'/);
   assert.match(table, /dashActivityByChannel/);
