@@ -1,7 +1,7 @@
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { AppIcon, feather } from '../../components/AppIcon';
-import { radii, useTheme } from '../../theme';
+import { useI18n } from '../../i18n/LanguageContext';
+import { fonts, radii, useTheme } from '../../theme';
 import { PlatformChannelIcon } from './PlatformChannelIcon';
 import type { ChannelFilter, ChatChannel } from './liveChatTypes';
 
@@ -20,6 +20,7 @@ type Props = {
 };
 
 export function InboxChannelChips({ selected, onSelect }: Props) {
+  const { tr } = useI18n();
   const { colors } = useTheme();
   return (
     <View style={styles.wrap}>
@@ -39,25 +40,20 @@ export function InboxChannelChips({ selected, onSelect }: Props) {
               key={chip.id}
               onPress={() => onSelect(chip.id)}
               style={[
-                styles.chip,
+                chip.id === 'all' ? styles.chipText : styles.chip,
                 {
                   backgroundColor: active ? colors.accentSoft : colors.surface,
                   borderColor: active ? colors.accent : colors.border,
                 },
               ]}
               accessibilityRole="tab"
-              accessibilityLabel={`Channel ${chip.label}`}
+              accessibilityLabel={
+                chip.id === 'all' ? tr('reqFilterAll') : `Channel ${chip.label}`
+              }
               accessibilityState={{ selected: active }}
             >
               {chip.id === 'all' ? (
-                <View
-                  style={[
-                    styles.allIcon,
-                    { backgroundColor: active ? colors.accentSoft : colors.input },
-                  ]}
-                >
-                  <AppIcon icon={feather('globe')} size={16} color={colors.text} />
-                </View>
+                <Text style={[styles.allLabel, { color: colors.text }]}>{tr('reqFilterAll')}</Text>
               ) : (
                 <PlatformChannelIcon channel={chip.id as ChatChannel} size={28} />
               )}
@@ -83,11 +79,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  allIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  chipText: {
+    minHeight: 44,
+    borderRadius: radii.pill,
+    borderWidth: 2,
+    paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  allLabel: { fontFamily: fonts.bodyMedium, fontSize: 14 },
 });

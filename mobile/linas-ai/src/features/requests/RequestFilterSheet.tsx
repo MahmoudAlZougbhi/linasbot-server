@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon, feather } from '../../components/AppIcon';
+import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import { PlatformChannelIcon } from '../livechat/PlatformChannelIcon';
 import type { ChatChannel } from '../livechat/liveChatTypes';
@@ -21,6 +22,7 @@ type Props = {
 };
 
 export function RequestFilterSheet({ visible, applied, staff, search, onClose, onApply }: Props) {
+  const { tr } = useI18n();
   const { colors } = useTheme();
   const [draft, setDraft] = useState<RequestFilters>(applied);
   const [matched, setMatched] = useState(0);
@@ -97,13 +99,15 @@ export function RequestFilterSheet({ visible, applied, staff, search, onClose, o
                     },
                   ]}
                 >
-                  {p.channel === 'all' ? (
-                    <AppIcon icon={feather('globe')} size={16} color={colors.textMuted} />
-                  ) : (
+                  {p.channel !== 'all' ? (
                     <PlatformChannelIcon channel={p.channel as ChatChannel} size={22} />
-                  )}
+                  ) : null}
                   <Text style={[styles.chipLabel, { color: colors.text }]}>
-                    {p.id === 'all' ? 'All' : p.channel === 'facebook' ? 'Facebook' : labelFor(p.channel)}
+                    {p.id === 'all'
+                      ? tr('reqFilterAll')
+                      : p.channel === 'facebook'
+                        ? 'Facebook'
+                        : labelFor(p.channel)}
                   </Text>
                   {selected ? (
                     <AppIcon icon={feather('check')} size={14} color={colors.accent} />

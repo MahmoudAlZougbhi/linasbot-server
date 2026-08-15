@@ -53,6 +53,8 @@ test('filter sheet has platforms date assignee reset and show count', () => {
   assert.match(sheet, /RequestDateField/);
   assert.match(sheet, /accentSoft/);
   assert.match(sheet, /tiktok/);
+  assert.match(sheet, /reqFilterAll/);
+  assert.doesNotMatch(sheet, /feather\('globe'\)/);
   const cal = read('features/requests/RequestDatePicker.tsx');
   assert.match(cal, /feather\('calendar'\)/);
   assert.match(cal, /Previous month/);
