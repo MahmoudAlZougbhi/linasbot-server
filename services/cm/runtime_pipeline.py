@@ -177,9 +177,20 @@ async def prepare_response(
     if tiered_match:
         qa_pair = tiered_match.get("qa_pair") or {}
         tier = tiered_match.get("tier") or "direct"
+        answer = str(qa_pair.get("answer") or "")
+        matched_language = str(
+            tiered_match.get("matched_language") or qa_pair.get("language") or detected_language
+        )
+        from services.faq_answer_localize import localize_faq_answer
+
+        localized = await localize_faq_answer(
+            answer=answer,
+            source_language=matched_language,
+            target_language=response_language,
+        )
         return PipelineOutcome(
             stop=True,
-            reply=str(qa_pair.get("answer") or ""),
+            reply=localized,
             reason="faq_exact" if tier == "exact" else "faq_direct",
             metadata={"match_score": tiered_match.get("match_score"), "tier": tier},
         )
@@ -196,16 +207,29 @@ async def prepare_response(
         semantic_hits = await semantic_search(
             tenant_id=tenant_id, index_id=index_id, query=message, kind="faq", language=detected_language, top_k=1
         )
+        if not semantic_hits:
+            semantic_hits = await semantic_search(
+                tenant_id=tenant_id, index_id=index_id, query=message, kind="faq", language=None, top_k=1
+            )
     except (FileNotFoundError, ValueError, KeyError, HashEmbeddingForbiddenError, PublishedEmbeddingError) as exc:
         return PipelineOutcome(stop=True, reason="index_unavailable", error=str(exc))
 
     if semantic_hits and float(semantic_hits[0].get("score") or 0) >= SEMANTIC_FAQ_MIN_SCORE:
         top = semantic_hits[0]
-        answer = str((top.get("metadata") or {}).get("answer") or "")
+        metadata = top.get("metadata") or {}
+        answer = str(metadata.get("answer") or "")
         if answer:
+            from services.faq_answer_localize import localize_faq_answer
+
+            matched_language = str(metadata.get("language") or detected_language)
+            localized = await localize_faq_answer(
+                answer=answer,
+                source_language=matched_language,
+                target_language=response_language,
+            )
             return PipelineOutcome(
                 stop=True,
-                reply=answer,
+                reply=localized,
                 reason="faq_semantic",
                 metadata={"match_score": top.get("score"), "source_id": top.get("source_id")},
             )

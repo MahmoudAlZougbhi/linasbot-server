@@ -182,6 +182,7 @@ async def run_customer_reply_v2_comment(
         tenant_id=tenant_id,
         message=comment_text,
         detected_language=detected_language,
+        response_language=response_language,
         has_unresolved_context_refs=bool(comment_ctx.get("caption")) and len(comment_text.split()) <= 3,
     )
     if faq.hit and not uncertainty:

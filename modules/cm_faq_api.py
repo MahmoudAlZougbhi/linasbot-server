@@ -262,6 +262,24 @@ async def cm_put_smart_answer_languages(request: Request, body: dict[str, Any] =
     return {"success": True, **saved, "batch_translate": batch}
 
 
+@app.delete("/api/cm/faq/smart-answer-languages/{language}")
+async def cm_delete_smart_answer_language(request: Request, language: str) -> Any:
+    """Remove a Smart Q&A language and permanently delete all saved Q&A for that language."""
+    session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
+    from services.cm.faq_integration import FaqIntegrationError, purge_smart_answer_language_data
+
+    try:
+        result = purge_smart_answer_language_data(
+            language=language,
+            tenant_id=tenant_id,
+            updated_by=_actor(session),
+        )
+    except FaqIntegrationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return result
+
+
 @app.post("/api/cm/faq/smart-answer-languages/translate-existing")
 async def cm_translate_existing_smart_answers(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
     session = require_permission(request, "contentManagers")

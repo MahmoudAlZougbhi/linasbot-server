@@ -245,6 +245,7 @@ async def run_customer_reply_v2_dm(
         tenant_id=tenant_id,
         message=message,
         detected_language=detected_language,
+        response_language=response_language,
         has_unresolved_context_refs=False,
     )
     if faq.hit:

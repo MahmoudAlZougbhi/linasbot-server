@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from services.cm.version_store import load_published_content
+from services.faq_answer_localize import localize_faq_answer
 
 # Pronouns / follow-ups that require conversation or post context — never FAQ-direct.
 _CONTEXT_DEPENDENT = re.compile(
@@ -31,16 +32,39 @@ def is_context_dependent_question(message: str) -> bool:
     return bool(_CONTEXT_DEPENDENT.search(message or ""))
 
 
+async def _localized_answer(
+    *,
+    answer: str,
+    matched_language: str | None,
+    response_language: str,
+    metadata: dict[str, Any] | None,
+) -> tuple[str, dict[str, Any] | None]:
+    localized = await localize_faq_answer(
+        answer=answer,
+        source_language=matched_language,
+        target_language=response_language,
+    )
+    meta = dict(metadata or {})
+    if matched_language and matched_language != response_language:
+        meta["matched_language"] = matched_language
+        meta["response_language"] = response_language
+        meta["localized"] = localized != answer
+    return localized, meta or None
+
+
 async def try_faq_fast_path(
     *,
     tenant_id: str,
     message: str,
     detected_language: str,
+    response_language: str | None = None,
     has_unresolved_context_refs: bool = False,
 ) -> FaqFastPathResult:
     """Exact / fuzzy / high-confidence semantic FAQ. Published only. Tenant-scoped."""
     if is_context_dependent_question(message) or has_unresolved_context_refs:
         return FaqFastPathResult(hit=False, reason="context_dependent")
+
+    visitor_language = (response_language or detected_language or "en").strip().lower()
 
     # Ensure published exists (raises if not).
     load_published_content(tenant_id)
@@ -52,11 +76,23 @@ async def try_faq_fast_path(
         qa = tiered.get("qa_pair") or {}
         answer = str(qa.get("answer") or "").strip()
         if answer:
+            matched_language = str(
+                tiered.get("matched_language") or qa.get("language") or detected_language
+            )
+            localized, meta = await _localized_answer(
+                answer=answer,
+                matched_language=matched_language,
+                response_language=visitor_language,
+                metadata={
+                    "match_score": tiered.get("match_score"),
+                    "tier": tiered.get("tier"),
+                },
+            )
             return FaqFastPathResult(
                 hit=True,
-                answer=answer,
+                answer=localized,
                 reason="faq_exact" if tiered.get("tier") == "exact" else "faq_direct",
-                metadata={"match_score": tiered.get("match_score"), "tier": tiered.get("tier")},
+                metadata=meta,
             )
 
     from services.cm.semantic_index import search as semantic_search
@@ -66,17 +102,22 @@ async def try_faq_fast_path(
     if not pointer or not pointer.index_version_id:
         return FaqFastPathResult(hit=False, reason="index_unavailable")
 
-    try:
-        hits = await semantic_search(
-            tenant_id=tenant_id,
-            index_id=pointer.index_version_id,
-            query=message,
-            kind="faq",
-            language=detected_language,
-            top_k=2,
-        )
-    except Exception:
-        return FaqFastPathResult(hit=False, reason="semantic_faq_error")
+    async def _semantic_hits(*, language: str | None) -> list[dict[str, Any]]:
+        try:
+            return await semantic_search(
+                tenant_id=tenant_id,
+                index_id=pointer.index_version_id,
+                query=message,
+                kind="faq",
+                language=language,
+                top_k=2,
+            )
+        except Exception:
+            return []
+
+    hits = await _semantic_hits(language=detected_language)
+    if not hits:
+        hits = await _semantic_hits(language=None)
 
     if not hits:
         return FaqFastPathResult(hit=False, reason="faq_miss")
@@ -90,12 +131,23 @@ async def try_faq_fast_path(
 
     if strong:
         top = strong[0]
-        answer = str((top.get("metadata") or {}).get("answer") or "").strip()
+        metadata = top.get("metadata") or {}
+        answer = str(metadata.get("answer") or "").strip()
         if answer:
+            matched_language = str(metadata.get("language") or detected_language)
+            localized, meta = await _localized_answer(
+                answer=answer,
+                matched_language=matched_language,
+                response_language=visitor_language,
+                metadata={
+                    "match_score": top.get("score"),
+                    "source_id": top.get("source_id"),
+                },
+            )
             return FaqFastPathResult(
                 hit=True,
-                answer=answer,
+                answer=localized,
                 reason="faq_semantic",
-                metadata={"match_score": top.get("score"), "source_id": top.get("source_id")},
+                metadata=meta,
             )
     return FaqFastPathResult(hit=False, reason="faq_miss")

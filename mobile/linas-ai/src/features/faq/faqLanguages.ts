@@ -4,7 +4,7 @@ export type SmartAnswerLang = {
   native?: string;
 };
 
-export const SMART_ANSWER_LANGUAGE_CATALOG: SmartAnswerLang[] = [
+const FALLBACK_CATALOG: SmartAnswerLang[] = [
   { id: 'en', label: 'English', native: 'English' },
   { id: 'ar', label: 'Arabic', native: 'العربية' },
   { id: 'franco', label: 'Franco / Arabizi', native: 'Franco' },
@@ -16,28 +16,45 @@ export const SMART_ANSWER_LANGUAGE_CATALOG: SmartAnswerLang[] = [
   { id: 'zh', label: 'Chinese', native: '中文' },
   { id: 'tr', label: 'Turkish', native: 'Türkçe' },
   { id: 'ru', label: 'Russian', native: 'Русский' },
+  { id: 'ur', label: 'Urdu', native: 'اردو' },
 ];
 
-/** @deprecated use SMART_ANSWER_LANGUAGE_CATALOG */
-export const FAQ_LANGS = SMART_ANSWER_LANGUAGE_CATALOG.map((lang) => ({
+let activeCatalog: SmartAnswerLang[] = FALLBACK_CATALOG;
+
+/** @deprecated use getSmartAnswerLanguageCatalog */
+export const SMART_ANSWER_LANGUAGE_CATALOG = FALLBACK_CATALOG;
+
+export function setSmartAnswerLanguageCatalog(catalog: SmartAnswerLang[]): void {
+  activeCatalog = catalog.length ? catalog : FALLBACK_CATALOG;
+}
+
+export function getSmartAnswerLanguageCatalog(): SmartAnswerLang[] {
+  return activeCatalog;
+}
+
+/** @deprecated use getSmartAnswerLanguageCatalog */
+export const FAQ_LANGS = FALLBACK_CATALOG.map((lang) => ({
   id: lang.id,
   labelKey: `faqLang_${lang.id}` as const,
 }));
 
 export type FaqLangId = string;
 
+function findLang(langId: string): SmartAnswerLang | undefined {
+  return activeCatalog.find((l) => l.id === langId);
+}
+
 export function langLabel(langId: string): string {
-  const hit = SMART_ANSWER_LANGUAGE_CATALOG.find((l) => l.id === langId);
-  return hit?.label || langId;
+  return findLang(langId)?.label || langId;
 }
 
 export function langNativeLabel(langId: string): string {
-  const hit = SMART_ANSWER_LANGUAGE_CATALOG.find((l) => l.id === langId);
+  const hit = findLang(langId);
   return hit?.native || hit?.label || langId;
 }
 
 export function sortLangIds(ids: string[]): string[] {
-  const order = SMART_ANSWER_LANGUAGE_CATALOG.map((lang) => lang.id);
+  const order = activeCatalog.map((lang) => lang.id);
   return [...ids].sort((a, b) => {
     const ia = order.indexOf(a);
     const ib = order.indexOf(b);
