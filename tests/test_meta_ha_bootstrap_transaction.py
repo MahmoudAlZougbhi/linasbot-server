@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import os
@@ -15,6 +16,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 BOOTSTRAP_PATH = ROOT / "scripts" / "ha" / "bootstrap_meta_ha_contract.py"
 LB_PATH = ROOT / "scripts" / "ha" / "manage_do_lb_ready_healthcheck.py"
+CONTRACT_PATH = ROOT / "scripts" / "ha" / "do_lb_ready_contract.py"
 
 
 def _load(path: Path, name: str):  # type: ignore[no-untyped-def]
@@ -27,6 +29,7 @@ def _load(path: Path, name: str):  # type: ignore[no-untyped-def]
 
 bootstrap = _load(BOOTSTRAP_PATH, "bootstrap_meta_ha_contract_test")
 lb = _load(LB_PATH, "manage_do_lb_ready_healthcheck_test")
+contract = _load(CONTRACT_PATH, "do_lb_ready_contract_test")
 
 
 def _observed_lb() -> dict[str, object]:
@@ -36,6 +39,7 @@ def _observed_lb() -> dict[str, object]:
         "disable_lets_encrypt_dns_records": False,
         "droplet_ids": [591901417, 510629908],
         "enable_backend_keepalive": True,
+        "enable_proxy_protocol": False,
         "forwarding_rules": [
             {"entry_protocol": "http", "entry_port": 80, "target_protocol": "http", "target_port": 80},
             {
@@ -60,18 +64,18 @@ def _observed_lb() -> dict[str, object]:
         "ip": lb.LB_IP,
         "ipv6": "",
         "name": lb.LB_NAME,
-        "network": "EXTERNAL",
-        "network_stack": "IPV4",
+        "network_stack": "DUALSTACK",
         "project_id": "70160077-6e21-4fc7-9c81-45e6b60d8919",
         "redirect_http_to_https": True,
         "region": {"slug": "lon1", "name": "London 1"},
         "size": "lb-small",
-        "size_unit": 2,
+        "size_unit": 1,
         "status": "active",
         "sticky_sessions": {"type": "none"},
+        "subnet_uuid": "2415d1ce-b8e6-4707-bc89-56e234548d60",
         "tag": "",
         "type": "REGIONAL",
-        "vpc_uuid": "d0e11d67-observed",
+        "vpc_uuid": "d0e11d67-3fba-4966-b2db-6a471307df85",
     }
 
 
@@ -82,10 +86,13 @@ def test_do_lb_update_is_full_projection_cas_and_changes_only_health_path() -> N
 
     assert before["region"] == "lon1"
     assert "id" not in before and "ip" not in before
-    assert before["network"] == "EXTERNAL"
-    assert before["network_stack"] == "IPV4"
+    assert "network" not in before
+    assert before["network_stack"] == "DUALSTACK"
     assert before["type"] == "REGIONAL"
-    assert before["size_unit"] == 2
+    assert before["size_unit"] == 1
+    assert before["enable_proxy_protocol"] is False
+    assert before["subnet_uuid"] == contract.LB_SUBNET_UUID
+    assert before["vpc_uuid"] == contract.LB_VPC_UUID
     assert "size" not in before
     assert "tag" not in before
     assert before["droplet_ids"] == [510629908, 591901417]
@@ -101,13 +108,23 @@ def test_do_lb_update_is_full_projection_cas_and_changes_only_health_path() -> N
 def test_do_lb_immutable_network_shape_is_validated_and_preserved_in_full_put() -> None:
     observed = _observed_lb()
     projection = lb.validate_observed_identity(observed)
-    assert observed["network"] == "EXTERNAL"
-    assert observed["network_stack"] == "IPV4"
-    assert projection["network"] == "EXTERNAL"
-    assert projection["network_stack"] == "IPV4"
+    assert "network" not in observed
+    assert observed["network_stack"] == "DUALSTACK"
+    assert "network" not in projection
+    assert projection["network_stack"] == "DUALSTACK"
     assert projection["type"] == "REGIONAL"
 
-    observed["network"] = "INTERNAL"
+    observed["network"] = "EXTERNAL"
+    with pytest.raises(RuntimeError, match="forbidden"):
+        lb.validate_observed_identity(observed)
+
+    observed = _observed_lb()
+    observed["network_stack"] = "IPV4"
+    with pytest.raises(RuntimeError, match="routing/safety contract"):
+        lb.validate_observed_identity(observed)
+
+    observed = _observed_lb()
+    observed["size_unit"] = 2
     with pytest.raises(RuntimeError, match="routing/safety contract"):
         lb.validate_observed_identity(observed)
 
@@ -115,10 +132,10 @@ def test_do_lb_immutable_network_shape_is_validated_and_preserved_in_full_put() 
 def test_do_lb_full_put_keeps_modern_capacity_and_omits_empty_tag() -> None:
     observed = _observed_lb()
     assert observed["size"] == "lb-small"
-    assert observed["size_unit"] == 2
+    assert observed["size_unit"] == 1
     assert observed["tag"] == ""
     projection = lb.validate_observed_identity(observed)
-    assert projection["size_unit"] == 2
+    assert projection["size_unit"] == 1
     assert "size" not in projection
     assert "tag" not in projection
     assert projection["droplet_ids"] == [510629908, 591901417]
@@ -128,9 +145,97 @@ def test_do_lb_full_put_keeps_modern_capacity_and_omits_empty_tag() -> None:
         lb.validate_observed_identity(observed)
 
     observed = _observed_lb()
-    observed["network_stack"] = "DUALSTACK"
+    observed["network_stack"] = "IPV4"
     with pytest.raises(RuntimeError, match="routing/safety contract"):
         lb.validate_observed_identity(observed)
+
+
+def _ready_projection_from_observed() -> dict[str, object]:
+    return lb.desired_projection(lb.validate_observed_identity(_observed_lb()))
+
+
+def test_do_lb_projection_keysets_match_across_all_consumers() -> None:
+    assert lb.LB_READY_PROJECTION_KEYS == contract.LB_READY_PROJECTION_KEYS
+    assert bootstrap.LB_READY_PROJECTION_KEYS == contract.LB_READY_PROJECTION_KEYS
+
+
+def test_do_lb_ready_projection_digest_matches_across_consumers() -> None:
+    ready = _ready_projection_from_observed()
+    digest = lb._digest(ready)
+    contract.validate_ready_projection_values(ready)
+    bootstrap._validate_lb_ready_projection(ready, digest)
+    assert digest == lb._digest(ready)
+
+
+@pytest.mark.parametrize(
+    ("mutator", "pattern"),
+    [
+        (lambda projection: projection.pop("subnet_uuid"), "incomplete or unknown"),
+        (lambda projection: projection.update({"network": "EXTERNAL"}), "forbidden network"),
+        (lambda projection: projection.update({"network_stack": "IPV4"}), "routing identity"),
+        (lambda projection: projection.update({"size_unit": 2}), "routing identity"),
+        (lambda projection: projection.update({"enable_proxy_protocol": True}), "routing identity"),
+        (
+            lambda projection: projection.update({"subnet_uuid": "00000000-0000-0000-0000-000000000000"}),
+            "routing identity",
+        ),
+        (
+            lambda projection: projection.update({"vpc_uuid": "00000000-0000-0000-0000-000000000000"}),
+            "routing identity",
+        ),
+        (lambda projection: projection.update({"extra_field": True}), "incomplete or unknown"),
+    ],
+)
+def test_do_lb_ready_projection_rejects_mutated_shapes_without_put(
+    mutator: object, pattern: str
+) -> None:
+    ready = _ready_projection_from_observed()
+    mutator(ready)  # type: ignore[operator]
+    with pytest.raises(RuntimeError, match=pattern):
+        contract.validate_ready_projection_values(ready)
+
+
+def test_do_lb_apply_and_restore_round_trip_preserves_full_representation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_root = tmp_path / "lb-owner-state"
+    lb._ensure_state_root(state_root)
+    before = lb.validate_observed_identity(_observed_lb())
+    desired = lb.desired_projection(before)
+    before_sha = lb._digest(before)
+    desired_sha = lb._digest(desired)
+    requests: list[tuple[str, object]] = []
+    observations = iter(
+        (
+            _observed_lb(),
+            _observed_lb(),
+            dict(_observed_lb(), health_check=dict(contract.LB_HEALTH_CONTRACT_READY)),
+            dict(_observed_lb(), health_check=dict(contract.LB_HEALTH_CONTRACT_READY)),
+        )
+    )
+    monkeypatch.setattr(lb, "_get_load_balancer", lambda: next(observations))
+    monkeypatch.setattr(
+        lb,
+        "_request",
+        lambda method, *, payload=None: requests.append((method, payload)) and {},
+    )
+    monkeypatch.setattr(lb, "_wait_projection", lambda expected, **kwargs: True)
+    apply_args = SimpleNamespace(
+        state_dir=state_root,
+        expected_before_sha256=before_sha,
+        snapshot=lb.snapshot_path_for(before_sha, state_root),
+        confirm=lb.apply_confirmation(before_sha),
+    )
+    lb._apply(apply_args)
+    assert requests[0] == ("PUT", desired)
+    restore_args = SimpleNamespace(
+        state_dir=state_root,
+        snapshot=lb.snapshot_path_for(before_sha, state_root),
+        expected_current_sha256=desired_sha,
+        confirm=lb.restore_confirmation(before_sha),
+    )
+    lb._restore(restore_args)
+    assert requests[-1] == ("PUT", before)
 
 
 def test_do_lb_update_refuses_unknown_fields_and_has_exact_restore_token() -> None:
@@ -1031,6 +1136,7 @@ def test_bootstrap_runtime_launcher_and_probe_never_execute_the_legacy_venv(
 def test_bootstrap_first_transition_orders_unit_and_bytecode_authority_before_commit() -> None:
     source = BOOTSTRAP_PATH.read_text(encoding="utf-8")
     prepare = source[source.index("def _node_prepare") : source.index("def _node_abort_prepare")]
+    drain = source[source.index("def _node_drain") : source.index("def _transition_historical_env")]
     apply = source[source.index("def _node_apply") : source.index("def _assert_env_contract")]
     verify = source[source.index("def _node_verify") : source.index("def _quiesce_and_disable_units")]
     rollback = source[source.index("def _node_rollback") : source.index("def _node_admit_rollback")]
@@ -1046,13 +1152,19 @@ def test_bootstrap_first_transition_orders_unit_and_bytecode_authority_before_co
     assert apply.index("_atomic_write(ENV_PATH") < apply.index('"status": "applied"')
     assert verify.index("_assert_target_units(") < verify.index("_assert_env_contract(")
     assert verify.index("_assert_repo_bytecode_absent()") < verify.index("_assert_env_contract(")
-    assert rollback.index("_restore_live_units(") < rollback.index('"status": "rolled_back_drained"')
+    assert verify.index("_nested.assert_quarantined(") < verify.index("_assert_env_contract(")
     assert rollback.index("_restore_repo_bytecode(") < rollback.index('"status": "rolled_back_drained"')
     assert rollback.index("_restore_git_metadata(") < rollback.index('"status": "rolled_back_drained"')
     assert '"format": "linas-meta-ha-bootstrap-node-v2"' in commit
     assert '"target_unit_contract_sha256"' in commit
     assert '"legacy_bytecode_manifest_sha256"' in commit
     assert '"repo_bytecode_absent": True' in commit
+    assert '"nested_runtime_present"' in commit
+    assert '"nested_runtime_evidence_sha256"' in commit
+    assert '"nested_runtime_quarantined"' in commit
+    assert drain.index("_nested.apply_quarantine(") < drain.index('"status": "drained"')
+    assert verify.index("_nested.assert_quarantined(") < verify.index("_assert_env_contract(")
+    assert rollback.index("_nested.restore_quarantine(") < rollback.index('"status": "rolled_back_drained"')
     assert release.index("_assert_target_units(") < release.rindex("_atomic_write(")
     assert release.index("_assert_repo_bytecode_absent()") < release.rindex("_atomic_write(")
 

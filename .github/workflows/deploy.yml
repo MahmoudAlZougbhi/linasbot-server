@@ -700,17 +700,18 @@ jobs:
               "disable_lets_encrypt_dns_records",
               "droplet_ids",
               "enable_backend_keepalive",
+              "enable_proxy_protocol",
               "forwarding_rules",
               "health_check",
               "http_idle_timeout_seconds",
               "name",
-              "network",
               "network_stack",
               "project_id",
               "redirect_http_to_https",
               "region",
               "size_unit",
               "sticky_sessions",
+              "subnet_uuid",
               "type",
               "vpc_uuid",
           }
@@ -742,17 +743,19 @@ jobs:
               projection.get("name") != "linas-http-lb-lon1"
               or projection.get("region") != "lon1"
               or projection.get("project_id") != "70160077-6e21-4fc7-9c81-45e6b60d8919"
-              or projection.get("network") != "EXTERNAL"
-              or projection.get("network_stack") != "IPV4"
+              or "network" in projection
+              or projection.get("network_stack") != "DUALSTACK"
               or projection.get("type") != "REGIONAL"
-              or projection.get("size_unit") != 2
+              or projection.get("size_unit") != 1
+              or projection.get("enable_proxy_protocol") is not False
+              or projection.get("subnet_uuid") != "2415d1ce-b8e6-4707-bc89-56e234548d60"
               or projection.get("sticky_sessions") != {"type": "none"}
               or projection.get("redirect_http_to_https") is not True
               or projection.get("enable_backend_keepalive") is not True
               or projection.get("disable_lets_encrypt_dns_records") is not False
               or projection.get("http_idle_timeout_seconds") != 60
+              or projection.get("vpc_uuid") != "d0e11d67-3fba-4966-b2db-6a471307df85"
               or not isinstance(projection.get("vpc_uuid"), str)
-              or not projection["vpc_uuid"]
               or not isinstance(droplet_ids, list)
               or any(type(value) is not int for value in droplet_ids)
               or sorted(droplet_ids) != [510629908, 591901417]

@@ -2531,35 +2531,10 @@ if (
     or set(projection) != module.LB_READY_PROJECTION_KEYS
 ):
     raise SystemExit("LB attestation is not the exact reviewed full projection")
-if (
-    projection.get("name") != module.LB_NAME
-    or projection.get("region") != "lon1"
-    or projection.get("project_id") != "70160077-6e21-4fc7-9c81-45e6b60d8919"
-    or projection.get("network") != "EXTERNAL"
-    or projection.get("network_stack") != "IPV4"
-    or projection.get("type") != "REGIONAL"
-    or projection.get("size_unit") != 2
-    or projection.get("sticky_sessions") != {"type": "none"}
-    or projection.get("redirect_http_to_https") is not True
-    or projection.get("enable_backend_keepalive") is not True
-    or projection.get("disable_lets_encrypt_dns_records") is not False
-    or projection.get("http_idle_timeout_seconds") != 60
-    or not isinstance(projection.get("vpc_uuid"), str)
-    or not projection["vpc_uuid"]
-    or sorted(projection.get("droplet_ids") or []) != module.EXPECTED_DROPLET_IDS
-):
-    raise SystemExit("LB attestation routing identity differs from the reviewed contract")
-expected_health = {
-    "protocol": "http",
-    "port": 8003,
-    "path": "/api/ready",
-    "check_interval_seconds": 5,
-    "response_timeout_seconds": 3,
-    "healthy_threshold": 2,
-    "unhealthy_threshold": 3,
-}
-if projection.get("health_check") != expected_health:
-    raise SystemExit("LB attestation does not bind direct :8003 /api/ready")
+try:
+    module.validate_ready_projection_values(projection)
+except RuntimeError as exc:
+    raise SystemExit("LB attestation routing identity differs from the reviewed contract") from exc
 rules = projection.get("forwarding_rules")
 if not isinstance(rules, list) or len(rules) != 2 or any(not isinstance(rule, dict) for rule in rules):
     raise SystemExit("LB attestation forwarding rules are invalid")

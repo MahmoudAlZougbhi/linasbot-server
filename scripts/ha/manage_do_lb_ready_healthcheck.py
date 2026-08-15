@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -31,13 +32,29 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
+_contract_spec = importlib.util.spec_from_file_location(
+    "do_lb_ready_contract",
+    Path(__file__).with_name("do_lb_ready_contract.py"),
+)
+if _contract_spec is None or _contract_spec.loader is None:
+    raise RuntimeError("DigitalOcean ready contract module is missing")
+_contract = importlib.util.module_from_spec(_contract_spec)
+_contract_spec.loader.exec_module(_contract)
+LB_HEALTH_CONTRACT = _contract.LB_HEALTH_CONTRACT
+LB_READY_PROJECTION_KEYS = _contract.LB_READY_PROJECTION_KEYS
+validate_observed_get_routing = _contract.validate_observed_get_routing
+validate_ready_projection_keyset = _contract.validate_ready_projection_keyset
+validate_ready_projection_values = _contract.validate_ready_projection_values
+
 LB_ID = "2535b8ff-b89c-442b-b5bf-91eae51ed3f6"
-LB_NAME = "linas-http-lb-lon1"
+LB_NAME = _contract.LB_NAME
 LB_IP = "157.245.31.104"
-EXPECTED_DROPLET_IDS = [510629908, 591901417]
+LB_SUBNET_UUID = _contract.LB_SUBNET_UUID
+LB_VPC_UUID = _contract.LB_VPC_UUID
+EXPECTED_DROPLET_IDS = _contract.LB_DROPLETS
 API_ROOT = "https://api.digitalocean.com/v2/load_balancers"
-OLD_HEALTH_PATH = "/api/health"
-READY_HEALTH_PATH = "/api/ready"
+OLD_HEALTH_PATH = _contract.OLD_HEALTH_PATH
+READY_HEALTH_PATH = _contract.READY_HEALTH_PATH
 _API_TOKEN: str | None = None
 FAILOVER_ATTESTATION_SCHEMA = "linas-do-lb-failover-phase-attestation-v1"
 READY_ATTESTATION_SCHEMA = 2
@@ -76,7 +93,6 @@ UPDATE_KEYS = frozenset(
         "target_load_balancer_ids",
         # Immutable after creation, but part of the provider's documented full
         # update representation. Preserve the already-validated exact values.
-        "network",
         "network_stack",
         "type",
     }
@@ -96,29 +112,7 @@ READ_ONLY_KEYS = frozenset(
     }
 )
 
-# Only this reviewed full PUT representation is accepted as deployment or
-# failover authority. Optional provider fields are deliberately absent; their
-# appearance requires an explicit contract review rather than silent carryover.
-LB_READY_PROJECTION_KEYS = frozenset(
-    {
-        "disable_lets_encrypt_dns_records",
-        "droplet_ids",
-        "enable_backend_keepalive",
-        "forwarding_rules",
-        "health_check",
-        "http_idle_timeout_seconds",
-        "name",
-        "network",
-        "network_stack",
-        "project_id",
-        "redirect_http_to_https",
-        "region",
-        "size_unit",
-        "sticky_sessions",
-        "type",
-        "vpc_uuid",
-    }
-)
+# Exact reviewed full PUT representation — see do_lb_ready_contract.py.
 
 
 def _canonical(value: Any) -> bytes:
@@ -264,26 +258,11 @@ def validate_observed_identity(load_balancer: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("DigitalOcean load-balancer algorithm changed")
     if load_balancer.get("size") != "lb-small":
         raise RuntimeError("DigitalOcean load-balancer size changed")
-    size_unit = load_balancer.get("size_unit")
-    if isinstance(size_unit, bool) or not isinstance(size_unit, int) or size_unit <= 0:
-        raise RuntimeError("DigitalOcean load-balancer size_unit changed")
     if load_balancer.get("tag", "") != "":
         raise RuntimeError("DigitalOcean load-balancer tag conflicts with fixed droplet membership")
     if load_balancer.get("project_id") != "70160077-6e21-4fc7-9c81-45e6b60d8919":
         raise RuntimeError("DigitalOcean load-balancer project changed")
-    if (
-        load_balancer.get("redirect_http_to_https") is not True
-        or load_balancer.get("enable_backend_keepalive") is not True
-        or load_balancer.get("disable_lets_encrypt_dns_records") is not False
-        or not 30 <= int(load_balancer.get("http_idle_timeout_seconds") or 0) <= 600
-        or load_balancer.get("network_stack") != "IPV4"
-        or load_balancer.get("network") not in {None, "EXTERNAL"}
-        or load_balancer.get("type") != "REGIONAL"
-        or not isinstance(load_balancer.get("vpc_uuid"), str)
-        or not load_balancer.get("vpc_uuid")
-        or load_balancer.get("sticky_sessions") != {"type": "none"}
-    ):
-        raise RuntimeError("DigitalOcean load-balancer routing/safety contract changed")
+    validate_observed_get_routing(load_balancer)
     region = load_balancer.get("region")
     if not isinstance(region, dict) or region.get("slug") != "lon1":
         raise RuntimeError("DigitalOcean load-balancer region changed")
@@ -311,18 +290,14 @@ def validate_observed_identity(load_balancer: dict[str, Any]) -> dict[str, Any]:
     health = load_balancer.get("health_check")
     if not isinstance(health, dict):
         raise RuntimeError("DigitalOcean health-check object is missing")
-    if health.get("protocol") != "http" or int(health.get("port") or 0) != 8003:
+    path = health.get("path")
+    if path not in {OLD_HEALTH_PATH, READY_HEALTH_PATH}:
+        raise RuntimeError("DigitalOcean health-check path is not authorized")
+    if health != {**LB_HEALTH_CONTRACT, "path": path}:
         raise RuntimeError("DigitalOcean health check is not the observed direct HTTP :8003 target")
-    interval = int(health.get("check_interval_seconds") or 0)
-    threshold = int(health.get("unhealthy_threshold") or 0)
-    if (
-        interval != 5
-        or threshold != 3
-        or int(health.get("response_timeout_seconds") or 0) != 3
-        or int(health.get("healthy_threshold") or 0) != 2
-    ):
-        raise RuntimeError("DigitalOcean unhealthy-window contract changed")
-    return update_projection(load_balancer)
+    projection = update_projection(load_balancer)
+    validate_ready_projection_keyset(projection)
+    return projection
 
 
 def desired_projection(before: dict[str, Any]) -> dict[str, Any]:
@@ -574,8 +549,10 @@ def _validate_attestation(payload: dict[str, Any], ready_sha256: str) -> None:
     if payload.get("ready_mutable_sha256") != ready_sha256:
         raise RuntimeError("ready attestation names a different projection digest")
     ready = payload.get("ready_projection")
-    if not isinstance(ready, dict) or set(ready) != LB_READY_PROJECTION_KEYS or _digest(ready) != ready_sha256:
+    if not isinstance(ready, dict) or _digest(ready) != ready_sha256:
         raise RuntimeError("ready attestation projection digest is invalid")
+    validate_ready_projection_keyset(ready)
+    validate_ready_projection_values(ready)
     health = ready.get("health_check")
     if not isinstance(health, dict) or payload.get("health_check") != {
         "protocol": health.get("protocol"),
@@ -594,13 +571,15 @@ def _validate_attestation(payload: dict[str, Any], ready_sha256: str) -> None:
         "status": "active",
         "algorithm": "round_robin",
         "size": "lb-small",
+        "size_unit": ready.get("size_unit"),
         "tag": "",
-        "network_stack": "IPV4",
         "region": {"slug": ready.get("region")},
+        "health_check": dict(_contract.LB_HEALTH_CONTRACT_OLD),
     }
-    if "network" in ready:
-        observed["network"] = "EXTERNAL"
-    if validate_observed_identity(observed) != ready:
+    observed_projection = validate_observed_identity(observed)
+    ready_before = dict(ready)
+    ready_before["health_check"] = dict(_contract.LB_HEALTH_CONTRACT_OLD)
+    if observed_projection != ready_before:
         raise RuntimeError("ready attestation is not the exact authorized mutable projection")
     if health.get("path") != READY_HEALTH_PATH:
         raise RuntimeError("ready attestation does not prove /api/ready")

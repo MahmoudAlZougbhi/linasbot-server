@@ -57,6 +57,7 @@ def _observed_lb() -> dict[str, object]:
         "disable_lets_encrypt_dns_records": False,
         "droplet_ids": [591901417, 510629908],
         "enable_backend_keepalive": True,
+        "enable_proxy_protocol": False,
         "forwarding_rules": [
             {"entry_protocol": "http", "entry_port": 80, "target_protocol": "http", "target_port": 80},
             {
@@ -81,18 +82,18 @@ def _observed_lb() -> dict[str, object]:
         "ip": lb.LB_IP,
         "ipv6": "",
         "name": lb.LB_NAME,
-        "network": "EXTERNAL",
-        "network_stack": "IPV4",
+        "network_stack": "DUALSTACK",
         "project_id": "70160077-6e21-4fc7-9c81-45e6b60d8919",
         "redirect_http_to_https": True,
         "region": {"slug": "lon1", "name": "London 1"},
         "size": "lb-small",
-        "size_unit": 2,
+        "size_unit": 1,
         "status": "active",
         "sticky_sessions": {"type": "none"},
+        "subnet_uuid": "2415d1ce-b8e6-4707-bc89-56e234548d60",
         "tag": "",
         "type": "REGIONAL",
-        "vpc_uuid": "d0e11d67-observed",
+        "vpc_uuid": "d0e11d67-3fba-4966-b2db-6a471307df85",
     }
 
 
