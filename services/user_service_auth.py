@@ -274,9 +274,28 @@ class UserServiceAuthMixin:
             print(f"Error counting admins: {e}")
             return 0
 
-    def _sanitize_user(self, user: dict[str, Any]) -> dict[str, Any] | None:
+    def _sanitize_user(
+        self,
+        user: dict[str, Any],
+        *,
+        doc_id: str | None = None,
+    ) -> dict[str, Any] | None:
         """Remove sensitive fields (password) from user data. Fast, in-memory only."""
         if not user:
+            return None
+
+        user_id = str(user.get("id") or doc_id or "").strip()
+        if not user_id:
+            return None
+
+        raw_tenant = user.get("tenantId")
+        if raw_tenant is None or str(raw_tenant).strip() == "":
+            raw_tenant = user.get("tenant_id")
+        if raw_tenant is None or str(raw_tenant).strip() == "":
+            return None
+        try:
+            tenant_id = self._normalize_tenant_id(raw_tenant)
+        except (ValueError, TypeError):
             return None
 
         email_verified = True if "emailVerified" not in user else bool(user.get("emailVerified"))
@@ -291,12 +310,12 @@ class UserServiceAuthMixin:
         else:
             pref_lang = "en"
         return {
-            "id": user.get("id"),
+            "id": user_id,
             "email": user.get("email"),
             "name": user.get("name"),
             "role": user.get("role"),
             "permissions": user.get("permissions"),
-            "tenantId": self._normalize_tenant_id(user.get("tenantId")),
+            "tenantId": tenant_id,
             "businessName": user.get("businessName"),
             "status": user.get("status"),
             "emailVerified": email_verified,

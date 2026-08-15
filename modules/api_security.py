@@ -72,6 +72,7 @@ PERMISSION_KEYS = {
 
 SYSTEM_ROLE_PERMISSIONS: dict[str, dict[str, bool]] = {
     "admin": {k: True for k in PERMISSION_KEYS},
+    "owner": {k: True for k in PERMISSION_KEYS},
     "platform_owner": {k: True for k in PERMISSION_KEYS},
     "operator": {
         "dashboard": True,
@@ -130,7 +131,7 @@ def is_production_env() -> bool:
 
 def resolve_permissions(role: str, custom: dict[str, bool] | None) -> dict[str, bool]:
     base = dict(SYSTEM_ROLE_PERMISSIONS.get(role) or SYSTEM_ROLE_PERMISSIONS["viewer"])
-    if role in {"admin", "platform_owner"}:
+    if role in {"admin", "owner", "platform_owner"}:
         return {k: True for k in PERMISSION_KEYS}
     if custom:
         for k, v in custom.items():

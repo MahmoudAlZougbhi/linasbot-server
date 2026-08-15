@@ -292,14 +292,46 @@ class UserService(UserServiceAuthMixin):
             )
             users: list[dict[str, Any]] = []
             for doc in docs:
-                user_data = doc.to_dict()
-                sanitized = self._sanitize_user(user_data)
-                if sanitized is not None:
-                    users.append(sanitized)
+                try:
+                    user_data = doc.to_dict() or {}
+                    sanitized = self._sanitize_user(user_data, doc_id=doc.id)
+                    if sanitized is not None:
+                        users.append(sanitized)
+                except Exception as exc:
+                    print(f"[auth:get_all_users] skip user {doc.id}: {exc}", flush=True)
             return users
         except Exception as e:
             print(f"Error getting all users: {e}")
             return []
+
+    def get_users_for_tenant(self, tenant_id: str) -> list[dict[str, Any]]:
+        """List sanitized dashboard users for one tenant (tenantId or legacy tenant_id)."""
+        tid = self._normalize_tenant_id(tenant_id)
+        users: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        for field in ("tenantId", "tenant_id"):
+            try:
+                query = self.collection.where(filter=FieldFilter(field, "==", tid))
+                docs = query.stream(
+                    timeout=self.AUTH_QUERY_TIMEOUT_SECONDS,
+                    retry=None,
+                )
+                for doc in docs:
+                    try:
+                        user_data = doc.to_dict() or {}
+                        sanitized = self._sanitize_user(user_data, doc_id=doc.id)
+                        uid = str(sanitized.get("id") or "").strip() if sanitized else ""
+                        if sanitized is not None and uid and uid not in seen_ids:
+                            users.append(sanitized)
+                            seen_ids.add(uid)
+                    except Exception as exc:
+                        print(
+                            f"[auth:get_users_for_tenant] skip user {doc.id} ({field}={tid}): {exc}",
+                            flush=True,
+                        )
+            except Exception as exc:
+                print(f"[auth:get_users_for_tenant] query failed ({field}={tid}): {exc}", flush=True)
+        return users
 
     def update_user(self, user_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
         """

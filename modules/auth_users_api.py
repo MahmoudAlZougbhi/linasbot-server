@@ -18,11 +18,7 @@ from services.user_service import user_service
 async def get_users(request: Request) -> Any:
     session = require_session(request)
     try:
-        users = [
-            user
-            for user in user_service.get_all_users()
-            if str(user.get("tenantId") or "").strip() == session.tenant_id
-        ]
+        users = user_service.get_users_for_tenant(session.tenant_id)
         return {"success": True, "users": users}
     except Exception as e:
         print(f"Get users error: {e}")
@@ -40,11 +36,7 @@ async def create_user(body: CreateUserRequest, request: Request) -> Any:
 
     ent = entitlements_store.get(session.tenant_id)
     if ent.plan_id in {"lite", "starter", "growth", "pro", "max"}:
-        tenant_users = [
-            user
-            for user in user_service.get_all_users()
-            if str(user.get("tenantId") or "").strip() == session.tenant_id
-        ]
+        tenant_users = user_service.get_users_for_tenant(session.tenant_id)
         non_owners = [
             u
             for u in tenant_users
