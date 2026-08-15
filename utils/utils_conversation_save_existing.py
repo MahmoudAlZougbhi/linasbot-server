@@ -227,32 +227,61 @@ async def save_message_when_conversation_id(
             message_data=message_data,
         )
     else:
-        # Conversation not found - create new one
         message_data = _build_saved_message_payload(text, metadata, channel, role)
+        new_doc_ref = conversations_collection_for_user.document(conversation_id)
 
-        _, new_doc_ref = await asyncio.to_thread(
-            conversations_collection_for_user.add,
-            {
-                "user_id": canonical_user_id,
-                "customer_info": customer_info,
-                "messages": [message_data],
-                "timestamp": utc_now(),
-                # Smart outbound must stay visible as an active bot thread in Live Chat (not "closed"/archived).
-                "status": "active",
-                "sentiment": "neutral",
-                "human_takeover_active": False,
-                "last_updated": utc_now(),
-                "conversation_state": "bot_active",
-                "last_message_text": message_data.get("text", ""),
-                "last_message_at": message_data.get("timestamp") or utc_now(),
-                "unread_count": 0 if role != "user" else 1,
-            },
-        )
-        saved_conv_id = new_doc_ref.id
+        def _create_or_append() -> str:
+            from google.cloud import firestore as gcf
+
+            transaction = db.transaction()
+
+            @gcf.transactional
+            def _run(transaction: Any) -> str:
+                snap = new_doc_ref.get(transaction=transaction)
+                if snap.exists:
+                    return "exists"
+                transaction.set(
+                    new_doc_ref,
+                    {
+                        "user_id": canonical_user_id,
+                        "customer_info": customer_info,
+                        "messages": [message_data],
+                        "timestamp": utc_now(),
+                        "status": "active",
+                        "sentiment": "neutral",
+                        "human_takeover_active": False,
+                        "last_updated": utc_now(),
+                        "conversation_state": "bot_active",
+                        "last_message_text": message_data.get("text", ""),
+                        "last_message_at": message_data.get("timestamp") or utc_now(),
+                        "unread_count": 0 if role != "user" else 1,
+                    },
+                )
+                return "created"
+
+            outcome: str = _run(transaction)
+            return outcome
+
+        outcome = await asyncio.to_thread(_create_or_append)
+        if outcome == "exists":
+            return await save_message_when_conversation_id(
+                db=db,
+                app_id_for_firestore=app_id_for_firestore,
+                conversation_id=conversation_id,
+                user_id=user_id,
+                canonical_user_id=canonical_user_id,
+                role=role,
+                text=text,
+                metadata=metadata,
+                channel=channel,
+                customer_info=customer_info,
+                conversations_collection_for_user=conversations_collection_for_user,
+            )
+        saved_conv_id = conversation_id
         if canonical_user_id not in config.user_data_whatsapp:
             config.user_data_whatsapp[canonical_user_id] = {}
-        config.user_data_whatsapp[canonical_user_id]["current_conversation_id"] = new_doc_ref.id
+        config.user_data_whatsapp[canonical_user_id]["current_conversation_id"] = conversation_id
         _invalidate_live_chat_cache()
         await _ensure_live_chat_index_after_save(canonical_user_id, saved_conv_id, None, {})
-        print(f"✅ Created conversation {new_doc_ref.id} for user {canonical_user_id}")
+        print(f"✅ Created conversation {conversation_id} for user {canonical_user_id}")
     return saved_conv_id, conversations_collection_for_user

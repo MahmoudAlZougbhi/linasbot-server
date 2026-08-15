@@ -1228,7 +1228,7 @@ def test_bootstrap_first_transition_orders_unit_and_bytecode_authority_before_co
     apply = source[source.index("def _node_apply") : source.index("def _assert_env_contract")]
     verify = source[source.index("def _node_verify") : source.index("def _quiesce_and_disable_units")]
     rollback = source[source.index("def _node_rollback") : source.index("def _node_admit_rollback")]
-    commit = source[source.index("def _bootstrap_commit_proof_payload") : source.index("def _node_finalize")]
+    commit = source[source.index("def _nested_commit_proof_fields") : source.index("def _node_finalize")]
     release = source[source.index("def _node_release_active") : source.index("def _node_status")]
 
     assert prepare.index("_backup_live_units(") < prepare.index("_write_journal(backup, prepared)")
@@ -1243,13 +1243,14 @@ def test_bootstrap_first_transition_orders_unit_and_bytecode_authority_before_co
     assert verify.index("_nested.assert_quarantined(") < verify.index("_assert_env_contract(")
     assert rollback.index("_restore_repo_bytecode(") < rollback.index('"status": "rolled_back_drained"')
     assert rollback.index("_restore_git_metadata(") < rollback.index('"status": "rolled_back_drained"')
-    assert '"format": "linas-meta-ha-bootstrap-node-v2"' in commit
+    assert '"format": "linas-meta-ha-bootstrap-node-v3"' in source
     assert '"target_unit_contract_sha256"' in commit
     assert '"legacy_bytecode_manifest_sha256"' in commit
     assert '"repo_bytecode_absent": True' in commit
     assert '"nested_runtime_present"' in commit
     assert '"nested_runtime_evidence_sha256"' in commit
     assert '"nested_runtime_quarantined"' in commit
+    assert '"nested_runtime_authority_sha256"' in commit
     assert drain.index("_nested.apply_quarantine(") < drain.index('"status": "drained"')
     assert verify.index("_nested.assert_quarantined(") < verify.index("_assert_env_contract(")
     assert rollback.index("_nested.restore_quarantine(") < rollback.index('"status": "rolled_back_drained"')

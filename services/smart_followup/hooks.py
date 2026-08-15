@@ -7,7 +7,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from services.requests.constants import SOURCE_CHANNEL_WHATSAPP_CLOUD
+from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT, SOURCE_CHANNEL_WHATSAPP_CLOUD
 from services.smart_followup.channels import normalize_followup_channel
 from services.smart_followup.constants import DEFAULT_CHANNEL
 from services.smart_followup.repository import SmartFollowUpRepository
@@ -84,6 +84,11 @@ def schedule_followup_sequence(
         return {"scheduled": False, "reason": "no_enabled_steps"}
 
     channel = normalize_followup_channel(request.channel or DEFAULT_CHANNEL)
+    if channel == SOURCE_CHANNEL_WEB_CHAT:
+        from services.web_chat.flags import web_chat_containment_active
+
+        if web_chat_containment_active():
+            return {"scheduled": False, "reason": "web_chat_contained"}
     if not channel_enabled_for_settings(settings, channel):
         return {"scheduled": False, "reason": "channel_disabled"}
 

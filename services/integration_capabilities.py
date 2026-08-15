@@ -274,7 +274,7 @@ def list_tenant_integration_status(tenant_id: str) -> list[dict[str, Any]]:
 
         web_widget = web_chat_store.get_or_create_widget(tenant_id)
         web_connected = web_widget.connected
-        web_row = {
+        web_row: dict[str, Any] = {
             "platform": "web",
             "label": "Website",
             "connected": web_connected,

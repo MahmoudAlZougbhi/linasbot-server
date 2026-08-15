@@ -6,6 +6,8 @@ import time
 import uuid
 from typing import Any
 
+from sqlalchemy.exc import IntegrityError
+
 from services.billing_backend import require_billing_pg_session
 from services.credit_ledger_pg_store import (
     append_entry,
@@ -217,6 +219,33 @@ def reverse_pack_on_session(
     }
 
 
+def _open_reservation_from_prior(
+    session: Any,
+    tenant_id: str,
+    prior: list[dict[str, Any]],
+) -> str | None:
+    for prior_row in prior:
+        if prior_row.get("op") != "reserve":
+            continue
+        reservation_id = str(prior_row.get("id") or "").strip()
+        if not reservation_id:
+            continue
+        row_credits, terminal = reservation_state(session, tenant_id, reservation_id)
+        if row_credits > 0 and terminal is None:
+            return reservation_id
+    return None
+
+
+def pg_find_open_reservation_by_request(tenant_id: str, request_id: str) -> str | None:
+    """Return an open reservation id for ``request_id`` when reserve already committed."""
+    rid = str(request_id or "").strip()
+    if not rid:
+        return None
+    with require_billing_pg_session() as session:
+        prior = find_ops_by_request_id(session, tenant_id, rid)
+        return _open_reservation_from_prior(session, tenant_id, prior)
+
+
 def pg_reserve(
     *,
     tenant_id: str,
@@ -226,31 +255,45 @@ def pg_reserve(
     request_id: str,
 ) -> str:
     pg_ensure_period_grant(tenant_id)
+    rid = str(request_id or "").strip()
     with require_billing_pg_session() as session:
-        row = get_balance_row(session, tenant_id, for_update=True)
-        assert row is not None
-        available = int(row.available)
-        reserved = int(row.reserved)
+        prior = find_ops_by_request_id(session, tenant_id, rid)
+        existing = _open_reservation_from_prior(session, tenant_id, prior)
+        if existing:
+            return existing
+        balance_row = get_balance_row(session, tenant_id, for_update=True)
+        assert balance_row is not None
+        available = int(balance_row.available)
+        reserved = int(balance_row.reserved)
         if available < credits:
             raise PermissionError("Insufficient credits")
-        available -= credits
-        reserved += credits
-        upsert_balance(session, tenant_id, available, reserved)
         reservation_id = uuid.uuid4().hex
-        append_entry(
-            session,
-            {
-                "id": reservation_id,
-                "tenant_id": tenant_id,
-                "user_id": user_id,
-                "op": "reserve",
-                "credits": credits,
-                "balance_after": available,
-                "operation_type": operation_type,
-                "request_id": request_id,
-                "meta": {"reservation_id": reservation_id},
-            },
-        )
+        try:
+            with session.begin_nested():
+                available -= credits
+                reserved += credits
+                upsert_balance(session, tenant_id, available, reserved)
+                append_entry(
+                    session,
+                    {
+                        "id": reservation_id,
+                        "tenant_id": tenant_id,
+                        "user_id": user_id,
+                        "op": "reserve",
+                        "credits": credits,
+                        "balance_after": available,
+                        "operation_type": operation_type,
+                        "request_id": rid,
+                        "meta": {"reservation_id": reservation_id},
+                    },
+                )
+        except IntegrityError:
+            session.expire_all()
+            raced = find_ops_by_request_id(session, tenant_id, rid)
+            existing = _open_reservation_from_prior(session, tenant_id, raced)
+            if existing:
+                return existing
+            raise
         return reservation_id
 
 

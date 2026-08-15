@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import tempfile
+from collections.abc import Iterator
 
 import pytest
 
@@ -41,6 +42,26 @@ def _ensure_event_loop():
     except RuntimeError:
         asyncio.set_event_loop(asyncio.new_event_loop())
     yield
+
+
+pytest_plugins = ("tests.web_chat_acceptance_support",)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _interrupt_safe_docker_cleanup() -> Iterator[None]:
+    from tests.docker_test_containers import (
+        cleanup_tracked_containers,
+        current_run_owner,
+        install_interrupt_safe_cleanup,
+        purge_stale_test_containers,
+    )
+
+    os.environ.setdefault("LINAS_TEST_RUN_OWNER", current_run_owner())
+    install_interrupt_safe_cleanup()
+    purge_stale_test_containers()
+    yield
+    cleanup_tracked_containers()
+    purge_stale_test_containers()
 
 
 @pytest.fixture

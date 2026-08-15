@@ -188,6 +188,17 @@ async def ready() -> Any:
         checks["data_root_writable"] = {"ok": False, "error": type(e).__name__}
         overall_ok = False
 
+    try:
+        from services.web_chat.flags import get_web_chat_ha_readiness
+
+        wc_ok, wc_checks = get_web_chat_ha_readiness()
+        checks["web_chat_ha"] = wc_checks
+        if wc_checks.get("required") and not wc_ok:
+            overall_ok = False
+    except Exception as e:
+        checks["web_chat_ha"] = {"ok": False, "error": type(e).__name__, "required": True}
+        overall_ok = False
+
     # Queue / Redis readiness — hard-fail only when LINAS_REQUIRE_REDIS (or durable queues) is on.
     try:
         from services.job_queue import job_queue

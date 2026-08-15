@@ -83,6 +83,8 @@ def test_control_plane_allowlists_and_workflow_bridge_are_closed() -> None:
         "scripts/ha/bootstrap_nested_runtime_evidence.py",
         "scripts/ha/bootstrap_nested_runtime_quarantine.py",
         "scripts/ha/bootstrap_nested_runtime_safety.py",
+        "scripts/ha/bootstrap_nested_runtime_loader.py",
+        "scripts/ha/bootstrap_nested_runtime_mount.py",
     }
     assert required <= set(release.CONTROL_PLANE_FILES)
     assert required <= bootstrap.RUNTIME_CONTROL_FILES
@@ -161,6 +163,8 @@ def test_nested_runtime_authenticated_dependencies_are_closed_and_non_circular()
         "scripts/ha/bootstrap_nested_runtime_evidence.py",
         "scripts/ha/bootstrap_nested_runtime_quarantine.py",
         "scripts/ha/bootstrap_nested_runtime_safety.py",
+        "scripts/ha/bootstrap_nested_runtime_loader.py",
+        "scripts/ha/bootstrap_nested_runtime_mount.py",
     }
     assert nested_runtime_authority <= bootstrap.RUNTIME_CONTROL_FILES
     assert len(evidence_source.splitlines()) <= 500
@@ -168,10 +172,9 @@ def test_nested_runtime_authenticated_dependencies_are_closed_and_non_circular()
     assert len(safety_source.splitlines()) <= 500
     assert "bootstrap_nested_runtime_quarantine" not in evidence_source
     assert "from scripts.ha" not in quarantine_source
-    assert 'Path(__file__).with_name("bootstrap_nested_runtime_evidence.py")' in quarantine_source
-    assert 'Path(__file__).with_name("bootstrap_nested_runtime_safety.py")' in quarantine_source
-    assert 'Path(__file__).with_name("bootstrap_nested_runtime_safety.py")' in evidence_source
-    assert "_nested_evidence_spec" in bootstrap_source
+    assert "bootstrap_nested_runtime_loader.py" in evidence_source
+    assert "load_authenticated_module" in quarantine_source
+    assert "_nested_loader" in bootstrap_source
     assert "bootstrap_nested_runtime_evidence.py" in bootstrap_source
 
 

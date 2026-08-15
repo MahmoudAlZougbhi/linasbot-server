@@ -38,6 +38,8 @@ class FollowUpSendResult:
     provider_message_id: str | None = None
     detail: str | None = None
     reconciliation: bool = False
+    billing_captured: bool = False
+    billing_pending: bool = False
 
 
 @dataclass

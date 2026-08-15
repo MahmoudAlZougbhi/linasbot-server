@@ -24,6 +24,8 @@ CONTROL_FILES = frozenset(
         "scripts/ha/bootstrap_nested_runtime_quarantine.py",
         "scripts/ha/bootstrap_nested_runtime_evidence.py",
         "scripts/ha/bootstrap_nested_runtime_safety.py",
+        "scripts/ha/bootstrap_nested_runtime_loader.py",
+        "scripts/ha/bootstrap_nested_runtime_mount.py",
         "scripts/ha/cluster_runtime_env_contract.py",
         "scripts/ha/deploy_meta_release_ha.sh",
         "scripts/ha/do_lb_ready_contract.py",

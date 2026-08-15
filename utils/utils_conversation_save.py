@@ -8,6 +8,7 @@ from typing import Any
 
 import config
 from services.live_chat_contracts import utc_now
+from utils.conversation_save_result import FirestoreSaveOutcome, FirestoreSaveStatus
 from utils.utils_context import append_turn_to_user_context_memory
 from utils.utils_conversation_save_existing import save_message_when_conversation_id
 from utils.utils_conversation_save_latest import save_message_without_conversation_id
@@ -50,12 +51,12 @@ async def save_conversation_message_to_firestore(
 
     if hasattr(config, "TESTING_MODE") and config.TESTING_MODE:
         print(f"🧪 TESTING MODE: Skipping Firebase save for user {user_id}, role {role}")
-        return
+        return FirestoreSaveOutcome(status=FirestoreSaveStatus.SKIPPED, conversation_id=conversation_id)
 
     db = get_firestore_db()
     if not db:
         print("⚠️ Firestore not initialized. Skipping conversation save.")
-        return
+        return FirestoreSaveOutcome(status=FirestoreSaveStatus.SKIPPED, conversation_id=conversation_id)
 
     app_id_for_firestore = "linas-ai-bot-backend"
 
@@ -253,7 +254,7 @@ async def save_conversation_message_to_firestore(
                 conversations_collection_for_user=conversations_collection_for_user,
             )
         if result is None:
-            return
+            return FirestoreSaveOutcome(status=FirestoreSaveStatus.DUPLICATE, conversation_id=conversation_id)
         saved_conv_id, conversations_collection_for_user = result
 
         if defer_external_for_speed and saved_conv_id and normalized_phone:
@@ -266,9 +267,15 @@ async def save_conversation_message_to_firestore(
                     user_doc_ref,
                 )
             )
+        return FirestoreSaveOutcome(
+            status=FirestoreSaveStatus.CREATED,
+            conversation_id=str(saved_conv_id or conversation_id),
+            collection=conversations_collection_for_user,
+        )
 
     except Exception as e:
         print(f"❌ ERROR saving conversation message to Firestore for user {user_id}: {e}")
         import traceback
 
         traceback.print_exc()
+        raise

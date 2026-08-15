@@ -12,8 +12,17 @@ from services.rate_limit_service import rate_limit_service
 from services.web_chat.appearance import contrast_warnings
 from services.web_chat.config_models import WebChatWidgetConfig
 from services.web_chat.embed import build_embed_snippet, public_api_base
+from services.web_chat.flags import web_chat_containment_active
 from services.web_chat.processor import evaluate_web_ai_eligibility
 from services.web_chat.store import web_chat_store
+
+
+def reject_if_web_chat_contained() -> None:
+    if web_chat_containment_active():
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "WEB_CHAT_UNAVAILABLE", "message": "Website chat is not available."},
+        )
 
 
 def rate_limit_widget(request: Request, *, session_id: str, widget_key: str) -> None:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
@@ -55,17 +54,12 @@ def test_registry_lock_remains_a_noop_for_non_postgres_sessions() -> None:
 
 
 @pytest.mark.integration
-def test_two_postgres_connections_block_until_owner_transaction_commits() -> None:
-    """Exercise the real wrapper against an explicitly local, dedicated test DB.
+def test_two_postgres_connections_block_until_owner_transaction_commits(
+    postgres_advisory_lock_url: str,
+) -> None:
+    """Exercise the real wrapper against an explicitly local, dedicated test DB."""
 
-    This test never falls back to either runtime database variable.  Set
-    ``LINAS_TEST_POSTGRES_ADVISORY_LOCK_URL`` to opt in.
-    """
-
-    raw_url = (os.getenv("LINAS_TEST_POSTGRES_ADVISORY_LOCK_URL") or "").strip()
-    if not raw_url:
-        pytest.skip("dedicated local PostgreSQL advisory-lock test URL is not configured")
-    url = make_url(raw_url)
+    url = make_url(postgres_advisory_lock_url)
     if not url.drivername.startswith("postgresql"):
         pytest.fail("advisory-lock integration URL must use PostgreSQL")
     if (url.host or "").lower() not in {"localhost", "127.0.0.1", "::1"}:
@@ -117,13 +111,12 @@ def test_two_postgres_connections_block_until_owner_transaction_commits() -> Non
 
 
 @pytest.mark.integration
-def test_cross_product_rekey_lock_excludes_a_second_postgres_transaction() -> None:
+def test_cross_product_rekey_lock_excludes_a_second_postgres_transaction(
+    postgres_advisory_lock_url: str,
+) -> None:
     """Prove the dedicated rekey xact lock is fail-fast and commit-scoped."""
 
-    raw_url = (os.getenv("LINAS_TEST_POSTGRES_ADVISORY_LOCK_URL") or "").strip()
-    if not raw_url:
-        pytest.skip("dedicated local PostgreSQL advisory-lock test URL is not configured")
-    url = make_url(raw_url)
+    url = make_url(postgres_advisory_lock_url)
     if not url.drivername.startswith("postgresql"):
         pytest.fail("advisory-lock integration URL must use PostgreSQL")
     if (url.host or "").lower() not in {"localhost", "127.0.0.1", "::1"}:

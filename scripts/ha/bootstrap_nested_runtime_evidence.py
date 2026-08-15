@@ -5,26 +5,32 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
-import os
 import stat
 from pathlib import Path
 from typing import Any
 
-_safety_spec = importlib.util.spec_from_file_location(
+_loader_path = Path(__file__).with_name("bootstrap_nested_runtime_loader.py")
+_loader_spec = importlib.util.spec_from_file_location(
+    f"bootstrap_nested_runtime_loader@{hashlib.sha256(str(_loader_path.resolve()).encode()).hexdigest()}",
+    _loader_path,
+)
+if _loader_spec is None or _loader_spec.loader is None:
+    raise RuntimeError("nested runtime loader module is missing")
+_loader = importlib.util.module_from_spec(_loader_spec)
+_loader_spec.loader.exec_module(_loader)
+
+_safety = _loader.load_authenticated_module(
     "bootstrap_nested_runtime_safety",
     Path(__file__).with_name("bootstrap_nested_runtime_safety.py"),
 )
-if _safety_spec is None or _safety_spec.loader is None:
-    raise RuntimeError("nested runtime safety module is missing")
-_safety = importlib.util.module_from_spec(_safety_spec)
-_safety_spec.loader.exec_module(_safety)
 
 NestedRuntimeQuarantineError = _safety.NestedRuntimeQuarantineError
 member_lstat = _safety.member_lstat
-walk_fail_closed = _safety.walk_fail_closed
-is_mount_safe = _safety.is_mount_safe
-safe_symlink_target = _safety.safe_symlink_target
+opaque_symlink_target = _safety.opaque_symlink_target
 hash_regular_file = _safety.hash_regular_file
+prepare_mount_context = _safety.prepare_mount_context
+iter_tree_members = _safety.iter_tree_members
+TreeEnumerateState = _safety.TreeEnumerateState
 
 SCHEMA = 1
 NESTED_RUNTIME_NAME = "linaslaserbot-2.7.22"
@@ -72,107 +78,26 @@ def portable_content_identity(evidence: dict[str, Any]) -> dict[str, Any]:
 def collect_present(root: Path) -> dict[str, Any]:
     if root.is_symlink():
         raise NestedRuntimeQuarantineError("nested runtime root is a symlink")
+    mount_context = prepare_mount_context(root)
     root_info = member_lstat(root)
     if not stat.S_ISDIR(root_info.st_mode):
         raise NestedRuntimeQuarantineError("nested runtime root is not a directory")
-    if is_mount_safe(root):
-        raise NestedRuntimeQuarantineError("nested runtime root is a mount point")
     root_dev = root_info.st_dev
+    counters = TreeEnumerateState(
+        max_files=MAX_FILE_COUNT,
+        max_symlinks=MAX_SYMLINK_COUNT,
+        max_directories=MAX_DIRECTORY_COUNT,
+        max_total_bytes=MAX_TOTAL_BYTES,
+    )
     member_digests: list[str] = []
-    file_count = 0
-    symlink_count = 0
-    directory_count = 0
-    total_bytes = 0
-    for current, dirnames, filenames in os.walk(
-        root,
-        topdown=True,
-        followlinks=False,
-        onerror=walk_fail_closed,
-    ):
-        directory = Path(current)
-        if directory != root and is_mount_safe(directory):
-            raise NestedRuntimeQuarantineError("nested runtime tree contains a mount point")
-        dir_info = member_lstat(directory)
-        if dir_info.st_dev != root_dev:
-            raise NestedRuntimeQuarantineError("nested runtime tree crosses devices")
-        if directory != root:
-            directory_count += 1
-            if directory_count > MAX_DIRECTORY_COUNT:
-                raise NestedRuntimeQuarantineError("nested runtime tree exceeds the safety limit")
+    for kind, path, info in iter_tree_members(root, mount_context=mount_context, counters=counters):
+        if kind == "directory":
             member_digests.append(
                 _digest_bytes(
                     _canonical(
                         {
                             "kind": "directory",
-                            "relative": directory.relative_to(root).as_posix(),
-                            "mode": stat.S_IMODE(dir_info.st_mode),
-                            "uid": dir_info.st_uid,
-                            "gid": dir_info.st_gid,
-                        }
-                    )
-                )
-            )
-        dirnames[:] = sorted(name for name in dirnames if name not in {".", ".."})
-        for name in sorted(dirnames):
-            path = directory / name
-            info = member_lstat(path)
-            if info.st_dev != root_dev:
-                raise NestedRuntimeQuarantineError("nested runtime tree crosses devices")
-            if stat.S_ISLNK(info.st_mode):
-                symlink_count += 1
-                if symlink_count > MAX_SYMLINK_COUNT:
-                    raise NestedRuntimeQuarantineError("nested runtime tree exceeds the safety limit")
-                member_digests.append(
-                    _digest_bytes(
-                        _canonical(
-                            {
-                                "kind": "symlink",
-                                "relative": path.relative_to(root).as_posix(),
-                                "target": safe_symlink_target(root, path),
-                            }
-                        )
-                    )
-                )
-                dirnames.remove(name)
-            elif not stat.S_ISDIR(info.st_mode):
-                raise NestedRuntimeQuarantineError("nested runtime tree contains a special file")
-        for name in sorted(filenames):
-            path = directory / name
-            info = member_lstat(path)
-            if info.st_dev != root_dev:
-                raise NestedRuntimeQuarantineError("nested runtime tree crosses devices")
-            if stat.S_ISLNK(info.st_mode):
-                symlink_count += 1
-                if symlink_count > MAX_SYMLINK_COUNT:
-                    raise NestedRuntimeQuarantineError("nested runtime tree exceeds the safety limit")
-                member_digests.append(
-                    _digest_bytes(
-                        _canonical(
-                            {
-                                "kind": "symlink",
-                                "relative": path.relative_to(root).as_posix(),
-                                "target": safe_symlink_target(root, path),
-                            }
-                        )
-                    )
-                )
-                continue
-            if not stat.S_ISREG(info.st_mode):
-                raise NestedRuntimeQuarantineError("nested runtime tree contains a special file")
-            if info.st_nlink != 1:
-                raise NestedRuntimeQuarantineError("nested runtime tree contains an unsafe object")
-            file_count += 1
-            total_bytes += info.st_size
-            if file_count > MAX_FILE_COUNT or total_bytes > MAX_TOTAL_BYTES:
-                raise NestedRuntimeQuarantineError("nested runtime tree exceeds the safety limit")
-            member_digests.append(
-                _digest_bytes(
-                    _canonical(
-                        {
-                            "kind": "file",
                             "relative": path.relative_to(root).as_posix(),
-                            "sha256": hash_regular_file(path, info),
-                            "size": info.st_size,
                             "mode": stat.S_IMODE(info.st_mode),
                             "uid": info.st_uid,
                             "gid": info.st_gid,
@@ -180,18 +105,50 @@ def collect_present(root: Path) -> dict[str, Any]:
                     )
                 )
             )
+            continue
+        if kind == "symlink":
+            member_digests.append(
+                _digest_bytes(
+                    _canonical(
+                        {
+                            "kind": "symlink",
+                            "relative": path.relative_to(root).as_posix(),
+                            "target": opaque_symlink_target(path),
+                        }
+                    )
+                )
+            )
+            continue
+        if info.st_nlink != 1:
+            raise NestedRuntimeQuarantineError("nested runtime tree contains an unsafe object")
+        member_digests.append(
+            _digest_bytes(
+                _canonical(
+                    {
+                        "kind": "file",
+                        "relative": path.relative_to(root).as_posix(),
+                        "sha256": hash_regular_file(path, info),
+                        "size": info.st_size,
+                        "mode": stat.S_IMODE(info.st_mode),
+                        "uid": info.st_uid,
+                        "gid": info.st_gid,
+                    }
+                )
+            )
+        )
     return {
         "schema": SCHEMA,
         "present": True,
-        "file_count": file_count,
-        "symlink_count": symlink_count,
-        "directory_count": directory_count,
-        "total_bytes": total_bytes,
+        "file_count": counters.file_count,
+        "symlink_count": counters.symlink_count,
+        "directory_count": counters.directory_count,
+        "total_bytes": counters.total_bytes,
         "root_dev": root_dev,
         "root_ino": root_info.st_ino,
         "root_uid": root_info.st_uid,
         "root_gid": root_info.st_gid,
         "root_mode": stat.S_IMODE(root_info.st_mode),
+        "mount_namespace_sha256": mount_context.namespace_sha256,
         "aggregate_sha256": _digest_bytes(_canonical(sorted(member_digests))),
     }
 

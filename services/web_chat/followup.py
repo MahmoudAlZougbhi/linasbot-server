@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from services.requests.constants import SOURCE_CHANNEL_WEB_CHAT
+from services.web_chat.flags import web_chat_containment_active
 
 
 def maybe_schedule_web_followup_after_ai_reply(
@@ -21,6 +22,8 @@ def maybe_schedule_web_followup_after_ai_reply(
     vid = str(visitor_session_id or "").strip()
     if not tid or not vid or not conversation_id:
         return None
+    if web_chat_containment_active():
+        return {"scheduled": False, "reason": "web_chat_contained"}
 
     from db.session import whatsapp_session
     from services.smart_followup.hooks import schedule_after_ai_reply
