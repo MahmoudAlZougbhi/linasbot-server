@@ -64,10 +64,10 @@ def get_faq_entitlement(tenant_id: str) -> dict[str, Any]:
             None
             if enabled and not at_limit
             else (
-                "Smart Answers are not included on your current plan. Upgrade to enable FAQ."
+                "Smart Q&A is not included on your current plan. Upgrade to enable FAQ."
                 if not enabled
                 else (
-                    f"Smart Answers quota reached ({used} / {max_entries}). Upgrade your plan for a higher FAQ limit."
+                    f"Smart Q&A quota reached ({used} / {max_entries}). Upgrade your plan for a higher FAQ limit."
                 )
             )
         ),

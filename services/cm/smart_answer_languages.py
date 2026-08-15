@@ -87,7 +87,7 @@ def save_smart_answer_languages(
 ) -> dict[str, Any]:
     normalized = normalize_smart_answer_languages(languages)
     if not normalized:
-        raise FaqIntegrationError("At least one Smart Answer language is required")
+        raise FaqIntegrationError("At least one Smart Q&A language is required")
 
     env = get_draft(FAQ_SECTION, tenant_id=tenant_id, create_default=True)
     section = FaqSection.model_validate(env.payload)

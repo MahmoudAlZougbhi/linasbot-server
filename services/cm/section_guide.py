@@ -26,7 +26,7 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
         "purpose": (
             "Content/knowledge language organization and default fallback — NOT customer reply language control. "
             "Customer-facing AI replies are multilingual by default (auto-detect, reply in user's language). "
-            "Smart Answer translation languages are configured on the Smart Answers / FAQ screen."
+            "Smart Q&A translation languages are configured on the Smart Q&A screen."
         ),
         "why": "Default language and behavior notes still matter for content organization and unknown-language fallback.",
         "what_to_fill": ["supported_languages", "default_language"],
@@ -104,14 +104,14 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
     },
     "faq": {
         "title": "FAQ",
-        "purpose": "Smart Answers — ready-made linked Q&A (ar/en/fr/franco) for repeated customer questions.",
+        "purpose": "Smart Q&A — ready-made linked Q&A (ar/en/fr/franco) for repeated customer questions.",
         "why": (
             "Matching questions (same text or meaning) reply from FAQ before a full AI generation — "
             "saves AI credits. Highest-precision answers; production FAQ lives here."
         ),
         "what_to_fill": ["items[] with at least one language question + answer"],
         "useful": "Full four-language variants, tags, review status, plan quota.",
-        "app_path": "Smart Answers / FAQ (or AI Setup → FAQ)",
+        "app_path": "Smart Q&A (or AI Setup → FAQ)",
     },
     "handoff": {
         "title": "Human Handoff",

@@ -60,7 +60,7 @@ export const usersUiFr: Record<keyof typeof import('./usersUiEn').usersUiEn, str
   usersAccessLiveChat: 'Live Chat',
   usersAccessRequests: 'Demandes',
   usersAccessAiSetup: 'Configuration IA',
-  usersAccessSmartAnswers: 'Réponses intelligentes',
+  usersAccessSmartAnswers: 'Q&R intelligentes',
   usersAccessSmartFollowUp: 'Suivi intelligent',
   usersAccessIntegrations: 'Intégrations',
   usersAccessUsers: 'Utilisateurs',

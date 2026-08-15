@@ -56,8 +56,8 @@ export function LanguagesEditor({ payload, onChange }: Props) {
         <Text style={cmFormStyles.label}>Content languages</Text>
         <Text style={cmFormStyles.hint}>
           Languages for organizing published content and knowledge. Customer AI replies are multilingual
-          by default — not limited by these toggles. Smart Answer translation languages are on the Smart
-          Answers screen.
+          by default — not limited by these toggles. Smart Q&A translation languages are on the Smart
+          Q&A screen.
         </Text>
         <View style={cmFormStyles.chipRow}>
           {LANGS.map((lang) => {

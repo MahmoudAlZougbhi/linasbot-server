@@ -40,7 +40,7 @@ const CmLanguagesPage = () => {
   return (
     <CmSectionShell
       title="Languages"
-      description="Languages are used for Smart Answers and saved content translations — not customer reply language. Customer AI replies are multilingual by default."
+      description="Languages are used for Smart Q&A and saved content translations — not customer reply language. Customer AI replies are multilingual by default."
       loading={draft.loading}
       dirty={draft.dirty}
       saving={draft.saving}
@@ -58,7 +58,7 @@ const CmLanguagesPage = () => {
           <p className="text-xs text-slate-500">
             Organize published content and knowledge by language. This does not limit which languages
             customers receive in DMs or comments — the AI detects and replies in the customer&apos;s language.
-            Smart Answer translation languages are managed on the Smart Answers screen.
+            Smart Q&A translation languages are managed on the Smart Q&A screen.
           </p>
           <div className="grid sm:grid-cols-2 gap-2">
             {LANGS.map((lang) => (

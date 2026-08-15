@@ -33,7 +33,7 @@ export const CONTROL_ITEMS: ControlItem[] = [
   },
   {
     id: 'faq',
-    title: 'Smart Answers / FAQ',
+    title: 'Smart Q&A',
     subtitle: 'Ready-made Q&A — saves AI cost',
     group: 'operate',
   },

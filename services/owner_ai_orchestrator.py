@@ -157,18 +157,18 @@ def _summarize(name: str, result_data: dict[str, Any], *, reply_language: str) -
         return f"Diagnosis fix applied: {result_data.get('applied')}"
     if name == "read_faq_quota":
         ent = result_data.get("entitlement") or {}
-        return f"Smart Answers quota: {ent.get('quota_display')} (enabled={ent.get('faq_enabled')})."
+        return f"Smart Q&A quota: {ent.get('quota_display')} (enabled={ent.get('faq_enabled')})."
     if name == "propose_smart_answer":
-        return "Proposed Smart Answer ready for approval."
+        return "Proposed Smart Q&A ready for approval."
     if name == "approve_smart_answer":
         live = bool(result_data.get("live"))
         gid = result_data.get("qa_group_id")
         if live:
-            return f"Smart Answer saved and Live for customers (qa_group_id={gid})."
+            return f"Smart Q&A saved and Live for customers (qa_group_id={gid})."
         reason = ((result_data.get("activation") or {}) if isinstance(result_data.get("activation"), dict) else {}).get(
             "reason"
         )
-        return f"Smart Answer saved as draft (qa_group_id={gid})" + (
+        return f"Smart Q&A saved as draft (qa_group_id={gid})" + (
             f"; Live not updated yet ({reason})." if reason else "."
         )
     if name == "read_cm":

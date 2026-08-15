@@ -178,12 +178,12 @@ const CmFaqPage = () => {
           <Link to="/content-managers" className="inline-flex items-center text-sm text-slate-500 hover:text-slate-800 mb-2">
             <ArrowLeftIcon className="w-4 h-4 mr-1" /> AI Setup
           </Link>
-          <h1 className="text-2xl font-semibold text-slate-900">FAQ / Smart Answers</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">FAQ / Smart Q&A</h1>
           <p className="text-slate-600 mt-1 max-w-3xl">
             Ready-made Q&A in linked Arabic / English / French / Franco. When a customer asks the same question
             (or same meaning), the bot replies from FAQ instead of a full AI generation — that saves AI credits.
             Franco questions keep Latin script; answers for Arabic and Franco are always Arabic script.
-            Ask Linas (Owner Copilot in the mobile app) to propose a Smart Answer — Approve goes Live.
+            Ask Linas (Owner Copilot in the mobile app) to propose a Smart Q&A — Approve goes Live.
           </p>
         </div>
         <div className="text-xs text-slate-500 space-y-1 text-right">
@@ -191,7 +191,7 @@ const CmFaqPage = () => {
           <div>Publish: {publishEnabled ? "enabled" : "drafts only"}</div>
           {quotaDisplay ? (
             <div className="text-slate-700 font-medium">
-              Smart Answers quota: {quotaDisplay}
+              Smart Q&A quota: {quotaDisplay}
               {entitlement && typeof entitlement.faq_remaining_entries === "number"
                 ? ` · ${entitlement.faq_remaining_entries} remaining`
                 : null}

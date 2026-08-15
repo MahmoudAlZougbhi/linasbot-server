@@ -119,7 +119,7 @@ test('exact EN plan copy present in locale table', () => {
     'Instagram & Facebook DMs + comments',
     'WhatsApp messages',
     'TikTok DMs + comments',
-    '{n} saved Smart Answers',
+    '{n} saved Smart Q&A',
     '1 owner account',
     '{n} additional team members',
     'Unlimited team members',
@@ -133,7 +133,7 @@ test('exact EN plan copy present in locale table', () => {
     'SMALL BUSINESS',
     'HIGH VOLUME',
     'MAXIMUM CAPACITY',
-    'Smart Answers save credits',
+    'Smart Q&A saves credits',
   ]) {
     assert.match(en, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }

@@ -293,7 +293,7 @@ async def translate_existing_faq_groups_to_language(
     """Batch-translate all existing Smart Answers into one newly added language."""
     lang = language_detection_service.normalize_training_language(language, default="")
     if not lang:
-        raise FaqIntegrationError(f"Unsupported Smart Answer language: {language}")
+        raise FaqIntegrationError(f"Unsupported Smart Q&A language: {language}")
 
     env = get_draft(FAQ_SECTION, tenant_id=tenant_id, create_default=True)
     section = FaqSection.model_validate(env.payload)
