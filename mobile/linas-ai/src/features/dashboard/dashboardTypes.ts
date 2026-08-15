@@ -10,7 +10,14 @@ const ActionSchema = z
 
 const AvailabilitySchema = z.enum(['ok', 'empty', 'error', 'unavailable']);
 
-export const DashboardPeriodIdSchema = z.enum(['billing', '7d', '30d', 'custom', 'today']);
+export const DashboardPeriodIdSchema = z.enum([
+  'billing',
+  '7d',
+  '30d',
+  'custom',
+  'today',
+  'last_month',
+]);
 export type DashboardPeriodId = z.infer<typeof DashboardPeriodIdSchema>;
 
 const ChannelCardSchema = z.object({

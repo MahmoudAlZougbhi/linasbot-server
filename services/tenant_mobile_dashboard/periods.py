@@ -6,9 +6,9 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal, cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-DashboardPeriod = Literal["billing", "7d", "30d", "custom", "today"]
+DashboardPeriod = Literal["billing", "7d", "30d", "custom", "today", "last_month"]
 
-VALID_PERIODS: frozenset[str] = frozenset({"billing", "7d", "30d", "custom", "today"})
+VALID_PERIODS: frozenset[str] = frozenset({"billing", "7d", "30d", "custom", "today", "last_month"})
 
 
 class PeriodValidationError(ValueError):
@@ -44,10 +44,34 @@ def _parse_custom_date(raw: str | None, *, field: str) -> date:
         raise PeriodValidationError(f"Invalid custom {field} date: {raw!r}") from exc
 
 
+def _local_midnight(day: date, tz: ZoneInfo) -> datetime:
+    return datetime(day.year, day.month, day.day, tzinfo=tz)
+
+
 def _local_day_bounds(day: date, tz: ZoneInfo) -> tuple[datetime, datetime]:
-    """Inclusive local midnight → exclusive next local midnight."""
-    start_local = datetime(day.year, day.month, day.day, tzinfo=tz)
-    return start_local, start_local + timedelta(days=1)
+    """Inclusive local midnight → exclusive next local midnight (calendar, not +24h)."""
+    start_local = _local_midnight(day, tz)
+    nxt = day + timedelta(days=1)
+    return start_local, _local_midnight(nxt, tz)
+
+
+def _previous_calendar_month_bounds(day: date, tz: ZoneInfo) -> tuple[datetime, datetime]:
+    first_of_this = day.replace(day=1)
+    last_of_prev = first_of_this - timedelta(days=1)
+    first_of_prev = last_of_prev.replace(day=1)
+    start_local, _ = _local_day_bounds(first_of_prev, tz)
+    _, end_local = _local_day_bounds(last_of_prev, tz)
+    return start_local, end_local
+
+
+def _last_n_local_days_bounds(day: date, tz: ZoneInfo, *, days: int) -> tuple[datetime, datetime]:
+    """Inclusive rolling local calendar days ending on `day` (today counts as day 1)."""
+    if days < 1:
+        raise PeriodValidationError("days must be >= 1")
+    start_day = day - timedelta(days=days - 1)
+    start_local, _ = _local_day_bounds(start_day, tz)
+    _, end_local = _local_day_bounds(day, tz)
+    return start_local, end_local
 
 
 def resolve_period_window(
@@ -62,10 +86,14 @@ def resolve_period_window(
     """Return inclusive-start exclusive-end UTC window for the selected period."""
     now_utc = now.astimezone(UTC) if now else datetime.now(UTC)
     local_now = now_utc.astimezone(tz)
+    today = local_now.date()
 
     if period == "today":
-        start_local, end_local = _local_day_bounds(local_now.date(), tz)
+        start_local, end_local = _local_day_bounds(today, tz)
         label = "Today"
+    elif period == "last_month":
+        start_local, end_local = _previous_calendar_month_bounds(today, tz)
+        label = "Last month"
     elif period == "custom":
         start_day = _parse_custom_date(custom_start, field="start")
         end_day = _parse_custom_date(custom_end, field="end")
@@ -73,17 +101,13 @@ def resolve_period_window(
             raise PeriodValidationError("Custom end date must be on or after start date")
         start_local, _ = _local_day_bounds(start_day, tz)
         _, end_local = _local_day_bounds(end_day, tz)
-        # Never emit a zero-width or inverted window (same-day Today used to collapse).
+        if end_day > today:
+            _, end_local = _local_day_bounds(today, tz)
         if end_local <= start_local:
-            end_local = start_local + timedelta(days=1)
-        if end_local > local_now + timedelta(days=1) and start_local < local_now:
-            end_local = local_now
-        if end_local <= start_local:
-            end_local = start_local + timedelta(days=1)
+            _, end_local = _local_day_bounds(start_day, tz)
         label = "Custom range"
     elif period == "7d":
-        start_local = local_now - timedelta(days=7)
-        end_local = local_now
+        start_local, end_local = _last_n_local_days_bounds(today, tz, days=7)
         label = "Last 7 days"
     elif period == "30d":
         start_local = local_now - timedelta(days=30)

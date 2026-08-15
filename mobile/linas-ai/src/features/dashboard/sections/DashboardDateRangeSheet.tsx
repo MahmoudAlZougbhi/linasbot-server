@@ -17,12 +17,19 @@ type Props = {
 
 type Preset = {
   id: DashboardPresetId;
-  labelKey: 'dashAllTime' | 'dashToday' | 'dashLastMonth' | 'dashLast6Months' | 'dashLastYear';
+  labelKey:
+    | 'dashAllTime'
+    | 'dashToday'
+    | 'dashLast7Days'
+    | 'dashLastMonth'
+    | 'dashLast6Months'
+    | 'dashLastYear';
 };
 
 const PRESETS: Preset[] = [
   { id: 'all_time', labelKey: 'dashAllTime' },
   { id: 'today', labelKey: 'dashToday' },
+  { id: 'last_7d', labelKey: 'dashLast7Days' },
   { id: 'last_month', labelKey: 'dashLastMonth' },
   { id: 'last_6m', labelKey: 'dashLast6Months' },
   { id: 'last_year', labelKey: 'dashLastYear' },
