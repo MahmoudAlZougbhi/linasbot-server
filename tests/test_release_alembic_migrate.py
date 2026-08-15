@@ -14,6 +14,8 @@ from scripts.ha.release_alembic_migrate import (
     LEGACY_PRE_MERGE_STAMPS,
     _assert_runtime_environment,
     _normalize_repo_relative_path,
+    _script_directory,
+    ancestors_of,
     assert_canonical_release_tree,
     git_ls_files_others_command,
     load_migration_env_snapshot,
@@ -208,6 +210,15 @@ def test_assert_canonical_release_tree_accepts_current_head(monkeypatch) -> None
     head = _current_head()
     monkeypatch.setattr(subprocess, "run", _fake_canonical_git_run(head))
     assert_canonical_release_tree(head)
+
+
+def test_ancestors_of_collects_string_revision_ids() -> None:
+    script = _script_directory()
+    ancestors = ancestors_of(script, HEAD_ID)
+    assert HEAD_ID in ancestors
+    assert ancestors
+    assert all(isinstance(revision_id, str) for revision_id in ancestors)
+    assert LEGACY_PRE_MERGE_STAMPS <= ancestors
 
 
 class TestUntrackedMigrationAuthority:

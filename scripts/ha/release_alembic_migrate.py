@@ -253,10 +253,12 @@ def ancestors_of(script: ScriptDirectory, revision_id: str) -> set[str]:
         down = revision.down_revision
         if down is None:
             continue
-        if isinstance(down, tuple):
-            stack.extend(down)
-        else:
+        if isinstance(down, str):
             stack.append(down)
+        elif isinstance(down, (tuple, list)):
+            stack.extend(str(parent) for parent in down)
+        else:
+            raise RuntimeError(f"unsupported alembic down_revision type: {type(down)!r}")
     return result
 
 
