@@ -130,6 +130,34 @@ class ProductConversationContext(Base):
     )
 
 
+class ProductImageFingerprint(Base):
+  __tablename__ = "product_image_fingerprints"
+  __table_args__ = (
+      Index("ix_product_img_fp_tenant_sha256", "tenant_id", "sha256"),
+      Index("ix_product_img_fp_tenant_product", "tenant_id", "product_id"),
+      Index("ix_product_img_fp_tenant_media", "tenant_id", "media_id", unique=True),
+  )
+
+  id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+  tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+  product_id: Mapped[str] = mapped_column(
+      String(36),
+      ForeignKey("products.id", ondelete="CASCADE"),
+      nullable=False,
+      index=True,
+  )
+  product_image_id: Mapped[str] = mapped_column(String(36), nullable=False)
+  media_id: Mapped[str] = mapped_column(String(64), nullable=False)
+  sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+  phash: Mapped[str] = mapped_column(String(16), nullable=False)
+  histogram: Mapped[list[Any] | None] = mapped_column(JsonType, nullable=True)
+  created_at: Mapped[datetime] = mapped_column(
+      DateTime(timezone=True),
+      nullable=False,
+      server_default=func.now(),
+  )
+
+
 class ProductSentMessage(Base):
     __tablename__ = "product_sent_messages"
     __table_args__ = (

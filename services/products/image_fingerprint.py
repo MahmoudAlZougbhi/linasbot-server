@@ -68,6 +68,11 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
     return float(dot / (norm_l * norm_r))
 
 
+# Shape/structure (pHash) dominates; color histogram is secondary.
+PHASH_WEIGHT = 0.85
+HISTOGRAM_WEIGHT = 0.15
+
+
 def combined_image_similarity(
     *,
     query_fp: dict[str, str],
@@ -82,4 +87,9 @@ def combined_image_similarity(
     )
     hist = entry.get("histogram")
     hist_sim = cosine_similarity(query_hist, list(hist or [])) if isinstance(hist, list) else 0.0
-    return max(phash_sim, hist_sim)
+    # Weighted blend — same model different color should still match via pHash.
+    blended = (phash_sim * PHASH_WEIGHT) + (hist_sim * HISTOGRAM_WEIGHT)
+    # Exact checksum already returned; strong pHash alone can clear threshold.
+    if phash_sim >= 0.92:
+        return max(blended, phash_sim)
+    return blended

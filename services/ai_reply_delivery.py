@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from services.products.outbound_hook import maybe_record_product_outbound
+
 SendFunc = Callable[..., Awaitable[Any]]
 
 PERMANENT_ERROR_MARKERS = (
@@ -87,6 +89,10 @@ def wrap_tracked_send(raw_send: SendFunc, user_data: dict[str, Any]) -> SendFunc
         user_data["_last_outbound_delivery"] = evidence
         if evidence.get("success"):
             user_data["_delivery_succeeded"] = True
+            maybe_record_product_outbound(
+                user_data,
+                provider_message_id=str(evidence.get("provider_message_id") or ""),
+            )
         else:
             user_data["_delivery_succeeded"] = False
         return result

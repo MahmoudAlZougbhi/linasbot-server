@@ -1,6 +1,7 @@
-"""Luna title resolver — bounded fallback after deterministic product search fails.
+"""Luna title resolver — fallback after deterministic product search fails.
 
 Sends product titles only (never descriptions, images, or prices).
+Chunks large catalogs so every active title is compared.
 Metered via existing token_metering; 0 credits blocks via credit_ai_gate.
 """
 
@@ -18,8 +19,8 @@ from services.products.schemas import product_to_dict
 
 logger = logging.getLogger(__name__)
 
-MAX_TITLE_CANDIDATES = 80
 MAX_MATCHES = 5
+TITLES_PER_CHUNK = 80
 
 
 async def resolve_product_titles_with_luna(
@@ -37,19 +38,68 @@ async def resolve_product_titles_with_luna(
         return []
 
     repo = ProductsRepository(session)
-    rows = repo.list_all_for_tenant(tenant_id=tenant_id)[:MAX_TITLE_CANDIDATES]
+    rows = repo.list_all_for_tenant(tenant_id=tenant_id, customer_facing=True)
     if not rows:
         return []
 
+    assert_tenant_can_use_ai(tenant_id)
+
+    all_ids: list[str] = []
+    total_prompt = 0
+    total_completion = 0
+    for start in range(0, len(rows), TITLES_PER_CHUNK):
+        chunk = rows[start : start + TITLES_PER_CHUNK]
+        chunk_ids, prompt_toks, completion_toks = await _luna_match_chunk(
+            tenant_id=tenant_id,
+            query_text=query_text,
+            rows=chunk,
+            limit=limit,
+        )
+        total_prompt += prompt_toks
+        total_completion += completion_toks
+        for pid in chunk_ids:
+            if pid not in all_ids:
+                all_ids.append(pid)
+        if len(all_ids) >= limit:
+            break
+
+    try:
+        debit_ai_usage(
+            tenant_id=tenant_id,
+            model=MODEL_CUSTOMER_LUNA,
+            prompt_tokens=total_prompt,
+            completion_tokens=total_completion,
+            reference="product_title_resolution_fallback",
+        )
+    except Exception:
+        logger.exception("products_luna_title_debit_failed tenant=%s", tenant_id)
+
+    by_id = {row.id: row for row in rows}
+    out: list[dict[str, Any]] = []
+    for pid in all_ids:
+        row = by_id.get(pid)
+        if row is not None:
+            out.append(product_to_dict(row))
+        if len(out) >= limit:
+            break
+    return out
+
+
+async def _luna_match_chunk(
+    *,
+    tenant_id: str,
+    query_text: str,
+    rows: list[Any],
+    limit: int,
+) -> tuple[list[str], int, int]:
     titles = [{"product_id": row.id, "title": row.name} for row in rows]
     system = (
-        "You resolve a customer product title query against a bounded catalog title list. "
+        "You resolve a customer product title query against a catalog title list. "
         'Return JSON only: {"product_ids": ["id", ...]} with at most '
-        f"{min(limit, MAX_MATCHES)} best matches. Titles only — never invent products."
+        f"{min(limit, MAX_MATCHES)} best matches. Titles only — never invent products. "
+        "Exclude products not in the list."
     )
     user = json.dumps({"query": query_text, "titles": titles}, ensure_ascii=False)
-
-    assert_tenant_can_use_ai(tenant_id)
 
     from services.llm_core_service import build_chat_completion_kwargs, client
 
@@ -65,31 +115,10 @@ async def resolve_product_titles_with_luna(
     )
     response = await client.chat.completions.create(**kwargs)
     usage = getattr(response, "usage", None)
-    try:
-        debit_ai_usage(
-            tenant_id=tenant_id,
-            model=MODEL_CUSTOMER_LUNA,
-            prompt_tokens=int(getattr(usage, "prompt_tokens", 0) or 0),
-            completion_tokens=int(getattr(usage, "completion_tokens", 0) or 0),
-            reference="product_title_resolution_fallback",
-        )
-    except Exception:
-        logger.exception("products_luna_title_debit_failed tenant=%s", tenant_id)
-
+    prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+    completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
     content = (response.choices[0].message.content or "").strip()
-    product_ids = _parse_product_ids(content)
-    if not product_ids:
-        return []
-
-    by_id = {row.id: row for row in rows}
-    out: list[dict[str, Any]] = []
-    for pid in product_ids:
-        row = by_id.get(pid)
-        if row is not None:
-            out.append(product_to_dict(row))
-        if len(out) >= limit:
-            break
-    return out
+    return _parse_product_ids(content), prompt_tokens, completion_tokens
 
 
 def _parse_product_ids(content: str) -> list[str]:

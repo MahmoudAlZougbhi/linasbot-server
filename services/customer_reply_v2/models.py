@@ -125,6 +125,7 @@ class RetrievalResult:
     returned_model: str = ""
     refused_third_round: bool = False
     error: str | None = None
+    active_product_id: str | None = None
 
 
 @dataclass

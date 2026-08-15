@@ -295,6 +295,7 @@ async def run_retrieval_luna(
         requested_model=model,
         returned_model=str(returned_model),
         refused_third_round=ctx.refused_third_round,
+        active_product_id=ctx.active_product_id,
     )
 
 
@@ -335,6 +336,7 @@ async def _run_scripted(
         requested_model=model,
         returned_model=model,
         refused_third_round=ctx.refused_third_round,
+        active_product_id=ctx.active_product_id,
     )
 
 

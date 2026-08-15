@@ -131,7 +131,7 @@ def test_image_index_checksum_match(products_env: Path) -> None:
                 links=[],
             ),
         )
-    candidates = find_image_candidates(tenant_id="tenant-img2", query_bytes=content, top_k=8)
+        candidates = find_image_candidates(session, tenant_id="tenant-img2", query_bytes=content, top_k=8)
     assert len(candidates) >= 1
 
 

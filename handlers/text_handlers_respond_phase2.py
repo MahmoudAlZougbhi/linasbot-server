@@ -110,6 +110,11 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
             user_data["_dashboard_cm_diagnostics"] = cm_diag
         if cm_metadata.get("reason") == "insufficient_credits":
             return _PHASE_HALT
+        active_product_id = str(cm_metadata.get("active_product_id") or "").strip()
+        if active_product_id:
+            from services.products.outbound_hook import set_pending_product_outbound
+
+            set_pending_product_outbound(user_data, product_id=active_product_id, source="crv2_reply")
         cm_steps = [
             {
                 "step": 1,
