@@ -1,6 +1,7 @@
 """Owner System Copilot V2 package."""
 
-from services.owner_copilot_v2.brain import iter_owner_turn_v2_events, run_owner_turn_v2
+from services.owner_copilot_v2.brain import iter_owner_turn_v2_events
+from services.owner_copilot_v2.brain_run import run_owner_turn_v2
 from services.owner_copilot_v2.flags import flags_snapshot, owner_copilot_v2_enabled
 
 __all__ = [

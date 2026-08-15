@@ -259,6 +259,30 @@ async def test_zero_credits_does_not_call_owner_model(monkeypatch: pytest.Monkey
 
 
 @pytest.mark.asyncio
+async def test_run_owner_turn_v2_returns_credits_paused_without_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.owner_copilot_v2.brain_run import run_owner_turn_v2
+
+    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: True)
+    called = {"n": 0}
+
+    async def _fake_tool_round(**kwargs: Any):
+        called["n"] += 1
+        yield ("delta", "should-not-run")
+
+    monkeypatch.setattr("services.owner_copilot_v2.brain.iter_sol_tool_round", _fake_tool_round)
+    result = await run_owner_turn_v2(
+        tenant_id="clinic-zero",
+        user_id="u1",
+        role="admin",
+        conversation_id="c1",
+        user_text="hello",
+    )
+    assert result.reply_text == ""
+    assert result.route.get("reason") == "insufficient_credits"
+    assert called["n"] == 0
+
+
+@pytest.mark.asyncio
 async def test_shadow_mode_blocks_approve_writes(monkeypatch: pytest.MonkeyPatch) -> None:
     from services.owner_copilot_v2.tool_dispatch import dispatch_v2_tool
 

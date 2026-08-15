@@ -4,6 +4,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 
+import { readChatScreenBundle } from './chatScreenBundle.mjs';
+
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 function read(rel) {
@@ -35,7 +37,7 @@ describe('chat session isolation', () => {
   });
 
   it('ChatScreen never shows owner transcript while guest', () => {
-    const chat = read('features/chat/ChatScreen.tsx');
+    const chat = readChatScreenBundle(read);
     assert.match(chat, /useChatSession\(isAuthenticated\)/);
     assert.match(chat, /useGuestChatSession\(!isAuthenticated\)/);
     assert.match(

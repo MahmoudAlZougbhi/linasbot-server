@@ -253,7 +253,7 @@ async def run_owner_turn(
         return OwnerTurnResult(reply_text="", route={"reason": "insufficient_credits", **paused})
 
     if owner_copilot_v2_enabled():
-        from services.owner_copilot_v2.brain import run_owner_turn_v2
+        from services.owner_copilot_v2.brain_run import run_owner_turn_v2
 
         v2 = await run_owner_turn_v2(
             tenant_id=tenant_id,

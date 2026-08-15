@@ -12,6 +12,8 @@ import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { readChatScreenBundle } from './chatScreenBundle.mjs';
+
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const src = (...p) => join(root, 'src', ...p);
 
@@ -35,7 +37,7 @@ describe('stream scroll freedom', () => {
   });
 
   it('stream growth uses followBottomIfStuck, not scrollToBottom', () => {
-    const screen = read('features/chat/ChatScreen.tsx');
+    const screen = readChatScreenBundle(read);
     assert.match(screen, /followBottomIfStuck\(false\)/);
     // liveText effect dependency list must drive follow, not scrollToBottom.
     const liveDep = screen.indexOf('turn.liveText,');

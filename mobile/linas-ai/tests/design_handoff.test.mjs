@@ -8,6 +8,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
+import { readChatScreenBundle } from './chatScreenBundle.mjs';
+
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const src = (...p) => join(root, 'src', ...p);
 
@@ -185,14 +187,15 @@ test('ChatScreen has no right Control Center drawer and no mascot avatar state',
 });
 
 test('Chat|Work toggle shows on new owner chat despite greeting seed', () => {
-  const chat = read('features/chat/ChatScreen.tsx');
+  const chat = readChatScreenBundle(read);
+  const controller = read('features/chat/useChatScreenController.ts');
   const mode = read('features/chat/ChatModeToggle.tsx');
   const session = read('features/chat/useChatSession.ts');
   assert.match(mode, /Segmented Chat \| Work/);
   assert.match(chat, /ChatModeToggle/);
-  assert.match(chat, /hasUserMessage/);
-  assert.match(chat, /showModeToggle/);
-  assert.match(chat, /isAuthenticated && !hasUserMessage/);
+  assert.match(controller, /hasUserMessage/);
+  assert.match(controller, /showModeToggle/);
+  assert.match(controller, /isAuthenticated && !hasUserMessage/);
   assert.doesNotMatch(chat, /messages\.length === 0 && !turn\.liveText/);
   assert.match(session, /setMessages\(\[\]\)/);
 });
@@ -303,7 +306,7 @@ test('owner stream shows Thinking then live bubble in the same footer slot', () 
   const turn = read('features/chat/v2/useStreamingTurn.ts');
   const footer = read('features/chat/ChatStreamFooter.tsx');
   const list = read('features/chat/ChatMessageList.tsx');
-  const chat = read('features/chat/ChatScreen.tsx');
+  const chat = readChatScreenBundle(read);
   const thinking = read('features/chat/ThinkingRow.tsx');
   assert.match(turn, /setThinking\(true\)/);
   assert.match(turn, /onDelta:[\s\S]*setThinking\(false\)/);
@@ -311,11 +314,11 @@ test('owner stream shows Thinking then live bubble in the same footer slot', () 
   assert.match(footer, /thinking && !liveText/);
   assert.match(footer, /ThinkingRow/);
   assert.match(footer, /thinkingLabel/);
-  assert.match(chat, /thinkingLabel=\{tr\('chatThinking'\)\}/);
+  assert.match(chat, /thinkingLabel=\{c\.tr\('chatThinking'\)\}/);
   assert.match(footer, /id: 'live-stream'/);
   assert.match(list, /thinking=\{thinking\}/);
   // Guest send also shows Thinking in the same footer slot.
-  assert.match(chat, /thinking=\{turn\.thinking \|\| \(!isAuthenticated && guest\.sending\)\}/);
+  assert.match(chat, /thinking=\{c\.turn\.thinking \|\| \(!isAuthenticated && c\.guest\.sending\)\}/);
   assert.match(thinking, /isReduceMotionEnabled|reduceMotionChanged/);
   assert.match(thinking, /LinasStarMark/);
 });
@@ -351,7 +354,7 @@ test('guest pending draft handoff does not import transcript', () => {
 
 test('voice STT wires transcript into composer draft (no auto-send)', () => {
   const voice = read('features/chat/useVoiceDraft.ts');
-  const chat = read('features/chat/ChatScreen.tsx');
+  const chat = readChatScreenBundle(read);
   const composer = read('features/chat/ChatComposer.tsx');
   const controls = read('features/chat/VoiceComposerControls.tsx');
   const glyphs = read('features/chat/ComposerGlyphs.tsx');
@@ -418,7 +421,7 @@ test('LIN effort chip opens Low/High picker synced with Chat|Work', () => {
   assert.match(sheet, /linEffortHighSub/);
   assert.match(sheet, /id: 'chat'/);
   assert.match(sheet, /id: 'work'/);
-  assert.match(chat, /onOwnerModeChange=\{setOwnerMode\}/);
+  assert.match(chat, /onOwnerModeChange=\{c\.setOwnerMode\}/);
   assert.match(mode, /effortLabelForMode/);
 });
 
@@ -493,7 +496,7 @@ test('drawer search chrome is header icon; Settings beside search; New chat on R
   const nav = read('features/nav/NavDrawer.tsx');
   const drawerHeader = read('features/nav/DrawerHeader.tsx');
   const recents = read('features/nav/DrawerRecents.tsx');
-  const chat = read('features/chat/ChatScreen.tsx');
+  const chat = readChatScreenBundle(read);
   const overlays = read('features/chat/ChatScreenOverlays.tsx');
   const drawer = read('components/SideDrawer.tsx');
   assert.doesNotMatch(nav, /DrawerFooter/);
@@ -722,7 +725,7 @@ test('Dashboard sections match design handoff', () => {
   assert.match(screen, /BuyCreditsSheet/);
   assert.match(screen, /useBuyCreditsFlow/);
   assert.match(screen, /onBuyCredits=\{\(\) => credits\.setOpen\(true\)\}/);
-  assert.match(screen, /onUpgrade=\{\(\) => onNavigate\('subscription'\)\}/);
+  assert.match(screen, /onUpgrade=\{\(\) => onNavigate\('choose_plan'\)\}/);
   assert.doesNotMatch(screen, /centerTitle/);
   assert.doesNotMatch(screen, /stackedHeader/);
   assert.match(header, /calendar-outline/);
