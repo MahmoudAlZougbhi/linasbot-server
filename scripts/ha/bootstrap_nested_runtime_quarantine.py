@@ -7,28 +7,28 @@ import importlib.util
 import json
 import os
 import stat
-import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-_evidence_spec = importlib.util.spec_from_file_location(
-    "bootstrap_nested_runtime_evidence",
-    Path(__file__).with_name("bootstrap_nested_runtime_evidence.py"),
+_loader_path = Path(__file__).with_name("bootstrap_nested_runtime_loader.py")
+_loader_spec = importlib.util.spec_from_file_location(
+    "bootstrap_nested_runtime_loader",
+    _loader_path,
 )
-if _evidence_spec is None or _evidence_spec.loader is None:
-    raise RuntimeError("nested runtime evidence module is missing")
-_evidence = importlib.util.module_from_spec(_evidence_spec)
-_evidence_spec.loader.exec_module(_evidence)
+if _loader_spec is None or _loader_spec.loader is None:
+    raise RuntimeError("nested runtime loader module is missing")
+_loader = importlib.util.module_from_spec(_loader_spec)
+_loader_spec.loader.exec_module(_loader)
 
-_safety_spec = importlib.util.spec_from_file_location(
+_safety = _loader.load_authenticated_module(
     "bootstrap_nested_runtime_safety",
     Path(__file__).with_name("bootstrap_nested_runtime_safety.py"),
 )
-if _safety_spec is None or _safety_spec.loader is None:
-    raise RuntimeError("nested runtime safety module is missing")
-_safety = importlib.util.module_from_spec(_safety_spec)
-_safety_spec.loader.exec_module(_safety)
+_evidence = _loader.load_authenticated_module(
+    "bootstrap_nested_runtime_evidence",
+    Path(__file__).with_name("bootstrap_nested_runtime_evidence.py"),
+)
 
 NestedRuntimeQuarantineError = _evidence.NestedRuntimeQuarantineError
 NESTED_RUNTIME_NAME = _evidence.NESTED_RUNTIME_NAME
@@ -41,6 +41,9 @@ read_authority_bytes: Callable[[Path], bytes] = _safety.read_authority_bytes
 fsync_path = _safety.fsync_path
 is_known_authority_temp = _safety.is_known_authority_temp
 authority_temp_prefix = _safety.authority_temp_prefix
+verify_mount_context = _safety.verify_mount_context
+iter_tree_members = _safety.iter_tree_members
+atomic_authority_write = _safety.atomic_authority_write
 AUTHORITY_KEYS = _safety.AUTHORITY_KEYS
 
 SECURE_ROOT_MODE = 0o700
@@ -67,40 +70,18 @@ def _fsync_regular(path: Path) -> None:
     fsync_path(path)
 
 
-def _fsync_tree(root: Path) -> None:
-    root_info = member_lstat(root)
-    root_dev = root_info.st_dev
-    directories: list[Path] = []
-    for current, dirnames, filenames in os.walk(
-        root,
-        topdown=True,
-        followlinks=False,
-        onerror=walk_fail_closed,
-    ):
-        directory = Path(current)
-        dir_info = member_lstat(directory)
-        if dir_info.st_dev != root_dev:
-            raise NestedRuntimeQuarantineError("nested runtime tree crosses devices")
-        directories.append(directory)
-        for name in list(dirnames):
-            path = directory / name
-            info = member_lstat(path)
-            if info.st_dev != root_dev:
-                raise NestedRuntimeQuarantineError("nested runtime tree crosses devices")
-            if stat.S_ISLNK(info.st_mode):
-                _safety.safe_symlink_target(root, path)
-                dirnames.remove(name)
-        for name in filenames:
-            path = directory / name
-            info = member_lstat(path)
-            if info.st_dev != root_dev:
-                raise NestedRuntimeQuarantineError("nested runtime tree crosses devices")
-            if stat.S_ISLNK(info.st_mode):
-                _safety.safe_symlink_target(root, path)
-                continue
-            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-                raise NestedRuntimeQuarantineError("nested runtime tree contains an unsafe object")
-            _fsync_regular(path)
+def _fsync_tree(root: Path, *, mount_namespace_sha256: str | None = None) -> None:
+    if mount_namespace_sha256 is not None:
+        verify_mount_context(root, mount_namespace_sha256)
+    directories = [root]
+    for kind, path, _info in iter_tree_members(root):
+        if kind == "directory":
+            directories.append(path)
+            continue
+        if kind == "symlink":
+            _safety.opaque_symlink_target(path)
+            continue
+        _fsync_regular(path)
     for directory in reversed(directories):
         _fsync_dir(directory)
 
@@ -121,6 +102,14 @@ def digest_evidence(evidence: dict[str, Any]) -> str:
     if evidence.get("present") is False:
         return _digest(absent_evidence())
     return _digest(evidence)
+
+
+def digest_authority(backup: Path) -> str:
+    path = authority_path(backup)
+    if not path.exists() and not path.is_symlink():
+        return digest_evidence(absent_evidence())
+    raw = read_authority_bytes(path)
+    return hashlib.sha256(raw).hexdigest()
 
 
 def probe_evidence(repo_dir: Path) -> dict[str, Any]:
@@ -200,69 +189,6 @@ def _read_authority(backup: Path) -> dict[str, Any]:
     return _validate_authority_document(document, raw)
 
 
-def _read_existing_authority_candidate(path: Path) -> bytes:
-    if not path.exists() and not path.is_symlink():
-        return b""
-    try:
-        loaded = read_authority_bytes(path)
-    except NestedRuntimeQuarantineError:
-        try:
-            return path.read_bytes()
-        except OSError as exc:
-            raise NestedRuntimeQuarantineError("nested runtime authority is invalid") from exc
-    if not isinstance(loaded, bytes):
-        raise NestedRuntimeQuarantineError("nested runtime authority is invalid")
-    return loaded
-
-
-def _atomic_authority_write(path: Path, payload: bytes) -> None:
-    if len(payload) > _safety.MAX_AUTHORITY_BYTES:
-        raise NestedRuntimeQuarantineError("nested runtime authority write failed")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp_prefix = authority_temp_prefix(path.name)
-    fd, temporary_name = tempfile.mkstemp(prefix=temp_prefix, dir=path.parent)
-    temporary = Path(temporary_name)
-    if not is_known_authority_temp(temporary, path.name):
-        raise NestedRuntimeQuarantineError("nested runtime authority write failed")
-    try:
-        os.fchmod(fd, _safety.SECURE_AUTHORITY_MODE)
-        offset = 0
-        while offset < len(payload):
-            written = os.write(fd, payload[offset:])
-            if written <= 0:
-                raise NestedRuntimeQuarantineError("nested runtime authority write failed")
-            offset += written
-        os.fsync(fd)
-        os.close(fd)
-        fd = -1
-        fsync_path(temporary)
-        if path.exists() or path.is_symlink():
-            existing = _read_existing_authority_candidate(path)
-            if existing == payload:
-                temporary.unlink()
-                return
-            if len(existing) < len(payload) and payload.startswith(existing):
-                path.unlink()
-                _fsync_dir(path.parent)
-            else:
-                raise NestedRuntimeQuarantineError("nested runtime authority changed")
-        os.link(temporary, path, follow_symlinks=False)
-        temporary.unlink()
-        fsync_path(path)
-        _fsync_dir(path.parent)
-        verify = read_authority_bytes(path)
-        if verify != payload:
-            raise NestedRuntimeQuarantineError("nested runtime authority readback failed")
-        _fsync_dir(path.parent)
-    except OSError as exc:
-        raise NestedRuntimeQuarantineError("nested runtime authority write failed") from exc
-    finally:
-        if fd >= 0:
-            os.close(fd)
-        if temporary.exists() and is_known_authority_temp(temporary, path.name):
-            temporary.unlink()
-
-
 def _write_authority(backup: Path, *, tx_id: str, evidence: dict[str, Any], destination_name: str) -> None:
     payload = (
         _canonical(
@@ -276,7 +202,7 @@ def _write_authority(backup: Path, *, tx_id: str, evidence: dict[str, Any], dest
         )
         + b"\n"
     )
-    _atomic_authority_write(authority_path(backup), payload)
+    atomic_authority_write(authority_path(backup), payload, authority_name=AUTHORITY_NAME)
 
 
 def publish_authority(repo_dir: Path, backup: Path, expected: dict[str, Any], tx_id: str) -> None:
@@ -305,7 +231,14 @@ def _transition_root_metadata(
         raise NestedRuntimeQuarantineError(f"nested runtime {direction} root identity changed")
     current_owner = (info.st_uid, info.st_gid)
     current_mode = stat.S_IMODE(info.st_mode)
-    if current_owner not in {source_owner, target_owner} or current_mode not in {source_mode, target_mode}:
+    allowed = {
+        (source_owner, source_mode),
+        (target_owner, source_mode),
+        (target_owner, target_mode),
+    }
+    if (current_owner, current_mode) not in allowed:
+        raise NestedRuntimeQuarantineError(f"nested runtime {direction} partial root metadata is invalid")
+    if current_owner == source_owner and current_mode == target_mode and source_owner != target_owner:
         raise NestedRuntimeQuarantineError(f"nested runtime {direction} partial root metadata is invalid")
     if current_owner != target_owner:
         os.chown(path, target_owner[0], target_owner[1])
@@ -317,31 +250,16 @@ def _transition_root_metadata(
     _fsync_dir(path)
 
 
-def _rename_quarantine(
-    *,
-    live: Path,
-    quarantine: Path,
-    evidence: dict[str, Any],
-    direction: str,
-) -> Path:
-    live_exists = live.exists() or live.is_symlink()
-    quarantine_exists = quarantine.exists() or quarantine.is_symlink()
-    if live_exists == quarantine_exists:
-        raise NestedRuntimeQuarantineError(f"nested runtime {direction} location is ambiguous")
-    if live_exists:
-        _evidence.assert_content_matches(live, evidence)
-        try:
-            if live.stat().st_dev != quarantine.parent.stat().st_dev:
-                raise NestedRuntimeQuarantineError(f"nested runtime {direction} would cross devices")
-        except OSError as exc:
-            raise NestedRuntimeQuarantineError(f"nested runtime {direction} would cross devices") from exc
-        _fsync_tree(live)
-        os.rename(live, quarantine)
-        _fsync_dir(live.parent)
-        _fsync_dir(quarantine.parent)
-        return quarantine
-    _evidence.assert_content_matches(quarantine, evidence)
-    return quarantine
+def _rename_live_to_quarantine(*, live: Path, quarantine: Path, evidence: dict[str, Any]) -> None:
+    try:
+        if live.stat().st_dev != quarantine.parent.stat().st_dev:
+            raise NestedRuntimeQuarantineError("nested runtime quarantine would cross devices")
+    except OSError as exc:
+        raise NestedRuntimeQuarantineError("nested runtime quarantine would cross devices") from exc
+    _fsync_tree(live, mount_namespace_sha256=str(evidence["mount_namespace_sha256"]))
+    os.rename(live, quarantine)
+    _fsync_dir(live.parent)
+    _fsync_dir(quarantine.parent)
 
 
 def apply_quarantine(repo_dir: Path, backup: Path, expected: dict[str, Any], tx_id: str) -> None:
@@ -354,16 +272,23 @@ def apply_quarantine(repo_dir: Path, backup: Path, expected: dict[str, Any], tx_
     if (live.exists() or live.is_symlink()) and (quarantine.exists() or quarantine.is_symlink()):
         raise NestedRuntimeQuarantineError("nested runtime quarantine collides with the live tree")
     publish_authority(repo_dir, backup, expected, tx_id)
-    current = _rename_quarantine(live=live, quarantine=quarantine, evidence=expected, direction="quarantine")
-    _transition_root_metadata(
-        current,
-        evidence=expected,
-        source_owner=(int(expected["root_uid"]), int(expected["root_gid"])),
-        source_mode=int(expected["root_mode"]),
-        target_owner=SECURE_ROOT_OWNER,
-        target_mode=SECURE_ROOT_MODE,
-        direction="quarantine",
-    )
+    if live.exists() or live.is_symlink():
+        verify_mount_context(live, str(expected["mount_namespace_sha256"]))
+        _evidence.assert_content_matches(live, expected)
+        _transition_root_metadata(
+            live,
+            evidence=expected,
+            source_owner=(int(expected["root_uid"]), int(expected["root_gid"])),
+            source_mode=int(expected["root_mode"]),
+            target_owner=SECURE_ROOT_OWNER,
+            target_mode=SECURE_ROOT_MODE,
+            direction="quarantine",
+        )
+        _rename_live_to_quarantine(live=live, quarantine=quarantine, evidence=expected)
+    elif quarantine.exists() or quarantine.is_symlink():
+        _evidence.assert_content_matches(quarantine, expected)
+    else:
+        raise NestedRuntimeQuarantineError("nested runtime quarantine location is ambiguous")
     assert_absent(repo_dir)
     assert_quarantined(repo_dir, expected, tx_id)
 
@@ -388,8 +313,14 @@ def restore_quarantine(repo_dir: Path, backup: Path, expected: dict[str, Any], t
     if live_exists and quarantine_exists:
         raise NestedRuntimeQuarantineError("nested runtime rollback location is ambiguous")
     if quarantine_exists:
+        verify_mount_context(quarantine, str(expected["mount_namespace_sha256"]))
+        _evidence.assert_content_matches(quarantine, expected)
+        _fsync_tree(quarantine, mount_namespace_sha256=str(expected["mount_namespace_sha256"]))
+        os.rename(quarantine, live)
+        _fsync_dir(quarantine.parent)
+        _fsync_dir(live.parent)
         _transition_root_metadata(
-            quarantine,
+            live,
             evidence=expected,
             source_owner=SECURE_ROOT_OWNER,
             source_mode=SECURE_ROOT_MODE,
@@ -397,10 +328,18 @@ def restore_quarantine(repo_dir: Path, backup: Path, expected: dict[str, Any], t
             target_mode=int(expected["root_mode"]),
             direction="rollback",
         )
-        _fsync_tree(quarantine)
-        os.rename(quarantine, live)
-        _fsync_dir(quarantine.parent)
-        _fsync_dir(live.parent)
+    elif live_exists:
+        verify_mount_context(live, str(expected["mount_namespace_sha256"]))
+        _evidence.assert_content_matches(live, expected)
+        _transition_root_metadata(
+            live,
+            evidence=expected,
+            source_owner=SECURE_ROOT_OWNER,
+            source_mode=SECURE_ROOT_MODE,
+            target_owner=(int(expected["root_uid"]), int(expected["root_gid"])),
+            target_mode=int(expected["root_mode"]),
+            direction="rollback",
+        )
     assert_live_matches(repo_dir, expected)
 
 
@@ -416,5 +355,7 @@ def assert_quarantined(repo_dir: Path, expected: dict[str, Any], tx_id: str) -> 
         raise NestedRuntimeQuarantineError("nested runtime quarantine is missing")
     _evidence.assert_content_matches(quarantine, expected)
     info = member_lstat(quarantine)
+    if info.st_dev != int(expected["root_dev"]) or info.st_ino != int(expected["root_ino"]):
+        raise NestedRuntimeQuarantineError("nested runtime quarantine root identity is invalid")
     if (info.st_uid, info.st_gid) != SECURE_ROOT_OWNER or stat.S_IMODE(info.st_mode) != SECURE_ROOT_MODE:
         raise NestedRuntimeQuarantineError("nested runtime quarantine root metadata is invalid")

@@ -82,6 +82,38 @@ class CreditLedgerService:
             data = json.loads(path.read_text(encoding="utf-8"))
             return int(data.get("reserved") or 0)
 
+    def find_open_reservation_by_request(self, tenant_id: str, request_id: str) -> str | None:
+        rid = str(request_id or "").strip()
+        if not rid:
+            return None
+        if billing_uses_postgres():
+            from services.credit_ledger_pg_ops import pg_find_open_reservation_by_request
+
+            return pg_find_open_reservation_by_request(tenant_id, rid)
+        with self._lock:
+            prior = self._find_ops_by_request_id(tenant_id, rid)
+            for row in prior:
+                if row.get("op") != "reserve":
+                    continue
+                reservation_id = str(row.get("id") or "").strip()
+                if not reservation_id:
+                    continue
+                credits, terminal = self._reservation_state(tenant_id, reservation_id)
+                if credits > 0 and terminal is None:
+                    return reservation_id
+        return None
+
+    def reservation_terminal(self, tenant_id: str, reservation_id: str) -> str | None:
+        if billing_uses_postgres():
+            from services.billing_backend import require_billing_pg_session
+            from services.credit_ledger_pg_store import reservation_state
+
+            with require_billing_pg_session() as session:
+                _credits, terminal = reservation_state(session, tenant_id, reservation_id)
+            return terminal
+        _credits, terminal = self._reservation_state(tenant_id, reservation_id)
+        return terminal
+
     def _set_balance(self, tenant_id: str, available: int, reserved: int) -> None:
         self._balance_path(tenant_id).write_text(
             json.dumps({"available": available, "reserved": reserved, "updated_at": time.time()}),
@@ -144,6 +176,9 @@ class CreditLedgerService:
                 request_id=request_id,
             )
         self.ensure_period_grant(tenant_id)
+        existing = self.find_open_reservation_by_request(tenant_id, request_id)
+        if existing:
+            return existing
         with self._lock:
             data = json.loads(self._balance_path(tenant_id).read_text(encoding="utf-8"))
             available = int(data["available"])

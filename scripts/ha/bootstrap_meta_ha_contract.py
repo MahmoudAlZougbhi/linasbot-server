@@ -33,22 +33,23 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-_nested_spec = importlib.util.spec_from_file_location(
+_nested_loader_path = Path(__file__).with_name("bootstrap_nested_runtime_loader.py")
+_nested_loader_spec = importlib.util.spec_from_file_location(
+    "bootstrap_nested_runtime_loader",
+    _nested_loader_path,
+)
+if _nested_loader_spec is None or _nested_loader_spec.loader is None:
+    raise RuntimeError("nested runtime loader module is missing")
+_nested_loader = importlib.util.module_from_spec(_nested_loader_spec)
+_nested_loader_spec.loader.exec_module(_nested_loader)
+_nested = _nested_loader.load_authenticated_module(
     "bootstrap_nested_runtime_quarantine",
     Path(__file__).with_name("bootstrap_nested_runtime_quarantine.py"),
 )
-if _nested_spec is None or _nested_spec.loader is None:
-    raise RuntimeError("nested runtime quarantine module is missing")
-_nested = importlib.util.module_from_spec(_nested_spec)
-_nested_spec.loader.exec_module(_nested)
-_nested_evidence_spec = importlib.util.spec_from_file_location(
+_nested_evidence = _nested_loader.load_authenticated_module(
     "bootstrap_nested_runtime_evidence",
     Path(__file__).with_name("bootstrap_nested_runtime_evidence.py"),
 )
-if _nested_evidence_spec is None or _nested_evidence_spec.loader is None:
-    raise RuntimeError("nested runtime evidence module is missing")
-_nested_evidence = importlib.util.module_from_spec(_nested_evidence_spec)
-_nested_evidence_spec.loader.exec_module(_nested_evidence)
 _lb_contract_spec = importlib.util.spec_from_file_location(
     "do_lb_ready_contract",
     Path(__file__).with_name("do_lb_ready_contract.py"),
@@ -296,6 +297,8 @@ RUNTIME_CONTROL_FILES = {
     "scripts/ha/bootstrap_nested_runtime_quarantine.py",
     "scripts/ha/bootstrap_nested_runtime_evidence.py",
     "scripts/ha/bootstrap_nested_runtime_safety.py",
+    "scripts/ha/bootstrap_nested_runtime_loader.py",
+    "scripts/ha/bootstrap_nested_runtime_mount.py",
     "scripts/ha/do_lb_ready_contract.py",
     "scripts/ha/python_runtime_archive_contract.py",
     "scripts/ha/python_runtime_provision_contract.py",
@@ -3830,18 +3833,42 @@ def _node_admit_rollback(tx_id: str, plan_sha256: str) -> None:
         _assert_legacy_retired(prove_manual_start_denied=True)
 
 
+def _nested_commit_proof_fields(
+    backup: Path,
+    nested: dict[str, Any],
+    *,
+    tx_id: str,
+) -> dict[str, Any]:
+    nested_present = bool(nested.get("present"))
+    if nested_present:
+        _nested.assert_quarantined(REPO_DIR, nested, tx_id)
+        nested_quarantined = True
+    else:
+        nested_quarantined = False
+    if nested_present != nested_quarantined:
+        raise RuntimeError("nested runtime commit proof truth table violated")
+    return {
+        "nested_runtime_present": nested_present,
+        "nested_runtime_quarantined": nested_quarantined,
+        "nested_runtime_evidence_sha256": _nested.digest_evidence(nested),
+        "nested_runtime_authority_sha256": _nested.digest_authority(backup),
+    }
+
+
 def _bootstrap_commit_proof_payload(
     probe: dict[str, Any],
     *,
+    backup: Path,
     tx_id: str,
     plan_sha256: str,
     node_id: str,
 ) -> dict[str, Any]:
     runtime = probe["runtime_authority"]
     shared = runtime["shared"]
+    nested_fields = _nested_commit_proof_fields(backup, probe["nested_runtime"], tx_id=tx_id)
     return {
-        "schema": 2,
-        "format": "linas-meta-ha-bootstrap-node-v2",
+        "schema": 3,
+        "format": "linas-meta-ha-bootstrap-node-v3",
         "tx_id": tx_id,
         "plan_sha256": plan_sha256,
         "node_id": node_id,
@@ -3863,15 +3890,14 @@ def _bootstrap_commit_proof_payload(
         "target_unit_contract_sha256": _digest(probe["target_units"]),
         "legacy_bytecode_manifest_sha256": _digest(probe["repo_bytecode"]),
         "repo_bytecode_absent": True,
-        "nested_runtime_present": bool(probe["nested_runtime"]["present"]),
-        "nested_runtime_evidence_sha256": _nested.digest_evidence(probe["nested_runtime"]),
-        "nested_runtime_quarantined": bool(probe["nested_runtime"]["present"]),
+        **nested_fields,
     }
 
 
 def _read_bootstrap_commit_proof(
     probe: dict[str, Any],
     *,
+    backup: Path,
     tx_id: str,
     plan_sha256: str,
     node_id: str,
@@ -3879,6 +3905,7 @@ def _read_bootstrap_commit_proof(
     payload, raw = _read_authority_json(COMMITTED_PROOF_PATH)
     expected = _bootstrap_commit_proof_payload(
         probe,
+        backup=backup,
         tx_id=tx_id,
         plan_sha256=plan_sha256,
         node_id=node_id,
@@ -3916,6 +3943,7 @@ def _node_commit_proof(tx_id: str, plan_sha256: str) -> None:
         raise RuntimeError("bootstrap cannot record commit before proven traffic restoration")
     proof_payload = _bootstrap_commit_proof_payload(
         probe,
+        backup=backup,
         tx_id=tx_id,
         plan_sha256=plan_sha256,
         node_id=node_id,
@@ -3970,6 +3998,7 @@ def _node_finalize(tx_id: str, plan_sha256: str, status_value: str) -> None:
         _assert_normalized_git_metadata(backup, probe["git_metadata"])
         _read_bootstrap_commit_proof(
             probe,
+            backup=backup,
             tx_id=tx_id,
             plan_sha256=plan_sha256,
             node_id=node_id,
@@ -4016,6 +4045,7 @@ def _node_release_active(tx_id: str, plan_sha256: str, status_value: str) -> Non
             raise RuntimeError("bootstrap commit proof node identity is invalid")
         _read_bootstrap_commit_proof(
             probe,
+            backup=backup,
             tx_id=tx_id,
             plan_sha256=plan_sha256,
             node_id=node_id,

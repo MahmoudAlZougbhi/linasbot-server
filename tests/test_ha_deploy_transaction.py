@@ -801,6 +801,7 @@ def test_target_verification_keeps_boot_guard_and_workers_offline_until_parity()
     assert 'systemctl start "linasbot-worker@${queue}.service"' not in verify_start
     assert '"$REPO_DIR/venv/bin/python" -B -I "$REPO_DIR/$RELEASE_VERIFY_REPO_PATH"' in verify_start
     assert '"$REPO_DIR/venv/bin/python" "$REPO_DIR/main.py"' not in verify_start
+    assert "run_target_alembic_migrate" in verify_start
     assert "run_target_readiness_probe" in verify_start
     assert "LINAS_HA_VERIFY_ONLY=true" in verify_start
     assert "LINAS_HA_VERIFY_RELEASE_SHA=$target_sha" in verify_start
@@ -863,6 +864,17 @@ assert 'storage.migrate_bootstrap' not in sys.modules
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_precommit_alembic_migrate_is_bounded_collectable_and_before_readiness() -> None:
+    source = _helper()
+    verify_start = source[source.index("start_target_runtime() {") : source.index("activate_impl() {")]
+    migrate = source[source.index("run_target_alembic_migrate() {") : source.index("run_target_readiness_probe() {")]
+    assert "RELEASE_ALEMBIC_MIGRATE_REPO_PATH" in migrate
+    assert '"$REPO_DIR/venv/bin/python" -B -I "$REPO_DIR/$RELEASE_ALEMBIC_MIGRATE_REPO_PATH"' in migrate
+    assert "--property=RuntimeMaxSec=120s" in migrate
+    assert "LINAS_HA_VERIFY_ONLY=true" in migrate
+    assert verify_start.index("run_target_alembic_migrate") < verify_start.index("run_target_readiness_probe")
 
 
 def test_precommit_readiness_probe_is_bounded_collectable_and_non_routable() -> None:
@@ -1433,7 +1445,7 @@ def test_explicit_reconciliation_supports_distinct_exact_baselines_only_once() -
     assert 'orchestrate "${2:-}" steady-confirmed "${3:-}" "${4:-}" "${5:-}" "" "${6:-}"' in steady_dispatch
 
 
-def test_deploy_accepts_only_the_exact_bootstrap_v2_proof_bound_to_runtime(
+def test_deploy_accepts_only_the_exact_bootstrap_v3_proof_bound_to_runtime(
     tmp_path: Path,
 ) -> None:
     code = _embedded_python("read_bootstrap_commit_proof")
@@ -1457,8 +1469,8 @@ def test_deploy_accepts_only_the_exact_bootstrap_v2_proof_bound_to_runtime(
         "legacy_bytecode_manifest_sha256",
     }
     payload: dict[str, object] = {
-        "schema": 2,
-        "format": "linas-meta-ha-bootstrap-node-v2",
+        "schema": 3,
+        "format": "linas-meta-ha-bootstrap-node-v3",
         "tx_id": "a" * 32,
         "plan_sha256": plan_sha,
         "node_id": "node01",
@@ -1471,6 +1483,7 @@ def test_deploy_accepts_only_the_exact_bootstrap_v2_proof_bound_to_runtime(
         "nested_runtime_present": False,
         "nested_runtime_evidence_sha256": "f" * 64,
         "nested_runtime_quarantined": False,
+        "nested_runtime_authority_sha256": "a" * 64,
         **{key: "e" * 64 for key in digest_keys},
     }
 
@@ -1502,7 +1515,8 @@ def test_deploy_accepts_only_the_exact_bootstrap_v2_proof_bound_to_runtime(
     assert verify({**payload, "unknown": True}).returncode != 0
     assert verify({**payload, "repo_bytecode_absent": False}).returncode != 0
     assert verify({**payload, "nested_runtime_present": 1}).returncode != 0
-    assert verify({**payload, "nested_runtime_quarantined": "false"}).returncode != 0
+    assert verify({**payload, "nested_runtime_quarantined": True}).returncode != 0
+    assert verify({**payload, "nested_runtime_present": True, "nested_runtime_quarantined": False}).returncode != 0
     assert (
         verify({key: value for key, value in payload.items() if key != "nested_runtime_evidence_sha256"}).returncode
         != 0

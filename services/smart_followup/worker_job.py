@@ -10,6 +10,8 @@ from services.smart_followup.channels import get_channel_adapter, normalize_foll
 from services.smart_followup.constants import OPERATION_TYPE
 from services.smart_followup.eligibility import evaluate_job_eligibility_async
 from services.smart_followup.generation import generate_followup_text
+from services.smart_followup.idempotency import canonical_sfu_credit_request_id, canonical_sfu_key
+from services.smart_followup.job_fence import JobClaimFenceError, assert_job_claim_fence, claim_generation_of
 from services.smart_followup.repository import SmartFollowUpRepository
 from services.whatsapp_cloud.observability import emit_wa_event
 
@@ -36,12 +38,23 @@ def _sender_id_for_generation(job: Any, conv: Any) -> tuple[str, str]:
     return str(conv.social_sender_id or conv.user_id or ""), str(conv.user_id or conv.social_sender_id or "")
 
 
+def _fence_job(session: Any, *, job_id: str, worker_id: str, claim_generation: int) -> Any | None:
+    from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpJob
+
+    job = session.get(WhatsAppSmartFollowUpJob, job_id)
+    if job is None:
+        return None
+    assert_job_claim_fence(job, worker_id=worker_id, claim_generation=claim_generation)
+    return job
+
+
 async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, Any]:
     from db.models.whatsapp_smart_followup import WhatsAppSmartFollowUpJob
 
     reservation_id: str | None = None
     tenant_id = ""
     snapshot: dict[str, Any] = {}
+    claim_generation = 0
 
     with whatsapp_session() as session:
         sfu = SmartFollowUpRepository(session)
@@ -50,6 +63,7 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
             return {"job_id": job_id, "status": "missing"}
         if job.status != "claimed" or job.claimed_by != worker_id:
             return {"job_id": job_id, "status": "claim_lost"}
+        claim_generation = claim_generation_of(job)
 
         tenant_id = job.tenant_id
         settings = sfu.get_settings(tenant_id)
@@ -73,6 +87,9 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
             return {"job_id": job_id, "status": "skipped", "reason": reason}
 
         try:
+            job = _fence_job(session, job_id=job_id, worker_id=worker_id, claim_generation=claim_generation)
+            if job is None:
+                return {"job_id": job_id, "status": "missing"}
             from services.credit_ledger_service import credit_ledger_service
 
             reservation_id = credit_ledger_service.reserve(
@@ -80,16 +97,22 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
                 user_id=None,
                 credits=1,
                 operation_type=OPERATION_TYPE,
-                request_id=f"sfu:{job.idempotency_key}",
+                request_id=canonical_sfu_credit_request_id(job.idempotency_key),
             )
             job.reservation_id = reservation_id
             job.status = "generating"
             session.flush()
+        except JobClaimFenceError:
+            return {"job_id": job_id, "status": "claim_lost"}
         except PermissionError:
+            if job is None:
+                return {"job_id": job_id, "status": "missing"}
             sfu.mark_job_terminal(job, status="skipped", reason="insufficient_credits")
             sfu.maybe_complete_sequence(job.sequence_id)
             return {"job_id": job_id, "status": "skipped", "reason": "insufficient_credits"}
         except Exception as exc:
+            if job is None:
+                return {"job_id": job_id, "status": "missing"}
             sfu.mark_job_terminal(
                 job,
                 status="failed",
@@ -131,9 +154,12 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
     except Exception as exc:
         _release(tenant_id, reservation_id)
         with whatsapp_session() as session:
-            sfu = SmartFollowUpRepository(session)
-            job = session.get(WhatsAppSmartFollowUpJob, job_id)
+            try:
+                job = _fence_job(session, job_id=job_id, worker_id=worker_id, claim_generation=claim_generation)
+            except JobClaimFenceError:
+                return {"job_id": job_id, "status": "claim_lost"}
             if job is not None:
+                sfu = SmartFollowUpRepository(session)
                 sfu.mark_job_terminal(
                     job,
                     status="failed",
@@ -146,20 +172,27 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
     if not reply_text:
         _release(tenant_id, reservation_id)
         with whatsapp_session() as session:
-            sfu = SmartFollowUpRepository(session)
-            job = session.get(WhatsAppSmartFollowUpJob, job_id)
+            try:
+                job = _fence_job(session, job_id=job_id, worker_id=worker_id, claim_generation=claim_generation)
+            except JobClaimFenceError:
+                return {"job_id": job_id, "status": "claim_lost"}
             if job is not None:
+                sfu = SmartFollowUpRepository(session)
                 sfu.mark_job_terminal(job, status="skipped", reason="empty_generation")
                 sfu.maybe_complete_sequence(job.sequence_id)
         return {"job_id": job_id, "status": "skipped", "reason": "empty_generation"}
 
     with whatsapp_session() as session:
-        sfu = SmartFollowUpRepository(session)
-        job = session.get(WhatsAppSmartFollowUpJob, job_id)
+        try:
+            job = _fence_job(session, job_id=job_id, worker_id=worker_id, claim_generation=claim_generation)
+        except JobClaimFenceError:
+            _release(tenant_id, reservation_id)
+            return {"job_id": job_id, "status": "claim_lost"}
         if job is None:
             _release(tenant_id, reservation_id)
             return {"job_id": job_id, "status": "missing"}
 
+        sfu = SmartFollowUpRepository(session)
         settings = sfu.get_settings(tenant_id)
         sequence = sfu.get_sequence(job.sequence_id)
         adapter = get_channel_adapter(job.channel)
@@ -178,38 +211,92 @@ async def process_one_followup_job(*, job_id: str, worker_id: str) -> dict[str, 
             return {"job_id": job_id, "status": "skipped", "reason": reason}
 
         job.status = "sending"
+        session.flush()
         send_result = await adapter.send_followup(
             session,
             job=job,
             conv=conv,
             reply_text=reply_text,
-            idempotency_key=f"sfu:{job.idempotency_key}",
+            idempotency_key=canonical_sfu_key(job.idempotency_key),
         )
 
-        if send_result.status == "sent":
-            try:
-                from services.credit_ledger_service import credit_ledger_service
+        try:
+            job = _fence_job(session, job_id=job_id, worker_id=worker_id, claim_generation=claim_generation)
+        except JobClaimFenceError:
+            return {"job_id": job_id, "status": "claim_lost"}
+        if job is None:
+            return {"job_id": job_id, "status": "missing"}
 
-                if reservation_id:
-                    credit_ledger_service.capture(
-                        tenant_id=tenant_id,
-                        reservation_id=reservation_id,
-                        provider_cost_usd=None,
-                        model_provider="smart_followup",
+        if send_result.status == "sent":
+            if send_result.reason == "duplicate_delivery":
+                if send_result.billing_captured:
+                    sfu.mark_job_terminal(
+                        job,
+                        status="sent",
+                        reason=send_result.reason,
+                        provider_wamid=send_result.provider_message_id,
+                        credits_captured=1,
                     )
-            except Exception as exc:
-                emit_wa_event("sfu_credit_capture_failed", error=type(exc).__name__)
-            sfu.mark_job_terminal(
-                job,
-                status="sent",
-                reason="sent",
-                provider_wamid=send_result.provider_message_id,
-                credits_captured=1,
-            )
+                else:
+                    sfu.mark_job_terminal(
+                        job,
+                        status="reconciliation_required",
+                        reason="billing_pending",
+                        provider_wamid=send_result.provider_message_id,
+                        credits_captured=0,
+                    )
+            elif send_result.billing_captured:
+                sfu.mark_job_terminal(
+                    job,
+                    status="sent",
+                    reason=send_result.reason,
+                    provider_wamid=send_result.provider_message_id,
+                    credits_captured=1,
+                )
+            elif send_result.billing_pending or snapshot.get("channel") == "web_chat":
+                sfu.mark_job_terminal(
+                    job,
+                    status="reconciliation_required",
+                    reason="billing_pending",
+                    provider_wamid=send_result.provider_message_id,
+                    credits_captured=0,
+                )
+            else:
+                credits_captured = 0
+                try:
+                    from services.credit_ledger_service import credit_ledger_service
+
+                    if reservation_id:
+                        credit_ledger_service.capture(
+                            tenant_id=tenant_id,
+                            reservation_id=reservation_id,
+                            provider_cost_usd=None,
+                            model_provider="smart_followup",
+                        )
+                        credits_captured = 1
+                except Exception as exc:
+                    emit_wa_event("sfu_credit_capture_failed", error=type(exc).__name__)
+                    sfu.mark_job_terminal(
+                        job,
+                        status="reconciliation_required",
+                        reason="billing_pending",
+                        detail=type(exc).__name__,
+                        provider_wamid=send_result.provider_message_id,
+                        credits_captured=0,
+                    )
+                    sfu.maybe_complete_sequence(job.sequence_id)
+                    return {"job_id": job_id, "status": "reconciliation_required", "reason": "billing_pending"}
+                sfu.mark_job_terminal(
+                    job,
+                    status="sent",
+                    reason=send_result.reason,
+                    provider_wamid=send_result.provider_message_id,
+                    credits_captured=credits_captured,
+                )
             sfu.maybe_complete_sequence(job.sequence_id)
             return {
                 "job_id": job_id,
-                "status": "sent",
+                "status": job.status,
                 "provider_message_id": send_result.provider_message_id,
                 "channel": snapshot["channel"],
             }

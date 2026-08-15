@@ -18,6 +18,17 @@
     }
   })();
 
+  function loadScript(src, onload) {
+    var tag = document.createElement('script');
+    tag.src = src;
+    tag.async = false;
+    tag.onload = onload;
+    tag.onerror = function () {
+      console.error('[Linas Web Chat] Could not load widget runtime script: ' + src);
+    };
+    document.head.appendChild(tag);
+  }
+
   function boot() {
     if (!window.LinasWebChat) {
       console.error('[Linas Web Chat] Runtime failed to load');
@@ -26,12 +37,7 @@
     window.LinasWebChat.init({ widgetKey: widgetKey, apiBase: apiBase });
   }
 
-  var runtime = document.createElement('script');
-  runtime.src = apiBase + '/web-chat/widget-runtime.js';
-  runtime.async = true;
-  runtime.onload = boot;
-  runtime.onerror = function () {
-    console.error('[Linas Web Chat] Could not load widget runtime');
-  };
-  document.head.appendChild(runtime);
+  loadScript(apiBase + '/web-chat/widget-runtime-shared.js', function () {
+    loadScript(apiBase + '/web-chat/widget-runtime.js', boot);
+  });
 })();

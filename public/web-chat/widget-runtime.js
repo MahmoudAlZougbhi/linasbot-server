@@ -1,144 +1,110 @@
 (function (global) {
   'use strict';
 
-  function escapeHtml(text) {
-    return String(text || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  function prefersReducedMotion() {
-    try {
-      return global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  function sizeMap(size) {
-    if (size === 'compact') return { width: 320, height: 440, launcher: 48, font: 13 };
-    if (size === 'large') return { width: 400, height: 600, launcher: 60, font: 15 };
-    return { width: 360, height: 520, launcher: 56, font: 14 };
-  }
-
-  function radiusMap(corners) {
-    if (corners === 'soft') return { panel: 10, bubble: 8, input: 8 };
-    if (corners === 'extra_rounded') return { panel: 24, bubble: 18, input: 14 };
-    return { panel: 16, bubble: 12, input: 10 };
-  }
-
-  function buildStyles(cfg, dims, radii) {
-    var a = (cfg && cfg.appearance) || {};
-    var theme = a.theme || {};
-    var bubbles = a.bubbles || {};
-    var layout = a.layout || {};
-    var accent = theme.accent_color || '#0D9488';
-    var dark = theme.mode === 'dark';
-    var panelBg = dark ? '#0F172A' : '#FFFFFF';
-    var surface = dark ? '#1E293B' : '#F8FAFC';
-    var text = dark ? '#F8FAFC' : '#0F172A';
-    var muted = dark ? '#94A3B8' : '#64748B';
-    var pos = layout.position === 'bottom_left' ? 'left:20px;right:auto' : 'right:20px;left:auto';
-  var motion = prefersReducedMotion() ? '' : 'transition:transform .2s ease,opacity .2s ease;';
-    return (
-      '#linas-web-chat-root{position:fixed;bottom:20px;' + pos + ';z-index:2147483000;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}' +
-      '#linas-web-chat-panel{display:none;width:min(' + dims.width + 'px,calc(100vw - 32px));height:min(' + dims.height + 'px,calc(100vh - 120px));background:' + panelBg + ';border-radius:' + radii.panel + 'px;box-shadow:0 16px 48px rgba(15,23,42,.22);overflow:hidden;flex-direction:column;margin-bottom:12px;border:1px solid ' + (dark ? '#334155' : '#E2E8F0') + ';' + motion + '}' +
-      '#linas-web-chat-panel.open{display:flex}' +
-      '#linas-web-chat-header{background:' + accent + ';color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px}' +
-      '#linas-web-chat-header-text{flex:1;min-width:0}' +
-      '#linas-web-chat-title{font-weight:700;font-size:15px;line-height:1.2}' +
-      '#linas-web-chat-subtitle{font-size:12px;opacity:.9;margin-top:2px}' +
-      '#linas-web-chat-close{margin-left:auto;background:rgba(255,255,255,.18);border:none;color:#fff;width:28px;height:28px;border-radius:999px;cursor:pointer;font-size:16px}' +
-      '#linas-web-chat-messages{flex:1;overflow:auto;padding:14px;background:' + surface + '}' +
-      '.linas-web-chat-msg{margin:8px 0;max-width:85%;padding:10px 12px;border-radius:' + radii.bubble + 'px;line-height:1.45;font-size:' + dims.font + 'px;white-space:pre-wrap;word-break:break-word}' +
-      '.linas-web-chat-msg.user{margin-left:auto;background:' + (bubbles.visitor_bg || accent) + ';color:' + (bubbles.visitor_text || '#fff') + '}' +
-      '.linas-web-chat-msg.assistant{margin-right:auto;background:' + (bubbles.assistant_bg || panelBg) + ';color:' + (bubbles.assistant_text || text) + ';border:1px solid ' + (dark ? '#334155' : '#E2E8F0') + '}' +
-      '.linas-web-chat-typing{margin:8px 0;color:' + muted + ';font-size:12px;font-style:italic}' +
-      '#linas-web-chat-banner{margin:8px 12px;padding:8px 10px;border-radius:' + radii.bubble + 'px;background:#FEF3C7;color:#92400E;font-size:12px;display:none}' +
-      '#linas-web-chat-input-row{display:flex;gap:8px;padding:10px;border-top:1px solid ' + (dark ? '#334155' : '#E2E8F0') + ';background:' + panelBg + '}' +
-      '#linas-web-chat-input{flex:1;border:1px solid ' + (dark ? '#475569' : '#CBD5E1') + ';border-radius:' + radii.input + 'px;padding:10px 12px;font-size:' + dims.font + 'px;background:' + (dark ? '#0F172A' : '#fff') + ';color:' + text + '}' +
-      '#linas-web-chat-send{border:none;background:' + accent + ';color:#fff;border-radius:' + radii.input + 'px;padding:0 14px;cursor:pointer;font-weight:600}' +
-      '#linas-web-chat-launcher{border:none;background:' + accent + ';color:#fff;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.18);display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:14px;padding:0 16px;height:' + dims.launcher + 'px;border-radius:999px;' + motion + '}' +
-      '#linas-web-chat-launcher.icon-only{width:' + dims.launcher + 'px;padding:0;justify-content:center;font-size:22px}' +
-      '#linas-web-chat-logo{width:28px;height:28px;border-radius:999px;object-fit:cover;background:rgba(255,255,255,.2)}'
-    );
-  }
-
-  function errorMessage(code, fallback) {
-    var map = {
-      WIDGET_DISABLED: 'Website chat is turned off.',
-      ORIGIN_NOT_ALLOWED: 'This domain is not allowed for this widget.',
-      RATE_LIMIT: 'Too many messages. Please wait a moment.',
-      insufficient_credits: 'AI replies are paused until credits are available.',
-      web_plan_denied: 'Website chat is not available on this plan.',
-      widget_disabled: 'Website chat is turned off.',
-      published_cm_missing: 'AI setup is not published yet.',
-    };
-    return map[code] || fallback || 'Something went wrong. Please try again.';
-  }
-
-  function createApi(apiBase, widgetKey) {
-    function request(method, path, body) {
-      var opts = {
-        method: method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'omit',
-      };
-      if (body) opts.body = JSON.stringify(body);
-      return fetch(apiBase + path, opts).then(function (res) {
-        return res.json().then(function (data) {
-          if (!res.ok) {
-            var err = new Error(errorMessage(data && data.error, data && data.message));
-            err.code = (data && data.error) || 'request_failed';
-            err.status = res.status;
-            err.payload = data;
-            throw err;
-          }
-          return data;
-        });
-      });
-    }
-    return {
-      loadConfig: function () {
-        return request('GET', '/api/web-chat/config?widget_key=' + encodeURIComponent(widgetKey));
-      },
-      heartbeat: function () {
-        return request('POST', '/api/web-chat/heartbeat', { widget_key: widgetKey });
-      },
-      bootstrap: function (sessionId, language) {
-        return request('POST', '/api/web-chat/session', {
-          visitor_session_id: sessionId,
-          widget_key: widgetKey,
-          language: language,
-        });
-      },
-      send: function (sessionId, content, language) {
-        return request('POST', '/api/web-chat/session/messages', {
-          visitor_session_id: sessionId,
-          widget_key: widgetKey,
-          content: content,
-          language: language,
-        });
-      },
-    };
-  }
+  var shared = global.LinasWebChatShared || {};
+  var escapeHtml = shared.escapeHtml;
+  var buildStyles = shared.buildStyles;
+  var sizeMap = shared.sizeMap;
+  var radiusMap = shared.radiusMap;
+  var widgetStorageDigest = shared.widgetStorageDigest;
+  var errorMessage = shared.errorMessage;
+  var newClientMessageKey = shared.newClientMessageKey;
+  var createApi = shared.createApi;
 
   function init(opts) {
     var widgetKey = opts.widgetKey;
     var apiBase = opts.apiBase;
     var api = createApi(apiBase, widgetKey);
-    var storageKey = 'linas_web_chat_session_' + widgetKey.slice(0, 12);
-    var sessionId = global.localStorage.getItem(storageKey);
-    if (!sessionId || sessionId.length < 8) {
-      sessionId = 'w' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-      global.localStorage.setItem(storageKey, sessionId);
-    }
+    var storageDigest = widgetStorageDigest(widgetKey);
+    var sessionIdKey = 'linas_web_chat_session_id_' + storageDigest;
+    var sessionAuthKey = 'linas_web_chat_session_auth_' + storageDigest;
+    var pollCursorKey = 'linas_web_chat_poll_cursor_' + storageDigest;
+    var pendingAckKey = 'linas_web_chat_pending_ack_' + storageDigest;
+    var transcriptKey = 'linas_web_chat_transcript_' + storageDigest;
+    var sessionId = global.localStorage.getItem(sessionIdKey) || '';
+    var sessionAuthority = global.localStorage.getItem(sessionAuthKey) || '';
+    var pollCursor = null;
+    var pollTimer = null;
+    var ackedMessageIds = {};
+    var ackQueue = [];
 
     var state = { open: false, messages: [], loading: false, config: null, banner: '' };
     var lang = (global.navigator.language || 'en').slice(0, 2);
+    var pendingSend = null;
+
+    function persistSession(id, authority) {
+      sessionId = id;
+      sessionAuthority = authority;
+      global.localStorage.setItem(sessionIdKey, id);
+      global.localStorage.setItem(sessionAuthKey, authority);
+    }
+
+    function persistTranscript() {
+      try {
+        global.localStorage.setItem(transcriptKey, JSON.stringify(state.messages));
+      } catch (e) {
+        /* ignore quota errors */
+      }
+    }
+
+    function persistPollCursor() {
+      if (pollCursor) {
+        global.localStorage.setItem(pollCursorKey, pollCursor);
+      } else {
+        global.localStorage.removeItem(pollCursorKey);
+      }
+    }
+
+    function persistPendingAckQueue() {
+      if (!ackQueue.length) {
+        global.localStorage.removeItem(pendingAckKey);
+        return;
+      }
+      var pending = ackQueue[0].ids.filter(function (id) {
+        return !ackedMessageIds[id];
+      });
+      if (pending.length) {
+        global.localStorage.setItem(pendingAckKey, JSON.stringify(pending));
+      } else {
+        global.localStorage.removeItem(pendingAckKey);
+      }
+    }
+
+    function loadDurablePollState() {
+      try {
+        var storedCursor = global.localStorage.getItem(pollCursorKey);
+        pollCursor = storedCursor || null;
+        var pendingRaw = global.localStorage.getItem(pendingAckKey);
+        if (pendingRaw) {
+          var pendingIds = JSON.parse(pendingRaw);
+          if (pendingIds && pendingIds.length) {
+            ackQueue.push({ ids: pendingIds, cursor: pollCursor });
+          }
+        }
+        var transcriptRaw = global.localStorage.getItem(transcriptKey);
+        if (transcriptRaw) {
+          var transcript = JSON.parse(transcriptRaw);
+          if (transcript && transcript.length) {
+            state.messages = transcript;
+          }
+        }
+      } catch (e) {
+        /* ignore corrupt local state */
+      }
+    }
+
+    function clearSession() {
+      sessionId = '';
+      sessionAuthority = '';
+      pollCursor = null;
+      ackQueue = [];
+      ackedMessageIds = {};
+      global.localStorage.removeItem(sessionIdKey);
+      global.localStorage.removeItem(sessionAuthKey);
+      global.localStorage.removeItem(pollCursorKey);
+      global.localStorage.removeItem(pendingAckKey);
+      global.localStorage.removeItem(transcriptKey);
+    }
 
     function el(tag, className) {
       var node = global.document.createElement(tag);
@@ -188,6 +154,7 @@
       messagesEl.innerHTML = '';
       state.messages.forEach(function (m) {
         var node = el('div', 'linas-web-chat-msg ' + (m.role === 'user' ? 'user' : 'assistant'));
+        if (m.id) node.setAttribute('data-message-id', m.id);
         node.textContent = m.content;
         messagesEl.appendChild(node);
       });
@@ -197,6 +164,92 @@
         messagesEl.appendChild(typing);
       }
       messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function mergeServerMessages(serverMessages) {
+      if (!serverMessages || !serverMessages.length) return false;
+      var known = {};
+      state.messages.forEach(function (m) {
+        if (m.id) known[m.id] = true;
+      });
+      var added = false;
+      serverMessages.forEach(function (m) {
+        if (m.id && known[m.id]) return;
+        state.messages.push({ id: m.id, role: m.role, content: m.content });
+        added = true;
+      });
+      if (added) {
+        persistTranscript();
+      }
+      return added;
+    }
+
+    function flushAckQueue() {
+      if (!sessionId || !sessionAuthority || !ackQueue.length) {
+        return Promise.resolve(true);
+      }
+      var batch = ackQueue[0];
+      var ids = batch.ids.filter(function (id) {
+        return !ackedMessageIds[id];
+      });
+      if (!ids.length) {
+        ackQueue.shift();
+        pollCursor = batch.cursor || pollCursor;
+        persistPollCursor();
+        persistPendingAckQueue();
+        return flushAckQueue();
+      }
+      return api.ack(sessionId, sessionAuthority, ids).then(function () {
+        ids.forEach(function (id) {
+          ackedMessageIds[id] = true;
+        });
+        ackQueue.shift();
+        pollCursor = batch.cursor || pollCursor;
+        persistPollCursor();
+        persistPendingAckQueue();
+        return flushAckQueue();
+      }).catch(function (err) {
+        if (err.code === 'SESSION_AUTHORITY_INVALID' || err.code === 'SESSION_NOT_FOUND') {
+          clearSession();
+        }
+        return false;
+      });
+    }
+
+    function pollFollowups() {
+      if (!sessionId || !sessionAuthority) return Promise.resolve();
+      return flushAckQueue().then(function (ready) {
+        if (!ready) return;
+        return api.poll(sessionId, sessionAuthority, pollCursor).then(function (data) {
+          var incoming = data.messages || [];
+          if (!incoming.length) return;
+          mergeServerMessages(incoming);
+          renderMessages();
+          var ids = incoming.map(function (m) { return m.id; }).filter(Boolean);
+          var pendingAck = ids.filter(function (id) { return !ackedMessageIds[id]; });
+          if (!pendingAck.length) return;
+          ackQueue.push({ ids: pendingAck, cursor: data.cursor || pollCursor });
+          persistPendingAckQueue();
+          return flushAckQueue();
+        }).catch(function (err) {
+          if (err.code === 'SESSION_AUTHORITY_INVALID' || err.code === 'SESSION_NOT_FOUND') {
+            clearSession();
+          }
+        });
+      });
+    }
+
+    function startPolling() {
+      if (pollTimer) return;
+      pollFollowups();
+      pollTimer = global.setInterval(pollFollowups, 5000);
+    }
+
+    function stopPolling() {
+      if (pollTimer) {
+        global.clearInterval(pollTimer);
+        pollTimer = null;
+      }
     }
 
     var styleEl = el('style');
@@ -257,23 +310,41 @@
     var launcherLabel = el('span');
     launcherBtn.appendChild(launcherLabel);
 
+    function bootstrapSession() {
+      return api.bootstrap(lang).then(function (data) {
+        persistSession(data.session_id, data.session_authority);
+        state.messages = data.messages || [];
+        pollCursor = null;
+        ackQueue = [];
+        ackedMessageIds = {};
+        persistPollCursor();
+        persistPendingAckQueue();
+        persistTranscript();
+        if (data.config) applyConfig(data.config);
+        renderMessages();
+        startPolling();
+      });
+    }
+
     function openPanel() {
       state.open = true;
       panel.classList.add('open');
-      if (!state.messages.length) {
-        api.bootstrap(sessionId, lang).then(function (data) {
-          state.messages = data.messages || [];
-          if (data.config) applyConfig(data.config);
-          renderMessages();
-        }).catch(function (err) {
+      if (!sessionId || !sessionAuthority) {
+        bootstrapSession().catch(function (err) {
           showBanner(err.message);
         });
+        return;
+      }
+      startPolling();
+      if (!state.messages.length) {
+        pollFollowups();
       }
     }
 
     function closePanel() {
       state.open = false;
       panel.classList.remove('open');
+      stopPolling();
     }
 
     launcherBtn.addEventListener('click', function () {
@@ -282,18 +353,43 @@
     });
     closeBtn.addEventListener('click', closePanel);
 
+    function deliverSend(text, clientMessageKey, attempt) {
+      var sendPromise = sessionId && sessionAuthority
+        ? api.send(sessionId, sessionAuthority, text, lang, clientMessageKey)
+        : bootstrapSession().then(function () {
+          return api.send(sessionId, sessionAuthority, text, lang, clientMessageKey);
+        });
+      return sendPromise.then(function (data) {
+        pendingSend = null;
+        state.messages = data.messages || state.messages;
+        persistTranscript();
+      }).catch(function (err) {
+        if (err.code === 'SESSION_AUTHORITY_INVALID' || err.code === 'SESSION_NOT_FOUND') {
+          clearSession();
+          pendingSend = null;
+          state.messages.push({ role: 'assistant', content: err.message });
+          return;
+        }
+        if (attempt < 1 && (!err.code || err.code === 'request_failed')) {
+          return deliverSend(text, clientMessageKey, attempt + 1);
+        }
+        pendingSend = null;
+        state.messages.push({ role: 'assistant', content: err.message });
+      });
+    }
+
     function submit() {
       var text = (input.value || '').trim();
       if (!text || state.loading) return;
       input.value = '';
       state.loading = true;
+      var clientMessageKey = pendingSend && pendingSend.text === text
+        ? pendingSend.clientMessageKey
+        : newClientMessageKey();
+      pendingSend = { text: text, clientMessageKey: clientMessageKey };
       state.messages.push({ role: 'user', content: text });
       renderMessages();
-      api.send(sessionId, text, lang).then(function (data) {
-        state.messages = data.messages || state.messages;
-      }).catch(function (err) {
-        state.messages.push({ role: 'assistant', content: err.message });
-      }).finally(function () {
+      deliverSend(text, clientMessageKey, 0).finally(function () {
         state.loading = false;
         renderMessages();
       });
@@ -311,6 +407,11 @@
     root.appendChild(launcherBtn);
     global.document.body.appendChild(root);
 
+    loadDurablePollState();
+    if (state.messages.length) {
+      renderMessages();
+    }
+
     api.loadConfig().then(function (data) {
       applyConfig(data.config || {});
       api.heartbeat().catch(function () {});
@@ -320,5 +421,10 @@
     });
   }
 
-  global.LinasWebChat = { init: init, escapeHtml: escapeHtml };
+  global.LinasWebChat = {
+    init: init,
+    escapeHtml: escapeHtml,
+    widgetStorageDigest: widgetStorageDigest,
+    newClientMessageKey: newClientMessageKey,
+  };
 })(window);

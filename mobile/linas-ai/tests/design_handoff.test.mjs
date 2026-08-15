@@ -473,7 +473,7 @@ test('Live Chat inbox matches design handoff (search, All/Human, platform row)',
   const chips = read('features/livechat/InboxChannelChips.tsx');
   const row = read('features/livechat/ConversationRow.tsx');
   const icon = read('features/livechat/PlatformChannelIcon.tsx');
-  const types = read('features/livechat/liveChatTypes.ts');
+  const helpers = read('features/livechat/liveChatHelpers.ts');
   const thread = read('features/livechat/LiveChatThread.tsx');
   assert.match(screen, /subtitle="All customer conversations"/);
   assert.match(search, /borderRadius:\s*radii\.pill/);
@@ -497,7 +497,7 @@ test('Live Chat inbox matches design handoff (search, All/Human, platform row)',
   assert.match(icon, /logo-instagram/);
   assert.match(icon, /facebook-messenger/);
   assert.match(icon, /logo-tiktok/);
-  assert.match(types, /hour12:\s*true/);
+  assert.match(helpers, /hour12:\s*true/);
   assert.match(thread, /LiveChatComposer/);
   assert.match(thread, /LiveChatAssignSheet/);
   assert.match(thread, /onTakeover/);
@@ -687,13 +687,15 @@ test('Subscription choose-a-plan matches design handoff', () => {
   const detail = read('features/billing/PlanDetailCard.tsx');
   const toggle = read('features/billing/BillingPeriodToggle.tsx');
   const billing = read('features/billing/BillingScreen.tsx');
+  const cta = read('features/billing/subscriptionCta.ts');
   assert.match(billing, /subChooseTitle/);
   assert.match(billing, /onBack/);
   assert.match(choose, /BillingPeriodToggle/);
   assert.match(choose, /PlanChipRow/);
   assert.match(choose, /PlanDetailCard/);
-  assert.match(choose, /subCtaChooseLite|PLAN_CHOOSE_CTA/);
-  assert.match(chips, /PLAN_ORDER\.map/);
+  assert.match(choose, /ctaLabelKey/);
+  assert.match(cta, /subCtaChooseLite/);
+  assert.match(chips, /plans\.map/);
   assert.match(chips, /subYourPlan/);
   assert.match(chips, /subTapToCompare/);
   assert.match(toggle, /subPeriodMonthly/);

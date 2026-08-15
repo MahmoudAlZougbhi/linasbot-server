@@ -62,6 +62,7 @@ CLUSTER_ENV_HELPER_REPO_PATH=scripts/ha/cluster_runtime_env_contract.py
 PRODUCTION_GUARD_REPO_PATH=scripts/ha/production_mutation_guard.py
 RELEASE_VERIFY_REPO_PATH=scripts/ha/release_verify_server.py
 RELEASE_READINESS_REPO_PATH=scripts/ha/release_readiness_probe.py
+RELEASE_ALEMBIC_MIGRATE_REPO_PATH=scripts/ha/release_alembic_migrate.py
 LB_MANAGER_REPO_PATH=scripts/ha/manage_do_lb_ready_healthcheck.py
 LB_CONTRACT_REPO_PATH=scripts/ha/do_lb_ready_contract.py
 RELEASE_ARTIFACT_CONTRACT_REPO_PATH=scripts/ha/release_artifact_contract.py
@@ -373,8 +374,13 @@ for value in (release_artifact_api_sha, release_manifest_sha):
         raise SystemExit("deployment release artifact digest is invalid")
 if not re.fullmatch(r"[0-9a-f]{40}", release_target_tree_sha):
     raise SystemExit("deployment release target tree is invalid")
-if bootstrap and not re.fullmatch(r"[0-9a-f]{64}", bootstrap):
-    raise SystemExit("deployment bootstrap digest is invalid")
+if not re.fullmatch(r"[0-9a-f]{64}", bootstrap):
+    raise SystemExit("deployment bootstrap digest is required")
+if mode == "steady-confirmed":
+    if node01_old != node02_old:
+        raise SystemExit("steady deployment journal contract is invalid")
+elif node01_old == node02_old:
+    raise SystemExit("reconciliation deployment journal contract is invalid")
 if peer != "10.106.0.4" or not re.fullmatch(
     rf"/var/backups/linasbot-ha/{target}-[0-9]{{14}}-[0-9]+", tx_dir
 ):
@@ -1344,7 +1350,7 @@ keys = {
     "wheelhouse_total_size", "requirements_lock_sha256", "runtime_tree_sha256",
     "target_unit_contract_sha256", "legacy_bytecode_manifest_sha256",
     "repo_bytecode_absent", "nested_runtime_present", "nested_runtime_evidence_sha256",
-    "nested_runtime_quarantined",
+    "nested_runtime_quarantined", "nested_runtime_authority_sha256",
 }
 if not isinstance(payload, dict) or set(payload) != keys:
     raise SystemExit("bootstrap commit proof schema is invalid")
@@ -1352,8 +1358,8 @@ canonical = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode() 
 if raw != canonical:
     raise SystemExit("bootstrap commit proof is not canonical")
 if (
-    payload.get("schema") != 2
-    or payload.get("format") != "linas-meta-ha-bootstrap-node-v2"
+    payload.get("schema") != 3
+    or payload.get("format") != "linas-meta-ha-bootstrap-node-v3"
     or payload.get("status") != "committed"
     or payload.get("repo_bytecode_absent") is not True
 ):
@@ -1380,6 +1386,8 @@ for key in ("wheelhouse_file_count", "wheelhouse_total_size"):
 for key in ("nested_runtime_present", "nested_runtime_quarantined"):
     if type(payload.get(key)) is not bool:
         raise SystemExit(f"bootstrap commit proof flag is invalid: {key}")
+if payload.get("nested_runtime_present") != payload.get("nested_runtime_quarantined"):
+    raise SystemExit("bootstrap commit proof nested runtime truth table violated")
 if not re.fullmatch(r"[0-9a-f]{64}", str(payload.get("nested_runtime_evidence_sha256") or "")):
     raise SystemExit("bootstrap commit proof nested runtime digest is invalid")
 if payload.get("runtime_cluster_receipt_sha256") != expected_runtime_cluster:
@@ -3627,6 +3635,35 @@ PY
     die "transient verification API PID changed during the cluster environment proof"
 }
 
+run_target_alembic_migrate() {
+  local target_sha="$1"
+  validate_sha "$target_sha"
+  test "$(git -C "$REPO_DIR" hash-object "$REPO_DIR/$RELEASE_ALEMBIC_MIGRATE_REPO_PATH")" = \
+    "$(git -C "$REPO_DIR" rev-parse "$target_sha:$RELEASE_ALEMBIC_MIGRATE_REPO_PATH")" || \
+    die "target alembic migrate helper differs from the authorized target blob"
+  systemd-run \
+    --unit=linasbot-ha-alembic-migrate.service \
+    --collect \
+    --wait \
+    --service-type=oneshot \
+    --property=User=root \
+    --property=RuntimeMaxSec=120s \
+    --property=TimeoutStartSec=120s \
+    --property=TimeoutStopSec=5s \
+    --property=KillMode=control-group \
+    --property=SendSIGKILL=yes \
+    --property="WorkingDirectory=$REPO_DIR" \
+    --property="EnvironmentFile=-$REPO_DIR/.env" \
+    --property=Environment=PYTHONUNBUFFERED=1 \
+    --property=Environment=PYTHONDONTWRITEBYTECODE=1 \
+    --property=Environment=LINAS_HA_VERIFY_ONLY=true \
+    --property="Environment=LINAS_HA_VERIFY_RELEASE_SHA=$target_sha" \
+    --property=Environment=DISABLE_API_DOCS=1 \
+    --property="Environment=PATH=$REPO_DIR/venv/bin:/usr/local/bin:/usr/bin:/bin" \
+    "$REPO_DIR/venv/bin/python" -B -I "$REPO_DIR/$RELEASE_ALEMBIC_MIGRATE_REPO_PATH" || \
+    die "target alembic migration failed before readiness"
+}
+
 run_target_readiness_probe() {
   local target_sha="$1"
   local load_state
@@ -3789,6 +3826,7 @@ assert_target_object() {
   git -C "$REPO_DIR" cat-file -e "$target_sha:$PRODUCTION_GUARD_REPO_PATH"
   git -C "$REPO_DIR" cat-file -e "$target_sha:$RELEASE_VERIFY_REPO_PATH"
   git -C "$REPO_DIR" cat-file -e "$target_sha:$RELEASE_READINESS_REPO_PATH"
+  git -C "$REPO_DIR" cat-file -e "$target_sha:$RELEASE_ALEMBIC_MIGRATE_REPO_PATH"
   git -C "$REPO_DIR" cat-file -e "$target_sha:$REQUIREMENTS_LOCK_REPO_PATH"
   git -C "$REPO_DIR" cat-file -e "$target_sha:scripts/ha/verify_meta_release_ha.sh"
   git -C "$REPO_DIR" cat-file -e "$target_sha:scripts/prod_cm_preserve_durable_flags.sh"
@@ -6713,6 +6751,7 @@ start_target_runtime() {
   assert_health_while_drained
   # A separate non-routable target process executes the real Redis/Firestore/
   # Meta/etc readiness evaluator. Public /api/ready remains marker-gated 503.
+  run_target_alembic_migrate "$target_sha"
   run_target_readiness_probe "$target_sha"
   for queue in "${WORKER_QUEUES[@]}"; do
     ! systemctl is-active --quiet "linasbot-worker@${queue}.service" || \
@@ -8358,12 +8397,12 @@ if not re.fullmatch(
 if payload.get("deploy_mode") not in {"steady-confirmed", "reconcile"}:
     raise SystemExit("deployment journal mode is invalid")
 bootstrap = str(payload.get("bootstrap_plan_sha256") or "")
+if not re.fullmatch(r"[0-9a-f]{64}", bootstrap):
+    raise SystemExit("deployment bootstrap digest is required")
 if payload["deploy_mode"] == "steady-confirmed":
-    if bootstrap or payload["node01_previous_sha"] != payload["node02_previous_sha"]:
+    if payload["node01_previous_sha"] != payload["node02_previous_sha"]:
         raise SystemExit("steady deployment journal contract is invalid")
-elif not re.fullmatch(r"[0-9a-f]{64}", bootstrap) or (
-    payload["node01_previous_sha"] == payload["node02_previous_sha"]
-):
+elif payload["node01_previous_sha"] == payload["node02_previous_sha"]:
     raise SystemExit("reconciliation deployment journal contract is invalid")
 if not isinstance(payload.get("drain_seconds"), int) or not 30 <= payload["drain_seconds"] <= 300:
     raise SystemExit("deployment journal drain interval is invalid")
