@@ -1,5 +1,4 @@
 import {
-  ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -7,6 +6,7 @@ import {
 } from 'react-native';
 
 import { GradientBackground } from '../../components/GradientBackground';
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import type { ControlArea } from '../control/controlAreas';
 import type { CmProposalReview } from '../cm/cmProposalReview';
 import { BuyCreditsSheet } from '../billing/BuyCreditsSheet';
@@ -100,7 +100,7 @@ export function ChatScreen({
 
         {c.loading ? (
           <View style={styles.center} accessibilityLabel="Loading conversation">
-            <ActivityIndicator color={c.colors.accent} />
+            <LinasLoadingIndicator variant="screen" />
           </View>
         ) : (
           <ChatMessageList

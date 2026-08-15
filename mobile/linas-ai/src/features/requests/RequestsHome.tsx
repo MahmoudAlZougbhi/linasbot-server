@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   RefreshControl,
   Share,
@@ -10,6 +9,7 @@ import {
 } from 'react-native';
 
 import { EmptyState } from '../../components/EmptyState';
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, spacing, useTheme } from '../../theme';
@@ -135,10 +135,10 @@ export function RequestsHome({ list, onOpen, onOpenAiSetup, onOpenLiveChat }: Pr
     });
   }
 
-  if (list.loading) {
+  if (list.loading && !list.refreshing) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={colors.accent} />
+        <LinasLoadingIndicator variant="screen" />
       </View>
     );
   }
@@ -215,7 +215,7 @@ export function RequestsHome({ list, onOpen, onOpenAiSetup, onOpenLiveChat }: Pr
         onEndReachedThreshold={0.4}
         ListEmptyComponent={<EmptyState title={tr('reqEmptyTitle')} body={tr('reqEmptyBody')} />}
         ListFooterComponent={
-          list.loadingMore ? <ActivityIndicator color={colors.accent} style={{ marginVertical: 12 }} /> : null
+          list.loadingMore ? <LinasLoadingIndicator variant="inline" /> : null
         }
       />
 

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   Pressable,
   ScrollView,
@@ -8,6 +7,8 @@ import {
   Text,
   View,
 } from 'react-native';
+
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { pickImageAttachment } from '../chat/v2/pickAttachment';
@@ -159,7 +160,7 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
         title={tr(editing ? 'productsEditTitle' : 'productsAddTitle')}
         onBack={onBack}
       >
-        <ActivityIndicator color={colors.accent} />
+        <LinasLoadingIndicator variant="screen" />
       </ScreenChrome>
     );
   }

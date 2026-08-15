@@ -22,14 +22,52 @@ test('LinasLoadingIndicator uses sparkle mark with breathe animation', () => {
   assert.match(hook, /isReduceMotionEnabled/);
 });
 
-test('screen loaders use LinasLoadingIndicator on key surfaces', () => {
+test('useScreenLoadGate exposes initial-load vs refresh semantics', () => {
+  const gate = read('hooks/useScreenLoadGate.ts');
+  assert.match(gate, /showInitialLoader/);
+  assert.match(gate, /hasLoadedOnce/);
+  assert.match(gate, /isRefreshing/);
+});
+
+const SCREEN_SURFACES = [
+  'features/integrations/IntegrationsScreen.tsx',
+  'features/users/UsersScreen.tsx',
+  'features/dashboard/DashboardScreen.tsx',
+  'features/faq/FaqScreen.tsx',
+  'features/products/ProductsScreen.tsx',
+  'features/notifications/NotificationsScreen.tsx',
+  'features/requests/RequestsHome.tsx',
+  'features/livechat/LiveChatInbox.tsx',
+  'features/livechat/LiveChatThread.tsx',
+  'features/cm/CmScreen.tsx',
+  'features/cm/CmSectionScreen.tsx',
+  'features/smartFollowUp/SmartFollowUpScreen.tsx',
+  'features/billing/BillingScreen.tsx',
+  'features/integrations/WebsiteIntegrationScreen.tsx',
+  'features/chat/ChatScreen.tsx',
+  'features/control/OwnerPortalScreen.tsx',
+  'features/products/AddProductScreen.tsx',
+];
+
+test('screen loaders use LinasLoadingIndicator on feature surfaces', () => {
+  for (const rel of SCREEN_SURFACES) {
+    const source = read(rel);
+    assert.match(source, /LinasLoadingIndicator/, `${rel} should import LinasLoadingIndicator`);
+    assert.match(source, /variant="screen"/, `${rel} should use screen variant for initial load`);
+    assert.doesNotMatch(source, /<ActivityIndicator/, `${rel} should not use ActivityIndicator`);
+  }
+});
+
+test('integrations gates content until first load and web chat are ready', () => {
   const integrations = read('features/integrations/IntegrationsScreen.tsx');
-  const users = read('features/users/UsersScreen.tsx');
-  const dashboard = read('features/dashboard/DashboardScreen.tsx');
-  assert.match(integrations, /LinasLoadingIndicator/);
   assert.match(integrations, /showInitialLoader/);
-  assert.match(users, /LinasLoadingIndicator/);
-  assert.doesNotMatch(users, /ActivityIndicator/);
-  assert.match(dashboard, /LinasLoadingIndicator/);
-  assert.doesNotMatch(dashboard, /ActivityIndicator/);
+  assert.match(integrations, /hasLoadedOnce/);
+  assert.match(integrations, /webChatReady/);
+  assert.match(integrations, /headerRefreshing/);
+});
+
+test('dashboard hides content until ready state', () => {
+  const dashboard = read('features/dashboard/DashboardScreen.tsx');
+  assert.match(dashboard, /state\.kind === 'loading' \? <LinasLoadingIndicator variant="screen" \/> : null/);
+  assert.match(dashboard, /state\.kind === 'ready' \? \([\s\S]*<DashboardHeader/);
 });

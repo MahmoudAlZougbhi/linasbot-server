@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ApiError } from '../../api/client';
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, spacing } from '../../theme';
 import type { CmProposalReview } from '../cm/cmProposalReview';
@@ -35,6 +36,7 @@ type Props = {
 export function FaqScreen({ proposalReview }: Props) {
   const { tr } = useI18n();
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<FaqGroup[]>([]);
@@ -73,6 +75,7 @@ export function FaqScreen({ proposalReview }: Props) {
       setError(err instanceof ApiError ? err.message : tr('faqLoadError'));
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
     }
   }, [query, tr]);
 
@@ -255,16 +258,17 @@ export function FaqScreen({ proposalReview }: Props) {
 
   return (
     <ScreenChrome title={tr('faqTitle')}>
-      {loading ? <ActivityIndicator color={colors.accent} /> : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {savedFlash ? <Text style={styles.ok}>{tr('faqSaved')}</Text> : null}
-      {proposalBits ? (
+      {loading && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" /> : null}
+      {hasLoadedOnce && error ? <Text style={styles.error}>{error}</Text> : null}
+      {hasLoadedOnce && savedFlash ? <Text style={styles.ok}>{tr('faqSaved')}</Text> : null}
+      {hasLoadedOnce && proposalBits ? (
         <View style={[styles.card, { borderColor: colors.accent, marginBottom: spacing.sm }]}>
           <Text style={styles.section}>AI proposal preview — not saved</Text>
           <Text style={styles.hint}>{proposalBits}</Text>
         </View>
       ) : null}
 
+      {hasLoadedOnce ? (
       <ScrollView contentContainerStyle={styles.list}>
         {mode === 'list' ? (
           <FaqListView
@@ -325,6 +329,7 @@ export function FaqScreen({ proposalReview }: Props) {
           />
         ) : null}
       </ScrollView>
+      ) : null}
 
       <FaqLanguagePickerModal
         visible={langPickerOpen}

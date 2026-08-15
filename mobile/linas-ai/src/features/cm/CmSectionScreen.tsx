@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useI18n } from '../../i18n/LanguageContext';
-import { colors } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import type { CmProposalReview } from './cmProposalReview';
 import { cmFormStyles } from './cmFormStyles';
@@ -37,7 +37,7 @@ function AiBasicsComposite({ proposalReview }: { proposalReview?: CmProposalRevi
 
   return (
     <>
-      {multi.loading ? <ActivityIndicator color={colors.accent} /> : null}
+      {multi.loading ? <LinasLoadingIndicator variant="screen" /> : null}
       {multi.error ? <Text style={cmFormStyles.error}>{multi.error}</Text> : null}
       {multi.conflict ? <Text style={cmFormStyles.warn}>{multi.conflict}</Text> : null}
       {!multi.loading ? (
@@ -181,7 +181,7 @@ export function CmSectionScreen({ section, proposalReview, onBack }: Props) {
 
   return (
     <ScreenChrome title={title} subtitle={subtitle} sectionTitle={isAiLimits} onBack={onBack}>
-      {draft.loading ? <ActivityIndicator color={colors.accent} /> : null}
+      {draft.loading ? <LinasLoadingIndicator variant="screen" /> : null}
       {draft.error ? <Text style={cmFormStyles.error}>{draft.error}</Text> : null}
       {draft.conflict ? <Text style={cmFormStyles.warn}>{draft.conflict}</Text> : null}
       {draft.proposalActive ? (

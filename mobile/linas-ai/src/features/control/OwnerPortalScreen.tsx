@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { z } from 'zod';
 
 import { ApiError, apiFetch } from '../../api/client';
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, spacing } from '../../theme';
@@ -30,6 +31,7 @@ type PilotRow = z.infer<typeof PilotListSchema>['pilots'][number];
 export function OwnerPortalScreen() {
   const { tr } = useI18n();
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -55,6 +57,7 @@ export function OwnerPortalScreen() {
       }
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
     }
   }, [tr]);
 
@@ -107,9 +110,11 @@ export function OwnerPortalScreen() {
 
   return (
     <ScreenChrome title={tr('waOwnerPortalTitle')} subtitle={tr('waOwnerPortalSub')}>
-      {loading ? <ActivityIndicator color={colors.accent} /> : null}
-      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {loading && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" /> : null}
+      {hasLoadedOnce && notice ? <Text style={styles.notice}>{notice}</Text> : null}
+      {hasLoadedOnce && error ? <Text style={styles.error}>{error}</Text> : null}
+      {hasLoadedOnce ? (
+        <>
       <Text style={styles.meta}>
         {tr('waPublicAvailability')}: {publicAvailability ? tr('waOn') : tr('waOff')}
       </Text>
@@ -159,6 +164,8 @@ export function OwnerPortalScreen() {
         ))}
       </ScrollView>
       <PrimaryButton label={tr('refreshConnectionStatus')} variant="ghost" loading={loading} onPress={() => void load()} />
+        </>
+      ) : null}
     </ScreenChrome>
   );
 }

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet, Text } from 'react-native';
 
 import { EmptyState } from '../../components/EmptyState';
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { useI18n } from '../../i18n/LanguageContext';
 import { spacing, useTheme } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
@@ -30,6 +31,7 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
   const { colors } = useTheme();
   const { tr } = useI18n();
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [meta, setMeta] = useState<CmMeta | null>(null);
@@ -79,6 +81,7 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
       setError(tr('aiSetupLoadError'));
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
     }
   }, [tr]);
 
@@ -116,9 +119,9 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
 
   return (
     <ScreenChrome title={tr('aiSetupTitle')}>
-      {loading && !hydrated ? <ActivityIndicator color={colors.accent} style={styles.loader} /> : null}
-      {error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
-      {hydrated ? (
+      {loading && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" style={styles.loader} /> : null}
+      {hasLoadedOnce && error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
+      {hasLoadedOnce && hydrated ? (
         <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
           <AiSetupProgressCard
             percent={displaySummary.percent}

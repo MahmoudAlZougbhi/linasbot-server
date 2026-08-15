@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet, Text } from 'react-native';
 import { z } from 'zod';
 
 import { apiFetch } from '../../api/client';
 import { EmptyState } from '../../components/EmptyState';
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { colors, fonts, spacing } from '../../theme';
 import { ScreenChrome } from './ScreenChrome';
 
@@ -16,6 +17,7 @@ const LooseSchema = z.object({ success: z.boolean() }).passthrough();
 
 export function SimpleResourceScreen({ title, path }: Props) {
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState('');
   const [loaded, setLoaded] = useState(false);
@@ -39,6 +41,7 @@ export function SimpleResourceScreen({ title, path }: Props) {
       } finally {
         if (!cancelled) {
           setLoading(false);
+          setHasLoadedOnce(true);
         }
       }
     })();
@@ -49,8 +52,9 @@ export function SimpleResourceScreen({ title, path }: Props) {
 
   return (
     <ScreenChrome title={title}>
-      {loading ? <ActivityIndicator color={colors.accent} /> : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {loading && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" /> : null}
+      {hasLoadedOnce && error ? <Text style={styles.error}>{error}</Text> : null}
+      {hasLoadedOnce ? (
       <ScrollView>
         {__DEV__ && payload ? (
           <Text style={styles.mono}>{payload}</Text>
@@ -60,6 +64,7 @@ export function SimpleResourceScreen({ title, path }: Props) {
           <EmptyState title="Nothing to show" body="Please try again later." />
         ) : null}
       </ScrollView>
+      ) : null}
     </ScreenChrome>
   );
 }

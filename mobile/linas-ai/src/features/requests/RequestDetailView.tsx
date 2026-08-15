@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,6 +9,7 @@ import {
 
 import type { PublicUser } from '../../api/types';
 import { EmptyState } from '../../components/EmptyState';
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { StatusChip } from '../../components/StatusChip';
 import { TextField } from '../../components/TextField';
@@ -114,7 +114,7 @@ export function RequestDetailView({ requestId, user, onBack, onOpenLiveChat }: P
   if (loading && !detail) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={colors.accent} />
+        <LinasLoadingIndicator variant="screen" />
       </View>
     );
   }

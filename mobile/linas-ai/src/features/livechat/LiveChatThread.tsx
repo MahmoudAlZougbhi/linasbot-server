@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   KeyboardAvoidingView,
@@ -11,6 +10,7 @@ import {
 } from 'react-native';
 
 import { EmptyState } from '../../components/EmptyState';
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, spacing } from '../../theme';
 import { LikeFeedbackModal } from './LikeFeedbackModal';
@@ -87,7 +87,7 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
 
       {thread.loading && !thread.messages.length ? (
         <View style={styles.center}>
-          <ActivityIndicator color={colors.accent} />
+          <LinasLoadingIndicator variant="screen" />
         </View>
       ) : (
         <FlatList
@@ -111,7 +111,7 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
           }
           ListFooterComponent={
             thread.loadingMore ? (
-              <ActivityIndicator color={colors.accent} style={styles.olderSpinner} />
+              <LinasLoadingIndicator variant="inline" style={styles.olderSpinner} />
             ) : thread.hasMore ? (
               <Text style={styles.olderHint}>Scroll up for older messages</Text>
             ) : thread.messages.length > 0 ? (
