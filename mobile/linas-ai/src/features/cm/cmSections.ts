@@ -32,6 +32,12 @@ export type CmSectionCard = {
 
 export const CM_SECTION_CARDS: CmSectionCard[] = [
   {
+    id: 'knowledge',
+    title: 'Knowledge',
+    description: 'Knowledge articles: title and note.',
+    mobileSupported: true,
+  },
+  {
     id: 'ai_basics',
     title: 'AI Basics',
     description: 'Business name, AI name, role, and style.',
@@ -88,12 +94,6 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
     description: 'Preparation and aftercare articles.',
     mobileSupported: true,
     showInCmHub: false,
-  },
-  {
-    id: 'knowledge',
-    title: 'Knowledge',
-    description: 'Knowledge articles: title and note.',
-    mobileSupported: true,
   },
   {
     id: 'handoff',

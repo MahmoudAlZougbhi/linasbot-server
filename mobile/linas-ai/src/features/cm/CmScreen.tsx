@@ -112,6 +112,18 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
     });
   }, [meta, filter, statusBySection]);
 
+  /** Products hub card sits where Knowledge used to be — after Prices, before Comments. */
+  const { tilesBeforeProducts, tilesAfterProducts } = useMemo(() => {
+    const splitAt = tiles.findIndex((tile) => tile.id === 'comments');
+    if (splitAt === -1) {
+      return { tilesBeforeProducts: tiles, tilesAfterProducts: [] as typeof tiles };
+    }
+    return {
+      tilesBeforeProducts: tiles.slice(0, splitAt),
+      tilesAfterProducts: tiles.slice(splitAt),
+    };
+  }, [tiles]);
+
   const titleMap = useMemo(
     () => Object.fromEntries(CM_HUB_CARDS.map((c) => [c.id, tr(cmSectionTitleKey(c.id))])),
     [tr],
@@ -145,13 +157,21 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
             onChange={setFilter}
           />
 
-          {onOpenProducts ? <AiSetupProductsCard onOpenProducts={onOpenProducts} /> : null}
-
           <AiSetupSectionGrid
-            tiles={tiles}
+            tiles={tilesBeforeProducts}
             statusBySection={statusBySection}
             onOpenSection={onOpenSection}
           />
+
+          {onOpenProducts ? <AiSetupProductsCard onOpenProducts={onOpenProducts} /> : null}
+
+          {tilesAfterProducts.length > 0 ? (
+            <AiSetupSectionGrid
+              tiles={tilesAfterProducts}
+              statusBySection={statusBySection}
+              onOpenSection={onOpenSection}
+            />
+          ) : null}
 
           {!loading && !meta && !error ? (
             <EmptyState title={tr('aiSetupUnavailable')} body={tr('aiSetupUnavailableBody')} />
