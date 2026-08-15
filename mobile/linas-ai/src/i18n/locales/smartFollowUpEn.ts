@@ -5,9 +5,7 @@ export const smartFollowUpEn = {
   aiSetupStatusNeedsAttention: 'Needs Attention',
   sfuTitle: 'Smart Follow-Up',
   sfuSubtitle: 'Follow up when customers stop replying.',
-  sfuEnabledLabel: 'Enabled',
   sfuChannelsTitle: 'Channels',
-  sfuSelectAll: 'Select all',
   sfuChannelInstagram: 'Instagram',
   sfuChannelFacebook: 'Facebook',
   sfuChannelWhatsApp: 'WhatsApp',
@@ -16,7 +14,7 @@ export const smartFollowUpEn = {
   sfuMasterToggle: 'Smart Follow-Up',
   sfuMasterToggleHint:
     'When on, Linas schedules gentle follow-ups after your AI reply if the customer goes quiet.',
-  sfuStepLabel: 'Step {n}',
+  sfuStepsTitle: 'Follow-up steps',
   sfuStepEnabled: 'Enable this step',
   sfuDefaultDelay: 'Default {delay}',
   sfuDelayMinutes: 'Delay (minutes)',
@@ -26,9 +24,6 @@ export const smartFollowUpEn = {
   sfuGoalPolitelyClose: 'Politely close',
   sfuBusinessHours: 'Business hours only',
   sfuBusinessHoursHint: 'Send only while your business is open.',
-  sfuAiWrites: 'AI writes each message',
-  sfuAiWritesBody: 'Linas writes every follow-up for the conversation.',
-  sfuWindowCompliance: "Follow-ups respect each channel's messaging window.",
   sfuStopRules: 'Stops permanently when',
   sfuStopRulesDefault:
     'customer replies · business app manual reply · conversation paused · feature off · AI off · WhatsApp disconnected · opt-out · no credits · customer-service window expired',

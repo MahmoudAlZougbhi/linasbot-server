@@ -5,9 +5,7 @@ export const smartFollowUpFr = {
   aiSetupStatusNeedsAttention: 'Attention requise',
   sfuTitle: 'Relance intelligente',
   sfuSubtitle: 'Relancez quand les clients cessent de répondre.',
-  sfuEnabledLabel: 'Activé',
   sfuChannelsTitle: 'Canaux',
-  sfuSelectAll: 'Tout sélectionner',
   sfuChannelInstagram: 'Instagram',
   sfuChannelFacebook: 'Facebook',
   sfuChannelWhatsApp: 'WhatsApp',
@@ -16,7 +14,7 @@ export const smartFollowUpFr = {
   sfuMasterToggle: 'Relance intelligente',
   sfuMasterToggleHint:
     'Activée, Linas planifie de douces relances après la réponse IA si le client reste silencieux.',
-  sfuStepLabel: 'Étape {n}',
+  sfuStepsTitle: 'Étapes de relance',
   sfuStepEnabled: 'Activer cette étape',
   sfuDefaultDelay: 'Par défaut {delay}',
   sfuDelayMinutes: 'Délai (minutes)',
@@ -26,9 +24,6 @@ export const smartFollowUpFr = {
   sfuGoalPolitelyClose: 'Clôturer poliment',
   sfuBusinessHours: 'Heures d’ouverture uniquement',
   sfuBusinessHoursHint: 'Envoyer uniquement pendant vos heures d’ouverture.',
-  sfuAiWrites: 'L’IA rédige chaque message',
-  sfuAiWritesBody: 'Linas rédige chaque relance pour la conversation.',
-  sfuWindowCompliance: 'Les relances respectent la fenêtre de messagerie de chaque canal.',
   sfuStopRules: 'S’arrête définitivement quand',
   sfuStopRulesDefault:
     'réponse client · réponse manuelle app pro · conversation en pause · fonctionnalité off · IA off · WhatsApp déconnecté · désabonnement · crédits insuffisants · fenêtre service client expirée',

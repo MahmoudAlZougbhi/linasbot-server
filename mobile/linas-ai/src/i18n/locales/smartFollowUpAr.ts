@@ -5,9 +5,7 @@ export const smartFollowUpAr = {
   aiSetupStatusNeedsAttention: 'يحتاج انتباهاً',
   sfuTitle: 'المتابعة الذكية',
   sfuSubtitle: 'تابع عندما يتوقف الزبائن عن الرد.',
-  sfuEnabledLabel: 'مفعّل',
   sfuChannelsTitle: 'القنوات',
-  sfuSelectAll: 'تحديد الكل',
   sfuChannelInstagram: 'إنستغرام',
   sfuChannelFacebook: 'فيسبوك',
   sfuChannelWhatsApp: 'واتساب',
@@ -16,7 +14,7 @@ export const smartFollowUpAr = {
   sfuMasterToggle: 'المتابعة الذكية',
   sfuMasterToggleHint:
     'عند التفعيل، يجدول ليناس متابعات لطيفة بعد رد الذكاء الاصطناعي إذا صمت الزبون.',
-  sfuStepLabel: 'الخطوة {n}',
+  sfuStepsTitle: 'خطوات المتابعة',
   sfuStepEnabled: 'تفعيل هذه الخطوة',
   sfuDefaultDelay: 'الافتراضي {delay}',
   sfuDelayMinutes: 'التأخير (بالدقائق)',
@@ -26,9 +24,6 @@ export const smartFollowUpAr = {
   sfuGoalPolitelyClose: 'إغلاق بأدب',
   sfuBusinessHours: 'ساعات العمل فقط',
   sfuBusinessHoursHint: 'الإرسال فقط أثناء ساعات عملك.',
-  sfuAiWrites: 'الذكاء الاصطناعي يكتب كل رسالة',
-  sfuAiWritesBody: 'ليناس تكتب كل متابعة للمحادثة.',
-  sfuWindowCompliance: 'المتابعات تحترم نافذة المراسلة لكل قناة.',
   sfuStopRules: 'تتوقف نهائياً عند',
   sfuStopRulesDefault:
     'رد الزبون · رد يدوي من تطبيق الأعمال · إيقاف المحادثة · إيقاف الميزة · إيقاف الذكاء · فصل واتساب · إلغاء الاشتراك · نفاد الرصيد · انتهاء نافذة خدمة الزبون',
