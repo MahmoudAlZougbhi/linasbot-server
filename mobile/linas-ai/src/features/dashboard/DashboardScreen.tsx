@@ -41,12 +41,6 @@ export function DashboardScreen({ onNavigate, active = true }: Props) {
       canvasColor={DASH_CANVAS}
       headerRight={<DashboardRefreshButton onRefresh={refresh} refreshing={refreshing} />}
     >
-      {state.kind === 'loading' ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.accent} accessibilityLabel="Loading dashboard" />
-        </View>
-      ) : null}
-
       {state.kind === 'forbidden' ? (
         <EmptyState title={tr('dashPermissionDenied')} body={state.message} />
       ) : null}
@@ -63,26 +57,15 @@ export function DashboardScreen({ onNavigate, active = true }: Props) {
         </View>
       ) : null}
 
-      {state.kind === 'ready' ? (
+      {state.kind === 'loading' || state.kind === 'ready' ? (
         <ScrollView
           contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
+          refreshControl={
+            state.kind === 'ready' ? (
+              <RefreshControl refreshing={refreshing} onRefresh={refresh} />
+            ) : undefined
+          }
         >
-          {state.stale || state.refreshError ? (
-            <View style={[styles.banner, { backgroundColor: colors.banner, borderColor: colors.bannerBorder }]}>
-              <Text style={{ color: colors.textMuted, fontFamily: fonts.body, fontSize: 13 }}>
-                {state.refreshError ? tr('dashRefreshFailed') : tr('dashStaleBanner')}
-              </Text>
-            </View>
-          ) : null}
-          {(state.data.partial_failures?.length ?? 0) > 0 ? (
-            <View style={[styles.banner, { backgroundColor: colors.banner, borderColor: colors.bannerBorder }]}>
-              <Text style={{ color: colors.textMuted, fontFamily: fonts.body, fontSize: 13 }}>
-                {tr('dashPartialFailure')} {state.data.partial_failures?.join(', ')}
-              </Text>
-            </View>
-          ) : null}
-
           <DashboardHeader
             period={period}
             rangeStart={queryRange.start}
@@ -90,29 +73,54 @@ export function DashboardScreen({ onNavigate, active = true }: Props) {
             onPeriodChange={setPeriod}
           />
 
-          <GrowthPlanCard
-            plan={state.data.plan_and_credits}
-            locale={language === 'ar' ? 'ar' : language === 'fr' ? 'fr' : 'en'}
-            onBuyCredits={() => credits.setOpen(true)}
-            onUpgrade={() => onNavigate('choose_plan')}
-          />
+          {state.kind === 'loading' ? (
+            <View style={styles.center}>
+              <ActivityIndicator color={colors.accent} accessibilityLabel="Loading dashboard" />
+            </View>
+          ) : null}
 
-          <TotalActivityGrid
-            activity={state.data.activity_summary?.total_activity}
-            unavailable={state.data.activity_summary?.availability !== 'ok'}
-          />
+          {state.kind === 'ready' && (state.stale || state.refreshError) ? (
+            <View style={[styles.banner, { backgroundColor: colors.banner, borderColor: colors.bannerBorder }]}>
+              <Text style={{ color: colors.textMuted, fontFamily: fonts.body, fontSize: 13 }}>
+                {state.refreshError ? tr('dashRefreshFailed') : tr('dashStaleBanner')}
+              </Text>
+            </View>
+          ) : null}
+          {state.kind === 'ready' && (state.data.partial_failures?.length ?? 0) > 0 ? (
+            <View style={[styles.banner, { backgroundColor: colors.banner, borderColor: colors.bannerBorder }]}>
+              <Text style={{ color: colors.textMuted, fontFamily: fonts.body, fontSize: 13 }}>
+                {tr('dashPartialFailure')} {state.data.partial_failures?.join(', ')}
+              </Text>
+            </View>
+          ) : null}
 
-          <ChannelActivityTable
-            channels={state.data.activity_summary?.channels}
-            unavailable={state.data.activity_summary?.availability !== 'ok'}
-          />
+          {state.kind === 'ready' ? (
+            <>
+              <GrowthPlanCard
+                plan={state.data.plan_and_credits}
+                locale={language === 'ar' ? 'ar' : language === 'fr' ? 'fr' : 'en'}
+                onBuyCredits={() => credits.setOpen(true)}
+                onUpgrade={() => onNavigate('choose_plan')}
+              />
 
-          <OwnerCopilotCard
-            copilot={state.data.activity_summary?.owner_copilot}
-            expanded={copilotExpanded}
-            onToggle={() => setCopilotExpanded((v) => !v)}
-            onOpenChat={() => onNavigate('chat')}
-          />
+              <TotalActivityGrid
+                activity={state.data.activity_summary?.total_activity}
+                unavailable={state.data.activity_summary?.availability !== 'ok'}
+              />
+
+              <ChannelActivityTable
+                channels={state.data.activity_summary?.channels}
+                unavailable={state.data.activity_summary?.availability !== 'ok'}
+              />
+
+              <OwnerCopilotCard
+                copilot={state.data.activity_summary?.owner_copilot}
+                expanded={copilotExpanded}
+                onToggle={() => setCopilotExpanded((v) => !v)}
+                onOpenChat={() => onNavigate('chat')}
+              />
+            </>
+          ) : null}
         </ScrollView>
       ) : null}
 

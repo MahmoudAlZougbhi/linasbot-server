@@ -119,6 +119,78 @@ def test_today_activity_includes_local_noon_replies() -> None:
     assert payload["total_activity"]["smart_answers"] == 1
 
 
+def test_last_month_dashboard_survives_corrupt_owner_chat_meta(
+    ledger_env: EntitlementsStore,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from services.credit_ledger_service import credit_ledger_service
+    from services.owner_chat_store import OwnerChatStore
+
+    tenant_id = "t_last_month_corrupt"
+    ledger_env.set_plan(tenant_id=tenant_id, plan_id="starter", status="active", source="admin")
+    credit_ledger_service.ensure_period_grant(tenant_id)
+    store = OwnerChatStore(root=tmp_path / "owner_chat")
+    conv = store.create_conversation(tenant_id=tenant_id, user_id="u1", greeting_text="Hi")
+    store.append_message(
+        tenant_id=tenant_id,
+        user_id="u1",
+        conversation_id=conv.id,
+        role="user",
+        content="Hello",
+    )
+    path = store._conv_path(tenant_id, conv.id)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["created_at"] = "bad"
+    payload["updated_at"] = "bad"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    monkeypatch.setattr(
+        "services.tenant_mobile_dashboard.copilot.OwnerChatStore",
+        lambda *args, **kwargs: store,
+    )
+    monkeypatch.setattr(
+        "services.tenant_mobile_dashboard.compose.platform_owner_service.is_suspended",
+        lambda _tid: False,
+    )
+    monkeypatch.setattr(
+        "services.tenant_mobile_dashboard.compose.compute_cm_progress",
+        lambda _tid: {
+            "sections_total": 10,
+            "sections_present": 8,
+            "sections_missing": [],
+            "sections_filled": ["ai_basics"],
+            "sections_weak": [],
+            "sections_truly_missing": [],
+            "published": True,
+            "percent": 80,
+        },
+    )
+    monkeypatch.setattr(
+        "services.integration_capabilities.list_tenant_integration_status",
+        lambda _tid: [{"platform": "instagram", "connected": True}],
+    )
+    monkeypatch.setattr(
+        "services.tenant_mobile_dashboard.compose.aggregate_tenant_usage",
+        lambda *_a, **_k: {"status": "empty", "total_interactions": 0, "distribution": []},
+    )
+    monkeypatch.setattr("services.user_service.user_service.get_user_by_id", lambda _uid: {"name": "Owner"})
+    monkeypatch.setattr(
+        "services.user_service.user_service.get_all_users",
+        lambda: [{"id": "u1", "tenantId": tenant_id, "role": "owner", "email": "o@x.com", "status": "active"}],
+    )
+
+    dashboard = build_tenant_mobile_dashboard(
+        tenant_id=tenant_id,
+        user_id="u1",
+        period_raw="last_month",
+        timezone_raw="Asia/Beirut",
+    )
+    assert dashboard["period"]["id"] == "last_month"
+    assert dashboard["activity_summary"]["availability"] == "ok"
+    assert "owner_copilot" in dashboard["activity_summary"]
+
+
 def test_zero_credits_vs_missing_credit_data(ledger_env: EntitlementsStore, monkeypatch: pytest.MonkeyPatch) -> None:
     ledger_env.set_plan(tenant_id="t_zero", plan_id="starter", status="active", source="admin")
     from services.credit_ledger_service import credit_ledger_service

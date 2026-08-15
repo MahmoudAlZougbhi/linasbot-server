@@ -29,6 +29,22 @@ def _safe_ts(raw: Any) -> float:
     except (TypeError, ValueError):
         return 0.0
 
+
+def first_user_message_ts(messages: Any) -> float:
+    """Earliest user-message timestamp, or 0 when missing or corrupt."""
+    if not isinstance(messages, list):
+        return 0.0
+    earliest = 0.0
+    for msg in messages:
+        if not isinstance(msg, dict) or str(msg.get("role") or "") != "user":
+            continue
+        ts = _safe_ts(msg.get("created_at"))
+        if ts <= 0:
+            continue
+        earliest = ts if earliest <= 0 else min(earliest, ts)
+    return earliest
+
+
 def is_default_conversation_title(title: str | None) -> bool:
     cleaned = (title or "").strip()
     return not cleaned or cleaned in {DEFAULT_CONVERSATION_TITLE, "Chat", "Untitled"}
@@ -294,6 +310,7 @@ class OwnerChatStore:
                         "user_id": str(data.get("user_id") or "").strip(),
                         "created_at": _safe_ts(data.get("created_at")),
                         "updated_at": _safe_ts(data.get("updated_at")),
+                        "first_user_message_at": first_user_message_ts(data.get("messages")),
                         "has_user_message": messages_include_user_turn(data.get("messages")),
                     }
                 )

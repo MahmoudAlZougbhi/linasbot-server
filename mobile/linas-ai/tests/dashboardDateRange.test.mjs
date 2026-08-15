@@ -192,6 +192,14 @@ test('date filter i18n covers EN AR FR and drops billing / last 30 days', () => 
   }
 });
 
+test('dashboard keeps date header visible while loading a new range', () => {
+  const screen = read('features/dashboard/DashboardScreen.tsx');
+  assert.match(screen, /state\.kind === 'loading' \|\| state\.kind === 'ready'/);
+  const block = screen.slice(screen.indexOf("state.kind === 'loading' || state.kind === 'ready'"));
+  assert.match(block, /<DashboardHeader/);
+  assert.match(block, /state\.kind === 'loading' \?/);
+});
+
 test('Owner Copilot uses the Linas sparkle logo, not Ionicons sparkles', () => {
   const copilot = read('features/dashboard/sections/OwnerCopilotCard.tsx');
   assert.match(copilot, /LinasSparkleIcon size=\{20\} color=\{colors\.accentDeep\}/);

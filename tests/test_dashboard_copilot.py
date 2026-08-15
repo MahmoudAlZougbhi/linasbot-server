@@ -75,8 +75,73 @@ def test_copilot_survives_corrupt_conversation_meta(tmp_path: Path, monkeypatch)
         log_interactions=0,
         store=store,
     )
-    assert summary["chats"] == 0
+    assert summary["chats"] == 1
     assert summary["credits"] == 0
+
+
+def test_copilot_ignores_epoch_timestamps_in_all_time_window(tmp_path: Path, monkeypatch) -> None:
+    store = OwnerChatStore(root=tmp_path / "owner_chat")
+    monkeypatch.setattr(
+        "services.tenant_mobile_dashboard.copilot.owner_chat_usage_tracker",
+        OwnerChatUsageTracker(root=tmp_path / "usage"),
+    )
+    conv = store.create_conversation(tenant_id="acme", user_id="u1", greeting_text="Hi")
+    store.append_message(
+        tenant_id="acme",
+        user_id="u1",
+        conversation_id=conv.id,
+        role="user",
+        content="Hello",
+    )
+    path = store._conv_path("acme", conv.id)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["created_at"] = 0
+    payload["updated_at"] = 0
+    for msg in payload.get("messages") or []:
+        if isinstance(msg, dict) and msg.get("role") == "user":
+            msg["created_at"] = 0
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    now = time.time()
+    summary = build_owner_copilot_summary(
+        "acme",
+        start_ts=0,
+        end_ts=now + 60,
+        log_credits_by_conversation={},
+        log_credits_unmapped=0,
+        log_interactions=0,
+        store=store,
+    )
+    assert summary["chats"] == 0
+
+
+def test_copilot_chat_counts_match_across_recent_ranges(tmp_path: Path, monkeypatch) -> None:
+    store = OwnerChatStore(root=tmp_path / "owner_chat")
+    tracker = OwnerChatUsageTracker(root=tmp_path / "owner_ai_usage")
+    monkeypatch.setattr("services.tenant_mobile_dashboard.copilot.owner_chat_usage_tracker", tracker)
+    now = time.time()
+    cid = _seed_chat(store, tenant_id="acme", user_id="u1", ts=now - 3600)
+    tracker.record(
+        tenant_id="acme",
+        user_id="u1",
+        conversation_id=cid,
+        route=_route(),
+        prompt_tokens=120,
+        completion_tokens=30,
+    )
+
+    kwargs = dict(
+        log_credits_by_conversation={cid: 2},
+        log_credits_unmapped=0,
+        log_interactions=1,
+        store=store,
+    )
+    last_day = build_owner_copilot_summary("acme", start_ts=now - 86400, end_ts=now + 60, **kwargs)
+    last_year = build_owner_copilot_summary("acme", start_ts=now - 365 * 86400, end_ts=now + 60, **kwargs)
+    all_time = build_owner_copilot_summary("acme", start_ts=0, end_ts=now + 60, **kwargs)
+    assert last_day["chats"] == 1
+    assert last_year["chats"] == 1
+    assert all_time["chats"] == 1
 
 
 def test_copilot_per_user_rows_sum_to_footer(tmp_path: Path, monkeypatch) -> None:
