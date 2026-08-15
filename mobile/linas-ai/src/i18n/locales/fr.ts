@@ -11,6 +11,7 @@ import { requestsFr } from './requestsFr';
 import { usersUiFr } from './usersUiFr';
 import { authFlowFr } from './authFlowFr';
 import { settingsUiFr } from './settingsUiFr';
+import { webChatUiEn } from './webChatUiEn';
 import type { StringKey } from './en';
 
 export const fr = {
@@ -338,6 +339,7 @@ export const fr = {
   ...usersUiFr,
   ...dashboardFr,
   ...aiSetupFr,
+  ...webChatUiEn,
 
   proposalChangeTitle: 'Modification Configuration IA',
   proposalDeleteTitle: 'Supprimer de la Configuration IA',

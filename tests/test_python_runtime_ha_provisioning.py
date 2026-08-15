@@ -69,9 +69,16 @@ def _plan() -> tuple[dict[str, Any], str]:
 
 
 def test_control_plane_allowlists_and_workflow_bridge_are_closed() -> None:
+    from scripts.ha import bootstrap_meta_ha_contract as bootstrap
     from scripts.ha import python_runtime_provision_ingest_contract as ingest_contract
 
     assert set(release.CONTROL_PLANE_FILES) == launcher.CONTROL_FILES == ingest_contract.CONTROL_FILES
+    required = {
+        "scripts/ha/bootstrap_nested_runtime_quarantine.py",
+        "scripts/ha/do_lb_ready_contract.py",
+    }
+    assert required <= set(release.CONTROL_PLANE_FILES)
+    assert required <= bootstrap.RUNTIME_CONTROL_FILES
     assert "scripts/ha/python_runtime_provision_workflow_bootstrap.py" in launcher.CONTROL_FILES
     workflow = (ROOT / ".github/workflows/provision-python-runtime-ha.yml").read_text(encoding="utf-8")
     bridge = ROOT / "scripts/ha/python_runtime_provision_workflow_bootstrap.py"
@@ -105,6 +112,29 @@ def test_actual_control_archive_contains_every_trusted_import(tmp_path: Path) ->
     for relative in release.CONTROL_PLANE_FILES:
         if relative.endswith(".py"):
             compile((source / relative).read_bytes(), relative, "exec")
+
+
+def test_control_plane_archive_imports_bootstrap_dependencies(tmp_path: Path) -> None:
+    import importlib.util
+    import sys
+
+    control_root = tmp_path / "control"
+    for relative in release.CONTROL_PLANE_FILES:
+        destination = control_root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes((ROOT / relative).read_bytes())
+    inserted = str(control_root)
+    if inserted not in sys.path:
+        sys.path.insert(0, inserted)
+    spec = importlib.util.spec_from_file_location(
+        "bootstrap_meta_ha_contract_import_test",
+        control_root / "scripts/ha/bootstrap_meta_ha_contract.py",
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module._nested.NESTED_RUNTIME_NAME == "linaslaserbot-2.7.22"
+    assert module._lb_contract.LB_NETWORK_STACK == "DUALSTACK"
 
 
 def test_remote_stage_materializes_full_bundle_control_and_launcher_receipt(

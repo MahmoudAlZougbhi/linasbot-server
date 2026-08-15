@@ -74,15 +74,20 @@ def _fsync_tree(root: Path) -> None:
     for current, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
         directory = Path(current)
         directories.append(directory)
+        for name in list(dirnames):
+            path = directory / name
+            if stat.S_ISLNK(path.lstat().st_mode):
+                _safe_symlink_target(root, path)
+                dirnames.remove(name)
         for name in filenames:
             path = directory / name
             info = path.lstat()
-            if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+            if stat.S_ISLNK(info.st_mode):
+                _safe_symlink_target(root, path)
                 continue
+            if not stat.S_ISREG(info.st_mode):
+                raise NestedRuntimeQuarantineError("nested runtime tree contains an unsafe object")
             _fsync_regular(path)
-        for name in dirnames:
-            if stat.S_ISLNK((directory / name).lstat().st_mode):
-                raise NestedRuntimeQuarantineError("nested runtime tree contains an unsafe link")
     for directory in reversed(directories):
         _fsync_dir(directory)
 

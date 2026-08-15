@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -229,6 +230,55 @@ def test_special_file_and_cross_device_and_collision_reject(
     monkeypatch.setattr(quarantine.os, "stat", fake_stat)
     with pytest.raises(quarantine.NestedRuntimeQuarantineError, match="cross devices"):
         quarantine.apply_quarantine(repo, backup, evidence, tx_id)
+
+
+def test_unsafe_absolute_symlink_rejects_probe_and_apply(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    nested = quarantine.nested_runtime_path(repo)
+    nested.mkdir()
+    (nested / "main.py").write_text("print('legacy')\n", encoding="utf-8")
+    os.symlink("/etc/passwd", nested / "escape")
+    with pytest.raises(quarantine.NestedRuntimeQuarantineError, match="escapes"):
+        quarantine.probe_evidence(repo)
+
+    shutil.rmtree(nested)
+    nested.mkdir()
+    (nested / "main.py").write_text("print('legacy')\n", encoding="utf-8")
+    os.symlink("../outside", nested / "relative-escape")
+    outside = repo / "outside"
+    outside.mkdir()
+    with pytest.raises(quarantine.NestedRuntimeQuarantineError, match="escapes"):
+        quarantine.probe_evidence(repo)
+
+
+def test_internal_directory_symlink_apply_and_rollback(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    backup = tmp_path / "backup"
+    backup.mkdir()
+    tx_id = "mb_" + "f" * 28
+    _patch_chown(monkeypatch)
+    nested = quarantine.nested_runtime_path(repo)
+    nested.mkdir()
+    (nested / "main.py").write_text("print('legacy')\n", encoding="utf-8")
+    subdir = nested / "links"
+    subdir.mkdir()
+    os.symlink("../main.py", subdir / "up.py")
+    os.symlink("up.py", subdir / "alias.py")
+    expected = quarantine.probe_evidence(repo)
+    assert expected["symlink_count"] == 2
+
+    quarantine.apply_quarantine(repo, backup, expected, tx_id)
+    quarantine.assert_quarantined(repo, expected, tx_id)
+    quarantine.restore_quarantine(repo, backup, expected, tx_id)
+    quarantine.assert_live_matches(repo, expected)
 
 
 def test_repo_bytecode_manifest_excludes_nested_runtime_tree(

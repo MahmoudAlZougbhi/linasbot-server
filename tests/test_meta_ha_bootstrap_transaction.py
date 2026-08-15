@@ -171,6 +171,8 @@ def test_do_lb_ready_projection_digest_matches_across_consumers() -> None:
     [
         (lambda projection: projection.pop("subnet_uuid"), "incomplete or unknown"),
         (lambda projection: projection.update({"network": "EXTERNAL"}), "forbidden network"),
+        (lambda projection: projection.update({"network": None}), "forbidden network"),
+        (lambda projection: projection.update({"firewall": None}), "incomplete or unknown"),
         (lambda projection: projection.update({"network_stack": "IPV4"}), "routing identity"),
         (lambda projection: projection.update({"size_unit": 2}), "routing identity"),
         (lambda projection: projection.update({"enable_proxy_protocol": True}), "routing identity"),
@@ -192,6 +194,85 @@ def test_do_lb_ready_projection_rejects_mutated_shapes_without_put(
     mutator(ready)  # type: ignore[operator]
     with pytest.raises(RuntimeError, match=pattern):
         contract.validate_ready_projection_values(ready)
+
+
+def test_do_lb_plan_and_apply_validate_ready_projection_before_any_put(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_root = tmp_path / "lb-owner-state"
+    lb._ensure_state_root(state_root)
+    before = lb.validate_observed_identity(_observed_lb())
+    desired = lb.desired_projection(before)
+    contract.validate_mutable_projection_routing_values(before)
+    contract.validate_ready_projection_values(desired)
+    requests: list[tuple[str, object]] = []
+    monkeypatch.setattr(lb, "_get_load_balancer", lambda: _observed_lb())
+    monkeypatch.setattr(
+        lb,
+        "_request",
+        lambda method, *, payload=None: requests.append((method, payload)) or {},
+    )
+    invalid = dict(desired)
+    invalid["subnet_uuid"] = "00000000-0000-0000-0000-000000000000"
+    monkeypatch.setattr(lb, "desired_projection", lambda _before: invalid)
+    before_sha = lb._digest(before)
+    args = SimpleNamespace(
+        state_dir=state_root,
+        expected_before_sha256=before_sha,
+        snapshot=lb.snapshot_path_for(before_sha, state_root),
+        confirm=lb.apply_confirmation(before_sha),
+    )
+    with pytest.raises(RuntimeError, match="routing identity"):
+        lb._apply(args)
+    assert requests == []
+
+
+@pytest.mark.parametrize(
+    ("mutator", "pattern"),
+    [
+        (lambda projection: projection.update({"network": "EXTERNAL"}), "forbidden network"),
+        (lambda projection: projection.update({"network": None}), "forbidden network"),
+        (lambda projection: projection.update({"firewall": None}), "incomplete or unknown"),
+        (lambda projection: projection.update({"network_stack": "IPV4"}), "routing identity"),
+        (lambda projection: projection.update({"size_unit": 2}), "routing identity"),
+        (lambda projection: projection.update({"enable_proxy_protocol": True}), "routing identity"),
+        (
+            lambda projection: projection.update({"subnet_uuid": "00000000-0000-0000-0000-000000000000"}),
+            "routing identity",
+        ),
+        (lambda projection: projection.update({"extra_field": True}), "incomplete or unknown"),
+    ],
+)
+def test_do_lb_apply_issues_zero_puts_for_invalid_ready_projection(
+    mutator: object,
+    pattern: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_root = tmp_path / "lb-owner-state"
+    lb._ensure_state_root(state_root)
+    before = lb.validate_observed_identity(_observed_lb())
+    desired = lb.desired_projection(before)
+    mutator(desired)  # type: ignore[operator]
+    requests: list[tuple[str, object]] = []
+    monkeypatch.setattr(lb, "_get_load_balancer", lambda: _observed_lb())
+    monkeypatch.setattr(
+        lb,
+        "_request",
+        lambda method, *, payload=None: requests.append((method, payload)) or {},
+    )
+    monkeypatch.setattr(lb, "desired_projection", lambda _before: desired)
+    before_sha = lb._digest(before)
+    args = SimpleNamespace(
+        state_dir=state_root,
+        expected_before_sha256=before_sha,
+        snapshot=lb.snapshot_path_for(before_sha, state_root),
+        confirm=lb.apply_confirmation(before_sha),
+    )
+    with pytest.raises(RuntimeError, match=pattern):
+        lb._apply(args)
+    assert requests == []
 
 
 def test_do_lb_apply_and_restore_round_trip_preserves_full_representation(

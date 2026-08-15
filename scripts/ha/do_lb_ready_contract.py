@@ -78,6 +78,12 @@ def validate_ready_projection_keyset(projection: dict[str, Any]) -> None:
 
 
 def validate_ready_projection_values(projection: dict[str, Any]) -> None:
+    validate_mutable_projection_routing_values(projection)
+    if projection.get("health_check") != LB_HEALTH_CONTRACT_READY:
+        raise RuntimeError("DigitalOcean ready projection does not prove direct :8003 /api/ready")
+
+
+def validate_mutable_projection_routing_values(projection: dict[str, Any]) -> None:
     validate_ready_projection_keyset(projection)
     if (
         projection.get("name") != LB_NAME
@@ -104,8 +110,9 @@ def validate_ready_projection_values(projection: dict[str, Any]) -> None:
         raise RuntimeError("DigitalOcean ready projection backend membership is invalid") from exc
     if droplet_ids != sorted(LB_DROPLETS):
         raise RuntimeError("DigitalOcean ready projection backend membership changed")
-    if projection.get("health_check") != LB_HEALTH_CONTRACT_READY:
-        raise RuntimeError("DigitalOcean ready projection does not prove direct :8003 /api/ready")
+    health = projection.get("health_check")
+    if health not in (LB_HEALTH_CONTRACT_OLD, LB_HEALTH_CONTRACT_READY):
+        raise RuntimeError("DigitalOcean projection health check is not authorized")
     forwarding = projection.get("forwarding_rules")
     if (
         not isinstance(forwarding, list)

@@ -285,6 +285,8 @@ RUNTIME_CONTROL_FILES = {
     "deploy/systemd/linasbot.service",
     "requirements.lock",
     "scripts/ha/bootstrap_meta_ha_contract.py",
+    "scripts/ha/bootstrap_nested_runtime_quarantine.py",
+    "scripts/ha/do_lb_ready_contract.py",
     "scripts/ha/python_runtime_archive_contract.py",
     "scripts/ha/python_runtime_provision_contract.py",
     "scripts/ha/python_runtime_provision_ingest_contract.py",

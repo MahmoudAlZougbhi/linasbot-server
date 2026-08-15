@@ -1468,6 +1468,9 @@ def test_deploy_accepts_only_the_exact_bootstrap_v2_proof_bound_to_runtime(
         "wheelhouse_file_count": 78,
         "wheelhouse_total_size": 1024,
         "repo_bytecode_absent": True,
+        "nested_runtime_present": False,
+        "nested_runtime_evidence_sha256": "f" * 64,
+        "nested_runtime_quarantined": False,
         **{key: "e" * 64 for key in digest_keys},
     }
 
@@ -1498,4 +1501,24 @@ def test_deploy_accepts_only_the_exact_bootstrap_v2_proof_bound_to_runtime(
     assert verify({key: value for key, value in payload.items() if key != "repo_bytecode_absent"}).returncode != 0
     assert verify({**payload, "unknown": True}).returncode != 0
     assert verify({**payload, "repo_bytecode_absent": False}).returncode != 0
+    assert verify({**payload, "nested_runtime_present": 1}).returncode != 0
+    assert verify({**payload, "nested_runtime_quarantined": "false"}).returncode != 0
+    assert verify({key: value for key, value in payload.items() if key != "nested_runtime_evidence_sha256"}).returncode != 0
     assert verify(payload, "f" * 64).returncode != 0
+
+
+def test_materialize_lb_manager_materializes_manager_and_contract_in_closed_temp_root() -> None:
+    source = _helper()
+    materialize = source[source.index("materialize_lb_manager() {") : source.index("cleanup_lb_manager() {")]
+    cleanup = source[source.index("cleanup_lb_manager() {") : source.index("materialize_release_artifact_contract() {")]
+    assert "LB_CONTRACT_REPO_PATH=scripts/ha/do_lb_ready_contract.py" in source
+    assert 'mkdir -m 0700 "$helper_root/scripts" "$helper_root/scripts/ha"' in materialize
+    assert 'for path in "$LB_MANAGER_REPO_PATH" "$LB_CONTRACT_REPO_PATH"' in materialize
+    assert "$helper_root/scripts/ha/manage_do_lb_ready_healthcheck.py" in source
+    assert "$helper_root/scripts/ha/do_lb_ready_contract.py" in cleanup
+    assert "rmdir \"$helper_root/scripts/ha\" \"$helper_root/scripts\"" in cleanup
+    assert 'git -C "$REPO_DIR" cat-file blob "$object"' in materialize
+    assert 'git -C "$REPO_DIR" hash-object "$destination"' in materialize
+    assert 'cat "$REPO_DIR/$path"' not in materialize
+    assert 'cp "$REPO_DIR/$path"' not in materialize
+    assert 'python3 "$REPO_DIR/$LB_MANAGER_REPO_PATH"' not in source

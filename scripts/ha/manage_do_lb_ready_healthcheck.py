@@ -45,6 +45,7 @@ LB_READY_PROJECTION_KEYS = _contract.LB_READY_PROJECTION_KEYS
 validate_observed_get_routing = _contract.validate_observed_get_routing
 validate_ready_projection_keyset = _contract.validate_ready_projection_keyset
 validate_ready_projection_values = _contract.validate_ready_projection_values
+validate_mutable_projection_routing_values = _contract.validate_mutable_projection_routing_values
 
 LB_ID = "2535b8ff-b89c-442b-b5bf-91eae51ed3f6"
 LB_NAME = _contract.LB_NAME
@@ -738,11 +739,13 @@ def _plan(args: argparse.Namespace) -> int:
     state_root = _state_root(args.state_dir)
     _ensure_state_root(state_root)
     before = validate_observed_identity(_get_load_balancer())
+    validate_mutable_projection_routing_values(before)
     path = str(before["health_check"].get("path") or "")
     if path not in {OLD_HEALTH_PATH, READY_HEALTH_PATH}:
         raise RuntimeError("DigitalOcean health path differs from both authorized states")
     before_sha256 = _digest(before)
     desired = desired_projection(before)
+    validate_ready_projection_values(desired)
     desired_sha256 = _digest(desired)
     health = before["health_check"]
     minimum_drain = int(health["check_interval_seconds"]) * int(health["unhealthy_threshold"]) + 10
@@ -766,6 +769,7 @@ def _apply(args: argparse.Namespace) -> int:
     state_root = _state_root(args.state_dir)
     _ensure_state_root(state_root)
     before = validate_observed_identity(_get_load_balancer())
+    validate_mutable_projection_routing_values(before)
     before_sha256 = _digest(before)
     if before_sha256 != _require_digest(args.expected_before_sha256, "expected before digest"):
         raise RuntimeError("DigitalOcean load balancer changed after owner dry-run")
@@ -780,6 +784,7 @@ def _apply(args: argparse.Namespace) -> int:
     if snapshot_path != snapshot_path_for(before_sha256, state_root):
         raise PermissionError("snapshot path is not the exact digest-bound canonical path")
     desired = desired_projection(before)
+    validate_ready_projection_values(desired)
     _write_protected_json(
         snapshot_path,
         {

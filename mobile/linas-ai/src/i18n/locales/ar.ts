@@ -11,6 +11,7 @@ import { requestsAr } from './requestsAr';
 import { usersUiAr } from './usersUiAr';
 import { authFlowAr } from './authFlowAr';
 import { settingsUiAr } from './settingsUiAr';
+import { webChatUiEn } from './webChatUiEn';
 import type { StringKey } from './en';
 
 export const ar = {
@@ -334,6 +335,7 @@ export const ar = {
   ...usersUiAr,
   ...dashboardAr,
   ...aiSetupAr,
+  ...webChatUiEn,
 
   proposalChangeTitle: 'تعديل إعداد الذكاء الاصطناعي',
   proposalDeleteTitle: 'حذف من إعداد الذكاء الاصطناعي',
