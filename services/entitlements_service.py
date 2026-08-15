@@ -215,6 +215,7 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
         "additional_seats_unlimited": additional_seats is None if ent.plan_id in PLAN_PRICES_USD else False,
         "comment_automation": comment_automation,
         "whatsapp": bool(features.get("whatsapp")),
+        "web": bool(features.get("web")) if not exempt else True,
         "tiktok": bool(features.get("tiktok")),
         "features": features,
         "faq_enabled": faq.get("faq_enabled"),

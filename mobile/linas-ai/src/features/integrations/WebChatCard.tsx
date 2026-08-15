@@ -12,6 +12,10 @@ import {
   saveWebChatSettings,
   type WebChatSettings,
 } from './webChatApi';
+import {
+  fetchWebChannelEntitledFromEntitlements,
+  resolveWebPlanAllowed,
+} from './webChatPlanAccess';
 
 type Props = {
   onError?: (message: string) => void;
@@ -21,15 +25,23 @@ type Props = {
 export function WebChatCard({ onError, onNotice }: Props) {
   const { tr } = useI18n();
   const [settings, setSettings] = useState<WebChatSettings | null>(null);
+  const [entitlementWeb, setEntitlementWeb] = useState<boolean | null>(null);
   const [siteUrl, setSiteUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
+  const webPlanAllowed = resolveWebPlanAllowed(settings, entitlementWeb);
+  const planBlocked = !webPlanAllowed;
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchWebChatSettings();
+      const [data, entitled] = await Promise.all([
+        fetchWebChatSettings(),
+        fetchWebChannelEntitledFromEntitlements(),
+      ]);
       setSettings(data);
+      setEntitlementWeb(entitled);
       setSiteUrl(data.site_url || '');
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) return;
@@ -44,7 +56,7 @@ export function WebChatCard({ onError, onNotice }: Props) {
   }, [load]);
 
   async function save(enabled?: boolean) {
-    if (!settings?.membership_allows) {
+    if (planBlocked) {
       onError?.(settings?.membership_message || tr('webChatPlanRequired'));
       return;
     }
@@ -102,7 +114,6 @@ export function WebChatCard({ onError, onNotice }: Props) {
 
   const connected = Boolean(settings?.connected);
   const operational = Boolean(settings?.operational);
-  const planBlocked = settings?.membership_allows === false;
 
   return (
     <View accessibilityRole="summary" style={styles.wrap}>
@@ -117,6 +128,7 @@ export function WebChatCard({ onError, onNotice }: Props) {
         notConnectedLabel={tr('notConnected')}
         comingSoonLabel={tr('comingSoon')}
         healthLabel={operational ? tr('integrationStatusConnected') : tr('notConnected')}
+        menuLabel={tr('webChatRotateKey')}
         showConnect={!connected && !planBlocked}
         showMenu={connected}
         showHealth={operational}

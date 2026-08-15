@@ -58,6 +58,16 @@ def _rate_limit_widget(request: Request, *, session_id: str, widget_key: str) ->
             )
 
 
+def _web_membership_gate(tenant_id: str) -> tuple[bool, str | None]:
+    from services.membership.web_gate import WebPlanDenied, assert_web_plan_allowed
+
+    try:
+        assert_web_plan_allowed(tenant_id)
+    except WebPlanDenied as exc:
+        return False, str(exc)
+    return True, None
+
+
 def _widget_payload(widget: Any) -> dict[str, Any]:
     eligible, blocker = evaluate_web_ai_eligibility(widget.tenant_id, widget)
     return {
@@ -144,23 +154,19 @@ async def web_chat_send_message(
     }
 
 
+def _mobile_web_chat_payload(tenant_id: str, widget: Any) -> dict[str, Any]:
+    membership_allows, membership_message = _web_membership_gate(tenant_id)
+    payload = _widget_payload(widget)
+    payload["membership_allows"] = membership_allows
+    payload["membership_message"] = membership_message
+    return payload
+
+
 @app.get("/api/mobile/web-chat")
 async def mobile_web_chat_settings(request: Request) -> Any:
     session = require_session(request)
     widget = web_chat_store.get_or_create_widget(session.tenant_id)
-    from services.membership.web_gate import WebPlanDenied, assert_web_plan_allowed
-
-    membership_allows = True
-    membership_message = None
-    try:
-        assert_web_plan_allowed(session.tenant_id)
-    except WebPlanDenied as exc:
-        membership_allows = False
-        membership_message = str(exc)
-    payload = _widget_payload(widget)
-    payload["membership_allows"] = membership_allows
-    payload["membership_message"] = membership_message
-    return {"success": True, "web_chat": payload}
+    return {"success": True, "web_chat": _mobile_web_chat_payload(session.tenant_id, widget)}
 
 
 @app.put("/api/mobile/web-chat")
@@ -180,7 +186,7 @@ async def mobile_web_chat_update(request: Request, body: WebChatSettingsBody = B
         site_url=body.site_url,
         enabled=body.enabled,
     )
-    return {"success": True, "web_chat": _widget_payload(widget)}
+    return {"success": True, "web_chat": _mobile_web_chat_payload(session.tenant_id, widget)}
 
 
 @app.post("/api/mobile/web-chat/rotate-key")
@@ -196,4 +202,4 @@ async def mobile_web_chat_rotate_key(request: Request) -> Any:
             content={"success": False, "error": exc.code, "message": str(exc)},
         )
     widget = web_chat_store.rotate_widget_key(session.tenant_id)
-    return {"success": True, "web_chat": _widget_payload(widget)}
+    return {"success": True, "web_chat": _mobile_web_chat_payload(session.tenant_id, widget)}
