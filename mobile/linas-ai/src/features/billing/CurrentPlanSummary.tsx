@@ -4,6 +4,7 @@ import type { StringKey } from '../../i18n';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import { StatusChip } from '../../components/StatusChip';
 import { isPlanId, type PlanId } from './planCatalog';
+import { accentForPlan, planNameColor } from './planColors';
 import { statusLabelKey } from './subscriptionCta';
 
 type Props = {
@@ -29,7 +30,7 @@ export function CurrentPlanSummary({
   locale,
   onManage,
 }: Props) {
-  const { colors } = useTheme();
+  const { colors, resolved } = useTheme();
   if (!planId || !isPlanId(planId) || !status || status === 'none') {
     return null;
   }
@@ -51,13 +52,16 @@ export function CurrentPlanSummary({
         ? 'warn'
         : 'neutral';
 
+  const planAccent = accentForPlan(planId);
+  const nameColor = planNameColor(planId, resolved);
+
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.accent }]}>
+    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: planAccent }]}>
       <View style={styles.head}>
         <Text style={[styles.title, { color: colors.accentDeep }]}>{tr('subCurrentTitle')}</Text>
         <StatusChip label={tr(statusKey)} tone={tone} />
       </View>
-      <Text style={[styles.plan, { color: colors.text }]}>
+      <Text style={[styles.plan, { color: nameColor }]}>
         {tr(planLabelKey(planId))}
       </Text>
       <Text style={[styles.meta, { color: colors.textMuted }]}>

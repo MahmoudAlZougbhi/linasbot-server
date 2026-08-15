@@ -4,6 +4,7 @@ import type { StringKey } from '../../i18n';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import { PLAN_NAME_KEY } from './planEntitlements';
 import type { PlanId } from './planCatalog';
+import { accentForPlan, planNameColor } from './planColors';
 
 type Props = {
   planId: PlanId;
@@ -26,19 +27,26 @@ export function CurrentPlanHeroCard({
   tr,
   onBuyCredits,
 }: Props) {
-  const { colors } = useTheme();
+  const { colors, resolved } = useTheme();
+  const nameColor = planNameColor(planId, resolved);
+  const planAccent = accentForPlan(planId);
   return (
-    <View style={[styles.card, { backgroundColor: colors.surfaceAlt }]}>
-      <Text style={[styles.kicker, { color: colors.accent }]}>{tr('subCurrentPlanKicker')}</Text>
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: colors.surfaceAlt, borderLeftColor: planAccent },
+      ]}
+    >
+      <Text style={[styles.kicker, { color: planAccent }]}>{tr('subCurrentPlanKicker')}</Text>
       <View style={styles.nameRow}>
-        <Text style={[styles.name, { color: colors.text }]}>{tr(PLAN_NAME_KEY[planId])}</Text>
+        <Text style={[styles.name, { color: nameColor }]}>{tr(PLAN_NAME_KEY[planId])}</Text>
         <View style={styles.status}>
           <View style={[styles.dot, { backgroundColor: colors.success }]} />
           <Text style={[styles.statusText, { color: colors.success }]}>{statusLabel}</Text>
         </View>
       </View>
       <View style={styles.metaRow}>
-        <Text style={[styles.price, { color: colors.accent }]}>{priceLabel}</Text>
+        <Text style={[styles.price, { color: planAccent }]}>{priceLabel}</Text>
         <Text style={[styles.renews, { color: colors.textMuted }]}>{renewsLabel}</Text>
       </View>
 
@@ -56,10 +64,10 @@ export function CurrentPlanHeroCard({
           accessibilityLabel={tr('subBuyCredits')}
           style={({ pressed }) => [
             styles.buy,
-            { borderColor: colors.accent, opacity: pressed ? 0.7 : 1 },
+            { borderColor: planAccent, opacity: pressed ? 0.7 : 1 },
           ]}
         >
-          <Text style={[styles.buyText, { color: colors.accent }]}>{tr('subBuyCredits')}</Text>
+          <Text style={[styles.buyText, { color: planAccent }]}>{tr('subBuyCredits')}</Text>
         </Pressable>
       </View>
     </View>
@@ -71,6 +79,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.lg,
     padding: spacing.lg,
     gap: 6,
+    borderLeftWidth: 4,
   },
   kicker: {
     fontFamily: fonts.bodyMedium,

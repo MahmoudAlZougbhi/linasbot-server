@@ -664,7 +664,8 @@ test('Subscription current plan matches design handoff', () => {
   assert.match(current, /PlanNotIncluded/);
   assert.match(current, /subUpgradePlan/);
   assert.match(current, /subCreditsRefreshNote/);
-  assert.match(hero, /borderColor:\s*colors\.accent/);
+  assert.match(hero, /borderLeftColor:\s*planAccent/);
+  assert.match(hero, /planNameColor/);
 });
 
 test('Subscription choose-a-plan matches design handoff', () => {

@@ -11,7 +11,8 @@ import {
   DASH_MINT_SOFT,
   DASH_TRACK,
 } from '../dashboardChrome';
-import { isHighestPlan } from '../../billing/planCatalog';
+import { isHighestPlan, isPlanId } from '../../billing/planCatalog';
+import { planNameOnForest } from '../../billing/planColors';
 import { formatCount, formatRenewDate } from '../dashboardFormat';
 import type { TenantDashboard } from '../dashboardTypes';
 
@@ -27,14 +28,16 @@ type Props = {
 export function GrowthPlanCard({ plan, locale, onBuyCredits, onUpgrade }: Props) {
   const { tr } = useI18n();
   const planName = (plan.plan_name || plan.plan_id || '').trim();
-  const title = planName
-    ? tr('dashPlanTitle').replace('{name}', planName)
-    : tr('dashNoPlan');
+  const planId = isPlanId(plan.plan_id) ? plan.plan_id : null;
+  const planNameColor = planId ? planNameOnForest(planId) : DASH_MINT;
 
   if (plan.availability !== 'ok') {
+    const fallbackTitle = planName
+      ? tr('dashPlanTitle').replace('{name}', planName)
+      : tr('dashNoPlan');
     return (
       <View style={styles.card}>
-        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.title}>{fallbackTitle}</Text>
         <Text style={styles.muted}>{plan.message || tr('dashUnavailable')}</Text>
       </View>
     );
@@ -56,7 +59,11 @@ export function GrowthPlanCard({ plan, locale, onBuyCredits, onUpgrade }: Props)
     <View style={styles.card}>
       <View style={styles.topRow}>
         <View style={styles.planRow}>
-          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.title}>
+            {planName
+              ? renderPlanTitle(tr('dashPlanTitle'), planName, planNameColor)
+              : tr('dashNoPlan')}
+          </Text>
           {active ? (
             <View style={styles.activePill}>
               <Text style={styles.activeText}>{tr('dashActive')}</Text>
@@ -91,6 +98,23 @@ export function GrowthPlanCard({ plan, locale, onBuyCredits, onUpgrade }: Props)
         </Pressable>
       </View>
     </View>
+  );
+}
+
+function renderPlanTitle(template: string, planName: string, nameColor: string) {
+  const marker = '{name}';
+  const idx = template.indexOf(marker);
+  if (idx === -1 || !planName) {
+    return template.replace(marker, planName);
+  }
+  const before = template.slice(0, idx);
+  const after = template.slice(idx + marker.length);
+  return (
+    <>
+      {before}
+      <Text style={{ color: nameColor }}>{planName}</Text>
+      {after}
+    </>
   );
 }
 
