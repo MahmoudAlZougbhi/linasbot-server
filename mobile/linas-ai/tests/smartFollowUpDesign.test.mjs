@@ -26,6 +26,9 @@ test('Smart Follow-Up layout: no Enabled, business hours first, no extra copy', 
   assert.doesNotMatch(screen, /SmartFollowUpStepEditor/);
   assert.doesNotMatch(screen, /sfuPreview/);
   assert.doesNotMatch(screen, /stackedHeader/);
+  assert.doesNotMatch(screen, /sfuSelectAll/);
+  assert.doesNotMatch(screen, /onSelectAll/);
+  assert.doesNotMatch(screen, /selectAllChannels/);
   const hours = screen.indexOf("tr('sfuBusinessHours')");
   const channels = screen.indexOf('<SmartFollowUpChannelsCard');
   const steps = screen.indexOf('<SmartFollowUpStepsCard');
@@ -69,10 +72,15 @@ test('Follow-up steps card matches screenshot structure', () => {
 
 test('Smart Follow-Up channels grid includes supported platforms', () => {
   const opts = read('features/smartFollowUp/smartFollowUpOptions.ts');
+  const card = read('features/smartFollowUp/SmartFollowUpChannelsCard.tsx');
   assert.match(opts, /instagram_dm/);
   assert.match(opts, /facebook_messenger/);
   assert.match(opts, /whatsapp_cloud/);
   assert.match(opts, /supported: false/);
+  assert.match(card, /sfuChannelsTitle/);
+  assert.match(card, /onToggle/);
+  assert.doesNotMatch(card, /sfuSelectAll/);
+  assert.doesNotMatch(card, /onSelectAll/);
 });
 
 test('Smart Follow-Up API persists channels_enabled', () => {
@@ -88,6 +96,7 @@ test('removed Follow-Up copy is gone from locales', () => {
     assert.doesNotMatch(loc, /sfuEnabledLabel/);
     assert.doesNotMatch(loc, /sfuAiWritesBody/);
     assert.doesNotMatch(loc, /sfuWindowCompliance/);
+    assert.doesNotMatch(loc, /sfuSelectAll/);
     assert.match(loc, /sfuStepsTitle/);
   }
 });

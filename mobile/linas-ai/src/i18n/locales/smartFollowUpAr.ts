@@ -6,7 +6,6 @@ export const smartFollowUpAr = {
   sfuTitle: 'المتابعة الذكية',
   sfuSubtitle: 'تابع عندما يتوقف الزبائن عن الرد.',
   sfuChannelsTitle: 'القنوات',
-  sfuSelectAll: 'تحديد الكل',
   sfuChannelInstagram: 'إنستغرام',
   sfuChannelFacebook: 'فيسبوك',
   sfuChannelWhatsApp: 'واتساب',

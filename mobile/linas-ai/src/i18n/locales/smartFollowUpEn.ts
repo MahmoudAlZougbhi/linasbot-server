@@ -6,7 +6,6 @@ export const smartFollowUpEn = {
   sfuTitle: 'Smart Follow-Up',
   sfuSubtitle: 'Follow up when customers stop replying.',
   sfuChannelsTitle: 'Channels',
-  sfuSelectAll: 'Select all',
   sfuChannelInstagram: 'Instagram',
   sfuChannelFacebook: 'Facebook',
   sfuChannelWhatsApp: 'WhatsApp',

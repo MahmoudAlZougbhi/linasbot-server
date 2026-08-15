@@ -132,15 +132,6 @@ export function SmartFollowUpScreen() {
     setValidationKey(null);
   }
 
-  function selectAllChannels() {
-    setChannels({
-      instagram_dm: true,
-      facebook_messenger: true,
-      whatsapp_cloud: true,
-    });
-    setValidationKey(null);
-  }
-
   async function onSave() {
     const v = validateLocal(steps, channels);
     if (v) {
@@ -223,7 +214,6 @@ export function SmartFollowUpScreen() {
             channels={channels}
             disabled={formDisabled}
             onToggle={toggleChannel}
-            onSelectAll={selectAllChannels}
           />
 
           <SmartFollowUpStepsCard

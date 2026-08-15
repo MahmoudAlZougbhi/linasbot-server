@@ -15,7 +15,6 @@ type Props = {
   channels: FollowUpChannelsEnabled;
   disabled?: boolean;
   onToggle: (channel: FollowUpChannelKey) => void;
-  onSelectAll: () => void;
 };
 
 function isSelected(id: FollowUpChannelId, channels: FollowUpChannelsEnabled): boolean {
@@ -23,23 +22,13 @@ function isSelected(id: FollowUpChannelId, channels: FollowUpChannelsEnabled): b
   return Boolean(channels[id]);
 }
 
-export function SmartFollowUpChannelsCard({ channels, disabled, onToggle, onSelectAll }: Props) {
+export function SmartFollowUpChannelsCard({ channels, disabled, onToggle }: Props) {
   const { colors } = useTheme();
   const { tr } = useI18n();
 
   return (
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: SFU_CARD_BORDER }]}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>{tr('sfuChannelsTitle')}</Text>
-        <Pressable
-          onPress={onSelectAll}
-          disabled={disabled}
-          accessibilityRole="button"
-          accessibilityLabel={tr('sfuSelectAll')}
-        >
-          <Text style={[styles.selectAll, { color: SFU_TEAL }]}>{tr('sfuSelectAll')}</Text>
-        </Pressable>
-      </View>
+      <Text style={[styles.title, { color: colors.text }]}>{tr('sfuChannelsTitle')}</Text>
 
       <View style={styles.grid}>
         {CHANNEL_TILES.map((tile) => {
@@ -97,18 +86,9 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.md,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   title: {
     fontFamily: fonts.bodyMedium,
     fontSize: 16,
-  },
-  selectAll: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 14,
   },
   grid: {
     flexDirection: 'row',
