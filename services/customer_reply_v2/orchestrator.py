@@ -110,7 +110,7 @@ async def run_customer_reply_v2_dm(
 
     from services.credit_ai_gate import ai_generation_blocked
 
-    if ai_generation_blocked(tenant_id):
+    if ai_generation_blocked(tenant_id, honor_inflight_reserved=True):
         return CustomerReplyOutcome(
             stop=True,
             reply=None,

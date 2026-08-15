@@ -35,19 +35,27 @@ def _reserved_credits(tenant_id: str) -> int:
         return 0
 
 
-def ai_generation_blocked(tenant_id: str | None, *, need: int = 1) -> bool:
+def ai_generation_blocked(
+    tenant_id: str | None,
+    *,
+    need: int = 1,
+    honor_inflight_reserved: bool = False,
+) -> bool:
     """True when the next AI turn cannot be funded from the credit ledger.
 
-    Callers that already reserved (WhatsApp Cloud, delayed Meta DM) may show
-    remaining 0 with reserved >= need — that is not a block.
-    Missing tenant, ledger errors, and true zero with nothing reserved fail closed.
+    Default is strict: only ``remaining_credits`` (available balance) counts.
+    Pass ``honor_inflight_reserved=True`` only for callers invoked *after* this
+    same turn already reserved on the ledger (e.g. Customer Reply V2 under WA/web
+    reserve). Owner Copilot and pre-reserve gates must stay strict.
     """
     tid = (tenant_id or "").strip().lower()
     if not tid:
         return True
     if remaining_credits(tid) >= need:
         return False
-    return _reserved_credits(tid) < need
+    if honor_inflight_reserved and _reserved_credits(tid) >= need:
+        return False
+    return True
 
 
 def upgrade_plan_allowed(plan_id: str | None) -> bool:
