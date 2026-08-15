@@ -48,7 +48,7 @@ from services.meta_subject_deletion_guard import (
 )
 from services.meta_surface_secret_separation import (
     environ_secret_values,
-    evaluate_meta_surface_secret_separation,
+    evaluate_meta_surface_signing_separation,
 )
 from services.rate_limit_service import rate_limit_service
 
@@ -203,7 +203,7 @@ def _instagram_callback_context() -> _MetaCallbackContext:
 
 def _load_callback_context(*, instagram_login: bool) -> _MetaCallbackContext:
     try:
-        if not evaluate_meta_surface_secret_separation(environ_secret_values()).ok:
+        if not evaluate_meta_surface_signing_separation(environ_secret_values()).ok:
             raise MetaSignedRequestError("Meta callback signing secrets must be distinct")
         return _instagram_callback_context() if instagram_login else _app_a_callback_context()
     except MetaSignedRequestError:

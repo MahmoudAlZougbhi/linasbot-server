@@ -105,6 +105,20 @@ def evaluate_meta_surface_secret_separation(
     return MetaSurfaceSecretSeparation(ok=not collisions, collisions=tuple(collisions))
 
 
+def evaluate_meta_surface_signing_separation(
+    values: Mapping[str, str],
+) -> MetaSurfaceSecretSeparation:
+    """Signing-only policy for signed-request compliance callbacks."""
+
+    facebook_signing = _present_secrets(values, FACEBOOK_SIGNING_KEYS)
+    collisions: list[str] = []
+    if not _facebook_aliases_agree(facebook_signing):
+        collisions.append(FACEBOOK_SIGNING_ALIAS_MISMATCH)
+    if _cross_surface_collision(facebook_signing, _present_secrets(values, INSTAGRAM_SIGNING_KEYS)):
+        collisions.append(SIGNING_COLLISION)
+    return MetaSurfaceSecretSeparation(ok=not collisions, collisions=tuple(collisions))
+
+
 def runtime_meta_surface_secret_separation() -> MetaSurfaceSecretSeparation:
     return evaluate_meta_surface_secret_separation(environ_secret_values())
 
