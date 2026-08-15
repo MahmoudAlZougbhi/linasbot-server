@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.web_chat.operation import OperationRuntime, refresh_operation_runtime, try_advance_operation
+from services.web_chat.operation import (
+    OperationRuntime,
+    abandon_operation_lease,
+    refresh_operation_runtime,
+    try_advance_operation,
+)
 from services.web_chat.operation_fsm import OperationState
 from services.web_chat.processor import _ensure_turn_appended
 from services.web_chat.store import WebChatStoreBackend
@@ -67,19 +72,26 @@ def complete_captured_turn(
     refresh_operation_runtime(runtime)
     record = runtime.record
     canonical = canonical_reply_text(record, reply_text)
-    repair_canonical_turn(
-        active_store=active_store,
-        visitor_id=visitor_id,
-        user_text=user_text,
-        operation_key=operation_key,
-        canonical=canonical,
-    )
-    if record and record.state == OperationState.CAPTURED:
-        try_advance_operation(
-            runtime,
-            OperationState.CAPTURED,
-            OperationState.COMPLETE,
-            result=turn_result,
+    try:
+        repair_canonical_turn(
+            active_store=active_store,
+            visitor_id=visitor_id,
+            user_text=user_text,
+            operation_key=operation_key,
+            canonical=canonical,
         )
+        if record and record.state == OperationState.CAPTURED:
+            try_advance_operation(
+                runtime,
+                OperationState.CAPTURED,
+                OperationState.COMPLETE,
+                result=turn_result,
+            )
+    except Exception:
+        try:
+            abandon_operation_lease(runtime)
+        except Exception:
+            pass
+        raise
     refresh_operation_runtime(runtime)
     return canonical_reply_text(runtime.record, canonical)
