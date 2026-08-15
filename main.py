@@ -87,6 +87,7 @@ import modules.smart_messaging_api  # noqa: E402, F401
 import modules.store_iap_api  # noqa: E402, F401
 import modules.training_files_api  # noqa: E402, F401
 import modules.wallet_api  # noqa: E402, F401
+import modules.web_chat_api  # noqa: E402, F401
 import modules.webhook_handlers  # noqa: E402, F401
 import modules.whatsapp_adapters  # noqa: E402, F401
 import modules.whatsapp_cloud_api  # noqa: E402, F401
@@ -128,6 +129,7 @@ if os.path.exists(DASHBOARD_BUILD_PATH) and os.path.exists(INDEX_HTML_PATH):
             full_path.startswith("api/")
             or full_path.startswith("static/")
             or full_path.startswith("downloads/")
+            or full_path.startswith("web-chat/")
             or full_path == "webhook"
             or full_path.startswith("webhook/")
         ):

@@ -91,7 +91,7 @@ async def get_unified_chats(
     page_size: int = Query(default=30, ge=1, le=100),
     cursor: str = Query(default=None, description="Cursor string returned by previous page"),
     filter: str = Query(default="all", description="Badge filter: all|waiting|with_operator|bot|closed"),
-    channel: str = Query(default="all", description="Channel: all|whatsapp|instagram|facebook|tiktok"),
+    channel: str = Query(default="all", description="Channel: all|whatsapp|instagram|facebook|tiktok|web"),
 ) -> Any:
     """WhatsApp-style inbox (single master list) powered by live_chat_index."""
     _log.info(

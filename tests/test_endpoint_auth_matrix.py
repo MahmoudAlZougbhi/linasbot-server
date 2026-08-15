@@ -33,6 +33,7 @@ _ROUTE_MODULES = (
     "modules.owner_ai_v2_api",
     "modules.owner_notifications_api",
     "modules.guest_ai_api",
+    "modules.web_chat_api",
     "modules.entitlements_api",
     "modules.creative_api",
     "modules.schedule_api",
@@ -222,6 +223,8 @@ class TestRouteInventory:
             ("POST", "/api/guest-ai/session"),
             ("GET", "/api/guest-ai/session"),
             ("POST", "/api/guest-ai/session/messages"),
+            ("POST", "/api/web-chat/session"),
+            ("POST", "/api/web-chat/session/messages"),
         }
         assert counts["total_api_routes"] >= 229
         assert counts["public"] >= 23

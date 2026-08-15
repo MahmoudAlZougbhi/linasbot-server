@@ -26,6 +26,7 @@ class PlanDefinition:
     additional_seats: SeatLimit  # owner does not count; None = unlimited
     comment_automation: bool
     whatsapp: bool
+    web: bool
     tiktok: bool
     public_sale: bool
     catalog_version: str
@@ -48,6 +49,11 @@ def _whatsapp_for(plan_id: PlanId) -> bool:
     return plan_id != "lite"
 
 
+def _web_for(plan_id: PlanId) -> bool:
+    """Website chat widget: Lite excluded; Starter ($25) and above included."""
+    return plan_id != "lite"
+
+
 def _tiktok_for(plan_id: PlanId) -> bool:
     """TikTok DMs + comments: Growth, Pro, and Max (channel ships behind this flag)."""
     return plan_id in {"growth", "pro", "max"}
@@ -66,6 +72,7 @@ def _build_catalog() -> dict[str, PlanDefinition]:
             additional_seats=seats,
             comment_automation=comments,
             whatsapp=_whatsapp_for(plan_id),
+            web=_web_for(plan_id),
             tiktok=_tiktok_for(plan_id),
             public_sale=True,
             catalog_version=CATALOG_VERSION,
@@ -111,6 +118,7 @@ def plan_features(plan_id: str) -> dict[str, bool]:
         "faq_enabled": True,
         "comment_automation": plan.comment_automation,
         "whatsapp": plan.whatsapp,
+        "web": plan.web,
         "tiktok": plan.tiktok,
         "tenant_analytics": True,
         "instagram_dm": True,
@@ -140,6 +148,7 @@ def public_plan_matrix() -> list[dict[str, Any]]:
                 "additional_seats_unlimited": p.additional_seats is None,
                 "comment_automation": p.comment_automation,
                 "whatsapp": p.whatsapp,
+                "web": p.web,
                 "tiktok": p.tiktok,
                 "features": plan_features(p.plan_id),
                 "catalog_version": p.catalog_version,

@@ -4,6 +4,7 @@ export const FOLLOWUP_CHANNEL_IDS = [
   'instagram_dm',
   'facebook_messenger',
   'whatsapp_cloud',
+  'web_chat',
   'tiktok',
 ] as const;
 
@@ -16,11 +17,12 @@ export const DEFAULT_CHANNELS_ENABLED: FollowUpChannelsEnabled = {
   instagram_dm: true,
   facebook_messenger: true,
   whatsapp_cloud: true,
+  web_chat: true,
 };
 
 export type ChannelTileDef = {
   id: FollowUpChannelId;
-  labelKey: 'sfuChannelInstagram' | 'sfuChannelFacebook' | 'sfuChannelWhatsApp' | 'sfuChannelTikTok';
+  labelKey: 'sfuChannelInstagram' | 'sfuChannelFacebook' | 'sfuChannelWhatsApp' | 'sfuChannelWeb' | 'sfuChannelTikTok';
   iconFamily: 'ion' | 'mci';
   iconName: string;
   iconColor: string;
@@ -50,6 +52,14 @@ export const CHANNEL_TILES: ChannelTileDef[] = [
     iconFamily: 'ion',
     iconName: 'logo-whatsapp',
     iconColor: '#25D366',
+    supported: true,
+  },
+  {
+    id: 'web_chat',
+    labelKey: 'sfuChannelWeb',
+    iconFamily: 'ion',
+    iconName: 'globe-outline',
+    iconColor: '#0D9488',
     supported: true,
   },
   {
@@ -102,6 +112,7 @@ export function normalizeChannelsEnabled(
     instagram_dm: raw?.instagram_dm ?? DEFAULT_CHANNELS_ENABLED.instagram_dm,
     facebook_messenger: raw?.facebook_messenger ?? DEFAULT_CHANNELS_ENABLED.facebook_messenger,
     whatsapp_cloud: raw?.whatsapp_cloud ?? DEFAULT_CHANNELS_ENABLED.whatsapp_cloud,
+    web_chat: raw?.web_chat ?? DEFAULT_CHANNELS_ENABLED.web_chat,
   };
 }
 

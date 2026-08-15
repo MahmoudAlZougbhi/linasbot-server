@@ -145,6 +145,7 @@ export const ar = {
   platformFacebook: 'فيسبوك',
   platformWhatsApp: 'WhatsApp',
   platformTikTok: 'تيك توك',
+  platformWeb: 'الموقع',
   platformSnapchat: 'سناب شات',
   retry: 'تعذر تحميل المحادثة. اضغط لإعادة المحاولة.',
   messageFailed: 'فشل إرسال الرسالة. يمكنك إعادة المحاولة.',

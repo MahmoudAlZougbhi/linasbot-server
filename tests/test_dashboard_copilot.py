@@ -105,7 +105,7 @@ def test_activity_includes_tiktok_zero_row() -> None:
         entries=[],
     )
     platforms = [row["platform"] for row in payload["channels"]]
-    assert platforms == ["instagram", "facebook", "tiktok", "whatsapp"]
+    assert platforms == ["instagram", "facebook", "tiktok", "whatsapp", "web"]
     tiktok = next(row for row in payload["channels"] if row["platform"] == "tiktok")
     assert tiktok["messages"] == 0
     assert tiktok["connected"] is False

@@ -13,7 +13,8 @@ export type FeatureIcon =
   | 'quotes'
   | 'person'
   | 'whatsapp'
-  | 'tiktok';
+  | 'tiktok'
+  | 'web';
 
 export type IncludedRow = {
   id: string;
@@ -22,7 +23,7 @@ export type IncludedRow = {
   count?: number;
 };
 
-export type ExcludedId = 'comments' | 'whatsapp' | 'tiktok';
+export type ExcludedId = 'comments' | 'whatsapp' | 'tiktok' | 'web';
 
 export type PlanEntitlements = {
   planId: PlanId;
@@ -36,6 +37,7 @@ const EXCLUDED_LABEL: Record<ExcludedId, StringKey> = {
   comments: 'subNotComments',
   whatsapp: 'subNotWhatsApp',
   tiktok: 'subNotTikTok',
+  web: 'subNotWeb',
 };
 
 export function excludedLabelKey(id: ExcludedId): StringKey {
@@ -67,6 +69,12 @@ export function entitlementsForPlan(plan: PlanDefinition): PlanEntitlements {
     included.push({ id: 'tiktok', icon: 'tiktok', labelKey: 'subFeatTikTok' });
   } else {
     excluded.push('tiktok');
+  }
+
+  if (plan.web) {
+    included.push({ id: 'web', icon: 'web', labelKey: 'subFeatWeb' });
+  } else {
+    excluded.push('web');
   }
 
   included.push({

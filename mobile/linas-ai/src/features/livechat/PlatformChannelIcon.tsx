@@ -8,6 +8,7 @@ const SPEC: Record<ChatChannel, { icon: AppIconName; color: string; bg: string }
   instagram: { icon: ion('logo-instagram'), color: '#E1306C', bg: '#FCE7F3' },
   facebook: { icon: mci('facebook-messenger'), color: '#0084FF', bg: '#E8F1FF' },
   tiktok: { icon: ion('logo-tiktok'), color: '#111111', bg: '#F3F4F6' },
+  web: { icon: ion('globe-outline'), color: '#0D9488', bg: '#E6F7F4' },
 };
 
 type Props = {

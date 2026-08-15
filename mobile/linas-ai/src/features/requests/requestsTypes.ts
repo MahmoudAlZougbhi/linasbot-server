@@ -20,6 +20,7 @@ export const SOURCE_CHANNELS = [
   'instagram_dm',
   'facebook_messenger',
   'whatsapp_cloud',
+  'web_chat',
   'comment_linked_dm',
 ] as const;
 
@@ -142,6 +143,7 @@ export const CHANNEL_LABEL_KEYS: Record<string, StringKey> = {
   instagram_dm: 'reqChannelInstagram',
   facebook_messenger: 'reqChannelFacebook',
   whatsapp_cloud: 'reqChannelWhatsApp',
+  web_chat: 'reqChannelWeb',
   comment_linked_dm: 'reqChannelCommentDm',
   tiktok: 'reqChannelTikTok',
 };

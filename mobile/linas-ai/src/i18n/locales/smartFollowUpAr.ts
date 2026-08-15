@@ -9,6 +9,7 @@ export const smartFollowUpAr = {
   sfuChannelInstagram: 'إنستغرام',
   sfuChannelFacebook: 'فيسبوك',
   sfuChannelWhatsApp: 'واتساب',
+  sfuChannelWeb: 'الموقع',
   sfuChannelTikTok: 'تيك توك',
   sfuChannelComingSoon: 'قريباً',
   sfuMasterToggle: 'المتابعة الذكية',

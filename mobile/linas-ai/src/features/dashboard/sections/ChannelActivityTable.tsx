@@ -20,6 +20,7 @@ const PLATFORM_LABEL: Record<string, StringKey> = {
   facebook: 'platformFacebook',
   tiktok: 'platformTikTok',
   whatsapp: 'platformWhatsApp',
+  web: 'platformWeb',
 };
 
 const ACTIVE_DOT = '#22C55E';
@@ -59,7 +60,8 @@ export function ChannelActivityTable({ channels, unavailable }: Props) {
                   platform={
                     row.platform === 'facebook' ||
                     row.platform === 'whatsapp' ||
-                    row.platform === 'tiktok'
+                    row.platform === 'tiktok' ||
+                    row.platform === 'web'
                       ? row.platform
                       : 'instagram'
                   }

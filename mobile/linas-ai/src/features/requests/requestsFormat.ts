@@ -9,11 +9,13 @@ export const FILTER_PLATFORMS: { id: string; channel: ChatChannel | 'all' }[] = 
   { id: 'instagram_dm', channel: 'instagram' },
   { id: 'facebook_messenger', channel: 'facebook' },
   { id: 'tiktok', channel: 'tiktok' },
+  { id: 'web_chat', channel: 'web' },
 ];
 
 export function requestChannel(source: string | null | undefined): ChatChannel {
   const ch = String(source || '').toLowerCase();
   if (ch.includes('tiktok')) return 'tiktok';
+  if (ch.includes('web')) return 'web';
   if (ch.includes('instagram')) return 'instagram';
   if (ch.includes('facebook') || ch.includes('messenger')) return 'facebook';
   return 'whatsapp';
