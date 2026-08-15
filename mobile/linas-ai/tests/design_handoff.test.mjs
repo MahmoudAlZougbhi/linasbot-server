@@ -570,6 +570,7 @@ test('Settings hosts AI Limits only (no Actions)', () => {
   assert.doesNotMatch(tree, /section: 'actions'/);
   assert.match(tree, /section: 'ai_limits'/);
   assert.match(tree, /backTo: 'settings'/);
+  assert.match(tree, /onBack=\{[\s\S]*?setScreen\(\{ name: 'settings' \}\)/);
 });
 
 test('Settings hosts Notifications and Logout; drawer does not', () => {
@@ -776,6 +777,7 @@ test('Customer AI Limits screen matches design handoff', () => {
   assert.match(screen, /tr\('aiLimitsTitle'\)/);
   assert.match(screen, /tr\('aiLimitsSubtitle'\)/);
   assert.match(screen, /sectionTitle=\{isAiLimits\}/);
+  assert.match(screen, /onBack=\{onBack\}/);
   assert.match(editor, /aiLimitsBanner/);
   assert.match(editor, /aiLimitsTextChat/);
   assert.match(editor, /aiLimitsPhotos/);

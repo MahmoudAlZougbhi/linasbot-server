@@ -29,6 +29,8 @@ type Props = {
   section: CmSectionId;
   /** Local overlay of a chat proposal — shown dirty, not auto-saved. */
   proposalReview?: CmProposalReview | null;
+  /** When set, header shows back chevron instead of the hamburger. */
+  onBack?: () => void;
 };
 
 function SectionBody({
@@ -95,7 +97,7 @@ function SectionBody({
   }
 }
 
-export function CmSectionScreen({ section, proposalReview }: Props) {
+export function CmSectionScreen({ section, proposalReview, onBack }: Props) {
   const meta = getCmSection(section);
   const draft = useCmDraft(section, proposalReview);
   const { tr } = useI18n();
@@ -114,7 +116,7 @@ export function CmSectionScreen({ section, proposalReview }: Props) {
   const subtitle = isAiLimits ? tr('aiLimitsSubtitle') : meta?.description;
 
   return (
-    <ScreenChrome title={title} subtitle={subtitle} sectionTitle={isAiLimits}>
+    <ScreenChrome title={title} subtitle={subtitle} sectionTitle={isAiLimits} onBack={onBack}>
       {draft.loading ? <ActivityIndicator color={colors.accent} /> : null}
       {draft.error ? <Text style={cmFormStyles.error}>{draft.error}</Text> : null}
       {draft.conflict ? <Text style={cmFormStyles.warn}>{draft.conflict}</Text> : null}
