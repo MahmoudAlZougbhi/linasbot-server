@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { ApiError, apiFetch } from '../../api/client';
@@ -61,7 +61,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     onAuthGate: () => setAuthGate(true),
     onError: (message) => setError(message),
   });
-  const { loading, notice, setNotice, rows, setRows, load } = useIntegrationsLoad({
+  const { loading, hasLoadedOnce, notice, setNotice, rows, setRows, load } = useIntegrationsLoad({
     tr,
     refreshWhatsApp: wa.refreshWhatsApp,
     activeArea: nav.activeArea,
@@ -69,11 +69,8 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     setError,
     setAuthGate,
   });
-  const initialLoadDone = useRef(false);
-  useEffect(() => {
-    if (!loading) initialLoadDone.current = true;
-  }, [loading]);
-  const headerRefreshing = loading && initialLoadDone.current;
+  const headerRefreshing = loading && hasLoadedOnce;
+  const whatsappInitialLoading = loading && !wa.waStatus;
 
   async function connectPlatform(platform: 'instagram' | 'facebook') {
     setBusyPlatform(platform);
@@ -314,6 +311,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
         ))}
         <WhatsAppCloudCard
           status={wa.waStatus}
+          loading={whatsappInitialLoading}
           busy={wa.waBusy}
           onRefresh={() => void load()}
           onConnect={() => void wa.connectWhatsApp()}

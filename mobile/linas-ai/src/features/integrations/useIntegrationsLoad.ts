@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { AppState, Linking } from 'react-native';
 
 import { ApiError, apiFetch } from '../../api/client';
@@ -24,9 +24,11 @@ export function useIntegrationsLoad({
   setError,
   setAuthGate,
 }: Args) {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [rows, setRows] = useState<IntegrationListRow[]>([]);
+  const skipNextAreaFocusLoad = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,15 +53,22 @@ export function useIntegrationsLoad({
       }
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
     }
   }, [tr, refreshWhatsApp, setAuthGate, setError]);
 
   useEffect(() => {
+    skipNextAreaFocusLoad.current = true;
     void load();
   }, [load]);
 
   useEffect(() => {
-    if (activeArea === 'integrations') void load();
+    if (activeArea !== 'integrations') return;
+    if (skipNextAreaFocusLoad.current) {
+      skipNextAreaFocusLoad.current = false;
+      return;
+    }
+    void load();
   }, [areaFocusNonce, activeArea, load]);
 
   useEffect(() => {
@@ -90,5 +99,5 @@ export function useIntegrationsLoad({
     return () => sub.remove();
   }, [load, tr, setError]);
 
-  return { loading, notice, setNotice, rows, setRows, load };
+  return { loading, hasLoadedOnce, notice, setNotice, rows, setRows, load };
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ApiError } from '../../api/client';
@@ -8,6 +8,11 @@ import { IntegrationCardLoading } from './IntegrationCardLoading';
 import { IntegrationCardShell } from './IntegrationCardShell';
 import { WebsiteIntegrationScreen } from './WebsiteIntegrationScreen';
 import { fetchWebChatSettings, type WebChatSettings } from './webChatApi';
+import {
+  clearWebChatCardSnapshot,
+  readWebChatCardSnapshot,
+  writeWebChatCardSnapshot,
+} from './webChatCardCache';
 import {
   fetchWebChannelEntitledFromEntitlements,
   resolveWebPlanAllowed,
@@ -27,35 +32,31 @@ function statusKey(status: WebChatSettings['installation_status'] | undefined) {
 
 export function WebChatCard({ onError, onNotice }: Props) {
   const { tr } = useI18n();
-  const [settings, setSettings] = useState<WebChatSettings | null>(null);
-  const [entitlementWeb, setEntitlementWeb] = useState<boolean | null>(null);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const hasLoadedOnce = useRef(false);
+  const cached = readWebChatCardSnapshot();
+  const [settings, setSettings] = useState<WebChatSettings | null>(cached?.settings ?? null);
+  const [entitlementWeb, setEntitlementWeb] = useState<boolean | null>(cached?.entitlementWeb ?? null);
+  const [ready, setReady] = useState(cached !== null);
   const [detailOpen, setDetailOpen] = useState(false);
 
-  const webPlanAllowed = resolveWebPlanAllowed(settings, entitlementWeb);
-  const planBlocked = hasLoadedOnce.current && !webPlanAllowed;
-
   const load = useCallback(async () => {
-    if (!hasLoadedOnce.current) setInitialLoading(true);
     try {
       const [data, entitled] = await Promise.all([
         fetchWebChatSettings(),
         fetchWebChannelEntitledFromEntitlements(),
       ]);
+      writeWebChatCardSnapshot({ settings: data, entitlementWeb: entitled });
       setSettings(data);
       setEntitlementWeb(entitled);
+      setReady(true);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) return;
       onError?.(tr('integrationsActionError'));
-    } finally {
-      setInitialLoading(false);
-      hasLoadedOnce.current = true;
     }
   }, [onError, tr]);
 
   useEffect(() => {
     void load();
+    return () => clearWebChatCardSnapshot();
   }, [load]);
 
   if (detailOpen) {
@@ -71,10 +72,12 @@ export function WebChatCard({ onError, onNotice }: Props) {
     );
   }
 
-  if (initialLoading && !hasLoadedOnce.current) {
+  if (!ready) {
     return <IntegrationCardLoading platform="web" />;
   }
 
+  const webPlanAllowed = resolveWebPlanAllowed(settings, entitlementWeb);
+  const planBlocked = !webPlanAllowed;
   const connected = Boolean(settings?.connected);
   const statusLabel = tr(statusKey(settings?.installation_status));
 
