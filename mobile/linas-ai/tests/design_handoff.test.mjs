@@ -163,7 +163,7 @@ test('drawer and CM module tiles expose design handoff icons', () => {
   assert.match(modules, /integrations: mci\('power-plug-outline'\)/);
   assert.match(modules, /subscription: feather\('credit-card'\)/);
   assert.match(modules, /settings: feather\('settings'\)/);
-  assert.match(cm, /AiSetupSectionGrid/);
+  assert.match(cm, /AiSetupHubSections/);
   assert.match(cmIcons, /ai_basics: mci\('robot-outline'\)/);
   assert.match(cmIcons, /languages: feather\('globe'\)/);
 });

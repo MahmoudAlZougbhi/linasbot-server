@@ -1,18 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { AppIcon, feather } from '../../components/AppIcon';
-import { useI18n } from '../../i18n/LanguageContext';
-import { fonts, radii, spacing } from '../../theme';
-import {
-  AI_SETUP_CARD_BORDER,
-  AI_SETUP_MISSING_BG,
-  AI_SETUP_MISSING_BORDER,
-  AI_SETUP_ORANGE,
-  AI_SETUP_TEAL,
-} from './aiSetupDesign';
-import { resolveAiSetupSectionPaint } from './aiSetupSectionPaint';
-import { CM_SECTION_ICONS } from './cmSectionIcons';
-import { cmSectionTitleKey } from './cmSectionTitles';
+import { spacing } from '../../theme';
+import { AiSetupSectionTile } from './AiSetupSectionTile';
 import type { CmSectionCard } from './cmSections';
 
 type Props = {
@@ -21,54 +10,21 @@ type Props = {
   onOpenSection: (id: CmSectionCard['id']) => void;
 };
 
-/** Two-column section grid — complete (white) vs missing (peach) cards. */
+/** Legacy two-column grid — kept for tests; hub uses AiSetupHubSections. */
 export function AiSetupSectionGrid({ tiles, statusBySection, onOpenSection }: Props) {
-  const { tr } = useI18n();
-
   return (
     <View style={styles.grid}>
-      {tiles.map((tile) => {
-        const supported = tile.mobileSupported !== false;
-        const paint = resolveAiSetupSectionPaint(statusBySection.get(tile.id));
-        const missing = supported && paint === 'missing';
-        const complete = paint === 'complete';
-        const title = tr(cmSectionTitleKey(tile.id));
-        const statusLabel =
-          paint === 'pending'
-            ? title
-            : `${title}, ${missing ? tr('aiSetupStatusMissing') : tr('aiSetupStatusComplete')}`;
-
-        return (
-          <Pressable
-            key={tile.id}
-            style={[
-              styles.card,
-              missing
-                ? { backgroundColor: AI_SETUP_MISSING_BG, borderColor: AI_SETUP_MISSING_BORDER }
-                : { backgroundColor: '#FFFFFF', borderColor: AI_SETUP_CARD_BORDER },
-              { opacity: supported ? 1 : 0.55 },
-            ]}
-            disabled={!supported}
-            onPress={() => supported && onOpenSection(tile.id)}
-            accessibilityRole="button"
-            accessibilityLabel={statusLabel}
-            accessibilityState={{ disabled: !supported }}
-          >
-            <AppIcon icon={CM_SECTION_ICONS[tile.id]} size={20} color={AI_SETUP_TEAL} />
-            <Text style={styles.title} numberOfLines={2}>
-              {title}
-            </Text>
-            {missing ? (
-              <View style={styles.statusRow}>
-                <View style={styles.orangeDot} />
-                <Text style={styles.missingText}>{tr('aiSetupStatusMissing')}</Text>
-              </View>
-            ) : complete ? (
-              <AppIcon icon={feather('check')} size={18} color={AI_SETUP_TEAL} />
-            ) : null}
-          </Pressable>
-        );
-      })}
+      {tiles.map((tile) => (
+        <View key={tile.id} style={styles.cell}>
+          <AiSetupSectionTile
+            kind="section"
+            tile={tile}
+            variant="small"
+            statusBySection={statusBySection}
+            onPress={() => onOpenSection(tile.id)}
+          />
+        </View>
+      ))}
     </View>
   );
 }
@@ -79,27 +35,9 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
-  card: {
+  cell: {
     flexGrow: 1,
     flexBasis: '47%',
     maxWidth: '48%',
-    minHeight: 88,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
   },
-  title: {
-    flex: 1,
-    fontFamily: fonts.bodyMedium,
-    fontSize: 14,
-    color: '#10221A',
-    lineHeight: 18,
-  },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  orangeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: AI_SETUP_ORANGE },
-  missingText: { fontFamily: fonts.bodyMedium, fontSize: 11, color: AI_SETUP_ORANGE },
 });
