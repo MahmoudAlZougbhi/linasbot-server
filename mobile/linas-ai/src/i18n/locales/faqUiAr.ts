@@ -28,4 +28,8 @@ export const faqUiAr = {
   faqTranslateExistingBody: 'هل تريد ترجمة كل الأسئلة والأجوبة المحفوظة إلى {lang}؟',
   faqTranslateSkip: 'للإجابات الجديدة فقط',
   faqTranslateAll: 'ترجمة الكل',
+  faqRemoveLangTitle: 'إزالة اللغة؟',
+  faqRemoveLangBody:
+    'سيتم حذف كل الأسئلة والأجوبة المحفوظة بـ {lang} نهائياً. لا يمكن التراجع عن هذا الإجراء.',
+  faqRemoveLangConfirm: 'إزالة وحذف',
 } as const;

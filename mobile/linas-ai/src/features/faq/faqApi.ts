@@ -116,6 +116,13 @@ export async function saveSmartAnswerLanguages(input: {
   });
 }
 
+export async function deleteSmartAnswerLanguage(language: string): Promise<void> {
+  await apiFetch(`/api/cm/faq/smart-answer-languages/${encodeURIComponent(language)}`, {
+    method: 'DELETE',
+    schema: OkSchema,
+  });
+}
+
 export async function translateExistingSmartAnswers(language: string): Promise<void> {
   await apiFetch('/api/cm/faq/smart-answer-languages/translate-existing', {
     method: 'POST',

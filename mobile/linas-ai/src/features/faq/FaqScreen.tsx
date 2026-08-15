@@ -13,6 +13,7 @@ import { FaqListView } from './FaqListView';
 import {
   archiveFaq,
   createFaq,
+  deleteSmartAnswerLanguage,
   listFaq,
   patchFaqVariant,
   regenerateFaq,
@@ -21,7 +22,7 @@ import {
   type FaqGroup,
 } from './faqApi';
 import type { FaqLangId, SmartAnswerLang } from './faqLanguages';
-import { setSmartAnswerLanguageCatalog } from './faqLanguages';
+import { langNativeLabel, setSmartAnswerLanguageCatalog } from './faqLanguages';
 import { variantForLang } from './faqPreview';
 
 type Mode = 'list' | 'create' | 'detail';
@@ -150,9 +151,29 @@ export function FaqScreen({ proposalReview }: Props) {
   }
 
   function handleRemoveLanguage(langId: string) {
-    const next = smartAnswerLanguages.filter((x) => x !== langId);
-    if (next.length === 0) return;
-    void commitLanguageSave(next, false);
+    if (smartAnswerLanguages.length <= 1) return;
+    const langName = langNativeLabel(langId);
+    Alert.alert(
+      tr('faqRemoveLangTitle'),
+      tr('faqRemoveLangBody').replace('{lang}', langName),
+      [
+        { text: tr('usersCancel'), style: 'cancel' },
+        {
+          text: tr('faqRemoveLangConfirm'),
+          style: 'destructive',
+          onPress: () => {
+            setSaving(true);
+            setError(null);
+            void deleteSmartAnswerLanguage(langId)
+              .then(() => load())
+              .catch((err) => {
+                setError(err instanceof ApiError ? err.message : tr('faqCreateError'));
+              })
+              .finally(() => setSaving(false));
+          },
+        },
+      ],
+    );
   }
 
   async function handleSaveVariant() {

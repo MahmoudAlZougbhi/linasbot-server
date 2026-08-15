@@ -73,6 +73,8 @@ test('Smart Q&A list matches screenshot handoff', () => {
   assert.match(faqEn, /Translated to selected languages/);
   assert.match(faqAr, /مترجم إلى اللغات المختارة/);
   assert.match(faqFr, /Traduit dans les langues sélectionnées/);
-  assert.match(screen, /archiveFaq/);
-  assert.match(screen, /confirmDelete/);
+  assert.match(screen, /deleteSmartAnswerLanguage/);
+  assert.match(faqEn, /faqRemoveLangTitle/);
+  assert.match(faqAr, /إزالة اللغة/);
+  assert.match(faqFr, /Retirer la langue/);
 });

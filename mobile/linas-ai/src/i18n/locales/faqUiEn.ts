@@ -29,4 +29,8 @@ export const faqUiEn = {
   faqTranslateExistingBody: 'Translate all saved Smart Q&A into {lang}?',
   faqTranslateSkip: 'Only future answers',
   faqTranslateAll: 'Translate all',
+  faqRemoveLangTitle: 'Remove language?',
+  faqRemoveLangBody:
+    'All saved Smart Q&A in {lang} will be permanently deleted. This cannot be undone.',
+  faqRemoveLangConfirm: 'Remove & delete',
 } as const;

@@ -31,4 +31,8 @@ export const faqUiFr = {
     'Traduire toutes les Q&R intelligentes enregistrées en {lang} ?',
   faqTranslateSkip: 'Uniquement les prochaines',
   faqTranslateAll: 'Tout traduire',
+  faqRemoveLangTitle: 'Retirer la langue ?',
+  faqRemoveLangBody:
+    'Toutes les Q&R intelligentes enregistrées en {lang} seront supprimées définitivement. Cette action est irréversible.',
+  faqRemoveLangConfirm: 'Retirer et supprimer',
 } as const;
