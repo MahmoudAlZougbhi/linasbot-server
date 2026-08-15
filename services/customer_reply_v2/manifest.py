@@ -31,6 +31,7 @@ SECTION_DESCRIPTIONS: dict[str, str] = {
     "ai_limits": "AI usage and behavior limits.",
     "off_days": "Closed days and holiday schedules.",
     "opening_hours": "Named opening-hour calendars.",
+    "requests_appointments": "Customer request rules: appointment, order, or other (title + note).",
 }
 
 _CACHE: dict[str, tuple[float, str, list[ManifestSection]]] = {}
@@ -43,6 +44,9 @@ def _item_count(section_id: str, payload: dict[str, Any]) -> int:
     items = payload.get("items")
     if isinstance(items, list):
         return len(items)
+    rules = payload.get("rules")
+    if isinstance(rules, list):
+        return len(rules)
     topics = payload.get("topics")
     if isinstance(topics, list):
         return len(topics)

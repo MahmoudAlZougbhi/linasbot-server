@@ -92,6 +92,7 @@ def build_answer_messages(
     response_language: str,
     detected_language: str = "",
     repair_failures: list[str] | None = None,
+    request_capture_guidance: str | None = None,
 ) -> list[dict[str, Any]]:
     """Build Answer Tera messages. Includes full AI Basics + Style. No retrieval tools."""
     evidence_blob = [
@@ -132,6 +133,8 @@ def build_answer_messages(
         payload["repair_instruction"] = (
             "Rewrite reply_text to satisfy validator failures using the SAME evidence only. Do not request more files."
         )
+    if request_capture_guidance:
+        payload["request_capture_guidance"] = request_capture_guidance
 
     user_content: list[dict[str, Any]] = [{"type": "text", "text": json.dumps(payload, ensure_ascii=False)}]
     # Multimodal visual inputs (bounded). Never invent visuals when absent.
@@ -251,6 +254,14 @@ async def run_answer_luna(
     model = customer_answer_model_name()
     fixed = load_fixed_answer_context(tenant_id)
     revision = str(fixed.get("published_revision") or "")
+    request_guidance = ""
+    from services.requests.config_loader import load_published_requests_config, requests_capture_active
+
+    if requests_capture_active(tenant_id):
+        from services.cm.request_rules import format_request_rules_for_ai
+
+        cfg = load_published_requests_config(tenant_id) or {}
+        request_guidance = format_request_rules_for_ai(cfg)
     messages = build_answer_messages(
         message=message,
         fixed_context=fixed,
@@ -264,6 +275,7 @@ async def run_answer_luna(
         response_language=response_language,
         detected_language=detected_language,
         repair_failures=repair_failures,
+        request_capture_guidance=request_guidance or None,
     )
     assert answer_context_has_full_basics_and_style(messages)
 

@@ -61,6 +61,16 @@ class RequestAssignmentDefaults(CmBaseModel):
     auto_assign: bool = False
 
 
+class RequestRule(CmBaseModel):
+    """Owner-facing request rule — type, title, and custom note."""
+
+    id: str
+    type: RequestTypeCode = "APPOINTMENT"
+    name: str = ""
+    notes: str | None = None
+    enabled: bool = True
+
+
 class RequestsAppointmentsSection(CmBaseModel):
     """Publishable Requests & Appointments configuration.
 
@@ -69,6 +79,7 @@ class RequestsAppointmentsSection(CmBaseModel):
     """
 
     module_enabled: bool = False
+    rules: list[RequestRule] = Field(default_factory=list)
     enabled_types: list[RequestTypeCode] = Field(default_factory=list)
     type_labels: dict[str, LocalizedLabels] = Field(default_factory=dict)
     fields: list[RequestFieldDef] = Field(default_factory=list)

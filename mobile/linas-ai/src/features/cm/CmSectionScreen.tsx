@@ -138,6 +138,7 @@ export function CmSectionScreen({ section, proposalReview, onBack }: Props) {
   const isAiLimits = section === 'ai_limits';
   const isAiBasics = section === 'ai_basics' || section === 'style' || section === 'dynamic_messages';
   const isLanguagesRemoved = section === 'languages';
+  const isRequests = section === 'requests_appointments';
 
   async function handleSave() {
     const ok = await draft.save();
@@ -168,7 +169,11 @@ export function CmSectionScreen({ section, proposalReview, onBack }: Props) {
   }
 
   const title = isAiLimits ? tr('aiLimitsTitle') : (meta?.title ?? section);
-  const subtitle = isAiLimits ? tr('aiLimitsSubtitle') : meta?.description;
+  const subtitle = isAiLimits
+    ? tr('aiLimitsSubtitle')
+    : isRequests
+      ? tr('aiSetupRequestsSubtitle')
+      : meta?.description;
 
   return (
     <ScreenChrome title={title} subtitle={subtitle} sectionTitle={isAiLimits} onBack={onBack}>

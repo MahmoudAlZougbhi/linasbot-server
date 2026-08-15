@@ -126,8 +126,8 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
   },
   {
     id: 'requests_appointments',
-    title: 'Requests & Appointments',
-    description: 'الطلبات والمواعيد — orders, appointments, and other customer requests.',
+    title: 'Requests',
+    description: 'Request rules with type, title, and custom note.',
     mobileSupported: true,
   },
   {

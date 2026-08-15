@@ -156,19 +156,15 @@ def assess_section_fill(
                 "fill": "filled",
                 "is_done": True,
                 "gaps": [],
-                "summary": "Optional — module stays off until you enable types and publish.",
+                "summary": "Optional — add request rules when you want customer capture.",
             }
-        gaps_ra: list[str] = []
-        enabled = bool(payload.get("module_enabled"))
-        types = payload.get("enabled_types") or []
-        if enabled and (not isinstance(types, list) or not types):
-            gaps_ra.append("enabled_types_when_module_on")
-        if gaps_ra:
+        request_rules = payload.get("rules") or []
+        if not isinstance(request_rules, list) or not request_rules:
             return {
-                "fill": "weak",
-                "is_done": False,
-                "gaps": gaps_ra,
-                "summary": "Module is on but no request types are enabled — pick ORDER/APPOINTMENT/OTHER or disable.",
+                "fill": "filled",
+                "is_done": True,
+                "gaps": [],
+                "summary": "Optional — add request rules when you want customer capture.",
             }
         return {
             "fill": "filled",
