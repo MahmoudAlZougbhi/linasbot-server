@@ -19,7 +19,7 @@ describe('AI Setup hub restructure', () => {
     const src = read('features/cm/cmSections.ts');
     assert.match(src, /id: 'languages'[\s\S]*showInCmHub: false/);
     assert.match(src, /id: 'style'[\s\S]*showInCmHub: false/);
-    assert.match(src, /CM_HUB_PROGRESS_EXCLUDED.*languages.*style/s);
+    assert.match(src, /CM_HUB_PROGRESS_EXCLUDED[\s\S]*languages[\s\S]*style/s);
     assert.doesNotMatch(src, /CM_HUB_CARDS[\s\S]*id: 'languages'/);
   });
 

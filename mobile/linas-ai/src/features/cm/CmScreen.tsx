@@ -6,6 +6,7 @@ import { useI18n } from '../../i18n/LanguageContext';
 import { spacing, useTheme } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import { AiSetupFilterTabs, type AiSetupFilter } from './AiSetupFilterTabs';
+import { AiSetupProductsCard } from '../products/AiSetupProductsCard';
 import { AiSetupProgressCard } from './AiSetupProgressCard';
 import { AiSetupSectionGrid } from './AiSetupSectionGrid';
 import { fetchCmMeta, type CmMeta } from './cmApi';
@@ -20,11 +21,12 @@ import { cmSectionTitleKey } from './cmSectionTitles';
 
 type Props = {
   onOpenSection: (section: CmSectionId) => void;
+  onOpenProducts?: () => void;
   onContinueSetup?: (prompt: string) => void;
 };
 
 /** CM overview — design handoff layout with live progress + section grid. */
-export function CmScreen({ onOpenSection, onContinueSetup }: Props) {
+export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Props) {
   const { colors } = useTheme();
   const { tr } = useI18n();
   const [loading, setLoading] = useState(true);
@@ -139,6 +141,8 @@ export function CmScreen({ onOpenSection, onContinueSetup }: Props) {
             missingCount={displaySummary.incomplete}
             onChange={setFilter}
           />
+
+          {onOpenProducts ? <AiSetupProductsCard onOpenProducts={onOpenProducts} /> : null}
 
           <AiSetupSectionGrid
             tiles={tiles}

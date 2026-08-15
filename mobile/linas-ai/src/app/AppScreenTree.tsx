@@ -9,6 +9,8 @@ import { ChatScreen } from '../features/chat/ChatScreen';
 import { queueSetupHandoff } from '../features/chat/pendingSetupHandoff';
 import { CmScreen } from '../features/cm/CmScreen';
 import { CmSectionScreen } from '../features/cm/CmSectionScreen';
+import { AddProductScreen } from '../features/products/AddProductScreen';
+import { ProductsScreen } from '../features/products/ProductsScreen';
 import type { CmProposalReview } from '../features/cm/cmProposalReview';
 import type { ControlArea } from '../features/control/controlAreas';
 import { DashboardScreen } from '../features/dashboard/DashboardScreen';
@@ -164,6 +166,7 @@ export function AppScreenTree({
       <KeepMountedPane key={`cm-${authEpoch}`} active={name === 'cm'}>
         <CmScreen
           onOpenSection={(section) => setScreen({ name: 'cm_section', section, backTo: 'cm' })}
+          onOpenProducts={() => setScreen({ name: 'products', backTo: 'cm' })}
           onContinueSetup={(prompt) => {
             queueSetupHandoff({ text: prompt, mode: 'work', autoSend: true });
             setScreen({ name: 'chat' });
@@ -182,6 +185,29 @@ export function AppScreenTree({
       <KeepMountedPane key={`owner-${authEpoch}`} active={name === 'owner'}>
         <OwnerPortalScreen />
       </KeepMountedPane>
+
+      {name === 'products' ? (
+        <ProductsScreen
+          onBack={screen.backTo === 'cm' ? () => setScreen({ name: 'cm' }) : undefined}
+          onAdd={() => setScreen({ name: 'products_add', backTo: 'products' })}
+          onEdit={(productId) =>
+            setScreen({ name: 'products_edit', productId, backTo: 'products' })
+          }
+        />
+      ) : null}
+      {name === 'products_add' ? (
+        <AddProductScreen
+          onBack={() => setScreen({ name: 'products', backTo: screen.backTo })}
+          onSaved={() => setScreen({ name: 'products', backTo: screen.backTo })}
+        />
+      ) : null}
+      {name === 'products_edit' ? (
+        <AddProductScreen
+          productId={screen.productId}
+          onBack={() => setScreen({ name: 'products', backTo: screen.backTo })}
+          onSaved={() => setScreen({ name: 'products', backTo: screen.backTo })}
+        />
+      ) : null}
 
       {name === 'cm_section' ? (
         <CmSectionScreen
