@@ -32,7 +32,7 @@ export function WebChatCard({ onError, onNotice }: Props) {
   const [detailOpen, setDetailOpen] = useState(false);
 
   const webPlanAllowed = resolveWebPlanAllowed(settings, entitlementWeb);
-  const planBlocked = !webPlanAllowed;
+  const planBlocked = !loading && !webPlanAllowed;
 
   const load = useCallback(async () => {
     setLoading(true);

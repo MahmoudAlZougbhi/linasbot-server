@@ -171,7 +171,8 @@ def tenant_has_app_access(tenant_id: str) -> bool:
 
 def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
     ent = entitlements_store.get(tenant_id)
-    price = PLAN_PRICES_USD.get(ent.plan_id)
+    plan_id = (ent.plan_id or "").strip().lower()
+    price = PLAN_PRICES_USD.get(plan_id)
     from services.plan_economics import PLAN_ADDITIONAL_SEATS, PLAN_FAQ_MAX_ENTRIES
 
     # Compute gate fields first — FAQ enrichment must never 500 /api/entitlements/me
@@ -179,7 +180,7 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
     exempt = is_subscription_exempt_tenant(tenant_id)
     app_access = tenant_has_app_access(tenant_id)
     # Catalog features are SoT for known plan_ids; do not trust stale stored blobs.
-    features = dict(PLAN_FEATURES.get(ent.plan_id) or ent.features or {})
+    features = dict(PLAN_FEATURES.get(plan_id) or ent.features or {})
     faq: dict[str, Any]
     try:
         from services.faq_entitlements import get_faq_entitlement
@@ -194,12 +195,12 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
         }
     features.setdefault("faq_enabled", bool(faq.get("faq_enabled")))
     display_name = None
-    additional_seats = PLAN_ADDITIONAL_SEATS.get(ent.plan_id)
+    additional_seats = PLAN_ADDITIONAL_SEATS.get(plan_id)
     comment_automation = bool(features.get("comment_automation"))
-    if ent.plan_id in PLAN_PRICES_USD:
+    if plan_id in PLAN_PRICES_USD:
         from services.membership.plan_catalog import require_plan
 
-        display_name = require_plan(ent.plan_id).display_name
+        display_name = require_plan(plan_id).display_name
     return {
         "tenant_id": ent.tenant_id,
         "plan_id": ent.plan_id,
@@ -212,7 +213,7 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
         "extra_credits": ent.extra_credits,
         "purchased_credits": ent.extra_credits,
         "additional_seats": additional_seats,
-        "additional_seats_unlimited": additional_seats is None if ent.plan_id in PLAN_PRICES_USD else False,
+        "additional_seats_unlimited": additional_seats is None if plan_id in PLAN_PRICES_USD else False,
         "comment_automation": comment_automation,
         "whatsapp": bool(features.get("whatsapp")),
         "web": bool(features.get("web")) if not exempt else True,
@@ -236,7 +237,8 @@ def assert_feature(tenant_id: str, feature: str) -> None:
     ent = entitlements_store.get(tenant_id)
     if ent.status not in {"active", "trial", "grace"}:
         raise PermissionError("Active subscription required")
-    features = PLAN_FEATURES.get(ent.plan_id) or ent.features or {}
+    plan_id = (ent.plan_id or "").strip().lower()
+    features = PLAN_FEATURES.get(plan_id) or ent.features or {}
     if not features.get(feature):
         raise PermissionError(f"Plan does not include feature: {feature}")
 

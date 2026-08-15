@@ -33,7 +33,7 @@ export async function fetchWebChannelEntitledFromEntitlements(): Promise<boolean
     if (ent.subscription_exempt === true) return true;
     if (ent.web === true) return true;
     if (ent.features?.web === true) return true;
-    const planId = ent.plan_id;
+    const planId = (ent.plan_id || '').trim().toLowerCase();
     if (isPlanId(planId) && PLAN_CATALOG[planId].web) return true;
     if (ent.web === false || ent.features?.web === false) return false;
     if (isPlanId(planId) && !PLAN_CATALOG[planId].web) return false;
@@ -48,9 +48,8 @@ export function resolveWebPlanAllowed(
   settings: WebChatSettings | null,
   entitlementFallback: boolean | null,
 ): boolean {
-  if (settings?.membership_allows === true) return true;
-  if (settings?.membership_allows === false) return false;
-  if (entitlementFallback === true) return true;
-  if (entitlementFallback === false) return false;
+  // Either source granting access wins (handles stale membership_allows on older servers).
+  if (entitlementFallback === true || settings?.membership_allows === true) return true;
+  if (entitlementFallback === false || settings?.membership_allows === false) return false;
   return false;
 }

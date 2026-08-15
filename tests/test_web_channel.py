@@ -56,14 +56,53 @@ def test_web_gate_allows_max_plan(monkeypatch, tmp_path) -> None:
     assert_web_plan_allowed("clinic")
 
 
+def test_web_gate_ignores_stale_features_blob(monkeypatch, tmp_path) -> None:
+    from services import entitlements_service as es
+    from services.entitlements_service import EntitlementsStore, TenantEntitlement
+    from services.membership import web_gate as wg
+
+    store = EntitlementsStore(root=tmp_path / "ent")
+    monkeypatch.setattr(es, "entitlements_store", store)
+    monkeypatch.setattr(wg, "entitlements_store", store)
+    monkeypatch.setenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", "")
+
+    ent = store.set_plan(tenant_id="clinic", plan_id="max", status="active", source="admin")
+    stale = TenantEntitlement(**{**ent.__dict__, "features": {"web": False}})
+    store.save(stale)
+    assert_web_plan_allowed("clinic")
+
+
+def test_mobile_membership_allows_true_for_max_despite_stale_features(monkeypatch, tmp_path) -> None:
+    from modules.web_chat_helpers import mobile_web_chat_payload
+    from services import entitlements_service as es
+    from services.entitlements_service import EntitlementsStore, TenantEntitlement
+    from services.membership import web_gate as wg
+    from services.web_chat.store import WebChatStore
+
+    store = EntitlementsStore(root=tmp_path / "ent")
+    web_store = WebChatStore(root=tmp_path / "web_chat")
+    monkeypatch.setattr(es, "entitlements_store", store)
+    monkeypatch.setattr(wg, "entitlements_store", store)
+    monkeypatch.setenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", "")
+
+    ent = store.set_plan(tenant_id="clinic", plan_id="max", status="active", source="admin")
+    stale = TenantEntitlement(**{**ent.__dict__, "features": {"web": False}})
+    store.save(stale)
+    widget = web_store.get_or_create_widget("clinic")
+    payload = mobile_web_chat_payload("clinic", widget)
+    assert payload["membership_allows"] is True
+
+
 def test_entitlements_public_includes_web_for_max(tmp_path, monkeypatch) -> None:
-    from services.entitlements_service import EntitlementsStore, get_tenant_entitlement_public
+    from services.entitlements_service import EntitlementsStore, TenantEntitlement, get_tenant_entitlement_public
 
     store = EntitlementsStore(root=tmp_path / "ent")
     monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
     monkeypatch.setenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", "")
 
-    store.set_plan(tenant_id="clinic", plan_id="max", status="active", source="admin")
+    ent = store.set_plan(tenant_id="clinic", plan_id="max", status="active", source="admin")
+    stale = TenantEntitlement(**{**ent.__dict__, "features": {"web": False}})
+    store.save(stale)
     pub = get_tenant_entitlement_public("clinic")
     assert pub["plan_id"] == "max"
     assert pub["web"] is True
