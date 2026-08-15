@@ -19,7 +19,7 @@ export const FEATURED_AI_SETUP: DrawerModule = {
 
 /**
  * 3×3 drawer grid order (Settings lives in footer).
- * Row 1: AI Setup · Dashboard · Smart Follow-Up
+ * Row 1: AI Setup · Dashboard · Follow up
  * Row 2: FAQ · Live Chat · Requests
  * Row 3: Integrations · Users · Subscription
  */

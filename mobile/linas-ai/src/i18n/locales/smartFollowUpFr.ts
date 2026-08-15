@@ -1,5 +1,5 @@
 export const smartFollowUpFr = {
-  navSmartFollowUp: 'Relance intelligente',
+  navSmartFollowUp: 'Relance',
   aiSetupStatusContinue: 'Continuer la configuration',
   aiSetupStatusComplete: 'Configuration terminée',
   aiSetupStatusNeedsAttention: 'Attention requise',

@@ -1,5 +1,5 @@
 export const smartFollowUpEn = {
-  navSmartFollowUp: 'Smart Follow-Up',
+  navSmartFollowUp: 'Follow up',
   aiSetupStatusContinue: 'Continue Setup',
   aiSetupStatusComplete: 'Setup Complete',
   aiSetupStatusNeedsAttention: 'Needs Attention',

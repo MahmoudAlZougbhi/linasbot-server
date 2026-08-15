@@ -1,5 +1,5 @@
 export const smartFollowUpAr = {
-  navSmartFollowUp: 'المتابعة الذكية',
+  navSmartFollowUp: 'المتابعة',
   aiSetupStatusContinue: 'متابعة الإعداد',
   aiSetupStatusComplete: 'اكتمل الإعداد',
   aiSetupStatusNeedsAttention: 'يحتاج انتباهاً',
