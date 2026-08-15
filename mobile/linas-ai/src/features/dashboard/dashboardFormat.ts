@@ -1,6 +1,15 @@
+export type DashboardPresetId = 'today' | 'last_month' | 'last_6m' | 'last_year';
+
 export type DashboardPeriodSelection =
-  | { kind: 'preset'; id: 'billing' | '7d' | '30d' }
+  | { kind: 'preset'; id: DashboardPresetId }
   | { kind: 'custom'; start: string; end: string };
+
+export function ymdFromDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
 export function monthStartIso(date = new Date()): string {
   const y = date.getFullYear();
@@ -9,10 +18,37 @@ export function monthStartIso(date = new Date()): string {
 }
 
 export function todayIso(date = new Date()): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return ymdFromDate(date);
+}
+
+/** Previous complete calendar month (not a rolling 30 days). */
+export function lastCalendarMonthRange(date = new Date()): { start: string; end: string } {
+  const start = new Date(date.getFullYear(), date.getMonth() - 1, 1);
+  const end = new Date(date.getFullYear(), date.getMonth(), 0);
+  return { start: ymdFromDate(start), end: ymdFromDate(end) };
+}
+
+export function resolvePresetRange(
+  id: DashboardPresetId,
+  date = new Date(),
+): { start: string; end: string } {
+  const end = todayIso(date);
+  if (id === 'today') return { start: end, end };
+  if (id === 'last_month') return lastCalendarMonthRange(date);
+  if (id === 'last_6m') {
+    const start = new Date(date.getFullYear(), date.getMonth() - 6, 1);
+    return { start: ymdFromDate(start), end };
+  }
+  const start = new Date(date.getFullYear(), date.getMonth() - 12, 1);
+  return { start: ymdFromDate(start), end };
+}
+
+export function dashboardQueryRange(
+  period: DashboardPeriodSelection,
+  date = new Date(),
+): { start: string; end: string } {
+  if (period.kind === 'custom') return { start: period.start, end: period.end };
+  return resolvePresetRange(period.id, date);
 }
 
 export function formatDashboardRangeLabel(

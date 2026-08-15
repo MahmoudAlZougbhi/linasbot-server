@@ -109,3 +109,14 @@ test('dashboard i18n covers en ar fr', () => {
   assert.match(read('i18n/locales/fr.ts'), /dashboardFr/);
   assert.match(read('i18n/locales/dashboardEn.ts'), /dashGrowthPlan/);
 });
+
+test('dashboard date card uses new presets and Linas copilot mark', () => {
+  const sheet = read('features/dashboard/sections/DashboardDateRangeSheet.tsx');
+  const copilot = read('features/dashboard/sections/OwnerCopilotCard.tsx');
+  assert.match(sheet, /dashToday/);
+  assert.match(sheet, /dashLastMonth/);
+  assert.match(sheet, /RequestMonthCalendar/);
+  assert.doesNotMatch(sheet, /dashBillingPeriod/);
+  assert.match(copilot, /LinasSparkleIcon/);
+  assert.doesNotMatch(copilot, /name="sparkles"/);
+});
