@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { EmptyState } from '../../components/EmptyState';
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, spacing, useTheme } from '../../theme';
 import { BuyCreditsSheet } from '../billing/BuyCreditsSheet';
@@ -75,7 +76,7 @@ export function DashboardScreen({ onNavigate, active = true }: Props) {
 
           {state.kind === 'loading' ? (
             <View style={styles.center}>
-              <ActivityIndicator color={colors.accent} accessibilityLabel="Loading dashboard" />
+              <LinasLoadingIndicator variant="screen" />
             </View>
           ) : null}
 

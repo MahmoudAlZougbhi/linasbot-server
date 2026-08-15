@@ -4,7 +4,6 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ApiError } from '../../api/client';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, spacing } from '../../theme';
-import { IntegrationCardLoading } from './IntegrationCardLoading';
 import { IntegrationCardShell } from './IntegrationCardShell';
 import { WebsiteIntegrationScreen } from './WebsiteIntegrationScreen';
 import { fetchWebChatSettings, type WebChatSettings } from './webChatApi';
@@ -73,7 +72,7 @@ export function WebChatCard({ onError, onNotice }: Props) {
   }
 
   if (!ready) {
-    return <IntegrationCardLoading platform="web" />;
+    return null;
   }
 
   const webPlanAllowed = resolveWebPlanAllowed(settings, entitlementWeb);
