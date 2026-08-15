@@ -116,3 +116,91 @@ def test_last_month_activity_includes_all_july_days() -> None:
     )
     assert payload["total_activity"]["messages_replied"] == 3
     assert payload["total_activity"]["smart_answers"] == 3
+
+
+def _facebook_reply(ts: datetime, *, tenant_id: str = "acme") -> dict:
+    return {
+        "timestamp": ts.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+        "tenant_id": tenant_id,
+        "channel": "facebook",
+        "source": "gpt",
+        "bot_to_user": True,
+    }
+
+
+def _copilot_reply(ts: datetime, *, tenant_id: str = "acme", conversation_id: str = "c1") -> dict:
+    return {
+        "timestamp": ts.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+        "tenant_id": tenant_id,
+        "channel": "owner_copilot",
+        "source": "owner_ai",
+        "bot_to_user": True,
+        "conversation_id": conversation_id,
+        "prompt_tokens": 100,
+        "completion_tokens": 50,
+    }
+
+
+def test_facebook_and_copilot_counts_change_with_period_window() -> None:
+    tz = parse_timezone("Asia/Beirut")
+    now = datetime(2026, 8, 15, 12, 35, tzinfo=tz)
+    entries = [
+        _facebook_reply(datetime(2026, 7, 10, 12, 0, tzinfo=tz)),
+        _facebook_reply(datetime(2026, 8, 10, 12, 0, tzinfo=tz)),
+        _copilot_reply(datetime(2026, 7, 10, 12, 0, tzinfo=tz), conversation_id="july"),
+        _copilot_reply(datetime(2026, 8, 10, 12, 0, tzinfo=tz), conversation_id="august"),
+    ]
+    integrations = [
+        {"platform": "instagram", "connected": True},
+        {"platform": "facebook", "connected": True},
+    ]
+
+    last_month = resolve_period_window(period="last_month", tz=tz, current_period_end=None, now=now)
+    july_payload = build_activity_summary(
+        "acme",
+        start_ts=last_month["start_ts"],
+        end_ts=last_month["end_ts"],
+        integrations=integrations,
+        entries=entries,
+    )
+    custom = resolve_period_window(
+        period="custom",
+        tz=tz,
+        current_period_end=None,
+        now=now,
+        custom_start="2026-08-01",
+        custom_end="2026-08-15",
+    )
+    august_payload = build_activity_summary(
+        "acme",
+        start_ts=custom["start_ts"],
+        end_ts=custom["end_ts"],
+        integrations=integrations,
+        entries=entries,
+    )
+
+    july_fb = next(row for row in july_payload["channels"] if row["platform"] == "facebook")
+    aug_fb = next(row for row in august_payload["channels"] if row["platform"] == "facebook")
+    assert july_fb["messages"] == 1
+    assert aug_fb["messages"] == 1
+    assert july_payload["owner_copilot"]["interactions"] == 1
+    assert august_payload["owner_copilot"]["interactions"] == 1
+    assert july_payload["owner_copilot"]["credits"] == 2
+    assert august_payload["owner_copilot"]["credits"] == 2
+    all_time = resolve_period_window(
+        period="custom",
+        tz=tz,
+        current_period_end=None,
+        now=now,
+        custom_start="2026-01-01",
+        custom_end="2026-08-15",
+    )
+    all_payload = build_activity_summary(
+        "acme",
+        start_ts=all_time["start_ts"],
+        end_ts=all_time["end_ts"],
+        integrations=integrations,
+        entries=entries,
+    )
+    assert all_payload["total_activity"]["messages_replied"] == 2
+    assert all_payload["owner_copilot"]["interactions"] == 2
