@@ -24,6 +24,10 @@ def _sanitize_section_payload(section: str, payload: dict[str, object]) -> dict[
         from services.cm.greeting_rules import sanitize_dynamic_messages_payload
 
         return sanitize_dynamic_messages_payload(payload)  # type: ignore[arg-type]
+    if section == "requests_appointments":
+        from services.cm.request_rules import sanitize_requests_appointments_payload
+
+        return sanitize_requests_appointments_payload(payload)  # type: ignore[arg-type]
     return payload
 
 
@@ -94,7 +98,11 @@ def make_etag(revision: int, payload: dict[str, object]) -> str:
 
 
 def _envelope_from_dict(data: dict[str, object]) -> SectionDraftEnvelope:
-    return SectionDraftEnvelope.model_validate(data)
+    envelope = SectionDraftEnvelope.model_validate(data)
+    sanitized = _sanitize_section_payload(envelope.section, envelope.payload)
+    if sanitized is not envelope.payload and sanitized != envelope.payload:
+        envelope = envelope.model_copy(update={"payload": sanitized})
+    return envelope
 
 
 def build_default_envelope(

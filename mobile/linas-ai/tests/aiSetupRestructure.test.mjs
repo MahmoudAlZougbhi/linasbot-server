@@ -74,9 +74,21 @@ describe('AI Setup hub restructure', () => {
       const src = read(`i18n/locales/${loc}`);
       assert.match(src, /aiSetupAddGreetingRule/);
       assert.match(src, /aiSetupGreetingNote/);
+      assert.match(src, /aiSetupAddRequestRule/);
+      assert.match(src, /aiSetupRequestNote/);
       assert.match(src, /servicesAddOption.*Add more option|Ajouter une option|إضافة خيار/);
       assert.match(src, /servicesTitle: 'Service'|servicesTitle: 'الخدمة'/);
     }
+  });
+
+  it('requests editor uses type title note only', () => {
+    const src = read('features/cm/editors/RequestsAppointmentsEditor.tsx');
+    assert.match(src, /aiSetupAddRequestRule/);
+    assert.match(src, /aiSetupRequestNote/);
+    assert.match(src, /aiSetupRequestTypeAppointment/);
+    assert.doesNotMatch(src, /Seed common fields/);
+    assert.doesNotMatch(src, /enabled_types/);
+    assert.doesNotMatch(src, /module_enabled/);
   });
 });
 

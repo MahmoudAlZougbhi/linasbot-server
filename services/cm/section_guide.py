@@ -187,20 +187,14 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
         "title": "Requests & Appointments",
         "title_ar": "الطلبات والمواعيد",
         "purpose": (
-            "Optional customer Orders / Appointment requests / Other capture. "
-            "Draft never affects customers until published with module_enabled and enabled_types."
+            "Optional customer Orders / Appointment requests / Other capture via simple request rules."
         ),
         "why": "Lets owners collect structured requests without forced wa.me booking handoff.",
         "what_to_fill": [
-            "module_enabled",
-            "enabled_types (ORDER | APPOINTMENT | OTHER)",
-            "fields[] required/optional questions + order/validation",
-            "services / products / branches catalogs",
-            "messages (acknowledgment, appointment_confirmed, order_ready, completed, cancelled)",
-            "notification_language, assignment_defaults, push_enabled, prohibited",
+            "rules[] with type (ORDER | APPOINTMENT | OTHER), title (name), and custom note",
         ],
-        "useful": "Leave disabled until ready; empty/unpublished keeps AI capture inactive.",
-        "app_path": "AI Setup → Requests & Appointments",
+        "useful": "Leave empty until ready; unpublished or no rules keeps AI capture inactive.",
+        "app_path": "AI Setup → Requests",
     },
 }
 

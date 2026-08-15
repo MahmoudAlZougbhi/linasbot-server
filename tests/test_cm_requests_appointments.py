@@ -37,6 +37,7 @@ def test_defaults_keep_module_inactive() -> None:
     payload = default_section_payload("requests_appointments")
     section = RequestsAppointmentsSection.model_validate(payload)
     assert section.module_enabled is False
+    assert section.rules == []
     assert section.enabled_types == []
     assert section.fields == []
     assert section.services == []

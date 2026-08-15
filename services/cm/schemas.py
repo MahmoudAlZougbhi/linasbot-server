@@ -48,6 +48,7 @@ from services.cm.schemas_requests import (  # noqa: F401
     RequestCatalogItem,
     RequestFieldDef,
     RequestMessages,
+    RequestRule,
     RequestsAppointmentsSection,
 )
 
