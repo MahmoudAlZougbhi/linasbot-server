@@ -25,7 +25,8 @@ test('requests list matches inbox screenshot chrome', () => {
   assert.match(summary, /countWrap/);
   assert.match(summary, /borderRadius: 22/);
   assert.match(screen, /reqSubtitle/);
-  assert.match(screen, /titleColor=\{colors\.accent\}/);
+  assert.doesNotMatch(screen, /titleColor=\{colors\.accent\}/);
+  assert.doesNotMatch(screen, /iconColor=\{colors\.accent\}/);
   assert.doesNotMatch(home, /ChipRow|TYPE_CHIPS|DATE_CHIPS/);
 });
 

@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useModuleNav } from '../nav/ModuleNavContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import { useI18n } from '../../i18n/LanguageContext';
-import { useTheme } from '../../theme';
 import { RequestDetailView } from './RequestDetailView';
 import { RequestsHome } from './RequestsHome';
 import { useRequestsList } from './useRequestsList';
@@ -21,7 +20,6 @@ type Props = {
  */
 export function RequestsScreen({ onOpenLiveChat }: Props) {
   const { tr } = useI18n();
-  const { colors } = useTheme();
   const nav = useModuleNav();
   const active = nav.activeArea === 'requests';
   const list = useRequestsList(nav.isAuthenticated && active);
@@ -39,12 +37,7 @@ export function RequestsScreen({ onOpenLiveChat }: Props) {
 
   if (selectedId) {
     return (
-      <ScreenChrome
-        title={tr('reqDetailTitle')}
-        subtitle={tr('reqSubtitle')}
-        titleColor={colors.accent}
-        iconColor={colors.accent}
-      >
+      <ScreenChrome title={tr('reqDetailTitle')} subtitle={tr('reqSubtitle')}>
         <RequestDetailView
           requestId={selectedId}
           user={list.user}
@@ -59,12 +52,7 @@ export function RequestsScreen({ onOpenLiveChat }: Props) {
   }
 
   return (
-    <ScreenChrome
-      title={tr('reqTitle')}
-      subtitle={tr('reqSubtitle')}
-      titleColor={colors.accent}
-      iconColor={colors.accent}
-    >
+    <ScreenChrome title={tr('reqTitle')} subtitle={tr('reqSubtitle')}>
       <RequestsHome
         list={list}
         onOpen={(item: RequestCard) => setSelectedId(item.request_id)}

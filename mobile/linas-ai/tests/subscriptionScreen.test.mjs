@@ -116,6 +116,9 @@ test('BillingScreen routes no-sub to choose, has-sub to current, upgrade + credi
   assert.match(billing, /setBrowsePlans\(false\)/);
   assert.doesNotMatch(billing, /nav\.goChat\(\)/);
   assert.doesNotMatch(billing, /view === 'choose' \?/);
+  assert.match(billing, /useState\(openChoosePlan\)/);
+  assert.match(billing, /showChooseChrome/);
+  assert.match(billing, /entitlement\.loading/);
   const choose = read('features/billing/ChoosePlanScreen.tsx');
   assert.match(choose, /BillingPeriodToggle/);
   assert.match(choose, /PlanChipRow/);
