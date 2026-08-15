@@ -44,6 +44,7 @@ from pathlib import Path
 import os
 import re
 import subprocess
+import sys
 
 values = {}
 
@@ -241,6 +242,23 @@ print(f"[preflight] auth_secret_source_ok={dash_ok or auth_alias_ok}")
 if not all(required) or not firebase_ok or not env_ok:
     raise SystemExit("[preflight] REQUIRED_CONFIG_MISSING")
 print("[preflight] required_config_ok=true")
+
+repo_roots = [Path("/opt/linasbot"), Path.cwd()]
+for root in repo_roots:
+    if (root / "services" / "meta_surface_secret_separation.py").is_file():
+        sys.path.insert(0, str(root))
+        break
+from services.meta_surface_secret_separation import evaluate_meta_surface_secret_separation
+
+separation = evaluate_meta_surface_secret_separation(values)
+print(
+    "[preflight] instagram_facebook_secret_collision="
+    + ("true" if not separation.ok else "false")
+)
+if not separation.ok:
+    for code in separation.collisions:
+        print(f"[preflight] collision_code={code}")
+    raise SystemExit("[preflight] INSTAGRAM_FACEBOOK_SECRET_COLLISION")
 PY
 
 # Activate app venv before Firestore admin probe / dry-run (system python lacks deps).

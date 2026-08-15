@@ -8,6 +8,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
+import { readChatScreenBundle } from './chatScreenBundle.mjs';
+
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const src = (...p) => join(root, 'src', ...p);
 
@@ -138,7 +140,7 @@ test('model chip maps chat/work to existing 5.6 LIN Low/High ids', () => {
 });
 
 test('chat thread starts high; sparkle slightly larger than Linas name; send is sparkle teal', () => {
-  const screen = read('features/chat/ChatScreen.tsx');
+  const screen = readChatScreenBundle(read);
   const scroll = read('features/chat/useChatListScroll.ts');
   const toggle = read('features/chat/ChatModeToggle.tsx');
   const bubble = read('features/chat/ChatBubble.tsx');

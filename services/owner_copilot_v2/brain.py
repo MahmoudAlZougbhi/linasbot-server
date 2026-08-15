@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, Callable
 from typing import Any, Literal
 
 from services.model_policy import emit_model_policy_trace, owner_stream_route_payload, resolve_owner_policy
@@ -21,41 +21,14 @@ from services.owner_copilot_v2.choices import choices_from_tool_result, make_cho
 from services.owner_copilot_v2.confirm_path import run_confirm_path
 from services.owner_copilot_v2.creative_policy import creative_refusal_message, looks_like_creative_request
 from services.owner_copilot_v2.flags import owner_copilot_v2_enabled, owner_model_name
-from services.owner_copilot_v2.models import ChatChoice, OwnerV2TurnResult, StreamEvent
+from services.owner_copilot_v2.models import ChatChoice, StreamEvent
 from services.owner_copilot_v2.proposal_revise import load_proposal_revise_context, supersede_revised_proposal
 from services.owner_copilot_v2.provider import iter_sol_text_deltas, iter_sol_tool_round
 from services.owner_copilot_v2.tool_dispatch import dispatch_v2_tool, tool_result_for_model
-from services.owner_copilot_v2.turn_results import owner_result_from_done_payload, record_owner_v2_usage
 
 CancelCheck = Callable[[], bool]
 # Full CM walks need enough rounds to cover every section + article/FAQ chunk continuation.
 MAX_TOOL_ROUNDS = 10
-
-
-async def run_owner_turn_v2(**kwargs: Any) -> OwnerV2TurnResult:
-    final: OwnerV2TurnResult | None = None
-    async for ev in iter_owner_turn_v2_events(**kwargs):
-        if ev.type == "done":
-            final = owner_result_from_done_payload(ev.payload)
-            record_owner_v2_usage(kwargs, final)
-        elif ev.type == "cancelled":
-            return OwnerV2TurnResult(
-                reply_text=str(ev.payload.get("reply_text") or ""),
-                cancelled=True,
-                model=owner_model_name(),
-            )
-        elif ev.type == "credits_paused" and final is None:
-            return OwnerV2TurnResult(
-                reply_text="",
-                route={"reason": "insufficient_credits", **ev.payload},
-                model=owner_model_name(),
-            )
-        elif ev.type == "error" and final is None:
-            return OwnerV2TurnResult(
-                reply_text=str(ev.payload.get("message") or "Linas AI is temporarily unavailable. Please retry."),
-                model=owner_model_name(),
-            )
-    return final or OwnerV2TurnResult(reply_text="", model=owner_model_name())
 
 
 async def iter_owner_turn_v2_events(
@@ -75,7 +48,7 @@ async def iter_owner_turn_v2_events(
     reply_language: str | None = None,
     revise_proposal_id: str | None = None,
     is_cancelled: CancelCheck | None = None,
-) -> AsyncIterator[StreamEvent]:
+) -> AsyncGenerator[StreamEvent, None]:
     if not owner_copilot_v2_enabled():
         yield StreamEvent(type="error", payload={"message": "OWNER_COPILOT_V2 disabled"})
         return
@@ -401,3 +374,11 @@ async def iter_owner_turn_v2_events(
                 "retryable": True,
             },
         )
+
+
+def __getattr__(name: str) -> Any:
+    if name == "run_owner_turn_v2":
+        from services.owner_copilot_v2.brain_run import run_owner_turn_v2 as _run_owner_turn_v2
+
+        return _run_owner_turn_v2
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

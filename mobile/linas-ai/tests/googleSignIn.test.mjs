@@ -137,11 +137,12 @@ describe('googleSignIn source contracts', () => {
 describe('guest Sign In navigation', () => {
   it('guest auth overlay Sign In preserves the draft and goes to login', () => {
     const chat = read('features/chat/ChatScreen.tsx');
-    assert.match(chat, /function goToLoginPreservingDraft/);
-    assert.match(chat, /onLogin=\{goToLoginPreservingDraft\}/);
-    const loginHandler = chat.slice(
-      chat.indexOf('function goToLoginPreservingDraft'),
-      chat.indexOf('\n  }', chat.indexOf('function goToLoginPreservingDraft')) + 4,
+    const controller = read('features/chat/useChatScreenController.ts');
+    assert.match(controller, /const goToLoginPreservingDraft/);
+    assert.match(chat, /onLogin=\{c\.goToLoginPreservingDraft\}/);
+    const loginHandler = controller.slice(
+      controller.indexOf('const goToLoginPreservingDraft'),
+      controller.indexOf('\n  },', controller.indexOf('const goToLoginPreservingDraft')) + 4,
     );
     assert.match(loginHandler, /queueGuestDraft\(draft\)/);
     assert.match(loginHandler, /onRequestLogin\(\)/);

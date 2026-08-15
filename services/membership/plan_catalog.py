@@ -74,7 +74,7 @@ def _build_catalog() -> dict[str, PlanDefinition]:
 
 
 PLAN_CATALOG: Final[dict[str, PlanDefinition]] = _build_catalog()
-PUBLIC_PLAN_IDS: Final[tuple[str, ...]] = tuple(PLAN_CATALOG.keys())
+PUBLIC_PLAN_IDS: Final[tuple[PlanId, ...]] = tuple(plan_id for plan_id, *_ in _PLAN_ROWS)
 HIGHEST_PUBLIC_PLAN_ID: Final[PlanId] = PUBLIC_PLAN_IDS[-1]
 
 

@@ -9,6 +9,11 @@ from dataclasses import dataclass
 from typing import Literal
 
 from services.meta_app_registry import APP_A_KEY, get_meta_app_configs
+from services.meta_surface_secret_separation import (
+    CONFIG_COLLISION_KEY,
+    environ_secret_values,
+    evaluate_meta_surface_secret_separation,
+)
 
 DEFAULT_INSTAGRAM_LOGIN_APP_ID = "1035856539045307"
 EXPECTED_INSTAGRAM_LOGIN_REDIRECT_URI = "https://www.linasaibot.com/oauth/instagram/callback"
@@ -111,6 +116,10 @@ def instagram_login_config_status() -> InstagramLoginConfigStatus:
         reasons["META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN"] = (
             "Dedicated Instagram Login webhook verify token is required"
         )
+    separation = evaluate_meta_surface_secret_separation(environ_secret_values())
+    if not separation.ok:
+        missing.append(CONFIG_COLLISION_KEY)
+        reasons[CONFIG_COLLISION_KEY] = "Instagram signing and verify secrets must be distinct from Facebook"
     return InstagramLoginConfigStatus(
         configured=not missing,
         missing=tuple(missing),

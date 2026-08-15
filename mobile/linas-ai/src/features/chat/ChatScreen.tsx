@@ -1,20 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
-  TextInput,
   View,
 } from 'react-native';
 
 import { GradientBackground } from '../../components/GradientBackground';
-import { useI18n } from '../../i18n/LanguageContext';
-import { useTheme } from '../../theme';
-import { BuyCreditsSheet } from '../billing/BuyCreditsSheet';
-import { useBuyCreditsFlow } from '../billing/useBuyCreditsFlow';
 import type { ControlArea } from '../control/controlAreas';
 import type { CmProposalReview } from '../cm/cmProposalReview';
+import { BuyCreditsSheet } from '../billing/BuyCreditsSheet';
 import { ChatComposer } from './ChatComposer';
 import { ChatHeader } from './ChatHeader';
 import { ChatMessageList } from './ChatMessageList';
@@ -23,26 +18,15 @@ import { ChatScreenOverlays } from './ChatScreenOverlays';
 import { chatScreenStyles as styles } from './chatScreenStyles';
 import { ChatStatusBanners } from './ChatStatusBanners';
 import { CreditsPausedBanner } from './CreditsPausedBanner';
-import type { OwnerChatMode } from './ownerChatMode';
-import { useModuleNavOptional } from '../nav/ModuleNavContext';
 import { resolveOwnerModeForOutgoing } from './ownerChatMode';
 import { PendingAttachmentsStrip } from './PendingAttachmentsStrip';
-import { queueGuestDraft } from './pendingGuestDraft';
 import { buildApproveSendOpts, buildDiscardSendOpts } from './proposalBarActions';
 import { sendChatMessage } from './sendChatMessage';
 import { chatErrorLabelKey, retryAssistantMessage } from './chatRetryHandlers';
-import { useChatIdentity } from './useChatIdentity';
-import { useChatListScroll } from './useChatListScroll';
-import { useChatSession } from './useChatSession';
-import { useGuestChatSession } from './useGuestChatSession';
 import { usePendingChatNavHandoff } from './usePendingChatNavHandoff';
-import { usePinnedChats } from './usePinnedChats';
-import { appendVoiceTranscript, useVoiceDraft } from './useVoiceDraft';
-import { ChoiceChips } from './v2/ChoiceChips';
-import type { PendingFile } from './v2/pickAttachment';
 import { useSetupHandoff } from './useSetupHandoff';
-import { useProposalEditMode } from './useProposalEditMode';
-import { useStreamingTurn } from './v2/useStreamingTurn';
+import { useChatScreenController } from './useChatScreenController';
+import { ChoiceChips } from './v2/ChoiceChips';
 
 type Props = {
   isAuthenticated: boolean;
@@ -51,6 +35,7 @@ type Props = {
   onRequestLogin: () => void;
   onRequestRegister: () => void;
 };
+
 export function ChatScreen({
   isAuthenticated,
   onOpenArea,
@@ -58,124 +43,29 @@ export function ChatScreen({
   onRequestLogin,
   onRequestRegister,
 }: Props) {
-  const { tr, language } = useI18n();
-  const { colors } = useTheme();
-  const nav = useModuleNavOptional();
-  const owner = useChatSession(isAuthenticated);
-  const guest = useGuestChatSession(!isAuthenticated);
-  const [draft, setDraft] = useState('');
-  const { userId, workspaceLabel } = useChatIdentity(isAuthenticated, setDraft);
-  const { pinnedIds, togglePin } = usePinnedChats(userId);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [plusOpen, setPlusOpen] = useState(false);
-  const [authGate, setAuthGate] = useState(false);
-  const [hardLimit, setHardLimit] = useState(false);
-  const [offline, setOffline] = useState(false);
-  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
-  const [ownerMode, setOwnerMode] = useState<OwnerChatMode>('chat');
-  const promoteOwnerMode = useCallback((mode: OwnerChatMode) => { if (mode === 'work') setOwnerMode('work'); }, []);
-  const turn = useStreamingTurn(owner.conversationId, {
-    onTerminal: (opts) => owner.syncAfterTurn(opts),
-    onTitleUpdated: (title) => {
-      if (owner.conversationId) {
-        owner.applyConversationTitle(owner.conversationId, title, { onlyIfDefault: true });
-      }
-    },
-    onOwnerModeHint: promoteOwnerMode,
-  });
-  const { reviseProposalId, setReviseProposalId, ownerSendWithMode } = useProposalEditMode(ownerMode, setOwnerMode, turn.send);
-  const imagePreviewByContent = useRef<Record<string, string[]>>({});
-  const [choiceBusy, setChoiceBusy] = useState(false);
-  const composerInputRef = useRef<TextInput>(null);
-  const { listRef, stickToBottomRef, scrollToBottom, followBottomIfStuck, armOpenAtLatest } = useChatListScroll();
-  const credits = useBuyCreditsFlow(() => turn.clearCreditsPaused());
-  const voice = useVoiceDraft((text) => {
-    setDraft((prev) => appendVoiceTranscript(prev, text));
-    requestAnimationFrame(() => composerInputRef.current?.focus());
-  });
-  const authVoice = isAuthenticated ? voice : null;
-
-  const startNewChat = useCallback(() => {
-    if (!isAuthenticated) return;
-    Keyboard.dismiss();
-    composerInputRef.current?.blur();
-    stickToBottomRef.current = true;
-    setOwnerMode('chat');
-    setReviseProposalId(null);
-    if (turn.streaming) turn.stop();
-    void owner.newChat();
-  }, [isAuthenticated, owner, stickToBottomRef, turn]);
-
-  useEffect(() => {
-    if (guest.gated) {
-      setHardLimit(true);
-      setAuthGate(true);
-    }
-  }, [guest.gated]);
-
-  const archivedIds = useMemo(
-    () => owner.history.filter((h) => h.archived).map((h) => h.id),
-    [owner.history],
-  );
-
-  const loading = isAuthenticated ? owner.loading : guest.loading;
-  const messages = isAuthenticated ? owner.messages : guest.messages;
-  const sessionReady = isAuthenticated && !owner.loading && Boolean(owner.conversationId);
-  const sending = isAuthenticated ? turn.streaming || owner.loading : guest.sending;
-  const error = isAuthenticated ? owner.error : guest.error;
-  const listKey = isAuthenticated ? owner.conversationId || 'owner' : guest.guestId || 'guest';
-  // Greeting-seeded chats: show Chat|Work until first user message.
-  const hasUserMessage = messages.some((m) => m.role === 'user');
-  const showModeToggle = isAuthenticated && !hasUserMessage && !turn.liveText && !turn.streaming;
-
-  useEffect(() => {
-    if (loading) return;
-    armOpenAtLatest({ pinToLatest: hasUserMessage });
-  }, [armOpenAtLatest, hasUserMessage, loading, listKey]);
-
-  useEffect(() => {
-    followBottomIfStuck(false);
-  }, [
-    messages.length,
-    turn.thinking,
-    turn.liveText,
-    turn.statusRows.length,
-    turn.cards.length,
-    turn.choices.length,
-    followBottomIfStuck,
-  ]);
-
-  function openAuthPreservingDraft(hard = false) {
-    queueGuestDraft(draft);
-    setHardLimit(hard); setAuthGate(true);
-  }
-  function goToLoginPreservingDraft() {
-    Keyboard.dismiss();
-    queueGuestDraft(draft);
-    onRequestLogin();
-  }
+  const c = useChatScreenController(isAuthenticated, onRequestLogin);
 
   useSetupHandoff({
     isAuthenticated,
-    loading: owner.loading,
-    streaming: turn.streaming,
-    setDraft,
-    setOwnerMode,
+    loading: c.owner.loading,
+    streaming: c.turn.streaming,
+    setDraft: c.setDraft,
+    setOwnerMode: c.setOwnerMode,
     send: (text, mode) => {
-      stickToBottomRef.current = true;
-      void turn.send(text, { owner_mode: mode });
+      c.stickToBottomRef.current = true;
+      void c.turn.send(text, { owner_mode: mode });
     },
   });
 
   usePendingChatNavHandoff({
     isAuthenticated,
-    owner,
-    turn,
-    setOwnerMode,
+    owner: c.owner,
+    turn: c.turn,
+    setOwnerMode: c.setOwnerMode,
     stickToBottom: () => {
-      stickToBottomRef.current = true;
+      c.stickToBottomRef.current = true;
     },
-    afterOpen: () => armOpenAtLatest(),
+    afterOpen: () => c.armOpenAtLatest(),
   });
 
   return (
@@ -186,238 +76,238 @@ export function ChatScreen({
         keyboardVerticalOffset={0}
       >
         <View style={styles.flex}>
-        {showModeToggle && !drawerOpen ? (
-          <ChatModeToggle mode={ownerMode} onChange={setOwnerMode} />
+        {c.showModeToggle && !c.drawerOpen ? (
+          <ChatModeToggle mode={c.ownerMode} onChange={c.setOwnerMode} />
         ) : null}
 
         <ChatStatusBanners
-          offline={offline}
-          errorLabel={error ? tr(chatErrorLabelKey(error)) : null}
-          voiceError={voice.voiceError}
+          offline={c.offline}
+          errorLabel={c.error ? c.tr(chatErrorLabelKey(c.error)) : null}
+          voiceError={c.voice.voiceError}
           onRetry={() => {
-            setOffline(false);
+            c.setOffline(false);
             if (!isAuthenticated) {
-              guest.setError(null);
-              void guest.bootstrap();
+              c.guest.setError(null);
+              void c.guest.bootstrap();
               return;
             }
-            const err = owner.error;
-            owner.setError(null);
+            const err = c.owner.error;
+            c.owner.setError(null);
             if (err === 'messageFailed') return;
-            void owner.bootstrap();
+            void c.owner.bootstrap();
           }}
         />
 
-        {loading ? (
+        {c.loading ? (
           <View style={styles.center} accessibilityLabel="Loading conversation">
-            <ActivityIndicator color={colors.accent} />
+            <ActivityIndicator color={c.colors.accent} />
           </View>
         ) : (
           <ChatMessageList
-            listRef={listRef}
-            listKey={listKey}
-            messages={messages}
+            listRef={c.listRef}
+            listKey={c.listKey}
+            messages={c.messages}
             isAuthenticated={isAuthenticated}
-            stickToBottomRef={stickToBottomRef}
-            scrollToBottom={scrollToBottom}
-            followBottomIfStuck={followBottomIfStuck}
-            imagePreviewByContent={imagePreviewByContent}
-            thinking={turn.thinking || (!isAuthenticated && guest.sending)}
-            thinkingLabel={tr('chatThinking')}
-            statusRows={turn.statusRows}
-            liveText={turn.liveText}
-            cards={turn.cards}
-            proposedPatch={isAuthenticated ? owner.proposedPatch : null}
-            hasMore={isAuthenticated ? owner.hasMore : false}
-            loadingMore={isAuthenticated ? owner.loadingMore : false}
+            stickToBottomRef={c.stickToBottomRef}
+            scrollToBottom={c.scrollToBottom}
+            followBottomIfStuck={c.followBottomIfStuck}
+            imagePreviewByContent={c.imagePreviewByContent}
+            thinking={c.turn.thinking || (!isAuthenticated && c.guest.sending)}
+            thinkingLabel={c.tr('chatThinking')}
+            statusRows={c.turn.statusRows}
+            liveText={c.turn.liveText}
+            cards={c.turn.cards}
+            proposedPatch={isAuthenticated ? c.owner.proposedPatch : null}
+            hasMore={isAuthenticated ? c.owner.hasMore : false}
+            loadingMore={isAuthenticated ? c.owner.loadingMore : false}
             onLoadOlder={() => {
-              if (isAuthenticated) void owner.loadOlder();
+              if (isAuthenticated) void c.owner.loadOlder();
             }}
             onRetryAssistant={(content) =>
               retryAssistantMessage({
                 isAuthenticated,
-                streaming: turn.streaming,
-                guestSending: guest.sending,
-                guestGated: guest.gated,
+                streaming: c.turn.streaming,
+                guestSending: c.guest.sending,
+                guestGated: c.guest.gated,
                 content,
-                ownerSend: (text) => void ownerSendWithMode(text),
-                guestSend: (text) => void guest.send(text),
-                openAuth: () => openAuthPreservingDraft(true),
-                scrollToBottom,
+                ownerSend: (text) => void c.ownerSendWithMode(text),
+                guestSend: (text) => void c.guest.send(text),
+                openAuth: () => c.openAuthPreservingDraft(true),
+                scrollToBottom: c.scrollToBottom,
               })
             }
             onApproveDraft={(token, approveOpts) => {
-              setReviseProposalId(null);
-              void ownerSendWithMode('', buildApproveSendOpts(token, approveOpts));
+              c.setReviseProposalId(null);
+              void c.ownerSendWithMode('', buildApproveSendOpts(token, approveOpts));
             }}
             onDiscardProposal={(token) => {
-              owner.setProposedPatch(null);
-              owner.setPendingConfirm(null);
-              setReviseProposalId(null);
+              c.owner.setProposedPatch(null);
+              c.owner.setPendingConfirm(null);
+              c.setReviseProposalId(null);
               const d = buildDiscardSendOpts(token);
-              if (d) void ownerSendWithMode('', d);
+              if (d) void c.ownerSendWithMode('', d);
             }}
             onEditProposal={(id) => {
-              setReviseProposalId(id);
-              composerInputRef.current?.focus();
+              c.setReviseProposalId(id);
+              c.composerInputRef.current?.focus();
             }}
             onOpenCm={(r) => (r && onOpenCmReview ? onOpenCmReview(r) : onOpenArea('cm'))}
             onGuestPrompt={(prompt) => {
-              if (guest.gated) {
-                openAuthPreservingDraft(true);
+              if (c.guest.gated) {
+                c.openAuthPreservingDraft(true);
                 return;
               }
-              scrollToBottom();
-              void guest.send(prompt);
+              c.scrollToBottom();
+              void c.guest.send(prompt);
             }}
             showOwnerWelcomeChips={
-              isAuthenticated && !hasUserMessage && !turn.liveText && !turn.streaming
+              isAuthenticated && !c.hasUserMessage && !c.turn.liveText && !c.turn.streaming
             }
             onOwnerWelcomeChip={(chip) => {
-              if (turn.creditsPaused) return;
+              if (c.turn.creditsPaused) return;
               const mode = resolveOwnerModeForOutgoing(chip.mode, chip.prompt);
-              setOwnerMode(mode);
-              scrollToBottom();
-              void turn.send(chip.prompt, { owner_mode: mode, reply_language: language });
+              c.setOwnerMode(mode);
+              c.scrollToBottom();
+              void c.turn.send(chip.prompt, { owner_mode: mode, reply_language: c.language });
             }}
-            seedTypewriterMessageId={isAuthenticated ? owner.seedTypewriterMessageId : null}
-            onSeedTypewriterDone={owner.clearSeedTypewriter}
+            seedTypewriterMessageId={isAuthenticated ? c.owner.seedTypewriterMessageId : null}
+            onSeedTypewriterDone={c.owner.clearSeedTypewriter}
           />
         )}
 
         {isAuthenticated ? (
           <ChoiceChips
-            choices={turn.choices}
-            disabled={choiceBusy || turn.streaming || Boolean(turn.creditsPaused)}
-            onSelect={(c) => {
-              if (!turn.choiceSetId || choiceBusy) return;
-              setChoiceBusy(true);
-              scrollToBottom();
-              void ownerSendWithMode(c.label, {
-                choice_id: c.id,
-                choice_set_id: turn.choiceSetId,
-              }).finally(() => setChoiceBusy(false));
+            choices={c.turn.choices}
+            disabled={c.choiceBusy || c.turn.streaming || Boolean(c.turn.creditsPaused)}
+            onSelect={(choice) => {
+              if (!c.turn.choiceSetId || c.choiceBusy) return;
+              c.setChoiceBusy(true);
+              c.scrollToBottom();
+              void c.ownerSendWithMode(choice.label, {
+                choice_id: choice.id,
+                choice_set_id: c.turn.choiceSetId,
+              }).finally(() => c.setChoiceBusy(false));
             }}
           />
         ) : null}
 
         <PendingAttachmentsStrip
-          files={pendingFiles}
-          onRemove={(id) => setPendingFiles((prev) => prev.filter((f) => f.id !== id))}
+          files={c.pendingFiles}
+          onRemove={(id) => c.setPendingFiles((prev) => prev.filter((f) => f.id !== id))}
         />
 
-        {isAuthenticated && turn.creditsPaused ? (
+        {isAuthenticated && c.turn.creditsPaused ? (
           <CreditsPausedBanner
-            showUpgrade={turn.creditsPaused.showUpgrade}
-            onBuyCredits={() => credits.setOpen(true)}
-            onUpgrade={() => nav?.openChoosePlan()}
+            showUpgrade={c.turn.creditsPaused.showUpgrade}
+            onBuyCredits={() => c.credits.setOpen(true)}
+            onUpgrade={() => c.nav?.openChoosePlan()}
           />
         ) : null}
 
         <ChatComposer
-          draft={draft}
-          onChangeDraft={setDraft}
+          draft={c.draft}
+          onChangeDraft={c.setDraft}
           sending={
-            sending ||
-            (!isAuthenticated && guest.gated) ||
-            (isAuthenticated && !sessionReady) ||
-            Boolean(turn.creditsPaused)
+            c.sending ||
+            (!isAuthenticated && c.guest.gated) ||
+            (isAuthenticated && !c.sessionReady) ||
+            Boolean(c.turn.creditsPaused)
           }
-          canSendWithAttachment={pendingFiles.length > 0}
-          voiceState={authVoice?.voiceState ?? 'idle'}
-          elapsedMs={authVoice?.elapsedMs ?? 0}
-          metering={authVoice?.metering ?? null}
-          inputRef={composerInputRef}
+          canSendWithAttachment={c.pendingFiles.length > 0}
+          voiceState={c.authVoice?.voiceState ?? 'idle'}
+          elapsedMs={c.authVoice?.elapsedMs ?? 0}
+          metering={c.authVoice?.metering ?? null}
+          inputRef={c.composerInputRef}
           showPlus={isAuthenticated}
           showMic={isAuthenticated}
           showModelChip={isAuthenticated}
-          ownerMode={ownerMode}
-          onOwnerModeChange={setOwnerMode}
-          editChipActive={Boolean(reviseProposalId)}
-          onClearEditChip={() => setReviseProposalId(null)}
-          onPlus={() => setPlusOpen(true)}
-          onToggleVoice={() => void voice.toggleVoice()}
-          onResumeVoice={() => void voice.resumeVoice()}
-          onConfirmVoice={() => void voice.confirmVoice()}
-          onDiscardVoice={() => void voice.discardVoice()}
-          onStop={turn.streaming ? () => turn.stop() : undefined}
+          ownerMode={c.ownerMode}
+          onOwnerModeChange={c.setOwnerMode}
+          editChipActive={Boolean(c.reviseProposalId)}
+          onClearEditChip={() => c.setReviseProposalId(null)}
+          onPlus={() => c.setPlusOpen(true)}
+          onToggleVoice={() => void c.voice.toggleVoice()}
+          onResumeVoice={() => void c.voice.resumeVoice()}
+          onConfirmVoice={() => void c.voice.confirmVoice()}
+          onDiscardVoice={() => void c.voice.discardVoice()}
+          onStop={c.turn.streaming ? () => c.turn.stop() : undefined}
           onSend={() =>
             void sendChatMessage({
               isAuthenticated,
-              draft,
-              setDraft,
-              pendingFiles,
-              setPendingFiles,
-              voiceState: voice.voiceState,
-              conversationId: owner.conversationId,
-              guestGated: guest.gated,
-              guestSend: guest.send,
-              ownerSend: ownerSendWithMode,
-              appendOptimisticUser: owner.appendOptimisticUser,
-              removeOptimisticUser: owner.removeOptimisticUser,
-              autoTitleFromOutgoing: owner.autoTitleFromOutgoing,
-              openAuthPreservingDraft,
-              setOffline,
-              setSendError: (v) => (isAuthenticated ? owner.setError(v) : guest.setError(v)),
-              scrollToBottom,
-              imagePreviewByContent,
+              draft: c.draft,
+              setDraft: c.setDraft,
+              pendingFiles: c.pendingFiles,
+              setPendingFiles: c.setPendingFiles,
+              voiceState: c.voice.voiceState,
+              conversationId: c.owner.conversationId,
+              guestGated: c.guest.gated,
+              guestSend: c.guest.send,
+              ownerSend: c.ownerSendWithMode,
+              appendOptimisticUser: c.owner.appendOptimisticUser,
+              removeOptimisticUser: c.owner.removeOptimisticUser,
+              autoTitleFromOutgoing: c.owner.autoTitleFromOutgoing,
+              openAuthPreservingDraft: c.openAuthPreservingDraft,
+              setOffline: c.setOffline,
+              setSendError: (v) => (isAuthenticated ? c.owner.setError(v) : c.guest.setError(v)),
+              scrollToBottom: c.scrollToBottom,
+              imagePreviewByContent: c.imagePreviewByContent,
             })
           }
         />
         </View>
       </KeyboardAvoidingView>
-      {!drawerOpen ? (
+      {!c.drawerOpen ? (
         <ChatHeader
           onOpenMenu={() => {
             Keyboard.dismiss();
-            setDrawerOpen(true);
+            c.setDrawerOpen(true);
           }}
         />
       ) : null}
 
       <ChatScreenOverlays
-        drawerOpen={drawerOpen}
-        onCloseDrawer={() => setDrawerOpen(false)}
+        drawerOpen={c.drawerOpen}
+        onCloseDrawer={() => c.setDrawerOpen(false)}
         isAuthenticated={isAuthenticated}
         activeArea="chat"
-        history={owner.history}
-        archivedIds={archivedIds}
-        pinnedIds={pinnedIds}
-        activeId={owner.conversationId}
-        workspaceLabel={workspaceLabel}
+        history={c.owner.history}
+        archivedIds={c.archivedIds}
+        pinnedIds={c.pinnedIds}
+        activeId={c.owner.conversationId}
+        workspaceLabel={c.workspaceLabel}
         onOpenArea={onOpenArea}
-        onNewChat={() => { setDrawerOpen(false); startNewChat(); }}
+        onNewChat={() => { c.setDrawerOpen(false); c.startNewChat(); }}
         onOpenChat={(id) => {
-          stickToBottomRef.current = true;
-          void owner.openConversation(id).then(() => armOpenAtLatest());
+          c.stickToBottomRef.current = true;
+          void c.owner.openConversation(id).then(() => c.armOpenAtLatest());
         }}
-        onTogglePin={(id) => void togglePin(id)}
-        onArchive={(id) => void owner.setArchived(id, true)}
-        onUnarchive={(id) => void owner.setArchived(id, false)}
-        onRename={(id, title) => void owner.renameConversation(id, title)}
-        onDelete={(id) => void owner.deleteConversation(id)}
-        onLogin={goToLoginPreservingDraft}
+        onTogglePin={(id) => void c.togglePin(id)}
+        onArchive={(id) => void c.owner.setArchived(id, true)}
+        onUnarchive={(id) => void c.owner.setArchived(id, false)}
+        onRename={(id, title) => void c.owner.renameConversation(id, title)}
+        onDelete={(id) => void c.owner.deleteConversation(id)}
+        onLogin={c.goToLoginPreservingDraft}
         onRegister={onRequestRegister}
-        plusOpen={plusOpen}
-        onClosePlus={() => setPlusOpen(false)}
-        pendingFiles={pendingFiles}
-        setPendingFiles={setPendingFiles}
-        authGate={authGate}
-        hardLimit={hardLimit}
-        guestGated={guest.gated}
-        gateText={guest.gateText}
-        onCloseAuth={() => { setAuthGate(false); setHardLimit(false); }}
+        plusOpen={c.plusOpen}
+        onClosePlus={() => c.setPlusOpen(false)}
+        pendingFiles={c.pendingFiles}
+        setPendingFiles={c.setPendingFiles}
+        authGate={c.authGate}
+        hardLimit={c.hardLimit}
+        guestGated={c.guest.gated}
+        gateText={c.guest.gateText}
+        onCloseAuth={() => { c.setAuthGate(false); c.setHardLimit(false); }}
         onRequestLogin={onRequestLogin}
         onRequestRegister={onRequestRegister}
       />
       <BuyCreditsSheet
-        visible={credits.open}
-        prices={credits.prices}
-        purchasing={credits.purchasing}
-        locale={credits.locale}
-        tr={credits.tr}
-        onClose={() => credits.setOpen(false)}
-        onBuy={(pack) => void credits.buy(pack)}
+        visible={c.credits.open}
+        prices={c.credits.prices}
+        purchasing={c.credits.purchasing}
+        locale={c.credits.locale}
+        tr={c.credits.tr}
+        onClose={() => c.credits.setOpen(false)}
+        onBuy={(pack) => void c.credits.buy(pack)}
       />
     </GradientBackground>
   );

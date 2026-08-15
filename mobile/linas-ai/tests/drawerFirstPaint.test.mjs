@@ -18,6 +18,7 @@ import {
 } from '../src/features/nav/drawerSessionCache.ts';
 import { drawerTileBadge } from '../src/features/nav/drawerTileBadge.ts';
 import { visibleRecentItems } from '../src/features/nav/visibleRecentItems.ts';
+import { readChatScreenBundle } from './chatScreenBundle.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -96,13 +97,13 @@ describe('drawer paints cache immediately and hides chat chrome', () => {
   });
 
   it('hides hamburger and Chat/Work while the drawer is open', () => {
-    const chat = read('features/chat/ChatScreen.tsx');
+    const chat = readChatScreenBundle(read);
     const header = read('features/chat/ChatHeader.tsx');
     const toggle = read('features/chat/ChatModeToggle.tsx');
     const drawer = read('components/SideDrawer.tsx');
-    assert.match(chat, /\{\!drawerOpen \? \(/);
+    assert.match(chat, /\{\!c\.drawerOpen \? \(/);
     assert.match(chat, /<ChatHeader/);
-    assert.match(chat, /showModeToggle && !drawerOpen/);
+    assert.match(chat, /c\.showModeToggle && !c\.drawerOpen/);
     assert.match(header, /zIndex:\s*20/);
     assert.match(toggle, /zIndex:\s*15/);
     assert.match(drawer, /export const DRAWER_Z = 40/);

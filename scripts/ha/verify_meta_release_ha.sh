@@ -239,14 +239,21 @@ PY
 verify_operator_gates() {
   local repo_dir="$1"
 
-  "$repo_dir/venv/bin/python" - "$repo_dir/.env" <<'PY'
+  "$repo_dir/venv/bin/python" - "$repo_dir" "$repo_dir/.env" "$VERIFY_MODE" <<'PY'
 import sys
 from pathlib import Path
 
 from dotenv import dotenv_values
 
-values = dotenv_values(Path(sys.argv[1]), interpolate=False)
-registry_backend = str(values.get("META_APP_REGISTRY_BACKEND") or "").strip().lower()
+sys.path.insert(0, sys.argv[1])
+from services.meta_surface_secret_separation import (
+    COLLISION_EXIT,
+    operator_gate_allows_separation,
+)
+
+values = dotenv_values(Path(sys.argv[2]), interpolate=False)
+verify_mode = sys.argv[3]
+registry_backend = str(values.get("META_REGISTRY_BACKEND") or "").strip().lower()
 if registry_backend != "postgres":
     raise SystemExit("Meta app registry backend must be explicit postgres")
 lb_ready = str(values.get("META_HA_LB_READY_HEALTHCHECK_APPROVED") or "").strip().lower()
@@ -258,6 +265,9 @@ except ValueError as exc:
     raise SystemExit("HA drain interval is invalid") from exc
 if not 30 <= drain_seconds <= 300:
     raise SystemExit("HA drain interval is outside the approved range")
+coerced = {str(key): str(value or "") for key, value in values.items()}
+if not operator_gate_allows_separation(coerced, verify_mode=verify_mode):
+    raise SystemExit(COLLISION_EXIT)
 PY
 }
 

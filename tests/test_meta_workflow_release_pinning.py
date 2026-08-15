@@ -222,10 +222,13 @@ def test_ha_verifier_proves_live_api_and_worker_processes() -> None:
         "META_DELETION_NODE_ID",
         "META_DELETION_REQUIRED_NODES",
         'required != {"node01", "node02"}',
-        "META_APP_REGISTRY_BACKEND",
+        "META_REGISTRY_BACKEND",
         'registry_backend != "postgres"',
+        "operator_gate_allows_separation",
+        "COLLISION_EXIT",
     ):
         assert contract in source
+    assert ("META_APP_" + "REGISTRY_BACKEND") not in source
 
 
 def test_meta_environment_mutations_sync_the_peer_then_require_parity() -> None:
@@ -273,6 +276,8 @@ def test_release_only_preflight_enables_recovery_but_mutations_end_with_strict_p
     assert 'if [ "$verify_runtime_state" = "1" ]; then\n    verify_local_readiness' in verifier
     assert 'if [ "$verify_meta_environment" != "1" ]; then' in verifier
     assert 'VERIFY_MODE" = "cluster-release-only"' in verifier
+    assert "operator_gate_allows_separation" in verifier
+    assert "verify_mode = sys.argv[3]" in verifier
     for name in (
         "instagram-login-secrets-apply.yml",
         "meta-app-a-login-config-apply.yml",

@@ -67,7 +67,10 @@ async def test_typing_failure_does_not_abort_customer_reply_pipeline(capsys: pyt
     send_func: Callable[..., Awaitable[Any]] = unused_send
     action_func: Callable[[str], Awaitable[Any]] = failed_typing
     try:
-        with mock.patch.object(text_handlers_delayed, "_process_and_respond", side_effect=captured_process):
+        with (
+            mock.patch.object(text_handlers_delayed, "_process_and_respond", side_effect=captured_process),
+            mock.patch("services.ai_reply_turn_runtime.try_reserve_for_ai", return_value=True),
+        ):
             await text_handlers_delayed._delayed_process_messages(
                 user_id,
                 user_data,

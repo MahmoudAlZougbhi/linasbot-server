@@ -41,6 +41,30 @@ def sfu_db(tmp_path, monkeypatch):
     reset_engine_for_tests()
 
 
+@pytest.fixture()
+def sfu_credit_entitlement(tmp_path, monkeypatch):
+    """Provision active credits for SFU worker routing tests."""
+    from services.credit_ledger_service import CreditLedgerService
+    from services.entitlements_service import EntitlementsStore
+
+    store = EntitlementsStore(root=tmp_path / "sfu-ents")
+    monkeypatch.setattr("services.entitlements_service.entitlements_store", store)
+    monkeypatch.setattr("services.credit_ledger_service.entitlements_store", store)
+    monkeypatch.setattr("services.credit_ledger_pg_ops.entitlements_store", store)
+    ledger = CreditLedgerService(root=tmp_path / "sfu-ledger")
+    monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
+    monkeypatch.setattr(
+        "services.credit_ai_gate.ai_generation_blocked",
+        lambda *_a, **_k: False,
+    )
+
+    def grant(tenant_id: str) -> None:
+        store.set_plan(tenant_id=tenant_id, plan_id="starter", status="active", source="admin")
+        ledger.ensure_period_grant(tenant_id)
+
+    return grant
+
+
 def test_normalize_followup_channel():
     assert normalize_followup_channel("whatsapp") == SOURCE_CHANNEL_WHATSAPP_CLOUD
     assert normalize_followup_channel("instagram") == SOURCE_CHANNEL_INSTAGRAM_DM
@@ -151,7 +175,8 @@ def test_schedule_meta_stores_channel_context(sfu_db):
 
 
 @pytest.mark.asyncio
-async def test_meta_worker_routes_to_deliver_meta_dm(sfu_db):
+async def test_meta_worker_routes_to_deliver_meta_dm(sfu_db, sfu_credit_entitlement):
+    sfu_credit_entitlement("tenant_meta_send")
     update_settings(
         sfu_db,
         tenant_id="tenant_meta_send",
@@ -190,7 +215,7 @@ async def test_meta_worker_routes_to_deliver_meta_dm(sfu_db):
 
     with (
         patch(
-            "services.smart_followup.generation.generate_followup_text",
+            "services.smart_followup.worker_job.generate_followup_text",
             new=AsyncMock(return_value="Still need help?"),
         ),
         patch(
@@ -207,8 +232,6 @@ async def test_meta_worker_routes_to_deliver_meta_dm(sfu_db):
                 return_value=type("R", (), {"status": "sent", "provider_message_id": "mid-1", "error_redacted": None})()
             ),
         ),
-        patch("services.credit_ledger_service.credit_ledger_service.reserve", return_value="res-1"),
-        patch("services.credit_ledger_service.credit_ledger_service.capture", return_value=None),
     ):
         from services.smart_followup.worker import process_due_followup_jobs
 
