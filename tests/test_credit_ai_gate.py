@@ -24,6 +24,7 @@ def ledger_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CreditLedgerS
     monkeypatch.setattr("services.credit_ledger_pg_ops.entitlements_store", store)
     store.set_plan(tenant_id="clinic", plan_id="starter", status="active", source="admin")
     store.set_plan(tenant_id="linas", plan_id="max", status="active", source="admin")
+    store.set_plan(tenant_id="t_max", plan_id="max", status="active", source="admin")
     ledger = CreditLedgerService(root=tmp_path / "ledger")
     monkeypatch.setattr("services.credit_ledger_service.credit_ledger_service", ledger)
     return ledger
@@ -142,3 +143,92 @@ def test_copilot_pause_payload_hides_upgrade_on_max(ledger_env: CreditLedgerServ
     assert paused["actions"]["buy_credits"] is True
     clinic = owner_credits_paused_payload("clinic")
     assert clinic["show_upgrade"] is True
+
+
+def test_inflight_reserved_does_not_fund_new_owner_turn(ledger_env: CreditLedgerService) -> None:
+    """Strict gate: available=0 blocks Owner Copilot even if other turns hold reserved credits."""
+    ledger_env.ensure_period_grant("clinic")
+    stuck_rid = ledger_env.reserve(
+        tenant_id="clinic",
+        user_id=None,
+        credits=1,
+        operation_type="stuck_channel_turn",
+        request_id="stuck-reserve-1",
+    )
+    rest = ledger_env.get_balance("clinic")
+    if rest > 0:
+        drain_rid = ledger_env.reserve(
+            tenant_id="clinic",
+            user_id=None,
+            credits=rest,
+            operation_type="drain_for_reserve_test",
+            request_id="drain-strict",
+        )
+        ledger_env.capture(
+            tenant_id="clinic",
+            reservation_id=drain_rid,
+            provider_cost_usd=None,
+            model_provider="test",
+        )
+    assert stuck_rid
+    assert remaining_credits("clinic") == 0
+    assert ledger_env.get_reserved("clinic") >= 1
+    assert ai_generation_blocked("clinic") is True
+    assert ai_generation_blocked("clinic", honor_inflight_reserved=True) is False
+
+
+def test_owner_turn_credit_begin_blocks_at_zero(ledger_env: CreditLedgerService) -> None:
+    from services.owner_copilot_credit import owner_turn_credit_begin
+
+    _drain(ledger_env, "linas", "drain-owner-begin")
+    credit = owner_turn_credit_begin("linas", conversation_id="conv-1")
+    assert credit.blocked is True
+    assert credit.reservation_id is None
+
+
+def test_owner_turn_credit_begin_capture_debits_ledger(ledger_env: CreditLedgerService) -> None:
+    from services.owner_copilot_credit import (
+        owner_turn_credit_abort,
+        owner_turn_credit_begin,
+        owner_turn_credit_finalize,
+    )
+
+    ledger_env.ensure_period_grant("t_max")
+    before = remaining_credits("t_max")
+    credit = owner_turn_credit_begin("t_max", conversation_id="conv-max")
+    assert credit.blocked is False
+    assert credit.reservation_id
+    assert remaining_credits("t_max") == before - 1
+    owner_turn_credit_finalize(credit)
+    assert remaining_credits("t_max") == before - 1
+    assert ledger_env.get_reserved("t_max") == 0
+
+    credit2 = owner_turn_credit_begin("t_max", conversation_id="conv-max-2")
+    owner_turn_credit_abort(credit2)
+    assert remaining_credits("t_max") == before - 1
+
+
+@pytest.mark.asyncio
+async def test_max_plan_owner_copilot_emits_credits_paused_at_zero(
+    ledger_env: CreditLedgerService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from services.owner_copilot_v2.brain import iter_owner_turn_v2_events
+
+    _drain(ledger_env, "t_max", "drain-max-copilot")
+    monkeypatch.setenv("OWNER_COPILOT_V2", "1")
+
+    async def _must_not_run(**_kwargs):  # noqa: ANN001
+        raise AssertionError("model must not run at 0 credits")
+
+    monkeypatch.setattr("services.owner_copilot_v2.brain.iter_sol_tool_round", _must_not_run)
+
+    events: list[str] = []
+    async for ev in iter_owner_turn_v2_events(
+        tenant_id="t_max",
+        user_id="u1",
+        role="owner",
+        conversation_id="c1",
+        user_text="hello",
+    ):
+        events.append(ev.type)
+    assert events == ["credits_paused"]

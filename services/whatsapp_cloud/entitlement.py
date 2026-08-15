@@ -97,7 +97,7 @@ def evaluate_ai_eligibility(session: Session, conn: WhatsAppConnection) -> tuple
     try:
         from services.credit_ai_gate import ai_generation_blocked
 
-        if ai_generation_blocked(conn.tenant_id):
+        if ai_generation_blocked(conn.tenant_id, honor_inflight_reserved=True):
             return False, "insufficient_credits"
     except Exception:
         return False, "credits_unavailable"
