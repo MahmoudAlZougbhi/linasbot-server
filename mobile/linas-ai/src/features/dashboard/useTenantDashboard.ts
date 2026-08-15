@@ -40,16 +40,19 @@ export function useTenantDashboard(initialPeriod?: DashboardPeriodSelection) {
   const [refreshing, setRefreshing] = useState(false);
   const snapshotRef = useRef<TenantDashboard | null>(null);
   const requestIdRef = useRef(0);
-  const tz = defaultTz();
+  const periodRef = useRef(period);
+  periodRef.current = period;
+  const [tz] = useState(defaultTz);
 
   const load = useCallback(
     async (opts?: { soft?: boolean }) => {
       const requestId = ++requestIdRef.current;
       const soft = Boolean(opts?.soft);
+      const selected = periodRef.current;
       if (soft) setRefreshing(true);
       else if (!snapshotRef.current) setState({ kind: 'loading' });
       try {
-        const data = await fetchTenantDashboard(period, tz);
+        const data = await fetchTenantDashboard(selected, tz);
         if (requestId !== requestIdRef.current) return;
         snapshotRef.current = data;
         setState({
@@ -82,12 +85,12 @@ export function useTenantDashboard(initialPeriod?: DashboardPeriodSelection) {
         if (requestId === requestIdRef.current) setRefreshing(false);
       }
     },
-    [period, tz],
+    [tz],
   );
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, period]);
 
   const resetToDefaultPeriod = useCallback(() => {
     setPeriod((prev) => (isAllTimePeriod(prev) ? prev : DEFAULT_DASHBOARD_PERIOD));

@@ -8,6 +8,7 @@ import { BuyCreditsSheet } from '../billing/BuyCreditsSheet';
 import { useBuyCreditsFlow } from '../billing/useBuyCreditsFlow';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import { DASH_CANVAS } from './dashboardChrome';
+import { dashboardQueryRange } from './dashboardFormat';
 import type { DashboardNavigateTarget } from './dashboardTypes';
 import { ChannelActivityTable } from './sections/ChannelActivityTable';
 import { DashboardHeader } from './sections/DashboardHeader';
@@ -22,19 +23,11 @@ type Props = {
   active?: boolean;
 };
 
-function periodRangeIso(data: { period: { start: string; end: string } }): { start: string; end: string } {
-  const endDt = new Date(data.period.end);
-  endDt.setUTCDate(endDt.getUTCDate() - 1);
-  return {
-    start: data.period.start.slice(0, 10),
-    end: endDt.toISOString().slice(0, 10),
-  };
-}
-
 export function DashboardScreen({ onNavigate, active = true }: Props) {
   const { colors } = useTheme();
   const { tr, language } = useI18n();
   const { period, setPeriod, resetToDefaultPeriod, state, refreshing, refresh } = useTenantDashboard();
+  const queryRange = dashboardQueryRange(period);
   const [copilotExpanded, setCopilotExpanded] = useState(false);
   const credits = useBuyCreditsFlow(refresh);
 
@@ -92,8 +85,8 @@ export function DashboardScreen({ onNavigate, active = true }: Props) {
 
           <DashboardHeader
             period={period}
-            rangeStart={periodRangeIso(state.data).start}
-            rangeEnd={periodRangeIso(state.data).end}
+            rangeStart={queryRange.start}
+            rangeEnd={queryRange.end}
             onPeriodChange={setPeriod}
           />
 

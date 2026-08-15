@@ -79,6 +79,22 @@ test('presets resolve to custom start/end for activity queries', () => {
   assert.match(format, /getMonth\(\) - 12/);
 });
 
+test('Today is a full local calendar day and is queried as period=today', () => {
+  const api = read('features/dashboard/dashboardApi.ts');
+  const format = read('features/dashboard/dashboardFormat.ts');
+  const screen = read('features/dashboard/DashboardScreen.tsx');
+  assert.match(format, /isTodayPeriod/);
+  assert.match(format, /getFullYear\(\)/);
+  assert.match(format, /getDate\(\)/);
+  assert.doesNotMatch(format, /toISOString\(\)\.slice\(0, 10\)/);
+  assert.match(api, /isTodayPeriod\(period\)/);
+  assert.match(api, /params\.set\('period', 'today'\)/);
+  assert.match(screen, /dashboardQueryRange\(period\)/);
+  assert.doesNotMatch(screen, /setUTCDate/);
+  const localMidnight = new Date(2026, 7, 15, 0, 30);
+  assert.equal(ymd(localMidnight), '2026-08-15');
+});
+
 test('default period is All time encoded as custom 1970-01-01 through today', () => {
   const hook = read('features/dashboard/useTenantDashboard.ts');
   const format = read('features/dashboard/dashboardFormat.ts');
@@ -100,6 +116,7 @@ test('refresh keeps the last snapshot and does not treat missing activity as zer
   assert.match(hook, /if \(soft\) setRefreshing\(true\)/);
   assert.match(hook, /else if \(!snapshotRef\.current\) setState\(\{ kind: 'loading' \}\)/);
   assert.match(hook, /refresh: \(\) => load\(\{ soft: true \}\)/);
+  assert.match(hook, /periodRef\.current/);
   assert.match(hook, /if \(snapshotRef\.current\)/);
   assert.match(hook, /requestId !== requestIdRef\.current/);
   assert.match(grid, /unavailable \|\| value == null \? '—' : formatCount\(value\)/);

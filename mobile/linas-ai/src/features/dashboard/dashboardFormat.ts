@@ -10,6 +10,10 @@ export function isAllTimePeriod(period: DashboardPeriodSelection): boolean {
   return period.kind === 'preset' && period.id === 'all_time';
 }
 
+export function isTodayPeriod(period: DashboardPeriodSelection): boolean {
+  return period.kind === 'preset' && period.id === 'today';
+}
+
 export function ymdFromDate(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -40,7 +44,10 @@ export function resolvePresetRange(
 ): { start: string; end: string } {
   const end = todayIso(date);
   if (id === 'all_time') return { start: '1970-01-01', end }; // existing custom window; API has no `all` period
-  if (id === 'today') return { start: end, end };
+  if (id === 'today') {
+    // Inclusive local calendar day. Queries use period=today (tz), not this pair as exclusive end.
+    return { start: end, end };
+  }
   if (id === 'last_month') return lastCalendarMonthRange(date);
   if (id === 'last_6m') {
     const start = new Date(date.getFullYear(), date.getMonth() - 6, 1);

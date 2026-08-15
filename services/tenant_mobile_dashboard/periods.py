@@ -6,9 +6,9 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal, cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-DashboardPeriod = Literal["billing", "7d", "30d", "custom"]
+DashboardPeriod = Literal["billing", "7d", "30d", "custom", "today"]
 
-VALID_PERIODS: frozenset[str] = frozenset({"billing", "7d", "30d", "custom"})
+VALID_PERIODS: frozenset[str] = frozenset({"billing", "7d", "30d", "custom", "today"})
 
 
 class PeriodValidationError(ValueError):
@@ -44,6 +44,12 @@ def _parse_custom_date(raw: str | None, *, field: str) -> date:
         raise PeriodValidationError(f"Invalid custom {field} date: {raw!r}") from exc
 
 
+def _local_day_bounds(day: date, tz: ZoneInfo) -> tuple[datetime, datetime]:
+    """Inclusive local midnight → exclusive next local midnight."""
+    start_local = datetime(day.year, day.month, day.day, tzinfo=tz)
+    return start_local, start_local + timedelta(days=1)
+
+
 def resolve_period_window(
     *,
     period: DashboardPeriod,
@@ -57,15 +63,23 @@ def resolve_period_window(
     now_utc = now.astimezone(UTC) if now else datetime.now(UTC)
     local_now = now_utc.astimezone(tz)
 
-    if period == "custom":
+    if period == "today":
+        start_local, end_local = _local_day_bounds(local_now.date(), tz)
+        label = "Today"
+    elif period == "custom":
         start_day = _parse_custom_date(custom_start, field="start")
         end_day = _parse_custom_date(custom_end, field="end")
         if end_day < start_day:
             raise PeriodValidationError("Custom end date must be on or after start date")
-        start_local = datetime(start_day.year, start_day.month, start_day.day, tzinfo=tz)
-        end_local = datetime(end_day.year, end_day.month, end_day.day, tzinfo=tz) + timedelta(days=1)
-        if end_local > local_now + timedelta(days=1):
+        start_local, _ = _local_day_bounds(start_day, tz)
+        _, end_local = _local_day_bounds(end_day, tz)
+        # Never emit a zero-width or inverted window (same-day Today used to collapse).
+        if end_local <= start_local:
+            end_local = start_local + timedelta(days=1)
+        if end_local > local_now + timedelta(days=1) and start_local < local_now:
             end_local = local_now
+        if end_local <= start_local:
+            end_local = start_local + timedelta(days=1)
         label = "Custom range"
     elif period == "7d":
         start_local = local_now - timedelta(days=7)
