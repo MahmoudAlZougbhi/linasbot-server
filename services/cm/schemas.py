@@ -22,8 +22,10 @@ from services.cm.schemas_content import (  # noqa: F401
     ArticleAttachment,
     ArticleRecord,
     Audience,
+    BranchDaySchedule,
     BranchHours,
     BranchRecord,
+    BranchWeeklySchedule,
     CmBaseModel,
     CommentRule,
     CommentsSection,
@@ -153,6 +155,8 @@ class ServicesSection(CmBaseModel):
 class BranchesSection(CmBaseModel):
     items: list[BranchRecord] = Field(default_factory=list)
     policy_text: str = ""
+    timezone: str = "Asia/Beirut"
+    specific_off_rules: list[OffDayRule] = Field(default_factory=list)
     notes: str | None = None
 
 
