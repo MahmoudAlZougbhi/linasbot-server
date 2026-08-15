@@ -103,6 +103,7 @@ def process_signed_transaction(
             original_transaction_id=original_transaction_id,
             status=status,
             idempotency_key=f"apple:txn:{transaction_id}:{status}",
+            notification_type=notification_type,
         )
         expires = payload.get("expiresDate")
         try:

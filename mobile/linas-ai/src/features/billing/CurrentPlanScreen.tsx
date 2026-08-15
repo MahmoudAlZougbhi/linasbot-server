@@ -4,10 +4,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { StringKey } from '../../i18n';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import { CurrentPlanHeroCard } from './CurrentPlanHeroCard';
+import { PendingDowngradeBanner } from './PendingDowngradeBanner';
 import { PlanIncludedList } from './PlanIncludedList';
 import { PlanNotIncluded } from './PlanNotIncluded';
 import { SmartAnswersInfo } from './SmartAnswersInfo';
-import { PLAN_CATALOG, isHighestPlan, type PlanId } from './planCatalog';
+import type { PendingDowngrade } from './planChangeApi';
+import { PLAN_CATALOG, isHighestPlan, isLowestPlan, type PlanId } from './planCatalog';
 import { entitlementsForPlan, PLAN_NAME_KEY } from './planEntitlements';
 
 type Props = {
@@ -16,10 +18,14 @@ type Props = {
   priceLabel: string;
   renewsLabel: string;
   creditBalance: number | null;
+  pendingDowngrade: PendingDowngrade | null;
   locale: string;
   tr: (key: StringKey) => string;
   onBuyCredits: () => void;
   onUpgrade: () => void;
+  onDowngrade: () => void;
+  onCancelPendingDowngrade: () => void;
+  cancelingDowngrade: boolean;
 };
 
 export function CurrentPlanScreen({
@@ -28,10 +34,14 @@ export function CurrentPlanScreen({
   priceLabel,
   renewsLabel,
   creditBalance,
+  pendingDowngrade,
   locale,
   tr,
   onBuyCredits,
   onUpgrade,
+  onDowngrade,
+  onCancelPendingDowngrade,
+  cancelingDowngrade,
 }: Props) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -47,10 +57,20 @@ export function CurrentPlanScreen({
   );
   const includesTitle = tr('subWhatIncludes').replace('{plan}', tr(PLAN_NAME_KEY[planId]));
   const showUpgrade = !isHighestPlan(planId);
+  const showDowngrade = !isLowestPlan(planId) && !pendingDowngrade;
 
   return (
     <View style={styles.root}>
       <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+        {pendingDowngrade ? (
+          <PendingDowngradeBanner
+            pending={pendingDowngrade}
+            locale={locale}
+            tr={tr}
+            onCancel={onCancelPendingDowngrade}
+            canceling={cancelingDowngrade}
+          />
+        ) : null}
         <CurrentPlanHeroCard
           planId={planId}
           statusLabel={statusLabel}
@@ -85,6 +105,19 @@ export function CurrentPlanScreen({
             <Text style={[styles.ctaText, { color: colors.onAccent }]}>{tr('subUpgradePlan')}</Text>
           </Pressable>
         ) : null}
+        {showDowngrade ? (
+          <Pressable
+            onPress={onDowngrade}
+            accessibilityRole="button"
+            accessibilityLabel={tr('subDowngradePlan')}
+            style={({ pressed }) => [
+              styles.ctaSecondary,
+              { borderColor: colors.border, opacity: pressed ? 0.88 : 1 },
+            ]}
+          >
+            <Text style={[styles.ctaSecondaryText, { color: colors.text }]}>{tr('subDowngradePlan')}</Text>
+          </Pressable>
+        ) : null}
         <Text style={[styles.footNote, { color: colors.textMuted }]}>{tr('subCreditsRefreshNote')}</Text>
       </View>
     </View>
@@ -101,6 +134,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   ctaText: { fontFamily: fonts.bodyMedium, fontSize: 16, fontWeight: '700' },
+  ctaSecondary: {
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  ctaSecondaryText: { fontFamily: fonts.bodyMedium, fontSize: 16, fontWeight: '700' },
   footNote: {
     fontFamily: fonts.body,
     fontSize: 12,

@@ -122,3 +122,14 @@ export function isHighestPlan(id: string | null | undefined): boolean {
 export function planRank(id: PlanId): number {
   return PLAN_ORDER.indexOf(id);
 }
+
+export function isLowestPlan(id: string | null | undefined): boolean {
+  const rank = PLAN_ORDER.indexOf((id || '').trim().toLowerCase() as PlanId);
+  return rank === 0;
+}
+
+export function plansBelow(current: PlanId): PlanId[] {
+  const rank = planRank(current);
+  if (rank <= 0) return [];
+  return PLAN_ORDER.slice(0, rank);
+}

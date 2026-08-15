@@ -18,6 +18,11 @@ from services.iap_product_catalog import (
     map_subscription_product,
 )
 from services.store_iap_service import normalize_apple_status
+from services.subscription_downgrade import (
+    clear_pending_downgrade,
+    schedule_pending_downgrade,
+    should_schedule_instead_of_apply,
+)
 
 
 def lookup_tenant_by_app_account_token(app_account_token: str) -> tuple[str, str] | None:
@@ -91,8 +96,33 @@ def apply_subscription_effect(
     original_transaction_id: str,
     status: EntitlementStatus,
     idempotency_key: str,
+    notification_type: str | None = None,
 ) -> dict[str, Any]:
     plan_id = map_subscription_product(product_id)
+    existing = entitlements_store.get(tenant_id)
+    if should_schedule_instead_of_apply(
+        current_plan_id=existing.plan_id,
+        target_plan_id=plan_id,
+        status=status,
+        notification_type=notification_type,
+    ):
+        scheduled = schedule_pending_downgrade(
+            tenant_id=tenant_id,
+            pending_plan_id=plan_id,
+            effective_at=existing.current_period_end,
+        )
+        return {
+            "kind": "subscription",
+            "plan_id": plan_id,
+            "status": status,
+            "scheduled_downgrade": True,
+            "pending_downgrade": scheduled,
+            "duplicate": False,
+        }
+
+    if status == "active":
+        clear_pending_downgrade(tenant_id)
+
     result = apply_store_notification(
         tenant_id=tenant_id,
         plan_id=plan_id,  # type: ignore[arg-type]
@@ -100,6 +130,7 @@ def apply_subscription_effect(
         source="apple",
         original_transaction_id=original_transaction_id,
         idempotency_key=idempotency_key,
+        force_apply=True,
     )
     return {"kind": "subscription", "plan_id": plan_id, "status": status, **result}
 

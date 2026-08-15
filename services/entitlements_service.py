@@ -73,6 +73,8 @@ class TenantEntitlement:
     features: dict[str, bool]
     updated_at: float
     store_original_transaction_id: str | None = None
+    pending_plan_id: str | None = None
+    pending_plan_effective_at: float | None = None
 
 
 class EntitlementsStore:
@@ -150,6 +152,8 @@ class EntitlementsStore:
             features=dict(PLAN_FEATURES.get(plan_id, {})),
             updated_at=time.time(),
             store_original_transaction_id=store_original_transaction_id,
+            pending_plan_id=existing.pending_plan_id,
+            pending_plan_effective_at=existing.pending_plan_effective_at,
         )
         return self.save(ent)
 
@@ -201,6 +205,9 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
         from services.membership.plan_catalog import require_plan
 
         display_name = require_plan(plan_id).display_name
+    from services.subscription_downgrade import pending_downgrade_public
+
+    pending = pending_downgrade_public(ent)
     return {
         "tenant_id": ent.tenant_id,
         "plan_id": ent.plan_id,
@@ -228,6 +235,7 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
         "subscription_required": not exempt,
         "subscription_exempt": exempt,
         "iap_purchase_in_app": False,
+        "pending_downgrade": pending,
         # Omit iap_note entirely — JSON null previously broke mobile Zod
         # (z.string().optional rejects null) and fail-closed the subscription gate.
     }
@@ -251,8 +259,75 @@ def apply_store_notification(
     source: str,
     original_transaction_id: str,
     idempotency_key: str,
+    force_apply: bool = False,
 ) -> dict[str, Any]:
     """Idempotent entitlement update from Apple/Google server notifications."""
+    from services.subscription_downgrade import (
+        clear_pending_downgrade,
+        is_downgrade,
+        schedule_pending_downgrade,
+    )
+
+    existing = entitlements_store.get(tenant_id)
+    active_like = status in {"active", "trial", "grace"}
+    if not force_apply and active_like and is_downgrade(existing.plan_id, plan_id):
+        scheduled = schedule_pending_downgrade(
+            tenant_id=tenant_id,
+            pending_plan_id=plan_id,
+            effective_at=existing.current_period_end,
+        )
+        if billing_uses_postgres():
+            from services.entitlements_pg_store import mark_processed_event, processed_event_exists
+
+            with require_billing_pg_session() as session:
+                if processed_event_exists(session, idempotency_key):
+                    return {
+                        "duplicate": True,
+                        "scheduled_downgrade": True,
+                        "entitlement": get_tenant_entitlement_public(tenant_id),
+                    }
+        else:
+            processed_dir = Path(_DATA_ROOT) / "entitlements" / "processed_events"
+            processed_dir.mkdir(parents=True, exist_ok=True)
+            marker = processed_dir / f"{idempotency_key}.json"
+            if marker.is_file():
+                return {
+                    "duplicate": True,
+                    "scheduled_downgrade": True,
+                    "entitlement": get_tenant_entitlement_public(tenant_id),
+                }
+
+        if billing_uses_postgres():
+            with require_billing_pg_session() as session:
+                mark_processed_event(
+                    session,
+                    idempotency_key=idempotency_key,
+                    tenant_id=tenant_id,
+                    meta={"event_id": idempotency_key, "uuid": uuid.uuid4().hex, "scheduled_downgrade": True},
+                )
+        else:
+            marker.write_text(
+                json.dumps(
+                    {
+                        "tenant_id": tenant_id,
+                        "event_id": idempotency_key,
+                        "ts": time.time(),
+                        "uuid": uuid.uuid4().hex,
+                        "scheduled_downgrade": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
+        return {
+            "duplicate": False,
+            "scheduled_downgrade": True,
+            **scheduled,
+            "entitlement": get_tenant_entitlement_public(tenant_id),
+        }
+
+    if active_like and existing.pending_plan_id:
+        if plan_id == existing.pending_plan_id or not is_downgrade(existing.plan_id, plan_id):
+            clear_pending_downgrade(tenant_id)
     if billing_uses_postgres():
         from services.entitlements_pg_store import mark_processed_event, processed_event_exists
 

@@ -24,6 +24,8 @@ def row_to_dict(row: TenantEntitlementRow) -> dict[str, Any]:
         "features": dict(row.features or {}),
         "updated_at": float(row.updated_at or 0),
         "store_original_transaction_id": row.store_original_transaction_id,
+        "pending_plan_id": row.pending_plan_id,
+        "pending_plan_effective_at": row.pending_plan_effective_at,
     }
 
 
@@ -50,6 +52,8 @@ def save_entitlement(session: Session, data: dict[str, Any]) -> dict[str, Any]:
     row.features = dict(data.get("features") or {})
     row.updated_at = now
     row.store_original_transaction_id = data.get("store_original_transaction_id")
+    row.pending_plan_id = data.get("pending_plan_id")
+    row.pending_plan_effective_at = data.get("pending_plan_effective_at")
     session.flush()
     return row_to_dict(row)
 

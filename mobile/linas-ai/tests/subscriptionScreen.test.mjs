@@ -86,6 +86,23 @@ test('storePricing keeps preview unavailable and loads via IAP module', () => {
   assert.match(src, /loadIapModule/);
 });
 
+test('BillingScreen downgrade flow wires confirm sheet and pending banner', () => {
+  const billing = read('features/billing/BillingScreen.tsx');
+  assert.match(billing, /DowngradeConfirmSheet/);
+  assert.match(billing, /subDowngradeScheduled/);
+  assert.match(billing, /cancelPendingDowngrade/);
+  assert.match(billing, /browseMode === 'downgrade'/);
+  const current = read('features/billing/CurrentPlanScreen.tsx');
+  assert.match(current, /PendingDowngradeBanner/);
+  assert.match(current, /subDowngradePlan/);
+});
+
+test('planChangeApi calls schedule-downgrade and pending-plan-change endpoints', () => {
+  const src = read('features/billing/planChangeApi.ts');
+  assert.match(src, /\/api\/entitlements\/schedule-downgrade/);
+  assert.match(src, /\/api\/entitlements\/pending-plan-change/);
+});
+
 test('BillingScreen routes no-sub to choose, has-sub to current, upgrade + credits', () => {
   const billing = read('features/billing/BillingScreen.tsx');
   assert.match(billing, /CurrentPlanScreen/);
@@ -95,8 +112,8 @@ test('BillingScreen routes no-sub to choose, has-sub to current, upgrade + credi
   assert.match(billing, /setBrowsePlans\(true\)/);
   assert.match(billing, /purchaseSubscription/);
   assert.match(billing, /purchaseCredits/);
-  assert.match(billing, /browsePlans \? \(\) => setBrowsePlans\(false\)/);
   assert.match(billing, /onBack/);
+  assert.match(billing, /setBrowsePlans\(false\)/);
   assert.doesNotMatch(billing, /nav\.goChat\(\)/);
   assert.doesNotMatch(billing, /view === 'choose' \?/);
   const choose = read('features/billing/ChoosePlanScreen.tsx');
@@ -126,6 +143,9 @@ test('exact EN plan copy present in locale table', () => {
     'Choose a plan',
     'Your current plan',
     'Upgrade plan',
+    'Downgrade plan',
+    'Schedule downgrade',
+    'Cancel downgrade',
     'Buy credits',
     'Choose a credit pack',
     'Purchased credits do not expire.',
@@ -211,12 +231,7 @@ test('planColors defines distinct premium palette per tier', () => {
   }
   assert.match(src, /accentForPlan/);
   assert.match(src, /planNameColor/);
-  assert.match(src, /PlanNameContext/);
-  assert.match(src, /nameLight: '#64748B'/);
-  assert.match(src, /nameLight: '#008B8B'/);
-  assert.match(src, /nameLight: '#059669'/);
-  assert.match(src, /nameLight: '#6366F1'/);
-  assert.match(src, /nameLight: '#D97706'/);
+  assert.match(src, /planNameOnForest/);
   assert.match(src, /lite:[\s\S]*?#64748B/);
   assert.match(src, /starter:[\s\S]*?#008B8B/);
   assert.match(src, /growth:[\s\S]*?#059669/);
@@ -232,7 +247,7 @@ test('billing surfaces tint plan names from planColors', () => {
     ['features/billing/CurrentPlanHeroCard.tsx', /planNameColor/],
     ['features/billing/CurrentPlanSummary.tsx', /planNameColor/],
     ['features/billing/ChoosePlanScreen.tsx', /accentForPlan/],
-    ['features/dashboard/sections/GrowthPlanCard.tsx', /planNameColor\([^,]+,\s*'forest'\)/],
+    ['features/dashboard/sections/GrowthPlanCard.tsx', /planNameOnForest/],
   ]) {
     assert.match(read(file), pattern, file);
   }

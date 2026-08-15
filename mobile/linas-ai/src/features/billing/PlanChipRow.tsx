@@ -9,12 +9,14 @@ import { PLAN_NAME_KEY } from './planEntitlements';
 type Props = {
   selected: PlanId;
   currentPlan: PlanId | null;
+  visiblePlans?: PlanId[];
   tr: (key: StringKey) => string;
   onSelect: (id: PlanId) => void;
 };
 
-export function PlanChipRow({ selected, currentPlan, tr, onSelect }: Props) {
+export function PlanChipRow({ selected, currentPlan, visiblePlans, tr, onSelect }: Props) {
   const { colors, resolved } = useTheme();
+  const plans = visiblePlans ?? PLAN_ORDER;
   return (
     <View style={styles.wrap}>
       <ScrollView
@@ -22,7 +24,7 @@ export function PlanChipRow({ selected, currentPlan, tr, onSelect }: Props) {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.row}
       >
-        {PLAN_ORDER.map((id) => {
+        {plans.map((id) => {
           const active = id === selected;
           const isCurrent = id === currentPlan;
           const planAccent = accentForPlan(id);

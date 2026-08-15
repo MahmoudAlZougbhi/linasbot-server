@@ -14,6 +14,10 @@ from services.apple_iap_effects import (
 )
 from services.apple_jws import decode_jws_payload
 from services.entitlements_service import EntitlementStatus, entitlements_store
+from services.subscription_downgrade import (
+    is_downgrade,
+    schedule_pending_downgrade,
+)
 from services.iap_product_catalog import is_subscription_product
 
 
@@ -123,6 +127,7 @@ def decode_and_apply_renewal_info(
             original_transaction_id=original_transaction_id,
             status=status_to_apply,
             idempotency_key=f"apple:renewal:{ntype}:{original_transaction_id}:{status_to_apply}",
+            notification_type=notification_type,
         )
         period_end = _ms_to_epoch(grace_ms if status_to_apply == "grace" else renewal_date_ms)
         if period_end is not None:
@@ -132,11 +137,34 @@ def decode_and_apply_renewal_info(
                 entitlements_store.save(ent)
                 effect = {**effect, "current_period_end": period_end}
 
+    pending_downgrade: dict[str, Any] | None = None
+    renew_product = str(auto_renew_product_id or "").strip()
+    if tid and renew_product and is_subscription_product(renew_product):
+        from services.iap_product_catalog import map_subscription_product
+
+        try:
+            renew_plan = map_subscription_product(renew_product)
+        except ValueError:
+            renew_plan = None
+        ent = entitlements_store.get(tid)
+        if renew_plan and is_downgrade(ent.plan_id, renew_plan):
+            effective = _ms_to_epoch(renewal_date_ms) or ent.current_period_end
+            pending_downgrade = schedule_pending_downgrade(
+                tenant_id=tid,
+                pending_plan_id=renew_plan,
+                effective_at=effective,
+            )
+            if effect is None:
+                effect = {"scheduled_downgrade": True, "pending_downgrade": pending_downgrade}
+            else:
+                effect = {**effect, "pending_downgrade": pending_downgrade}
+
     return {
         "renewal_info": info,
         "hints": hints,
         "tenant_id": tid,
         "effect": effect,
+        "pending_downgrade": pending_downgrade,
         # Explicit: decoding renewal info is never an activating event by itself.
         "forced_active": False,
     }
