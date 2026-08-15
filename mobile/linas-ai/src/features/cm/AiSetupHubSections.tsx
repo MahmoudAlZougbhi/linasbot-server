@@ -33,14 +33,15 @@ export function AiSetupHubSections({ tiles, statusBySection, onOpenSection, onOp
               />
             );
           }
+          const { tile } = row.item;
           return (
             <AiSetupSectionTile
-              key={key}
+              key={tile.id}
               kind="section"
-              tile={row.item.tile}
+              tile={tile}
               variant="full"
               statusBySection={statusBySection}
-              onPress={() => onOpenSection(row.item.tile.id)}
+              onPress={() => onOpenSection(tile.id)}
             />
           );
         }
