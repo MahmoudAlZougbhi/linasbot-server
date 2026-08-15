@@ -232,9 +232,7 @@ def test_expired_durable_visible_lease_is_reclaimable(tmp_path, monkeypatch, acc
     assert runtime_b.record.state == OperationState.DURABLE_VISIBLE
 
 
-def test_stale_worker_abandon_does_not_touch_successor_lease(
-    tmp_path, monkeypatch, acceptance_pg_ha_env
-) -> None:
+def test_stale_worker_abandon_does_not_touch_successor_lease(tmp_path, monkeypatch, acceptance_pg_ha_env) -> None:
     """Stale runtime A cannot expire B's lease via abandon_operation_lease after reclaim."""
     monkeypatch.setenv("WEB_CHAT_PUBLIC_AVAILABILITY", "true")
     patch_acceptance_eligibility(monkeypatch, tmp_path)
