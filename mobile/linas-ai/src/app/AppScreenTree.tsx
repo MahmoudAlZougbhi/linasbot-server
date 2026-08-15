@@ -12,6 +12,8 @@ import { CmSectionScreen } from '../features/cm/CmSectionScreen';
 import { AddProductScreen } from '../features/products/AddProductScreen';
 import { ProductsImportScreen } from '../features/products/ProductsImportScreen';
 import { ProductsScreen } from '../features/products/ProductsScreen';
+import { AddServiceScreen } from '../features/services/AddServiceScreen';
+import { ServicesScreen } from '../features/services/ServicesScreen';
 import type { CmProposalReview } from '../features/cm/cmProposalReview';
 import type { ControlArea } from '../features/control/controlAreas';
 import { DashboardScreen } from '../features/dashboard/DashboardScreen';
@@ -166,7 +168,13 @@ export function AppScreenTree({
       </KeepMountedPane>
       <KeepMountedPane key={`cm-${authEpoch}`} active={name === 'cm'}>
         <CmScreen
-          onOpenSection={(section) => setScreen({ name: 'cm_section', section, backTo: 'cm' })}
+          onOpenSection={(section) => {
+            if (section === 'prices') {
+              setScreen({ name: 'services', backTo: 'cm' });
+              return;
+            }
+            setScreen({ name: 'cm_section', section, backTo: 'cm' });
+          }}
           onOpenProducts={() => setScreen({ name: 'products', backTo: 'cm' })}
           onContinueSetup={(prompt) => {
             queueSetupHandoff({ text: prompt, mode: 'work', autoSend: true });
@@ -214,6 +222,29 @@ export function AppScreenTree({
           productId={screen.productId}
           onBack={() => setScreen({ name: 'products', backTo: 'cm' })}
           onSaved={() => setScreen({ name: 'products', backTo: 'cm' })}
+        />
+      ) : null}
+
+      {name === 'services' ? (
+        <ServicesScreen
+          onBack={screen.backTo === 'cm' ? () => setScreen({ name: 'cm' }) : undefined}
+          onAdd={() => setScreen({ name: 'services_add', backTo: 'services' })}
+          onEdit={(serviceId) =>
+            setScreen({ name: 'services_edit', serviceId, backTo: 'services' })
+          }
+        />
+      ) : null}
+      {name === 'services_add' ? (
+        <AddServiceScreen
+          onBack={() => setScreen({ name: 'services', backTo: screen.backTo })}
+          onSaved={() => setScreen({ name: 'services', backTo: screen.backTo })}
+        />
+      ) : null}
+      {name === 'services_edit' ? (
+        <AddServiceScreen
+          serviceId={screen.serviceId}
+          onBack={() => setScreen({ name: 'services', backTo: screen.backTo })}
+          onSaved={() => setScreen({ name: 'services', backTo: screen.backTo })}
         />
       ) : null}
 

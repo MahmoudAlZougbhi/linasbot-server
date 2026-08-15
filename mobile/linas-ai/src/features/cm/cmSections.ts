@@ -84,8 +84,8 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
   },
   {
     id: 'prices',
-    title: 'Prices',
-    description: 'Build reusable price list catalogs.',
+    title: 'Services & Prices',
+    description: 'Services with machine, body part, staff options and prices.',
     mobileSupported: true,
   },
   {
