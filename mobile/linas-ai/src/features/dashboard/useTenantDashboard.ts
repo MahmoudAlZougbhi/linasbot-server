@@ -7,6 +7,7 @@ import {
 } from './dashboardApi';
 import {
   DEFAULT_DASHBOARD_PERIOD,
+  dashboardPeriodKey,
   isAllTimePeriod,
   type DashboardPeriodSelection,
 } from './dashboardFormat';
@@ -39,22 +40,35 @@ export function useTenantDashboard(initialPeriod?: DashboardPeriodSelection) {
   const [state, setState] = useState<DashboardLoadState>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
   const snapshotRef = useRef<TenantDashboard | null>(null);
+  const snapshotPeriodKeyRef = useRef<string | null>(null);
   const requestIdRef = useRef(0);
   const periodRef = useRef(period);
   periodRef.current = period;
+  const periodKey = dashboardPeriodKey(period);
   const [tz] = useState(defaultTz);
 
   const load = useCallback(
     async (opts?: { soft?: boolean }) => {
       const requestId = ++requestIdRef.current;
-      const soft = Boolean(opts?.soft);
       const selected = periodRef.current;
-      if (soft) setRefreshing(true);
-      else if (!snapshotRef.current) setState({ kind: 'loading' });
+      const selectedKey = dashboardPeriodKey(selected);
+      const hasMatchingSnapshot =
+        snapshotRef.current != null && snapshotPeriodKeyRef.current === selectedKey;
+      const soft = Boolean(opts?.soft) && hasMatchingSnapshot;
+      if (soft) {
+        setRefreshing(true);
+      } else {
+        if (!hasMatchingSnapshot) {
+          snapshotRef.current = null;
+          snapshotPeriodKeyRef.current = null;
+        }
+        setState({ kind: 'loading' });
+      }
       try {
         const data = await fetchTenantDashboard(selected, tz);
         if (requestId !== requestIdRef.current) return;
         snapshotRef.current = data;
+        snapshotPeriodKeyRef.current = selectedKey;
         setState({
           kind: 'ready',
           data,
@@ -66,11 +80,11 @@ export function useTenantDashboard(initialPeriod?: DashboardPeriodSelection) {
         if (requestId !== requestIdRef.current) return;
         const code = classifyDashboardError(err);
         const message = dashboardErrorMessage(err);
-        if (code === 'forbidden' && !snapshotRef.current) {
+        if (code === 'forbidden' && !hasMatchingSnapshot) {
           setState({ kind: 'forbidden', message });
           return;
         }
-        if (snapshotRef.current) {
+        if (hasMatchingSnapshot && snapshotRef.current) {
           setState({
             kind: 'ready',
             data: snapshotRef.current,
@@ -90,7 +104,7 @@ export function useTenantDashboard(initialPeriod?: DashboardPeriodSelection) {
 
   useEffect(() => {
     void load();
-  }, [load, period]);
+  }, [load, periodKey]);
 
   const resetToDefaultPeriod = useCallback(() => {
     setPeriod((prev) => (isAllTimePeriod(prev) ? prev : DEFAULT_DASHBOARD_PERIOD));
