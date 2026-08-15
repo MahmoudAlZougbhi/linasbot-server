@@ -110,7 +110,10 @@ test('drawer Smart Follow-Up tile uses short Follow up labels', () => {
   assert.match(ar, /navSmartFollowUp:\s*'المتابعة',/);
   assert.match(fr, /navSmartFollowUp:\s*'Relance',/);
   assert.doesNotMatch(en, /navSmartFollowUp:\s*'Smart Follow-Up'/);
-  assert.match(en, /sfuTitle:\s*'Smart Follow-Up',/);
+  assert.match(en, /sfuTitle:\s*'Follow up',/);
+  assert.match(ar, /sfuTitle:\s*'المتابعة',/);
+  assert.match(fr, /sfuTitle:\s*'Relance',/);
+  assert.doesNotMatch(en, /sfuTitle:\s*'Smart Follow-Up'/);
 });
 
 test('drawer, Dashboard, and Settings use Smart Q&A product name', () => {
