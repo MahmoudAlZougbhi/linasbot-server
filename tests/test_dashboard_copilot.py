@@ -9,7 +9,7 @@ from pathlib import Path
 from services.owner_ai_model_router import OwnerChatUsageTracker, RouteDecision
 from services.owner_chat_store import OwnerChatStore
 from services.tenant_mobile_dashboard.activity import build_activity_summary
-from services.tenant_mobile_dashboard.copilot import build_owner_copilot_summary, credits_from_tokens
+from services.tenant_mobile_dashboard.copilot import build_owner_copilot_summary, credits_from_tokens, _safe_ts
 
 
 def _route() -> RouteDecision:
@@ -37,6 +37,46 @@ def test_credits_from_tokens_matches_log_estimate() -> None:
     assert credits_from_tokens(0) == 0
     assert credits_from_tokens(100) == 1
     assert credits_from_tokens(250) == 2
+
+
+def test_safe_ts_ignores_corrupt_conversation_timestamps() -> None:
+    assert _safe_ts("not-a-number") == 0.0
+    assert _safe_ts(None) == 0.0
+    assert _safe_ts(1_700_000_000) == 1_700_000_000.0
+
+
+def test_copilot_survives_corrupt_conversation_meta(tmp_path: Path, monkeypatch) -> None:
+    store = OwnerChatStore(root=tmp_path / "owner_chat")
+    monkeypatch.setattr(
+        "services.tenant_mobile_dashboard.copilot.owner_chat_usage_tracker",
+        OwnerChatUsageTracker(root=tmp_path / "usage"),
+    )
+    conv = store.create_conversation(tenant_id="acme", user_id="u1", greeting_text="Hi")
+    store.append_message(
+        tenant_id="acme",
+        user_id="u1",
+        conversation_id=conv.id,
+        role="user",
+        content="Hello",
+    )
+    path = store._conv_path("acme", conv.id)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["updated_at"] = "corrupt"
+    payload["created_at"] = "also-bad"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    now = time.time()
+    summary = build_owner_copilot_summary(
+        "acme",
+        start_ts=now - 86400,
+        end_ts=now + 60,
+        log_credits_by_conversation={},
+        log_credits_unmapped=0,
+        log_interactions=0,
+        store=store,
+    )
+    assert summary["chats"] == 0
+    assert summary["credits"] == 0
 
 
 def test_copilot_per_user_rows_sum_to_footer(tmp_path: Path, monkeypatch) -> None:

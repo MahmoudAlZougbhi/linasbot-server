@@ -23,6 +23,12 @@ def messages_include_user_turn(messages: Any) -> bool:
     return any(isinstance(m, dict) and str(m.get("role") or "") == "user" for m in messages)
 
 
+def _safe_ts(raw: Any) -> float:
+    try:
+        return float(raw or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
 def is_default_conversation_title(title: str | None) -> bool:
     cleaned = (title or "").strip()
     return not cleaned or cleaned in {DEFAULT_CONVERSATION_TITLE, "Chat", "Untitled"}
@@ -286,8 +292,8 @@ class OwnerChatStore:
                     {
                         "id": str(data.get("id") or path.stem),
                         "user_id": str(data.get("user_id") or "").strip(),
-                        "created_at": float(data.get("created_at") or 0),
-                        "updated_at": float(data.get("updated_at") or 0),
+                        "created_at": _safe_ts(data.get("created_at")),
+                        "updated_at": _safe_ts(data.get("updated_at")),
                         "has_user_message": messages_include_user_turn(data.get("messages")),
                     }
                 )

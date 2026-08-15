@@ -157,10 +157,16 @@ test('changing the date range clears the snapshot and refetches for the new key'
   assert.match(format, /export function dashboardPeriodKey/);
   assert.match(format, /custom:\$\{period\.start\}:\$\{period\.end\}/);
   assert.match(format, /preset:\$\{period\.id\}/);
+  assert.match(hook, /const applyPeriod = useCallback/);
+  assert.match(hook, /setPeriod: applyPeriod/);
+  assert.match(hook, /if \(nextKey !== dashboardPeriodKey\(periodRef\.current\)\)/);
+  assert.match(hook, /setState\(\{ kind: 'loading' \}\)/);
+  assert.match(hook, /periodKey: selectedKey/);
+  assert.match(hook, /state\.periodKey !== periodKey/);
+  assert.match(hook, /stateForPeriod/);
   assert.match(hook, /if \(!hasMatchingSnapshot\)/);
   assert.match(hook, /snapshotRef\.current = null/);
   assert.match(hook, /snapshotPeriodKeyRef\.current = null/);
-  assert.match(hook, /setState\(\{ kind: 'loading' \}\)/);
   assert.match(hook, /const periodKey = dashboardPeriodKey\(period\)/);
   assert.doesNotMatch(hook, /else if \(!snapshotRef\.current\) setState/);
 });

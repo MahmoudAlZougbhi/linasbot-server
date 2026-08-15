@@ -15,6 +15,13 @@ def credits_from_tokens(tokens: int) -> int:
     return max(1, round(int(tokens) / 100))
 
 
+def _safe_ts(raw: Any) -> float:
+    try:
+        return float(raw or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _display_name(user: dict[str, Any] | None, user_id: str) -> str:
     if isinstance(user, dict):
         for key in ("displayName", "name", "email"):
@@ -62,7 +69,7 @@ def build_owner_copilot_summary(
             conv_to_user[cid] = uid
         if not meta.get("has_user_message"):
             continue
-        active_at = max(float(meta.get("updated_at") or 0), float(meta.get("created_at") or 0))
+        active_at = max(_safe_ts(meta.get("updated_at")), _safe_ts(meta.get("created_at")))
         if active_at < start_ts or active_at >= end_ts:
             continue
         if uid:

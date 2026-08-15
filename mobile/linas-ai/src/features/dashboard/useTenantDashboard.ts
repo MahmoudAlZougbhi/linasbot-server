@@ -18,6 +18,7 @@ export type DashboardLoadState =
   | {
       kind: 'ready';
       data: TenantDashboard;
+      periodKey: string;
       stale: boolean;
       refreshError: string | null;
       refreshErrorCode: 'auth' | 'forbidden' | 'offline' | 'other' | null;
@@ -72,6 +73,7 @@ export function useTenantDashboard(initialPeriod?: DashboardPeriodSelection) {
         setState({
           kind: 'ready',
           data,
+          periodKey: selectedKey,
           stale: false,
           refreshError: null,
           refreshErrorCode: null,
@@ -88,6 +90,7 @@ export function useTenantDashboard(initialPeriod?: DashboardPeriodSelection) {
           setState({
             kind: 'ready',
             data: snapshotRef.current,
+            periodKey: selectedKey,
             stale: true,
             refreshError: message,
             refreshErrorCode: code,
@@ -106,15 +109,29 @@ export function useTenantDashboard(initialPeriod?: DashboardPeriodSelection) {
     void load();
   }, [load, periodKey]);
 
-  const resetToDefaultPeriod = useCallback(() => {
-    setPeriod((prev) => (isAllTimePeriod(prev) ? prev : DEFAULT_DASHBOARD_PERIOD));
+  const applyPeriod = useCallback((next: DashboardPeriodSelection) => {
+    const nextKey = dashboardPeriodKey(next);
+    if (nextKey !== dashboardPeriodKey(periodRef.current)) {
+      snapshotRef.current = null;
+      snapshotPeriodKeyRef.current = null;
+      setState({ kind: 'loading' });
+    }
+    setPeriod(next);
   }, []);
+
+  const resetToDefaultPeriod = useCallback(() => {
+    if (isAllTimePeriod(periodRef.current)) return;
+    applyPeriod(DEFAULT_DASHBOARD_PERIOD);
+  }, [applyPeriod]);
+
+  const stateForPeriod =
+    state.kind === 'ready' && state.periodKey !== periodKey ? { kind: 'loading' as const } : state;
 
   return {
     period,
-    setPeriod,
+    setPeriod: applyPeriod,
     resetToDefaultPeriod,
-    state,
+    state: stateForPeriod,
     refreshing,
     refresh: () => load({ soft: true }),
     reload: () => load({ soft: false }),
