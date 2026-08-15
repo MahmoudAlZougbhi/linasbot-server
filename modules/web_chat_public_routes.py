@@ -136,8 +136,7 @@ async def web_chat_bootstrap_session(
         "session_id": session.id,
         "channel": "web",
         "messages": [
-            {"id": m.id, "role": m.role, "content": m.content, "created_at": m.created_at}
-            for m in session.messages
+            {"id": m.id, "role": m.role, "content": m.content, "created_at": m.created_at} for m in session.messages
         ],
         "ai_available": eligible,
         "config": build_public_widget_config(widget, eligible=eligible),

@@ -46,7 +46,7 @@ def compute_color_histogram(content: bytes, bins: int = 16) -> list[float]:
             pixels = list(rgb.getdata())
     except Exception:
         digest = hashlib.sha256(content).digest()
-        return [float(b) / 255.0 for b in digest[:bins * 3]]
+        return [float(b) / 255.0 for b in digest[: bins * 3]]
     hist = [0.0] * (bins * 3)
     step = 256 / bins
     for r, g, b in pixels:

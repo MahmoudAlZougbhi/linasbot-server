@@ -291,7 +291,7 @@ class LanguageDetectionService:
         prompt = (
             "You are an expert translator for a laser clinic customer-service bot.\n"
             "Translate the answer into the requested target language.\n"
-            "Return strict JSON only: {\"answer\": \"...\"}.\n"
+            'Return strict JSON only: {"answer": "..."}.\n'
             "Rules:\n"
             f"- Target language code: {target}.\n"
             f"- Source language code: {source}.\n"

@@ -32,7 +32,7 @@ async def vision_rerank_candidates(
             "type": "text",
             "text": (
                 "Customer sent a product image. Pick the best matching catalog candidate or none. "
-                "Return JSON only: {\"product_id\": \"...\"|null, \"confidence\": \"high|medium|low\"}."
+                'Return JSON only: {"product_id": "..."|null, "confidence": "high|medium|low"}.'
             ),
         },
         {

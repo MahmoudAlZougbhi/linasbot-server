@@ -210,15 +210,8 @@ def assess_section_fill(
 
         raw_items = payload.get("items")
         items: list[Any] = list(raw_items) if isinstance(raw_items, list) else []
-        active = [
-            it
-            for it in items
-            if isinstance(it, dict) and it.get("enabled", True) is not False
-        ]
-        ok = any(
-            greeting_rule_has_text(it) and greeting_rule_trigger_ok(it)
-            for it in active
-        )
+        active = [it for it in items if isinstance(it, dict) and it.get("enabled", True) is not False]
+        ok = any(greeting_rule_has_text(it) and greeting_rule_trigger_ok(it) for it in active)
         if not ok and not _nonempty(payload.get("notes")):
             gaps.append("greeting_rule_with_trigger_and_text")
     elif name == "services":

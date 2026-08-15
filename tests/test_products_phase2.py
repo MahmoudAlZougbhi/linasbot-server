@@ -221,12 +221,15 @@ def test_hard_delete_clears_context_and_reply(products_env: Path) -> None:
         )
         svc.delete_product(tenant_id="tenant-del", product_id=product["id"])
         assert get_active_product(session, tenant_id="tenant-del", conversation_id="conv-del") is None
-        assert resolve_reply_to_product(
-            session,
-            tenant_id="tenant-del",
-            channel="web_chat",
-            reply_to_message_id="msg-del",
-        ) is None
+        assert (
+            resolve_reply_to_product(
+                session,
+                tenant_id="tenant-del",
+                channel="web_chat",
+                reply_to_message_id="msg-del",
+            )
+            is None
+        )
 
 
 def test_crv2_active_context_tool(products_env: Path) -> None:

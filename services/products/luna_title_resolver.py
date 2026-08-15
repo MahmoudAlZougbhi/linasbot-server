@@ -44,7 +44,7 @@ async def resolve_product_titles_with_luna(
     titles = [{"product_id": row.id, "title": row.name} for row in rows]
     system = (
         "You resolve a customer product title query against a bounded catalog title list. "
-        "Return JSON only: {\"product_ids\": [\"id\", ...]} with at most "
+        'Return JSON only: {"product_ids": ["id", ...]} with at most '
         f"{min(limit, MAX_MATCHES)} best matches. Titles only — never invent products."
     )
     user = json.dumps({"query": query_text, "titles": titles}, ensure_ascii=False)

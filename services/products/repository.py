@@ -88,12 +88,16 @@ class ProductsRepository:
         return row
 
     def replace_images(self, *, tenant_id: str, product_id: str, images: list[dict[str, Any]]) -> None:
-        existing = self.session.execute(
-            select(ProductImage).where(
-                ProductImage.tenant_id == tenant_id,
-                ProductImage.product_id == product_id,
+        existing = (
+            self.session.execute(
+                select(ProductImage).where(
+                    ProductImage.tenant_id == tenant_id,
+                    ProductImage.product_id == product_id,
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for row in existing:
             self.session.delete(row)
         self.session.flush()
@@ -111,12 +115,16 @@ class ProductsRepository:
         self.session.flush()
 
     def replace_links(self, *, tenant_id: str, product_id: str, links: list[dict[str, Any]]) -> None:
-        existing = self.session.execute(
-            select(ProductLink).where(
-                ProductLink.tenant_id == tenant_id,
-                ProductLink.product_id == product_id,
+        existing = (
+            self.session.execute(
+                select(ProductLink).where(
+                    ProductLink.tenant_id == tenant_id,
+                    ProductLink.product_id == product_id,
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for row in existing:
             self.session.delete(row)
         self.session.flush()
@@ -167,11 +175,7 @@ class ProductsRepository:
         filters = [Product.tenant_id == tenant_id]
         if customer_facing:
             filters.append(Product.availability.in_(list(CUSTOMER_SEARCH_AVAILABILITY)))
-        stmt = (
-            select(Product)
-            .where(*filters)
-            .options(selectinload(Product.images), selectinload(Product.links))
-        )
+        stmt = select(Product).where(*filters).options(selectinload(Product.images), selectinload(Product.links))
         return list(self.session.execute(stmt).scalars().all())
 
     def find_by_link_url(self, *, tenant_id: str, normalized_url: str) -> Product | None:

@@ -111,20 +111,18 @@ def normalize_appearance(raw: dict[str, Any] | None) -> dict[str, Any]:
     bubbles = raw.get("bubbles") if isinstance(raw.get("bubbles"), dict) else {}
     launcher = raw.get("launcher") if isinstance(raw.get("launcher"), dict) else {}
 
-    base["identity"]["display_name"] = _clamp_text(
-        identity.get("display_name"), max_len=80
-    ) or base["identity"]["display_name"]
+    base["identity"]["display_name"] = (
+        _clamp_text(identity.get("display_name"), max_len=80) or base["identity"]["display_name"]
+    )
     base["identity"]["logo_url"] = _clamp_text(identity.get("logo_url"), max_len=500)
-    base["identity"]["welcome_message"] = _clamp_text(
-        identity.get("welcome_message"), max_len=500
-    ) or base["identity"]["welcome_message"]
+    base["identity"]["welcome_message"] = (
+        _clamp_text(identity.get("welcome_message"), max_len=500) or base["identity"]["welcome_message"]
+    )
     base["identity"]["subtitle"] = _clamp_text(identity.get("subtitle"), max_len=120)
 
     mode = str(theme.get("mode") or base["theme"]["mode"]).lower()
     base["theme"]["mode"] = mode if mode in _ALLOWED["theme.mode"] else base["theme"]["mode"]
-    base["theme"]["accent_color"] = _normalize_hex(
-        theme.get("accent_color"), base["theme"]["accent_color"]
-    )
+    base["theme"]["accent_color"] = _normalize_hex(theme.get("accent_color"), base["theme"]["accent_color"])
 
     for key, fallback_key in (
         ("assistant_bg", "assistant_bg"),
@@ -132,9 +130,7 @@ def normalize_appearance(raw: dict[str, Any] | None) -> dict[str, Any]:
         ("visitor_bg", "visitor_bg"),
         ("visitor_text", "visitor_text"),
     ):
-        base["bubbles"][key] = _normalize_hex(
-            bubbles.get(key), DEFAULT_APPEARANCE["bubbles"][fallback_key]
-        )
+        base["bubbles"][key] = _normalize_hex(bubbles.get(key), DEFAULT_APPEARANCE["bubbles"][fallback_key])
 
     for section, field, allowed in (
         ("layout", "position", "layout.position"),
@@ -145,9 +141,7 @@ def normalize_appearance(raw: dict[str, Any] | None) -> dict[str, Any]:
         base[section][field] = val if val in _ALLOWED[allowed] else base[section][field]
 
     launcher_mode = str(launcher.get("mode") or base["launcher"]["mode"]).lower()
-    base["launcher"]["mode"] = (
-        launcher_mode if launcher_mode in _ALLOWED["launcher.mode"] else base["launcher"]["mode"]
-    )
+    base["launcher"]["mode"] = launcher_mode if launcher_mode in _ALLOWED["launcher.mode"] else base["launcher"]["mode"]
     base["launcher"]["text"] = _clamp_text(launcher.get("text"), max_len=40) or base["launcher"]["text"]
     return base
 

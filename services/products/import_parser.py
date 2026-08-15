@@ -47,11 +47,13 @@ def normalize_import_row(raw: dict[str, Any], *, row_number: int) -> dict[str, A
         price = f"{price} {currency}"
 
     image_urls = [
-        u for u in [
+        u
+        for u in [
             normalized.get("image_url_1") or "",
             normalized.get("image_url_2") or "",
             normalized.get("image_url_3") or "",
-        ] if u
+        ]
+        if u
     ][:3]
 
     links: list[dict[str, Any]] = []

@@ -129,7 +129,9 @@ async def process_web_chat_message(
             request_id=f"web:{visitor_id}:{int(asyncio.get_event_loop().time() * 1000)}",
         )
     except PermissionError as exc:
-        raise WebChatError("insufficient_credits", "AI replies are paused until credits are available.", status_code=402) from exc
+        raise WebChatError(
+            "insufficient_credits", "AI replies are paused until credits are available.", status_code=402
+        ) from exc
 
     reply_text = ""
     try:

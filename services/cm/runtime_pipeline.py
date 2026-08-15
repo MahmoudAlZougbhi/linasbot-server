@@ -178,9 +178,7 @@ async def prepare_response(
         qa_pair = tiered_match.get("qa_pair") or {}
         tier = tiered_match.get("tier") or "direct"
         answer = str(qa_pair.get("answer") or "")
-        matched_language = str(
-            tiered_match.get("matched_language") or qa_pair.get("language") or detected_language
-        )
+        matched_language = str(tiered_match.get("matched_language") or qa_pair.get("language") or detected_language)
         from services.faq_answer_localize import localize_faq_answer
 
         localized = await localize_faq_answer(

@@ -76,9 +76,7 @@ async def try_faq_fast_path(
         qa = tiered.get("qa_pair") or {}
         answer = str(qa.get("answer") or "").strip()
         if answer:
-            matched_language = str(
-                tiered.get("matched_language") or qa.get("language") or detected_language
-            )
+            matched_language = str(tiered.get("matched_language") or qa.get("language") or detected_language)
             localized, meta = await _localized_answer(
                 answer=answer,
                 matched_language=matched_language,
