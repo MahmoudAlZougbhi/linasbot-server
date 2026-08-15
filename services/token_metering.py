@@ -32,8 +32,16 @@ def resolve_tenant_id(user_data: dict[str, Any] | None = None, explicit: str | N
 
 
 def assert_tenant_can_use_ai(tenant_id: str | None) -> None:
-    """Raise InsufficientTokenBalance when either input or output bucket is empty."""
+    """Raise when credit ledger remaining is 0, or a metered token bucket is empty.
+
+    Founder ``linas`` may skip prepaid *token* buckets. It does not skip the credit
+    ledger — remaining 0 blocks generation for every tenant.
+    """
     tid = resolve_tenant_id(explicit=tenant_id)
+    from services.credit_ai_gate import ai_generation_blocked
+
+    if ai_generation_blocked(tid):
+        raise PermissionError("Insufficient credits")
     if is_unlimited_tenant(tid):
         return
     token_wallet_service.ensure_ai_allowed(tid, require_at_least=1)

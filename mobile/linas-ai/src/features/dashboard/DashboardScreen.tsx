@@ -94,7 +94,7 @@ export function DashboardScreen({ onNavigate, active = true }: Props) {
             plan={state.data.plan_and_credits}
             locale={language === 'ar' ? 'ar' : language === 'fr' ? 'fr' : 'en'}
             onBuyCredits={() => credits.setOpen(true)}
-            onUpgrade={() => onNavigate('subscription')}
+            onUpgrade={() => onNavigate('choose_plan')}
           />
 
           <TotalActivityGrid

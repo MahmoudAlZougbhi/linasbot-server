@@ -66,8 +66,9 @@ export function resolveDashboardAction(code: string | null | undefined): Dashboa
       return 'integrations';
     case 'renew_subscription':
     case 'manage_subscription':
-    case 'upgrade_plan':
       return 'subscription';
+    case 'upgrade_plan':
+      return 'choose_plan';
     case 'buy_credits':
       return 'buy_credits';
     case 'review_faq':

@@ -31,6 +31,7 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
   const [cards, setCards] = useState<StreamCard[]>([]);
   const [choices, setChoices] = useState<StreamChoice[]>([]);
   const [choiceSetId, setChoiceSetId] = useState<string | null>(null);
+  const [creditsPaused, setCreditsPaused] = useState<{ showUpgrade: boolean } | null>(null);
   const pendingConfirmRef = useRef<string | null>(null);
 
   const resetUi = useCallback(() => {
@@ -60,12 +61,13 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
         owner_mode?: 'chat' | 'work';
         reply_language?: 'en' | 'ar' | 'fr';
       },
-    ): Promise<'done' | 'error' | 'network_error' | 'cancelled' | 'skipped'> => {
+    ): Promise<'done' | 'error' | 'network_error' | 'cancelled' | 'skipped' | 'credits_paused'> => {
       if (!conversationId) return 'skipped';
       resetUi();
       setCards([]);
       setChoices([]);
       setChoiceSetId(null);
+      setCreditsPaused(null);
       setThinking(true);
       let confirmTool = opts?.confirm_tool ?? null;
       const reviseId = opts?.revise_proposal_id?.trim() || null;
@@ -120,6 +122,14 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
             resetUi();
             void hooksRef.current.onTerminal();
           },
+          onCreditsPaused: (payload) => {
+            const actions = (payload.actions as Record<string, unknown> | undefined) || {};
+            setCreditsPaused({
+              showUpgrade: payload.show_upgrade === true || actions.upgrade_plan === true,
+            });
+            resetUi();
+            void hooksRef.current.onTerminal();
+          },
           onDone: (payload) => {
             applyTitle(payload);
             const nextPending = pendingTokenFromDonePayload(payload);
@@ -157,5 +167,7 @@ export function useStreamingTurn(conversationId: string | null, hooks: TurnHooks
     cards,
     choices,
     choiceSetId,
+    creditsPaused,
+    clearCreditsPaused: () => setCreditsPaused(null),
   };
 }

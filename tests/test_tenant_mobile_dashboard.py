@@ -179,11 +179,25 @@ def test_zero_credits_vs_missing_credit_data(ledger_env: EntitlementsStore, monk
     payload = build_tenant_mobile_dashboard(tenant_id="t_zero", user_id="u1", period_raw="30d", timezone_raw="UTC")
     assert payload["plan_and_credits"]["availability"] == "ok"
     assert payload["plan_and_credits"]["available_credits"] == 0
+    assert payload["plan_and_credits"]["actions"]["upgrade_plan"] is True
     assert payload["workspace_status"]["state"] == "credits_depleted"
     blob = json.dumps(payload).lower()
     assert "cost_usd" not in blob
     assert "provider_cost" not in blob
     assert payload["privacy"]["excludes_openai_usd"] is True
+
+
+def test_max_plan_hides_upgrade_action(ledger_env: EntitlementsStore) -> None:
+    ledger_env.set_plan(tenant_id="t_max", plan_id="max", status="active", source="admin")
+    from services.credit_ledger_service import credit_ledger_service
+    from services.tenant_mobile_dashboard.compose import _plan_and_credits
+
+    credit_ledger_service.ensure_period_grant("t_max")
+    section = _plan_and_credits("t_max")
+    assert section["availability"] == "ok"
+    assert section["plan_id"] == "max"
+    assert section["actions"]["upgrade_plan"] is False
+    assert section["actions"]["buy_credits"] is True
 
 
 def test_no_subscription_status(ledger_env: EntitlementsStore, monkeypatch: pytest.MonkeyPatch) -> None:

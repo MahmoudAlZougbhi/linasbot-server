@@ -17,7 +17,7 @@ type OwnerTurnSend = (
     confirm_tool?: string | null;
     owner_mode?: 'chat' | 'work';
   },
-) => Promise<'done' | 'error' | 'network_error' | 'cancelled' | 'skipped'>;
+) => Promise<'done' | 'error' | 'network_error' | 'cancelled' | 'skipped' | 'credits_paused'>;
 
 type Args = {
   isAuthenticated: boolean;
@@ -167,6 +167,11 @@ export async function sendChatMessage(args: Args): Promise<void> {
   if (result === 'cancelled') {
     // Stop leaves partial turn; keep draft cleared (user chose stop).
     setOffline(false);
+    return;
+  }
+  if (result === 'credits_paused') {
+    setOffline(false);
+    setSendError(null);
     return;
   }
   setOffline(false);

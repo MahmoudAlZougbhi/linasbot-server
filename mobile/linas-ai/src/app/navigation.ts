@@ -14,7 +14,7 @@ export type Screen =
   | { name: 'integrations' }
   | { name: 'users' }
   | { name: 'dashboard' }
-  | { name: 'billing' }
+  | { name: 'billing'; browsePlans?: boolean }
   | { name: 'livechat'; open?: LiveChatOpen | null }
   | { name: 'requests' }
   | { name: 'notifications'; backTo?: 'chat' | 'settings' }

@@ -217,17 +217,17 @@ async def mobile_usage(request: Request) -> Any:
     """
 
     session = require_session(request)
-    credit_ledger_service.ensure_period_grant(session.tenant_id)
+    from services.credit_ai_gate import remaining_credits
     from services.entitlements_service import entitlements_store
     from services.plan_economics import PLAN_PRICES_USD, recommend_allowance
 
-    ent = entitlements_store.get(session.tenant_id)
-    available = int(credit_ledger_service.get_balance(session.tenant_id))
+    available = remaining_credits(session.tenant_id)
     reserved = 0
     try:
         reserved = int(credit_ledger_service.get_reserved(session.tenant_id))
     except Exception:
         reserved = 0
+    ent = entitlements_store.get(session.tenant_id)
     limit = int(ent.included_credits + ent.extra_credits)
     if limit <= 0 and ent.plan_id in PLAN_PRICES_USD:
         limit = int(recommend_allowance(ent.plan_id).included_credits)

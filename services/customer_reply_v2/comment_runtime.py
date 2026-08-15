@@ -112,6 +112,17 @@ async def run_customer_reply_v2_comment(
     if not comments_enabled:
         return CustomerReplyOutcome(stop=True, reason="comments_toggle_off", reply=None)
 
+    from services.credit_ai_gate import ai_generation_blocked
+
+    if ai_generation_blocked(tenant_id):
+        return CustomerReplyOutcome(
+            stop=True,
+            reply=None,
+            reason="insufficient_credits",
+            evidence_status="policy_stop",
+            metadata={"ai_called": False, "cost_status": "none", "flags": flags_snapshot()},
+        )
+
     from services.cm.language_policy import ensure_customer_languages
 
     detected_language, response_language = ensure_customer_languages(

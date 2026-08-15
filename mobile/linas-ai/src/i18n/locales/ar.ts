@@ -44,6 +44,8 @@ export const ar = {
   chatEmptyBody:
     'بقدر ساعدك بكل شي. هالتطبيق هو مدير مجتمعك بالذكاء الاصطناعي لصفحات السوشال ميديا تبعك.',
   chatThinking: 'جارٍ التفكير…',
+  chatCreditsPausedTitle: 'ما في رصيد كافٍ',
+  chatCreditsPausedBody: 'مساعد المالك متوقف إلى أن تشتري رصيد. ردود الذكاء الاصطناعي على القنوات متوقفة أيضاً.',
   chatYouLabel: 'أنت',
   chatLinasLabel: 'Linas',
   guestChatEmptyTitle: 'أهلاً بك في Linas AI',

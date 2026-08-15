@@ -9,6 +9,8 @@ export function screenForDashboardTarget(target: DashboardNavigateTarget): Scree
     case 'subscription':
     case 'buy_credits':
       return { name: 'billing' };
+    case 'choose_plan':
+      return { name: 'billing', browsePlans: true };
     case 'integrations':
       return { name: 'integrations' };
     case 'cm':

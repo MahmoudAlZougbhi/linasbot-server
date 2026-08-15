@@ -212,6 +212,7 @@ async def test_stream_events_thinking_then_deltas(monkeypatch: pytest.MonkeyPatc
         yield ("result", ToolRoundResult(content="Hello from Sol.", tool_calls=[]))
 
     monkeypatch.setattr("services.owner_copilot_v2.brain.iter_sol_tool_round", _fake_tool_round)
+    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
 
     events = []
     texts: list[str] = []
@@ -230,6 +231,31 @@ async def test_stream_events_thinking_then_deltas(monkeypatch: pytest.MonkeyPatc
     assert events.count("delta") >= 2
     assert "".join(texts) == "Hello from Sol."
     assert events[-1] == "done"
+
+
+@pytest.mark.asyncio
+async def test_zero_credits_does_not_call_owner_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.owner_copilot_v2.brain import iter_owner_turn_v2_events
+
+    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: True)
+    called = {"n": 0}
+
+    async def _fake_tool_round(**kwargs: Any):
+        called["n"] += 1
+        yield ("delta", "should-not-run")
+
+    monkeypatch.setattr("services.owner_copilot_v2.brain.iter_sol_tool_round", _fake_tool_round)
+    events: list[str] = []
+    async for ev in iter_owner_turn_v2_events(
+        tenant_id="clinic-zero",
+        user_id="u1",
+        role="admin",
+        conversation_id="c1",
+        user_text="hello",
+    ):
+        events.append(ev.type)
+    assert events == ["credits_paused"]
+    assert called["n"] == 0
 
 
 @pytest.mark.asyncio

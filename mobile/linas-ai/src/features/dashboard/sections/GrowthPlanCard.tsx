@@ -11,6 +11,7 @@ import {
   DASH_MINT_SOFT,
   DASH_TRACK,
 } from '../dashboardChrome';
+import { isHighestPlan } from '../../billing/planCatalog';
 import { formatCount, formatRenewDate } from '../dashboardFormat';
 import type { TenantDashboard } from '../dashboardTypes';
 
@@ -49,6 +50,7 @@ export function GrowthPlanCard({ plan, locale, onBuyCredits, onUpgrade }: Props)
   const renews = formatRenewDate(plan.current_period_end, locale);
   const active = plan.has_subscription || plan.subscription_exempt;
   const displayRatio = limit > 0 ? Math.max(0, Math.min(1, used / limit)) : ratio;
+  const showUpgrade = !isHighestPlan(plan.plan_id);
 
   return (
     <View style={styles.card}>
@@ -61,9 +63,11 @@ export function GrowthPlanCard({ plan, locale, onBuyCredits, onUpgrade }: Props)
             </View>
           ) : null}
         </View>
-        <Pressable onPress={onUpgrade} style={styles.outlineBtn} accessibilityRole="button">
-          <Text style={styles.outlineText}>{tr('dashUpgrade')}</Text>
-        </Pressable>
+        {showUpgrade ? (
+          <Pressable onPress={onUpgrade} style={styles.outlineBtn} accessibilityRole="button">
+            <Text style={styles.outlineText}>{tr('dashUpgrade')}</Text>
+          </Pressable>
+        ) : null}
       </View>
       <View style={styles.headerRule} />
 
