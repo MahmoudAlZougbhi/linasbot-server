@@ -6,16 +6,22 @@ import {
   TenantDashboardSchema,
   type DashboardNavigateTarget,
 } from './dashboardTypes';
-import { dashboardQueryRange, isTodayPeriod, type DashboardPeriodSelection } from './dashboardFormat';
+import {
+  dashboardQueryRange,
+  namedDashboardApiPeriod,
+  type DashboardPeriodSelection,
+} from './dashboardFormat';
 
 export async function fetchTenantDashboard(
   period: DashboardPeriodSelection,
   tz: string,
 ): Promise<TenantDashboard> {
   const params = new URLSearchParams({ tz });
-  if (isTodayPeriod(period)) {
-    // Tenant-local calendar day via tz — do not send same-day start/end (exclusive end is empty).
-    params.set('period', 'today');
+  const named = namedDashboardApiPeriod(period);
+  if (named) {
+    // Named periods are resolved in the tenant timezone on the server.
+    // Do not send custom start/end (exclusive end + same-day/UTC month bugs).
+    params.set('period', named);
   } else {
     const range = dashboardQueryRange(period);
     params.set('period', 'custom');

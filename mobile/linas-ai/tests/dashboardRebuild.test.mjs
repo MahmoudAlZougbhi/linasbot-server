@@ -117,6 +117,7 @@ test('dashboard date card uses new presets and Linas copilot mark', () => {
   const copilot = read('features/dashboard/sections/OwnerCopilotCard.tsx');
   assert.match(sheet, /dashAllTime/);
   assert.match(sheet, /dashToday/);
+  assert.match(sheet, /dashLast7Days/);
   assert.match(sheet, /dashLastMonth/);
   assert.match(sheet, /RequestMonthCalendar/);
   assert.doesNotMatch(sheet, /dashBillingPeriod/);

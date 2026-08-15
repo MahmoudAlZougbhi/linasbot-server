@@ -35,11 +35,13 @@ export function DashboardHeader({
       ? tr('dashCustomRange')
       : period.id === 'today'
         ? tr('dashToday')
-        : period.id === 'last_month'
-          ? tr('dashLastMonth')
-          : period.id === 'last_6m'
-            ? tr('dashLast6Months')
-            : tr('dashLastYear');
+        : period.id === 'last_7d'
+          ? tr('dashLast7Days')
+          : period.id === 'last_month'
+            ? tr('dashLastMonth')
+            : period.id === 'last_6m'
+              ? tr('dashLast6Months')
+              : tr('dashLastYear');
 
   return (
     <>

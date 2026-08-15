@@ -5,6 +5,7 @@ export const dashboardEn = {
   dashCustom: 'Custom',
   dashAllTime: 'All time',
   dashToday: 'Today',
+  dashLast7Days: 'Last 7 days',
   dashLastMonth: 'Last month',
   dashLast6Months: 'Last 6 months',
   dashLastYear: 'Last year',

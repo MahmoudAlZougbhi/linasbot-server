@@ -5,6 +5,7 @@ export const dashboardAr = {
   dashCustom: 'مخصص',
   dashAllTime: 'كل الوقت',
   dashToday: 'اليوم',
+  dashLast7Days: 'آخر 7 أيام',
   dashLastMonth: 'الشهر الماضي',
   dashLast6Months: 'آخر 6 أشهر',
   dashLastYear: 'السنة الماضية',
