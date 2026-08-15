@@ -71,9 +71,8 @@ export const aiLimitsStyles = StyleSheet.create({
   },
   rowLabel: {
     flex: 1,
+    ...typography.sectionTitle,
     color: '#10221A',
-    fontFamily: fonts.body,
-    fontSize: 15,
   },
   periodLabel: {
     color: '#10221A',

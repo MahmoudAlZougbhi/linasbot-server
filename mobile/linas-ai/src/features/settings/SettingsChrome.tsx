@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon, feather, ion, mci, type AppIconName } from '../../components/AppIcon';
 import { useI18n } from '../../i18n/LanguageContext';
-import { fonts, radii, spacing, useTheme } from '../../theme';
+import { fonts, radii, spacing, typography, useTheme } from '../../theme';
 
 /** Pale teal wash — lighter than accentSoft so icon squares match the Settings handoff. */
 export const SETTINGS_ICON_WASH = {
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   rowText: { flex: 1, minWidth: 0 },
-  rowLabel: { fontFamily: fonts.bodyMedium, fontSize: 16, fontWeight: '600' },
+  rowLabel: typography.sectionTitle,
   rowHint: { fontFamily: fonts.body, fontSize: 12, marginTop: 2 },
   rowValue: { fontFamily: fonts.body, fontSize: 14, maxWidth: 148, textAlign: 'right' },
   pressed: { opacity: 0.62 },
