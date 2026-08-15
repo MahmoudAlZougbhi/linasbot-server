@@ -131,12 +131,15 @@ test('model chip maps chat/work to existing 5.6 LIN Low/High ids', () => {
   assert.match(sheet, /linEffortHigh/);
   assert.match(sheet, /linEffortFast/);
   assert.match(sheet, /linEffortHighSub/);
+  assert.match(sheet, /linEffortCostsMore/);
+  assert.match(sheet, /rowHint/);
   assert.match(sheet, /feather\('zap'\)/);
   assert.match(sheet, /feather\('check'\)/);
   assert.match(en, /linEffortLow:\s*'Low'/);
   assert.match(en, /linEffortHigh:\s*'High'/);
   assert.match(en, /linEffortFast:\s*'Fast'/);
   assert.match(en, /linEffortHighSub:\s*'More powerful'/);
+  assert.match(en, /linEffortCostsMore:\s*'Uses more credits'/);
 });
 
 test('chat thread starts high; sparkle slightly larger than Linas name; send is sparkle teal', () => {

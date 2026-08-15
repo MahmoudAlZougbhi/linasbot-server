@@ -84,7 +84,7 @@ export const fr = {
   linEffortHigh: 'High',
   linEffortFast: 'Rapide',
   linEffortHighSub: 'Plus puissant',
-  linEffortCostsMore: 'Coûte plus',
+  linEffortCostsMore: 'Utilise plus de crédits',
   settings: 'Paramètres',
   settingsSub: 'Langue, notifications, contrôles IA, mentions légales et infos app',
   logout: 'Déconnexion',

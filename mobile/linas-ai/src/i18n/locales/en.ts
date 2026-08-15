@@ -82,7 +82,7 @@ export const en = {
   linEffortHigh: 'High',
   linEffortFast: 'Fast',
   linEffortHighSub: 'More powerful',
-  linEffortCostsMore: 'Costs more',
+  linEffortCostsMore: 'Uses more credits',
   settings: 'Settings',
   settingsSub: 'Language, notifications, AI controls, legal & app info',
   settingsLegalSection: 'Legal',
