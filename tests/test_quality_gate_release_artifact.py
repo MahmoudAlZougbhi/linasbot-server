@@ -151,3 +151,16 @@ def test_portable_runtime_self_checks_are_bytecode_free_and_tree_stable() -> Non
     for line in source.splitlines():
         if "scripts.ha.release_artifact_cli" in line:
             assert " -B -m scripts.ha.release_artifact_cli" in line
+
+
+def test_deploy_readiness_checks_protected_ha_helper_not_retired_entrypoint() -> None:
+    readiness = _step(_workflow()["jobs"]["deploy-readiness"], "Document readiness gate (no production deploy)")["run"]
+    assert "Standalone deploy.sh is disabled." in readiness
+    assert "manual protected .github/workflows/deploy.yml" in readiness
+    assert "never derives node-local CM/model values or mutates canonical .env" in readiness
+    assert 'cat-file -e "$target_sha:scripts/prod_cm_preserve_durable_flags.sh"' in readiness
+    assert "linasbot-worker@' scripts/ha/deploy_meta_release_ha.sh" in readiness
+    assert "api/queue/ready' scripts/ha/deploy_meta_release_ha.sh" in readiness
+    assert "prod_cm_preserve_durable_flags.sh' deploy.sh" not in readiness
+    assert "linasbot-worker@' deploy.sh" not in readiness
+    assert "api/queue/ready' deploy.sh" not in readiness
