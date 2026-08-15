@@ -230,8 +230,9 @@ class LiveChatUnifiedMixin:
             request_started = utc_now()
             db = get_firestore_db()
             if not db:
-                if can_use_stale_cache:
-                    return self._cached_unified_response(page_num, safe_size, filter_state, search)
+                stale = self._stale_unified_fallback(page_num, safe_size, filter_state, search)
+                if stale:
+                    return stale
                 return self._empty_unified_response(
                     page_num,
                     safe_size,
@@ -317,8 +318,9 @@ class LiveChatUnifiedMixin:
                 )
 
             if not docs:
-                if can_use_stale_cache:
-                    return self._cached_unified_response(page_num, safe_size, filter_state, search)
+                stale = self._stale_unified_fallback(page_num, safe_size, filter_state, search)
+                if stale:
+                    return stale
                 # Never N+1 full-scan conversations on the list path.
                 # Operators must run scripts/backfill_live_chat_index.py (or rebuild-index API).
                 print(
@@ -477,8 +479,9 @@ class LiveChatUnifiedMixin:
 
             traceback.print_exc()
             # Never fall back to legacy full-scan on errors — use cache or empty + rebuild signal.
-            if can_use_stale_cache:
-                return self._cached_unified_response(page_num, safe_size, filter_state, search)
+            stale = self._stale_unified_fallback(page_num, safe_size, filter_state, search)
+            if stale:
+                return stale
             empty = self._empty_unified_response(
                 page_num,
                 safe_size,

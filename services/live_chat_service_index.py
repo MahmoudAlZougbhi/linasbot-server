@@ -333,6 +333,21 @@ class LiveChatIndexMixin:
         except Exception as e:
             print(f"⚠️ Could not load unified cache from disk: {e}")
 
+    def _stale_unified_fallback(
+        self, page: int, page_size: int, filter_state: str, search: str
+    ) -> dict[str, Any] | None:
+        """Serve memory or disk cache when live index reads fail — never invent rows."""
+        if self._unified_chats_cache:
+            resp = self._cached_unified_response(page, page_size, filter_state, search)
+            resp["source"] = "memory_cache"
+            return resp
+        self._load_unified_cache_from_disk()
+        if self._unified_chats_cache:
+            resp = self._cached_unified_response(page, page_size, filter_state, search)
+            resp["source"] = "disk_cache"
+            return resp
+        return None
+
     def _empty_unified_response(
         self, page: int, page_size: int, filter_state: str, search: str, source: str
     ) -> dict[str, Any]:

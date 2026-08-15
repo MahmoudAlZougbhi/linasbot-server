@@ -20,8 +20,10 @@ test('inbox defaults to All channels, not WhatsApp-only', () => {
   assert.match(hook, /useState<ChannelFilter>\('all'\)/);
   assert.doesNotMatch(hook, /useState<ChannelFilter>\('whatsapp'\)/);
   assert.match(hook, /channel,/);
+  assert.match(hook, /requires_index_rebuild \|\| data\.index_empty/);
   assert.match(api, /params\.set\('channel', opts\.channel\)/);
   assert.match(api, /parseUnifiedChatsResponse/);
+  assert.match(api, /parseConversationDetailsResponse/);
   assert.match(inbox, /InboxChannelChips/);
   assert.match(chips, /id: 'whatsapp'/);
   assert.match(chips, /id: 'instagram'/);

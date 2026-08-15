@@ -67,17 +67,20 @@ class LiveChatDetailsMixin:
                         data = index_doc.to_dict() or {}
                         recent = data.get("recent_messages")
                         if isinstance(recent, list) and len(recent) > 0:
+                            formatted_recent = [
+                                self._format_single_message(msg) for msg in recent if isinstance(msg, dict)
+                            ]
                             msg_count = int(data.get("message_count") or 0)
                             print(
-                                f"[live_chat:conversation] source=index_recent conv={conversation_id} returned={len(recent)} total={msg_count}"
+                                f"[live_chat:conversation] source=index_recent conv={conversation_id} returned={len(formatted_recent)} total={msg_count}"
                             )
                             return {
                                 "success": True,
                                 "conversation_id": conversation_id,
-                                "messages": recent,
+                                "messages": formatted_recent,
                                 "total_messages": msg_count,
-                                "returned_messages": len(recent),
-                                "has_more": msg_count > len(recent),
+                                "returned_messages": len(formatted_recent),
+                                "has_more": msg_count > len(formatted_recent),
                                 "sentiment": str(data.get("sentiment") or "neutral"),
                                 "status": self._conversation_state_to_status(str(data.get("conversation_state") or "")),
                             }

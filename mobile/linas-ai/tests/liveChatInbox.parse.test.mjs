@@ -9,6 +9,7 @@ import {
   UnifiedChatsSchema,
   chatChannel,
   matchesChannelFilter,
+  parseConversationDetailsResponse,
   parseLiveChatItems,
   parseUnifiedChatsResponse,
 } from '../src/features/livechat/liveChatTypes.ts';
@@ -110,4 +111,31 @@ test('production-shaped rows with null user_id still render on All', () => {
   assert.equal(chatChannel(parsed.chats[1]), 'instagram');
   assert.equal(chatChannel(parsed.chats[2]), 'facebook');
   assert.equal(parsed.chats.filter((c) => matchesChannelFilter(c, 'all')).length, 3);
+});
+
+test('parseConversationDetailsResponse keeps numeric timestamps and is_user flags', () => {
+  const parsed = parseConversationDetailsResponse({
+    success: true,
+    conversation_id: 'conv-1',
+    messages: [
+      { timestamp: 1692000000000, is_user: 1, content: 'hello' },
+      { timestamp: '2026-08-14T12:00:00Z', role: 'user', text: 'hi' },
+    ],
+  });
+  assert.equal(parsed.success, true);
+  assert.equal(parsed.messages.length, 2);
+  assert.equal(parsed.messages[0].timestamp, '1692000000000');
+  assert.equal(parsed.messages[0].is_user, true);
+  assert.equal(parsed.messages[1].is_user, true);
+});
+
+test('parseUnifiedChatsResponse treats index rebuild as non-fatal empty', () => {
+  const parsed = parseUnifiedChatsResponse({
+    success: false,
+    chats: [],
+    requires_index_rebuild: true,
+    source: 'index_error',
+  });
+  assert.equal(parsed.chats.length, 0);
+  assert.equal(parsed.requires_index_rebuild, true);
 });

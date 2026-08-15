@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
+import pytest
+
 from services.live_chat_channel import (
     coerce_live_chat_user_id,
     live_chat_channel_matches,
@@ -168,3 +172,23 @@ def test_coerce_user_id_never_blank_for_real_threads() -> None:
     assert formatted["user_id"] == "facebook:55"
     assert formatted["channel"] == "facebook"
     assert formatted["conversation_id"] == "conv-fb"
+
+
+@pytest.mark.asyncio
+async def test_unified_chats_uses_disk_cache_when_firestore_missing() -> None:
+    svc = live_chat_service
+    svc._unified_chats_cache = [
+        {
+            "conversation_id": "cached-1",
+            "user_id": "+96170111111",
+            "last_message_at": utc_now().isoformat(),
+            "conversation_state": svc.STATE_BOT_ACTIVE,
+        }
+    ]
+    svc._unified_chats_cache_has_more = False
+    svc._unified_chats_cache_total = 1
+    with patch("services.live_chat_service_unified.get_firestore_db", return_value=None):
+        result = await svc.get_unified_chats(search="", page=1, page_size=20, filter_state="all")
+    assert result.get("success") is True
+    assert len(result.get("chats") or []) == 1
+    assert result.get("source") == "memory_cache"
