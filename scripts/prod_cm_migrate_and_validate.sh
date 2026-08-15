@@ -3,6 +3,10 @@
 # Keeps CM_RUNTIME_MODE=legacy. Does not publish. Never prints FAQ/content bodies.
 set -euo pipefail
 
+# shellcheck source=scripts/ha/require_production_mutation_guard.sh
+source /opt/linasbot/scripts/ha/require_production_mutation_guard.sh
+linas_require_production_mutation_guard "scripts/prod_cm_migrate_and_validate.sh"
+
 APP_DIR="/opt/linasbot"
 cd "$APP_DIR"
 export LINASBOT_DATA_ROOT="${LINASBOT_DATA_ROOT:-/opt/linasbot_data}"

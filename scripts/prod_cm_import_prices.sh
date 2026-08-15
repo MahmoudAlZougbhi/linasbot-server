@@ -3,6 +3,12 @@
 # Never invents amounts. Archives ambiguous lines for Mahmoud review. Does not publish.
 set -euo pipefail
 
+# shellcheck source=scripts/ha/require_production_mutation_guard.sh
+source /opt/linasbot/scripts/ha/require_production_mutation_guard.sh
+linas_require_production_mutation_guard \
+  "scripts/prod_cm_import_prices.sh" \
+  "scripts/prod_cm_repair_linas_prices_publish.sh"
+
 APP_DIR="/opt/linasbot"
 cd "$APP_DIR"
 export LINASBOT_DATA_ROOT="${LINASBOT_DATA_ROOT:-/opt/linasbot_data}"

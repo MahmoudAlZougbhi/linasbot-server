@@ -21,6 +21,7 @@ from services.meta_app_registry_common import (
     MetaChannel,
     _app_b_linas_cutover_allowed,
     _bindings_share_exclusive_asset,
+    authorized_meta_user_id_hash,
     get_meta_app_configs,
     normalize_meta_tenant_id,
 )
@@ -91,6 +92,13 @@ class MetaAppRegistryLifecycleMixin:
         app = get_meta_app_configs().get(current.app_key)
         if app is None or not app.enabled:
             raise MetaBindingConflictError("target Meta app is not configured")
+        credential = state["credentials"].get(current.credential_id)
+        if (
+            not isinstance(credential, dict)
+            or credential.get("binding_id") != current.binding_id
+            or float(credential.get("archived_at") or 0) > 0
+        ):
+            raise MetaBindingConflictError("binding credential is unavailable; reconnect required")
         if current.app_key == APP_B_KEY and not app.advanced_access_approved:
             raise MetaBindingConflictError("App B cannot activate before Advanced Access approval")
         if (
@@ -129,6 +137,116 @@ class MetaAppRegistryLifecycleMixin:
                 replacing_binding_id=replacing_binding_id,
             )
             return current
+
+    def activate_staged_bindings(
+        self,
+        binding_ids: tuple[str, ...],
+        *,
+        actor_id: str,
+        expected_generations: dict[str, int] | None = None,
+        replace_existing: bool = False,
+    ) -> tuple[MetaAssetBinding, ...]:
+        """Activate a staged asset set in one registry transaction.
+
+        All rows, generations, conflicts, and activation policies are checked
+        before any active owner is changed. This prevents a multi-Page OAuth
+        callback from cutting over only the Pages processed before a failure.
+        """
+
+        resolved_ids = tuple(str(binding_id or "").strip() for binding_id in binding_ids)
+        if not resolved_ids or any(not binding_id for binding_id in resolved_ids):
+            raise MetaBindingConflictError("staged binding identifiers are required")
+        if len(set(resolved_ids)) != len(resolved_ids):
+            raise MetaBindingConflictError("staged binding identifiers must be unique")
+        expected = expected_generations or {}
+        if expected and set(expected) != set(resolved_ids):
+            raise MetaBindingConflictError("staged binding generations are incomplete")
+
+        with self._locked():
+            state = self._read_unlocked()
+            staged: list[MetaAssetBinding] = []
+            for binding_id in resolved_ids:
+                raw = state["bindings"].get(binding_id)
+                if not isinstance(raw, dict):
+                    raise MetaBindingNotFoundError("binding not found")
+                current = self._binding_from_dict(raw)
+                if current.status not in {"testing", "inactive"}:
+                    raise MetaBindingConflictError("binding is not staged for activation")
+                if binding_id in expected and current.generation != expected[binding_id]:
+                    raise MetaBindingConflictError("binding generation changed")
+                staged.append(current)
+
+            for index, current in enumerate(staged):
+                if any(_bindings_share_exclusive_asset(current, other) for other in staged[index + 1 :]):
+                    raise MetaBindingConflictError("staged bindings contain the same exclusive asset")
+
+            replacements: dict[str, MetaAssetBinding | None] = {}
+            for current in staged:
+                conflicts = [
+                    self._binding_from_dict(value)
+                    for value in state["bindings"].values()
+                    if self._binding_from_dict(value).active
+                    and _bindings_share_exclusive_asset(self._binding_from_dict(value), current)
+                ]
+                if len({conflict.binding_id for conflict in conflicts}) > 1:
+                    raise MetaBindingConflictError("active binding indexes are inconsistent")
+                if conflicts and not replace_existing:
+                    raise MetaBindingConflictError("another active binding owns this asset")
+                replacement = conflicts[0] if conflicts else None
+                replacements[current.binding_id] = replacement
+                self._validate_activation_unlocked(
+                    state,
+                    current,
+                    replacing_binding_id=replacement.binding_id if replacement and replace_existing else "",
+                )
+
+            now = time.time()
+            for replacement in replacements.values():
+                if replacement is None:
+                    continue
+                changed = dict(state["bindings"][replacement.binding_id])
+                changed["status"] = "inactive"
+                changed["generation"] = replacement.generation + 1
+                changed["updated_at"] = now
+                state["bindings"][replacement.binding_id] = changed
+            activated: list[MetaAssetBinding] = []
+            for current in staged:
+                changed = dict(state["bindings"][current.binding_id])
+                changed["status"] = "active"
+                changed["generation"] = current.generation + 1
+                changed["updated_at"] = now
+                replacement = replacements[current.binding_id]
+                if replacement is not None:
+                    changed["previous_binding_id"] = replacement.binding_id
+                state["bindings"][current.binding_id] = changed
+                for other_id, other_raw in list(state["bindings"].items()):
+                    if other_id == current.binding_id:
+                        continue
+                    other = self._binding_from_dict(other_raw)
+                    if other.asset_key != current.asset_key or other.superseded_by_binding_id:
+                        continue
+                    superseded = dict(other_raw)
+                    superseded["superseded_by_binding_id"] = current.binding_id
+                    superseded["generation"] = other.generation + 1
+                    superseded["updated_at"] = now
+                    state["bindings"][other_id] = superseded
+                activated.append(self._binding_from_dict(changed))
+            for binding in activated:
+                self._append_audit(
+                    {
+                        "event": "binding_cutover_activated"
+                        if replacements[binding.binding_id]
+                        else "binding_activated",
+                        "actor_id": actor_id,
+                        "tenant_id": binding.tenant_id,
+                        "channel": binding.channel,
+                        "asset_id": binding.asset_id,
+                        "app_key": binding.app_key,
+                        "binding_id": binding.binding_id,
+                    }
+                )
+            self._write_unlocked(state)
+            return tuple(activated)
 
     def activate_binding(
         self,
@@ -215,6 +333,7 @@ class MetaAppRegistryLifecycleMixin:
                     ):
                         changed = dict(raw_binding)
                         changed["status"] = "inactive"
+                        changed["generation"] = current_binding.generation + 1
                         changed["updated_at"] = now
                         state["bindings"][binding_id] = changed
             if status == "testing":
@@ -228,6 +347,7 @@ class MetaAppRegistryLifecycleMixin:
                     ):
                         raw = dict(state["bindings"][existing.binding_id])
                         raw["status"] = "inactive"
+                        raw["generation"] = existing.generation + 1
                         raw["updated_at"] = now
                         state["bindings"][existing.binding_id] = raw
 
@@ -248,6 +368,8 @@ class MetaAppRegistryLifecycleMixin:
                 created_at=now,
                 updated_at=now,
                 previous_binding_id=previous_binding_id,
+                authorized_meta_user_id_hash=authorized_meta_user_id_hash(credential.authorized_meta_user_id),
+                auth_flow=credential.auth_flow,
             )
             aad = f"{binding_id}:{credential_id}:{tenant}:{channel}:{asset}:{app_key}"
             state["credentials"][credential_id] = {

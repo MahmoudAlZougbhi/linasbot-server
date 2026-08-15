@@ -26,7 +26,6 @@ from services.meta_app_registry import (
     META_CHANNEL_SCOPES,
     META_COMMENT_SCOPES,
     META_FACEBOOK_LOGIN_EXTRA_SCOPES,
-    META_FORBIDDEN_SCOPES,
     MetaAppRegistry,
     MetaAssetBinding,
     MetaBindingConflictError,
@@ -37,6 +36,11 @@ from services.meta_app_registry import (
     get_meta_app_registry,
     normalize_meta_tenant_id,
 )
+from services.meta_facebook_scope_policy import (
+    FACEBOOK_PAGE_BINDING_SCOPES,
+    normalize_facebook_page_token_scopes,
+)
+from services.meta_oauth_activation import ValidatedFacebookPage, activate_validated_facebook_pages
 from services.meta_oauth_graph import (  # noqa: F401 — re-export Graph helpers for meta_* consumers
     META_GRAPH_BASE_URL,
     MetaOAuthError,
@@ -55,23 +59,6 @@ from services.meta_oauth_graph import (  # noqa: F401 — re-export Graph helper
 MetaOAuthFlowMode = Literal["facebook", "instagram", "unified"]
 
 META_OAUTH_STATE_TTL_SECONDS = 10 * 60
-
-# App A also runs WhatsApp Embedded Signup. Meta often returns those scopes on the
-# same user's Page token during Facebook Business Login rerequest. They must not
-# block Page reconnect / comment-scope upgrades (strip before forbid + persist).
-_META_PAGE_TOKEN_COEXISTENCE_SCOPES = frozenset(
-    {
-        "whatsapp_business_management",
-        "whatsapp_business_messaging",
-    }
-)
-
-
-def _scopes_for_facebook_page_binding(scopes: tuple[str, ...]) -> tuple[str, ...]:
-    """Keep Page-binding scopes free of WhatsApp coexistence residue."""
-
-    return tuple(scope for scope in scopes if scope not in _META_PAGE_TOKEN_COEXISTENCE_SCOPES)
-
 
 @dataclass(frozen=True)
 class MetaOAuthResult:
@@ -121,7 +108,6 @@ def resolve_business_login_config_id(flow_mode: MetaOAuthFlowMode) -> str:
             "Start via /api/meta/connections/instagram-login/start."
         )
 
-    # ``facebook`` and legacy ``unified``/``meta`` starts both use the Pages-only config.
     config_id = facebook_login_config_id()
     if not config_id:
         raise MetaOAuthError(
@@ -154,8 +140,8 @@ def _channels_for_authorization(
     scopes: tuple[str, ...],
     instagram_id: str,
 ) -> tuple[MetaChannel, ...]:
-    if flow_mode == "facebook":
-        return ("facebook",)
+    if flow_mode in {"facebook", "unified"}:
+        return ("facebook",) if META_CHANNEL_SCOPES["facebook"].issubset(scopes) else ()
     if flow_mode == "instagram":
         return ("instagram",)
     channels: list[MetaChannel] = []
@@ -176,11 +162,9 @@ def _business_login_request_scopes(flow_mode: MetaOAuthFlowMode) -> str:
 
     scopes: set[str] = set()
     if flow_mode == "instagram":
-        # Business Login must not start Instagram Connect; scopes unused when rejected above.
         scopes |= set(META_CHANNEL_SCOPES["instagram"])
         scopes |= set(META_COMMENT_SCOPES["instagram"])
     else:
-        # Facebook Connect and legacy unified starts: Pages only (no instagram_*).
         scopes |= set(META_CHANNEL_SCOPES["facebook"])
         scopes |= set(META_COMMENT_SCOPES["facebook"])
         scopes |= set(META_FACEBOOK_LOGIN_EXTRA_SCOPES)
@@ -213,6 +197,7 @@ def begin_meta_business_login(
     actor_reference = hashlib.sha256(str(actor_id or "oauth").encode("utf-8")).hexdigest()[:16]
     surface = normalize_return_surface(return_surface)
     current_registry = registry or get_meta_app_registry()
+    oauth_started_at = time.time()
     current_registry.store_oauth_state(
         nonce_hash,
         {
@@ -223,7 +208,8 @@ def begin_meta_business_login(
             "redirect_uri": meta_oauth_redirect_uri(),
             "return_surface": surface,
             "login_config_id": config_id,
-            "expires_at": time.time() + META_OAUTH_STATE_TTL_SECONDS,
+            "created_at": oauth_started_at,
+            "expires_at": oauth_started_at + META_OAUTH_STATE_TTL_SECONDS,
         },
     )
     query = urlencode(
@@ -263,7 +249,12 @@ async def complete_meta_business_login(
         raise MetaOAuthStateError("OAuth redirect does not match")
     tenant_id = str(state_data.get("tenant_id") or "").strip()
     flow_mode = _resolve_oauth_flow_channel(str(state_data.get("channel") or ""))
+    if flow_mode == "instagram":
+        raise MetaOAuthStateError("OAuth state flow does not match Facebook Login")
     actor_id = str(state_data.get("actor_id") or "oauth")
+    oauth_started_at = float(state_data.get("created_at") or 0.0)
+    if oauth_started_at <= 0.0 or oauth_started_at > time.time():
+        raise MetaOAuthStateError("OAuth state creation time is invalid")
     from services.meta_oauth_return import normalize_return_surface
 
     return_surface = normalize_return_surface(state_data.get("return_surface"))
@@ -299,6 +290,11 @@ async def complete_meta_business_login(
             app_id=app.app_id,
             app_secret=app.app_secret,
         )
+        missing_integration = sorted(META_FACEBOOK_LOGIN_EXTRA_SCOPES - set(_scope_tuple(integration_debug)))
+        if missing_integration:
+            raise MetaOAuthError(
+                f"Meta integration token is missing required review permissions ({','.join(missing_integration)})"
+            )
         authorized_meta_user_id = str(integration_debug.get("user_id") or "").strip()
         if not authorized_meta_user_id.isdigit() or not 3 <= len(authorized_meta_user_id) <= 64:
             raise MetaOAuthError("Meta authorization owner is missing from the inspected token")
@@ -318,9 +314,7 @@ async def complete_meta_business_login(
             raise MetaOAuthError("Meta Page discovery response is incomplete")
         pages = [cast(dict[str, Any], page) for page in raw_pages if isinstance(page, dict)]
         selected_pages = _eligible_pages(pages, flow_mode=flow_mode)
-        authorized_bindings: list[MetaAssetBinding] = []
-        primary_page_name = ""
-        primary_instagram_username = ""
+        validated_pages: list[ValidatedFacebookPage] = []
         for selected in selected_pages:
             page_id = str(selected.get("id") or "")
             page_name = str(selected.get("name") or "Facebook Page")
@@ -339,73 +333,62 @@ async def complete_meta_business_login(
                 raise MetaOAuthError("Meta Page token profile does not match the selected Page")
             if str(page_debug.get("type") or "").upper() != "PAGE":
                 raise MetaOAuthError("Meta token is not a Page access token")
-            scopes = _scopes_for_facebook_page_binding(_scope_tuple(page_debug) or _scope_tuple(integration_debug))
-            forbidden = sorted(set(scopes) & META_FORBIDDEN_SCOPES)
+            raw_page_scopes = set(_scope_tuple(page_debug))
+            scopes, forbidden = normalize_facebook_page_token_scopes(raw_page_scopes)
             if forbidden:
                 raise MetaOAuthError(
                     f"Meta token includes a prohibited non-messaging permission ({','.join(forbidden)})"
                 )
-            if flow_mode == "instagram" and not instagram_id:
-                raise MetaOAuthError("The selected Page has no linked professional Instagram account")
+            missing = sorted(FACEBOOK_PAGE_BINDING_SCOPES - set(scopes))
+            if missing:
+                raise MetaOAuthError(f"Meta Page token is missing required review permissions ({','.join(missing)})")
             if not _granular_targets_are_allowlisted(
                 page_debug,
                 page_id=page_id,
                 instagram_id=instagram_id,
             ):
-                continue
+                raise MetaOAuthError("Meta token granular targets are missing or include another asset")
 
             channels_to_authorize = _channels_for_authorization(
                 flow_mode=flow_mode,
                 scopes=scopes,
                 instagram_id=instagram_id,
             )
-            if flow_mode in {"facebook", "instagram"}:
-                required = META_CHANNEL_SCOPES[flow_mode]
-                missing = sorted(required - set(scopes))
-                if missing:
-                    raise MetaOAuthError(
-                        f"Meta token is missing required private-messaging permissions ({','.join(missing)})"
-                    )
-            elif not channels_to_authorize:
-                continue
-
-            credential = MetaBindingCredential(
-                access_token=page_token,
-                token_app_id=app.app_id,
-                token_profile_id=page_id,
-                scopes=scopes,
-                expires_at=int(page_debug["expires_at"]) if page_debug.get("expires_at") else None,
-                authorized_meta_user_id=authorized_meta_user_id,
-            )
-            subscribed = False
-            for authorize_channel in channels_to_authorize:
-                if authorize_channel == "instagram" and not instagram_id:
-                    continue
-                asset_id = page_id if authorize_channel == "facebook" else instagram_id
-                binding = current_registry.authorize_oauth_asset(
-                    tenant_id=tenant_id,
-                    channel=authorize_channel,
-                    asset_id=asset_id,
+            if not channels_to_authorize:
+                raise MetaOAuthError("Meta Page token does not authorize Facebook messaging")
+            validated_pages.append(
+                ValidatedFacebookPage(
                     page_id=page_id,
-                    instagram_account_id=instagram_id,
-                    app_key=app_key,
-                    credential=credential,
-                    actor_id=actor_id,
                     page_name=page_name,
+                    instagram_id=instagram_id,
                     instagram_username=instagram_username,
-                    status="active",
+                    channels=channels_to_authorize,
+                    credential=MetaBindingCredential(
+                        access_token=page_token,
+                        token_app_id=app.app_id,
+                        token_profile_id=page_id,
+                        scopes=scopes,
+                        expires_at=int(page_debug["expires_at"]) if page_debug.get("expires_at") else None,
+                        authorized_meta_user_id=authorized_meta_user_id,
+                        authorization_started_at=oauth_started_at,
+                    ),
                 )
-                authorized_bindings.append(binding)
-                if not subscribed:
-                    await subscribe_binding_webhook(binding, registry=current_registry, client=client)
-                    subscribed = True
-                if not primary_page_name:
-                    primary_page_name = page_name
-                    primary_instagram_username = instagram_username
+            )
+
+        authorized_bindings = list(
+            await activate_validated_facebook_pages(
+                validated_pages,
+                tenant_id=tenant_id,
+                app_key=app_key,
+                actor_id=actor_id,
+                registry=current_registry,
+                client=http_client,
+                oauth_started_at=oauth_started_at,
+            )
+        )
 
         if not authorized_bindings:
-            raise MetaOAuthError("Meta token granular targets are missing or include another asset")
-        current_registry.archive_superseded_duplicate_bindings(actor_id=actor_id)
+            raise MetaOAuthError("No Facebook Page binding was authorized")
         from services.channel_capability_toggles import enable_channel_defaults_after_connect
 
         for channel in sorted({binding.channel for binding in authorized_bindings}):
@@ -419,8 +402,8 @@ async def complete_meta_business_login(
                 pass
         return MetaOAuthResult(
             bindings=tuple(authorized_bindings),
-            page_name=primary_page_name,
-            instagram_username=primary_instagram_username,
+            page_name=validated_pages[0].page_name,
+            instagram_username=validated_pages[0].instagram_username,
             return_surface=return_surface,
         )
     finally:

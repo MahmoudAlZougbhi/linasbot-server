@@ -2,6 +2,9 @@
 # Production-safe generic tenant CM runtime proof (isolated tenant id; no Meta assets).
 # Creates/publishes/deletes only under tenants/<proof_tenant>/cm. Never touches linas.
 set -euo pipefail
+# shellcheck source=scripts/ha/require_production_mutation_guard.sh
+source /opt/linasbot/scripts/ha/require_production_mutation_guard.sh
+linas_require_production_mutation_guard "scripts/prod_cm_generic_tenant_proof.sh"
 cd /opt/linasbot
 export LINASBOT_DATA_ROOT="${LINASBOT_DATA_ROOT:-/opt/linasbot_data}"
 export ENVIRONMENT="${ENVIRONMENT:-production}"

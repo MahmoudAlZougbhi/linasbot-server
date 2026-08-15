@@ -4,6 +4,9 @@
 # exports required envs over SSH, runs scripts/prod_apply_resend_secrets.sh on each node.
 set -euo pipefail
 
+echo "[resend-dual] BLOCKED: retired; use a reviewed two-node env transaction" >&2
+exit 2
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 NODE01="${NODE01:-139.59.167.62}"
 NODE02="${NODE02:-167.99.89.243}"

@@ -3,6 +3,10 @@
 # Requires CM_PUBLISH_ENABLED=true and CM_RUNTIME_MODE=legacy (or published after cutover).
 set -euo pipefail
 
+# shellcheck source=scripts/ha/require_production_mutation_guard.sh
+source /opt/linasbot/scripts/ha/require_production_mutation_guard.sh
+linas_require_production_mutation_guard "scripts/prod_cm_publish.sh"
+
 APP_DIR="/opt/linasbot"
 cd "$APP_DIR"
 export LINASBOT_DATA_ROOT="${LINASBOT_DATA_ROOT:-/opt/linasbot_data}"

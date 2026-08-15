@@ -4,24 +4,69 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+_webhook_contract = importlib.import_module("scripts.meta_webhook_contract" if __package__ else "meta_webhook_contract")
+
+ALLOWED_PAGE_SUBSCRIPTION_FIELDS = _webhook_contract.ALLOWED_PAGE_SUBSCRIPTION_FIELDS
+merge_subscription_fields = _webhook_contract.merge_subscription_fields
+
 EXPECTED_PAGE_ID = "378696005334409"
 EXPECTED_INSTAGRAM_ID = "17841413184256533"
+EXPECTED_APP_ID = "2963733803971681"
+RETIRED_APP_ID = "1784792718776344"
+RETIRED_APP_CONFIRMATION = "CONFIRM_RETIRED_META_APP_SUBSCRIPTION"
+ALLOWED_APP_IDS = frozenset({EXPECTED_APP_ID, RETIRED_APP_ID})
 EXPECTED_GRAPH_VERSION = "v24.0"
-REQUIRED_FIELDS = ("messages", "messaging_postbacks")
 DEFAULT_ENV_PATH = Path("/opt/linasbot/.env")
 
 
 class MetaSubscriptionError(RuntimeError):
     """Raised when subscription state is outside the approved boundary."""
+
+
+def _subscription_writer_lock(config: MetaConfig) -> AbstractContextManager[None]:
+    """Load the shared runtime lock lazily so direct script execution is safe."""
+
+    repo_dir = str(Path(__file__).resolve().parents[1])
+    if repo_dir not in sys.path:
+        sys.path.insert(0, repo_dir)
+    from services.meta_oauth_page_lock import (
+        lock_facebook_page_subscription_operation_sync,
+        page_lock_target_from_env_file,
+    )
+
+    return lock_facebook_page_subscription_operation_sync(
+        app_key="app_a" if config.app_id == EXPECTED_APP_ID else "retired_app",
+        page_ids=(config.page_id,),
+        target=page_lock_target_from_env_file(Path(os.environ.get("META_ENV_PATH", str(DEFAULT_ENV_PATH)))),
+    )
+
+
+def _ensure_canonical_python() -> None:
+    """Re-exec legacy shell callers through the deployed dependency runtime."""
+
+    script_path = Path(__file__).resolve()
+    canonical_python = script_path.parents[1] / "venv" / "bin" / "python"
+    if not canonical_python.is_file():
+        return
+    if Path(sys.executable).resolve() == canonical_python.resolve():
+        return
+    os.execv(
+        str(canonical_python),
+        [str(canonical_python), str(script_path), *sys.argv[1:]],
+    )
+    raise AssertionError("unreachable")
 
 
 @dataclass(frozen=True)
@@ -33,8 +78,16 @@ class MetaConfig:
     page_token: str
 
 
-def load_config(path: Path) -> MetaConfig:
+def load_config(path: Path, *, expected_app_id: str = EXPECTED_APP_ID) -> MetaConfig:
     """Read only the required values from the root-owned production env file."""
+
+    if expected_app_id not in ALLOWED_APP_IDS:
+        raise MetaSubscriptionError("Refusing an app outside the exact cutover allowlist")
+    if (
+        expected_app_id == RETIRED_APP_ID
+        and (os.getenv("META_RETIRED_APP_SUBSCRIPTION_CONFIRM") or "").strip() != RETIRED_APP_CONFIRMATION
+    ):
+        raise MetaSubscriptionError("Retired-app subscription mode requires explicit confirmation")
 
     values: dict[str, str] = {}
     for raw_line in path.read_text(encoding="utf-8").splitlines():
@@ -67,8 +120,8 @@ def load_config(path: Path) -> MetaConfig:
         raise MetaSubscriptionError("Refusing an unexpected Instagram account")
     if values["META_GRAPH_API_VERSION"] != EXPECTED_GRAPH_VERSION:
         raise MetaSubscriptionError("Refusing an unexpected Graph API version")
-    if not values["META_APP_ID"].isdigit():
-        raise MetaSubscriptionError("Refusing a malformed Meta App ID")
+    if values["META_APP_ID"] != expected_app_id:
+        raise MetaSubscriptionError("Refusing an unexpected Meta App ID")
 
     return MetaConfig(
         app_id=values["META_APP_ID"],
@@ -115,21 +168,29 @@ def validate_state(
     current_app_id: str,
     expectation: str,
 ) -> tuple[set[str], tuple[str, ...]]:
-    """Enforce an empty or one-app-only state and the exact messaging fields."""
+    """Enforce an empty or one-app-only state with the full social field set."""
 
     app_ids, fields = validate_subscription_payload(payload, current_app_id=current_app_id)
-    required_fields = tuple(sorted(REQUIRED_FIELDS))
     if expectation == "empty":
         if app_ids:
             raise MetaSubscriptionError("Expected no Page subscriptions")
     elif expectation == "current-only":
         if app_ids != {current_app_id}:
             raise MetaSubscriptionError("Expected the configured app to be the only Page subscription")
-        if fields != required_fields:
-            raise MetaSubscriptionError("Configured app has unexpected webhook fields")
+        if set(fields) != ALLOWED_PAGE_SUBSCRIPTION_FIELDS:
+            raise MetaSubscriptionError("Configured app is missing the required DM/comment webhook fields")
     else:
         raise MetaSubscriptionError("Unknown subscription-state expectation")
     return app_ids, fields
+
+
+def plan_subscription_reconcile(current_fields: tuple[str, ...] | set[str]) -> tuple[str, ...]:
+    """Converge the Page subscription to the approved DM-and-comments fields."""
+
+    current = set(current_fields)
+    if not current.issubset(ALLOWED_PAGE_SUBSCRIPTION_FIELDS):
+        raise MetaSubscriptionError("Configured app has unexpected webhook fields")
+    return tuple(sorted(merge_subscription_fields(current, ALLOWED_PAGE_SUBSCRIPTION_FIELDS)))
 
 
 def _request_json(
@@ -178,50 +239,60 @@ def status(config: MetaConfig, expectation: str) -> None:
 
 
 def subscribe(config: MetaConfig, *, allow_present: bool) -> None:
-    before = _status(config)
-    try:
-        app_ids, fields = validate_state(before, current_app_id=config.app_id, expectation="current-only")
-    except MetaSubscriptionError:
-        validate_state(before, current_app_id=config.app_id, expectation="empty")
-    else:
-        if not allow_present:
-            raise MetaSubscriptionError("Configured app is already subscribed")
-        _print_state(app_ids, fields, config)
-        print("[meta-subscription] subscribe_noop=true")
-        return
+    with _subscription_writer_lock(config):
+        before = _status(config)
+        app_ids, fields = validate_subscription_payload(before, current_app_id=config.app_id)
+        if not app_ids:
+            target_fields = plan_subscription_reconcile(set())
+        elif app_ids == {config.app_id}:
+            target_fields = plan_subscription_reconcile(fields)
+            if fields == target_fields:
+                if not allow_present:
+                    raise MetaSubscriptionError("Configured app is already subscribed")
+                _print_state(app_ids, fields, config)
+                print("[meta-subscription] subscribe_noop=true")
+                return
+        else:
+            raise MetaSubscriptionError("Expected no other Page subscriptions")
 
-    result = _request_json(
-        config,
-        method="POST",
-        form={"subscribed_fields": ",".join(REQUIRED_FIELDS)},
-    )
-    if result.get("success") is not True:
-        raise MetaSubscriptionError("Meta did not confirm the Page subscription")
-    app_ids, fields = validate_state(_status(config), current_app_id=config.app_id, expectation="current-only")
-    _print_state(app_ids, fields, config)
-    print("[meta-subscription] subscribed=true")
+        result = _request_json(
+            config,
+            method="POST",
+            form={"subscribed_fields": ",".join(target_fields)},
+        )
+        if result.get("success") is not True:
+            raise MetaSubscriptionError("Meta did not confirm the Page subscription")
+        app_ids, fields = validate_state(_status(config), current_app_id=config.app_id, expectation="current-only")
+        if fields != target_fields:
+            raise MetaSubscriptionError("Meta returned unexpected fields after Page subscription reconcile")
+        _print_state(app_ids, fields, config)
+        print("[meta-subscription] subscribed=true")
 
 
 def unsubscribe(config: MetaConfig, *, allow_absent: bool) -> None:
-    before = _status(config)
-    try:
-        app_ids, fields = validate_state(before, current_app_id=config.app_id, expectation="current-only")
-    except MetaSubscriptionError:
-        validate_state(before, current_app_id=config.app_id, expectation="empty")
-        if not allow_absent:
-            raise MetaSubscriptionError("Configured app is not subscribed") from None
-        print("[meta-subscription] unsubscribe_noop=true")
-        return
-    _print_state(app_ids, fields, config)
+    with _subscription_writer_lock(config):
+        before = _status(config)
+        app_ids, fields = validate_subscription_payload(before, current_app_id=config.app_id)
+        if not app_ids:
+            if not allow_absent:
+                raise MetaSubscriptionError("Configured app is not subscribed")
+            print("[meta-subscription] unsubscribe_noop=true")
+            return
+        if app_ids != {config.app_id}:
+            raise MetaSubscriptionError("Expected the configured app to be the only Page subscription")
+        if not set(fields).issubset(ALLOWED_PAGE_SUBSCRIPTION_FIELDS):
+            raise MetaSubscriptionError("Configured app has unexpected webhook fields")
+        _print_state(app_ids, fields, config)
 
-    result = _request_json(config, method="DELETE")
-    if result.get("success") is not True:
-        raise MetaSubscriptionError("Meta did not confirm subscription removal")
-    validate_state(_status(config), current_app_id=config.app_id, expectation="empty")
-    print("[meta-subscription] unsubscribed=true")
+        result = _request_json(config, method="DELETE")
+        if result.get("success") is not True:
+            raise MetaSubscriptionError("Meta did not confirm subscription removal")
+        validate_state(_status(config), current_app_id=config.app_id, expectation="empty")
+        print("[meta-subscription] unsubscribed=true")
 
 
 def main() -> None:
+    _ensure_canonical_python()
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "command",
@@ -235,12 +306,17 @@ def main() -> None:
     parser.add_argument("--allow-present", action="store_true")
     parser.add_argument("--allow-absent", action="store_true")
     parser.add_argument(
+        "--expected-app-id",
+        choices=tuple(sorted(ALLOWED_APP_IDS)),
+        default=EXPECTED_APP_ID,
+    )
+    parser.add_argument(
         "--env-file",
         type=Path,
         default=Path(os.environ.get("META_ENV_PATH", str(DEFAULT_ENV_PATH))),
     )
     args = parser.parse_args()
-    config = load_config(args.env_file)
+    config = load_config(args.env_file, expected_app_id=args.expected_app_id)
     if args.command == "status":
         status(config, args.expect)
     elif args.command == "subscribe":

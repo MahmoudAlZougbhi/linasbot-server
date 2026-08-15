@@ -1,88 +1,27 @@
-# One-shot HA infra bootstrap: inject agent SSH pubkey on prod node-01.
-# Does NOT deploy app release, merge PR, migrate Requests, or enable BOC.
-name: HA Infra SSH Bootstrap
+name: BLOCKED - HA SSH Bootstrap Requires a Recoverable Transaction
 
 on:
   workflow_dispatch:
     inputs:
-      agent_pubkey:
-        description: "SSH public key to append to root authorized_keys (ed25519)"
-        required: true
-        type: string
       confirm:
-        description: "Type HA_SSH_BOOTSTRAP_CONFIRM to run"
+        description: "Type HA_SSH_BOOTSTRAP_CONFIRM to acknowledge the blocked operation"
         required: true
         type: string
 
 concurrency:
-  group: ha-infra-ssh-bootstrap
+  group: meta-social-cutover
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  bootstrap:
-    name: Inject SSH key + collect peer facts
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+  blocked:
     if: ${{ inputs.confirm == 'HA_SSH_BOOTSTRAP_CONFIRM' }}
+    runs-on: ubuntu-latest
+    environment: meta-social-cutover
     steps:
-      - name: Inject pubkey and collect redacted peer facts
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          script_stop: true
-          command_timeout: 8m
-          script: |
-            set -euo pipefail
-            PUBKEY='${{ inputs.agent_pubkey }}'
-            test -n "$PUBKEY"
-            mkdir -p /root/.ssh
-            chmod 700 /root/.ssh
-            touch /root/.ssh/authorized_keys
-            chmod 600 /root/.ssh/authorized_keys
-            if ! grep -Fqx "$PUBKEY" /root/.ssh/authorized_keys; then
-              echo "$PUBKEY" >> /root/.ssh/authorized_keys
-              echo "[ha-bootstrap] pubkey_appended=true"
-            else
-              echo "[ha-bootstrap] pubkey_already_present=true"
-            fi
-            echo "[ha-bootstrap] hostname=$(hostname)"
-            echo "[ha-bootstrap] uname=$(uname -a)"
-            echo "[ha-bootstrap] public_ip=$(curl -sS -m 3 https://ifconfig.me || true)"
-            ip -4 addr show | sed -n 's/.*inet \([0-9.]*\).*/[ha-bootstrap] inet=\1/p'
-            echo "[ha-bootstrap] linasbot_active=$(systemctl is-active linasbot || true)"
-            echo "[ha-bootstrap] nginx_active=$(systemctl is-active nginx || true)"
-            echo "[ha-bootstrap] opt_linasbot=$(test -d /opt/linasbot && echo yes || echo no)"
-            if test -d /opt/linasbot; then
-              git -C /opt/linasbot rev-parse --short HEAD 2>/dev/null | sed 's/^/[ha-bootstrap] git_head=/'
-              git -C /opt/linasbot rev-parse --abbrev-ref HEAD 2>/dev/null | sed 's/^/[ha-bootstrap] git_branch=/'
-            fi
-            # Env presence only — never print secret values
-            if test -f /opt/linasbot/.env; then
-              python3 - <<'PY'
-            from pathlib import Path
-            keys = []
-            for line in Path("/opt/linasbot/.env").read_text(errors="replace").splitlines():
-                s = line.strip()
-                if not s or s.startswith("#") or "=" not in s:
-                    continue
-                k = s.split("=", 1)[0].strip()
-                keys.append(k)
-            interesting = [
-                "REDIS_URL", "LINAS_REDIS_URL", "LINAS_REQUIRE_REDIS",
-                "DATABASE_URL", "POSTGRES", "FIRESTORE", "OPENAI",
-                "RATE_LIMIT", "BOC",
-            ]
-            print(f"[ha-bootstrap] env_key_count={len(keys)}")
-            for needle in interesting:
-                hits = [k for k in keys if needle.lower() in k.lower()]
-                print(f"[ha-bootstrap] env_hits_{needle}={hits}")
-            PY
-            fi
-            ss -lnt | sed -n '1,40p' | sed 's/^/[ha-bootstrap] listen /'
-            ls /etc/nginx/sites-enabled 2>/dev/null | sed 's/^/[ha-bootstrap] nginx_site=/' || true
+      - name: Refuse non-transactional root SSH mutation
+        run: |
+          echo "BLOCKED: root authorized_keys changes require a strict key parser, atomic backup/CAS, rollback, and HA bootstrap transaction." >&2
+          exit 1

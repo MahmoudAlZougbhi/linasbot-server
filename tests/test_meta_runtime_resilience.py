@@ -13,7 +13,9 @@ import pytest
 
 import config
 from handlers import text_handlers_delayed
+from handlers.text_handlers_firestore import _delayed_processing_tasks
 from modules import meta_messaging_webhook
+from services import social_messaging_processor
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -99,6 +101,39 @@ async def test_background_failure_log_omits_exception_message(caplog: pytest.Log
     rendered = "\n".join(record.getMessage() for record in caplog.records)
     assert "background_processing_failed type=RuntimeError" in rendered
     assert "sensitive-webhook-payload-must-not-be-logged" not in rendered
+
+
+@pytest.mark.asyncio
+async def test_older_meta_waiter_follows_replacement_without_removing_it() -> None:
+    user_id = "instagram:rapid-same-sender"
+    first_started = asyncio.Event()
+    replacement_release = asyncio.Event()
+
+    async def first_wave() -> None:
+        first_started.set()
+        await asyncio.Event().wait()
+
+    async def replacement_wave() -> None:
+        await replacement_release.wait()
+
+    first = asyncio.create_task(first_wave())
+    _delayed_processing_tasks[user_id] = first
+    older_waiter = asyncio.create_task(social_messaging_processor._await_delayed_processing(user_id))
+    await first_started.wait()
+
+    replacement = asyncio.create_task(replacement_wave())
+    first.cancel()
+    _delayed_processing_tasks[user_id] = replacement
+    await asyncio.sleep(0)
+    assert not older_waiter.done()
+    assert _delayed_processing_tasks[user_id] is replacement
+
+    newer_waiter = asyncio.create_task(social_messaging_processor._await_delayed_processing(user_id))
+    replacement_release.set()
+    await asyncio.gather(older_waiter, newer_waiter)
+
+    assert user_id not in _delayed_processing_tasks
+    assert replacement.done()
 
 
 def test_production_runtime_metric_parser_uses_real_meta_object_names() -> None:

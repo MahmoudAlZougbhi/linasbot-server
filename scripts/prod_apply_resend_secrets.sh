@@ -3,6 +3,10 @@
 # Runtime MUST use SENDING_ONLY key (RESEND_API_KEY). Never write RESEND_API_KEY_FULL.
 set -euo pipefail
 
+# shellcheck source=scripts/ha/require_production_mutation_guard.sh
+source /opt/linasbot/scripts/ha/require_production_mutation_guard.sh
+linas_require_production_mutation_guard "scripts/prod_apply_resend_secrets.sh"
+
 require_nonempty() {
   local name="$1"
   local value="${!1:-}"
@@ -55,10 +59,12 @@ export RESEND_FROM="${RESEND_FROM:-${RESEND_FROM_NAME} <${RESEND_FROM_EMAIL}>}"
 # Explicitly clear Full Access from apply environment so it cannot be written.
 unset RESEND_API_KEY_FULL || true
 
-python3 - <<'PY'
+PYTHONPATH=/opt/linasbot /opt/linasbot/venv/bin/python - <<'PY'
 import hashlib
 import os
 from pathlib import Path
+
+from scripts.ha.production_env_cas import atomic_update_canonical_env
 
 SECRET_KEYS = ("RESEND_API_KEY", "RESEND_WEBHOOK_SECRET")
 PUBLIC_KEYS = (
@@ -77,29 +83,6 @@ for key in SECRET_KEYS + PUBLIC_KEYS:
     updates[key] = value
 
 fps = {k: hashlib.sha256(updates[k].encode("utf-8")).hexdigest()[:16] for k in SECRET_KEYS}
-
-
-def upsert(path: Path, updates: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    lines = path.read_text().splitlines() if path.exists() else []
-    found = set()
-    out = []
-    for line in lines:
-        if "=" in line and not line.lstrip().startswith("#"):
-            k = line.split("=", 1)[0].strip()
-            if k in FORBIDDEN:
-                # Strip Full Access key from runtime env if present.
-                continue
-            if k in updates:
-                out.append(f"{k}={updates[k]}")
-                found.add(k)
-                continue
-        out.append(line)
-    for k, v in updates.items():
-        if k not in found:
-            out.append(f"{k}={v}")
-    path.write_text("\n".join(out) + "\n")
-    os.chmod(path, 0o600)
 
 
 def verify(path: Path) -> None:
@@ -125,18 +108,9 @@ def verify(path: Path) -> None:
     print(f"[resend-apply] updated={path} mode={mode} secrets_fp_ok=true public_ok=true full_access_absent=true")
 
 
-paths = [Path("/opt/linasbot/.env"), Path("/opt/linasbot/linaslaserbot-2.7.22/.env")]
-updated = 0
-for path in paths:
-    if not path.parent.exists():
-        print(f"[resend-apply] skip missing dir for {path}")
-        continue
-    upsert(path, updates)
-    verify(path)
-    updated += 1
-
-if updated < 1:
-    raise SystemExit("[resend-apply] no .env paths updated")
+path = Path("/opt/linasbot/.env")
+atomic_update_canonical_env(updates, remove_keys=frozenset(FORBIDDEN))
+verify(path)
 
 print(f"[resend-apply] api_key_fp={fps['RESEND_API_KEY']}")
 print(f"[resend-apply] api_key_len={len(updates['RESEND_API_KEY'])}")
@@ -152,19 +126,17 @@ systemctl restart linasbot
 sleep 6
 systemctl is-active linasbot
 
-python3 - <<'PY'
+/opt/linasbot/venv/bin/python - <<'PY'
 import hashlib
 import os
 import subprocess
 from pathlib import Path
 
 def load_expected(key: str) -> str:
-    for path in (Path("/opt/linasbot/.env"), Path("/opt/linasbot/linaslaserbot-2.7.22/.env")):
-        if not path.exists():
-            continue
-        for line in path.read_text().splitlines():
-            if line.startswith(key + "="):
-                return line.split("=", 1)[1].strip()
+    path = Path("/opt/linasbot/.env")
+    for line in path.read_text(encoding="utf-8", errors="strict").splitlines():
+        if line.startswith(key + "="):
+            return line.split("=", 1)[1]
     raise SystemExit(f"[resend-apply] could not read {key} from .env")
 
 expected_api = load_expected("RESEND_API_KEY")

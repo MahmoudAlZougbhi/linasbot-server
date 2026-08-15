@@ -17,6 +17,22 @@ from services.ai_reply_lifecycle import (
     persist_generated_reply,
 )
 
+_TURN_RUNTIME_KEYS = (
+    "_logical_reply_id",
+    "_last_outbound_delivery",
+    "_delivery_succeeded",
+    "_credit_captured_for_turn",
+    "_ai_credit_blocked",
+    "_ai_turn_started",
+)
+
+
+def reset_turn_runtime_state(user_data: dict[str, Any]) -> None:
+    """Remove per-turn evidence before reusing a sender's conversation state."""
+
+    for key in _TURN_RUNTIME_KEYS:
+        user_data.pop(key, None)
+
 
 def _tenant_channel_inbound(user_data: dict[str, Any]) -> tuple[str, str, str, str | None]:
     tenant_id = str(user_data.get("tenant_id") or user_data.get("tenantId") or "").strip().lower()
@@ -31,12 +47,18 @@ def _tenant_channel_inbound(user_data: dict[str, Any]) -> tuple[str, str, str, s
     return tenant_id, channel, external_id, str(inbound_event_id) if inbound_event_id else None
 
 
-def ensure_turn_started(user_data: dict[str, Any], *, claim_key_basis: str | None = None) -> str | None:
+def ensure_turn_started(
+    user_data: dict[str, Any],
+    *,
+    claim_key_basis: str | None = None,
+    external_inbound_id: str | None = None,
+) -> str | None:
     """Create or return logical_reply_id for this inbound turn."""
     existing = user_data.get("_logical_reply_id")
     if existing:
         return str(existing)
-    tenant_id, channel, external_id, inbound_event_id = _tenant_channel_inbound(user_data)
+    tenant_id, channel, discovered_external_id, inbound_event_id = _tenant_channel_inbound(user_data)
+    external_id = str(external_inbound_id or discovered_external_id or "").strip()
     if not tenant_id or not external_id:
         return None
     turn = begin_turn(
@@ -117,12 +139,19 @@ def finalize_delivery(ctx: dict[str, Any]) -> dict[str, Any]:
     if turn is None:
         return {"delivery": "unknown"}
     delivered = turn.state == "DELIVERED"
+    retryable = bool(turn.delivery_evidence.get("retryable", not delivered))
+    terminal = bool(delivered or turn.state in {"PERMANENT_DELIVERY_BLOCK", "NEEDS_OWNER_ACTION"})
+    if turn.delivery_evidence and not retryable:
+        terminal = True
     return {
         "delivery": "delivered" if delivered else turn.outbound_state or "pending",
         "state": turn.state,
         "logical_reply_id": turn.logical_reply_id,
         "credit_captured": turn.credit_captured,
         "has_saved_reply": bool(turn.generated_reply),
+        "retryable": bool(not terminal and retryable),
+        "terminal": terminal,
+        "provider_message_id_present": bool(turn.delivery_evidence.get("provider_message_id")),
     }
 
 

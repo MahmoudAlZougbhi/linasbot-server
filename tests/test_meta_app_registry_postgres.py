@@ -170,7 +170,9 @@ def test_dual_write_pg_then_file(tmp_path: Path, meta_env: None, monkeypatch: py
     reset_engine_for_tests()
 
 
-def test_import_script_roundtrip(tmp_path: Path, meta_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_import_script_dry_run_and_direct_apply_hard_gate(
+    tmp_path: Path, meta_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
     import importlib.util
 
     script = Path(__file__).resolve().parents[1] / "scripts" / "ha" / "import_meta_registry_to_postgres.py"
@@ -204,10 +206,46 @@ def test_import_script_roundtrip(tmp_path: Path, meta_env: None, monkeypatch: py
         credential=_credential(app_id, "121314151617"),
         actor_id="owner-import",
     )
+    monkeypatch.setattr(mod, "_validate_secure_regular_file", lambda path, **_kwargs: path.lstat())
+    monkeypatch.setattr(mod, "_require_root", lambda: None)
+
+    # Default is a non-mutating preflight.
     assert mod.main(["--store", str(store)]) == 0
-    assert mod.main(["--store", str(store)]) == 0  # idempotent
+    with whatsapp_session(require=True) as session:
+        empty_fp = state_fingerprint(load_state(session))
+    assert empty_fp["binding_count"] == 0
+
+    import json
+
+    source_fp = state_fingerprint(json.loads(store.read_text(encoding="utf-8")))
+    canonical_env = tmp_path / "canonical.env"
+    canonical_env.write_text(
+        f"META_REGISTRY_BACKEND=file\nMETA_CREDENTIAL_ENCRYPTION_KEY={MASTER}\nLINAS_WHATSAPP_DATABASE_URL={url}\n",
+        encoding="utf-8",
+    )
+    canonical_env.chmod(0o600)
+    from scripts.ha import production_mutation_guard
+
+    monkeypatch.setattr(
+        production_mutation_guard,
+        "acquire_direct_production_mutation_lock",
+        lambda **_kwargs: os.open(tmp_path / "mutation.lock", os.O_RDWR | os.O_CREAT, 0o600),
+    )
+    apply_args = [
+        "--store",
+        str(store),
+        "--env-file",
+        str(canonical_env),
+        "--apply",
+        "--expected-release-sha",
+        "a" * 40,
+        "--expected-source-sha256",
+        source_fp["state_sha256"],
+        "--expected-target-sha256",
+        empty_fp["state_sha256"],
+    ]
+    assert mod.main(apply_args) == 2
     with whatsapp_session(require=True) as session:
         state = load_state(session)
-    assert binding.binding_id in state["bindings"]
-    assert state["bindings"][binding.binding_id]["tenant_id"] == "tenant-import"
+    assert binding.binding_id not in state["bindings"]
     reset_engine_for_tests()

@@ -54,6 +54,7 @@ __all__ = [
     "comment_capability_state",
     "comments_enable_blocker",
     "enable_channel_defaults_after_connect",
+    "ensure_comment_webhook_for_binding",
     "reconcile_comment_webhooks_for_platform",
     "set_channel_toggle",
     "supported_platforms",
@@ -185,7 +186,7 @@ def _record_comment_webhook_fields(binding: Any, *, registry: Any, extra_fields:
             state = registry._read_unlocked()
             raw = state["bindings"].get(binding.binding_id)
             if not isinstance(raw, dict):
-                return
+                raise MetaOAuthError("Meta binding disappeared while recording webhook readiness")
             changed = dict(raw)
             existing = [str(item) for item in (changed.get("webhook_subscribed_fields") or [])]
             changed["webhook_subscribed_fields"] = sorted(
@@ -195,11 +196,13 @@ def _record_comment_webhook_fields(binding: Any, *, registry: Any, extra_fields:
             changed["updated_at"] = time.time()
             state["bindings"][binding.binding_id] = changed
             registry._write_unlocked(state)
-    except Exception:
-        return
+    except MetaOAuthError:
+        raise
+    except Exception as exc:
+        raise MetaOAuthError("Meta webhook readiness could not be persisted") from exc
 
 
-async def _ensure_comment_webhook_for_binding(binding: Any, *, registry: Any) -> None:
+async def ensure_comment_webhook_for_binding(binding: Any, *, registry: Any) -> None:
     """Subscribe/verify comment webhooks for the canonical binding (idempotent)."""
 
     auth_flow = str(getattr(binding, "auth_flow", "") or "")
@@ -269,7 +272,7 @@ async def _sync_comment_assets(*, tenant_id: str, platform: str, enabled: bool) 
         if not enabled:
             continue
         try:
-            await _ensure_comment_webhook_for_binding(binding, registry=registry)
+            await ensure_comment_webhook_for_binding(binding, registry=registry)
         except MetaOAuthError as exc:
             set_comment_reply_setting(
                 tenant_id=tenant_id,
@@ -302,7 +305,7 @@ async def reconcile_comment_webhooks_for_platform(*, tenant_id: str, platform: s
         registry = get_meta_app_registry()
         for binding in canonical_channel_bindings(tenant_id, platform_key):
             try:
-                await _ensure_comment_webhook_for_binding(binding, registry=registry)
+                await ensure_comment_webhook_for_binding(binding, registry=registry)
             except MetaOAuthError as exc:
                 raise ChannelToggleError(str(exc), status_code=409, code="COMMENT_WEBHOOK_FAILED") from exc
     return {

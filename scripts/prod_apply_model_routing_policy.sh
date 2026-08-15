@@ -4,30 +4,29 @@
 # Usage: prod_apply_model_routing_policy.sh
 set -euo pipefail
 
+# shellcheck source=scripts/ha/require_production_mutation_guard.sh
+source /opt/linasbot/scripts/ha/require_production_mutation_guard.sh
+linas_require_production_mutation_guard "scripts/prod_apply_model_routing_policy.sh"
+
 REPO_ROOT="/opt/linasbot"
-CANONICAL_SUBDIR="$REPO_ROOT/linaslaserbot-2.7.22"
 APP_DIR="$REPO_ROOT"
-if [ -f "$CANONICAL_SUBDIR/main.py" ]; then
-  APP_DIR="$CANONICAL_SUBDIR"
-fi
 
 export LINASBOT_DATA_ROOT="${LINASBOT_DATA_ROOT:-/opt/linasbot_data}"
-export PYTHONPATH="${APP_DIR}${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="/opt/linasbot${PYTHONPATH:+:$PYTHONPATH}"
 export CM_PRESERVE_APP_DIR="$APP_DIR"
 
 PYTHON_BIN="/opt/linasbot/venv/bin/python"
 if [ ! -x "$PYTHON_BIN" ]; then
-  PYTHON_BIN="${APP_DIR}/venv/bin/python"
-fi
-if [ ! -x "$PYTHON_BIN" ]; then
   PYTHON_BIN="python3"
 fi
 
-UPSERT="$REPO_ROOT/scripts/prod_upsert_model_routing_env.py"
-if [ ! -f "$UPSERT" ]; then
-  UPSERT="$APP_DIR/scripts/prod_upsert_model_routing_env.py"
-fi
-"$PYTHON_BIN" "$UPSERT"
+"$PYTHON_BIN" - <<'PY'
+from scripts.ha.production_env_cas import atomic_update_canonical_env
+from scripts.prod_upsert_model_routing_env import UPDATES
+
+atomic_update_canonical_env(UPDATES)
+print(f"[model-routing] canonical_env_updated=true keys={sorted(UPDATES)}")
+PY
 
 systemctl restart linasbot
 sleep 3
@@ -37,15 +36,13 @@ systemctl is-active linasbot
 import os
 from pathlib import Path
 
-from services.cm.durable_flags import default_production_env_paths
 from services.model_policy import (
     MODEL_CUSTOMER_TERRA,
     MODEL_OWNER_SOL,
     validate_model_policy_config,
 )
 
-app_dir = os.environ.get("CM_PRESERVE_APP_DIR") or "/opt/linasbot"
-for path in default_production_env_paths(app_dir=app_dir):
+for path in (Path("/opt/linasbot/.env"),):
     if not path.is_file():
         continue
     for line in path.read_text(encoding="utf-8").splitlines():

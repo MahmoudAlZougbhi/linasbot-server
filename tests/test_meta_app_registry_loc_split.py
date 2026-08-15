@@ -29,6 +29,7 @@ def test_meta_app_registry_modules_under_500_lines() -> None:
     assert _line_count("services/meta_app_registry_common.py") < 500
     assert _line_count("services/meta_app_registry_bindings.py") < 500
     assert _line_count("services/meta_app_registry_backend.py") < 500
+    assert _line_count("services/meta_app_registry_deletion.py") < 500
     assert _line_count("services/meta_app_registry_lifecycle.py") < 500
     assert _line_count("services/meta_app_registry_oauth.py") < 500
 

@@ -63,7 +63,6 @@ if snapshot.get("schema") != 1 or snapshot.get("old_app_id") != os.environ["OLD_
 
 approved = {
     "/opt/linasbot/.env",
-    "/opt/linasbot/linaslaserbot-2.7.22/.env",
 }
 required = {
     "META_APP_ID",

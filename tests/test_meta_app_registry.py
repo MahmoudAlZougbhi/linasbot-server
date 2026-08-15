@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ from services.meta_app_registry import (
     LINAS_PAGE_ID,
     MetaAppRegistry,
     MetaBindingConflictError,
+    MetaBindingCredential,
     MetaCredentialCipher,
     MetaCredentialError,
     get_meta_app_configs,
@@ -129,6 +131,7 @@ def test_deauthorization_disconnects_only_matching_app_and_destroys_token(
 
     revoked = registry.revoke_authorization(
         app_key=APP_B_KEY,
+        auth_flow="facebook_login",
         authorized_meta_user_id="112233445566",
     )
 
@@ -139,6 +142,119 @@ def test_deauthorization_disconnects_only_matching_app_and_destroys_token(
     with pytest.raises(MetaCredentialError):
         registry.get_credential(refreshed[app_b.binding_id])
     assert registry.get_credential(refreshed[app_a.binding_id]).token_app_id == configs[APP_A_KEY].app_id
+
+
+def test_deauthorization_isolates_same_numeric_owner_id_by_auth_flow(
+    registry: MetaAppRegistry,
+) -> None:
+    app_a_id = get_meta_app_configs()[APP_A_KEY].app_id
+    facebook = registry.activate_binding(
+        tenant_id="linas",
+        channel="facebook",
+        asset_id=LINAS_PAGE_ID,
+        page_id=LINAS_PAGE_ID,
+        instagram_account_id=LINAS_INSTAGRAM_ACCOUNT_ID,
+        app_key=APP_A_KEY,
+        credential=_credential(app_a_id, LINAS_PAGE_ID),
+        actor_id="owner",
+    )
+    instagram = registry.authorize_oauth_asset(
+        tenant_id="linas",
+        channel="instagram",
+        asset_id=LINAS_INSTAGRAM_ACCOUNT_ID,
+        page_id="",
+        instagram_account_id=LINAS_INSTAGRAM_ACCOUNT_ID,
+        app_key=APP_A_KEY,
+        credential=MetaBindingCredential(
+            access_token="direct-instagram-token",
+            token_app_id="1035856539045307",
+            token_profile_id=LINAS_INSTAGRAM_ACCOUNT_ID,
+            scopes=(
+                "instagram_business_basic",
+                "instagram_business_manage_messages",
+            ),
+            authorized_meta_user_id="112233445566",
+            auth_flow="instagram_login",
+        ),
+        actor_id="owner",
+        auth_flow="instagram_login",
+    )
+
+    found = registry.find_authorization_bindings(
+        app_key=APP_A_KEY,
+        auth_flow="facebook_login",
+        authorized_meta_user_id="112233445566",
+    )
+    revoked = registry.revoke_authorization(
+        app_key=APP_A_KEY,
+        auth_flow="facebook_login",
+        authorized_meta_user_id="112233445566",
+    )
+    disconnected_found = registry.find_authorization_bindings(
+        app_key=APP_A_KEY,
+        auth_flow="facebook_login",
+        authorized_meta_user_id="112233445566",
+    )
+    instagram_found = registry.find_authorization_bindings(
+        app_key=APP_A_KEY,
+        auth_flow="instagram_login",
+        authorized_meta_user_id="112233445566",
+    )
+
+    assert [binding.binding_id for binding in found] == [facebook.binding_id]
+    assert [binding.binding_id for binding in revoked] == [facebook.binding_id]
+    assert [binding.binding_id for binding in disconnected_found] == [facebook.binding_id]
+    assert [binding.binding_id for binding in instagram_found] == [instagram.binding_id]
+    refreshed = {binding.binding_id: binding for binding in registry.list_bindings()}
+    assert refreshed[facebook.binding_id].status == "disconnected"
+    assert refreshed[instagram.binding_id].status == "active"
+    assert registry.get_credential(refreshed[instagram.binding_id]).access_token == "direct-instagram-token"
+
+
+def test_delayed_deauthorization_does_not_revoke_newer_reconnect(
+    registry: MetaAppRegistry,
+) -> None:
+    app_id = get_meta_app_configs()[APP_A_KEY].app_id
+    old = registry.activate_binding(
+        tenant_id="linas",
+        channel="facebook",
+        asset_id=LINAS_PAGE_ID,
+        page_id=LINAS_PAGE_ID,
+        instagram_account_id="",
+        app_key=APP_A_KEY,
+        credential=replace(
+            _credential(app_id, LINAS_PAGE_ID),
+            authorization_started_at=100.0,
+        ),
+        actor_id="owner",
+    )
+    new_page_id = "445566778899"
+    newer = registry.activate_binding(
+        tenant_id="linas",
+        channel="facebook",
+        asset_id=new_page_id,
+        page_id=new_page_id,
+        instagram_account_id="",
+        app_key=APP_A_KEY,
+        credential=replace(
+            _credential(app_id, new_page_id),
+            authorization_started_at=300.0,
+        ),
+        actor_id="owner",
+    )
+
+    revoked = registry.revoke_authorization(
+        app_key=APP_A_KEY,
+        auth_flow="facebook_login",
+        authorized_meta_user_id="112233445566",
+        authorized_before=200.0,
+    )
+
+    assert [binding.binding_id for binding in revoked] == [old.binding_id]
+    refreshed = {binding.binding_id: binding for binding in registry.list_bindings()}
+    assert refreshed[old.binding_id].status == "disconnected"
+    assert refreshed[newer.binding_id].status == "active"
+    assert registry.get_credential(refreshed[newer.binding_id]).authorization_started_at == 300.0
 
 
 def test_one_active_app_per_tenant_channel_and_asset(registry: MetaAppRegistry) -> None:

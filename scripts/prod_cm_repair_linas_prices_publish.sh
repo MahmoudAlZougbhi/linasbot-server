@@ -3,6 +3,10 @@
 # Never invents amounts or assistant names. Does not enable Meta comments.
 set -euo pipefail
 
+# shellcheck source=scripts/ha/require_production_mutation_guard.sh
+source /opt/linasbot/scripts/ha/require_production_mutation_guard.sh
+linas_require_production_mutation_guard "scripts/prod_cm_repair_linas_prices_publish.sh"
+
 APP_DIR="/opt/linasbot"
 cd "$APP_DIR"
 export LINASBOT_DATA_ROOT="${LINASBOT_DATA_ROOT:-/opt/linasbot_data}"
@@ -18,7 +22,7 @@ echo "[cm-price-repair] deployed_sha=$(git rev-parse HEAD)"
 echo "[cm-price-repair] tenant=$TENANT_ID"
 
 # Re-run proven price import first (idempotent overwrite of structured catalog).
-sudo bash /opt/linasbot/scripts/prod_cm_import_prices.sh
+bash /opt/linasbot/scripts/prod_cm_import_prices.sh
 
 /opt/linasbot/venv/bin/python - <<'PY'
 from __future__ import annotations

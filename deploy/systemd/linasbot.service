@@ -1,0 +1,22 @@
+[Unit]
+Description=Linas Laser AI Bot
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=__APP_DIR__
+ExecStart=__APP_DIR__/venv/bin/python main.py
+Restart=always
+RestartSec=10
+KillSignal=SIGTERM
+TimeoutStopSec=60
+StandardOutput=append:/var/log/linasbot.log
+StandardError=append:/var/log/linasbot.error.log
+EnvironmentFile=-__APP_DIR__/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PATH=__APP_DIR__/venv/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target

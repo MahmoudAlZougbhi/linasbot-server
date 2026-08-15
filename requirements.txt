@@ -60,9 +60,10 @@ stripe>=11.0.0,<13.0.0
 cryptography==50.0.0
 PyJWT==2.13.0
 
-# Language Detection for English/French (used in language_resolver.py)
-# langdetect is pure Python and works reliably
-langdetect>=1.0.9
+# Language Detection for English/French (used in language_resolver.py).
+# This maintained wheel preserves the `langdetect` import API and avoids an
+# unreviewed source build during the immutable HA release transaction.
+langdetect-py==1.1.1
 
 # Durable job queues (production workers). Connection via REDIS_URL / LINAS_REDIS_URL.
 redis>=5.0.0,<6.0.0

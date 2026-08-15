@@ -1,42 +1,30 @@
-name: WhatsApp Cloud Migrate + Phase1 Flags
+name: BLOCKED - WhatsApp Cloud Phase 1 Apply Requires Two-Node HA
 
 on:
   workflow_dispatch:
     inputs:
       CONFIRM:
-        description: "APPLY_WHATSAPP_CLOUD_PHASE1 (migrate+flags) or APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY"
+        description: "Type APPLY_WHATSAPP_CLOUD_PHASE1 or APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY"
         required: true
         type: string
 
 concurrency:
-  group: whatsapp-cloud-phase1
+  group: meta-social-cutover
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  apply:
-    name: Migrate WhatsApp Cloud + Phase 1 flags
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+  blocked:
     if: >-
       github.event.inputs.CONFIRM == 'APPLY_WHATSAPP_CLOUD_PHASE1' ||
       github.event.inputs.CONFIRM == 'APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY'
+    runs-on: ubuntu-latest
+    environment: meta-social-cutover
     steps:
-      - name: Ops via SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          script_stop: true
-          command_timeout: 20m
-          script: |
-            set -e
-            cd /opt/linasbot
-            git fetch origin main
-            git show origin/main:scripts/prod_whatsapp_cloud_phase1_ops.sh > /tmp/prod_whatsapp_cloud_phase1_ops.sh
-            sudo install -m 0755 /tmp/prod_whatsapp_cloud_phase1_ops.sh /opt/linasbot/scripts/prod_whatsapp_cloud_phase1_ops.sh
-            sudo MODE='${{ github.event.inputs.CONFIRM }}' bash /opt/linasbot/scripts/prod_whatsapp_cloud_phase1_ops.sh
+      - name: Refuse node01-only environment mutation
+        run: |
+          echo "BLOCKED: WhatsApp phase-1 flags need an exact two-node env backup, sync, restart, worker proof, and rollback transaction." >&2
+          echo "Use the separately serialized connection_source migration workflow for its DB-only migration." >&2
+          exit 1

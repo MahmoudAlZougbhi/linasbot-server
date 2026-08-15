@@ -3,6 +3,10 @@
 # CM_RUNTIME_MODE=published and restart. Explicit rollback script exists separately.
 set -euo pipefail
 
+# shellcheck source=scripts/ha/require_production_mutation_guard.sh
+source /opt/linasbot/scripts/ha/require_production_mutation_guard.sh
+linas_require_production_mutation_guard "scripts/prod_cm_cutover.sh"
+
 APP_DIR="/opt/linasbot"
 cd "$APP_DIR"
 export LINASBOT_DATA_ROOT="${LINASBOT_DATA_ROOT:-/opt/linasbot_data}"
@@ -58,7 +62,7 @@ export CM_RUNTIME_MODE_VALUE=published
 export CM_PUBLISH_ENABLED_VALUE=true
 export CM_EMBEDDING_PROVIDER_VALUE=openai
 export CM_EMBEDDING_MODEL_VALUE=text-embedding-3-small
-sudo -E bash /opt/linasbot/scripts/prod_cm_apply_flags.sh
+bash /opt/linasbot/scripts/prod_cm_apply_flags.sh
 
 # Post-cutover readiness probe (local)
 sleep 3

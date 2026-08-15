@@ -1,10 +1,10 @@
-name: Meta App Webhooks Reconcile
+name: Meta Page DM + comment Webhook Reconcile
 
 on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: "Type RECONCILE_META_DM_WEBHOOKS"
+        description: "Type RECONCILE_META_SOCIAL_WEBHOOKS"
         required: true
         type: string
 
@@ -17,20 +17,43 @@ permissions:
 
 jobs:
   reconcile:
-    name: Reconcile Page and Instagram DM webhook fields
-    if: inputs.confirmation == 'RECONCILE_META_DM_WEBHOOKS'
+    name: Repair Page fields; validate Direct Instagram read-only
+    if: inputs.confirmation == 'RECONCILE_META_SOCIAL_WEBHOOKS'
     environment: meta-social-cutover
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Reconcile without rendering credentials
+      - name: Reconcile Page from the verified production release
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
         env:
-          META_APP_ID: ${{ secrets.META_APP_ID }}
-          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
-          META_WEBHOOK_VERIFY_TOKEN: ${{ secrets.META_WEBHOOK_VERIFY_TOKEN }}
-          META_GRAPH_API_VERSION: ${{ secrets.META_GRAPH_API_VERSION }}
-        run: python scripts/reconcile_meta_app_webhooks.py
+          EXPECTED_RELEASE_SHA: ${{ github.sha }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 10m
+          envs: EXPECTED_RELEASE_SHA
+          script: |
+            set -euo pipefail
+            exec 9>/run/lock/linasbot-meta-live.lock
+            flock -x 9
+            REPO_DIR=/opt/linasbot
+            DEPLOYED_RELEASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
+            if [ "$DEPLOYED_RELEASE_SHA" != "$EXPECTED_RELEASE_SHA" ]; then
+              echo "[meta-app-webhooks] workflow SHA does not match deployed release" >&2
+              exit 1
+            fi
+            if ! git -C "$REPO_DIR" diff --quiet "$DEPLOYED_RELEASE_SHA" -- || \
+               ! git -C "$REPO_DIR" diff --cached --quiet "$DEPLOYED_RELEASE_SHA" --; then
+              echo "[meta-app-webhooks] deployed tracked files differ from release SHA" >&2
+              exit 1
+            fi
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
+            git -C "$REPO_DIR" ls-files --error-unmatch \
+              scripts/reconcile_meta_app_webhooks.py scripts/ha/run_with_canonical_meta_env.py >/dev/null
+            cd "$REPO_DIR"
+            sudo "$REPO_DIR/venv/bin/python" scripts/ha/run_with_canonical_meta_env.py \
+              reconcile-app-webhooks
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"

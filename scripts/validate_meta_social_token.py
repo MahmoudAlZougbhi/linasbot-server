@@ -49,7 +49,10 @@ EXPECTED_PAGE_ID = "378696005334409"
 EXPECTED_INSTAGRAM_ID = "17841413184256533"
 RETIRED_APP_ID = "1784792718776344"
 EXPECTED_GRAPH_VERSION = "v24.0"
-EXPECTED_CALLBACK_URL = "https://www.linasaibot.com/webhook/meta-messaging"
+EXPECTED_PAGE_CALLBACK_URL = "https://www.linasaibot.com/webhook/meta-messaging"
+EXPECTED_INSTAGRAM_CALLBACK_URL = "https://www.linasaibot.com/webhook/instagram-login"
+EXPECTED_CALLBACK_URL = EXPECTED_PAGE_CALLBACK_URL
+PRESERVED_AUXILIARY_WEBHOOK_OBJECTS = frozenset({"whatsapp_business_account"})
 
 REQUIRED_SCOPES = frozenset(
     {
@@ -57,8 +60,6 @@ REQUIRED_SCOPES = frozenset(
         "pages_manage_metadata",
         "pages_show_list",
         "pages_read_engagement",
-        "instagram_basic",
-        "instagram_manage_messages",
     }
 )
 
@@ -106,8 +107,6 @@ def validate_debug_payload(
         "token_type_is_page": str(data.get("type") or "").upper() == "PAGE",
         "token_has_no_expiry": data.get("expires_at") == 0,
         "granular_targets_present": EXPECTED_PAGE_ID in target_ids,
-        "granular_targets_allowlisted": bool(target_ids)
-        and target_ids.issubset({EXPECTED_PAGE_ID, EXPECTED_INSTAGRAM_ID}),
     }
     checks.update({f"scope_{scope}_present": scope in scopes for scope in sorted(REQUIRED_SCOPES)})
     if not all(checks.values()):
@@ -142,14 +141,20 @@ def validate_payloads(
 
 def validate_conversation_payloads(
     messenger_payload: dict[str, object],
-    instagram_payload: dict[str, object],
+    instagram_payload: dict[str, object] | None = None,
 ) -> Any:
-    """Prove both messaging APIs are callable without rendering conversation data."""
+    """Prove App A messaging APIs are callable without crossing app trust domains.
+
+    Direct Instagram Login is validated through its own app, token, callback and
+    graph host. The optional second payload is retained only for explicitly
+    legacy Page-linked Instagram diagnostics.
+    """
 
     checks = {
         "messenger_conversations_query_succeeded": isinstance(messenger_payload.get("data"), list),
-        "instagram_conversations_query_succeeded": isinstance(instagram_payload.get("data"), list),
     }
+    if instagram_payload is not None:
+        checks["legacy_instagram_conversations_query_succeeded"] = isinstance(instagram_payload.get("data"), list)
     if not all(checks.values()):
         failed = sorted(key for key, value in checks.items() if not value)
         raise MetaTokenValidationError(f"Meta conversation validation failed checks={failed}")
@@ -201,10 +206,13 @@ def validate_app_webhook_configuration(payload: dict[str, object]) -> Any:
 
     raw_subscriptions = payload.get("data")
     subscriptions = raw_subscriptions if isinstance(raw_subscriptions, list) else []
+    rows = [subscription for subscription in subscriptions if isinstance(subscription, dict)]
+    names = [str(subscription.get("object") or "").strip().lower() for subscription in rows]
+    page_rows = [row for row, name in zip(rows, names, strict=True) if name == "page"]
+    instagram_rows = [row for row, name in zip(rows, names, strict=True) if name == "instagram"]
     by_object = {
-        str(subscription.get("object") or "").strip().lower(): subscription
-        for subscription in subscriptions
-        if isinstance(subscription, dict)
+        "page": page_rows[0] if len(page_rows) == 1 else {},
+        "instagram": instagram_rows[0] if len(instagram_rows) == 1 else {},
     }
     page = _mapping(by_object.get("page"))
     instagram = _mapping(by_object.get("instagram"))
@@ -213,13 +221,18 @@ def validate_app_webhook_configuration(payload: dict[str, object]) -> Any:
     page_field_check = check_exact_fields(page_fields, APP_PAGE_WEBHOOK_FIELDS)
     instagram_field_check = check_exact_fields(instagram_fields, APP_INSTAGRAM_WEBHOOK_FIELDS)
     checks = {
-        "app_webhook_objects_exact": set(by_object) == {"page", "instagram"},
+        "app_social_webhook_objects_exact": len(page_rows) == 1 and len(instagram_rows) == 1,
+        "app_auxiliary_webhook_objects_supported": set(names).issubset(
+            {"page", "instagram"} | set(PRESERVED_AUXILIARY_WEBHOOK_OBJECTS)
+        ),
+        "app_webhook_rows_valid": len(rows) == len(subscriptions),
         "app_page_webhook_active": page.get("active") is True,
-        "app_page_webhook_callback_match": str(page.get("callback_url") or "") == EXPECTED_CALLBACK_URL,
+        "app_page_webhook_callback_match": str(page.get("callback_url") or "") == EXPECTED_PAGE_CALLBACK_URL,
         "app_page_webhook_fields_exact": page_field_check.exact,
         "app_page_webhook_dm_fields_present": page_field_check.dm_fields_present,
         "app_instagram_webhook_active": instagram.get("active") is True,
-        "app_instagram_webhook_callback_match": str(instagram.get("callback_url") or "") == EXPECTED_CALLBACK_URL,
+        "app_instagram_webhook_callback_match": str(instagram.get("callback_url") or "")
+        == EXPECTED_INSTAGRAM_CALLBACK_URL,
         "app_instagram_webhook_fields_exact": instagram_field_check.exact,
         "app_instagram_webhook_dm_fields_present": instagram_field_check.dm_fields_present,
     }
@@ -310,18 +323,12 @@ def main() -> None:
     baseline_checks.update(validate_payloads(debug_payload, page_payload, page_payload, expected_app_id=app_id))
 
     messenger_query = urllib.parse.urlencode({"fields": "id", "limit": "1"})
-    instagram_query = urllib.parse.urlencode({"fields": "id", "limit": "1", "platform": "instagram"})
     messenger_payload = _request_json(
         f"{base}/{EXPECTED_PAGE_ID}/conversations?{messenger_query}",
         bearer=page_token,
         stage="messenger_conversations",
     )
-    instagram_payload = _request_json(
-        f"{base}/{EXPECTED_PAGE_ID}/conversations?{instagram_query}",
-        bearer=page_token,
-        stage="instagram_conversations",
-    )
-    baseline_checks.update(validate_conversation_payloads(messenger_payload, instagram_payload))
+    baseline_checks.update(validate_conversation_payloads(messenger_payload))
 
     subscription_query = urllib.parse.urlencode({"fields": "id,subscribed_fields"})
     subscription_payload = _request_json(

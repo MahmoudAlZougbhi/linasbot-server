@@ -126,10 +126,10 @@ def comments_enforcement_decision(
         cm_action_enabled=action_on,
         per_asset_switch_enabled=per_asset_enabled,
     )
-    if not action_on:
-        return {"allow": False, "reason": "cm_action_disabled", "readiness": readiness}
     if not per_asset_enabled:
         return {"allow": False, "reason": "feature_disabled", "readiness": readiness}
+    if not action_on:
+        return {"allow": False, "reason": "cm_action_disabled", "readiness": readiness}
     if granted_scopes is not None and not readiness["scopes_ready"]:
         return {"allow": False, "reason": "comment_scopes_missing", "readiness": readiness}
     return {"allow": True, "reason": "ok", "readiness": readiness}

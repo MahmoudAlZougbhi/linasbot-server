@@ -1,0 +1,349 @@
+name: Provision Exact Python Runtime HA
+
+on:
+  workflow_dispatch:
+    inputs:
+      OPERATION:
+        description: "Read-only plan/dry-run, or confirmation-gated HA operation"
+        required: true
+        type: choice
+        options: [plan, dry-run, apply, status, recover, rollback]
+      TARGET_SHA:
+        description: "Initial operations: exact successful Quality Gates target SHA"
+        required: false
+        type: string
+      QUALITY_GATES_RUN_ID:
+        description: "Initial operations: exact successful Quality Gates run ID"
+        required: false
+        type: string
+      RELEASE_RUN_ATTEMPT:
+        description: "Initial operations: exact Quality Gates run attempt"
+        required: false
+        type: string
+      RELEASE_ARTIFACT_ID:
+        description: "Initial operations: exact immutable release artifact ID"
+        required: false
+        type: string
+      RELEASE_ARTIFACT_API_SHA256:
+        description: "Initial operations: bare SHA-256 from the GitHub artifact REST object"
+        required: false
+        type: string
+      RELEASE_MANIFEST_SHA256:
+        description: "Initial operations: exact release-manifest.json SHA-256"
+        required: false
+        type: string
+      TRANSACTION_ID:
+        description: "Status/recovery: exact pyr_<32hex> transaction ID"
+        required: false
+        type: string
+      PLAN_SHA256:
+        description: "Apply only: exact SHA-256 emitted by a prior read-only plan"
+        required: false
+        type: string
+      JOURNAL_SHA256:
+        description: "Recover/rollback only: exact coordinator journal SHA-256 from status"
+        required: false
+        type: string
+      CONFIRMATION:
+        description: "Apply/recover/rollback only: exact confirmation emitted by plan/status"
+        required: false
+        type: string
+      PROTECTION_CONFIRM:
+        description: "Type I_CONFIRMED_META_SOCIAL_CUTOVER_HAS_REQUIRED_REVIEWERS"
+        required: true
+        type: string
+
+concurrency:
+  group: meta-social-cutover
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  provision:
+    name: Exact CPython Two-Node Transaction
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    environment: meta-social-cutover
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout reviewed workflow bootstrap only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Gate protected operation and immutable authorities
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPERATION: ${{ inputs.OPERATION }}
+          TARGET_SHA: ${{ inputs.TARGET_SHA }}
+          QUALITY_GATES_RUN_ID: ${{ inputs.QUALITY_GATES_RUN_ID }}
+          RELEASE_RUN_ATTEMPT: ${{ inputs.RELEASE_RUN_ATTEMPT }}
+          RELEASE_ARTIFACT_ID: ${{ inputs.RELEASE_ARTIFACT_ID }}
+          RELEASE_ARTIFACT_API_SHA256: ${{ inputs.RELEASE_ARTIFACT_API_SHA256 }}
+          RELEASE_MANIFEST_SHA256: ${{ inputs.RELEASE_MANIFEST_SHA256 }}
+          TRANSACTION_ID: ${{ inputs.TRANSACTION_ID }}
+          PLAN_SHA256: ${{ inputs.PLAN_SHA256 }}
+          JOURNAL_SHA256: ${{ inputs.JOURNAL_SHA256 }}
+          CONFIRMATION: ${{ inputs.CONFIRMATION }}
+          PROTECTION_CONFIRM: ${{ inputs.PROTECTION_CONFIRM }}
+          META_HA_PROTECTED_ENVIRONMENT_APPROVED: ${{ vars.META_HA_PROTECTED_ENVIRONMENT_APPROVED }}
+        run: |
+          set -euo pipefail
+          [ "$PROTECTION_CONFIRM" = "I_CONFIRMED_META_SOCIAL_CUTOVER_HAS_REQUIRED_REVIEWERS" ]
+          [ "$META_HA_PROTECTED_ENVIRONMENT_APPROVED" = true ]
+          REQUIRED_REVIEWERS="$(gh api "repos/$GITHUB_REPOSITORY/environments/meta-social-cutover" --jq '[.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[]?] | length')"
+          PREVENT_SELF_REVIEW="$(gh api "repos/$GITHUB_REPOSITORY/environments/meta-social-cutover" --jq '[.protection_rules[]? | select(.type == "required_reviewers") | .prevent_self_review] | all')"
+          [[ "$REQUIRED_REVIEWERS" =~ ^[1-9][0-9]*$ ]]
+          [ "$PREVENT_SELF_REVIEW" = true ]
+
+          if [ "$OPERATION" = plan ] || [ "$OPERATION" = dry-run ] || [ "$OPERATION" = apply ]; then
+            [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] && [ "$TARGET_SHA" != "$(printf '%040d' 0)" ]
+            [[ "$QUALITY_GATES_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+            [[ "$RELEASE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+            [[ "$RELEASE_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+            [[ "$RELEASE_ARTIFACT_API_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            [[ "$RELEASE_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            [ "$RELEASE_ARTIFACT_API_SHA256" != "$(printf '%064d' 0)" ]
+            [ "$RELEASE_MANIFEST_SHA256" != "$(printf '%064d' 0)" ]
+            [ -z "$TRANSACTION_ID$JOURNAL_SHA256" ]
+            if [ "$OPERATION" = apply ]; then
+              [[ "$PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]]
+              [ -n "$CONFIRMATION" ]
+            else
+              [ -z "$PLAN_SHA256$CONFIRMATION" ]
+            fi
+
+            RUN_JSON="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$QUALITY_GATES_RUN_ID")"
+            [ "$(jq -r '.head_sha' <<<"$RUN_JSON")" = "$TARGET_SHA" ]
+            [ "$(jq -r '.head_branch' <<<"$RUN_JSON")" = main ]
+            [ "$(jq -r '.event' <<<"$RUN_JSON")" = push ]
+            [ "$(jq -r '.conclusion' <<<"$RUN_JSON")" = success ]
+            [ "$(jq -r '.run_attempt' <<<"$RUN_JSON")" = "$RELEASE_RUN_ATTEMPT" ]
+            WORKFLOW_ID="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/quality-gates.yml" --jq '.id')"
+            [ "$(jq -r '.workflow_id' <<<"$RUN_JSON")" = "$WORKFLOW_ID" ]
+
+            ARTIFACT_JSON="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$RELEASE_ARTIFACT_ID")"
+            [ "$(jq -r '.name' <<<"$ARTIFACT_JSON")" = "linasbot-release-$TARGET_SHA" ]
+            [ "$(jq -r '.expired' <<<"$ARTIFACT_JSON")" = false ]
+            [ "$(jq -r '.workflow_run.id' <<<"$ARTIFACT_JSON")" = "$QUALITY_GATES_RUN_ID" ]
+            [ "$(jq -r '.workflow_run.head_sha' <<<"$ARTIFACT_JSON")" = "$TARGET_SHA" ]
+            ARTIFACT_DIGEST="$(jq -r '.digest' <<<"$ARTIFACT_JSON")"
+            [ "$ARTIFACT_DIGEST" = "sha256:$RELEASE_ARTIFACT_API_SHA256" ]
+          elif [ "$OPERATION" = status ]; then
+            [[ "$TRANSACTION_ID" =~ ^pyr_[0-9a-f]{32}$ ]]
+            [ -z "$TARGET_SHA$QUALITY_GATES_RUN_ID$RELEASE_RUN_ATTEMPT$RELEASE_ARTIFACT_ID" ]
+            [ -z "$RELEASE_ARTIFACT_API_SHA256$RELEASE_MANIFEST_SHA256$PLAN_SHA256$JOURNAL_SHA256$CONFIRMATION" ]
+          elif [ "$OPERATION" = recover ] || [ "$OPERATION" = rollback ]; then
+            [[ "$TRANSACTION_ID" =~ ^pyr_[0-9a-f]{32}$ ]]
+            [[ "$JOURNAL_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            [ "$JOURNAL_SHA256" != "$(printf '%064d' 0)" ]
+            [ -n "$CONFIRMATION" ]
+            [ -z "$TARGET_SHA$QUALITY_GATES_RUN_ID$RELEASE_RUN_ATTEMPT$RELEASE_ARTIFACT_ID" ]
+            [ -z "$RELEASE_ARTIFACT_API_SHA256$RELEASE_MANIFEST_SHA256$PLAN_SHA256" ]
+          else
+            exit 1
+          fi
+
+      - name: Stage hash-pinned workflow trust bridge
+        run: |
+          set -euo pipefail
+          umask 077
+          BOOTSTRAP=scripts/ha/python_runtime_provision_workflow_bootstrap.py
+          EXPECTED=04fb2449fa341242c287c24f5b861220b4663566870bb45d42ee989b0a50764c
+          test -f "$BOOTSTRAP" && test ! -L "$BOOTSTRAP"
+          [ "$(/usr/bin/sha256sum "$BOOTSTRAP" | /usr/bin/awk '{print $1}')" = "$EXPECTED" ]
+          mkdir -m 0700 transfer
+          cp -- "$BOOTSTRAP" transfer/workflow-bootstrap.py
+          chmod 0600 transfer/workflow-bootstrap.py
+          [ "$(/usr/bin/sha256sum transfer/workflow-bootstrap.py | /usr/bin/awk '{print $1}')" = "$EXPECTED" ]
+
+      - name: Download exact immutable QG release artifact
+        if: inputs.OPERATION == 'plan' || inputs.OPERATION == 'dry-run' || inputs.OPERATION == 'apply'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ inputs.RELEASE_ARTIFACT_ID }}
+          run-id: ${{ inputs.QUALITY_GATES_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: release-download
+          merge-multiple: true
+
+      - name: Authenticate QG bundle and compute read-only plan
+        id: plan
+        if: inputs.OPERATION == 'plan' || inputs.OPERATION == 'dry-run' || inputs.OPERATION == 'apply'
+        env:
+          TARGET_SHA: ${{ inputs.TARGET_SHA }}
+          QUALITY_GATES_RUN_ID: ${{ inputs.QUALITY_GATES_RUN_ID }}
+          RELEASE_RUN_ATTEMPT: ${{ inputs.RELEASE_RUN_ATTEMPT }}
+          RELEASE_ARTIFACT_ID: ${{ inputs.RELEASE_ARTIFACT_ID }}
+          RELEASE_ARTIFACT_API_SHA256: ${{ inputs.RELEASE_ARTIFACT_API_SHA256 }}
+          RELEASE_MANIFEST_SHA256: ${{ inputs.RELEASE_MANIFEST_SHA256 }}
+          REQUESTED_PLAN_SHA256: ${{ inputs.PLAN_SHA256 }}
+          REQUESTED_CONFIRMATION: ${{ inputs.CONFIRMATION }}
+          OPERATION: ${{ inputs.OPERATION }}
+        run: |
+          set -euo pipefail
+          umask 077
+          TRUST_ROOT="/run/linas-python-runtime-qg-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          PREPARED="$(sudo env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+            /usr/bin/python3 -B -I -S "$GITHUB_WORKSPACE/transfer/workflow-bootstrap.py" prepare \
+            "$GITHUB_WORKSPACE/release-download" "$TRUST_ROOT" "$GITHUB_WORKSPACE/transfer" \
+            "$GITHUB_REPOSITORY" "$QUALITY_GATES_RUN_ID" "$RELEASE_RUN_ATTEMPT" "$TARGET_SHA" \
+            "$RELEASE_MANIFEST_SHA256" "$(id -u)")"
+          [ "$(jq -r '.schema' <<<"$PREPARED")" = 1 ]
+          BUNDLE_ROOT="$(jq -r '.bundle_root' <<<"$PREPARED")"
+          CONTROL_ROOT="$(jq -r '.control_root' <<<"$PREPARED")"
+          PLAN="$(sudo env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+            /usr/bin/python3 -B -I -S "$CONTROL_ROOT/scripts/ha/python_runtime_provision_trusted_launcher.py" \
+            plan-source "$BUNDLE_ROOT" "$CONTROL_ROOT" "$RELEASE_MANIFEST_SHA256" \
+            "$RELEASE_ARTIFACT_ID" "$RELEASE_ARTIFACT_API_SHA256" "$RELEASE_MANIFEST_SHA256" \
+            "$QUALITY_GATES_RUN_ID" "$RELEASE_RUN_ATTEMPT" "$TARGET_SHA")"
+          [ "$(jq -r '.status' <<<"$PLAN")" = read-only-plan ]
+          PLAN_SHA="$(jq -r '.plan_sha256' <<<"$PLAN")"
+          APPLY_CONFIRM="$(jq -r '.apply_confirmation' <<<"$PLAN")"
+          [[ "$PLAN_SHA" =~ ^[0-9a-f]{64}$ ]]
+          if [ "$OPERATION" = apply ]; then
+            [ "$REQUESTED_PLAN_SHA256" = "$PLAN_SHA" ]
+            [ "$REQUESTED_CONFIRMATION" = "$APPLY_CONFIRM" ]
+          fi
+          jq . <<<"$PLAN"
+          {
+            printf 'plan_sha256=%s\n' "$PLAN_SHA"
+            for key in launcher_sha256 launcher_size ingest_sha256 ingest_size ingest_contract_sha256 ingest_contract_size; do
+              printf '%s=%s\n' "$key" "$(jq -r ".$key" <<<"$PREPARED")"
+            done
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Transfer exact release and bootstrap authority to fixed node01
+        if: inputs.OPERATION == 'apply'
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "transfer/release,transfer/bootstrap,transfer/workflow-bootstrap.py"
+          target: "/tmp/linasbot-python-runtime-upload-${{ github.run_id }}-${{ github.run_attempt }}"
+          strip_components: 1
+
+      - name: Transfer only pinned recovery bridge
+        if: inputs.OPERATION == 'status' || inputs.OPERATION == 'recover' || inputs.OPERATION == 'rollback'
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "transfer/workflow-bootstrap.py"
+          target: "/tmp/linasbot-python-runtime-upload-${{ github.run_id }}-${{ github.run_attempt }}"
+          strip_components: 1
+
+      - name: Execute authenticated OS-Python HA operation
+        if: inputs.OPERATION == 'apply' || inputs.OPERATION == 'status' || inputs.OPERATION == 'recover' || inputs.OPERATION == 'rollback'
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
+        env:
+          OPERATION: ${{ inputs.OPERATION }}
+          TARGET_SHA: ${{ inputs.TARGET_SHA }}
+          QUALITY_GATES_RUN_ID: ${{ inputs.QUALITY_GATES_RUN_ID }}
+          RELEASE_RUN_ATTEMPT: ${{ inputs.RELEASE_RUN_ATTEMPT }}
+          RELEASE_ARTIFACT_ID: ${{ inputs.RELEASE_ARTIFACT_ID }}
+          RELEASE_ARTIFACT_API_SHA256: ${{ inputs.RELEASE_ARTIFACT_API_SHA256 }}
+          RELEASE_MANIFEST_SHA256: ${{ inputs.RELEASE_MANIFEST_SHA256 }}
+          TRANSACTION_ID: ${{ inputs.TRANSACTION_ID }}
+          PLAN_SHA256: ${{ inputs.PLAN_SHA256 }}
+          JOURNAL_SHA256: ${{ inputs.JOURNAL_SHA256 }}
+          CONFIRMATION: ${{ inputs.CONFIRMATION }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+          LAUNCHER_SHA256: ${{ steps.plan.outputs.launcher_sha256 }}
+          LAUNCHER_SIZE: ${{ steps.plan.outputs.launcher_size }}
+          INGEST_SHA256: ${{ steps.plan.outputs.ingest_sha256 }}
+          INGEST_SIZE: ${{ steps.plan.outputs.ingest_size }}
+          INGEST_CONTRACT_SHA256: ${{ steps.plan.outputs.ingest_contract_sha256 }}
+          INGEST_CONTRACT_SIZE: ${{ steps.plan.outputs.ingest_contract_size }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: false
+          command_timeout: 115m
+          envs: OPERATION,TARGET_SHA,QUALITY_GATES_RUN_ID,RELEASE_RUN_ATTEMPT,RELEASE_ARTIFACT_ID,RELEASE_ARTIFACT_API_SHA256,RELEASE_MANIFEST_SHA256,TRANSACTION_ID,PLAN_SHA256,JOURNAL_SHA256,CONFIRMATION,WORKFLOW_RUN_ID,WORKFLOW_RUN_ATTEMPT,LAUNCHER_SHA256,LAUNCHER_SIZE,INGEST_SHA256,INGEST_SIZE,INGEST_CONTRACT_SHA256,INGEST_CONTRACT_SIZE
+          script: |
+            set -euo pipefail
+            umask 077
+            UPLOAD="/tmp/linasbot-python-runtime-upload-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
+            SOURCE="$UPLOAD/workflow-bootstrap.py"
+            TRUSTED="/run/linas-python-runtime-workflow-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}.py"
+            SOURCE_UID="$(id -u)"
+            sudo env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+              /usr/bin/python3 -B -I -S - "$SOURCE" "$TRUSTED" \
+              04fb2449fa341242c287c24f5b861220b4663566870bb45d42ee989b0a50764c "$SOURCE_UID" <<'PY'
+            import hashlib, os, re, stat, sys
+            from pathlib import Path
+            source, target, expected, uid = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], int(sys.argv[4])
+            if not re.fullmatch(r"/run/linas-python-runtime-workflow-[1-9][0-9]*-[1-9][0-9]*\.py", str(target)):
+                raise SystemExit("workflow bootstrap target is not fixed")
+            parent = target.parent.lstat()
+            if not stat.S_ISDIR(parent.st_mode) or stat.S_ISLNK(parent.st_mode) or parent.st_uid != 0 or stat.S_IMODE(parent.st_mode) != 0o755:
+                raise SystemExit("workflow bootstrap parent is unsafe")
+            def read_safe(path, expected_uid, exact_mode=None):
+                before = path.lstat()
+                mode = stat.S_IMODE(before.st_mode)
+                if (not stat.S_ISREG(before.st_mode) or stat.S_ISLNK(before.st_mode) or before.st_uid != expected_uid
+                        or before.st_nlink != 1 or not 1 <= before.st_size <= 1048576
+                        or (exact_mode is None and mode & 0o022) or (exact_mode is not None and mode != exact_mode)):
+                    raise SystemExit("unsafe workflow bootstrap file")
+                fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)); opened = os.fstat(fd); chunks = []; consumed = 0
+                while consumed < opened.st_size:
+                    chunk = os.read(fd, min(1048576, opened.st_size - consumed))
+                    if not chunk: raise SystemExit("truncated workflow bootstrap")
+                    chunks.append(chunk); consumed += len(chunk)
+                after = os.fstat(fd); os.close(fd)
+                identity = ("st_dev", "st_ino", "st_size", "st_mtime_ns")
+                if any(getattr(before, k) != getattr(opened, k) for k in identity) or any(getattr(opened, k) != getattr(after, k) for k in identity):
+                    raise SystemExit("workflow bootstrap changed")
+                return b"".join(chunks)
+            raw = read_safe(source, uid)
+            if hashlib.sha256(raw).hexdigest() != expected: raise SystemExit("workflow bootstrap digest changed")
+            if target.exists() or target.is_symlink():
+                if read_safe(target, 0, 0o600) != raw: raise SystemExit("trusted workflow bootstrap conflicts")
+            else:
+                temporary = target.parent / ("." + target.name + ".writing")
+                if temporary.exists() or temporary.is_symlink():
+                    try: complete = read_safe(temporary, 0, 0o600) == raw
+                    except (OSError, SystemExit): complete = False
+                    if not complete: temporary.unlink()
+                if not temporary.exists():
+                    out = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+                    os.fchmod(out, 0o600); os.fchown(out, 0, 0); view = memoryview(raw)
+                    while view:
+                        written = os.write(out, view)
+                        if written < 1: raise SystemExit("workflow bootstrap write stalled")
+                        view = view[written:]
+                    os.fsync(out); os.close(out)
+                directory = os.open(target.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)); os.fsync(directory)
+                os.replace(temporary, target); os.fsync(directory); os.close(directory)
+            PY
+
+            if [ "$OPERATION" = apply ]; then
+              sudo env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+                /usr/bin/python3 -B -I -S "$TRUSTED" initial "$UPLOAD" "$WORKFLOW_RUN_ID" \
+                "$WORKFLOW_RUN_ATTEMPT" "$SOURCE_UID" "$RELEASE_ARTIFACT_ID" \
+                "$RELEASE_ARTIFACT_API_SHA256" "$RELEASE_MANIFEST_SHA256" "$QUALITY_GATES_RUN_ID" \
+                "$RELEASE_RUN_ATTEMPT" "$TARGET_SHA" "$PLAN_SHA256" "$CONFIRMATION" \
+                "$LAUNCHER_SHA256" "$LAUNCHER_SIZE" "$INGEST_SHA256" "$INGEST_SIZE" \
+                "$INGEST_CONTRACT_SHA256" "$INGEST_CONTRACT_SIZE"
+            elif [ "$OPERATION" = status ]; then
+              sudo env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+                /usr/bin/python3 -B -I -S "$TRUSTED" resume status "$TRANSACTION_ID"
+            else
+              sudo env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+                /usr/bin/python3 -B -I -S "$TRUSTED" resume "$OPERATION" "$TRANSACTION_ID" \
+                "$JOURNAL_SHA256" "$CONFIRMATION"
+            fi

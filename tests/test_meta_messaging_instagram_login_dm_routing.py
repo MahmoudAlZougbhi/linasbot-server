@@ -1,4 +1,4 @@
-"""Instagram DMs on /webhook/meta-messaging resolve Instagram Login and legacy facebook_login."""
+"""The App A callback accepts page-linked Instagram, never Direct Instagram Login."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from starlette.requests import Request
 from modules import meta_messaging_webhook
 from services.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential
 from services.meta_messaging import InMemoryMessageDeduper
+from tests.meta_compliance_helpers import _FakeFirestore
 
 PROD_IG_ID = "17841413184256533"
 APP_A_SECRET = "multi-app-a-secret"
@@ -89,6 +90,8 @@ def registry_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MetaAppRegi
     monkeypatch.setenv("META_INSTAGRAM_LOGIN_APP_SECRET", "instagram-app-secret-tests")
     monkeypatch.setenv("META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN", "verify-ig-login-tests")
     monkeypatch.setenv("META_CREDENTIAL_ENCRYPTION_KEY", "ig-login-dm-webhook-secret-tests-1234567890")
+    firestore = _FakeFirestore()
+    monkeypatch.setattr("utils.utils.get_firestore_db", lambda: firestore)
     registry = MetaAppRegistry(
         store_path=tmp_path / "registry.json",
         audit_path=tmp_path / "audit.jsonl",
@@ -178,14 +181,14 @@ async def _post_ig_dm(account_id: str, *, mid: str, monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.asyncio
-async def test_instagram_object_accepts_instagram_login_binding(
+async def test_instagram_object_rejects_instagram_login_binding_on_app_a_callback(
     registry_env: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _authorize_instagram_login(registry_env)
     result = await _post_ig_dm(PROD_IG_ID, mid="ig-login-mid", monkeypatch=monkeypatch)
-    assert result["json"]["accepted"] == 1
-    assert result["processed"] == ["instagram_login"]
+    assert result["json"]["accepted"] == 0
+    assert result["processed"] == []
 
 
 @pytest.mark.asyncio
@@ -210,7 +213,6 @@ async def test_instagram_object_rejects_wrong_account(
     assert result["processed"] == []
 
 
-def test_meta_messaging_webhook_does_not_hardcode_facebook_login_for_dms() -> None:
+def test_meta_messaging_webhook_uses_callback_auth_flow_boundary() -> None:
     source = Path(meta_messaging_webhook.__file__).read_text(encoding="utf-8")
     assert "registry_auth_flow_for_webhook_object(payload_object)" in source
-    assert 'auth_flow="facebook_login"' not in source

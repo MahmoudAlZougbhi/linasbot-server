@@ -19,7 +19,8 @@ from services.meta_app_registry import (
     MetaAppRegistry,
     MetaBindingCredential,
 )
-from services.meta_messaging import InMemoryMessageDeduper
+from services.meta_messaging import InMemoryMessageDeduper, MetaMessagingSettings
+from tests.meta_compliance_helpers import _FakeFirestore
 
 SCOPES = (
     "pages_show_list",
@@ -68,6 +69,8 @@ def configured_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Meta
     monkeypatch.setenv("META_APP_B_WEBHOOK_VERIFY_TOKEN", "verify-b")
     monkeypatch.setenv("META_APP_B_LOGIN_CONFIG_ID", "config-b")
     monkeypatch.setenv("META_CREDENTIAL_ENCRYPTION_KEY", "webhook-registry-credential-encryption-key-tests")
+    firestore = _FakeFirestore()
+    monkeypatch.setattr("utils.utils.get_firestore_db", lambda: firestore)
     registry = MetaAppRegistry(
         store_path=tmp_path / "registry.json",
         audit_path=tmp_path / "audit.jsonl",
@@ -113,6 +116,88 @@ def configured_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Meta
     )
     meta_messaging_webhook._message_deduper = InMemoryMessageDeduper(ttl_seconds=60)
     return registry
+
+
+@pytest.mark.asyncio
+async def test_legacy_inline_route_passes_authenticated_synthetic_tenant_and_binding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("META_MULTI_APP_REGISTRY_ENABLED", "false")
+    settings = MetaMessagingSettings(
+        enabled=True,
+        app_secret="legacy-app-secret",
+        page_id="legacy-page",
+        page_access_token="legacy-token",
+        instagram_account_id="legacy-instagram",
+        verify_token="legacy-verify",
+        graph_api_version="v24.0",
+    )
+    monkeypatch.setattr(meta_messaging_webhook, "get_meta_messaging_settings", lambda: settings)
+    meta_messaging_webhook._message_deduper = InMemoryMessageDeduper(ttl_seconds=60)
+    captured: list[dict[str, Any]] = []
+    handle = SimpleNamespace(owner_token="owner", generation=1, nonproduction_bypass=True)
+
+    async def acquire(*_args: Any, **_kwargs: Any) -> Any:
+        return handle
+
+    async def run(*_args: Any, operation: Any, **_kwargs: Any) -> Any:
+        return await operation()
+
+    async def settle(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def process(_event: dict[str, Any], _settings: Any, **kwargs: Any) -> dict[str, Any]:
+        captured.append(kwargs)
+        return {"delivery": "no_text", "retryable": False, "terminal": True}
+
+    monkeypatch.setattr("services.durable_event_claim.try_claim_event_handle", acquire)
+    monkeypatch.setattr("services.durable_event_claim.run_under_event_claim", run)
+    monkeypatch.setattr("services.durable_event_claim.complete_event_claim", settle)
+    monkeypatch.setattr("services.durable_event_claim.release_event_claim", settle)
+    monkeypatch.setattr(
+        "services.scale.meta_ingress.persist_meta_dm_accepted",
+        lambda *_args, **_kwargs: ("ibe_" + "1" * 40, True),
+    )
+    monkeypatch.setattr(
+        "services.scale.meta_ingress.enqueue_meta_inbound_event",
+        lambda *_args, **_kwargs: "inline",
+    )
+    monkeypatch.setattr("services.scale.meta_ingress.mark_dm_processing", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("services.scale.meta_ingress.mark_dm_completed", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("services.scale.meta_ingress.mark_dm_failed", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("services.scale.inbound_event_store.mark_inbound_state", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(meta_messaging_webhook, "process_meta_social_event", process)
+
+    payload = {
+        "object": "page",
+        "entry": [
+            {
+                "id": "legacy-page",
+                "messaging": [
+                    {
+                        "sender": {"id": "legacy-customer"},
+                        "recipient": {"id": "legacy-page"},
+                        "message": {"mid": "legacy-inline-mid", "text": "hello"},
+                    }
+                ],
+            }
+        ],
+    }
+    body = json.dumps(payload, separators=(",", ":")).encode()
+    response = await meta_messaging_webhook.receive_meta_messaging_webhook(
+        _request(body, _sign(settings.app_secret, body))
+    )
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+
+    assert json.loads(response.body)["accepted"] == 1
+    assert captured == [
+        {
+            "inbound_event_id": "ibe_" + "1" * 40,
+            "tenant_id": "linas",
+            "binding_id": "legacy-single-app",
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -244,16 +329,11 @@ async def test_instagram_object_routes_only_linked_instagram_binding(
 
 
 @pytest.mark.asyncio
-async def test_instagram_comment_on_app_a_callback_uses_instagram_login_binding(
+async def test_instagram_comment_on_app_a_callback_does_not_cross_into_instagram_login_binding(
     configured_registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Regression: Meta may deliver IG comments to App A /webhook/meta-messaging.
-
-    When the page-linked facebook_login IG row lacks comment scopes but Direct
-    Instagram Login is comments-ready for the same asset, the webhook must accept
-    and process via the instagram_login binding (not drop with facebook_login-only).
-    """
+    """App-A signed events must never cross into the dedicated IG trust domain."""
     from services.meta_app_registry import MetaBindingCredential
     from services.meta_comment_replies import CommentReplyResult
     from services.meta_instagram_login_subscription import COMMENTS_SUBSCRIPTION_FIELD
@@ -333,8 +413,8 @@ async def test_instagram_comment_on_app_a_callback_uses_instagram_login_binding(
     await asyncio.sleep(0)
     data = json.loads(response.body)
     assert data["accepted"] == 0
-    assert data["comments_accepted"] == 1
-    assert processed == ["instagram_login"]
+    assert data["comments_accepted"] == 0
+    assert processed == []
 
 
 @pytest.mark.asyncio

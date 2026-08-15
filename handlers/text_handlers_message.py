@@ -21,6 +21,7 @@ from handlers.text_handlers_message_takeover import (
     resolve_conversation_doc_ref,
 )
 from handlers.training_handlers import handle_training_input
+from services.meta_outbound_attempts import meta_outbound_send_purpose
 from services.outbound_turn_idempotency import record_inbound_mid_for_ai_turn
 from services.sentiment_escalation_service import sentiment_service
 from utils.utils import (
@@ -276,7 +277,8 @@ async def handle_message(
         if should_greet_now:
             user_lang = user_data.get("user_preferred_lang", "ar")
             greeting_msg = _get_session_greeting_message(user_lang)
-            await send_message_func(user_id, greeting_msg)
+            with meta_outbound_send_purpose("session_greeting"):
+                await send_message_func(user_id, greeting_msg)
             await save_conversation_message_to_firestore(
                 user_id,
                 "ai",

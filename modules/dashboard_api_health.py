@@ -2,9 +2,26 @@
 
 from __future__ import annotations
 
+import contextvars
+from pathlib import Path
 from typing import Any
 
 from modules.core import app
+
+PERSISTENT_MAINTENANCE_DRAIN_FILE = "/var/lib/linasbot/meta-ha/maintenance"
+_HA_INTERNAL_READINESS = contextvars.ContextVar("linas_ha_internal_readiness", default=False)
+
+
+def _maintenance_entry_exists(path: Path) -> bool:
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return False
+    except OSError:
+        # An unreadable maintenance path is fail-closed, not permission to
+        # return this node to the load balancer.
+        return True
+    return True
 
 
 @app.get("/")
@@ -30,6 +47,18 @@ async def ready() -> Any:
 
     from modules.api_security import is_production_env
     from services.scale.shutdown import shutdown_coordinator
+
+    maintenance_paths = (
+        Path((os.getenv("LINAS_MAINTENANCE_DRAIN_FILE") or "/run/linasbot-maintenance").strip()),
+        Path(PERSISTENT_MAINTENANCE_DRAIN_FILE),
+    )
+    if not _HA_INTERNAL_READINESS.get() and any(_maintenance_entry_exists(path) for path in maintenance_paths):
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            status_code=503,
+            content={"ok": False, "role": "readiness", "checks": {"maintenance": {"ok": False}}},
+        )
 
     role = (os.getenv("LINAS_SERVICE_ROLE") or "api").strip().lower()
     if role not in {"", "api", "all"}:
@@ -194,3 +223,21 @@ async def ready() -> Any:
         status_code=status,
         content={"ok": overall_ok, "role": "readiness", "checks": checks},
     )
+
+
+async def readiness_for_ha_verification() -> Any:
+    """Run the real dependency readiness path only inside the one-shot verifier.
+
+    This is intentionally not an HTTP route.  The ContextVar cannot be supplied
+    by a request or proxy header, and the exact process flag is checked again in
+    the isolated target helper before this function is called.
+    """
+    import os
+
+    if os.getenv("LINAS_HA_VERIFY_ONLY") != "true":
+        raise RuntimeError("HA internal readiness requires exact verification-only mode")
+    token = _HA_INTERNAL_READINESS.set(True)
+    try:
+        return await ready()
+    finally:
+        _HA_INTERNAL_READINESS.reset(token)

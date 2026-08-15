@@ -147,8 +147,13 @@ Ready for owner device tests once TestFlight processing finishes (~5–10 min) a
 
 ## Rollback
 
+> Historical release evidence. Do not use the Meta file rollback shown below;
+> current Managed PG is newer and NFS is stale. Use the encrypted four-table PG
+> rollback in `docs/scale/META_REGISTRY_POSTGRES_HA_CUTOVER.md`.
+
 ```bash
 PREVIOUS_PROD_SHA=7ed5c3fd5068191a5a0b20e64a85fbb9fb43d076
 # per node: git reset --hard "$PREVIOUS_PROD_SHA" && sudo bash /opt/linasbot/deploy.sh
-# emergency SoT: LINAS_BILLING_BACKEND=file LINAS_AUTH_TOKEN_BACKEND=file META_REGISTRY_BACKEND=file
+# historical billing/auth emergency SoT: LINAS_BILLING_BACKEND=file LINAS_AUTH_TOKEN_BACKEND=file
+# Meta uses the encrypted Managed-PG four-table rollback only; never stale NFS.
 ```

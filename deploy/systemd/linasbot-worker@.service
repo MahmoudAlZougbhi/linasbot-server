@@ -22,6 +22,7 @@ WorkingDirectory=__APP_DIR__
 # dry boots; production MUST provide __APP_DIR__/.env with secrets.
 EnvironmentFile=-__APP_DIR__/.env
 Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=LINAS_WORKER_QUEUE=%i
 Environment=PATH=__APP_DIR__/venv/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=__APP_DIR__/venv/bin/python scripts/run_queue_worker.py --queue %i

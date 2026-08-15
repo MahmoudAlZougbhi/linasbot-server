@@ -16,7 +16,7 @@ def privacy_policy_body(*, contact_email: str, public_base_url: str) -> str:
     base = html.escape(public_base_url.rstrip("/"))
     return f"""
 <h1>Privacy Policy</h1>
-<p class="meta">Effective 11 August 2026 · Last updated 11 August 2026</p>
+<p class="meta">Effective 11 August 2026 · Last updated 14 August 2026</p>
 
 <p>This Privacy Policy describes how <strong>Linas AI</strong> (“we”, “us”, or “Operator”)
 collects, uses, stores, shares, and deletes personal data when you use our website,
@@ -346,7 +346,7 @@ def data_deletion_body(*, contact_email: str, public_base_url: str) -> str:
     base = html.escape(public_base_url.rstrip("/"))
     return f"""
 <h1>User Data Deletion</h1>
-<p class="meta">Effective 11 August 2026 · Last updated 11 August 2026</p>
+<p class="meta">Effective 11 August 2026 · Last updated 14 August 2026</p>
 
 <p>This page explains how to request deletion of personal data processed by
 <strong>Linas AI</strong>. Canonical URL:
@@ -363,19 +363,31 @@ Privacy details:
   identifiers under our control).</li>
 </ul>
 
-<h2>2. End-customer social message deletion via Meta</h2>
-<p>For Facebook / Instagram interactions processed through our Meta app
-integration, remove the app or request deletion through the applicable Facebook
-or Instagram settings. Meta sends our server an authenticated, signed deletion
-request. Valid requests remove the namespaced Facebook/Instagram user record, its
-stored conversations, and matching social chat index entries under our control.
-Invalid signatures are rejected.</p>
-<p>After Meta accepts the request, use the confirmation code returned by Meta to
-check status at
+<h2>2. Meta app-authorizer deletion callbacks</h2>
+<p>A business administrator or Instagram professional-account holder who authorized
+one of our Meta apps may ask Meta to remove that app’s data. Meta sends the app an
+authenticated signed request containing an identifier scoped to the signing app and
+authorization owner. That identifier is <strong>not</strong> an identifier for every
+end customer who merely sent the business a message or comment.</p>
+<ul>
+  <li>Facebook / Page app callback:
+  <code>{base}/oauth/meta/data-deletion</code></li>
+  <li>Instagram API with Instagram Login callback:
+  <code>{base}/oauth/instagram/data-deletion</code></li>
+</ul>
+<p>Each callback is verified only with that app’s corresponding secret. When matching
+records exist, a valid request revokes the matching authorization flow’s stored
+access credential and redacts terminal (completed or permanently failed) inbound webhook payloads that are
+deterministically linked to the affected connection. Invalid signatures are rejected.
+We do not report completion if a linked event is still being processed or a required
+data store cannot be inspected or updated.</p>
+<p>Use the returned confirmation code to check status at
 <code>{base}/data-deletion/status/&lt;confirmation-code&gt;</code>.</p>
 
 <h2>3. End-customer deletion by email (all channels)</h2>
-<p>Email
+<p>People who only messaged or commented on a business’s connected account normally
+did not authorize our Meta app, so Meta’s app-authorizer callback cannot identify
+their Linas AI conversation record. For those end-customer requests, email
 <a href="mailto:{email}?subject=Social%20message%20data%20deletion">{email}</a>
 with the subject “Social message data deletion”. Include:</p>
 <ul>
@@ -404,12 +416,15 @@ respective store account settings; deleting Linas AI data does not automatically
 cancel a store subscription.</p>
 
 <h2>5. What deletion covers</h2>
-<p>When completed, deletion covers under our control: platform-scoped social
-identifiers tied to the request, stored DM/comment text and AI replies, optional
-comment-derived processing records, conversation state, timestamps, matching
-social-chat index entries, and — for Tenant account requests — account profile
-fields, Tenant knowledge configuration, and channel connection records we store
-for that Tenant, except narrow retention noted below.</p>
+<p>The records covered depend on the verified request. A signed Meta app-authorizer
+request covers the matching authorization credential and terminal webhook payloads
+linked to that connection, including completed or permanently failed events that
+will not be retried. A verified end-customer request covers the matched
+platform-scoped identifier, stored DM/comment text and AI replies, conversation
+state, timestamps, and matching social-chat index records under our control. A
+verified Tenant account request additionally covers account profile fields, Tenant
+knowledge configuration, and channel connection records, except narrow retention
+noted below.</p>
 
 <h2>6. What deletion does not cover</h2>
 <ul>
@@ -425,10 +440,11 @@ for that Tenant, except narrow retention noted below.</p>
 </ul>
 
 <h2>7. Timing</h2>
-<p>Authenticated Meta deletion callbacks are processed when received and status is
-exposed at the confirmation URL. Manual email requests are handled as promptly as
-practical after verification; we aim to complete deletions under our control within
-30 days unless a shorter or longer period is required by law or platform rules.</p>
+<p>Authenticated Meta deletion callbacks are processed when received and their
+success or failure is exposed at the confirmation URL. Manual email requests are
+handled as promptly as practical after verification; we aim to complete deletions
+under our control within 30 days unless a shorter or longer period is required by
+law or platform rules.</p>
 
 <h2>8. Deauthorization</h2>
 <p>Removing the Linas AI app from Meta account settings may revoke the business

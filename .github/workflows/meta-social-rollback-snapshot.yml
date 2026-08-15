@@ -15,10 +15,12 @@ jobs:
     name: Encrypt old Meta production configuration
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment: meta-social-cutover
     steps:
       - name: Create encrypted rollback archive on production
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
         env:
+          EXPECTED_RELEASE_SHA: ${{ github.sha }}
           META_ROLLBACK_ENCRYPTION_KEY: ${{ secrets.META_ROLLBACK_ENCRYPTION_KEY }}
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -27,8 +29,24 @@ jobs:
           port: 22
           script_stop: true
           command_timeout: 10m
-          envs: META_ROLLBACK_ENCRYPTION_KEY
+          envs: EXPECTED_RELEASE_SHA,META_ROLLBACK_ENCRYPTION_KEY
           script: |
-            set -e
-            test -f /opt/linasbot/scripts/prod_snapshot_meta_social_rollback.sh
-            sudo -E bash /opt/linasbot/scripts/prod_snapshot_meta_social_rollback.sh
+            set -euo pipefail
+            exec 9>/run/lock/linasbot-meta-live.lock
+            flock -x 9
+            REPO_DIR=/opt/linasbot
+            DEPLOYED_RELEASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
+            if [ "$DEPLOYED_RELEASE_SHA" != "$EXPECTED_RELEASE_SHA" ]; then
+              echo "[meta-rollback-snapshot] workflow SHA does not match deployed release" >&2
+              exit 1
+            fi
+            if ! git -C "$REPO_DIR" diff --quiet "$DEPLOYED_RELEASE_SHA" -- || \
+               ! git -C "$REPO_DIR" diff --cached --quiet "$DEPLOYED_RELEASE_SHA" --; then
+              echo "[meta-rollback-snapshot] deployed tracked files differ from release SHA" >&2
+              exit 1
+            fi
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
+            SNAPSHOT_SCRIPT="$REPO_DIR/scripts/prod_snapshot_meta_social_rollback.sh"
+            test -f "$SNAPSHOT_SCRIPT"
+            sudo -E bash "$SNAPSHOT_SCRIPT"
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"

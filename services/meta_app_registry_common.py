@@ -395,6 +395,7 @@ class MetaBindingCredential:
     authorized_meta_user_id: str = ""
     auth_flow: AuthFlow = "facebook_login"
     declined_scopes: tuple[str, ...] = ()
+    authorization_started_at: float = 0.0
 
     def as_secret_dict(self) -> dict[str, Any]:
         return {
@@ -406,4 +407,5 @@ class MetaBindingCredential:
             "authorized_meta_user_id": self.authorized_meta_user_id,
             "auth_flow": self.auth_flow,
             "declined_scopes": list(self.declined_scopes),
+            "authorization_started_at": self.authorization_started_at,
         }

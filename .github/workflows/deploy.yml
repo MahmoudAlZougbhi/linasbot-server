@@ -1,133 +1,1335 @@
-# Production deploy runs ONLY after Quality Gates succeed on main.
-#
-# Normal path: push to main -> Quality Gates -> this workflow (workflow_run, success required).
-#
-# Emergency bypass (skip gate verification): Actions -> Deploy to Production -> Run workflow
-# with workflow_dispatch and set:
-#   EMERGENCY_DEPLOY_CONFIRM = I_UNDERSTAND_SKIPPING_GATES
-# Use only when gates are broken but production must be patched; document incident + follow-up
-# to restore green Quality Gates before the next routine deploy.
+# Manual-only, exact-artifact two-node production release transaction.
+# New deploys stop with both nodes drained at exact target parity. A separate
+# commit_exact dispatch must supply a distinct fresh provider observation before
+# the durable commit decision and admission.
 
 name: Deploy to Production
 
 on:
-  workflow_run:
-    workflows: ["Quality Gates"]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
-      EMERGENCY_DEPLOY_CONFIRM:
-        description: "Type I_UNDERSTAND_SKIPPING_GATES to bypass quality gate requirement"
+      DEPLOY_OPERATION:
+        description: "Exact transaction operation"
+        required: true
+        type: choice
+        options:
+          - steady
+          - reconcile_exact
+          - commit_exact
+          - recover_exact
+          - retry_reconcile_exact
+      TARGET_SHA:
+        description: "Exact tested 40-character release SHA"
+        required: true
+        type: string
+      QUALITY_GATES_RUN_ID:
+        description: "Exact successful Quality Gates run ID"
+        required: true
+        type: string
+      RELEASE_RUN_ATTEMPT:
+        description: "Exact Quality Gates run attempt"
+        required: true
+        type: string
+      RELEASE_ARTIFACT_ID:
+        description: "Exact immutable linasbot-release-TARGET_SHA artifact ID"
+        required: true
+        type: string
+      RELEASE_ARTIFACT_API_SHA256:
+        description: "Bare 64hex digest from the GitHub artifact REST object"
+        required: true
+        type: string
+      RELEASE_MANIFEST_SHA256:
+        description: "Exact release-manifest.json SHA-256"
+        required: true
+        type: string
+      RELEASE_TARGET_TREE_SHA:
+        description: "Exact target Git tree SHA bound by source.bundle"
+        required: true
+        type: string
+      RELEASE_INSTALL_CONFIRM:
+        description: "New deploy only: exact artifact/control/source/tree installation confirmation"
+        required: false
+        type: string
+      NODE01_BASELINE_SHA:
+        description: "Exact authorized node01 baseline SHA"
+        required: true
+        type: string
+      NODE02_BASELINE_SHA:
+        description: "Exact authorized node02 baseline SHA"
+        required: true
+        type: string
+      BOOTSTRAP_PLAN_SHA256:
+        description: "New deploy: exact committed first-transition bootstrap plan SHA-256"
+        required: false
+        type: string
+      RECONCILE_CONFIRM:
+        description: "Reconcile only: I_UNDERSTAND_RECONCILING_DISTINCT_HA_BASELINES"
+        required: false
+        type: string
+      DEPLOY_CONFIRM:
+        description: "New deploy only: exact target and initial LB artifact confirmation"
+        required: false
+        type: string
+      RECOVERY_JOURNAL_SHA256:
+        description: "Commit/recover/retry only: exact durable deploy.active digest"
+        required: false
+        type: string
+      COMMIT_CONFIRM:
+        description: "Commit only: exact journal and fresh LB artifact confirmation"
+        required: false
+        type: string
+      RECOVERY_CONFIRM:
+        description: "Recovery only: exact journal, LB artifact, and decision confirmation"
+        required: false
+        type: string
+      RETRY_RECONCILE_CONFIRM:
+        description: "Retry only: exact journal and LB artifact confirmation"
+        required: false
+        type: string
+      LB_ATTESTATION_BASE64:
+        description: "Canonical fresh provider attestation encoded as strict base64"
+        required: true
+        type: string
+      LB_ATTESTATION_SHA256:
+        description: "Exact canonical LB attestation artifact SHA-256"
+        required: true
+        type: string
+      LB_READY_PROJECTION_SHA256:
+        description: "Exact reviewed full /api/ready projection SHA-256"
+        required: true
+        type: string
+      LB_INSTALL_CONFIRM:
+        description: "Exact operation/journal/LB installation confirmation"
+        required: true
+        type: string
+      LB_OWNER_CONFIRM:
+        description: "I_HOLD_EXCLUSIVE_DO_LB_OWNER_UNTIL_DEPLOY_COMPLETE"
+        required: true
+        type: string
+      PROTECTION_CONFIRM:
+        description: "I_CONFIRMED_META_SOCIAL_CUTOVER_HAS_REQUIRED_REVIEWERS"
         required: true
         type: string
 
 concurrency:
-  group: production-deploy
+  group: meta-social-cutover
   cancel-in-progress: false
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   deploy:
-    name: SSH Deploy
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    if: >
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main') ||
-      (github.event_name == 'workflow_dispatch' &&
-       github.event.inputs.EMERGENCY_DEPLOY_CONFIRM == 'I_UNDERSTAND_SKIPPING_GATES')
+    name: Exact Artifact HA Transaction
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    environment: meta-social-cutover
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
 
     steps:
-      - name: Gate source
+      - name: Gate protected operation and immutable GitHub authorities
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_OPERATION: ${{ inputs.DEPLOY_OPERATION }}
+          TARGET_SHA: ${{ inputs.TARGET_SHA }}
+          QUALITY_GATES_RUN_ID: ${{ inputs.QUALITY_GATES_RUN_ID }}
+          RELEASE_RUN_ATTEMPT: ${{ inputs.RELEASE_RUN_ATTEMPT }}
+          RELEASE_ARTIFACT_ID: ${{ inputs.RELEASE_ARTIFACT_ID }}
+          RELEASE_ARTIFACT_API_SHA256: ${{ inputs.RELEASE_ARTIFACT_API_SHA256 }}
+          RELEASE_MANIFEST_SHA256: ${{ inputs.RELEASE_MANIFEST_SHA256 }}
+          RELEASE_TARGET_TREE_SHA: ${{ inputs.RELEASE_TARGET_TREE_SHA }}
+          NODE01_BASELINE_SHA: ${{ inputs.NODE01_BASELINE_SHA }}
+          NODE02_BASELINE_SHA: ${{ inputs.NODE02_BASELINE_SHA }}
+          BOOTSTRAP_PLAN_SHA256: ${{ inputs.BOOTSTRAP_PLAN_SHA256 }}
+          RECONCILE_CONFIRM: ${{ inputs.RECONCILE_CONFIRM }}
+          DEPLOY_CONFIRM: ${{ inputs.DEPLOY_CONFIRM }}
+          RECOVERY_JOURNAL_SHA256: ${{ inputs.RECOVERY_JOURNAL_SHA256 }}
+          COMMIT_CONFIRM: ${{ inputs.COMMIT_CONFIRM }}
+          RECOVERY_CONFIRM: ${{ inputs.RECOVERY_CONFIRM }}
+          RETRY_RECONCILE_CONFIRM: ${{ inputs.RETRY_RECONCILE_CONFIRM }}
+          LB_ATTESTATION_SHA256: ${{ inputs.LB_ATTESTATION_SHA256 }}
+          LB_READY_PROJECTION_SHA256: ${{ inputs.LB_READY_PROJECTION_SHA256 }}
+          LB_INSTALL_CONFIRM: ${{ inputs.LB_INSTALL_CONFIRM }}
+          LB_OWNER_CONFIRM: ${{ inputs.LB_OWNER_CONFIRM }}
+          PROTECTION_CONFIRM: ${{ inputs.PROTECTION_CONFIRM }}
+          META_HA_PROTECTED_ENVIRONMENT_APPROVED: ${{ vars.META_HA_PROTECTED_ENVIRONMENT_APPROVED }}
+          DISPATCH_SHA: ${{ github.sha }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            echo "Deploy authorized by successful Quality Gates on main."
-            echo "Commit: ${{ github.event.workflow_run.head_sha }}"
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$NODE01_BASELINE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$NODE02_BASELINE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$QUALITY_GATES_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$RELEASE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$RELEASE_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$RELEASE_ARTIFACT_API_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$RELEASE_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$RELEASE_TARGET_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$LB_ATTESTATION_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$LB_READY_PROJECTION_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [ "$LB_ATTESTATION_SHA256" != "$(printf '%064d' 0)" ]
+          [ "$LB_READY_PROJECTION_SHA256" != "$(printf '%064d' 0)" ]
+          [ "$LB_OWNER_CONFIRM" = "I_HOLD_EXCLUSIVE_DO_LB_OWNER_UNTIL_DEPLOY_COMPLETE" ]
+          [ "$PROTECTION_CONFIRM" = "I_CONFIRMED_META_SOCIAL_CUTOVER_HAS_REQUIRED_REVIEWERS" ]
+          [ "$META_HA_PROTECTED_ENVIRONMENT_APPROVED" = true ]
+
+          REQUIRED_REVIEWER_COUNT="$(gh api \
+            "repos/$GITHUB_REPOSITORY/environments/meta-social-cutover" \
+            --jq '[.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[]?] | length')"
+          PREVENT_SELF_REVIEW="$(gh api \
+            "repos/$GITHUB_REPOSITORY/environments/meta-social-cutover" \
+            --jq '[.protection_rules[]? | select(.type == "required_reviewers") | .prevent_self_review] | all')"
+          [[ "$REQUIRED_REVIEWER_COUNT" =~ ^[1-9][0-9]*$ ]]
+          [ "$PREVENT_SELF_REVIEW" = true ]
+
+          TARGET_PREFIX="${TARGET_SHA:0:16}"
+          LB_PREFIX="${LB_ATTESTATION_SHA256:0:16}"
+          PROJECTION_PREFIX="${LB_READY_PROJECTION_SHA256:0:16}"
+          if [ "$DEPLOY_OPERATION" = steady ]; then
+            [ "$TARGET_SHA" = "$DISPATCH_SHA" ]
+            [ "$NODE01_BASELINE_SHA" = "$NODE02_BASELINE_SHA" ]
+            [[ "$BOOTSTRAP_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            [ -z "$RECONCILE_CONFIRM$RECOVERY_JOURNAL_SHA256" ]
+            [ -z "$COMMIT_CONFIRM$RECOVERY_CONFIRM$RETRY_RECONCILE_CONFIRM" ]
+            [ "$DEPLOY_CONFIRM" = "DEPLOY_${TARGET_SHA}_LB_${LB_PREFIX}_WITH_HA_PREFLIGHT_BACKUPS_AND_ROLLBACK" ]
+            [ "$LB_INSTALL_CONFIRM" = "INSTALL_DEPLOY_LB_${TARGET_PREFIX^^}_${LB_PREFIX^^}_${PROJECTION_PREFIX^^}" ]
+          elif [ "$DEPLOY_OPERATION" = reconcile_exact ]; then
+            [ "$TARGET_SHA" = "$DISPATCH_SHA" ]
+            [ "$NODE01_BASELINE_SHA" != "$NODE02_BASELINE_SHA" ]
+            [[ "$BOOTSTRAP_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            [ "$RECONCILE_CONFIRM" = "I_UNDERSTAND_RECONCILING_DISTINCT_HA_BASELINES" ]
+            [ -z "$RECOVERY_JOURNAL_SHA256$COMMIT_CONFIRM$RECOVERY_CONFIRM$RETRY_RECONCILE_CONFIRM" ]
+            [ "$DEPLOY_CONFIRM" = "DEPLOY_${TARGET_SHA}_LB_${LB_PREFIX}_WITH_HA_PREFLIGHT_BACKUPS_AND_ROLLBACK" ]
+            [ "$LB_INSTALL_CONFIRM" = "INSTALL_DEPLOY_LB_${TARGET_PREFIX^^}_${LB_PREFIX^^}_${PROJECTION_PREFIX^^}" ]
+          elif [ "$DEPLOY_OPERATION" = commit_exact ]; then
+            [[ "$RECOVERY_JOURNAL_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            JOURNAL_PREFIX="${RECOVERY_JOURNAL_SHA256:0:16}"
+            [ -z "$BOOTSTRAP_PLAN_SHA256$RECONCILE_CONFIRM$DEPLOY_CONFIRM" ]
+            [ -z "$RECOVERY_CONFIRM$RETRY_RECONCILE_CONFIRM" ]
+            [ "$COMMIT_CONFIRM" = "COMMIT_DEPLOY_${TARGET_PREFIX^^}_${JOURNAL_PREFIX^^}_LB_${LB_PREFIX^^}_FROM_TARGET_PARITY" ]
+            [ "$LB_INSTALL_CONFIRM" = "INSTALL_COMMIT_LB_${TARGET_PREFIX^^}_${JOURNAL_PREFIX^^}_${LB_PREFIX^^}_${PROJECTION_PREFIX^^}" ]
+          elif [ "$DEPLOY_OPERATION" = recover_exact ]; then
+            [[ "$RECOVERY_JOURNAL_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            JOURNAL_PREFIX="${RECOVERY_JOURNAL_SHA256:0:16}"
+            [ -z "$BOOTSTRAP_PLAN_SHA256$RECONCILE_CONFIRM$DEPLOY_CONFIRM$COMMIT_CONFIRM" ]
+            [ -z "$RETRY_RECONCILE_CONFIRM" ]
+            RECOVERY_PREFIX="RECOVER_DEPLOY_${TARGET_PREFIX^^}_${JOURNAL_PREFIX^^}_LB_${LB_PREFIX^^}_TO_"
+            [ "$RECOVERY_CONFIRM" = "${RECOVERY_PREFIX}ROLLBACK" ] || \
+              [ "$RECOVERY_CONFIRM" = "${RECOVERY_PREFIX}COMMIT" ]
+            [ "$LB_INSTALL_CONFIRM" = "INSTALL_RECOVER_LB_${TARGET_PREFIX^^}_${JOURNAL_PREFIX^^}_${LB_PREFIX^^}_${PROJECTION_PREFIX^^}" ]
+          elif [ "$DEPLOY_OPERATION" = retry_reconcile_exact ]; then
+            [[ "$RECOVERY_JOURNAL_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            [ "$NODE01_BASELINE_SHA" != "$NODE02_BASELINE_SHA" ]
+            JOURNAL_PREFIX="${RECOVERY_JOURNAL_SHA256:0:16}"
+            [ -z "$BOOTSTRAP_PLAN_SHA256$RECONCILE_CONFIRM$DEPLOY_CONFIRM$COMMIT_CONFIRM" ]
+            [ -z "$RECOVERY_CONFIRM" ]
+            [ "$RETRY_RECONCILE_CONFIRM" = "RETRY_DEPLOY_${TARGET_PREFIX^^}_${JOURNAL_PREFIX^^}_LB_${LB_PREFIX^^}_FROM_DISTINCT_DRAINED" ]
+            [ "$LB_INSTALL_CONFIRM" = "INSTALL_RETRY_LB_${TARGET_PREFIX^^}_${JOURNAL_PREFIX^^}_${LB_PREFIX^^}_${PROJECTION_PREFIX^^}" ]
           else
-            echo "::warning::EMERGENCY DEPLOY — quality gates were NOT verified for this run."
-            echo "Confirmation input matched I_UNDERSTAND_SKIPPING_GATES."
+            echo "unsupported deployment operation" >&2
+            exit 1
           fi
 
-      - name: Start deployment
-        run: |
-          echo "Starting deployment..."
-          echo "Repository: $GITHUB_REPOSITORY"
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            echo "Branch: main"
-            echo "Commit: ${{ github.event.workflow_run.head_sha }}"
-          else
-            echo "Branch: ${{ github.ref_name }}"
-            echo "Commit: $GITHUB_SHA"
+          if [ "$DEPLOY_OPERATION" = steady ] || [ "$DEPLOY_OPERATION" = reconcile_exact ]; then
+          RUN_JSON="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$QUALITY_GATES_RUN_ID")"
+          RUN_HEAD_SHA="$(jq -r '.head_sha' <<<"$RUN_JSON")"
+          RUN_HEAD_BRANCH="$(jq -r '.head_branch' <<<"$RUN_JSON")"
+          RUN_CONCLUSION="$(jq -r '.conclusion' <<<"$RUN_JSON")"
+          RUN_WORKFLOW_ID="$(jq -r '.workflow_id' <<<"$RUN_JSON")"
+          RUN_EVENT="$(jq -r '.event' <<<"$RUN_JSON")"
+          RUN_ATTEMPT="$(jq -r '.run_attempt' <<<"$RUN_JSON")"
+          EXPECTED_QG_WORKFLOW_ID="$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/quality-gates.yml" --jq '.id')"
+          RUN_WORKFLOW_PATH="$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/$RUN_WORKFLOW_ID" --jq '.path')"
+          [ "$RUN_HEAD_SHA" = "$TARGET_SHA" ]
+          [ "$RUN_HEAD_BRANCH" = main ]
+          [ "$RUN_CONCLUSION" = success ]
+          [ "$RUN_WORKFLOW_ID" = "$EXPECTED_QG_WORKFLOW_ID" ]
+          [ "$RUN_WORKFLOW_PATH" = .github/workflows/quality-gates.yml ]
+          [ "$RUN_EVENT" = push ]
+          [ "$RUN_ATTEMPT" = "$RELEASE_RUN_ATTEMPT" ]
+
+          ARTIFACT_JSON="$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/artifacts/$RELEASE_ARTIFACT_ID")"
+          ARTIFACT_NAME="$(jq -r '.name' <<<"$ARTIFACT_JSON")"
+          ARTIFACT_EXPIRED="$(jq -r '.expired' <<<"$ARTIFACT_JSON")"
+          ARTIFACT_RUN_ID="$(jq -r '.workflow_run.id' <<<"$ARTIFACT_JSON")"
+          ARTIFACT_HEAD_SHA="$(jq -r '.workflow_run.head_sha' <<<"$ARTIFACT_JSON")"
+          ARTIFACT_DIGEST="$(jq -r '.digest' <<<"$ARTIFACT_JSON")"
+          [ "$ARTIFACT_NAME" = "linasbot-release-$TARGET_SHA" ]
+          [ "$ARTIFACT_EXPIRED" = false ]
+          [ "$ARTIFACT_RUN_ID" = "$QUALITY_GATES_RUN_ID" ]
+          [ "$ARTIFACT_HEAD_SHA" = "$TARGET_SHA" ]
+          [[ "$ARTIFACT_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [ "${ARTIFACT_DIGEST#sha256:}" = "$RELEASE_ARTIFACT_API_SHA256" ]
           fi
 
-      - name: Deploy on production server (node01)
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Download exact immutable release artifact ID
+        if: inputs.DEPLOY_OPERATION == 'steady' || inputs.DEPLOY_OPERATION == 'reconcile_exact'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ inputs.RELEASE_ARTIFACT_ID }}
+          run-id: ${{ inputs.QUALITY_GATES_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: release-download
+          merge-multiple: true
+
+      - name: Validate release bundle and extract exact helper
+        id: release_contract
+        if: inputs.DEPLOY_OPERATION == 'steady' || inputs.DEPLOY_OPERATION == 'reconcile_exact'
+        env:
+          TARGET_SHA: ${{ inputs.TARGET_SHA }}
+          QUALITY_GATES_RUN_ID: ${{ inputs.QUALITY_GATES_RUN_ID }}
+          RELEASE_RUN_ATTEMPT: ${{ inputs.RELEASE_RUN_ATTEMPT }}
+          RELEASE_ARTIFACT_ID: ${{ inputs.RELEASE_ARTIFACT_ID }}
+          RELEASE_ARTIFACT_API_SHA256: ${{ inputs.RELEASE_ARTIFACT_API_SHA256 }}
+          RELEASE_MANIFEST_SHA256: ${{ inputs.RELEASE_MANIFEST_SHA256 }}
+          RELEASE_TARGET_TREE_SHA: ${{ inputs.RELEASE_TARGET_TREE_SHA }}
+          RELEASE_INSTALL_CONFIRM: ${{ inputs.RELEASE_INSTALL_CONFIRM }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -m 0700 transfer transfer/release
+          mapfile -t CONTRACT_VALUES < <(
+            /usr/bin/python3 -B -I -S - \
+              "$GITHUB_WORKSPACE/release-download" \
+              "$GITHUB_WORKSPACE/transfer/bootstrap-control" \
+              "$GITHUB_WORKSPACE/transfer/control" \
+              "$TARGET_SHA" "$QUALITY_GATES_RUN_ID" "$RELEASE_RUN_ATTEMPT" \
+              "$RELEASE_MANIFEST_SHA256" "$GITHUB_REPOSITORY" <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import stat
+          import sys
+          import tarfile
+          from pathlib import Path, PurePosixPath
+
+          (
+              bundle_raw,
+              bootstrap_raw,
+              control_destination_raw,
+              target,
+              run_id,
+              attempt,
+              manifest_sha,
+              repository,
+          ) = sys.argv[1:]
+          bundle = Path(bundle_raw)
+          bootstrap = Path(bootstrap_raw)
+          control_destination = Path(control_destination_raw)
+          sha256_re = re.compile(r"[0-9a-f]{64}")
+
+
+          def unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
+              result: dict[str, object] = {}
+              for key, value in pairs:
+                  if key in result:
+                      raise SystemExit("release manifest contains a duplicate JSON key")
+                  result[key] = value
+              return result
+
+
+          def read_regular(path: Path, maximum: int) -> bytes:
+              before = path.lstat()
+              if (
+                  not stat.S_ISREG(before.st_mode)
+                  or stat.S_ISLNK(before.st_mode)
+                  or before.st_nlink != 1
+                  or before.st_size > maximum
+              ):
+                  raise SystemExit("release authority file is unsafe")
+              descriptor = os.open(
+                  path,
+                  os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+              )
+              try:
+                  opened = os.fstat(descriptor)
+                  if (opened.st_dev, opened.st_ino, opened.st_size) != (
+                      before.st_dev,
+                      before.st_ino,
+                      before.st_size,
+                  ):
+                      raise SystemExit("release authority changed while opening")
+                  raw = bytearray()
+                  while chunk := os.read(descriptor, 1024 * 1024):
+                      raw.extend(chunk)
+                      if len(raw) > maximum:
+                          raise SystemExit("release authority exceeds its size limit")
+                  after = os.fstat(descriptor)
+                  if (after.st_size, after.st_mtime_ns) != (opened.st_size, opened.st_mtime_ns):
+                      raise SystemExit("release authority changed while reading")
+              finally:
+                  os.close(descriptor)
+              return bytes(raw)
+
+
+          manifest_path = bundle / "release-manifest.json"
+          manifest_raw = read_regular(manifest_path, 1024 * 1024)
+          if hashlib.sha256(manifest_raw).hexdigest() != manifest_sha:
+              raise SystemExit("release manifest differs from dispatch authority")
+          try:
+              manifest = json.loads(manifest_raw.decode("utf-8", "strict"), object_pairs_hook=unique)
+          except (UnicodeError, json.JSONDecodeError) as exc:
+              raise SystemExit("release manifest is not strict JSON") from exc
+          canonical = (
+              json.dumps(
+                  manifest,
+                  ensure_ascii=False,
+                  sort_keys=True,
+                  separators=(",", ":"),
+                  allow_nan=False,
+              )
+              + "\n"
+          ).encode("utf-8")
+          if canonical != manifest_raw:
+              raise SystemExit("release manifest is not canonical JSON")
+          expected_top = {
+              "schema",
+              "repository",
+              "workflow_path",
+              "workflow_ref",
+              "run_id",
+              "run_attempt",
+              "target_sha",
+              "source_locks",
+              "toolchains",
+              "payloads",
+          }
+          expected_workflow = f"{repository}/.github/workflows/quality-gates.yml@refs/heads/main"
+          if (
+              not isinstance(manifest, dict)
+              or set(manifest) != expected_top
+              or manifest.get("schema") != "linasbot-release-manifest-v1"
+              or manifest.get("repository") != repository
+              or manifest.get("workflow_path") != ".github/workflows/quality-gates.yml"
+              or manifest.get("workflow_ref") != expected_workflow
+              or manifest.get("run_id") != int(run_id)
+              or manifest.get("run_attempt") != int(attempt)
+              or manifest.get("target_sha") != target
+          ):
+              raise SystemExit("release manifest identity differs from dispatch authority")
+          payloads = manifest.get("payloads")
+          expected_payloads = {
+              "wheelhouse", "dashboard", "control_plane", "source_bundle", "python_runtime"
+          }
+          if not isinstance(payloads, dict) or set(payloads) != expected_payloads:
+              raise SystemExit("release payload schema is not closed")
+          control = payloads.get("control_plane")
+          if (
+              not isinstance(control, dict)
+              or set(control)
+              != {"archive", "archive_sha256", "tree_sha256", "file_count", "total_size"}
+              or control.get("archive") != "control-plane.tar"
+              or not isinstance(control.get("archive_sha256"), str)
+              or sha256_re.fullmatch(control["archive_sha256"]) is None
+              or not isinstance(control.get("tree_sha256"), str)
+              or sha256_re.fullmatch(control["tree_sha256"]) is None
+              or type(control.get("file_count")) is not int
+              or not 1 <= control["file_count"] <= 1000
+              or type(control.get("total_size")) is not int
+              or not 1 <= control["total_size"] <= 64 * 1024 * 1024
+          ):
+              raise SystemExit("release control-plane authority is invalid")
+          expected_files = {
+              "release-manifest.json",
+              "wheelhouse.tar",
+              "dashboard-build.tar",
+              "control-plane.tar",
+              "source.bundle",
+              "cpython-3.13.15+20260814-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+          }
+          entries = list(os.scandir(bundle))
+          if {entry.name for entry in entries} != expected_files or any(
+              not entry.is_file(follow_symlinks=False) for entry in entries
+          ):
+              raise SystemExit("release bundle file set is not closed")
+
+          control_path = bundle / "control-plane.tar"
+          before = control_path.lstat()
+          if (
+              not stat.S_ISREG(before.st_mode)
+              or stat.S_ISLNK(before.st_mode)
+              or before.st_nlink != 1
+              or before.st_size > 128 * 1024 * 1024
+          ):
+              raise SystemExit("release control-plane archive is unsafe")
+          descriptor = os.open(
+              control_path,
+              os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+          )
+          required_modules = {
+              "scripts/ha/release_archive_contract.py",
+              "scripts/ha/release_artifact_contract.py",
+          }
+          module_bytes: dict[str, bytes] = {}
+          seen: set[str] = set()
+          file_count = 0
+          total_size = 0
+          try:
+              with os.fdopen(descriptor, "rb", closefd=False) as raw_control:
+                  opened = os.fstat(descriptor)
+                  if (opened.st_dev, opened.st_ino, opened.st_size) != (
+                      before.st_dev,
+                      before.st_ino,
+                      before.st_size,
+                  ):
+                      raise SystemExit("release control-plane archive changed while opening")
+                  archive_digest = hashlib.sha256()
+                  for chunk in iter(lambda: raw_control.read(1024 * 1024), b""):
+                      archive_digest.update(chunk)
+                  if archive_digest.hexdigest() != control["archive_sha256"]:
+                      raise SystemExit("release control-plane archive digest changed")
+                  raw_control.seek(0)
+                  with tarfile.open(fileobj=raw_control, mode="r:") as archive:
+                      for member in archive:
+                          name = member.name
+                          parts = name.split("/")
+                          if (
+                              not name
+                              or name.startswith("/")
+                              or "\\" in name
+                              or any(part in {"", ".", ".."} for part in parts)
+                              or str(PurePosixPath(name)) != name
+                              or any(ord(character) < 32 or ord(character) == 127 for character in name)
+                              or name in seen
+                          ):
+                              raise SystemExit("release control-plane archive path is unsafe")
+                          seen.add(name)
+                          if (
+                              set(member.pax_headers) - {"path"}
+                              or ("path" in member.pax_headers and member.pax_headers["path"] != name)
+                              or member.uid != 0
+                              or member.gid != 0
+                              or member.uname != ""
+                              or member.gname != ""
+                              or member.mtime != 0
+                          ):
+                              raise SystemExit("release control-plane archive metadata is invalid")
+                          if member.isdir():
+                              if member.mode != 0o755 or member.size != 0:
+                                  raise SystemExit("release control-plane directory metadata is invalid")
+                              continue
+                          if not member.isreg() or member.mode not in {0o644, 0o755}:
+                              raise SystemExit("release control-plane archive contains an unsafe object")
+                          file_count += 1
+                          total_size += member.size
+                          if total_size > control["total_size"] or member.size > 16 * 1024 * 1024:
+                              raise SystemExit("release control-plane archive exceeds its authority")
+                          if name in required_modules:
+                              source = archive.extractfile(member)
+                              if source is None:
+                                  raise SystemExit("release control module payload is missing")
+                              value = source.read(1024 * 1024 + 1)
+                              if len(value) != member.size or len(value) > 1024 * 1024:
+                                  raise SystemExit("release control module size is invalid")
+                              module_bytes[name] = value
+                  after = os.fstat(descriptor)
+                  if (after.st_size, after.st_mtime_ns) != (opened.st_size, opened.st_mtime_ns):
+                      raise SystemExit("release control-plane archive changed while reading")
+          except (OSError, tarfile.TarError) as exc:
+              raise SystemExit("release control-plane archive is invalid") from exc
+          finally:
+              os.close(descriptor)
+          if (
+              file_count != control["file_count"]
+              or total_size != control["total_size"]
+              or set(module_bytes) != required_modules
+          ):
+              raise SystemExit("release control-plane evidence differs from its manifest")
+          if bootstrap.exists() or bootstrap.is_symlink():
+              raise SystemExit("release bootstrap control destination already exists")
+          (bootstrap / "scripts/ha").mkdir(parents=True, mode=0o700)
+          os.chmod(bootstrap, 0o700)
+          os.chmod(bootstrap / "scripts", 0o700)
+          os.chmod(bootstrap / "scripts/ha", 0o700)
+          for name, value in module_bytes.items():
+              destination = bootstrap.joinpath(*PurePosixPath(name).parts)
+              flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+              output = os.open(destination, flags, 0o600)
+              try:
+                  view = memoryview(value)
+                  while view:
+                      written = os.write(output, view)
+                      if written <= 0:
+                          raise SystemExit("release control module write did not progress")
+                      view = view[written:]
+                  os.fsync(output)
+              finally:
+                  os.close(output)
+              os.chmod(destination, 0o600)
+
+          sys.path.insert(0, str(bootstrap))
+          from scripts.ha.release_artifact_contract import (  # noqa: E402
+              CONTROL_PLANE_MEMBERS,
+              extract_archive,
+              sha256_file,
+              verify_release_bundle,
+          )
+
+          manifest = verify_release_bundle(
+              bundle,
+              expected_repository=repository,
+              expected_workflow_ref=(
+                  f"{repository}/.github/workflows/quality-gates.yml@refs/heads/main"
+              ),
+              expected_run_id=int(run_id),
+              expected_run_attempt=int(attempt),
+              expected_target_sha=target,
+          )
+          payloads = manifest["payloads"]
+          control = payloads["control_plane"]
+          source = payloads["source_bundle"]
+          runtime = payloads["python_runtime"]
+          extract_archive(
+              bundle / control["archive"],
+              control_destination,
+              control["archive_sha256"],
+              control["tree_sha256"],
+              expected_paths=CONTROL_PLANE_MEMBERS,
+          )
+          helper = control_destination / "scripts/ha/deploy_meta_release_ha.sh"
+          values = {
+              "release_control_sha": control["archive_sha256"],
+              "release_control_size": (bundle / control["archive"]).stat().st_size,
+              "release_source_sha": source["sha256"],
+              "release_source_size": source["size"],
+              "release_wheelhouse_sha": payloads["wheelhouse"]["archive_sha256"],
+              "release_wheelhouse_size": (bundle / "wheelhouse.tar").stat().st_size,
+              "release_dashboard_sha": payloads["dashboard"]["archive_sha256"],
+              "release_dashboard_size": (bundle / "dashboard-build.tar").stat().st_size,
+              "release_runtime_sha": runtime["sha256"],
+              "release_runtime_size": runtime["size"],
+              "release_manifest_size": (bundle / "release-manifest.json").stat().st_size,
+              "manifest_target_tree_sha": source["target_tree_sha"],
+              "expected_helper_sha": sha256_file(helper),
+              "expected_helper_size": helper.stat().st_size,
+          }
+          for key, value in values.items():
+              print(f"{key}={value}")
+          PY
+          )
+          [ "${#CONTRACT_VALUES[@]}" -eq 14 ]
+          for value in "${CONTRACT_VALUES[@]}"; do
+            [[ "$value" =~ ^[a-z_]+=[0-9a-f]+$ ]]
+            printf '%s\n' "$value" >>"$GITHUB_OUTPUT"
+            export "$value"
+          done
+          [ "$manifest_target_tree_sha" = "$RELEASE_TARGET_TREE_SHA" ]
+          cp transfer/control/scripts/ha/deploy_meta_release_ha.sh \
+            transfer/deploy_meta_release_ha.sh
+          chmod 0700 transfer/deploy_meta_release_ha.sh
+          for name in \
+            release-manifest.json wheelhouse.tar dashboard-build.tar control-plane.tar \
+            source.bundle \
+            cpython-3.13.15+20260814-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz; do
+            install -m 0600 "release-download/$name" "transfer/release/$name"
+          done
+          EXPECTED_RELEASE_INSTALL="INSTALL_RELEASE_${TARGET_SHA^^}_ARTIFACT_${RELEASE_ARTIFACT_ID}_${RELEASE_ARTIFACT_API_SHA256^^}_MANIFEST_${RELEASE_MANIFEST_SHA256^^}_RUN_${QUALITY_GATES_RUN_ID}_ATTEMPT_${RELEASE_RUN_ATTEMPT}_CONTROL_${release_control_sha^^}_SOURCE_${release_source_sha^^}_TREE_${RELEASE_TARGET_TREE_SHA^^}"
+          [ "$RELEASE_INSTALL_CONFIRM" = "$EXPECTED_RELEASE_INSTALL" ]
+
+      - name: Validate exact fresh LB attestation
+        id: lb_contract
+        env:
+          LB_ATTESTATION_BASE64: ${{ inputs.LB_ATTESTATION_BASE64 }}
+          LB_ATTESTATION_SHA256: ${{ inputs.LB_ATTESTATION_SHA256 }}
+          LB_READY_PROJECTION_SHA256: ${{ inputs.LB_READY_PROJECTION_SHA256 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p transfer
+          chmod 0700 transfer
+          /usr/bin/python3 -B -I -S - \
+            "$GITHUB_WORKSPACE/transfer/lb-attestation.json" \
+            "$LB_ATTESTATION_SHA256" "$LB_READY_PROJECTION_SHA256" <<'PY'
+          import base64
+          import hashlib
+          import json
+          import os
+          import re
+          import sys
+          from datetime import UTC, datetime, timedelta
+          from pathlib import Path
+
+          artifact_raw, artifact_sha, projection_sha = sys.argv[1:]
+          encoded = os.environ.get("LB_ATTESTATION_BASE64", "")
+          if not encoded or len(encoded) > 262_144:
+              raise SystemExit("LB attestation base64 authority is invalid")
+          try:
+              raw = base64.b64decode(encoded, validate=True)
+          except (ValueError, base64.binascii.Error) as exc:
+              raise SystemExit("LB attestation is not strict base64") from exc
+          if not raw or len(raw) > 131_072:
+              raise SystemExit("LB attestation exceeds its size limit")
+          if hashlib.sha256(raw).hexdigest() != artifact_sha:
+              raise SystemExit("LB artifact digest changed")
+
+          def unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
+              result: dict[str, object] = {}
+              for key, value in pairs:
+                  if key in result:
+                      raise ValueError("duplicate LB JSON key")
+                  result[key] = value
+              return result
+
+          try:
+              payload = json.loads(raw.decode("utf-8", "strict"), object_pairs_hook=unique)
+          except (UnicodeError, json.JSONDecodeError) as exc:
+              raise SystemExit("LB attestation is not strict JSON") from exc
+          canonical = json.dumps(
+              payload,
+              allow_nan=False,
+              separators=(",", ":"),
+              sort_keys=True,
+          ).encode()
+          if raw != canonical + b"\n":
+              raise SystemExit("LB artifact is not canonical")
+          expected_keys = {
+              "schema",
+              "load_balancer_id",
+              "observed_at",
+              "transaction_before_sha256",
+              "ready_mutable_sha256",
+              "ready_projection",
+              "health_check",
+          }
+          projection_keys = {
+              "disable_lets_encrypt_dns_records",
+              "droplet_ids",
+              "enable_backend_keepalive",
+              "forwarding_rules",
+              "health_check",
+              "http_idle_timeout_seconds",
+              "name",
+              "network",
+              "network_stack",
+              "project_id",
+              "redirect_http_to_https",
+              "region",
+              "size_unit",
+              "sticky_sessions",
+              "type",
+              "vpc_uuid",
+          }
+          if (
+              not isinstance(payload, dict)
+              or set(payload) != expected_keys
+              or payload.get("schema") != 2
+              or payload.get("load_balancer_id") != "2535b8ff-b89c-442b-b5bf-91eae51ed3f6"
+              or payload.get("ready_mutable_sha256") != projection_sha
+          ):
+              raise SystemExit("LB attestation schema or identity is invalid")
+          projection = payload.get("ready_projection")
+          projection_digest = hashlib.sha256(
+              json.dumps(
+                  projection,
+                  allow_nan=False,
+                  separators=(",", ":"),
+                  sort_keys=True,
+              ).encode()
+          ).hexdigest()
+          if (
+              not isinstance(projection, dict)
+              or set(projection) != projection_keys
+              or projection_digest != projection_sha
+          ):
+              raise SystemExit("LB attestation full projection is invalid")
+          droplet_ids = projection.get("droplet_ids")
+          if (
+              projection.get("name") != "linas-http-lb-lon1"
+              or projection.get("region") != "lon1"
+              or projection.get("project_id") != "70160077-6e21-4fc7-9c81-45e6b60d8919"
+              or projection.get("network") != "EXTERNAL"
+              or projection.get("network_stack") != "IPV4"
+              or projection.get("type") != "REGIONAL"
+              or projection.get("size_unit") != 2
+              or projection.get("sticky_sessions") != {"type": "none"}
+              or projection.get("redirect_http_to_https") is not True
+              or projection.get("enable_backend_keepalive") is not True
+              or projection.get("disable_lets_encrypt_dns_records") is not False
+              or projection.get("http_idle_timeout_seconds") != 60
+              or not isinstance(projection.get("vpc_uuid"), str)
+              or not projection["vpc_uuid"]
+              or not isinstance(droplet_ids, list)
+              or any(type(value) is not int for value in droplet_ids)
+              or sorted(droplet_ids) != [510629908, 591901417]
+          ):
+              raise SystemExit("LB attestation routing identity differs from the reviewed contract")
+          expected_health = {
+              "protocol": "http",
+              "port": 8003,
+              "path": "/api/ready",
+              "check_interval_seconds": 5,
+              "response_timeout_seconds": 3,
+              "healthy_threshold": 2,
+              "unhealthy_threshold": 3,
+          }
+          if (
+              projection.get("health_check") != expected_health
+              or payload.get("health_check") != expected_health
+          ):
+              raise SystemExit("LB attestation does not bind direct :8003 /api/ready")
+          rules = projection.get("forwarding_rules")
+          if not isinstance(rules, list) or len(rules) != 2 or any(
+              not isinstance(rule, dict) for rule in rules
+          ):
+              raise SystemExit("LB attestation forwarding rules are invalid")
+          http_rules = [rule for rule in rules if rule.get("entry_protocol") == "http"]
+          https_rules = [rule for rule in rules if rule.get("entry_protocol") == "https"]
+          if http_rules != [{
+              "entry_protocol": "http",
+              "entry_port": 80,
+              "target_protocol": "http",
+              "target_port": 80,
+          }]:
+              raise SystemExit("LB attestation HTTP forwarding rule changed")
+          if len(https_rules) != 1 or set(https_rules[0]) != {
+              "entry_protocol", "entry_port", "target_protocol", "target_port", "certificate_id"
+          }:
+              raise SystemExit("LB attestation HTTPS forwarding rule shape changed")
+          https_rule = https_rules[0]
+          if (
+              https_rule.get("entry_port") != 443
+              or https_rule.get("target_protocol") != "http"
+              or https_rule.get("target_port") != 80
+              or not isinstance(https_rule.get("certificate_id"), str)
+              or not https_rule["certificate_id"]
+          ):
+              raise SystemExit("LB attestation HTTPS forwarding rule changed")
+          transaction_before = payload.get("transaction_before_sha256")
+          if transaction_before is not None and (
+              not isinstance(transaction_before, str)
+              or re.fullmatch(r"[0-9a-f]{64}", transaction_before) is None
+          ):
+              raise SystemExit("LB attestation before digest is invalid")
+          observed_at = payload.get("observed_at")
+          if not isinstance(observed_at, str) or re.fullmatch(
+              r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z", observed_at
+          ) is None:
+              raise SystemExit("LB attestation observation time is invalid")
+          observed = datetime.fromisoformat(observed_at[:-1] + "+00:00")
+          now = datetime.now(UTC)
+          if observed > now + timedelta(seconds=30) or now - observed > timedelta(seconds=300):
+              raise SystemExit("LB artifact is outside the five-minute operation window")
+          destination = Path(artifact_raw)
+          if destination.exists() or destination.is_symlink():
+              raise SystemExit("LB attestation destination already exists")
+          descriptor = os.open(
+              destination,
+              os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+              0o600,
+          )
+          try:
+              view = memoryview(raw)
+              while view:
+                  written = os.write(descriptor, view)
+                  if written <= 0:
+                      raise SystemExit("LB attestation write did not progress")
+                  view = view[written:]
+              os.fsync(descriptor)
+          finally:
+              os.close(descriptor)
+          os.chmod(destination, 0o600)
+          PY
+          printf 'lb_size=%s\n' "$(stat -c '%s' transfer/lb-attestation.json)" >>"$GITHUB_OUTPUT"
+
+      - name: Transfer exact release and LB artifacts to fixed node01
+        if: inputs.DEPLOY_OPERATION == 'steady' || inputs.DEPLOY_OPERATION == 'reconcile_exact'
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "transfer/deploy_meta_release_ha.sh,transfer/lb-attestation.json,transfer/release"
+          target: "/tmp/linasbot-ha-upload-${{ github.run_id }}-${{ github.run_attempt }}"
+          strip_components: 1
+
+      - name: Transfer fresh LB artifact for durable transaction recovery
+        if: inputs.DEPLOY_OPERATION != 'steady' && inputs.DEPLOY_OPERATION != 'reconcile_exact'
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "transfer/lb-attestation.json"
+          target: "/tmp/linasbot-ha-upload-${{ github.run_id }}-${{ github.run_attempt }}"
+          strip_components: 1
+
+      - name: Execute exact peer-first HA transaction
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        env:
+          DEPLOY_OPERATION: ${{ inputs.DEPLOY_OPERATION }}
+          TARGET_SHA: ${{ inputs.TARGET_SHA }}
+          QUALITY_GATES_RUN_ID: ${{ inputs.QUALITY_GATES_RUN_ID }}
+          RELEASE_RUN_ATTEMPT: ${{ inputs.RELEASE_RUN_ATTEMPT }}
+          RELEASE_ARTIFACT_ID: ${{ inputs.RELEASE_ARTIFACT_ID }}
+          RELEASE_ARTIFACT_API_SHA256: ${{ inputs.RELEASE_ARTIFACT_API_SHA256 }}
+          RELEASE_MANIFEST_SHA256: ${{ inputs.RELEASE_MANIFEST_SHA256 }}
+          RELEASE_TARGET_TREE_SHA: ${{ inputs.RELEASE_TARGET_TREE_SHA }}
+          RELEASE_INSTALL_CONFIRM: ${{ inputs.RELEASE_INSTALL_CONFIRM }}
+          NODE01_BASELINE_SHA: ${{ inputs.NODE01_BASELINE_SHA }}
+          NODE02_BASELINE_SHA: ${{ inputs.NODE02_BASELINE_SHA }}
+          BOOTSTRAP_PLAN_SHA256: ${{ inputs.BOOTSTRAP_PLAN_SHA256 }}
+          RECONCILE_CONFIRM: ${{ inputs.RECONCILE_CONFIRM }}
+          DEPLOY_CONFIRM: ${{ inputs.DEPLOY_CONFIRM }}
+          RECOVERY_JOURNAL_SHA256: ${{ inputs.RECOVERY_JOURNAL_SHA256 }}
+          COMMIT_CONFIRM: ${{ inputs.COMMIT_CONFIRM }}
+          RECOVERY_CONFIRM: ${{ inputs.RECOVERY_CONFIRM }}
+          RETRY_RECONCILE_CONFIRM: ${{ inputs.RETRY_RECONCILE_CONFIRM }}
+          LB_ATTESTATION_SHA256: ${{ inputs.LB_ATTESTATION_SHA256 }}
+          LB_READY_PROJECTION_SHA256: ${{ inputs.LB_READY_PROJECTION_SHA256 }}
+          LB_INSTALL_CONFIRM: ${{ inputs.LB_INSTALL_CONFIRM }}
+          LB_OWNER_CONFIRM: ${{ inputs.LB_OWNER_CONFIRM }}
+          RELEASE_CONTROL_SHA: ${{ steps.release_contract.outputs.release_control_sha }}
+          RELEASE_CONTROL_SIZE: ${{ steps.release_contract.outputs.release_control_size }}
+          RELEASE_SOURCE_SHA: ${{ steps.release_contract.outputs.release_source_sha }}
+          RELEASE_SOURCE_SIZE: ${{ steps.release_contract.outputs.release_source_size }}
+          RELEASE_WHEELHOUSE_SHA: ${{ steps.release_contract.outputs.release_wheelhouse_sha }}
+          RELEASE_WHEELHOUSE_SIZE: ${{ steps.release_contract.outputs.release_wheelhouse_size }}
+          RELEASE_DASHBOARD_SHA: ${{ steps.release_contract.outputs.release_dashboard_sha }}
+          RELEASE_DASHBOARD_SIZE: ${{ steps.release_contract.outputs.release_dashboard_size }}
+          RELEASE_RUNTIME_SHA: ${{ steps.release_contract.outputs.release_runtime_sha }}
+          RELEASE_RUNTIME_SIZE: ${{ steps.release_contract.outputs.release_runtime_size }}
+          RELEASE_MANIFEST_SIZE: ${{ steps.release_contract.outputs.release_manifest_size }}
+          EXPECTED_HELPER_SHA: ${{ steps.release_contract.outputs.expected_helper_sha }}
+          EXPECTED_HELPER_SIZE: ${{ steps.release_contract.outputs.expected_helper_size }}
+          LB_ATTESTATION_SIZE: ${{ steps.lb_contract.outputs.lb_size }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script_stop: true
-          command_timeout: 30m
+          command_timeout: 115m
+          envs: DEPLOY_OPERATION,TARGET_SHA,QUALITY_GATES_RUN_ID,RELEASE_RUN_ATTEMPT,RELEASE_ARTIFACT_ID,RELEASE_ARTIFACT_API_SHA256,RELEASE_MANIFEST_SHA256,RELEASE_TARGET_TREE_SHA,RELEASE_INSTALL_CONFIRM,NODE01_BASELINE_SHA,NODE02_BASELINE_SHA,BOOTSTRAP_PLAN_SHA256,RECONCILE_CONFIRM,DEPLOY_CONFIRM,RECOVERY_JOURNAL_SHA256,COMMIT_CONFIRM,RECOVERY_CONFIRM,RETRY_RECONCILE_CONFIRM,LB_ATTESTATION_SHA256,LB_READY_PROJECTION_SHA256,LB_INSTALL_CONFIRM,LB_OWNER_CONFIRM,RELEASE_CONTROL_SHA,RELEASE_CONTROL_SIZE,RELEASE_SOURCE_SHA,RELEASE_SOURCE_SIZE,RELEASE_WHEELHOUSE_SHA,RELEASE_WHEELHOUSE_SIZE,RELEASE_DASHBOARD_SHA,RELEASE_DASHBOARD_SIZE,RELEASE_RUNTIME_SHA,RELEASE_RUNTIME_SIZE,RELEASE_MANIFEST_SIZE,EXPECTED_HELPER_SHA,EXPECTED_HELPER_SIZE,LB_ATTESTATION_SIZE,WORKFLOW_RUN_ID,WORKFLOW_RUN_ATTEMPT
           script: |
-            set -e
-            echo "[deploy] Connected to $(hostname)"
-            cd /opt/linasbot
-
-            # Backup entire data/ before git reset (Q&A, knowledge, style, price, content files, settings)
+            set -euo pipefail
             umask 077
-            DATA_BACKUP="/tmp/linasbot_data_backup_$$"
-            if [ -d data ]; then
-              echo "[deploy] Backing up data/ (knowledge, style, Q&A, settings, content files...)"
-              cp -a data "$DATA_BACKUP"
-              chmod 700 "$DATA_BACKUP"
+            UPLOAD_ROOT="/tmp/linasbot-ha-upload-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
+            [ -d "$UPLOAD_ROOT" ] && [ ! -L "$UPLOAD_ROOT" ]
+            HELPER_SOURCE="$UPLOAD_ROOT/deploy_meta_release_ha.sh"
+            LB_SOURCE="$UPLOAD_ROOT/lb-attestation.json"
+            RELEASE_SOURCE="$UPLOAD_ROOT/release"
+            [ -f "$LB_SOURCE" ] && [ ! -L "$LB_SOURCE" ]
+            [ "$(sha256sum "$LB_SOURCE" | awk '{print $1}')" = "$LB_ATTESTATION_SHA256" ]
+            NEW_DEPLOY=0
+            if [ "$DEPLOY_OPERATION" = steady ] || [ "$DEPLOY_OPERATION" = reconcile_exact ]; then
+              NEW_DEPLOY=1
+              [ -f "$HELPER_SOURCE" ] && [ ! -L "$HELPER_SOURCE" ]
+              [ -d "$RELEASE_SOURCE" ] && [ ! -L "$RELEASE_SOURCE" ]
             fi
 
-            git fetch origin main
-            git reset --hard origin/main
-
-            # Restore user data so dashboard saves persist across deploys
-            if [ -d "$DATA_BACKUP" ]; then
-              echo "[deploy] Restoring user data..."
-              mkdir -p data
-              cp -a "$DATA_BACKUP"/* data/ 2>/dev/null || true
-              rm -rf "$DATA_BACKUP"
-              echo "[deploy] User data restored."
-            fi
-
-            sudo bash /opt/linasbot/deploy.sh
-            echo "[deploy] Deployment completed successfully on $(hostname)"
-
-            # Peer node via VPC (Actions SSH key is on node01 only). Non-fatal if unreachable.
-            PEER_HOST="${LINAS_HA_PEER_HOST:-10.106.0.4}"
-            if ssh -o BatchMode=yes -o ConnectTimeout=8 "root@${PEER_HOST}" 'hostname' >/dev/null 2>&1; then
-              echo "[deploy] Starting peer deploy on ${PEER_HOST}"
-              if ! ssh -o BatchMode=yes "root@${PEER_HOST}" 'bash -s' <<'PEER_EOF'
-            set -e
-            cd /opt/linasbot
-            umask 077
-            DATA_BACKUP="/tmp/linasbot_data_backup_$$"
-            if [ -d data ]; then
-              cp -a data "$DATA_BACKUP"
-              chmod 700 "$DATA_BACKUP"
-            fi
-            git fetch origin main
-            git reset --hard origin/main
-            if [ -d "$DATA_BACKUP" ]; then
-              mkdir -p data
-              cp -a "$DATA_BACKUP"/* data/ 2>/dev/null || true
-              rm -rf "$DATA_BACKUP"
-            fi
-            sudo bash /opt/linasbot/deploy.sh
-            echo "[deploy] Peer deployment completed on $(hostname)"
-            PEER_EOF
-              then
-                echo "::warning::Peer deploy failed on ${PEER_HOST} — node01 deploy succeeded"
+            HELPER_ROOT=""
+            HELPER_PATH=""
+            LB_ROOT=""
+            RELEASE_ROOT=""
+            cleanup() {
+              set +e
+              if [ -n "$LB_ROOT" ]; then sudo unlink "$LB_ROOT" 2>/dev/null || true; fi
+              if [ -n "$RELEASE_ROOT" ]; then
+                for name in \
+                  release-manifest.json wheelhouse.tar dashboard-build.tar control-plane.tar \
+                  source.bundle \
+                  cpython-3.13.15+20260814-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz; do
+                  sudo unlink "$RELEASE_ROOT/$name" 2>/dev/null || true
+                done
+                sudo rmdir "$RELEASE_ROOT" 2>/dev/null || true
               fi
+              if [ -n "$HELPER_PATH" ]; then sudo unlink "$HELPER_PATH" 2>/dev/null || true; fi
+              if [ -n "$HELPER_ROOT" ]; then sudo rmdir "$HELPER_ROOT" 2>/dev/null || true; fi
+              unlink "$LB_SOURCE" 2>/dev/null || true
+              if [ "$NEW_DEPLOY" = 1 ]; then unlink "$HELPER_SOURCE" 2>/dev/null || true; fi
+              if [ -d "$RELEASE_SOURCE" ] && [ ! -L "$RELEASE_SOURCE" ]; then
+                for name in \
+                  release-manifest.json wheelhouse.tar dashboard-build.tar control-plane.tar \
+                  source.bundle \
+                  cpython-3.13.15+20260814-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz; do
+                  unlink "$RELEASE_SOURCE/$name" 2>/dev/null || true
+                done
+                rmdir "$RELEASE_SOURCE" 2>/dev/null || true
+              fi
+              rmdir "$UPLOAD_ROOT" 2>/dev/null || true
+            }
+            trap cleanup EXIT
+            trap 'exit 130' INT
+            trap 'exit 143' TERM
+
+            root_copy_exact() {
+              sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+                PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+                /usr/bin/python3 -B -I -S - "$@" "$(id -u)" <<'PY'
+            import hashlib
+            import os
+            import stat
+            import sys
+            from pathlib import Path
+
+            source = Path(sys.argv[1])
+            destination = Path(sys.argv[2])
+            expected_size = int(sys.argv[3])
+            expected_sha = sys.argv[4]
+            mode = int(sys.argv[5], 8)
+            source_uid = int(sys.argv[6])
+            if expected_size < 1 or expected_size > (1 << 30):
+                raise SystemExit("staged authority size is invalid")
+            if len(expected_sha) != 64 or any(ch not in "0123456789abcdef" for ch in expected_sha):
+                raise SystemExit("staged authority digest is invalid")
+            if mode not in {0o600, 0o700}:
+                raise SystemExit("staged authority mode is invalid")
+            source_info = source.lstat()
+            if (
+                not stat.S_ISREG(source_info.st_mode)
+                or stat.S_ISLNK(source_info.st_mode)
+                or source_info.st_uid != source_uid
+                or source_info.st_nlink != 1
+                or stat.S_IMODE(source_info.st_mode) & 0o022
+                or source_info.st_size != expected_size
+            ):
+                raise SystemExit("staged authority source is unsafe")
+            source_fd = os.open(source, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+            try:
+                opened = os.fstat(source_fd)
+                if (opened.st_dev, opened.st_ino, opened.st_size) != (
+                    source_info.st_dev,
+                    source_info.st_ino,
+                    expected_size,
+                ):
+                    raise SystemExit("staged authority source changed while opening")
+                destination_fd = os.open(
+                    destination,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+                    mode,
+                )
+                digest = hashlib.sha256()
+                total = 0
+                try:
+                    while True:
+                        chunk = os.read(source_fd, min(1 << 20, expected_size - total + 1))
+                        if not chunk:
+                            break
+                        total += len(chunk)
+                        if total > expected_size:
+                            raise SystemExit("staged authority source exceeded its bound")
+                        digest.update(chunk)
+                        view = memoryview(chunk)
+                        while view:
+                            written = os.write(destination_fd, view)
+                            view = view[written:]
+                    if total != expected_size or digest.hexdigest() != expected_sha:
+                        raise SystemExit("staged authority bytes differ from workflow evidence")
+                    os.fchmod(destination_fd, mode)
+                    os.fchown(destination_fd, 0, 0)
+                    os.fsync(destination_fd)
+                finally:
+                    os.close(destination_fd)
+                final_source = os.fstat(source_fd)
+                if (
+                    final_source.st_dev,
+                    final_source.st_ino,
+                    final_source.st_size,
+                    final_source.st_mtime_ns,
+                    final_source.st_ctime_ns,
+                ) != (
+                    opened.st_dev,
+                    opened.st_ino,
+                    opened.st_size,
+                    opened.st_mtime_ns,
+                    opened.st_ctime_ns,
+                ):
+                    raise SystemExit("staged authority source changed during copy")
+            finally:
+                os.close(source_fd)
+            parent_fd = os.open(destination.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+            try:
+                os.fsync(parent_fd)
+            finally:
+                os.close(parent_fd)
+            PY
+            }
+
+            materialize_recovery_helper() {
+              sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+                PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+                /usr/bin/python3 -B -I -S - \
+                "$HELPER_PATH" "$TARGET_SHA" "$RELEASE_ARTIFACT_ID" \
+                "$RELEASE_ARTIFACT_API_SHA256" "$RELEASE_MANIFEST_SHA256" \
+                "$QUALITY_GATES_RUN_ID" "$RELEASE_RUN_ATTEMPT" \
+                "$RELEASE_TARGET_TREE_SHA" <<'PY'
+            import hashlib
+            import json
+            import os
+            import re
+            import stat
+            import sys
+            import tarfile
+            from pathlib import Path
+
+            destination = Path(sys.argv[1])
+            target_sha, artifact_id, artifact_api_sha, manifest_sha = sys.argv[2:6]
+            run_id, run_attempt, target_tree_sha = sys.argv[6:]
+            state_root = Path("/var/lib/linasbot/meta-ha")
+            bundle = state_root / "release-bundles" / f"{artifact_id}-{artifact_api_sha}"
+            receipt = state_root / "release-bundle-receipts" / f"{artifact_id}-{artifact_api_sha}.json"
+            digest_re = re.compile(r"[0-9a-f]{64}")
+
+            def read_secure(path: Path, mode: int, limit: int) -> bytes:
+                info = path.lstat()
+                if (
+                    not stat.S_ISREG(info.st_mode)
+                    or stat.S_ISLNK(info.st_mode)
+                    or info.st_uid != 0
+                    or info.st_gid != 0
+                    or info.st_nlink != 1
+                    or stat.S_IMODE(info.st_mode) != mode
+                    or info.st_size < 1
+                    or info.st_size > limit
+                ):
+                    raise SystemExit("protected release authority is unsafe")
+                descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+                try:
+                    opened = os.fstat(descriptor)
+                    if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                        raise SystemExit("protected release authority changed while opening")
+                    raw = b""
+                    while len(raw) <= limit:
+                        chunk = os.read(descriptor, min(1 << 20, limit + 1 - len(raw)))
+                        if not chunk:
+                            break
+                        raw += chunk
+                    if len(raw) != info.st_size:
+                        raise SystemExit("protected release authority changed while reading")
+                    return raw
+                finally:
+                    os.close(descriptor)
+
+            def unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
+                result: dict[str, object] = {}
+                for key, value in pairs:
+                    if key in result:
+                        raise ValueError("duplicate release authority key")
+                    result[key] = value
+                return result
+
+            for directory, mode in (
+                (state_root, 0o700),
+                (bundle.parent, 0o700),
+                (receipt.parent, 0o700),
+                (bundle, 0o700),
+            ):
+                info = directory.lstat()
+                if (
+                    not stat.S_ISDIR(info.st_mode)
+                    or stat.S_ISLNK(info.st_mode)
+                    or info.st_uid != 0
+                    or info.st_gid != 0
+                    or stat.S_IMODE(info.st_mode) != mode
+                ):
+                    raise SystemExit("protected release directory is unsafe")
+            receipt_raw = read_secure(receipt, 0o600, 1 << 20)
+            receipt_payload = json.loads(receipt_raw, object_pairs_hook=unique)
+            receipt_keys = {
+                "schema", "format", "status", "node_id", "target_sha", "artifact_id",
+                "artifact_api_sha256", "manifest_sha256", "run_id", "run_attempt",
+                "target_tree_sha", "bundle_summary_sha256", "python_runtime_cluster_sha256",
+            }
+            if (
+                not isinstance(receipt_payload, dict)
+                or set(receipt_payload) != receipt_keys
+                or receipt_raw != (json.dumps(receipt_payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+                or receipt_payload["schema"] != 1
+                or receipt_payload["format"] != "linasbot-release-bundle-install-v1"
+                or receipt_payload["status"] != "installed"
+                or receipt_payload["node_id"] != "node01"
+                or receipt_payload["target_sha"] != target_sha
+                or receipt_payload["artifact_id"] != int(artifact_id)
+                or receipt_payload["artifact_api_sha256"] != artifact_api_sha
+                or receipt_payload["manifest_sha256"] != manifest_sha
+                or receipt_payload["run_id"] != int(run_id)
+                or receipt_payload["run_attempt"] != int(run_attempt)
+                or receipt_payload["target_tree_sha"] != target_tree_sha
+                or digest_re.fullmatch(str(receipt_payload["bundle_summary_sha256"])) is None
+                or digest_re.fullmatch(str(receipt_payload["python_runtime_cluster_sha256"])) is None
+            ):
+                raise SystemExit("protected release receipt differs from recovery authority")
+            expected_files = {
+                "release-manifest.json", "wheelhouse.tar", "dashboard-build.tar",
+                "control-plane.tar", "source.bundle",
+                "cpython-3.13.15+20260814-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+            }
+            if {entry.name for entry in os.scandir(bundle)} != expected_files:
+                raise SystemExit("protected release bundle file set is not closed")
+            manifest_raw = read_secure(bundle / "release-manifest.json", 0o600, 1 << 20)
+            if hashlib.sha256(manifest_raw).hexdigest() != manifest_sha:
+                raise SystemExit("protected release manifest digest changed")
+            manifest = json.loads(manifest_raw, object_pairs_hook=unique)
+            if manifest_raw != (json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n").encode():
+                raise SystemExit("protected release manifest is not canonical")
+            if (
+                manifest.get("target_sha") != target_sha
+                or manifest.get("run_id") != int(run_id)
+                or manifest.get("run_attempt") != int(run_attempt)
+                or manifest.get("payloads", {}).get("source_bundle", {}).get("target_tree_sha") != target_tree_sha
+            ):
+                raise SystemExit("protected release manifest identity changed")
+            control = manifest.get("payloads", {}).get("control_plane")
+            if not isinstance(control, dict) or set(control) != {
+                "archive", "archive_sha256", "tree_sha256", "file_count", "total_size"
+            } or control.get("archive") != "control-plane.tar" or digest_re.fullmatch(
+                str(control.get("archive_sha256", ""))
+            ) is None:
+                raise SystemExit("protected control-plane authority is invalid")
+            archive = bundle / "control-plane.tar"
+            archive_raw = read_secure(archive, 0o600, 64 << 20)
+            if hashlib.sha256(archive_raw).hexdigest() != control["archive_sha256"]:
+                raise SystemExit("protected control-plane archive changed")
+            helper_name = "scripts/ha/deploy_meta_release_ha.sh"
+            with tarfile.open(archive, mode="r:") as handle:
+                matches = [member for member in handle.getmembers() if member.name == helper_name]
+                if len(matches) != 1:
+                    raise SystemExit("protected deploy helper member is not unique")
+                member = matches[0]
+                if not member.isfile() or member.mode != 0o755 or not 1 <= member.size <= (4 << 20):
+                    raise SystemExit("protected deploy helper member is unsafe")
+                extracted = handle.extractfile(member)
+                if extracted is None:
+                    raise SystemExit("protected deploy helper member cannot be read")
+                helper_bytes = extracted.read(member.size + 1)
+            if len(helper_bytes) != member.size:
+                raise SystemExit("protected deploy helper member size changed")
+            descriptor = os.open(
+                destination,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+                0o700,
+            )
+            try:
+                os.fchown(descriptor, 0, 0)
+                view = memoryview(helper_bytes)
+                while view:
+                    written = os.write(descriptor, view)
+                    view = view[written:]
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            parent_fd = os.open(destination.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+            try:
+                os.fsync(parent_fd)
+            finally:
+                os.close(parent_fd)
+            PY
+            }
+
+            HELPER_ROOT="$(sudo mktemp -d -p /run linasbot-ha-deploy.XXXXXXXX)"
+            case "$HELPER_ROOT" in /run/linasbot-ha-deploy.????????) ;; *) exit 1 ;; esac
+            HELPER_PATH="$HELPER_ROOT/deploy_meta_release_ha.sh"
+            if [ "$NEW_DEPLOY" = 1 ]; then
+              root_copy_exact "$HELPER_SOURCE" "$HELPER_PATH" \
+                "$EXPECTED_HELPER_SIZE" "$EXPECTED_HELPER_SHA" 0700
             else
-              echo "::warning::Peer deploy skipped — no SSH to ${PEER_HOST}"
+              materialize_recovery_helper
+            fi
+
+            LB_ROOT="$(sudo mktemp -p /run linasbot-lb-upload.XXXXXXXX)"
+            case "$LB_ROOT" in /run/linasbot-lb-upload.????????) ;; *) exit 1 ;; esac
+            sudo unlink "$LB_ROOT"
+            root_copy_exact "$LB_SOURCE" "$LB_ROOT" \
+              "$LB_ATTESTATION_SIZE" "$LB_ATTESTATION_SHA256" 0600
+
+            if [ "$NEW_DEPLOY" = 1 ]; then
+              RELEASE_ROOT="$(sudo mktemp -d -p /run linasbot-release-import.XXXXXXXX)"
+              case "$RELEASE_ROOT" in /run/linasbot-release-import.????????) ;; *) exit 1 ;; esac
+              root_copy_exact "$RELEASE_SOURCE/release-manifest.json" \
+                "$RELEASE_ROOT/release-manifest.json" "$RELEASE_MANIFEST_SIZE" \
+                "$RELEASE_MANIFEST_SHA256" 0600
+              root_copy_exact "$RELEASE_SOURCE/wheelhouse.tar" \
+                "$RELEASE_ROOT/wheelhouse.tar" "$RELEASE_WHEELHOUSE_SIZE" \
+                "$RELEASE_WHEELHOUSE_SHA" 0600
+              root_copy_exact "$RELEASE_SOURCE/dashboard-build.tar" \
+                "$RELEASE_ROOT/dashboard-build.tar" "$RELEASE_DASHBOARD_SIZE" \
+                "$RELEASE_DASHBOARD_SHA" 0600
+              root_copy_exact "$RELEASE_SOURCE/control-plane.tar" \
+                "$RELEASE_ROOT/control-plane.tar" "$RELEASE_CONTROL_SIZE" \
+                "$RELEASE_CONTROL_SHA" 0600
+              root_copy_exact "$RELEASE_SOURCE/source.bundle" \
+                "$RELEASE_ROOT/source.bundle" "$RELEASE_SOURCE_SIZE" \
+                "$RELEASE_SOURCE_SHA" 0600
+              root_copy_exact \
+                "$RELEASE_SOURCE/cpython-3.13.15+20260814-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz" \
+                "$RELEASE_ROOT/cpython-3.13.15+20260814-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz" \
+                "$RELEASE_RUNTIME_SIZE" "$RELEASE_RUNTIME_SHA" 0600
+              sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+                PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+                /bin/bash --noprofile --norc "$HELPER_PATH" install-release-bundle-cluster \
+                "$RELEASE_ROOT" "$TARGET_SHA" "$RELEASE_ARTIFACT_ID" \
+                "$RELEASE_ARTIFACT_API_SHA256" "$RELEASE_MANIFEST_SHA256" \
+                "$QUALITY_GATES_RUN_ID" "$RELEASE_RUN_ATTEMPT" "$RELEASE_CONTROL_SHA" \
+                "$RELEASE_SOURCE_SHA" "$RELEASE_TARGET_TREE_SHA" "$RELEASE_INSTALL_CONFIRM"
+            fi
+
+            if [ "$DEPLOY_OPERATION" = steady ] || [ "$DEPLOY_OPERATION" = reconcile_exact ]; then
+              LB_OPERATION=deploy
+              LB_JOURNAL=none
+            elif [ "$DEPLOY_OPERATION" = commit_exact ]; then
+              LB_OPERATION=commit
+              LB_JOURNAL="$RECOVERY_JOURNAL_SHA256"
+            elif [ "$DEPLOY_OPERATION" = recover_exact ]; then
+              LB_OPERATION=recover
+              LB_JOURNAL="$RECOVERY_JOURNAL_SHA256"
+            else
+              LB_OPERATION=retry
+              LB_JOURNAL="$RECOVERY_JOURNAL_SHA256"
+            fi
+            sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+              PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+              /bin/bash --noprofile --norc "$HELPER_PATH" install-lb-attestation-cluster \
+              "$LB_ROOT" "$LB_OPERATION" "$TARGET_SHA" "$LB_ATTESTATION_SHA256" \
+              "$LB_READY_PROJECTION_SHA256" "$LB_JOURNAL" "$LB_INSTALL_CONFIRM" \
+              "$LB_OWNER_CONFIRM"
+
+            if [ "$DEPLOY_OPERATION" = steady ]; then
+              sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+                PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+                /bin/bash --noprofile --norc "$HELPER_PATH" orchestrate-confirmed \
+                "$TARGET_SHA" "$NODE01_BASELINE_SHA" "$NODE02_BASELINE_SHA" \
+                "$BOOTSTRAP_PLAN_SHA256" "$DEPLOY_CONFIRM" "$LB_ATTESTATION_SHA256" \
+                "$LB_READY_PROJECTION_SHA256" "$LB_OWNER_CONFIRM" \
+                "$RELEASE_ARTIFACT_ID" "$RELEASE_ARTIFACT_API_SHA256" \
+                "$RELEASE_MANIFEST_SHA256" "$QUALITY_GATES_RUN_ID" \
+                "$RELEASE_RUN_ATTEMPT" "$RELEASE_TARGET_TREE_SHA"
+            elif [ "$DEPLOY_OPERATION" = reconcile_exact ]; then
+              sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+                PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+                /bin/bash --noprofile --norc "$HELPER_PATH" orchestrate-reconcile \
+                "$TARGET_SHA" "$NODE01_BASELINE_SHA" "$NODE02_BASELINE_SHA" \
+                "$BOOTSTRAP_PLAN_SHA256" "$RECONCILE_CONFIRM" "$DEPLOY_CONFIRM" \
+                "$LB_ATTESTATION_SHA256" "$LB_READY_PROJECTION_SHA256" \
+                "$LB_OWNER_CONFIRM" "$RELEASE_ARTIFACT_ID" \
+                "$RELEASE_ARTIFACT_API_SHA256" "$RELEASE_MANIFEST_SHA256" \
+                "$QUALITY_GATES_RUN_ID" "$RELEASE_RUN_ATTEMPT" "$RELEASE_TARGET_TREE_SHA"
+            elif [ "$DEPLOY_OPERATION" = commit_exact ]; then
+              sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+                PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+                /bin/bash --noprofile --norc "$HELPER_PATH" commit-target-confirmed \
+                "$TARGET_SHA" "$RECOVERY_JOURNAL_SHA256" "$COMMIT_CONFIRM" \
+                "$LB_ATTESTATION_SHA256" "$LB_READY_PROJECTION_SHA256" "$LB_OWNER_CONFIRM"
+            elif [ "$DEPLOY_OPERATION" = recover_exact ]; then
+              sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+                PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+                /bin/bash --noprofile --norc "$HELPER_PATH" recover-confirmed \
+                "$TARGET_SHA" "$NODE01_BASELINE_SHA" "$NODE02_BASELINE_SHA" \
+                "$RECOVERY_JOURNAL_SHA256" "$RECOVERY_CONFIRM" \
+                "$LB_ATTESTATION_SHA256" "$LB_READY_PROJECTION_SHA256" "$LB_OWNER_CONFIRM"
+            else
+              sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+                PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+                /bin/bash --noprofile --norc "$HELPER_PATH" retry-reconcile-confirmed \
+                "$TARGET_SHA" "$NODE01_BASELINE_SHA" "$NODE02_BASELINE_SHA" \
+                "$RECOVERY_JOURNAL_SHA256" "$RETRY_RECONCILE_CONFIRM" \
+                "$LB_ATTESTATION_SHA256" "$LB_READY_PROJECTION_SHA256" "$LB_OWNER_CONFIRM"
             fi

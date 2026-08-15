@@ -36,6 +36,11 @@ from services.meta_instagram_login_config import (
 )
 from services.meta_instagram_login_subscription import ensure_instagram_login_webhook_subscription
 from services.meta_oauth import META_OAUTH_STATE_TTL_SECONDS, MetaOAuthError, _safe_json
+from services.meta_subject_deletion_guard import (
+    MetaSubjectDeletionGuardError,
+    acquire_meta_oauth_subject_guard,
+    meta_deletion_subject_hmac,
+)
 
 INSTAGRAM_LOGIN_OAUTH_FLOW = "instagram_login"
 
@@ -72,6 +77,7 @@ def begin_instagram_login(
     actor_reference = hashlib.sha256(str(actor_id or "oauth").encode("utf-8")).hexdigest()[:16]
     surface = normalize_return_surface(return_surface)
     current_registry = registry or get_meta_app_registry()
+    oauth_started_at = time.time()
     current_registry.store_oauth_state(
         nonce_hash,
         {
@@ -82,7 +88,8 @@ def begin_instagram_login(
             "redirect_uri": instagram_login_redirect_uri(),
             "requested_scopes": sorted(META_INSTAGRAM_LOGIN_REQUEST_SCOPES),
             "return_surface": surface,
-            "expires_at": time.time() + META_OAUTH_STATE_TTL_SECONDS,
+            "created_at": oauth_started_at,
+            "expires_at": oauth_started_at + META_OAUTH_STATE_TTL_SECONDS,
         },
     )
     query = urlencode(
@@ -254,6 +261,9 @@ async def complete_instagram_login(
         raise MetaOAuthStateError("OAuth redirect does not match")
     tenant_id = str(state_data.get("tenant_id") or "").strip()
     actor_id = str(state_data.get("actor_id") or "oauth")
+    oauth_started_at = float(state_data.get("created_at") or 0.0)
+    if oauth_started_at <= 0.0 or oauth_started_at > time.time():
+        raise MetaOAuthStateError("OAuth state creation time is invalid")
     from services.meta_oauth_return import normalize_return_surface
 
     return_surface = normalize_return_surface(state_data.get("return_surface"))
@@ -295,34 +305,98 @@ async def complete_instagram_login(
             authorized_meta_user_id=authorized_user_id,
             auth_flow="instagram_login",
             declined_scopes=declined,
+            authorization_started_at=oauth_started_at,
         )
-        binding = current_registry.authorize_oauth_asset(
-            tenant_id=tenant_id,
-            channel="instagram",
-            asset_id=instagram_id,
-            page_id="",
-            instagram_account_id=instagram_id,
+        subject_key = meta_deletion_subject_hmac(
             app_key=APP_A_KEY,
-            credential=credential,
-            actor_id=actor_id,
-            instagram_username=instagram_username,
-            status="active",
+            app_id=instagram_login_app_id(),
             auth_flow="instagram_login",
-            webhook_subscription_status="pending",
+            meta_user_id=authorized_user_id,
+            app_secret=instagram_login_app_secret(),
         )
-        app = get_meta_app_configs()[APP_A_KEY]
-        await ensure_instagram_login_webhook_subscription(
-            binding,
-            credential,
-            registry=current_registry,
-            graph_api_version=app.graph_api_version,
-            client=http_client,
-        )
-        binding = next(
-            item
-            for item in current_registry.list_bindings(include_inactive=False, include_superseded=True)
-            if item.binding_id == binding.binding_id
-        )
+        try:
+            subject_guard = acquire_meta_oauth_subject_guard(
+                subject_key,
+                oauth_started_at=oauth_started_at,
+            )
+        except MetaSubjectDeletionGuardError as exc:
+            raise MetaOAuthError("Instagram authorization is blocked by a data deletion request") from exc
+
+        with subject_guard:
+            previous_active = next(
+                (
+                    item
+                    for item in current_registry.list_bindings(include_inactive=False, include_superseded=True)
+                    if item.tenant_id == tenant_id
+                    and item.channel == "instagram"
+                    and item.asset_id == instagram_id
+                    and item.app_key == APP_A_KEY
+                    and item.auth_flow == "instagram_login"
+                ),
+                None,
+            )
+            binding = current_registry.authorize_oauth_asset(
+                tenant_id=tenant_id,
+                channel="instagram",
+                asset_id=instagram_id,
+                page_id="",
+                instagram_account_id=instagram_id,
+                app_key=APP_A_KEY,
+                credential=credential,
+                actor_id=actor_id,
+                instagram_username=instagram_username,
+                status="testing",
+                auth_flow="instagram_login",
+                webhook_subscription_status="pending",
+                create_new_binding=True,
+            )
+            app = get_meta_app_configs()[APP_A_KEY]
+            try:
+                subscription = await ensure_instagram_login_webhook_subscription(
+                    binding,
+                    credential,
+                    registry=current_registry,
+                    graph_api_version=app.graph_api_version,
+                    client=http_client,
+                )
+                staged = next(
+                    item
+                    for item in current_registry.list_bindings(include_inactive=True, include_superseded=True)
+                    if item.binding_id == binding.binding_id
+                )
+                if not subscription.ready_for_dm or not subscription.ready_for_comments:
+                    raise MetaOAuthError(
+                        "Instagram webhook subscription could not be confirmed. Reconnect Instagram and try again."
+                    )
+                try:
+                    subject_guard.assert_oauth_snapshot_unchanged()
+                except MetaSubjectDeletionGuardError as exc:
+                    raise MetaOAuthError("Meta deletion state changed during Instagram authorization") from exc
+                binding = current_registry.activate_staged_binding(
+                    staged.binding_id,
+                    actor_id=actor_id,
+                    expected_generation=staged.generation,
+                    replace_existing=previous_active is not None,
+                )
+            except Exception:
+                latest = next(
+                    (
+                        item
+                        for item in current_registry.list_bindings(include_inactive=True, include_superseded=True)
+                        if item.binding_id == binding.binding_id
+                    ),
+                    None,
+                )
+                if latest is not None and not latest.active:
+                    try:
+                        current_registry.discard_staged_binding(
+                            latest.binding_id,
+                            actor_id=actor_id,
+                            expected_generation=latest.generation,
+                        )
+                    except Exception as cleanup_exc:
+                        raise MetaOAuthError("Instagram staged credential cleanup failed") from cleanup_exc
+                raise
         current_registry.archive_superseded_duplicate_bindings(actor_id=actor_id)
         from services.channel_capability_toggles import enable_channel_defaults_after_connect
 

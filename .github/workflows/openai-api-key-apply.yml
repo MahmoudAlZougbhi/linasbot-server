@@ -1,41 +1,27 @@
-name: OpenAI API Key Apply
+name: BLOCKED - OpenAI API Key Apply Requires Two-Node HA
 
 on:
   workflow_dispatch:
     inputs:
       CONFIRM:
-        description: "Type APPLY_OPENAI_API_KEY to apply"
+        description: "Type APPLY_OPENAI_API_KEY to acknowledge the blocked operation"
         required: true
         type: string
 
 concurrency:
-  group: openai-api-key-apply
+  group: meta-social-cutover
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  apply:
-    name: Apply OPENAI_API_KEY on production
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  blocked:
     if: github.event.inputs.CONFIRM == 'APPLY_OPENAI_API_KEY'
+    runs-on: ubuntu-latest
+    environment: meta-social-cutover
     steps:
-      - name: Apply OpenAI key via SSH
-        uses: appleboy/ssh-action@v1.2.0
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          script_stop: true
-          command_timeout: 15m
-          envs: OPENAI_API_KEY
-          script: |
-            set -e
-            test -f /opt/linasbot/scripts/prod_apply_openai_api_key.sh
-            sudo -E bash /opt/linasbot/scripts/prod_apply_openai_api_key.sh
-            sudo -E bash /opt/linasbot/scripts/prod_verify_canonical_social_ai.sh
+      - name: Refuse node01-only environment mutation
+        run: |
+          echo "BLOCKED: OPENAI_API_KEY needs an exact two-node env backup, sync, restart, worker proof, and rollback transaction." >&2
+          exit 1

@@ -14,6 +14,44 @@ from tests.meta_social_messaging_helpers import _sign
 
 
 class MetaSendFailureTests(unittest.TestCase):
+    def test_graph_send_requires_provider_message_id(self):
+        adapter = MetaMessagingAdapter(
+            access_token="unit-token",
+            account_id="378696005334409",
+            channel="facebook",
+        )
+
+        async def fake_post(*args, **kwargs):
+            del args, kwargs
+            return {"success": True}
+
+        adapter._post = fake_post
+
+        import asyncio
+
+        result = asyncio.run(adapter.send_text_message("PSID1", "hello"))
+        self.assertFalse(result["success"])
+        self.assertEqual(result["error"], "meta_send_missing_message_id")
+
+    def test_graph_send_surfaces_provider_message_id(self):
+        adapter = MetaMessagingAdapter(
+            access_token="unit-token",
+            account_id="378696005334409",
+            channel="facebook",
+        )
+
+        async def fake_post(*args, **kwargs):
+            del args, kwargs
+            return {"recipient_id": "recipient", "message_id": "mid-1"}
+
+        adapter._post = fake_post
+
+        import asyncio
+
+        result = asyncio.run(adapter.send_text_message("PSID1", "hello"))
+        self.assertTrue(result["success"])
+        self.assertEqual(result["message_id"], "mid-1")
+
     def test_graph_send_failure_raises(self):
         adapter = MetaMessagingAdapter(
             access_token="unit-token",

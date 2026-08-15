@@ -39,10 +39,7 @@ __all__ = ["MetaAppRegistryBindingsMixin", "MetaRegistryBackend", "resolve_meta_
 
 
 class MetaAppRegistryBindingsMixin:
-    """Persistence primitives, listing, and OAuth asset authorization.
-
-    Backend via META_REGISTRY_BACKEND: postgres (default), file, or dual (migration only).
-    """
+    """Persistence, listing, and OAuth authorization for the configurable registry backend."""
 
     def __init__(
         self,
@@ -318,13 +315,16 @@ class MetaAppRegistryBindingsMixin:
         webhook_subscribed_fields: tuple[str, ...] = (),
         webhook_subscription_error: str = "",
         webhook_subscription_checked_at: float = 0.0,
+        create_new_binding: bool = False,
     ) -> MetaAssetBinding:
-        """Upsert one workspace asset binding without disconnecting unrelated assets."""
+        """Authorize an asset, optionally staging a new row for fail-closed verification."""
 
         tenant = normalize_meta_tenant_id(tenant_id)
         asset = asset_id.strip()
         if not asset:
             raise MetaBindingConflictError("asset is required")
+        if create_new_binding and status != "testing":
+            raise MetaBindingConflictError("new OAuth bindings must be staged for activation")
         auth_hash = authorized_meta_user_id_hash(credential.authorized_meta_user_id)
         resolved_auth_flow = auth_flow or credential.auth_flow or "facebook_login"
         now = time.time()
@@ -340,12 +340,16 @@ class MetaAppRegistryBindingsMixin:
                 ):
                     raise MetaBindingConflictError("asset is already active for another workspace")
 
-            same_key = [
-                binding
-                for binding in all_bindings
-                if binding.asset_key == binding_asset_key(tenant, app_key, channel, asset, resolved_auth_flow)
-                and not binding.superseded_by_binding_id
-            ]
+            same_key = (
+                []
+                if create_new_binding
+                else [
+                    binding
+                    for binding in all_bindings
+                    if binding.asset_key == binding_asset_key(tenant, app_key, channel, asset, resolved_auth_flow)
+                    and not binding.superseded_by_binding_id
+                ]
+            )
             canonical = (
                 max(
                     same_key,
@@ -358,12 +362,14 @@ class MetaAppRegistryBindingsMixin:
                 else None
             )
 
+            if canonical is not None and canonical.status == "disconnected":
+                raise MetaBindingConflictError("disconnected authorization must reconnect with a new binding")
+
             if canonical is not None:
                 binding_id = canonical.binding_id
                 generation = canonical.generation + 1
                 created_at = canonical.created_at
-                # Safe reauth: preserve existing webhook subscription metadata unless caller
-                # explicitly supplies a new non-empty field set (avoid wiping feed/comments).
+                # Preserve webhook metadata unless the caller supplies a replacement.
                 preserved_fields = webhook_subscribed_fields or canonical.webhook_subscribed_fields
                 preserved_status = (
                     webhook_subscription_status
@@ -421,6 +427,7 @@ class MetaAppRegistryBindingsMixin:
                         continue
                     raw = dict(state["bindings"][duplicate.binding_id])
                     raw["superseded_by_binding_id"] = binding_id
+                    raw["generation"] = duplicate.generation + 1
                     raw["updated_at"] = now
                     state["bindings"][duplicate.binding_id] = raw
                 self._write_unlocked(state)

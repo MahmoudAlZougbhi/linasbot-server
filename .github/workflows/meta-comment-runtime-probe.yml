@@ -1,10 +1,55 @@
-name: Meta Comment Runtime Probe
+name: Meta Social Runtime Evidence Probe
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Coarse diagnostics, initial controlled proof, or final post-retry proof
+        required: true
+        default: coarse_diagnostic
+        type: choice
+        options:
+          - coarse_diagnostic
+          - controlled_initial
+          - controlled_final
+      window_minutes:
+        description: Recent journal window used only by coarse diagnostics
+        required: true
+        default: "30"
+        type: string
+      manifest_path:
+        description: Root-owned 0600 controlled-run manifest on node01
+        required: false
+        default: /var/lib/linasbot/meta-evidence/controlled-run.json
+        type: string
+      manifest_sha256:
+        description: SHA-256 of the exact controlled-run manifest bytes
+        required: false
+        default: ""
+        type: string
+      initial_attestation_path:
+        description: Root-owned 0600 initial-node routing attestation on node01
+        required: false
+        default: /var/lib/linasbot/meta-evidence/failover/initial.json
+        type: string
+      initial_attestation_sha256:
+        description: SHA-256 of the exact initial routing attestation
+        required: false
+        default: ""
+        type: string
+      replay_attestation_path:
+        description: Root-owned 0600 opposite-node failover attestation on node01
+        required: false
+        default: /var/lib/linasbot/meta-evidence/failover/replay.json
+        type: string
+      replay_attestation_sha256:
+        description: SHA-256 of the exact opposite-node failover attestation
+        required: false
+        default: ""
+        type: string
 
 concurrency:
-  group: meta-comment-runtime-probe
+  group: meta-social-cutover
   cancel-in-progress: false
 
 permissions:
@@ -12,13 +57,23 @@ permissions:
 
 jobs:
   probe:
-    name: Read-only Meta comment runtime probe
+    name: Read-only Meta social runtime evidence probe
     environment: meta-social-cutover
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Probe comment webhook logs on production
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        env:
+          EXPECTED_RELEASE_SHA: ${{ github.sha }}
+          META_EVIDENCE_MODE: ${{ inputs.mode }}
+          META_EVIDENCE_WINDOW_MINUTES: ${{ inputs.window_minutes }}
+          META_EVIDENCE_MANIFEST_PATH: ${{ inputs.manifest_path }}
+          META_EVIDENCE_MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+          META_EVIDENCE_INITIAL_ATTESTATION_PATH: ${{ inputs.initial_attestation_path }}
+          META_EVIDENCE_INITIAL_ATTESTATION_SHA256: ${{ inputs.initial_attestation_sha256 }}
+          META_EVIDENCE_REPLAY_ATTESTATION_PATH: ${{ inputs.replay_attestation_path }}
+          META_EVIDENCE_REPLAY_ATTESTATION_SHA256: ${{ inputs.replay_attestation_sha256 }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -26,14 +81,128 @@ jobs:
           port: 22
           script_stop: true
           command_timeout: 5m
+          envs: EXPECTED_RELEASE_SHA,META_EVIDENCE_MODE,META_EVIDENCE_WINDOW_MINUTES,META_EVIDENCE_MANIFEST_PATH,META_EVIDENCE_MANIFEST_SHA256,META_EVIDENCE_INITIAL_ATTESTATION_PATH,META_EVIDENCE_INITIAL_ATTESTATION_SHA256,META_EVIDENCE_REPLAY_ATTESTATION_PATH,META_EVIDENCE_REPLAY_ATTESTATION_SHA256
           script: |
             set -euo pipefail
-            cd /opt/linasbot
-            # Prefer deployed script; refresh from origin/main only if missing.
-            # Do not soft-checkout a stale feature branch.
-            if [ ! -f /opt/linasbot/scripts/prod_meta_comment_runtime_probe.py ]; then
-              git fetch origin main
-              git show origin/main:scripts/prod_meta_comment_runtime_probe.py > /tmp/prod_meta_comment_runtime_probe.py
-              install -m 0755 /tmp/prod_meta_comment_runtime_probe.py /opt/linasbot/scripts/prod_meta_comment_runtime_probe.py
+            exec 9>/run/lock/linasbot-meta-live.lock
+            flock -x 9
+            REPO_DIR=/opt/linasbot
+            DEPLOYED_RELEASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
+            if [ "$DEPLOYED_RELEASE_SHA" != "$EXPECTED_RELEASE_SHA" ]; then
+              echo "[meta-runtime-probe] workflow SHA does not match deployed release" >&2
+              exit 1
             fi
-            python3 /opt/linasbot/scripts/prod_meta_comment_runtime_probe.py
+            if ! git -C "$REPO_DIR" diff --quiet "$DEPLOYED_RELEASE_SHA" -- || \
+               ! git -C "$REPO_DIR" diff --cached --quiet "$DEPLOYED_RELEASE_SHA" --; then
+              echo "[meta-runtime-probe] deployed tracked files differ from release SHA" >&2
+              exit 1
+            fi
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
+            PROBE="$REPO_DIR/scripts/prod_meta_comment_runtime_probe.py"
+            test -f "$PROBE"
+            PYTHON_BIN="$REPO_DIR/venv/bin/python"
+            test -x "$PYTHON_BIN"
+            case "$META_EVIDENCE_MODE" in
+              coarse_diagnostic)
+                case "$META_EVIDENCE_WINDOW_MINUTES" in
+                  ''|*[!0-9]*)
+                    echo "[meta-runtime-probe] window_minutes must be an integer from 1 to 60" >&2
+                    exit 1
+                    ;;
+                esac
+                if [ "$META_EVIDENCE_WINDOW_MINUTES" -lt 1 ] || [ "$META_EVIDENCE_WINDOW_MINUTES" -gt 60 ]; then
+                  echo "[meta-runtime-probe] window_minutes must be between 1 and 60" >&2
+                  exit 1
+                fi
+                "$PYTHON_BIN" "$PROBE" \
+                  --include-ha-peer \
+                  --window-minutes "$META_EVIDENCE_WINDOW_MINUTES"
+                ;;
+              controlled_initial|controlled_final)
+                if [ "$(id -u)" -ne 0 ]; then
+                  echo "[meta-runtime-probe] controlled evidence requires the root account" >&2
+                  exit 1
+                fi
+                case "$META_EVIDENCE_MANIFEST_PATH" in
+                  /var/lib/linasbot/meta-evidence/*.json) ;;
+                  *)
+                    echo "[meta-runtime-probe] manifest path must be an approved absolute JSON path" >&2
+                    exit 1
+                    ;;
+                esac
+                case "$META_EVIDENCE_MANIFEST_PATH" in
+                  *..*)
+                    echo "[meta-runtime-probe] manifest path cannot contain traversal" >&2
+                    exit 1
+                    ;;
+                esac
+                case "$META_EVIDENCE_MANIFEST_SHA256" in
+                  ''|*[!0-9a-f]*)
+                    echo "[meta-runtime-probe] manifest SHA-256 must be 64 lowercase hex characters" >&2
+                    exit 1
+                    ;;
+                esac
+                if [ "${#META_EVIDENCE_MANIFEST_SHA256}" -ne 64 ]; then
+                  echo "[meta-runtime-probe] manifest SHA-256 must be 64 lowercase hex characters" >&2
+                  exit 1
+                fi
+                for ATTESTATION_PATH in \
+                  "$META_EVIDENCE_INITIAL_ATTESTATION_PATH" \
+                  "$META_EVIDENCE_REPLAY_ATTESTATION_PATH"; do
+                  case "$ATTESTATION_PATH" in
+                    /var/lib/linasbot/meta-evidence/failover/*.json) ;;
+                    *)
+                      echo "[meta-runtime-probe] failover attestation path is not approved" >&2
+                      exit 1
+                      ;;
+                  esac
+                  case "$ATTESTATION_PATH" in
+                    *..*)
+                      echo "[meta-runtime-probe] failover attestation path cannot contain traversal" >&2
+                      exit 1
+                      ;;
+                  esac
+                done
+                case "$META_EVIDENCE_INITIAL_ATTESTATION_SHA256" in
+                  ''|*[!0-9a-f]*)
+                    echo "[meta-runtime-probe] initial attestation SHA-256 is invalid" >&2
+                    exit 1
+                    ;;
+                esac
+                if [ "${#META_EVIDENCE_INITIAL_ATTESTATION_SHA256}" -ne 64 ]; then
+                  echo "[meta-runtime-probe] initial attestation SHA-256 is invalid" >&2
+                  exit 1
+                fi
+                PHASE="${META_EVIDENCE_MODE#controlled_}"
+                REPLAY_ARGS=()
+                if [ "$PHASE" = "final" ]; then
+                  case "$META_EVIDENCE_REPLAY_ATTESTATION_SHA256" in
+                    ''|*[!0-9a-f]*)
+                      echo "[meta-runtime-probe] replay attestation SHA-256 is invalid" >&2
+                      exit 1
+                      ;;
+                  esac
+                  if [ "${#META_EVIDENCE_REPLAY_ATTESTATION_SHA256}" -ne 64 ]; then
+                    echo "[meta-runtime-probe] replay attestation SHA-256 is invalid" >&2
+                    exit 1
+                  fi
+                  REPLAY_ARGS=(
+                    --replay-attestation "$META_EVIDENCE_REPLAY_ATTESTATION_PATH"
+                    --replay-attestation-sha256 "$META_EVIDENCE_REPLAY_ATTESTATION_SHA256"
+                  )
+                fi
+                "$PYTHON_BIN" "$PROBE" \
+                  --controlled-manifest "$META_EVIDENCE_MANIFEST_PATH" \
+                  --manifest-sha256 "$META_EVIDENCE_MANIFEST_SHA256" \
+                  --initial-attestation "$META_EVIDENCE_INITIAL_ATTESTATION_PATH" \
+                  --initial-attestation-sha256 "$META_EVIDENCE_INITIAL_ATTESTATION_SHA256" \
+                  --phase "$PHASE" \
+                  --expected-release-sha "$EXPECTED_RELEASE_SHA" \
+                  "${REPLAY_ARGS[@]}"
+                ;;
+              *)
+                echo "[meta-runtime-probe] unsupported evidence mode" >&2
+                exit 1
+                ;;
+            esac
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"

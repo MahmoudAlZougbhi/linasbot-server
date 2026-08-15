@@ -1,102 +1,133 @@
-# Instagram and Facebook AI messaging setup
+# Facebook and Instagram AI messaging setup
 
-The code supports one Meta app connected to a Facebook Page and its linked Instagram professional account. The AI answers inbound text DMs. Appointment and human-agent requests are routed deterministically to the correct WhatsApp number; the social channel cannot execute CRM appointment tools and never enters the dashboard human-takeover queue.
+> The former single-credential, Page-linked, DM-only instructions in this file
+> are retired. The Dashboard has one top-level **Linas AI** app, but its Facebook
+> and Instagram products use separate credential/callback domains. Do not share
+> their secrets or callbacks, and do not run DM-only subscription commands. The
+> canonical operational contract is `docs/META_APP_REVIEW_SOCIAL_PACKAGE.md`.
 
-## Meta assets and access required
+## Current product-domain split
 
-1. A published Facebook Page.
-2. An Instagram Business or Creator account connected to that Page.
-3. A Meta Business Portfolio that owns both assets and is business-verified.
-4. A Meta developer app owned by that business.
-5. Admin/full-control access for the person completing setup.
-6. Advanced Access/App Review for the permissions used with public customers.
+| Surface | Product | OAuth redirect | Webhook callback |
+|---|---|---|---|
+| Facebook Messenger + Page comments | Linas AI app ID `2963733803971681` / Facebook Login for Business | `https://www.linasaibot.com/oauth/meta/callback` | `https://www.linasaibot.com/webhook/meta-messaging` |
+| Instagram DMs + comments | Instagram product app ID `1035856539045307` inside Linas AI / Instagram Login | `https://www.linasaibot.com/oauth/instagram/callback` | `https://www.linasaibot.com/webhook/instagram-login` |
 
-Permissions normally required for the Page-linked implementation:
+The two rows have different app secrets, verify tokens, access tokens, app-scoped
+IDs, and Graph hosts. They must never be mixed or configured to use the other
+row's callback. Permission-family approval state is separate too:
+`META_APP_A_ADVANCED_ACCESS_APPROVED` cannot unlock Instagram, which uses the
+fail-closed `META_INSTAGRAM_LOGIN_ADVANCED_ACCESS_APPROVED` gate selected by
+binding `auth_flow`. Linas AI has one top-level App Review draft/submission,
+`2964793000532428`, with separate Facebook and Instagram evidence sections.
 
-- Facebook Messenger: pages_messaging, pages_manage_metadata, and pages_read_engagement.
-- Instagram messaging: instagram_basic, instagram_manage_messages, and pages_manage_metadata.
-- If Instagram Login is used instead of Facebook Login, Meta uses the newer instagram_business_basic and instagram_business_manage_messages scopes. Do not mix the two login models.
+Required review permissions:
 
-Official references:
+- Facebook: `business_management`, `pages_show_list`,
+  `pages_manage_metadata`, `pages_read_engagement`, `pages_messaging`,
+  `pages_read_user_content`, `pages_manage_engagement`.
+- Direct Instagram: `instagram_business_basic`,
+  `instagram_business_manage_messages`,
+  `instagram_business_manage_comments`.
 
-- https://www.postman.com/meta/instagram/documentation/6yqw8pt/instagram-api
-- https://www.postman.com/meta/messenger-platform-api/documentation/iyp204x/messenger-platform-api
+This package does not request content publishing or insights. The generated
+Instagram embed sample includes `instagram_business_content_publish` and
+`instagram_business_manage_insights`, but the code requests only the three
+Instagram permissions above. Linas AI also hosts an existing WhatsApp Cloud
+webhook object; every social reconcile must preserve it unchanged.
 
-## Production environment
+## Required subscription fields
 
-Set the Meta secret/token variables from `.env.example` on the DigitalOcean production service. Never commit real tokens or app secrets.
+- Linas AI `page` on `/webhook/meta-messaging`:
+  `messages,messaging_postbacks,feed`
+- Linas AI `instagram` on `/webhook/instagram-login`:
+  `messages,messaging_postbacks,comments`
+- Page `378696005334409` `subscribed_apps`:
+  `messages,messaging_postbacks,feed`
+- Instagram account `17841413184256533` Direct IG app row ID
+  `1035856539045307`: `messages,messaging_postbacks,comments`
 
-### Public WhatsApp routing numbers
+Only the recovered reconcilers may mutate these fields. They must preserve
+approved existing fields, repair a missing/inactive/wrong-callback social row,
+and GET-verify exact post-state. The unexpected `User` object is a fail-closed
+condition, not an implicit deletion target. A successful POST alone is not
+readiness.
 
-Tracked defaults ship in `services/social_contact_routing.py` (`DEFAULT_SOCIAL_WHATSAPP_CONTACTS`) so routing works after deploy without requiring env vars. Optional env overrides (same keys) win when set:
+## Live Dashboard status — 2026-08-14
 
-| Key | Default | Use |
-|---|---|---|
-| `SOCIAL_WHATSAPP_BEIRUT_FEMALE` | `+96178847527` | Laser — women — Beirut / Ramlet El Bayda |
-| `SOCIAL_WHATSAPP_ANTELIAS_FEMALE` | `+96170707354` | Laser — women — Antelias |
-| `SOCIAL_WHATSAPP_BEIRUT_MALE` | `+96171534928` | Laser — men — Beirut / Ramlet El Bayda |
-| `SOCIAL_WHATSAPP_ANTELIAS_MALE` | `+96171226082` | Laser — men — Antelias |
-| `SOCIAL_WHATSAPP_TATTOO_REMOVAL` | `+96171534928` | Tattoo removal — Beirut only — all genders |
+- Business Verification and Access Verification are **Verified**; no Required
+  Actions are shown.
+- Linas AI is **Unpublished**, and every desired Facebook/Instagram permission is
+  only **Ready for testing**, not Advanced Access.
+- Facebook redirect, deauthorization, data deletion, callback, and Page fields
+  are correct. The Page fields are subscribed at webhook version `v26.0`.
+- Instagram OAuth redirect and dedicated callback are correct; its three fields
+  are subscribed at webhook version `v26.0`. Testers `linaslaser` and `boc_system`
+  both show Webhook Subscription On.
+- Instagram Business Login's Deauthorize callback URL and Data deletion request
+  URL are empty. Configure them as `/oauth/instagram/deauthorize` and
+  `/oauth/instagram/data-deletion` on `https://www.linasaibot.com`, then test the
+  signed flows before App Review.
+- An unexpected generic `User` webhook object points to
+  `/webhook/instagram-login`; all visible User fields are Unsubscribed. This needs
+  an owner-approved cleanup decision and strict read-after-write verification.
+  Do not remove it during a read-only audit or claim it is harmless.
+- Draft `2964793000532428` mixes the ten desired permissions with legacy
+  `instagram_basic`, `instagram_manage_messages`, `instagram_manage_comments`,
+  and unrelated WhatsApp requests. Clean the one draft before submission.
 
-Customer-facing replies always use WhatsApp only (no calls) and a canonical `https://wa.me/<digits>` link generated from the authoritative phone number. Do **not** use `wa.link` short links.
+The runtime's supported Graph API `v24.0` and Dashboard webhook version `v26.0`
+are an intentional two-version boundary, not an immediate review blocker.
 
-Business rules enforced in code:
+## Customer behavior
 
-1. Instagram/Facebook never create, edit, reschedule, cancel, or claim appointments.
-2. Social DMs never activate dashboard human takeover.
-3. General service/pricing/preparation/branch/policy questions stay with the AI.
-4. Booking or human-agent intent routes to WhatsApp after collecting missing laser branch/gender (once each).
-5. Tattoo removal skips gender and Antelias selection; contact is Beirut-only.
+The AI answers customer-initiated service, pricing, preparation, branch, and
+policy questions in DMs and, when explicitly enabled and reviewed, replies to
+Facebook/Instagram comments. It does not create, edit, confirm, reschedule, or
+cancel appointments on Meta or in a CRM.
 
-## Meta dashboard configuration
+When a customer requests booking or a human, the assistant collects only the
+missing branch/gender fields and returns the applicable public WhatsApp handoff:
 
-1. Add Messenger and Instagram products to the app.
-2. Generate a durable Page access token with the required permissions.
-3. Set the callback URL to `https://www.linasaibot.com/webhook/meta-messaging`
-4. Set the same random value in Meta and `META_WEBHOOK_VERIFY_TOKEN`.
-5. Subscribe the Page/app to message and postback events (at minimum `messages` and `messaging_postbacks`).
-6. Install/subscribe the app to the Facebook Page and linked Instagram account.
-7. Test in Development mode with app-role accounts.
-8. Complete App Review/Advanced Access, switch the app Live, then test with a real non-role customer.
-9. Set `META_SOCIAL_MESSAGING_ENABLED=true` only after Meta credentials are present.
+| Use | Number |
+|---|---|
+| Laser — women — Beirut / Ramlet El Bayda | `+96178847527` |
+| Laser — women — Antelias | `+96170707354` |
+| Laser — men — Beirut / Ramlet El Bayda | `+96171534928` |
+| Laser — men — Antelias | `+96171226082` |
 
-Send API notes:
+Customer-facing links use `https://wa.me/<digits>`, never a short-link service.
+Tattoo removal is not currently offered and must return the approved refusal
+without any WhatsApp handoff. Social DMs do not activate the dashboard
+human-takeover queue.
 
-- Page-linked Instagram Messaging uses `POST /{PAGE_ID}/messages` with the Page access token and the customer IGSID.
-- Facebook Messenger uses the same Page endpoint with the customer PSID.
-- `META_INSTAGRAM_ACCOUNT_ID` is kept for webhook channel detection / Instagram Login fallback; it is not required as the send path when `META_PAGE_ID` is set.
+## Release verification
 
-The POST webhook is verified with `X-Hub-Signature-256` using `META_APP_SECRET`. It acknowledges valid webhooks immediately and processes the AI response in the background. Duplicate `mid` values are ignored for a short TTL.
+Local tests are necessary but not live proof. Before App Review or enabling
+public traffic, complete every gate in
+`docs/META_APP_REVIEW_SOCIAL_PACKAGE.md`, including:
 
-## Platform constraints
+1. approved SHA deployed and production SHA verified;
+2. historical credential snapshots sanitized, pre-lineage rows audited, affected
+   credentials rotated, and the implemented scheduled retention job deployed and
+   count-only apply/clean verified;
+3. exact Dashboard redirects/callbacks/scopes/subscriptions and separate
+   permission-family approval decisions verified inside Linas AI, including the
+   two currently empty Instagram compliance URLs and the extra `User` object;
+4. Facebook and Direct IG reauthorization/reseeding completed through their separate
+   flows; and
+5. four timestamped recordings, each showing one controlled inbound action and
+   exactly one recipient-visible reply with no duplicate; and a time-bounded
+   runtime probe used only as supporting send-acceptance evidence.
 
-- The customer must initiate the conversation (or use another allowed opt-in path).
-- Automated replies must stay inside Meta's allowed messaging window.
-- Meta's `HUMAN_AGENT` tag is for real human support, not AI automation.
-- Group DMs and arbitrary unsolicited outbound DMs are not supported.
-- This integration controls messaging, not passwords, account ownership, calls, or every Instagram UI feature.
+Facebook and Instagram require separate permission lists, reviewer instructions,
+recordings, declarations, secrets, callbacks, and approval gates inside the one
+Linas AI review. Do not press **Submit for Review** from an audit session. The one
+final submission requires the owner's explicit approval after both evidence
+sections and every operational gate are complete.
 
-## Verification
+## Official Meta references
 
-Run:
-
-```bash
-pytest -q tests/test_meta_social_messaging.py
-```
-
-If `pytest` is unavailable in the environment, the same file can be executed with:
-
-```bash
-python3 -m unittest tests.test_meta_social_messaging -v
-```
-
-(Note: the repo's root `.gitignore` ignores `tests/`; when committing this suite, use `git add -f tests/test_meta_social_messaging.py`.)
-
-Test at least these conversations on both channels:
-
-1. General service/price question: AI answers normally.
-2. Booking request with known gender and branch: correct number and `wa.me` link.
-3. Booking request with unknown gender/branch: asks one missing field at a time.
-4. Human-agent request: same WhatsApp routing behavior (no dashboard takeover).
-5. Tattoo removal: shared Beirut tattoo number for either gender; never Antelias.
-6. Duplicate webhook delivery: only one response.
+- [Create an Instagram app](https://developers.facebook.com/documentation/instagram-platform/create-an-instagram-app)
+- [Instagram Business Login](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login)
+- [Graph API versions](https://developers.facebook.com/docs/graph-api/changelog/versions/)

@@ -37,17 +37,11 @@ def _valid_payloads() -> tuple[dict[str, object], dict[str, object], dict[str, o
                     "pages_manage_metadata",
                     "pages_show_list",
                     "pages_read_engagement",
-                    "instagram_basic",
-                    "instagram_manage_messages",
                 ],
                 "granular_scopes": [
                     {
                         "scope": "pages_messaging",
                         "target_ids": ["378696005334409"],
-                    },
-                    {
-                        "scope": "instagram_manage_messages",
-                        "target_ids": ["17841413184256533"],
                     },
                 ],
             }
@@ -86,7 +80,7 @@ def _app_webhook_payload(
             },
             {
                 "object": "instagram",
-                "callback_url": "https://www.linasaibot.com/webhook/meta-messaging",
+                "callback_url": "https://www.linasaibot.com/webhook/instagram-login",
                 "active": True,
                 "fields": [{"name": field} for field in (instagram_fields or sorted(APP_INSTAGRAM_WEBHOOK_FIELDS))],
             },
@@ -94,7 +88,7 @@ def _app_webhook_payload(
     }
 
 
-def test_exact_page_instagram_app_scopes_and_targets_pass() -> None:
+def test_page_only_app_scopes_and_target_pass() -> None:
     debug, profile, page = _valid_payloads()
     checks = validate_payloads(debug, profile, page, expected_app_id="999000111222333")
     assert all(checks.values())
@@ -102,7 +96,7 @@ def test_exact_page_instagram_app_scopes_and_targets_pass() -> None:
 
 @pytest.mark.parametrize(
     "failure",
-    ["old_app", "wrong_page", "wrong_instagram", "extra_target", "missing_scope", "expiring_token"],
+    ["old_app", "wrong_page", "wrong_instagram", "missing_target", "missing_scope", "expiring_token"],
 )
 def test_unexpected_token_identity_or_access_fails(failure: str) -> None:
     debug, profile, page = _valid_payloads()
@@ -113,12 +107,14 @@ def test_unexpected_token_identity_or_access_fails(failure: str) -> None:
         profile["id"] = "999999999999999"
     elif failure == "wrong_instagram":
         page["instagram_business_account"] = {"id": "99999999999999999"}
-    elif failure == "extra_target":
+    elif failure == "missing_target":
         data = debug["data"]
         assert isinstance(data, dict)
         granular = data["granular_scopes"]
         assert isinstance(granular, list)
-        granular.append({"scope": "pages_messaging", "target_ids": ["999999999999999"]})
+        first = granular[0]
+        assert isinstance(first, dict)
+        first["target_ids"] = ["999999999999999"]
     elif failure == "expiring_token":
         data = debug["data"]
         assert isinstance(data, dict)
@@ -134,16 +130,39 @@ def test_unexpected_token_identity_or_access_fails(failure: str) -> None:
         validate_payloads(debug, profile, page, expected_app_id=app_id)
 
 
-def test_messenger_and_instagram_conversation_queries_accept_empty_data() -> None:
+def test_additional_explicit_page_targets_do_not_invalidate_token() -> None:
+    debug, profile, page = _valid_payloads()
+    data = debug["data"]
+    assert isinstance(data, dict)
+    granular = data["granular_scopes"]
+    assert isinstance(granular, list)
+    first = granular[0]
+    assert isinstance(first, dict)
+    targets = first["target_ids"]
+    assert isinstance(targets, list)
+    targets.append("999999999999999")
+
+    checks = validate_payloads(debug, profile, page, expected_app_id="999000111222333")
+
+    assert checks["granular_targets_present"] is True
+
+
+def test_messenger_and_explicit_legacy_instagram_queries_accept_empty_data() -> None:
     checks = validate_conversation_payloads({"data": []}, {"data": []})
 
     assert checks == {
         "messenger_conversations_query_succeeded": True,
-        "instagram_conversations_query_succeeded": True,
+        "legacy_instagram_conversations_query_succeeded": True,
     }
 
 
-@pytest.mark.parametrize("channel", ["messenger", "instagram"])
+def test_current_app_a_conversation_probe_is_facebook_only() -> None:
+    assert validate_conversation_payloads({"data": []}) == {
+        "messenger_conversations_query_succeeded": True,
+    }
+
+
+@pytest.mark.parametrize("channel", ["messenger", "legacy_instagram"])
 def test_malformed_conversation_query_payload_fails_closed(channel: str) -> None:
     messenger: dict[str, object] = {"data": []}
     instagram: dict[str, object] = {"data": []}
@@ -238,6 +257,27 @@ def test_production_app_webhook_configuration_passes() -> None:
     assert checks["app_instagram_webhook_fields_exact"] is True
     assert checks["app_page_webhook_dm_fields_present"] is True
     assert checks["app_instagram_webhook_dm_fields_present"] is True
+    assert checks["app_page_webhook_callback_match"] is True
+    assert checks["app_instagram_webhook_callback_match"] is True
+
+
+def test_app_webhook_validation_allows_separate_whatsapp_subscription() -> None:
+    payload = _app_webhook_payload()
+    data = payload["data"]
+    assert isinstance(data, list)
+    data.append(
+        {
+            "object": "whatsapp_business_account",
+            "callback_url": "https://www.linasaibot.com/webhook/whatsapp-cloud",
+            "active": True,
+            "fields": [{"name": "messages"}],
+        }
+    )
+
+    checks = validate_app_webhook_configuration(payload)
+
+    assert checks["app_social_webhook_objects_exact"] is True
+    assert checks["app_auxiliary_webhook_objects_supported"] is True
 
 
 def test_legacy_dm_only_app_webhook_configuration_fails() -> None:
@@ -268,7 +308,7 @@ def test_app_webhook_mismatch_fails_closed(failure: str) -> None:
     }
     instagram: dict[str, object] = {
         "object": "instagram",
-        "callback_url": "https://www.linasaibot.com/webhook/meta-messaging",
+        "callback_url": "https://www.linasaibot.com/webhook/instagram-login",
         "active": True,
         "fields": [{"name": field} for field in instagram_fields],
     }
@@ -278,7 +318,7 @@ def test_app_webhook_mismatch_fails_closed(failure: str) -> None:
     elif failure == "inactive_page":
         page["active"] = False
     elif failure == "wrong_callback":
-        instagram["callback_url"] = "https://example.invalid/webhook"
+        instagram["callback_url"] = "https://www.linasaibot.com/webhook/meta-messaging"
     elif failure == "extra_object":
         data.append({"object": "user", "active": True, "fields": []})
     elif failure == "extra_field":

@@ -1,23 +1,27 @@
 export const faqUiFr = {
-  faqCreateBannerTitle: 'Ajouter une réponse prête',
+  faqTranslatedStatus: 'traduit',
+  faqCreateBannerTitle: 'Écrivez une fois — traduction automatique',
   faqCreateBannerBody:
-    'Rédigez la question et la réponse dans une langue. Nous traduisons en arabe, anglais, français et franco.',
+    'Écrivez la question et la réponse dans une langue. Linas les traduit dans les langues de réponses intelligentes sélectionnées.',
   faqSaveTranslate: 'Enregistrer et traduire',
-  faqCreateFooter: 'Les réponses enregistrées répondent instantanément et utilisent moins de crédits IA.',
-  faqTranslatedStatus: 'Traduit',
-  faqLangPickerTitle: 'Langues',
-  faqLangPickerSub: 'Choisissez les langues couvertes par cette réponse intelligente.',
+  faqCreateFooter: 'Vous pourrez vérifier et modifier chaque traduction après l’enregistrement.',
+  faqLangPickerTitle: 'Langues des réponses intelligentes',
+  faqLangPickerSub:
+    'Choisissez les langues utilisées par Linas pour les réponses intelligentes enregistrées.',
   faqLangSearch: 'Rechercher une langue',
-  faqLangSelected: 'sélectionnée(s)',
-  faqLangAutoTranslate: 'Les langues manquantes sont traduites automatiquement à l’enregistrement.',
+  faqLangSelected: 'sélectionnées',
+  faqLangAutoTranslate:
+    'Les nouvelles réponses intelligentes sont traduites automatiquement dans chaque langue sélectionnée.',
   faqLangSave: 'Enregistrer les langues',
-  faqLangSection: 'Langues',
+  faqLangSection: 'Langues des réponses intelligentes',
   faqAddLanguage: 'Ajouter une langue',
-  faqLangHint: 'Le client reçoit automatiquement la langue correspondante.',
+  faqLangHint:
+    'Les nouvelles réponses intelligentes sont traduites automatiquement. Maintenez une langue pour la retirer.',
   faqAnswersCount: 'réponses',
-  faqEmptyQuestion: '(aucune question)',
+  faqEmptyQuestion: 'Question sans titre',
   faqTranslateExistingTitle: 'Traduire les réponses existantes ?',
-  faqTranslateExistingBody: 'Traduire les réponses intelligentes actuelles vers {lang} ?',
-  faqTranslateSkip: 'Ignorer',
+  faqTranslateExistingBody:
+    'Traduire toutes les réponses intelligentes enregistrées en {lang} ?',
+  faqTranslateSkip: 'Uniquement les prochaines',
   faqTranslateAll: 'Tout traduire',
 } as const;

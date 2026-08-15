@@ -8,6 +8,7 @@ Truth fields (never claim live_verified for Comments without full E2E proof):
 
 from __future__ import annotations
 
+import os
 import time
 from typing import Any, Literal
 
@@ -60,8 +61,8 @@ BLOCKER_MESSAGES: dict[str, str] = {
     "missing_comment_webhook": "Comment webhook subscription is not confirmed yet for this connection.",
     "missing_dm_webhook": "Messaging webhook subscription is not confirmed yet for this connection.",
     "meta_approval_required": (
-        "Meta App Review Advanced Access is required for comment permissions. "
-        "Complete App Review for the platform's comment scopes, then Disconnect and Connect again."
+        "Meta App Review Advanced Access is required for this capability. "
+        "Complete App Review for this app and permission set, then Disconnect and Connect again."
     ),
     "reauthorization_required": (
         "This connection needs a fresh authorization. Disconnect this channel, then Connect again."
@@ -174,6 +175,38 @@ def _advanced_access_approved() -> bool:
         return bool(get_meta_app_configs()[APP_A_KEY].advanced_access_approved)
     except Exception:
         return False
+
+
+def _instagram_login_advanced_access_approved() -> bool:
+    """Return only the dedicated Instagram app's App Review decision."""
+
+    return (os.getenv("META_INSTAGRAM_LOGIN_ADVANCED_ACCESS_APPROVED") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def binding_advanced_access_approved(binding: Any) -> bool:
+    """Return the approval flag for exactly this binding's OAuth/signing app."""
+
+    if str(getattr(binding, "auth_flow", "") or "") == "instagram_login":
+        return _instagram_login_advanced_access_approved()
+    return _advanced_access_approved()
+
+
+def _advanced_access_for_bindings(bindings: list[Any]) -> tuple[bool, str]:
+    """Require approval from the signing/OAuth domain used by every binding."""
+
+    if not bindings:
+        return False, "unresolved"
+    domains = {
+        "instagram_login" if str(getattr(binding, "auth_flow", "") or "") == "instagram_login" else "app_a"
+        for binding in bindings
+    }
+    approved = all(binding_advanced_access_approved(binding) for binding in bindings)
+    return approved, next(iter(domains)) if len(domains) == 1 else "mixed"
 
 
 def _binding_connection_healthy(binding: Any, *, registry: Any) -> bool:
@@ -291,8 +324,8 @@ def _status_and_blocker(
     if not connection_healthy:
         code = "connection_unhealthy"
         return "reauthorization_required", code, BLOCKER_MESSAGES[code]
-    if capability == "comments" and not comments_policy_ok:
-        # Public / non–App-Role tenants stay blocked until Meta Advanced Access.
+    if not comments_policy_ok:
+        # Public / non–App-Role tenants stay blocked until this app's Advanced Access.
         code = "meta_approval_required"
         return "meta_approval_required", code, BLOCKER_MESSAGES[code]
     if not permission_present:
@@ -341,7 +374,8 @@ def capability_state(tenant_id: str, platform: str, capability: CapabilityKey) -
             "missing_scopes": [],
             "last_checked_at": checked_at,
             "app_review": {
-                "advanced_access_approved": _advanced_access_approved(),
+                "advanced_access_approved": False,
+                "approval_domain": "unresolved",
                 "scopes_required": [],
                 "scopes_missing": [],
                 "live_verified": False,
@@ -356,10 +390,8 @@ def capability_state(tenant_id: str, platform: str, capability: CapabilityKey) -
     )
     permission_present = bool(bindings) and not missing_scopes
     connection_healthy = bool(bindings) and all(_binding_connection_healthy(b, registry=registry) for b in bindings)
-    advanced_access = _advanced_access_approved()
-    comments_policy_ok = (
-        True if capability != "comments" else comments_policy_allows(tenant_id, advanced_access=advanced_access)
-    )
+    advanced_access, approval_domain = _advanced_access_for_bindings(bindings)
+    comments_policy_ok = comments_policy_allows(tenant_id, advanced_access=advanced_access)
 
     if capability == "comments":
         webhook_subscribed = bool(bindings) and all(_comment_webhook_subscribed(b) for b in bindings)
@@ -374,7 +406,13 @@ def capability_state(tenant_id: str, platform: str, capability: CapabilityKey) -
         # DMs have no separate per-asset switch — CM action is the tenant action.
         tenant_action_enabled = bool(requested_enabled)
         # Existing production DMs are live when gates pass.
-        live_verified = bool(connection_healthy and permission_present and webhook_subscribed and requested_enabled)
+        live_verified = bool(
+            connection_healthy
+            and permission_present
+            and webhook_subscribed
+            and requested_enabled
+            and comments_policy_ok
+        )
         scopes_required = sorted(
             {
                 scope
@@ -430,6 +468,7 @@ def capability_state(tenant_id: str, platform: str, capability: CapabilityKey) -
         "last_checked_at": checked_at,
         "app_review": {
             "advanced_access_approved": advanced_access,
+            "approval_domain": approval_domain,
             "scopes_required": scopes_required,
             "scopes_missing": missing_scopes,
             "live_verified": bool(live_verified) if capability == "dm" else False,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate and seed App A's two active bindings without rendering secrets."""
+"""Validate App A's Page token and seed only its Facebook Page binding."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from scripts.validate_meta_social_token import (
     EXPECTED_GRAPH_VERSION,
     EXPECTED_INSTAGRAM_ID,
     EXPECTED_PAGE_ID,
-    REQUIRED_SCOPES,
     MetaTokenValidationError,
     _mapping,
     _request_json,
@@ -19,10 +18,14 @@ from scripts.validate_meta_social_token import (
 from services.meta_app_registry import (
     APP_A_EXPECTED_ID,
     APP_A_KEY,
-    META_FORBIDDEN_SCOPES,
     MetaAppRegistry,
     MetaBindingCredential,
     get_meta_app_configs,
+)
+from services.meta_facebook_scope_policy import (
+    FACEBOOK_PAGE_BINDING_SCOPES,
+    facebook_page_granular_targets_are_allowlisted,
+    normalize_facebook_page_token_scopes,
 )
 
 
@@ -57,18 +60,27 @@ def main() -> None:
     )
     validate_payloads(debug_payload, page_payload, page_payload, expected_app_id=app.app_id)
     debug_data = _mapping(debug_payload.get("data"))
+    if not facebook_page_granular_targets_are_allowlisted(
+        debug_data,
+        page_id=EXPECTED_PAGE_ID,
+    ):
+        raise MetaTokenValidationError("App A token includes a granular permission target for another asset")
     raw_scopes = debug_data.get("scopes")
-    scopes = tuple(sorted({str(scope) for scope in raw_scopes})) if isinstance(raw_scopes, list) else ()
-    if not REQUIRED_SCOPES.issubset(scopes):
-        raise MetaTokenValidationError("App A token is missing a required messaging permission")
-    if set(scopes) & META_FORBIDDEN_SCOPES:
+    raw_token_scopes = tuple(sorted({str(scope) for scope in raw_scopes})) if isinstance(raw_scopes, list) else ()
+    scopes, forbidden = normalize_facebook_page_token_scopes(raw_token_scopes)
+    if forbidden:
         raise MetaTokenValidationError("App A token includes a prohibited non-messaging permission")
+    if not FACEBOOK_PAGE_BINDING_SCOPES.issubset(scopes):
+        raise MetaTokenValidationError("App A token is missing a required DM or comment permission")
     expires_raw = debug_data.get("expires_at")
     expires_at = (
         int(expires_raw)
         if isinstance(expires_raw, (int, str)) and not isinstance(expires_raw, bool) and str(expires_raw) != "0"
         else None
     )
+    authorized_meta_user_id = str(debug_data.get("user_id") or "").strip()
+    if not authorized_meta_user_id.isdigit() or not 3 <= len(authorized_meta_user_id) <= 64:
+        raise MetaTokenValidationError("App A token authorization owner is unavailable")
 
     credential = MetaBindingCredential(
         access_token=page_token,
@@ -76,35 +88,32 @@ def main() -> None:
         token_profile_id=EXPECTED_PAGE_ID,
         scopes=scopes,
         expires_at=expires_at,
+        authorized_meta_user_id=authorized_meta_user_id,
     )
     registry = MetaAppRegistry(master_secret=encryption_key)
-    expected = {
-        "facebook": EXPECTED_PAGE_ID,
-        "instagram": EXPECTED_INSTAGRAM_ID,
-    }
-    for channel, asset_id in expected.items():
-        current = next(
-            (
-                binding
-                for binding in registry.get_active_bindings_for_app(APP_A_KEY)
-                if binding.tenant_id == "linas" and binding.channel == channel and binding.asset_id == asset_id
-            ),
-            None,
+    current = next(
+        (
+            binding
+            for binding in registry.get_active_bindings_for_app(APP_A_KEY)
+            if binding.tenant_id == "linas" and binding.channel == "facebook" and binding.asset_id == EXPECTED_PAGE_ID
+        ),
+        None,
+    )
+    already_active = False
+    if current is not None:
+        stored = registry.get_credential(current)
+        already_active = (
+            stored.access_token == page_token
+            and stored.token_app_id == app.app_id
+            and stored.token_profile_id == EXPECTED_PAGE_ID
+            and stored.authorized_meta_user_id == authorized_meta_user_id
+            and set(stored.scopes) == set(scopes)
         )
-        if current is not None:
-            stored = registry.get_credential(current)
-            if (
-                stored.access_token == page_token
-                and stored.token_app_id == app.app_id
-                and stored.token_profile_id == EXPECTED_PAGE_ID
-                and REQUIRED_SCOPES.issubset(stored.scopes)
-            ):
-                print(f"[meta-registry-seed] channel={channel} status=already_active")
-                continue
+    if not already_active:
         registry.activate_binding(
             tenant_id="linas",
-            channel=channel,  # type: ignore[arg-type]
-            asset_id=asset_id,
+            channel="facebook",
+            asset_id=EXPECTED_PAGE_ID,
             page_id=EXPECTED_PAGE_ID,
             instagram_account_id=EXPECTED_INSTAGRAM_ID,
             app_key=APP_A_KEY,
@@ -112,10 +121,11 @@ def main() -> None:
             actor_id="production-seed",
             replace_existing=True,
         )
-        print(f"[meta-registry-seed] channel={channel} status=active")
+    print(f"[meta-registry-seed] channel=facebook status={'already_active' if already_active else 'active'}")
     print("[meta-registry-seed] app_a_id_match=true")
     print("[meta-registry-seed] page_id_match=true")
-    print("[meta-registry-seed] instagram_account_id_match=true")
+    print("[meta-registry-seed] instagram_relationship_match=true")
+    print("[meta-registry-seed] direct_instagram_binding_seeded=false")
     print("[meta-registry-seed] SUCCESS")
 
 

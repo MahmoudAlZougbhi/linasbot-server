@@ -1,7 +1,18 @@
 #!/usr/bin/env bash
-# Apply Meta social-messaging secrets on production. Never prints secret values.
-# Keeps META_SOCIAL_MESSAGING_ENABLED=false unless APPLY_ENABLE_MESSAGING=true AND readiness passes.
+# Stage Meta social-messaging settings in the canonical environment.
+# Runtime activation is owned by scripts/ha/sync_meta_env_to_peer.py.
 set -euo pipefail
+
+if [ "${META_HA_STAGE_ONLY:-}" != "true" ]; then
+  echo "[meta-apply] refusing non-transactional apply: META_HA_STAGE_ONLY=true is required" >&2
+  exit 1
+fi
+if [ -z "${EXPECTED_RELEASE_SHA:-}" ]; then
+  echo "[meta-apply] refusing stage without an authorized release" >&2
+  exit 1
+fi
+/opt/linasbot/venv/bin/python -I /opt/linasbot/scripts/ha/sync_meta_env_to_peer.py \
+  --expected-sha "$EXPECTED_RELEASE_SHA" --verify-stage-authority
 
 required_nonempty=(
   META_APP_ID
@@ -12,7 +23,6 @@ required_nonempty=(
   META_WEBHOOK_VERIFY_TOKEN
   META_GRAPH_API_VERSION
 )
-
 for key in "${required_nonempty[@]}"; do
   if [ -z "${!key:-}" ]; then
     echo "[meta-apply] missing required env: $key" >&2
@@ -24,48 +34,44 @@ if [ "$META_PAGE_ID" != "378696005334409" ]; then
   echo "[meta-apply] refusing unexpected META_PAGE_ID" >&2
   exit 1
 fi
-
 if [ "$META_INSTAGRAM_ACCOUNT_ID" != "17841413184256533" ]; then
   echo "[meta-apply] refusing unexpected META_INSTAGRAM_ACCOUNT_ID" >&2
   exit 1
 fi
-
 if [ "$META_APP_ID" = "1784792718776344" ] || ! [[ "$META_APP_ID" =~ ^[0-9]+$ ]]; then
   echo "[meta-apply] refusing old or malformed META_APP_ID for new-app cutover" >&2
   exit 1
 fi
-
 if [ "$META_GRAPH_API_VERSION" != "v24.0" ]; then
   echo "[meta-apply] refusing unexpected META_GRAPH_API_VERSION" >&2
   exit 1
 fi
 
+enable_requested="${APPLY_ENABLE_MESSAGING:-false}"
+case "$enable_requested" in
+  false|true) ;;
+  *) echo "[meta-apply] messaging enable decision must be true or false" >&2; exit 1 ;;
+esac
+export APPLY_ENABLE_MESSAGING="$enable_requested"
+
+APP_DIR=/opt/linasbot
+ENV_PATH="$APP_DIR/.env"
+PYTHON_BIN="$APP_DIR/venv/bin/python"
+test -x "$PYTHON_BIN"
+test -f "$ENV_PATH"
+
 umask 077
-TOKEN_PATTERN_FILE="$(mktemp /tmp/linasbot-meta-apply-pattern.XXXXXX)"
-trap 'rm -f "$TOKEN_PATTERN_FILE"' EXIT
-
-token_pattern_present_in_logs() {
-  local log_path
-  while IFS= read -r log_path; do
-    if grep -qFf "$TOKEN_PATTERN_FILE" "$log_path" 2>/dev/null; then
-      return 0
-    fi
-  done < <(
-    find /var/log/nginx /var/log -maxdepth 2 -type f \
-      \( -name '*linasaibot*.log*' -o -name 'access.log*' -o -name 'error.log*' \) 2>/dev/null
-  )
-  if command -v journalctl >/dev/null 2>&1 && \
-    journalctl -u linasbot --no-pager 2>/dev/null | grep -qFf "$TOKEN_PATTERN_FILE"; then
-    return 0
-  fi
-  return 1
-}
-
-python3 - <<'PY'
+"$PYTHON_BIN" -I - <<'PY'
+import hmac
 import os
+import sys
 from pathlib import Path
 
-KEYS_ALWAYS = [
+sys.path.insert(0, "/opt/linasbot")
+from scripts.ha.meta_env_file import atomic_update_env
+
+ENV_PATH = Path("/opt/linasbot/.env")
+keys = (
     "META_APP_ID",
     "META_APP_SECRET",
     "META_PAGE_ID",
@@ -73,214 +79,37 @@ KEYS_ALWAYS = [
     "META_INSTAGRAM_ACCOUNT_ID",
     "META_WEBHOOK_VERIFY_TOKEN",
     "META_GRAPH_API_VERSION",
-]
-OPTIONAL = []
+)
+updates = {key: os.environ[key].strip() for key in keys}
+updates.update(
+    {
+        "META_SOCIAL_MESSAGING_ENABLED": os.environ["APPLY_ENABLE_MESSAGING"],
+        "META_SOCIAL_ROLLBACK_ACTIVE": "false",
+        "META_SOCIAL_NEW_APP_REQUIRED": "true",
+    }
+)
+atomic_update_env(ENV_PATH, updates)
 
-def upsert(path: Path, updates: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    lines = path.read_text().splitlines() if path.exists() else []
-    found = set()
-    out = []
-    for line in lines:
-        if "=" in line and not line.lstrip().startswith("#"):
-            key = line.split("=", 1)[0].strip()
-            if key in updates:
-                out.append(f"{key}={updates[key]}")
-                found.add(key)
-                continue
-        out.append(line)
-    for key, value in updates.items():
-        if key not in found:
-            out.append(f"{key}={value}")
-    path.write_text("\n".join(out) + "\n")
-    os.chmod(path, 0o600)
 
-updates = {k: os.environ[k].strip() for k in KEYS_ALWAYS}
-updates["META_SOCIAL_ROLLBACK_ACTIVE"] = "false"
-updates["META_SOCIAL_NEW_APP_REQUIRED"] = "true"
-for key in OPTIONAL:
-    value = (os.environ.get(key) or "").strip()
-    if value:
-        updates[key] = value
+def read_exact(key: str) -> str:
+    values = [
+        line.split("=", 1)[1]
+        for line in ENV_PATH.read_text(encoding="utf-8", errors="strict").splitlines()
+        if "=" in line
+        and not line.lstrip().startswith("#")
+        and line.split("=", 1)[0].strip() == key
+    ]
+    if len(values) != 1:
+        raise SystemExit(f"[meta-apply] staged key count invalid: {key}")
+    return values[0]
 
-# Never auto-enable here unless explicitly requested after readiness.
-enable_requested = (os.environ.get("APPLY_ENABLE_MESSAGING") or "").strip().lower() in {"1", "true", "yes"}
-app_secret = (os.environ.get("META_APP_SECRET") or "").strip()
-iga = (os.environ.get("META_INSTAGRAM_ACCOUNT_ID") or "").strip()
-ready = bool(app_secret and iga and updates.get("META_PAGE_ACCESS_TOKEN"))
 
-if enable_requested and ready:
-    updates["META_SOCIAL_MESSAGING_ENABLED"] = "true"
-else:
-    updates["META_SOCIAL_MESSAGING_ENABLED"] = "false"
+for key, expected in updates.items():
+    if not hmac.compare_digest(read_exact(key), expected):
+        raise SystemExit(f"[meta-apply] staged value mismatch: {key}")
+    print(f"[meta-apply] {key}:match=true")
 
-paths = [Path("/opt/linasbot/.env"), Path("/opt/linasbot/linaslaserbot-2.7.22/.env")]
-for path in paths:
-    if not path.parent.exists():
-        print(f"[meta-apply] skip missing dir for {path}")
-        continue
-    upsert(path, updates)
-    text = path.read_text()
-    def present(key: str) -> bool:
-        return any(line.startswith(key + "=") and line.split("=", 1)[1].strip() for line in text.splitlines())
-    print(f"[meta-apply] updated={path}")
-    for key in [
-        "META_APP_ID",
-        "META_APP_SECRET",
-        "META_PAGE_ID",
-        "META_PAGE_ACCESS_TOKEN",
-        "META_INSTAGRAM_ACCOUNT_ID",
-        "META_WEBHOOK_VERIFY_TOKEN",
-        "META_GRAPH_API_VERSION",
-        "META_SOCIAL_MESSAGING_ENABLED",
-        "META_SOCIAL_ROLLBACK_ACTIVE",
-        "META_SOCIAL_NEW_APP_REQUIRED",
-    ]:
-        print(f"[meta-apply] {key}:present={present(key)}")
-
-print(f"[meta-apply] readiness_app_secret={bool(app_secret)}")
-print(f"[meta-apply] readiness_instagram_account_id={bool(iga)}")
-print(f"[meta-apply] readiness_complete={ready}")
-print(f"[meta-apply] messaging_enabled={updates['META_SOCIAL_MESSAGING_ENABLED']}")
-if enable_requested and not ready:
-    print("[meta-apply] enable requested but readiness incomplete; left disabled")
+print("[meta-apply] runtime_activation_deferred_to_ha_sync=true")
+print("[meta-apply] stage_only=true")
+print("[meta-apply] static_environment_valid=true")
 PY
-
-# Nginx: keep ^~ /webhook
-if [ -f /etc/nginx/sites-enabled/linasaibot ]; then
-  NGINX_SITE=/etc/nginx/sites-enabled/linasaibot
-elif [ -f /etc/nginx/sites-available/linasaibot ]; then
-  NGINX_SITE=/etc/nginx/sites-available/linasaibot
-else
-  NGINX_SITE=""
-fi
-
-if [ -n "$NGINX_SITE" ]; then
-  if ! grep -qE 'location[[:space:]]+\^~[[:space:]]+/webhook' "$NGINX_SITE"; then
-    cp -a "$NGINX_SITE" "${NGINX_SITE}.bak.meta-social"
-    sed -i -E 's/location[[:space:]]+=[[:space:]]+\/webhook/location ^~ \/webhook/; s/location[[:space:]]+\/webhook/location ^~ \/webhook/' "$NGINX_SITE"
-  fi
-  nginx -t
-  systemctl reload nginx
-  echo "[meta-apply] nginx_ok=true"
-else
-  echo "[meta-apply] nginx_ok=false"
-  exit 1
-fi
-
-systemctl restart linasbot
-sleep 5
-systemctl is-active linasbot
-
-python3 - <<'PY'
-import os
-import urllib.error
-import urllib.parse
-import urllib.request
-
-challenge = "meta_apply_challenge"
-token = os.environ["META_WEBHOOK_VERIFY_TOKEN"]
-
-def call(base: str, supplied_token: str) -> tuple[int, str]:
-    query = urllib.parse.urlencode(
-        {
-            "hub.mode": "subscribe",
-            "hub.verify_token": supplied_token,
-            "hub.challenge": challenge,
-        }
-    )
-    try:
-        with urllib.request.urlopen(f"{base}?{query}", timeout=15) as response:
-            return response.status, response.read(4096).decode("utf-8", "replace")
-    except urllib.error.HTTPError as exc:
-        return exc.code, exc.read(4096).decode("utf-8", "replace")
-
-for label, base in (
-    ("local", "http://127.0.0.1:8003/webhook/meta-messaging"),
-    ("public", "https://www.linasaibot.com/webhook/meta-messaging"),
-):
-    correct = call(base, token)
-    incorrect = call(base, "wrong-token")
-    print(f"{label}_correct_http={correct[0]}")
-    print(f"{label}_incorrect_http={incorrect[0]}")
-    if correct != (200, challenge):
-        raise SystemExit(f"{label} correct-token challenge failed")
-    if incorrect[0] != 403:
-        raise SystemExit(f"{label} wrong-token challenge did not return 403")
-    if "<!doctype html" in incorrect[1].lower():
-        raise SystemExit(f"{label} returned dashboard HTML")
-PY
-
-printf '%s' "$META_WEBHOOK_VERIFY_TOKEN" > "$TOKEN_PATTERN_FILE"
-if token_pattern_present_in_logs; then
-  echo "new_verify_token_present_in_logs=true" >&2
-  exit 1
-fi
-echo "new_verify_token_present_in_logs=false"
-: > "$TOKEN_PATTERN_FILE"
-
-# Invalid signature POST must be rejected whenever App Secret is configured.
-POST_CODE="$(curl -sS -o /tmp/meta_post_body -w '%{http_code}' --max-time 10 \
-  -X POST "http://127.0.0.1:8003/webhook/meta-messaging" \
-  -H 'Content-Type: application/json' \
-  -H 'X-Hub-Signature-256: sha256=deadbeef' \
-  -d '{"object":"page","entry":[]}' || true)"
-POST_BODY="$(cat /tmp/meta_post_body 2>/dev/null || true)"
-echo "local_invalid_sig_http=$POST_CODE"
-echo "local_invalid_sig_body=$POST_BODY"
-test "$POST_CODE" = "401"
-
-# Existing WhatsApp provider webhook must reject unsigned traffic, then accept
-# a correctly signed probe only to return the explicit handoff-only policy.
-python3 - <<'PY'
-import hashlib
-import hmac
-import json
-import os
-import urllib.error
-import urllib.request
-
-body = b'{"object":"whatsapp_business_account","entry":[]}'
-secret = os.environ["META_APP_SECRET"].encode("utf-8")
-signature = "sha256=" + hmac.new(secret, body, hashlib.sha256).hexdigest()
-
-
-def call(signature_header: str | None) -> tuple[int, dict[str, object]]:
-    headers = {"Content-Type": "application/json"}
-    if signature_header:
-        headers["X-Hub-Signature-256"] = signature_header
-    request = urllib.request.Request(
-        "http://127.0.0.1:8003/webhook",
-        data=body,
-        headers=headers,
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=10) as response:
-            raw = response.read(4096)
-            return response.status, json.loads(raw) if raw else {}
-    except urllib.error.HTTPError as exc:
-        raw = exc.read(4096)
-        try:
-            payload = json.loads(raw) if raw else {}
-        except json.JSONDecodeError:
-            payload = {}
-        return exc.code, payload
-
-
-unsigned = call(None)
-signed = call(signature)
-print(f"local_whatsapp_unsigned_http={unsigned[0]}")
-print(f"local_whatsapp_signed_http={signed[0]}")
-print(f"local_whatsapp_signed_reason={signed[1].get('reason', 'missing')}")
-if unsigned[0] != 401:
-    raise SystemExit("unsigned WhatsApp inbound was not rejected")
-if signed[0] != 200:
-    raise SystemExit("signed WhatsApp policy probe did not return 200")
-if signed[1].get("reason") != "whatsapp_inbound_ai_disabled" or signed[1].get("accepted") != 0:
-    raise SystemExit("signed WhatsApp probe did not remain handoff-only")
-print("whatsapp_inbound_ai_disabled=true")
-PY
-
-echo "api_health=$(curl -sS --max-time 10 https://www.linasaibot.com/api/health || true)"
-echo "[meta-apply] SUCCESS"

@@ -1,5 +1,9 @@
 # Multi-node divergence closeout — Linas AI HA
 
+> Historical 2026-08-12 evidence. Meta authority/cutover statements are
+> superseded by `docs/scale/META_REGISTRY_POSTGRES_HA_CUTOVER.md`; current PG is
+> newer and the NFS file must not be imported or enabled as authority.
+
 **Date:** 2026-08-12  
 **Branch:** `chore/project-cleanup-reorg`  
 **PR:** [#240](https://github.com/MahmoudAlZougbhi/linasbot-server/pull/240)  

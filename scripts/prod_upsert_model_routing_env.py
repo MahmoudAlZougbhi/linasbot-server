@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upsert Sol/Terra model-routing env keys (no service restart)."""
+"""Upsert Sol/Terra routing in the canonical env under the common HA lock."""
 
 from __future__ import annotations
 
@@ -10,8 +10,6 @@ import sys
 _app = os.environ.get("CM_PRESERVE_APP_DIR") or "/opt/linasbot"
 if _app not in sys.path:
     sys.path.insert(0, _app)
-
-from services.cm.durable_flags import default_production_env_paths, upsert_env_file  # noqa: E402
 
 UPDATES = {
     "LINAS_OWNER_MODEL": "gpt-5.6-sol",
@@ -29,17 +27,10 @@ UPDATES = {
 
 
 def main() -> int:
-    app_dir = os.environ.get("CM_PRESERVE_APP_DIR") or "/opt/linasbot"
-    touched = 0
-    for path in default_production_env_paths(app_dir=app_dir):
-        if not path.parent.exists():
-            continue
-        upsert_env_file(path, UPDATES)
-        print(f"[model-routing] upserted path={path} keys={sorted(UPDATES)}")
-        touched += 1
-    if touched == 0:
-        print("[model-routing] no env paths found to update", file=sys.stderr)
-        return 1
+    from scripts.ha.production_env_cas import atomic_update_canonical_env
+
+    atomic_update_canonical_env(UPDATES)
+    print(f"[model-routing] upserted path=/opt/linasbot/.env keys={sorted(UPDATES)}")
     return 0
 
 

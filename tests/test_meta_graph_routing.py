@@ -43,10 +43,12 @@ def instagram_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("META_APP_A_ID", "2963733803971681")
     monkeypatch.setenv("META_APP_A_SECRET", "app-a-secret-tests")
     monkeypatch.setenv("META_APP_A_WEBHOOK_VERIFY_TOKEN", "verify-a-tests")
+    monkeypatch.setenv("META_APP_A_ADVANCED_ACCESS_APPROVED", "true")
     monkeypatch.setenv("META_GRAPH_API_VERSION", "v24.0")
     monkeypatch.setenv("META_INSTAGRAM_LOGIN_APP_ID", "1035856539045307")
     monkeypatch.setenv("META_INSTAGRAM_LOGIN_APP_SECRET", "instagram-app-secret-tests")
     monkeypatch.setenv("META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN", "verify-ig-login-tests")
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_ADVANCED_ACCESS_APPROVED", "true")
     monkeypatch.setenv("META_CREDENTIAL_ENCRYPTION_KEY", "instagram-login-routing-secret-tests-1234567890")
 
 
@@ -91,11 +93,16 @@ def _instagram_binding(
     )
 
 
-def test_instagram_login_scopes_exclude_insights() -> None:
+def test_instagram_login_oauth_scopes_are_limited_to_dm_and_comments() -> None:
     from services.meta_instagram_login_config import META_INSTAGRAM_LOGIN_REQUEST_SCOPES
 
     assert "instagram_business_manage_insights" not in META_INSTAGRAM_LOGIN_REQUEST_SCOPES
-    assert "instagram_business_content_publish" in META_INSTAGRAM_LOGIN_REQUEST_SCOPES
+    assert "instagram_business_content_publish" not in META_INSTAGRAM_LOGIN_REQUEST_SCOPES
+    assert META_INSTAGRAM_LOGIN_REQUEST_SCOPES == {
+        "instagram_business_basic",
+        "instagram_business_manage_messages",
+        "instagram_business_manage_comments",
+    }
 
 
 def test_graph_routing_uses_instagram_host_for_direct_login(registry: MetaAppRegistry) -> None:
@@ -193,7 +200,17 @@ async def test_reconcile_pending_subscription_recovers_failed_binding(registry: 
     async def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "POST":
             return httpx.Response(200, json={"success": True})
-        return httpx.Response(200, json={"data": [{"subscribed_fields": ["messages", "messaging_postbacks"]}]})
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "id": "1035856539045307",
+                        "subscribed_fields": ["messages", "messaging_postbacks"],
+                    }
+                ]
+            },
+        )
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="https://graph.instagram.com")
     state = await retry_instagram_login_webhook_subscription(binding.binding_id, registry=registry, client=client)
@@ -218,8 +235,8 @@ def test_facebook_login_binding_ready_for_dm_when_no_direct_login(registry: Meta
     assert binding_ready_for_dm(binding, credential) is True
 
 
-def test_registry_auth_flow_unrestricted_for_instagram_object() -> None:
-    assert registry_auth_flow_for_webhook_object("instagram") is None
+def test_main_callback_is_facebook_login_only_for_every_object() -> None:
+    assert registry_auth_flow_for_webhook_object("instagram") == "facebook_login"
     assert registry_auth_flow_for_webhook_object("page") == "facebook_login"
 
 
@@ -243,7 +260,7 @@ def _instagram_dm_payload(account_id: str, *, mid: str = "mid-1") -> dict:
 
 
 @pytest.mark.asyncio
-async def test_resolve_unrestricted_accepts_instagram_login_binding(registry: MetaAppRegistry) -> None:
+async def test_main_callback_filter_rejects_instagram_login_binding(registry: MetaAppRegistry) -> None:
     from services.meta_app_registry import get_meta_app_configs
 
     _instagram_binding(registry, auth_flow="instagram_login")
@@ -253,12 +270,11 @@ async def test_resolve_unrestricted_accepts_instagram_login_binding(registry: Me
         registry=registry,
         auth_flow=registry_auth_flow_for_webhook_object("instagram"),
     )
-    assert len(routed) == 1
-    assert routed[0].binding.auth_flow == "instagram_login"
+    assert routed == []
 
 
 @pytest.mark.asyncio
-async def test_resolve_unrestricted_accepts_facebook_login_legacy_binding(registry: MetaAppRegistry) -> None:
+async def test_main_callback_filter_accepts_facebook_login_legacy_binding(registry: MetaAppRegistry) -> None:
     from services.meta_app_registry import get_meta_app_configs
 
     _instagram_binding(registry, auth_flow="facebook_login")

@@ -3,6 +3,13 @@
 # Never prints secret values. Requires explicit MODE/PUBLISH args from the workflow.
 set -euo pipefail
 
+# shellcheck source=scripts/ha/require_production_mutation_guard.sh
+source /opt/linasbot/scripts/ha/require_production_mutation_guard.sh
+linas_require_production_mutation_guard \
+  "scripts/prod_cm_apply_flags.sh" \
+  "scripts/prod_cm_cutover.sh" \
+  "scripts/prod_cm_rollback.sh"
+
 MODE="${CM_RUNTIME_MODE_VALUE:-}"
 PUBLISH="${CM_PUBLISH_ENABLED_VALUE:-}"
 EMBED_PROVIDER="${CM_EMBEDDING_PROVIDER_VALUE:-openai}"
@@ -38,9 +45,10 @@ export CM_EMBEDDING_PROVIDER_VALUE="$EMBED_PROVIDER"
 export CM_EMBEDDING_MODEL_VALUE="$EMBED_MODEL"
 export CM_FAQ_CANONICAL_VALUE="$FAQ_CANONICAL"
 
-python3 - <<'PY'
+PYTHONPATH=/opt/linasbot /opt/linasbot/venv/bin/python - <<'PY'
 import os
-from pathlib import Path
+
+from scripts.ha.production_env_cas import atomic_update_canonical_env
 
 updates = {
     "CM_RUNTIME_MODE": os.environ["CM_RUNTIME_MODE_VALUE"],
@@ -52,29 +60,8 @@ faq = (os.environ.get("CM_FAQ_CANONICAL_VALUE") or "").strip()
 if faq:
     updates["CM_FAQ_CANONICAL"] = faq
 
-def upsert(path: Path, updates: dict[str, str]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    found: set[str] = set()
-    out: list[str] = []
-    for line in lines:
-        if "=" in line and not line.lstrip().startswith("#"):
-            key = line.split("=", 1)[0].strip()
-            if key in updates:
-                out.append(f"{key}={updates[key]}")
-                found.add(key)
-                continue
-        out.append(line)
-    for key, value in updates.items():
-        if key not in found:
-            out.append(f"{key}={value}")
-    path.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
-    os.chmod(path, 0o600)
-    print(f"[cm-flags] upserted path={path} keys={sorted(updates)}")
-
-for candidate in (Path("/opt/linasbot/.env"), Path("/opt/linasbot/linaslaserbot-2.7.22/.env")):
-    if candidate.parent.exists():
-        upsert(candidate, updates)
+atomic_update_canonical_env(updates)
+print(f"[cm-flags] canonical_env_updated=true keys={sorted(updates)}")
 PY
 
 systemctl restart linasbot
