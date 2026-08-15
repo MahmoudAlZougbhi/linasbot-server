@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-from fastapi import Body, HTTPException, Query, Request
+from fastapi import HTTPException, Query, Request
 from fastapi.responses import Response
 
 from db.session import WhatsAppDatabaseUnavailable, whatsapp_session

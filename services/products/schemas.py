@@ -94,7 +94,7 @@ def product_to_dict(row: Any) -> dict[str, Any]:
                 "label": link.label,
                 "sort_order": link.sort_order,
             }
-            for link in sorted(row.links or [], key=lambda l: l.sort_order)
+            for link in sorted(row.links or [], key=lambda link: link.sort_order)
         ],
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,

@@ -11,8 +11,6 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from storage.persistent_storage import _DATA_ROOT
-
 from services.web_chat.appearance import normalize_appearance, normalize_integration_mode
 from services.web_chat.config_models import (
     WebChatInstallation,
@@ -21,6 +19,7 @@ from services.web_chat.config_models import (
     config_to_raw,
 )
 from services.web_chat.domain import normalize_site_url, origin_allowed_for_site
+from storage.persistent_storage import _DATA_ROOT
 
 
 @dataclass

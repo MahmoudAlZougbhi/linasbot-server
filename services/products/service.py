@@ -93,7 +93,7 @@ class ProductsService:
         return media_ids
 
     def preview_csv(self, *, csv_text: str) -> dict[str, Any]:
-        from services.products.import_service import preview_csv_rows, ProductsImportError
+        from services.products.import_service import ProductsImportError, preview_csv_rows
 
         try:
             return preview_csv_rows(csv_text)
@@ -106,7 +106,7 @@ class ProductsService:
         return import_csv_rows(self, tenant_id=tenant_id, csv_text=csv_text)
 
     def preview_xlsx(self, *, content: bytes) -> dict[str, Any]:
-        from services.products.import_service import preview_xlsx_rows, ProductsImportError
+        from services.products.import_service import ProductsImportError, preview_xlsx_rows
 
         try:
             return preview_xlsx_rows(content)

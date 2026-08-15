@@ -9,10 +9,9 @@ import json
 import re
 
 from language_resolver import LanguageResolver, system_language_instruction
+from services.cm.iso639_languages import normalize_language_code
 from services.llm_core_service import client as openai_client
 from services.user_persistence_service import user_persistence
-
-from services.cm.iso639_languages import normalize_language_code
 
 SUPPORTED_TRAINING_LANGUAGES = {"ar", "en", "fr", "franco", "es", "de", "it", "pt", "zh", "tr", "ru"}
 TRAINING_LANGUAGE_ORDER = ["ar", "en", "fr", "franco", "es", "de", "it", "pt", "zh", "tr", "ru"]

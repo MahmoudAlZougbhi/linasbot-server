@@ -7,7 +7,6 @@ from typing import Any
 
 from services.cm.schemas import (
     BranchesSection,
-    BranchRecord,
     OffDaysSection,
     OpeningHoursDay,
     OpeningHoursSchedule,

@@ -109,7 +109,6 @@ def normalize_appearance(raw: dict[str, Any] | None) -> dict[str, Any]:
     identity = raw.get("identity") if isinstance(raw.get("identity"), dict) else {}
     theme = raw.get("theme") if isinstance(raw.get("theme"), dict) else {}
     bubbles = raw.get("bubbles") if isinstance(raw.get("bubbles"), dict) else {}
-    layout = raw.get("layout") if isinstance(raw.get("layout"), dict) else {}
     launcher = raw.get("launcher") if isinstance(raw.get("launcher"), dict) else {}
 
     base["identity"]["display_name"] = _clamp_text(

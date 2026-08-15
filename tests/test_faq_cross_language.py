@@ -6,8 +6,8 @@ import pytest
 
 pytest_plugins = ("tests.customer_reply_ai_v2_fixtures",)
 
-from services.customer_reply_v2.faq_fast_path import try_faq_fast_path
-from services.faq_answer_localize import localize_faq_answer
+from services.customer_reply_v2.faq_fast_path import try_faq_fast_path  # noqa: E402
+from services.faq_answer_localize import localize_faq_answer  # noqa: E402
 
 
 @pytest.mark.asyncio

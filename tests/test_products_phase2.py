@@ -18,13 +18,13 @@ from services.customer_reply_v2.retrieval_tools import ToolContext, dispatch_ret
 from services.products.active_context import get_active_product, set_active_product  # noqa: E402
 from services.products.availability import normalize_availability  # noqa: E402
 from services.products.image_fingerprint import compute_average_phash, sha256_hex  # noqa: E402
-from services.products.image_index import build_index_from_media, find_image_candidates  # noqa: E402
+from services.products.image_index import find_image_candidates  # noqa: E402
 from services.products.media import store_product_media  # noqa: E402
 from services.products.reply_to_map import record_sent_product_message, resolve_reply_to_product  # noqa: E402
 from services.products.schemas import ProductWriteBody  # noqa: E402
 from services.products.search import search_product_by_title  # noqa: E402
 from services.products.service import ProductsService  # noqa: E402
-from services.products.xlsx_import import build_xlsx_template_bytes, parse_xlsx_bytes  # noqa: E402
+from services.products.xlsx_import import parse_xlsx_bytes  # noqa: E402
 
 
 @pytest.fixture()

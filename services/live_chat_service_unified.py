@@ -202,14 +202,6 @@ class LiveChatUnifiedMixin:
         state_values = self._state_filter_values(filter_state)
         wanted_channel = normalize_live_chat_channel(channel)
         page_num = max(1, int(page))
-        can_use_stale_cache = (
-            page_num == 1
-            and not search_val
-            and not cursor
-            and not state_values
-            and not wanted_channel
-            and bool(self._unified_chats_cache)
-        )
         use_cache_fallback = (
             page_num == 1
             and not search_val

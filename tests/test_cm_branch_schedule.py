@@ -10,10 +10,11 @@ from services.cm.branch_schedule import (
     merge_opening_hours_into_branches,
     normalize_branches_payload,
 )
+from services.cm.off_days import resolve_off_day_facts
 from services.cm.schemas import (
     BranchDaySchedule,
-    BranchRecord,
     BranchesSection,
+    BranchRecord,
     BranchWeeklySchedule,
     LocalizedLabels,
     OpeningHoursDay,
@@ -21,7 +22,6 @@ from services.cm.schemas import (
     OpeningHoursSection,
 )
 from services.cm.structured_resolver import resolve_branch_facts, resolve_opening_hours_facts
-from services.cm.off_days import resolve_off_day_facts
 
 
 def test_branch_weekly_schedule_summary() -> None:
