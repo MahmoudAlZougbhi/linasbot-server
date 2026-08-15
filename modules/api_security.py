@@ -171,8 +171,8 @@ _PUBLIC_EXACT: set[tuple[str, str]] = {
     ("POST", "/api/webhooks/apple/app-store"),
 }
 
-# Prefix public (rare) — guest sales chat is intentionally unauthenticated + rate-limited.
-_PUBLIC_PREFIX: tuple[str, ...] = ("/api/guest-ai/",)
+# Prefix public (rare) — guest sales chat + tenant web widget are unauthenticated + rate-limited.
+_PUBLIC_PREFIX: tuple[str, ...] = ("/api/guest-ai/", "/api/web-chat/")
 
 
 def _normalize_path(path: str) -> str:

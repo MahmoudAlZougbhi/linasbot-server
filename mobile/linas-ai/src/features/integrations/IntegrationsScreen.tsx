@@ -24,6 +24,7 @@ import { disconnectMetaPlatform, startMetaOAuth } from './integrationsOAuth';
 import { ToggleResponseSchema, type IntegrationListRow } from './integrationsSchemas';
 import { useIntegrationsLoad } from './useIntegrationsLoad';
 import { WhatsAppCloudCard, whatsappCardSubtitle } from './WhatsAppCloudCard';
+import { WebChatCard } from './WebChatCard';
 import { useWhatsAppIntegrations } from './useWhatsAppIntegrations';
 
 type Row = IntegrationListRow;
@@ -326,6 +327,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
           onError={setError}
           onNotice={setNotice}
         />
+        <WebChatCard onError={setError} onNotice={setNotice} />
         {tiktokRow ? (
           <IntegrationChannelCard
             key="tiktok"

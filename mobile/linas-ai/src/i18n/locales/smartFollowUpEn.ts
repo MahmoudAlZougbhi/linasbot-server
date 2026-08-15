@@ -9,6 +9,7 @@ export const smartFollowUpEn = {
   sfuChannelInstagram: 'Instagram',
   sfuChannelFacebook: 'Facebook',
   sfuChannelWhatsApp: 'WhatsApp',
+  sfuChannelWeb: 'Website',
   sfuChannelTikTok: 'TikTok',
   sfuChannelComingSoon: 'Coming soon',
   sfuMasterToggle: 'Smart Follow-Up',

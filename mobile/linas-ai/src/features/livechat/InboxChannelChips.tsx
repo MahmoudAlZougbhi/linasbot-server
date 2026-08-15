@@ -11,6 +11,7 @@ const CHIPS: { id: ChannelFilter; label: string }[] = [
   { id: 'instagram', label: 'Instagram' },
   { id: 'facebook', label: 'Messenger' },
   { id: 'tiktok', label: 'TikTok' },
+  { id: 'web', label: 'Website' },
 ];
 
 type Props = {

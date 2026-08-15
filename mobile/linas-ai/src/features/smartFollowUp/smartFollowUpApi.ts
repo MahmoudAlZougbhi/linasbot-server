@@ -16,6 +16,7 @@ const ChannelsEnabledSchema = z.object({
   whatsapp_cloud: z.boolean(),
   instagram_dm: z.boolean(),
   facebook_messenger: z.boolean(),
+  web_chat: z.boolean().optional().default(true),
 });
 
 export type FollowUpChannelsEnabled = z.infer<typeof ChannelsEnabledSchema>;

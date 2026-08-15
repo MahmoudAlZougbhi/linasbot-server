@@ -269,8 +269,55 @@ def list_tenant_integration_status(tenant_id: str) -> list[dict[str, Any]]:
         pass
     rows.insert(2, wa_row)
 
+    try:
+        from services.web_chat.store import web_chat_store
+
+        web_widget = web_chat_store.get_or_create_widget(tenant_id)
+        web_connected = web_widget.connected
+        web_row = {
+            "platform": "web",
+            "label": "Website",
+            "connected": web_connected,
+            "coming_soon": False,
+            "connectable": True,
+            "binding_ids": [],
+            "capabilities": {
+                "dm_read": _cap(
+                    level="connected" if web_connected else "available",
+                    supported_in_code=True,
+                    permission_present=web_connected,
+                    live_verified=web_connected,
+                    notes="Tenant website chat widget",
+                ),
+                "dm_reply": _cap(
+                    level="connected" if web_connected else "available",
+                    supported_in_code=True,
+                    permission_present=web_connected,
+                    live_verified=web_connected,
+                    notes="AI replies on embedded website chat",
+                ),
+            },
+            "site_url": web_widget.site_url,
+            "widget_key": web_widget.widget_key,
+            "enabled": web_widget.enabled,
+        }
+    except Exception:
+        web_row = {
+            "platform": "web",
+            "label": "Website",
+            "connected": False,
+            "coming_soon": False,
+            "connectable": True,
+            "binding_ids": [],
+            "capabilities": {
+                "dm_read": _cap(level="available", supported_in_code=True),
+                "dm_reply": _cap(level="available", supported_in_code=True),
+            },
+        }
+
     rows.extend(
         [
+            web_row,
             {
                 "platform": "tiktok",
                 "label": "TikTok",

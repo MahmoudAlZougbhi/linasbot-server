@@ -20,12 +20,14 @@ SOURCE_CHANNEL_INSTAGRAM_DM: Final[str] = "instagram_dm"
 SOURCE_CHANNEL_FACEBOOK_MESSENGER: Final[str] = "facebook_messenger"
 SOURCE_CHANNEL_WHATSAPP_CLOUD: Final[str] = "whatsapp_cloud"
 SOURCE_CHANNEL_COMMENT_LINKED_DM: Final[str] = "comment_linked_dm"
+SOURCE_CHANNEL_WEB_CHAT: Final[str] = "web_chat"
 
 SOURCE_CHANNELS: Final[tuple[str, ...]] = (
     SOURCE_CHANNEL_INSTAGRAM_DM,
     SOURCE_CHANNEL_FACEBOOK_MESSENGER,
     SOURCE_CHANNEL_WHATSAPP_CLOUD,
     SOURCE_CHANNEL_COMMENT_LINKED_DM,
+    SOURCE_CHANNEL_WEB_CHAT,
 )
 
 EVENT_MANUAL_PAUSE: Final[str] = "manual_pause"

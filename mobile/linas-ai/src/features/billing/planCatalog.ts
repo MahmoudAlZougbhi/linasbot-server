@@ -17,6 +17,8 @@ export type PlanDefinition = {
   whatsapp: boolean;
   /** TikTok DMs + comments — Growth, Pro, and Max. */
   tiktok: boolean;
+  /** Website chat widget — Lite excluded; Starter and above included. */
+  web: boolean;
   recommended?: boolean;
   /**
    * Default Apple monthly product id (canonical ASC SKU).
@@ -38,6 +40,7 @@ export const PLAN_CATALOG: Record<PlanId, PlanDefinition> = {
     commentAutomation: false,
     whatsapp: false,
     tiktok: false,
+    web: false,
     appleProductId: 'com.linasai.subscription.basic.monthly',
     googleProductId: 'linas_ai_lite_monthly',
   },
@@ -50,6 +53,7 @@ export const PLAN_CATALOG: Record<PlanId, PlanDefinition> = {
     commentAutomation: true,
     whatsapp: true,
     tiktok: false,
+    web: true,
     appleProductId: 'com.linasai.subscription.plus.monthly',
     googleProductId: 'linas_ai_starter_monthly',
   },
@@ -62,6 +66,7 @@ export const PLAN_CATALOG: Record<PlanId, PlanDefinition> = {
     commentAutomation: true,
     whatsapp: true,
     tiktok: true,
+    web: true,
     recommended: true,
     appleProductId: 'com.linasai.subscription.growth.monthly',
     googleProductId: 'linas_ai_growth_monthly',
@@ -75,6 +80,7 @@ export const PLAN_CATALOG: Record<PlanId, PlanDefinition> = {
     commentAutomation: true,
     whatsapp: true,
     tiktok: true,
+    web: true,
     appleProductId: 'com.linasai.subscription.pro.monthly',
     googleProductId: 'linas_ai_pro_monthly',
   },
@@ -87,6 +93,7 @@ export const PLAN_CATALOG: Record<PlanId, PlanDefinition> = {
     commentAutomation: true,
     whatsapp: true,
     tiktok: true,
+    web: true,
     appleProductId: 'com.linasai.subscription.scale.monthly',
     googleProductId: 'linas_ai_max_monthly',
   },

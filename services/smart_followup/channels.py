@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from services.requests.constants import (
     SOURCE_CHANNEL_FACEBOOK_MESSENGER,
     SOURCE_CHANNEL_INSTAGRAM_DM,
+    SOURCE_CHANNEL_WEB_CHAT,
     SOURCE_CHANNEL_WHATSAPP_CLOUD,
 )
 
@@ -18,6 +19,7 @@ SUPPORTED_CHANNELS = frozenset(
         SOURCE_CHANNEL_WHATSAPP_CLOUD,
         SOURCE_CHANNEL_INSTAGRAM_DM,
         SOURCE_CHANNEL_FACEBOOK_MESSENGER,
+        SOURCE_CHANNEL_WEB_CHAT,
     }
 )
 
@@ -36,6 +38,8 @@ def normalize_followup_channel(channel: str | None) -> str:
         "page",
     }:
         return SOURCE_CHANNEL_FACEBOOK_MESSENGER
+    if raw in {SOURCE_CHANNEL_WEB_CHAT, "web", "web_chat", "website"}:
+        return SOURCE_CHANNEL_WEB_CHAT
     raise ValueError(f"unsupported_followup_channel:{raw or 'empty'}")
 
 
@@ -54,6 +58,10 @@ def get_channel_adapter(channel: str) -> SmartFollowUpChannelAdapter:
         from services.smart_followup.adapters.whatsapp import WhatsAppFollowUpAdapter
 
         return WhatsAppFollowUpAdapter()
+    if normalized == SOURCE_CHANNEL_WEB_CHAT:
+        from services.smart_followup.adapters.web import WebFollowUpAdapter
+
+        return WebFollowUpAdapter()
     from services.smart_followup.adapters.meta_dm import MetaDmFollowUpAdapter
 
     return MetaDmFollowUpAdapter(channel=normalized)

@@ -9,12 +9,13 @@ from services.tenant_mobile_dashboard.copilot import build_owner_copilot_summary
 from services.tenant_mobile_dashboard.usage import _is_failure, _load_entries, _normalize_usage_bucket
 from services.wallet_spend_analytics import _entry_matches_tenant, _parse_ts
 
-_ACTIVITY_PLATFORMS = ("instagram", "facebook", "tiktok", "whatsapp")
+_ACTIVITY_PLATFORMS = ("instagram", "facebook", "tiktok", "whatsapp", "web")
 _SMART_SOURCES = frozenset({"qa_database", "dynamic_retrieval"})
 _REQUEST_CHANNEL_MAP = {
     "instagram_dm": "instagram",
     "facebook_messenger": "facebook",
     "whatsapp_cloud": "whatsapp",
+    "web_chat": "web",
     "comment_linked_dm": "instagram",
 }
 
@@ -33,12 +34,16 @@ def _normalize_platform(channel: Any) -> str | None:
         return "whatsapp"
     if ch in {"tiktok"}:
         return "tiktok"
+    if ch in {"web", "web_chat", "website"}:
+        return "web"
     if "instagram" in ch:
         return "instagram"
     if "facebook" in ch or "messenger" in ch:
         return "facebook"
     if "whatsapp" in ch:
         return "whatsapp"
+    if "web" in ch:
+        return "web"
     return None
 
 
@@ -154,7 +159,7 @@ def build_activity_summary(
         if platform not in platform_rows:
             continue
 
-        if bucket in {"instagram_dm", "facebook_dm", "whatsapp_dm"}:
+        if bucket in {"instagram_dm", "facebook_dm", "whatsapp_dm", "web_dm"}:
             platform_rows[platform]["messages"] += 1
         elif bucket in {"instagram_comments", "facebook_comments"}:
             platform_rows[platform]["comments"] += 1
@@ -171,6 +176,13 @@ def build_activity_summary(
     connected = {
         str(row.get("platform") or ""): bool(row.get("connected")) for row in integrations if isinstance(row, dict)
     }
+    try:
+        from services.web_chat.store import web_chat_store
+
+        web_widget = web_chat_store.get_or_create_widget(tid)
+        connected["web"] = web_widget.connected
+    except Exception:
+        pass
 
     channels: list[dict[str, Any]] = []
     for platform in _ACTIVITY_PLATFORMS:

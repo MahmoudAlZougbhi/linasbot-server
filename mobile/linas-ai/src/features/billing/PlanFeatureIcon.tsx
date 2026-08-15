@@ -9,6 +9,7 @@ const ICONS: Record<FeatureIcon, AppIconName> = {
   person: ion('person-outline'),
   whatsapp: ion('logo-whatsapp'),
   tiktok: ion('logo-tiktok'),
+  web: ion('globe-outline'),
 };
 
 export function PlanFeatureIcon({

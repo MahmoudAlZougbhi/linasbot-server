@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-LIVE_CHAT_CHANNELS = ("whatsapp", "instagram", "facebook", "tiktok")
+LIVE_CHAT_CHANNELS = ("whatsapp", "instagram", "facebook", "tiktok", "web")
 
 _ALIASES = {
     "whatsapp": "whatsapp",
@@ -17,6 +17,9 @@ _ALIASES = {
     "facebook_messenger": "facebook",
     "messenger": "facebook",
     "tiktok": "tiktok",
+    "web": "web",
+    "web_chat": "web",
+    "website": "web",
 }
 
 
@@ -34,6 +37,8 @@ def _channel_from_user_id(user_id: Any) -> str | None:
         return None
     if "tiktok:" in uid:
         return "tiktok"
+    if "web:" in uid:
+        return "web"
     if "instagram:" in uid:
         return "instagram"
     if "facebook:" in uid or "messenger:" in uid:
@@ -45,7 +50,7 @@ def _channel_from_user_id(user_id: Any) -> str | None:
 
 def resolve_live_chat_channel(user_id: Any, payload: dict[str, Any] | None = None) -> str:
     """
-    WhatsApp / Instagram / Facebook / TikTok for inbox rows.
+    WhatsApp / Instagram / Facebook / TikTok / Web for inbox rows.
     TikTok only when the payload or user_id actually says TikTok — never as a default.
     """
     data: dict[str, Any] = payload or {}

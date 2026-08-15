@@ -67,6 +67,8 @@ def _normalize_channel(raw: Any) -> str:
         return "testing_lab"
     if ch in ("whatsapp", "wa", "360dialog", "dialog360"):
         return "whatsapp"
+    if ch in ("web", "web_chat", "website"):
+        return "web"
     if not ch or ch == "unknown":
         return "unknown"
     return ch
