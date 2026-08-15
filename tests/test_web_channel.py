@@ -97,10 +97,25 @@ def test_widget_store_roundtrip(tmp_path) -> None:
     store = WebChatStore(root=tmp_path / "web_chat")
     widget = store.get_or_create_widget("tenant-a")
     assert widget.widget_key
-    updated = store.update_widget("tenant-a", site_url="https://shop.example.com", enabled=True)
+    updated = store.update_widget(
+        "tenant-a",
+        site_url="https://shop.example.com",
+        enabled=True,
+        integration_mode="custom_chat",
+        appearance={"identity": {"display_name": "Clinic"}},
+    )
     assert updated.site_url == "https://shop.example.com"
     assert updated.enabled is True
     assert updated.connected is True
+    assert updated.integration_mode == "custom_chat"
+    assert updated.appearance["identity"]["display_name"] == "Clinic"
     by_key = store.get_widget_by_key(updated.widget_key)
     assert by_key is not None
     assert by_key.tenant_id == "tenant-a"
+
+
+def test_widget_origin_www_match(tmp_path) -> None:
+    store = WebChatStore(root=tmp_path / "web_chat")
+    widget = store.update_widget("tenant-a", site_url="https://www.clinic.com", enabled=True)
+    assert store.origin_allowed_for_widget(widget, "https://clinic.com")
+    assert not store.origin_allowed_for_widget(widget, "https://other.com")

@@ -10,34 +10,17 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 from storage.persistent_storage import _DATA_ROOT
 
-
-def _normalize_site_url(raw: str) -> str:
-    text = (raw or "").strip()
-    if not text:
-        return ""
-    if "://" not in text:
-        text = f"https://{text}"
-    parsed = urlparse(text)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise ValueError("invalid_site_url")
-    return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
-
-
-def _origin_allowed(site_url: str, origin: str | None) -> bool:
-    if not origin:
-        return False
-    try:
-        parsed = urlparse(origin.strip())
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            return False
-        allowed = urlparse(site_url)
-        return parsed.netloc.lower() == allowed.netloc.lower()
-    except Exception:
-        return False
+from services.web_chat.appearance import normalize_appearance, normalize_integration_mode
+from services.web_chat.config_models import (
+    WebChatInstallation,
+    WebChatWidgetConfig,
+    config_from_raw,
+    config_to_raw,
+)
+from services.web_chat.domain import normalize_site_url, origin_allowed_for_site
 
 
 @dataclass
@@ -57,20 +40,6 @@ class WebChatVisitorSession:
     updated_at: float
     messages: list[WebChatMessage] = field(default_factory=list)
     pending_assistant: list[WebChatMessage] = field(default_factory=list)
-
-
-@dataclass
-class WebChatWidgetConfig:
-    tenant_id: str
-    widget_key: str
-    site_url: str
-    enabled: bool
-    created_at: float
-    updated_at: float
-
-    @property
-    def connected(self) -> bool:
-        return bool(self.site_url.strip()) and self.enabled
 
 
 class WebChatStore:
@@ -98,17 +67,12 @@ class WebChatStore:
             raw = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             return None
-        return WebChatWidgetConfig(
-            tenant_id=str(raw.get("tenant_id") or tenant_id),
-            widget_key=str(raw.get("widget_key") or ""),
-            site_url=str(raw.get("site_url") or ""),
-            enabled=bool(raw.get("enabled")),
-            created_at=float(raw.get("created_at") or time.time()),
-            updated_at=float(raw.get("updated_at") or time.time()),
-        )
+        if not isinstance(raw, dict):
+            return None
+        return config_from_raw(tenant_id, raw)
 
     def _save_widget(self, config: WebChatWidgetConfig) -> None:
-        payload = asdict(config)
+        payload = config_to_raw(config)
         self._tenant_path(config.tenant_id).write_text(
             json.dumps(payload, ensure_ascii=False),
             encoding="utf-8",
@@ -200,11 +164,21 @@ class WebChatStore:
         *,
         site_url: str | None = None,
         enabled: bool | None = None,
+        integration_mode: str | None = None,
+        appearance: dict[str, Any] | None = None,
     ) -> WebChatWidgetConfig:
         config = self.get_or_create_widget(tenant_id)
         now = time.time()
-        new_site = _normalize_site_url(site_url) if site_url is not None else config.site_url
+        new_site = normalize_site_url(site_url) if site_url is not None else config.site_url
         new_enabled = config.enabled if enabled is None else bool(enabled)
+        new_mode = (
+            normalize_integration_mode(integration_mode)
+            if integration_mode is not None
+            else config.integration_mode
+        )
+        new_appearance = (
+            normalize_appearance(appearance) if appearance is not None else config.appearance
+        )
         updated = WebChatWidgetConfig(
             tenant_id=config.tenant_id,
             widget_key=config.widget_key,
@@ -212,6 +186,9 @@ class WebChatStore:
             enabled=new_enabled,
             created_at=config.created_at,
             updated_at=now,
+            integration_mode=new_mode,
+            appearance=new_appearance,
+            installation=config.installation,
         )
         with self._lock:
             self._save_widget(updated)
@@ -227,6 +204,34 @@ class WebChatStore:
             enabled=config.enabled,
             created_at=config.created_at,
             updated_at=now,
+            integration_mode=config.integration_mode,
+            appearance=config.appearance,
+            installation=config.installation,
+        )
+        with self._lock:
+            self._save_widget(updated)
+        return updated
+
+    def record_installation_heartbeat(
+        self,
+        widget: WebChatWidgetConfig,
+        *,
+        origin: str | None,
+    ) -> WebChatWidgetConfig:
+        now = time.time()
+        updated = WebChatWidgetConfig(
+            tenant_id=widget.tenant_id,
+            widget_key=widget.widget_key,
+            site_url=widget.site_url,
+            enabled=widget.enabled,
+            created_at=widget.created_at,
+            updated_at=now,
+            integration_mode=widget.integration_mode,
+            appearance=widget.appearance,
+            installation=WebChatInstallation(
+                last_seen_at=now,
+                last_origin=str(origin or "").strip()[:500],
+            ),
         )
         with self._lock:
             self._save_widget(updated)
@@ -235,7 +240,7 @@ class WebChatStore:
     def origin_allowed_for_widget(self, widget: WebChatWidgetConfig, origin: str | None) -> bool:
         if not widget.site_url:
             return False
-        return _origin_allowed(widget.site_url, origin)
+        return origin_allowed_for_site(widget.site_url, origin)
 
     def get_or_create_visitor(
         self,
