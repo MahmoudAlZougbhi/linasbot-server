@@ -6,7 +6,7 @@ import { TextField } from '../../components/TextField';
 import { AuthPasswordField } from '../auth/AuthFields';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { AppLanguage } from '../../i18n';
-import { fonts, spacing, useTheme } from '../../theme';
+import { fonts, spacing, typography, useTheme } from '../../theme';
 import { SettingsSheet } from './SettingsChrome';
 
 export function SettingsNameSheet({
@@ -166,6 +166,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingVertical: 12,
   },
-  langLabel: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 16 },
+  langLabel: { flex: 1, ...typography.sectionTitle },
   langCheck: { fontFamily: fonts.bodyMedium, fontSize: 18, fontWeight: '700' },
 });

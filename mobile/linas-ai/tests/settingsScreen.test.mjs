@@ -102,6 +102,9 @@ test('Settings visual handoff: stacked title, inset hairline, pale canvas, light
   assert.match(chrome, /sectionTitle:\s*\{[^}]*textTransform:\s*'uppercase'/);
   assert.doesNotMatch(chrome, /sectionTitle:\s*\{[^}]*fontSize:\s*(1[2-9]|2\d)/);
   assert.match(chrome, /styles\.sectionTitle[^\n]*maxFontSizeMultiplier=\{1\.2\}/);
+
+  assert.match(chrome, /rowLabel:\s*typography\.sectionTitle/);
+  assert.doesNotMatch(chrome, /rowLabel:\s*\{[^}]*fontWeight:\s*'600'/);
 });
 
 test('Settings still hosts Notifications and Logout; drawer does not', () => {
