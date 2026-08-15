@@ -222,10 +222,11 @@ def test_ha_verifier_proves_live_api_and_worker_processes() -> None:
         "META_DELETION_NODE_ID",
         "META_DELETION_REQUIRED_NODES",
         'required != {"node01", "node02"}',
-        "META_APP_REGISTRY_BACKEND",
+        "META_REGISTRY_BACKEND",
         'registry_backend != "postgres"',
     ):
         assert contract in source
+    assert ("META_APP_" + "REGISTRY_BACKEND") not in source
 
 
 def test_meta_environment_mutations_sync_the_peer_then_require_parity() -> None:

@@ -246,7 +246,7 @@ from pathlib import Path
 from dotenv import dotenv_values
 
 values = dotenv_values(Path(sys.argv[1]), interpolate=False)
-registry_backend = str(values.get("META_APP_REGISTRY_BACKEND") or "").strip().lower()
+registry_backend = str(values.get("META_REGISTRY_BACKEND") or "").strip().lower()
 if registry_backend != "postgres":
     raise SystemExit("Meta app registry backend must be explicit postgres")
 lb_ready = str(values.get("META_HA_LB_READY_HEALTHCHECK_APPROVED") or "").strip().lower()

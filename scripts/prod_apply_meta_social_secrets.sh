@@ -69,6 +69,9 @@ from pathlib import Path
 
 sys.path.insert(0, "/opt/linasbot")
 from scripts.ha.meta_env_file import atomic_update_env
+from services.meta_surface_secret_separation import (
+    require_separated_meta_surface_secrets_for_update,
+)
 
 ENV_PATH = Path("/opt/linasbot/.env")
 keys = (
@@ -88,6 +91,7 @@ updates.update(
         "META_SOCIAL_NEW_APP_REQUIRED": "true",
     }
 )
+require_separated_meta_surface_secrets_for_update(ENV_PATH, updates)
 atomic_update_env(ENV_PATH, updates)
 
 

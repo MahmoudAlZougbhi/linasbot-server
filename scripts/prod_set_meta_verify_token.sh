@@ -34,6 +34,9 @@ from pathlib import Path
 
 sys.path.insert(0, "/opt/linasbot")
 from scripts.ha.meta_env_file import atomic_update_env
+from services.meta_surface_secret_separation import (
+    require_separated_meta_surface_secrets_for_update,
+)
 
 ENV_PATH = Path("/opt/linasbot/.env")
 text_before = ENV_PATH.read_text(encoding="utf-8", errors="strict")
@@ -50,6 +53,7 @@ if not messaging_values:
 elif len(messaging_values) > 1:
     updates["META_SOCIAL_MESSAGING_ENABLED"] = messaging_values[-1]
 
+require_separated_meta_surface_secrets_for_update(ENV_PATH, updates)
 atomic_update_env(ENV_PATH, updates)
 text_after = ENV_PATH.read_text(encoding="utf-8", errors="strict")
 
