@@ -20,6 +20,10 @@ def _sanitize_section_payload(section: str, payload: dict[str, object]) -> dict[
         from services.cm.language_policy import sanitize_languages_payload
 
         return sanitize_languages_payload(payload)  # type: ignore[arg-type]
+    if section == "dynamic_messages":
+        from services.cm.greeting_rules import sanitize_dynamic_messages_payload
+
+        return sanitize_dynamic_messages_payload(payload)  # type: ignore[arg-type]
     return payload
 
 

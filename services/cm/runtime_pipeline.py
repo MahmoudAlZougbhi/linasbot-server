@@ -242,8 +242,21 @@ async def prepare_response(
 
     facts: list[AnswerFact] = []
     facts.extend(resolve_service_catalog_facts(services_section))
-    facts.extend(resolve_off_day_facts(sections.get("off_days") or {}))
-    facts.extend(resolve_opening_hours_facts(sections.get("opening_hours") or {}))
+    branches_raw = sections.get("branches") or {}
+    from services.cm.branch_schedule import (
+        branches_section_has_unified_schedule,
+        derive_off_days_section,
+        derive_opening_hours_section,
+    )
+
+    if branches_section_has_unified_schedule(branches_raw if isinstance(branches_raw, dict) else {}):
+        derived_off = derive_off_days_section(branches_raw)
+        derived_oh = derive_opening_hours_section(branches_raw)
+        facts.extend(resolve_off_day_facts(derived_off))
+        facts.extend(resolve_opening_hours_facts(derived_oh))
+    else:
+        facts.extend(resolve_off_day_facts(sections.get("off_days") or {}))
+        facts.extend(resolve_opening_hours_facts(sections.get("opening_hours") or {}))
     if interpreted.service_id:
         facts.extend(resolve_service_facts(services_section, interpreted.service_id))
         facts.extend(resolve_price_facts(sections.get("prices") or {}, interpreted.service_id))

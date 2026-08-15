@@ -31,10 +31,35 @@ def _service_ok(item: dict[str, Any]) -> bool:
     return _nonempty(item.get("id")) and _nonempty(_label_text(item.get("labels")))
 
 
+def _branch_schedule_ok(item: dict[str, Any]) -> bool:
+    ws = item.get("weekly_schedule")
+    if not isinstance(ws, dict):
+        return False
+    for day in (
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+    ):
+        row = ws.get(day)
+        if not isinstance(row, dict) or not row.get("enabled"):
+            continue
+        if row.get("off_day"):
+            return True
+        if _nonempty(row.get("open")) and _nonempty(row.get("close")):
+            return True
+    return False
+
+
 def _branch_ok(item: dict[str, Any]) -> bool:
     if not _nonempty(item.get("id")):
         return False
     if _nonempty(_label_text(item.get("labels"))):
+        return True
+    if _branch_schedule_ok(item):
         return True
     return _nonempty(item.get("address")) or _nonempty(item.get("street"))
 
@@ -75,7 +100,13 @@ def _prices_ok(payload: dict[str, Any]) -> bool:
     return _nonempty(payload.get("policy_text"))
 
 
-def assess_section_fill(section: str, payload: dict[str, Any] | None, *, is_default: bool) -> dict[str, Any]:
+def assess_section_fill(
+    section: str,
+    payload: dict[str, Any] | None,
+    *,
+    is_default: bool,
+    branches_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Return fill level + gaps for one CM section (never invents sections)."""
     name = section.strip().replace("-", "_")
 
@@ -175,11 +206,21 @@ def assess_section_fill(section: str, payload: dict[str, Any] | None, *, is_defa
         if not any(_nonempty(payload.get(k)) for k in ("tone", "formality", "style_body", "response_length")):
             gaps.append("tone_or_style_body")
     elif name == "dynamic_messages":
+        from services.cm.greeting_rules import greeting_rule_has_text, greeting_rule_trigger_ok
+
         raw_items = payload.get("items")
         items: list[Any] = list(raw_items) if isinstance(raw_items, list) else []
-        ok = any(isinstance(it, dict) and any(_nonempty(it.get(k)) for k in ("ar", "en", "fr", "name")) for it in items)
+        active = [
+            it
+            for it in items
+            if isinstance(it, dict) and it.get("enabled", True) is not False
+        ]
+        ok = any(
+            greeting_rule_has_text(it) and greeting_rule_trigger_ok(it)
+            for it in active
+        )
         if not ok and not _nonempty(payload.get("notes")):
-            gaps.append("greeting_or_message_text")
+            gaps.append("greeting_rule_with_trigger_and_text")
     elif name == "services":
         items = [it for it in (payload.get("items") or []) if isinstance(it, dict)]
         if not any(_service_ok(it) for it in items):
@@ -190,10 +231,17 @@ def assess_section_fill(section: str, payload: dict[str, Any] | None, *, is_defa
             gaps.append("branch_name_or_address")
         elif not items and not _nonempty(payload.get("policy_text")) and not _nonempty(payload.get("notes")):
             gaps.append("locations_or_explicit_none")
+        elif items and not any(_branch_schedule_ok(it) for it in items):
+            gaps.append("branch_weekly_schedule")
     elif name == "opening_hours":
-        items = [it for it in (payload.get("items") or []) if isinstance(it, dict)]
-        if not any(_hours_schedule_ok(it) for it in items):
-            gaps.append("named_schedule_with_hours")
+        from services.cm.branch_schedule import branches_section_has_unified_schedule
+
+        if branches_payload and branches_section_has_unified_schedule(branches_payload):
+            pass
+        else:
+            items = [it for it in (payload.get("items") or []) if isinstance(it, dict)]
+            if not any(_hours_schedule_ok(it) for it in items):
+                gaps.append("named_schedule_with_hours")
     elif name == "prices":
         if not _prices_ok(payload):
             gaps.append("catalog_entries_or_policy")
@@ -228,10 +276,15 @@ def assess_section_fill(section: str, payload: dict[str, Any] | None, *, is_defa
         # Non-default payload already means owner touched limits — treat as filled unless empty junk.
         pass
     elif name == "off_days":
-        _raw_rules = payload.get("rules")
-        rules: list[Any] = list(_raw_rules) if isinstance(_raw_rules, list) else []
-        if not rules and not _nonempty(payload.get("notes")):
-            gaps.append("off_day_rules_or_note")
+        from services.cm.branch_schedule import branches_section_has_unified_schedule
+
+        if branches_payload and branches_section_has_unified_schedule(branches_payload):
+            pass
+        else:
+            _raw_rules = payload.get("rules")
+            rules: list[Any] = list(_raw_rules) if isinstance(_raw_rules, list) else []
+            if not rules and not _nonempty(payload.get("notes")):
+                gaps.append("off_day_rules_or_note")
     else:
         gaps.append("unknown_section_shape")
 
