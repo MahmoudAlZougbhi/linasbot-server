@@ -125,6 +125,35 @@ test('dashboard date card uses new presets and Linas copilot mark', () => {
   assert.doesNotMatch(copilot, /name="sparkles"/);
 });
 
+test('Growth plan hides Upgrade on Max and Copilot pause uses Buy credits sheet', () => {
+  const growth = read('features/dashboard/sections/GrowthPlanCard.tsx');
+  const chat = read('features/chat/ChatScreen.tsx');
+  const banner = read('features/chat/CreditsPausedBanner.tsx');
+  assert.match(growth, /showUpgrade/);
+  assert.match(growth, /isHighestPlan/);
+  assert.match(chat, /BuyCreditsSheet/);
+  assert.match(chat, /CreditsPausedBanner/);
+  assert.match(chat, /openChoosePlan/);
+  assert.doesNotMatch(chat, /onOpenArea\('subscription'\)/);
+  assert.match(banner, /dashBuyCredits/);
+  assert.match(banner, /subUpgradePlan/);
+});
+
+test('Dashboard Upgrade navigates to Choose a plan, not Current plan', () => {
+  const screen = read('features/dashboard/DashboardScreen.tsx');
+  const nav = read('features/dashboard/dashboardNavigation.ts');
+  const tree = read('app/AppScreenTree.tsx');
+  const billing = read('features/billing/BillingScreen.tsx');
+  const current = read('features/billing/CurrentPlanScreen.tsx');
+  assert.match(screen, /onNavigate\('choose_plan'\)/);
+  assert.match(nav, /browsePlans: true/);
+  assert.match(tree, /openChoosePlan/);
+  assert.match(billing, /openChoosePlan/);
+  assert.match(current, /isHighestPlan/);
+  assert.match(current, /showUpgrade/);
+  assert.match(current, /showUpgrade \?/);
+});
+
 test('Growth plan header divider and Total activity card stroke match siblings', () => {
   const growth = read('features/dashboard/sections/GrowthPlanCard.tsx');
   const grid = read('features/dashboard/sections/TotalActivityGrid.tsx');

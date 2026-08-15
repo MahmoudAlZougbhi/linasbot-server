@@ -270,6 +270,7 @@ async def test_owner_turn_diagnosis_intent(monkeypatch: pytest.MonkeyPatch) -> N
     from services.owner_ai_tools_base import ToolResult
 
     monkeypatch.setenv("OWNER_COPILOT_V2", "false")
+    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
     monkeypatch.setattr(
         "services.owner_ai_context.pack_owner_turn_context",
         lambda **_: {

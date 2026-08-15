@@ -273,4 +273,5 @@ export type DashboardNavigateTarget =
   | 'faq'
   | 'users'
   | 'subscription'
+  | 'choose_plan'
   | 'buy_credits';

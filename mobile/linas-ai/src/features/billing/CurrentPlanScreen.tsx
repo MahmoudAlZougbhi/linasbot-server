@@ -7,7 +7,7 @@ import { CurrentPlanHeroCard } from './CurrentPlanHeroCard';
 import { PlanIncludedList } from './PlanIncludedList';
 import { PlanNotIncluded } from './PlanNotIncluded';
 import { SmartAnswersInfo } from './SmartAnswersInfo';
-import { PLAN_CATALOG, type PlanId } from './planCatalog';
+import { PLAN_CATALOG, isHighestPlan, type PlanId } from './planCatalog';
 import { entitlementsForPlan, PLAN_NAME_KEY } from './planEntitlements';
 
 type Props = {
@@ -46,6 +46,7 @@ export function CurrentPlanScreen({
     plan.includedCredits.toLocaleString(locale),
   );
   const includesTitle = tr('subWhatIncludes').replace('{plan}', tr(PLAN_NAME_KEY[planId]));
+  const showUpgrade = !isHighestPlan(planId);
 
   return (
     <View style={styles.root}>
@@ -71,17 +72,19 @@ export function CurrentPlanScreen({
         <PlanNotIncluded ids={ents.excluded} tr={tr} variant="current" />
       </ScrollView>
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-        <Pressable
-          onPress={onUpgrade}
-          accessibilityRole="button"
-          accessibilityLabel={tr('subUpgradePlan')}
-          style={({ pressed }) => [
-            styles.cta,
-            { backgroundColor: colors.accent, opacity: pressed ? 0.88 : 1 },
-          ]}
-        >
-          <Text style={[styles.ctaText, { color: colors.onAccent }]}>{tr('subUpgradePlan')}</Text>
-        </Pressable>
+        {showUpgrade ? (
+          <Pressable
+            onPress={onUpgrade}
+            accessibilityRole="button"
+            accessibilityLabel={tr('subUpgradePlan')}
+            style={({ pressed }) => [
+              styles.cta,
+              { backgroundColor: colors.accent, opacity: pressed ? 0.88 : 1 },
+            ]}
+          >
+            <Text style={[styles.ctaText, { color: colors.onAccent }]}>{tr('subUpgradePlan')}</Text>
+          </Pressable>
+        ) : null}
         <Text style={[styles.footNote, { color: colors.textMuted }]}>{tr('subCreditsRefreshNote')}</Text>
       </View>
     </View>

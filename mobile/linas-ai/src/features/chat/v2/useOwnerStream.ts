@@ -30,9 +30,10 @@ type StreamHandlers = {
   onError?: (message: string) => void;
   onDone?: (payload: Record<string, unknown>) => void;
   onCancelled?: () => void;
+  onCreditsPaused?: (payload: Record<string, unknown>) => void;
 };
 
-type StreamResult = 'done' | 'error' | 'network_error' | 'cancelled' | 'auth_error';
+type StreamResult = 'done' | 'error' | 'network_error' | 'cancelled' | 'auth_error' | 'credits_paused';
 
 function dispatchEvent(raw: string, handlers: StreamHandlers) {
   let ev: Record<string, unknown>;
@@ -54,7 +55,8 @@ function dispatchEvent(raw: string, handlers: StreamHandlers) {
     });
   } else if (type === 'title_updated') {
     handlers.onTitleUpdated?.(String(ev.title || ''));
-  } else if (type === 'error') handlers.onError?.(String(ev.message || 'error'));
+  }   else if (type === 'error') handlers.onError?.(String(ev.message || 'error'));
+  else if (type === 'credits_paused') handlers.onCreditsPaused?.(ev);
   else if (type === 'cancelled') handlers.onCancelled?.();
   else if (type === 'done') handlers.onDone?.(ev);
 }
@@ -80,6 +82,7 @@ function drainSseBuffer(
       const evType = String((JSON.parse(raw) as { type?: string }).type || '');
       if (evType === 'error') nextTerminal = 'error';
       else if (evType === 'cancelled') nextTerminal = 'cancelled';
+      else if (evType === 'credits_paused') nextTerminal = 'credits_paused';
       else if (evType === 'done') nextTerminal = 'done';
     } catch {
       /* ignore parse for terminal tracking */
@@ -126,7 +129,7 @@ export function useOwnerStream() {
         reply_language?: 'en' | 'ar' | 'fr';
       },
       handlers: StreamHandlers,
-    ): Promise<'done' | 'error' | 'network_error' | 'cancelled'> => {
+    ): Promise<'done' | 'error' | 'network_error' | 'cancelled' | 'credits_paused'> => {
       abortActive(false);
       return (async () => {
         const runOnce = (access: string): Promise<StreamResult> =>

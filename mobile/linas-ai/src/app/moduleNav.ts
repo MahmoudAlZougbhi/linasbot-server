@@ -58,6 +58,7 @@ export function buildModuleNavValue(opts: {
   return {
     isAuthenticated: opts.hasAccess,
     openArea: opts.openArea,
+    openChoosePlan: () => opts.setScreen({ name: 'billing', browsePlans: true }),
     goChat: opts.goChat,
     startNewChat: opts.startNewChat,
     openChat: opts.openChat,

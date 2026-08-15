@@ -44,6 +44,12 @@ async def run_owner_turn_v2(**kwargs: Any) -> OwnerV2TurnResult:
                 cancelled=True,
                 model=owner_model_name(),
             )
+        elif ev.type == "credits_paused" and final is None:
+            return OwnerV2TurnResult(
+                reply_text="",
+                route={"reason": "insufficient_credits", **ev.payload},
+                model=owner_model_name(),
+            )
         elif ev.type == "error" and final is None:
             return OwnerV2TurnResult(
                 reply_text=str(ev.payload.get("message") or "Linas AI is temporarily unavailable. Please retry."),
@@ -72,6 +78,12 @@ async def iter_owner_turn_v2_events(
 ) -> AsyncIterator[StreamEvent]:
     if not owner_copilot_v2_enabled():
         yield StreamEvent(type="error", payload={"message": "OWNER_COPILOT_V2 disabled"})
+        return
+
+    from services.credit_ai_gate import ai_generation_blocked, owner_credits_paused_payload
+
+    if ai_generation_blocked(tenant_id):
+        yield StreamEvent(type="credits_paused", payload=owner_credits_paused_payload(tenant_id))
         return
 
     text = (user_text or "").strip()

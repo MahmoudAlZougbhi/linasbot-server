@@ -318,7 +318,7 @@ async def prepare_chat_response_prompt(ns: Any) -> Any:
                 },
             }
         assert_tenant_can_use_ai(ns._tenant)
-    except InsufficientTokenBalance:
+    except (InsufficientTokenBalance, PermissionError):
         return {
             "action": "reply",
             "reply": RECHARGE_REQUIRED_MESSAGE,

@@ -108,6 +108,8 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
         }
         if user_data.get("_dashboard_test_simulation"):
             user_data["_dashboard_cm_diagnostics"] = cm_diag
+        if cm_metadata.get("reason") == "insufficient_credits":
+            return _PHASE_HALT
         cm_steps = [
             {
                 "step": 1,

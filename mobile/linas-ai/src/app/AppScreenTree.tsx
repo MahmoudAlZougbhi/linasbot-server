@@ -130,7 +130,9 @@ export function AppScreenTree({
         />
       </KeepMountedPane>
       <KeepMountedPane key={`billing-${authEpoch}`} active={name === 'billing'}>
-        <BillingScreen />
+        <BillingScreen
+          openChoosePlan={name === 'billing' && 'browsePlans' in screen && screen.browsePlans === true}
+        />
       </KeepMountedPane>
       <KeepMountedPane key={`livechat-${authEpoch}`} active={name === 'livechat'}>
         <LiveChatScreen initialOpen={name === 'livechat' ? (screen.open ?? null) : null} />

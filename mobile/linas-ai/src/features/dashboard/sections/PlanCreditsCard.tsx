@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { fonts, radii, spacing, useTheme } from '../../../theme';
+import { isHighestPlan } from '../../billing/planCatalog';
 import type { TenantDashboard } from '../dashboardTypes';
 
 type Plan = TenantDashboard['plan_and_credits'];
@@ -37,6 +38,7 @@ export function PlanCreditsCard({ plan, onManageSubscription, onBuyCredits, onUp
 
   const available = plan.available_credits;
   const included = plan.included_credits;
+  const showUpgrade = !isHighestPlan(plan.plan_id);
   const ratio =
     typeof plan.usage_progress_ratio === 'number'
       ? Math.max(0, Math.min(1, plan.usage_progress_ratio))
@@ -101,9 +103,11 @@ export function PlanCreditsCard({ plan, onManageSubscription, onBuyCredits, onUp
         <Pressable onPress={onManageSubscription} accessibilityRole="button">
           <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>Manage subscription</Text>
         </Pressable>
-        <Pressable onPress={onUpgrade} accessibilityRole="button">
-          <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>Upgrade plan</Text>
-        </Pressable>
+        {showUpgrade ? (
+          <Pressable onPress={onUpgrade} accessibilityRole="button">
+            <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>Upgrade plan</Text>
+          </Pressable>
+        ) : null}
         <Pressable onPress={onBuyCredits} accessibilityRole="button">
           <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium }}>Buy credits</Text>
         </Pressable>

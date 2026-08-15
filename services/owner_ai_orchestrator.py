@@ -245,7 +245,12 @@ async def run_owner_turn(
     choice_set_id: str | None = None,
     attachment_ids: list[str] | None = None,
 ) -> OwnerTurnResult:
+    from services.credit_ai_gate import ai_generation_blocked, owner_credits_paused_payload
     from services.owner_copilot_v2.flags import owner_copilot_v2_enabled
+
+    if ai_generation_blocked(tenant_id):
+        paused = owner_credits_paused_payload(tenant_id)
+        return OwnerTurnResult(reply_text="", route={"reason": "insufficient_credits", **paused})
 
     if owner_copilot_v2_enabled():
         from services.owner_copilot_v2.brain import run_owner_turn_v2

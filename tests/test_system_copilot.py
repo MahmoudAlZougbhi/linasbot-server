@@ -152,6 +152,7 @@ async def test_owner_turn_help_and_publish_confirm(monkeypatch: pytest.MonkeyPat
     from services.owner_ai_orchestrator import run_owner_turn
 
     monkeypatch.setenv("OWNER_COPILOT_V2", "false")
+    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
     monkeypatch.setattr(
         "services.owner_ai_context.pack_owner_turn_context",
         lambda **_: {

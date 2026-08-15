@@ -53,7 +53,7 @@ def reserve_before_ai(turn: AiReplyTurnRecord, *, credits: int = 1) -> str | Non
         raise
     except Exception as exc:
         logger.warning("[ai_reply_credit] reserve_failed tenant=%s type=%s", tenant_id, type(exc).__name__)
-        return None
+        raise PermissionError("Credit reservation failed") from exc
 
 
 def capture_after_reply_persisted(

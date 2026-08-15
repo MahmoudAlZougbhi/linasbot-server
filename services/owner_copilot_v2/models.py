@@ -13,6 +13,7 @@ StreamEventType = Literal[
     "choices",
     "title_updated",
     "error",
+    "credits_paused",
     "done",
     "cancelled",
 ]

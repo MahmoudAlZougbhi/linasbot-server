@@ -21,4 +21,8 @@ def v2_env(tmp_path, monkeypatch):
     from services.customer_reply_v2.manifest import clear_manifest_cache
 
     clear_manifest_cache()
+    monkeypatch.setattr(
+        "services.credit_ai_gate.ai_generation_blocked",
+        lambda *_a, **_k: False,
+    )
     return tmp_path

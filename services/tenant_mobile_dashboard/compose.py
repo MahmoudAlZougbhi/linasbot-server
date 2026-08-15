@@ -6,6 +6,8 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
+from services.billing_backend import billing_uses_postgres
+from services.credit_ai_gate import remaining_credits, upgrade_plan_allowed
 from services.credit_ledger_service import credit_ledger_service
 from services.entitlements_service import (
     get_tenant_entitlement_public,
@@ -64,9 +66,8 @@ def _workspace_identity(*, tenant_id: str, user_id: str) -> dict[str, Any]:
 
 def _plan_and_credits(tenant_id: str) -> dict[str, Any]:
     try:
-        credit_ledger_service.ensure_period_grant(tenant_id)
         public = get_tenant_entitlement_public(tenant_id)
-        available = int(credit_ledger_service.get_balance(tenant_id))
+        available = remaining_credits(tenant_id)
         reserved = int(credit_ledger_service.get_reserved(tenant_id))
     except Exception as exc:
         return _section_error("credits_unavailable", f"Credit service unavailable: {exc}")
@@ -108,15 +109,15 @@ def _plan_and_credits(tenant_id: str) -> dict[str, Any]:
             "faq_max_entries": public.get("faq_max_entries"),
             "faq_used_entries": public.get("faq_used_entries"),
             "faq_quota_display": public.get("faq_quota_display"),
-            "credit_source": "file_credit_ledger",
+            "credit_source": "postgres_credit_ledger" if billing_uses_postgres() else "file_credit_ledger",
             "credit_source_note": (
-                "Balances come from the current file-based credit ledger + entitlements store. "
-                "A PostgreSQL credit system is not the live source of truth yet."
+                "Remaining credits are the credit-ledger available balance — the same wallet "
+                "that gates Owner Copilot and channel AI."
             ),
             "has_subscription": has_subscription,
             "actions": {
                 "manage_subscription": True,
-                "upgrade_plan": True,
+                "upgrade_plan": upgrade_plan_allowed(plan_id),
                 "buy_credits": True,
             },
         }

@@ -43,6 +43,8 @@ export const en = {
   chatEmptyBody:
     'I can help with everything. This app is your AI community manager for your social media pages.',
   chatThinking: 'Thinking…',
+  chatCreditsPausedTitle: 'Not enough credits',
+  chatCreditsPausedBody: 'Owner Copilot is paused until you buy credits. Channel AI replies are paused too.',
   chatYouLabel: 'You',
   chatLinasLabel: 'Linas',
   guestChatEmptyTitle: 'Welcome to Linas AI',

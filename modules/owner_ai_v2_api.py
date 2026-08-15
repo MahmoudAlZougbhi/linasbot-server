@@ -96,6 +96,27 @@ async def stream_owner_message(
     if conv is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    from services.credit_ai_gate import ai_generation_blocked, owner_credits_paused_payload
+    from services.owner_copilot_v2.models import StreamEvent as CopilotStreamEvent
+
+    if ai_generation_blocked(session.tenant_id):
+        paused = owner_credits_paused_payload(session.tenant_id)
+
+        async def paused_gen() -> AsyncIterator[str]:
+            yield encode_sse(CopilotStreamEvent(type="credits_paused", payload=paused))
+            yield encode_sse_done()
+
+        return StreamingResponse(
+            paused_gen(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
     content = (body.content or "").strip()
     if not content and not body.confirm_tool and not body.choice_id and not (body.attachment_ids or []):
         raise HTTPException(status_code=400, detail="content, confirm_tool, choice, or attachment required")

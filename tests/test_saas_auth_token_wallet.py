@@ -130,11 +130,19 @@ def test_landing_pricing_section_in_source() -> None:
 
 def test_unlimited_linas_bypass(wallet_svc: TokenWalletService, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS", "linas")
+    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
     assert is_unlimited_tenant("linas")
     assert not is_unlimited_tenant("acme-co")
-    assert_tenant_can_use_ai("linas")  # does not raise even at zero
+    assert_tenant_can_use_ai("linas")  # token buckets skipped; credits already allowed
     with pytest.raises(InsufficientTokenBalance):
         assert_tenant_can_use_ai("acme-co")
+
+
+def test_zero_credits_blocks_unlimited_linas(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS", "linas")
+    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: True)
+    with pytest.raises(PermissionError, match="Insufficient credits"):
+        assert_tenant_can_use_ai("linas")
 
 
 def test_wallet_credit_debit_atomic_no_negative(wallet_svc: TokenWalletService) -> None:
@@ -150,6 +158,7 @@ def test_wallet_credit_debit_atomic_no_negative(wallet_svc: TokenWalletService) 
 def test_zero_balance_blocks_ai_gate(wallet_svc: TokenWalletService, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("services.token_metering.token_wallet_service", wallet_svc)
     monkeypatch.setattr("services.token_wallet_service.token_wallet_service", wallet_svc)
+    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
     with pytest.raises(InsufficientTokenBalance):
         assert_tenant_can_use_ai("newbiz")
     wallet_svc.credit("newbiz", input_tokens=10, output_tokens=10, reason="seed")

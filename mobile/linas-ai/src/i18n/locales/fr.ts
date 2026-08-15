@@ -44,6 +44,9 @@ export const fr = {
   chatEmptyBody:
     'Je peux vous aider pour tout. Cette application est votre community manager IA pour vos pages sur les réseaux sociaux.',
   chatThinking: 'Réflexion…',
+  chatCreditsPausedTitle: 'Crédits insuffisants',
+  chatCreditsPausedBody:
+    'Le Copilot propriétaire est en pause jusqu’à l’achat de crédits. Les réponses IA des canaux sont aussi en pause.',
   chatYouLabel: 'Vous',
   chatLinasLabel: 'Linas',
   guestChatEmptyTitle: 'Bienvenue sur Linas AI',
