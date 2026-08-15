@@ -77,7 +77,8 @@ export function BillingScreen(_props: Props = {}) {
   };
   const storeReady = (id: PlanId) => Boolean(store.storePrices[id]?.available);
 
-  const onBack = view === 'choose' && hasSub ? () => setBrowsePlans(false) : undefined;
+  /** Drawer → Subscription is always hamburger. Back only after Upgrade → Choose a plan. */
+  const onBack = browsePlans ? () => setBrowsePlans(false) : undefined;
 
   const periodEnd = entitlement.periodEnd;
   const renewsDate =
