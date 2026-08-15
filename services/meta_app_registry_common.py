@@ -119,11 +119,24 @@ def normalize_meta_tenant_id(value: str) -> str:
 
 
 def _bindings_share_exclusive_asset(left: MetaAssetBinding, right: MetaAssetBinding) -> bool:
-    if left.tenant_id != right.tenant_id or left.channel != right.channel or left.asset_id != right.asset_id:
-        return False
-    if left.channel == "instagram":
-        return left.auth_flow == right.auth_flow
-    return True
+    """Return whether two bindings compete for the same provider asset.
+
+    OAuth flow is credential provenance, not asset identity.  In particular, a
+    Page-linked Instagram credential and an Instagram Login credential for the
+    same professional account must never both be active.  Tenant is also not
+    part of provider ownership: allowing the same asset to be active in two
+    workspaces would permit cross-tenant delivery.
+    """
+
+    return left.exclusive_asset_key == right.exclusive_asset_key
+
+
+def binding_exclusive_asset_key(channel: str, asset_id: str) -> str:
+    """Provider-global active ownership key, independent of tenant/app/OAuth flow."""
+
+    resolved_channel = str(channel or "").strip().lower()
+    asset = str(asset_id or "").strip()
+    return f"{resolved_channel}:{asset}"
 
 
 def binding_asset_key(
@@ -330,6 +343,10 @@ class MetaAssetBinding:
         )
 
     @property
+    def exclusive_asset_key(self) -> str:
+        return binding_exclusive_asset_key(self.channel, self.asset_id)
+
+    @property
     def instagram_login_ready(self) -> bool:
         if self.auth_flow != "instagram_login":
             return self.active
@@ -338,6 +355,20 @@ class MetaAssetBinding:
         if self.webhook_subscription_status not in {"ready", "partial"}:
             return False
         return self.active and REQUIRED_DM_SUBSCRIPTION_FIELDS.issubset(self.webhook_subscribed_fields)
+
+    @property
+    def instagram_login_product_ready(self) -> bool:
+        """Whether direct Instagram can safely replace the linked fallback."""
+
+        if self.auth_flow != "instagram_login" or self.webhook_subscription_status != "ready":
+            return False
+        from services.meta_instagram_login_subscription import (
+            COMMENTS_SUBSCRIPTION_FIELD,
+            REQUIRED_DM_SUBSCRIPTION_FIELDS,
+        )
+
+        required_fields = REQUIRED_DM_SUBSCRIPTION_FIELDS | {COMMENTS_SUBSCRIPTION_FIELD}
+        return self.active and required_fields.issubset(self.webhook_subscribed_fields)
 
     @property
     def visible_in_dashboard(self) -> bool:
@@ -383,6 +414,20 @@ class MetaAssetBinding:
             ),
             "asset_key": self.asset_key,
         }
+
+
+def _binding_duplicate_keeper_rank(item: MetaAssetBinding) -> tuple[int, int, float, float, str]:
+    """Deterministic preference for repairing duplicate binding history."""
+
+    direct_ready = (
+        item.channel == "instagram" and item.auth_flow == "instagram_login" and item.instagram_login_product_ready
+    )
+    if item.active:
+        flow_rank = 2 if direct_ready else (1 if item.auth_flow == "facebook_login" else 0)
+    else:
+        flow_rank = 1 if item.auth_flow == "instagram_login" else 0
+    status_rank = {"active": 4, "disconnected": 3, "inactive": 2, "testing": 1}.get(item.status, 0)
+    return status_rank, flow_rank, item.updated_at, item.created_at, item.binding_id
 
 
 @dataclass(frozen=True)

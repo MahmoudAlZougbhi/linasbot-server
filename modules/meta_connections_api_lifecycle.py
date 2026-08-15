@@ -24,11 +24,11 @@ from services.meta_app_registry import (
 )
 from services.meta_comment_reply_settings import get_comment_reply_setting, set_comment_reply_setting
 from services.meta_comment_webhooks import credential_has_comment_scopes
+from services.meta_connection_disconnect import disconnect_meta_binding_set
 from services.meta_graph_routing import required_comment_scopes_for_binding
 from services.meta_instagram_login_subscription_recovery import retry_instagram_login_webhook_subscription
 from services.meta_oauth import (
     MetaOAuthError,
-    disconnect_binding_webhook,
     subscribe_binding_webhook,
 )
 from services.meta_oauth_graph import (
@@ -45,6 +45,7 @@ from services.meta_page_subscription_transaction import (
     reconcile_page_activation_after_exception,
     reconcile_page_rollback_after_exception,
 )
+from services.mobile_integrations_display import bindings_for_disconnect
 
 
 async def _activate_meta_connection_locked(
@@ -209,23 +210,24 @@ async def disconnect_meta_connection(binding_id: str, request: Request) -> Any:
     platform = str(binding.channel or "").strip().lower()
     registry = get_meta_app_registry()
     try:
-        if binding.active:
-            updated = await disconnect_binding_webhook(
-                binding,
-                actor_id=session.user_id or session.email,
-            )
-        else:
-            updated = registry.set_binding_status(
-                binding.binding_id,
-                status="disconnected",
-                actor_id=session.user_id or session.email,
-                expected_generation=binding.generation,
-            )
-            updated = registry.archive_binding_credential(
-                binding.binding_id,
-                actor_id=session.user_id or session.email,
-                expected_generation=updated.generation,
-            )
+        targets = bindings_for_disconnect(
+            session.tenant_id,
+            platform,
+            asset_id=binding.asset_id,
+            registry=registry,
+        )
+        if not targets:
+            targets = [binding]
+        disconnected = await disconnect_meta_binding_set(
+            targets,
+            actor_id=session.user_id or session.email,
+            registry=registry,
+            asset_id=binding.asset_id,
+        )
+        updated = next(
+            (item for item in disconnected if item.binding_id == binding.binding_id),
+            disconnected[0],
+        )
     except (MetaOAuthError, MetaRegistryError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     # Force DM + Comments OFF once no active binding remains for this platform.
@@ -237,7 +239,11 @@ async def disconnect_meta_connection(binding_id: str, request: Request) -> Any:
             platform=platform,
             actor=session.user_id or session.email or "meta_disconnect",
         )
-    return {"success": True, "connection": updated.public_dict()}
+    return {
+        "success": True,
+        "connection": updated.public_dict(),
+        "connections": [item.public_dict() for item in disconnected],
+    }
 
 
 @app.post("/api/meta/connections/{binding_id}/instagram-login/retry-webhook")

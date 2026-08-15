@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
@@ -17,11 +18,14 @@ from services.meta_app_registry import (  # noqa: E402
     APP_B_KEY,
     MetaAppRegistry,
     MetaBindingConflictError,
+    MetaBindingCredential,
     MetaRegistryError,
     get_meta_app_configs,
     get_meta_registry_readiness,
 )
 from services.meta_app_registry_pg_store import load_state, state_fingerprint  # noqa: E402
+from services.meta_connection_disconnect import disconnect_meta_binding_set  # noqa: E402
+from services.mobile_integrations_display import bindings_for_disconnect  # noqa: E402
 from tests.meta_app_registry_helpers import _credential  # noqa: E402
 
 pytest_plugins = ("tests.meta_app_registry_fixtures",)
@@ -106,6 +110,116 @@ def test_postgres_exclusivity_conflict(pg_registry: MetaAppRegistry) -> None:
             actor_id="owner-b",
             status="active",
         )
+
+
+@pytest.mark.asyncio
+async def test_postgres_cross_flow_transition_and_disconnect_settle_every_ig_credential(
+    pg_registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    instagram_id = "17840000999900001"
+    page_id = "445566778899"
+    linked = pg_registry.authorize_oauth_asset(
+        tenant_id="tenant-a",
+        channel="instagram",
+        asset_id=instagram_id,
+        page_id=page_id,
+        instagram_account_id=instagram_id,
+        app_key=APP_A_KEY,
+        credential=MetaBindingCredential(
+            access_token="linked-private-token",
+            token_app_id="2963733803971681",
+            token_profile_id=page_id,
+            scopes=("instagram_basic", "instagram_manage_messages"),
+            auth_flow="facebook_login",
+        ),
+        actor_id="owner",
+        auth_flow="facebook_login",
+    )
+    staged = pg_registry.authorize_oauth_asset(
+        tenant_id="tenant-a",
+        channel="instagram",
+        asset_id=instagram_id,
+        page_id="",
+        instagram_account_id=instagram_id,
+        app_key=APP_A_KEY,
+        credential=MetaBindingCredential(
+            access_token="direct-private-token",
+            token_app_id="1035856539045307",
+            token_profile_id=instagram_id,
+            scopes=("instagram_business_basic", "instagram_business_manage_messages"),
+            auth_flow="instagram_login",
+        ),
+        actor_id="owner",
+        status="testing",
+        auth_flow="instagram_login",
+        webhook_subscription_status="ready",
+        webhook_subscribed_fields=("messages", "messaging_postbacks"),
+        create_new_binding=True,
+    )
+    direct = pg_registry.activate_staged_binding(
+        staged.binding_id,
+        actor_id="owner",
+        expected_generation=staged.generation,
+        replace_existing=True,
+    )
+    pg_registry.archive_superseded_duplicate_bindings(actor_id="owner")
+
+    active = [
+        item
+        for item in pg_registry.list_bindings(include_inactive=False)
+        if item.channel == "instagram" and item.asset_id == instagram_id
+    ]
+    assert [item.binding_id for item in active] == [direct.binding_id]
+
+    async def settle_without_provider(binding, *, actor_id, registry):  # type: ignore[no-untyped-def]
+        changed = registry.set_binding_status(
+            binding.binding_id,
+            status="disconnected",
+            actor_id=actor_id,
+            expected_generation=binding.generation,
+        )
+        return registry.archive_binding_credential(
+            changed.binding_id,
+            actor_id=actor_id,
+            expected_generation=changed.generation,
+        )
+
+    monkeypatch.setattr(
+        "services.meta_connection_disconnect.disconnect_binding_webhook",
+        settle_without_provider,
+    )
+
+    @asynccontextmanager
+    async def sqlite_transaction_fixture_lock(*_args, **_kwargs):  # type: ignore[no-untyped-def]
+        # This fixture exercises the registry's Postgres code through SQLite;
+        # durable advisory-lock behavior has its own real-Postgres suite.
+        yield
+
+    monkeypatch.setattr(
+        "services.meta_connection_disconnect.lock_facebook_page_oauth_operation",
+        sqlite_transaction_fixture_lock,
+    )
+    targets = bindings_for_disconnect(
+        "tenant-a",
+        "instagram",
+        asset_id=instagram_id,
+        registry=pg_registry,
+    )
+    await disconnect_meta_binding_set(
+        targets,
+        actor_id="owner",
+        registry=pg_registry,
+        asset_id=instagram_id,
+    )
+
+    assert pg_registry.binding_credential_is_available(linked.binding_id) is False
+    assert pg_registry.binding_credential_is_available(direct.binding_id) is False
+    assert not [
+        item
+        for item in pg_registry.list_bindings()
+        if item.channel == "instagram" and item.asset_id == instagram_id and item.status != "disconnected"
+    ]
 
 
 def test_postgres_backend_fails_closed_without_engine(

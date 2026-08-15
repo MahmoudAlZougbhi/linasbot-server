@@ -3,19 +3,22 @@
 from __future__ import annotations
 
 import asyncio
-import time
 from typing import Any
 
 import httpx
 
 from services.async_safety_cleanup import await_safety_task as _await_safety_task
 from services.meta_app_registry import (
-    META_COMMENT_SCOPES,
     MetaAppRegistry,
     MetaAssetBinding,
     MetaRegistryError,
-    get_meta_app_configs,
     get_meta_app_registry,
+)
+from services.meta_instagram_login_subscription import (
+    inspect_instagram_login_webhook_subscription,
+    instagram_channel_subscription_lock_asset,
+    instagram_login_subscription_lock_asset,
+    unsubscribe_instagram_login_webhook_raw,
 )
 from services.meta_oauth_graph_http import (  # noqa: F401 - preserve historical imports
     META_GRAPH_BASE_URL,
@@ -32,255 +35,16 @@ from services.meta_oauth_graph_validation import (  # noqa: F401 - preserve hist
     _scope_tuple,
 )
 from services.meta_oauth_page_lock import lock_facebook_page_oauth_operation
-
-_PAGE_DM_FIELDS = frozenset({"messages", "messaging_postbacks"})
-_PAGE_COMMENT_FIELD = "feed"
-PageWebhookSubscriptionSnapshot = tuple[str, ...] | None
-
-
-def _page_subscription_context(binding: MetaAssetBinding, registry: MetaAppRegistry) -> tuple[Any, Any]:
-    credential = registry.get_credential(binding)
-    app = get_meta_app_configs()[binding.app_key]
-    if credential.token_app_id != app.app_id or credential.token_profile_id != binding.page_id:
-        raise MetaOAuthError("Meta Page subscription credential does not match the binding")
-    return credential, app
-
-
-def _subscription_fields(payload: dict[str, Any], *, app_id: str) -> PageWebhookSubscriptionSnapshot:
-    rows = payload.get("data")
-    if not isinstance(rows, list):
-        raise MetaOAuthError("Meta Page webhook subscription rows could not be verified")
-    matching = [row for row in rows if isinstance(row, dict) and str(row.get("id") or "").strip() == app_id]
-    if len(matching) > 1:
-        raise MetaOAuthError("Meta Page webhook subscription rows are ambiguous")
-    if not matching:
-        return None
-    raw_fields = matching[0].get("subscribed_fields")
-    if not isinstance(raw_fields, list):
-        raise MetaOAuthError("Meta Page webhook subscription fields could not be verified")
-    return tuple(
-        sorted(
-            {
-                str(item.get("name") if isinstance(item, dict) else item).strip().lower()
-                for item in raw_fields
-                if str(item.get("name") if isinstance(item, dict) else item).strip()
-            }
-        )
-    )
-
-
-async def _read_page_subscription(
-    client: httpx.AsyncClient,
-    *,
-    page_id: str,
-    access_token: str,
-    app_id: str,
-    step: str,
-) -> PageWebhookSubscriptionSnapshot:
-    payload = await _graph_get(
-        client,
-        f"{page_id}/subscribed_apps",
-        step=step,
-        params={"fields": "id,subscribed_fields"},
-        bearer_token=access_token,
-    )
-    return _subscription_fields(payload, app_id=app_id)
-
-
-async def inspect_binding_webhook_subscription(
-    binding: MetaAssetBinding,
-    *,
-    registry: MetaAppRegistry,
-    client: httpx.AsyncClient | None = None,
-) -> PageWebhookSubscriptionSnapshot:
-    """Capture this app's exact Page subscription before any OAuth mutation."""
-
-    credential, app = _page_subscription_context(binding, registry)
-    owns_client = client is None
-    http_client = client or httpx.AsyncClient(base_url=f"{META_GRAPH_BASE_URL}/{app.graph_api_version}", timeout=20.0)
-    try:
-        return await _read_page_subscription(
-            http_client,
-            page_id=binding.page_id,
-            access_token=credential.access_token,
-            app_id=app.app_id,
-            step="webhook subscription preflight",
-        )
-    finally:
-        if owns_client:
-            await http_client.aclose()
-
-
-async def restore_binding_webhook_subscription(
-    binding: MetaAssetBinding,
-    snapshot: PageWebhookSubscriptionSnapshot,
-    *,
-    expected_current: PageWebhookSubscriptionSnapshot,
-    registry: MetaAppRegistry,
-    client: httpx.AsyncClient | None = None,
-) -> None:
-    """Restore one Page subscription while holding the shared writer lock."""
-
-    _credential, app = _page_subscription_context(binding, registry)
-    owns_client = client is None
-    http_client = client or httpx.AsyncClient(base_url=f"{META_GRAPH_BASE_URL}/{app.graph_api_version}", timeout=20.0)
-    try:
-        async with lock_facebook_page_oauth_operation(
-            registry,
-            app_key=binding.app_key,
-            page_ids=(binding.page_id,),
-        ):
-            await _restore_binding_webhook_subscription_locked(
-                binding,
-                snapshot,
-                expected_current=expected_current,
-                registry=registry,
-                client=http_client,
-            )
-    finally:
-        if owns_client:
-            await http_client.aclose()
-
-
-async def _restore_binding_webhook_subscription_locked(
-    binding: MetaAssetBinding,
-    snapshot: PageWebhookSubscriptionSnapshot,
-    *,
-    expected_current: PageWebhookSubscriptionSnapshot,
-    registry: MetaAppRegistry,
-    client: httpx.AsyncClient,
-) -> None:
-    """Compensate only when the provider still holds this callback's write.
-
-    Meta does not expose an ETag/version precondition for ``subscribed_apps``.
-    The Page operation lock serializes our writers; this read-before-write check
-    is the strongest available CAS guard against an out-of-band provider change.
-    """
-
-    credential, app = _page_subscription_context(binding, registry)
-    headers = {"Authorization": f"Bearer {credential.access_token}"}
-    try:
-        current = await _read_page_subscription(
-            client,
-            page_id=binding.page_id,
-            access_token=credential.access_token,
-            app_id=app.app_id,
-            step="webhook subscription compensation ownership check",
-        )
-        if current == snapshot:
-            return
-        if current != expected_current:
-            raise MetaOAuthError(
-                "Meta Page webhook subscription changed after this callback; refusing stale compensation"
-            )
-        if snapshot is None:
-            response = await client.delete(f"{binding.page_id}/subscribed_apps", headers=headers)
-            restored = _safe_json(response, step="webhook subscription compensation")
-        else:
-            response = await client.post(
-                f"{binding.page_id}/subscribed_apps",
-                data={"subscribed_fields": ",".join(snapshot)},
-                headers=headers,
-            )
-            restored = _safe_json(response, step="webhook subscription compensation")
-        if restored.get("success") is not True:
-            raise MetaOAuthError("Meta did not confirm Page webhook subscription compensation")
-        verified = await _read_page_subscription(
-            client,
-            page_id=binding.page_id,
-            access_token=credential.access_token,
-            app_id=app.app_id,
-            step="webhook subscription compensation verification",
-        )
-        if verified != snapshot:
-            raise MetaOAuthError("Meta Page webhook subscription compensation could not be verified")
-    except httpx.HTTPError as exc:
-        raise MetaOAuthError("Meta webhook subscription compensation request failed") from exc
-
-
-def desired_binding_webhook_subscription(
-    binding: MetaAssetBinding,
-    *,
-    registry: MetaAppRegistry,
-) -> tuple[str, ...]:
-    """Return the exact provider state written by ``subscribe_binding_webhook``."""
-
-    credential, _app = _page_subscription_context(binding, registry)
-    existing = {str(item).strip().lower() for item in (binding.webhook_subscribed_fields or ())}
-    desired_fields = set(_PAGE_DM_FIELDS)
-    if _PAGE_COMMENT_FIELD in existing or META_COMMENT_SCOPES["facebook"].issubset(credential.scopes):
-        desired_fields.add(_PAGE_COMMENT_FIELD)
-    return tuple(sorted(desired_fields))
-
-
-async def subscribe_binding_webhook(
-    binding: MetaAssetBinding,
-    *,
-    registry: MetaAppRegistry | None = None,
-    client: httpx.AsyncClient | None = None,
-) -> None:
-    """Subscribe and read-after-write verify the Page's exact social fields."""
-
-    if not binding.active:
-        raise MetaOAuthError("Only an active binding may subscribe webhooks")
-    current_registry = registry or get_meta_app_registry()
-    async with lock_facebook_page_oauth_operation(
-        current_registry,
-        app_key=binding.app_key,
-        page_ids=(binding.page_id,),
-    ):
-        credential, app = _page_subscription_context(binding, current_registry)
-        owns_client = client is None
-        http_client = client or httpx.AsyncClient(
-            base_url=f"{META_GRAPH_BASE_URL}/{app.graph_api_version}", timeout=20.0
-        )
-        # Meta replaces subscribed_fields on POST. Derive the desired comment field
-        # from the token while preserving feed during legacy migrations.
-        fields = desired_binding_webhook_subscription(binding, registry=current_registry)
-        desired_fields = set(fields)
-        try:
-            response = await http_client.post(
-                f"{binding.page_id}/subscribed_apps",
-                data={"subscribed_fields": ",".join(fields)},
-                headers={"Authorization": f"Bearer {credential.access_token}"},
-            )
-            posted = _safe_json(response, step="webhook subscription")
-            if posted.get("success") is not True:
-                raise MetaOAuthError("Meta did not confirm the Page webhook subscription")
-            verified_fields = await _read_page_subscription(
-                http_client,
-                page_id=binding.page_id,
-                access_token=credential.access_token,
-                app_id=app.app_id,
-                step="webhook subscription verification",
-            )
-            if verified_fields is None or set(verified_fields) != desired_fields:
-                raise MetaOAuthError("Meta Page webhook subscription fields do not match the approved state")
-            try:
-                with current_registry._locked():
-                    state = current_registry._read_unlocked()
-                    raw = state["bindings"].get(binding.binding_id)
-                    if not isinstance(raw, dict):
-                        raise MetaOAuthError("Meta binding disappeared while recording webhook readiness")
-                    changed = dict(raw)
-                    changed.update(
-                        webhook_subscribed_fields=list(fields),
-                        webhook_subscription_status="ready",
-                        webhook_subscription_error="",
-                        webhook_subscription_checked_at=time.time(),
-                        updated_at=time.time(),
-                    )
-                    state["bindings"][binding.binding_id] = changed
-                    current_registry._write_unlocked(state)
-            except MetaOAuthError:
-                raise
-            except Exception as exc:
-                raise MetaOAuthError("Meta Page webhook readiness could not be persisted") from exc
-        except httpx.HTTPError as exc:
-            raise MetaOAuthError("Meta webhook subscription request failed") from exc
-        finally:
-            if owns_client:
-                await http_client.aclose()
+from services.meta_page_webhook_subscription import (  # noqa: F401 - preserve historical imports
+    PageWebhookSubscriptionSnapshot,
+    _page_subscription_context,
+    _read_page_subscription,
+    _restore_binding_webhook_subscription_locked,
+    desired_binding_webhook_subscription,
+    inspect_binding_webhook_subscription,
+    restore_binding_webhook_subscription,
+    subscribe_binding_webhook,
+)
 
 
 def _other_active_binding_shares_page(binding: MetaAssetBinding, registry: MetaAppRegistry) -> bool:
@@ -289,7 +53,7 @@ def _other_active_binding_shares_page(binding: MetaAssetBinding, registry: MetaA
     page_id = str(binding.page_id or "").strip()
     if not page_id:
         return False
-    for other in registry.list_bindings(include_inactive=False, include_superseded=False):
+    for other in registry.list_bindings(include_inactive=False, include_superseded=True):
         if other.binding_id == binding.binding_id:
             continue
         if other.app_key != binding.app_key:
@@ -302,6 +66,22 @@ def _other_active_binding_shares_page(binding: MetaAssetBinding, registry: MetaA
     return False
 
 
+def _other_active_direct_instagram_binding_shares_subscription(
+    binding: MetaAssetBinding,
+    registry: MetaAppRegistry,
+) -> bool:
+    """Fail safe when a newer direct binding still needs the app/account subscription."""
+
+    for other in registry.list_bindings(include_inactive=False, include_superseded=True):
+        if other.binding_id == binding.binding_id:
+            continue
+        if other.channel != "instagram" or other.auth_flow != "instagram_login":
+            continue
+        if other.app_key == binding.app_key and other.asset_id == binding.asset_id:
+            return True
+    return False
+
+
 async def disconnect_binding_webhook(
     binding: MetaAssetBinding,
     *,
@@ -311,18 +91,29 @@ async def disconnect_binding_webhook(
 ) -> Any:
     """Mark the binding disconnected, archive its credential, and best-effort unsubscribe.
 
-    Owner disconnect must succeed locally even when Meta Graph cleanup fails
-    (expired token, already unsubscribed, transient Graph errors). Instagram Login
-    bindings never use Page ``subscribed_apps``. Skip Meta unsubscribe when another
-    active non–Instagram-Login binding still shares the same app+Page subscription.
+    Local routing is cut off before provider cleanup. If cleanup cannot be
+    confirmed, the credential remains available only so an idempotent retry can
+    finish cleanup before archival. Direct Instagram Login uses its account-scoped
+    ``subscribed_apps`` endpoint; Page-linked bindings use the Page endpoint.
     """
 
     current_registry = registry or get_meta_app_registry()
-    if binding.auth_flow != "instagram_login" and str(binding.page_id or "").strip():
+    direct_instagram = binding.channel == "instagram" and binding.auth_flow == "instagram_login"
+    lock_assets: list[str] = []
+    if binding.channel == "instagram":
+        lock_assets.append(instagram_channel_subscription_lock_asset(binding.tenant_id))
+    provider_asset = (
+        instagram_login_subscription_lock_asset(binding.asset_id)
+        if direct_instagram
+        else str(binding.page_id or "").strip()
+    )
+    if provider_asset:
+        lock_assets.append(provider_asset)
+    if lock_assets:
         async with lock_facebook_page_oauth_operation(
             current_registry,
             app_key=binding.app_key,
-            page_ids=(binding.page_id,),
+            page_ids=tuple(lock_assets),
         ):
             return await _disconnect_binding_webhook_locked(
                 binding,
@@ -345,72 +136,142 @@ async def _disconnect_binding_webhook_locked(
     registry: MetaAppRegistry,
     client: httpx.AsyncClient | None,
 ) -> Any:
-    """Settle the local disconnect even when provider cleanup is cancelled."""
+    """Run status -> provider cleanup -> credential archive as a retryable saga."""
 
-    current_registry = registry
-    should_unsubscribe = (
-        binding.auth_flow != "instagram_login"
-        and bool(str(binding.page_id or "").strip())
-        and not _other_active_binding_shares_page(binding, current_registry)
-    )
-    http_client = client
-    owns_client = False
-    snapshot: PageWebhookSubscriptionSnapshot = None
-    delete_attempted = False
-    provider_error: BaseException | None = None
-    try:
-        if should_unsubscribe:
-            try:
-                _credential, app = _page_subscription_context(binding, current_registry)
-                if http_client is None:
-                    http_client = httpx.AsyncClient(
-                        base_url=f"{META_GRAPH_BASE_URL}/{app.graph_api_version}", timeout=20.0
-                    )
-                    owns_client = True
-                snapshot = await inspect_binding_webhook_subscription(
-                    binding,
-                    registry=current_registry,
-                    client=http_client,
-                )
-                delete_attempted = True
-                await _unsubscribe_binding_webhook_locked_raw(
-                    binding,
-                    registry=current_registry,
-                    client=http_client,
-                )
-            except BaseException as exc:  # noqa: BLE001 - local disconnect must still settle
-                provider_error = exc
-
-        settle_task = asyncio.create_task(
-            _settle_binding_disconnect(binding, actor_id=actor_id, registry=current_registry)
-        )
-        updated, cancelled, local_error = await _await_safety_task(settle_task)
-        if local_error is not None and delete_attempted and http_client is not None:
-            restore_task = asyncio.create_task(
-                _restore_binding_webhook_subscription_locked(
-                    binding,
-                    snapshot,
-                    expected_current=None,
-                    registry=current_registry,
-                    client=http_client,
-                )
-            )
-            _unused, cleanup_cancelled, cleanup_error = await _await_safety_task(restore_task)
-            cancelled = cancelled or cleanup_cancelled
-            if cleanup_error is not None and not isinstance(provider_error, asyncio.CancelledError):
-                raise MetaOAuthError(
-                    "Meta disconnect failed and the prior Page subscription could not be verified"
-                ) from cleanup_error
-        if isinstance(provider_error, asyncio.CancelledError) or cancelled:
+    cancelled = False
+    status_task = asyncio.create_task(_settle_binding_disconnect(binding, actor_id=actor_id, registry=registry))
+    updated, step_cancelled, local_error = await _await_safety_task(status_task)
+    cancelled = cancelled or step_cancelled
+    if local_error is not None:
+        if cancelled:
             raise asyncio.CancelledError
-        if local_error is not None:
-            raise local_error
-        if provider_error is not None and not isinstance(provider_error, (MetaOAuthError, MetaRegistryError)):
-            raise provider_error
-        return updated
+        raise local_error
+    if not isinstance(updated, MetaAssetBinding):
+        raise MetaRegistryError("Meta disconnect status settlement is incomplete")
+
+    latest, credential_available = _binding_disconnect_state(updated, registry=registry)
+    if latest is None or latest.status != "disconnected":
+        raise MetaRegistryError("Meta disconnect status settlement is incomplete")
+    if not credential_available:
+        if cancelled:
+            raise asyncio.CancelledError
+        return latest
+
+    provider_task = asyncio.create_task(
+        _cleanup_binding_provider_subscription(latest, registry=registry, client=client)
+    )
+    _unused, step_cancelled, provider_error = await _await_safety_task(provider_task)
+    cancelled = cancelled or step_cancelled
+    if provider_error is not None:
+        if cancelled or isinstance(provider_error, asyncio.CancelledError):
+            raise asyncio.CancelledError
+        raise provider_error
+
+    archive_task = asyncio.create_task(
+        _archive_binding_disconnect_credential(latest, actor_id=actor_id, registry=registry)
+    )
+    archived, step_cancelled, archive_error = await _await_safety_task(archive_task)
+    cancelled = cancelled or step_cancelled
+    if archive_error is not None:
+        if cancelled:
+            raise asyncio.CancelledError
+        raise archive_error
+    if cancelled:
+        raise asyncio.CancelledError
+    return archived
+
+
+async def _cleanup_binding_provider_subscription(
+    binding: MetaAssetBinding,
+    *,
+    registry: MetaAppRegistry,
+    client: httpx.AsyncClient | None,
+) -> None:
+    direct_instagram = binding.channel == "instagram" and binding.auth_flow == "instagram_login"
+    if direct_instagram and _other_active_direct_instagram_binding_shares_subscription(binding, registry):
+        return
+    if not direct_instagram:
+        if not str(binding.page_id or "").strip() or _other_active_binding_shares_page(binding, registry):
+            return
+
+    owns_client = client is None
+    if client is not None:
+        http_client = client
+    elif direct_instagram:
+        http_client = httpx.AsyncClient(timeout=20.0)
+    else:
+        _credential, app = _page_subscription_context(binding, registry)
+        http_client = httpx.AsyncClient(
+            base_url=f"{META_GRAPH_BASE_URL}/{app.graph_api_version}",
+            timeout=20.0,
+        )
+    try:
+        if direct_instagram:
+            before = await inspect_instagram_login_webhook_subscription(
+                binding,
+                registry=registry,
+                client=http_client,
+            )
+            if before is None:
+                return
+            delete_error: BaseException | None = None
+            try:
+                await unsubscribe_instagram_login_webhook_raw(
+                    binding,
+                    registry=registry,
+                    client=http_client,
+                )
+            except BaseException as exc:  # noqa: BLE001 - reconcile a possible lost DELETE acknowledgement
+                delete_error = exc
+            after = await inspect_instagram_login_webhook_subscription(
+                binding,
+                registry=registry,
+                client=http_client,
+            )
+            if after is None:
+                return
+            if delete_error is not None:
+                raise delete_error
+            if after != before:
+                raise MetaOAuthError("Instagram webhook subscription changed during disconnect")
+            raise MetaOAuthError("Instagram webhook disconnect could not be verified")
+
+        await _unsubscribe_binding_webhook_locked_raw(
+            binding,
+            registry=registry,
+            client=http_client,
+        )
     finally:
-        if owns_client and http_client is not None:
+        if owns_client:
             await http_client.aclose()
+
+
+def _binding_disconnect_state(
+    binding: MetaAssetBinding,
+    *,
+    registry: MetaAppRegistry,
+) -> tuple[MetaAssetBinding | None, bool]:
+    """Read exact local settlement metadata without decrypting or logging credentials."""
+
+    latest = next(
+        (
+            item
+            for item in registry.list_bindings(include_inactive=True, include_superseded=True)
+            if item.binding_id == binding.binding_id
+        ),
+        None,
+    )
+    if latest is None:
+        return None, False
+    if (
+        latest.tenant_id != binding.tenant_id
+        or latest.channel != binding.channel
+        or latest.asset_id != binding.asset_id
+        or latest.app_key != binding.app_key
+        or latest.auth_flow != binding.auth_flow
+    ):
+        return None, False
+    return latest, registry.binding_credential_is_available(latest.binding_id)
 
 
 async def _settle_binding_disconnect(
@@ -419,19 +280,65 @@ async def _settle_binding_disconnect(
     actor_id: str,
     registry: MetaAppRegistry,
 ) -> Any:
-    """Perform the synchronous local cut-off in an independently shielded task."""
+    """Persist the fail-closed status, reconciling a lost commit acknowledgement."""
 
-    updated = registry.set_binding_status(
-        binding.binding_id,
-        status="disconnected",
-        actor_id=actor_id,
-        expected_generation=binding.generation,
+    latest, _credential_available = _binding_disconnect_state(binding, registry=registry)
+    if latest is None:
+        raise MetaRegistryError("Meta disconnect target disappeared")
+    if latest.status == "disconnected":
+        return latest
+    try:
+        return registry.set_binding_status(
+            latest.binding_id,
+            status="disconnected",
+            actor_id=actor_id,
+            expected_generation=latest.generation,
+        )
+    except Exception:
+        committed, _credential_available = _binding_disconnect_state(binding, registry=registry)
+        if committed is None or committed.status != "disconnected":
+            raise
+        return committed
+
+
+def _disconnect_fully_settled(binding: MetaAssetBinding, *, registry: MetaAppRegistry) -> bool:
+    return (
+        binding.status == "disconnected"
+        and not registry.binding_credential_is_available(binding.binding_id)
+        and not binding.webhook_subscribed_fields
+        and binding.webhook_subscription_status == "unknown"
+        and not binding.webhook_subscription_error
+        and binding.webhook_subscription_checked_at == 0.0
     )
-    return registry.archive_binding_credential(
-        binding.binding_id,
-        actor_id=actor_id,
-        expected_generation=updated.generation,
-    )
+
+
+async def _archive_binding_disconnect_credential(
+    binding: MetaAssetBinding,
+    *,
+    actor_id: str,
+    registry: MetaAppRegistry,
+) -> MetaAssetBinding:
+    """Archive after provider cleanup, reconciling a lost commit acknowledgement."""
+
+    latest, _credential_available = _binding_disconnect_state(binding, registry=registry)
+    if latest is None or latest.status != "disconnected":
+        raise MetaRegistryError("Meta disconnect target is not locally disconnected")
+    if _disconnect_fully_settled(latest, registry=registry):
+        return latest
+    try:
+        archived = registry.archive_binding_credential(
+            latest.binding_id,
+            actor_id=actor_id,
+            expected_generation=latest.generation,
+        )
+    except Exception:
+        committed, _credential_available = _binding_disconnect_state(binding, registry=registry)
+        if committed is None or not _disconnect_fully_settled(committed, registry=registry):
+            raise
+        return committed
+    if not _disconnect_fully_settled(archived, registry=registry):
+        raise MetaRegistryError("Meta disconnect credential settlement is incomplete")
+    return archived
 
 
 async def unsubscribe_binding_webhook(
@@ -460,19 +367,46 @@ async def _unsubscribe_binding_webhook_locked_raw(
     registry: MetaAppRegistry,
     client: httpx.AsyncClient | None = None,
 ) -> None:
-    """Unconditionally DELETE after a caller has proved exclusive ownership."""
+    """DELETE and read-after-write verify after exclusive ownership is proved."""
 
     credential, app = _page_subscription_context(binding, registry)
     owns_client = client is None
     http_client = client or httpx.AsyncClient(base_url=f"{META_GRAPH_BASE_URL}/{app.graph_api_version}", timeout=20.0)
     try:
-        response = await http_client.delete(
-            f"{binding.page_id}/subscribed_apps",
-            headers={"Authorization": f"Bearer {credential.access_token}"},
+        before = await _read_page_subscription(
+            http_client,
+            page_id=binding.page_id,
+            access_token=credential.access_token,
+            app_id=app.app_id,
+            step="webhook disconnect preflight",
         )
-        _safe_json(response, step="webhook disconnect")
-    except httpx.HTTPError as exc:
-        raise MetaOAuthError("Meta webhook disconnect request failed") from exc
+        if before is None:
+            return
+        delete_error: BaseException | None = None
+        try:
+            response = await http_client.delete(
+                f"{binding.page_id}/subscribed_apps",
+                headers={"Authorization": f"Bearer {credential.access_token}"},
+            )
+            payload = _safe_json(response, step="webhook disconnect")
+            if payload.get("success") is not True:
+                raise MetaOAuthError("Meta did not confirm the Page webhook disconnect")
+        except BaseException as exc:  # noqa: BLE001 - verify a possible lost DELETE acknowledgement
+            delete_error = exc
+        after = await _read_page_subscription(
+            http_client,
+            page_id=binding.page_id,
+            access_token=credential.access_token,
+            app_id=app.app_id,
+            step="webhook disconnect verification",
+        )
+        if after is None:
+            return
+        if delete_error is not None:
+            raise delete_error
+        if after != before:
+            raise MetaOAuthError("Meta Page webhook subscription changed during disconnect")
+        raise MetaOAuthError("Meta Page webhook disconnect could not be verified")
     finally:
         if owns_client:
             await http_client.aclose()

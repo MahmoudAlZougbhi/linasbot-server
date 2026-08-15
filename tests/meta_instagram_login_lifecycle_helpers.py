@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from services.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential
+from services.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaAssetBinding, MetaBindingCredential
 
 INSTAGRAM_ID = "17840000999900021"
 DM_SCOPES = (
@@ -27,8 +27,9 @@ def _binding(
     scopes: tuple[str, ...] = FULL_SCOPES,
     webhook_status: str = "ready",
     webhook_fields: tuple[str, ...] = ("messages", "messaging_postbacks"),
-) -> object:
-    return registry.authorize_oauth_asset(
+    legacy_duplicate: bool = False,
+) -> MetaAssetBinding:
+    binding = registry.authorize_oauth_asset(
         tenant_id="tenant-a",
         channel="instagram",
         asset_id=INSTAGRAM_ID,
@@ -46,10 +47,30 @@ def _binding(
         ),
         actor_id="owner",
         instagram_username="clinic_ig",
+        status="testing" if legacy_duplicate else "active",
         auth_flow=auth_flow,
         webhook_subscription_status=webhook_status,
         webhook_subscribed_fields=webhook_fields,
+        create_new_binding=legacy_duplicate,
     )
+    if not legacy_duplicate:
+        return binding
+    return force_legacy_binding_active(registry, binding)
+
+
+def force_legacy_binding_active(
+    registry: MetaAppRegistry,
+    binding: MetaAssetBinding,
+) -> MetaAssetBinding:
+    """Seed a pre-migration duplicate without reopening the production API."""
+
+    with registry._locked():
+        state = registry._read_unlocked()
+        raw = dict(state["bindings"][binding.binding_id])
+        raw["status"] = "active"
+        state["bindings"][binding.binding_id] = raw
+        registry._write_unlocked(state)
+    return next(item for item in registry.list_bindings() if item.binding_id == binding.binding_id)
 
 
 def _dm_payload() -> dict:

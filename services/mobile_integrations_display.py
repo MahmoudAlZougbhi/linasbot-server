@@ -148,7 +148,44 @@ def enrich_mobile_integration_rows(rows: list[dict[str, Any]], *, tenant_id: str
     return [enrich_mobile_integration_row(row, tenant_id=tenant_id) for row in rows]
 
 
-def active_bindings_for_disconnect(tenant_id: str, platform: str) -> list[Any]:
-    """Bindings that should be disconnected for a platform (canonical active set)."""
+def bindings_for_disconnect(
+    tenant_id: str,
+    platform: str,
+    *,
+    asset_id: str = "",
+    registry: Any | None = None,
+) -> list[Any]:
+    """Every unsettled binding inside one tenant+channel boundary.
 
-    return canonical_channel_bindings(tenant_id, (platform or "").strip().lower())
+    Unlike capability display, disconnect must not collapse direct Instagram and
+    Page-linked Instagram siblings.  It also includes inactive/testing history so
+    credentials cannot remain hidden after an explicit owner disconnect. A
+    disconnected row is retried when its credential metadata is still live.
+    """
+
+    tenant = str(tenant_id or "").strip().lower()
+    platform_key = (platform or "").strip().lower()
+    asset = str(asset_id or "").strip()
+    current_registry = registry or get_meta_app_registry()
+    matches = []
+    for binding in current_registry.list_bindings(include_inactive=True, include_superseded=True):
+        if binding.tenant_id != tenant or binding.channel != platform_key or (asset and binding.asset_id != asset):
+            continue
+        if binding.status != "disconnected" or current_registry.binding_credential_is_available(binding.binding_id):
+            matches.append(binding)
+    return sorted(
+        matches,
+        key=lambda item: (
+            item.asset_id,
+            0 if item.active else 1,
+            0 if item.auth_flow == "instagram_login" else 1,
+            item.created_at,
+            item.binding_id,
+        ),
+    )
+
+
+def active_bindings_for_disconnect(tenant_id: str, platform: str) -> list[Any]:
+    """Backward-compatible alias for the complete disconnect target set."""
+
+    return bindings_for_disconnect(tenant_id, platform)

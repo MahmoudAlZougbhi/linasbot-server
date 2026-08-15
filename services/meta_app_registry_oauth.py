@@ -62,6 +62,8 @@ class MetaAppRegistryOAuthMixin:
             conflict_ids = {conflict.binding_id for conflict in conflicts}
             if len(conflict_ids) > 1:
                 raise MetaBindingConflictError("active binding indexes are inconsistent")
+            if conflicts and conflicts[0].tenant_id != current.tenant_id:
+                raise MetaBindingConflictError("asset is already active for another workspace")
             if conflicts and not replace_existing:
                 raise MetaBindingConflictError("another active binding owns this asset")
             replacement_id = conflicts[0].binding_id if conflicts else ""
@@ -181,6 +183,23 @@ class MetaAppRegistryOAuthMixin:
             declined_scopes=declined_scopes,
             authorization_started_at=float(decoded.get("authorization_started_at") or 0.0),
         )
+
+    def binding_credential_is_available(self, binding_id: str) -> bool:
+        """Return unarchived credential metadata without decrypting the token."""
+
+        with self._locked():
+            state = self._read_unlocked()
+            raw = state["bindings"].get(binding_id)
+            if not isinstance(raw, dict):
+                raise MetaBindingNotFoundError("binding not found")
+            binding = self._binding_from_dict(raw)
+            record = state["credentials"].get(binding.credential_id)
+            if not isinstance(record, dict) or record.get("binding_id") != binding.binding_id:
+                return False
+            try:
+                return float(record.get("archived_at") or 0) <= 0
+            except (TypeError, ValueError) as exc:
+                raise MetaCredentialError("binding credential archive metadata is invalid") from exc
 
     def archive_binding_credential(
         self,

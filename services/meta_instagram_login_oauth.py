@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import secrets
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlencode
 
 import httpx
 
+from services.async_safety_cleanup import await_safety_task as _await_safety_task
 from services.meta_app_registry import (
     APP_A_KEY,
     META_FORBIDDEN_SCOPES,
@@ -34,8 +36,20 @@ from services.meta_instagram_login_config import (
     instagram_login_redirect_uri,
     instagram_login_refresh_lead_seconds,
 )
-from services.meta_instagram_login_subscription import ensure_instagram_login_webhook_subscription
+from services.meta_instagram_login_subscription import (
+    INSTAGRAM_LOGIN_CLEANUP_DELETE_ERROR,
+    INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS,
+    INSTAGRAM_LOGIN_CLEANUP_RESTORE_ERROR,
+    InstagramLoginSubscriptionState,
+    ensure_instagram_login_webhook_subscription,
+    inspect_instagram_login_webhook_subscription,
+    instagram_channel_subscription_lock_asset,
+    instagram_login_subscription_lock_asset,
+    restore_instagram_login_webhook_subscription,
+)
+from services.meta_instagram_login_subscription_recovery import retry_instagram_login_cleanup
 from services.meta_oauth import META_OAUTH_STATE_TTL_SECONDS, MetaOAuthError, _safe_json
+from services.meta_oauth_page_lock import lock_facebook_page_oauth_operation
 from services.meta_subject_deletion_guard import (
     MetaSubjectDeletionGuardError,
     acquire_meta_oauth_subject_guard,
@@ -240,6 +254,219 @@ def credential_needs_refresh(
     return credential.expires_at <= now + lead
 
 
+def _discard_staged_instagram_binding_reconciled(
+    binding: MetaAssetBinding,
+    *,
+    actor_id: str,
+    registry: MetaAppRegistry,
+) -> MetaAssetBinding:
+    """Discard one staged credential and accept only an exact lost acknowledgement."""
+
+    try:
+        return registry.discard_staged_binding(
+            binding.binding_id,
+            actor_id=actor_id,
+            expected_generation=binding.generation,
+        )
+    except Exception:
+        latest = next(
+            (
+                item
+                for item in registry.list_bindings(include_inactive=True, include_superseded=True)
+                if item.binding_id == binding.binding_id
+            ),
+            None,
+        )
+        if (
+            latest is None
+            or latest.tenant_id != binding.tenant_id
+            or latest.channel != binding.channel
+            or latest.asset_id != binding.asset_id
+            or latest.app_key != binding.app_key
+            or latest.auth_flow != binding.auth_flow
+            or latest.status != "disconnected"
+            or registry.binding_credential_is_available(binding.binding_id)
+        ):
+            raise
+        return latest
+
+
+def _mark_instagram_cleanup_pending(
+    binding: MetaAssetBinding,
+    *,
+    restore_target: tuple[str, ...] | None,
+    registry: MetaAppRegistry,
+) -> MetaAssetBinding:
+    """Persist enough non-secret provider preimage for startup/periodic recovery."""
+
+    error = (
+        INSTAGRAM_LOGIN_CLEANUP_RESTORE_ERROR if restore_target is not None else INSTAGRAM_LOGIN_CLEANUP_DELETE_ERROR
+    )
+    state = InstagramLoginSubscriptionState(
+        status=INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS,
+        subscribed_fields=tuple(restore_target or ()),
+        verified_fields=tuple(restore_target or ()),
+        error=error,
+    )
+    try:
+        return cast(
+            MetaAssetBinding,
+            registry.update_instagram_login_webhook_subscription(
+                binding.binding_id,
+                state=state,
+                actor_id="instagram-login-cleanup-pending",
+            ),
+        )
+    except Exception:
+        latest = next(
+            (
+                item
+                for item in registry.list_bindings(include_inactive=True, include_superseded=True)
+                if item.binding_id == binding.binding_id
+            ),
+            None,
+        )
+        if (
+            latest is None
+            or latest.webhook_subscription_status != INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS
+            or latest.webhook_subscription_error != error
+            or latest.webhook_subscribed_fields != tuple(restore_target or ())
+            or not registry.binding_credential_is_available(binding.binding_id)
+        ):
+            raise
+        return latest
+
+
+def _authorize_staged_instagram_binding_reconciled(
+    *,
+    registry: MetaAppRegistry,
+    tenant_id: str,
+    instagram_id: str,
+    instagram_username: str,
+    credential: MetaBindingCredential,
+    actor_id: str,
+) -> MetaAssetBinding:
+    """Stage direct OAuth and clean a file/dual commit whose acknowledgement was lost."""
+
+    before_ids = {
+        item.binding_id
+        for item in registry.list_bindings(include_inactive=True, include_superseded=True)
+        if item.tenant_id == tenant_id
+        and item.channel == "instagram"
+        and item.asset_id == instagram_id
+        and item.app_key == APP_A_KEY
+        and item.auth_flow == "instagram_login"
+    }
+    try:
+        return registry.authorize_oauth_asset(
+            tenant_id=tenant_id,
+            channel="instagram",
+            asset_id=instagram_id,
+            page_id="",
+            instagram_account_id=instagram_id,
+            app_key=APP_A_KEY,
+            credential=credential,
+            actor_id=actor_id,
+            instagram_username=instagram_username,
+            status="testing",
+            auth_flow="instagram_login",
+            webhook_subscription_status="pending",
+            create_new_binding=True,
+        )
+    except Exception:
+        candidates = [
+            item
+            for item in registry.list_bindings(include_inactive=True, include_superseded=True)
+            if item.binding_id not in before_ids
+            and item.tenant_id == tenant_id
+            and item.channel == "instagram"
+            and item.asset_id == instagram_id
+            and item.app_key == APP_A_KEY
+            and item.auth_flow == "instagram_login"
+            and item.status == "testing"
+            and registry.binding_credential_is_available(item.binding_id)
+        ]
+        if len(candidates) == 1:
+            _discard_staged_instagram_binding_reconciled(
+                candidates[0],
+                actor_id=actor_id,
+                registry=registry,
+            )
+        raise
+
+
+def _instagram_activation_commit_matches(
+    latest: MetaAssetBinding | None,
+    *,
+    staged: MetaAssetBinding,
+    registry: MetaAppRegistry,
+) -> bool:
+    if (
+        latest is None
+        or not latest.active
+        or latest.binding_id != staged.binding_id
+        or latest.tenant_id != staged.tenant_id
+        or latest.channel != "instagram"
+        or latest.asset_id != staged.asset_id
+        or latest.app_key != staged.app_key
+        or latest.auth_flow != "instagram_login"
+        or not latest.instagram_login_product_ready
+        or not registry.binding_credential_is_available(latest.binding_id)
+    ):
+        return False
+    active = [
+        item
+        for item in registry.list_bindings(include_inactive=False, include_superseded=True)
+        if item.channel == "instagram" and item.asset_id == staged.asset_id
+    ]
+    return [item.binding_id for item in active] == [latest.binding_id]
+
+
+async def _compensate_failed_instagram_activation(
+    binding: MetaAssetBinding,
+    *,
+    previous_active: MetaAssetBinding | None,
+    provider_preimage: tuple[str, ...] | None,
+    provider_write_started: bool,
+    actor_id: str,
+    registry: MetaAppRegistry,
+    client: httpx.AsyncClient,
+) -> None:
+    """Restore exact provider state before archiving a failed staged credential."""
+
+    if provider_write_started:
+        actual = await inspect_instagram_login_webhook_subscription(
+            binding,
+            registry=registry,
+            client=client,
+        )
+        restore_target = (
+            provider_preimage
+            if previous_active is not None and previous_active.auth_flow == "instagram_login"
+            else None
+        )
+        await restore_instagram_login_webhook_subscription(
+            binding,
+            restore_target,
+            expected_current=actual,
+            registry=registry,
+            client=client,
+        )
+    latest = next(
+        (
+            item
+            for item in registry.list_bindings(include_inactive=True, include_superseded=True)
+            if item.binding_id == binding.binding_id
+        ),
+        None,
+    )
+    if latest is None:
+        return
+    if latest.active:
+        raise MetaOAuthError("Instagram activation outcome is ambiguous; refusing staged cleanup")
+    _discard_staged_instagram_binding_reconciled(latest, actor_id=actor_id, registry=registry)
+
+
 async def complete_instagram_login(
     *,
     code: str,
@@ -327,80 +554,150 @@ async def complete_instagram_login(
             raise MetaOAuthError("Instagram authorization is blocked by a data deletion request") from exc
 
         with subject_guard:
-            previous_active = next(
-                (
-                    item
-                    for item in current_registry.list_bindings(include_inactive=False, include_superseded=True)
-                    if item.tenant_id == tenant_id
+            async with lock_facebook_page_oauth_operation(
+                current_registry,
+                app_key=APP_A_KEY,
+                page_ids=(
+                    instagram_channel_subscription_lock_asset(tenant_id),
+                    instagram_login_subscription_lock_asset(instagram_id),
+                ),
+            ):
+                previous_active = next(
+                    (
+                        item
+                        for item in current_registry.list_bindings(include_inactive=False, include_superseded=True)
+                        if item.tenant_id == tenant_id
+                        and item.channel == "instagram"
+                        and item.asset_id == instagram_id
+                        and item.app_key == APP_A_KEY
+                    ),
+                    None,
+                )
+                binding = _authorize_staged_instagram_binding_reconciled(
+                    registry=current_registry,
+                    tenant_id=tenant_id,
+                    instagram_id=instagram_id,
+                    instagram_username=instagram_username,
+                    credential=credential,
+                    actor_id=actor_id,
+                )
+                app = get_meta_app_configs()[APP_A_KEY]
+                provider_write_started = False
+                provider_preimage: tuple[str, ...] | None = None
+                try:
+                    current_registry.assert_binding_can_activate(
+                        binding.binding_id,
+                        expected_generation=binding.generation,
+                        replacing_binding_id=previous_active.binding_id if previous_active is not None else "",
+                    )
+                    provider_preimage = await inspect_instagram_login_webhook_subscription(
+                        binding,
+                        registry=current_registry,
+                        client=http_client,
+                    )
+                    provider_write_started = True
+                    subscription = await ensure_instagram_login_webhook_subscription(
+                        binding,
+                        credential,
+                        registry=current_registry,
+                        graph_api_version=app.graph_api_version,
+                        client=http_client,
+                    )
+                    staged = next(
+                        item
+                        for item in current_registry.list_bindings(include_inactive=True, include_superseded=True)
+                        if item.binding_id == binding.binding_id
+                    )
+                    if not subscription.ready_for_dm or not subscription.ready_for_comments:
+                        raise MetaOAuthError(
+                            "Instagram webhook subscription could not be confirmed. Reconnect Instagram and try again."
+                        )
+                    try:
+                        subject_guard.assert_oauth_snapshot_unchanged()
+                    except MetaSubjectDeletionGuardError as exc:
+                        raise MetaOAuthError("Meta deletion state changed during Instagram authorization") from exc
+                    binding = current_registry.activate_staged_binding(
+                        staged.binding_id,
+                        actor_id=actor_id,
+                        expected_generation=staged.generation,
+                        replace_existing=previous_active is not None,
+                    )
+                except BaseException as operation_error:  # noqa: BLE001 - cancellation must compensate too
+                    latest = next(
+                        (
+                            item
+                            for item in current_registry.list_bindings(include_inactive=True, include_superseded=True)
+                            if item.binding_id == binding.binding_id
+                        ),
+                        None,
+                    )
+                    if _instagram_activation_commit_matches(
+                        latest,
+                        staged=binding,
+                        registry=current_registry,
+                    ):
+                        binding = cast(MetaAssetBinding, latest)
+                        if isinstance(operation_error, asyncio.CancelledError):
+                            raise
+                    else:
+                        cleanup_task = asyncio.create_task(
+                            _compensate_failed_instagram_activation(
+                                binding,
+                                previous_active=previous_active,
+                                provider_preimage=provider_preimage,
+                                provider_write_started=provider_write_started,
+                                actor_id=actor_id,
+                                registry=current_registry,
+                                client=http_client,
+                            )
+                        )
+                        _unused, cleanup_cancelled, cleanup_error = await _await_safety_task(cleanup_task)
+                        if cleanup_error is not None:
+                            restore_target = (
+                                provider_preimage
+                                if previous_active is not None and previous_active.auth_flow == "instagram_login"
+                                else None
+                            )
+                            try:
+                                _mark_instagram_cleanup_pending(
+                                    binding,
+                                    restore_target=restore_target,
+                                    registry=current_registry,
+                                )
+                            except Exception as marker_error:
+                                raise MetaOAuthError(
+                                    "Instagram cleanup state could not be persisted; operator recovery required"
+                                ) from marker_error
+                            raise MetaOAuthError(
+                                "Instagram provider subscription cleanup failed; retry before reconnecting"
+                            ) from cleanup_error
+                        if isinstance(operation_error, asyncio.CancelledError) or cleanup_cancelled:
+                            raise asyncio.CancelledError from operation_error
+                        raise operation_error
+                pending_cleanup_ids = [
+                    item.binding_id
+                    for item in current_registry.list_bindings(include_inactive=True, include_superseded=True)
+                    if item.binding_id != binding.binding_id
+                    and item.tenant_id == tenant_id
                     and item.channel == "instagram"
                     and item.asset_id == instagram_id
                     and item.app_key == APP_A_KEY
                     and item.auth_flow == "instagram_login"
-                ),
-                None,
-            )
-            binding = current_registry.authorize_oauth_asset(
-                tenant_id=tenant_id,
-                channel="instagram",
-                asset_id=instagram_id,
-                page_id="",
-                instagram_account_id=instagram_id,
-                app_key=APP_A_KEY,
-                credential=credential,
-                actor_id=actor_id,
-                instagram_username=instagram_username,
-                status="testing",
-                auth_flow="instagram_login",
-                webhook_subscription_status="pending",
-                create_new_binding=True,
-            )
-            app = get_meta_app_configs()[APP_A_KEY]
-            try:
-                subscription = await ensure_instagram_login_webhook_subscription(
-                    binding,
-                    credential,
-                    registry=current_registry,
-                    graph_api_version=app.graph_api_version,
-                    client=http_client,
-                )
-                staged = next(
-                    item
-                    for item in current_registry.list_bindings(include_inactive=True, include_superseded=True)
-                    if item.binding_id == binding.binding_id
-                )
-                if not subscription.ready_for_dm or not subscription.ready_for_comments:
-                    raise MetaOAuthError(
-                        "Instagram webhook subscription could not be confirmed. Reconnect Instagram and try again."
-                    )
-                try:
-                    subject_guard.assert_oauth_snapshot_unchanged()
-                except MetaSubjectDeletionGuardError as exc:
-                    raise MetaOAuthError("Meta deletion state changed during Instagram authorization") from exc
-                binding = current_registry.activate_staged_binding(
-                    staged.binding_id,
-                    actor_id=actor_id,
-                    expected_generation=staged.generation,
-                    replace_existing=previous_active is not None,
-                )
-            except Exception:
-                latest = next(
-                    (
-                        item
-                        for item in current_registry.list_bindings(include_inactive=True, include_superseded=True)
-                        if item.binding_id == binding.binding_id
-                    ),
-                    None,
-                )
-                if latest is not None and not latest.active:
+                    and item.webhook_subscription_status == INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS
+                    and current_registry.binding_credential_is_available(item.binding_id)
+                ]
+                for pending_binding_id in pending_cleanup_ids:
                     try:
-                        current_registry.discard_staged_binding(
-                            latest.binding_id,
+                        await retry_instagram_login_cleanup(
+                            pending_binding_id,
+                            registry=current_registry,
                             actor_id=actor_id,
-                            expected_generation=latest.generation,
+                            client=http_client,
                         )
-                    except Exception as cleanup_exc:
-                        raise MetaOAuthError("Instagram staged credential cleanup failed") from cleanup_exc
-                raise
+                    except Exception:
+                        # The fresh owner is already committed and routable.
+                        # Durable recovery will retry stale marker cleanup.
+                        continue
         current_registry.archive_superseded_duplicate_bindings(actor_id=actor_id)
         from services.channel_capability_toggles import enable_channel_defaults_after_connect
 
