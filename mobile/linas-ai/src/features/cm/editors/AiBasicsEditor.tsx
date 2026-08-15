@@ -4,12 +4,15 @@ import { useI18n } from '../../../i18n/LanguageContext';
 import { cmFormStyles } from '../cmFormStyles';
 import { AiBasicsStyleSection } from './AiBasicsStyleSection';
 import { Field } from './Field';
+import { GreetingsEditor } from './GreetingsEditor';
 
 type Props = {
   basicsPayload: Record<string, unknown>;
   stylePayload: Record<string, unknown>;
+  greetingsPayload: Record<string, unknown>;
   onBasicsChange: (next: Record<string, unknown>) => void;
   onStyleChange: (next: Record<string, unknown>) => void;
+  onGreetingsChange: (next: Record<string, unknown>) => void;
 };
 
 function str(payload: Record<string, unknown>, key: string): string {
@@ -17,7 +20,14 @@ function str(payload: Record<string, unknown>, key: string): string {
   return typeof v === 'string' ? v : v == null ? '' : String(v);
 }
 
-export function AiBasicsEditor({ basicsPayload, stylePayload, onBasicsChange, onStyleChange }: Props) {
+export function AiBasicsEditor({
+  basicsPayload,
+  stylePayload,
+  greetingsPayload,
+  onBasicsChange,
+  onStyleChange,
+  onGreetingsChange,
+}: Props) {
   const { tr } = useI18n();
   const setBasics = (key: string, value: string) =>
     onBasicsChange({ ...basicsPayload, [key]: value });
@@ -55,6 +65,9 @@ export function AiBasicsEditor({ basicsPayload, stylePayload, onBasicsChange, on
         />
       </View>
       <AiBasicsStyleSection payload={stylePayload} onChange={onStyleChange} />
+      <View style={cmFormStyles.card}>
+        <GreetingsEditor payload={greetingsPayload} onChange={onGreetingsChange} embedded />
+      </View>
     </View>
   );
 }

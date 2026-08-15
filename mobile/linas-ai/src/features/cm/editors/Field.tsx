@@ -4,7 +4,7 @@ import { TextField } from '../../../components/TextField';
 import { cmFormStyles } from '../cmFormStyles';
 
 type Props = {
-  label: string;
+  label?: string;
   value: string;
   onChange: (value: string) => void;
   multiline?: boolean;
@@ -15,7 +15,7 @@ type Props = {
 export function Field({ label, value, onChange, multiline, placeholder, hint }: Props) {
   return (
     <View>
-      <Text style={cmFormStyles.label}>{label}</Text>
+      {label ? <Text style={cmFormStyles.label}>{label}</Text> : null}
       <TextField
         value={value}
         onChangeText={onChange}

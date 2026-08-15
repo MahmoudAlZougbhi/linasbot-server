@@ -50,6 +50,12 @@ def test_any_keyword_trigger_requires_keywords() -> None:
     assert greeting_rule_trigger_ok({**rule, "keywords": []}) is False
 
 
+def test_en_copied_to_notes_when_notes_empty() -> None:
+    legacy = {"id": "g5", "name": "Welcome", "en": "Hello there!", "notes": None}
+    normalized = normalize_greeting_item(legacy)
+    assert normalized["notes"] == "Hello there!"
+
+
 def test_sanitize_dynamic_messages_payload_normalizes_items() -> None:
     payload = {
         "items": [{"id": "a", "name": "Rule 1", "en": "Hi"}],

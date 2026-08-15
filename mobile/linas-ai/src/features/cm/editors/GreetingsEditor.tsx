@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { useI18n } from '../../../i18n/LanguageContext';
@@ -9,15 +9,33 @@ import { Field } from './Field';
 type EditorProps = {
   payload: Record<string, unknown>;
   onChange: (next: Record<string, unknown>) => void;
+  embedded?: boolean;
 };
-
-const TRIGGER_MODES = ['always', 'starts_with', 'any_keyword', 'session_start'] as const;
 
 function str(value: unknown): string {
   return value == null ? '' : String(value);
 }
 
-export function GreetingsEditor({ payload, onChange }: EditorProps) {
+/** Display note from notes field, falling back to legacy en greeting text. */
+function ruleNote(item: Record<string, unknown>): string {
+  const notes = str(item.notes);
+  if (notes) return notes;
+  return str(item.en);
+}
+
+/** Persist note to notes + en so runtime greeting resolution keeps working. */
+function withNote(item: Record<string, unknown>, note: string): Record<string, unknown> {
+  const trimmed = note.trim();
+  return {
+    ...item,
+    notes: trimmed || null,
+    en: trimmed,
+    trigger_mode: item.trigger_mode || 'always',
+    enabled: item.enabled !== false,
+  };
+}
+
+export function GreetingsEditor({ payload, onChange, embedded = false }: EditorProps) {
   const { tr } = useI18n();
   const items = asRecordList(payload.items);
   const setItems = (next: Record<string, unknown>[]) => onChange({ ...payload, items: next });
@@ -31,7 +49,7 @@ export function GreetingsEditor({ payload, onChange }: EditorProps) {
         id,
         enabled: true,
         name: '',
-        trigger_mode: 'starts_with',
+        trigger_mode: 'always',
         trigger_pattern: '',
         keywords: [],
         ar: '',
@@ -44,79 +62,29 @@ export function GreetingsEditor({ payload, onChange }: EditorProps) {
   };
 
   return (
-    <View>
+    <View style={embedded ? { marginTop: 12 } : undefined}>
+      <Text style={cmFormStyles.rowTitle}>
+        {embedded ? tr('aiSetupGreetingsHeading') : tr('aiSetupSec_dynamic_messages')}
+      </Text>
       <Text style={cmFormStyles.hint}>{tr('aiSetupGreetingsHint')}</Text>
-      <Field
-        label={tr('aiSetupGreetingsSectionNote')}
-        value={str(payload.notes)}
-        onChange={(v) => onChange({ ...payload, notes: v || null })}
-        multiline
-        hint={tr('aiSetupGreetingsSectionNoteHint')}
-      />
-      <PrimaryButton label={tr('aiSetupAddGreeting')} variant="ghost" onPress={addRule} />
+      <PrimaryButton label={tr('aiSetupAddGreetingRule')} variant="ghost" onPress={addRule} />
       <View style={{ height: 12 }} />
       {items.map((item) => {
         const id = String(item.id);
-        const mode = str(item.trigger_mode) || 'always';
-        const enabled = item.enabled !== false;
         return (
           <View key={id} style={cmFormStyles.card}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={cmFormStyles.itemTitle}>{str(item.name) || tr('aiSetupGreetingUntitled')}</Text>
-              <Pressable onPress={() => patch(id, { enabled: !enabled })}>
-                <Text style={[cmFormStyles.hint, { marginBottom: 0, color: enabled ? '#059669' : '#9CA3AF' }]}>
-                  {enabled ? tr('aiSetupGreetingEnabled') : tr('aiSetupGreetingDisabled')}
-                </Text>
-              </Pressable>
-            </View>
+            <Text style={cmFormStyles.itemTitle}>{str(item.name) || tr('aiSetupGreetingUntitled')}</Text>
             <Field
               label={tr('aiSetupGreetingTitle')}
               value={str(item.name)}
               onChange={(v) => patch(id, { name: v })}
             />
-            <Text style={cmFormStyles.label}>{tr('aiSetupGreetingTrigger')}</Text>
-            <View style={cmFormStyles.chipRow}>
-              {TRIGGER_MODES.map((opt) => {
-                const active = mode === opt;
-                return (
-                  <Pressable
-                    key={opt}
-                    style={[cmFormStyles.chip, active && cmFormStyles.chipOn]}
-                    onPress={() => patch(id, { trigger_mode: opt })}
-                  >
-                    <Text style={cmFormStyles.chipText}>{tr(`aiSetupGreetingTrigger_${opt}`)}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            {mode === 'starts_with' ? (
-              <Field
-                label={tr('aiSetupGreetingPattern')}
-                value={str(item.trigger_pattern)}
-                onChange={(v) => patch(id, { trigger_pattern: v })}
-                hint={tr('aiSetupGreetingPatternHint')}
-              />
-            ) : null}
-            {mode === 'any_keyword' ? (
-              <Field
-                label={tr('aiSetupGreetingKeywords')}
-                value={Array.isArray(item.keywords) ? item.keywords.map(String).join(', ') : ''}
-                onChange={(v) =>
-                  patch(id, {
-                    keywords: v
-                      .split(',')
-                      .map((x) => x.trim())
-                      .filter(Boolean),
-                  })
-                }
-                hint={tr('aiSetupGreetingKeywordsHint')}
-              />
-            ) : null}
             <Field
-              label={tr('aiSetupGreetingText')}
-              value={str(item.en)}
-              onChange={(v) => patch(id, { en: v })}
+              label={tr('aiSetupGreetingNote')}
+              value={ruleNote(item)}
+              onChange={(v) => patch(id, withNote(item, v))}
               multiline
+              hint={tr('aiSetupGreetingNoteHint')}
             />
             <PrimaryButton
               label={tr('aiSetupDeleteGreeting')}

@@ -13,7 +13,7 @@ type Props = {
   onOpenProducts?: () => void;
 };
 
-/** AI Setup hub — full-width Knowledge/Greetings/Services, then big + two-small mosaic rows. */
+/** AI Setup hub — full-width Knowledge/Service, then big + two-small mosaic rows. */
 export function AiSetupHubSections({ tiles, statusBySection, onOpenSection, onOpenProducts }: Props) {
   const rows = buildAiSetupHubRows(tiles, Boolean(onOpenProducts));
 

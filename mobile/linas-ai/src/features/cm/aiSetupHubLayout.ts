@@ -1,7 +1,7 @@
 import type { CmSectionCard } from './cmSections';
 
 /** Full-width hub rows appear in this order at the top of AI Setup. */
-export const AI_SETUP_FULL_WIDTH_IDS = ['knowledge', 'dynamic_messages', 'services'] as const;
+export const AI_SETUP_FULL_WIDTH_IDS = ['knowledge', 'prices'] as const;
 
 export type HubItem =
   | { kind: 'section'; tile: CmSectionCard }

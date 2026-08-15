@@ -49,14 +49,14 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
     },
     "dynamic_messages": {
         "title": "Greetings",
-        "purpose": "Multiple conditional greeting rules (title, trigger, greeting text).",
-        "why": "Different openings (hi vs hello vs session start) need different greetings.",
+        "purpose": "Greeting rules with title and custom note (edited inside AI Basics).",
+        "why": "Owners define how the AI opens conversations.",
         "what_to_fill": [
-            "items[] rules: name, trigger_mode, trigger_pattern/keywords, ar/en/fr text",
-            "section notes for overall greeting guidance",
+            "items[] rules: name (title) and notes (custom greeting note)",
+            "legacy trigger fields are preserved but optional in mobile UI",
         ],
-        "useful": "enabled per rule; legacy single items migrate to one always rule.",
-        "app_path": "AI Setup → Greetings",
+        "useful": "notes sync to en for runtime; legacy single items migrate to one always rule.",
+        "app_path": "AI Setup → AI Basics → Greetings",
     },
     "services": {
         "title": "Services",
