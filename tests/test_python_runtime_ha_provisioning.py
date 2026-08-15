@@ -76,11 +76,13 @@ def test_control_plane_allowlists_and_workflow_bridge_are_closed() -> None:
     required = {
         "scripts/ha/bootstrap_nested_runtime_quarantine.py",
         "scripts/ha/bootstrap_nested_runtime_evidence.py",
+        "scripts/ha/bootstrap_nested_runtime_safety.py",
         "scripts/ha/do_lb_ready_contract.py",
     }
     nested_runtime_authority = {
         "scripts/ha/bootstrap_nested_runtime_evidence.py",
         "scripts/ha/bootstrap_nested_runtime_quarantine.py",
+        "scripts/ha/bootstrap_nested_runtime_safety.py",
     }
     assert required <= set(release.CONTROL_PLANE_FILES)
     assert required <= bootstrap.RUNTIME_CONTROL_FILES
@@ -153,17 +155,22 @@ def test_nested_runtime_authenticated_dependencies_are_closed_and_non_circular()
 
     evidence_source = (ROOT / "scripts/ha/bootstrap_nested_runtime_evidence.py").read_text(encoding="utf-8")
     quarantine_source = (ROOT / "scripts/ha/bootstrap_nested_runtime_quarantine.py").read_text(encoding="utf-8")
+    safety_source = (ROOT / "scripts/ha/bootstrap_nested_runtime_safety.py").read_text(encoding="utf-8")
     bootstrap_source = (ROOT / "scripts/ha/bootstrap_meta_ha_contract.py").read_text(encoding="utf-8")
     nested_runtime_authority = {
         "scripts/ha/bootstrap_nested_runtime_evidence.py",
         "scripts/ha/bootstrap_nested_runtime_quarantine.py",
+        "scripts/ha/bootstrap_nested_runtime_safety.py",
     }
     assert nested_runtime_authority <= bootstrap.RUNTIME_CONTROL_FILES
     assert len(evidence_source.splitlines()) <= 500
     assert len(quarantine_source.splitlines()) <= 500
+    assert len(safety_source.splitlines()) <= 500
     assert "bootstrap_nested_runtime_quarantine" not in evidence_source
     assert "from scripts.ha" not in quarantine_source
     assert 'Path(__file__).with_name("bootstrap_nested_runtime_evidence.py")' in quarantine_source
+    assert 'Path(__file__).with_name("bootstrap_nested_runtime_safety.py")' in quarantine_source
+    assert 'Path(__file__).with_name("bootstrap_nested_runtime_safety.py")' in evidence_source
     assert "_nested_evidence_spec" in bootstrap_source
     assert "bootstrap_nested_runtime_evidence.py" in bootstrap_source
 
@@ -192,7 +199,8 @@ def test_bootstrap_nested_runtime_modules_load_from_closed_control_tree_only(tmp
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     assert not sentinel.exists()
-    assert module._nested_evidence.READ_CHUNK == 1024 * 1024
+    assert module._nested_evidence.NESTED_RUNTIME_NAME == "linaslaserbot-2.7.22"
+    assert module._nested._safety.READ_CHUNK == 1024 * 1024
 
 
 def test_remote_stage_materializes_full_bundle_control_and_launcher_receipt(

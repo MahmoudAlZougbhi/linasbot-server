@@ -58,6 +58,7 @@ CONTROL_PLANE_FILES = (
     "scripts/ha/bootstrap_meta_ha_contract.py",
     "scripts/ha/bootstrap_nested_runtime_quarantine.py",
     "scripts/ha/bootstrap_nested_runtime_evidence.py",
+    "scripts/ha/bootstrap_nested_runtime_safety.py",
     "scripts/ha/cluster_runtime_env_contract.py",
     "scripts/ha/deploy_meta_release_ha.sh",
     "scripts/ha/do_lb_ready_contract.py",

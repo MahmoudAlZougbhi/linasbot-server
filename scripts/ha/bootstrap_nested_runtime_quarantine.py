@@ -8,6 +8,7 @@ import json
 import os
 import stat
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -20,14 +21,31 @@ if _evidence_spec is None or _evidence_spec.loader is None:
 _evidence = importlib.util.module_from_spec(_evidence_spec)
 _evidence_spec.loader.exec_module(_evidence)
 
+_safety_spec = importlib.util.spec_from_file_location(
+    "bootstrap_nested_runtime_safety",
+    Path(__file__).with_name("bootstrap_nested_runtime_safety.py"),
+)
+if _safety_spec is None or _safety_spec.loader is None:
+    raise RuntimeError("nested runtime safety module is missing")
+_safety = importlib.util.module_from_spec(_safety_spec)
+_safety_spec.loader.exec_module(_safety)
+
 NestedRuntimeQuarantineError = _evidence.NestedRuntimeQuarantineError
 NESTED_RUNTIME_NAME = _evidence.NESTED_RUNTIME_NAME
 SCHEMA = _evidence.SCHEMA
 portable_content_identity = _evidence.portable_content_identity
 nested_runtime_path = _evidence.nested_runtime_path
+member_lstat = _safety.member_lstat
+walk_fail_closed = _safety.walk_fail_closed
+read_authority_bytes: Callable[[Path], bytes] = _safety.read_authority_bytes
+fsync_path = _safety.fsync_path
+is_known_authority_temp = _safety.is_known_authority_temp
+authority_temp_prefix = _safety.authority_temp_prefix
+AUTHORITY_KEYS = _safety.AUTHORITY_KEYS
 
 SECURE_ROOT_MODE = 0o700
 SECURE_ROOT_OWNER = (0, 0)
+AUTHORITY_NAME = "nested-runtime.authority.json"
 
 
 def _canonical(value: Any) -> bytes:
@@ -39,47 +57,48 @@ def _digest(value: Any) -> str:
 
 
 def _fsync_dir(path: Path) -> None:
-    try:
-        fd = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
-    except OSError as exc:
-        raise NestedRuntimeQuarantineError("nested runtime tree contains an unsafe object") from exc
-    try:
-        os.fsync(fd)
-    finally:
-        os.close(fd)
+    fsync_path(path)
 
 
 def _fsync_regular(path: Path) -> None:
-    info = path.lstat()
-    if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
+    info = member_lstat(path)
+    if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode) or info.st_nlink != 1:
         raise NestedRuntimeQuarantineError("nested runtime tree contains an unsafe object")
-    try:
-        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
-    except OSError as exc:
-        raise NestedRuntimeQuarantineError("nested runtime tree contains an unsafe object") from exc
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
+    fsync_path(path)
 
 
 def _fsync_tree(root: Path) -> None:
+    root_info = member_lstat(root)
+    root_dev = root_info.st_dev
     directories: list[Path] = []
-    for current, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
+    for current, dirnames, filenames in os.walk(
+        root,
+        topdown=True,
+        followlinks=False,
+        onerror=walk_fail_closed,
+    ):
         directory = Path(current)
+        dir_info = member_lstat(directory)
+        if dir_info.st_dev != root_dev:
+            raise NestedRuntimeQuarantineError("nested runtime tree crosses devices")
         directories.append(directory)
         for name in list(dirnames):
             path = directory / name
-            if stat.S_ISLNK(path.lstat().st_mode):
-                _evidence._safe_symlink_target(root, path)
+            info = member_lstat(path)
+            if info.st_dev != root_dev:
+                raise NestedRuntimeQuarantineError("nested runtime tree crosses devices")
+            if stat.S_ISLNK(info.st_mode):
+                _safety.safe_symlink_target(root, path)
                 dirnames.remove(name)
         for name in filenames:
             path = directory / name
-            info = path.lstat()
+            info = member_lstat(path)
+            if info.st_dev != root_dev:
+                raise NestedRuntimeQuarantineError("nested runtime tree crosses devices")
             if stat.S_ISLNK(info.st_mode):
-                _evidence._safe_symlink_target(root, path)
+                _safety.safe_symlink_target(root, path)
                 continue
-            if not stat.S_ISREG(info.st_mode):
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
                 raise NestedRuntimeQuarantineError("nested runtime tree contains an unsafe object")
             _fsync_regular(path)
     for directory in reversed(directories):
@@ -91,7 +110,7 @@ def quarantine_destination(repo_dir: Path, tx_id: str) -> Path:
 
 
 def authority_path(backup: Path) -> Path:
-    return backup / "nested-runtime.authority.json"
+    return backup / AUTHORITY_NAME
 
 
 def absent_evidence() -> dict[str, Any]:
@@ -133,23 +152,80 @@ def assert_live_matches(repo_dir: Path, expected: dict[str, Any]) -> None:
     assert_matches(repo_dir, expected)
 
 
-def _read_authority(backup: Path) -> dict[str, Any]:
-    path = authority_path(backup)
-    try:
-        document = json.loads(path.read_bytes())
-    except (OSError, json.JSONDecodeError) as exc:
-        raise NestedRuntimeQuarantineError("nested runtime authority is invalid") from exc
-    if not isinstance(document, dict):
+def _validate_authority_document(document: dict[str, Any], raw: bytes) -> dict[str, Any]:
+    if set(document.keys()) != AUTHORITY_KEYS:
+        raise NestedRuntimeQuarantineError("nested runtime authority is invalid")
+    if document.get("schema") != SCHEMA:
+        raise NestedRuntimeQuarantineError("nested runtime authority is invalid")
+    tx_id = document.get("tx_id")
+    if not isinstance(tx_id, str) or not tx_id:
+        raise NestedRuntimeQuarantineError("nested runtime authority is invalid")
+    evidence = document.get("evidence")
+    if not isinstance(evidence, dict):
+        raise NestedRuntimeQuarantineError("nested runtime authority is invalid")
+    quarantine_name = document.get("quarantine_name")
+    if not isinstance(quarantine_name, str) or not quarantine_name:
+        raise NestedRuntimeQuarantineError("nested runtime authority is invalid")
+    evidence_sha256 = document.get("evidence_sha256")
+    if not isinstance(evidence_sha256, str) or evidence_sha256 != digest_evidence(evidence):
+        raise NestedRuntimeQuarantineError("nested runtime authority is invalid")
+    canonical = (
+        _canonical(
+            {
+                "schema": SCHEMA,
+                "tx_id": tx_id,
+                "evidence": evidence,
+                "quarantine_name": quarantine_name,
+                "evidence_sha256": evidence_sha256,
+            }
+        )
+        + b"\n"
+    )
+    if raw != canonical:
         raise NestedRuntimeQuarantineError("nested runtime authority is invalid")
     return document
 
 
-def _atomic_authority_write(path: Path, payload: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.authority.", dir=path.parent)
-    temporary = Path(temporary_name)
+def _read_authority(backup: Path) -> dict[str, Any]:
+    path = authority_path(backup)
+    if not path.exists() and not path.is_symlink():
+        raise NestedRuntimeQuarantineError("nested runtime authority is invalid")
+    raw = read_authority_bytes(path)
     try:
-        os.fchmod(fd, 0o600)
+        document = json.loads(raw.decode("utf-8", errors="strict"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise NestedRuntimeQuarantineError("nested runtime authority is invalid") from exc
+    if not isinstance(document, dict):
+        raise NestedRuntimeQuarantineError("nested runtime authority is invalid")
+    return _validate_authority_document(document, raw)
+
+
+def _read_existing_authority_candidate(path: Path) -> bytes:
+    if not path.exists() and not path.is_symlink():
+        return b""
+    try:
+        loaded = read_authority_bytes(path)
+    except NestedRuntimeQuarantineError:
+        try:
+            return path.read_bytes()
+        except OSError as exc:
+            raise NestedRuntimeQuarantineError("nested runtime authority is invalid") from exc
+    if not isinstance(loaded, bytes):
+        raise NestedRuntimeQuarantineError("nested runtime authority is invalid")
+    return loaded
+
+
+def _atomic_authority_write(path: Path, payload: bytes) -> None:
+    if len(payload) > _safety.MAX_AUTHORITY_BYTES:
+        raise NestedRuntimeQuarantineError("nested runtime authority write failed")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_prefix = authority_temp_prefix(path.name)
+    fd, temporary_name = tempfile.mkstemp(prefix=temp_prefix, dir=path.parent)
+    temporary = Path(temporary_name)
+    if not is_known_authority_temp(temporary, path.name):
+        raise NestedRuntimeQuarantineError("nested runtime authority write failed")
+    try:
+        os.fchmod(fd, _safety.SECURE_AUTHORITY_MODE)
         offset = 0
         while offset < len(payload):
             written = os.write(fd, payload[offset:])
@@ -159,8 +235,9 @@ def _atomic_authority_write(path: Path, payload: bytes) -> None:
         os.fsync(fd)
         os.close(fd)
         fd = -1
+        fsync_path(temporary)
         if path.exists() or path.is_symlink():
-            existing = path.read_bytes()
+            existing = _read_existing_authority_candidate(path)
             if existing == payload:
                 temporary.unlink()
                 return
@@ -170,19 +247,11 @@ def _atomic_authority_write(path: Path, payload: bytes) -> None:
             else:
                 raise NestedRuntimeQuarantineError("nested runtime authority changed")
         os.link(temporary, path, follow_symlinks=False)
-        _fsync_dir(path.parent)
         temporary.unlink()
-        verify_fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
-        try:
-            read_back = bytearray()
-            while True:
-                chunk = os.read(verify_fd, 65536)
-                if not chunk:
-                    break
-                read_back.extend(chunk)
-        finally:
-            os.close(verify_fd)
-        if bytes(read_back) != payload:
+        fsync_path(path)
+        _fsync_dir(path.parent)
+        verify = read_authority_bytes(path)
+        if verify != payload:
             raise NestedRuntimeQuarantineError("nested runtime authority readback failed")
         _fsync_dir(path.parent)
     except OSError as exc:
@@ -190,10 +259,8 @@ def _atomic_authority_write(path: Path, payload: bytes) -> None:
     finally:
         if fd >= 0:
             os.close(fd)
-        try:
+        if temporary.exists() and is_known_authority_temp(temporary, path.name):
             temporary.unlink()
-        except FileNotFoundError:
-            pass
 
 
 def _write_authority(backup: Path, *, tx_id: str, evidence: dict[str, Any], destination_name: str) -> None:
@@ -231,7 +298,7 @@ def _transition_root_metadata(
     target_mode: int,
     direction: str,
 ) -> None:
-    info = path.lstat()
+    info = member_lstat(path)
     if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode):
         raise NestedRuntimeQuarantineError(f"nested runtime {direction} root is unsafe")
     if info.st_dev != int(evidence["root_dev"]) or info.st_ino != int(evidence["root_ino"]):
@@ -244,7 +311,7 @@ def _transition_root_metadata(
         os.chown(path, target_owner[0], target_owner[1])
     if current_mode != target_mode:
         os.chmod(path, target_mode)
-    final = path.lstat()
+    final = member_lstat(path)
     if (final.st_uid, final.st_gid) != target_owner or stat.S_IMODE(final.st_mode) != target_mode:
         raise NestedRuntimeQuarantineError(f"nested runtime {direction} root metadata is not exact")
     _fsync_dir(path)
@@ -348,6 +415,6 @@ def assert_quarantined(repo_dir: Path, expected: dict[str, Any], tx_id: str) -> 
     if not quarantine.exists() and not quarantine.is_symlink():
         raise NestedRuntimeQuarantineError("nested runtime quarantine is missing")
     _evidence.assert_content_matches(quarantine, expected)
-    info = quarantine.lstat()
+    info = member_lstat(quarantine)
     if (info.st_uid, info.st_gid) != SECURE_ROOT_OWNER or stat.S_IMODE(info.st_mode) != SECURE_ROOT_MODE:
         raise NestedRuntimeQuarantineError("nested runtime quarantine root metadata is invalid")

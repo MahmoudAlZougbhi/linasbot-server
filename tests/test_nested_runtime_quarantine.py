@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 import shutil
+import stat
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "scripts" / "ha" / "bootstrap_nested_runtime_quarantine.py"
 EVIDENCE_PATH = ROOT / "scripts" / "ha" / "bootstrap_nested_runtime_evidence.py"
+SAFETY_PATH = ROOT / "scripts" / "ha" / "bootstrap_nested_runtime_safety.py"
 BOOTSTRAP_PATH = ROOT / "scripts" / "ha" / "bootstrap_meta_ha_contract.py"
 
 
@@ -26,7 +28,35 @@ def _load(path: Path, name: str):  # type: ignore[no-untyped-def]
 
 quarantine = _load(MODULE_PATH, "bootstrap_nested_runtime_quarantine_test")
 evidence = _load(EVIDENCE_PATH, "bootstrap_nested_runtime_evidence_test")
+safety = _load(SAFETY_PATH, "bootstrap_nested_runtime_safety_test")
 bootstrap = _load(BOOTSTRAP_PATH, "bootstrap_meta_ha_contract_nested_test")
+
+
+def _patch_secure_authority(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_lstat = os.lstat
+
+    def fake_lstat(path: os.PathLike[str] | str, *args: object, **kwargs: object) -> os.stat_result:
+        result = real_lstat(path, *args, **kwargs)  # type: ignore[arg-type]
+        if Path(path).name == quarantine.AUTHORITY_NAME:
+            mode = stat.S_IFREG | 0o600
+            return os.stat_result(
+                (
+                    mode,
+                    result.st_ino,
+                    result.st_dev,
+                    result.st_nlink,
+                    0,
+                    0,
+                    result.st_size,
+                    result.st_atime,
+                    result.st_mtime,
+                    result.st_ctime,
+                )
+            )
+        return result
+
+    monkeypatch.setattr(safety.os, "lstat", fake_lstat)
+    monkeypatch.setattr(quarantine._safety, "member_lstat", lambda path: fake_lstat(path))
 
 
 def _patch_chown(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -77,7 +107,11 @@ def _build_tree(repo: Path) -> dict[str, object]:
     return quarantine.probe_evidence(repo)
 
 
-def test_absent_tree_binds_absence_without_member_names(tmp_path: Path) -> None:
+def test_absent_tree_binds_absence_without_member_names(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_secure_authority(monkeypatch)
     repo = tmp_path / "repo"
     repo.mkdir()
     evidence = quarantine.probe_evidence(repo)
@@ -102,6 +136,7 @@ def test_synthetic_tree_quarantine_commit_and_rollback(
     backup.mkdir()
     tx_id = "mb_" + "b" * 28
     _patch_chown(monkeypatch)
+    _patch_secure_authority(monkeypatch)
     expected = _build_tree(repo)
     assert expected["present"] is True
     assert expected["file_count"] == 3
@@ -129,6 +164,7 @@ def test_quarantine_replays_rename_and_metadata_ack_loss(
     backup.mkdir()
     tx_id = "mb_" + "c" * 28
     _patch_chown(monkeypatch)
+    _patch_secure_authority(monkeypatch)
     expected = _build_tree(repo)
     real_rename = os.rename
     real_chown = quarantine.os.chown
@@ -177,6 +213,7 @@ def test_mutation_during_transaction_fails_closed(
     backup.mkdir()
     tx_id = "mb_" + "d" * 28
     _patch_chown(monkeypatch)
+    _patch_secure_authority(monkeypatch)
     expected = _build_tree(repo)
     (quarantine.nested_runtime_path(repo) / "main.py").write_text("mutated\n", encoding="utf-8")
     with pytest.raises(quarantine.NestedRuntimeQuarantineError, match="evidence changed"):
@@ -205,6 +242,7 @@ def test_special_file_and_cross_device_and_collision_reject(
     quar = quarantine.quarantine_destination(repo, tx_id)
     quar.mkdir()
     _patch_chown(monkeypatch)
+    _patch_secure_authority(monkeypatch)
     with pytest.raises(quarantine.NestedRuntimeQuarantineError, match="collides"):
         quarantine.apply_quarantine(repo, backup, evidence, tx_id)
 
@@ -239,6 +277,7 @@ def test_special_file_and_cross_device_and_collision_reject(
         return result
 
     monkeypatch.setattr(quarantine.os, "stat", fake_stat)
+    _patch_secure_authority(monkeypatch)
     with pytest.raises(quarantine.NestedRuntimeQuarantineError, match="cross devices"):
         quarantine.apply_quarantine(repo, backup, evidence, tx_id)
 
@@ -275,6 +314,7 @@ def test_internal_directory_symlink_apply_and_rollback(
     backup.mkdir()
     tx_id = "mb_" + "f" * 28
     _patch_chown(monkeypatch)
+    _patch_secure_authority(monkeypatch)
     nested = quarantine.nested_runtime_path(repo)
     nested.mkdir()
     (nested / "main.py").write_text("print('legacy')\n", encoding="utf-8")
@@ -316,21 +356,39 @@ def test_publish_authority_before_drain_allows_safe_rollback_without_quarantine(
     backup.mkdir()
     tx_id = "mb_" + "9" * 28
     _patch_chown(monkeypatch)
+    _patch_secure_authority(monkeypatch)
     expected = _build_tree(repo)
     quarantine.publish_authority(repo, backup, expected, tx_id)
     quarantine.restore_quarantine(repo, backup, expected, tx_id)
     quarantine.assert_live_matches(repo, expected)
 
 
-def test_authority_write_replays_after_partial_prefix(tmp_path: Path) -> None:
+def test_authority_write_replays_after_partial_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_secure_authority(monkeypatch)
     backup = tmp_path / "backup"
     backup.mkdir()
-    payload = evidence._canonical({"schema": 1, "tx_id": "mb_" + "a" * 28, "evidence": {"present": False}}) + b"\n"
+    tx_id = "mb_" + "a" * 28
+    evidence_doc = {"schema": 1, "present": False}
+    payload = (
+        evidence._canonical(
+            {
+                "schema": 1,
+                "tx_id": tx_id,
+                "evidence": evidence_doc,
+                "quarantine_name": f".quarantine-nested-runtime-{tx_id}",
+                "evidence_sha256": quarantine.digest_evidence(evidence_doc),
+            }
+        )
+        + b"\n"
+    )
     path = quarantine.authority_path(backup)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(payload[: len(payload) // 2])
     quarantine._atomic_authority_write(path, payload)
-    assert path.read_bytes() == payload
+    assert quarantine._read_authority(backup)["tx_id"] == tx_id
 
 
 def test_repo_bytecode_manifest_excludes_nested_runtime_tree(
@@ -372,3 +430,127 @@ def test_bootstrap_wires_nested_runtime_authority() -> None:
     assert '"nested_runtime_evidence_sha256"' in commit
     assert '"nested_runtime_quarantined"' in commit
     assert "nested_runtime = _nested.probe_evidence(REPO_DIR)" in source
+
+
+def test_cyclic_symlink_raises_redacted_error(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    nested = quarantine.nested_runtime_path(repo)
+    nested.mkdir()
+    os.symlink("loop", nested / "loop")
+    with pytest.raises(quarantine.NestedRuntimeQuarantineError, match="unsafe object") as exc:
+        quarantine.probe_evidence(repo)
+    assert str(nested / "loop") not in str(exc.value)
+
+
+def test_walk_scan_error_fails_closed_without_path_leak(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    nested = quarantine.nested_runtime_path(repo)
+    nested.mkdir()
+    (nested / "file").write_bytes(b"x")
+    secret = str(nested / "secret-member")
+
+    def broken_walk(
+        _root: Path,
+        *_args: object,
+        onerror: object | None = None,
+        **_kwargs: object,
+    ) -> object:
+        if onerror is not None:
+            onerror(OSError(13, "permission denied", secret))  # type: ignore[misc]
+        return iter(())
+
+    monkeypatch.setattr(evidence.os, "walk", broken_walk)
+    with pytest.raises(quarantine.NestedRuntimeQuarantineError, match="unsafe object") as exc:
+        quarantine.probe_evidence(repo)
+    assert secret not in str(exc.value)
+
+
+def test_same_size_replacement_fails_during_hash(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    nested = quarantine.nested_runtime_path(repo)
+    nested.mkdir()
+    target = nested / "file"
+    target.write_bytes(b"aaaa")
+    path_info = safety.member_lstat(target)
+    real_read = os.read
+
+    def poisoned_read(fd: int, size: int) -> bytes:
+        target.write_bytes(b"bbbb")
+        return real_read(fd, size)
+
+    monkeypatch.setattr(safety.os, "read", poisoned_read)
+    with pytest.raises(RuntimeError, match="changed during evidence collection"):
+        safety.hash_regular_file(target, path_info)
+
+
+def test_hardlinked_member_rejects_probe(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    nested = quarantine.nested_runtime_path(repo)
+    nested.mkdir()
+    primary = nested / "primary"
+    primary.write_bytes(b"x")
+    os.link(primary, nested / "alias")
+    with pytest.raises(quarantine.NestedRuntimeQuarantineError, match="unsafe object"):
+        quarantine.probe_evidence(repo)
+
+
+def _authority_payload(tx_id: str = "mb_" + "a" * 28) -> bytes:
+    evidence_doc = {"schema": 1, "present": False}
+    return (
+        evidence._canonical(
+            {
+                "schema": 1,
+                "tx_id": tx_id,
+                "evidence": evidence_doc,
+                "quarantine_name": f".quarantine-nested-runtime-{tx_id}",
+                "evidence_sha256": quarantine.digest_evidence(evidence_doc),
+            }
+        )
+        + b"\n"
+    )
+
+
+@pytest.mark.parametrize(
+    ("mutator", "match"),
+    [
+        ("symlink", "invalid"),
+        ("mode", "invalid"),
+        ("nlink", "invalid"),
+        ("extra_key", "invalid"),
+        ("mutated_key", "invalid"),
+    ],
+)
+def test_authority_closedness_rejects_unsafe_files(
+    mutator: str,
+    match: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    if mutator in {"extra_key", "mutated_key"}:
+        _patch_secure_authority(monkeypatch)
+    backup = tmp_path / "backup"
+    backup.mkdir()
+    path = quarantine.authority_path(backup)
+    payload = _authority_payload()
+    if mutator == "symlink":
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.symlink_to("elsewhere")
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        body = json.loads(payload.decode("utf-8"))
+        if mutator == "extra_key":
+            body["extra"] = True
+        elif mutator == "mutated_key":
+            body["tx_id"] = "mutated"
+            body["evidence_sha256"] = "0" * 64
+        path.write_bytes((evidence._canonical(body) + b"\n") if mutator in {"extra_key", "mutated_key"} else payload)
+        if mutator == "mode":
+            os.chmod(path, 0o644)
+        elif mutator == "nlink":
+            os.link(path, path.parent / "authority.alias")
+    with pytest.raises(RuntimeError, match=match):
+        quarantine._read_authority(backup)

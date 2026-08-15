@@ -295,6 +295,7 @@ RUNTIME_CONTROL_FILES = {
     "scripts/ha/bootstrap_meta_ha_contract.py",
     "scripts/ha/bootstrap_nested_runtime_quarantine.py",
     "scripts/ha/bootstrap_nested_runtime_evidence.py",
+    "scripts/ha/bootstrap_nested_runtime_safety.py",
     "scripts/ha/do_lb_ready_contract.py",
     "scripts/ha/python_runtime_archive_contract.py",
     "scripts/ha/python_runtime_provision_contract.py",
