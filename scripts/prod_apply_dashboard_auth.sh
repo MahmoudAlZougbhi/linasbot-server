@@ -3,6 +3,10 @@
 # Never prints secret values. Never auto-generates a secret (caller must supply).
 set -euo pipefail
 
+# shellcheck source=scripts/ha/require_production_mutation_guard.sh
+source /opt/linasbot/scripts/ha/require_production_mutation_guard.sh
+linas_require_production_mutation_guard "scripts/prod_apply_dashboard_auth.sh"
+
 if [ -z "${DASHBOARD_AUTH_SECRET:-}" ]; then
   echo "[dashboard-auth-apply] missing required env: DASHBOARD_AUTH_SECRET" >&2
   exit 1
@@ -14,11 +18,13 @@ if [ "$SECRET_LEN" -lt 32 ]; then
   exit 1
 fi
 
-python3 - <<'PY'
+PYTHONPATH=/opt/linasbot /opt/linasbot/venv/bin/python - <<'PY'
 import hmac
 import os
 import re
 from pathlib import Path
+
+from scripts.ha.production_env_cas import atomic_update_canonical_env
 
 KEY = "DASHBOARD_AUTH_SECRET"
 ENV_KEY = "ENVIRONMENT"
@@ -38,53 +44,21 @@ classes = sum(
 if classes < 2:
     raise SystemExit(f"[dashboard-auth-apply] refusing {KEY}: weak_charset")
 
-def upsert(path: Path, updates: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    lines = path.read_text().splitlines() if path.exists() else []
-    found = set()
-    out = []
-    for line in lines:
-        if "=" in line and not line.lstrip().startswith("#"):
-            k = line.split("=", 1)[0].strip()
-            if k in updates:
-                out.append(f"{k}={updates[k]}")
-                found.add(k)
-                continue
-        out.append(line)
-    for k, v in updates.items():
-        if k not in found:
-            out.append(f"{k}={v}")
-    path.write_text("\n".join(out) + "\n")
-    os.chmod(path, 0o600)
-
 updates = {KEY: value, ENV_KEY: "production"}
-paths = [Path("/opt/linasbot/.env"), Path("/opt/linasbot/linaslaserbot-2.7.22/.env")]
-updated = 0
-for path in paths:
-    if not path.parent.exists():
-        print(f"[dashboard-auth-apply] skip missing dir for {path}")
-        continue
-    upsert(path, updates)
-    text = path.read_text()
-    present = False
-    file_value = ""
-    env_ok = False
-    for line in text.splitlines():
-        if line.startswith(KEY + "="):
-            present = bool(line.split("=", 1)[1].strip())
-            file_value = line.split("=", 1)[1].strip()
-        if line.startswith(ENV_KEY + "=") and line.split("=", 1)[1].strip() == "production":
-            env_ok = True
-    print(
-        f"[dashboard-auth-apply] updated={path} secret_present={present} "
-        f"secret_match={hmac.compare_digest(file_value, value)} environment_production={env_ok}"
-    )
-    if not present or not hmac.compare_digest(file_value, value) or not env_ok:
-        raise SystemExit(f"[dashboard-auth-apply] verify failed for {path}")
-    updated += 1
-
-if updated < 1:
-    raise SystemExit("[dashboard-auth-apply] no .env paths updated")
+path = Path("/opt/linasbot/.env")
+atomic_update_canonical_env(updates)
+mapping = {}
+for line in path.read_text(encoding="utf-8", errors="strict").splitlines():
+    if "=" in line and not line.lstrip().startswith("#"):
+        key, raw = line.split("=", 1)
+        mapping.setdefault(key.strip(), []).append(raw)
+if (
+    len(mapping.get(KEY, [])) != 1
+    or not hmac.compare_digest(mapping[KEY][0], value)
+    or mapping.get(ENV_KEY) != ["production"]
+):
+    raise SystemExit("[dashboard-auth-apply] canonical environment verification failed")
+print("[dashboard-auth-apply] canonical_env_updated=true secret_match=true")
 print("[dashboard-auth-apply] secret_validated=true")
 print("[dashboard-auth-apply] environment=production")
 PY
@@ -93,7 +67,7 @@ systemctl restart linasbot
 sleep 6
 systemctl is-active linasbot
 
-python3 - <<'PY'
+/opt/linasbot/venv/bin/python - <<'PY'
 import hmac
 import subprocess
 from pathlib import Path
@@ -101,14 +75,9 @@ from pathlib import Path
 KEY = "DASHBOARD_AUTH_SECRET"
 ENV_KEY = "ENVIRONMENT"
 expected = None
-for path in (Path("/opt/linasbot/.env"), Path("/opt/linasbot/linaslaserbot-2.7.22/.env")):
-    if not path.exists():
-        continue
-    for line in path.read_text().splitlines():
-        if line.startswith(KEY + "="):
-            expected = line.split("=", 1)[1].strip()
-            break
-    if expected:
+for line in Path("/opt/linasbot/.env").read_text(encoding="utf-8", errors="strict").splitlines():
+    if line.startswith(KEY + "="):
+        expected = line.split("=", 1)[1]
         break
 if not expected:
     raise SystemExit("[dashboard-auth-apply] could not read expected secret from .env")

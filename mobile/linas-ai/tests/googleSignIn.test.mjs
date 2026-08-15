@@ -135,14 +135,16 @@ describe('googleSignIn source contracts', () => {
 });
 
 describe('guest Sign In navigation', () => {
-  it('header Sign In goes to login instead of AuthGate modal', () => {
+  it('guest auth overlay Sign In preserves the draft and goes to login', () => {
     const chat = read('features/chat/ChatScreen.tsx');
     assert.match(chat, /function goToLoginPreservingDraft/);
-    assert.match(chat, /onSignIn=\{goToLoginPreservingDraft\}/);
     assert.match(chat, /onLogin=\{goToLoginPreservingDraft\}/);
-    const signInLine = chat.split('\n').find((line) => line.includes('onSignIn='));
-    assert.ok(signInLine);
-    assert.doesNotMatch(signInLine, /openAuthPreservingDraft/);
-    assert.match(chat, /onRequestLogin\(\)/);
+    const loginHandler = chat.slice(
+      chat.indexOf('function goToLoginPreservingDraft'),
+      chat.indexOf('\n  }', chat.indexOf('function goToLoginPreservingDraft')) + 4,
+    );
+    assert.match(loginHandler, /queueGuestDraft\(draft\)/);
+    assert.match(loginHandler, /onRequestLogin\(\)/);
+    assert.doesNotMatch(chat, /onLogin=\{[^}]*openAuthPreservingDraft/);
   });
 });

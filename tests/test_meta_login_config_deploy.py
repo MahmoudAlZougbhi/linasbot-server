@@ -11,10 +11,14 @@ def test_prod_apply_meta_app_a_login_config_script_exists() -> None:
     text = script.read_text(encoding="utf-8")
     assert "META_APP_A_FACEBOOK_LOGIN_CONFIG_ID" in text
     assert "META_APP_A_LOGIN_CONFIG_ID" in text  # stripped as obsolete
-    assert "REMOVE_KEYS" in text
+    assert 'remove_keys = frozenset({"META_APP_A_LOGIN_CONFIG_ID"})' in text
     assert "seed_meta_app_a_registry" not in text
-    assert "systemctl restart linasbot" in text
+    assert "META_HA_STAGE_ONLY=true is required" in text
+    assert "atomic_update_env" in text
+    assert "systemctl" not in text
     workflow = Path(".github/workflows/meta-app-a-login-config-apply.yml")
     assert workflow.is_file()
     workflow_text = workflow.read_text(encoding="utf-8")
     assert "META_APP_A_FACEBOOK_LOGIN_CONFIG_ID" in workflow_text
+    assert 'META_HA_STAGE_ONLY: "true"' in workflow_text
+    assert "--maintenance-active" in workflow_text

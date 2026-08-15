@@ -11,29 +11,30 @@ from typing import Literal
 from services.meta_app_registry import APP_A_KEY, get_meta_app_configs
 
 DEFAULT_INSTAGRAM_LOGIN_APP_ID = "1035856539045307"
+EXPECTED_INSTAGRAM_LOGIN_REDIRECT_URI = "https://www.linasaibot.com/oauth/instagram/callback"
+EXPECTED_INSTAGRAM_LOGIN_WEBHOOK_PATH = "/webhook/instagram-login"
+EXPECTED_INSTAGRAM_LOGIN_WEBHOOK_URL = "https://www.linasaibot.com/webhook/instagram-login"
 META_INSTAGRAM_GRAPH_BASE_URL = "https://graph.instagram.com"
 META_INSTAGRAM_OAUTH_AUTHORIZE_URL = "https://www.instagram.com/oauth/authorize"
 META_INSTAGRAM_OAUTH_TOKEN_URL = "https://api.instagram.com/oauth/access_token"
 
 AuthFlow = Literal["facebook_login", "instagram_login"]
 
-# Request every approved direct-login scope during OAuth.
+# Keep Connect Instagram least-privileged for the App Review surfaces enabled here:
+# professional identity, DMs, and comment replies. Content publishing has its own
+# permission and must be added through a separate reviewed/reauthorization flow.
 META_INSTAGRAM_LOGIN_REQUEST_SCOPES = frozenset(
     {
         "instagram_business_basic",
         "instagram_business_manage_messages",
         "instagram_business_manage_comments",
-        "instagram_business_content_publish",
     }
 )
 
-# Minimum scopes required to keep an Instagram Login messaging binding active.
-META_INSTAGRAM_LOGIN_REQUIRED_SCOPES = frozenset(
-    {
-        "instagram_business_basic",
-        "instagram_business_manage_messages",
-    }
-)
+# This product is reviewed and activated as one DM-and-comments surface.  A
+# declined comments grant must not replace a previously healthy binding with a
+# misleading DM-only connection.
+META_INSTAGRAM_LOGIN_REQUIRED_SCOPES = META_INSTAGRAM_LOGIN_REQUEST_SCOPES
 
 # Backward-compatible alias used by existing imports/tests.
 META_INSTAGRAM_LOGIN_SCOPES = META_INSTAGRAM_LOGIN_REQUEST_SCOPES
@@ -51,13 +52,11 @@ def instagram_login_app_id() -> str:
 
 
 def instagram_login_redirect_uri() -> str:
-    return (
-        os.getenv("META_INSTAGRAM_LOGIN_REDIRECT_URI") or "https://www.linasaibot.com/oauth/instagram/callback"
-    ).strip()
+    return (os.getenv("META_INSTAGRAM_LOGIN_REDIRECT_URI") or EXPECTED_INSTAGRAM_LOGIN_REDIRECT_URI).strip()
 
 
 def instagram_login_webhook_callback_path() -> str:
-    return (os.getenv("META_INSTAGRAM_LOGIN_WEBHOOK_PATH") or "/webhook/instagram-login").strip()
+    return (os.getenv("META_INSTAGRAM_LOGIN_WEBHOOK_PATH") or EXPECTED_INSTAGRAM_LOGIN_WEBHOOK_PATH).strip()
 
 
 def instagram_login_webhook_callback_url(public_base: str | None = None) -> str:
@@ -89,9 +88,17 @@ def instagram_login_config_status() -> InstagramLoginConfigStatus:
     if not app_id.isdigit() or app_id != DEFAULT_INSTAGRAM_LOGIN_APP_ID:
         missing.append("META_INSTAGRAM_LOGIN_APP_ID")
         reasons["META_INSTAGRAM_LOGIN_APP_ID"] = f"Instagram Login App ID must be {DEFAULT_INSTAGRAM_LOGIN_APP_ID}"
-    if not instagram_login_redirect_uri():
+    if instagram_login_redirect_uri() != EXPECTED_INSTAGRAM_LOGIN_REDIRECT_URI:
         missing.append("META_INSTAGRAM_LOGIN_REDIRECT_URI")
-        reasons["META_INSTAGRAM_LOGIN_REDIRECT_URI"] = "OAuth redirect URI is required"
+        reasons["META_INSTAGRAM_LOGIN_REDIRECT_URI"] = (
+            f"OAuth redirect URI must be {EXPECTED_INSTAGRAM_LOGIN_REDIRECT_URI}"
+        )
+    if instagram_login_webhook_callback_path() != EXPECTED_INSTAGRAM_LOGIN_WEBHOOK_PATH:
+        missing.append("META_INSTAGRAM_LOGIN_WEBHOOK_PATH")
+        reasons["META_INSTAGRAM_LOGIN_WEBHOOK_PATH"] = f"Webhook path must be {EXPECTED_INSTAGRAM_LOGIN_WEBHOOK_PATH}"
+    if instagram_login_webhook_callback_url() != EXPECTED_INSTAGRAM_LOGIN_WEBHOOK_URL:
+        missing.append("PUBLIC_URL")
+        reasons["PUBLIC_URL"] = f"Instagram webhook URL must be {EXPECTED_INSTAGRAM_LOGIN_WEBHOOK_URL}"
     secret = instagram_login_app_secret()
     if not secret:
         missing.append("META_INSTAGRAM_LOGIN_APP_SECRET")

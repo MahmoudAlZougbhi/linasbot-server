@@ -14,6 +14,16 @@ APPLY="/opt/linasbot/scripts/prod_apply_meta_social_secrets.sh"
 SNAPSHOT="/opt/linasbot/scripts/prod_snapshot_meta_social_rollback.sh"
 RESTORE="/opt/linasbot/scripts/prod_restore_meta_social_rollback.sh"
 VALIDATE="/opt/linasbot/scripts/validate_meta_social_token.py"
+RETIRED_CONFIRM="CONFIRM_RETIRED_META_APP_SUBSCRIPTION"
+
+manage_new() {
+  python3 "$MANAGER" "$@" --expected-app-id "$NEW_APP_ID"
+}
+
+manage_old() {
+  META_RETIRED_APP_SUBSCRIPTION_CONFIRM="$RETIRED_CONFIRM" \
+    python3 "$MANAGER" "$@" --expected-app-id "$OLD_APP_ID"
+}
 
 required_nonempty=(
   META_APP_ID
@@ -72,7 +82,7 @@ rollback_on_error() {
 
   if [ "$phase" = "new_apply_started" ] || [ "$phase" = "new_applied" ] || \
     [ "$phase" = "new_subscribed" ] || [ "$phase" = "enabled" ]; then
-    python3 "$MANAGER" unsubscribe --allow-absent
+    manage_new unsubscribe --allow-absent
     new_unsubscribe_code=$?
     if [ "$new_unsubscribe_code" -ne 0 ]; then
       echo "[meta-cutover] rollback_new_unsubscribe_failed=true" >&2
@@ -84,7 +94,7 @@ rollback_on_error() {
       echo "[meta-cutover] rollback_restore_failed=true" >&2
       exit "$exit_code"
     fi
-    python3 "$MANAGER" subscribe --allow-present
+    manage_old subscribe --allow-present
     old_subscribe_code=$?
     if [ "$old_subscribe_code" -ne 0 ]; then
       echo "[meta-cutover] rollback_old_subscribe_failed=true" >&2
@@ -92,7 +102,7 @@ rollback_on_error() {
     fi
     META_ROLLBACK_ARCHIVE=LATEST ROLLBACK_ENABLE_MESSAGING=true bash "$RESTORE"
   elif [ "$phase" = "old_unsubscribed" ]; then
-    python3 "$MANAGER" subscribe --allow-present
+    manage_old subscribe --allow-present
   fi
 
   if [ "$(current_app_id)" = "$OLD_APP_ID" ]; then
@@ -110,10 +120,10 @@ echo "[meta-cutover] retired_app_active_before=true"
 
 bash "$SNAPSHOT"
 python3 "$VALIDATE"
-python3 "$MANAGER" status --expect current-only
+manage_old status --expect current-only
 echo "[meta-cutover] candidate_and_rollback_ready=true"
 
-python3 "$MANAGER" unsubscribe
+manage_old unsubscribe
 phase="old_unsubscribed"
 echo "[meta-cutover] retired_app_unsubscribed=true"
 
@@ -124,14 +134,14 @@ test "$(current_app_id)" = "$NEW_APP_ID"
 echo "[meta-cutover] new_credentials_applied=true"
 echo "[meta-cutover] messaging_disabled_during_swap=true"
 
-python3 "$MANAGER" status --expect empty
-python3 "$MANAGER" subscribe
+manage_new status --expect empty
+manage_new subscribe
 phase="new_subscribed"
 echo "[meta-cutover] new_app_subscribed=true"
 
 APPLY_ENABLE_MESSAGING=true bash "$APPLY"
 phase="enabled"
-python3 "$MANAGER" status --expect current-only
+manage_new status --expect current-only
 
 python3 - <<'PY'
 import json

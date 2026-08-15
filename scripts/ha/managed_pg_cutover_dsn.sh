@@ -3,6 +3,9 @@
 # Default dry-run; --apply writes env + optional restart. Never prints passwords.
 set -euo pipefail
 
+echo "[managed-pg-cutover] BLOCKED: retired; use a reviewed two-node env transaction" >&2
+exit 2
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 source "${SCRIPT_DIR}/_managed_pg_common.sh"

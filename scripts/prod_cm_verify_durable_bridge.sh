@@ -4,6 +4,10 @@
 # when VERIFY_RELOAD=0; optional safe restart when VERIFY_RELOAD=1).
 set -euo pipefail
 
+# shellcheck source=scripts/ha/require_production_mutation_guard.sh
+source /opt/linasbot/scripts/ha/require_production_mutation_guard.sh
+linas_require_production_mutation_guard "scripts/prod_cm_verify_durable_bridge.sh"
+
 VERIFY_RELOAD="${VERIFY_RELOAD:-0}"
 REPO_ROOT="/opt/linasbot"
 CANONICAL_SUBDIR="$REPO_ROOT/linaslaserbot-2.7.22"
@@ -20,7 +24,7 @@ export CM_PRESERVE_APP_DIR="$APP_DIR"
 echo "[cm-durable-verify] app_dir=$APP_DIR deployed_sha=$(git -C /opt/linasbot rev-parse HEAD)"
 
 # Re-run preserve (idempotent) then readiness gate.
-sudo bash /opt/linasbot/scripts/prod_cm_preserve_durable_flags.sh "$APP_DIR"
+bash /opt/linasbot/scripts/prod_cm_preserve_durable_flags.sh "$APP_DIR"
 
 if [ "$VERIFY_RELOAD" = "1" ]; then
   systemctl daemon-reload

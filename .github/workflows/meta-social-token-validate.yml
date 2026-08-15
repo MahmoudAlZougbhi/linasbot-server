@@ -14,10 +14,14 @@ on:
         type: boolean
         default: false
       instagram_comment_switch_enabled:
-        description: "Canonical Instagram comment reply switch state"
+        description: "Legacy Page-linked Instagram switch (Direct IG is audited separately)"
         required: true
         type: boolean
         default: false
+
+concurrency:
+  group: meta-social-cutover
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -29,23 +33,43 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Validate without rendering credentials
+      - name: Validate from the verified production release
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
         env:
-          META_APP_ID: ${{ secrets.META_APP_ID }}
-          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
-          META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
-          META_GRAPH_API_VERSION: ${{ secrets.META_GRAPH_API_VERSION }}
+          EXPECTED_RELEASE_SHA: ${{ github.sha }}
           META_EXPECT_FACEBOOK_COMMENT_DELIVERY: ${{ inputs.expect_facebook_comment_delivery }}
           META_FACEBOOK_COMMENT_SWITCH_ENABLED: ${{ inputs.facebook_comment_switch_enabled }}
           META_INSTAGRAM_COMMENT_SWITCH_ENABLED: ${{ inputs.instagram_comment_switch_enabled }}
-        run: |
-          PYTHONPATH=${{ github.workspace }} python scripts/validate_meta_social_token.py
-          echo "Contract sections:"
-          echo "  [baseline-dm] token, page relationship, conversations, page subscribed_apps DM subset"
-          echo "  [page-subscription] explicit delivery profile; feed absence is informational when comments disabled"
-          echo "  [app-webhooks] exact app-level fields with DM preserved"
-          echo "  [feature-readiness] informational only; false does not fail this workflow"
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 10m
+          envs: EXPECTED_RELEASE_SHA,META_EXPECT_FACEBOOK_COMMENT_DELIVERY,META_FACEBOOK_COMMENT_SWITCH_ENABLED,META_INSTAGRAM_COMMENT_SWITCH_ENABLED
+          script: |
+            set -euo pipefail
+            exec 9>/run/lock/linasbot-meta-live.lock
+            flock -x 9
+            REPO_DIR=/opt/linasbot
+            DEPLOYED_RELEASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
+            if [ "$DEPLOYED_RELEASE_SHA" != "$EXPECTED_RELEASE_SHA" ]; then
+              echo "[meta-token-validate] workflow SHA does not match deployed release" >&2
+              exit 1
+            fi
+            if ! git -C "$REPO_DIR" diff --quiet "$DEPLOYED_RELEASE_SHA" -- || \
+               ! git -C "$REPO_DIR" diff --cached --quiet "$DEPLOYED_RELEASE_SHA" --; then
+              echo "[meta-token-validate] deployed tracked files differ from release SHA" >&2
+              exit 1
+            fi
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
+            git -C "$REPO_DIR" ls-files --error-unmatch \
+              scripts/validate_meta_social_token.py scripts/ha/run_with_canonical_meta_env.py >/dev/null
+            cd "$REPO_DIR"
+            sudo -E "$REPO_DIR/venv/bin/python" scripts/ha/run_with_canonical_meta_env.py \
+              validate-social-token \
+              --passthrough META_EXPECT_FACEBOOK_COMMENT_DELIVERY \
+              --passthrough META_FACEBOOK_COMMENT_SWITCH_ENABLED \
+              --passthrough META_INSTAGRAM_COMMENT_SWITCH_ENABLED
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"

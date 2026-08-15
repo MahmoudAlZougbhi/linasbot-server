@@ -3,6 +3,9 @@
 # Does NOT deploy app release, merge PR, migrate Requests, or enable BOC.
 set -euo pipefail
 
+echo "[ha-share] BLOCKED: retired legacy mutator; use the transactional HA runbooks" >&2
+exit 2
+
 NODE01_PRIV="10.106.0.3"
 NODE02_PRIV="10.106.0.4"
 VPC_CIDR="10.106.0.0/20"

@@ -47,8 +47,21 @@ def wa_db(tmp_path, monkeypatch):
     reset_engine_for_tests()
 
 
-def test_start_embedded_signup_returns_https_bridge_url(wa_db, monkeypatch):
+def _grant_whatsapp_plan(monkeypatch, tmp_path, tenant_id: str, plan_id: str = "starter") -> None:
+    from services import entitlements_service as es
+    from services.entitlements_service import EntitlementsStore
+    from services.membership import whatsapp_gate as wg
+
+    store = EntitlementsStore(root=tmp_path / "ent-wa-plan")
+    monkeypatch.setattr(es, "entitlements_store", store)
+    monkeypatch.setattr(wg, "entitlements_store", store)
+    monkeypatch.setenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", "linas")
+    store.set_plan(tenant_id=tenant_id, plan_id=plan_id, status="active", source="admin")
+
+
+def test_start_embedded_signup_returns_https_bridge_url(wa_db, monkeypatch, tmp_path):
     monkeypatch.setenv("WHATSAPP_CLOUD_PUBLIC_AVAILABILITY", "true")
+    _grant_whatsapp_plan(monkeypatch, tmp_path, "t1")
     result = start_embedded_signup(tenant_id="t1", actor_user_id="u1", return_surface="mobile")
     assert result["success"] is True
     assert result["authorization_url"].startswith("https://example.test/integrations/whatsapp/embedded-signup?")
@@ -73,9 +86,10 @@ def test_start_rejects_missing_bridge_url(wa_db, monkeypatch):
     assert exc.value.code == "bridge_url_misconfigured"
 
 
-def test_start_rejects_non_pilot_when_public_off(wa_db, monkeypatch):
+def test_start_rejects_non_pilot_when_public_off(wa_db, monkeypatch, tmp_path):
     monkeypatch.setenv("WHATSAPP_CLOUD_PUBLIC_AVAILABILITY", "false")
     monkeypatch.setenv("WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT", "true")
+    _grant_whatsapp_plan(monkeypatch, tmp_path, "not-pilot")
     with pytest.raises(Exception) as exc:
         start_embedded_signup(tenant_id="not-pilot", actor_user_id="u1", return_surface="mobile")
     assert "WHATSAPP_PILOT_REQUIRED" in str(exc.value) or getattr(exc.value, "code", "") == "WHATSAPP_PILOT_REQUIRED"
@@ -92,9 +106,10 @@ def test_nginx_snippet_proxies_whatsapp_bridge():
     assert "proxy_pass http://127.0.0.1:8003" in full
 
 
-def test_pilot_grant_allows_start(wa_db, monkeypatch):
+def test_pilot_grant_allows_start(wa_db, monkeypatch, tmp_path):
     monkeypatch.setenv("WHATSAPP_CLOUD_PUBLIC_AVAILABILITY", "false")
     monkeypatch.setenv("WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT", "true")
+    _grant_whatsapp_plan(monkeypatch, tmp_path, "pilot-t")
     repo = WhatsAppCloudRepository(wa_db)
     repo.grant_pilot(tenant_id="pilot-t", granted_by_user_id="owner", reason="test")
     wa_db.commit()

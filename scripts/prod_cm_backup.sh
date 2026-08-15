@@ -2,6 +2,10 @@
 # Recoverable timestamped backup of production CM-relevant data. Never prints secrets/PII contents.
 set -euo pipefail
 
+# shellcheck source=scripts/ha/require_production_mutation_guard.sh
+source /opt/linasbot/scripts/ha/require_production_mutation_guard.sh
+linas_require_production_mutation_guard "scripts/prod_cm_backup.sh"
+
 APP_DIR="/opt/linasbot"
 DATA_ROOT="${LINASBOT_DATA_ROOT:-/opt/linasbot_data}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"

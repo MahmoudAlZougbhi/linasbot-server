@@ -26,13 +26,34 @@ def classify_send_result(result: Any) -> dict[str, Any]:
     if isinstance(result, dict):
         if result.get("skipped_stale_text_turn"):
             return {"success": False, "retryable": False, "reason": "stale_turn_skip"}
+        if result.get("duplicate_suppressed"):
+            return {
+                "success": False,
+                "retryable": False,
+                "duplicate_suppressed": True,
+                "reason": "meta_outbound_duplicate_suppressed",
+            }
+        if result.get("needs_owner_action"):
+            return {
+                "success": False,
+                "retryable": False,
+                "needs_owner_action": True,
+                "reason": "meta_outbound_ambiguous_needs_owner_action",
+            }
         if result.get("simulated"):
             return {"success": True, "retryable": False, "reason": "simulated", "delivered_externally": False}
         if result.get("success") is True:
+            provider_message_id = result.get("message_id") or result.get("id")
+            if result.get("provider") == "meta" and not str(provider_message_id or "").strip():
+                return {
+                    "success": False,
+                    "retryable": True,
+                    "reason": "meta_send_missing_message_id",
+                }
             return {
                 "success": True,
                 "retryable": False,
-                "provider_message_id": result.get("message_id") or result.get("id"),
+                "provider_message_id": provider_message_id,
                 "raw": {k: result.get(k) for k in ("message_id", "id", "recipient_id") if k in result},
             }
         err = str(result.get("error") or result.get("error_message") or "")
@@ -86,6 +107,12 @@ def record_delivery_outcome(logical_reply_id: str, evidence: dict[str, Any]) -> 
     if evidence.get("success"):
         rec.state = "DELIVERED"
         rec.outbound_state = "delivered"
+    elif evidence.get("needs_owner_action"):
+        rec.state = "NEEDS_OWNER_ACTION"
+        rec.outbound_state = "needs_owner_action"
+    elif evidence.get("duplicate_suppressed"):
+        rec.state = "PERMANENT_DELIVERY_BLOCK"
+        rec.outbound_state = "duplicate_suppressed"
     elif evidence.get("permanent_block"):
         rec.state = "PERMANENT_DELIVERY_BLOCK"
         rec.outbound_state = "permanent_block"

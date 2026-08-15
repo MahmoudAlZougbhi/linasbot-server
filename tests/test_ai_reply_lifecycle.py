@@ -95,4 +95,13 @@ def test_lifecycle_invariants_zero_dup_capture(turn_store: None) -> None:
 def test_classify_send_result_permanent_block() -> None:
     out = classify_send_result({"success": False, "error": "OAuth permission blocked"})
     assert out["permanent_block"] is True
-    assert out["retryable"] is False
+
+
+def test_classify_meta_success_requires_provider_message_id() -> None:
+    missing = classify_send_result({"success": True, "provider": "meta"})
+    accepted = classify_send_result({"success": True, "provider": "meta", "message_id": "mid-1"})
+
+    assert missing == {"success": False, "retryable": True, "reason": "meta_send_missing_message_id"}
+    assert accepted["success"] is True
+    assert accepted["provider_message_id"] == "mid-1"
+    assert accepted["retryable"] is False

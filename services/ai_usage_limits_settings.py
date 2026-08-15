@@ -29,9 +29,7 @@ _HARD_MAX_MINUTES = 10_000
 _HARD_MAX_WORDS = 100_000
 _HARD_MAX_PHOTOS_MSG = 50
 
-CUSTOMER_IMAGE_LIMIT_MESSAGE = (
-    "You've reached this customer's photo-analysis limit. You can send photos to our AI agent again after the limit resets."
-)
+CUSTOMER_IMAGE_LIMIT_MESSAGE = "You've reached this customer's photo-analysis limit. You can send photos to our AI agent again after the limit resets."
 CUSTOMER_CONTEXT_LIMIT_MESSAGE = (
     "I can still help with a shorter question. Please send a brief message about what you need."
 )
@@ -129,7 +127,9 @@ def normalize_ai_limit_settings(raw: dict[str, Any] | None) -> AiLimitSettings:
         unlimited=bool(data.get("unlimited", False)),
         image_per_day=_clamp_int(data.get("image_per_day"), default=RECOMMENDED_IMAGE_PER_DAY, hi=_HARD_MAX_IMAGES),
         image_per_week=_clamp_int(data.get("image_per_week"), default=RECOMMENDED_IMAGE_PER_WEEK, hi=_HARD_MAX_IMAGES),
-        image_per_month=_clamp_int(data.get("image_per_month"), default=RECOMMENDED_IMAGE_PER_MONTH, hi=_HARD_MAX_IMAGES),
+        image_per_month=_clamp_int(
+            data.get("image_per_month"), default=RECOMMENDED_IMAGE_PER_MONTH, hi=_HARD_MAX_IMAGES
+        ),
         photos_per_message=_clamp_int(
             data.get("photos_per_message"), default=RECOMMENDED_PHOTOS_PER_MESSAGE, hi=_HARD_MAX_PHOTOS_MSG
         ),

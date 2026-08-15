@@ -1,5 +1,6 @@
-# Dev / CI quality tools (install alongside requirements.txt)
--r requirements.txt
+# Dev / CI quality tools. `requirements-dev.lock` resolves this file together
+# with requirements.txt so tests and linters share the exact production pins.
+pip==26.2.1
 pytest>=9.0.3,<10
 pytest-asyncio>=0.23.0,<1.0
 anyio>=4.0.0,<5

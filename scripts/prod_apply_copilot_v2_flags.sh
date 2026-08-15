@@ -4,12 +4,12 @@
 # Usage: prod_apply_copilot_v2_flags.sh
 set -euo pipefail
 
+# shellcheck source=scripts/ha/require_production_mutation_guard.sh
+source /opt/linasbot/scripts/ha/require_production_mutation_guard.sh
+linas_require_production_mutation_guard "scripts/prod_apply_copilot_v2_flags.sh"
+
 REPO_ROOT="/opt/linasbot"
-CANONICAL_SUBDIR="$REPO_ROOT/linaslaserbot-2.7.22"
 APP_DIR="$REPO_ROOT"
-if [ -f "$CANONICAL_SUBDIR/main.py" ]; then
-  APP_DIR="$CANONICAL_SUBDIR"
-fi
 
 export LINASBOT_DATA_ROOT="${LINASBOT_DATA_ROOT:-/opt/linasbot_data}"
 export PYTHONPATH="/opt/linasbot${PYTHONPATH:+:$PYTHONPATH}"
@@ -21,10 +21,9 @@ if [ ! -x "$PYTHON_BIN" ]; then
 fi
 
 "$PYTHON_BIN" - <<'PY'
-import os
 from pathlib import Path
 
-from services.cm.durable_flags import default_production_env_paths, upsert_env_file
+from scripts.ha.production_env_cas import atomic_update_canonical_env
 
 updates = {
     # Owner V2 brain (also code-default true)
@@ -40,38 +39,16 @@ updates = {
     # Preserve required production constraints
     "CM_DISABLE_LINAS_LEGACY_BRIDGE": "true",
 }
-# Explicitly do NOT set LINAS_REQUIRE_REDIS=true
-app_dir = os.environ.get("CM_PRESERVE_APP_DIR") or "/opt/linasbot"
-for path in default_production_env_paths(app_dir=app_dir):
-    if not path.parent.exists():
-        continue
-    upsert_env_file(path, updates)
-    print(f"[copilot-v2-flags] upserted path={path} keys={sorted(updates)}")
-
-# Ensure Redis requirement stays off if present
-for path in default_production_env_paths(app_dir=app_dir):
-    if not path.exists():
-        continue
-    text = path.read_text(encoding="utf-8")
-    lines = []
-    changed = False
-    for line in text.splitlines():
-        if line.startswith("LINAS_REQUIRE_REDIS="):
-            val = line.split("=", 1)[1].strip().strip('"').strip("'").lower()
-            if val in {"1", "true", "yes", "on"}:
-                lines.append("LINAS_REQUIRE_REDIS=false")
-                changed = True
-                continue
-        lines.append(line)
-    if changed:
-        path.write_text("\n".join(lines) + ("\n" if text.endswith("\n") else ""), encoding="utf-8")
-        print(f"[copilot-v2-flags] forced LINAS_REQUIRE_REDIS=false path={path}")
+path = Path("/opt/linasbot/.env")
+for line in path.read_text(encoding="utf-8", errors="strict").splitlines():
+    if line.startswith("LINAS_REQUIRE_REDIS="):
+        value = line.split("=", 1)[1].strip().strip('"').strip("'").lower()
+        if value in {"1", "true", "yes", "on"}:
+            updates["LINAS_REQUIRE_REDIS"] = "false"
+        break
+atomic_update_canonical_env(updates)
+print(f"[copilot-v2-flags] canonical_env_updated=true keys={sorted(updates)}")
 PY
-
-# Keep durable bridge flag synced
-if [ -x /opt/linasbot/scripts/prod_cm_preserve_durable_flags.sh ] || [ -f /opt/linasbot/scripts/prod_cm_preserve_durable_flags.sh ]; then
-  bash /opt/linasbot/scripts/prod_cm_preserve_durable_flags.sh "$APP_DIR" || true
-fi
 
 systemctl restart linasbot
 sleep 3
@@ -91,9 +68,7 @@ def read_flag(paths, key, default=""):
                 return line.split("=", 1)[1].strip().strip('"').strip("'")
     return default
 
-app_dir = os.environ.get("CM_PRESERVE_APP_DIR") or "/opt/linasbot"
-from services.cm.durable_flags import default_production_env_paths
-paths = default_production_env_paths(app_dir=app_dir)
+paths = [Path("/opt/linasbot/.env")]
 keys = [
     "OWNER_COPILOT_V2",
     "OWNER_COPILOT_WRITES",

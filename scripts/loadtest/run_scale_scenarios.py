@@ -93,7 +93,11 @@ def _latencies_to_result(
 def _fakeredis() -> Any:
     import fakeredis
 
-    return fakeredis.FakeRedis(decode_responses=True)
+    # Scenario C deliberately runs 128 concurrent workers.  Recent redis-py /
+    # fakeredis combinations default the synthetic pool below that level and
+    # intermittently raise MaxConnectionsError, which measures the harness
+    # configuration rather than the queue/claim behavior under test.
+    return fakeredis.FakeRedis(decode_responses=True, max_connections=256)
 
 
 def scenario_a_mobile(concurrency: int) -> ScenarioResult:

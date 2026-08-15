@@ -43,13 +43,17 @@ cd /opt/linasbot && git rev-parse HEAD
 # Also note: https://github.com/MahmoudAlZougbhi/linasbot-server/actions (Deploy to Production → last green commit)
 ```
 
-7. On **both** app nodes, **pre-pin file SoT** in `/opt/linasbot/.env` **before** merge so the new code defaults (`postgres`) do not fail-closed on first restart with empty/unimported tables:
+7. Billing/auth may retain their own file pins until their imports complete. For
+   Meta, the 2026-08-14 inventory supersedes this historical step: Managed PG is
+   already newer/authoritative, so **never pin Meta to the stale file**. Stage
+   explicit `META_REGISTRY_BACKEND=postgres` identically on both nodes through the
+   transactional env/deploy procedure:
 
 ```bash
 # Exact lines to ADD (or keep) until import+parity complete — names only; no secrets:
 LINAS_BILLING_BACKEND=file
 LINAS_AUTH_TOKEN_BACKEND=file
-META_REGISTRY_BACKEND=file
+META_REGISTRY_BACKEND=postgres
 ```
 
 8. Apple `.p8` files present on nodes at protected `0600` paths (or deploy secrets in the same window as ASSN enablement) — see §9. Do **not** commit keys.
@@ -88,10 +92,10 @@ push/merge → main
 | B | Watch **Quality Gates** on `main` for the merge SHA | All jobs SUCCESS |
 | C | Watch **Deploy to Production** (`workflow_run` after gates) | SSH Deploy SUCCESS |
 | D | Confirm both LB backends healthy | `https://linasaibot.com/api/health` → 200; LB target health green |
-| E | Confirm file SoT pins still present on both nodes | §0.7 still set |
+| E | Confirm exact canonical env parity; Meta explicitly `postgres` | §0.7 + Meta HA runbook |
 | F | Apply Alembic **only through Apple** (§3) on Managed PG | `alembic current` = `20260812_apple_billing` |
-| G | Import file → PG + parity (§3) | imports idempotent; parity OK |
-| H | Cutover env: **remove** the three `=file` pins (unset = code default `postgres`) on **both** nodes; optional brief `META_REGISTRY_BACKEND=dual` then remove | env updated |
+| G | Billing/auth import per their runbooks; Meta PG backup + read-only deep verify (§3) | no Meta file import |
+| H | Billing/auth cutover per their runbooks; keep explicit `META_REGISTRY_BACKEND=postgres` on both nodes (never `dual`) | env updated |
 | I | Restart app on both nodes (`systemctl restart linasbot` or redeploy) | `/api/ready` ok |
 | J | Post-deploy smoke (§6) | all checks pass |
 | K | Soak window (owner-chosen duration; recommend ≥24h of normal traffic) | no financial/auth regressions |
@@ -126,8 +130,9 @@ push/merge → main
 ### When (relative to deploy)
 
 1. **After** Deploy SUCCESS puts this branch’s Alembic files on disk.
-2. **While** `LINAS_BILLING_BACKEND=file` / `LINAS_AUTH_TOKEN_BACKEND=file` / `META_REGISTRY_BACKEND=file` still pinned (§0.7).
-3. **Before** removing those pins / relying on postgres defaults.
+2. **While** billing/auth retain their approved file pins, but Meta is explicitly
+   `META_REGISTRY_BACKEND=postgres` (§0.7 and the Meta HA runbook).
+3. **Before** removing billing/auth pins; never unset or switch Meta to stale file/dual.
 
 ### Exact commands (Managed PG via app env)
 
@@ -160,13 +165,14 @@ source venv/bin/activate
 
 python scripts/ha/import_billing_auth_to_postgres.py --dry-run
 python scripts/ha/import_billing_auth_to_postgres.py
-python scripts/ha/import_meta_registry_to_postgres.py
-# optional explicit store:
-# python scripts/ha/import_meta_registry_to_postgres.py --store /path/to/registry.json
 
 python scripts/ha/verify_billing_auth_parity.py
-python scripts/ha/import_meta_registry_to_postgres.py   # idempotent fingerprint re-check
 ```
+
+**2026-08-14 Meta registry safety override:** do not run the old file import or
+an “idempotent” re-import. Managed Postgres is non-empty/newer and NFS is stale.
+Follow `docs/scale/META_REGISTRY_POSTGRES_HA_CUTOVER.md`; the guarded importer is
+dry-run by default and intentionally refuses the observed production shape.
 
 Then complete §2 steps H–J (unset file pins → restart → smoke).
 
@@ -185,9 +191,10 @@ Enable **only after** Mahmoud soak GO and §6 smoke remains green.
 
 ### A. Postgres SoT (expected steady state)
 
-After import+parity, on **both** nodes:
+After the current Postgres authority is backed up and verified, on **both** nodes:
 
-- **Unset** (preferred) or set explicitly:
+- Set exact steady-state flags; `META_REGISTRY_BACKEND` must be explicit because
+  an omitted default is not sufficient for NFS retirement:
   - `LINAS_BILLING_BACKEND=postgres`
   - `LINAS_AUTH_TOKEN_BACKEND=postgres`
   - `META_REGISTRY_BACKEND=postgres`
@@ -236,13 +243,13 @@ Confirm: `https://linasaibot.com/api/health` and `/api/ready`.
 ### B. SoT / flag rollback (if postgres cutover misbehaves)
 
 ```bash
-# Emergency file SoT — short window only (node-local divergence risk):
+# Billing/auth emergency rollback only; Meta has a separate PG snapshot rollback.
 LINAS_BILLING_BACKEND=file
 LINAS_AUTH_TOKEN_BACKEND=file
-META_REGISTRY_BACKEND=file   # or dual if PG still writable and mirror needed
 ```
 
-Restart `linasbot`. Re-import from file later if PG was partially written.
+Never enable or re-import the stale Meta NFS file. Follow the registry-only
+encrypted four-table restore in `docs/scale/META_REGISTRY_POSTGRES_HA_CUTOVER.md`.
 
 Apple transaction / credit-grant **tables** remain Postgres regardless of billing flag.
 

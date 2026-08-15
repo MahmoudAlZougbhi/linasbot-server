@@ -5,19 +5,92 @@ on:
   push:
     branches: [main, fix/**, feat/**]
 
+env:
+  LINAS_PYTHON_RUNTIME_NAME: cpython-3.13.15+20260814-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz
+  LINAS_PYTHON_RUNTIME_URL: https://github.com/astral-sh/python-build-standalone/releases/download/20260814/cpython-3.13.15%2B20260814-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz
+  LINAS_PYTHON_RUNTIME_SHA256: aaca2af2ab4d7b68a712660d1334c0cfd5ec13c0312ccd30c29122d8d0342320
+  LINAS_PYTHON_EXECUTABLE_SHA256: ce20f82411f2b0ccdf3e2212ca62303519521d73d25178588f1a9c8d4935c866
+  LINAS_PYTHON_LIBPYTHON_SHA256: 965dcc1afd5934923b5a930e54afcaafc572485394ae33c35d27038bd943dcc5
+  LINAS_PYTHON_RUNTIME_TREE_SHA256: e4f022d45328996d72ed818a4cecca7588b71589b8804735535ecb88a9856afc
+
 jobs:
   backend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Install exact production Python runtime
+        run: |
+          set -euo pipefail
+          umask 022
+          archive="$RUNNER_TEMP/$LINAS_PYTHON_RUNTIME_NAME"
+          runtime="$RUNNER_TEMP/linas-cpython-3.13.15"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$archive" "$LINAS_PYTHON_RUNTIME_URL"
+          echo "$LINAS_PYTHON_RUNTIME_SHA256  $archive" | sha256sum --check --strict
+          if tar -tzf "$archive" | awk '
+            $0 !~ /^python\// || $0 ~ /(^|\/)\.\.(\/|$)/ || $0 ~ /^\// { bad=1 }
+            END { exit bad ? 0 : 1 }
+          '; then
+            echo "Portable Python archive path contract is invalid" >&2
+            exit 1
+          fi
+          mkdir "$runtime"
+          tar --extract --gzip --file "$archive" --directory "$runtime" \
+            --strip-components=1 --no-same-owner --no-same-permissions
+          echo "$LINAS_PYTHON_EXECUTABLE_SHA256  $runtime/bin/python3.13" | sha256sum --check --strict
+          echo "$LINAS_PYTHON_LIBPYTHON_SHA256  $runtime/lib/libpython3.13.so.1.0" | sha256sum --check --strict
+          runtime_tree_before="$(python3 -B -c 'import sys; from pathlib import Path; from scripts.ha.release_artifact_contract import python_runtime_tree_sha256; print(python_runtime_tree_sha256(Path(sys.argv[1])))' "$runtime")"
+          runtime_count_before="$(find "$runtime" -xdev -print | wc -l | tr -d ' ')"
+          test "$runtime_tree_before" = "$LINAS_PYTHON_RUNTIME_TREE_SHA256"
+          test "$(PYTHONDONTWRITEBYTECODE=1 "$runtime/bin/python3.13" -B --version)" = "Python 3.13.15"
+          test "$(PYTHONDONTWRITEBYTECODE=1 "$runtime/bin/python3.13" -B -m pip --version | awk '{print $2}')" = "26.2.1"
+          PYTHONDONTWRITEBYTECODE=1 "$runtime/bin/python3.13" -B -m venv "$RUNNER_TEMP/linas-qg-venv"
+          runtime_tree_after="$(python3 -B -c 'import sys; from pathlib import Path; from scripts.ha.release_artifact_contract import python_runtime_tree_sha256; print(python_runtime_tree_sha256(Path(sys.argv[1])))' "$runtime")"
+          runtime_count_after="$(find "$runtime" -xdev -print | wc -l | tr -d ' ')"
+          test "$runtime_tree_after" = "$runtime_tree_before"
+          test "$runtime_count_after" = "$runtime_count_before"
+          find "$RUNNER_TEMP/linas-qg-venv" -type f -name '*.pyc' -delete
+          test "$("$RUNNER_TEMP/linas-qg-venv/bin/python" -B --version)" = "Python 3.13.15"
+          test "$("$RUNNER_TEMP/linas-qg-venv/bin/python" -B -m pip --version | awk '{print $2}')" = "26.2.1"
+          echo "PYTHONDONTWRITEBYTECODE=1" >> "$GITHUB_ENV"
+          echo "LINAS_PYTHON_ARCHIVE=$archive" >> "$GITHUB_ENV"
+          echo "LINAS_PYTHON_RUNTIME=$runtime" >> "$GITHUB_ENV"
+          echo "LINAS_QG_VENV=$RUNNER_TEMP/linas-qg-venv" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/linas-qg-venv/bin" >> "$GITHUB_PATH"
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          set -euo pipefail
+          python scripts/verify_python_locks.py
+          test "$(uname -s)" = "Linux"
+          test "$(uname -m)" = "x86_64"
+          test "$(python -c 'import platform,sys; print(platform.python_implementation(), platform.python_version(), sys.implementation.cache_tag)')" = "CPython 3.13.15 cpython-313"
+          test "$(python -c 'import sysconfig; print(sysconfig.get_platform())')" = "linux-x86_64"
+          wheelhouse="$RUNNER_TEMP/linas-release-wheelhouse"
+          mkdir "$wheelhouse"
+          python -m pip download \
+            --dest "$wheelhouse" \
+            --only-binary=:all: \
+            --require-hashes \
+            -r requirements.lock
+          test -n "$(find "$wheelhouse" -type f -name '*.whl' -print -quit)"
+          test -z "$(find "$wheelhouse" -type f ! -name '*.whl' -print -quit)"
+          python -m pip install \
+            --no-index \
+            --find-links="$wheelhouse" \
+            --no-compile \
+            --only-binary=:all: \
+            --require-hashes \
+            -r requirements.lock
+          python -m pip check
+          python -m pip install \
+            --no-compile \
+            --only-binary=:all: \
+            --require-hashes \
+            -r requirements-dev.lock
+          test "$(python -m pip --version | awk '{print $2}')" = "26.2.1"
+          python -m pip check
+          test -z "$(find "$LINAS_QG_VENV" -type f -name '*.pyc' -print -quit)"
+          echo "LINAS_RELEASE_WHEELHOUSE=$wheelhouse" >> "$GITHUB_ENV"
       - name: Ruff lint (full backend scope)
         run: >
           ruff check
@@ -62,27 +135,57 @@ jobs:
           ENVIRONMENT: test
           DISABLE_API_DOCS: "true"
         run: pytest tests/ -q --tb=short
+      - name: Copilot V2 manifest freshness
+        run: python scripts/check_copilot_v2_manifest.py
       - name: Dependency audit
-        run: pip-audit -r requirements.txt --strict
+        run: pip-audit -r requirements.lock --strict
       - name: Bandit security lint (high+)
         run: bandit -q -r services modules utils -x '*/tests/*' -lll
+      - name: Build authenticated backend intermediate
+        run: |
+          set -euo pipefail
+          intermediate="$RUNNER_TEMP/linas-backend-intermediate"
+          mkdir "$intermediate"
+          python -B -m scripts.ha.release_artifact_cli pack \
+            --source "$LINAS_RELEASE_WHEELHOUSE" \
+            --archive "$intermediate/wheelhouse.tar"
+          python -B -m scripts.ha.release_artifact_cli backend-attestation \
+            --archive "$intermediate/wheelhouse.tar" \
+            --output "$intermediate/backend-intermediate.json" \
+            --target-sha "$GITHUB_SHA" \
+            --requirements-lock requirements.lock \
+            --requirements-dev-lock requirements-dev.lock \
+            --runtime-executable "$LINAS_PYTHON_RUNTIME/bin/python3.13" \
+            --runtime-archive "$LINAS_PYTHON_ARCHIVE" \
+            --pip-version "$(python -m pip --version | awk '{print $2}')"
+      - name: Upload authenticated backend intermediate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: linasbot-wheelhouse-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/linas-backend-intermediate
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
 
   frontend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: dashboard
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           # jsdom@30 → undici@8 requires Node >=22.19 (markAsUncloneable).
           # Node 20 fails vitest/jsdom worker startup in CI.
-          node-version: "22"
+          node-version: "22.23.2"
           cache: npm
           cache-dependency-path: dashboard/package-lock.json
       - name: Install
-        run: npm ci
+        run: |
+          test "$(node --version)" = "v22.23.2"
+          test "$(npm --version)" = "10.9.8"
+          npm ci
       - name: Lint (0 errors, 0 warnings)
         run: npm run lint
       - name: Typecheck (checkJs / JSDoc strict)
@@ -91,8 +194,6 @@ jobs:
         run: node ../scripts/npm_audit_gate.mjs
       - name: Test
         run: npm test
-      - name: Build
-        run: npm run build
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Content Management browser smoke
@@ -101,29 +202,127 @@ jobs:
           CM_PW_CHANNEL: bundled
           CI: true
         run: npm run test:e2e:cm
+      - name: Build production dashboard after checks
+        run: npm run build
+      - name: Build authenticated frontend intermediate
+        working-directory: .
+        run: |
+          set -euo pipefail
+          intermediate="$RUNNER_TEMP/linas-frontend-intermediate"
+          mkdir "$intermediate"
+          python3 -B -m scripts.ha.release_artifact_cli pack \
+            --source dashboard/build \
+            --archive "$intermediate/dashboard-build.tar"
+          python3 -B -m scripts.ha.release_artifact_cli frontend-attestation \
+            --archive "$intermediate/dashboard-build.tar" \
+            --output "$intermediate/frontend-intermediate.json" \
+            --target-sha "$GITHUB_SHA" \
+            --package-lock dashboard/package-lock.json \
+            --node-version "$(node --version)" \
+            --npm-version "$(npm --version)"
+      - name: Upload authenticated frontend intermediate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: linasbot-dashboard-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/linas-frontend-intermediate
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  release-artifact:
+    runs-on: ubuntu-24.04
+    needs: [backend, frontend]
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download authenticated backend intermediate
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: linasbot-wheelhouse-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/linas-downloaded-backend
+      - name: Download authenticated frontend intermediate
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: linasbot-dashboard-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/linas-downloaded-frontend
+      - name: Assemble and verify closed release artifact
+        run: |
+          set -euo pipefail
+          umask 022
+          runtime_archive="$RUNNER_TEMP/linas-downloaded-backend/$LINAS_PYTHON_RUNTIME_NAME"
+          runtime="$RUNNER_TEMP/linas-release-cpython-3.13.15"
+          echo "$LINAS_PYTHON_RUNTIME_SHA256  $runtime_archive" | sha256sum --check --strict
+          if tar -tzf "$runtime_archive" | awk '
+            $0 !~ /^python\// || $0 ~ /(^|\/)\.\.(\/|$)/ || $0 ~ /^\// { bad=1 }
+            END { exit bad ? 0 : 1 }
+          '; then
+            echo "Portable Python archive path contract is invalid" >&2
+            exit 1
+          fi
+          mkdir "$runtime"
+          tar --extract --gzip --file "$runtime_archive" --directory "$runtime" \
+            --strip-components=1 --no-same-owner --no-same-permissions
+          echo "$LINAS_PYTHON_EXECUTABLE_SHA256  $runtime/bin/python3.13" | sha256sum --check --strict
+          echo "$LINAS_PYTHON_LIBPYTHON_SHA256  $runtime/lib/libpython3.13.so.1.0" | sha256sum --check --strict
+          runtime_tree_before="$(python3 -B -c 'import sys; from pathlib import Path; from scripts.ha.release_artifact_contract import python_runtime_tree_sha256; print(python_runtime_tree_sha256(Path(sys.argv[1])))' "$runtime")"
+          runtime_count_before="$(find "$runtime" -xdev -print | wc -l | tr -d ' ')"
+          test "$runtime_tree_before" = "$LINAS_PYTHON_RUNTIME_TREE_SHA256"
+          test "$(PYTHONDONTWRITEBYTECODE=1 "$runtime/bin/python3.13" -B --version)" = "Python 3.13.15"
+          PYTHONDONTWRITEBYTECODE=1 "$runtime/bin/python3.13" -B -m scripts.ha.release_artifact_cli assemble \
+            --backend-dir "$RUNNER_TEMP/linas-downloaded-backend" \
+            --frontend-dir "$RUNNER_TEMP/linas-downloaded-frontend" \
+            --repository-root "$GITHUB_WORKSPACE" \
+            --repository "$GITHUB_REPOSITORY" \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --target-sha "$GITHUB_SHA" \
+            --requirements-lock requirements.lock \
+            --requirements-dev-lock requirements-dev.lock \
+            --package-lock dashboard/package-lock.json \
+            --output-dir "$RUNNER_TEMP/linasbot-release-$GITHUB_SHA"
+          runtime_tree_after="$(python3 -B -c 'import sys; from pathlib import Path; from scripts.ha.release_artifact_contract import python_runtime_tree_sha256; print(python_runtime_tree_sha256(Path(sys.argv[1])))' "$runtime")"
+          runtime_count_after="$(find "$runtime" -xdev -print | wc -l | tr -d ' ')"
+          test "$runtime_tree_after" = "$runtime_tree_before"
+          test "$runtime_count_after" = "$runtime_count_before"
+      - name: Upload closed release artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: linasbot-release-${{ github.sha }}
+          path: ${{ runner.temp }}/linasbot-release-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+          overwrite: true
 
   mobile:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: mobile/linas-ai
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: "22"
+          node-version: "22.23.2"
           cache: npm
           cache-dependency-path: mobile/linas-ai/package-lock.json
       - name: Install
-        run: npm ci
+        run: |
+          test "$(node --version)" = "v22.23.2"
+          test "$(npm --version)" = "10.9.8"
+          npm ci
       - name: Typecheck
         run: npm run typecheck
       - name: Line limit
         working-directory: .
         run: node scripts/check_source_line_limit.mjs mobile/linas-ai/src mobile/linas-ai/App.tsx services/owner_copilot_v2
-      - name: Copilot V2 manifest freshness
-        working-directory: .
-        run: python scripts/check_copilot_v2_manifest.py
       - name: Mobile secret scan
         working-directory: .
         run: node scripts/scan_mobile_bundle_secrets.mjs
@@ -133,25 +332,53 @@ jobs:
         run: npx expo export --platform ios --output-dir /tmp/linas-ai-ios-export
 
   secret-scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Secret patterns
         run: bash scripts/scan_tracked_secrets.sh
 
   deploy-readiness:
-    runs-on: ubuntu-latest
-    needs: [backend, frontend, mobile, secret-scan]
+    runs-on: ubuntu-24.04
+    needs: [backend, frontend, mobile, secret-scan, release-artifact]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Install exact production Python runtime
+        run: |
+          set -euo pipefail
+          umask 022
+          archive="$RUNNER_TEMP/linas-cpython-3.13.15.tar.gz"
+          runtime="$RUNNER_TEMP/linas-cpython-3.13.15"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$archive" "$LINAS_PYTHON_RUNTIME_URL"
+          echo "$LINAS_PYTHON_RUNTIME_SHA256  $archive" | sha256sum --check --strict
+          if tar -tzf "$archive" | awk '
+            $0 !~ /^python\// || $0 ~ /(^|\/)\.\.(\/|$)/ || $0 ~ /^\// { bad=1 }
+            END { exit bad ? 0 : 1 }
+          '; then
+            echo "Portable Python archive path contract is invalid" >&2
+            exit 1
+          fi
+          mkdir "$runtime"
+          tar --extract --gzip --file "$archive" --directory "$runtime" \
+            --strip-components=1 --no-same-owner --no-same-permissions
+          test "$(PYTHONDONTWRITEBYTECODE=1 "$runtime/bin/python3.13" -B --version)" = "Python 3.13.15"
+          test "$(PYTHONDONTWRITEBYTECODE=1 "$runtime/bin/python3.13" -B -m pip --version | awk '{print $2}')" = "26.2.1"
+          PYTHONDONTWRITEBYTECODE=1 "$runtime/bin/python3.13" -B -m venv "$RUNNER_TEMP/linas-qg-venv"
+          find "$RUNNER_TEMP/linas-qg-venv" -type f -name '*.pyc' -delete
+          test "$("$RUNNER_TEMP/linas-qg-venv/bin/python" -B --version)" = "Python 3.13.15"
+          test "$("$RUNNER_TEMP/linas-qg-venv/bin/python" -B -m pip --version | awk '{print $2}')" = "26.2.1"
+          echo "PYTHONDONTWRITEBYTECODE=1" >> "$GITHUB_ENV"
+          echo "LINAS_PYTHON_RUNTIME=$runtime" >> "$GITHUB_ENV"
+          echo "LINAS_QG_VENV=$RUNNER_TEMP/linas-qg-venv" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/linas-qg-venv/bin" >> "$GITHUB_PATH"
       - name: Install backend deps for readiness unit checks
         run: |
-          python -m pip install --upgrade pip
-          # pytest lives in requirements-dev.txt (not requirements.txt).
-          pip install -r requirements-dev.txt
+          python scripts/verify_python_locks.py
+          python -m pip install --no-compile --only-binary=:all: --require-hashes -r requirements-dev.lock
+          test "$(python -m pip --version | awk '{print $2}')" = "26.2.1"
+          python -m pip check
+          test -z "$(find "$LINAS_QG_VENV" -type f -name '*.pyc' -print -quit)"
       - name: Durable bridge-flag readiness (unit)
         env:
           PYTHONPATH: .
@@ -165,8 +392,8 @@ jobs:
           set -euo pipefail
           echo "Quality gates passed. Production deploy is NOT executed in this workflow."
           echo "Required release check: GET /api/ready must return ok=true after deploy."
-          echo "Required: deploy.sh must call scripts/prod_cm_preserve_durable_flags.sh so"
-          echo "CM_DISABLE_LINAS_LEGACY_BRIDGE survives dual-.env / systemd EnvironmentFile reloads."
+          echo "Required: standalone deploy.sh remains fail-closed; the protected two-node helper"
+          echo "preserves the canonical environment instead of deriving node-local CM values."
           echo "Rollback artifact: previous container image tag / previous git SHA on main."
           echo "Emergency legacy rollback flag: CM_EMERGENCY_FORCE_LEGACY=true (EnvironmentFile)."
           test -f docs/AUDIT_CLOSURE_LEDGER.md
@@ -174,13 +401,15 @@ jobs:
           test -f .github/workflows/deploy.yml
           test -f scripts/prod_cm_preserve_durable_flags.sh
           test -f services/cm/durable_flags.py
-          grep -q 'prod_cm_preserve_durable_flags.sh' deploy.sh
+          grep -Fq 'Standalone deploy.sh is disabled.' deploy.sh
+          grep -Fq 'manual protected .github/workflows/deploy.yml' deploy.sh
+          grep -Fq 'never derives node-local CM/model values or mutates canonical .env' scripts/ha/deploy_meta_release_ha.sh
+          grep -Fq 'cat-file -e "$target_sha:scripts/prod_cm_preserve_durable_flags.sh"' scripts/ha/deploy_meta_release_ha.sh
           test -f deploy/systemd/linasbot-worker@.service
           test -f scripts/run_queue_worker.py
           test -f services/queues/redis_backend.py
-          grep -q 'linasbot-worker@' deploy.sh
-          grep -q 'api/queue/ready' deploy.sh
-          grep -q 'prod_cm_preserve_durable_flags.sh' deploy.sh
+          grep -q 'linasbot-worker@' scripts/ha/deploy_meta_release_ha.sh
+          grep -q 'api/queue/ready' scripts/ha/deploy_meta_release_ha.sh
           # Durable queues must remain opt-in until Redis is live (do not hard-fail prod without flag).
           grep -q 'LINAS_REQUIRE_REDIS' services/queues/config.py
           python -m pytest -q tests/test_phase2_queues_credits.py tests/test_phase2_app_core.py tests/test_phase2_wave0.py

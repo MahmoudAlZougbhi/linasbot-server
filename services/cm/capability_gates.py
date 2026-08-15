@@ -53,11 +53,14 @@ def human_handoff_enabled(tenant_id: str) -> bool:
     if isinstance(raw_limits, dict) and "human_handoff_enabled" in raw_limits:
         return bool(raw_limits["human_handoff_enabled"])
 
-    from services.cm.actions import ACTION_HUMAN_HANDOFF, action_enabled, load_actions_section
+    from services.cm.actions import ACTION_HUMAN_HANDOFF, action_enabled
 
-    actions = load_actions_section(tid)
-    if actions is not None:
-        return action_enabled(actions, ACTION_HUMAN_HANDOFF)
+    # Read the fallback from the same verified published snapshot as AI Limits.
+    # Re-loading through actions.load_actions_section can observe another
+    # pointer (and made this gate disagree with an otherwise valid snapshot).
+    raw_actions = sections.get("actions")
+    if raw_actions is not None:
+        return action_enabled(raw_actions, ACTION_HUMAN_HANDOFF)
 
     limits = AiLimitsSection.model_validate(raw_limits or {})
     return bool(limits.human_handoff_enabled)

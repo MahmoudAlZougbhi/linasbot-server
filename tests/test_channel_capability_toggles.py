@@ -388,6 +388,40 @@ def test_dm_capability_effective_when_requested_and_healthy(monkeypatch) -> None
     assert state["status"] == "live_verified"
 
 
+def test_public_direct_instagram_dm_requires_its_own_app_approval(monkeypatch) -> None:
+    binding = _ig_binding(
+        tenant_id="customer_a",
+        auth_flow="instagram_login",
+        webhook_subscribed_fields=("messages", "messaging_postbacks", "comments"),
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state._action_requested",
+        lambda *_a, **_k: True,
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state.canonical_channel_bindings",
+        lambda *_a, **_k: [binding],
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state.get_meta_app_registry",
+        lambda: _Registry(_Cred(("instagram_business_basic", "instagram_business_manage_messages"))),
+    )
+    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: True)
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_ADVANCED_ACCESS_APPROVED", "false")
+
+    blocked = dm_capability_state("customer_a", "instagram")
+
+    assert blocked["blocker_code"] == "meta_approval_required"
+    assert blocked["effective_enabled"] is False
+    assert blocked["live_verified"] is False
+    assert blocked["app_review"]["approval_domain"] == "instagram_login"
+
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_ADVANCED_ACCESS_APPROVED", "true")
+    approved = dm_capability_state("customer_a", "instagram")
+    assert approved["effective_enabled"] is True
+    assert approved["live_verified"] is True
+
+
 def test_tenant_isolation_bindings(monkeypatch) -> None:
     other = _fb_binding(tenant_id="other", asset_id="page-other")
     monkeypatch.setattr(

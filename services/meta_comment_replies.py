@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections import deque
@@ -22,6 +23,8 @@ _COMMENT_RATE_LIMIT_PER_ASSET = 30
 _RATE_BUCKETS: dict[str, deque[float]] = {}
 _SENT_REPLY_IDS: dict[str, float] = {}
 _SENT_REPLY_TTL_SECONDS = 86400.0
+_COMMENT_REPLY_PAGE_SIZE = 100
+_COMMENT_REPLY_MAX_PAGES = 100
 
 
 @dataclass(frozen=True)
@@ -29,6 +32,35 @@ class CommentReplyResult:
     status: str
     reason: str = ""
     reply_id: str = ""
+
+
+class MetaCommentReplyGenerationError(RuntimeError):
+    """Transient AI generation failure that should remain eligible for retry."""
+
+
+class MetaCommentReplyInspectionError(RuntimeError):
+    """The provider reply list could not be proven complete and trustworthy."""
+
+
+def _provider_rejection_is_definitive(reason: str) -> bool:
+    """Only an explicit client rejection proves Meta did not accept the send."""
+
+    safe_reason = str(reason or "").strip().lower()
+    if safe_reason in {"empty_private_reply", "missing_comment_id", "missing_instagram_account"}:
+        return True
+    for prefix in ("http_", "graph_http_"):
+        if not safe_reason.startswith(prefix):
+            continue
+        status_text = safe_reason[len(prefix) :].split("_", 1)[0]
+        if status_text.isdigit() and 400 <= int(status_text) < 500:
+            return True
+    return False
+
+
+def comment_reply_requires_retry(result: CommentReplyResult) -> bool:
+    """Return whether the durable event/claim must remain non-terminal."""
+
+    return result.status == "failed" or result.reason == "rate_limited"
 
 
 def _rate_limit_key(binding: MetaAssetBinding) -> str:
@@ -76,7 +108,11 @@ def _is_self_comment(event: dict[str, Any], binding: MetaAssetBinding) -> bool:
         return True
     if binding.channel == "facebook":
         return author_id == binding.page_id
-    return author_id == binding.instagram_account_id or author_id == binding.asset_id
+    if author_id == binding.instagram_account_id or author_id == binding.asset_id:
+        return True
+    author_username = str(event.get("author_username") or "").strip().casefold()
+    binding_username = str(binding.instagram_username or "").strip().casefold()
+    return bool(author_username and binding_username and author_username == binding_username)
 
 
 async def _graph_get_json(
@@ -86,14 +122,19 @@ async def _graph_get_json(
     token: str,
     params: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    response = await client.get(path, params=params or {}, headers={"Authorization": f"Bearer {token}"})
+    try:
+        response = await client.get(path, params=params or {}, headers={"Authorization": f"Bearer {token}"})
+    except httpx.HTTPError as exc:
+        raise MetaCommentReplyInspectionError("request_failed") from exc
     if response.status_code < 200 or response.status_code >= 300:
-        return {}
+        raise MetaCommentReplyInspectionError(f"http_{response.status_code}")
     try:
         payload = response.json()
-    except ValueError:
-        return {}
-    return payload if isinstance(payload, dict) else {}
+    except ValueError as exc:
+        raise MetaCommentReplyInspectionError("invalid_json") from exc
+    if not isinstance(payload, dict) or payload.get("error"):
+        raise MetaCommentReplyInspectionError("invalid_response")
+    return payload
 
 
 async def _graph_post_form(
@@ -115,7 +156,9 @@ async def _graph_post_form(
     if payload.get("error"):
         return False, "graph_error", payload
     reply_id = str(payload.get("id") or "").strip()
-    return True, "ok", payload if reply_id else {"id": reply_id}
+    if not reply_id:
+        return False, "missing_reply_id", payload
+    return True, "ok", payload
 
 
 async def _comment_has_page_reply(
@@ -126,23 +169,52 @@ async def _comment_has_page_reply(
     token: str,
     graph_url: str,
 ) -> bool:
-    payload = await _graph_get_json(
-        client,
-        graph_url,
-        token=token,
-        params={"fields": "from{id}", "limit": "10"},
-    )
-    rows = payload.get("data")
-    if not isinstance(rows, list):
-        return False
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        from_raw = row.get("from")
-        from_dict = from_raw if isinstance(from_raw, dict) else {}
-        if str(from_dict.get("id") or "") == owner_id:
-            return True
-    return False
+    if not owner_id:
+        raise MetaCommentReplyInspectionError("missing_owner_id")
+
+    params = {"fields": "from{id}", "limit": str(_COMMENT_REPLY_PAGE_SIZE)}
+    seen_cursors: set[str] = set()
+    for _page_number in range(_COMMENT_REPLY_MAX_PAGES):
+        payload = await _graph_get_json(
+            client,
+            graph_url,
+            token=token,
+            params=params,
+        )
+        rows = payload.get("data")
+        if not isinstance(rows, list):
+            raise MetaCommentReplyInspectionError("invalid_rows")
+        for row in rows:
+            if not isinstance(row, dict):
+                raise MetaCommentReplyInspectionError("invalid_row")
+            from_raw = row.get("from")
+            if not isinstance(from_raw, dict) or not str(from_raw.get("id") or "").strip():
+                raise MetaCommentReplyInspectionError("missing_reply_owner")
+            if str(from_raw.get("id") or "").strip() == owner_id:
+                return True
+
+        paging_raw = payload.get("paging")
+        if paging_raw is None:
+            return False
+        if not isinstance(paging_raw, dict):
+            raise MetaCommentReplyInspectionError("invalid_paging")
+        if not str(paging_raw.get("next") or "").strip():
+            return False
+        cursors_raw = paging_raw.get("cursors")
+        cursors = cursors_raw if isinstance(cursors_raw, dict) else {}
+        after = str(cursors.get("after") or "").strip()
+        if not after or after in seen_cursors:
+            raise MetaCommentReplyInspectionError("invalid_paging_cursor")
+        seen_cursors.add(after)
+        # Reuse the already-validated Graph endpoint and only carry Meta's opaque
+        # cursor forward. Never follow an arbitrary paging URL or embedded token.
+        params = {
+            "fields": "from{id}",
+            "limit": str(_COMMENT_REPLY_PAGE_SIZE),
+            "after": after,
+        }
+
+    raise MetaCommentReplyInspectionError("pagination_limit_exceeded")
 
 
 async def _generate_comment_reply_text(
@@ -200,7 +272,7 @@ async def _generate_comment_reply_text(
                 "customer_reply_v2 comment path failed closed: %s",
                 type(v2_exc).__name__,
             )
-            return None
+            raise MetaCommentReplyGenerationError("customer reply generation failed") from v2_exc
         if v2_outcome.reply:
             return str(v2_outcome.reply).strip()[:900]
         return None
@@ -218,6 +290,7 @@ async def process_meta_comment_event(
     *,
     simulation: bool = False,
     capture_send: list[dict[str, Any]] | None = None,
+    inbound_event_id: str | None = None,
 ) -> CommentReplyResult:
     event = resolved.event
     binding = resolved.binding
@@ -291,13 +364,22 @@ async def process_meta_comment_event(
     owner_id = binding.page_id if binding.channel == "facebook" else (binding.instagram_account_id or binding.asset_id)
     reply_list_path = f"{comment_id}/comments" if binding.channel == "facebook" else f"{comment_id}/replies"
     async with httpx.AsyncClient(timeout=20.0) as client:
-        if await _comment_has_page_reply(
-            client,
-            comment_id=comment_id,
-            owner_id=owner_id,
-            token=token,
-            graph_url=graph_api_url(binding, graph_api_version=graph_version, path=reply_list_path),
-        ):
+        try:
+            already_replied = await _comment_has_page_reply(
+                client,
+                comment_id=comment_id,
+                owner_id=owner_id,
+                token=token,
+                graph_url=graph_api_url(binding, graph_api_version=graph_version, path=reply_list_path),
+            )
+        except MetaCommentReplyInspectionError as exc:
+            _runtime_logger.warning(
+                "[meta-comment] reply_dedupe_check_failed channel=%s reason=%s",
+                binding.channel,
+                str(exc),
+            )
+            return CommentReplyResult(status="failed", reason="reply_dedupe_check_failed")
+        if already_replied:
             return CommentReplyResult(status="ignored", reason="human_replied")
 
         # CM rule: reply via private DM — never fall back to a public comment reply.
@@ -318,18 +400,72 @@ async def process_meta_comment_event(
                 _mark_sent_reply(binding, comment_id)
                 return CommentReplyResult(status="simulated", reply_id="simulated_dm")
             from services.meta_comment_private_reply import send_comment_private_reply
-
-            ok, reason, response = await send_comment_private_reply(
-                client,
-                binding=binding,
-                comment_id=comment_id,
-                message=dm_text,
-                token=token,
-                graph_api_version=graph_version,
+            from services.meta_controlled_evidence import meta_evidence_surface
+            from services.meta_outbound_attempts import (
+                MetaOutboundAttemptDecision,
+                begin_meta_outbound_attempt,
+                finish_meta_outbound_attempt,
             )
+
+            private_attempt: MetaOutboundAttemptDecision | None = None
+            if inbound_event_id:
+                private_attempt = await begin_meta_outbound_attempt(
+                    event_id=inbound_event_id,
+                    surface=meta_evidence_surface(kind="meta_comment", channel=binding.channel),
+                    binding_id=binding.binding_id,
+                )
+                if private_attempt.kind == "duplicate_suppressed":
+                    return CommentReplyResult(status="ignored", reason="already_replied")
+                if private_attempt.kind == "needs_owner_action":
+                    return CommentReplyResult(status="skipped", reason="ambiguous_needs_owner_action")
+
+            try:
+                ok, reason, response = await send_comment_private_reply(
+                    client,
+                    binding=binding,
+                    comment_id=comment_id,
+                    message=dm_text,
+                    token=token,
+                    graph_api_version=graph_version,
+                )
+            except BaseException:
+                if private_attempt is not None and private_attempt.kind == "send":
+                    task = asyncio.create_task(
+                        finish_meta_outbound_attempt(
+                            private_attempt,
+                            status="needs_owner_action",
+                            safe_reason="provider_call_ambiguous",
+                        )
+                    )
+                    from services.async_safety_cleanup import await_safety_task
+
+                    await await_safety_task(task)
+                raise
             if not ok:
+                if private_attempt is not None and private_attempt.kind == "send":
+                    ambiguous = not _provider_rejection_is_definitive(reason)
+                    try:
+                        await finish_meta_outbound_attempt(
+                            private_attempt,
+                            status="needs_owner_action" if ambiguous else "definitive_failure",
+                            safe_reason="accepted_without_provider_id" if ambiguous else "provider_rejected",
+                        )
+                    except BaseException:
+                        return CommentReplyResult(status="skipped", reason="ambiguous_needs_owner_action")
+                    if ambiguous:
+                        return CommentReplyResult(status="skipped", reason="ambiguous_needs_owner_action")
                 return CommentReplyResult(status="failed", reason=f"private_reply:{reason}")
             reply_id = str(response.get("id") or response.get("message_id") or "").strip()
+            if private_attempt is not None and private_attempt.kind == "send":
+                try:
+                    await finish_meta_outbound_attempt(
+                        private_attempt,
+                        status="accepted",
+                        safe_reason="provider_accepted",
+                        provider_message_id=reply_id,
+                    )
+                except BaseException:
+                    return CommentReplyResult(status="skipped", reason="ambiguous_needs_owner_action")
             _mark_sent_reply(binding, comment_id)
             _runtime_logger.info(
                 "[meta-comment] private_reply_sent channel=%s tenant=%s comment=%s rule=%s",
@@ -397,21 +533,65 @@ async def process_meta_comment_event(
             _mark_sent_reply(binding, comment_id)
             return CommentReplyResult(status="simulated", reply_id="simulated")
 
-        if binding.channel == "facebook":
-            ok, reason, response = await _graph_post_form(
-                client,
-                graph_api_url(binding, graph_api_version=graph_version, path=f"{comment_id}/comments"),
-                token=token,
-                data={"message": reply_text},
+        from services.meta_controlled_evidence import meta_evidence_surface
+        from services.meta_outbound_attempts import (
+            MetaOutboundAttemptDecision,
+            begin_meta_outbound_attempt,
+            finish_meta_outbound_attempt,
+        )
+
+        public_attempt: MetaOutboundAttemptDecision | None = None
+        if inbound_event_id:
+            public_attempt = await begin_meta_outbound_attempt(
+                event_id=inbound_event_id,
+                surface=meta_evidence_surface(kind="meta_comment", channel=binding.channel),
+                binding_id=binding.binding_id,
             )
-        else:
-            ok, reason, response = await _graph_post_form(
-                client,
-                graph_api_url(binding, graph_api_version=graph_version, path=f"{comment_id}/replies"),
-                token=token,
-                data={"message": reply_text},
-            )
+            if public_attempt.kind == "duplicate_suppressed":
+                return CommentReplyResult(status="ignored", reason="already_replied")
+            if public_attempt.kind == "needs_owner_action":
+                return CommentReplyResult(status="skipped", reason="ambiguous_needs_owner_action")
+        try:
+            if binding.channel == "facebook":
+                ok, reason, response = await _graph_post_form(
+                    client,
+                    graph_api_url(binding, graph_api_version=graph_version, path=f"{comment_id}/comments"),
+                    token=token,
+                    data={"message": reply_text},
+                )
+            else:
+                ok, reason, response = await _graph_post_form(
+                    client,
+                    graph_api_url(binding, graph_api_version=graph_version, path=f"{comment_id}/replies"),
+                    token=token,
+                    data={"message": reply_text},
+                )
+        except BaseException:
+            if public_attempt is not None and public_attempt.kind == "send":
+                task = asyncio.create_task(
+                    finish_meta_outbound_attempt(
+                        public_attempt,
+                        status="needs_owner_action",
+                        safe_reason="provider_call_ambiguous",
+                    )
+                )
+                from services.async_safety_cleanup import await_safety_task
+
+                await await_safety_task(task)
+            raise
         if not ok:
+            if public_attempt is not None and public_attempt.kind == "send":
+                ambiguous = not _provider_rejection_is_definitive(reason)
+                try:
+                    await finish_meta_outbound_attempt(
+                        public_attempt,
+                        status="needs_owner_action" if ambiguous else "definitive_failure",
+                        safe_reason="accepted_without_provider_id" if ambiguous else "provider_rejected",
+                    )
+                except BaseException:
+                    return CommentReplyResult(status="skipped", reason="ambiguous_needs_owner_action")
+                if ambiguous:
+                    return CommentReplyResult(status="skipped", reason="ambiguous_needs_owner_action")
             _runtime_logger.error(
                 "[meta-comment] reply_failed channel=%s reason=%s",
                 binding.channel,
@@ -420,6 +600,16 @@ async def process_meta_comment_event(
             return CommentReplyResult(status="failed", reason=reason)
 
         reply_id = str(response.get("id") or "").strip()
+        if public_attempt is not None and public_attempt.kind == "send":
+            try:
+                await finish_meta_outbound_attempt(
+                    public_attempt,
+                    status="accepted",
+                    safe_reason="provider_accepted",
+                    provider_message_id=reply_id,
+                )
+            except BaseException:
+                return CommentReplyResult(status="skipped", reason="ambiguous_needs_owner_action")
         _mark_sent_reply(binding, comment_id)
         _runtime_logger.info(
             "[meta-comment] reply_sent channel=%s tenant=%s asset=%s comment=%s",

@@ -44,7 +44,7 @@ on:
         default: ""
 
 concurrency:
-  group: cm-production-cutover
+  group: meta-social-cutover
   cancel-in-progress: false
 
 permissions:
@@ -53,13 +53,15 @@ permissions:
 jobs:
   run:
     name: CM production phase
-    if: inputs.confirmation == 'CM_CUTOVER_CONFIRMED'
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'CM_CUTOVER_CONFIRMED'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    environment: meta-social-cutover
     steps:
       - name: Execute phase on production
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
         env:
+          EXPECTED_RELEASE_SHA: ${{ github.sha }}
           PHASE: ${{ inputs.phase }}
           CONTENT_VERSION_ID: ${{ inputs.content_version_id }}
         with:
@@ -69,74 +71,82 @@ jobs:
           port: 22
           script_stop: true
           command_timeout: 40m
-          envs: PHASE,CONTENT_VERSION_ID
+          envs: EXPECTED_RELEASE_SHA,PHASE,CONTENT_VERSION_ID
           script: |
             set -euo pipefail
+            REPO_DIR=/opt/linasbot
+            guarded() {
+              sudo -E "$REPO_DIR/venv/bin/python" \
+                "$REPO_DIR/scripts/ha/production_mutation_guard.py" run \
+                --expected-sha "$EXPECTED_RELEASE_SHA" \
+                --script "$1" -- "${@:2}"
+            }
             echo "[cm-workflow] phase=${PHASE}"
-            echo "[cm-workflow] deployed_sha=$(git -C /opt/linasbot rev-parse HEAD)"
+            TWO_NODE_ENV_PHASES=" enable_publish_keep_legacy cutover_published rollback_legacy enable_faq_canonical disable_linas_legacy_bridge preserve_durable_flags verify_durable_bridge "
+            if [[ "$TWO_NODE_ENV_PHASES" == *" ${PHASE} "* ]]; then
+              echo "[cm-workflow] BLOCKED: this phase needs a generic two-node env backup/sync/restart/rollback proof" >&2
+              exit 2
+            fi
             if [ "${PHASE}" = "backup" ]; then
-              sudo bash /opt/linasbot/scripts/prod_cm_backup.sh
+              guarded scripts/prod_cm_backup.sh
             elif [ "${PHASE}" = "migrate_validate" ]; then
-              sudo bash /opt/linasbot/scripts/prod_cm_migrate_and_validate.sh
+              guarded scripts/prod_cm_migrate_and_validate.sh
             elif [ "${PHASE}" = "enable_publish_keep_legacy" ]; then
               export CM_RUNTIME_MODE_VALUE=legacy
               export CM_PUBLISH_ENABLED_VALUE=true
               export CM_EMBEDDING_PROVIDER_VALUE=openai
               export CM_EMBEDDING_MODEL_VALUE=text-embedding-3-small
-              sudo -E bash /opt/linasbot/scripts/prod_cm_apply_flags.sh
+              guarded scripts/prod_cm_apply_flags.sh
             elif [ "${PHASE}" = "publish" ]; then
-              sudo bash /opt/linasbot/scripts/prod_cm_publish.sh
+              guarded scripts/prod_cm_publish.sh
             elif [ "${PHASE}" = "publish_faq_only" ]; then
-              sudo bash /opt/linasbot/scripts/prod_cm_publish_faq_only.sh
+              guarded scripts/prod_cm_publish_faq_only.sh
             elif [ "${PHASE}" = "cutover_published" ]; then
-              sudo bash /opt/linasbot/scripts/prod_cm_cutover.sh
+              guarded scripts/prod_cm_cutover.sh
             elif [ "${PHASE}" = "rollback_legacy" ]; then
               export CM_PUBLISH_ENABLED_VALUE=false
-              sudo -E bash /opt/linasbot/scripts/prod_cm_rollback.sh
+              guarded scripts/prod_cm_rollback.sh
             elif [ "${PHASE}" = "rollback_content_version" ]; then
               if [ -z "${CONTENT_VERSION_ID}" ]; then
                 echo "[cm-workflow] content_version_id required for rollback_content_version" >&2
                 exit 1
               fi
               export CM_ROLLBACK_CONTENT_VERSION_ID="${CONTENT_VERSION_ID}"
-              sudo -E bash /opt/linasbot/scripts/prod_cm_rollback_version.sh
+              guarded scripts/prod_cm_rollback_version.sh
             elif [ "${PHASE}" = "price_source_ledger" ]; then
-              sudo bash /opt/linasbot/scripts/prod_cm_price_source_ledger.sh
+              guarded scripts/prod_cm_price_source_ledger.sh
             elif [ "${PHASE}" = "price_line_shape_probe" ]; then
-              sudo bash /opt/linasbot/scripts/prod_cm_price_line_shape_probe.sh
+              guarded scripts/prod_cm_price_line_shape_probe.sh
             elif [ "${PHASE}" = "enable_faq_canonical" ]; then
               export CM_RUNTIME_MODE_VALUE=published
               export CM_PUBLISH_ENABLED_VALUE=true
               export CM_FAQ_CANONICAL_VALUE=true
               export CM_EMBEDDING_PROVIDER_VALUE=openai
               export CM_EMBEDDING_MODEL_VALUE=text-embedding-3-small
-              sudo -E bash /opt/linasbot/scripts/prod_cm_apply_flags.sh
+              guarded scripts/prod_cm_apply_flags.sh
             elif [ "${PHASE}" = "sot_audit_published" ]; then
-              sudo bash /opt/linasbot/scripts/prod_cm_sot_audit.sh
+              guarded scripts/prod_cm_sot_audit.sh
             elif [ "${PHASE}" = "corpus_inventory" ]; then
-              sudo bash /opt/linasbot/scripts/prod_cm_corpus_inventory.sh
+              guarded scripts/prod_cm_corpus_inventory.sh
             elif [ "${PHASE}" = "linas_content_audit" ]; then
-              sudo bash /opt/linasbot/scripts/prod_cm_linas_content_audit.sh
+              guarded scripts/prod_cm_linas_content_audit.sh
             elif [ "${PHASE}" = "bridge_readiness" ]; then
-              sudo bash /opt/linasbot/scripts/prod_cm_bridge_readiness.sh
+              guarded scripts/prod_cm_bridge_readiness.sh
             elif [ "${PHASE}" = "runtime_proof" ]; then
-              sudo bash /opt/linasbot/scripts/prod_cm_runtime_proof.sh
+              guarded scripts/prod_cm_runtime_proof.sh
             elif [ "${PHASE}" = "generic_tenant_proof" ]; then
-              cd /opt/linasbot
-              git fetch origin main
-              git checkout origin/main -- scripts/prod_cm_generic_tenant_proof.sh
-              sudo bash /opt/linasbot/scripts/prod_cm_generic_tenant_proof.sh
+              guarded scripts/prod_cm_generic_tenant_proof.sh
             elif [ "${PHASE}" = "disable_linas_legacy_bridge" ]; then
-              sudo bash /opt/linasbot/scripts/prod_cm_set_linas_bridge_flag.sh true
+              guarded scripts/prod_cm_set_linas_bridge_flag.sh true
             elif [ "${PHASE}" = "preserve_durable_flags" ]; then
-              sudo bash /opt/linasbot/scripts/prod_cm_preserve_durable_flags.sh
+              guarded scripts/prod_cm_preserve_durable_flags.sh
             elif [ "${PHASE}" = "verify_durable_bridge" ]; then
               export VERIFY_RELOAD=1
-              sudo -E bash /opt/linasbot/scripts/prod_cm_verify_durable_bridge.sh
+              guarded scripts/prod_cm_verify_durable_bridge.sh
             elif [ "${PHASE}" = "import_prices" ]; then
-              sudo bash /opt/linasbot/scripts/prod_cm_import_prices.sh
+              guarded scripts/prod_cm_import_prices.sh
             elif [ "${PHASE}" = "repair_linas_prices_publish" ]; then
-              sudo bash /opt/linasbot/scripts/prod_cm_repair_linas_prices_publish.sh
+              guarded scripts/prod_cm_repair_linas_prices_publish.sh
             else
               echo "unknown phase=${PHASE}" >&2
               exit 1

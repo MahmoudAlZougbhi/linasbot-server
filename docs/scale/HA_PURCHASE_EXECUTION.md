@@ -5,6 +5,10 @@
 **PR:** [#240](https://github.com/MahmoudAlZougbhi/linasbot-server/pull/240)  
 **Status:** `HA_MANAGED_PG_CUTOVER_COMPLETE` (app release **not** merged/deployed)
 
+> Historical 2026-08-12 evidence. Meta authority/cutover statements are
+> superseded by `docs/scale/META_REGISTRY_POSTGRES_HA_CUTOVER.md`: current PG is
+> newer and NFS is stale, so never enable `dual` or import the file over PG.
+
 ## Resources created (live)
 
 | Resource | ID / name | Spec | Monthly |
@@ -54,7 +58,8 @@ Existing node `510629908` kept. SportBook/BOC databases **untouched**.
 ## Remaining before merge/deploy
 
 1. Merge/deploy PR #240 deliberately.
-2. Enable `META_REGISTRY_BACKEND=dual` → soak → `postgres` → unexport registry NFS.
+2. Back up/verify current PG → explicit `META_REGISTRY_BACKEND=postgres` on both
+   nodes → failover/soak → separately confirmed NFS retirement. Never use `dual`.
 3. Enable `LINAS_BILLING_BACKEND=postgres` + `LINAS_AUTH_TOKEN_BACKEND=postgres` after import verify.
 4. Owner gate for `LINAS_REQUIRE_REDIS` / `LINAS_FAIL_CLOSED_REDIS_CLAIMS`.
 5. Then Requests migration (separate approval).

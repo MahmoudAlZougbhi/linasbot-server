@@ -39,6 +39,29 @@ def _stable_comment_id(*parts: str) -> str:
     return "meta_comment_" + hashlib.sha256(joined.encode("utf-8")).hexdigest()[:48]
 
 
+def _stable_instagram_username_author_id(username: str) -> str:
+    normalized = username.strip().casefold()
+    return "instagram_username_" + hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:32]
+
+
+def _instagram_comment_values(entry: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return comment values from both Instagram webhook payload shapes."""
+
+    values: list[dict[str, Any]] = []
+    direct_value = entry.get("value")
+    if str(entry.get("field") or "").strip().lower() == "comments" and isinstance(direct_value, dict):
+        values.append(direct_value)
+    for change in entry.get("changes") or []:
+        if not isinstance(change, dict):
+            continue
+        if str(change.get("field") or "").strip().lower() != "comments":
+            continue
+        value = change.get("value")
+        if isinstance(value, dict):
+            values.append(value)
+    return values
+
+
 def _parse_facebook_comment_changes(
     payload: dict[str, Any],
     *,
@@ -107,19 +130,15 @@ def _parse_instagram_comment_changes(
         entry_id = str(entry.get("id") or "").strip()
         if instagram_account_id and entry_id and entry_id != instagram_account_id:
             continue
-        for change in entry.get("changes") or []:
-            if not isinstance(change, dict):
-                continue
-            if str(change.get("field") or "").strip().lower() != "comments":
-                continue
-            value = change.get("value")
-            if not isinstance(value, dict):
-                continue
+        for value in _instagram_comment_values(entry):
             comment_id = str(value.get("id") or "").strip()
             text = str(value.get("text") or "").strip()
             from_raw = value.get("from")
             from_dict = from_raw if isinstance(from_raw, dict) else {}
             author_id = str(from_dict.get("id") or "").strip()
+            author_username = str(from_dict.get("username") or "").strip()
+            if not author_id and author_username:
+                author_id = _stable_instagram_username_author_id(author_username)
             media_raw = value.get("media")
             media = media_raw if isinstance(media_raw, dict) else {}
             media_id = str(media.get("id") or value.get("media_id") or "").strip()
@@ -133,7 +152,7 @@ def _parse_instagram_comment_changes(
                     "post_id": media_id,
                     "parent_id": str(value.get("parent_id") or "").strip(),
                     "author_id": author_id,
-                    "author_username": str(from_dict.get("username") or "").strip(),
+                    "author_username": author_username,
                     "text": text,
                     "timestamp": value.get("created_time") or entry.get("time"),
                     "message_id": comment_id,
@@ -163,6 +182,9 @@ def count_raw_comment_changes(payload: dict[str, Any]) -> int:
     for entry in payload.get("entry") or []:
         if not isinstance(entry, dict):
             continue
+        if object_name == "instagram":
+            count += len(_instagram_comment_values(entry))
+            continue
         for change in entry.get("changes") or []:
             if not isinstance(change, dict):
                 continue
@@ -177,8 +199,6 @@ def count_raw_comment_changes(payload: dict[str, Any]) -> int:
                 if verb not in {"add", "edited"}:
                     continue
                 count += 1
-            elif object_name == "instagram" and field == "comments":
-                count += 1
     return count
 
 
@@ -189,6 +209,17 @@ def comment_binding_skip_reason(
     registry: MetaAppRegistry,
 ) -> str | None:
     """Return why a binding cannot handle comments, or None when ready."""
+
+    from services.channel_capability_state import (
+        binding_advanced_access_approved,
+        comments_policy_allows,
+    )
+
+    if not comments_policy_allows(
+        binding.tenant_id,
+        advanced_access=binding_advanced_access_approved(binding),
+    ):
+        return "meta_approval_required"
 
     try:
         credential = registry.get_credential(binding)

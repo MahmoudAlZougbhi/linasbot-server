@@ -25,7 +25,7 @@
 
 | Path | Flag / notes |
 |------|----------------|
-| `meta_registry/` | `META_REGISTRY_BACKEND=file\|dual\|postgres` |
+| `meta_registry/` | Managed PG authority; local/NFS file is stale rollback evidence only |
 | `billing/wallets/` + wallet ledger | `LINAS_BILLING_BACKEND` |
 | `billing/stripe_events/` | same |
 | `billing/admin_credit_idempotency/` | same |
@@ -34,7 +34,8 @@
 | `auth/mobile_refresh/` | `LINAS_AUTH_TOKEN_BACKEND` |
 | `auth/email_tokens/` | same |
 
-Import: `scripts/ha/import_billing_auth_to_postgres.py`, `scripts/ha/import_meta_registry_to_postgres.py`.
+Billing/auth import: `scripts/ha/import_billing_auth_to_postgres.py`. Current Meta
+production must not import stale NFS; use the dedicated Postgres HA runbook.
 
 ## C — removable post-cutover
 
@@ -56,7 +57,10 @@ Import: `scripts/ha/import_billing_auth_to_postgres.py`, `scripts/ha/import_meta
 ## Post-deploy cutover sequence (do not execute now)
 
 1. Deploy PR #240  
-2. Import meta registry → `META_REGISTRY_BACKEND=dual` soak → `postgres` → `remove_registry_nfs.sh`  
+2. **Do not import stale NFS.** Back up/verify current PG → explicit
+   `META_REGISTRY_BACKEND=postgres` on both nodes → failover/soak → separately
+   confirmed `remove_registry_nfs.sh` per
+   `docs/scale/META_REGISTRY_POSTGRES_HA_CUTOVER.md`.
 3. Import billing/auth/credits/entitlements → `LINAS_BILLING_BACKEND=postgres` + `LINAS_AUTH_TOKEN_BACKEND=postgres`  
 4. Owner gate: `LINAS_REQUIRE_REDIS` / `LINAS_FAIL_CLOSED_REDIS_CLAIMS`  
 5. Requests migration **only** with separate owner GO  

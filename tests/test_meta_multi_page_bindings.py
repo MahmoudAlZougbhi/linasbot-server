@@ -10,6 +10,7 @@ import pytest
 from services.meta_app_registry import (
     APP_A_KEY,
     MetaAppRegistry,
+    MetaBindingConflictError,
     MetaBindingCredential,
     authorized_meta_user_id_hash,
 )
@@ -48,7 +49,7 @@ def registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MetaAppRegistry
     )
 
 
-def test_oauth_reauthorize_same_page_reuses_binding_without_duplicate(registry: MetaAppRegistry) -> None:
+def test_disconnected_page_reconnect_requires_fresh_staged_binding(registry: MetaAppRegistry) -> None:
     page_id = "378696005334409"
     first = registry.authorize_oauth_asset(
         tenant_id="linas",
@@ -63,6 +64,19 @@ def test_oauth_reauthorize_same_page_reuses_binding_without_duplicate(registry: 
         status="active",
     )
     registry.set_binding_status(first.binding_id, status="disconnected", actor_id="owner")
+    with pytest.raises(MetaBindingConflictError, match="new binding"):
+        registry.authorize_oauth_asset(
+            tenant_id="linas",
+            channel="facebook",
+            asset_id=page_id,
+            page_id=page_id,
+            instagram_account_id="17841413184256533",
+            app_key=APP_A_KEY,
+            credential=_credential(page_id, user_id="123456789"),
+            actor_id="owner",
+            page_name="Lina's Laser Clinics",
+            status="active",
+        )
     second = registry.authorize_oauth_asset(
         tenant_id="linas",
         channel="facebook",
@@ -73,13 +87,14 @@ def test_oauth_reauthorize_same_page_reuses_binding_without_duplicate(registry: 
         credential=_credential(page_id, user_id="123456789"),
         actor_id="owner",
         page_name="Lina's Laser Clinics",
-        status="active",
+        status="testing",
+        create_new_binding=True,
     )
     visible = registry.list_bindings(include_superseded=False)
     facebook_rows = [row for row in visible if row.channel == "facebook"]
-    assert second.binding_id == first.binding_id
-    assert len(facebook_rows) == 1
-    assert facebook_rows[0].status == "active"
+    assert second.binding_id != first.binding_id
+    assert len(facebook_rows) == 2
+    assert {row.status for row in facebook_rows} == {"disconnected", "testing"}
 
 
 def test_second_facebook_page_adds_new_binding(registry: MetaAppRegistry) -> None:

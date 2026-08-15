@@ -156,7 +156,12 @@ async def handle_photo_message_whatsapp_with_adapter(user_id: str, image_id: str
         user_data.pop("_batch_turn_body_fps", None)
         mids = user_data.pop("_batch_inbound_mids", []) or []
         claim_id = stable_ai_claim_identity(user_id, user_data.get("phone_number"))
-        if mids and not await try_claim_ai_turn(claim_id, mids):
+        if mids and not await try_claim_ai_turn(
+            claim_id,
+            mids,
+            binding_id=str(user_data.get("meta_binding_id") or ""),
+            inbound_event_id=str(user_data.get("_inbound_event_id") or ""),
+        ):
             print(f"⚠️ [ai-turn] trace_id={trace} image claim=DUPLICATE_SKIP user=...{str(user_id)[-4:]}")
             return
         if mids:

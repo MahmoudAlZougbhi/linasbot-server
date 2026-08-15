@@ -20,6 +20,7 @@ from services.meta_app_registry import (
     MetaCredentialError,
 )
 from services.meta_oauth import begin_meta_business_login, complete_meta_business_login
+from tests.meta_compliance_helpers import _FakeFirestore
 
 SCOPES = (
     "pages_show_list",
@@ -58,6 +59,8 @@ def _request(tenant_id: str) -> Request:
 
 @pytest.fixture
 def registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MetaAppRegistry:
+    import utils.utils
+
     monkeypatch.setenv("META_REGISTRY_BACKEND", "file")
     monkeypatch.setenv("META_APP_A_ID", "2963733803971681")
     monkeypatch.setenv("META_APP_A_SECRET", "app-a-secret-tests")
@@ -67,6 +70,8 @@ def registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MetaAppRegistry
     monkeypatch.setenv("META_APP_A_FACEBOOK_LOGIN_CONFIG_ID", "facebook-only-config-tests")
     monkeypatch.setenv("META_GRAPH_API_VERSION", "v24.0")
     monkeypatch.setenv("META_OAUTH_REDIRECT_URI", "https://www.linasaibot.com/oauth/meta/callback")
+    db = _FakeFirestore()
+    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
     return MetaAppRegistry(
         store_path=tmp_path / "registry.json",
         audit_path=tmp_path / "audit.jsonl",
@@ -109,11 +114,15 @@ async def test_disconnect_archives_credential_and_clears_webhooks(
         nonlocal unsubscribed
         unsubscribed = True
 
+    async def inspect(*_args: Any, **_kwargs: Any) -> tuple[str, ...]:
+        return ("messages", "messaging_postbacks")
+
     monkeypatch.setattr(meta_connections_api, "get_meta_app_registry", lambda: registry)
     monkeypatch.setattr("modules.meta_connections_api_helpers.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr("modules.meta_connections_api_lifecycle.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(graph, "get_meta_app_registry", lambda: registry)
-    monkeypatch.setattr(graph, "unsubscribe_binding_webhook", unsubscribe)
+    monkeypatch.setattr(graph, "inspect_binding_webhook_subscription", inspect)
+    monkeypatch.setattr(graph, "_unsubscribe_binding_webhook_locked_raw", unsubscribe)
 
     async def clear_toggles(**_kwargs: Any) -> bool:
         return True
@@ -169,11 +178,12 @@ async def test_disconnect_then_oauth_connect_uses_new_credential(
             data: dict[str, Any] = {
                 "is_valid": True,
                 "app_id": "2963733803971681",
-                "scopes": list(SCOPES),
+                "scopes": ["business_management"],
                 "expires_at": 4102444800,
                 "user_id": "112233445566",
             }
             if inspected == "page-token-private":
+                data["scopes"] = [scope for scope in SCOPES if scope != "business_management"]
                 data["profile_id"] = "445566778899"
                 data["type"] = "PAGE"
                 data["granular_scopes"] = [
@@ -189,13 +199,25 @@ async def test_disconnect_then_oauth_connect_uses_new_credential(
                             "id": "445566778899",
                             "name": "Clinic Page",
                             "access_token": "page-token-private",
-                            "tasks": ["MANAGE", "MESSAGING"],
+                            "tasks": ["MESSAGING", "MODERATE"],
                         }
                     ]
                 },
             )
-        if path.endswith("/subscribed_apps"):
+        if path.endswith("/subscribed_apps") and request.method == "POST":
             return httpx.Response(200, json={"success": True})
+        if path.endswith("/subscribed_apps") and request.method == "GET":
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "id": "2963733803971681",
+                            "subscribed_fields": ["feed", "messages", "messaging_postbacks"],
+                        }
+                    ]
+                },
+            )
         return httpx.Response(404, json={"error": {"message": "not found"}})
 
     url = begin_meta_business_login(tenant_id="tenant-a", channel="facebook", actor_id="owner", registry=registry)

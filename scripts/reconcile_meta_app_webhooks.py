@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Reconcile the dedicated Meta app's Page and Instagram DM webhook fields."""
+"""Reconcile App A's Page webhook while preserving Direct Instagram configuration."""
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import urllib.error
@@ -10,11 +11,30 @@ import urllib.parse
 import urllib.request
 from typing import cast
 
+_webhook_contract = importlib.import_module("scripts.meta_webhook_contract" if __package__ else "meta_webhook_contract")
+
+APP_INSTAGRAM_WEBHOOK_FIELDS = _webhook_contract.APP_INSTAGRAM_WEBHOOK_FIELDS
+APP_PAGE_WEBHOOK_FIELDS = _webhook_contract.APP_PAGE_WEBHOOK_FIELDS
+merge_subscription_fields = _webhook_contract.merge_subscription_fields
+
 EXPECTED_APP_ID = "2963733803971681"
 EXPECTED_GRAPH_VERSION = "v24.0"
-EXPECTED_CALLBACK_URL = "https://www.linasaibot.com/webhook/meta-messaging"
-EXPECTED_OBJECTS = ("instagram", "page")
-EXPECTED_FIELDS = {"messages", "messaging_postbacks"}
+PAGE_OBJECT = "page"
+INSTAGRAM_OBJECT = "instagram"
+EXPECTED_PAGE_CALLBACK_URL = "https://www.linasaibot.com/webhook/meta-messaging"
+EXPECTED_INSTAGRAM_CALLBACK_URL = "https://www.linasaibot.com/webhook/instagram-login"
+EXPECTED_CALLBACK_URL = EXPECTED_PAGE_CALLBACK_URL
+EXPECTED_OBJECTS = (INSTAGRAM_OBJECT, PAGE_OBJECT)
+MUTABLE_OBJECTS = (PAGE_OBJECT,)
+PRESERVED_AUXILIARY_OBJECTS = frozenset({"whatsapp_business_account"})
+ALLOWED_FIELDS_BY_OBJECT = {
+    INSTAGRAM_OBJECT: APP_INSTAGRAM_WEBHOOK_FIELDS,
+    PAGE_OBJECT: APP_PAGE_WEBHOOK_FIELDS,
+}
+EXPECTED_CALLBACKS_BY_OBJECT = {
+    INSTAGRAM_OBJECT: EXPECTED_INSTAGRAM_CALLBACK_URL,
+    PAGE_OBJECT: EXPECTED_PAGE_CALLBACK_URL,
+}
 
 
 class MetaWebhookReconcileError(RuntimeError):
@@ -80,34 +100,98 @@ def _classify_error_message(message: object) -> tuple[str, tuple[str, ...]]:
 def validate_webhook_state(
     payload: dict[str, object],
     *,
-    require_exact_fields: bool,
+    require_expected_fields: bool,
 ) -> dict[str, set[str]]:
-    """Require exactly the two approved callbacks and no unrelated fields."""
+    """Require approved callbacks/fields and optionally the full social contract."""
 
     raw_subscriptions = payload.get("data")
     subscriptions = raw_subscriptions if isinstance(raw_subscriptions, list) else []
-    by_object = {
-        str(subscription.get("object") or "").strip().lower(): subscription
-        for subscription in subscriptions
-        if isinstance(subscription, dict)
-    }
-    if set(by_object) != set(EXPECTED_OBJECTS):
+    rows = [subscription for subscription in subscriptions if isinstance(subscription, dict)]
+    if len(rows) != len(subscriptions):
+        raise MetaWebhookReconcileError("Invalid Meta webhook subscription row")
+    names = [str(subscription.get("object") or "").strip().lower() for subscription in rows]
+    allowed_objects = set(EXPECTED_OBJECTS) | set(PRESERVED_AUXILIARY_OBJECTS)
+    if not set(names).issubset(allowed_objects):
         raise MetaWebhookReconcileError("Unexpected Meta webhook object set")
+    by_object: dict[str, dict[str, object]] = {}
+    for object_name in EXPECTED_OBJECTS:
+        matching = [row for row, name in zip(rows, names, strict=True) if name == object_name]
+        if len(matching) != 1:
+            raise MetaWebhookReconcileError(f"Expected exactly one Meta webhook object={object_name}")
+        by_object[object_name] = matching[0]
 
     fields_by_object: dict[str, set[str]] = {}
     for object_name in EXPECTED_OBJECTS:
         subscription = _mapping(by_object.get(object_name))
         if subscription.get("active") is not True:
             raise MetaWebhookReconcileError(f"Inactive Meta webhook object={object_name}")
-        if str(subscription.get("callback_url") or "") != EXPECTED_CALLBACK_URL:
+        if str(subscription.get("callback_url") or "") != EXPECTED_CALLBACKS_BY_OBJECT[object_name]:
             raise MetaWebhookReconcileError(f"Unexpected Meta callback object={object_name}")
         fields = _field_names(subscription.get("fields"))
-        if not fields.issubset(EXPECTED_FIELDS):
+        allowed_fields = ALLOWED_FIELDS_BY_OBJECT[object_name]
+        if not fields.issubset(allowed_fields):
             raise MetaWebhookReconcileError(f"Unexpected Meta webhook field object={object_name}")
-        if require_exact_fields and fields != EXPECTED_FIELDS:
+        if (require_expected_fields or object_name == INSTAGRAM_OBJECT) and fields != allowed_fields:
             raise MetaWebhookReconcileError(f"Incomplete Meta webhook fields object={object_name}")
         fields_by_object[object_name] = fields
     return fields_by_object
+
+
+def inspect_repairable_webhook_state(payload: dict[str, object]) -> dict[str, set[str]]:
+    """Read a safe pre-reconcile state without requiring it to be healthy yet.
+
+    A missing, inactive, or wrong-callback Page row is repairable. The Direct
+    Instagram product row is read-only here and must already be uniquely active
+    on its dedicated callback with the exact approved fields. Unknown objects,
+    duplicate rows, and unapproved fields fail closed.
+    """
+
+    raw_subscriptions = payload.get("data")
+    subscriptions = raw_subscriptions if isinstance(raw_subscriptions, list) else []
+    rows = [subscription for subscription in subscriptions if isinstance(subscription, dict)]
+    if len(rows) != len(subscriptions):
+        raise MetaWebhookReconcileError("Invalid Meta webhook subscription row")
+    names = [str(subscription.get("object") or "").strip().lower() for subscription in rows]
+    allowed_objects = set(EXPECTED_OBJECTS) | set(PRESERVED_AUXILIARY_OBJECTS)
+    if not set(names).issubset(allowed_objects):
+        raise MetaWebhookReconcileError("Unexpected Meta webhook object set")
+    if any(names.count(object_name) > 1 for object_name in allowed_objects):
+        raise MetaWebhookReconcileError("Duplicate Meta webhook object")
+
+    fields_by_object: dict[str, set[str]] = {}
+    for object_name in EXPECTED_OBJECTS:
+        matching = [row for row, name in zip(rows, names, strict=True) if name == object_name]
+        if object_name == INSTAGRAM_OBJECT:
+            if len(matching) != 1:
+                raise MetaWebhookReconcileError("Expected exactly one Meta webhook object=instagram")
+            instagram = _mapping(matching[0])
+            if instagram.get("active") is not True:
+                raise MetaWebhookReconcileError("Inactive Meta webhook object=instagram")
+            if str(instagram.get("callback_url") or "") != EXPECTED_INSTAGRAM_CALLBACK_URL:
+                raise MetaWebhookReconcileError("Unexpected Meta callback object=instagram")
+        fields = _field_names(matching[0].get("fields")) if matching else set()
+        if not fields.issubset(ALLOWED_FIELDS_BY_OBJECT[object_name]):
+            raise MetaWebhookReconcileError(f"Unexpected Meta webhook field object={object_name}")
+        if object_name == INSTAGRAM_OBJECT and fields != APP_INSTAGRAM_WEBHOOK_FIELDS:
+            raise MetaWebhookReconcileError("Incomplete Meta webhook fields object=instagram")
+        fields_by_object[object_name] = fields
+    return fields_by_object
+
+
+def plan_webhook_reconcile(fields_by_object: dict[str, set[str]]) -> dict[str, set[str]]:
+    """Converge Page fields while preserving the validated Instagram row."""
+
+    targets: dict[str, set[str]] = {}
+    for object_name in EXPECTED_OBJECTS:
+        current = set(fields_by_object.get(object_name, set()))
+        if not current.issubset(ALLOWED_FIELDS_BY_OBJECT[object_name]):
+            raise MetaWebhookReconcileError(f"Unexpected Meta webhook field object={object_name}")
+        targets[object_name] = (
+            set(current)
+            if object_name == INSTAGRAM_OBJECT
+            else merge_subscription_fields(current, ALLOWED_FIELDS_BY_OBJECT[object_name])
+        )
+    return targets
 
 
 def _request_json(
@@ -181,34 +265,38 @@ def main() -> None:
         bearer=app_token,
         stage="read_before",
     )
-    before_fields = validate_webhook_state(before, require_exact_fields=False)
+    before_fields = inspect_repairable_webhook_state(before)
+    target_fields = plan_webhook_reconcile(before_fields)
     for object_name in EXPECTED_OBJECTS:
         print(f"[meta-webhooks] before_{object_name}_fields={','.join(sorted(before_fields[object_name])) or 'none'}")
 
-    for object_name in EXPECTED_OBJECTS:
+    for object_name in MUTABLE_OBJECTS:
         result = _request_json(
             base_url,
             bearer=app_token,
             method="POST",
             form={
                 "object": object_name,
-                "callback_url": EXPECTED_CALLBACK_URL,
+                "callback_url": EXPECTED_CALLBACKS_BY_OBJECT[object_name],
                 "verify_token": verify_token,
-                "fields": ",".join(sorted(EXPECTED_FIELDS)),
+                "fields": ",".join(sorted(target_fields[object_name])),
             },
             stage=f"reconcile_{object_name}",
         )
         if result.get("success") is not True:
             raise MetaWebhookReconcileError(f"Meta did not confirm object={object_name}")
         print(f"[meta-webhooks] reconciled_{object_name}=true")
+    print("[meta-webhooks] instagram_preserved_read_only=true")
 
     after = _request_json(
         f"{base_url}?{fields_query}",
         bearer=app_token,
         stage="read_after",
     )
-    after_fields = validate_webhook_state(after, require_exact_fields=True)
+    after_fields = validate_webhook_state(after, require_expected_fields=True)
     for object_name in EXPECTED_OBJECTS:
+        if after_fields[object_name] != target_fields[object_name]:
+            raise MetaWebhookReconcileError(f"Unexpected reconciled fields object={object_name}")
         print(f"[meta-webhooks] after_{object_name}_fields={','.join(sorted(after_fields[object_name]))}")
     print("[meta-webhooks] callback_match=true")
     print("[meta-webhooks] SUCCESS")

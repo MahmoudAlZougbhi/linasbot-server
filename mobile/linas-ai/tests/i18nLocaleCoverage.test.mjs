@@ -21,7 +21,15 @@ function extractKeys(source) {
 function localeBundle(lang) {
   const cap = lang.charAt(0).toUpperCase() + lang.slice(1);
   const main = readFileSync(join(root, `src/i18n/locales/${lang}.ts`), 'utf8');
-  const extras = ['subscription', 'whatsapp', 'smartFollowUp', 'requests', 'usersUi', 'authFlow'].map((prefix) => {
+  const extras = [
+    'subscription',
+    'whatsapp',
+    'smartFollowUp',
+    'faqUi',
+    'requests',
+    'usersUi',
+    'authFlow',
+  ].map((prefix) => {
     try {
       return readFileSync(join(root, `src/i18n/locales/${prefix}${cap}.ts`), 'utf8');
     } catch {

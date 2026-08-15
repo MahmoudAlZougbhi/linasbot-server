@@ -3,6 +3,9 @@
 # Does NOT deploy app release, merge PR, migrate Requests, or enable BOC.
 set -euo pipefail
 
+echo "[ha-share] BLOCKED: retired legacy mutator; use the transactional HA runbooks" >&2
+exit 2
+
 NODE01_PRIV="10.106.0.3"
 DATA_ROOT="/opt/linasbot_data"
 REG_DIR="${DATA_ROOT}/meta_registry"

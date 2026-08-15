@@ -3,31 +3,61 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import urllib.error
 import urllib.parse
 import urllib.request
+from contextlib import AbstractContextManager
+from pathlib import Path
 from typing import Any, Protocol, cast
 
-from scripts.meta_webhook_contract import (
-    APP_INSTAGRAM_WEBHOOK_FIELDS,
-    APP_PAGE_WEBHOOK_FIELDS,
-    DM_WEBHOOK_FIELDS,
-    plan_page_subscription_reconcile,
-    subscription_field_names,
+_webhook_contract = importlib.import_module("scripts.meta_webhook_contract" if __package__ else "meta_webhook_contract")
+_app_webhooks = importlib.import_module(
+    "scripts.reconcile_meta_app_webhooks" if __package__ else "reconcile_meta_app_webhooks"
 )
+
+APP_INSTAGRAM_WEBHOOK_FIELDS = _webhook_contract.APP_INSTAGRAM_WEBHOOK_FIELDS
+APP_PAGE_WEBHOOK_FIELDS = _webhook_contract.APP_PAGE_WEBHOOK_FIELDS
+DM_WEBHOOK_FIELDS = _webhook_contract.DM_WEBHOOK_FIELDS
+plan_page_subscription_reconcile = _webhook_contract.plan_page_subscription_reconcile
+subscription_field_names = _webhook_contract.subscription_field_names
+EXPECTED_PAGE_CALLBACK_URL = _app_webhooks.EXPECTED_PAGE_CALLBACK_URL
+INSTAGRAM_OBJECT = _app_webhooks.INSTAGRAM_OBJECT
+PAGE_OBJECT = _app_webhooks.PAGE_OBJECT
+MetaWebhookReconcileError = _app_webhooks.MetaWebhookReconcileError
+inspect_repairable_webhook_state = _app_webhooks.inspect_repairable_webhook_state
+validate_webhook_state = _app_webhooks.validate_webhook_state
 
 EXPECTED_APP_ID = "2963733803971681"
 EXPECTED_PAGE_ID = "378696005334409"
 EXPECTED_GRAPH_VERSION = "v24.0"
-EXPECTED_CALLBACK_URL = "https://www.linasaibot.com/webhook/meta-messaging"
-PAGE_OBJECT = "page"
-INSTAGRAM_OBJECT = "instagram"
+EXPECTED_CALLBACK_URL = EXPECTED_PAGE_CALLBACK_URL
 
 
 class MetaCommentWebhookReconcileError(RuntimeError):
     pass
+
+
+def _page_subscription_writer_lock(*, page_id: str) -> AbstractContextManager[None]:
+    """Use the same Page-wide lock as OAuth/API writers on every HA node."""
+
+    import sys
+
+    repo_dir = str(Path(__file__).resolve().parents[1])
+    if repo_dir not in sys.path:
+        sys.path.insert(0, repo_dir)
+    from services.meta_oauth_page_lock import (
+        lock_facebook_page_subscription_operation_sync,
+        page_lock_target_from_env_file,
+    )
+
+    return lock_facebook_page_subscription_operation_sync(
+        app_key="app_a",
+        page_ids=(page_id,),
+        target=page_lock_target_from_env_file(Path(os.environ.get("META_ENV_PATH", "/opt/linasbot/.env"))),
+    )
 
 
 def _mapping(value: object) -> dict[str, object]:
@@ -69,9 +99,13 @@ def plan_app_subscription_reconcile(
     page_fields: set[str],
     instagram_fields: set[str],
 ) -> tuple[set[str], set[str]]:
+    if instagram_fields != APP_INSTAGRAM_WEBHOOK_FIELDS:
+        raise MetaCommentWebhookReconcileError(
+            "Direct Instagram webhook fields must already match the dedicated product contract"
+        )
     return (
         merge_app_subscription_fields(page_fields, APP_PAGE_WEBHOOK_FIELDS),
-        merge_app_subscription_fields(instagram_fields, APP_INSTAGRAM_WEBHOOK_FIELDS),
+        set(instagram_fields),
     )
 
 
@@ -95,60 +129,76 @@ def reconcile_app_subscriptions(
     version: str,
     request_json: GraphRequest = _request_json,
 ) -> tuple[set[str], set[str]]:
-    """Merge app-level webhook fields for Page and Instagram objects."""
+    """Repair only Page app fields; validate Direct Instagram read-only."""
 
     app_token = f"{app_id}|{app_secret}"
     base_url = f"https://graph.facebook.com/{version}/{app_id}/subscriptions"
     fields_query = urllib.parse.urlencode({"fields": "object,callback_url,active,fields"})
     request = request_json
     before = request(f"{base_url}?{fields_query}", bearer=app_token, stage="read_before")
-    subscriptions_raw = before.get("data") if isinstance(before, dict) else None
-    subscriptions: list[dict[str, object]] = (
-        cast(list[dict[str, object]], subscriptions_raw) if isinstance(subscriptions_raw, list) else []
-    )
-    by_object = {str(row.get("object") or "").strip().lower(): row for row in subscriptions if isinstance(row, dict)}
-    page_before = subscription_field_names(_mapping(by_object.get(PAGE_OBJECT)).get("fields"))
-    ig_before = subscription_field_names(_mapping(by_object.get(INSTAGRAM_OBJECT)).get("fields"))
+    try:
+        before_fields = inspect_repairable_webhook_state(before)
+    except MetaWebhookReconcileError as exc:
+        raise MetaCommentWebhookReconcileError(str(exc)) from exc
+    page_before = before_fields[PAGE_OBJECT]
+    ig_before = before_fields[INSTAGRAM_OBJECT]
     page_target, ig_target = plan_app_subscription_reconcile(page_fields=page_before, instagram_fields=ig_before)
 
-    for object_name, target_fields in ((PAGE_OBJECT, page_target), (INSTAGRAM_OBJECT, ig_target)):
-        result = request(
-            base_url,
-            bearer=app_token,
-            method="POST",
-            form={
-                "object": object_name,
-                "callback_url": EXPECTED_CALLBACK_URL,
-                "verify_token": verify_token,
-                "fields": ",".join(sorted(target_fields)),
-            },
-            stage=f"reconcile_{object_name}",
-        )
-        if not isinstance(result, dict) or result.get("success") is not True:
-            raise MetaCommentWebhookReconcileError(f"Meta did not confirm object={object_name}")
+    result = request(
+        base_url,
+        bearer=app_token,
+        method="POST",
+        form={
+            "object": PAGE_OBJECT,
+            "callback_url": EXPECTED_PAGE_CALLBACK_URL,
+            "verify_token": verify_token,
+            "fields": ",".join(sorted(page_target)),
+        },
+        stage="reconcile_page",
+    )
+    if not isinstance(result, dict) or result.get("success") is not True:
+        raise MetaCommentWebhookReconcileError("Meta did not confirm object=page")
 
     after = request(f"{base_url}?{fields_query}", bearer=app_token, stage="read_after")
-    subscriptions_after_raw = after.get("data") if isinstance(after, dict) else None
-    subscriptions_after: list[dict[str, object]] = (
-        cast(list[dict[str, object]], subscriptions_after_raw) if isinstance(subscriptions_after_raw, list) else []
-    )
-    by_object_after = {
-        str(row.get("object") or "").strip().lower(): row for row in subscriptions_after if isinstance(row, dict)
-    }
-    page_after = subscription_field_names(_mapping(by_object_after.get(PAGE_OBJECT)).get("fields"))
-    ig_after = subscription_field_names(_mapping(by_object_after.get(INSTAGRAM_OBJECT)).get("fields"))
-    if not APP_PAGE_WEBHOOK_FIELDS.issubset(page_after):
-        raise MetaCommentWebhookReconcileError("Page comment fields missing after reconcile")
-    if not APP_INSTAGRAM_WEBHOOK_FIELDS.issubset(ig_after):
-        raise MetaCommentWebhookReconcileError("Instagram comment fields missing after reconcile")
-    if not DM_WEBHOOK_FIELDS.issubset(page_after) or not DM_WEBHOOK_FIELDS.issubset(ig_after):
-        raise MetaCommentWebhookReconcileError("DM fields missing after reconcile")
+    try:
+        after_fields = validate_webhook_state(after, require_expected_fields=True)
+    except MetaWebhookReconcileError as exc:
+        raise MetaCommentWebhookReconcileError(str(exc)) from exc
+    page_after = after_fields[PAGE_OBJECT]
+    ig_after = after_fields[INSTAGRAM_OBJECT]
+    if page_after != page_target or ig_after != ig_target:
+        raise MetaCommentWebhookReconcileError("Meta app webhook fields did not converge exactly")
     return page_after, ig_after
+
+
+def _page_fields_for_app(
+    payload: dict[str, object],
+    *,
+    app_id: str,
+    allow_absent: bool,
+) -> set[str]:
+    rows_raw = payload.get("data")
+    rows = rows_raw if isinstance(rows_raw, list) else []
+    if any(not isinstance(row, dict) for row in rows):
+        raise MetaCommentWebhookReconcileError("Invalid Page subscribed_apps row")
+    app_ids = {str(row.get("id") or "") for row in rows if isinstance(row, dict)}
+    if app_ids - {app_id}:
+        raise MetaCommentWebhookReconcileError("Unexpected app in Page subscribed_apps")
+    matching = [row for row in rows if isinstance(row, dict) and str(row.get("id") or "") == app_id]
+    if not matching and allow_absent:
+        return set()
+    if len(matching) != 1:
+        raise MetaCommentWebhookReconcileError("Configured app Page subscription is not unique")
+    raw_fields = subscription_field_names(matching[0].get("subscribed_fields"))
+    if not isinstance(raw_fields, (set, frozenset, list, tuple)):
+        raise MetaCommentWebhookReconcileError("Invalid Page subscribed_fields value")
+    return {str(field) for field in raw_fields if str(field)}
 
 
 def reconcile_page_subscription(
     *,
     page_id: str,
+    app_id: str,
     page_token: str,
     version: str,
     current_fields: set[str],
@@ -156,19 +206,36 @@ def reconcile_page_subscription(
 ) -> Any:
     """Idempotently add Page-level feed while preserving DM subscribed fields."""
 
-    target_fields = plan_page_subscription_reconcile(current_fields)
-    result = request_json(
-        f"https://graph.facebook.com/{version}/{page_id}/subscribed_apps",
-        bearer=page_token,
-        method="POST",
-        form={"subscribed_fields": ",".join(sorted(target_fields))},
-        stage="reconcile_page_subscription",
-    )
-    if not isinstance(result, dict) or result.get("success") is not True:
-        raise MetaCommentWebhookReconcileError("Meta did not confirm page subscribed_apps reconcile")
-    if not DM_WEBHOOK_FIELDS.issubset(target_fields):
-        raise MetaCommentWebhookReconcileError("DM fields missing after page reconcile plan")
-    return target_fields
+    del current_fields
+    with _page_subscription_writer_lock(page_id=page_id):
+        fields_query = urllib.parse.urlencode({"fields": "id,subscribed_fields"})
+        locked_before = request_json(
+            f"https://graph.facebook.com/{version}/{page_id}/subscribed_apps?{fields_query}",
+            bearer=page_token,
+            stage="read_page_under_lock",
+        )
+        locked_fields = _page_fields_for_app(locked_before, app_id=app_id, allow_absent=True)
+        target_fields = plan_page_subscription_reconcile(locked_fields)
+        result = request_json(
+            f"https://graph.facebook.com/{version}/{page_id}/subscribed_apps",
+            bearer=page_token,
+            method="POST",
+            form={"subscribed_fields": ",".join(sorted(target_fields))},
+            stage="reconcile_page_subscription",
+        )
+        if not isinstance(result, dict) or result.get("success") is not True:
+            raise MetaCommentWebhookReconcileError("Meta did not confirm page subscribed_apps reconcile")
+        if not DM_WEBHOOK_FIELDS.issubset(target_fields):
+            raise MetaCommentWebhookReconcileError("DM fields missing after page reconcile plan")
+        verified = request_json(
+            f"https://graph.facebook.com/{version}/{page_id}/subscribed_apps?{fields_query}",
+            bearer=page_token,
+            stage="verify_page_subscription",
+        )
+        verified_fields = _page_fields_for_app(verified, app_id=app_id, allow_absent=False)
+        if verified_fields != target_fields:
+            raise MetaCommentWebhookReconcileError("Page subscribed_apps did not converge exactly")
+        return verified_fields
 
 
 def main() -> None:
@@ -190,6 +257,8 @@ def main() -> None:
         raise MetaCommentWebhookReconcileError("Refusing an unexpected Graph API version")
     if not app_secret or len(verify_token) < 32:
         raise MetaCommentWebhookReconcileError("Required Meta credentials are missing or malformed")
+    if page_id != EXPECTED_PAGE_ID:
+        raise MetaCommentWebhookReconcileError("Refusing an unexpected Facebook Page")
     if reconcile_page and not page_token:
         raise MetaCommentWebhookReconcileError("Page subscription reconcile requested without page token")
 
@@ -209,14 +278,11 @@ def main() -> None:
             bearer=page_token,
             stage="read_page_before",
         )
-        raw_apps = before_page.get("data")
-        apps = raw_apps if isinstance(raw_apps, list) else []
-        current_fields = (
-            subscription_field_names(_mapping(apps[0]).get("subscribed_fields")) if len(apps) == 1 else set()
-        )
+        current_fields = _page_fields_for_app(before_page, app_id=app_id, allow_absent=True)
         print(f"[meta-comment-webhooks] before_page_subscription_fields={','.join(sorted(current_fields)) or 'none'}")
         target_fields = reconcile_page_subscription(
             page_id=page_id,
+            app_id=app_id,
             page_token=page_token,
             version=version,
             current_fields=current_fields,

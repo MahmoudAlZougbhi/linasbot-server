@@ -31,16 +31,19 @@ Existing scripts (do not duplicate):
 python scripts/ha/import_billing_auth_to_postgres.py
 python scripts/ha/import_billing_auth_to_postgres.py --dry-run   # count only
 
-# Meta registry JSON → PG (verifies fingerprint; exits non-zero on mismatch)
-python scripts/ha/import_meta_registry_to_postgres.py
-python scripts/ha/import_meta_registry_to_postgres.py --store /path/to/registry.json
+# Meta registry: DO NOT import on the 2026-08-14 production state.
+# Managed PG is non-empty/newer and NFS is stale. Use the dedicated HA runbook.
 ```
+
+Current Meta procedure: `docs/scale/META_REGISTRY_POSTGRES_HA_CUTOVER.md`.
+`import_meta_registry_to_postgres.py` is default-dry-run, requires digest CAS for
+apply, and refuses a non-empty divergent target without a separate destructive
+confirmation plus an exact encrypted four-table backup.
 
 ## 3. Verify parity
 
 ```bash
-# Re-run imports (idempotent) + fingerprint check for meta
-python scripts/ha/import_meta_registry_to_postgres.py
+# Meta: use verify_meta_registry_postgres.py; never re-import stale NFS as parity.
 
 # Billing/auth/credits/entitlements count re-import (idempotent) + optional parity probe
 python scripts/ha/verify_billing_auth_parity.py
@@ -51,8 +54,10 @@ python scripts/ha/verify_billing_auth_parity.py
 After import+parity on the target DB:
 
 1. Confirm `DATABASE_URL` / `LINAS_WHATSAPP_DATABASE_URL` points at Managed PG.
-2. **Do not** set `LINAS_BILLING_BACKEND` / `LINAS_AUTH_TOKEN_BACKEND` / `META_REGISTRY_BACKEND` unless overriding — unset means postgres.
-3. Optional soak: `META_REGISTRY_BACKEND=dual` only during migration, then `postgres`.
+2. Set `META_REGISTRY_BACKEND=postgres` explicitly and identically on both nodes
+   before NFS retirement. Do not switch the current production state to `dual`,
+   because dual mode would mirror newer PG writes into a stale file path.
+3. Follow the backup/readiness/failover gates in the dedicated Meta HA runbook.
 4. Restart app processes so they pick up env (no BOC; no unapproved live flips).
 
 ## 5. Rollback
@@ -60,12 +65,12 @@ After import+parity on the target DB:
 Set env **explicitly** (do not rely on old code defaults):
 
 ```bash
-# Emergency file SoT (local node / NFS — divergent risk; short window only)
+# Billing/auth emergency rollback follows their dedicated runbooks.
 export LINAS_BILLING_BACKEND=file
 export LINAS_AUTH_TOKEN_BACKEND=file
-export META_REGISTRY_BACKEND=file   # or dual if PG still writable and you need mirror
 
-# Restart processes. Re-import from file if PG was partially written during failed cutover.
+# Meta registry rollback is four-table PG snapshot restore only.
+# Never enable/re-import the stale NFS file as authority.
 ```
 
 Notes:

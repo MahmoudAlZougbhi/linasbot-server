@@ -70,10 +70,7 @@ def customer_window_limit_message(
     if code == "ar":
         kind_ar = _KIND_AR.get(kind, "الاستخدام")
         label = _PERIOD_LABEL["ar"][period_key]
-        return (
-            f"وصلت إلى الحد {label} لـ{kind_ar}. "
-            f"تقدر تتواصل مع وكيلنا الذكي مرة ثانية بعد {reset}."
-        )
+        return f"وصلت إلى الحد {label} لـ{kind_ar}. تقدر تتواصل مع وكيلنا الذكي مرة ثانية بعد {reset}."
     if code == "fr":
         kind_fr = _KIND_FR.get(kind, "usage IA")
         label = _PERIOD_LABEL["fr"][period_key]
@@ -84,16 +81,10 @@ def customer_window_limit_message(
     if code == "franco":
         kind_en = _KIND_EN.get(kind, "AI")
         label = _PERIOD_LABEL["en"][period_key]
-        return (
-            f"Wesselt 3al {label} {kind_en} limit. "
-            f"Fik terja3 la AI agent ba3d {reset}."
-        )
+        return f"Wesselt 3al {label} {kind_en} limit. Fik terja3 la AI agent ba3d {reset}."
     kind_en = _KIND_EN.get(kind, "AI")
     label = _PERIOD_LABEL["en"][period_key]
-    return (
-        f"You've reached the {label} {kind_en} limit. "
-        f"You can reach our AI agent again after {reset}."
-    )
+    return f"You've reached the {label} {kind_en} limit. You can reach our AI agent again after {reset}."
 
 
 def customer_words_truncated_message(*, word_limit: int, lang: str | None = None) -> str:
@@ -108,10 +99,7 @@ def customer_words_truncated_message(*, word_limit: int, lang: str | None = None
         )
     if code == "franco":
         return f"Ma ederet e2ra kel el message — bass awwal {n} kelme. El jawab 3ala hayda l jize."
-    return (
-        f"I couldn't read everything — only the first {n} words as configured. "
-        "My reply is based on that part."
-    )
+    return f"I couldn't read everything — only the first {n} words as configured. My reply is based on that part."
 
 
 def customer_photos_truncated_message(*, photo_limit: int, lang: str | None = None) -> str:

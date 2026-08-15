@@ -225,7 +225,16 @@ def migrate_from_legacy() -> bool:
 
 
 def get_data_root() -> Path:
-    """Return the persistent data root path."""
+    """Return the persistent data root path.
+
+    Production treats ``LINASBOT_DATA_ROOT`` as startup configuration, but
+    callers that deliberately replace it (notably isolated test and migration
+    contexts) must not be pinned to the value cached when this module was first
+    imported.  The fallback remains the validated startup root.
+    """
+    explicit = os.getenv("LINASBOT_DATA_ROOT")
+    if explicit:
+        return Path(explicit).expanduser().resolve()
     return _DATA_ROOT
 
 

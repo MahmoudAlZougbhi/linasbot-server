@@ -19,6 +19,16 @@ from services.meta_graph_routing import graph_api_url
 _runtime_logger = logging.getLogger("uvicorn.error")
 
 
+def _safe_graph_failure(status_code: int, body: dict[str, Any]) -> tuple[str, dict[str, int]]:
+    error = body.get("error") if isinstance(body.get("error"), dict) else {}
+    code = error.get("code") if isinstance(error, dict) else None
+    subcode = error.get("error_subcode") if isinstance(error, dict) else None
+    safe_code = int(code) if isinstance(code, int) and not isinstance(code, bool) else 0
+    safe_subcode = int(subcode) if isinstance(subcode, int) and not isinstance(subcode, bool) else 0
+    reason = f"graph_http_{int(status_code)}_code_{safe_code}_subcode_{safe_subcode}"
+    return reason, {"code": safe_code, "error_subcode": safe_subcode}
+
+
 async def send_comment_private_reply(
     client: httpx.AsyncClient,
     *,
@@ -62,20 +72,25 @@ async def send_comment_private_reply(
     try:
         body = response.json()
     except Exception:
-        body = {"raw": (response.text or "")[:500]}
+        body = {}
     if not isinstance(body, dict):
-        body = {"value": body}
+        body = {}
 
-    if response.status_code >= 400:
-        err = ""
-        if isinstance(body.get("error"), dict):
-            err = str(body["error"].get("message") or body["error"].get("code") or "")
-        reason = err or f"http_{response.status_code}"
+    if response.status_code < 200 or response.status_code >= 300 or body.get("error"):
+        reason, safe_error = _safe_graph_failure(response.status_code, body)
         _runtime_logger.warning(
             "[meta-comment] private_reply_failed channel=%s reason=%s",
             binding.channel,
             reason,
         )
-        return False, reason, body
+        return False, reason, {"error": safe_error}
+
+    reply_id = str(body.get("id") or body.get("message_id") or "").strip()
+    if not reply_id:
+        _runtime_logger.warning(
+            "[meta-comment] private_reply_failed channel=%s reason=missing_reply_id",
+            binding.channel,
+        )
+        return False, "missing_reply_id", {}
 
     return True, "sent", body

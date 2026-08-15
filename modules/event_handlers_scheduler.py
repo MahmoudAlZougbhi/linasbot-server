@@ -153,6 +153,16 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
         name="Inbound Event Reconcile Watchdog",
         replace_existing=True,
     )
+    from modules.meta_data_deletion_reconcile_job import run_meta_data_deletion_reconcile_job
+
+    scheduler.add_job(
+        run_meta_data_deletion_reconcile_job,
+        "interval",
+        minutes=1,
+        id="meta_data_deletion_reconcile",
+        name="Meta Data Deletion Per-Node Reconcile",
+        replace_existing=True,
+    )
     from modules.customer_reply_reconcile_job import run_customer_reply_reconcile_job
 
     scheduler.add_job(
@@ -171,6 +181,7 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
     print("✅ Initial dispatcher check queued")
     asyncio.create_task(run_smart_followup_worker_job())
     asyncio.create_task(run_inbound_event_reconcile_job())
+    asyncio.create_task(run_meta_data_deletion_reconcile_job())
     asyncio.create_task(run_customer_reply_reconcile_job())
 
     print("✅ Smart Messaging Scheduler started successfully")
@@ -180,6 +191,7 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
     print(f"   - Queue monitor/sender: Every {monitor_interval_minutes} minute(s)")
     print("   - Smart Follow-Up worker: Every 1 minute")
     print("   - Inbound event reconcile: Every 1 minute")
+    print("   - Meta data deletion reconcile: Every 1 minute per node")
     print("   - Customer reply reconcile: Every 1 minute")
     print("=" * 60)
 

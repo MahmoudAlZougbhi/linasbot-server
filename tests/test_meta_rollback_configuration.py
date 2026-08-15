@@ -25,17 +25,17 @@ def test_restore_never_reactivates_compromised_verify_token() -> None:
 def test_new_app_apply_disables_rollback_mode_and_rejects_retired_app() -> None:
     source = (ROOT / "scripts" / "prod_apply_meta_social_secrets.sh").read_text(encoding="utf-8")
     assert 'META_APP_ID" = "1784792718776344' in source
-    assert 'updates["META_SOCIAL_ROLLBACK_ACTIVE"] = "false"' in source
-    assert 'updates["META_SOCIAL_NEW_APP_REQUIRED"] = "true"' in source
+    assert '"META_SOCIAL_ROLLBACK_ACTIVE": "false"' in source
+    assert '"META_SOCIAL_NEW_APP_REQUIRED": "true"' in source
 
 
-def test_new_app_apply_proves_signed_whatsapp_is_handoff_only() -> None:
+def test_new_app_apply_defers_runtime_proofs_until_after_ha_sync() -> None:
     source = (ROOT / "scripts" / "prod_apply_meta_social_secrets.sh").read_text(encoding="utf-8")
-    assert "local_whatsapp_unsigned_http" in source
-    assert "local_whatsapp_signed_http" in source
-    assert "hmac.new(secret, body, hashlib.sha256)" in source
-    assert 'signed[1].get("reason") != "whatsapp_inbound_ai_disabled"' in source
-    assert 'signed[1].get("accepted") != 0' in source
+    assert "META_HA_STAGE_ONLY=true is required" in source
+    assert "runtime_activation_deferred_to_ha_sync=true" in source
+    assert "local_whatsapp_unsigned_http" not in source
+    assert "urllib.request" not in source
+    assert "systemctl" not in source
 
 
 def test_new_app_apply_uses_candidate_environment_and_cutover_lock() -> None:
@@ -49,10 +49,16 @@ def test_atomic_cutover_is_environment_scoped_and_has_automatic_rollback() -> No
     script = (ROOT / "scripts" / "prod_cutover_meta_social.sh").read_text(encoding="utf-8")
     assert "environment: meta-social-cutover" in workflow
     assert "group: meta-social-cutover" in workflow
-    assert "CUTOVER_VERIFIED_META_APP" in workflow
+    assert workflow.startswith("name: RETIRED -")
+    assert "appleboy/ssh-action" not in workflow
+    assert "secrets." not in workflow
+    assert "exit 1" in workflow
     assert "trap rollback_on_error ERR" in script
-    assert 'python3 "$MANAGER" unsubscribe' in script
-    assert 'python3 "$MANAGER" subscribe' in script
+    assert "manage_old unsubscribe" in script
+    assert "manage_new subscribe" in script
+    assert '--expected-app-id "$OLD_APP_ID"' in script
+    assert '--expected-app-id "$NEW_APP_ID"' in script
+    assert "CONFIRM_RETIRED_META_APP_SUBSCRIPTION" in script
     assert "APPLY_ENABLE_MESSAGING=false" in script
     assert "APPLY_ENABLE_MESSAGING=true" in script
     assert script.index('phase="new_apply_started"') < script.index("APPLY_ENABLE_MESSAGING=false")
@@ -61,9 +67,14 @@ def test_atomic_cutover_is_environment_scoped_and_has_automatic_rollback() -> No
 def test_manual_rollback_unsubscribes_new_before_restoring_old_subscription() -> None:
     script = (ROOT / "scripts" / "prod_rollback_meta_social.sh").read_text(encoding="utf-8")
     workflow = (ROOT / ".github" / "workflows" / "meta-social-rollback-restore.yml").read_text(encoding="utf-8")
-    unsubscribe_at = script.index('python3 "$MANAGER" unsubscribe')
+    unsubscribe_at = script.index("manage_new unsubscribe")
     restore_at = script.index('ROLLBACK_ENABLE_MESSAGING=false bash "$RESTORE"')
-    subscribe_at = script.index('python3 "$MANAGER" subscribe', restore_at)
+    subscribe_at = script.index("manage_old subscribe", restore_at)
     assert unsubscribe_at < restore_at < subscribe_at
-    assert "prod_rollback_meta_social.sh" in workflow
+    assert '--expected-app-id "$OLD_APP_ID"' in script
+    assert '--expected-app-id "$NEW_APP_ID"' in script
     assert "group: meta-social-cutover" in workflow
+    assert workflow.startswith("name: RETIRED -")
+    assert "appleboy/ssh-action" not in workflow
+    assert "secrets." not in workflow
+    assert "exit 1" in workflow

@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: meta-app-a-login-config-apply
+  group: meta-social-cutover
   cancel-in-progress: false
 
 permissions:
@@ -15,45 +15,115 @@ permissions:
 jobs:
   apply:
     name: Apply App A Facebook login configuration
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     environment: meta-social-cutover
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Copy apply script to production
-        uses: appleboy/scp-action@v1.0.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          source: scripts/prod_apply_meta_app_a_login_config.sh
-          target: /tmp/linasbot-meta-login-config
-
       - name: Set META_APP_A_FACEBOOK_LOGIN_CONFIG_ID on production
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
         env:
+          EXPECTED_RELEASE_SHA: ${{ github.sha }}
           META_APP_A_FACEBOOK_LOGIN_CONFIG_ID: ${{ secrets.META_APP_A_FACEBOOK_LOGIN_CONFIG_ID }}
           META_OAUTH_REDIRECT_URI: https://www.linasaibot.com/oauth/meta/callback
+          META_HA_STAGE_ONLY: "true"
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script_stop: true
-          command_timeout: 10m
-          envs: META_APP_A_FACEBOOK_LOGIN_CONFIG_ID,META_OAUTH_REDIRECT_URI
+          command_timeout: 14m
+          envs: EXPECTED_RELEASE_SHA,META_APP_A_FACEBOOK_LOGIN_CONFIG_ID,META_OAUTH_REDIRECT_URI,META_HA_STAGE_ONLY
           script: |
             set -euo pipefail
+            test "$(id -u)" -eq 0 && test "$(id -g)" -eq 0
+            exec 9>/run/lock/linasbot-meta-live.lock
+            flock -x 9
+            export LINAS_PRODUCTION_MUTATION_LOCK_FD=9
+            REPO_DIR=/opt/linasbot
+            DEPLOYED_RELEASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
+            if [ "$DEPLOYED_RELEASE_SHA" != "$EXPECTED_RELEASE_SHA" ]; then
+              echo "[meta-login-config] workflow SHA does not match deployed release" >&2
+              exit 1
+            fi
+            if ! git -C "$REPO_DIR" diff --quiet "$DEPLOYED_RELEASE_SHA" -- || \
+               ! git -C "$REPO_DIR" diff --cached --quiet "$DEPLOYED_RELEASE_SHA" --; then
+              echo "[meta-login-config] deployed tracked files differ from release SHA" >&2
+              exit 1
+            fi
             if [ -z "${META_APP_A_FACEBOOK_LOGIN_CONFIG_ID:-}" ]; then
               echo "[meta-login-config] missing GitHub secret META_APP_A_FACEBOOK_LOGIN_CONFIG_ID" >&2
               exit 1
             fi
-            APPLY_SCRIPT="/tmp/linasbot-meta-login-config/scripts/prod_apply_meta_app_a_login_config.sh"
-            if [ ! -f "$APPLY_SCRIPT" ] && [ -f /opt/linasbot/scripts/prod_apply_meta_app_a_login_config.sh ]; then
-              APPLY_SCRIPT="/opt/linasbot/scripts/prod_apply_meta_app_a_login_config.sh"
-            fi
+            PEER_HOST="${LINAS_HA_PEER_HOST:-10.106.0.4}"
+            MAINTENANCE_FILE=/run/linasbot-maintenance
+            META_HA_STATE_ROOT=/var/lib/linasbot/meta-ha
+            PERSISTENT_MAINTENANCE_FILE="$META_HA_STATE_ROOT/maintenance"
+            ENV_BACKUP=""
+            MAINTENANCE_ARMED=false
+            TRANSACTION_COMPLETE=false
+            fail_closed_cleanup() {
+              status=$?
+              trap - EXIT
+              if [ "$TRANSACTION_COMPLETE" != "true" ]; then
+                status=1
+                if [ "$MAINTENANCE_ARMED" = "true" ]; then
+                  sudo install -d -m 0700 -o root -g root "$META_HA_STATE_ROOT" || true
+                  sudo install -m 0600 -o root -g root /dev/null "$PERSISTENT_MAINTENANCE_FILE" || true
+                  install -m 0600 /dev/null "$MAINTENANCE_FILE" || true
+                  ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                    "root@${PEER_HOST}" \
+                    "install -d -m 0700 -o root -g root '$META_HA_STATE_ROOT' && install -m 0600 -o root -g root /dev/null '$PERSISTENT_MAINTENANCE_FILE' && install -m 0600 -o root -g root /dev/null '$MAINTENANCE_FILE'" || true
+                  echo "[meta-login-config] HA maintenance retained after uncertain transaction" >&2
+                fi
+                if [ -n "$ENV_BACKUP" ]; then
+                  echo "[meta-login-config] exact pre-stage backup retained at $ENV_BACKUP" >&2
+                fi
+              else
+                sudo rm -f "$ENV_BACKUP"
+              fi
+              exit "$status"
+            }
+            trap fail_closed_cleanup EXIT
+            MAINTENANCE_ARMED=true
+            sudo install -d -m 0700 -o root -g root "$META_HA_STATE_ROOT"
+            sudo install -m 0600 -o root -g root /dev/null "$PERSISTENT_MAINTENANCE_FILE"
+            sudo install -m 0600 -o root -g root /dev/null "$MAINTENANCE_FILE"
+            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+              "root@${PEER_HOST}" \
+              "install -d -m 0700 -o root -g root '$META_HA_STATE_ROOT' && install -m 0600 -o root -g root /dev/null '$PERSISTENT_MAINTENANCE_FILE' && install -m 0600 -o root -g root /dev/null '$MAINTENANCE_FILE'"
+            test "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 \
+              http://127.0.0.1:8003/api/ready || true)" = "503"
+            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+              "root@${PEER_HOST}" \
+              "test \"\$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8003/api/ready || true)\" = 503"
+            DRAIN_SECONDS="$("$REPO_DIR/venv/bin/python" - "$REPO_DIR/.env" <<'PY'
+            import sys
+            from dotenv import dotenv_values
+
+            value = int(str(dotenv_values(sys.argv[1], interpolate=False).get("META_HA_LB_DRAIN_SECONDS") or ""))
+            if not 30 <= value <= 300:
+                raise SystemExit("invalid HA drain interval")
+            print(value)
+            PY
+            )"
+            sleep "$DRAIN_SECONDS"
+            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+              --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --recover-only
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
+              "$EXPECTED_RELEASE_SHA" cluster-release-only
+            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+              --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --register-prestage-backup
+            ENV_BACKUP="$META_HA_STATE_ROOT/env.before"
+            APPLY_SCRIPT="$REPO_DIR/scripts/prod_apply_meta_app_a_login_config.sh"
             test -f "$APPLY_SCRIPT"
-            sudo -E bash "$APPLY_SCRIPT"
+            bash "$APPLY_SCRIPT"
+            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+              --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active \
+              --local-prestage-backup "$ENV_BACKUP"
+            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+              --expected-sha "$EXPECTED_RELEASE_SHA" --finalize
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
+            TRANSACTION_COMPLETE=true
+            MAINTENANCE_ARMED=false

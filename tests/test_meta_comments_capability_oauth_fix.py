@@ -216,6 +216,60 @@ def test_public_tenant_without_advanced_access_blocked(monkeypatch) -> None:
     assert state["status"] == "meta_approval_required"
 
 
+def test_app_a_approval_never_unlocks_dedicated_instagram_app(monkeypatch) -> None:
+    """Each Meta App Review decision unlocks only its own signing domain."""
+
+    binding = _ig_binding(
+        tenant_id="customer_a",
+        auth_flow="instagram_login",
+        webhook_subscribed_fields=("messages", "messaging_postbacks", "comments"),
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state.canonical_channel_bindings",
+        lambda *_a, **_k: [binding],
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state.get_meta_app_registry",
+        lambda: _MapRegistry(
+            {
+                binding.binding_id: _Cred(
+                    (
+                        "instagram_business_basic",
+                        "instagram_business_manage_messages",
+                        "instagram_business_manage_comments",
+                    )
+                )
+            }
+        ),
+    )
+    monkeypatch.setattr("services.channel_capability_state._advanced_access_approved", lambda: True)
+    monkeypatch.setattr(
+        "services.channel_capability_state._action_requested",
+        lambda *_a, **_k: False,
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_state._tenant_comment_assets_enabled",
+        lambda *_a, **_k: False,
+    )
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_ADVANCED_ACCESS_APPROVED", "false")
+
+    blocked = comment_capability_state("customer_a", "instagram")
+
+    assert blocked["blocker_code"] == "meta_approval_required"
+    assert blocked["app_review"] == {
+        "advanced_access_approved": False,
+        "approval_domain": "instagram_login",
+        "scopes_required": ["instagram_business_manage_comments"],
+        "scopes_missing": [],
+        "live_verified": False,
+    }
+
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_ADVANCED_ACCESS_APPROVED", "true")
+    ready = comment_capability_state("customer_a", "instagram")
+    assert ready["status"] == "ready"
+    assert ready["app_review"]["advanced_access_approved"] is True
+
+
 def test_internal_exception_never_enables_without_scopes(monkeypatch) -> None:
     """Case 6: no permission scope → never enabled through internal exception."""
 

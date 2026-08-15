@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import html
 import os
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from urllib.parse import parse_qs
 
@@ -19,18 +21,31 @@ from services.compliance_page_content import (
     terms_of_service_body,
 )
 from services.meta_app_registry import (
+    APP_A_EXPECTED_ID,
     APP_A_KEY,
+    AuthFlow,
     MetaAppConfig,
     MetaRegistryError,
     get_meta_app_configs,
     get_meta_app_registry,
 )
 from services.meta_data_deletion import (
+    MetaDeletionStateError,
+    MetaDeletionStoreUnavailableError,
     MetaSignedRequestError,
-    VerifiedMetaDeletionRequest,
     delete_meta_social_user_data,
     read_deletion_status,
     verify_meta_deletion_signed_request,
+)
+from services.meta_instagram_login_config import (
+    DEFAULT_INSTAGRAM_LOGIN_APP_ID,
+    instagram_login_app_id,
+    instagram_login_app_secret,
+)
+from services.meta_subject_deletion_guard import (
+    MetaSubjectDeletionGuardError,
+    acquire_meta_deauthorization_subject_guard,
+    meta_deletion_subject_hmac,
 )
 from services.rate_limit_service import rate_limit_service
 
@@ -50,6 +65,14 @@ _CALLBACK_RATE_LIMIT = 120
 _CALLBACK_RATE_WINDOW_SECONDS = 300
 _STATUS_RATE_LIMIT = 30
 _STATUS_RATE_WINDOW_SECONDS = 300
+
+
+@dataclass(frozen=True)
+class _MetaCallbackContext:
+    app_key: str
+    app_id: str
+    app_secret: str
+    auth_flow: AuthFlow
 
 
 def _page(title: str, body: str, *, noindex: bool = False) -> HTMLResponse:
@@ -150,12 +173,51 @@ def _app_a_config() -> MetaAppConfig:
     raise MetaSignedRequestError("Meta App A is not configured")
 
 
-def _verify_app_a_signed_request(signed_request: str) -> VerifiedMetaDeletionRequest:
+def _app_a_callback_context() -> _MetaCallbackContext:
     config = _app_a_config()
-    return verify_meta_deletion_signed_request(signed_request, config.app_secret)
+    if config.app_id != APP_A_EXPECTED_ID:
+        raise MetaSignedRequestError("Meta App A signing identity is unavailable")
+    return _MetaCallbackContext(
+        app_key=config.key,
+        app_id=config.app_id,
+        app_secret=config.app_secret,
+        auth_flow="facebook_login",
+    )
 
 
-async def _handle_meta_data_deletion(request: Request) -> JSONResponse:
+def _instagram_callback_context() -> _MetaCallbackContext:
+    app_id = instagram_login_app_id()
+    app_secret = instagram_login_app_secret()
+    if app_id != DEFAULT_INSTAGRAM_LOGIN_APP_ID or not app_secret:
+        raise MetaSignedRequestError("Instagram Login signing configuration is unavailable")
+    return _MetaCallbackContext(
+        app_key=APP_A_KEY,
+        app_id=app_id,
+        app_secret=app_secret,
+        auth_flow="instagram_login",
+    )
+
+
+def _load_callback_context(*, instagram_login: bool) -> _MetaCallbackContext:
+    try:
+        context = _instagram_callback_context() if instagram_login else _app_a_callback_context()
+        other_secret = (
+            (os.getenv("META_APP_A_SECRET") or os.getenv("META_APP_SECRET") or "").strip()
+            if instagram_login
+            else instagram_login_app_secret()
+        )
+        if other_secret and hmac.compare_digest(context.app_secret, other_secret):
+            raise MetaSignedRequestError("Meta callback signing secrets must be distinct")
+        return context
+    except MetaSignedRequestError:
+        raise HTTPException(status_code=503, detail="Meta callback is not configured") from None
+
+
+async def _handle_meta_data_deletion(
+    request: Request,
+    *,
+    context: _MetaCallbackContext,
+) -> JSONResponse:
     _enforce_rate_limit(
         request,
         "data-deletion",
@@ -166,8 +228,7 @@ async def _handle_meta_data_deletion(request: Request) -> JSONResponse:
         signed_request = await _extract_signed_request(request)
         if not signed_request.strip():
             raise MetaSignedRequestError("Missing signed request")
-        verified = _verify_app_a_signed_request(signed_request)
-        app_config = _app_a_config()
+        verified = verify_meta_deletion_signed_request(signed_request, context.app_secret)
     except (MetaSignedRequestError, UnicodeDecodeError):
         raise HTTPException(status_code=400, detail="Invalid signed deletion request") from None
 
@@ -175,8 +236,10 @@ async def _handle_meta_data_deletion(request: Request) -> JSONResponse:
         result = await asyncio.to_thread(
             delete_meta_social_user_data,
             verified.meta_user_id,
-            app_config.app_secret,
-            app_key=app_config.key,
+            context.app_secret,
+            app_key=context.app_key,
+            signing_app_id=context.app_id,
+            auth_flow=context.auth_flow,
         )
     except Exception:
         raise HTTPException(status_code=503, detail="Data deletion could not be completed") from None
@@ -190,7 +253,11 @@ async def _handle_meta_data_deletion(request: Request) -> JSONResponse:
     )
 
 
-async def _handle_meta_deauthorization(request: Request) -> JSONResponse:
+async def _handle_meta_deauthorization(
+    request: Request,
+    *,
+    context: _MetaCallbackContext,
+) -> JSONResponse:
     _enforce_rate_limit(
         request,
         "deauthorize",
@@ -201,17 +268,30 @@ async def _handle_meta_deauthorization(request: Request) -> JSONResponse:
         signed_request = await _extract_signed_request(request)
         if not signed_request.strip():
             raise MetaSignedRequestError("Missing signed request")
-        verified = _verify_app_a_signed_request(signed_request)
-        app_config = _app_a_config()
+        verified = verify_meta_deletion_signed_request(signed_request, context.app_secret)
     except (MetaSignedRequestError, UnicodeDecodeError):
         raise HTTPException(status_code=400, detail="Invalid signed deauthorization request") from None
 
-    try:
-        get_meta_app_registry().revoke_authorization(
-            app_key=app_config.key,
-            authorized_meta_user_id=verified.meta_user_id,
+    def _revoke_after_tombstone() -> None:
+        subject_key = meta_deletion_subject_hmac(
+            app_key=context.app_key,
+            app_id=context.app_id,
+            auth_flow=context.auth_flow,
+            meta_user_id=verified.meta_user_id,
+            app_secret=context.app_secret,
         )
-    except MetaRegistryError:
+        with acquire_meta_deauthorization_subject_guard(subject_key) as guard:
+            guard.record_deauthorization(deauthorized_at=float(verified.issued_at))
+            get_meta_app_registry().revoke_authorization(
+                app_key=context.app_key,
+                auth_flow=context.auth_flow,
+                authorized_meta_user_id=verified.meta_user_id,
+                authorized_before=float(verified.issued_at),
+            )
+
+    try:
+        await asyncio.to_thread(_revoke_after_tombstone)
+    except (MetaRegistryError, MetaSubjectDeletionGuardError):
         raise HTTPException(status_code=503, detail="Meta deauthorization could not be completed") from None
     return JSONResponse({"success": True}, headers=_SECURITY_HEADERS)
 
@@ -248,7 +328,10 @@ async def data_deletion_status_page(confirmation_code: str, request: Request) ->
         limit=_STATUS_RATE_LIMIT,
         window_seconds=_STATUS_RATE_WINDOW_SECONDS,
     )
-    status = read_deletion_status(confirmation_code)
+    try:
+        status = read_deletion_status(confirmation_code)
+    except (MetaDeletionStateError, MetaDeletionStoreUnavailableError):
+        raise HTTPException(status_code=503, detail="Deletion status is temporarily unavailable") from None
     safe_code = html.escape(str(confirmation_code or "").strip())
     if status is None:
         body = f"""
@@ -292,7 +375,10 @@ Meta or contact <a href="mailto:{_CONTACT_EMAIL}">{_CONTACT_EMAIL}</a> if you ne
 
 @app.post("/oauth/meta/data-deletion", response_class=JSONResponse)
 async def meta_oauth_data_deletion_callback(request: Request) -> JSONResponse:
-    return await _handle_meta_data_deletion(request)
+    return await _handle_meta_data_deletion(
+        request,
+        context=_load_callback_context(instagram_login=False),
+    )
 
 
 @app.get("/oauth/meta/data-deletion", response_class=JSONResponse)
@@ -303,12 +389,32 @@ async def meta_oauth_data_deletion_health() -> JSONResponse:
 
 @app.post("/data-deletion", response_class=JSONResponse)
 async def meta_data_deletion_callback_legacy(request: Request) -> JSONResponse:
-    return await _handle_meta_data_deletion(request)
+    return await _handle_meta_data_deletion(
+        request,
+        context=_load_callback_context(instagram_login=False),
+    )
+
+
+@app.post("/oauth/instagram/data-deletion", response_class=JSONResponse)
+async def instagram_oauth_data_deletion_callback(request: Request) -> JSONResponse:
+    return await _handle_meta_data_deletion(
+        request,
+        context=_load_callback_context(instagram_login=True),
+    )
+
+
+@app.get("/oauth/instagram/data-deletion", response_class=JSONResponse)
+@app.head("/oauth/instagram/data-deletion", response_class=JSONResponse)
+async def instagram_oauth_data_deletion_health() -> JSONResponse:
+    return _callback_health_response()
 
 
 @app.post("/oauth/meta/deauthorize", response_class=JSONResponse)
 async def meta_oauth_deauthorization_callback(request: Request) -> JSONResponse:
-    return await _handle_meta_deauthorization(request)
+    return await _handle_meta_deauthorization(
+        request,
+        context=_load_callback_context(instagram_login=False),
+    )
 
 
 @app.get("/oauth/meta/deauthorize", response_class=JSONResponse)
@@ -319,4 +425,21 @@ async def meta_oauth_deauthorization_health() -> JSONResponse:
 
 @app.post("/meta/deauthorize", response_class=JSONResponse)
 async def meta_deauthorization_callback_legacy(request: Request) -> JSONResponse:
-    return await _handle_meta_deauthorization(request)
+    return await _handle_meta_deauthorization(
+        request,
+        context=_load_callback_context(instagram_login=False),
+    )
+
+
+@app.post("/oauth/instagram/deauthorize", response_class=JSONResponse)
+async def instagram_oauth_deauthorization_callback(request: Request) -> JSONResponse:
+    return await _handle_meta_deauthorization(
+        request,
+        context=_load_callback_context(instagram_login=True),
+    )
+
+
+@app.get("/oauth/instagram/deauthorize", response_class=JSONResponse)
+@app.head("/oauth/instagram/deauthorize", response_class=JSONResponse)
+async def instagram_oauth_deauthorization_health() -> JSONResponse:
+    return _callback_health_response()

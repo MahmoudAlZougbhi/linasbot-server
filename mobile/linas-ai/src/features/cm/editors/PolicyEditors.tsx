@@ -82,4 +82,3 @@ export function RestrictedEditor({ payload, onChange }: EditorProps) {
     </View>
   );
 }
-

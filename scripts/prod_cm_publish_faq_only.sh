@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # FAQ-only publish: draft FAQ over current published base + semantic index (no dirty non-FAQ drafts).
 set -euo pipefail
+# shellcheck source=scripts/ha/require_production_mutation_guard.sh
+source /opt/linasbot/scripts/ha/require_production_mutation_guard.sh
+linas_require_production_mutation_guard "scripts/prod_cm_publish_faq_only.sh"
 APP_DIR="/opt/linasbot"
 cd "$APP_DIR"
 export LINASBOT_DATA_ROOT="${LINASBOT_DATA_ROOT:-/opt/linasbot_data}"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from functools import partial
 from typing import Any
 
 from services.queues.config import redis_required
@@ -19,15 +20,25 @@ _runtime_logger = logging.getLogger("uvicorn.error")
 _MAX_ATTEMPTS = 8
 
 
-def _enqueue_or_mark(rec: InboundEventRecord) -> dict[str, Any]:
+def _claim_contract(rec: InboundEventRecord) -> tuple[str, str]:
+    from services.meta_cross_flow_dedup import GLOBAL_COMMENT_CLAIM_NAMESPACE, GLOBAL_DM_CLAIM_NAMESPACE
+
+    if rec.kind == "meta_dm":
+        return GLOBAL_DM_CLAIM_NAMESPACE, "meta_social_dm_global_claims"
+    return GLOBAL_COMMENT_CLAIM_NAMESPACE, "meta_social_comment_global_claims"
+
+
+def _enqueue_or_mark(rec: InboundEventRecord, claim_handle: Any) -> dict[str, Any]:
+    queue_available = False
     try:
         from services.job_queue import job_queue
 
-        if (
+        queue_available = bool(
             getattr(job_queue, "backend", None) == "redis"
             and getattr(job_queue, "production_ready", False)
             and redis_required()
-        ):
+        )
+        if queue_available:
             job = job_queue.enqueue(
                 queue="high_priority",
                 job_type="meta_inbound_process",
@@ -38,10 +49,20 @@ def _enqueue_or_mark(rec: InboundEventRecord) -> dict[str, Any]:
                     "_conversation_key": rec.conversation_key,
                     "_provider": "openai",
                     "_priority": "customer_conversation",
+                    "_claim_token": claim_handle.owner_token,
+                    "_claim_generation": claim_handle.generation,
                 },
                 idempotency_key=f"meta_inbound:{rec.event_id}:r{rec.attempts}",
             )
-            mark_inbound_state(rec.event_id, state="queued", queue_job_id=str(job.id), bump_attempts=True)
+            try:
+                mark_inbound_state(rec.event_id, state="queued", queue_job_id=str(job.id), bump_attempts=True)
+            except Exception as exc:
+                _runtime_logger.warning(
+                    "[inbound-reconcile] enqueued_ledger_update_failed event_id=%s type=%s",
+                    rec.event_id,
+                    type(exc).__name__,
+                )
+                return {"event_id": rec.event_id, "action": "requeued_ledger_update_failed", "job_id": job.id}
             return {"event_id": rec.event_id, "action": "requeued", "job_id": job.id}
     except Exception as exc:
         _runtime_logger.warning(
@@ -49,8 +70,28 @@ def _enqueue_or_mark(rec: InboundEventRecord) -> dict[str, Any]:
             rec.event_id,
             type(exc).__name__,
         )
-    # Queue unavailable: leave accepted/failed for next tick / local operator retry.
+        if queue_available:
+            # Redis may have accepted the deterministic job before the ACK was
+            # lost. Retain the claim; releasing it would let two consumers run.
+            try:
+                mark_inbound_state(rec.event_id, state="queued", last_error="enqueue_ack_unknown")
+            except Exception:
+                pass
+            return {"event_id": rec.event_id, "action": "enqueue_ack_unknown"}
+    # Queue was proven unavailable before an enqueue attempt. Release safely so
+    # a later tick can retry without waiting for lease expiry.
     mark_inbound_state(rec.event_id, state="accepted", bump_attempts=True)
+    from services.durable_event_claim import release_event_claim, run_claim_coroutine_blocking
+
+    namespace, collection = _claim_contract(rec)
+    run_claim_coroutine_blocking(
+        lambda: release_event_claim(
+            namespace,
+            rec.claim_key,
+            firestore_collection=collection,
+            claim_handle=claim_handle,
+        )
+    )
     return {"event_id": rec.event_id, "action": "marked_accepted_for_retry"}
 
 
@@ -59,15 +100,53 @@ def reconcile_stuck_inbound_events(*, older_than_seconds: float = 45.0) -> dict[
     stuck = list_active_inbound_events(older_than_seconds=older_than_seconds)
     actions: list[dict[str, Any]] = []
     for rec in stuck:
+        from services.durable_event_claim import (
+            complete_event_claim,
+            meta_claim_binding_digest,
+            run_claim_coroutine_blocking,
+            try_claim_event_handle,
+        )
+
+        namespace, collection = _claim_contract(rec)
+        claim_handle = run_claim_coroutine_blocking(
+            partial(
+                try_claim_event_handle,
+                namespace,
+                rec.claim_key,
+                ttl_seconds=300.0,
+                firestore_collection=collection,
+                firestore_claim_metadata={
+                    "binding_id_sha256": meta_claim_binding_digest(
+                        str(rec.binding_snapshot.get("binding_id") or rec.settings_snapshot.get("binding_id") or "")
+                    ),
+                    "inbound_event_id": rec.event_id,
+                },
+                meta_binding_id=str(
+                    rec.binding_snapshot.get("binding_id") or rec.settings_snapshot.get("binding_id") or ""
+                ),
+            )
+        )
+        if claim_handle is None:
+            actions.append({"event_id": rec.event_id, "action": "live_claim_skipped"})
+            continue
         if rec.attempts >= _MAX_ATTEMPTS:
             mark_inbound_state(
                 rec.event_id,
                 state="dead_letter",
                 last_error=rec.last_error or "max_reconcile_attempts",
             )
+            run_claim_coroutine_blocking(
+                partial(
+                    complete_event_claim,
+                    namespace,
+                    rec.claim_key,
+                    firestore_collection=collection,
+                    claim_handle=claim_handle,
+                )
+            )
             actions.append({"event_id": rec.event_id, "action": "dead_letter"})
             continue
-        actions.append(_enqueue_or_mark(rec))
+        actions.append(_enqueue_or_mark(rec, claim_handle))
     stats = accountability_stats()
     return {
         "reconciled_at": time.time(),

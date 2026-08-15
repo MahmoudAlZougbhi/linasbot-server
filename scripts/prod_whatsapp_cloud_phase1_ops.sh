@@ -5,6 +5,10 @@
 #   MODE=APPLY_WHATSAPP_CLOUD_PHASE1 bash scripts/prod_whatsapp_cloud_phase1_ops.sh
 set -euo pipefail
 
+# shellcheck source=scripts/ha/require_production_mutation_guard.sh
+source /opt/linasbot/scripts/ha/require_production_mutation_guard.sh
+linas_require_production_mutation_guard "scripts/prod_whatsapp_cloud_phase1_ops.sh"
+
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$APP_DIR"
 MODE="${MODE:-}"
@@ -12,11 +16,9 @@ MODE="${MODE:-}"
 echo "[wa-ops] deployed_sha=$(git rev-parse HEAD)"
 echo "[wa-ops] mode=${MODE}"
 
-chmod +x scripts/prod_whatsapp_cloud_migrate.sh scripts/prod_apply_whatsapp_cloud_phase1_flags.sh || true
-
 if [ "$MODE" = "APPLY_WHATSAPP_CLOUD_PHASE1" ]; then
   echo "[wa-ops] running migrate"
-  sudo bash scripts/prod_whatsapp_cloud_migrate.sh
+  bash scripts/prod_whatsapp_cloud_migrate.sh
 elif [ "$MODE" = "APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY" ]; then
   echo "[wa-ops] skipping migrate (FLAGS_ONLY)"
 else
@@ -25,7 +27,7 @@ else
 fi
 
 echo "[wa-ops] applying phase1 flags"
-sudo bash scripts/prod_apply_whatsapp_cloud_phase1_flags.sh
+bash scripts/prod_apply_whatsapp_cloud_phase1_flags.sh
 
 curl -fsS https://linasaibot.com/api/ready >/tmp/ready.json
 python3 - <<'PY'

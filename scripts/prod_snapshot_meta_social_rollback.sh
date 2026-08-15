@@ -46,7 +46,6 @@ keys = (
 )
 approved_paths = (
     Path("/opt/linasbot/.env"),
-    Path("/opt/linasbot/linaslaserbot-2.7.22/.env"),
 )
 
 def read_values(path: Path) -> dict[str, str]:

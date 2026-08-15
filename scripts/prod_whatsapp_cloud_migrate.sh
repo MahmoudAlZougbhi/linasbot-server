@@ -8,6 +8,10 @@
 #
 set -euo pipefail
 
+# shellcheck source=scripts/ha/require_production_mutation_guard.sh
+source /opt/linasbot/scripts/ha/require_production_mutation_guard.sh
+linas_require_production_mutation_guard "scripts/prod_whatsapp_cloud_phase1_ops.sh"
+
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$APP_DIR"
 
@@ -24,9 +28,8 @@ load_env_file() {
   fi
 }
 
-# Dual env paths used in production (never echo values).
+# Only the canonical root EnvironmentFile is authoritative in production.
 load_env_file "/opt/linasbot/.env"
-load_env_file "$APP_DIR/.env"
 
 URL="${LINAS_WHATSAPP_DATABASE_URL:-${DATABASE_URL:-}}"
 if [ -z "$URL" ]; then

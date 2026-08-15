@@ -1,4 +1,4 @@
-name: Meta Social Rollback Restore
+name: RETIRED - Meta Social Rollback Restore
 
 on:
   workflow_dispatch:
@@ -20,27 +20,13 @@ permissions:
   contents: read
 
 jobs:
-  restore:
-    name: Restore encrypted retired-app configuration
+  retired:
+    name: Block retired-app restoration
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    if: inputs.restore_confirmation == 'RESTORE_RETIRED_META_APP'
+    timeout-minutes: 2
+    environment: meta-social-cutover
     steps:
-      - name: Restore rollback archive on production
-        uses: appleboy/ssh-action@v1.2.0
-        env:
-          META_ROLLBACK_ENCRYPTION_KEY: ${{ secrets.META_ROLLBACK_ENCRYPTION_KEY }}
-          META_WEBHOOK_VERIFY_TOKEN: ${{ secrets.META_WEBHOOK_VERIFY_TOKEN }}
-          META_ROLLBACK_ARCHIVE: ${{ inputs.archive }}
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          script_stop: true
-          command_timeout: 10m
-          envs: META_ROLLBACK_ENCRYPTION_KEY,META_WEBHOOK_VERIFY_TOKEN,META_ROLLBACK_ARCHIVE
-          script: |
-            set -e
-            test -f /opt/linasbot/scripts/prod_rollback_meta_social.sh
-            sudo -E bash /opt/linasbot/scripts/prod_rollback_meta_social.sh
+      - name: Refuse restoration of the retired Meta app
+        run: |
+          echo "::error::Retired-app restoration is disabled; repair or roll back the current App A release instead."
+          exit 1

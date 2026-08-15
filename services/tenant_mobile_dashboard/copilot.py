@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any
+from typing import Any, cast
 
 from services.owner_ai_model_router import owner_chat_usage_tracker
 from services.owner_chat_store import OwnerChatStore
@@ -100,10 +100,10 @@ def build_owner_copilot_summary(
     if leftover_logs or log_credits_unmapped:
         sources.append("interaction_logs_estimate")
 
-    user_ids = set(chats_by_user) | set(credits_by_user)
+    user_ids: set[str] = set(chats_by_user) | set(credits_by_user)
     names = _lookup_names(user_ids)
     by_user: list[dict[str, Any]] = []
-    for uid in sorted(user_ids, key=lambda key: names.get(key, key).lower()):
+    for uid in sorted(user_ids, key=lambda key: cast(str, names.get(key, key)).lower()):
         by_user.append(
             {
                 "user_id": uid,

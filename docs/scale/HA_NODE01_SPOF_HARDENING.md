@@ -1,5 +1,10 @@
 # HA node01 SPOF hardening — Linas AI
 
+> Historical 2026-08-12 evidence. The Meta registry authority/counts and cutover
+> sequence below are superseded by the read-only 2026-08-14 inventory and
+> `docs/scale/META_REGISTRY_POSTGRES_HA_CUTOVER.md`. Never import the now-stale
+> NFS file over the newer Managed Postgres registry.
+
 **Date:** 2026-08-12  
 **Branch:** `chore/project-cleanup-reorg`  
 **PR:** [#240](https://github.com/MahmoudAlZougbhi/linasbot-server/pull/240)  

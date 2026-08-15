@@ -1,11 +1,11 @@
-# Subscribe the allowlisted Facebook Page to App A DM webhook fields only.
-name: Meta Page Subscription Subscribe
+# Reconcile the allowlisted Page to App A's complete DM + comment field set.
+name: Meta Page DM + Comment Subscription Reconcile
 
 on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: "Type PAGE_SUBSCRIBE_APP_A_DM"
+        description: "Type PAGE_RECONCILE_APP_A_SOCIAL"
         required: true
         type: string
 
@@ -18,14 +18,16 @@ permissions:
 
 jobs:
   subscribe:
-    name: Page subscribed_apps status and subscribe
-    if: inputs.confirmation == 'PAGE_SUBSCRIBE_APP_A_DM'
+    name: Page subscribed_apps DM + comments reconcile
+    if: inputs.confirmation == 'PAGE_RECONCILE_APP_A_SOCIAL'
     environment: meta-social-cutover
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Status then subscribe on production server
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        env:
+          EXPECTED_RELEASE_SHA: ${{ github.sha }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -33,16 +35,38 @@ jobs:
           port: 22
           script_stop: true
           command_timeout: 5m
+          envs: EXPECTED_RELEASE_SHA
           script: |
-            set -e
-            MANAGER=/opt/linasbot/scripts/manage_meta_page_subscription.py
+            set -euo pipefail
+            exec 9>/run/lock/linasbot-meta-live.lock
+            flock -x 9
+            REPO_DIR=/opt/linasbot
+            DEPLOYED_RELEASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
+            if [ "$DEPLOYED_RELEASE_SHA" != "$EXPECTED_RELEASE_SHA" ]; then
+              echo "[page-subscribe] workflow SHA does not match deployed release" >&2
+              exit 1
+            fi
+            if ! git -C "$REPO_DIR" diff --quiet "$DEPLOYED_RELEASE_SHA" -- || \
+               ! git -C "$REPO_DIR" diff --cached --quiet "$DEPLOYED_RELEASE_SHA" --; then
+              echo "[page-subscribe] deployed tracked files differ from release SHA" >&2
+              exit 1
+            fi
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
+            MANAGER="$REPO_DIR/scripts/manage_meta_page_subscription.py"
+            CONTRACT="$REPO_DIR/scripts/meta_webhook_contract.py"
+            PYTHON_BIN="$REPO_DIR/venv/bin/python"
             test -f "$MANAGER"
+            test -f "$CONTRACT"
+            test -x "$PYTHON_BIN"
+            sudo "$PYTHON_BIN" -m py_compile "$MANAGER" "$CONTRACT"
+            echo "[page-subscribe] deployed_release_sha=$DEPLOYED_RELEASE_SHA"
             echo "[page-subscribe] phase=status_before_empty_expectation"
-            sudo python3 "$MANAGER" status --expect empty || true
+            sudo "$PYTHON_BIN" "$MANAGER" status --expect empty || true
             echo "[page-subscribe] phase=status_before_current_only_expectation"
-            sudo python3 "$MANAGER" status --expect current-only || true
+            sudo "$PYTHON_BIN" "$MANAGER" status --expect current-only || true
             echo "[page-subscribe] phase=subscribe"
-            sudo python3 "$MANAGER" subscribe --allow-present
+            sudo "$PYTHON_BIN" "$MANAGER" subscribe --allow-present
             echo "[page-subscribe] phase=status_after"
-            sudo python3 "$MANAGER" status --expect current-only
+            sudo "$PYTHON_BIN" "$MANAGER" status --expect current-only
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
             echo "[page-subscribe] SUCCESS"

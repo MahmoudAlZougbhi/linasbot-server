@@ -9,7 +9,13 @@ import time
 import httpx
 
 from services.durable_event_claim import release_job_lock, try_acquire_job_lock
-from services.meta_app_registry import MetaAppRegistry, MetaAssetBinding, MetaBindingCredential, get_meta_app_registry
+from services.meta_app_registry import (
+    MetaAppRegistry,
+    MetaAssetBinding,
+    MetaBindingConflictError,
+    MetaBindingCredential,
+    get_meta_app_registry,
+)
 from services.meta_instagram_login_config import META_INSTAGRAM_GRAPH_BASE_URL, instagram_login_app_id
 from services.meta_instagram_login_oauth import credential_needs_refresh, refresh_instagram_long_lived_token
 from services.meta_oauth import MetaOAuthError
@@ -81,25 +87,17 @@ async def refresh_binding_instagram_login_token(
                         authorized_meta_user_id=credential.authorized_meta_user_id,
                         auth_flow="instagram_login",
                         declined_scopes=credential.declined_scopes,
+                        authorization_started_at=credential.authorization_started_at,
                     )
-                    current_registry.authorize_oauth_asset(
-                        tenant_id=latest_binding.tenant_id,
-                        channel="instagram",
-                        asset_id=latest_binding.asset_id,
-                        page_id="",
-                        instagram_account_id=latest_binding.asset_id,
-                        app_key=latest_binding.app_key,
+                    current_registry.refresh_binding_credential_exact(
+                        binding_id=latest_binding.binding_id,
+                        expected_generation=latest_binding.generation,
                         credential=updated,
                         actor_id="instagram-login-refresh",
-                        instagram_username=latest_binding.instagram_username,
-                        status=latest_binding.status,
-                        auth_flow="instagram_login",
-                        webhook_subscription_status=latest_binding.webhook_subscription_status,
-                        webhook_subscribed_fields=latest_binding.webhook_subscribed_fields,
-                        webhook_subscription_error=latest_binding.webhook_subscription_error,
-                        webhook_subscription_checked_at=latest_binding.webhook_subscription_checked_at,
                     )
                     return updated
+                except MetaBindingConflictError as exc:
+                    raise MetaOAuthError("Instagram authorization changed; reconnect required") from exc
                 except (MetaOAuthError, httpx.HTTPError) as exc:
                     last_error = type(exc).__name__
                     _runtime_logger.warning(

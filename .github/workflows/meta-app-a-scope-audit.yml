@@ -1,4 +1,4 @@
-name: Meta App A Scope Audit
+name: Meta Facebook Permission Group Scope Audit
 
 on:
   workflow_dispatch:
@@ -12,13 +12,15 @@ permissions:
 
 jobs:
   audit:
-    name: Read-only App A scope audit on production
+    name: Read-only Facebook permission group audit on production
     environment: meta-social-cutover
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Audit binding scopes on production server
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        env:
+          EXPECTED_RELEASE_SHA: ${{ github.sha }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -26,45 +28,32 @@ jobs:
           port: 22
           script_stop: true
           command_timeout: 5m
+          envs: EXPECTED_RELEASE_SHA
           script: |
             set -euo pipefail
-            APP_DIR=/opt/linasbot
-            if [ -f /opt/linasbot/linaslaserbot-2.7.22/main.py ]; then
-              APP_DIR=/opt/linasbot/linaslaserbot-2.7.22
-            fi
-            cd /opt/linasbot
-            # Prefer scripts already deployed on the host (main). Do not soft-checkout
-            # a stale feature branch (fix/ig-fb-comments-capability-gates).
-            if [ ! -f /opt/linasbot/scripts/audit_meta_app_a_scopes.py ]; then
-              git fetch origin main
-              git show origin/main:scripts/audit_meta_app_a_scopes.py > /tmp/audit_meta_app_a_scopes.py
-              install -m 0755 /tmp/audit_meta_app_a_scopes.py /opt/linasbot/scripts/audit_meta_app_a_scopes.py
-            fi
-            if [ ! -f /opt/linasbot/scripts/prod_meta_comment_runtime_probe.py ]; then
-              git fetch origin main
-              git show origin/main:scripts/prod_meta_comment_runtime_probe.py > /tmp/prod_meta_comment_runtime_probe.py
-              install -m 0755 /tmp/prod_meta_comment_runtime_probe.py /opt/linasbot/scripts/prod_meta_comment_runtime_probe.py
-            fi
-            set -a
-            if [ -f "$APP_DIR/.env" ]; then
-              # shellcheck disable=SC1090
-              source "$APP_DIR/.env"
-            elif [ -f /opt/linasbot/.env ]; then
-              # shellcheck disable=SC1091
-              source /opt/linasbot/.env
-            fi
-            set +a
-            if [ -f "$APP_DIR/venv/bin/activate" ]; then
-              # shellcheck disable=SC1091
-              source "$APP_DIR/venv/bin/activate"
-            elif [ -f /opt/linasbot/venv/bin/activate ]; then
-              # shellcheck disable=SC1091
-              source /opt/linasbot/venv/bin/activate
-            else
-              echo "App venv missing" >&2
+            exec 9>/run/lock/linasbot-meta-live.lock
+            flock -x 9
+            REPO_DIR=/opt/linasbot
+            DEPLOYED_RELEASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
+            if [ "$DEPLOYED_RELEASE_SHA" != "$EXPECTED_RELEASE_SHA" ]; then
+              echo "[meta-scope-audit] workflow SHA does not match deployed release" >&2
               exit 1
             fi
+            if ! git -C "$REPO_DIR" diff --quiet "$DEPLOYED_RELEASE_SHA" -- || \
+               ! git -C "$REPO_DIR" diff --cached --quiet "$DEPLOYED_RELEASE_SHA" --; then
+              echo "[meta-scope-audit] deployed tracked files differ from release SHA" >&2
+              exit 1
+            fi
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
+            APP_DIR=/opt/linasbot
+            ENV_FILE="$APP_DIR/.env"
+            PYTHON_BIN="$APP_DIR/venv/bin/python"
+            test -f "$ENV_FILE"
+            test -x "$PYTHON_BIN"
             export PYTHONPATH="$APP_DIR${PYTHONPATH:+:$PYTHONPATH}"
+            export META_SCOPE_AUDIT_ENV_FILE="$ENV_FILE"
+            export META_SCOPE_AUDIT_REQUIRE_COMMENTS=true
             cd "$APP_DIR"
-            python3 /opt/linasbot/scripts/audit_meta_app_a_scopes.py
-            python3 /opt/linasbot/scripts/prod_meta_comment_runtime_probe.py
+            "$PYTHON_BIN" "$REPO_DIR/scripts/audit_meta_app_a_scopes.py"
+            "$PYTHON_BIN" "$REPO_DIR/scripts/prod_meta_comment_runtime_probe.py"
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"

@@ -64,7 +64,7 @@ test('Settings handoff sections and rows match the iOS mock', () => {
   assert.doesNotMatch(en, /About Linas AI/);
   assert.match(en, /Terms & Privacy/);
   assert.match(en, /Support & Legal/);
-  assert.match(read('i18n/locales/en.ts'), /settingsAiLimits: 'AI Limits'/);
+  assert.match(read('i18n/locales/en.ts'), /settingsAiLimits: 'Customer AI Limits'/);
   assert.match(ar, /تنبيهات الدردشات والطلبات/);
   assert.match(fr, /Alertes chats et demandes/);
 });

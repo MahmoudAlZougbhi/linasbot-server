@@ -61,6 +61,7 @@ from services.meta_app_registry_common import (
     normalize_meta_tenant_id,
     verify_any_meta_challenge_token,
 )
+from services.meta_app_registry_deletion import MetaAppRegistryDeletionMixin
 from services.meta_app_registry_lifecycle import MetaAppRegistryLifecycleMixin
 from services.meta_app_registry_oauth import MetaAppRegistryOAuthMixin
 
@@ -115,6 +116,7 @@ __all__ = [
 class MetaAppRegistry(
     MetaAppRegistryBindingsMixin,
     MetaAppRegistryLifecycleMixin,
+    MetaAppRegistryDeletionMixin,
     MetaAppRegistryOAuthMixin,
 ):
     """Process-safe registry with encrypted credential envelopes (file|postgres|dual)."""

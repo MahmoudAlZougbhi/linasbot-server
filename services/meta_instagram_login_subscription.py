@@ -10,7 +10,7 @@ from typing import Any
 import httpx
 
 from services.meta_app_registry import MetaAppRegistry, MetaAssetBinding, MetaBindingCredential, get_meta_app_registry
-from services.meta_instagram_login_config import META_INSTAGRAM_GRAPH_BASE_URL
+from services.meta_instagram_login_config import META_INSTAGRAM_GRAPH_BASE_URL, instagram_login_app_id
 from services.meta_oauth import MetaOAuthError, _safe_json
 
 _runtime_logger = logging.getLogger("uvicorn.error")
@@ -63,19 +63,21 @@ def _subscription_status_for_verified(*, verified: frozenset[str], subscribed_fi
     return "ready"
 
 
-def _parse_verified_fields(payload: dict[str, Any]) -> frozenset[str]:
-    verified: set[str] = set()
+def _parse_verified_fields(payload: dict[str, Any], *, expected_app_id: str) -> frozenset[str]:
+    """Return fields only from the one direct-Instagram app subscription row."""
+
     rows = payload.get("data")
-    if isinstance(rows, list):
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            subscribed = row.get("subscribed_fields")
-            if isinstance(subscribed, list):
-                verified.update(str(item).strip() for item in subscribed if str(item).strip())
-            elif isinstance(subscribed, str):
-                verified.update(item.strip() for item in subscribed.split(",") if item.strip())
-    subscribed_fields = payload.get("subscribed_fields")
+    matching = [
+        row
+        for row in (rows if isinstance(rows, list) else [])
+        if isinstance(row, dict) and str(row.get("id") or "").strip() == expected_app_id
+    ]
+    if len(matching) != 1:
+        return frozenset()
+    subscribed_fields = matching[0].get("subscribed_fields")
+    verified: set[str] = set()
+    if isinstance(subscribed_fields, list):
+        verified.update(str(item).strip() for item in subscribed_fields if str(item).strip())
     if isinstance(subscribed_fields, str):
         verified.update(item.strip() for item in subscribed_fields.split(",") if item.strip())
     return frozenset(verified)
@@ -86,10 +88,11 @@ async def _subscribe_once(
     ig_user_id: str,
     access_token: str,
     subscribed_fields: tuple[str, ...],
+    graph_api_version: str,
     client: httpx.AsyncClient,
 ) -> None:
     response = await client.post(
-        f"{ig_user_id}/subscribed_apps",
+        f"{META_INSTAGRAM_GRAPH_BASE_URL}/{graph_api_version}/{ig_user_id}/subscribed_apps",
         data={"subscribed_fields": ",".join(subscribed_fields)},
         headers={"Authorization": f"Bearer {access_token}"},
     )
@@ -102,14 +105,16 @@ async def _fetch_subscription_state(
     *,
     ig_user_id: str,
     access_token: str,
+    graph_api_version: str,
+    expected_app_id: str,
     client: httpx.AsyncClient,
 ) -> frozenset[str]:
     response = await client.get(
-        f"{ig_user_id}/subscribed_apps",
+        f"{META_INSTAGRAM_GRAPH_BASE_URL}/{graph_api_version}/{ig_user_id}/subscribed_apps",
         headers={"Authorization": f"Bearer {access_token}"},
     )
     payload = _safe_json(response, step="instagram subscribed_apps verify")
-    return _parse_verified_fields(payload)
+    return _parse_verified_fields(payload, expected_app_id=expected_app_id)
 
 
 async def ensure_instagram_login_webhook_subscription(
@@ -129,6 +134,9 @@ async def ensure_instagram_login_webhook_subscription(
         raise MetaOAuthError("Instagram professional account id is invalid")
 
     subscribed_fields = subscribed_fields_for_granted_scopes(credential.scopes)
+    expected_app_id = instagram_login_app_id()
+    if credential.token_app_id != expected_app_id:
+        raise MetaOAuthError("Instagram Login credential belongs to an unexpected app")
     current_registry = registry or get_meta_app_registry()
     owns_client = client is None
     http_client = client or httpx.AsyncClient(
@@ -143,11 +151,14 @@ async def ensure_instagram_login_webhook_subscription(
                     ig_user_id=ig_user_id,
                     access_token=credential.access_token,
                     subscribed_fields=subscribed_fields,
+                    graph_api_version=graph_api_version,
                     client=http_client,
                 )
                 verified = await _fetch_subscription_state(
                     ig_user_id=ig_user_id,
                     access_token=credential.access_token,
+                    graph_api_version=graph_api_version,
+                    expected_app_id=expected_app_id,
                     client=http_client,
                 )
                 if REQUIRED_DM_SUBSCRIPTION_FIELDS.issubset(verified):

@@ -49,10 +49,12 @@ def instagram_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("META_APP_A_ID", "2963733803971681")
     monkeypatch.setenv("META_APP_A_SECRET", "app-a-secret-tests")
     monkeypatch.setenv("META_APP_A_WEBHOOK_VERIFY_TOKEN", "verify-a-tests")
+    monkeypatch.setenv("META_APP_A_ADVANCED_ACCESS_APPROVED", "true")
     monkeypatch.setenv("META_GRAPH_API_VERSION", "v24.0")
     monkeypatch.setenv("META_INSTAGRAM_LOGIN_APP_ID", "1035856539045307")
     monkeypatch.setenv("META_INSTAGRAM_LOGIN_APP_SECRET", "instagram-app-secret-tests")
     monkeypatch.setenv("META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN", "verify-ig-login-tests")
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_ADVANCED_ACCESS_APPROVED", "true")
     monkeypatch.setenv("META_CREDENTIAL_ENCRYPTION_KEY", "instagram-login-lifecycle-secret-tests-1234567890")
 
 
@@ -78,7 +80,17 @@ async def test_startup_recovers_failed_subscription_without_webhook(registry: Me
     async def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "POST":
             return httpx.Response(200, json={"success": True})
-        return httpx.Response(200, json={"data": [{"subscribed_fields": ["messages", "messaging_postbacks"]}]})
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "id": "1035856539045307",
+                        "subscribed_fields": ["messages", "messaging_postbacks"],
+                    }
+                ]
+            },
+        )
 
     lifecycle = InstagramLoginLifecycle()
     mock_client = httpx.AsyncClient(
@@ -368,7 +380,14 @@ async def test_permission_upgrade_adds_comments_without_removing_dm_subscription
             return httpx.Response(200, json={"success": True})
         return httpx.Response(
             200,
-            json={"data": [{"subscribed_fields": ["messages", "messaging_postbacks", COMMENTS_SUBSCRIPTION_FIELD]}]},
+            json={
+                "data": [
+                    {
+                        "id": "1035856539045307",
+                        "subscribed_fields": ["messages", "messaging_postbacks", COMMENTS_SUBSCRIPTION_FIELD],
+                    }
+                ]
+            },
         )
 
     upgraded_credential = MetaBindingCredential(

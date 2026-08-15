@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# Preserve durable CM ops flags across dual .env paths used by production deploy.
-# Never prints secret values. Safe to run on every deploy before service restart.
+# Preserve the durable CM ops flag in the canonical production EnvironmentFile.
+# Never prints secret values. The common live/deploy guard must already be held.
 set -euo pipefail
+
+# shellcheck source=scripts/ha/require_production_mutation_guard.sh
+source /opt/linasbot/scripts/ha/require_production_mutation_guard.sh
+linas_require_production_mutation_guard "scripts/prod_cm_preserve_durable_flags.sh"
 
 APP_DIR="${1:-}"
 if [ -z "$APP_DIR" ]; then
@@ -37,10 +41,14 @@ os.environ.setdefault("LINASBOT_DATA_ROOT", "/opt/linasbot_data")
 os.environ.setdefault("ENVIRONMENT", "production")
 
 from services.cm.durable_flags import (
+    CM_DISABLE_LINAS_LEGACY_BRIDGE,
     default_production_env_paths,
+    parse_env_bool,
     preserve_disable_linas_legacy_bridge,
+    read_env_file_map,
     readiness_requires_disable_bridge,
 )
+from scripts.ha.production_env_cas import atomic_update_canonical_env
 from services.cm.constants import tenant_has_published_cm
 
 app_dir = os.environ.get("CM_PRESERVE_APP_DIR") or "/opt/linasbot"
@@ -49,11 +57,24 @@ linas_published = tenant_has_published_cm("linas")
 report = preserve_disable_linas_legacy_bridge(
     paths,
     linas_has_published_cm=linas_published,
-    dry_run=False,
+    dry_run=True,
 )
+effective = report.get("effective")
+if effective is not None:
+    atomic_update_canonical_env(
+        {CM_DISABLE_LINAS_LEGACY_BRIDGE: "true" if effective else "false"}
+    )
+    report["updated_paths"] = ["/opt/linasbot/.env"]
+    report["dry_run"] = False
+persisted = parse_env_bool(
+    read_env_file_map(Path("/opt/linasbot/.env")).get(CM_DISABLE_LINAS_LEGACY_BRIDGE)
+)
+if effective is not None and persisted != effective:
+    report["ok"] = False
+    report["failures"].append("canonical_env_postcondition_failed")
 gate = readiness_requires_disable_bridge(
     linas_has_published_cm=linas_published,
-    effective_disable_bridge=report.get("effective"),
+    effective_disable_bridge=persisted,
 )
 out = {"preserve": report, "readiness": gate}
 print(json.dumps(out, indent=2, ensure_ascii=False))

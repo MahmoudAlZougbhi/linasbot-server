@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import re
-from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -18,7 +16,10 @@ from services.meta_data_deletion import (
     generate_opaque_confirmation_code,
     verify_meta_deletion_signed_request,
 )
-from tests.meta_compliance_helpers import APP_A_ENV, APP_SECRET, _signed_request
+from tests.meta_compliance_helpers import APP_A_ENV, APP_SECRET, _FakeFirestore, _signed_request
+
+INSTAGRAM_APP_ID = "1035856539045307"
+INSTAGRAM_APP_SECRET = "instagram-login-secret-for-tests"
 
 
 @pytest.fixture(scope="module")
@@ -31,8 +32,14 @@ def compliance_client() -> TestClient:
 
 @pytest.fixture(autouse=True)
 def _configure_app_a(monkeypatch: pytest.MonkeyPatch) -> None:
+    import utils.utils
+
     for key, value in APP_A_ENV.items():
         monkeypatch.setenv(key, value)
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_APP_ID", INSTAGRAM_APP_ID)
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_APP_SECRET", INSTAGRAM_APP_SECRET)
+    db = _FakeFirestore()
+    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
 
 
 def test_meta_signed_request_success() -> None:
@@ -115,6 +122,9 @@ def test_public_compliance_pages_are_real_html(compliance_client: TestClient) ->
     assert "Linas AI account deletion" in deletion.text
     assert "30 days" in deletion.text
     assert "Social message data deletion" in deletion.text
+    assert "/oauth/meta/data-deletion" in deletion.text
+    assert "/oauth/instagram/data-deletion" in deletion.text
+    assert "identifier for every" in deletion.text
 
 
 @pytest.mark.parametrize(
@@ -122,6 +132,8 @@ def test_public_compliance_pages_are_real_html(compliance_client: TestClient) ->
     [
         "/oauth/meta/data-deletion",
         "/oauth/meta/deauthorize",
+        "/oauth/instagram/data-deletion",
+        "/oauth/instagram/deauthorize",
     ],
 )
 def test_meta_callback_health_is_reachable(compliance_client: TestClient, path: str) -> None:
@@ -174,7 +186,118 @@ def test_valid_deletion_callback_returns_meta_contract(compliance_client: TestCl
         "123456789",
         APP_SECRET,
         app_key=APP_A_KEY,
+        signing_app_id="2963733803971681",
+        auth_flow="facebook_login",
     )
+
+
+def test_direct_instagram_deletion_uses_only_its_signing_domain(
+    compliance_client: TestClient,
+) -> None:
+    result = MetaDeletionResult(
+        confirmation_code="b" * 32,
+        deleted_user_documents=0,
+        deleted_nested_documents=0,
+        deleted_index_documents=0,
+    )
+    with mock.patch(
+        "modules.meta_compliance.delete_meta_social_user_data",
+        return_value=result,
+    ) as delete_mock:
+        response = compliance_client.post(
+            "/oauth/instagram/data-deletion",
+            data={"signed_request": _signed_request(secret=INSTAGRAM_APP_SECRET)},
+        )
+
+    assert response.status_code == 200
+    delete_mock.assert_called_once_with(
+        "123456789",
+        INSTAGRAM_APP_SECRET,
+        app_key=APP_A_KEY,
+        signing_app_id=INSTAGRAM_APP_ID,
+        auth_flow="instagram_login",
+    )
+
+
+@pytest.mark.parametrize(
+    ("path", "secret"),
+    [
+        ("/oauth/meta/data-deletion", INSTAGRAM_APP_SECRET),
+        ("/oauth/instagram/data-deletion", APP_SECRET),
+    ],
+)
+def test_deletion_callback_rejects_other_signing_domain_secret(
+    compliance_client: TestClient,
+    path: str,
+    secret: str,
+) -> None:
+    with mock.patch("modules.meta_compliance.delete_meta_social_user_data") as delete_mock:
+        response = compliance_client.post(
+            path,
+            data={"signed_request": _signed_request(secret=secret)},
+        )
+
+    assert response.status_code == 400
+    delete_mock.assert_not_called()
+
+
+def test_direct_instagram_deletion_fails_closed_without_its_secret(
+    compliance_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("META_INSTAGRAM_LOGIN_APP_SECRET")
+    with mock.patch("modules.meta_compliance.delete_meta_social_user_data") as delete_mock:
+        response = compliance_client.post(
+            "/oauth/instagram/data-deletion",
+            data={"signed_request": _signed_request(secret=INSTAGRAM_APP_SECRET)},
+        )
+
+    assert response.status_code == 503
+    delete_mock.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/oauth/meta/data-deletion", "/oauth/instagram/data-deletion"],
+)
+def test_callback_fails_closed_if_signing_secrets_are_ambiguous(
+    compliance_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+) -> None:
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_APP_SECRET", APP_SECRET)
+    with mock.patch("modules.meta_compliance.delete_meta_social_user_data") as delete_mock:
+        response = compliance_client.post(
+            path,
+            data={"signed_request": _signed_request(secret=APP_SECRET)},
+        )
+
+    assert response.status_code == 503
+    delete_mock.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("path", "app_id_env"),
+    [
+        ("/oauth/meta/data-deletion", "META_APP_A_ID"),
+        ("/oauth/instagram/data-deletion", "META_INSTAGRAM_LOGIN_APP_ID"),
+    ],
+)
+def test_deletion_callback_rejects_wrong_numeric_signing_app_id(
+    compliance_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    app_id_env: str,
+) -> None:
+    monkeypatch.setenv(app_id_env, "999999999999999")
+    with mock.patch("modules.meta_compliance.delete_meta_social_user_data") as delete_mock:
+        response = compliance_client.post(
+            path,
+            data={"signed_request": _signed_request()},
+        )
+
+    assert response.status_code == 503
+    delete_mock.assert_not_called()
 
 
 def test_legacy_data_deletion_route_still_works(compliance_client: TestClient) -> None:
@@ -203,7 +326,9 @@ def test_app_a_deauthorization_revokes_only_authenticated_owner_connections(
     assert response.json() == {"success": True}
     registry.revoke_authorization.assert_called_once_with(
         app_key=APP_A_KEY,
+        auth_flow="facebook_login",
         authorized_meta_user_id="123456789",
+        authorized_before=mock.ANY,
     )
 
 
@@ -217,7 +342,28 @@ def test_legacy_deauthorize_route_still_works(compliance_client: TestClient) -> 
     assert response.status_code == 200
     registry.revoke_authorization.assert_called_once_with(
         app_key=APP_A_KEY,
+        auth_flow="facebook_login",
         authorized_meta_user_id="123456789",
+        authorized_before=mock.ANY,
+    )
+
+
+def test_direct_instagram_deauthorization_is_flow_scoped(
+    compliance_client: TestClient,
+) -> None:
+    registry = mock.Mock()
+    with mock.patch("modules.meta_compliance.get_meta_app_registry", return_value=registry):
+        response = compliance_client.post(
+            "/oauth/instagram/deauthorize",
+            data={"signed_request": _signed_request(secret=INSTAGRAM_APP_SECRET)},
+        )
+
+    assert response.status_code == 200
+    registry.revoke_authorization.assert_called_once_with(
+        app_key=APP_A_KEY,
+        auth_flow="instagram_login",
+        authorized_meta_user_id="123456789",
+        authorized_before=mock.ANY,
     )
 
 
@@ -230,6 +376,43 @@ def test_invalid_deauthorization_signature_is_rejected_without_registry_access(
             data={"signed_request": _signed_request(secret="wrong-secret")},
         )
     assert response.status_code == 400
+    registry.assert_not_called()
+
+
+def test_direct_instagram_deauthorization_rejects_app_a_secret(
+    compliance_client: TestClient,
+) -> None:
+    with mock.patch("modules.meta_compliance.get_meta_app_registry") as registry:
+        response = compliance_client.post(
+            "/oauth/instagram/deauthorize",
+            data={"signed_request": _signed_request(secret=APP_SECRET)},
+        )
+
+    assert response.status_code == 400
+    registry.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("path", "app_id_env"),
+    [
+        ("/oauth/meta/deauthorize", "META_APP_A_ID"),
+        ("/oauth/instagram/deauthorize", "META_INSTAGRAM_LOGIN_APP_ID"),
+    ],
+)
+def test_deauthorization_rejects_wrong_numeric_signing_app_id_without_registry_access(
+    compliance_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    app_id_env: str,
+) -> None:
+    monkeypatch.setenv(app_id_env, "999999999999999")
+    with mock.patch("modules.meta_compliance.get_meta_app_registry") as registry:
+        response = compliance_client.post(
+            path,
+            data={"signed_request": _signed_request()},
+        )
+
+    assert response.status_code == 503
     registry.assert_not_called()
 
 
@@ -246,26 +429,41 @@ def test_callback_never_reports_success_when_deletion_fails(compliance_client: T
     assert response.json() == {"detail": "Data deletion could not be completed"}
 
 
-def test_public_status_page_does_not_expose_pii(compliance_client: TestClient, tmp_path: Path) -> None:
-    import services.meta_data_deletion as deletion_service
+def test_public_status_page_does_not_expose_pii(
+    compliance_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import utils.utils
 
+    db = _FakeFirestore()
     code = "d" * 32
-    monkeypatch_dir = tmp_path / "status"
-    monkeypatch_dir.mkdir()
-    status_path = monkeypatch_dir / f"{code}.json"
-    status_path.write_text(
-        json.dumps(
-            {
-                "confirmation_code": code,
-                "status": "completed",
-                "requested_at": 1_800_000_000,
-                "completed_at": 1_800_000_100,
-            }
-        ),
-        encoding="utf-8",
+    request = (
+        db.collection("artifacts").document("linas-ai-bot-backend").collection("meta_deletion_requests").document(code)
     )
-    with mock.patch.object(deletion_service, "_STATUS_DIR", monkeypatch_dir):
-        response = compliance_client.get(f"/data-deletion/status/{code}")
+    request.set(
+        {
+            "schema_version": 1,
+            "confirmation_code": code,
+            "app_key": "app_a",
+            "app_id": "2963733803971681",
+            "auth_flow": "facebook_login",
+            "bindings": [],
+            "current_bindings": [],
+            "generation": 1,
+            "required_nodes": ["node01", "node02"],
+            "state": "completed",
+            "coordinator_state": "completed",
+            "requested_at": 1_800_000_000,
+            "updated_at": 1_800_000_100,
+            "completed_at": 1_800_000_100,
+            "revoked_bindings": 0,
+            "shared_redacted_documents": 0,
+            "redacted_ledger_documents": 0,
+            "safe_error": "none",
+        }
+    )
+    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    response = compliance_client.get(f"/data-deletion/status/{code}")
     assert response.status_code == 200
     assert "noindex" in response.text
     assert code in response.text
@@ -273,8 +471,26 @@ def test_public_status_page_does_not_expose_pii(compliance_client: TestClient, t
     assert "completed" in response.text
 
 
-def test_unknown_status_code_returns_safe_message(compliance_client: TestClient) -> None:
+def test_unknown_status_code_returns_safe_message(
+    compliance_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import utils.utils
+
+    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: _FakeFirestore())
     response = compliance_client.get("/data-deletion/status/" + ("e" * 32))
     assert response.status_code == 200
     assert "could not find" in response.text.lower()
     assert "123456789" not in response.text
+
+
+def test_status_page_fails_closed_when_shared_store_is_unavailable(
+    compliance_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import utils.utils
+
+    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: None)
+    response = compliance_client.get("/data-deletion/status/" + ("f" * 32))
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Deletion status is temporarily unavailable"}

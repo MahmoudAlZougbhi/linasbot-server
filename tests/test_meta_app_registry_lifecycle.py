@@ -158,6 +158,106 @@ def test_staged_lina_cutover_is_explicit_atomic_and_rollback_ready(
     assert restored.active
 
 
+def test_rollback_reverses_archived_canonical_lineage_and_hides_rejected_binding(
+    registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app_id = get_meta_app_configs()[APP_A_KEY].app_id
+    page_id = "445566778899"
+    previous = registry.authorize_oauth_asset(
+        tenant_id="tenant-a",
+        channel="facebook",
+        asset_id=page_id,
+        page_id=page_id,
+        instagram_account_id="",
+        app_key=APP_A_KEY,
+        credential=_credential(app_id, page_id),
+        actor_id="first-owner",
+        webhook_subscription_status="active",
+        webhook_subscribed_fields=("messages", "messaging_postbacks", "feed"),
+    )
+    staged = registry.authorize_oauth_asset(
+        tenant_id="tenant-a",
+        channel="facebook",
+        asset_id=page_id,
+        page_id=page_id,
+        instagram_account_id="",
+        app_key=APP_A_KEY,
+        credential=_credential(app_id, page_id),
+        actor_id="replacement-owner",
+        status="testing",
+        create_new_binding=True,
+    )
+    activated = registry.activate_staged_binding(
+        staged.binding_id,
+        actor_id="replacement-owner",
+        expected_generation=staged.generation,
+        replace_existing=True,
+    )
+    assert registry.archive_superseded_duplicate_bindings() == 1
+    archived_previous = next(item for item in registry.list_bindings() if item.binding_id == previous.binding_id)
+    assert archived_previous.superseded_by_binding_id == activated.binding_id
+
+    restored = registry.rollback_binding(activated.binding_id, actor_id="owner")
+    by_id = {item.binding_id: item for item in registry.list_bindings()}
+    rejected = by_id[activated.binding_id]
+
+    assert restored.binding_id == previous.binding_id
+    assert restored.active is True
+    assert restored.superseded_by_binding_id == ""
+    assert rejected.status == "inactive"
+    assert rejected.superseded_by_binding_id == restored.binding_id
+    assert rejected.webhook_subscription_status == "unknown"
+    assert rejected.webhook_subscribed_fields == ()
+    # Keep the rejected credential available for the caller's post-rollback
+    # provider unsubscribe; routing cannot use the hidden inactive binding.
+    assert registry.get_credential(rejected).access_token
+    assert registry.get_credential(restored).access_token
+    visible = registry.list_bindings(include_superseded=False)
+    assert [item.binding_id for item in visible] == [restored.binding_id]
+    assert registry.archive_superseded_duplicate_bindings() == 0
+
+    import services.queues.meta_inbound_handler as handler
+
+    monkeypatch.setattr("services.meta_app_registry.get_meta_app_registry", lambda: registry)
+    resolved = handler._resolve_active_registry_binding(
+        {"binding_id": rejected.binding_id},
+        rejected.public_dict(),
+    )
+    assert resolved.binding_id == restored.binding_id
+
+
+def test_rollback_rejects_hidden_or_non_active_source(registry: MetaAppRegistry) -> None:
+    app_id = get_meta_app_configs()[APP_A_KEY].app_id
+    page_id = "445566778899"
+    first = registry.activate_binding(
+        tenant_id="tenant-a",
+        channel="facebook",
+        asset_id=page_id,
+        page_id=page_id,
+        instagram_account_id="",
+        app_key=APP_A_KEY,
+        credential=_credential(app_id, page_id),
+        actor_id="owner",
+    )
+    second = registry.activate_binding(
+        tenant_id="tenant-a",
+        channel="facebook",
+        asset_id=page_id,
+        page_id=page_id,
+        instagram_account_id="",
+        app_key=APP_A_KEY,
+        credential=_credential(app_id, page_id),
+        actor_id="owner",
+        replace_existing=True,
+    )
+    registry.rollback_binding(second.binding_id, actor_id="owner")
+
+    with pytest.raises(MetaBindingConflictError, match="active rollback source"):
+        registry.rollback_binding(second.binding_id, actor_id="owner")
+    assert registry.get_active_bindings_for_app(APP_A_KEY)[0].binding_id == first.binding_id
+
+
 def test_oauth_state_is_one_time_and_expires(registry: MetaAppRegistry) -> None:
     registry.store_oauth_state("nonce-hash", {"expires_at": time.time() + 30, "tenant_id": "tenant-a"})
     assert registry.consume_oauth_state("nonce-hash")["tenant_id"] == "tenant-a"

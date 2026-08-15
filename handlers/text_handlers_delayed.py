@@ -4,6 +4,7 @@ from __future__ import annotations
 # Handles delayed message processing (message combining)
 import asyncio
 import datetime
+import hashlib
 import uuid
 from typing import Any
 
@@ -126,16 +127,22 @@ async def _delayed_process_messages(
                     ensure_turn_started,
                     finalize_delivery,
                     pending_delivery_for_claim,
+                    reset_turn_runtime_state,
                     retry_saved_reply_delivery,
                     try_reserve_for_ai,
                 )
                 from services.outbound_turn_idempotency import _claim_key_basis
 
                 key_basis = _claim_key_basis(claim_id, mids, bfps) if (mids or bfps) else ""
-                ensure_turn_started(user_data, claim_key_basis=key_basis or None)
+                # Conversation state is reused for the same sender. Rotate all
+                # logical-turn/delivery evidence before this batch so a prior
+                # Meta message_id can never make a later no-send turn look sent.
+                reset_turn_runtime_state(user_data)
 
                 pending = pending_delivery_for_claim(key_basis) if key_basis else None
                 if pending:
+                    user_data["_logical_reply_id"] = str(pending["logical_reply_id"])
+                    user_data["_ai_turn_started"] = True
                     delivered = await retry_saved_reply_delivery(
                         user_data=user_data,
                         send_message_func=outbound_send,
@@ -149,7 +156,20 @@ async def _delayed_process_messages(
                         print(f"[ai-turn] trace_id={trace} delivery_retry=FAILED saved_reply")
                     return
 
-                if (mids or bfps) and not await try_claim_ai_turn(claim_id, mids, inbound_body_fps=bfps):
+                external_turn_id = f"claim:{hashlib.sha256(key_basis.encode()).hexdigest()}" if key_basis else None
+                ensure_turn_started(
+                    user_data,
+                    claim_key_basis=key_basis or None,
+                    external_inbound_id=external_turn_id,
+                )
+
+                if (mids or bfps) and not await try_claim_ai_turn(
+                    claim_id,
+                    mids,
+                    inbound_body_fps=bfps,
+                    binding_id=str(user_data.get("meta_binding_id") or ""),
+                    inbound_event_id=str(user_data.get("_inbound_event_id") or ""),
+                ):
                     print(
                         f"⚠️ [ai-turn] trace_id={trace} claim=DUPLICATE_SKIP "
                         f"user={user_id[:20]}… mids={len(mids)} bfps={len(bfps)} "

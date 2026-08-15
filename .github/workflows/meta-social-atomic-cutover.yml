@@ -1,4 +1,4 @@
-name: Meta Social Atomic Cutover
+name: RETIRED - Meta Social Atomic Cutover
 
 on:
   workflow_dispatch:
@@ -16,33 +16,13 @@ permissions:
   contents: read
 
 jobs:
-  cutover:
-    name: Atomically cut over verified Meta app
-    if: inputs.cutover_confirmation == 'CUTOVER_VERIFIED_META_APP'
+  retired:
+    name: Block retired-app cutover
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 2
     environment: meta-social-cutover
     steps:
-      - name: Cut over Page subscription and production credentials
-        uses: appleboy/ssh-action@v1.2.0
-        env:
-          META_APP_ID: ${{ secrets.META_APP_ID }}
-          META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
-          META_PAGE_ID: ${{ secrets.META_PAGE_ID }}
-          META_PAGE_ACCESS_TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
-          META_INSTAGRAM_ACCOUNT_ID: ${{ secrets.META_INSTAGRAM_ACCOUNT_ID }}
-          META_WEBHOOK_VERIFY_TOKEN: ${{ secrets.META_WEBHOOK_VERIFY_TOKEN }}
-          META_GRAPH_API_VERSION: ${{ secrets.META_GRAPH_API_VERSION }}
-          META_ROLLBACK_ENCRYPTION_KEY: ${{ secrets.META_ROLLBACK_ENCRYPTION_KEY }}
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          script_stop: true
-          command_timeout: 15m
-          envs: META_APP_ID,META_APP_SECRET,META_PAGE_ID,META_PAGE_ACCESS_TOKEN,META_INSTAGRAM_ACCOUNT_ID,META_WEBHOOK_VERIFY_TOKEN,META_GRAPH_API_VERSION,META_ROLLBACK_ENCRYPTION_KEY
-          script: |
-            set -e
-            test -f /opt/linasbot/scripts/prod_cutover_meta_social.sh
-            sudo -E bash /opt/linasbot/scripts/prod_cutover_meta_social.sh
+      - name: Refuse the obsolete retired-app state machine
+        run: |
+          echo "::error::This retired-app cutover is intentionally disabled. Use the current App A recovery runbook."
+          exit 1

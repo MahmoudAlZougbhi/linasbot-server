@@ -1,96 +1,53 @@
-#!/usr/bin/env bash
-# Set Managed Postgres trusted sources to Linas droplets + tag only (doctl).
-# Default dry-run; pass --apply to mutate firewall rules.
-# NEVER opens SportBook/BOC resources — only configured droplet IDs + tag.
+#!/bin/bash
+# Thin trust bootstrap for the digest-bound Managed Postgres firewall transaction.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=/dev/null
-source "${SCRIPT_DIR}/_managed_pg_common.sh"
+exec /usr/bin/python3 -B -I -S -c '
+import hashlib, os, runpy, stat, sys, tempfile
+from pathlib import Path
 
-usage() {
-  cat <<EOF
-usage: $0 [--apply]
-
-Configure firewall for Managed Postgres cluster:
-  id=${MG_PG_CLUSTER_ID}
-  name=${MG_PG_CLUSTER_NAME}
-  droplets=${MG_PG_DROPLET_IDS}
-  tag=${MG_PG_FIREWALL_TAG}
-
-Default is dry-run. Pass --apply to call doctl databases firewalls replace.
-EOF
+expected = {
+    "managed_pg_firewall.py": "18cee89c9dcccf7b1b97496f37db37a04db4726c54bdbcd2f65df46def4db3b4",
+    "managed_pg_firewall_authority.py": "4c2760c2cca889697ca26fb04d56d86aee1eb58e00bdf53c2a31ae9c1c63bb9e",
+    "managed_pg_firewall_contract.py": "2a1484309ceec83aa6aca7679a3a6270c462af3f397c48c59db7f3f118bc05b9",
+    "managed_pg_firewall_provider.py": "aa7151976a39bcd7ca5a7d79adedbd5c9237c1f0e1e2aaff9e41c57574e452e2",
+    "managed_pg_firewall_state.py": "034d38ad53e2afb9f27d95f6bed000f1957e328617feef71ec01b17d606357ba",
 }
+wrapper = Path(sys.argv[1]).resolve(strict=True)
+source_dir = wrapper.parent
+directory = source_dir.stat()
+if not stat.S_ISDIR(directory.st_mode) or directory.st_uid not in {0, os.geteuid()} or stat.S_IMODE(directory.st_mode) & 0o022:
+    raise SystemExit("ERROR: unsafe Managed Postgres firewall control directory")
 
-APPLY=0
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --apply) APPLY=1 ;;
-    -h|--help) usage; exit 0 ;;
-    *) echo "unknown arg: $1" >&2; usage; exit 2 ;;
-  esac
-  shift
-done
+snapshots = {}
+for name, expected_sha256 in expected.items():
+    path = source_dir / name
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid not in {0, os.geteuid()} or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) & 0o022:
+            raise SystemExit("ERROR: unsafe Managed Postgres firewall control file")
+        with os.fdopen(descriptor, "rb") as handle:
+            descriptor = -1
+            payload = handle.read((1 << 20) + 1)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    if len(payload) > 1 << 20 or hashlib.sha256(payload).hexdigest() != expected_sha256:
+        raise SystemExit("ERROR: Managed Postgres firewall control digest differs")
+    snapshots[name] = payload
 
-if ! command -v doctl >/dev/null 2>&1; then
-  echo "[managed-pg-fw] doctl not found" >&2
-  exit 1
-fi
-
-RULES=()
-IFS=',' read -r -a DROPLETS <<<"${MG_PG_DROPLET_IDS}"
-for id in "${DROPLETS[@]}"; do
-  id="${id// /}"
-  [[ -n "$id" ]] || continue
-  RULES+=("droplet:${id}")
-done
-RULES+=("tag:${MG_PG_FIREWALL_TAG}")
-
-RULES_CSV=$(IFS=,; echo "${RULES[*]}")
-echo "[managed-pg-fw] cluster=${MG_PG_CLUSTER_NAME} (${MG_PG_CLUSTER_ID})"
-echo "[managed-pg-fw] desired_rules=${RULES_CSV}"
-
-echo "[managed-pg-fw] current firewall rules:"
-if doctl databases firewalls list "${MG_PG_CLUSTER_ID}" -o json 2>/dev/null | python3 - <<'PY'
-import json, sys
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    print("(unable to parse current rules)")
-    raise SystemExit(0)
-for row in data if isinstance(data, list) else data.get("rules", []):
-    t = row.get("type") or row.get("Type") or "?"
-    v = row.get("value") or row.get("Value") or "?"
-    print(f"  - {t}:{v}")
-PY
-then
-  :
-else
-  echo "  (list failed — cluster may be offline or id wrong)"
-fi
-
-# doctl expects repeated --rule flags (not --rules CSV on all CLI versions).
-DOCTL_RULE_ARGS=()
-for r in "${RULES[@]}"; do
-  DOCTL_RULE_ARGS+=(--rule "$r")
-done
-
-if [[ "$APPLY" -ne 1 ]]; then
-  echo "[managed-pg-fw] DRY-RUN: would run:"
-  echo "  doctl databases firewalls replace ${MG_PG_CLUSTER_ID} ${DOCTL_RULE_ARGS[*]}"
-  exit 0
-fi
-
-echo "[managed-pg-fw] applying firewall replace..."
-doctl databases firewalls replace "${MG_PG_CLUSTER_ID}" "${DOCTL_RULE_ARGS[@]}"
-
-echo "[managed-pg-fw] post-apply rules:"
-doctl databases firewalls list "${MG_PG_CLUSTER_ID}" -o json | python3 - <<'PY'
-import json, sys
-data = json.load(sys.stdin)
-for row in data if isinstance(data, list) else data.get("rules", []):
-    t = row.get("type") or row.get("Type") or "?"
-    v = row.get("value") or row.get("Value") or "?"
-    print(f"  - {t}:{v}")
-PY
-echo "[managed-pg-fw] DONE"
+with tempfile.TemporaryDirectory(prefix="linas-managed-pg-firewall-", dir="/tmp") as temporary:
+    root = Path(temporary)
+    root.chmod(0o700)
+    for name, payload in snapshots.items():
+        destination = root / name
+        descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+    sys.path.insert(0, str(root))
+    sys.argv = ["managed_pg_firewall", *sys.argv[2:]]
+    runpy.run_module("managed_pg_firewall", run_name="__main__")
+' "${BASH_SOURCE[0]}" "$@"

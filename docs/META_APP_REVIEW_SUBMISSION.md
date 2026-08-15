@@ -1,133 +1,306 @@
-# Meta App Review submission packet
+# Meta App Review submission — DMs and comments
 
-App: **Linas Clinic AI Social Bot**
+> **One top-level draft; not approved for submission.** Linas AI app ID
+> `2963733803971681` has one live App Review draft, `2964793000532428`. Its
+> Facebook and Instagram permission/evidence sections must remain clearly
+> separated inside that one submission. Operational blockers are defined in
+> `docs/META_APP_REVIEW_SOCIAL_PACKAGE.md`.
 
-Business Portfolio: **linalaser** (`2185164171581229`, Verified)
+Product: **Linas Clinic AI Social Bot**
 
-Facebook Page: **Lina’s Laser Clinics** (`378696005334409`)
+Business Portfolio: **linalaser** (`2185164171581229`; Business Verification and
+Access Verification both confirmed **Verified** in the live Dashboard)
+
+Facebook Page: **Lina's Laser Clinics** (`378696005334409`)
 
 Instagram professional account: `17841413184256533`
 
-This document contains reviewer-facing factual copy. It contains no credentials,
-customer messages, or reviewer passwords. Screen recordings and any dedicated
-reviewer-role details must remain in the private review-evidence directory, never
-in this public repository.
+Credentials, customer messages, owner passwords, 2FA, and reviewer-access
+details must never be committed here. Linas AI is currently **Unpublished**, has
+no Required Actions, and every desired permission is only **Ready for testing**,
+not Advanced Access. Those facts block public use and submission readiness.
 
-## Use-case narrative
+## Evidence section A — Facebook review
 
-A customer voluntarily sends a direct message to Lina’s Laser Clinics through
-Facebook Messenger or the linked Instagram professional account. Linas AI uses
-the customer’s message and relevant conversation context to answer clinic
-questions about services, prices, preparation, branches, and policies.
+**Top-level Meta app:** Linas AI, app ID `2963733803971681`
 
-When a customer explicitly asks to book or contact a person, the bot asks only
-for the routing information that is still required: branch and gender, one field
-at a time. It then supplies the correct public WhatsApp number and
-`https://wa.me/...` handoff link. The bot does not book, edit, confirm, or cancel
-an appointment inside Facebook, Instagram, WhatsApp, TikTok, or a business CRM.
+**Product/auth flow:** Facebook Login for Business
 
-The integration processes direct messages only. It does not process Facebook or
-Instagram comments, publish content, send outbound marketing or unsolicited
-messages, provide dashboard takeover for social conversations, accept WhatsApp
-as an inbound AI channel, or integrate TikTok.
+**Review surface:** Facebook Messenger DMs and Facebook Page comments only. The
+top-level app's `instagram` object is configured on the dedicated Instagram
+callback and belongs to evidence section B, not this Facebook section.
 
-## Requested permissions
+### Use case
 
-- `pages_messaging`: receive and respond to customer-initiated Messenger DMs for
-  the single allowlisted Lina’s Laser Clinics Page.
-- `pages_manage_metadata`: connect and maintain the Page webhook subscription for
-  the `messages` and `messaging_postbacks` fields only.
-- `pages_show_list`: let the authorized business administrator select the single
-  target Page during setup and token issuance.
-- `pages_read_engagement`: read the minimum Page identity/relationship metadata
-  required by Meta’s Page-connected messaging flow. It is not used to process
-  comments.
-- `instagram_basic`: resolve and verify the professional Instagram account linked
-  to the selected Page.
-- `instagram_manage_messages`: receive and respond to customer-initiated
-  Instagram DMs for the linked professional account.
+A person voluntarily sends Lina's Laser Clinics a Facebook Messenger message or
+comments on its Facebook Page. Linas AI answers clinic questions from
+tenant-approved information. For a public comment, it sends one relevant public
+reply; an approved comment rule may instead use Meta's supported
+customer-initiated private-reply path.
 
-Do not request `business_management` unless Meta’s current setup UI or an API
-error demonstrates that the selected administrator cannot connect the verified
-portfolio assets without it. Do not request publishing, comments, ads,
-WhatsApp, Threads, commerce, or unrelated permissions.
+When a person asks to book or contact a human for supported laser hair removal,
+the assistant asks only for the branch and gender still needed, one field at a
+time, then supplies the matching public WhatsApp handoff number/link. It does not
+claim that an appointment was booked, changed, confirmed, or cancelled inside
+Meta or a CRM. This review does not request Instagram, content-publishing,
+advertising, commerce, mass-outreach, or unsolicited-message permissions.
 
-## Facebook reviewer steps
+### Requested permissions
 
-1. Sign in with the dedicated Meta reviewer/tester role supplied through Meta’s
-   review-access mechanism. No personal owner password or 2FA is required.
-2. Open Messenger for **Lina’s Laser Clinics**.
-3. Send: `Hello, what laser services do you offer?`
-4. Verify one relevant Linas AI reply is received and there is no duplicate.
-5. Send: `I want to book an appointment with a human.`
-6. Answer the branch question with `Beirut`.
-7. Answer the gender question with `Women`.
-8. Verify the bot provides the Women/Beirut handoff number `+96178847527` and a
-   matching `https://wa.me/96178847527...` link. Verify it does not claim an
-   appointment was booked.
+- `business_management`: resolve the previously recorded business's eligible
+  Page assets; current business verification/ownership is a pre-submission
+  Dashboard gate.
+- `pages_show_list`: let an authorized administrator select the clinic Page.
+- `pages_manage_metadata`: create and maintain the Page webhook subscription.
+- `pages_read_engagement`: read Page engagement context required by the connected
+  Page flow.
+- `pages_messaging`: receive and answer customer-initiated Messenger DMs.
+- `pages_read_user_content`: receive customer-authored Page comment content.
+- `pages_manage_engagement`: reply to those Page comments.
 
-## Instagram reviewer steps
+Keep these Facebook requests and evidence separate from the Instagram permission
+section in the same top-level draft.
 
-1. Using the same dedicated reviewer/tester role, open the linked Lina’s Laser
-   Clinics Instagram professional account in Instagram DMs.
-2. Send: `Hi, how should I prepare before a laser session?`
-3. Verify one relevant Linas AI reply is received and there is no duplicate.
-4. Send: `Please connect me to someone for tattoo removal.`
-5. Verify the bot routes tattoo removal to Beirut only and supplies
-   `+96171534928` with the matching `https://wa.me/96171534928...` handoff link.
-6. Verify it does not create an Instagram appointment or claim a CRM booking.
+### Facebook reviewer steps
 
-## Screen-recording evidence
+#### Messenger DM
 
-Create two short recordings, one for Messenger and one for Instagram. Each must
-show the customer message, a single canonical AI reply, the explicit human or
-booking request, the one-at-a-time routing questions, and the correct WhatsApp
-handoff. Keep the browser viewport limited to the test conversation.
+1. Use the dedicated reviewer/tester role supplied through Meta's private review
+   mechanism; no owner password or 2FA is supplied.
+2. Open Messenger for **Lina's Laser Clinics** and send:
+   `Hello, what laser services do you offer?`
+3. Verify exactly one relevant reply is visible to the reviewer.
+4. Send: `I want to book an appointment with a human for laser hair removal.`
+5. Answer the branch question with `Beirut`, then the gender question with
+   `Women`.
+6. Verify exactly one assistant reply supplies `+96178847527` with the matching
+   `wa.me` handoff and does not claim an appointment was booked.
 
-Before upload, verify the recording contains no App Secret, access token,
-webhook verify token, terminal, browser password prompt, personal customer data,
-unrelated account, or notification preview. Store the source recordings under
-the private task evidence directory and upload them only to Meta’s review form.
+#### Page comment
 
-## Data handling answers
+1. Add a test comment to the designated reviewer post:
+   `What should I know before a laser hair removal session?`
+2. Verify exactly one relevant public reply appears below that comment.
+3. Verify the reply is a service answer, not an unsolicited promotion, and that
+   no unrelated comment is processed.
 
-- Data received: platform-scoped sender and destination identifiers, DM text,
-  message/timestamp identifiers, postback selections, and attachment metadata.
-- Purpose: authenticate/deduplicate webhooks, maintain conversation continuity,
-  answer the voluntarily submitted business question from tenant-approved knowledge, protect the service, and
-  provide a requested human/booking handoff.
-- Processors: Meta for message delivery, OpenAI for response generation,
-  Google Cloud/Firebase for operational conversation storage, and DigitalOcean
-  for hosting.
-- Storage and retention: as described in the published Privacy Policy; a valid
-  authenticated deletion request removes records under Linas AI / the tenant’s control.
-- Security: HTTPS, strict Page/Instagram allowlists, Meta HMAC-SHA256 webhook
-  validation, message-ID deduplication, echo rejection, query-secret-free access
-  logging, secret storage outside the repository, and least-privilege access.
-- Sale/advertising: social-message data is not sold or used for third-party ads.
-- Deletion: Meta’s signed deletion callback is authenticated with the current
-  App Secret; invalid, stale, malformed, or wrong-secret requests are rejected.
+### Facebook evidence set
 
-## Public URLs
+Create two short, timestamped recordings: Facebook DM and Facebook Page comment.
+Each recording must show the controlled inbound action and exactly one
+recipient-visible reply, with enough time afterward to show that no duplicate is
+created. Attach these recordings only to the matching Facebook permission
+requests in the Linas AI form.
+
+The time-bounded runtime probe may accompany the packet as a supporting
+operational signal. Its DM marker proves that Meta accepted a send and returned a
+message ID; it is not a delivery receipt and it does not by itself correlate the
+controlled event or prove no duplicate. The recording is the delivery and
+one-in/one-out evidence.
+
+### Facebook URLs
+
+- OAuth redirect: `https://www.linasaibot.com/oauth/meta/callback`
+- Webhook callback: `https://www.linasaibot.com/webhook/meta-messaging`
+- Data deletion: `https://www.linasaibot.com/oauth/meta/data-deletion`
+- Deauthorization: `https://www.linasaibot.com/oauth/meta/deauthorize`
+
+The live Dashboard confirms all four Facebook URLs above. The Page callback is
+`/webhook/meta-messaging`, and `feed`, `messages`, and `messaging_postbacks` are
+subscribed at webhook version `v26.0`.
+
+## Evidence section B — Instagram Login review
+
+**Top-level Meta app:** Linas AI, app ID `2963733803971681`
+
+**Instagram product app ID:** `1035856539045307` with a separate product secret,
+redirect, callback, verify token, and access token inside Linas AI
+
+**Product/auth flow:** Instagram API with Instagram Login
+
+**Review surface:** Instagram DMs and comments on the connected professional
+account only.
+
+### Use case
+
+A person voluntarily sends the connected Lina's Laser Clinics professional
+account an Instagram DM or comments on its media. Linas AI answers clinic
+questions from tenant-approved information and may send one relevant public
+comment reply. For a supported laser-hair-removal booking or human request, it
+collects only the missing branch/gender and supplies the matching public WhatsApp
+handoff. It does not claim a booking. This review does not request Facebook,
+content-publishing, advertising, commerce, mass-outreach, or unsolicited-message
+permissions.
+
+### Requested permissions
+
+- `instagram_business_basic`: resolve the connected professional identity.
+- `instagram_business_manage_messages`: receive and answer
+  customer-initiated Instagram DMs.
+- `instagram_business_manage_comments`: receive and answer comments on the
+  connected professional account.
+
+Do not request `instagram_basic`, `instagram_manage_messages`,
+`instagram_manage_comments`, `instagram_business_content_publish`, or
+`instagram_business_manage_insights` for this use case. The first three belong to
+a legacy flow; publishing and insights are separate capabilities. The generated
+Instagram embed sample currently includes the last two extras, but the
+application requests only the three permissions above. Do not expand the runtime
+or review merely to match that sample.
+
+### Instagram reviewer steps
+
+#### Direct message
+
+1. Open the connected Lina's Laser Clinics professional account in Instagram
+   DMs and send: `Hi, how should I prepare before a laser hair removal session?`
+2. Verify exactly one relevant reply is visible to the reviewer.
+3. Send: `Please connect me to someone for laser hair removal.`
+4. Answer the branch question with `Beirut`, then the gender question with
+   `Women`.
+5. Verify exactly one assistant reply supplies `+96178847527` with the matching
+   `wa.me` handoff and does not claim a booking.
+
+#### Media comment
+
+1. Add a test comment to the designated reviewer media:
+   `How should I prepare before a laser hair removal session?`
+2. Verify exactly one relevant public reply appears below that comment.
+3. If the review demonstrates a configured private-reply rule, verify it uses
+   the original comment ID and only one supported response path.
+
+### Instagram evidence set
+
+Create two short, timestamped recordings: Direct IG DM and Instagram media
+comment. Each recording must show the controlled inbound action and exactly one
+recipient-visible reply, with enough time afterward to show that no duplicate is
+created. Attach these recordings only to the matching Instagram permission
+requests in the Linas AI form.
+
+The time-bounded runtime probe is supporting evidence only. Its Direct IG DM
+marker proves Send API acceptance with a message ID, and its comment marker proves
+reply-send acceptance; neither substitutes for the recipient-visible recording.
+The Direct IG packet must also contain a separate live profile/token check and a
+read-only `subscribed_apps` result showing one row for app `1035856539045307` with
+`messages,messaging_postbacks,comments`. The registry scope audit alone does not
+prove those live facts.
+
+### Instagram URLs
+
+- OAuth redirect: `https://www.linasaibot.com/oauth/instagram/callback`
+- Webhook callback: `https://www.linasaibot.com/webhook/instagram-login`
+- Data deletion: `https://www.linasaibot.com/oauth/instagram/data-deletion`
+  (**currently empty in Instagram Business Login settings**)
+- Deauthorization: `https://www.linasaibot.com/oauth/instagram/deauthorize`
+  (**currently empty in Instagram Business Login settings**)
+
+The live Dashboard confirms the Instagram OAuth redirect and dedicated webhook
+callback. `comments`, `messages`, and `messaging_postbacks` are subscribed at
+webhook version `v26.0`. Tester accounts `linaslaser` and `boc_system` are present,
+and each shows **Webhook Subscription: On**. The two empty Instagram compliance
+URLs must be populated and their signed callbacks tested before submission.
+
+The generic Webhooks selector also shows an unexpected `User` object subscription
+pointing to `/webhook/instagram-login`; all visible User fields are Unsubscribed.
+Do not call it harmless or remove it during a read-only audit. The owner must
+approve the Meta mutation, and the strict reconciler must fail closed until the
+extra-object decision is recorded and the resulting state is verified. Expected
+objects are Page on the Facebook callback, Instagram on the dedicated callback,
+and the preserved WhatsApp Business Account object.
+
+## Shared app-level policy answers
+
+- **Data received:** app/product-scoped authorizer identifiers; platform-scoped sender,
+  destination, message/comment/media IDs; voluntarily submitted DM/comment text;
+  timestamps; postbacks; and attachment metadata for that app's surfaces.
+- **Purpose:** authenticate and deduplicate webhook events, route them to the
+  connected business asset, maintain conversation continuity, answer from
+  tenant-approved knowledge, enforce reply policy, and provide a requested human
+  handoff.
+- **Processors:** Meta for delivery, OpenAI for response generation, Google
+  Cloud/Firebase for operational storage, and DigitalOcean for hosting.
+- **Retention/deletion:** according to the published Privacy Policy. Signed Meta
+  deletion/deauthorization callbacks are verified with the secret for the exact
+  originating product credential domain, mapped through the authorization owner
+  and auth flow, and
+  remove or redact records under Linas AI's control. Terminal-event
+  retention/redaction primitives plus a scheduled/manual count-only job exist in
+  the recovery worktree, but automatic production retention may not be claimed
+  until that workflow is deployed, monitored, and proved against local and
+  Firestore stores. Historical rows whose authorization-owner lineage was already
+  overwritten require a separate remediation audit and must not be described as
+  reconstructable.
+- **Security:** HTTPS; per-product HMAC-SHA256 verification; exact asset/auth-flow
+  routing; encrypted credential registry; durable deduplication; credential-free
+  settings snapshots; and least-privilege operator access. Inbound ledgers still
+  contain the DM/comment payload needed for processing; they are not
+  metadata-only stores.
+- **Sale/advertising:** social data is not sold or used for third-party ads.
+
+Shared public URLs in the one form:
 
 - Website: `https://www.linasaibot.com/`
-- Privacy Policy: `https://www.linasaibot.com/privacy-policy`
+- Privacy: `https://www.linasaibot.com/privacy-policy`
 - Terms: `https://www.linasaibot.com/terms`
-- User Data Deletion instructions and callback:
-  `https://www.linasaibot.com/data-deletion`
+- User deletion instructions/status: `https://www.linasaibot.com/data-deletion`
 - App domain: `linasaibot.com`
 
-## Submission checklist
+## One-draft pre-submission authorization
 
-- App remains in Development mode.
-- Verified portfolio association and exact Page/Instagram IDs are visible.
-- Requested permissions match the list above and no unrelated permission is
-  included.
-- Webhook subscriptions are exactly `messages,messaging_postbacks` unless Meta
-  documents a mandatory additional field already handled by the backend.
-- Both controlled recordings pass the privacy check and are uploaded privately.
-- Reviewer-role access works without the owner’s password or 2FA.
-- Privacy, terms, and deletion URLs return public HTTPS `200`.
-- The factual fields and data-handling questionnaire are complete.
-- Mahmoud personally reviews and accepts any binding declaration before final
-  submission.
+Live draft `2964793000532428` currently mixes the ten desired social permissions
+with legacy `instagram_basic`, `instagram_manage_messages`,
+`instagram_manage_comments`, and unrelated WhatsApp requests. Do not submit it in
+that state.
+
+Facebook evidence section:
+
+- [x] Business Verification and Access Verification are Verified; there are no
+  Required Actions.
+- [ ] App mode remains Unpublished and all seven desired Facebook permissions are
+  only Ready for testing until Advanced Access is granted.
+- [ ] Exact Facebook callback/Page subscription and Facebook compliance URLs are
+  preserved as live-read facts in the evidence packet.
+- [ ] The Facebook live scope/token audit passes, and the two Facebook recordings
+  show timestamped one-in/one-out behavior with no duplicate.
+
+Instagram evidence section:
+
+- [ ] All three desired Instagram permissions remain only Ready for testing until
+  Advanced Access is granted; the two tester accounts and their per-account
+  Webhook Subscription On state are recorded.
+- [ ] Dedicated callback, exact live profile/token, and exact `subscribed_apps`
+  are freshly evidenced in Meta Dashboard/Graph.
+- [ ] The currently empty Instagram Business Login data-deletion and deauthorize
+  URLs are populated with the routes above and both signed flows pass.
+- [ ] `META_INSTAGRAM_LOGIN_ADVANCED_ACCESS_APPROVED` reflects only the Instagram
+  permission family's evidenced decision and runtime capability output reports
+  `approval_domain=instagram_login`; the Facebook flag cannot unlock it.
+- [ ] The two Direct IG recordings show timestamped one-in/one-out behavior with
+  no duplicate.
+
+- [ ] Remove the three legacy Instagram requests from the draft and remove
+  unrelated WhatsApp requests unless they have separately authorized, complete
+  evidence. Do not add the embed sample's publishing or insights permissions.
+- [ ] The unexpected `User` webhook object has an owner-approved cleanup decision
+  and strict read-after-write verification; no audit session mutates it.
+- [ ] The owner reviews both product-specific evidence sections and explicitly
+  authorizes the single declaration and **Submit for Review** action in Linas AI
+  app `2963733803971681`.
+
+For the one submission, production SHA, sanitation/rotation, token health, signed
+deletion/deauthorization isolation, Privacy/Terms/deletion pages, and all release
+blockers in the operational package must pass first. Recordings must contain no
+App Secret, access token, webhook verify token, terminal, environment file,
+password prompt, 2FA, private customer data, unrelated account, or notification
+preview. Store them only in the private evidence location and attach each to the
+matching permission request in the one Linas AI review form.
+
+The runtime uses supported Graph API `v24.0`; live webhook subscriptions use
+`v26.0`. Preserve this intentional boundary and schedule a controlled migration
+before `v24.0` expires rather than treating it as a present review blocker.
+
+## Official Meta references
+
+- [Create an Instagram app](https://developers.facebook.com/documentation/instagram-platform/create-an-instagram-app)
+- [Instagram Business Login](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login)
+- [Graph API versions](https://developers.facebook.com/docs/graph-api/changelog/versions/)

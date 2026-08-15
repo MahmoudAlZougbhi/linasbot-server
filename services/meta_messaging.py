@@ -405,15 +405,28 @@ class MetaMessagingAdapter:
         return cast(dict[str, Any], response.json())
 
     async def send_text_message(self, recipient_id: str, text: str) -> dict[str, Any]:
-        responses = []
+        message_ids: list[str] = []
         for chunk in split_meta_text(text):
             payload: dict[str, Any] = {
                 "recipient": {"id": str(recipient_id)},
                 "messaging_type": "RESPONSE",
                 "message": {"text": chunk},
             }
-            responses.append(await self._post(payload))
-        return {"success": True, "data": responses}
+            response = await self._post(payload)
+            message_id = str(response.get("message_id") or "").strip()
+            if not message_id:
+                return {
+                    "success": False,
+                    "provider": "meta",
+                    "error": "meta_send_missing_message_id",
+                }
+            message_ids.append(message_id)
+        return {
+            "success": True,
+            "provider": "meta",
+            "message_id": message_ids[-1],
+            "message_ids": message_ids,
+        }
 
     async def send_typing(self, recipient_id: str) -> dict[str, Any]:
         if self.channel != "facebook":

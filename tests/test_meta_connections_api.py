@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from starlette.requests import Request
 
-from modules import meta_connections_api
+from modules import meta_connections_api, meta_connections_api_lifecycle
 from services.dashboard_session_service import SessionRecord
 from services.meta_app_registry import (
     APP_A_KEY,
@@ -19,6 +19,7 @@ from services.meta_app_registry import (
     MetaBindingConflictError,
     MetaBindingCredential,
     MetaCredentialError,
+    MetaRegistryError,
 )
 
 SCOPES = (
@@ -259,14 +260,27 @@ async def test_reconnect_atomically_replaces_provider_then_removes_old_subscript
     async def unsubscribe(binding: Any, **_kwargs: Any) -> None:
         calls.append(("unsubscribe", binding.app_key))
 
+    async def inspect(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
     monkeypatch.setenv("META_APP_B_ADVANCED_ACCESS_APPROVED", "true")
     monkeypatch.setattr(meta_connections_api, "get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(meta_connections_api, "subscribe_binding_webhook", subscribe)
-    monkeypatch.setattr(meta_connections_api, "unsubscribe_binding_webhook", unsubscribe)
     monkeypatch.setattr("modules.meta_connections_api_helpers.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr("modules.meta_connections_api_lifecycle.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr("modules.meta_connections_api_lifecycle.subscribe_binding_webhook", subscribe)
-    monkeypatch.setattr("modules.meta_connections_api_lifecycle.unsubscribe_binding_webhook", unsubscribe)
+    monkeypatch.setattr(
+        "modules.meta_connections_api_lifecycle._unsubscribe_binding_webhook_locked_raw",
+        unsubscribe,
+    )
+    monkeypatch.setattr(
+        "services.meta_page_subscription_transaction.inspect_binding_webhook_subscription",
+        inspect,
+    )
+    monkeypatch.setattr(
+        "modules.meta_connections_api_lifecycle.desired_binding_webhook_subscription",
+        lambda *_args, **_kwargs: ("messages", "messaging_postbacks"),
+    )
     monkeypatch.setattr(cm_constants, "cm_runtime_mode", lambda: "published")
     monkeypatch.setattr(version_store, "load_published_content", lambda _tenant: ({}, {}))
 
@@ -282,6 +296,111 @@ async def test_reconnect_atomically_replaces_provider_then_removes_old_subscript
     assert calls == [("subscribe", APP_B_KEY), ("unsubscribe", APP_A_KEY)]
     inactive_old = next(item for item in registry.list_bindings() if item.binding_id == old.binding_id)
     assert inactive_old.status == "inactive"
+
+
+@pytest.mark.asyncio
+async def test_manual_activation_conflict_restores_shared_page_subscription_without_delete(
+    registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed registry CAS must not delete the existing app/Page subscription."""
+
+    page_id = "223344556677"
+    old = registry.authorize_oauth_asset(
+        tenant_id="tenant-a",
+        channel="facebook",
+        asset_id=page_id,
+        page_id=page_id,
+        instagram_account_id="",
+        app_key=APP_A_KEY,
+        credential=MetaBindingCredential(
+            access_token="private-old-shared-page-token",
+            token_app_id="2963733803971681",
+            token_profile_id=page_id,
+            scopes=SCOPES,
+            expires_at=int(time.time()) + 3600,
+        ),
+        actor_id="owner",
+        webhook_subscription_status="ready",
+        webhook_subscribed_fields=("feed", "messages", "messaging_postbacks"),
+    )
+    staged = registry.authorize_oauth_asset(
+        tenant_id="tenant-a",
+        channel="facebook",
+        asset_id=page_id,
+        page_id=page_id,
+        instagram_account_id="",
+        app_key=APP_A_KEY,
+        credential=MetaBindingCredential(
+            access_token="private-new-shared-page-token",
+            token_app_id="2963733803971681",
+            token_profile_id=page_id,
+            scopes=SCOPES,
+            expires_at=int(time.time()) + 7200,
+        ),
+        actor_id="owner",
+        status="testing",
+        create_new_binding=True,
+    )
+    snapshot = ("mention", "messages", "messaging_postbacks")
+    desired = ("feed", "messages", "messaging_postbacks")
+    calls: list[tuple[str, object]] = []
+
+    async def inspect(*_args: Any, **_kwargs: Any) -> tuple[str, ...]:
+        calls.append(("inspect", staged.binding_id))
+        return snapshot
+
+    async def subscribe(*_args: Any, **_kwargs: Any) -> None:
+        calls.append(("subscribe", staged.binding_id))
+
+    async def restore(
+        _binding: Any,
+        prior: object,
+        *,
+        expected_current: tuple[str, ...],
+        **_kwargs: Any,
+    ) -> None:
+        calls.append(("restore", (prior, expected_current)))
+
+    async def unsubscribe(*_args: Any, **_kwargs: Any) -> None:
+        pytest.fail("shared Page subscription must never be blindly deleted")
+
+    monkeypatch.setattr("modules.meta_connections_api_helpers.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr(
+        "services.meta_page_subscription_transaction.inspect_binding_webhook_subscription",
+        inspect,
+    )
+    monkeypatch.setattr(meta_connections_api_lifecycle, "subscribe_binding_webhook", subscribe)
+    monkeypatch.setattr(
+        "services.meta_page_subscription_transaction._restore_binding_webhook_subscription_locked",
+        restore,
+    )
+    monkeypatch.setattr(meta_connections_api_lifecycle, "_unsubscribe_binding_webhook_locked_raw", unsubscribe)
+    monkeypatch.setattr(
+        meta_connections_api_lifecycle,
+        "desired_binding_webhook_subscription",
+        lambda *_args, **_kwargs: desired,
+    )
+    monkeypatch.setattr(
+        registry,
+        "activate_staged_binding",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(MetaRegistryError("simulated CAS conflict")),
+    )
+
+    with pytest.raises(MetaRegistryError, match="simulated CAS conflict"):
+        await meta_connections_api_lifecycle._activate_meta_connection_locked(
+            staged,
+            old,
+            actor_id="owner",
+            registry=registry,
+        )
+
+    assert calls == [
+        ("inspect", staged.binding_id),
+        ("subscribe", staged.binding_id),
+        ("restore", (snapshot, desired)),
+    ]
+    assert next(item for item in registry.list_bindings() if item.binding_id == old.binding_id).active
 
 
 @pytest.mark.asyncio
@@ -376,6 +495,9 @@ async def test_facebook_disconnect_succeeds_when_meta_unsubscribe_fails(
     async def boom(*_args: Any, **_kwargs: Any) -> None:
         raise MetaOAuthError("Meta webhook disconnect failed with HTTP 400")
 
+    async def inspect(*_args: Any, **_kwargs: Any) -> tuple[str, ...]:
+        return ("messages", "messaging_postbacks")
+
     async def clear_toggles(**kwargs: Any) -> bool:
         cleared.append(str(kwargs.get("platform") or ""))
         return True
@@ -384,7 +506,8 @@ async def test_facebook_disconnect_succeeds_when_meta_unsubscribe_fails(
     monkeypatch.setattr("modules.meta_connections_api_helpers.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr("modules.meta_connections_api_lifecycle.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr(graph, "get_meta_app_registry", lambda: registry)
-    monkeypatch.setattr(graph, "unsubscribe_binding_webhook", boom)
+    monkeypatch.setattr(graph, "inspect_binding_webhook_subscription", inspect)
+    monkeypatch.setattr(graph, "_unsubscribe_binding_webhook_locked_raw", boom)
     monkeypatch.setattr(
         "services.channel_capability_disconnect.clear_channel_toggles_after_disconnect",
         clear_toggles,

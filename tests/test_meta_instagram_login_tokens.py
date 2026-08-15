@@ -4,12 +4,19 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import httpx
 import pytest
 
-from services.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaBindingCredential
+from services.meta_app_registry import (
+    APP_A_KEY,
+    MetaAppRegistry,
+    MetaBindingConflictError,
+    MetaBindingCredential,
+    MetaCredentialError,
+)
 from services.meta_instagram_login_config import instagram_login_refresh_lead_seconds
 from services.meta_instagram_login_oauth import credential_needs_refresh
 from services.meta_instagram_login_tokens import refresh_binding_instagram_login_token
@@ -90,6 +97,44 @@ async def test_refresh_binding_replaces_token_atomically(registry: MetaAppRegist
     stored = registry.get_credential(binding)
     assert stored.access_token == "refreshed-token"
     assert "refreshed-token" not in registry.store_path.read_text(encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_refresh_paused_across_exact_revocation_cannot_restore_credential(
+    registry: MetaAppRegistry,
+    binding: Any,
+) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        registry.revoke_authorization_exact(
+            app_key=binding.app_key,
+            auth_flow="instagram_login",
+            authorized_meta_user_id="998877",
+            expected_bindings={binding.binding_id: binding.generation},
+        )
+        return httpx.Response(
+            200,
+            json={"access_token": "must-not-be-restored", "token_type": "bearer", "expires_in": 5_183_944},
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="https://graph.instagram.com")
+    with patch("services.meta_instagram_login_tokens.try_acquire_job_lock", return_value=True):
+        with pytest.raises(MetaOAuthError, match="reconnect required"):
+            await refresh_binding_instagram_login_token(binding, registry=registry, client=client)
+
+    deleted = next(item for item in registry.list_bindings() if item.binding_id == binding.binding_id)
+    assert deleted.status == "disconnected"
+    assert deleted.generation == binding.generation + 1
+    with pytest.raises(MetaCredentialError, match="unavailable"):
+        registry.get_credential(deleted)
+    with pytest.raises(MetaBindingConflictError, match="reconnect required"):
+        registry.set_binding_status(
+            deleted.binding_id,
+            status="active",
+            actor_id="stale-reactivation",
+            expected_generation=deleted.generation,
+        )
+    assert "must-not-be-restored" not in registry.store_path.read_text(encoding="utf-8")
 
 
 def test_credential_does_not_refresh_before_lead_window() -> None:

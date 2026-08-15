@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 import config
+from services.meta_outbound_attempts import meta_outbound_send_purpose
 
 _PHASE_HALT = "_PHASE_HALT"
 
@@ -92,7 +93,8 @@ async def text_handlers_respond_phase5(ctx: dict) -> Any:
             gender_ack_message = (
                 f"{gender_acknowledgement}{respectful_address}! شكراً لتحديد جنسك. سأجيب على استفسارك الأصلي."
             )
-            await send_message_func(user_id, gender_ack_message)
+            with meta_outbound_send_purpose("gender_ack"):
+                await send_message_func(user_id, gender_ack_message)
             await save_conversation_message_to_firestore(
                 user_id,
                 "ai",

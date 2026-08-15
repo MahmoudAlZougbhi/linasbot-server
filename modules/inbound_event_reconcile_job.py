@@ -14,7 +14,7 @@ async def run_inbound_event_reconcile_job() -> None:
         result = reconcile_stuck_inbound_events(older_than_seconds=45.0)
         examined = int(result.get("examined") or 0)
         missing = int(result.get("unexplained_missing_events") or 0)
-        if examined:
+        if examined or missing:
             print(
                 f"[inbound-reconcile] examined={examined} "
                 f"actions={len(result.get('actions') or [])} "

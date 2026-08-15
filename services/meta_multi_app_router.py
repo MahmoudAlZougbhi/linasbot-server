@@ -40,6 +40,16 @@ async def _prepare_binding(
     app_config: MetaAppConfig,
     registry: MetaAppRegistry,
 ) -> tuple[MetaAssetBinding, MetaBindingCredential] | None:
+    from services.channel_capability_state import (
+        binding_advanced_access_approved,
+        comments_policy_allows,
+    )
+
+    if not comments_policy_allows(
+        binding.tenant_id,
+        advanced_access=binding_advanced_access_approved(binding),
+    ):
+        return None
     credential = registry.get_credential(binding)
     if binding.auth_flow == "facebook_login" and credential.token_app_id != app_config.app_id:
         return None
@@ -75,18 +85,15 @@ async def _prepare_binding(
     return binding, credential
 
 
-def registry_auth_flow_for_webhook_object(payload_object: str) -> AuthFlow | None:
-    """Auth-flow filter for signed Meta webhooks on /webhook/meta-messaging.
+def registry_auth_flow_for_webhook_object(payload_object: str) -> AuthFlow:
+    """Keep the App A-signed callback inside the Facebook Login trust domain.
 
-    Instagram object events may match an active Instagram Login binding or a
-    legacy Page-linked facebook_login binding. Restricting those events to
-    facebook_login drops Instagram Login DMs (parsed=0 / accepted=0).
-
-    Page object events stay facebook_login-only. Bindings remain separate;
-    the resolver still selects by tenant, asset/account ID, auth_flow, and
-    active status. None means both Instagram auth flows are eligible.
+    Direct Instagram Login has a different App ID, App Secret, webhook callback,
+    and app-scoped sender IDs. Its events must use ``/webhook/instagram-login``;
+    selecting a direct credential for an App A-signed event can misroute replies.
     """
-    return None if str(payload_object or "").strip().lower() == "instagram" else "facebook_login"
+    del payload_object
+    return "facebook_login"
 
 
 async def resolve_registry_events(

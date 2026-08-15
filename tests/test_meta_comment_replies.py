@@ -7,6 +7,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import httpx
+
 from services.meta_app_registry import (
     APP_A_KEY,
     APP_B_KEY,
@@ -19,7 +21,15 @@ from services.meta_comment_events import (
     parse_meta_comment_events,
     resolve_registry_comment_events,
 )
-from services.meta_comment_replies import _is_self_comment, process_meta_comment_event
+from services.meta_comment_replies import (
+    CommentReplyResult,
+    MetaCommentReplyInspectionError,
+    _comment_has_page_reply,
+    _graph_post_form,
+    _is_self_comment,
+    comment_reply_requires_retry,
+    process_meta_comment_event,
+)
 from services.meta_comment_reply_settings import (
     get_comment_reply_setting,
     set_comment_reply_setting,
@@ -80,6 +90,28 @@ def _instagram_comment_payload(
     }
 
 
+def _official_instagram_login_comment_payload(*, username: str = "commenter") -> dict:
+    return {
+        "object": "instagram",
+        "entry": [
+            {
+                "time": 1741982997,
+                "id": "222",
+                "field": "comments",
+                "value": {
+                    "from": {"username": username},
+                    "media": {
+                        "id": "media-official-1",
+                        "media_product_type": "FEED",
+                    },
+                    "id": "comment-official-1",
+                    "text": "This is an official-shape comment",
+                },
+            }
+        ],
+    }
+
+
 def _binding(
     *,
     tenant_id: str = "linas",
@@ -87,6 +119,7 @@ def _binding(
     asset_id: str = "111",
     page_id: str = "111",
     instagram_id: str = "222",
+    instagram_username: str = "",
     status: str = "active",
     app_key: str = APP_A_KEY,
 ) -> MetaAssetBinding:
@@ -97,6 +130,7 @@ def _binding(
         asset_id=asset_id,
         page_id=page_id,
         instagram_account_id=instagram_id,
+        instagram_username=instagram_username,
         app_key=app_key,
         credential_id="cred-1",
         status=status,  # type: ignore[arg-type]
@@ -136,9 +170,23 @@ class MetaCommentEventParserTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["comment_id"], "igc1")
 
+    def test_official_instagram_login_comment_shape_parsed_without_from_id(self):
+        payload = _official_instagram_login_comment_payload()
+
+        first = parse_meta_comment_events(payload, channel="instagram", instagram_account_id="222")
+        second = parse_meta_comment_events(payload, channel="instagram", instagram_account_id="222")
+
+        self.assertEqual(len(first), 1)
+        self.assertEqual(first[0]["comment_id"], "comment-official-1")
+        self.assertEqual(first[0]["media_id"], "media-official-1")
+        self.assertEqual(first[0]["author_username"], "commenter")
+        self.assertTrue(first[0]["author_id"])
+        self.assertEqual(first[0]["author_id"], second[0]["author_id"])
+
     def test_count_raw_comment_changes(self):
         self.assertEqual(count_raw_comment_changes(_facebook_comment_payload()), 1)
         self.assertEqual(count_raw_comment_changes(_instagram_comment_payload()), 1)
+        self.assertEqual(count_raw_comment_changes(_official_instagram_login_comment_payload()), 1)
         self.assertEqual(
             count_raw_comment_changes({"object": "instagram", "entry": [{"id": "222", "messaging": []}]}),
             0,
@@ -147,6 +195,22 @@ class MetaCommentEventParserTests(unittest.TestCase):
     def test_self_page_comment_ignored_in_processor(self):
         binding = _binding(channel="facebook", asset_id="111", page_id="111")
         self.assertTrue(_is_self_comment({"author_id": "111"}, binding))
+
+    def test_official_instagram_shape_self_comment_ignored_by_username(self):
+        binding = _binding(
+            channel="instagram",
+            asset_id="222",
+            instagram_id="222",
+            instagram_username="LinasAI",
+        )
+        events = parse_meta_comment_events(
+            _official_instagram_login_comment_payload(username="linasai"),
+            channel="instagram",
+            instagram_account_id="222",
+        )
+
+        self.assertEqual(len(events), 1)
+        self.assertTrue(_is_self_comment(events[0], binding))
 
     def test_dm_parser_unchanged_without_changes(self):
         dm_payload = {
@@ -322,11 +386,40 @@ class MetaCommentProcessorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first.status, "simulated")
         self.assertEqual(second.reason, "already_replied")
 
+    async def test_transient_reply_list_failure_never_generates_or_posts_duplicate(self):
+        binding = _binding()
+        set_comment_reply_setting(
+            tenant_id=binding.tenant_id,
+            app_key=binding.app_key,
+            channel=binding.channel,
+            asset_id=binding.asset_id,
+            enabled=True,
+        )
+        event = parse_meta_comment_events(_facebook_comment_payload(), channel="facebook", page_id="111")[0]
+        resolved = ResolvedMetaCommentEvent(event=event, settings=_settings(binding), binding=binding)
+
+        with (
+            mock.patch(
+                "services.meta_comment_replies._comment_has_page_reply",
+                new_callable=mock.AsyncMock,
+                side_effect=MetaCommentReplyInspectionError("http_503"),
+            ),
+            mock.patch(
+                "services.meta_comment_replies._generate_comment_reply_text",
+                new_callable=mock.AsyncMock,
+            ) as generate_mock,
+        ):
+            result = await process_meta_comment_event(resolved)
+
+        self.assertEqual(result, CommentReplyResult(status="failed", reason="reply_dedupe_check_failed"))
+        self.assertTrue(comment_reply_requires_retry(result))
+        generate_mock.assert_not_awaited()
+
 
 class MetaCommentRegistryRoutingTests(unittest.TestCase):
     def test_wrong_workspace_asset_not_resolved(self):
         payload = _facebook_comment_payload(page_id="111")
-        binding = _binding(tenant_id="tenant-a", asset_id="111", page_id="111")
+        binding = _binding(tenant_id="linas", asset_id="111", page_id="111")
         registry = mock.MagicMock()
         registry.get_active_bindings_for_app.return_value = [binding]
         registry.get_credential.return_value = MetaBindingCredential(
@@ -346,6 +439,82 @@ class MetaCommentRegistryRoutingTests(unittest.TestCase):
         wrong_payload = _facebook_comment_payload(page_id="999")
         resolved_wrong = resolve_registry_comment_events(wrong_payload, app_config=app_config, registry=registry)
         self.assertEqual(resolved_wrong, [])
+
+
+class MetaCommentResultPolicyTests(unittest.IsolatedAsyncioTestCase):
+    def test_only_retryable_outcomes_remain_non_terminal(self):
+        self.assertTrue(comment_reply_requires_retry(CommentReplyResult(status="failed", reason="http_500")))
+        self.assertTrue(comment_reply_requires_retry(CommentReplyResult(status="ignored", reason="rate_limited")))
+        self.assertFalse(comment_reply_requires_retry(CommentReplyResult(status="sent", reply_id="reply-1")))
+        self.assertFalse(
+            comment_reply_requires_retry(CommentReplyResult(status="skipped", reason="no_confident_reply"))
+        )
+
+    async def test_graph_2xx_without_reply_id_is_not_success(self):
+        async def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"success": True})
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            ok, reason, _payload = await _graph_post_form(
+                client,
+                "https://graph.facebook.com/v24.0/comment-1/comments",
+                token="token",
+                data={"message": "hello"},
+            )
+
+        self.assertFalse(ok)
+        self.assertEqual(reason, "missing_reply_id")
+
+    async def test_reply_dedupe_get_failure_is_fail_closed(self):
+        async def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(503, json={"error": {"message": "temporary"}})
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with self.assertRaisesRegex(MetaCommentReplyInspectionError, "http_503"):
+                await _comment_has_page_reply(
+                    client,
+                    comment_id="comment-1",
+                    owner_id="page-1",
+                    token="token",
+                    graph_url="https://graph.facebook.com/v24.0/comment-1/comments",
+                )
+
+    async def test_reply_dedupe_traverses_pagination_before_retrying_send(self):
+        requests: list[httpx.Request] = []
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            if request.url.params.get("after") == "cursor-1":
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": [{"id": "reply-11", "from": {"id": "page-1"}}],
+                        "paging": {"cursors": {"after": "cursor-2"}},
+                    },
+                )
+            return httpx.Response(
+                200,
+                json={
+                    "data": [{"id": f"reply-{index}", "from": {"id": f"customer-{index}"}} for index in range(10)],
+                    "paging": {
+                        "cursors": {"after": "cursor-1"},
+                        "next": "https://graph.facebook.com/v24.0/comment-1/comments?after=cursor-1",
+                    },
+                },
+            )
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            found = await _comment_has_page_reply(
+                client,
+                comment_id="comment-1",
+                owner_id="page-1",
+                token="token",
+                graph_url="https://graph.facebook.com/v24.0/comment-1/comments",
+            )
+
+        self.assertTrue(found)
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(requests[1].url.params.get("after"), "cursor-1")
 
 
 if __name__ == "__main__":

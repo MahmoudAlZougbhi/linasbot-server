@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
-from typing import Any
+from typing import Any, cast
 
 from fastapi import Body, HTTPException, Request
 
@@ -11,9 +12,9 @@ from modules.api_security import require_permission
 from modules.core import app
 from modules.meta_connections_api_helpers import (
     _active_conflict,
-    _subscription_identity,
     _tenant_binding,
 )
+from services.channel_capability_toggles import ensure_comment_webhook_for_binding
 from services.meta_app_registry import (
     APP_A_KEY,
     APP_B_KEY,
@@ -22,19 +23,183 @@ from services.meta_app_registry import (
     get_meta_app_registry,
 )
 from services.meta_comment_reply_settings import get_comment_reply_setting, set_comment_reply_setting
-from services.meta_comment_webhooks import (
-    credential_has_comment_scopes,
-    ensure_instagram_comment_app_webhook,
-    ensure_page_comment_webhook_subscription,
-    required_comment_scopes,
-)
+from services.meta_comment_webhooks import credential_has_comment_scopes
+from services.meta_graph_routing import required_comment_scopes_for_binding
 from services.meta_instagram_login_subscription_recovery import retry_instagram_login_webhook_subscription
 from services.meta_oauth import (
     MetaOAuthError,
     disconnect_binding_webhook,
     subscribe_binding_webhook,
-    unsubscribe_binding_webhook,
 )
+from services.meta_oauth_graph import (
+    _other_active_binding_shares_page,
+    _unsubscribe_binding_webhook_locked_raw,
+    desired_binding_webhook_subscription,
+)
+from services.meta_oauth_page_lock import lock_facebook_page_oauth_operation
+from services.meta_page_subscription_transaction import (
+    PageSubscriptionMutation,
+    capture_page_subscription_snapshots,
+    compensate_page_subscription_failure,
+    page_subscription_identity,
+    reconcile_page_activation_after_exception,
+    reconcile_page_rollback_after_exception,
+)
+
+
+async def _activate_meta_connection_locked(
+    binding: MetaAssetBinding,
+    previous: MetaAssetBinding | None,
+    *,
+    actor_id: str,
+    registry: Any,
+) -> MetaAssetBinding:
+    """Mutate every provider row first, then atomically flip local routing."""
+
+    current_conflict = _active_conflict(binding)
+    if (current_conflict.binding_id if current_conflict else "") != (previous.binding_id if previous else "") or (
+        current_conflict is not None
+        and previous is not None
+        and page_subscription_identity(current_conflict) != page_subscription_identity(previous)
+    ):
+        raise MetaRegistryError("Active Meta binding changed before Page cutover")
+    previous = current_conflict
+    registry.assert_binding_can_activate(
+        binding.binding_id,
+        expected_generation=binding.generation,
+        replacing_binding_id=previous.binding_id if previous else "",
+    )
+    staged = MetaAssetBinding(**{**binding.__dict__, "status": "active"})
+    delete_previous = (
+        previous is not None
+        and page_subscription_identity(previous) != page_subscription_identity(staged)
+        and not _other_active_binding_shares_page(previous, registry)
+    )
+    candidates = (staged,) + ((previous,) if delete_previous and previous is not None else ())
+    snapshots = await capture_page_subscription_snapshots(candidates, registry=registry)
+    mutations: list[PageSubscriptionMutation] = []
+    desired = desired_binding_webhook_subscription(staged, registry=registry)
+    try:
+        mutations.append(
+            PageSubscriptionMutation(
+                staged,
+                snapshots[page_subscription_identity(staged)],
+                desired,
+            )
+        )
+        await subscribe_binding_webhook(staged, registry=registry)
+        if delete_previous and previous is not None:
+            mutations.append(
+                PageSubscriptionMutation(
+                    previous,
+                    snapshots[page_subscription_identity(previous)],
+                    None,
+                )
+            )
+            await _unsubscribe_binding_webhook_locked_raw(previous, registry=registry, client=None)
+        return cast(
+            MetaAssetBinding,
+            registry.activate_staged_binding(
+                binding.binding_id,
+                actor_id=actor_id,
+                expected_generation=binding.generation,
+                replace_existing=previous is not None,
+            ),
+        )
+    except BaseException as exc:  # noqa: BLE001 - cancellation must compensate too
+        try:
+            committed = reconcile_page_activation_after_exception(
+                (binding,),
+                expected_fields={binding.binding_id: desired},
+                registry=registry,
+            )
+        except MetaOAuthError as reconciliation_error:
+            if isinstance(exc, asyncio.CancelledError):
+                raise exc from reconciliation_error
+            raise reconciliation_error from exc
+        if committed is not None:
+            if isinstance(exc, asyncio.CancelledError):
+                raise
+            return committed[0]
+        await compensate_page_subscription_failure(exc, mutations, registry=registry)
+        raise
+
+
+async def _rollback_meta_connection_locked(
+    binding: MetaAssetBinding,
+    previous: MetaAssetBinding,
+    *,
+    actor_id: str,
+    registry: Any,
+) -> MetaAssetBinding:
+    """Restore exact provider state on any failed or cancelled rollback."""
+
+    latest = {item.binding_id: item for item in registry.list_bindings()}
+    current_binding = latest.get(binding.binding_id)
+    current_previous = latest.get(previous.binding_id)
+    if (
+        current_binding is None
+        or current_previous is None
+        or current_binding.generation != binding.generation
+        or current_previous.generation != previous.generation
+        or page_subscription_identity(current_binding) != page_subscription_identity(binding)
+        or page_subscription_identity(current_previous) != page_subscription_identity(previous)
+    ):
+        raise MetaRegistryError("Meta rollback bindings changed before Page cutover")
+    binding = current_binding
+    previous = current_previous
+    staged_previous = MetaAssetBinding(**{**previous.__dict__, "status": "active"})
+    registry.assert_binding_can_activate(
+        previous.binding_id,
+        expected_generation=previous.generation,
+        replacing_binding_id=binding.binding_id,
+    )
+    delete_current = (
+        binding.active
+        and page_subscription_identity(binding) != page_subscription_identity(staged_previous)
+        and not _other_active_binding_shares_page(binding, registry)
+    )
+    candidates = (staged_previous,) + ((binding,) if delete_current else ())
+    snapshots = await capture_page_subscription_snapshots(candidates, registry=registry)
+    mutations: list[PageSubscriptionMutation] = []
+    desired = desired_binding_webhook_subscription(staged_previous, registry=registry)
+    try:
+        mutations.append(
+            PageSubscriptionMutation(
+                staged_previous,
+                snapshots[page_subscription_identity(staged_previous)],
+                desired,
+            )
+        )
+        await subscribe_binding_webhook(staged_previous, registry=registry)
+        if delete_current:
+            mutations.append(
+                PageSubscriptionMutation(
+                    binding,
+                    snapshots[page_subscription_identity(binding)],
+                    None,
+                )
+            )
+            await _unsubscribe_binding_webhook_locked_raw(binding, registry=registry, client=None)
+        return cast(MetaAssetBinding, registry.rollback_binding(binding.binding_id, actor_id=actor_id))
+    except BaseException as exc:  # noqa: BLE001 - cancellation must compensate too
+        try:
+            committed = reconcile_page_rollback_after_exception(
+                binding,
+                previous,
+                expected_previous_fields=desired,
+                registry=registry,
+            )
+        except MetaOAuthError as reconciliation_error:
+            if isinstance(exc, asyncio.CancelledError):
+                raise exc from reconciliation_error
+            raise reconciliation_error from exc
+        if committed is not None:
+            if isinstance(exc, asyncio.CancelledError):
+                raise
+            return committed
+        await compensate_page_subscription_failure(exc, mutations, registry=registry)
+        raise
 
 
 @app.post("/api/meta/connections/{binding_id}/disconnect")
@@ -132,58 +297,27 @@ async def activate_meta_connection(binding_id: str, request: Request) -> Any:
         except Exception as exc:
             raise HTTPException(status_code=409, detail="Tenant AI content is not published") from exc
     registry = get_meta_app_registry()
+    previous = _active_conflict(binding)
     try:
-        previous = _active_conflict(binding)
-        registry.assert_binding_can_activate(
-            binding.binding_id,
-            expected_generation=binding.generation,
-            replacing_binding_id=previous.binding_id if previous else "",
-        )
-        # Subscribe while the binding is still ignored by webhook routing, then
-        # atomically flip the exclusive active index. On conflict, undo subscription.
-        staged = MetaAssetBinding(**{**binding.__dict__, "status": "active"})
-        await subscribe_binding_webhook(staged, registry=registry)
-        try:
-            updated = registry.activate_staged_binding(
-                binding.binding_id,
+        async with lock_facebook_page_oauth_operation(
+            registry,
+            app_key=binding.app_key,
+            page_ids=tuple(
+                sorted(
+                    {
+                        binding.page_id,
+                        previous.page_id if previous is not None else "",
+                    }
+                    - {""}
+                )
+            ),
+        ):
+            updated = await _activate_meta_connection_locked(
+                binding,
+                previous,
                 actor_id=session.user_id or session.email,
-                expected_generation=binding.generation,
-                replace_existing=previous is not None,
+                registry=registry,
             )
-        except MetaRegistryError:
-            await unsubscribe_binding_webhook(staged, registry=registry)
-            raise
-        # The registry flip above is the response boundary: only the new binding
-        # can answer. Remove the old external subscription after the atomic flip.
-        # A same-app/same-Page reconnect shares one Meta subscription and must not
-        # unsubscribe it merely because its encrypted token was rotated.
-        if previous and _subscription_identity(previous) != _subscription_identity(updated):
-            try:
-                await unsubscribe_binding_webhook(previous, registry=registry)
-            except MetaOAuthError as cleanup_error:
-                # Restore the former provider first. Even if Meta's unsubscribe
-                # outcome was ambiguous, the inactive new binding cannot answer.
-                restore_errors: list[str] = []
-                try:
-                    await subscribe_binding_webhook(
-                        MetaAssetBinding(**{**previous.__dict__, "status": "active"}),
-                        registry=registry,
-                    )
-                except MetaOAuthError as exc:
-                    restore_errors.append(type(exc).__name__)
-                try:
-                    registry.rollback_binding(updated.binding_id, actor_id=session.user_id or session.email)
-                except MetaRegistryError as exc:
-                    restore_errors.append(type(exc).__name__)
-                try:
-                    await unsubscribe_binding_webhook(staged, registry=registry)
-                except MetaOAuthError as exc:
-                    restore_errors.append(type(exc).__name__)
-                if restore_errors:
-                    raise MetaOAuthError(
-                        "Provider cutover failed and requires subscription diagnostics"
-                    ) from cleanup_error
-                raise MetaOAuthError("Provider cutover failed; the previous binding was restored") from cleanup_error
     except (MetaOAuthError, MetaRegistryError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"success": True, "connection": updated.public_dict()}
@@ -200,23 +334,18 @@ async def rollback_meta_connection(binding_id: str, request: Request) -> Any:
     )
     if previous is None or previous.tenant_id != session.tenant_id:
         raise HTTPException(status_code=409, detail="Previous Meta connection is unavailable")
-    staged_previous = MetaAssetBinding(**{**previous.__dict__, "status": "active"})
     try:
-        registry.assert_binding_can_activate(
-            previous.binding_id,
-            expected_generation=previous.generation,
-            replacing_binding_id=binding.binding_id,
-        )
-        await subscribe_binding_webhook(staged_previous, registry=registry)
-        if binding.active:
-            await unsubscribe_binding_webhook(binding, registry=registry)
-        try:
-            restored = registry.rollback_binding(binding.binding_id, actor_id=session.user_id or session.email)
-        except MetaRegistryError:
-            await unsubscribe_binding_webhook(staged_previous, registry=registry)
-            if binding.active:
-                await subscribe_binding_webhook(binding, registry=registry)
-            raise
+        async with lock_facebook_page_oauth_operation(
+            registry,
+            app_key=binding.app_key,
+            page_ids=tuple({binding.page_id, previous.page_id}),
+        ):
+            restored = await _rollback_meta_connection_locked(
+                binding,
+                previous,
+                actor_id=session.user_id or session.email,
+                registry=registry,
+            )
     except (MetaOAuthError, MetaRegistryError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"success": True, "connection": restored.public_dict()}
@@ -297,10 +426,7 @@ async def update_meta_comment_replies(
 
     if enabled:
         try:
-            if binding.channel == "facebook":
-                await ensure_page_comment_webhook_subscription(binding, registry=registry)
-            else:
-                await ensure_instagram_comment_app_webhook(app_key=binding.app_key)
+            await ensure_comment_webhook_for_binding(binding, registry=registry)
         except MetaOAuthError as exc:
             set_comment_reply_setting(
                 tenant_id=binding.tenant_id,
@@ -323,7 +449,7 @@ async def update_meta_comment_replies(
     )
     public["comment_replies"] = {
         **updated_setting.public_dict(),
-        "scopes_required": sorted(required_comment_scopes(binding.channel)),
+        "scopes_required": sorted(required_comment_scopes_for_binding(binding)),
         "scopes_ready": credential_has_comment_scopes(binding, registry),
         "cm_action_enabled": bool(comment_decision["readiness"].get("cm_action_enabled")),
         "cm_enforcement_allow": bool(comment_decision["allow"]),

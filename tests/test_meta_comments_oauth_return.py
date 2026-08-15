@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import time
 from types import SimpleNamespace
 
 import pytest
+from starlette.requests import Request
 
-from modules import meta_connections_api
+from modules import meta_connections_api, meta_connections_api_lifecycle
 from services.channel_capability_toggles import set_channel_toggle
+from services.dashboard_session_service import SessionRecord
 from services.meta_app_registry import APP_A_KEY
 from services.meta_instagram_login_subscription import InstagramLoginSubscriptionState
 from services.meta_oauth import MetaOAuthError
@@ -54,6 +57,30 @@ def test_invalid_tampered_return_surface_rejected_to_web() -> None:
     assert "evil.example" not in web_url
 
 
+def _settings_request(tenant_id: str = "linas") -> Request:
+    request = Request(
+        {
+            "type": "http",
+            "method": "PATCH",
+            "path": "/api/meta/connections/ig-direct/comment-replies",
+            "query_string": b"",
+            "headers": [],
+        }
+    )
+    request.state.dashboard_session = SessionRecord(
+        session_id="session-a",
+        user_id="owner-a",
+        email="owner@example.com",
+        role="admin",
+        permissions=None,
+        tenant_id=tenant_id,
+        csrf_token="csrf",
+        created_at=time.time(),
+        expires_at=time.time() + 3600,
+    )
+    return request
+
+
 @pytest.mark.asyncio
 async def test_instagram_callback_mobile_surface_uses_deep_link(monkeypatch) -> None:
     binding = _ig_binding(auth_flow="instagram_login", status="active", channel="instagram")
@@ -71,6 +98,85 @@ async def test_instagram_callback_mobile_surface_uses_deep_link(monkeypatch) -> 
     assert "linasai://integrations?meta_connection=success" in body
     assert "/login" not in body
     assert "/settings" not in body
+
+
+@pytest.mark.asyncio
+async def test_instagram_callback_reports_failed_when_subscription_is_unconfirmed(monkeypatch) -> None:
+    async def _fail(**_k):
+        raise MetaOAuthError("Instagram webhook subscription could not be confirmed")
+
+    monkeypatch.setattr(meta_connections_api, "complete_instagram_login", _fail)
+    monkeypatch.setattr(meta_connections_api, "peek_return_surface_from_state", lambda *_a, **_k: "mobile")
+    response = await meta_connections_api.instagram_login_oauth_callback(
+        code="code",
+        state="state",
+        error="",
+    )
+    body = response.body.decode("utf-8")
+    assert "linasai://integrations?meta_connection=failed" in body
+    assert "meta_connection=success" not in body
+
+
+@pytest.mark.asyncio
+async def test_legacy_comment_enable_uses_direct_instagram_subscription(monkeypatch) -> None:
+    binding = _ig_binding(
+        binding_id="ig-direct",
+        auth_flow="instagram_login",
+        page_id="",
+        webhook_subscribed_fields=("messages", "messaging_postbacks"),
+    )
+    binding.public_dict = lambda: {"binding_id": binding.binding_id}
+    registry = SimpleNamespace(_append_audit=lambda _event: None)
+    calls: list[tuple[object, object]] = []
+
+    async def _ensure(candidate, *, registry):
+        calls.append((candidate, registry))
+
+    class _Setting:
+        def __init__(self, *, enabled: bool, instructions: str) -> None:
+            self.enabled = enabled
+            self.instructions = instructions
+
+        def public_dict(self):
+            return {"enabled": self.enabled, "instructions": self.instructions}
+
+    monkeypatch.setattr(meta_connections_api_lifecycle, "_tenant_binding", lambda *_a, **_k: binding)
+    monkeypatch.setattr(meta_connections_api_lifecycle, "get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr(meta_connections_api_lifecycle, "credential_has_comment_scopes", lambda *_a, **_k: True)
+    monkeypatch.setattr(
+        meta_connections_api_lifecycle,
+        "get_comment_reply_setting",
+        lambda **_k: _Setting(enabled=False, instructions=""),
+    )
+    monkeypatch.setattr(
+        meta_connections_api_lifecycle,
+        "set_comment_reply_setting",
+        lambda **kwargs: _Setting(
+            enabled=bool(kwargs["enabled"]),
+            instructions=str(kwargs["instructions"]),
+        ),
+    )
+    monkeypatch.setattr(meta_connections_api_lifecycle, "ensure_comment_webhook_for_binding", _ensure)
+    monkeypatch.setattr("services.membership.comment_gate.assert_comment_automation_allowed", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.cm.constants.tenant_uses_cm_runtime", lambda *_a, **_k: False)
+    monkeypatch.setattr(
+        "services.cm.actions.comments_enforcement_decision",
+        lambda **_k: {
+            "allow": True,
+            "reason": "enabled",
+            "readiness": {"cm_action_enabled": True},
+        },
+    )
+
+    response = await meta_connections_api.update_meta_comment_replies(
+        binding.binding_id,
+        _settings_request(),
+        {"enabled": True, "instructions": "Be helpful"},
+    )
+
+    assert response["success"] is True
+    assert response["comment_replies"]["scopes_required"] == ["instagram_business_manage_comments"]
+    assert calls == [(binding, registry)]
 
 
 @pytest.mark.asyncio

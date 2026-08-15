@@ -1,0 +1,159 @@
+name: Meta Inbound Payload Retention
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Dry-run report or explicitly confirmed irreversible retention apply
+        required: true
+        default: dry_run
+        type: choice
+        options:
+          - dry_run
+          - apply
+      confirmation:
+        description: Type APPLY_META_RETENTION only when operation=apply
+        required: false
+        type: string
+
+concurrency:
+  group: meta-social-cutover
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  retain:
+    name: Redact expired terminal Meta inbound payloads
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.operation == 'dry_run') ||
+      (github.event_name == 'workflow_dispatch' && inputs.operation == 'apply' && inputs.confirmation == 'APPLY_META_RETENTION')
+    environment: meta-social-cutover
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Apply and verify count-only retention on production
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        env:
+          EXPECTED_RELEASE_SHA: ${{ github.sha }}
+          META_RETENTION_EVENT: ${{ github.event_name }}
+          META_RETENTION_OPERATION: ${{ inputs.operation }}
+          META_RETENTION_CONFIRMATION: ${{ inputs.confirmation }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 10m
+          envs: EXPECTED_RELEASE_SHA,META_RETENTION_EVENT,META_RETENTION_OPERATION,META_RETENTION_CONFIRMATION
+          script: |
+            set -euo pipefail
+            exec 9>/run/lock/linasbot-meta-live.lock
+            flock -x 9
+            if [ "$META_RETENTION_EVENT" = "schedule" ]; then
+              RETENTION_OPERATION=dry_run
+            elif [ "$META_RETENTION_EVENT" = "workflow_dispatch" ]; then
+              case "$META_RETENTION_OPERATION" in
+                dry_run) RETENTION_OPERATION=dry_run ;;
+                apply)
+                  if [ "$META_RETENTION_CONFIRMATION" != "APPLY_META_RETENTION" ]; then
+                    echo "[meta-retention] apply confirmation is invalid" >&2
+                    exit 2
+                  fi
+                  RETENTION_OPERATION=apply
+                  ;;
+                *)
+                  echo "[meta-retention] operation is invalid" >&2
+                  exit 2
+                  ;;
+              esac
+            else
+              echo "[meta-retention] event is invalid" >&2
+              exit 2
+            fi
+            REPO_DIR=/opt/linasbot
+            DEPLOYED_RELEASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
+            if [ "$DEPLOYED_RELEASE_SHA" != "$EXPECTED_RELEASE_SHA" ]; then
+              echo "[meta-retention] workflow SHA does not match deployed release" >&2
+              exit 1
+            fi
+            if ! git -C "$REPO_DIR" diff --quiet "$DEPLOYED_RELEASE_SHA" -- || \
+               ! git -C "$REPO_DIR" diff --cached --quiet "$DEPLOYED_RELEASE_SHA" --; then
+              echo "[meta-retention] deployed tracked files differ from release SHA" >&2
+              exit 1
+            fi
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
+            APP_DIR=/opt/linasbot
+            ENV_FILE="$APP_DIR/.env"
+            SCRIPT="$APP_DIR/scripts/redact_meta_inbound_retention.py"
+            PYTHON_BIN="$APP_DIR/venv/bin/python3"
+            test -f "$APP_DIR/main.py"
+            test -f "$ENV_FILE"
+            test -f "$SCRIPT"
+            test -x "$PYTHON_BIN"
+            export PYTHONPATH="$APP_DIR${PYTHONPATH:+:$PYTHONPATH}"
+            cd "$APP_DIR"
+
+            set +e
+            "$PYTHON_BIN" "$SCRIPT" --env-file "$ENV_FILE"
+            DRY_RUN_STATUS=$?
+            set -e
+            if [ "$DRY_RUN_STATUS" -eq 0 ]; then
+              echo "[meta-retention] node01 has no expired terminal payloads"
+            elif [ "$DRY_RUN_STATUS" -eq 3 ]; then
+              if [ "$RETENTION_OPERATION" = "apply" ]; then
+                "$PYTHON_BIN" "$SCRIPT" --apply --env-file "$ENV_FILE"
+                "$PYTHON_BIN" "$SCRIPT" --env-file "$ENV_FILE"
+              else
+                echo "[meta-retention] node01 dry-run found expired payloads; no mutation performed"
+              fi
+            else
+              echo "[meta-retention] dry-run failed" >&2
+              exit "$DRY_RUN_STATUS"
+            fi
+
+            PEER_HOST="${LINAS_HA_PEER_HOST:-10.106.0.4}"
+            ssh \
+              -o BatchMode=yes \
+              -o ConnectTimeout=8 \
+              -o StrictHostKeyChecking=yes \
+              "root@${PEER_HOST}" \
+              bash -s -- "$EXPECTED_RELEASE_SHA" "$RETENTION_OPERATION" <<'PEER_RETENTION'
+            set -euo pipefail
+            exec 9>/run/lock/linasbot-meta-live.lock
+            flock -x 9
+            expected_sha="$1"
+            retention_operation="$2"
+            case "$retention_operation" in dry_run|apply) ;; *) exit 2 ;; esac
+            app_dir=/opt/linasbot
+            bash "$app_dir/scripts/ha/verify_meta_release_ha.sh" "$expected_sha" local-only
+            env_file="$app_dir/.env"
+            script="$app_dir/scripts/redact_meta_inbound_retention.py"
+            python_bin="$app_dir/venv/bin/python"
+            export PYTHONPATH="$app_dir${PYTHONPATH:+:$PYTHONPATH}"
+            cd "$app_dir"
+            set +e
+            "$python_bin" "$script" --env-file "$env_file"
+            dry_run_status=$?
+            set -e
+            if [ "$dry_run_status" -eq 0 ]; then
+              echo "[meta-retention] node02 has no expired terminal payloads"
+            elif [ "$dry_run_status" -eq 3 ]; then
+              if [ "$retention_operation" = "apply" ]; then
+                "$python_bin" "$script" --apply --env-file "$env_file"
+                "$python_bin" "$script" --env-file "$env_file"
+              else
+                echo "[meta-retention] node02 dry-run found expired payloads; no mutation performed"
+              fi
+            else
+              echo "[meta-retention] peer dry-run failed" >&2
+              exit "$dry_run_status"
+            fi
+            PEER_RETENTION
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
+            echo "[meta-retention] two-node operation=${RETENTION_OPERATION} complete"
