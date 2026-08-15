@@ -234,7 +234,7 @@ test('planColors defines distinct premium palette per tier', () => {
   }
   assert.match(src, /accentForPlan/);
   assert.match(src, /planNameColor/);
-  assert.match(src, /planNameOnForest/);
+  assert.doesNotMatch(src, /nameOnForest/);
   assert.match(src, /lite:[\s\S]*?#64748B/);
   assert.match(src, /starter:[\s\S]*?#008B8B/);
   assert.match(src, /growth:[\s\S]*?#059669/);
@@ -250,7 +250,7 @@ test('billing surfaces tint plan names from planColors', () => {
     ['features/billing/CurrentPlanHeroCard.tsx', /planNameColor/],
     ['features/billing/CurrentPlanSummary.tsx', /planNameColor/],
     ['features/billing/ChoosePlanScreen.tsx', /accentForPlan/],
-    ['features/dashboard/sections/GrowthPlanCard.tsx', /planNameOnForest/],
+    ['features/dashboard/sections/GrowthPlanCard.tsx', /planNameColor/],
   ]) {
     assert.match(read(file), pattern, file);
   }
