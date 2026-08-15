@@ -37,6 +37,7 @@ from db.models.products import (
     ProductLink,
     ProductSentMessage,
 )
+from db.models.tenant_services import ServiceOption, TenantService
 from db.models.requests import CustomerRequest, CustomerRequestCounter
 from db.models.requests_support import (
     CustomerRequestEvent,
@@ -91,6 +92,8 @@ __all__ = [
     "ProductImage",
     "ProductLink",
     "ProductSentMessage",
+    "ServiceOption",
+    "TenantService",
     "StripeProcessedEventRow",
     "TenantEntitlementRow",
     "TokenWalletLedgerRow",
