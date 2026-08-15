@@ -65,7 +65,7 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
     norm_r = sum(b * b for b in right) ** 0.5
     if norm_l == 0 or norm_r == 0:
         return 0.0
-    return dot / (norm_l * norm_r)
+    return float(dot / (norm_l * norm_r))
 
 
 def combined_image_similarity(

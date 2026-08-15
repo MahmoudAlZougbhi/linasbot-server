@@ -84,13 +84,17 @@ async def vision_rerank_candidates(
         logger.exception("product_image_candidate_rerank_debit_failed tenant=%s", tenant_id)
 
     parsed = _parse_json((response.choices[0].message.content or "").strip())
-    product_id = str(parsed.get("product_id") or "").strip() or None
+    resolved_product_id: str | None = str(parsed.get("product_id") or "").strip() or None
     confidence = str(parsed.get("confidence") or "low").strip().lower()
-    if product_id and product_id not in {c["product_id"] for c in catalog}:
-        product_id = None
+    if resolved_product_id and resolved_product_id not in {c["product_id"] for c in catalog}:
+        resolved_product_id = None
     if confidence != "high":
-        product_id = None
-    return {"resolved": bool(product_id), "product_id": product_id, "confidence": confidence}
+        resolved_product_id = None
+    return {
+        "resolved": bool(resolved_product_id),
+        "product_id": resolved_product_id,
+        "confidence": confidence,
+    }
 
 
 def _parse_json(content: str) -> dict[str, Any]:

@@ -82,22 +82,24 @@ class WebFollowUpAdapter:
     ) -> FollowUpSendResult:
         visitor_id = str(conv.social_sender_id or "").strip()
         if not visitor_id:
-            return FollowUpSendResult(ok=False, delivery="permanent_block", error="missing_visitor")
+            return FollowUpSendResult(status="failed", reason="missing_visitor")
         try:
             web_chat_store.queue_assistant_message(visitor_id, reply_text)
             user_id = compose_web_user_id(visitor_id)
             from utils.utils import save_conversation_message_to_firestore
 
-            user_data = {"tenant_id": job.tenant_id, "channel": "web"}
             await save_conversation_message_to_firestore(
                 user_id,
+                "assistant",
                 reply_text,
-                is_user=False,
-                user_data=user_data,
-                channel="web",
-                handled_by="smart_followup",
-                metadata={"channel": "web", "source": SOURCE_CHANNEL_WEB_CHAT, "idempotency_key": idempotency_key},
+                metadata={
+                    "channel": "web",
+                    "source": SOURCE_CHANNEL_WEB_CHAT,
+                    "idempotency_key": idempotency_key,
+                    "handled_by": "smart_followup",
+                    "tenant_id": job.tenant_id,
+                },
             )
-            return FollowUpSendResult(ok=True, delivery="delivered", provider_message_id=idempotency_key)
+            return FollowUpSendResult(status="sent", reason="sent", provider_message_id=idempotency_key)
         except Exception as exc:
-            return FollowUpSendResult(ok=False, delivery="failed", error=type(exc).__name__)
+            return FollowUpSendResult(status="failed", reason=type(exc).__name__)

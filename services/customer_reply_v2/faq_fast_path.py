@@ -101,10 +101,13 @@ async def try_faq_fast_path(
         return FaqFastPathResult(hit=False, reason="index_unavailable")
 
     async def _semantic_hits(*, language: str | None) -> list[dict[str, Any]]:
+        index_id = pointer.index_version_id
+        if not index_id:
+            return []
         try:
             return await semantic_search(
                 tenant_id=tenant_id,
-                index_id=pointer.index_version_id,
+                index_id=index_id,
                 query=message,
                 kind="faq",
                 language=language,

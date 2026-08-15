@@ -72,7 +72,7 @@ def claim_notification(
                         result={},
                     )
                 )
-                if int(res.rowcount or 0) == 1:
+                if int(getattr(res, "rowcount", 0) or 0) == 1:
                     logger.info("apple_assn_reclaim_failed uuid=%s type=%s", uuid, ntype)
                     return {
                         "duplicate": False,
@@ -137,7 +137,7 @@ def claim_notification(
                         result={},
                     )
                 )
-                if int(res.rowcount or 0) == 1:
+                if int(getattr(res, "rowcount", 0) or 0) == 1:
                     return {
                         "duplicate": False,
                         "claimed": True,

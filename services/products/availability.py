@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, cast
 
 Availability = Literal["in_stock", "out_of_stock", "inactive"]
 
@@ -33,10 +33,10 @@ def normalize_availability(raw: str | None, *, default: Availability = AVAILABIL
     if not text:
         return default
     if text in ALL_AVAILABILITY:
-        return text
+        return cast(Availability, text)
     compact = text.replace(" ", "")
     if compact in ALL_AVAILABILITY:
-        return compact
+        return cast(Availability, compact)
     return _ALIASES.get(text, _ALIASES.get(compact, default))
 
 

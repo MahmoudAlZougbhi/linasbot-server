@@ -106,10 +106,14 @@ def normalize_appearance(raw: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(raw, dict):
         return base
 
-    identity = raw.get("identity") if isinstance(raw.get("identity"), dict) else {}
-    theme = raw.get("theme") if isinstance(raw.get("theme"), dict) else {}
-    bubbles = raw.get("bubbles") if isinstance(raw.get("bubbles"), dict) else {}
-    launcher = raw.get("launcher") if isinstance(raw.get("launcher"), dict) else {}
+    identity_raw = raw.get("identity")
+    identity = identity_raw if isinstance(identity_raw, dict) else {}
+    theme_raw = raw.get("theme")
+    theme = theme_raw if isinstance(theme_raw, dict) else {}
+    bubbles_raw = raw.get("bubbles")
+    bubbles = bubbles_raw if isinstance(bubbles_raw, dict) else {}
+    launcher_raw = raw.get("launcher")
+    launcher = launcher_raw if isinstance(launcher_raw, dict) else {}
 
     base["identity"]["display_name"] = (
         _clamp_text(identity.get("display_name"), max_len=80) or base["identity"]["display_name"]
@@ -137,7 +141,9 @@ def normalize_appearance(raw: dict[str, Any] | None) -> dict[str, Any]:
         ("layout", "size", "layout.size"),
         ("layout", "corners", "layout.corners"),
     ):
-        val = str((raw.get(section) or {}).get(field) or base[section][field]).lower()
+        section_raw = raw.get(section)
+        section_dict = section_raw if isinstance(section_raw, dict) else {}
+        val = str(section_dict.get(field) or base[section][field]).lower()
         base[section][field] = val if val in _ALLOWED[allowed] else base[section][field]
 
     launcher_mode = str(launcher.get("mode") or base["launcher"]["mode"]).lower()
