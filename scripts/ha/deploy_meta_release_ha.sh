@@ -64,6 +64,9 @@ PRODUCTION_GUARD_REPO_PATH=scripts/ha/production_mutation_guard.py
 RELEASE_VERIFY_REPO_PATH=scripts/ha/release_verify_server.py
 RELEASE_READINESS_REPO_PATH=scripts/ha/release_readiness_probe.py
 RELEASE_ALEMBIC_MIGRATE_REPO_PATH=scripts/ha/release_alembic_migrate.py
+META_IG_SINGLE_MIGRATION_REPO_PATH=alembic/versions/20260820_meta_ig_single.py
+META_IG_SINGLE_COMPAT_MARKER_REPO_PATH=scripts/ha/compat/20260820_meta_ig_single_baseline_v1
+META_IG_SINGLE_COMPAT_MARKER_SHA256=5f0d85c013d155811a95e731a4895f4218d6719720a7378796717631079090c8
 LB_MANAGER_REPO_PATH=scripts/ha/manage_do_lb_ready_healthcheck.py
 LB_CONTRACT_REPO_PATH=scripts/ha/do_lb_ready_contract.py
 RELEASE_ARTIFACT_CONTRACT_REPO_PATH=scripts/ha/release_artifact_contract.py
@@ -3821,6 +3824,53 @@ raise SystemExit("maintenance marker did not withdraw readiness")
 PY
 }
 
+assert_exact_schema_compatibility_marker() {
+  local release_sha="$1"
+  local label="$2"
+  local entry metadata listed_path mode kind object extra marker_sha
+  validate_sha "$release_sha"
+  entry="$(git -C "$REPO_DIR" ls-tree "$release_sha" -- "$META_IG_SINGLE_COMPAT_MARKER_REPO_PATH")"
+  IFS=$'\t' read -r metadata listed_path <<<"$entry"
+  read -r mode kind object extra <<<"${metadata:-}"
+  test "$mode" = "100644" && test "$kind" = "blob" && \
+    [[ "$object" =~ ^[0-9a-f]{40}$ ]] && test -z "${extra:-}" && \
+    test "$listed_path" = "$META_IG_SINGLE_COMPAT_MARKER_REPO_PATH" || \
+    die "$label lacks the exact Stage A schema compatibility marker"
+  marker_sha="$(git -C "$REPO_DIR" show \
+    "$release_sha:$META_IG_SINGLE_COMPAT_MARKER_REPO_PATH" | sha256sum | awk '{print $1}')"
+  test "$marker_sha" = "$META_IG_SINGLE_COMPAT_MARKER_SHA256" || \
+    die "$label Stage A schema compatibility marker bytes differ"
+}
+
+release_schema_compatibility_evidence() {
+  local target_sha="$1"
+  local baseline_sha="$2"
+  local live_marker_sha
+  validate_sha "$target_sha"
+  validate_sha "$baseline_sha"
+  if ! git -C "$REPO_DIR" cat-file -e \
+    "$target_sha:$META_IG_SINGLE_MIGRATION_REPO_PATH" 2>/dev/null; then
+    printf 'not-required\n'
+    return 0
+  fi
+  assert_exact_schema_compatibility_marker "$target_sha" "target release"
+  assert_exact_schema_compatibility_marker "$baseline_sha" "live baseline"
+  test "$(current_head)" = "$baseline_sha" || \
+    die "live baseline changed during the schema compatibility gate"
+  test -f "$REPO_DIR/$META_IG_SINGLE_COMPAT_MARKER_REPO_PATH" && \
+    test ! -L "$REPO_DIR/$META_IG_SINGLE_COMPAT_MARKER_REPO_PATH" || \
+    die "live Stage A schema compatibility marker is missing or unsafe"
+  live_marker_sha="$(sha256sum "$REPO_DIR/$META_IG_SINGLE_COMPAT_MARKER_REPO_PATH" | awk '{print $1}')"
+  test "$live_marker_sha" = "$META_IG_SINGLE_COMPAT_MARKER_SHA256" || \
+    die "live Stage A schema compatibility marker bytes differ from its baseline"
+  test "$(git -C "$REPO_DIR" hash-object \
+    "$REPO_DIR/$META_IG_SINGLE_COMPAT_MARKER_REPO_PATH")" = \
+    "$(git -C "$REPO_DIR" rev-parse \
+      "$baseline_sha:$META_IG_SINGLE_COMPAT_MARKER_REPO_PATH")" || \
+    die "live Stage A schema compatibility marker differs from the checked-out baseline"
+  printf '%s\n' "$META_IG_SINGLE_COMPAT_MARKER_SHA256"
+}
+
 assert_target_object() {
   local target_sha="$1"
   local expected_helper_hash="$2"
@@ -3985,6 +4035,7 @@ node_preflight() {
   local expected_lb_attestation_sha="${5:-}"
   local expected_lb_projection_sha="${6:-}"
   local head node drain peer queue python_runtime_cluster_sha baseline_artifacts
+  local schema_compatibility_evidence
   local lb_observed_at
   local blocker=0
   python_runtime_cluster_sha="$(assert_python_runtime_contract "$expected_node_id")"
@@ -3998,10 +4049,11 @@ node_preflight() {
   head="$(current_head)"
   validate_sha "$head"
   assert_target_object "$target_sha" "$expected_helper_hash"
-  lb_observed_at="$(assert_fresh_lb_ready_attestation \
-    "$target_sha" "$expected_lb_attestation_sha" "$expected_lb_projection_sha")"
   git -C "$REPO_DIR" diff --quiet "$head" -- || die "live tracked tree is dirty"
   git -C "$REPO_DIR" diff --cached --quiet "$head" -- || die "live index is dirty"
+  schema_compatibility_evidence="$(release_schema_compatibility_evidence "$target_sha" "$head")"
+  lb_observed_at="$(assert_fresh_lb_ready_attestation \
+    "$target_sha" "$expected_lb_attestation_sha" "$expected_lb_projection_sha")"
   audit_untracked_runtime "$BACKUP_ROOT/untracked-audit" "preflight-${expected_node_id}" "$target_sha" || \
     blocker=1
   assert_no_shadow_runtime "$expected_node_id" || blocker=1
@@ -4053,9 +4105,10 @@ node_preflight() {
   assert_ready
   assert_lb_ready
   baseline_artifacts="$(live_baseline_artifact_evidence)"
-  printf 'NODE_ID=%s\nPREVIOUS_SHA=%s\nDRAIN_SECONDS=%s\nCONFIGURED_PEER=%s\nBOOTSTRAP_PLAN_SHA=%s\nPYTHON_RUNTIME_CLUSTER_SHA=%s\nLB_ATTESTATION_OBSERVED_AT=%s\nBASELINE_ARTIFACT_EVIDENCE=%s\n' \
+  printf 'NODE_ID=%s\nPREVIOUS_SHA=%s\nDRAIN_SECONDS=%s\nCONFIGURED_PEER=%s\nBOOTSTRAP_PLAN_SHA=%s\nPYTHON_RUNTIME_CLUSTER_SHA=%s\nSCHEMA_COMPATIBILITY_EVIDENCE=%s\nLB_ATTESTATION_OBSERVED_AT=%s\nBASELINE_ARTIFACT_EVIDENCE=%s\n' \
     "$node" "$head" "$drain" "$peer" "$expected_bootstrap_plan" \
-    "$python_runtime_cluster_sha" "$lb_observed_at" "$baseline_artifacts"
+    "$python_runtime_cluster_sha" "$schema_compatibility_evidence" \
+    "$lb_observed_at" "$baseline_artifacts"
 }
 
 capture_service_state() {
@@ -9068,6 +9121,8 @@ orchestrate() {
   local previous_sha peer_previous_sha drain_seconds peer_drain_seconds
   local python_runtime_cluster_sha local_preflight_runtime_cluster_sha
   local peer_python_runtime_cluster_sha
+  local local_schema_compatibility_evidence peer_schema_compatibility_evidence
+  local expected_schema_compatibility_evidence
   local lb_observed_at peer_lb_observed_at
   local release_summary peer_release_summary
   local configured_peer peer_host tx_stamp tx_dir
@@ -9155,6 +9210,22 @@ orchestrate() {
   if [ "$local_preflight_rc" -ne 0 ] || [ "$peer_preflight_rc" -ne 0 ]; then
     die "both-node preflight failed; no release, service, or admission mutation was attempted"
   fi
+  if git -C "$REPO_DIR" cat-file -e \
+    "$target_sha:$META_IG_SINGLE_MIGRATION_REPO_PATH" 2>/dev/null; then
+    expected_schema_compatibility_evidence="$META_IG_SINGLE_COMPAT_MARKER_SHA256"
+  else
+    expected_schema_compatibility_evidence=not-required
+  fi
+  local_schema_compatibility_evidence="$(
+    printf '%s\n' "$local_preflight" | extract_contract_value SCHEMA_COMPATIBILITY_EVIDENCE
+  )"
+  peer_schema_compatibility_evidence="$(
+    printf '%s\n' "$peer_preflight" | extract_contract_value SCHEMA_COMPATIBILITY_EVIDENCE
+  )"
+  test "$local_schema_compatibility_evidence" = "$expected_schema_compatibility_evidence" || \
+    die "node01 schema compatibility evidence differs from the target contract"
+  test "$peer_schema_compatibility_evidence" = "$expected_schema_compatibility_evidence" || \
+    die "node02 schema compatibility evidence differs from the target contract"
   previous_sha="$(printf '%s\n' "$local_preflight" | extract_contract_value PREVIOUS_SHA)"
   drain_seconds="$(printf '%s\n' "$local_preflight" | extract_contract_value DRAIN_SECONDS)"
   configured_peer="$(printf '%s\n' "$local_preflight" | extract_contract_value CONFIGURED_PEER)"

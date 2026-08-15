@@ -339,9 +339,13 @@ def test_instagram_schema_rollout_keeps_stage_a_as_the_rollback_runtime() -> Non
         "Stage A contains",
         "does not contain that migration",
         "exact baseline on both nodes",
-        "both nodes drained before its first target",
+        "both nodes are then drained",
         "does not run an automatic Alembic",
         "Stage A is the reviewed forward-compatible runtime",
+        "20260820_meta_ig_single_baseline_v1",
+        "read-only preflight requires its live baseline commit",
+        "before the deployment\njournal or any maintenance, staging, activation, or Alembic operation",
+        "without that migration does not require a marker",
     ):
         assert required in policy
     assert "alembic downgrade" not in HA_HELPER.read_text(encoding="utf-8").lower()

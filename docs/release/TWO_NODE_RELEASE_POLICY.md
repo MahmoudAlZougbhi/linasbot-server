@@ -20,10 +20,20 @@ uncertain node or pair drained for confirmed recovery.
 ## Two-stage schema release
 
 The `20260820_meta_ig_single` rollout is intentionally split. Stage A contains
-only the forward-compatible runtime and does not contain that migration. Stage
-A must first be admitted as the exact baseline on both nodes. Stage B may then
-contain and run the migration, with both nodes drained before its first target
-activation.
+only the forward-compatible runtime and does not contain that migration. It
+publishes the exact reviewed marker
+`scripts/ha/compat/20260820_meta_ig_single_baseline_v1`. Stage A must first be
+admitted as the exact baseline on both nodes.
+
+When a target contains `alembic/versions/20260820_meta_ig_single.py`, each
+node's read-only preflight requires its live baseline commit and checked-out
+worktree to contain that marker with the exact reviewed mode, bytes, and SHA-256.
+Both preflights must return the same target-bound evidence before the deployment
+journal or any maintenance, staging, activation, or Alembic operation. A target
+without that migration does not require a marker in its older live baseline;
+this is what allows Stage A to deploy. Stage B may run only after both nodes
+have Stage A as their compatible baseline, and both nodes are then drained
+before its first target activation.
 
 Rollback restores each node's exact Stage A application, environment, service,
 and artifact baseline. It deliberately does not run an automatic Alembic

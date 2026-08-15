@@ -27,6 +27,27 @@ def _helper() -> str:
     return HELPER.read_text(encoding="utf-8")
 
 
+def _schema_compatibility_gate_shell() -> str:
+    source = _helper()
+    assignments = "\n".join(line for line in source.splitlines() if line.startswith("META_IG_SINGLE_"))
+    start = source.index("assert_exact_schema_compatibility_marker() {")
+    end = source.index("\nassert_target_object() {", start)
+    functions = source[start:end]
+    return textwrap.dedent(
+        f"""\
+        set -euo pipefail
+        REPO_DIR="$1"
+        {assignments}
+        git() {{ /usr/bin/git "$@"; }}
+        die() {{ printf '[schema-gate-test] %s\\n' "$*" >&2; exit 1; }}
+        validate_sha() {{ [[ "$1" =~ ^[0-9a-f]{{40}}$ ]] || die "invalid SHA"; }}
+        current_head() {{ git -C "$REPO_DIR" rev-parse HEAD; }}
+        {functions}
+        release_schema_compatibility_evidence "$2" "$3"
+        """
+    )
+
+
 def _embedded_python(function_name: str) -> str:
     source = _helper()
     start = source.index(f"{function_name}() {{")
@@ -434,6 +455,112 @@ def test_both_nodes_preflight_before_any_stage_reset_restart_or_marker() -> None
     assert "both-node preflight failed" in orchestrate
     assert transaction_start < peer_marker < peer_stage < first_activate
     assert orchestrate.index('test "$previous_sha" = "$peer_previous_sha"') < transaction_start
+
+
+def test_stage_b_schema_gate_executes_before_every_mutation_surface() -> None:
+    source = _helper()
+    preflight = source[source.index("node_preflight() {") : source.index("capture_service_state() {")]
+    orchestrate = source[source.index("orchestrate() {") : source.index('case "${1:-}" in')]
+    target = preflight.index('assert_target_object "$target_sha" "$expected_helper_hash"')
+    clean_tree = preflight.index('git -C "$REPO_DIR" diff --quiet "$head" --')
+    compatibility = preflight.index(
+        'schema_compatibility_evidence="$(release_schema_compatibility_evidence "$target_sha" "$head")"'
+    )
+    untracked_audit = preflight.index('audit_untracked_runtime "$BACKUP_ROOT/untracked-audit"')
+
+    local_preflight = orchestrate.index('local_preflight="$(node_preflight')
+    peer_preflight = orchestrate.index('remote_node "$peer_host" preflight')
+    both_preflight_failure = orchestrate.index('if [ "$local_preflight_rc" -ne 0 ]')
+    first_journal = orchestrate.index('update_deploy_journal "preflight-proven"')
+    transaction_start = orchestrate.index("transaction_started=1")
+    first_maintenance = orchestrate.index('remote_node "$peer_host" mark-maintenance')
+    first_stage = orchestrate.index('remote_node "$peer_host" stage')
+    first_activate = orchestrate.index('remote_node "$peer_host" activate')
+
+    assert target < clean_tree < compatibility < untracked_audit
+    assert local_preflight < peer_preflight < both_preflight_failure < first_journal
+    assert first_journal < transaction_start < first_maintenance < first_stage < first_activate
+    assert "SCHEMA_COMPATIBILITY_EVIDENCE=%s" in preflight
+    assert orchestrate.count("extract_contract_value SCHEMA_COMPATIBILITY_EVIDENCE") == 2
+
+
+def test_stage_b_requires_exact_stage_a_marker_on_each_node(tmp_path: Path) -> None:
+    repo = tmp_path / "schema-repo"
+    repo.mkdir()
+
+    def git(*args: str) -> str:
+        result = subprocess.run(
+            ["/usr/bin/git", "-C", str(repo), *args],
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        return result.stdout.strip()
+
+    def commit(message: str) -> str:
+        git("add", "-A")
+        git("commit", "-q", "-m", message)
+        return git("rev-parse", "HEAD")
+
+    def checkout(sha: str) -> None:
+        git("checkout", "-q", "--detach", sha)
+
+    def gate(target: str, baseline: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["/bin/bash", str(gate_script), str(repo), target, baseline],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    git("init", "-q")
+    git("config", "user.name", "HA schema gate test")
+    git("config", "user.email", "ha-schema-gate@example.invalid")
+    (repo / "main.py").write_text("# pre-Stage-A runtime\n", encoding="utf-8")
+    pre_stage_a = commit("pre Stage A")
+
+    marker_relative = Path("scripts/ha/compat/20260820_meta_ig_single_baseline_v1")
+    marker_source = ROOT / marker_relative
+    marker_path = repo / marker_relative
+    marker_path.parent.mkdir(parents=True)
+    marker_path.write_bytes(marker_source.read_bytes())
+    stage_a = commit("Stage A compatible runtime marker")
+
+    migration = repo / "alembic/versions/20260820_meta_ig_single.py"
+    migration.parent.mkdir(parents=True)
+    migration.write_text('revision = "20260820_meta_ig_single"\n', encoding="utf-8")
+    stage_b = commit("Stage B migration")
+
+    checkout(pre_stage_a)
+    marker_path.parent.mkdir(parents=True, exist_ok=True)
+    marker_path.write_text("wrong compatibility claim\n", encoding="utf-8")
+    wrong_marker = commit("wrong Stage A marker")
+
+    gate_script = tmp_path / "schema-gate.sh"
+    gate_script.write_text(_schema_compatibility_gate_shell(), encoding="utf-8")
+
+    checkout(pre_stage_a)
+    pre_a_rejected = gate(stage_b, pre_stage_a)
+    assert pre_a_rejected.returncode != 0
+    assert "live baseline lacks the exact Stage A schema compatibility marker" in pre_a_rejected.stderr
+
+    checkout(stage_a)
+    node01 = gate(stage_b, stage_a)
+    node02 = gate(stage_b, stage_a)
+    expected_marker_sha = hashlib.sha256(marker_source.read_bytes()).hexdigest()
+    assert node01.returncode == 0, node01.stderr
+    assert node02.returncode == 0, node02.stderr
+    assert node01.stdout.strip() == node02.stdout.strip() == expected_marker_sha
+
+    checkout(wrong_marker)
+    mismatched_node02 = gate(stage_b, wrong_marker)
+    assert mismatched_node02.returncode != 0
+    assert "live baseline Stage A schema compatibility marker bytes differ" in mismatched_node02.stderr
+
+    checkout(pre_stage_a)
+    stage_a_without_migration = gate(pre_stage_a, pre_stage_a)
+    assert stage_a_without_migration.returncode == 0, stage_a_without_migration.stderr
+    assert stage_a_without_migration.stdout.strip() == "not-required"
 
 
 def test_both_nodes_are_durably_drained_before_first_target_activation() -> None:
