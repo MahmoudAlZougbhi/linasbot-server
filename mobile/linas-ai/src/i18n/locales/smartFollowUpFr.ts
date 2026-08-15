@@ -6,7 +6,6 @@ export const smartFollowUpFr = {
   sfuTitle: 'Relance intelligente',
   sfuSubtitle: 'Relancez quand les clients cessent de répondre.',
   sfuChannelsTitle: 'Canaux',
-  sfuSelectAll: 'Tout sélectionner',
   sfuChannelInstagram: 'Instagram',
   sfuChannelFacebook: 'Facebook',
   sfuChannelWhatsApp: 'WhatsApp',
