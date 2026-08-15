@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { AppModal } from '../../components/AppModal';
+import { ModalScrim } from '../../components/ModalScrim';
 
 import { AppIcon, feather } from '../../components/AppIcon';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -69,8 +72,9 @@ export function RequestFilterSheet({ visible, applied, staff, search, onClose, o
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+    <>
+    <AppModal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <ModalScrim onPress={onClose}>
         <Pressable
           style={[styles.sheet, { backgroundColor: colors.surface }]}
           onPress={(e) => e.stopPropagation()}
@@ -160,16 +164,17 @@ export function RequestFilterSheet({ visible, applied, staff, search, onClose, o
             </Pressable>
           </View>
         </Pressable>
-      </Pressable>
-      <RequestPickSheet
-        visible={assignOpen}
-        title="Assigned user"
-        selectedId={draft.assignedUserId ?? ''}
-        options={[{ id: '', label: 'All users' }, ...staff]}
-        onPick={(id) => setDraft((prev) => ({ ...prev, assignedUserId: id || null }))}
-        onClose={() => setAssignOpen(false)}
-      />
-    </Modal>
+      </ModalScrim>
+    </AppModal>
+    <RequestPickSheet
+      visible={assignOpen}
+      title="Assigned user"
+      selectedId={draft.assignedUserId ?? ''}
+      options={[{ id: '', label: 'All users' }, ...staff]}
+      onPick={(id) => setDraft((prev) => ({ ...prev, assignedUserId: id || null }))}
+      onClose={() => setAssignOpen(false)}
+    />
+    </>
   );
 }
 
@@ -181,7 +186,6 @@ function labelFor(channel: string): string {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: radii.xl,
     borderTopRightRadius: radii.xl,

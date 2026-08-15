@@ -1,5 +1,8 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { AppModal } from '../../components/AppModal';
+import { ModalScrim } from '../../components/ModalScrim';
 
 import { AppIcon, feather } from '../../components/AppIcon';
 import { colors, fonts, radii, spacing } from '../../theme';
@@ -41,8 +44,8 @@ export function IntegrationAccountSheet({
   const open = target !== null;
 
   return (
-    <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel={closeLabel}>
+    <AppModal visible={open} animationType="fade" onRequestClose={onClose}>
+      <ModalScrim onPress={onClose} accessibilityLabel={closeLabel}>
         <Pressable
           style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + spacing.md }]}
           onPress={(e) => e.stopPropagation()}
@@ -103,17 +106,12 @@ export function IntegrationAccountSheet({
             <Text style={styles.cancelText}>{cancelLabel}</Text>
           </Pressable>
         </Pressable>
-      </Pressable>
-    </Modal>
+      </ModalScrim>
+    </AppModal>
   );
 }
 
 const styles = StyleSheet.create({
-  scrim: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: colors.overlay,
-  },
   sheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radii.xl,

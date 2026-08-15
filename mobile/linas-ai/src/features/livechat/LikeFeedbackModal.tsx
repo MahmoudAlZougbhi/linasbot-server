@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -9,6 +8,9 @@ import {
   Text,
   View,
 } from 'react-native';
+
+import { AppModal } from '../../components/AppModal';
+import { ModalScrim } from '../../components/ModalScrim';
 
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { TextField } from '../../components/TextField';
@@ -58,12 +60,12 @@ export function LikeFeedbackModal({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={busy ? undefined : onClose}>
+    <AppModal visible={visible} animationType="fade" onRequestClose={busy ? undefined : onClose}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <Pressable style={styles.backdrop} onPress={busy ? undefined : onClose}>
+        <ModalScrim onPress={busy ? undefined : onClose} justify="center" style={styles.backdrop}>
           <Pressable style={styles.card} onPress={(e) => e.stopPropagation()}>
             <ScrollView keyboardShouldPersistTaps="handled" bounces={false}>
               <Text style={styles.title}>{tr('likeFaqTitle')}</Text>
@@ -111,18 +113,15 @@ export function LikeFeedbackModal({
               </View>
             </ScrollView>
           </Pressable>
-        </Pressable>
+        </ModalScrim>
       </KeyboardAvoidingView>
-    </Modal>
+    </AppModal>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   backdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'center',
     padding: spacing.lg,
   },
   card: {

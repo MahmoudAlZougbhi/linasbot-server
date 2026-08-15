@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { AppModal } from '../../components/AppModal';
+import { ModalScrim } from '../../components/ModalScrim';
 
 import { AppIcon, feather, ion, mci, type AppIconName } from '../../components/AppIcon';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -254,8 +257,8 @@ export function SettingsSheet({
   const { colors } = useTheme();
   const { tr } = useI18n();
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.scrim} onPress={onClose}>
+    <AppModal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <ModalScrim onPress={onClose}>
         <Pressable
           style={[
             styles.sheet,
@@ -273,8 +276,8 @@ export function SettingsSheet({
             <Text style={[styles.sheetCancelLabel, { color: colors.accent }]}>{tr('settingsAppleCancel')}</Text>
           </Pressable>
         </Pressable>
-      </Pressable>
-    </Modal>
+      </ModalScrim>
+    </AppModal>
   );
 }
 
@@ -363,7 +366,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.xxl,
   },
-  scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(16, 34, 26, 0.42)' },
   sheet: {
     borderTopLeftRadius: radii.xl,
     borderTopRightRadius: radii.xl,

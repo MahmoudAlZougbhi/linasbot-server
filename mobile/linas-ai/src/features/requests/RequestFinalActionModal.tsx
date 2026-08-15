@@ -1,4 +1,7 @@
-import { Modal, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+
+import { AppModal } from '../../components/AppModal';
+import { ModalScrim } from '../../components/ModalScrim';
 
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { TextField } from '../../components/TextField';
@@ -28,8 +31,8 @@ export function RequestFinalActionModal({
   const { tr } = useI18n();
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={[styles.backdrop, { backgroundColor: colors.overlay }]}>
+    <AppModal visible={visible} animationType="fade" onRequestClose={onCancel}>
+      <ModalScrim justify="center" style={styles.backdrop}>
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
           <Text style={[styles.hint, { color: colors.textMuted }]}>{tr('reqFinalMessageHint')}</Text>
@@ -55,15 +58,13 @@ export function RequestFinalActionModal({
             style={styles.cancel}
           />
         </View>
-      </View>
-    </Modal>
+      </ModalScrim>
+    </AppModal>
   );
 }
 
 const styles = StyleSheet.create({
   backdrop: {
-    flex: 1,
-    justifyContent: 'center',
     padding: spacing.xl,
   },
   card: {

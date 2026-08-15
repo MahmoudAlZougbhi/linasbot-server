@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { AppModal } from '../../../components/AppModal';
+import { ModalScrim } from '../../../components/ModalScrim';
 
 import { useI18n } from '../../../i18n/LanguageContext';
 import type { StringKey } from '../../../i18n';
@@ -54,8 +57,8 @@ export function DashboardDateRangeSheet({ open, period, onClose, onApply }: Prop
   const titleKey: StringKey = calPhase === 'end' ? 'dashRangeEnd' : calPhase === 'start' ? 'dashRangeStart' : 'dashSelectRange';
 
   return (
-    <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+    <AppModal visible={open} animationType="fade" onRequestClose={onClose}>
+      <ModalScrim onPress={onClose}>
         <Pressable
           style={[styles.sheet, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={(e) => e.stopPropagation()}
@@ -125,17 +128,12 @@ export function DashboardDateRangeSheet({ open, period, onClose, onApply }: Prop
             </View>
           )}
         </Pressable>
-      </Pressable>
-    </Modal>
+      </ModalScrim>
+    </AppModal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
-  },
   sheet: {
     borderTopLeftRadius: radii.lg,
     borderTopRightRadius: radii.lg,

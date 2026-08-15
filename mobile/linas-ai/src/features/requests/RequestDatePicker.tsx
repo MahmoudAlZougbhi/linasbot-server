@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { AppModal } from '../../components/AppModal';
+import { ModalScrim } from '../../components/ModalScrim';
 
 import { AppIcon, feather } from '../../components/AppIcon';
 import { fonts, radii, spacing, useTheme } from '../../theme';
@@ -142,8 +145,8 @@ export function RequestDatePicker({ visible, title, value, onPick, onClose }: Pi
   const { colors } = useTheme();
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+    <AppModal visible={visible} animationType="fade" onRequestClose={onClose}>
+      <ModalScrim onPress={onClose} justify="center" style={styles.backdrop}>
         <Pressable
           style={[styles.sheet, { backgroundColor: colors.surface }]}
           onPress={(e) => e.stopPropagation()}
@@ -151,8 +154,8 @@ export function RequestDatePicker({ visible, title, value, onPick, onClose }: Pi
           <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
           <RequestMonthCalendar key={visible ? 'open' : 'closed'} value={value} onPick={onPick} />
         </Pressable>
-      </Pressable>
-    </Modal>
+      </ModalScrim>
+    </AppModal>
   );
 }
 
@@ -171,9 +174,6 @@ const styles = StyleSheet.create({
   fieldText: { flex: 1, gap: 1 },
   fieldLabel: { fontFamily: fonts.body, fontSize: 12 },
   backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'center',
     padding: spacing.lg,
   },
   sheet: {

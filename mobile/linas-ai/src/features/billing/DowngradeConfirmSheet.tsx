@@ -1,12 +1,14 @@
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { AppModal } from '../../components/AppModal';
+import { ModalScrim } from '../../components/ModalScrim';
 
 import type { StringKey } from '../../i18n';
 import { fonts, radii, spacing, useTheme } from '../../theme';
@@ -40,8 +42,8 @@ export function DowngradeConfirmSheet({
     .replace('{date}', effectiveDateLabel);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={[styles.scrim, { backgroundColor: colors.overlay }]} onPress={onClose}>
+    <AppModal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <ModalScrim onPress={onClose}>
         <Pressable
           style={[
             styles.sheet,
@@ -81,13 +83,12 @@ export function DowngradeConfirmSheet({
             <Text style={[styles.cancelText, { color: colors.textMuted }]}>{tr('subCancel')}</Text>
           </Pressable>
         </Pressable>
-      </Pressable>
-    </Modal>
+      </ModalScrim>
+    </AppModal>
   );
 }
 
 const styles = StyleSheet.create({
-  scrim: { flex: 1, justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: radii.lg,
     borderTopRightRadius: radii.lg,

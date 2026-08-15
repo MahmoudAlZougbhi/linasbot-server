@@ -1,4 +1,6 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { AppModal } from '../../components/AppModal';
 
 import { AppIcon, feather } from '../../components/AppIcon';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -38,7 +40,7 @@ export function LinEffortSheet({ open, mode, onClose, onSelect }: Props) {
   ];
 
   return (
-    <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
+    <AppModal visible={open} animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.scrim} onPress={onClose}>
         <View style={styles.anchor} pointerEvents="box-none">
           <Pressable
@@ -85,7 +87,7 @@ export function LinEffortSheet({ open, mode, onClose, onSelect }: Props) {
           </Pressable>
         </View>
       </Pressable>
-    </Modal>
+    </AppModal>
   );
 }
 
