@@ -12,6 +12,7 @@ import { fetchCmMeta, type CmMeta } from './cmApi';
 import {
   buildFillMissingPrompt,
   fetchCmSetupProgress,
+  summarizeHubProgress,
   type CmProgressRow,
 } from './cmProgressApi';
 import { CM_HUB_CARDS, type CmSectionId } from './cmSections';
@@ -89,6 +90,8 @@ export function CmScreen({ onOpenSection, onContinueSetup }: Props) {
     return map;
   }, [rows]);
 
+  const displaySummary = useMemo(() => summarizeHubProgress(rows), [rows]);
+
   const tiles = useMemo(() => {
     const apiSections = new Set((meta?.sections ?? []).map((s) => s.replace(/-/g, '_')));
     const base =
@@ -116,21 +119,24 @@ export function CmScreen({ onOpenSection, onContinueSetup }: Props) {
       {hydrated ? (
         <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
           <AiSetupProgressCard
-            percent={summary.percent}
-            complete={summary.complete}
-            total={summary.total}
+            percent={displaySummary.percent}
+            complete={displaySummary.complete}
+            total={displaySummary.total}
             published={summary.published}
-            incomplete={summary.incomplete}
+            incomplete={displaySummary.incomplete}
             onContinueSetup={
               onContinueSetup
-                ? () => onContinueSetup(buildFillMissingPrompt(summary.missing_sections, titleMap))
+                ? () =>
+                    onContinueSetup(
+                      buildFillMissingPrompt(displaySummary.missing_sections, titleMap),
+                    )
                 : undefined
             }
           />
 
           <AiSetupFilterTabs
             filter={filter}
-            missingCount={summary.incomplete}
+            missingCount={displaySummary.incomplete}
             onChange={setFilter}
           />
 

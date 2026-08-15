@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { tokenStore } from '../../auth/tokenStore';
-import { fetchCmSetupProgress } from '../cm/cmProgressApi';
+import { fetchCmSetupProgress, summarizeHubProgress } from '../cm/cmProgressApi';
 import { fetchUnifiedChats } from '../livechat/liveChatApi';
 import { canViewRequests } from '../requests/requestsPermissions';
 import { listRequests } from '../requests/requestsApi';
@@ -26,8 +26,12 @@ async function refreshDrawerBadges(): Promise<DrawerBadges> {
       (async () => {
         try {
           const prog = await fetchCmSetupProgress();
-          const pct = prog.summary?.percent;
-          if (typeof pct === 'number') next.aiSetupPercent = Math.round(pct);
+          const rows = prog.progress ?? [];
+          if (rows.length) {
+            next.aiSetupPercent = summarizeHubProgress(rows).percent;
+          } else if (typeof prog.summary?.percent === 'number') {
+            next.aiSetupPercent = Math.round(prog.summary.percent);
+          }
         } catch {
           /* keep last known percent */
         }

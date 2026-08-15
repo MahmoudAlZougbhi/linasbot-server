@@ -168,6 +168,16 @@ test('drawer and CM module tiles expose design handoff icons', () => {
   assert.match(cmIcons, /languages: feather\('globe'\)/);
 });
 
+test('AI Setup hub hides care, handoff, and restricted topics', () => {
+  const sections = read('features/cm/cmSections.ts');
+  const cm = read('features/cm/CmScreen.tsx');
+  for (const id of ['care', 'handoff', 'restricted']) {
+    assert.match(sections, new RegExp(`id: '${id}'[\\s\\S]*?showInCmHub: false`));
+  }
+  assert.match(sections, /CM_HUB_PROGRESS_EXCLUDED/);
+  assert.match(cm, /summarizeHubProgress/);
+});
+
 test('NavDrawer is physical-left only', () => {
   const nav = read('features/nav/NavDrawer.tsx');
   assert.match(nav, /side="left"/);

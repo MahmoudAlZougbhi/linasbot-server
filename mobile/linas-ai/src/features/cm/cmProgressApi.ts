@@ -28,6 +28,8 @@ export const CmSetupProgressSchema = z
 export type CmSetupProgress = z.infer<typeof CmSetupProgressSchema>;
 export type CmProgressRow = z.infer<typeof ProgressRowSchema>;
 
+export { summarizeHubProgress, type HubProgressSummary } from './cmHubProgress';
+
 /** Real CM fill progress (complete vs still-default / missing). */
 export async function fetchCmSetupProgress(): Promise<CmSetupProgress> {
   return apiFetch('/api/cm/setup-chat/progress', { schema: CmSetupProgressSchema });
