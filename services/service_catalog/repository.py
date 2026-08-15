@@ -79,12 +79,16 @@ class ServiceCatalogRepository:
         service_id: str,
         options: list[dict[str, Any]],
     ) -> None:
-        existing = self.session.execute(
-            select(ServiceOption).where(
-                ServiceOption.tenant_id == tenant_id,
-                ServiceOption.service_id == service_id,
+        existing = (
+            self.session.execute(
+                select(ServiceOption).where(
+                    ServiceOption.tenant_id == tenant_id,
+                    ServiceOption.service_id == service_id,
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for row in existing:
             self.session.delete(row)
         self.session.flush()
