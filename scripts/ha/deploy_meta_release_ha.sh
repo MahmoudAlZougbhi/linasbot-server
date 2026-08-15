@@ -7014,6 +7014,9 @@ rollback_impl() {
   local previous_sha="$1"
   local tx_dir="$2"
   local sibling_dir target_sha phase generation generation_root generation_label
+  # Rollback restores the exact application/runtime baseline. Schema releases
+  # must use a forward-compatible expand/contract baseline; this transaction
+  # never guesses at reversing a database revision after target verification.
   if [ ! -e "$tx_dir/stage.complete" ] && [ ! -L "$tx_dir/stage.complete" ]; then
     return 0
   fi
@@ -8543,6 +8546,7 @@ recover_deployment() {
   node_ensure_maintenance "$tx_dir"
   remote_node "$peer_host" ensure-maintenance "$tx_dir"
   sleep "$drain_seconds"
+  update_recovery_journal "recovery-both-nodes-drained"
   if [ "$decision" = "commit" ]; then
     update_recovery_journal "commit-recovery-parity"
     node_assert_exact_head "$target_sha" "$tx_dir"
@@ -8778,6 +8782,9 @@ retry_distinct_reconciliation() {
     "$release_run_id" "$release_run_attempt"
   assert_stage_artifact_parity \
     "$peer_host" "$tx_dir" "$target_sha" "$previous_sha" "$peer_previous_sha"
+  node_assert_release_drained "$previous_sha" "$tx_dir"
+  remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"
+  update_retry_journal "retry-both-nodes-drained-before-activation"
   update_retry_journal "retry-peer-activate"
   remote_node "$peer_host" activate "$target_sha" "$peer_previous_sha" "$tx_dir"
   remote_node "$peer_host" assert-drained "$target_sha" "$tx_dir"
@@ -9276,6 +9283,11 @@ orchestrate() {
     remote_node "$peer_host" ensure-maintenance "$tx_dir" || rollback_ok=0
     if [ "$rollback_ok" = "1" ]; then
       sleep "$drain_seconds"
+    fi
+    if [ "$rollback_ok" = "1" ]; then
+      update_deploy_journal "automatic-rollback-both-nodes-drained" || rollback_ok=0
+    fi
+    if [ "$rollback_ok" = "1" ]; then
       rollback_impl "$previous_sha" "$tx_dir" || rollback_ok=0
       remote_node "$peer_host" rollback "$peer_previous_sha" "$tx_dir" || rollback_ok=0
     fi
@@ -9358,19 +9370,26 @@ orchestrate() {
   update_deploy_journal "node01-staged"
   assert_stage_artifact_parity \
     "$peer_host" "$tx_dir" "$target_sha" "$previous_sha" "$peer_previous_sha"
+
+  # Staging is byte preparation only, so node01 may continue serving the exact
+  # baseline while both recoverable backups are built. Target activation calls
+  # start_target_runtime(), which runs Alembic before readiness; withdraw and
+  # durably prove both fixed nodes drained before either activation can begin.
+  log "withdrawing node01 before any target activation or database migration"
+  update_deploy_journal "node01-mark-started"
+  node_mark_maintenance "$tx_dir"
+  update_deploy_journal "node01-marked"
+  sleep "$drain_seconds"
+  remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"
+  node_assert_release_drained "$previous_sha" "$tx_dir"
+  update_deploy_journal "both-nodes-drained-before-activation"
+
   log "activating exact target on drained peer"
   update_deploy_journal "peer-activate-started"
   remote_node "$peer_host" activate "$target_sha" "$peer_previous_sha" "$tx_dir"
   update_deploy_journal "peer-activated"
   remote_node "$peer_host" assert-drained "$target_sha" "$tx_dir"
-  node_assert_release_ready "$previous_sha"
-  assert_public_ready
-
-  log "withdrawing node01; owner-approved brief all-node maintenance begins"
-  update_deploy_journal "node01-mark-started"
-  node_mark_maintenance "$tx_dir"
-  update_deploy_journal "node01-marked"
-  sleep "$drain_seconds"
+  node_assert_release_drained "$previous_sha" "$tx_dir"
   log "activating exact target on drained node01"
   update_deploy_journal "node01-activate-started"
   node_activate "$target_sha" "$previous_sha" "$tx_dir"

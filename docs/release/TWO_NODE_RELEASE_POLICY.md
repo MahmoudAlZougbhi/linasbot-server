@@ -6,13 +6,29 @@ An application release may be admitted to production only after the fixed
 `node01` and `node02` pair has proved the same tested release SHA, artifact,
 runtime environment, and load-balancer readiness contract. The supported entry
 point is the protected `.github/workflows/deploy.yml` transaction. It may stage
-and activate one node at a time while that node is drained, but it must never
-serve a changed node before target parity is durable.
+the drained peer while the other node still serves the exact baseline. Before
+either target activation starts, however, both nodes must be in maintenance,
+past the drain interval, and durably recorded as drained. Activation includes
+the target Alembic migration. Neither node may serve again before target parity
+is durable and separately committed.
 
 `deploy.sh`, direct per-node helper phases, and every legacy single-node release
 path are fail-closed. Preparing an artifact on one node is not admission. A
 failed or interrupted transaction must roll both nodes back or leave the
 uncertain node or pair drained for confirmed recovery.
+
+## Two-stage schema release
+
+The `20260820_meta_ig_single` rollout is intentionally split. Stage A contains
+only the forward-compatible runtime and does not contain that migration. Stage
+A must first be admitted as the exact baseline on both nodes. Stage B may then
+contain and run the migration, with both nodes drained before its first target
+activation.
+
+Rollback restores each node's exact Stage A application, environment, service,
+and artifact baseline. It deliberately does not run an automatic Alembic
+downgrade: Stage A is the reviewed forward-compatible runtime for the Stage B
+schema, and Stage B is forbidden until Stage A is the proven two-node baseline.
 
 ## Break glass: disabled by default
 

@@ -12,6 +12,7 @@ DEPLOY_WORKFLOW = WORKFLOW_DIR / "deploy.yml"
 SECURITY_WORKFLOW = WORKFLOW_DIR / "security-checks.yml"
 HA_HELPER = ROOT / "scripts" / "ha" / "deploy_meta_release_ha.sh"
 BREAK_GLASS = ROOT / "scripts" / "ha" / "release_break_glass.sh"
+TWO_NODE_POLICY = ROOT / "docs" / "release" / "TWO_NODE_RELEASE_POLICY.md"
 
 ALL_WORKFLOWS = frozenset(
     {
@@ -329,6 +330,21 @@ def test_break_glass_is_explicit_and_non_operational_by_default() -> None:
         "Pin and verify both SSH host identities",
     ):
         assert required in policy
+
+
+def test_instagram_schema_rollout_keeps_stage_a_as_the_rollback_runtime() -> None:
+    policy = TWO_NODE_POLICY.read_text(encoding="utf-8")
+    for required in (
+        "`20260820_meta_ig_single` rollout is intentionally split",
+        "Stage A contains",
+        "does not contain that migration",
+        "exact baseline on both nodes",
+        "both nodes drained before its first target",
+        "does not run an automatic Alembic",
+        "Stage A is the reviewed forward-compatible runtime",
+    ):
+        assert required in policy
+    assert "alembic downgrade" not in HA_HELPER.read_text(encoding="utf-8").lower()
 
 
 def test_readonly_preflight_no_longer_advertises_retired_single_node_rollback() -> None:

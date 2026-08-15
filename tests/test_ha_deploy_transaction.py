@@ -436,23 +436,84 @@ def test_both_nodes_preflight_before_any_stage_reset_restart_or_marker() -> None
     assert orchestrate.index('test "$previous_sha" = "$peer_previous_sha"') < transaction_start
 
 
-def test_peer_is_staged_and_activated_drained_before_node01_cutover() -> None:
+def test_both_nodes_are_durably_drained_before_first_target_activation() -> None:
     source = _helper()
     orchestrate = source[source.index("orchestrate() {") :]
     peer_marker = orchestrate.index('remote_node "$peer_host" mark-maintenance')
     peer_stage = orchestrate.index('remote_node "$peer_host" stage')
     local_stage = orchestrate.index('backup_live_node "$target_sha" "$previous_sha" "$tx_dir"')
+    local_marker = orchestrate.index("node_mark_maintenance", local_stage)
+    peer_baseline_drain = orchestrate.index(
+        'remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"', local_marker
+    )
+    local_baseline_drain = orchestrate.index(
+        'node_assert_release_drained "$previous_sha" "$tx_dir"', peer_baseline_drain
+    )
+    all_node_barrier = orchestrate.index(
+        'update_deploy_journal "both-nodes-drained-before-activation"', local_baseline_drain
+    )
     peer_activate = orchestrate.index('remote_node "$peer_host" activate')
-    local_marker = orchestrate.index("node_mark_maintenance", peer_activate)
     local_activate = orchestrate.index('node_activate "$target_sha"')
     peer_parity = orchestrate.index('remote_node "$peer_host" assert-drained "$target_sha"', local_activate)
     local_parity = orchestrate.index('node_assert_release_drained "$target_sha"', local_activate)
     awaiting_fresh_lb = orchestrate.index('update_deploy_journal "target-parity-awaiting-fresh-lb"')
 
-    assert peer_marker < peer_stage < local_stage < peer_activate
-    assert peer_activate < local_marker < local_activate
+    assert peer_marker < peer_stage < local_stage < local_marker
+    assert local_marker < peer_baseline_drain < local_baseline_drain < all_node_barrier
+    assert all_node_barrier < peer_activate < local_activate
     assert local_activate < peer_parity < local_parity < awaiting_fresh_lb
+    assert 'node_assert_release_ready "$previous_sha"' not in orchestrate[peer_activate:local_activate]
+    assert "assert_public_ready" not in orchestrate[peer_activate:local_activate]
     assert 'remote_node "$peer_host" clear-maintenance' not in orchestrate[awaiting_fresh_lb:]
+
+
+def test_every_target_activation_coordinator_has_a_durable_all_node_barrier() -> None:
+    source = _helper()
+    verify_start = source[source.index("start_target_runtime() {") : source.index("activate_impl() {")]
+    activation = source[source.index("activate_impl() {") : source.index("start_saved_runtime_disabled() {")]
+    orchestrate = source[source.index("orchestrate() {") : source.index('case "${1:-}" in')]
+    retry = source[source.index("retry_distinct_reconciliation() {") : source.index("deployment_recovery_status() {")]
+
+    assert "run_target_alembic_migrate" in verify_start
+    assert activation.index('assert_secure_maintenance_marker "$MAINTENANCE_FILE"') < activation.index(
+        'start_target_runtime "$tx_dir"'
+    )
+
+    normal_barrier = orchestrate.index('update_deploy_journal "both-nodes-drained-before-activation"')
+    assert (
+        orchestrate.index(
+            'remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"',
+            orchestrate.index('node_mark_maintenance "$tx_dir"'),
+        )
+        < normal_barrier
+    )
+    assert (
+        orchestrate.index(
+            'node_assert_release_drained "$previous_sha" "$tx_dir"',
+            orchestrate.index('node_mark_maintenance "$tx_dir"'),
+        )
+        < normal_barrier
+    )
+    assert normal_barrier < orchestrate.index('remote_node "$peer_host" activate')
+    assert normal_barrier < orchestrate.index('node_activate "$target_sha"')
+
+    retry_barrier = retry.index('update_retry_journal "retry-both-nodes-drained-before-activation"')
+    assert (
+        retry.index(
+            'node_assert_release_drained "$previous_sha" "$tx_dir"',
+            retry.index("assert_stage_artifact_parity"),
+        )
+        < retry_barrier
+    )
+    assert (
+        retry.index(
+            'remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"',
+            retry.index("assert_stage_artifact_parity"),
+        )
+        < retry_barrier
+    )
+    assert retry_barrier < retry.index('remote_node "$peer_host" activate')
+    assert retry_barrier < retry.index('node_activate "$target_sha"')
 
 
 def test_owner_gate_fixed_membership_and_peer_not_self_are_fail_closed() -> None:
@@ -1335,8 +1396,9 @@ def test_deploy_has_durable_digest_bound_recovery_for_kill_and_ack_loss() -> Non
     for phase in (
         "peer-mark-started",
         "peer-staged",
-        "peer-activated",
         "node01-marked",
+        "both-nodes-drained-before-activation",
+        "peer-activated",
         "node01-activated",
         "target-parity-awaiting-fresh-lb",
     ):
@@ -1358,6 +1420,20 @@ def test_deploy_has_durable_digest_bound_recovery_for_kill_and_ack_loss() -> Non
     assert 'remote_node "$peer_host" recover-admit' in recover
     assert 'remote_node "$peer_host" recover-rollback' in recover
     assert "both nodes were forced fail-closed" in recover
+    recovery_barrier = recover.index('update_recovery_journal "recovery-both-nodes-drained"')
+    recovery_start = recover.index('update_recovery_journal "recovery-started"')
+    assert recover.index('node_ensure_maintenance "$tx_dir"', recovery_start) < recovery_barrier
+    assert recover.index('remote_node "$peer_host" ensure-maintenance "$tx_dir"', recovery_start) < recovery_barrier
+    assert recovery_barrier < recover.index('node_recover_rollback "$previous_sha" "$tx_dir"')
+
+    automatic = orchestrate[orchestrate.index("rollback_transaction() {") : orchestrate.index("on_exit() {")]
+    local_drain = automatic.index('node_ensure_maintenance "$tx_dir"')
+    peer_drain = automatic.index('remote_node "$peer_host" ensure-maintenance "$tx_dir"')
+    drain_wait = automatic.index('sleep "$drain_seconds"', peer_drain)
+    rollback_barrier = automatic.index('update_deploy_journal "automatic-rollback-both-nodes-drained"')
+    local_restore = automatic.index('rollback_impl "$previous_sha" "$tx_dir"')
+    peer_restore = automatic.index('remote_node "$peer_host" rollback "$peer_previous_sha" "$tx_dir"')
+    assert local_drain < peer_drain < drain_wait < rollback_barrier < local_restore < peer_restore
 
 
 def test_distinct_drained_rollback_has_an_exact_retryable_reconciliation_path() -> None:
@@ -1379,10 +1455,11 @@ def test_distinct_drained_rollback_has_an_exact_retryable_reconciliation_path() 
     peer_exact = retry.index('remote_node "$peer_host" assert-head "$peer_previous_sha" "$tx_dir"')
     peer_stage = retry.index('remote_node "$peer_host" retry-stage "$target_sha" "$peer_previous_sha" "$tx_dir"')
     local_stage = retry.index('prepare_retry_stage "$target_sha" "$previous_sha" "$tx_dir"')
+    both_drained = retry.index('update_retry_journal "retry-both-nodes-drained-before-activation"')
     peer_activate = retry.index('remote_node "$peer_host" activate "$target_sha" "$peer_previous_sha" "$tx_dir"')
     local_activate = retry.index('node_activate "$target_sha" "$previous_sha" "$tx_dir"')
     parity = retry.index('update_retry_journal "target-parity-awaiting-fresh-lb"')
-    assert local_exact < peer_exact < peer_stage < local_stage < peer_activate < local_activate < parity
+    assert local_exact < peer_exact < peer_stage < local_stage < both_drained < peer_activate < local_activate < parity
     assert 'remote_node "$peer_host" recover-admit "$target_sha" "$tx_dir"' not in retry
     assert 'node_recover_admit "$target_sha" "$tx_dir"' not in retry
     assert 'node_recover_rollback "$previous_sha" "$tx_dir"' in retry
