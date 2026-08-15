@@ -13,6 +13,8 @@ from services.meta_surface_secret_separation import (
     require_converged_meta_surface_secrets_for_update,
 )
 from tests.test_meta_surface_secret_separation import (
+    FB_APP_B_SIGN,
+    FB_APP_B_VERIFY,
     FB_CANON_SIGN,
     FB_CANON_VERIFY,
     FB_LEGACY_SIGN,
@@ -188,6 +190,44 @@ def test_multi_app_apply_rejects_copied_app_a_collision_with_instagram(tmp_path:
             },
         )
     _assert_no_secret_leak(str(raised.value))
+
+
+def test_multi_app_apply_rejects_app_b_signing_collision_before_mutation(tmp_path: Path) -> None:
+    env_path = _write_env(tmp_path)
+    before = env_path.read_bytes()
+    with pytest.raises(SystemExit, match=COLLISION_EXIT) as raised:
+        require_converged_meta_surface_secrets_for_update(
+            env_path,
+            {
+                "META_APP_B_ID": "998877665544",
+                "META_APP_B_SECRET": IG_SIGN,
+                "META_APP_B_WEBHOOK_VERIFY_TOKEN": FB_APP_B_VERIFY,
+                "META_APP_B_LOGIN_CONFIG_ID": "config-b-tests",
+            },
+        )
+    _assert_no_secret_leak(str(raised.value))
+    assert env_path.read_bytes() == before
+    assert env_file_values(env_path)["META_INSTAGRAM_LOGIN_APP_SECRET"] == IG_SIGN
+
+
+def test_multi_app_apply_rejects_app_b_verify_collision_before_mutation(tmp_path: Path) -> None:
+    env_path = _write_env(tmp_path)
+    before = env_path.read_bytes()
+    with pytest.raises(SystemExit, match=COLLISION_EXIT) as raised:
+        require_converged_meta_surface_secrets_for_update(
+            env_path,
+            {
+                "META_APP_B_ID": "998877665544",
+                "META_APP_B_SECRET": FB_APP_B_SIGN,
+                "META_APP_B_WEBHOOK_VERIFY_TOKEN": IG_VERIFY,
+                "META_APP_B_LOGIN_CONFIG_ID": "config-b-tests",
+            },
+        )
+    _assert_no_secret_leak(str(raised.value))
+    assert env_path.read_bytes() == before
+    assert env_file_values(env_path)["META_APP_A_WEBHOOK_VERIFY_TOKEN"] == FB_CANON_VERIFY
+    assert env_file_values(env_path)["META_WEBHOOK_VERIFY_TOKEN"] == FB_CANON_VERIFY
+    assert env_file_values(env_path)["META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN"] == IG_VERIFY
 
 
 def test_multi_app_apply_accepts_agreeing_copied_aliases(tmp_path: Path) -> None:

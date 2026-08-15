@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from unittest import mock
 
@@ -16,6 +17,7 @@ from services.meta_oauth import MetaOAuthError
 from services.meta_surface_secret_separation import (
     CONFIG_COLLISION_KEY,
     SIGNING_COLLISION,
+    VERIFY_COLLISION,
     env_file_values,
     evaluate_meta_surface_secret_separation,
     evaluate_meta_surface_signing_separation,
@@ -277,15 +279,17 @@ async def test_ready_fails_closed_when_app_b_verify_collides_with_instagram(
     monkeypatch.delenv("LINAS_SERVICE_ROLE", raising=False)
     monkeypatch.delenv("LINAS_MAINTENANCE_DRAIN_FILE", raising=False)
     _valid_instagram_env(monkeypatch)
-    monkeypatch.setenv("META_APP_B_WEBHOOK_VERIFY_TOKEN", SHARED_VERIFY)
-    monkeypatch.setenv("META_APP_A_WEBHOOK_VERIFY_TOKEN", SHARED_VERIFY)
-    monkeypatch.setenv("META_WEBHOOK_VERIFY_TOKEN", SHARED_VERIFY)
-    monkeypatch.setenv("META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN", SHARED_VERIFY)
+    monkeypatch.setenv("META_APP_B_WEBHOOK_VERIFY_TOKEN", IG_VERIFY)
     response = await dashboard_api_health.ready()
     payload = json.loads(response.body)
-    assert payload["checks"]["meta_surface_secret_separation"]["ok"] is False
+    separation = payload["checks"]["meta_surface_secret_separation"]
+    assert separation["ok"] is False
+    assert separation["collisions"] == [VERIFY_COLLISION]
     assert response.status_code == 503
     _assert_no_secret_leak(json.dumps(payload))
+    assert os.getenv("META_APP_A_WEBHOOK_VERIFY_TOKEN") == FB_CANON_VERIFY
+    assert os.getenv("META_WEBHOOK_VERIFY_TOKEN") == FB_CANON_VERIFY
+    assert os.getenv("META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN") == IG_VERIFY
 
 
 @pytest.mark.asyncio
