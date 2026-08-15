@@ -49,6 +49,7 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
   const { tr } = useI18n();
   const nav = useModuleNav();
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [busy, setBusy] = useState(false);
   const [users, setUsers] = useState<TeamUser[]>([]);
   const [roles, setRoles] = useState<TenantRole[]>([]);
@@ -105,6 +106,7 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
       }
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
     }
   }, [tr]);
 
@@ -259,13 +261,13 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
         ) : undefined
       }
     >
-      {loading ? <LinasLoadingIndicator variant="screen" style={styles.spinner} /> : null}
-      {!loading && authGate ? <EmptyState title={tr('authGateTitle')} body={tr('usersAuthBody')} /> : null}
-      {!loading && gate === 'forbidden' ? (
+      {loading && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" style={styles.spinner} /> : null}
+      {hasLoadedOnce && authGate ? <EmptyState title={tr('authGateTitle')} body={tr('usersAuthBody')} /> : null}
+      {hasLoadedOnce && gate === 'forbidden' ? (
         <EmptyState title={tr('usersForbiddenTitle')} body={tr('usersForbiddenBody')} />
       ) : null}
 
-      {!loading && showList ? (
+      {hasLoadedOnce && showList ? (
         <>
           <Text style={styles.summary}>
             {summary.split(' · ')[0]}

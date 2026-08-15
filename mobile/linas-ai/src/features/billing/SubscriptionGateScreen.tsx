@@ -1,6 +1,7 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GradientBackground } from '../../components/GradientBackground';
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { LinasStarMark } from '../../components/LinasStarMark';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../theme';
@@ -27,7 +28,7 @@ export function SubscriptionGateScreen({
         <LinasStarMark size={48} />
         <Text style={[styles.title, { color: colors.text }]}>{tr('subscribeGateTitle')}</Text>
         <Text style={[styles.body, { color: colors.textMuted }]}>{tr('subscribeGateBody')}</Text>
-        {loading ? <ActivityIndicator color={colors.accent} /> : null}
+        {loading ? <LinasLoadingIndicator variant="inline" /> : null}
         <Pressable
           style={[styles.btn, { backgroundColor: colors.accent }]}
           onPress={onOpenSubscription}

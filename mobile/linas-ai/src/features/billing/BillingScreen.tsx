@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
+
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, spacing, useTheme } from '../../theme';
@@ -157,7 +159,7 @@ export function BillingScreen({ openChoosePlan = false }: Props) {
         <Text style={[styles.note, { color: colors.warning }]}>{store.purchaseNote}</Text>
       ) : null}
       {entitlement.loading ? (
-        <ActivityIndicator color={colors.accent} style={styles.spinner} />
+        <LinasLoadingIndicator variant="screen" style={styles.spinner} />
       ) : view === 'current' && planId && isPlanId(planId) ? (
         <CurrentPlanScreen
           planId={planId}

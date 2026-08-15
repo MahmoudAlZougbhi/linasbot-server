@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Switch,
@@ -11,6 +10,7 @@ import {
 import { ApiError } from '../../api/client';
 import { isNetworkFailure } from '../../api/networkError';
 import { EmptyState } from '../../components/EmptyState';
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useI18n } from '../../i18n/LanguageContext';
 import type { StringKey } from '../../i18n/locales/en';
@@ -75,6 +75,7 @@ export function SmartFollowUpScreen() {
   const { tr } = useI18n();
   const nav = useModuleNav();
   const [load, setLoad] = useState<LoadState>({ kind: 'loading' });
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [businessHoursOnly, setBusinessHoursOnly] = useState(true);
   const [channels, setChannels] = useState<FollowUpChannelsEnabled>(DEFAULT_CHANNELS_ENABLED);
   const [steps, setSteps] = useState<SmartFollowUpStep[]>(defaultSteps);
@@ -99,19 +100,23 @@ export function SmartFollowUpScreen() {
       const data = await fetchSmartFollowUpSettings();
       applySettings(data);
       setLoad({ kind: 'ready', data });
+      setHasLoadedOnce(true);
     } catch (err) {
       if (isNetworkFailure(err)) {
         setLoad({ kind: 'offline' });
+        setHasLoadedOnce(true);
         return;
       }
       if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
         setLoad({ kind: 'forbidden' });
+        setHasLoadedOnce(true);
         return;
       }
       setLoad({
         kind: 'error',
         message: err instanceof Error ? err.message : tr('sfuLoadError'),
       });
+      setHasLoadedOnce(true);
     }
   }, [applySettings, tr]);
 
@@ -174,20 +179,20 @@ export function SmartFollowUpScreen() {
 
   return (
     <ScreenChrome title={tr('sfuTitle')} subtitle={tr('sfuSubtitle')}>
-      {load.kind === 'loading' ? <ActivityIndicator color={SFU_TEAL} /> : null}
+      {load.kind === 'loading' && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" /> : null}
 
-      {load.kind === 'offline' ? (
+      {hasLoadedOnce && load.kind === 'offline' ? (
         <EmptyState title={tr('sfuOffline')} body={tr('tapToRetry')} />
       ) : null}
-      {load.kind === 'forbidden' ? (
+      {hasLoadedOnce && load.kind === 'forbidden' ? (
         <EmptyState title={tr('sfuPermissionDenied')} body={tr('sfuPermissionDeniedBody')} />
       ) : null}
-      {load.kind === 'error' ? <EmptyState title={tr('sfuLoadError')} body={load.message} /> : null}
+      {hasLoadedOnce && load.kind === 'error' ? <EmptyState title={tr('sfuLoadError')} body={load.message} /> : null}
 
-      {(load.kind === 'offline' || load.kind === 'error') ? (
+      {hasLoadedOnce && (load.kind === 'offline' || load.kind === 'error') ? (
         <PrimaryButton label={tr('proposalRetry')} onPress={() => void reload()} variant="ghost" />
       ) : null}
-      {load.kind === 'forbidden' ? (
+      {hasLoadedOnce && load.kind === 'forbidden' ? (
         <PrimaryButton label={tr('loginOrRegister')} onPress={() => nav.requestLogin()} variant="ghost" />
       ) : null}
 

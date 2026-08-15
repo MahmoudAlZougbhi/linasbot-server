@@ -1,5 +1,4 @@
 import {
-  ActivityIndicator,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -8,7 +7,8 @@ import {
 } from 'react-native';
 
 import { EmptyState } from '../../components/EmptyState';
-import { colors, fonts, spacing, useTheme } from '../../theme';
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
+import { fonts, spacing, useTheme } from '../../theme';
 import { ConversationRow } from './ConversationRow';
 import { InboxChannelChips } from './InboxChannelChips';
 import { InboxFilterPills } from './InboxFilterPills';
@@ -29,6 +29,7 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
     loading,
     refreshing,
     loadingMore,
+    hasLoadedOnce,
     error,
     errorKind,
     search,
@@ -55,6 +56,14 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
   if (errorKind === 'auth') {
     return (
       <EmptyState title="Session expired" body="Sign in again to open the operator inbox." />
+    );
+  }
+
+  if (!hasLoadedOnce && loading) {
+    return (
+      <View style={styles.flex}>
+        <LinasLoadingIndicator variant="screen" />
+      </View>
     );
   }
 
@@ -92,17 +101,11 @@ export function LiveChatInbox({ onOpenChat, inbox }: Props) {
           }}
           onEndReachedThreshold={0.4}
           ListEmptyComponent={
-            loading ? (
-              <View style={styles.center}>
-                <ActivityIndicator color={colors.accent} />
-              </View>
-            ) : (
-              <EmptyState title={emptyTitle} body={emptyBody} />
-            )
+            <EmptyState title={emptyTitle} body={emptyBody} />
           }
           ListFooterComponent={
             loadingMore ? (
-              <ActivityIndicator color={colors.accent} style={styles.footer} />
+              <LinasLoadingIndicator variant="inline" style={styles.footer} />
             ) : null
           }
           renderItem={({ item }) => (

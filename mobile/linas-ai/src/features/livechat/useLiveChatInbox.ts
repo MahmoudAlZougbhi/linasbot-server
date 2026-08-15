@@ -13,6 +13,7 @@ const PAGE_SIZE = 30;
 export function useLiveChatInbox() {
   const [chats, setChats] = useState<LiveChatItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +77,7 @@ export function useLiveChatInbox() {
         }
       } finally {
         setLoading(false);
+        setHasLoadedOnce(true);
         setRefreshing(false);
       }
     },
@@ -126,6 +128,7 @@ export function useLiveChatInbox() {
     loading,
     refreshing,
     loadingMore,
+    hasLoadedOnce,
     error,
     errorKind,
     search,

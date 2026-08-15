@@ -12,6 +12,7 @@ import {
 import * as Clipboard from 'expo-clipboard';
 
 import { ApiError } from '../../api/client';
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
@@ -51,6 +52,7 @@ export function WebsiteIntegrationScreen({ onBack, onError, onNotice }: Props) {
   const [siteUrl, setSiteUrl] = useState('');
   const [appearance, setAppearance] = useState<WebChatAppearance | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const webPlanAllowed = resolveWebPlanAllowed(settings, entitlementWeb);
@@ -72,6 +74,7 @@ export function WebsiteIntegrationScreen({ onBack, onError, onNotice }: Props) {
       onError?.(tr('integrationsActionError'));
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
     }
   }, [onError, tr]);
 
@@ -192,6 +195,8 @@ export function WebsiteIntegrationScreen({ onBack, onError, onNotice }: Props) {
 
   return (
     <ScreenChrome title={tr('platformWeb')} subtitle={tr('webChatSubtitle')} onBack={onBack}>
+      {loading && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" /> : null}
+      {hasLoadedOnce ? (
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {planBlocked ? <Text style={styles.warn}>{tr('webChatPlanRequired')}</Text> : null}
 
@@ -287,6 +292,7 @@ export function WebsiteIntegrationScreen({ onBack, onError, onNotice }: Props) {
           </Pressable>
         ) : null}
       </ScrollView>
+      ) : null}
     </ScreenChrome>
   );
 }

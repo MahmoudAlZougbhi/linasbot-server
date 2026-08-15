@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -10,6 +9,7 @@ import {
 } from 'react-native';
 
 import { EmptyState } from '../../components/EmptyState';
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, radii, spacing } from '../../theme';
@@ -78,6 +78,7 @@ export function NotificationsScreen({
   const [items, setItems] = useState<OwnerNotification[]>([]);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gate, setGate] = useState<Gate>(isAuthenticated ? 'none' : 'auth');
@@ -87,6 +88,7 @@ export function NotificationsScreen({
       if (!isAuthenticated) {
         setGate('auth');
         setLoading(false);
+        setHasLoadedOnce(true);
         return;
       }
       if (!quiet) setLoading(true);
@@ -107,6 +109,7 @@ export function NotificationsScreen({
         }
       } finally {
         setLoading(false);
+        setHasLoadedOnce(true);
         setRefreshing(false);
       }
     },
@@ -168,8 +171,8 @@ export function NotificationsScreen({
 
   return (
     <ScreenChrome title={tr('notificationsTitle')} subtitle={tr('notificationsSub')} sectionTitle={sectionTitle}>
-      {loading ? (
-        <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
+      {loading && !hasLoadedOnce ? (
+        <LinasLoadingIndicator variant="screen" />
       ) : (
         <ScrollView
           contentContainerStyle={styles.list}
