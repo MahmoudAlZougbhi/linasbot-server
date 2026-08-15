@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import base64
+from contextlib import AbstractContextManager
 from typing import Any
 
 from fastapi import HTTPException, Query, Request
 from fastapi.responses import Response
-
-from contextlib import AbstractContextManager
-
 from sqlalchemy.orm import Session
 
 from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
