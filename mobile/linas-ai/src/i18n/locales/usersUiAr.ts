@@ -46,7 +46,6 @@ export const usersUiAr: Record<keyof typeof import('./usersUiEn').usersUiEn, str
   usersSearch: 'البحث عن الأعضاء',
   usersSummary: '{n} أعضاء · {a} نشط',
   usersSummaryOne: 'عضو واحد · {a} نشط',
-  usersFooter: 'المسؤولون فقط يمكنهم إدارة المستخدمين والصلاحيات.',
   usersLoginDetails: 'بيانات الدخول',
   usersTempPassword: 'كلمة مرور مؤقتة',
   usersGenerate: 'توليد',

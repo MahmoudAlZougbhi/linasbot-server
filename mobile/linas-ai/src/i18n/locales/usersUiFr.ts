@@ -47,7 +47,6 @@ export const usersUiFr: Record<keyof typeof import('./usersUiEn').usersUiEn, str
   usersSearch: 'Rechercher des membres',
   usersSummary: '{n} membres · {a} actifs',
   usersSummaryOne: '1 membre · {a} actifs',
-  usersFooter: 'Seuls les admins peuvent gérer les utilisateurs et les permissions.',
   usersLoginDetails: 'Identifiants',
   usersTempPassword: 'Mot de passe temporaire',
   usersGenerate: 'Générer',

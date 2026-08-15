@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 
 import type { PublicUser } from '../../api/types';
-import { AppIcon, mci } from '../../components/AppIcon';
 import { EmptyState } from '../../components/EmptyState';
 import { tokenStore } from '../../auth/tokenStore';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -295,10 +294,6 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
                 ))}
               </View>
             )}
-            <View style={styles.footer}>
-              <AppIcon icon={mci('star-four-points')} size={16} color={colors.accent} />
-              <Text style={styles.footerText}>{tr('usersFooter')}</Text>
-            </View>
           </ScrollView>
         </>
       ) : null}
@@ -384,8 +379,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     overflow: 'hidden',
   },
-  footer: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4, marginTop: 8 },
-  footerText: { flex: 1, fontFamily: fonts.body, fontSize: 12, color: colors.textMuted },
   error: { color: colors.danger, fontFamily: fonts.body, fontSize: 14, marginTop: 8 },
   scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay },
   sheetWrap: { width: '100%' },

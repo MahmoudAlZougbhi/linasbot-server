@@ -46,7 +46,6 @@ export const usersUiEn = {
   usersSearch: 'Search members',
   usersSummary: '{n} members · {a} active',
   usersSummaryOne: '1 member · {a} active',
-  usersFooter: 'Only admins can manage users and permissions.',
   usersLoginDetails: 'Login details',
   usersTempPassword: 'Temporary password',
   usersGenerate: 'Generate',
