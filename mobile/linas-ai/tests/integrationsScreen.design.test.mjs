@@ -82,3 +82,12 @@ test('TikTok card is shown from product list without faking a connection', () =>
   assert.match(screen, /soon=\{isComingSoon\(tiktokRow\)\}/);
   assert.doesNotMatch(screen, /connected:\s*true.*tiktok/);
 });
+
+test('initial load avoids header spinner and web chat misleading disconnected state', () => {
+  const screen = read('features/integrations/IntegrationsScreen.tsx');
+  const web = read('features/integrations/WebChatCard.tsx');
+  assert.match(screen, /headerRefreshing/);
+  assert.match(screen, /refreshing=\{headerRefreshing\}/);
+  assert.match(web, /IntegrationCardLoading/);
+  assert.doesNotMatch(web, /busy=\{/);
+});

@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ApiError } from '../../api/client';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, spacing } from '../../theme';
+import { IntegrationCardLoading } from './IntegrationCardLoading';
 import { IntegrationCardShell } from './IntegrationCardShell';
 import { WebsiteIntegrationScreen } from './WebsiteIntegrationScreen';
 import { fetchWebChatSettings, type WebChatSettings } from './webChatApi';
@@ -28,14 +29,15 @@ export function WebChatCard({ onError, onNotice }: Props) {
   const { tr } = useI18n();
   const [settings, setSettings] = useState<WebChatSettings | null>(null);
   const [entitlementWeb, setEntitlementWeb] = useState<boolean | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const hasLoadedOnce = useRef(false);
   const [detailOpen, setDetailOpen] = useState(false);
 
   const webPlanAllowed = resolveWebPlanAllowed(settings, entitlementWeb);
-  const planBlocked = !loading && !webPlanAllowed;
+  const planBlocked = hasLoadedOnce.current && !webPlanAllowed;
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!hasLoadedOnce.current) setInitialLoading(true);
     try {
       const [data, entitled] = await Promise.all([
         fetchWebChatSettings(),
@@ -47,7 +49,8 @@ export function WebChatCard({ onError, onNotice }: Props) {
       if (err instanceof ApiError && err.status === 401) return;
       onError?.(tr('integrationsActionError'));
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
+      hasLoadedOnce.current = true;
     }
   }, [onError, tr]);
 
@@ -68,6 +71,10 @@ export function WebChatCard({ onError, onNotice }: Props) {
     );
   }
 
+  if (initialLoading && !hasLoadedOnce.current) {
+    return <IntegrationCardLoading platform="web" />;
+  }
+
   const connected = Boolean(settings?.connected);
   const statusLabel = tr(statusKey(settings?.installation_status));
 
@@ -78,7 +85,6 @@ export function WebChatCard({ onError, onNotice }: Props) {
         title={tr('platformWeb')}
         subtitle={connected ? settings?.site_url || tr('platformWeb') : tr('webChatSubtitle')}
         connected={connected}
-        busy={loading}
         connectLabel={tr('webChatOpenSettings')}
         connectedLabel={tr('connected')}
         notConnectedLabel={tr('notConnected')}

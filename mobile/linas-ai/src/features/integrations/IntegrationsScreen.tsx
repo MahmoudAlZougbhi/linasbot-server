@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { ApiError, apiFetch } from '../../api/client';
@@ -69,6 +69,11 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     setError,
     setAuthGate,
   });
+  const initialLoadDone = useRef(false);
+  useEffect(() => {
+    if (!loading) initialLoadDone.current = true;
+  }, [loading]);
+  const headerRefreshing = loading && initialLoadDone.current;
 
   async function connectPlatform(platform: 'instagram' | 'facebook') {
     setBusyPlatform(platform);
@@ -281,7 +286,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
       headerRight={
         <IntegrationRefreshButton
           onRefresh={() => void load()}
-          refreshing={loading}
+          refreshing={headerRefreshing}
           accessibilityLabel={tr('refreshConnectionStatus')}
         />
       }
@@ -309,7 +314,6 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
         ))}
         <WhatsAppCloudCard
           status={wa.waStatus}
-          loading={loading}
           busy={wa.waBusy}
           onRefresh={() => void load()}
           onConnect={() => void wa.connectWhatsApp()}
