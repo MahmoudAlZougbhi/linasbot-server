@@ -70,7 +70,7 @@ test('module screens reuse the same silver HeaderMenuButton as chat', () => {
   assert.doesNotMatch(chrome, /paddingTop:\s*10/);
   assert.doesNotMatch(dash, /stackedHeader/);
   assert.match(settings, /stackedHeader/);
-  assert.match(billing, /view === 'choose' && hasSub/);
+  assert.match(billing, /browsePlans \? \(\) => setBrowsePlans\(false\)/);
   assert.doesNotMatch(billing, /nav\.goChat\(\)/);
 });
 
