@@ -236,15 +236,15 @@ export function AppScreenTree({
       ) : null}
       {name === 'services_add' ? (
         <AddServiceScreen
-          onBack={() => setScreen({ name: 'services', backTo: screen.backTo })}
-          onSaved={() => setScreen({ name: 'services', backTo: screen.backTo })}
+          onBack={() => setScreen({ name: 'services', backTo: 'cm' })}
+          onSaved={() => setScreen({ name: 'services', backTo: 'cm' })}
         />
       ) : null}
       {name === 'services_edit' ? (
         <AddServiceScreen
           serviceId={screen.serviceId}
-          onBack={() => setScreen({ name: 'services', backTo: screen.backTo })}
-          onSaved={() => setScreen({ name: 'services', backTo: screen.backTo })}
+          onBack={() => setScreen({ name: 'services', backTo: 'cm' })}
+          onSaved={() => setScreen({ name: 'services', backTo: 'cm' })}
         />
       ) : null}
 

@@ -64,7 +64,6 @@ def option_to_dict(row: Any) -> dict[str, Any]:
 
 def service_to_dict(row: Any) -> dict[str, Any]:
     options = sorted(row.options or [], key=lambda o: o.sort_order)
-    prices = [opt.price for opt in options if opt.price]
     return {
         "id": row.id,
         "name": row.name,

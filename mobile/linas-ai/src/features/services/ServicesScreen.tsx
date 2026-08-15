@@ -64,7 +64,7 @@ export function ServicesScreen({ onBack, onAdd, onEdit }: Props) {
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           !loading ? (
-            <Text style={[styles.empty, { color: colors.muted }]}>{tr('servicesEmpty')}</Text>
+            <Text style={[styles.empty, { color: colors.textDim }]}>{tr('servicesEmpty')}</Text>
           ) : null
         }
         renderItem={({ item }) => (
@@ -72,9 +72,9 @@ export function ServicesScreen({ onBack, onAdd, onEdit }: Props) {
             <Pressable onPress={() => onEdit(item.id)} style={styles.cardMain}>
               <Text style={styles.name}>{item.name}</Text>
               {item.price_summary ? (
-                <Text style={{ color: colors.muted }}>{item.price_summary}</Text>
+                <Text style={{ color: colors.textDim }}>{item.price_summary}</Text>
               ) : null}
-              <Text style={{ color: colors.muted, fontSize: 12 }}>
+              <Text style={{ color: colors.textDim, fontSize: 12 }}>
                 {(item.options?.length ?? 0) === 1
                   ? tr('servicesOneOption')
                   : `${item.options?.length ?? 0} ${tr('servicesOptionsLabel')}`}
