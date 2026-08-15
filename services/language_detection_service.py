@@ -12,6 +12,8 @@ from language_resolver import LanguageResolver, system_language_instruction
 from services.llm_core_service import client as openai_client
 from services.user_persistence_service import user_persistence
 
+from services.cm.iso639_languages import normalize_language_code
+
 SUPPORTED_TRAINING_LANGUAGES = {"ar", "en", "fr", "franco", "es", "de", "it", "pt", "zh", "tr", "ru"}
 TRAINING_LANGUAGE_ORDER = ["ar", "en", "fr", "franco", "es", "de", "it", "pt", "zh", "tr", "ru"]
 FRENCH_MARKERS = (
@@ -121,27 +123,14 @@ class LanguageDetectionService:
     def normalize_training_language(language: str | None, default: str = "ar") -> str:
         """
         Normalize language identifiers to project-standard codes (Smart Answers + legacy training).
+        Accepts any ISO 639-1 code plus product codes like franco.
         """
         if not language:
             return default
-        from services.cm.smart_answer_languages import normalize_smart_answer_language
-
-        normalized = normalize_smart_answer_language(language)
+        normalized = normalize_language_code(language)
         if normalized:
             return normalized
-        normalized = str(language).strip().lower()
-        alias_map = {
-            "arabic": "ar",
-            "english": "en",
-            "french": "fr",
-            "francoarabic": "franco",
-            "franco-arabic": "franco",
-            "franco_arabic": "franco",
-        }
-        normalized = alias_map.get(normalized, normalized)
-        if normalized not in SUPPORTED_TRAINING_LANGUAGES:
-            return default
-        return normalized
+        return default
 
     def detect_training_language(self, text: str) -> str:
         """
@@ -189,7 +178,7 @@ class LanguageDetectionService:
     ) -> dict:
         """
         Translate a Q&A pair from any supported source language into requested target languages.
-        Supported languages include ar, en, fr, franco, es, de, it, pt, zh, tr, ru (and more on request).
+        Supports ISO 639-1 codes plus product codes like franco.
         """
         normalized_targets: list[str] = []
         requested_targets = target_languages or TRAINING_LANGUAGE_ORDER
@@ -283,6 +272,52 @@ class LanguageDetectionService:
             "missing_languages": missing,
             "source_language": normalized_source or "auto",
         }
+
+    async def translate_answer_text(
+        self,
+        answer: str,
+        *,
+        source_language: str | None = None,
+        target_language: str | None = None,
+    ) -> str:
+        """Translate a single FAQ answer into the visitor response language."""
+        text = str(answer or "").strip()
+        target = self.normalize_training_language(target_language, default="")
+        source = self.normalize_training_language(source_language, default="")
+        if not text or not target or not source or source == target:
+            return text
+        if {source, target} <= {"ar", "franco"}:
+            return text
+
+        prompt = (
+            "You are an expert translator for a laser clinic customer-service bot.\n"
+            "Translate the answer into the requested target language.\n"
+            "Return strict JSON only: {\"answer\": \"...\"}.\n"
+            "Rules:\n"
+            f"- Target language code: {target}.\n"
+            f"- Source language code: {source}.\n"
+            "- Keep service names, numbers, and facts intact.\n"
+            "- ar MUST be Lebanese dialect in Arabic script.\n"
+            "- franco must be Lebanese Arabic in Latin characters only.\n"
+            "- Do not include markdown or extra keys."
+        )
+        payload = {"source_language": source, "answer": text, "target_language": target}
+        try:
+            response = await openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+                ],
+            )
+            content = (response.choices[0].message.content or "").strip() if response.choices else "{}"
+            parsed = json.loads(content)
+            translated = str(parsed.get("answer") or "").strip()
+            return translated or text
+        except Exception as error:
+            print(f"❌ translate_answer_text failed: {error}")
+            return text
 
 
 # Global singleton

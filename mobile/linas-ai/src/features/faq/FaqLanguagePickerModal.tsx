@@ -7,20 +7,23 @@ import { ModalScrim } from '../../components/ModalScrim';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import type { StringKey } from '../../i18n';
 import { colors, fonts, radii, spacing } from '../../theme';
-import { SMART_ANSWER_LANGUAGE_CATALOG } from './faqLanguages';
+import type { SmartAnswerLang } from './faqLanguages';
+import { getSmartAnswerLanguageCatalog } from './faqLanguages';
 
 type Props = {
   visible: boolean;
   selected: string[];
+  catalog?: SmartAnswerLang[];
   saving: boolean;
   onClose: () => void;
   onSave: (languages: string[]) => void;
   tr: (key: StringKey) => string;
 };
 
-export function FaqLanguagePickerModal({ visible, selected, saving, onClose, onSave, tr }: Props) {
+export function FaqLanguagePickerModal({ visible, selected, catalog, saving, onClose, onSave, tr }: Props) {
   const [draft, setDraft] = React.useState<string[]>(selected);
   const [query, setQuery] = React.useState('');
+  const languageCatalog = catalog?.length ? catalog : getSmartAnswerLanguageCatalog();
 
   React.useEffect(() => {
     if (visible) {
@@ -29,7 +32,7 @@ export function FaqLanguagePickerModal({ visible, selected, saving, onClose, onS
     }
   }, [visible, selected]);
 
-  const filtered = SMART_ANSWER_LANGUAGE_CATALOG.filter((lang) => {
+  const filtered = languageCatalog.filter((lang) => {
     const q = query.trim().toLowerCase();
     if (!q) return true;
     return (

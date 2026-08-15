@@ -31,6 +31,7 @@ from services.cm.faq_integration_ops import (  # noqa: F401
     find_duplicate_faq_groups,
     get_cm_faq_group,
     list_cm_faq,
+    purge_smart_answer_language_data,
     regenerate_cm_faq_variants,
     translate_existing_faq_groups_to_language,
     update_cm_faq_variant,

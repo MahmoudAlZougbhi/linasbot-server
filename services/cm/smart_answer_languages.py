@@ -5,50 +5,15 @@ from __future__ import annotations
 from typing import Any
 
 from services.cm.faq_integration_helpers import FAQ_SECTION, FaqIntegrationError
+from services.cm.iso639_languages import iso639_catalog, iso639_label, iso639_native_label, normalize_language_code
 from services.cm.schemas import FaqSection
 from services.cm.storage import get_draft, put_draft
 
 DEFAULT_SMART_ANSWER_LANGUAGES: tuple[str, ...] = ("ar", "en", "fr", "franco")
 
-# Catalog for owner language picker (design reference).
-SMART_ANSWER_LANGUAGE_CATALOG: tuple[dict[str, str], ...] = (
-    {"id": "en", "label": "English", "native": "English"},
-    {"id": "ar", "label": "Arabic", "native": "العربية"},
-    {"id": "franco", "label": "Franco / Arabizi", "native": "Franco"},
-    {"id": "fr", "label": "French", "native": "Français"},
-    {"id": "es", "label": "Spanish", "native": "Español"},
-    {"id": "de", "label": "German", "native": "Deutsch"},
-    {"id": "it", "label": "Italian", "native": "Italiano"},
-    {"id": "pt", "label": "Portuguese", "native": "Português"},
-    {"id": "zh", "label": "Chinese", "native": "中文"},
-    {"id": "tr", "label": "Turkish", "native": "Türkçe"},
-    {"id": "ru", "label": "Russian", "native": "Русский"},
-)
-
-_ALLOWED_SMART_ANSWER_IDS = frozenset(item["id"] for item in SMART_ANSWER_LANGUAGE_CATALOG)
-
 
 def normalize_smart_answer_language(code: str | None) -> str:
-    raw = str(code or "").strip().lower()
-    aliases = {
-        "arabic": "ar",
-        "english": "en",
-        "french": "fr",
-        "franco-arabic": "franco",
-        "franco_arabic": "franco",
-        "arabizi": "franco",
-        "spanish": "es",
-        "german": "de",
-        "italian": "it",
-        "portuguese": "pt",
-        "chinese": "zh",
-        "turkish": "tr",
-        "russian": "ru",
-    }
-    raw = aliases.get(raw, raw)
-    if raw in _ALLOWED_SMART_ANSWER_IDS:
-        return raw
-    return ""
+    return normalize_language_code(code)
 
 
 def normalize_smart_answer_languages(codes: list[str] | tuple[str, ...] | None) -> list[str]:
@@ -74,7 +39,7 @@ def smart_answer_languages_public(*, tenant_id: str | None) -> dict[str, Any]:
     selected = load_smart_answer_languages(tenant_id=tenant_id)
     return {
         "smart_answer_languages": selected,
-        "catalog": list(SMART_ANSWER_LANGUAGE_CATALOG),
+        "catalog": iso639_catalog(),
         "default_languages": list(DEFAULT_SMART_ANSWER_LANGUAGES),
     }
 
@@ -113,3 +78,32 @@ def save_smart_answer_languages(
         "added": added,
         "removed": removed,
     }
+
+
+def remove_smart_answer_language(
+    *,
+    tenant_id: str | None,
+    language: str,
+    updated_by: str = "content_manager",
+) -> dict[str, Any]:
+    """Remove one Smart Q&A language from tenant config (does not purge FAQ rows)."""
+    lang = normalize_smart_answer_language(language)
+    if not lang:
+        raise FaqIntegrationError(f"Unsupported Smart Q&A language: {language}")
+
+    current = load_smart_answer_languages(tenant_id=tenant_id)
+    if lang not in current:
+        raise FaqIntegrationError(f"Language not configured: {lang}")
+    if len(current) <= 1:
+        raise FaqIntegrationError("At least one Smart Q&A language is required")
+
+    next_langs = [code for code in current if code != lang]
+    return save_smart_answer_languages(
+        tenant_id=tenant_id,
+        languages=next_langs,
+        updated_by=updated_by,
+    )
+
+
+def language_display_name(code: str) -> str:
+    return iso639_native_label(code) or iso639_label(code) or code

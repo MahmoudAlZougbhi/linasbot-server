@@ -20,7 +20,8 @@ import {
   type FaqEntitlement,
   type FaqGroup,
 } from './faqApi';
-import type { FaqLangId } from './faqLanguages';
+import type { FaqLangId, SmartAnswerLang } from './faqLanguages';
+import { setSmartAnswerLanguageCatalog } from './faqLanguages';
 import { variantForLang } from './faqPreview';
 
 type Mode = 'list' | 'create' | 'detail';
@@ -38,6 +39,7 @@ export function FaqScreen({ proposalReview }: Props) {
   const [items, setItems] = useState<FaqGroup[]>([]);
   const [entitlement, setEntitlement] = useState<FaqEntitlement | null>(null);
   const [smartAnswerLanguages, setSmartAnswerLanguages] = useState<string[]>(['ar', 'en', 'fr', 'franco']);
+  const [languageCatalog, setLanguageCatalog] = useState<SmartAnswerLang[]>([]);
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<Mode>('list');
   const [selected, setSelected] = useState<FaqGroup | null>(null);
@@ -57,6 +59,10 @@ export function FaqScreen({ proposalReview }: Props) {
       setEntitlement(data.entitlement);
       if (data.smartAnswerLanguages.length) {
         setSmartAnswerLanguages(data.smartAnswerLanguages);
+      }
+      if (data.catalog.length) {
+        setLanguageCatalog(data.catalog);
+        setSmartAnswerLanguageCatalog(data.catalog);
       }
       setSelected((prev) => {
         if (!prev) return null;
@@ -302,6 +308,7 @@ export function FaqScreen({ proposalReview }: Props) {
       <FaqLanguagePickerModal
         visible={langPickerOpen}
         selected={pendingLangSave || smartAnswerLanguages}
+        catalog={languageCatalog}
         saving={saving}
         onClose={() => {
           setLangPickerOpen(false);

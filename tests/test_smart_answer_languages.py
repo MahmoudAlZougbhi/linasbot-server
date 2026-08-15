@@ -18,8 +18,16 @@ def test_default_smart_answer_languages() -> None:
 
 
 def test_normalize_dedupes_and_filters() -> None:
-    langs = normalize_smart_answer_languages(["en", "EN", "es", "bogus", "ar"])
-    assert langs == ["en", "es", "ar"]
+    langs = normalize_smart_answer_languages(["en", "EN", "es", "bogus", "ar", "ur"])
+    assert langs == ["en", "es", "ar", "ur"]
+
+
+def test_catalog_includes_urdu() -> None:
+    from services.cm.iso639_languages import iso639_catalog
+
+    ids = {item["id"] for item in iso639_catalog()}
+    assert "ur" in ids
+    assert len(ids) >= 180
 
 
 def test_faq_section_schema_has_smart_answer_languages() -> None:

@@ -284,6 +284,87 @@ def find_duplicate_faq_groups(
     return hits
 
 
+def purge_smart_answer_language_data(
+    *,
+    language: str,
+    tenant_id: str | None = None,
+    updated_by: str = "content_manager",
+) -> dict[str, Any]:
+    """Permanently delete all Smart Q&A content for one language (variants + runtime rows)."""
+    from services.cm.smart_answer_languages import normalize_smart_answer_language, remove_smart_answer_language
+
+    lang = normalize_smart_answer_language(language)
+    if not lang:
+        raise FaqIntegrationError(f"Unsupported Smart Q&A language: {language}")
+
+    env = get_draft(FAQ_SECTION, tenant_id=tenant_id, create_default=True)
+    section = FaqSection.model_validate(env.payload)
+    tenant_key = str(tenant_id or "").strip().lower()
+    groups_touched = 0
+    variants_removed = 0
+    archived_groups: list[str] = []
+    updated_items: list[FaqRecord] = []
+
+    for item in section.items:
+        kept_variants = [v for v in item.variants if v.language != lang]
+        removed_count = len(item.variants) - len(kept_variants)
+        if removed_count == 0:
+            updated_items.append(item)
+            continue
+        groups_touched += 1
+        variants_removed += removed_count
+        if not kept_variants:
+            archived = item.model_copy(update={"status": "archived", "revision": item.revision + 1, "variants": []})
+            updated_items.append(archived)
+            archived_groups.append(item.qa_group_id)
+            continue
+        updated_items.append(
+            item.model_copy(
+                update={
+                    "variants": kept_variants,
+                    "revision": item.revision + 1,
+                    "status": "draft" if item.status != "archived" else item.status,
+                }
+            )
+        )
+
+    put_draft(
+        FAQ_SECTION,
+        payload=FaqSection(
+            items=updated_items,
+            notes=section.notes,
+            smart_answer_languages=section.smart_answer_languages,
+        ).model_dump(mode="json"),
+        if_match=env.etag,
+        tenant_id=tenant_id,
+        updated_by=updated_by,
+    )
+
+    deleted_rows = 0
+    kept_pairs: list[dict[str, Any]] = []
+    for pair in local_qa_service.qa_pairs:
+        pair_lang = language_detection_service.normalize_training_language(pair.get("language"), default="")
+        pair_tenant = str(pair.get("tenant_id") or "").strip().lower()
+        if pair_lang == lang and (not tenant_key or pair_tenant == tenant_key):
+            deleted_rows += 1
+            continue
+        kept_pairs.append(pair)
+    if deleted_rows:
+        local_qa_service.qa_pairs = kept_pairs
+        local_qa_service.save_to_jsonl()
+
+    lang_save = remove_smart_answer_language(tenant_id=tenant_id, language=lang, updated_by=updated_by)
+    return {
+        "success": True,
+        "language": lang,
+        "groups_touched": groups_touched,
+        "variants_removed": variants_removed,
+        "archived_groups": archived_groups,
+        "deleted_runtime_rows": deleted_rows,
+        "smart_answer_languages": lang_save.get("smart_answer_languages"),
+    }
+
+
 async def translate_existing_faq_groups_to_language(
     *,
     language: str,

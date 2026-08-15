@@ -67,6 +67,24 @@ def _tenant_ok(entry: dict[str, Any], tenant_id: str) -> bool:
     return tid == want
 
 
+def _resolve_match_language(*, question: str, language: str, tenant_id: str) -> str:
+    """Prefer broad inbound detection so saved per-language Q&A works beyond ar/en/fr/franco."""
+    from services.cm.customer_language_detect import detect_broad_customer_language, normalize_language_code
+    from services.language_detection_service import language_detection_service
+
+    normalized_hint = language_detection_service.normalize_training_language(language, default="")
+    detected = detect_broad_customer_language(
+        message=question or "",
+        conversation_id=f"faq-match:{tenant_id}",
+    )
+    detected = normalize_language_code(detected) or normalized_hint or "ar"
+    if detected == "franco":
+        return "ar"
+    if normalized_hint and detected in {"", "en", "ar", "fr"} and normalized_hint not in {"", "en", "ar", "fr"}:
+        return normalized_hint
+    return detected or normalized_hint or "ar"
+
+
 def score_candidate(
     *,
     question: str,
@@ -125,7 +143,6 @@ def find_safe_faq_match(
 ) -> dict[str, Any] | None:
     """Return a safe match dict or None. Never invents answers."""
     from services.faq_entitlements import get_faq_entitlement
-    from services.language_detection_service import language_detection_service
 
     ent = get_faq_entitlement(tenant_id)
     if not ent.get("faq_enabled"):
@@ -136,7 +153,7 @@ def find_safe_faq_match(
 
         qa_pairs = list(local_qa_service.qa_pairs)
 
-    lang = language_detection_service.normalize_training_language(language, default="ar")
+    lang = _resolve_match_language(question=question, language=language, tenant_id=tenant_id)
     intent = _detect_intent(question)
     best: dict[str, Any] | None = None
     best_score = 0.0
