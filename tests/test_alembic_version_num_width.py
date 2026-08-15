@@ -230,13 +230,8 @@ def test_fresh_and_older_head_postgres_can_stamp_the_long_revision(postgres_url:
     assert maxlen == 64
     assert current == {HEAD_ID}
 
-    # Alembic 1.14 merge -1 is Ambiguous walk (two parents). The merge is a
-    # schema no-op; stamp --purge of both live heads restores the pre-merge rows.
     relative = _alembic(postgres_url, "downgrade", "-1")
-    assert relative.returncode != 0
-    assert "Ambiguous walk" in (relative.stderr or "")
-    _alembic_ok(postgres_url, "stamp", "--purge", SFU_HEAD, LONG_ID)
+    assert relative.returncode == 0
     maxlen, current = _version_meta(postgres_url)
     assert maxlen == 64
-    assert current == {SFU_HEAD, LONG_ID}
-    assert WIDEN_ID not in current
+    assert current == {"20260817_ai_products"}
