@@ -12,7 +12,7 @@ type Props = {
   accessibilityLabel?: string;
 };
 
-/** Semi-transparent dim overlay — never opaque black. */
+/** Semi-transparent dim overlay — never opaque black. Covers full screen incl. safe areas. */
 export function ModalScrim({ onPress, style, children, justify = 'flex-end', accessibilityLabel }: Props) {
   const { colors } = useTheme();
   return (
@@ -27,5 +27,5 @@ export function ModalScrim({ onPress, style, children, justify = 'flex-end', acc
 }
 
 const styles = StyleSheet.create({
-  base: { flex: 1 },
+  base: StyleSheet.absoluteFillObject,
 });

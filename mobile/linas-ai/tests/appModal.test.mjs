@@ -16,11 +16,18 @@ describe('AppModal chrome', () => {
     assert.match(src, /transparent/);
     assert.match(src, /statusBarTranslucent/);
     assert.match(src, /presentationStyle="overFullScreen"/);
+    assert.match(src, /absoluteFillObject/);
   });
 
-  it('ModalScrim uses theme overlay token', () => {
+  it('remaps slide animation to fade to avoid black bar flash', () => {
+    const src = read('components/AppModal.tsx');
+    assert.match(src, /animationType === 'slide' \? 'fade'/);
+  });
+
+  it('ModalScrim uses theme overlay token and full-screen fill', () => {
     const src = read('components/ModalScrim.tsx');
     assert.match(src, /colors\.overlay/);
+    assert.match(src, /absoluteFillObject/);
     assert.doesNotMatch(src, /backgroundColor:\s*['"]#000/);
   });
 
