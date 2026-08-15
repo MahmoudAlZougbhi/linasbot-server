@@ -13,7 +13,7 @@ from services.products.active_context import get_active_product
 from services.products.availability import is_customer_searchable
 from services.products.reply_to_map import resolve_reply_to_product
 from services.products.repository import ProductsRepository
-from services.products.schemas import normalize_product_name, product_to_dict
+from services.products.schemas import product_to_dict
 from services.products.search import search_product_by_title_with_scores
 
 _URL_RE = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)
