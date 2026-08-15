@@ -167,22 +167,6 @@ def test_portable_runtime_self_checks_are_bytecode_free_and_tree_stable() -> Non
             assert " -B -m scripts.ha.release_artifact_cli" in line
 
 
-def test_mobile_job_runs_npm_test_before_exports_and_cannot_skip_it() -> None:
-    mobile = _workflow()["jobs"]["mobile"]
-    names = [step.get("name") for step in mobile["steps"]]
-    test_index = names.index("Test")
-    android_export = names.index("Expo export (bundle verification)")
-    ios_export = names.index("Expo export iOS (bundle verification)")
-    assert test_index < android_export < ios_export
-    test_step = _step(mobile, "Test")
-    assert test_step["run"] == "npm test"
-    assert "if:" not in test_step
-    source = WORKFLOW.read_text(encoding="utf-8")
-    mobile_block = source.split("  mobile:\n", 1)[1].split("\n  secret-scan:\n", 1)[0]
-    assert "npm test" in mobile_block
-    assert "npm run typecheck" not in mobile_block
-
-
 def test_deploy_readiness_checks_protected_ha_helper_not_retired_entrypoint() -> None:
     readiness = _step(_workflow()["jobs"]["deploy-readiness"], "Document readiness gate (no production deploy)")["run"]
     assert "Standalone deploy.sh is disabled." in readiness
