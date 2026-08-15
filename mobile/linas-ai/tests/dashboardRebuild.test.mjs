@@ -40,6 +40,8 @@ test('Dashboard rebuild uses typed mobile dashboard API', () => {
   assert.match(screen, /BuyCreditsSheet/);
   assert.match(screen, /credits\.setOpen\(true\)/);
   assert.match(screen, /headerRight/);
+  assert.match(screen, /resetToDefaultPeriod/);
+  assert.match(read('app/AppScreenTree.tsx'), /active=\{name === 'dashboard'\}/);
   assert.doesNotMatch(screen, /stackedHeader/);
   assert.doesNotMatch(screen, /isPlatformOwner|Platform metrics|Owner only|Owner access only/);
   assert.doesNotMatch(screen, /JSON\.stringify/);
@@ -113,10 +115,22 @@ test('dashboard i18n covers en ar fr', () => {
 test('dashboard date card uses new presets and Linas copilot mark', () => {
   const sheet = read('features/dashboard/sections/DashboardDateRangeSheet.tsx');
   const copilot = read('features/dashboard/sections/OwnerCopilotCard.tsx');
+  assert.match(sheet, /dashAllTime/);
   assert.match(sheet, /dashToday/);
   assert.match(sheet, /dashLastMonth/);
   assert.match(sheet, /RequestMonthCalendar/);
   assert.doesNotMatch(sheet, /dashBillingPeriod/);
   assert.match(copilot, /LinasSparkleIcon/);
   assert.doesNotMatch(copilot, /name="sparkles"/);
+});
+
+test('Growth plan header divider and Total activity card stroke match siblings', () => {
+  const growth = read('features/dashboard/sections/GrowthPlanCard.tsx');
+  const grid = read('features/dashboard/sections/TotalActivityGrid.tsx');
+  const channels = read('features/dashboard/sections/ChannelActivityTable.tsx');
+  assert.match(growth, /headerRule/);
+  assert.match(growth, /DASH_TRACK/);
+  assert.match(grid, /borderWidth: 1/);
+  assert.match(grid, /borderColor: colors\.border/);
+  assert.match(channels, /borderWidth: 1/);
 });

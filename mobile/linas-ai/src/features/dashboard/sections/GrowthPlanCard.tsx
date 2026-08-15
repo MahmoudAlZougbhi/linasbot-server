@@ -65,6 +65,7 @@ export function GrowthPlanCard({ plan, locale, onBuyCredits, onUpgrade }: Props)
           <Text style={styles.outlineText}>{tr('dashUpgrade')}</Text>
         </Pressable>
       </View>
+      <View style={styles.headerRule} />
 
       <Text style={styles.creditsLabel}>{tr('dashCredits')}</Text>
       <View style={styles.creditsRow}>
@@ -115,6 +116,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   outlineText: { color: '#FFFFFF', fontFamily: fonts.bodyMedium, fontSize: 13 },
+  headerRule: { height: 1, backgroundColor: DASH_TRACK, marginVertical: 4 },
   creditsLabel: { color: DASH_MINT_SOFT, fontFamily: fonts.body, fontSize: 13, marginTop: 4 },
   creditsRow: { flexDirection: 'row', alignItems: 'baseline' },
   creditsBig: { color: '#FFFFFF', fontFamily: fonts.bodyMedium, fontSize: 34, fontWeight: '700' },

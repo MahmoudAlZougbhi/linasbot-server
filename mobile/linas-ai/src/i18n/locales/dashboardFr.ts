@@ -3,6 +3,7 @@ export const dashboardFr = {
   dashRefresh: 'Actualiser le tableau de bord',
   dashCustomRange: 'Plage personnalisée',
   dashCustom: 'Personnalisé',
+  dashAllTime: 'Tout le temps',
   dashToday: 'Aujourd’hui',
   dashLastMonth: 'Mois dernier',
   dashLast6Months: '6 derniers mois',

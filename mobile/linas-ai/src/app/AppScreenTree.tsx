@@ -125,6 +125,7 @@ export function AppScreenTree({
       </KeepMountedPane>
       <KeepMountedPane key={`dashboard-${authEpoch}`} active={name === 'dashboard'}>
         <DashboardScreen
+          active={name === 'dashboard'}
           onNavigate={(target) => setScreen(screenForDashboardTarget(target))}
         />
       </KeepMountedPane>

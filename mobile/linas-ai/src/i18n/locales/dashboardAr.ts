@@ -3,6 +3,7 @@ export const dashboardAr = {
   dashRefresh: 'تحديث اللوحة',
   dashCustomRange: 'نطاق مخصص',
   dashCustom: 'مخصص',
+  dashAllTime: 'كل الوقت',
   dashToday: 'اليوم',
   dashLastMonth: 'الشهر الماضي',
   dashLast6Months: 'آخر 6 أشهر',
