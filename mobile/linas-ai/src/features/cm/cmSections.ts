@@ -63,8 +63,8 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
   },
   {
     id: 'branches',
-    title: 'Locations',
-    description: 'Branches with address and Maps link.',
+    title: 'Location and Opening Hours',
+    description: 'Branches with map link and per-day opening hours.',
     mobileSupported: true,
   },
   {
@@ -72,6 +72,7 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
     title: 'Opening Hours',
     description: 'Named schedules with Mon–Sun open hours or day off.',
     mobileSupported: true,
+    showInCmHub: false,
   },
   {
     id: 'prices',
@@ -84,6 +85,7 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
     title: 'Care',
     description: 'Preparation and aftercare articles.',
     mobileSupported: true,
+    showInCmHub: false,
   },
   {
     id: 'knowledge',
@@ -96,12 +98,14 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
     title: 'Human Handoff',
     description: 'Contacts for when customers ask for a human.',
     mobileSupported: true,
+    showInCmHub: false,
   },
   {
     id: 'restricted',
     title: 'Restricted',
     description: 'Topics the AI must refuse.',
     mobileSupported: true,
+    showInCmHub: false,
   },
   {
     id: 'comments',
@@ -114,6 +118,7 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
     title: 'Off Days',
     description: 'Tap calendar days the business is closed.',
     mobileSupported: true,
+    showInCmHub: false,
   },
   {
     id: 'requests_appointments',
@@ -129,6 +134,9 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
     showInCmHub: false,
   },
 ];
+
+/** Hub sections excluded from progress/badge calculations (hidden from AI Setup hub). */
+export const CM_HUB_PROGRESS_EXCLUDED: CmSectionId[] = ['care', 'handoff', 'restricted'];
 
 export const CM_HUB_CARDS: CmSectionCard[] = CM_SECTION_CARDS.filter(
   (c) => c.showInCmHub !== false,
