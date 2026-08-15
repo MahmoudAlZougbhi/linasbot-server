@@ -27,6 +27,7 @@ from services.meta_instagram_login_subscription_recovery import (
 )
 from services.meta_multi_app_router import registry_auth_flow_for_webhook_object, resolve_registry_events
 from services.meta_social_publish import publish_instagram_post
+from tests.meta_instagram_login_lifecycle_helpers import force_legacy_binding_active
 
 INSTAGRAM_ID = "17840000999900021"
 MESSAGING_SCOPES = (
@@ -66,8 +67,9 @@ def _instagram_binding(
     *,
     auth_flow: str,
     webhook_status: str = "ready",
+    legacy_duplicate: bool = False,
 ) -> object:
-    return registry.authorize_oauth_asset(
+    binding = registry.authorize_oauth_asset(
         tenant_id="tenant-a",
         channel="instagram",
         asset_id=INSTAGRAM_ID,
@@ -87,10 +89,13 @@ def _instagram_binding(
         ),
         actor_id="owner",
         instagram_username="clinic_ig",
+        status="testing" if legacy_duplicate else "active",
         auth_flow=auth_flow,
         webhook_subscription_status=webhook_status,
         webhook_subscribed_fields=("messages", "messaging_postbacks"),
+        create_new_binding=legacy_duplicate,
     )
+    return force_legacy_binding_active(registry, binding) if legacy_duplicate else binding
 
 
 def test_instagram_login_oauth_scopes_are_limited_to_dm_and_comments() -> None:
@@ -118,7 +123,7 @@ def test_graph_routing_uses_instagram_host_for_direct_login(registry: MetaAppReg
 
 def test_select_instagram_binding_prefers_direct_login_for_dm(registry: MetaAppRegistry) -> None:
     _instagram_binding(registry, auth_flow="facebook_login")
-    direct = _instagram_binding(registry, auth_flow="instagram_login")
+    direct = _instagram_binding(registry, auth_flow="instagram_login", legacy_duplicate=True)
     bindings = list(registry.list_bindings(include_inactive=False))
     selected = select_instagram_binding_for_capability(bindings, "dm", registry=registry)
     assert selected is not None
@@ -130,7 +135,7 @@ async def test_resolve_registry_events_prefers_instagram_login_binding(registry:
     from services.meta_app_registry import get_meta_app_configs
 
     _instagram_binding(registry, auth_flow="facebook_login")
-    _instagram_binding(registry, auth_flow="instagram_login")
+    _instagram_binding(registry, auth_flow="instagram_login", legacy_duplicate=True)
     payload = {
         "object": "instagram",
         "entry": [

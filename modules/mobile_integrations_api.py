@@ -24,11 +24,9 @@ from services.channel_capability_toggles import (
 from services.credit_ledger_service import credit_ledger_service
 from services.integration_capabilities import list_tenant_integration_status
 from services.meta_app_registry import MetaRegistryError, get_meta_app_registry
-from services.meta_oauth import MetaOAuthError, disconnect_binding_webhook
-from services.mobile_integrations_display import (
-    active_bindings_for_disconnect,
-    enrich_mobile_integration_rows,
-)
+from services.meta_connection_disconnect import disconnect_meta_binding_set
+from services.meta_oauth import MetaOAuthError
+from services.mobile_integrations_display import bindings_for_disconnect, enrich_mobile_integration_rows
 
 ToggleKey = Literal["dm", "comments"]
 
@@ -136,30 +134,16 @@ async def mobile_disconnect_platform(platform: str, request: Request) -> Any:
     if platform_key not in supported_platforms():
         raise HTTPException(status_code=404, detail="Unknown platform")
 
-    bindings = active_bindings_for_disconnect(session.tenant_id, platform_key)
+    registry = get_meta_app_registry()
+    bindings = bindings_for_disconnect(session.tenant_id, platform_key, registry=registry)
     if not bindings:
         raise HTTPException(status_code=404, detail="No active connection for this platform")
 
-    registry = get_meta_app_registry()
     actor = session.user_id or session.email or "mobile_disconnect"
-    for binding in bindings:
-        try:
-            if binding.active:
-                await disconnect_binding_webhook(binding, actor_id=actor)
-            else:
-                updated = registry.set_binding_status(
-                    binding.binding_id,
-                    status="disconnected",
-                    actor_id=actor,
-                    expected_generation=binding.generation,
-                )
-                registry.archive_binding_credential(
-                    binding.binding_id,
-                    actor_id=actor,
-                    expected_generation=updated.generation,
-                )
-        except (MetaOAuthError, MetaRegistryError) as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
+    try:
+        await disconnect_meta_binding_set(bindings, actor_id=actor, registry=registry)
+    except (MetaOAuthError, MetaRegistryError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     await clear_channel_toggles_after_disconnect(
         tenant_id=session.tenant_id,

@@ -53,6 +53,7 @@ from services.meta_app_registry_common import (
     _truthy,
     authorized_meta_user_id_hash,
     binding_asset_key,
+    binding_exclusive_asset_key,
     get_meta_app_configs,
     get_meta_graph_api_version,
     identify_signed_meta_app,
@@ -64,6 +65,7 @@ from services.meta_app_registry_common import (
 from services.meta_app_registry_deletion import MetaAppRegistryDeletionMixin
 from services.meta_app_registry_lifecycle import MetaAppRegistryLifecycleMixin
 from services.meta_app_registry_oauth import MetaAppRegistryOAuthMixin
+from services.meta_app_registry_recovery import MetaAppRegistryRecoveryMixin
 
 __all__ = [
     "APP_A_EXPECTED_ID",
@@ -100,6 +102,7 @@ __all__ = [
     "_truthy",
     "authorized_meta_user_id_hash",
     "binding_asset_key",
+    "binding_exclusive_asset_key",
     "get_meta_app_configs",
     "get_meta_app_registry",
     "get_meta_graph_api_version",
@@ -116,6 +119,7 @@ __all__ = [
 class MetaAppRegistry(
     MetaAppRegistryBindingsMixin,
     MetaAppRegistryLifecycleMixin,
+    MetaAppRegistryRecoveryMixin,
     MetaAppRegistryDeletionMixin,
     MetaAppRegistryOAuthMixin,
 ):
@@ -175,9 +179,9 @@ def get_meta_registry_readiness(
         active_asset_keys: set[str] = set()
         now = int(time.time())
         for binding in bindings:
-            if binding.asset_key in active_asset_keys:
+            if binding.exclusive_asset_key in active_asset_keys:
                 checks["active_indexes_exclusive"] = False
-            active_asset_keys.add(binding.asset_key)
+            active_asset_keys.add(binding.exclusive_asset_key)
             if binding.app_key == APP_B_KEY and binding.asset_id in {
                 LINAS_PAGE_ID,
                 LINAS_INSTAGRAM_ACCOUNT_ID,

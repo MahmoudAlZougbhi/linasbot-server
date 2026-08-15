@@ -6,5 +6,6 @@ set -euo pipefail
 
 printf '%s\n' \
   'Standalone deploy.sh is disabled.' \
-  'Use the manual protected .github/workflows/deploy.yml transaction.' >&2
+  'Use the manual protected .github/workflows/deploy.yml transaction.' \
+  'Single-node release break-glass is disabled in product code.' >&2
 exit 2

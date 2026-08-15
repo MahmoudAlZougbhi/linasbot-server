@@ -125,7 +125,7 @@ Approve creating a **dedicated** DigitalOcean Managed Database:
 | Subject | Merge pull request #238 (`feat/wa-app-review-temp-bind`) |
 | `origin/main` on host | same SHA |
 | Rollback SHA for this release | **`781a94ca3d50b02b6a8da1b0afeaeaa32e01bb26`** (redeploy previous) |
-| Rollback procedure | On host: `cd /opt/linasbot && git fetch origin && git reset --hard 781a94ca3d50b02b6a8da1b0afeaeaa32e01bb26 && sudo bash /opt/linasbot/deploy.sh` |
+| Rollback procedure | Historical direct-host procedure retired. Use protected `recover_exact` for an active journal, or release a tested revert SHA through the two-node transaction. |
 | New release SHA | merge commit of PR #240 (after owner merge approval) |
 
 ### Migration state (expected)

@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 
 from modules import meta_connections_api_lifecycle as lifecycle
@@ -15,7 +16,6 @@ from services.meta_app_registry import (
     APP_B_KEY,
     MetaAppRegistry,
     MetaBindingCredential,
-    MetaCredentialError,
     MetaRegistryError,
 )
 from services.meta_oauth_graph import MetaOAuthError
@@ -518,25 +518,22 @@ async def test_disconnect_cancellation_after_delete_settles_local_disconnect(
 
     disconnected = _binding(registry, binding.binding_id)
     assert disconnected.status == "disconnected"
-    with pytest.raises(MetaCredentialError):
-        registry.get_credential(disconnected)
+    assert registry.get_credential(disconnected).access_token
 
 
 @pytest.mark.asyncio
-async def test_disconnect_local_cas_failure_restores_provider_preimage(
+async def test_disconnect_local_cas_failure_does_not_mutate_provider(
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import services.meta_oauth_graph as graph
 
     _staged, binding = _staged_b_then_active_a(registry)
-    before = ("mention", "messages", "messaging_postbacks")
-    restored: list[tuple[object, object]] = []
     events: list[str] = []
 
     async def inspect(*_args: Any, **_kwargs: Any) -> tuple[str, ...]:
         events.append("inspect")
-        return before
+        return DESIRED
 
     async def deleted(*_args: Any, **_kwargs: Any) -> None:
         events.append("delete")
@@ -546,14 +543,9 @@ async def test_disconnect_local_cas_failure_restores_provider_preimage(
         events.append("local")
         raise MetaRegistryError("simulated disconnect CAS")
 
-    async def restore(_binding: Any, snapshot: object, *, expected_current: object, **_kwargs: Any) -> None:
-        events.append("restore")
-        restored.append((snapshot, expected_current))
-
     monkeypatch.setattr(graph, "inspect_binding_webhook_subscription", inspect)
     monkeypatch.setattr(graph, "_unsubscribe_binding_webhook_locked_raw", deleted)
     monkeypatch.setattr(graph, "_settle_binding_disconnect", local_failure)
-    monkeypatch.setattr(graph, "_restore_binding_webhook_subscription_locked", restore)
 
     with pytest.raises(MetaRegistryError, match="disconnect CAS"):
         await graph.disconnect_binding_webhook(
@@ -562,6 +554,135 @@ async def test_disconnect_local_cas_failure_restores_provider_preimage(
             registry=registry,
         )
 
-    assert events == ["inspect", "delete", "local", "restore"]
-    assert restored == [(before, None)]
+    assert events == ["local"]
     assert _binding(registry, binding.binding_id).active
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("delete_success", [False, True])
+async def test_page_disconnect_keeps_credential_until_delete_absence_is_verified(
+    registry: MetaAppRegistry,
+    delete_success: bool,
+) -> None:
+    import services.meta_oauth_graph as graph
+
+    _staged, binding = _staged_b_then_active_a(registry)
+    calls: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.method)
+        if request.method == "DELETE":
+            return httpx.Response(200, json={"success": delete_success})
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "id": APP_A_ID,
+                        "subscribed_fields": list(DESIRED),
+                    }
+                ]
+            },
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url="https://graph.facebook.com/v24.0",
+    ) as client:
+        with pytest.raises(MetaOAuthError, match="disconnect"):
+            await graph.disconnect_binding_webhook(
+                binding,
+                actor_id="owner",
+                registry=registry,
+                client=client,
+            )
+
+    latest = _binding(registry, binding.binding_id)
+    assert latest.status == "disconnected"
+    assert registry.binding_credential_is_available(latest.binding_id) is True
+    assert calls == ["GET", "DELETE", "GET"]
+
+
+@pytest.mark.asyncio
+async def test_page_disconnect_accepts_lost_delete_ack_only_after_absence_readback(
+    registry: MetaAppRegistry,
+) -> None:
+    import services.meta_oauth_graph as graph
+
+    _staged, binding = _staged_b_then_active_a(registry)
+    present = True
+    calls: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal present
+        calls.append(request.method)
+        if request.method == "DELETE":
+            present = False
+            raise httpx.ReadError("simulated lost DELETE acknowledgement", request=request)
+        rows = [{"id": APP_A_ID, "subscribed_fields": list(DESIRED)}] if present else []
+        return httpx.Response(200, json={"data": rows})
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url="https://graph.facebook.com/v24.0",
+    ) as client:
+        settled = await graph.disconnect_binding_webhook(
+            binding,
+            actor_id="owner",
+            registry=registry,
+            client=client,
+        )
+
+    assert settled.status == "disconnected"
+    assert registry.binding_credential_is_available(binding.binding_id) is False
+    assert calls == ["GET", "DELETE", "GET"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("commit_method", ["set_binding_status", "archive_binding_credential"])
+async def test_page_disconnect_reconciles_local_commit_ack_loss_in_same_call(
+    registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+    commit_method: str,
+) -> None:
+    import services.meta_oauth_graph as graph
+
+    _staged, binding = _staged_b_then_active_a(registry)
+    original = getattr(registry, commit_method)
+    failed_once = False
+
+    def commit_then_throw(*args: object, **kwargs: object) -> object:
+        nonlocal failed_once
+        committed = original(*args, **kwargs)
+        if not failed_once:
+            failed_once = True
+            raise MetaRegistryError(f"simulated {commit_method} acknowledgement loss")
+        return committed
+
+    monkeypatch.setattr(registry, commit_method, commit_then_throw)
+    present = True
+    calls: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal present
+        calls.append(request.method)
+        if request.method == "DELETE":
+            present = False
+            return httpx.Response(200, json={"success": True})
+        rows = [{"id": APP_A_ID, "subscribed_fields": list(DESIRED)}] if present else []
+        return httpx.Response(200, json={"data": rows})
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        base_url="https://graph.facebook.com/v24.0",
+    ) as client:
+        settled = await graph.disconnect_binding_webhook(
+            binding,
+            actor_id="owner",
+            registry=registry,
+            client=client,
+        )
+
+    assert settled.status == "disconnected"
+    assert registry.binding_credential_is_available(binding.binding_id) is False
+    assert calls == ["GET", "DELETE", "GET"]

@@ -88,23 +88,26 @@ class MetaAppRegistryBindingsMixin:
 
     @contextmanager
     def _locked(self) -> Iterator[None]:
-        if self._lock_depth > 0:
-            self._lock_depth += 1
-            try:
-                yield
-            finally:
-                self._lock_depth -= 1
-            return
-
-        from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
-        from services.meta_app_registry_pg_store import (
-            acquire_registry_advisory_lock,
-            release_registry_advisory_lock,
-        )
-
-        needs_pg = self._backend in {"postgres", "dual"}
-        needs_file = self._backend in {"file", "dual"}
         with self._thread_lock:
+            # Depth and the shared Postgres session belong to the owning thread.
+            # Check re-entry only after acquiring the RLock so another thread can
+            # never inherit an in-flight transaction merely because depth > 0.
+            if self._lock_depth > 0:
+                self._lock_depth += 1
+                try:
+                    yield
+                finally:
+                    self._lock_depth -= 1
+                return
+
+            from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+            from services.meta_app_registry_pg_store import (
+                acquire_registry_advisory_lock,
+                release_registry_advisory_lock,
+            )
+
+            needs_pg = self._backend in {"postgres", "dual"}
+            needs_file = self._backend in {"file", "dual"}
             file_cm = self._file_lock_cm() if needs_file else nullcontext()
             with file_cm:
                 if not needs_pg:
@@ -122,9 +125,11 @@ class MetaAppRegistryBindingsMixin:
                         try:
                             yield
                         finally:
-                            release_registry_advisory_lock(session)
-                            self._pg_session = None
-                            self._lock_depth = 0
+                            try:
+                                release_registry_advisory_lock(session)
+                            finally:
+                                self._pg_session = None
+                                self._lock_depth = 0
                 except WhatsAppDatabaseUnavailable as exc:
                     raise MetaRegistryError("Meta registry Postgres backend is unavailable") from exc
 
@@ -327,18 +332,18 @@ class MetaAppRegistryBindingsMixin:
             raise MetaBindingConflictError("new OAuth bindings must be staged for activation")
         auth_hash = authorized_meta_user_id_hash(credential.authorized_meta_user_id)
         resolved_auth_flow = auth_flow or credential.auth_flow or "facebook_login"
+        requested_asset_key = binding_asset_key(tenant, app_key, channel, asset, resolved_auth_flow)
         now = time.time()
         with self._locked():
             state = self._read_unlocked()
             all_bindings = [self._binding_from_dict(value) for value in state["bindings"].values()]
-            for other in all_bindings:
-                if (
-                    other.active
-                    and other.channel == channel
-                    and other.asset_id == asset
-                    and (other.tenant_id != tenant or other.app_key != app_key)
-                ):
-                    raise MetaBindingConflictError("asset is already active for another workspace")
+            owners = [
+                other for other in all_bindings if other.active and other.channel == channel and other.asset_id == asset
+            ]
+            if any((other.tenant_id, other.app_key) != (tenant, app_key) for other in owners):
+                raise MetaBindingConflictError("asset is already active for another workspace")
+            if status == "active" and any(other.asset_key != requested_asset_key for other in owners):
+                raise MetaBindingConflictError("another active binding owns this asset")
 
             same_key = (
                 []
@@ -346,8 +351,7 @@ class MetaAppRegistryBindingsMixin:
                 else [
                     binding
                     for binding in all_bindings
-                    if binding.asset_key == binding_asset_key(tenant, app_key, channel, asset, resolved_auth_flow)
-                    and not binding.superseded_by_binding_id
+                    if binding.asset_key == requested_asset_key and not binding.superseded_by_binding_id
                 ]
             )
             canonical = (

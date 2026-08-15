@@ -153,7 +153,7 @@ Ready for owner device tests once TestFlight processing finishes (~5–10 min) a
 
 ```bash
 PREVIOUS_PROD_SHA=7ed5c3fd5068191a5a0b20e64a85fbb9fb43d076
-# per node: git reset --hard "$PREVIOUS_PROD_SHA" && sudo bash /opt/linasbot/deploy.sh
+# Historical SHA only. Direct per-node rollback is retired; use the protected two-node recovery/revert policy.
 # historical billing/auth emergency SoT: LINAS_BILLING_BACKEND=file LINAS_AUTH_TOKEN_BACKEND=file
 # Meta uses the encrypted Managed-PG four-table rollback only; never stale NFS.
 ```

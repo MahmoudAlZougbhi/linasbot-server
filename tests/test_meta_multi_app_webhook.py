@@ -21,6 +21,7 @@ from services.meta_app_registry import (
 )
 from services.meta_messaging import InMemoryMessageDeduper, MetaMessagingSettings
 from tests.meta_compliance_helpers import _FakeFirestore
+from tests.meta_instagram_login_lifecycle_helpers import force_legacy_binding_active
 
 SCOPES = (
     "pages_show_list",
@@ -344,7 +345,7 @@ async def test_instagram_comment_on_app_a_callback_does_not_cross_into_instagram
     monkeypatch.setenv("META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN", "verify-ig-login-tests")
 
     # Fixture already has facebook_login IG without comment scopes. Add Direct Login.
-    configured_registry.authorize_oauth_asset(
+    direct = configured_registry.authorize_oauth_asset(
         tenant_id="linas",
         channel="instagram",
         asset_id=ig_id,
@@ -363,10 +364,13 @@ async def test_instagram_comment_on_app_a_callback_does_not_cross_into_instagram
             auth_flow="instagram_login",
         ),
         actor_id="owner",
+        status="testing",
         auth_flow="instagram_login",
         webhook_subscription_status="ready",
         webhook_subscribed_fields=("messages", "messaging_postbacks", COMMENTS_SUBSCRIPTION_FIELD),
+        create_new_binding=True,
     )
+    force_legacy_binding_active(configured_registry, direct)
 
     processed: list[str] = []
 

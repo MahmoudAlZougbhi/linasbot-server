@@ -56,4 +56,8 @@ Rules enforced by the CLI:
 
 ## Emergency deploy bypass
 
-Only via documented `workflow_dispatch` with `EMERGENCY_DEPLOY_CONFIRM=I_UNDERSTAND_SKIPPING_GATES`. Prefer restoring green Quality Gates before the next routine deploy.
+Disabled. Product code exposes no single-node release bypass. Follow
+`docs/release/TWO_NODE_RELEASE_POLICY.md`: restore green Quality Gates and use
+the protected two-node recovery/release transaction. Live break-glass access is
+separate, time-limited, audited, and must keep a repaired node drained until
+exact pair parity is re-established.

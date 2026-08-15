@@ -27,6 +27,27 @@ def _helper() -> str:
     return HELPER.read_text(encoding="utf-8")
 
 
+def _schema_compatibility_gate_shell() -> str:
+    source = _helper()
+    assignments = "\n".join(line for line in source.splitlines() if line.startswith("META_IG_SINGLE_"))
+    start = source.index("assert_exact_schema_compatibility_marker() {")
+    end = source.index("\nassert_target_object() {", start)
+    functions = source[start:end]
+    return textwrap.dedent(
+        f"""\
+        set -euo pipefail
+        REPO_DIR="$1"
+        {assignments}
+        git() {{ /usr/bin/git "$@"; }}
+        die() {{ printf '[schema-gate-test] %s\\n' "$*" >&2; exit 1; }}
+        validate_sha() {{ [[ "$1" =~ ^[0-9a-f]{{40}}$ ]] || die "invalid SHA"; }}
+        current_head() {{ git -C "$REPO_DIR" rev-parse HEAD; }}
+        {functions}
+        release_schema_compatibility_evidence "$2" "$3"
+        """
+    )
+
+
 def _embedded_python(function_name: str) -> str:
     source = _helper()
     start = source.index(f"{function_name}() {{")
@@ -436,23 +457,190 @@ def test_both_nodes_preflight_before_any_stage_reset_restart_or_marker() -> None
     assert orchestrate.index('test "$previous_sha" = "$peer_previous_sha"') < transaction_start
 
 
-def test_peer_is_staged_and_activated_drained_before_node01_cutover() -> None:
+def test_stage_b_schema_gate_executes_before_every_mutation_surface() -> None:
+    source = _helper()
+    preflight = source[source.index("node_preflight() {") : source.index("capture_service_state() {")]
+    orchestrate = source[source.index("orchestrate() {") : source.index('case "${1:-}" in')]
+    target = preflight.index('assert_target_object "$target_sha" "$expected_helper_hash"')
+    clean_tree = preflight.index('git -C "$REPO_DIR" diff --quiet "$head" --')
+    compatibility = preflight.index(
+        'schema_compatibility_evidence="$(release_schema_compatibility_evidence "$target_sha" "$head")"'
+    )
+    untracked_audit = preflight.index('audit_untracked_runtime "$BACKUP_ROOT/untracked-audit"')
+
+    local_preflight = orchestrate.index('local_preflight="$(node_preflight')
+    peer_preflight = orchestrate.index('remote_node "$peer_host" preflight')
+    both_preflight_failure = orchestrate.index('if [ "$local_preflight_rc" -ne 0 ]')
+    first_journal = orchestrate.index('update_deploy_journal "preflight-proven"')
+    transaction_start = orchestrate.index("transaction_started=1")
+    first_maintenance = orchestrate.index('remote_node "$peer_host" mark-maintenance')
+    first_stage = orchestrate.index('remote_node "$peer_host" stage')
+    first_activate = orchestrate.index('remote_node "$peer_host" activate')
+
+    assert target < clean_tree < compatibility < untracked_audit
+    assert local_preflight < peer_preflight < both_preflight_failure < first_journal
+    assert first_journal < transaction_start < first_maintenance < first_stage < first_activate
+    assert "SCHEMA_COMPATIBILITY_EVIDENCE=%s" in preflight
+    assert orchestrate.count("extract_contract_value SCHEMA_COMPATIBILITY_EVIDENCE") == 2
+
+
+def test_stage_b_requires_exact_stage_a_marker_on_each_node(tmp_path: Path) -> None:
+    repo = tmp_path / "schema-repo"
+    repo.mkdir()
+
+    def git(*args: str) -> str:
+        result = subprocess.run(
+            ["/usr/bin/git", "-C", str(repo), *args],
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        return result.stdout.strip()
+
+    def commit(message: str) -> str:
+        git("add", "-A")
+        git("commit", "-q", "-m", message)
+        return git("rev-parse", "HEAD")
+
+    def checkout(sha: str) -> None:
+        git("checkout", "-q", "--detach", sha)
+
+    def gate(target: str, baseline: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["/bin/bash", str(gate_script), str(repo), target, baseline],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    git("init", "-q")
+    git("config", "user.name", "HA schema gate test")
+    git("config", "user.email", "ha-schema-gate@example.invalid")
+    (repo / "main.py").write_text("# pre-Stage-A runtime\n", encoding="utf-8")
+    pre_stage_a = commit("pre Stage A")
+
+    marker_relative = Path("scripts/ha/compat/20260820_meta_ig_single_baseline_v1")
+    marker_source = ROOT / marker_relative
+    marker_path = repo / marker_relative
+    marker_path.parent.mkdir(parents=True)
+    marker_path.write_bytes(marker_source.read_bytes())
+    stage_a = commit("Stage A compatible runtime marker")
+
+    migration = repo / "alembic/versions/20260820_meta_ig_single.py"
+    migration.parent.mkdir(parents=True)
+    migration.write_text('revision = "20260820_meta_ig_single"\n', encoding="utf-8")
+    stage_b = commit("Stage B migration")
+
+    checkout(pre_stage_a)
+    marker_path.parent.mkdir(parents=True, exist_ok=True)
+    marker_path.write_text("wrong compatibility claim\n", encoding="utf-8")
+    wrong_marker = commit("wrong Stage A marker")
+
+    gate_script = tmp_path / "schema-gate.sh"
+    gate_script.write_text(_schema_compatibility_gate_shell(), encoding="utf-8")
+
+    checkout(pre_stage_a)
+    pre_a_rejected = gate(stage_b, pre_stage_a)
+    assert pre_a_rejected.returncode != 0
+    assert "live baseline lacks the exact Stage A schema compatibility marker" in pre_a_rejected.stderr
+
+    checkout(stage_a)
+    node01 = gate(stage_b, stage_a)
+    node02 = gate(stage_b, stage_a)
+    expected_marker_sha = hashlib.sha256(marker_source.read_bytes()).hexdigest()
+    assert node01.returncode == 0, node01.stderr
+    assert node02.returncode == 0, node02.stderr
+    assert node01.stdout.strip() == node02.stdout.strip() == expected_marker_sha
+
+    checkout(wrong_marker)
+    mismatched_node02 = gate(stage_b, wrong_marker)
+    assert mismatched_node02.returncode != 0
+    assert "live baseline Stage A schema compatibility marker bytes differ" in mismatched_node02.stderr
+
+    checkout(pre_stage_a)
+    stage_a_without_migration = gate(pre_stage_a, pre_stage_a)
+    assert stage_a_without_migration.returncode == 0, stage_a_without_migration.stderr
+    assert stage_a_without_migration.stdout.strip() == "not-required"
+
+
+def test_both_nodes_are_durably_drained_before_first_target_activation() -> None:
     source = _helper()
     orchestrate = source[source.index("orchestrate() {") :]
     peer_marker = orchestrate.index('remote_node "$peer_host" mark-maintenance')
     peer_stage = orchestrate.index('remote_node "$peer_host" stage')
     local_stage = orchestrate.index('backup_live_node "$target_sha" "$previous_sha" "$tx_dir"')
+    local_marker = orchestrate.index("node_mark_maintenance", local_stage)
+    peer_baseline_drain = orchestrate.index(
+        'remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"', local_marker
+    )
+    local_baseline_drain = orchestrate.index(
+        'node_assert_release_drained "$previous_sha" "$tx_dir"', peer_baseline_drain
+    )
+    all_node_barrier = orchestrate.index(
+        'update_deploy_journal "both-nodes-drained-before-activation"', local_baseline_drain
+    )
     peer_activate = orchestrate.index('remote_node "$peer_host" activate')
-    local_marker = orchestrate.index("node_mark_maintenance", peer_activate)
     local_activate = orchestrate.index('node_activate "$target_sha"')
     peer_parity = orchestrate.index('remote_node "$peer_host" assert-drained "$target_sha"', local_activate)
     local_parity = orchestrate.index('node_assert_release_drained "$target_sha"', local_activate)
     awaiting_fresh_lb = orchestrate.index('update_deploy_journal "target-parity-awaiting-fresh-lb"')
 
-    assert peer_marker < peer_stage < local_stage < peer_activate
-    assert peer_activate < local_marker < local_activate
+    assert peer_marker < peer_stage < local_stage < local_marker
+    assert local_marker < peer_baseline_drain < local_baseline_drain < all_node_barrier
+    assert all_node_barrier < peer_activate < local_activate
     assert local_activate < peer_parity < local_parity < awaiting_fresh_lb
+    assert 'node_assert_release_ready "$previous_sha"' not in orchestrate[peer_activate:local_activate]
+    assert "assert_public_ready" not in orchestrate[peer_activate:local_activate]
     assert 'remote_node "$peer_host" clear-maintenance' not in orchestrate[awaiting_fresh_lb:]
+
+
+def test_every_target_activation_coordinator_has_a_durable_all_node_barrier() -> None:
+    source = _helper()
+    verify_start = source[source.index("start_target_runtime() {") : source.index("activate_impl() {")]
+    activation = source[source.index("activate_impl() {") : source.index("start_saved_runtime_disabled() {")]
+    orchestrate = source[source.index("orchestrate() {") : source.index('case "${1:-}" in')]
+    retry = source[source.index("retry_distinct_reconciliation() {") : source.index("deployment_recovery_status() {")]
+
+    assert "run_target_alembic_migrate" in verify_start
+    assert activation.index('assert_secure_maintenance_marker "$MAINTENANCE_FILE"') < activation.index(
+        'start_target_runtime "$tx_dir"'
+    )
+
+    normal_barrier = orchestrate.index('update_deploy_journal "both-nodes-drained-before-activation"')
+    assert (
+        orchestrate.index(
+            'remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"',
+            orchestrate.index('node_mark_maintenance "$tx_dir"'),
+        )
+        < normal_barrier
+    )
+    assert (
+        orchestrate.index(
+            'node_assert_release_drained "$previous_sha" "$tx_dir"',
+            orchestrate.index('node_mark_maintenance "$tx_dir"'),
+        )
+        < normal_barrier
+    )
+    assert normal_barrier < orchestrate.index('remote_node "$peer_host" activate')
+    assert normal_barrier < orchestrate.index('node_activate "$target_sha"')
+
+    retry_barrier = retry.index('update_retry_journal "retry-both-nodes-drained-before-activation"')
+    assert (
+        retry.index(
+            'node_assert_release_drained "$previous_sha" "$tx_dir"',
+            retry.index("assert_stage_artifact_parity"),
+        )
+        < retry_barrier
+    )
+    assert (
+        retry.index(
+            'remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"',
+            retry.index("assert_stage_artifact_parity"),
+        )
+        < retry_barrier
+    )
+    assert retry_barrier < retry.index('remote_node "$peer_host" activate')
+    assert retry_barrier < retry.index('node_activate "$target_sha"')
 
 
 def test_owner_gate_fixed_membership_and_peer_not_self_are_fail_closed() -> None:
@@ -1335,8 +1523,9 @@ def test_deploy_has_durable_digest_bound_recovery_for_kill_and_ack_loss() -> Non
     for phase in (
         "peer-mark-started",
         "peer-staged",
-        "peer-activated",
         "node01-marked",
+        "both-nodes-drained-before-activation",
+        "peer-activated",
         "node01-activated",
         "target-parity-awaiting-fresh-lb",
     ):
@@ -1358,6 +1547,20 @@ def test_deploy_has_durable_digest_bound_recovery_for_kill_and_ack_loss() -> Non
     assert 'remote_node "$peer_host" recover-admit' in recover
     assert 'remote_node "$peer_host" recover-rollback' in recover
     assert "both nodes were forced fail-closed" in recover
+    recovery_barrier = recover.index('update_recovery_journal "recovery-both-nodes-drained"')
+    recovery_start = recover.index('update_recovery_journal "recovery-started"')
+    assert recover.index('node_ensure_maintenance "$tx_dir"', recovery_start) < recovery_barrier
+    assert recover.index('remote_node "$peer_host" ensure-maintenance "$tx_dir"', recovery_start) < recovery_barrier
+    assert recovery_barrier < recover.index('node_recover_rollback "$previous_sha" "$tx_dir"')
+
+    automatic = orchestrate[orchestrate.index("rollback_transaction() {") : orchestrate.index("on_exit() {")]
+    local_drain = automatic.index('node_ensure_maintenance "$tx_dir"')
+    peer_drain = automatic.index('remote_node "$peer_host" ensure-maintenance "$tx_dir"')
+    drain_wait = automatic.index('sleep "$drain_seconds"', peer_drain)
+    rollback_barrier = automatic.index('update_deploy_journal "automatic-rollback-both-nodes-drained"')
+    local_restore = automatic.index('rollback_impl "$previous_sha" "$tx_dir"')
+    peer_restore = automatic.index('remote_node "$peer_host" rollback "$peer_previous_sha" "$tx_dir"')
+    assert local_drain < peer_drain < drain_wait < rollback_barrier < local_restore < peer_restore
 
 
 def test_distinct_drained_rollback_has_an_exact_retryable_reconciliation_path() -> None:
@@ -1379,10 +1582,11 @@ def test_distinct_drained_rollback_has_an_exact_retryable_reconciliation_path() 
     peer_exact = retry.index('remote_node "$peer_host" assert-head "$peer_previous_sha" "$tx_dir"')
     peer_stage = retry.index('remote_node "$peer_host" retry-stage "$target_sha" "$peer_previous_sha" "$tx_dir"')
     local_stage = retry.index('prepare_retry_stage "$target_sha" "$previous_sha" "$tx_dir"')
+    both_drained = retry.index('update_retry_journal "retry-both-nodes-drained-before-activation"')
     peer_activate = retry.index('remote_node "$peer_host" activate "$target_sha" "$peer_previous_sha" "$tx_dir"')
     local_activate = retry.index('node_activate "$target_sha" "$previous_sha" "$tx_dir"')
     parity = retry.index('update_retry_journal "target-parity-awaiting-fresh-lb"')
-    assert local_exact < peer_exact < peer_stage < local_stage < peer_activate < local_activate < parity
+    assert local_exact < peer_exact < peer_stage < local_stage < both_drained < peer_activate < local_activate < parity
     assert 'remote_node "$peer_host" recover-admit "$target_sha" "$tx_dir"' not in retry
     assert 'node_recover_admit "$target_sha" "$tx_dir"' not in retry
     assert 'node_recover_rollback "$previous_sha" "$tx_dir"' in retry

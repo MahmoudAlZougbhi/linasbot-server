@@ -2,9 +2,10 @@
 # Transactional, fail-closed two-node production release deployment.
 #
 # This file is executed from the exact authorized Git object by deploy.yml.  It
-# deliberately keeps both nodes out of the load balancer from the first runtime
-# mutation until both nodes run the same verified release.  The load balancer
-# owner must first attest that its health check is exactly /api/ready.
+# deliberately keeps every changed node out of the load balancer, then keeps
+# both nodes drained once target parity is reached and until a separately
+# confirmed commit admits them. The load balancer owner must first attest that
+# its health check is exactly /api/ready.
 
 set -euo pipefail
 umask 077
@@ -63,6 +64,9 @@ PRODUCTION_GUARD_REPO_PATH=scripts/ha/production_mutation_guard.py
 RELEASE_VERIFY_REPO_PATH=scripts/ha/release_verify_server.py
 RELEASE_READINESS_REPO_PATH=scripts/ha/release_readiness_probe.py
 RELEASE_ALEMBIC_MIGRATE_REPO_PATH=scripts/ha/release_alembic_migrate.py
+META_IG_SINGLE_MIGRATION_REPO_PATH=alembic/versions/20260820_meta_ig_single.py
+META_IG_SINGLE_COMPAT_MARKER_REPO_PATH=scripts/ha/compat/20260820_meta_ig_single_baseline_v1
+META_IG_SINGLE_COMPAT_MARKER_SHA256=5f0d85c013d155811a95e731a4895f4218d6719720a7378796717631079090c8
 LB_MANAGER_REPO_PATH=scripts/ha/manage_do_lb_ready_healthcheck.py
 LB_CONTRACT_REPO_PATH=scripts/ha/do_lb_ready_contract.py
 RELEASE_ARTIFACT_CONTRACT_REPO_PATH=scripts/ha/release_artifact_contract.py
@@ -92,6 +96,10 @@ PYTHON_LIBPYTHON=$PYTHON_RUNTIME_ROOT/lib/libpython3.13.so.1.0
 PYTHON_LIBPYTHON_SHA256=965dcc1afd5934923b5a930e54afcaafc572485394ae33c35d27038bd943dcc5
 REQUIRED_PIP_VERSION=26.2.1
 DEFAULT_PEER_HOST=10.106.0.4
+# Protocol fence for coordinator-to-node RPC. This is deliberately not a
+# secret and is not a security boundary against root; it prevents legacy or
+# accidental direct use of the helper's single-node implementation phases.
+INTERNAL_NODE_DISPATCH_CONFIRM=LINAS_HA_COORDINATOR_INTERNAL_NODE_RPC_V1
 VERIFY_API_UNIT=linasbot-ha-verify.service
 VERIFY_READINESS_UNIT=linasbot-ha-readiness-probe.service
 WORKER_QUEUES=(high_priority interactive background expensive)
@@ -110,6 +118,11 @@ log() {
 die() {
   printf '[ha-deploy] ERROR: %s\n' "$*" >&2
   exit 1
+}
+
+require_internal_node_dispatch() {
+  test "${1:-}" = "$INTERNAL_NODE_DISPATCH_CONFIRM" || \
+    die "single-node release phases are internal-only; use a two-node coordinator operation"
 }
 
 run_system_python_control() {
@@ -3811,6 +3824,53 @@ raise SystemExit("maintenance marker did not withdraw readiness")
 PY
 }
 
+assert_exact_schema_compatibility_marker() {
+  local release_sha="$1"
+  local label="$2"
+  local entry metadata listed_path mode kind object extra marker_sha
+  validate_sha "$release_sha"
+  entry="$(git -C "$REPO_DIR" ls-tree "$release_sha" -- "$META_IG_SINGLE_COMPAT_MARKER_REPO_PATH")"
+  IFS=$'\t' read -r metadata listed_path <<<"$entry"
+  read -r mode kind object extra <<<"${metadata:-}"
+  test "$mode" = "100644" && test "$kind" = "blob" && \
+    [[ "$object" =~ ^[0-9a-f]{40}$ ]] && test -z "${extra:-}" && \
+    test "$listed_path" = "$META_IG_SINGLE_COMPAT_MARKER_REPO_PATH" || \
+    die "$label lacks the exact Stage A schema compatibility marker"
+  marker_sha="$(git -C "$REPO_DIR" show \
+    "$release_sha:$META_IG_SINGLE_COMPAT_MARKER_REPO_PATH" | sha256sum | awk '{print $1}')"
+  test "$marker_sha" = "$META_IG_SINGLE_COMPAT_MARKER_SHA256" || \
+    die "$label Stage A schema compatibility marker bytes differ"
+}
+
+release_schema_compatibility_evidence() {
+  local target_sha="$1"
+  local baseline_sha="$2"
+  local live_marker_sha
+  validate_sha "$target_sha"
+  validate_sha "$baseline_sha"
+  if ! git -C "$REPO_DIR" cat-file -e \
+    "$target_sha:$META_IG_SINGLE_MIGRATION_REPO_PATH" 2>/dev/null; then
+    printf 'not-required\n'
+    return 0
+  fi
+  assert_exact_schema_compatibility_marker "$target_sha" "target release"
+  assert_exact_schema_compatibility_marker "$baseline_sha" "live baseline"
+  test "$(current_head)" = "$baseline_sha" || \
+    die "live baseline changed during the schema compatibility gate"
+  test -f "$REPO_DIR/$META_IG_SINGLE_COMPAT_MARKER_REPO_PATH" && \
+    test ! -L "$REPO_DIR/$META_IG_SINGLE_COMPAT_MARKER_REPO_PATH" || \
+    die "live Stage A schema compatibility marker is missing or unsafe"
+  live_marker_sha="$(sha256sum "$REPO_DIR/$META_IG_SINGLE_COMPAT_MARKER_REPO_PATH" | awk '{print $1}')"
+  test "$live_marker_sha" = "$META_IG_SINGLE_COMPAT_MARKER_SHA256" || \
+    die "live Stage A schema compatibility marker bytes differ from its baseline"
+  test "$(git -C "$REPO_DIR" hash-object \
+    "$REPO_DIR/$META_IG_SINGLE_COMPAT_MARKER_REPO_PATH")" = \
+    "$(git -C "$REPO_DIR" rev-parse \
+      "$baseline_sha:$META_IG_SINGLE_COMPAT_MARKER_REPO_PATH")" || \
+    die "live Stage A schema compatibility marker differs from the checked-out baseline"
+  printf '%s\n' "$META_IG_SINGLE_COMPAT_MARKER_SHA256"
+}
+
 assert_target_object() {
   local target_sha="$1"
   local expected_helper_hash="$2"
@@ -3975,6 +4035,7 @@ node_preflight() {
   local expected_lb_attestation_sha="${5:-}"
   local expected_lb_projection_sha="${6:-}"
   local head node drain peer queue python_runtime_cluster_sha baseline_artifacts
+  local schema_compatibility_evidence
   local lb_observed_at
   local blocker=0
   python_runtime_cluster_sha="$(assert_python_runtime_contract "$expected_node_id")"
@@ -3988,10 +4049,11 @@ node_preflight() {
   head="$(current_head)"
   validate_sha "$head"
   assert_target_object "$target_sha" "$expected_helper_hash"
-  lb_observed_at="$(assert_fresh_lb_ready_attestation \
-    "$target_sha" "$expected_lb_attestation_sha" "$expected_lb_projection_sha")"
   git -C "$REPO_DIR" diff --quiet "$head" -- || die "live tracked tree is dirty"
   git -C "$REPO_DIR" diff --cached --quiet "$head" -- || die "live index is dirty"
+  schema_compatibility_evidence="$(release_schema_compatibility_evidence "$target_sha" "$head")"
+  lb_observed_at="$(assert_fresh_lb_ready_attestation \
+    "$target_sha" "$expected_lb_attestation_sha" "$expected_lb_projection_sha")"
   audit_untracked_runtime "$BACKUP_ROOT/untracked-audit" "preflight-${expected_node_id}" "$target_sha" || \
     blocker=1
   assert_no_shadow_runtime "$expected_node_id" || blocker=1
@@ -4043,9 +4105,10 @@ node_preflight() {
   assert_ready
   assert_lb_ready
   baseline_artifacts="$(live_baseline_artifact_evidence)"
-  printf 'NODE_ID=%s\nPREVIOUS_SHA=%s\nDRAIN_SECONDS=%s\nCONFIGURED_PEER=%s\nBOOTSTRAP_PLAN_SHA=%s\nPYTHON_RUNTIME_CLUSTER_SHA=%s\nLB_ATTESTATION_OBSERVED_AT=%s\nBASELINE_ARTIFACT_EVIDENCE=%s\n' \
+  printf 'NODE_ID=%s\nPREVIOUS_SHA=%s\nDRAIN_SECONDS=%s\nCONFIGURED_PEER=%s\nBOOTSTRAP_PLAN_SHA=%s\nPYTHON_RUNTIME_CLUSTER_SHA=%s\nSCHEMA_COMPATIBILITY_EVIDENCE=%s\nLB_ATTESTATION_OBSERVED_AT=%s\nBASELINE_ARTIFACT_EVIDENCE=%s\n' \
     "$node" "$head" "$drain" "$peer" "$expected_bootstrap_plan" \
-    "$python_runtime_cluster_sha" "$lb_observed_at" "$baseline_artifacts"
+    "$python_runtime_cluster_sha" "$schema_compatibility_evidence" \
+    "$lb_observed_at" "$baseline_artifacts"
 }
 
 capture_service_state() {
@@ -7004,6 +7067,9 @@ rollback_impl() {
   local previous_sha="$1"
   local tx_dir="$2"
   local sibling_dir target_sha phase generation generation_root generation_label
+  # Rollback restores the exact application/runtime baseline. Schema releases
+  # must use a forward-compatible expand/contract baseline; this transaction
+  # never guesses at reversing a database revision after target verification.
   if [ ! -e "$tx_dir/stage.complete" ] && [ ! -L "$tx_dir/stage.complete" ]; then
     return 0
   fi
@@ -8135,7 +8201,8 @@ remote_node() {
   ssh "${SSH_OPTIONS[@]}" "root@${peer_host}" \
     /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
     PATH=/usr/sbin:/usr/bin:/sbin:/bin \
-    /bin/bash --noprofile --norc -s -- node "$@" <"$0"
+    /bin/bash --noprofile --norc -s -- node \
+    "$INTERNAL_NODE_DISPATCH_CONFIRM" "$@" <"$0"
 }
 
 prepare_remote_exact_helper() {
@@ -8228,7 +8295,8 @@ install_release_bundle_cluster() {
     /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
     PATH=/usr/sbin:/usr/bin:/sbin:/bin \
     /bin/bash --noprofile --norc "$remote_helper" install-release-bundle \
-    node02 "$remote_incoming" "$target_sha" "$artifact_id" "$artifact_api_sha" \
+    "$INTERNAL_NODE_DISPATCH_CONFIRM" node02 "$remote_incoming" "$target_sha" \
+    "$artifact_id" "$artifact_api_sha" \
     "$manifest_sha" "$run_id" "$run_attempt" "$control_sha" "$source_sha" \
     "$target_tree_sha" "$confirmation"
   rc=$?
@@ -8287,8 +8355,9 @@ install_lb_ready_attestation_cluster() {
     /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
     PATH=/usr/sbin:/usr/bin:/sbin:/bin \
     /bin/bash --noprofile --norc "$remote_helper" install-lb-attestation \
-    node02 "$operation" "$target_sha" "$attestation_sha" "$ready_projection_sha" \
-    "$journal_digest" "$confirmation" "$owner_confirmation" <"$attestation_path"
+    "$INTERNAL_NODE_DISPATCH_CONFIRM" node02 "$operation" "$target_sha" \
+    "$attestation_sha" "$ready_projection_sha" "$journal_digest" "$confirmation" \
+    "$owner_confirmation" <"$attestation_path"
   rc=$?
   set -e
   if [ "$rc" = 0 ]; then
@@ -8530,6 +8599,7 @@ recover_deployment() {
   node_ensure_maintenance "$tx_dir"
   remote_node "$peer_host" ensure-maintenance "$tx_dir"
   sleep "$drain_seconds"
+  update_recovery_journal "recovery-both-nodes-drained"
   if [ "$decision" = "commit" ]; then
     update_recovery_journal "commit-recovery-parity"
     node_assert_exact_head "$target_sha" "$tx_dir"
@@ -8765,6 +8835,9 @@ retry_distinct_reconciliation() {
     "$release_run_id" "$release_run_attempt"
   assert_stage_artifact_parity \
     "$peer_host" "$tx_dir" "$target_sha" "$previous_sha" "$peer_previous_sha"
+  node_assert_release_drained "$previous_sha" "$tx_dir"
+  remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"
+  update_retry_journal "retry-both-nodes-drained-before-activation"
   update_retry_journal "retry-peer-activate"
   remote_node "$peer_host" activate "$target_sha" "$peer_previous_sha" "$tx_dir"
   remote_node "$peer_host" assert-drained "$target_sha" "$tx_dir"
@@ -9048,6 +9121,8 @@ orchestrate() {
   local previous_sha peer_previous_sha drain_seconds peer_drain_seconds
   local python_runtime_cluster_sha local_preflight_runtime_cluster_sha
   local peer_python_runtime_cluster_sha
+  local local_schema_compatibility_evidence peer_schema_compatibility_evidence
+  local expected_schema_compatibility_evidence
   local lb_observed_at peer_lb_observed_at
   local release_summary peer_release_summary
   local configured_peer peer_host tx_stamp tx_dir
@@ -9135,6 +9210,22 @@ orchestrate() {
   if [ "$local_preflight_rc" -ne 0 ] || [ "$peer_preflight_rc" -ne 0 ]; then
     die "both-node preflight failed; no release, service, or admission mutation was attempted"
   fi
+  if git -C "$REPO_DIR" cat-file -e \
+    "$target_sha:$META_IG_SINGLE_MIGRATION_REPO_PATH" 2>/dev/null; then
+    expected_schema_compatibility_evidence="$META_IG_SINGLE_COMPAT_MARKER_SHA256"
+  else
+    expected_schema_compatibility_evidence=not-required
+  fi
+  local_schema_compatibility_evidence="$(
+    printf '%s\n' "$local_preflight" | extract_contract_value SCHEMA_COMPATIBILITY_EVIDENCE
+  )"
+  peer_schema_compatibility_evidence="$(
+    printf '%s\n' "$peer_preflight" | extract_contract_value SCHEMA_COMPATIBILITY_EVIDENCE
+  )"
+  test "$local_schema_compatibility_evidence" = "$expected_schema_compatibility_evidence" || \
+    die "node01 schema compatibility evidence differs from the target contract"
+  test "$peer_schema_compatibility_evidence" = "$expected_schema_compatibility_evidence" || \
+    die "node02 schema compatibility evidence differs from the target contract"
   previous_sha="$(printf '%s\n' "$local_preflight" | extract_contract_value PREVIOUS_SHA)"
   drain_seconds="$(printf '%s\n' "$local_preflight" | extract_contract_value DRAIN_SECONDS)"
   configured_peer="$(printf '%s\n' "$local_preflight" | extract_contract_value CONFIGURED_PEER)"
@@ -9263,6 +9354,11 @@ orchestrate() {
     remote_node "$peer_host" ensure-maintenance "$tx_dir" || rollback_ok=0
     if [ "$rollback_ok" = "1" ]; then
       sleep "$drain_seconds"
+    fi
+    if [ "$rollback_ok" = "1" ]; then
+      update_deploy_journal "automatic-rollback-both-nodes-drained" || rollback_ok=0
+    fi
+    if [ "$rollback_ok" = "1" ]; then
       rollback_impl "$previous_sha" "$tx_dir" || rollback_ok=0
       remote_node "$peer_host" rollback "$peer_previous_sha" "$tx_dir" || rollback_ok=0
     fi
@@ -9345,19 +9441,26 @@ orchestrate() {
   update_deploy_journal "node01-staged"
   assert_stage_artifact_parity \
     "$peer_host" "$tx_dir" "$target_sha" "$previous_sha" "$peer_previous_sha"
+
+  # Staging is byte preparation only, so node01 may continue serving the exact
+  # baseline while both recoverable backups are built. Target activation calls
+  # start_target_runtime(), which runs Alembic before readiness; withdraw and
+  # durably prove both fixed nodes drained before either activation can begin.
+  log "withdrawing node01 before any target activation or database migration"
+  update_deploy_journal "node01-mark-started"
+  node_mark_maintenance "$tx_dir"
+  update_deploy_journal "node01-marked"
+  sleep "$drain_seconds"
+  remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"
+  node_assert_release_drained "$previous_sha" "$tx_dir"
+  update_deploy_journal "both-nodes-drained-before-activation"
+
   log "activating exact target on drained peer"
   update_deploy_journal "peer-activate-started"
   remote_node "$peer_host" activate "$target_sha" "$peer_previous_sha" "$tx_dir"
   update_deploy_journal "peer-activated"
   remote_node "$peer_host" assert-drained "$target_sha" "$tx_dir"
-  node_assert_release_ready "$previous_sha"
-  assert_public_ready
-
-  log "withdrawing node01; owner-approved brief all-node maintenance begins"
-  update_deploy_journal "node01-mark-started"
-  node_mark_maintenance "$tx_dir"
-  update_deploy_journal "node01-marked"
-  sleep "$drain_seconds"
+  node_assert_release_drained "$previous_sha" "$tx_dir"
   log "activating exact target on drained node01"
   update_deploy_journal "node01-activate-started"
   node_activate "$target_sha" "$previous_sha" "$tx_dir"
@@ -9378,9 +9481,10 @@ orchestrate() {
 
 case "${1:-}" in
   install-release-bundle)
+    require_internal_node_dispatch "${2:-}"
     install_release_bundle \
-      "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" "${7:-}" \
-      "${8:-}" "${9:-}" "${10:-}" "${11:-}" "${12:-}" "${13:-}"
+      "${3:-}" "${4:-}" "${5:-}" "${6:-}" "${7:-}" "${8:-}" \
+      "${9:-}" "${10:-}" "${11:-}" "${12:-}" "${13:-}" "${14:-}"
     ;;
   install-release-bundle-cluster)
     install_release_bundle_cluster \
@@ -9388,8 +9492,9 @@ case "${1:-}" in
       "${8:-}" "${9:-}" "${10:-}" "${11:-}" "${12:-}"
     ;;
   install-lb-attestation)
+    require_internal_node_dispatch "${2:-}"
     install_lb_ready_attestation \
-      "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" "${7:-}" "${8:-}" "${9:-}"
+      "${3:-}" "${4:-}" "${5:-}" "${6:-}" "${7:-}" "${8:-}" "${9:-}" "${10:-}"
     ;;
   install-lb-attestation-cluster)
     install_lb_ready_attestation_cluster \
@@ -9420,6 +9525,8 @@ case "${1:-}" in
     deployment_recovery_status "${2:-}" "${3:-}" "${4:-}" "${5:-}"
     ;;
   node)
+    shift
+    require_internal_node_dispatch "${1:-}"
     shift
     node_dispatch "$@"
     ;;

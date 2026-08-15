@@ -13,9 +13,27 @@ from modules.core import app
 from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 
 
+def repair_meta_registry_before_readiness() -> None:
+    """Apply the local compatibility repair before startup can become ready."""
+
+    from services.meta_app_registry import get_meta_app_registry, meta_multi_app_registry_enabled
+
+    if meta_multi_app_registry_enabled():
+        get_meta_app_registry().archive_superseded_duplicate_bindings(actor_id="meta-registry-startup-repair")
+
+
 @app.on_event("startup")
 async def startup_event() -> None:
     """Initialize Meta Cloud as the default WhatsApp provider on startup"""
+    try:
+        # Local/DB-only compatibility repair must finish before this node can
+        # become ready.  It lets the runtime release safely precede the
+        # contract migration in a two-phase HA rollout.
+        repair_meta_registry_before_readiness()
+    except Exception as exc:
+        print(f"❌ META REGISTRY STARTUP REPAIR FAILED: {type(exc).__name__}")
+        raise
+
     try:
         from services.whatsapp_cloud.legacy_isolation import assert_no_monty_cloud_dual_bind
 

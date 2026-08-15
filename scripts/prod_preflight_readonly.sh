@@ -7,7 +7,7 @@ cd /opt/linasbot
 echo "[preflight] deployed_sha=$(git rev-parse HEAD)"
 echo "[preflight] deployed_subject=$(git log -1 --pretty=%s)"
 echo "[preflight] origin_main_remote=$(git rev-parse origin/main 2>/dev/null || echo unknown)"
-echo "[preflight] rollback_path=git reset --hard PREV_SHA && sudo bash /opt/linasbot/deploy.sh"
+echo "[preflight] rollback_path=protected .github/workflows/deploy.yml recover_exact transaction"
 
 NGINX_MATCH_COUNT=0
 if [ -d /etc/nginx/sites-enabled ]; then

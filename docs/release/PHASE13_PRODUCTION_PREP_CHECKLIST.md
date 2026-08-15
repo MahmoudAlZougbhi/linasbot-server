@@ -23,7 +23,7 @@
 | Database backup/snapshot | Postgres WA Cloud + Requests tables — see report §C |
 | Firestore backup/restore plan | Live Chat / users — indexes owner-gated; dry-run OK |
 | Previous deploy artifact | systemd `/etc/systemd/system/linasbot.service` |
-| Rollback command | `git reset --hard 781a94ca3d50b02b6a8da1b0afeaeaa32e01bb26 && sudo bash /opt/linasbot/deploy.sh` |
+| Rollback command | Retired. Use protected `recover_exact` for an active journal, or a tested revert SHA through the two-node release transaction. |
 | Migration forward/rollback | `20260812_customer_requests` additive; downgrade drops new tables only |
 | Meta connection snapshot | VERIFY_AND_PRESERVE — live verified; no disconnect/rebuild |
 | Redis rollback | unset require flag / previous URL |

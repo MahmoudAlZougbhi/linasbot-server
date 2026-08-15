@@ -20,6 +20,7 @@ from services.meta_app_registry_common import (
     MetaBindingNotFoundError,
     MetaChannel,
     _app_b_linas_cutover_allowed,
+    _binding_duplicate_keeper_rank,
     _bindings_share_exclusive_asset,
     authorized_meta_user_id_hash,
     get_meta_app_configs,
@@ -38,7 +39,10 @@ class MetaAppRegistryLifecycleMixin:
     _write_unlocked: Any
 
     def archive_superseded_duplicate_bindings(self, *, actor_id: str = "binding-archive") -> int:
-        """Mark older duplicate rows superseded when a newer active row exists for the same asset key."""
+        """Converge duplicate rows for file-backend and legacy-state repair.
+
+        A ready direct Instagram binding wins; otherwise the healthy linked row wins.
+        """
 
         archived = 0
         with self._locked():
@@ -46,23 +50,61 @@ class MetaAppRegistryLifecycleMixin:
             bindings = [self._binding_from_dict(value) for value in state["bindings"].values()]
             groups: dict[str, list[MetaAssetBinding]] = {}
             for binding in bindings:
-                groups.setdefault(binding.asset_key, []).append(binding)
+                groups.setdefault(binding.exclusive_asset_key, []).append(binding)
             now = time.time()
             for group in groups.values():
-                if len(group) < 2:
-                    continue
+                active_rows = [item for item in group if item.active]
+                active_tenants = {item.tenant_id for item in active_rows}
+                if len(active_tenants) > 1:
+                    # ``superseded_by_binding_id`` is dashboard history metadata;
+                    # it must never hide an active cross-tenant ownership split.
+                    raise MetaBindingConflictError("asset is active for multiple workspaces")
                 visible = [item for item in group if not item.superseded_by_binding_id]
-                if len(visible) < 2:
+                hidden_active = any(item.active and item.superseded_by_binding_id for item in group)
+                if len(visible) < 2 and len(active_rows) < 2 and not hidden_active:
                     continue
-                active_rows = [item for item in visible if item.active]
-                keeper = active_rows[0] if active_rows else max(visible, key=lambda item: item.updated_at)
-                for duplicate in visible:
+
+                if active_rows:
+                    keeper = max(active_rows, key=_binding_duplicate_keeper_rank)
+                    duplicates = [item for item in group if item.tenant_id == keeper.tenant_id]
+                    keeper_raw = dict(state["bindings"][keeper.binding_id])
+                    if keeper_raw.get("superseded_by_binding_id"):
+                        keeper_raw["superseded_by_binding_id"] = ""
+                        keeper_raw["generation"] = keeper.generation + 1
+                        keeper_raw["updated_at"] = now
+                        state["bindings"][keeper.binding_id] = keeper_raw
+                        archived += 1
+                else:
+                    # With no active owner, keep histories isolated by tenant/app/flow.
+                    historical_groups: dict[str, list[MetaAssetBinding]] = {}
+                    for item in visible:
+                        historical_groups.setdefault(item.asset_key, []).append(item)
+                    duplicates = []
+                    for history in historical_groups.values():
+                        history_keeper = max(
+                            history,
+                            key=lambda item: (item.updated_at, item.created_at, item.binding_id),
+                        )
+                        for item in history:
+                            if item.binding_id != history_keeper.binding_id:
+                                raw = dict(state["bindings"][item.binding_id])
+                                raw["superseded_by_binding_id"] = history_keeper.binding_id
+                                raw["generation"] = item.generation + 1
+                                raw["updated_at"] = now
+                                state["bindings"][item.binding_id] = raw
+                                archived += 1
+                    continue
+
+                for duplicate in duplicates:
                     if duplicate.binding_id == keeper.binding_id:
                         continue
                     raw = dict(state["bindings"][duplicate.binding_id])
-                    if raw.get("superseded_by_binding_id"):
+                    if not duplicate.active and raw.get("superseded_by_binding_id"):
                         continue
+                    if duplicate.active:
+                        raw["status"] = "inactive"
                     raw["superseded_by_binding_id"] = keeper.binding_id
+                    raw["generation"] = duplicate.generation + 1
                     raw["updated_at"] = now
                     state["bindings"][duplicate.binding_id] = raw
                     archived += 1
@@ -107,6 +149,17 @@ class MetaAppRegistryLifecycleMixin:
             and not _app_b_linas_cutover_allowed()
         ):
             raise MetaBindingConflictError("App B cannot activate Lina assets without an approved cutover")
+        if replacing_binding_id:
+            replacement_raw = state["bindings"].get(replacing_binding_id)
+            if not isinstance(replacement_raw, dict):
+                raise MetaBindingConflictError("replacement binding is unavailable")
+            replacement = self._binding_from_dict(replacement_raw)
+            if (
+                not replacement.active
+                or replacement.tenant_id != current.tenant_id
+                or not _bindings_share_exclusive_asset(replacement, current)
+            ):
+                raise MetaBindingConflictError("replacement binding crosses an ownership boundary")
         for value in state["bindings"].values():
             other = self._binding_from_dict(value)
             if other.binding_id in {current.binding_id, replacing_binding_id} or not other.active:
@@ -190,6 +243,8 @@ class MetaAppRegistryLifecycleMixin:
                 ]
                 if len({conflict.binding_id for conflict in conflicts}) > 1:
                     raise MetaBindingConflictError("active binding indexes are inconsistent")
+                if conflicts and conflicts[0].tenant_id != current.tenant_id:
+                    raise MetaBindingConflictError("asset is already active for another workspace")
                 if conflicts and not replace_existing:
                     raise MetaBindingConflictError("another active binding owns this asset")
                 replacement = conflicts[0] if conflicts else None
@@ -223,7 +278,11 @@ class MetaAppRegistryLifecycleMixin:
                     if other_id == current.binding_id:
                         continue
                     other = self._binding_from_dict(other_raw)
-                    if other.asset_key != current.asset_key or other.superseded_by_binding_id:
+                    if (
+                        other.tenant_id != current.tenant_id
+                        or not _bindings_share_exclusive_asset(other, current)
+                        or other.superseded_by_binding_id
+                    ):
                         continue
                     superseded = dict(other_raw)
                     superseded["superseded_by_binding_id"] = current.binding_id
@@ -304,6 +363,8 @@ class MetaAppRegistryLifecycleMixin:
             if len({candidate.binding_id for candidate in active_candidates}) > 1:
                 raise MetaBindingConflictError("active binding indexes are inconsistent")
             conflicts = [existing for existing in active_candidates if status == "active"]
+            if any(existing.tenant_id != tenant for existing in conflicts):
+                raise MetaBindingConflictError("asset is already active for another workspace")
             identical = next(
                 (
                     existing

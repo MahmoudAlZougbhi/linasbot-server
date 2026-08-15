@@ -9,16 +9,45 @@ from typing import Any
 
 import httpx
 
-from services.meta_app_registry import MetaAppRegistry, MetaAssetBinding, MetaBindingCredential, get_meta_app_registry
+from services.meta_app_registry import (
+    MetaAppRegistry,
+    MetaAssetBinding,
+    MetaBindingCredential,
+    get_meta_app_configs,
+    get_meta_app_registry,
+)
 from services.meta_instagram_login_config import META_INSTAGRAM_GRAPH_BASE_URL, instagram_login_app_id
-from services.meta_oauth import MetaOAuthError, _safe_json
+from services.meta_oauth_graph_http import MetaOAuthError, _safe_json
+from services.meta_oauth_page_lock import lock_facebook_page_oauth_operation
 
 _runtime_logger = logging.getLogger("uvicorn.error")
 
 REQUIRED_DM_SUBSCRIPTION_FIELDS = frozenset({"messages", "messaging_postbacks"})
 COMMENTS_SUBSCRIPTION_FIELD = "comments"
+InstagramLoginWebhookSubscriptionSnapshot = tuple[str, ...] | None
+INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS = "cleanup_pending"
+INSTAGRAM_LOGIN_CLEANUP_DELETE_ERROR = "cleanup_delete_subscription"
+INSTAGRAM_LOGIN_CLEANUP_RESTORE_ERROR = "cleanup_restore_preimage"
 _SUBSCRIBE_MAX_ATTEMPTS = 3
 _SUBSCRIBE_BACKOFF_SECONDS = (0.5, 1.5, 3.0)
+
+
+def instagram_login_subscription_lock_asset(ig_user_id: str) -> str:
+    """Return the durable writer-lock identity shared by connect and disconnect."""
+
+    normalized = str(ig_user_id or "").strip()
+    if not normalized.isdigit():
+        raise MetaOAuthError("Instagram professional account id is invalid")
+    return f"instagram-login:{normalized}"
+
+
+def instagram_channel_subscription_lock_asset(tenant_id: str) -> str:
+    """Serialize tenant-wide Instagram connect/disconnect target-set changes."""
+
+    normalized = str(tenant_id or "").strip().lower()
+    if not normalized:
+        raise MetaOAuthError("Instagram workspace lock identity is invalid")
+    return f"instagram-channel:{normalized}"
 
 
 @dataclass(frozen=True)
@@ -83,6 +112,175 @@ def _parse_verified_fields(payload: dict[str, Any], *, expected_app_id: str) -> 
     return frozenset(verified)
 
 
+def _parse_subscription_snapshot(
+    payload: dict[str, Any],
+    *,
+    expected_app_id: str,
+) -> InstagramLoginWebhookSubscriptionSnapshot:
+    rows = payload.get("data")
+    if not isinstance(rows, list):
+        raise MetaOAuthError("Instagram webhook subscription rows could not be verified")
+    matching = [row for row in rows if isinstance(row, dict) and str(row.get("id") or "").strip() == expected_app_id]
+    if len(matching) > 1:
+        raise MetaOAuthError("Instagram webhook subscription rows are ambiguous")
+    if not matching:
+        return None
+    raw_fields = matching[0].get("subscribed_fields")
+    if isinstance(raw_fields, list):
+        fields = {str(item).strip() for item in raw_fields if str(item).strip()}
+    elif isinstance(raw_fields, str):
+        fields = {item.strip() for item in raw_fields.split(",") if item.strip()}
+    else:
+        raise MetaOAuthError("Instagram webhook subscription fields could not be verified")
+    return tuple(sorted(fields))
+
+
+def _instagram_login_subscription_context(
+    binding: MetaAssetBinding,
+    registry: MetaAppRegistry,
+) -> tuple[MetaBindingCredential, str, str]:
+    if binding.channel != "instagram" or binding.auth_flow != "instagram_login":
+        raise MetaOAuthError("Instagram Login subscription requires a direct Instagram binding")
+    ig_user_id = str(binding.asset_id or "").strip()
+    if not ig_user_id.isdigit():
+        raise MetaOAuthError("Instagram professional account id is invalid")
+    credential = registry.get_credential(binding)
+    expected_app_id = instagram_login_app_id()
+    if credential.token_app_id != expected_app_id:
+        raise MetaOAuthError("Instagram Login credential belongs to an unexpected app")
+    if credential.token_profile_id != ig_user_id:
+        raise MetaOAuthError("Instagram Login credential does not match the professional account")
+    app = get_meta_app_configs().get(binding.app_key)
+    if app is None or not app.enabled or not app.graph_api_version:
+        raise MetaOAuthError("Instagram Login Graph version is unavailable")
+    return credential, app.graph_api_version, expected_app_id
+
+
+async def _read_instagram_login_subscription(
+    *,
+    ig_user_id: str,
+    access_token: str,
+    graph_api_version: str,
+    expected_app_id: str,
+    client: httpx.AsyncClient,
+    step: str,
+) -> InstagramLoginWebhookSubscriptionSnapshot:
+    response = await client.get(
+        f"{META_INSTAGRAM_GRAPH_BASE_URL}/{graph_api_version}/{ig_user_id}/subscribed_apps",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    payload = _safe_json(response, step=step)
+    return _parse_subscription_snapshot(payload, expected_app_id=expected_app_id)
+
+
+async def inspect_instagram_login_webhook_subscription(
+    binding: MetaAssetBinding,
+    *,
+    registry: MetaAppRegistry,
+    client: httpx.AsyncClient | None = None,
+) -> InstagramLoginWebhookSubscriptionSnapshot:
+    """Read this direct Instagram app/account subscription without exposing its token."""
+
+    credential, graph_api_version, expected_app_id = _instagram_login_subscription_context(binding, registry)
+    owns_client = client is None
+    http_client = client or httpx.AsyncClient(timeout=20.0)
+    try:
+        return await _read_instagram_login_subscription(
+            ig_user_id=binding.asset_id,
+            access_token=credential.access_token,
+            graph_api_version=graph_api_version,
+            expected_app_id=expected_app_id,
+            client=http_client,
+            step="instagram subscribed_apps disconnect preflight",
+        )
+    except httpx.HTTPError as exc:
+        raise MetaOAuthError("Instagram webhook subscription inspection failed") from exc
+    finally:
+        if owns_client:
+            await http_client.aclose()
+
+
+async def unsubscribe_instagram_login_webhook_raw(
+    binding: MetaAssetBinding,
+    *,
+    registry: MetaAppRegistry,
+    client: httpx.AsyncClient | None = None,
+) -> None:
+    """Delete one direct Instagram subscription after the caller serializes writers."""
+
+    credential, graph_api_version, _expected_app_id = _instagram_login_subscription_context(binding, registry)
+    owns_client = client is None
+    http_client = client or httpx.AsyncClient(timeout=20.0)
+    try:
+        response = await http_client.delete(
+            f"{META_INSTAGRAM_GRAPH_BASE_URL}/{graph_api_version}/{binding.asset_id}/subscribed_apps",
+            headers={"Authorization": f"Bearer {credential.access_token}"},
+        )
+        payload = _safe_json(response, step="instagram subscribed_apps disconnect")
+        if payload.get("success") is not True:
+            raise MetaOAuthError("Instagram webhook disconnect did not return success")
+    except httpx.HTTPError as exc:
+        raise MetaOAuthError("Instagram webhook disconnect request failed") from exc
+    finally:
+        if owns_client:
+            await http_client.aclose()
+
+
+async def restore_instagram_login_webhook_subscription(
+    binding: MetaAssetBinding,
+    snapshot: InstagramLoginWebhookSubscriptionSnapshot,
+    *,
+    expected_current: InstagramLoginWebhookSubscriptionSnapshot,
+    registry: MetaAppRegistry,
+    client: httpx.AsyncClient,
+) -> None:
+    """Restore direct Instagram provider state only when our delete still owns it."""
+
+    credential, graph_api_version, expected_app_id = _instagram_login_subscription_context(binding, registry)
+    current = await _read_instagram_login_subscription(
+        ig_user_id=binding.asset_id,
+        access_token=credential.access_token,
+        graph_api_version=graph_api_version,
+        expected_app_id=expected_app_id,
+        client=client,
+        step="instagram subscribed_apps compensation ownership check",
+    )
+    if current == snapshot:
+        return
+    if current != expected_current:
+        raise MetaOAuthError("Instagram webhook subscription changed; refusing stale compensation")
+    mutation_error: BaseException | None = None
+    try:
+        if snapshot is None:
+            await unsubscribe_instagram_login_webhook_raw(binding, registry=registry, client=client)
+        else:
+            await _subscribe_once(
+                ig_user_id=binding.asset_id,
+                access_token=credential.access_token,
+                subscribed_fields=snapshot,
+                graph_api_version=graph_api_version,
+                client=client,
+            )
+    except BaseException as exc:  # noqa: BLE001 - verify whether the provider committed before raising
+        mutation_error = exc
+    try:
+        verified = await _read_instagram_login_subscription(
+            ig_user_id=binding.asset_id,
+            access_token=credential.access_token,
+            graph_api_version=graph_api_version,
+            expected_app_id=expected_app_id,
+            client=client,
+            step="instagram subscribed_apps compensation verification",
+        )
+    except httpx.HTTPError as exc:
+        raise MetaOAuthError("Instagram webhook subscription compensation request failed") from exc
+    if verified == snapshot:
+        return
+    if mutation_error is not None:
+        raise mutation_error
+    raise MetaOAuthError("Instagram webhook subscription compensation could not be verified")
+
+
 async def _subscribe_once(
     *,
     ig_user_id: str,
@@ -109,12 +307,15 @@ async def _fetch_subscription_state(
     expected_app_id: str,
     client: httpx.AsyncClient,
 ) -> frozenset[str]:
-    response = await client.get(
-        f"{META_INSTAGRAM_GRAPH_BASE_URL}/{graph_api_version}/{ig_user_id}/subscribed_apps",
-        headers={"Authorization": f"Bearer {access_token}"},
+    snapshot = await _read_instagram_login_subscription(
+        ig_user_id=ig_user_id,
+        access_token=access_token,
+        graph_api_version=graph_api_version,
+        expected_app_id=expected_app_id,
+        client=client,
+        step="instagram subscribed_apps verify",
     )
-    payload = _safe_json(response, step="instagram subscribed_apps verify")
-    return _parse_verified_fields(payload, expected_app_id=expected_app_id)
+    return frozenset(snapshot or ())
 
 
 async def ensure_instagram_login_webhook_subscription(
@@ -138,6 +339,57 @@ async def ensure_instagram_login_webhook_subscription(
     if credential.token_app_id != expected_app_id:
         raise MetaOAuthError("Instagram Login credential belongs to an unexpected app")
     current_registry = registry or get_meta_app_registry()
+    async with lock_facebook_page_oauth_operation(
+        current_registry,
+        app_key=binding.app_key,
+        page_ids=(
+            instagram_channel_subscription_lock_asset(binding.tenant_id),
+            instagram_login_subscription_lock_asset(ig_user_id),
+        ),
+    ):
+        latest = next(
+            (
+                item
+                for item in current_registry.list_bindings(include_inactive=True, include_superseded=True)
+                if item.binding_id == binding.binding_id
+            ),
+            None,
+        )
+        if (
+            latest is None
+            or latest.channel != "instagram"
+            or latest.auth_flow != "instagram_login"
+            or latest.asset_id != binding.asset_id
+            or latest.app_key != binding.app_key
+            or latest.generation != binding.generation
+            or latest.status not in {"active", "testing"}
+            or not current_registry.binding_credential_is_available(binding.binding_id)
+        ):
+            raise MetaOAuthError("Instagram Login binding changed before webhook subscription")
+        return await _ensure_instagram_login_webhook_subscription_locked(
+            latest,
+            credential,
+            registry=current_registry,
+            graph_api_version=graph_api_version,
+            subscribed_fields=subscribed_fields,
+            expected_app_id=expected_app_id,
+            client=client,
+        )
+
+
+async def _ensure_instagram_login_webhook_subscription_locked(
+    binding: MetaAssetBinding,
+    credential: MetaBindingCredential,
+    *,
+    registry: MetaAppRegistry,
+    graph_api_version: str,
+    subscribed_fields: tuple[str, ...],
+    expected_app_id: str,
+    client: httpx.AsyncClient | None,
+) -> InstagramLoginSubscriptionState:
+    """Subscribe while the caller owns the direct app/account writer lock."""
+
+    ig_user_id = binding.asset_id.strip()
     owns_client = client is None
     http_client = client or httpx.AsyncClient(
         base_url=f"{META_INSTAGRAM_GRAPH_BASE_URL}/{graph_api_version}",
@@ -171,7 +423,7 @@ async def ensure_instagram_login_webhook_subscription(
                         subscribed_fields=subscribed_fields,
                         verified_fields=tuple(sorted(verified)),
                     )
-                    current_registry.update_instagram_login_webhook_subscription(
+                    registry.update_instagram_login_webhook_subscription(
                         binding.binding_id,
                         state=state,
                         actor_id="instagram-login-subscribe",
@@ -195,7 +447,7 @@ async def ensure_instagram_login_webhook_subscription(
             verified_fields=(),
             error=last_error or "subscription_verify_failed",
         )
-        current_registry.update_instagram_login_webhook_subscription(
+        registry.update_instagram_login_webhook_subscription(
             binding.binding_id,
             state=failed,
             actor_id="instagram-login-subscribe",

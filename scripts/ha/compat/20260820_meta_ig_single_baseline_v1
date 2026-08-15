@@ -1,0 +1,3 @@
+linasbot-schema-compatibility-v1
+migration=20260820_meta_ig_single
+guarantee=runtime-can-serve-the-forward-migrated-schema
