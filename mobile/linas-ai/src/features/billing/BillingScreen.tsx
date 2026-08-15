@@ -17,9 +17,9 @@ import { PLAN_CATALOG, isPlanId, type PlanId } from './planCatalog';
 import { isPaidActiveStatus, statusLabelKey } from './subscriptionCta';
 import { useBillingEntitlement, useBillingStorePrices } from './useBillingData';
 
-type Props = Record<string, never>;
+type Props = { openChoosePlan?: boolean };
 
-export function BillingScreen(_props: Props = {}) {
+export function BillingScreen({ openChoosePlan = false }: Props) {
   const { colors } = useTheme();
   const { tr, language } = useI18n();
   const nav = useModuleNav();
@@ -38,9 +38,9 @@ export function BillingScreen(_props: Props = {}) {
   const view: 'current' | 'choose' = hasSub && !browsePlans ? 'current' : 'choose';
 
   useEffect(() => {
-    setBrowsePlans(false);
+    setBrowsePlans(openChoosePlan);
     if (hasSub && planId) setSelected(planId);
-  }, [hasSub, planId, nav.areaFocusNonce]);
+  }, [hasSub, planId, nav.areaFocusNonce, openChoosePlan]);
 
   const runPurchase = useCallback(
     async (fn: () => Promise<{ ok: boolean; code?: string }>, successKey: 'subPurchaseSuccess' | 'subCreditsPurchaseSuccess') => {

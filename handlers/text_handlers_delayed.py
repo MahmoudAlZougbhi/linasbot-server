@@ -177,9 +177,7 @@ async def _delayed_process_messages(
                     )
                     return
                 if not try_reserve_for_ai(user_data):
-                    from services.token_metering import RECHARGE_REQUIRED_MESSAGE
-
-                    await outbound_send(user_id, RECHARGE_REQUIRED_MESSAGE)
+                    print(f"[ai-turn] trace_id={trace} credit=BLOCKED — no customer reply")
                     return
                 if mids or bfps:
                     print(

@@ -276,6 +276,23 @@ async def _handle_published_cm_runtime(
         }
 
     reply = (v2_outcome.reply or "").strip()
+    if v2_outcome.reason == "insufficient_credits":
+        return "", {
+            "reason": "insufficient_credits",
+            "customer_reply_ai_v2": True,
+            "classic_fallback": False,
+            "v2_evidence_status": v2_outcome.evidence_status,
+            "ai_called": False,
+            "cost_status": "none",
+            **(v2_outcome.metadata or {}),
+            "pipeline_decisions": [
+                {
+                    "step": "customer_reply_v2",
+                    "decision": "insufficient_credits",
+                    "ai_called": False,
+                },
+            ],
+        }
     if not reply:
         reply = get_dynamic_message(ANSWER_VALIDATION_FAILED_MESSAGE_KEY, response_language)
     meta = {

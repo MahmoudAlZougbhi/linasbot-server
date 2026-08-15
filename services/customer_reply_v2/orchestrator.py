@@ -108,6 +108,17 @@ async def run_customer_reply_v2_dm(
     started = time.perf_counter()
     word_notice: str | None = None
 
+    from services.credit_ai_gate import ai_generation_blocked
+
+    if ai_generation_blocked(tenant_id):
+        return CustomerReplyOutcome(
+            stop=True,
+            reply=None,
+            reason="insufficient_credits",
+            evidence_status="policy_stop",
+            metadata={"ai_called": False, "cost_status": "none", "flags": flags_snapshot()},
+        )
+
     def _out(**kwargs: Any) -> CustomerReplyOutcome:
         outcome = CustomerReplyOutcome(**kwargs)
         if word_notice:

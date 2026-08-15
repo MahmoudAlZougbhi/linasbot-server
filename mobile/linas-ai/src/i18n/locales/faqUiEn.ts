@@ -1,5 +1,5 @@
 export const faqUiEn = {
-  faqTranslatedStatus: 'translated',
+  faqTranslatedStatus: 'Translated to selected languages',
   faqCreateBannerTitle: 'Create once. Translate automatically.',
   faqCreateBannerBody:
     'Write the question and answer in one language. Linas translates them into your selected Smart Q&A languages.',
@@ -12,12 +12,19 @@ export const faqUiEn = {
   faqLangAutoTranslate:
     'New Smart Q&A entries are translated automatically into every selected language.',
   faqLangSave: 'Save languages',
-  faqLangSection: 'Smart Q&A languages',
+  faqLangSection: 'Q&A languages',
   faqAddLanguage: 'Add language',
-  faqLangHint:
-    'New Smart Q&A entries are translated automatically. Press and hold a language to remove it.',
+  faqRemoveLanguage: 'Remove language',
+  faqLangHint: 'New Q&A is automatically translated into every selected language.',
   faqAnswersCount: 'answers',
   faqEmptyQuestion: 'Untitled question',
+  faqQuestionLabel: 'Question',
+  faqAnswerLabel: 'Answer',
+  faqDeleteTitle: 'Delete Q&A',
+  faqDeleteBody: 'Remove this saved Q&A from Smart Q&A?',
+  faqDeleteConfirm: 'Delete',
+  faqSearchA11y: 'Search Q&A',
+  faqEditA11y: 'Edit Q&A',
   faqTranslateExistingTitle: 'Translate existing answers?',
   faqTranslateExistingBody: 'Translate all saved Smart Q&A into {lang}?',
   faqTranslateSkip: 'Only future answers',

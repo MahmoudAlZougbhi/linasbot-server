@@ -27,6 +27,7 @@ async def test_v2_creative_request_refused_no_provider(monkeypatch: pytest.Monke
     from services.owner_ai_orchestrator import run_owner_turn
 
     monkeypatch.setenv("OWNER_COPILOT_V2", "true")
+    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
     monkeypatch.setattr("services.owner_ai_context.pack_owner_turn_context", _stub_context)
 
     turn = await run_owner_turn(
@@ -48,6 +49,7 @@ async def test_legacy_create_post_still_reachable_when_v2_off(monkeypatch: pytes
     from services.owner_ai_tools_base import ToolResult
 
     monkeypatch.setenv("OWNER_COPILOT_V2", "false")
+    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
     monkeypatch.setattr("services.owner_ai_orchestrator.pack_owner_turn_context", _stub_context)
     monkeypatch.setattr("services.owner_ai_orchestrator.estimate_context_tokens", lambda _ctx: 10)
     monkeypatch.setattr("services.owner_ai_model_router.owner_chat_usage_tracker.record", lambda **_: {})

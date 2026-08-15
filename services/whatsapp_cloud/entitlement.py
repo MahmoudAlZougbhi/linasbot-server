@@ -93,12 +93,11 @@ def evaluate_ai_eligibility(session: Session, conn: WhatsAppConnection) -> tuple
             return False, "published_cm_missing"
     except Exception:
         return False, "published_cm_unavailable"
-    # Credits: require positive available balance (canonical ledger).
+    # Credits: same remaining wallet as Dashboard. In-flight reserve is not a block.
     try:
-        from services.credit_ledger_service import credit_ledger_service
+        from services.credit_ai_gate import ai_generation_blocked
 
-        credit_ledger_service.ensure_period_grant(conn.tenant_id)
-        if credit_ledger_service.get_balance(conn.tenant_id) <= 0:
+        if ai_generation_blocked(conn.tenant_id):
             return False, "insufficient_credits"
     except Exception:
         return False, "credits_unavailable"

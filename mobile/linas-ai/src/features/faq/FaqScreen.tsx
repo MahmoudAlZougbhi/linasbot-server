@@ -30,14 +30,13 @@ type Props = {
   proposalReview?: CmProposalReview | null;
 };
 
-export function FaqScreen({ onAskLinas, proposalReview }: Props) {
+export function FaqScreen({ proposalReview }: Props) {
   const { tr } = useI18n();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<FaqGroup[]>([]);
   const [entitlement, setEntitlement] = useState<FaqEntitlement | null>(null);
-  const [quotaDisplay, setQuotaDisplay] = useState<string | null>(null);
   const [smartAnswerLanguages, setSmartAnswerLanguages] = useState<string[]>(['ar', 'en', 'fr', 'franco']);
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<Mode>('list');
@@ -56,7 +55,6 @@ export function FaqScreen({ onAskLinas, proposalReview }: Props) {
       const data = await listFaq({ q: query.trim() || undefined });
       setItems(data.items);
       setEntitlement(data.entitlement);
-      setQuotaDisplay(data.quotaDisplay);
       if (data.smartAnswerLanguages.length) {
         setSmartAnswerLanguages(data.smartAnswerLanguages);
       }
@@ -184,13 +182,12 @@ export function FaqScreen({ onAskLinas, proposalReview }: Props) {
     }
   }
 
-  async function handleArchive() {
-    if (!selected) return;
+  async function handleArchiveId(qaGroupId: string) {
     setSaving(true);
     setError(null);
     try {
-      await archiveFaq(selected.qa_group_id);
-      setSelected(null);
+      await archiveFaq(qaGroupId);
+      setSelected((prev) => (prev?.qa_group_id === qaGroupId ? null : prev));
       setMode('list');
       await load();
     } catch (err) {
@@ -198,6 +195,22 @@ export function FaqScreen({ onAskLinas, proposalReview }: Props) {
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleArchive() {
+    if (!selected) return;
+    void handleArchiveId(selected.qa_group_id);
+  }
+
+  function confirmDelete(group: FaqGroup) {
+    Alert.alert(tr('faqDeleteTitle'), tr('faqDeleteBody'), [
+      { text: tr('usersCancel'), style: 'cancel' },
+      {
+        text: tr('faqDeleteConfirm'),
+        style: 'destructive',
+        onPress: () => void handleArchiveId(group.qa_group_id),
+      },
+    ]);
   }
 
   const proposalItem = proposalReview?.proposedItem;
@@ -214,7 +227,7 @@ export function FaqScreen({ onAskLinas, proposalReview }: Props) {
     .join('\n\n');
 
   return (
-    <ScreenChrome title={tr('faqTitle')} subtitle={tr('faqSub')}>
+    <ScreenChrome title={tr('faqTitle')}>
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {savedFlash ? <Text style={styles.ok}>{tr('faqSaved')}</Text> : null}
@@ -230,7 +243,6 @@ export function FaqScreen({ onAskLinas, proposalReview }: Props) {
           <FaqListView
             items={items}
             entitlement={entitlement}
-            quotaDisplay={quotaDisplay}
             smartAnswerLanguages={smartAnswerLanguages}
             query={query}
             onQueryChange={setQuery}
@@ -239,13 +251,14 @@ export function FaqScreen({ onAskLinas, proposalReview }: Props) {
               setAnswer('');
               setMode('create');
             }}
-            onAskLinas={() => onAskLinas?.()}
             onSelect={(group) => {
               setSelected(group);
-              setActiveLang(smartAnswerLanguages[0] || 'en');
+              setActiveLang(
+                (smartAnswerLanguages.includes('en') ? 'en' : smartAnswerLanguages[0]) || 'en',
+              );
               setMode('detail');
             }}
-            onRefresh={() => void load()}
+            onDelete={confirmDelete}
             onAddLanguage={() => setLangPickerOpen(true)}
             onRemoveLanguage={handleRemoveLanguage}
             tr={tr}

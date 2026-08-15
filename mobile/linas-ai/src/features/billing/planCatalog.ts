@@ -106,6 +106,12 @@ export function isPlanId(value: string | null | undefined): value is PlanId {
   return Boolean(value && value in PLAN_CATALOG);
 }
 
+export const HIGHEST_PLAN_ID: PlanId = 'max';
+
+export function isHighestPlan(id: string | null | undefined): boolean {
+  return (id || '').trim().toLowerCase() === HIGHEST_PLAN_ID;
+}
+
 export function planRank(id: PlanId): number {
   return PLAN_ORDER.indexOf(id);
 }

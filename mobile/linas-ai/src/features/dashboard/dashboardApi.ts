@@ -6,17 +6,28 @@ import {
   TenantDashboardSchema,
   type DashboardNavigateTarget,
 } from './dashboardTypes';
-import { dashboardQueryRange, type DashboardPeriodSelection } from './dashboardFormat';
+import {
+  dashboardQueryRange,
+  namedDashboardApiPeriod,
+  type DashboardPeriodSelection,
+} from './dashboardFormat';
 
 export async function fetchTenantDashboard(
   period: DashboardPeriodSelection,
   tz: string,
 ): Promise<TenantDashboard> {
   const params = new URLSearchParams({ tz });
-  const range = dashboardQueryRange(period);
-  params.set('period', 'custom');
-  params.set('start', range.start);
-  params.set('end', range.end);
+  const named = namedDashboardApiPeriod(period);
+  if (named) {
+    // Named periods are resolved in the tenant timezone on the server.
+    // Do not send custom start/end (exclusive end + same-day/UTC month bugs).
+    params.set('period', named);
+  } else {
+    const range = dashboardQueryRange(period);
+    params.set('period', 'custom');
+    params.set('start', range.start);
+    params.set('end', range.end);
+  }
   return apiFetch(`/api/mobile/dashboard?${params.toString()}`, {
     schema: TenantDashboardSchema,
   });
@@ -55,8 +66,9 @@ export function resolveDashboardAction(code: string | null | undefined): Dashboa
       return 'integrations';
     case 'renew_subscription':
     case 'manage_subscription':
-    case 'upgrade_plan':
       return 'subscription';
+    case 'upgrade_plan':
+      return 'choose_plan';
     case 'buy_credits':
       return 'buy_credits';
     case 'review_faq':

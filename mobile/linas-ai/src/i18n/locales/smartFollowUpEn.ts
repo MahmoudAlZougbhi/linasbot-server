@@ -3,7 +3,7 @@ export const smartFollowUpEn = {
   aiSetupStatusContinue: 'Continue Setup',
   aiSetupStatusComplete: 'Setup Complete',
   aiSetupStatusNeedsAttention: 'Needs Attention',
-  sfuTitle: 'Smart Follow-Up',
+  sfuTitle: 'Follow up',
   sfuSubtitle: 'Follow up when customers stop replying.',
   sfuChannelsTitle: 'Channels',
   sfuChannelInstagram: 'Instagram',

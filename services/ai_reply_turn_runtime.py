@@ -74,12 +74,23 @@ def ensure_turn_started(
 
 
 def try_reserve_for_ai(user_data: dict[str, Any]) -> bool:
+    tenant_id = str(user_data.get("tenant_id") or user_data.get("tenantId") or "").strip().lower()
+    if not tenant_id:
+        user_data["_ai_credit_blocked"] = True
+        return False
+    from services.credit_ai_gate import ai_generation_blocked
+
+    if ai_generation_blocked(tenant_id):
+        user_data["_ai_credit_blocked"] = True
+        return False
     lid = ensure_turn_started(user_data)
     if not lid:
-        return True
+        user_data["_ai_credit_blocked"] = True
+        return False
     turn = get_turn(lid)
     if turn is None:
-        return True
+        user_data["_ai_credit_blocked"] = True
+        return False
     try:
         reserve_before_ai(turn)
         return True

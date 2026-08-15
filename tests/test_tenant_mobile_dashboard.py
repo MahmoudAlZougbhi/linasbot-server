@@ -66,6 +66,59 @@ def test_period_and_timezone_validation() -> None:
     assert custom["start_ts"] < custom["end_ts"]
 
 
+def test_today_is_full_local_calendar_day() -> None:
+    tz = parse_timezone("Asia/Beirut")
+    now = datetime(2026, 8, 15, 12, 35, tzinfo=tz)
+    assert parse_period("today") == "today"
+    window = resolve_period_window(period="today", tz=tz, current_period_end=None, now=now)
+    assert window["period"] == "today"
+    assert window["end_ts"] - window["start_ts"] == 24 * 3600
+    noon = datetime(2026, 8, 15, 12, 0, tzinfo=tz)
+    assert window["start_ts"] <= noon.timestamp() < window["end_ts"]
+
+    same_day = resolve_period_window(
+        period="custom",
+        tz=tz,
+        current_period_end=None,
+        now=now,
+        custom_start="2026-08-15",
+        custom_end="2026-08-15",
+    )
+    assert same_day["end_ts"] - same_day["start_ts"] == 24 * 3600
+
+    utc = parse_timezone("UTC")
+    early = datetime(2026, 8, 16, 1, 0, tzinfo=tz)
+    today_utc = resolve_period_window(period="today", tz=utc, current_period_end=None, now=early)
+    assert today_utc["start_ts"] < today_utc["end_ts"]
+    assert today_utc["start_ts"] <= early.astimezone(UTC).timestamp() < today_utc["end_ts"]
+
+
+def test_today_activity_includes_local_noon_replies() -> None:
+    from services.tenant_mobile_dashboard.activity import build_activity_summary
+
+    tz = parse_timezone("Asia/Beirut")
+    now = datetime(2026, 8, 15, 12, 35, tzinfo=tz)
+    window = resolve_period_window(period="today", tz=tz, current_period_end=None, now=now)
+    noon = datetime(2026, 8, 15, 12, 0, tzinfo=tz)
+    payload = build_activity_summary(
+        "acme",
+        start_ts=window["start_ts"],
+        end_ts=window["end_ts"],
+        integrations=[{"platform": "instagram", "connected": True}],
+        entries=[
+            {
+                "timestamp": noon.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+                "tenant_id": "acme",
+                "channel": "instagram",
+                "source": "qa_database",
+                "bot_to_user": True,
+            }
+        ],
+    )
+    assert payload["total_activity"]["messages_replied"] == 1
+    assert payload["total_activity"]["smart_answers"] == 1
+
+
 def test_zero_credits_vs_missing_credit_data(ledger_env: EntitlementsStore, monkeypatch: pytest.MonkeyPatch) -> None:
     ledger_env.set_plan(tenant_id="t_zero", plan_id="starter", status="active", source="admin")
     from services.credit_ledger_service import credit_ledger_service
@@ -126,11 +179,25 @@ def test_zero_credits_vs_missing_credit_data(ledger_env: EntitlementsStore, monk
     payload = build_tenant_mobile_dashboard(tenant_id="t_zero", user_id="u1", period_raw="30d", timezone_raw="UTC")
     assert payload["plan_and_credits"]["availability"] == "ok"
     assert payload["plan_and_credits"]["available_credits"] == 0
+    assert payload["plan_and_credits"]["actions"]["upgrade_plan"] is True
     assert payload["workspace_status"]["state"] == "credits_depleted"
     blob = json.dumps(payload).lower()
     assert "cost_usd" not in blob
     assert "provider_cost" not in blob
     assert payload["privacy"]["excludes_openai_usd"] is True
+
+
+def test_max_plan_hides_upgrade_action(ledger_env: EntitlementsStore) -> None:
+    ledger_env.set_plan(tenant_id="t_max", plan_id="max", status="active", source="admin")
+    from services.credit_ledger_service import credit_ledger_service
+    from services.tenant_mobile_dashboard.compose import _plan_and_credits
+
+    credit_ledger_service.ensure_period_grant("t_max")
+    section = _plan_and_credits("t_max")
+    assert section["availability"] == "ok"
+    assert section["plan_id"] == "max"
+    assert section["actions"]["upgrade_plan"] is False
+    assert section["actions"]["buy_credits"] is True
 
 
 def test_no_subscription_status(ledger_env: EntitlementsStore, monkeypatch: pytest.MonkeyPatch) -> None:

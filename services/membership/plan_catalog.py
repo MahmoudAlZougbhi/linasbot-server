@@ -75,6 +75,13 @@ def _build_catalog() -> dict[str, PlanDefinition]:
 
 PLAN_CATALOG: Final[dict[str, PlanDefinition]] = _build_catalog()
 PUBLIC_PLAN_IDS: Final[tuple[str, ...]] = tuple(PLAN_CATALOG.keys())
+HIGHEST_PUBLIC_PLAN_ID: Final[PlanId] = PUBLIC_PLAN_IDS[-1]
+
+
+def is_highest_catalog_plan(plan_id: str | None) -> bool:
+    """True only for the top public catalog plan (Max). Do not treat founder ``linas`` as Max."""
+    return (plan_id or "").strip().lower() == HIGHEST_PUBLIC_PLAN_ID
+
 
 # Top-up packs (purchased credits; never expire): 500 credits / $1
 TOPUP_PACKS_USD: Final[tuple[int, ...]] = (10, 25, 40, 50, 100, 250)

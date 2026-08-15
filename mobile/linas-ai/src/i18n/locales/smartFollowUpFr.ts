@@ -3,7 +3,7 @@ export const smartFollowUpFr = {
   aiSetupStatusContinue: 'Continuer la configuration',
   aiSetupStatusComplete: 'Configuration terminée',
   aiSetupStatusNeedsAttention: 'Attention requise',
-  sfuTitle: 'Relance intelligente',
+  sfuTitle: 'Relance',
   sfuSubtitle: 'Relancez quand les clients cessent de répondre.',
   sfuChannelsTitle: 'Canaux',
   sfuChannelInstagram: 'Instagram',

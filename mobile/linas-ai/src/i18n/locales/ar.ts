@@ -44,6 +44,8 @@ export const ar = {
   chatEmptyBody:
     'بقدر ساعدك بكل شي. هالتطبيق هو مدير مجتمعك بالذكاء الاصطناعي لصفحات السوشال ميديا تبعك.',
   chatThinking: 'جارٍ التفكير…',
+  chatCreditsPausedTitle: 'ما في رصيد كافٍ',
+  chatCreditsPausedBody: 'مساعد المالك متوقف إلى أن تشتري رصيد. ردود الذكاء الاصطناعي على القنوات متوقفة أيضاً.',
   chatYouLabel: 'أنت',
   chatLinasLabel: 'Linas',
   guestChatEmptyTitle: 'أهلاً بك في Linas AI',
@@ -201,7 +203,7 @@ export const ar = {
   settingsAiLimitsSub: 'احمِ الرصيد بتحديد استخدام كل زبون للذكاء الاصطناعي',
   faqTitle: 'الأسئلة والأجوبة',
   faqSub: 'أسئلة جاهزة — ترجمة تلقائية لأربع لغات',
-  faqCreateNew: 'إضافة سؤال وجواب',
+  faqCreateNew: 'إنشاء سؤال وجواب',
   faqSavedList: 'الأسئلة والأجوبة المحفوظة',
   faqEmpty: 'لا توجد أسئلة وأجوبة بعد.',
   faqCreateHint:
@@ -209,9 +211,9 @@ export const ar = {
   faqSaved: 'تم الحفظ بأربع لغات.',
   faqLoadError: 'تعذر تحميل الأسئلة الشائعة.',
   faqCreateError: 'تعذر إنشاء السؤال.',
-  faqWhyTitle: 'لماذا الأسئلة والأجوبة',
+  faqWhyTitle: 'وفّر الرصيد مع الأسئلة والأجوبة',
   faqWhyBody:
-    'احفظ أسئلة وأجوبة جاهزة هنا. إذا سأل الزبون نفس السؤال أو نفس المعنى، ترد ليناس من الأسئلة الشائعة تلقائياً — بدون توليد ذكاء اصطناعي كامل، بتكلفة أقل.',
+    'عندما يسأل الزبون نفس السؤال أو سؤالاً مشابهاً، تستخدم ليناس جوابك المحفوظ بدل توليد جواب جديد.',
   faqAskLinas: 'اسأل ليناس',
   faqSearchPlaceholder: 'ابحث في الأسئلة أو الأجوبة',
   faqSourceLanguage: 'لغة المصدر',

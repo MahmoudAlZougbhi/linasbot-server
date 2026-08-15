@@ -11,6 +11,8 @@ import {
 import { GradientBackground } from '../../components/GradientBackground';
 import { useI18n } from '../../i18n/LanguageContext';
 import { useTheme } from '../../theme';
+import { BuyCreditsSheet } from '../billing/BuyCreditsSheet';
+import { useBuyCreditsFlow } from '../billing/useBuyCreditsFlow';
 import type { ControlArea } from '../control/controlAreas';
 import type { CmProposalReview } from '../cm/cmProposalReview';
 import { ChatComposer } from './ChatComposer';
@@ -20,7 +22,9 @@ import { ChatModeToggle } from './ChatModeToggle';
 import { ChatScreenOverlays } from './ChatScreenOverlays';
 import { chatScreenStyles as styles } from './chatScreenStyles';
 import { ChatStatusBanners } from './ChatStatusBanners';
+import { CreditsPausedBanner } from './CreditsPausedBanner';
 import type { OwnerChatMode } from './ownerChatMode';
+import { useModuleNavOptional } from '../nav/ModuleNavContext';
 import { resolveOwnerModeForOutgoing } from './ownerChatMode';
 import { PendingAttachmentsStrip } from './PendingAttachmentsStrip';
 import { queueGuestDraft } from './pendingGuestDraft';
@@ -56,6 +60,7 @@ export function ChatScreen({
 }: Props) {
   const { tr, language } = useI18n();
   const { colors } = useTheme();
+  const nav = useModuleNavOptional();
   const owner = useChatSession(isAuthenticated);
   const guest = useGuestChatSession(!isAuthenticated);
   const [draft, setDraft] = useState('');
@@ -83,6 +88,7 @@ export function ChatScreen({
   const [choiceBusy, setChoiceBusy] = useState(false);
   const composerInputRef = useRef<TextInput>(null);
   const { listRef, stickToBottomRef, scrollToBottom, followBottomIfStuck, armOpenAtLatest } = useChatListScroll();
+  const credits = useBuyCreditsFlow(() => turn.clearCreditsPaused());
   const voice = useVoiceDraft((text) => {
     setDraft((prev) => appendVoiceTranscript(prev, text));
     requestAnimationFrame(() => composerInputRef.current?.focus());
@@ -268,6 +274,7 @@ export function ChatScreen({
               isAuthenticated && !hasUserMessage && !turn.liveText && !turn.streaming
             }
             onOwnerWelcomeChip={(chip) => {
+              if (turn.creditsPaused) return;
               const mode = resolveOwnerModeForOutgoing(chip.mode, chip.prompt);
               setOwnerMode(mode);
               scrollToBottom();
@@ -281,7 +288,7 @@ export function ChatScreen({
         {isAuthenticated ? (
           <ChoiceChips
             choices={turn.choices}
-            disabled={choiceBusy || turn.streaming}
+            disabled={choiceBusy || turn.streaming || Boolean(turn.creditsPaused)}
             onSelect={(c) => {
               if (!turn.choiceSetId || choiceBusy) return;
               setChoiceBusy(true);
@@ -299,10 +306,23 @@ export function ChatScreen({
           onRemove={(id) => setPendingFiles((prev) => prev.filter((f) => f.id !== id))}
         />
 
+        {isAuthenticated && turn.creditsPaused ? (
+          <CreditsPausedBanner
+            showUpgrade={turn.creditsPaused.showUpgrade}
+            onBuyCredits={() => credits.setOpen(true)}
+            onUpgrade={() => nav?.openChoosePlan()}
+          />
+        ) : null}
+
         <ChatComposer
           draft={draft}
           onChangeDraft={setDraft}
-          sending={sending || (!isAuthenticated && guest.gated) || (isAuthenticated && !sessionReady)}
+          sending={
+            sending ||
+            (!isAuthenticated && guest.gated) ||
+            (isAuthenticated && !sessionReady) ||
+            Boolean(turn.creditsPaused)
+          }
           canSendWithAttachment={pendingFiles.length > 0}
           voiceState={authVoice?.voiceState ?? 'idle'}
           elapsedMs={authVoice?.elapsedMs ?? 0}
@@ -389,6 +409,15 @@ export function ChatScreen({
         onCloseAuth={() => { setAuthGate(false); setHardLimit(false); }}
         onRequestLogin={onRequestLogin}
         onRequestRegister={onRequestRegister}
+      />
+      <BuyCreditsSheet
+        visible={credits.open}
+        prices={credits.prices}
+        purchasing={credits.purchasing}
+        locale={credits.locale}
+        tr={credits.tr}
+        onClose={() => credits.setOpen(false)}
+        onBuy={(pack) => void credits.buy(pack)}
       />
     </GradientBackground>
   );

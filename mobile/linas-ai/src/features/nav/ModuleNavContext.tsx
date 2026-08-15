@@ -5,6 +5,8 @@ import type { ControlArea } from '../control/controlAreas';
 export type ModuleNavValue = {
   isAuthenticated: boolean;
   openArea: (area: ControlArea) => void;
+  /** Opens Subscription on the Choose a plan picker (not the current-plan stack). */
+  openChoosePlan: () => void;
   goChat: () => void;
   startNewChat: () => void;
   openChat: (conversationId: string) => void;

@@ -14,6 +14,7 @@ from services.cm.storage import get_draft, put_draft
 def tenant_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("LINASBOT_DATA_ROOT", str(tmp_path))
     monkeypatch.setenv("TOKEN_WALLET_UNLIMITED_TENANT_IDS", "setup-tenant")
+    monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
     from storage import persistent_storage as ps
 
     monkeypatch.setattr(ps, "_DATA_ROOT", tmp_path)
