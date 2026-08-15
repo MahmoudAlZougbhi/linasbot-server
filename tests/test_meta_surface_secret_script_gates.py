@@ -10,7 +10,7 @@ from services.meta_surface_secret_separation import (
     COLLISION_EXIT,
     env_file_values,
     evaluate_meta_surface_secret_separation,
-    require_separated_meta_surface_secrets_for_update,
+    require_converged_meta_surface_secrets_for_update,
 )
 from tests.test_meta_surface_secret_separation import (
     FB_CANON_SIGN,
@@ -25,6 +25,8 @@ from tests.test_meta_surface_secret_separation import (
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
+NEW_SIGN = "rotated-fb-sign-secret-99"
+NEW_VERIFY = "rotated-fb-verify-token-9"
 
 SIMULTANEOUS_ENV = (
     "\n".join(
@@ -55,6 +57,17 @@ def _write_env(tmp_path: Path, text: str = SIMULTANEOUS_ENV) -> Path:
     return env_path
 
 
+def _disagreeing_signing_env() -> str:
+    return SIMULTANEOUS_ENV.replace(f"META_APP_SECRET={FB_CANON_SIGN}", f"META_APP_SECRET={FB_LEGACY_SIGN}")
+
+
+def _disagreeing_verify_env() -> str:
+    return SIMULTANEOUS_ENV.replace(
+        f"META_WEBHOOK_VERIFY_TOKEN={FB_CANON_VERIFY}",
+        f"META_WEBHOOK_VERIFY_TOKEN={FB_LEGACY_VERIFY}",
+    )
+
+
 def _assert_no_secret_leak(haystack: str) -> None:
     for marker in SECRET_MARKERS:
         assert marker not in haystack
@@ -72,17 +85,19 @@ def test_apply_and_preflight_scripts_call_the_separation_gate() -> None:
             gate_at = source.index("evaluate_meta_surface_secret_separation")
             assert "INSTAGRAM_FACEBOOK_SECRET_COLLISION" in source[gate_at:]
             continue
-        require_call = "require_separated_meta_surface_secrets_for_update(ENV_PATH, updates)"
+        require_call = "require_converged_meta_surface_secrets_for_update(ENV_PATH, updates)"
         apply_call = "atomic_update_env(ENV_PATH, updates)"
+        assign_call = "updates = require_converged_meta_surface_secrets_for_update(ENV_PATH, updates)"
         assert require_call in source, name
+        assert assign_call in source, name
         assert apply_call in source, name
-        assert source.index(require_call) < source.index(apply_call), name
+        assert source.index(assign_call) < source.index(apply_call), name
 
 
 def test_instagram_apply_rejects_legacy_facebook_signing_collision(tmp_path: Path) -> None:
     env_path = _write_env(tmp_path)
     with pytest.raises(SystemExit, match=COLLISION_EXIT) as raised:
-        require_separated_meta_surface_secrets_for_update(
+        require_converged_meta_surface_secrets_for_update(
             env_path,
             {
                 "META_INSTAGRAM_LOGIN_APP_ID": "1035856539045307",
@@ -96,7 +111,7 @@ def test_instagram_apply_rejects_legacy_facebook_signing_collision(tmp_path: Pat
 
 
 def test_instagram_apply_accepts_agreeing_canonical_and_legacy(tmp_path: Path) -> None:
-    require_separated_meta_surface_secrets_for_update(
+    require_converged_meta_surface_secrets_for_update(
         _write_env(tmp_path),
         {
             "META_INSTAGRAM_LOGIN_APP_ID": "1035856539045307",
@@ -107,12 +122,38 @@ def test_instagram_apply_accepts_agreeing_canonical_and_legacy(tmp_path: Path) -
     )
 
 
+def test_social_secrets_apply_repairs_disagreeing_facebook_signing_aliases(tmp_path: Path) -> None:
+    env_path = _write_env(
+        tmp_path,
+        _disagreeing_signing_env(),
+    )
+    converged = require_converged_meta_surface_secrets_for_update(
+        env_path,
+        {
+            "META_APP_SECRET": NEW_SIGN,
+            "META_WEBHOOK_VERIFY_TOKEN": FB_CANON_VERIFY,
+        },
+    )
+    assert converged["META_APP_A_SECRET"] == NEW_SIGN
+    assert converged["META_APP_SECRET"] == NEW_SIGN
+
+
+def test_verify_token_apply_repairs_disagreeing_facebook_verify_aliases(tmp_path: Path) -> None:
+    env_path = _write_env(tmp_path, _disagreeing_verify_env())
+    converged = require_converged_meta_surface_secrets_for_update(
+        env_path,
+        {"META_WEBHOOK_VERIFY_TOKEN": NEW_VERIFY},
+    )
+    assert converged["META_APP_A_WEBHOOK_VERIFY_TOKEN"] == NEW_VERIFY
+    assert converged["META_WEBHOOK_VERIFY_TOKEN"] == NEW_VERIFY
+
+
 def test_social_secrets_apply_rejects_legacy_signing_collision_with_distinct_canonical(
     tmp_path: Path,
 ) -> None:
     env_path = _write_env(tmp_path)
     with pytest.raises(SystemExit, match=COLLISION_EXIT) as raised:
-        require_separated_meta_surface_secrets_for_update(
+        require_converged_meta_surface_secrets_for_update(
             env_path,
             {
                 "META_APP_SECRET": IG_SIGN,
@@ -124,7 +165,7 @@ def test_social_secrets_apply_rejects_legacy_signing_collision_with_distinct_can
 
 
 def test_social_secrets_apply_accepts_agreeing_legacy_facebook_aliases(tmp_path: Path) -> None:
-    require_separated_meta_surface_secrets_for_update(
+    require_converged_meta_surface_secrets_for_update(
         _write_env(tmp_path),
         {
             "META_APP_SECRET": FB_CANON_SIGN,
@@ -136,7 +177,7 @@ def test_social_secrets_apply_accepts_agreeing_legacy_facebook_aliases(tmp_path:
 def test_multi_app_apply_rejects_copied_app_a_collision_with_instagram(tmp_path: Path) -> None:
     env_path = _write_env(tmp_path)
     with pytest.raises(SystemExit, match=COLLISION_EXIT) as raised:
-        require_separated_meta_surface_secrets_for_update(
+        require_converged_meta_surface_secrets_for_update(
             env_path,
             {
                 "META_APP_SECRET": SHARED_SIGN,
@@ -150,7 +191,7 @@ def test_multi_app_apply_rejects_copied_app_a_collision_with_instagram(tmp_path:
 
 
 def test_multi_app_apply_accepts_agreeing_copied_aliases(tmp_path: Path) -> None:
-    require_separated_meta_surface_secrets_for_update(
+    require_converged_meta_surface_secrets_for_update(
         _write_env(tmp_path),
         {
             "META_APP_SECRET": FB_LEGACY_SIGN,
@@ -166,7 +207,7 @@ def test_verify_token_apply_rejects_legacy_collision_with_distinct_canonical(
 ) -> None:
     env_path = _write_env(tmp_path)
     with pytest.raises(SystemExit, match=COLLISION_EXIT) as raised:
-        require_separated_meta_surface_secrets_for_update(
+        require_converged_meta_surface_secrets_for_update(
             env_path,
             {"META_WEBHOOK_VERIFY_TOKEN": IG_VERIFY},
         )
@@ -175,7 +216,7 @@ def test_verify_token_apply_rejects_legacy_collision_with_distinct_canonical(
 
 
 def test_verify_token_apply_accepts_agreeing_legacy_verify(tmp_path: Path) -> None:
-    require_separated_meta_surface_secrets_for_update(
+    require_converged_meta_surface_secrets_for_update(
         _write_env(tmp_path),
         {"META_WEBHOOK_VERIFY_TOKEN": FB_CANON_VERIFY},
     )

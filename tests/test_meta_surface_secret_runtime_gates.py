@@ -71,7 +71,8 @@ async def test_ready_fails_closed_when_second_facebook_signing_alias_collides(
 
 def test_ha_verifier_source_and_evaluator_reject_second_alias_collision(tmp_path: Path) -> None:
     source = (ROOT / "scripts" / "ha" / "verify_meta_release_ha.sh").read_text(encoding="utf-8")
-    assert "evaluate_meta_surface_secret_separation" in source
+    assert "operator_gate_allows_separation" in source
+    assert "COLLISION_EXIT" in source
     assert "COLLISION_EXIT" in source
     env_path = tmp_path / ".env"
     env_path.write_text(

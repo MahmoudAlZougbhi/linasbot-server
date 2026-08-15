@@ -27,7 +27,9 @@ VERIFY_COLLISION = "instagram_verify_matches_facebook"
 FACEBOOK_SIGNING_ALIAS_MISMATCH = "facebook_signing_aliases_disagree"
 FACEBOOK_VERIFY_ALIAS_MISMATCH = "facebook_verify_aliases_disagree"
 COLLISION_EXIT = "meta surface secret policy failed"
+REPAIR_CONVERGENCE_EXIT = "meta surface secret repair invalid"
 CONFIG_COLLISION_KEY = "META_INSTAGRAM_FACEBOOK_SECRET_COLLISION"
+RELEASE_ONLY_VERIFY_MODES = frozenset({"cluster-release-only", "local-release-only"})
 
 
 @dataclass(frozen=True)
@@ -113,10 +115,66 @@ def require_separated_meta_surface_secrets(values: Mapping[str, str]) -> None:
         raise SystemExit(COLLISION_EXIT)
 
 
+def _authoritative_facebook_value(
+    proposed: Mapping[str, str],
+    keys: tuple[str, ...],
+) -> str | None:
+    for key in keys:
+        value = _normalized_secret(proposed, key)
+        if value:
+            return value
+    return None
+
+
+def converge_facebook_surface_secret_updates(
+    existing: Mapping[str, str],
+    proposed: Mapping[str, str],
+) -> dict[str, str]:
+    """Mirror any Facebook signing/verify rotation across all active FB aliases."""
+
+    updates = {str(key): str(value) for key, value in proposed.items()}
+    new_sign = _authoritative_facebook_value(proposed, FACEBOOK_SIGNING_KEYS)
+    if new_sign is not None and any(key in proposed for key in FACEBOOK_SIGNING_KEYS):
+        for key in FACEBOOK_SIGNING_KEYS:
+            if _normalized_secret(existing, key) or key in proposed:
+                updates[key] = new_sign
+    elif any(key in proposed for key in FACEBOOK_SIGNING_KEYS):
+        raise SystemExit(REPAIR_CONVERGENCE_EXIT)
+
+    new_verify = _authoritative_facebook_value(proposed, FACEBOOK_VERIFY_KEYS)
+    if new_verify is not None and any(key in proposed for key in FACEBOOK_VERIFY_KEYS):
+        for key in FACEBOOK_VERIFY_KEYS:
+            if _normalized_secret(existing, key) or key in proposed:
+                updates[key] = new_verify
+    elif any(key in proposed for key in FACEBOOK_VERIFY_KEYS):
+        raise SystemExit(REPAIR_CONVERGENCE_EXIT)
+    return updates
+
+
+def require_converged_meta_surface_secrets_for_update(
+    env_path: Path,
+    proposed: Mapping[str, str],
+) -> dict[str, str]:
+    existing = env_file_values(env_path)
+    converged = converge_facebook_surface_secret_updates(existing, proposed)
+    merged = dict(existing)
+    merged.update(converged)
+    require_separated_meta_surface_secrets(merged)
+    return converged
+
+
 def require_separated_meta_surface_secrets_for_update(
     env_path: Path,
     proposed: Mapping[str, str],
 ) -> None:
-    merged = env_file_values(env_path)
-    merged.update({str(key): str(value) for key, value in proposed.items()})
-    require_separated_meta_surface_secrets(merged)
+    require_converged_meta_surface_secrets_for_update(env_path, proposed)
+
+
+def operator_gate_allows_separation(
+    values: Mapping[str, str],
+    *,
+    verify_mode: str,
+) -> bool:
+    if verify_mode in RELEASE_ONLY_VERIFY_MODES:
+        return True
+    return evaluate_meta_surface_secret_separation(values).ok

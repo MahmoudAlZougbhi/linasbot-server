@@ -64,7 +64,7 @@ from pathlib import Path
 sys.path.insert(0, "/opt/linasbot")
 from scripts.ha.meta_env_file import atomic_update_env
 from services.meta_surface_secret_separation import (
-    require_separated_meta_surface_secrets_for_update,
+    require_converged_meta_surface_secrets_for_update,
 )
 
 APP_SECRET_KEY = "META_INSTAGRAM_LOGIN_APP_SECRET"
@@ -79,7 +79,7 @@ updates = {
     VERIFY_KEY: os.environ[VERIFY_KEY].strip(),
     ADVANCED_ACCESS_KEY: os.environ[ADVANCED_ACCESS_KEY],
 }
-require_separated_meta_surface_secrets_for_update(ENV_PATH, updates)
+updates = require_converged_meta_surface_secrets_for_update(ENV_PATH, updates)
 atomic_update_env(ENV_PATH, updates)
 
 
