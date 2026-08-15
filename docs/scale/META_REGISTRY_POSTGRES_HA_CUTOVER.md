@@ -38,14 +38,95 @@ restore. Its default dry-run rejects the observed non-empty/divergent shape.
 6. Confirm the load balancer health path is actually `/api/ready`, then prove
    exact `200` + `{"ok": true}` locally and through the LB.
 
-One named operator must hold an exclusive DigitalOcean load-balancer change
-window from the first plan/attestation GET through every apply, restore,
+If the trusted-source firewall differs from the fixed Linas policy, treat its
+replacement as a separate provider transaction. On one approved operator host,
+place the token only in the protected `DIGITALOCEAN_ACCESS_TOKEN` environment
+(never an argument or artifact), create one owner-only mode `0700` authority
+directory, and run a read-only plan:
+
+```text
+/usr/bin/env -i \
+  DIGITALOCEAN_ACCESS_TOKEN="${DIGITALOCEAN_ACCESS_TOKEN}" \
+  PATH=/usr/bin:/bin LANG=C LC_ALL=C \
+  /bin/bash scripts/ha/managed_pg_firewall.sh \
+  --plan \
+  --plan-artifact <absolute-0700-dir>/firewall-plan.json \
+  --doctl-bin <absolute-reviewed-doctl>
+```
+
+The helper targets only Managed Postgres cluster
+`17d6fb7e-30d7-442a-a716-5c5344639659`. Trusted-source rules are read and
+replaced only by official DigitalOcean HTTP `GET`/`PUT`
+`/v2/databases/<cluster>/firewall` (PUT succeeds with `204 No Content` and an
+empty body). Reviewed `doctl` is retained solely to double-read exact
+`tag:linas` droplet membership; it is never used to list or replace firewall
+rules. The wrapper pins that reviewed `doctl` path and byte digest, forces the
+official API origin, strips ambient CLI/config authority, and double-reads a
+closed canonical rule projection that preserves rule descriptions. Empty
+trusted-source lists are valid rollback targets. Desired `tag:linas` is accepted
+only when a double-read proves its members are exactly droplets `510629908` and
+`591901417`, including restore-of-restore. The replacement desired rules are
+exactly those two droplets and tag `linas`. The plan is mode `0600`, expires
+after five minutes, and prints a digest-bound confirmation.
+Do not apply unless the owner approves that exact token and one operator holds
+the exclusive firewall window:
+
+```text
+/usr/bin/env -i \
+  DIGITALOCEAN_ACCESS_TOKEN="${DIGITALOCEAN_ACCESS_TOKEN}" \
+  PATH=/usr/bin:/bin LANG=C LC_ALL=C \
+  /bin/bash scripts/ha/managed_pg_firewall.sh \
+  --apply \
+  --plan-artifact <absolute-0700-dir>/firewall-plan.json \
+  --rollback-artifact <absolute-0700-dir>/firewall-rollback.json \
+  --confirm <exact-printed-confirmation> \
+  --owner-confirm I_HOLD_EXCLUSIVE_MANAGED_PG_FIREWALL_UNTIL_COMPLETE
+```
+
+Apply re-hashes the tool, re-reads the provider state twice, performs an exact
+CAS against the approved baseline, and durably publishes/read-backs the rollback
+artifact before the single full-rule replacement. It then double-reads the exact
+postcondition. Provider ambiguity fails closed with the rollback artifact
+retained. Immutable intent/completion/supersede receipts in the same protected
+directory make the confirmation one transaction: an incomplete exact retry must
+reuse the same plan and rollback paths, a completed retry is read-only and only
+accepted while the approved state still exists, and a restore permanently
+supersedes the forward plan. Never copy the plan to another directory, select a
+new rollback path, delete an individual receipt, or rerun apply blindly. Retain
+or archive the entire authority directory as one indivisible audit unit; if any
+authority file is lost, stop and do not reuse its confirmation. To restore, first record the printed rollback artifact SHA, then create a fresh
+current-state-bound restore plan with `--restore-plan --source-rollback-artifact
+... --expected-source-rollback-sha256 ... --doctl-bin <absolute-reviewed-doctl>`.
+`--restore-plan` re-reviews that `doctl` binary now; it does not reuse the
+source rollback's tool digest. Then run `--restore` with a new reverse rollback
+artifact, the exact printed restore confirmation, and the same exclusive-owner
+token. Plan, rollback, lock, receipt, and `.writing` names are reserved: a
+collision is rejected before any provider mutation. A leftover `.writing`
+temporary whose bytes differ from the intended artifact is quarantined under
+`.managed-pg-firewall-quarantine-...` and never overwritten.
+
+Use that exact sanitized `/usr/bin/env -i ... /bin/bash` prefix for
+`--restore-plan` and `--restore` too. Do not invoke this privileged wrapper from
+an ambient shell environment: noninteractive Bash may otherwise consume
+`BASH_ENV` before the wrapper can isolate itself. The wrapper resolves its real
+path, authenticates every Python control-module byte against its embedded
+digest, snapshots the verified files into a private directory, and only then
+executes the transaction.
+
+The `linas` tag is accepted only when a double-read proves that its effective
+members are exactly the two pinned Linas droplets, and that membership is bound
+into the plan and rechecked before and after replacement. Tag membership remains
+dynamic after the transaction; production tag changes therefore require the
+same exclusive provider window and a fresh firewall attestation/plan.
+
+One named operator must hold an exclusive DigitalOcean Managed Postgres
+firewall/tag change window from the first plan/attestation GET through every apply, restore,
 failover-phase post-attestation, and final readback or rollback. During that
 window nobody may use the DigitalOcean Console, `doctl`, another API client, or
-LB automation against this load balancer. DigitalOcean's full-representation
-PUT has no conditional ETag/CAS: the required second GET closes known stale-read
+automation against this database firewall or the `linas` tag. DigitalOcean's
+full-representation PUT has no conditional ETag/CAS: the required second GET closes known stale-read
 interleavings, but it does not eliminate the residual GET-to-PUT provider race.
-If exclusive ownership cannot be proved, stop before any LB PUT.
+If exclusive ownership cannot be proved, stop before any firewall PUT.
 
 Any mismatch stops the phase. No “skip” flag is permitted.
 
@@ -132,13 +213,25 @@ sudo /opt/linasbot/venv/bin/python \
   /opt/linasbot/scripts/ha/retire_meta_registry_nfs_ha.py \
   --plan \
   --expected-release-sha <40-hex-release> \
-  --expected-pg-sha256 <64-hex-deep-registry-digest>
+  --expected-pg-sha256 <64-hex-state-sha256>
 ```
+
+Use the verifier's `state_sha256`, which binds the three mutable authority-state
+tables (`meta_asset_bindings`, `meta_binding_credentials`, and
+`meta_oauth_states`). Do not substitute the four-table snapshot
+`tables_sha256`: that also includes the append-only audit table and is separate
+backup/restore evidence.
 
 The plan holds the common production lock on both nodes and re-proves exact
 release, explicit `postgres`, readiness, node identities, registry invariants,
-the active node02 mount, and the active node01 export. It prints a digest-bound
-`RETIRE_META_REGISTRY_NFS:<release>:<pg-digest>` token. The operation is
+the active node02 mount, and the active node01 export. It prints
+`PLAN_TRANSACTION_ID`, `PLAN_CONTRACT_SHA256`, and a confirmation token of the
+closed form
+`RETIRE_META_REGISTRY_NFS:<tx-id>:<release>:<state-sha256>:<plan-contract-sha256>`.
+The plan-contract digest binds the transaction, release, Postgres state, and all
+six node01/node02 NFS config/runtime/postimage digests. `--apply` repeats both
+node preflights and rejects any baseline drift before its first journal write or
+mutation. The operation is
 destructive configuration change and must not proceed until the owner gives the
 specific live confirmation for that exact token.
 

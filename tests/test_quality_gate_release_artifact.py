@@ -10,6 +10,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "quality-gates.yml"
+SECURITY_WORKFLOW = ROOT / ".github" / "workflows" / "security-checks.yml"
 UPLOAD = "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
 DOWNLOAD = "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093"
 CHECKOUT = "actions/checkout@11d5960a326750d5838078e36cf38b85af677262"
@@ -124,6 +125,19 @@ def test_quality_gate_actions_are_immutable_and_manifest_never_claims_github_art
     assert "artifact_id" not in source
     assert "artifact_digest" not in source
     assert "${{ secrets." not in source
+
+
+def test_security_checks_use_only_pinned_read_only_checkout() -> None:
+    parsed = yaml.safe_load(SECURITY_WORKFLOW.read_text(encoding="utf-8"))
+    assert parsed["permissions"] == {"contents": "read"}
+    steps = parsed["jobs"]["secret-scan"]["steps"]
+    actions = [step for step in steps if "uses" in step]
+    assert actions == [
+        {
+            "uses": CHECKOUT,
+            "with": {"fetch-depth": 1, "persist-credentials": False},
+        }
+    ]
 
 
 def test_portable_runtime_self_checks_are_bytecode_free_and_tree_stable() -> None:

@@ -4,8 +4,10 @@
 This coordinator never imports NFS data.  It serializes both nodes behind the
 shared production lock, records an fsynced rollback decision before mutation,
 retires node02's mount before node01's export, and retains exact config/data
-backups.  Dry-run is the default; every mutation/recovery decision requires an
-exact, digest-bound confirmation.
+backups.  Dry-run is the default; its apply token binds one transaction ID, the
+release/Postgres authority, and all six node pre-/postimage digests.  Apply
+re-proves that exact plan before publishing a journal or mutating either node.
+Every mutation/recovery decision requires an exact, digest-bound confirmation.
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -54,6 +57,7 @@ OTHER_TRANSACTION_PATHS: Final = (
     STATE_ROOT / "python-runtime-provision.coordinator.json",
 )
 SCHEMA: Final = "linas-meta-registry-nfs-retire-v1"
+PLAN_SCHEMA: Final = "linas-meta-registry-nfs-retire-plan-v1"
 TX_RE: Final = re.compile(r"mnr_[0-9a-f]{64}")
 SHA_RE: Final = re.compile(r"[0-9a-f]{40}")
 DIGEST_RE: Final = re.compile(r"[0-9a-f]{64}")
@@ -889,8 +893,56 @@ def _new_tx_id(expected_release_sha: str, expected_pg_sha256: str) -> str:
     )
 
 
-def _confirm_apply(expected_release_sha: str, expected_pg_sha256: str) -> str:
-    return f"RETIRE_META_REGISTRY_NFS:{expected_release_sha}:{expected_pg_sha256}"
+def _plan_contract(journal: Mapping[str, Any]) -> dict[str, str]:
+    """Return the immutable, secret-free operator-approved detach baseline."""
+
+    validated = _validate_journal(journal)
+    return {
+        "schema": PLAN_SCHEMA,
+        **{
+            key: str(validated[key])
+            for key in (
+                "tx_id",
+                "expected_release_sha",
+                "expected_pg_sha256",
+                "node01_config_sha256",
+                "node01_runtime_sha256",
+                "node01_post_config_sha256",
+                "node02_config_sha256",
+                "node02_runtime_sha256",
+                "node02_post_config_sha256",
+            )
+        },
+    }
+
+
+def _plan_contract_sha256(journal: Mapping[str, Any]) -> str:
+    return _sha256_bytes(_canonical(_plan_contract(journal)))
+
+
+def _confirm_apply(journal: Mapping[str, Any]) -> str:
+    contract = _plan_contract(journal)
+    return (
+        "RETIRE_META_REGISTRY_NFS:"
+        f"{contract['tx_id']}:"
+        f"{contract['expected_release_sha']}:"
+        f"{contract['expected_pg_sha256']}:"
+        f"{_plan_contract_sha256(journal)}"
+    )
+
+
+def _parse_apply_confirmation(confirmation: str) -> tuple[str, str, str, str]:
+    parts = str(confirmation or "").split(":")
+    if (
+        len(parts) != 5
+        or parts[0] != "RETIRE_META_REGISTRY_NFS"
+        or TX_RE.fullmatch(parts[1]) is None
+        or SHA_RE.fullmatch(parts[2]) is None
+        or DIGEST_RE.fullmatch(parts[3]) is None
+        or DIGEST_RE.fullmatch(parts[4]) is None
+    ):
+        raise PermissionError("exact NFS retirement plan confirmation is missing or invalid")
+    return parts[1], parts[2], parts[3], parts[4]
 
 
 def _confirm_recovery(tx_id: str, decision: str, journal_sha256: str) -> str:
@@ -927,7 +979,7 @@ def _plan(expected_release_sha: str, expected_pg_sha256: str) -> int:
         _node_command("node01", draft, lock_fd=lock_fd, action="preflight")
         node02 = peer.call({"action": "preimage"})
         node01 = _preimage_digests("node01")
-        _journal_payload(
+        plan = _journal_payload(
             **{
                 **_journal_identity(draft),
                 "node01_config_sha256": node01["config_sha256"],
@@ -944,16 +996,20 @@ def _plan(expected_release_sha: str, expected_pg_sha256: str) -> int:
         peer.close()
         os.close(lock_fd)
     print("PLAN_OK: both nodes and Postgres authority passed read-only preflight")
-    print(f"APPLY_CONFIRMATION={_confirm_apply(expected_release_sha, expected_pg_sha256)}")
+    print(f"PLAN_TRANSACTION_ID={plan['tx_id']}")
+    print(f"PLAN_CONTRACT_SHA256={_plan_contract_sha256(plan)}")
+    print(f"APPLY_CONFIRMATION={_confirm_apply(plan)}")
     return 0
 
 
 def _apply(expected_release_sha: str, expected_pg_sha256: str, confirmation: str) -> int:
-    if confirmation != _confirm_apply(expected_release_sha, expected_pg_sha256):
-        raise PermissionError("exact NFS retirement confirmation is missing")
+    tx_id, confirmed_release_sha, confirmed_pg_sha256, confirmed_plan_sha256 = _parse_apply_confirmation(confirmation)
+    if confirmed_release_sha != expected_release_sha or confirmed_pg_sha256 != expected_pg_sha256:
+        raise PermissionError("NFS retirement confirmation targets another release or Postgres baseline")
     if ACTIVE_JOURNAL.exists() or ACTIVE_JOURNAL.is_symlink():
         raise NfsRetirementError("existing NFS retirement requires recovery")
-    tx_id = _new_tx_id(expected_release_sha, expected_pg_sha256)
+    if _read_receipt(tx_id) is not None:
+        raise NfsRetirementError("NFS retirement confirmation transaction was already finalized")
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     journal = _journal_payload(
         tx_id=tx_id,
@@ -975,6 +1031,9 @@ def _apply(expected_release_sha: str, expected_pg_sha256: str, confirmation: str
     peer_retired = False
     local_retired = False
     try:
+        peer_existing = peer.call({"action": "journal-read", "tx_id": tx_id})
+        if peer_existing.get("journal") is not None or peer_existing.get("receipt_status") != "absent":
+            raise NfsRetirementError("peer NFS retirement transaction state already exists")
         peer.call({"action": "preflight", "journal": journal})
         _node_command("node01", journal, lock_fd=lock_fd, action="preflight")
         node02 = peer.call({"action": "preimage"})
@@ -992,6 +1051,10 @@ def _apply(expected_release_sha: str, expected_pg_sha256: str, confirmation: str
                 "decision": "rollback",
             }
         )
+        if not hmac.compare_digest(_plan_contract_sha256(journal), confirmed_plan_sha256):
+            raise PermissionError("NFS retirement plan confirmation is stale or the baseline changed")
+        if confirmation != _confirm_apply(journal):
+            raise PermissionError("NFS retirement plan confirmation is stale or invalid")
         journal, _ = _write_journal(ACTIVE_JOURNAL, journal)
         peer.call({"action": "journal-write", "journal": journal})
         peer_state = peer.call({"action": "apply", "journal": journal}).get("status")

@@ -91,7 +91,36 @@ def test_plan_checks_both_active_baselines_without_mutation(
     assert retire._plan(RELEASE_SHA, PG_SHA) == 0
     assert calls[:2] == [("node02", "preflight"), ("node01", "preflight")]
     assert all(action != "apply" for _, action in calls)
-    assert "PLAN_OK" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "PLAN_OK" in output
+    assert f"PLAN_TRANSACTION_ID={TX_ID}" in output
+    assert f"PLAN_CONTRACT_SHA256={retire._plan_contract_sha256(_journal())}" in output
+    assert f"APPLY_CONFIRMATION={retire._confirm_apply(_journal())}" in output
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("tx_id", "mnr_" + "d" * 64),
+        ("expected_release_sha", "e" * 40),
+        ("expected_pg_sha256", "f" * 64),
+        ("node01_config_sha256", "5" * 64),
+        ("node01_runtime_sha256", "6" * 64),
+        ("node01_post_config_sha256", "7" * 64),
+        ("node02_config_sha256", "8" * 64),
+        ("node02_runtime_sha256", "9" * 64),
+        ("node02_post_config_sha256", "0" * 64),
+    ],
+)
+def test_apply_confirmation_binds_transaction_authority_and_all_nfs_preimages(
+    field: str,
+    replacement: str,
+) -> None:
+    baseline = _journal()
+    changed = {**baseline, field: replacement}
+
+    assert retire._plan_contract_sha256(changed) != retire._plan_contract_sha256(baseline)
+    assert retire._confirm_apply(changed) != retire._confirm_apply(baseline)
 
 
 def test_recovery_seeds_absent_peer_prepared_prefix_before_abort(
@@ -306,10 +335,15 @@ def _patch_transaction_runtime(
 def test_apply_commits_node02_then_node01_with_preimages_bound_before_mutation(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     events, peer, local, active = _patch_transaction_runtime(monkeypatch, tmp_path)
 
-    assert retire._apply(RELEASE_SHA, PG_SHA, retire._confirm_apply(RELEASE_SHA, PG_SHA)) == 0
+    assert retire._plan(RELEASE_SHA, PG_SHA) == 0
+    output = capsys.readouterr().out
+    confirmation = next(line.split("=", 1)[1] for line in output.splitlines() if line.startswith("APPLY_CONFIRMATION="))
+    assert confirmation == retire._confirm_apply(_journal())
+    assert retire._apply(RELEASE_SHA, PG_SHA, confirmation) == 0
     assert not active.exists()
     assert retire._receipt_status(TX_ID) == "committed"
     assert peer.receipt is not None and peer.receipt["node02_runtime_sha256"] == "4" * 64
@@ -328,7 +362,7 @@ def test_lost_node02_apply_ack_is_recoverable_to_exact_active_baseline(
         lose_peer_apply_ack=True,
     )
     with pytest.raises(retire.NfsRetirementError, match="ACK loss"):
-        retire._apply(RELEASE_SHA, PG_SHA, retire._confirm_apply(RELEASE_SHA, PG_SHA))
+        retire._apply(RELEASE_SHA, PG_SHA, retire._confirm_apply(_journal()))
     assert active.is_file()
     assert peer.state == "retired"
     assert local["state"] == "active"
@@ -348,6 +382,56 @@ def test_lost_node02_apply_ack_is_recoverable_to_exact_active_baseline(
     assert not active.exists()
     assert retire._receipt_status(TX_ID) == "aborted"
     assert "peer-rollback" in events
+
+
+def test_apply_rejects_plan_baseline_drift_before_journal_or_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    events, peer, local, active = _patch_transaction_runtime(monkeypatch, tmp_path)
+
+    assert retire._plan(RELEASE_SHA, PG_SHA) == 0
+    output = capsys.readouterr().out
+    confirmation = next(line.split("=", 1)[1] for line in output.splitlines() if line.startswith("APPLY_CONFIRMATION="))
+    monkeypatch.setattr(
+        retire,
+        "_preimage_digests",
+        lambda role: {
+            "config_sha256": "9" * 64,
+            "runtime_sha256": "2" * 64,
+            "post_config_sha256": "a" * 64,
+        },
+    )
+
+    with pytest.raises(PermissionError, match="baseline changed"):
+        retire._apply(RELEASE_SHA, PG_SHA, confirmation)
+
+    assert not active.exists()
+    assert peer.state == "active"
+    assert local["state"] == "active"
+    assert "peer-journal-write" not in events
+    assert "peer-apply" not in events
+    assert "local-apply" not in events
+
+
+def test_apply_rejects_mutated_plan_token_before_journal_or_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    events, peer, local, active = _patch_transaction_runtime(monkeypatch, tmp_path)
+    confirmation = retire._confirm_apply(_journal())
+    mutated = f"{confirmation[:-1]}{'0' if confirmation[-1] != '0' else '1'}"
+
+    with pytest.raises(PermissionError, match="stale"):
+        retire._apply(RELEASE_SHA, PG_SHA, mutated)
+
+    assert not active.exists()
+    assert peer.state == "active"
+    assert local["state"] == "active"
+    assert "peer-journal-write" not in events
+    assert "peer-apply" not in events
+    assert "local-apply" not in events
 
 
 @pytest.mark.parametrize(
