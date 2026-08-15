@@ -7,7 +7,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 
 import { ApiError } from '../../api/client';
 import { isNetworkFailure } from '../../api/networkError';
@@ -20,7 +19,7 @@ import { useModuleNav } from '../nav/ModuleNavContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import { SmartFollowUpChannelsCard } from './SmartFollowUpChannelsCard';
 import { SmartFollowUpStepsCard } from './SmartFollowUpStepsCard';
-import { SFU_CARD_BORDER, SFU_TEAL, SFU_TEAL_SOFT } from './smartFollowUpDesign';
+import { SFU_CARD_BORDER, SFU_TEAL } from './smartFollowUpDesign';
 import {
   DEFAULT_CHANNELS_ENABLED,
   type FollowUpChannelKey,
@@ -51,6 +50,10 @@ function defaultSteps(): SmartFollowUpStep[] {
   ];
 }
 
+function featureEnabledFromSteps(steps: SmartFollowUpStep[]): boolean {
+  return steps.some((s) => s.enabled);
+}
+
 function validateLocal(
   steps: SmartFollowUpStep[],
   channels: FollowUpChannelsEnabled,
@@ -72,7 +75,6 @@ export function SmartFollowUpScreen() {
   const { tr } = useI18n();
   const nav = useModuleNav();
   const [load, setLoad] = useState<LoadState>({ kind: 'loading' });
-  const [enabled, setEnabled] = useState(false);
   const [businessHoursOnly, setBusinessHoursOnly] = useState(true);
   const [channels, setChannels] = useState<FollowUpChannelsEnabled>(DEFAULT_CHANNELS_ENABLED);
   const [steps, setSteps] = useState<SmartFollowUpStep[]>(defaultSteps);
@@ -83,7 +85,6 @@ export function SmartFollowUpScreen() {
   const [validationKey, setValidationKey] = useState<StringKey | null>(null);
 
   const applySettings = useCallback((data: SmartFollowUpSettings) => {
-    setEnabled(data.enabled);
     setBusinessHoursOnly(data.business_hours_only);
     setChannels(normalizeChannelsEnabled(data.channels_enabled));
     setSteps(data.steps.length ? [...data.steps].sort((a, b) => a.step_index - b.step_index) : defaultSteps());
@@ -153,7 +154,7 @@ export function SmartFollowUpScreen() {
     setNotice(null);
     try {
       const data = await saveSmartFollowUpSettings({
-        enabled,
+        enabled: featureEnabledFromSteps(steps),
         business_hours_only: businessHoursOnly,
         settings_version: settingsVersion,
         channels_enabled: channels,
@@ -203,14 +204,17 @@ export function SmartFollowUpScreen() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: SFU_CARD_BORDER }]}>
             <View style={styles.rowBetween}>
-              <Text style={[styles.cardTitle, { color: colors.text }]}>{tr('sfuEnabledLabel')}</Text>
+              <View style={styles.flex}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{tr('sfuBusinessHours')}</Text>
+                <Text style={[styles.cardHint, { color: colors.textMuted }]}>{tr('sfuBusinessHoursHint')}</Text>
+              </View>
               <Switch
-                value={enabled}
-                onValueChange={setEnabled}
+                value={businessHoursOnly}
+                onValueChange={setBusinessHoursOnly}
                 disabled={formDisabled}
                 trackColor={{ false: colors.border, true: SFU_TEAL }}
                 thumbColor={colors.surface}
-                accessibilityLabel={tr('sfuEnabledLabel')}
+                accessibilityLabel={tr('sfuBusinessHours')}
               />
             </View>
           </View>
@@ -230,33 +234,6 @@ export function SmartFollowUpScreen() {
               setValidationKey(null);
             }}
           />
-
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: SFU_CARD_BORDER }]}>
-            <View style={styles.rowBetween}>
-              <View style={styles.flex}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>{tr('sfuBusinessHours')}</Text>
-                <Text style={[styles.cardHint, { color: colors.textMuted }]}>{tr('sfuBusinessHoursHint')}</Text>
-              </View>
-              <Switch
-                value={businessHoursOnly}
-                onValueChange={setBusinessHoursOnly}
-                disabled={formDisabled}
-                trackColor={{ false: colors.border, true: SFU_TEAL }}
-                thumbColor={colors.surface}
-                accessibilityLabel={tr('sfuBusinessHours')}
-              />
-            </View>
-          </View>
-
-          <View style={[styles.aiBox, { backgroundColor: SFU_TEAL_SOFT, borderColor: SFU_TEAL }]}>
-            <Ionicons name="sparkles" size={20} color={SFU_TEAL} />
-            <Text style={[styles.aiText, { color: colors.text }]}>{tr('sfuAiWritesBody')}</Text>
-          </View>
-
-          <View style={styles.compliance}>
-            <Ionicons name="shield-checkmark-outline" size={16} color={colors.textMuted} />
-            <Text style={[styles.complianceText, { color: colors.textMuted }]}>{tr('sfuWindowCompliance')}</Text>
-          </View>
 
           {validationKey ? (
             <Text style={{ color: colors.danger, fontFamily: fonts.body }}>{tr(validationKey)}</Text>
@@ -281,9 +258,9 @@ const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
     borderRadius: radii.md,
-    padding: spacing.md,
+    padding: spacing.lg,
   },
-  cardTitle: { fontFamily: fonts.bodyMedium, fontSize: 16 },
+  cardTitle: { fontFamily: fonts.display, fontSize: 16 },
   cardHint: { fontFamily: fonts.body, fontSize: 13, marginTop: 4 },
   rowBetween: {
     flexDirection: 'row',
@@ -292,32 +269,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   flex: { flex: 1 },
-  aiBox: {
-    borderWidth: 1,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  aiText: {
-    flex: 1,
-    fontFamily: fonts.body,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  compliance: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 2,
-  },
-  complianceText: {
-    flex: 1,
-    fontFamily: fonts.body,
-    fontSize: 12,
-    lineHeight: 16,
-  },
   saveBtn: {
     marginTop: spacing.xs,
   },

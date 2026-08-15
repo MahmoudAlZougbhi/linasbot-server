@@ -6,7 +6,7 @@ import { AppIcon, feather } from '../../components/AppIcon';
 import { GradientBackground } from '../../components/GradientBackground';
 import { useI18n } from '../../i18n/LanguageContext';
 import { HIT, fonts, spacing, typography, useTheme } from '../../theme';
-import { HEADER_HIT, HeaderMenuButton } from '../chat/ChatHeaderIcons';
+import { HEADER_HIT, HEADER_ICON_BOX, HeaderMenuButton } from '../chat/ChatHeaderIcons';
 import { NavDrawer } from '../nav/NavDrawer';
 import { useModuleNav } from '../nav/ModuleNavContext';
 import { useModuleDrawerHistory } from '../nav/useModuleDrawerHistory';
@@ -84,9 +84,21 @@ export function ScreenChrome({
             <View style={[styles.titleRule, { backgroundColor: colors.border }]} />
           </>
         ) : (
-          <View style={[styles.headerRow, centerTitle && styles.headerRowCentered]}>
+          <View
+            style={[
+              styles.headerRow,
+              centerTitle && styles.headerRowCentered,
+              Boolean(subtitle) && !centerTitle && styles.headerRowTitleTop,
+            ]}
+          >
             {menu}
-            <View style={[styles.titleBlock, centerTitle && styles.titleBlockCentered]}>
+            <View
+              style={[
+                styles.titleBlock,
+                centerTitle && styles.titleBlockCentered,
+                Boolean(subtitle) && !centerTitle && styles.titleBlockWithSub,
+              ]}
+            >
               <Text
                 style={[
                   centerTitle ? styles.centeredTitle : typography.title,
@@ -98,13 +110,13 @@ export function ScreenChrome({
               </Text>
               {subtitle ? (
                 <Text
-                  style={{
-                    color: colors.textMuted,
-                    fontFamily: fonts.body,
-                    marginTop: 4,
-                    fontSize: 14,
-                    textAlign: centerTitle ? 'center' : 'left',
-                  }}
+                  style={[
+                    styles.subtitle,
+                    {
+                      color: colors.textMuted,
+                      textAlign: centerTitle ? 'center' : 'left',
+                    },
+                  ]}
                 >
                   {subtitle}
                 </Text>
@@ -168,6 +180,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
+  /** Title top matches the silver menu square; subtitle sits under the title only. */
+  headerRowTitleTop: {
+    alignItems: 'flex-start',
+  },
   headerRowCentered: {
     alignItems: 'center',
   },
@@ -196,9 +212,17 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
+  titleBlockWithSub: {
+    paddingTop: (HEADER_HIT - HEADER_ICON_BOX) / 2,
+  },
   titleBlockCentered: {
     paddingTop: 0,
     alignItems: 'center',
+  },
+  subtitle: {
+    fontFamily: fonts.body,
+    marginTop: 4,
+    fontSize: 14,
   },
   centeredTitle: {
     fontFamily: fonts.bodyMedium,
