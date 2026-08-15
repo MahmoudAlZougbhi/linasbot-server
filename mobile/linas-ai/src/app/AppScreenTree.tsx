@@ -199,21 +199,21 @@ export function AppScreenTree({
       ) : null}
       {name === 'products_import' ? (
         <ProductsImportScreen
-          onBack={() => setScreen({ name: 'products', backTo: screen.backTo })}
-          onImported={() => setScreen({ name: 'products', backTo: screen.backTo })}
+          onBack={() => setScreen({ name: 'products', backTo: 'cm' })}
+          onImported={() => setScreen({ name: 'products', backTo: 'cm' })}
         />
       ) : null}
       {name === 'products_add' ? (
         <AddProductScreen
-          onBack={() => setScreen({ name: 'products', backTo: screen.backTo })}
-          onSaved={() => setScreen({ name: 'products', backTo: screen.backTo })}
+          onBack={() => setScreen({ name: 'products', backTo: 'cm' })}
+          onSaved={() => setScreen({ name: 'products', backTo: 'cm' })}
         />
       ) : null}
       {name === 'products_edit' ? (
         <AddProductScreen
           productId={screen.productId}
-          onBack={() => setScreen({ name: 'products', backTo: screen.backTo })}
-          onSaved={() => setScreen({ name: 'products', backTo: screen.backTo })}
+          onBack={() => setScreen({ name: 'products', backTo: 'cm' })}
+          onSaved={() => setScreen({ name: 'products', backTo: 'cm' })}
         />
       ) : null}
 

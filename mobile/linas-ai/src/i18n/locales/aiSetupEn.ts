@@ -155,6 +155,7 @@ export const aiSetupEn = {
   productsAvailability_out_of_stock: 'Out of stock',
   productsAvailability_inactive: 'Inactive',
   productsOutOfStockBadge: 'Out of stock',
+  productsImport: 'Import products',
   productsImportTitle: 'Import products',
   productsImportSubtitle: 'CSV or Excel template import',
   productsImportTemplateHint: 'Use the server template columns: name, price, availability, image URLs, social links.',

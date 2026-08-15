@@ -27,5 +27,5 @@ export function ModalScrim({ onPress, style, children, justify = 'flex-end', acc
 }
 
 const styles = StyleSheet.create({
-  base: StyleSheet.absoluteFillObject,
+  base: StyleSheet.absoluteFill,
 });

@@ -155,6 +155,7 @@ export const aiSetupFr = {
   productsAvailability_out_of_stock: 'Rupture de stock',
   productsAvailability_inactive: 'Inactif',
   productsOutOfStockBadge: 'Rupture de stock',
+  productsImport: 'Importer des produits',
   productsImportTitle: 'Importer des produits',
   productsImportSubtitle: 'Import CSV ou Excel',
   productsImportTemplateHint: 'Utilisez les colonnes du modèle : nom, prix, disponibilité, URLs.',

@@ -155,6 +155,7 @@ export const aiSetupAr = {
   productsAvailability_out_of_stock: 'غير متوفر',
   productsAvailability_inactive: 'غير نشط',
   productsOutOfStockBadge: 'غير متوفر',
+  productsImport: 'استيراد المنتجات',
   productsImportTitle: 'استيراد المنتجات',
   productsImportSubtitle: 'استيراد CSV أو Excel',
   productsImportTemplateHint: 'استخدم أعمدة القالب: الاسم، السعر، التوفر، روابط الصور.',

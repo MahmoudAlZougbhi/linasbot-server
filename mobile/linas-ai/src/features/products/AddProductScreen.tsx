@@ -88,7 +88,7 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
 
   const addImage = async () => {
     if (images.length >= MAX_PRODUCT_IMAGES) {
-      setError(tr('productsMaxImages', { max: MAX_PRODUCT_IMAGES }));
+      setError(tr('productsMaxImages'));
       return;
     }
     setUploading(true);
@@ -207,7 +207,7 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
                 },
               ]}
             >
-              <Text style={{ color: availability === value ? colors.accent : colors.muted, fontSize: 13 }}>
+              <Text style={{ color: availability === value ? colors.accent : colors.textMuted, fontSize: 13 }}>
                 {tr(`productsAvailability_${value}`)}
               </Text>
             </Pressable>
@@ -222,7 +222,7 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
                 <Image source={{ uri: img.previewUri }} style={styles.thumb} />
               ) : (
                 <View style={[styles.thumb, styles.thumbPlaceholder, { borderColor: colors.border }]}>
-                  <Text style={{ fontSize: 10, color: colors.muted }}>{img.media_id.slice(-6)}</Text>
+                  <Text style={{ fontSize: 10, color: colors.textMuted }}>{img.media_id.slice(-6)}</Text>
                 </View>
               )}
               <Pressable onPress={() => removeImage(img.media_id)}>

@@ -69,7 +69,7 @@ export function ProductsScreen({ onBack, onAdd, onImport, onEdit }: Props) {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          <Text style={[styles.empty, { color: colors.muted }]}>{tr('productsEmpty')}</Text>
+          <Text style={[styles.empty, { color: colors.textMuted }]}>{tr('productsEmpty')}</Text>
         }
         renderItem={({ item }) => (
           <View style={[styles.card, { borderColor: colors.border }]}>
@@ -78,8 +78,8 @@ export function ProductsScreen({ onBack, onAdd, onImport, onEdit }: Props) {
               {item.availability === 'out_of_stock' ? (
                 <Text style={styles.badge}>{tr('productsOutOfStockBadge')}</Text>
               ) : null}
-              {item.price ? <Text style={{ color: colors.muted }}>{item.price}</Text> : null}
-              <Text style={{ color: colors.muted, fontSize: 12 }}>
+              {item.price ? <Text style={{ color: colors.textMuted }}>{item.price}</Text> : null}
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>
                 {item.images?.length ?? 0} {tr('productsImagesLabel')}
               </Text>
             </Pressable>
