@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from contextlib import AbstractContextManager
 from typing import Any
 
 from fastapi import HTTPException, Query, Request
+from sqlalchemy.orm import Session
 
 from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
 from modules.api_security import require_session
@@ -25,7 +27,7 @@ def _http(exc: ServiceCatalogError) -> HTTPException:
     return HTTPException(status_code=exc.http_status, detail={"code": exc.code, "message": exc.message})
 
 
-def _db_session():
+def _db_session() -> AbstractContextManager[Session]:
     try:
         return whatsapp_session()
     except WhatsAppDatabaseUnavailable as exc:
