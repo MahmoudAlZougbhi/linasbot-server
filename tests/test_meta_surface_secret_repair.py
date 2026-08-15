@@ -18,6 +18,8 @@ from services.meta_surface_secret_separation import (
     require_converged_meta_surface_secrets_for_update,
 )
 from tests.test_meta_surface_secret_separation import (
+    FB_APP_B_SIGN,
+    FB_APP_B_VERIFY,
     FB_CANON_SIGN,
     FB_CANON_VERIFY,
     FB_LEGACY_SIGN,
@@ -177,6 +179,26 @@ def test_converge_failure_does_not_leak_secret_values(tmp_path: Path) -> None:
             {"META_APP_SECRET": SHARED_SIGN, "META_APP_A_SECRET": SHARED_SIGN},
         )
     _assert_no_secret_leak(str(raised.value))
+
+
+def test_repair_app_a_rotation_leaves_app_b_unchanged(tmp_path: Path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        _disagreeing_signing_env()
+        + f"META_APP_B_SECRET={FB_APP_B_SIGN}\nMETA_APP_B_WEBHOOK_VERIFY_TOKEN={FB_APP_B_VERIFY}\n",
+        encoding="utf-8",
+    )
+    before_b_sign = env_file_values(env_path)["META_APP_B_SECRET"]
+    before_b_verify = env_file_values(env_path)["META_APP_B_WEBHOOK_VERIFY_TOKEN"]
+    converged = require_converged_meta_surface_secrets_for_update(
+        env_path,
+        {"META_APP_SECRET": NEW_SIGN},
+    )
+    assert converged["META_APP_A_SECRET"] == NEW_SIGN
+    assert converged["META_APP_SECRET"] == NEW_SIGN
+    assert "META_APP_B_SECRET" not in converged
+    assert env_file_values(env_path)["META_APP_B_SECRET"] == before_b_sign
+    assert env_file_values(env_path)["META_APP_B_WEBHOOK_VERIFY_TOKEN"] == before_b_verify
 
 
 def test_ha_verifier_skips_separation_only_on_release_only_preflight() -> None:

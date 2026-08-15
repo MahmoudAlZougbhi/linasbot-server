@@ -15,6 +15,7 @@ from services.meta_surface_secret_separation import (
     FACEBOOK_VERIFY_ALIAS_MISMATCH,
     SIGNING_COLLISION,
     VERIFY_COLLISION,
+    converge_facebook_surface_secret_updates,
     env_file_values,
     evaluate_meta_surface_secret_separation,
     require_separated_meta_surface_secrets,
@@ -30,6 +31,8 @@ IG_SIGN = "ig-login-sign-secret-001"
 SHARED_SIGN = "shared-sign-secret-value"
 FB_CANON_VERIFY = "fb-canon-verify-00000001"
 FB_LEGACY_VERIFY = "fb-legacy-verify-0000001"
+FB_APP_B_SIGN = "fb-app-b-sign-secret-001"
+FB_APP_B_VERIFY = "fb-app-b-verify-00000001"
 IG_VERIFY = "ig-login-verify-00000001"
 SHARED_VERIFY = "shared-verify-0000000001"
 
@@ -40,6 +43,8 @@ SEPARATED = {
     "META_WEBHOOK_VERIFY_TOKEN": FB_CANON_VERIFY,
     "META_INSTAGRAM_LOGIN_APP_SECRET": IG_SIGN,
     "META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN": IG_VERIFY,
+    "META_APP_B_SECRET": FB_APP_B_SIGN,
+    "META_APP_B_WEBHOOK_VERIFY_TOKEN": FB_APP_B_VERIFY,
 }
 
 SECRET_MARKERS = (
@@ -49,6 +54,8 @@ SECRET_MARKERS = (
     SHARED_SIGN,
     FB_CANON_VERIFY,
     FB_LEGACY_VERIFY,
+    FB_APP_B_SIGN,
+    FB_APP_B_VERIFY,
     IG_VERIFY,
     SHARED_VERIFY,
 )
@@ -70,12 +77,69 @@ def test_helper_does_not_use_first_present_precedence() -> None:
     assert "_first_present" not in source
     assert "_present_secrets" in source
     assert "_cross_surface_collision" in source
+    assert "FACEBOOK_APP_B_SIGNING_KEYS" in source
+    assert "FACEBOOK_APP_B_VERIFY_KEYS" in source
 
 
 def test_valid_simultaneous_agreeing_aliases_are_ok() -> None:
     result = evaluate_meta_surface_secret_separation(SEPARATED)
     assert result.ok is True
     assert result.collisions == ()
+
+
+def test_distinct_app_b_allowed_without_matching_app_a() -> None:
+    values = _values(
+        META_APP_SECRET=FB_LEGACY_SIGN,
+        META_APP_B_SECRET=FB_APP_B_SIGN,
+        META_APP_B_WEBHOOK_VERIFY_TOKEN=FB_APP_B_VERIFY,
+    )
+    result = evaluate_meta_surface_secret_separation(values)
+    assert result.ok is False
+    assert result.collisions == (FACEBOOK_SIGNING_ALIAS_MISMATCH,)
+
+
+def test_app_b_signing_collision_with_instagram_is_fail_closed() -> None:
+    values = _values(META_APP_B_SECRET=SHARED_SIGN, META_INSTAGRAM_LOGIN_APP_SECRET=SHARED_SIGN)
+    result = evaluate_meta_surface_secret_separation(values)
+    assert result.ok is False
+    assert result.collisions == (SIGNING_COLLISION,)
+
+
+def test_app_b_verify_collision_with_instagram_is_fail_closed() -> None:
+    values = _values(
+        META_APP_B_WEBHOOK_VERIFY_TOKEN=SHARED_VERIFY,
+        META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN=SHARED_VERIFY,
+    )
+    result = evaluate_meta_surface_secret_separation(values)
+    assert result.ok is False
+    assert result.collisions == (VERIFY_COLLISION,)
+
+
+def test_app_b_collision_exit_is_value_free() -> None:
+    values = _values(META_APP_B_SECRET=SHARED_SIGN, META_INSTAGRAM_LOGIN_APP_SECRET=SHARED_SIGN)
+    with pytest.raises(SystemExit, match=COLLISION_EXIT) as raised:
+        require_separated_meta_surface_secrets(values)
+    _assert_no_secret_leak(str(raised.value))
+
+
+NEW_SIGN = "rotated-fb-sign-secret-99"
+
+
+def test_app_a_alias_convergence_does_not_mirror_into_app_b() -> None:
+    existing = {
+        "META_APP_A_SECRET": FB_CANON_SIGN,
+        "META_APP_SECRET": FB_LEGACY_SIGN,
+        "META_APP_B_SECRET": FB_APP_B_SIGN,
+        "META_APP_B_WEBHOOK_VERIFY_TOKEN": FB_APP_B_VERIFY,
+    }
+    converged = converge_facebook_surface_secret_updates(
+        existing,
+        {"META_APP_SECRET": NEW_SIGN},
+    )
+    assert converged["META_APP_A_SECRET"] == NEW_SIGN
+    assert converged["META_APP_SECRET"] == NEW_SIGN
+    assert "META_APP_B_SECRET" not in converged
+    assert "META_APP_B_WEBHOOK_VERIFY_TOKEN" not in converged
 
 
 @pytest.mark.parametrize(

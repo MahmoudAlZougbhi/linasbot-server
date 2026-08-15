@@ -15,6 +15,7 @@ from services.meta_instagram_login_oauth import complete_instagram_login
 from services.meta_oauth import MetaOAuthError
 from services.meta_surface_secret_separation import (
     CONFIG_COLLISION_KEY,
+    SIGNING_COLLISION,
     env_file_values,
     evaluate_meta_surface_secret_separation,
     evaluate_meta_surface_signing_separation,
@@ -164,6 +165,18 @@ def test_signing_only_evaluator_ignores_verify_cross_surface_collision() -> None
     assert signing.ok is True
 
 
+def test_signing_only_evaluator_detects_app_b_signing_collision() -> None:
+    values = {
+        "META_APP_A_SECRET": FB_CANON_SIGN,
+        "META_APP_SECRET": FB_CANON_SIGN,
+        "META_APP_B_SECRET": IG_SIGN,
+        "META_INSTAGRAM_LOGIN_APP_SECRET": IG_SIGN,
+    }
+    signing = evaluate_meta_surface_signing_separation(values)
+    assert signing.ok is False
+    assert signing.collisions == (SIGNING_COLLISION,)
+
+
 @pytest.mark.asyncio
 async def test_ready_still_fails_closed_on_verify_alias_disagreement(
     monkeypatch: pytest.MonkeyPatch,
@@ -239,6 +252,40 @@ def test_compliance_fails_closed_when_facebook_signing_aliases_disagree(
     assert response.status_code == 503
     delete_mock.assert_not_called()
     _assert_no_secret_leak(response.text)
+
+
+def test_compliance_fails_closed_when_app_b_signing_equals_instagram(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _compliance_client(monkeypatch)
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_APP_SECRET", INSTAGRAM_APP_SECRET)
+    monkeypatch.setenv("META_APP_B_SECRET", INSTAGRAM_APP_SECRET)
+    with mock.patch("modules.meta_compliance.delete_meta_social_user_data") as delete_mock:
+        response = client.post(
+            "/oauth/instagram/data-deletion",
+            data={"signed_request": _signed_request(secret=INSTAGRAM_APP_SECRET)},
+        )
+    assert response.status_code == 503
+    delete_mock.assert_not_called()
+    _assert_no_secret_leak(response.text)
+
+
+@pytest.mark.asyncio
+async def test_ready_fails_closed_when_app_b_verify_collides_with_instagram(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("LINAS_SERVICE_ROLE", raising=False)
+    monkeypatch.delenv("LINAS_MAINTENANCE_DRAIN_FILE", raising=False)
+    _valid_instagram_env(monkeypatch)
+    monkeypatch.setenv("META_APP_B_WEBHOOK_VERIFY_TOKEN", SHARED_VERIFY)
+    monkeypatch.setenv("META_APP_A_WEBHOOK_VERIFY_TOKEN", SHARED_VERIFY)
+    monkeypatch.setenv("META_WEBHOOK_VERIFY_TOKEN", SHARED_VERIFY)
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN", SHARED_VERIFY)
+    response = await dashboard_api_health.ready()
+    payload = json.loads(response.body)
+    assert payload["checks"]["meta_surface_secret_separation"]["ok"] is False
+    assert response.status_code == 503
+    _assert_no_secret_leak(json.dumps(payload))
 
 
 @pytest.mark.asyncio

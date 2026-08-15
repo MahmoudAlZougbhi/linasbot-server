@@ -1,11 +1,12 @@
 """Fail closed when Instagram and Facebook Meta secrets are identical.
 
-Compares every simultaneously present Facebook signing alias against every
-present Instagram signing alias, and every present Facebook verify alias
-against every present Instagram verify alias. Simultaneously present Facebook
-aliases must also agree with each other. First-present precedence is not used.
-Missing/empty values are not collisions. Messages and reason codes never
-include secret values.
+Compares every simultaneously present App A + legacy Facebook signing alias
+against every present Instagram signing alias, and the same for verify tokens.
+App B (META_APP_B_*) is a separate Facebook app: it participates in
+cross-surface IG separation but is not required to agree with App A/legacy and
+is not mirrored when App A aliases converge. Simultaneously present App A +
+legacy aliases must agree with each other. Missing/empty values are not
+collisions. Messages and reason codes never include secret values.
 """
 
 from __future__ import annotations
@@ -18,6 +19,8 @@ from pathlib import Path
 
 FACEBOOK_SIGNING_KEYS = ("META_APP_A_SECRET", "META_APP_SECRET")
 FACEBOOK_VERIFY_KEYS = ("META_APP_A_WEBHOOK_VERIFY_TOKEN", "META_WEBHOOK_VERIFY_TOKEN")
+FACEBOOK_APP_B_SIGNING_KEYS = ("META_APP_B_SECRET",)
+FACEBOOK_APP_B_VERIFY_KEYS = ("META_APP_B_WEBHOOK_VERIFY_TOKEN",)
 INSTAGRAM_SIGNING_KEY = "META_INSTAGRAM_LOGIN_APP_SECRET"
 INSTAGRAM_VERIFY_KEY = "META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN"
 INSTAGRAM_SIGNING_KEYS = (INSTAGRAM_SIGNING_KEY,)
@@ -63,6 +66,14 @@ def _cross_surface_collision(left: tuple[str, ...], right: tuple[str, ...]) -> b
     return any(_secrets_equal(facebook, instagram) for facebook in left for instagram in right)
 
 
+def _facebook_signing_for_cross_surface(values: Mapping[str, str]) -> tuple[str, ...]:
+    return _present_secrets(values, FACEBOOK_SIGNING_KEYS + FACEBOOK_APP_B_SIGNING_KEYS)
+
+
+def _facebook_verify_for_cross_surface(values: Mapping[str, str]) -> tuple[str, ...]:
+    return _present_secrets(values, FACEBOOK_VERIFY_KEYS + FACEBOOK_APP_B_VERIFY_KEYS)
+
+
 def env_file_values(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     if not path.is_file():
@@ -82,6 +93,8 @@ def environ_secret_values() -> dict[str, str]:
     keys = (
         *FACEBOOK_SIGNING_KEYS,
         *FACEBOOK_VERIFY_KEYS,
+        *FACEBOOK_APP_B_SIGNING_KEYS,
+        *FACEBOOK_APP_B_VERIFY_KEYS,
         *INSTAGRAM_SIGNING_KEYS,
         *INSTAGRAM_VERIFY_KEYS,
     )
@@ -98,9 +111,11 @@ def evaluate_meta_surface_secret_separation(
         collisions.append(FACEBOOK_SIGNING_ALIAS_MISMATCH)
     if not _facebook_aliases_agree(facebook_verify):
         collisions.append(FACEBOOK_VERIFY_ALIAS_MISMATCH)
-    if _cross_surface_collision(facebook_signing, _present_secrets(values, INSTAGRAM_SIGNING_KEYS)):
+    instagram_signing = _present_secrets(values, INSTAGRAM_SIGNING_KEYS)
+    instagram_verify = _present_secrets(values, INSTAGRAM_VERIFY_KEYS)
+    if _cross_surface_collision(_facebook_signing_for_cross_surface(values), instagram_signing):
         collisions.append(SIGNING_COLLISION)
-    if _cross_surface_collision(facebook_verify, _present_secrets(values, INSTAGRAM_VERIFY_KEYS)):
+    if _cross_surface_collision(_facebook_verify_for_cross_surface(values), instagram_verify):
         collisions.append(VERIFY_COLLISION)
     return MetaSurfaceSecretSeparation(ok=not collisions, collisions=tuple(collisions))
 
@@ -114,7 +129,10 @@ def evaluate_meta_surface_signing_separation(
     collisions: list[str] = []
     if not _facebook_aliases_agree(facebook_signing):
         collisions.append(FACEBOOK_SIGNING_ALIAS_MISMATCH)
-    if _cross_surface_collision(facebook_signing, _present_secrets(values, INSTAGRAM_SIGNING_KEYS)):
+    if _cross_surface_collision(
+        _facebook_signing_for_cross_surface(values),
+        _present_secrets(values, INSTAGRAM_SIGNING_KEYS),
+    ):
         collisions.append(SIGNING_COLLISION)
     return MetaSurfaceSecretSeparation(ok=not collisions, collisions=tuple(collisions))
 
@@ -144,7 +162,7 @@ def converge_facebook_surface_secret_updates(
     existing: Mapping[str, str],
     proposed: Mapping[str, str],
 ) -> dict[str, str]:
-    """Mirror any Facebook signing/verify rotation across all active FB aliases."""
+    """Mirror any App A + legacy Facebook signing/verify rotation across active aliases."""
 
     updates = {str(key): str(value) for key, value in proposed.items()}
     new_sign = _authoritative_facebook_value(proposed, FACEBOOK_SIGNING_KEYS)
