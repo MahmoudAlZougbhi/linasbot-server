@@ -31,6 +31,7 @@ audioop-lts>=0.2.0; python_version >= "3.13"  # audioop removed from stdlib in 3
 
 # Image Processing (>=11.0 for Python 3.13 compatibility)
 Pillow>=11.0.0
+openpyxl>=3.1.5
 
 # Async Support
 aiofiles==23.2.1

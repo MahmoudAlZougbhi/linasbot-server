@@ -48,6 +48,7 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
   const [sizesText, setSizesText] = useState('');
   const [colorsText, setColorsText] = useState('');
   const [note, setNote] = useState('');
+  const [availability, setAvailability] = useState<'in_stock' | 'out_of_stock' | 'inactive'>('in_stock');
   const [images, setImages] = useState<ImageRow[]>([]);
   const [links, setLinks] = useState<{ url: string; label?: string }[]>([{ url: '', label: '' }]);
 
@@ -62,6 +63,9 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
         setSizesText(joinCommaList(product.sizes ?? []));
         setColorsText(joinCommaList(product.colors ?? []));
         setNote(product.note ?? '');
+        setAvailability(
+          (product.availability as 'in_stock' | 'out_of_stock' | 'inactive') || 'in_stock',
+        );
         setImages(
           (product.images ?? []).map((img) => ({
             media_id: img.media_id,
@@ -84,7 +88,7 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
 
   const addImage = async () => {
     if (images.length >= MAX_PRODUCT_IMAGES) {
-      setError(tr('productsMaxImages', { max: MAX_PRODUCT_IMAGES }));
+      setError(tr('productsMaxImages'));
       return;
     }
     setUploading(true);
@@ -122,6 +126,7 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
     sizes: parseCommaList(sizesText),
     colors: parseCommaList(colorsText),
     note: note.trim() || null,
+    availability,
     images: images.map((row, index) => ({ media_id: row.media_id, sort_order: index })),
     links: links
       .map((link, index) => ({
@@ -188,6 +193,27 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
         />
         <Field label={tr('productsNote')} value={note} onChange={setNote} multiline />
 
+        <Text style={styles.section}>{tr('productsAvailabilitySection')}</Text>
+        <View style={styles.availabilityRow}>
+          {(['in_stock', 'out_of_stock', 'inactive'] as const).map((value) => (
+            <Pressable
+              key={value}
+              onPress={() => setAvailability(value)}
+              style={[
+                styles.availabilityChip,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: availability === value ? colors.accentSoft : 'transparent',
+                },
+              ]}
+            >
+              <Text style={{ color: availability === value ? colors.accent : colors.textMuted, fontSize: 13 }}>
+                {tr(`productsAvailability_${value}`)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
         <Text style={styles.section}>{tr('productsImagesSection')}</Text>
         <View style={styles.imageRow}>
           {images.map((img) => (
@@ -196,7 +222,7 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
                 <Image source={{ uri: img.previewUri }} style={styles.thumb} />
               ) : (
                 <View style={[styles.thumb, styles.thumbPlaceholder, { borderColor: colors.border }]}>
-                  <Text style={{ fontSize: 10, color: colors.muted }}>{img.media_id.slice(-6)}</Text>
+                  <Text style={{ fontSize: 10, color: colors.textMuted }}>{img.media_id.slice(-6)}</Text>
                 </View>
               )}
               <Pressable onPress={() => removeImage(img.media_id)}>
@@ -264,4 +290,11 @@ const styles = StyleSheet.create({
   },
   linkBlock: { gap: spacing.xs },
   addLink: { paddingVertical: spacing.xs },
+  availabilityRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  availabilityChip: {
+    borderWidth: 1,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
 });

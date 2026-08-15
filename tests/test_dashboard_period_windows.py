@@ -232,7 +232,6 @@ def test_web_channel_counts_handler_only_logs() -> None:
     web = next(row for row in payload["channels"] if row["platform"] == "web")
     assert web["messages"] == 1
 
-
     tz = parse_timezone("Asia/Beirut")
     now = datetime(2026, 8, 15, 12, 35, tzinfo=tz)
     entries = [

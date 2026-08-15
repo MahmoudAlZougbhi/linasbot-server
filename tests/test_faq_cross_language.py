@@ -6,8 +6,8 @@ import pytest
 
 pytest_plugins = ("tests.customer_reply_ai_v2_fixtures",)
 
-from services.customer_reply_v2.faq_fast_path import try_faq_fast_path
-from services.faq_answer_localize import localize_faq_answer
+from services.customer_reply_v2.faq_fast_path import try_faq_fast_path  # noqa: E402
+from services.faq_answer_localize import localize_faq_answer  # noqa: E402
 
 
 @pytest.mark.asyncio
@@ -22,7 +22,9 @@ async def test_localize_faq_answer_same_language_is_noop() -> None:
 
 @pytest.mark.asyncio
 async def test_localize_faq_answer_translates_to_visitor_language(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _fake_translate(answer: str, *, source_language: str | None = None, target_language: str | None = None) -> str:
+    async def _fake_translate(
+        answer: str, *, source_language: str | None = None, target_language: str | None = None
+    ) -> str:
         assert source_language == "en"
         assert target_language == "ur"
         return "ہم صبح دس بجے کھلتے ہیں۔"
@@ -54,7 +56,9 @@ async def test_faq_fast_path_localizes_cross_language_tier_hit(v2_env, monkeypat
             "qa_pair": {"answer": "We open 10am to 6pm.", "language": "en"},
         }
 
-    async def _fake_translate(answer: str, *, source_language: str | None = None, target_language: str | None = None) -> str:
+    async def _fake_translate(
+        answer: str, *, source_language: str | None = None, target_language: str | None = None
+    ) -> str:
         return "ہم صبح دس بجے سے شام چھ بجے تک کھلے رہتے ہیں۔"
 
     monkeypatch.setattr("services.local_qa_service.local_qa_service.find_match_with_tier", _fake_tier)
@@ -105,7 +109,9 @@ async def test_faq_fast_path_semantic_cross_language_fallback(v2_env, monkeypatc
             ]
         return []
 
-    async def _fake_translate(answer: str, *, source_language: str | None = None, target_language: str | None = None) -> str:
+    async def _fake_translate(
+        answer: str, *, source_language: str | None = None, target_language: str | None = None
+    ) -> str:
         return "لیزر سیشن بیس ڈالر سے شروع ہوتے ہیں۔"
 
     monkeypatch.setattr("services.cm.semantic_index.search", _fake_semantic)

@@ -76,9 +76,7 @@ async def try_faq_fast_path(
         qa = tiered.get("qa_pair") or {}
         answer = str(qa.get("answer") or "").strip()
         if answer:
-            matched_language = str(
-                tiered.get("matched_language") or qa.get("language") or detected_language
-            )
+            matched_language = str(tiered.get("matched_language") or qa.get("language") or detected_language)
             localized, meta = await _localized_answer(
                 answer=answer,
                 matched_language=matched_language,
@@ -103,10 +101,13 @@ async def try_faq_fast_path(
         return FaqFastPathResult(hit=False, reason="index_unavailable")
 
     async def _semantic_hits(*, language: str | None) -> list[dict[str, Any]]:
+        index_id = pointer.index_version_id
+        if not index_id:
+            return []
         try:
             return await semantic_search(
                 tenant_id=tenant_id,
-                index_id=pointer.index_version_id,
+                index_id=index_id,
                 query=message,
                 kind="faq",
                 language=language,

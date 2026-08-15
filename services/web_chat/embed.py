@@ -13,7 +13,4 @@ def public_api_base() -> str:
 def build_embed_snippet(*, widget_key: str) -> str:
     base = public_api_base()
     key = (widget_key or "").strip()
-    return (
-        f'<script src="{base}/web-chat/widget.js" '
-        f'data-widget-key="{key}" async></script>'
-    )
+    return f'<script src="{base}/web-chat/widget.js" data-widget-key="{key}" async></script>'

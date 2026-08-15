@@ -26,6 +26,7 @@ export const ProductSchema = z
     sizes: z.array(z.string()).optional(),
     colors: z.array(z.string()).optional(),
     note: z.string().nullable().optional(),
+    availability: z.string().optional(),
     images: z.array(ProductImageSchema).optional(),
     links: z.array(ProductLinkSchema).optional(),
     created_at: z.string().nullable().optional(),
@@ -41,6 +42,7 @@ export type ProductWriteInput = {
   sizes: string[];
   colors: string[];
   note?: string | null;
+  availability?: string;
   images: { media_id: string; sort_order: number }[];
   links: { url: string; label?: string | null; sort_order?: number }[];
 };
@@ -106,6 +108,86 @@ export async function deleteProduct(productId: string): Promise<void> {
     method: 'DELETE',
     schema: z.object({ success: z.literal(true) }).passthrough(),
   });
+}
+
+const ImportPreviewSchema = z
+  .object({
+    success: z.literal(true),
+    preview: z.array(
+      z
+        .object({
+          row: z.number(),
+          name: z.string(),
+          valid: z.boolean().optional(),
+        })
+        .passthrough(),
+    ),
+    valid_count: z.number(),
+    error_count: z.number(),
+    errors: z.array(z.object({ row: z.string(), error: z.string() })).optional(),
+    import_format: z.string().optional(),
+  })
+  .passthrough();
+
+const ImportResultSchema = z
+  .object({
+    success: z.literal(true),
+    created: z.number(),
+    errors: z.array(z.object({ row: z.string(), error: z.string() })).optional(),
+    import_format: z.string().optional(),
+  })
+  .passthrough();
+
+export async function previewProductsImport(csvText: string): Promise<{
+  preview: { row: number; name: string; valid?: boolean }[];
+  valid_count: number;
+  error_count: number;
+}> {
+  const body = await apiFetch('/api/mobile/products/import/preview', {
+    method: 'POST',
+    schema: ImportPreviewSchema,
+    body: JSON.stringify({ csv_text: csvText }),
+  });
+  return {
+    preview: body.preview,
+    valid_count: body.valid_count,
+    error_count: body.error_count,
+  };
+}
+
+export async function importProducts(csvText: string): Promise<{ created: number }> {
+  const body = await apiFetch('/api/mobile/products/import', {
+    method: 'POST',
+    schema: ImportResultSchema,
+    body: JSON.stringify({ csv_text: csvText }),
+  });
+  return { created: body.created };
+}
+
+export async function previewProductsXlsxImport(fileBase64: string): Promise<{
+  preview: Array<{ row: number; name: string; valid?: boolean; availability?: string }>;
+  valid_count: number;
+  error_count: number;
+}> {
+  const body = await apiFetch('/api/mobile/products/import/xlsx/preview', {
+    method: 'POST',
+    schema: ImportPreviewSchema,
+    body: JSON.stringify({ file_base64: fileBase64 }),
+  });
+  return {
+    preview: body.preview,
+    valid_count: body.valid_count,
+    error_count: body.error_count,
+  };
+}
+
+export async function importProductsXlsx(fileBase64: string): Promise<{ created: number }> {
+  const body = await apiFetch('/api/mobile/products/import/xlsx', {
+    method: 'POST',
+    schema: ImportResultSchema,
+    body: JSON.stringify({ file_base64: fileBase64 }),
+  });
+  return { created: body.created };
 }
 
 export async function uploadProductImage(file: {

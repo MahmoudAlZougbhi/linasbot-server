@@ -18,6 +18,12 @@ from services.owner_copilot_v2.stream_protocol import encode_sse
 from services.owner_copilot_v2.tool_schemas import tool_names
 
 
+def _fake_turn_credit(tenant_id: str, *, conversation_id: str = "") -> Any:
+    from services.owner_copilot_credit import OwnerTurnCredit
+
+    return OwnerTurnCredit(tenant_id=tenant_id, reservation_id="test-reservation")
+
+
 def test_owner_model_is_sol() -> None:
     assert owner_model_name() == "gpt-5.6-sol"
     snap = flags_snapshot()
@@ -211,8 +217,12 @@ async def test_stream_events_thinking_then_deltas(monkeypatch: pytest.MonkeyPatc
 
         yield ("result", ToolRoundResult(content="Hello from Sol.", tool_calls=[]))
 
-    monkeypatch.setattr("services.owner_copilot_v2.brain.iter_sol_tool_round", _fake_tool_round)
+    monkeypatch.setattr("services.owner_copilot_v2.brain_stream_body.iter_sol_tool_round", _fake_tool_round)
     monkeypatch.setattr("services.credit_ai_gate.ai_generation_blocked", lambda *_a, **_k: False)
+    monkeypatch.setattr("services.owner_copilot_credit.owner_turn_credit_begin", _fake_turn_credit)
+    monkeypatch.setattr("services.owner_copilot_credit.owner_turn_credit_on_event", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.owner_copilot_credit.owner_turn_credit_finalize", lambda *_a, **_k: None)
+    monkeypatch.setattr("services.owner_copilot_credit.owner_turn_credit_abort", lambda *_a, **_k: None)
 
     events = []
     texts: list[str] = []

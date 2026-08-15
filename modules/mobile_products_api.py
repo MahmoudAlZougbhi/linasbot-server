@@ -1,18 +1,23 @@
-"""Mobile AI Products CRUD + CSV import."""
+"""Mobile AI Products CRUD + CSV/XLSX import."""
 
 from __future__ import annotations
 
+import base64
+from contextlib import AbstractContextManager
 from typing import Any
 
-from fastapi import Body, HTTPException, Query, Request
+from fastapi import HTTPException, Query, Request
+from fastapi.responses import Response
+from sqlalchemy.orm import Session
 
 from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
 from modules.api_security import require_session
 from modules.core import app
 from services.dashboard_session_service import SessionRecord
 from services.products.media import delete_product_media
-from services.products.schemas import ProductImportBody, ProductWriteBody
+from services.products.schemas import ProductImportBody, ProductWriteBody, ProductXlsxImportBody
 from services.products.service import ProductsError, ProductsService
+from services.products.xlsx_import import build_xlsx_template_bytes
 
 
 def _session_tenant(session: SessionRecord) -> str:
@@ -26,7 +31,7 @@ def _http(exc: ProductsError) -> HTTPException:
     return HTTPException(status_code=exc.http_status, detail={"code": exc.code, "message": exc.message})
 
 
-def _db_session():
+def _db_session() -> AbstractContextManager[Session]:
     try:
         return whatsapp_session()
     except WhatsAppDatabaseUnavailable as exc:
@@ -108,6 +113,19 @@ async def mobile_delete_product(product_id: str, request: Request) -> Any:
     return {"success": True, "deleted": True, "product_id": product_id}
 
 
+@app.post("/api/mobile/products/import/preview")
+async def mobile_preview_products_import(request: Request, body: ProductImportBody) -> Any:
+    session = require_session(request)
+    _session_tenant(session)
+    with _db_session() as db:
+        svc = ProductsService(db)
+        try:
+            result = svc.preview_csv(csv_text=body.csv_text)
+        except ProductsError as exc:
+            raise _http(exc) from exc
+    return {"success": True, **result}
+
+
 @app.post("/api/mobile/products/import")
 async def mobile_import_products(request: Request, body: ProductImportBody) -> Any:
     session = require_session(request)
@@ -116,6 +134,51 @@ async def mobile_import_products(request: Request, body: ProductImportBody) -> A
         svc = ProductsService(db)
         try:
             result = svc.import_csv(tenant_id=tenant_id, csv_text=body.csv_text)
+        except ProductsError as exc:
+            raise _http(exc) from exc
+    return {"success": True, **result}
+
+
+@app.get("/api/mobile/products/import/template.xlsx")
+async def mobile_products_import_template(request: Request) -> Response:
+    require_session(request)
+    content = build_xlsx_template_bytes()
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=linas-products-template.xlsx"},
+    )
+
+
+@app.post("/api/mobile/products/import/xlsx/preview")
+async def mobile_preview_products_xlsx_import(request: Request, body: ProductXlsxImportBody) -> Any:
+    session = require_session(request)
+    _session_tenant(session)
+    try:
+        content = base64.b64decode(body.file_base64)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_BASE64", "message": "invalid_file"}) from exc
+    with _db_session() as db:
+        svc = ProductsService(db)
+        try:
+            result = svc.preview_xlsx(content=content)
+        except ProductsError as exc:
+            raise _http(exc) from exc
+    return {"success": True, **result}
+
+
+@app.post("/api/mobile/products/import/xlsx")
+async def mobile_import_products_xlsx(request: Request, body: ProductXlsxImportBody) -> Any:
+    session = require_session(request)
+    tenant_id = _session_tenant(session)
+    try:
+        content = base64.b64decode(body.file_base64)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_BASE64", "message": "invalid_file"}) from exc
+    with _db_session() as db:
+        svc = ProductsService(db)
+        try:
+            result = svc.import_xlsx(tenant_id=tenant_id, content=content)
         except ProductsError as exc:
             raise _http(exc) from exc
     return {"success": True, **result}

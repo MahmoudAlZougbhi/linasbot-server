@@ -159,7 +159,7 @@ def test_mobile_payload_includes_mode_and_installation(client, web_store, monkey
 
 
 def test_legacy_widget_without_appearance_gets_defaults(web_store) -> None:
-    widget = web_store.get_or_create_widget("legacy")
+    web_store.get_or_create_widget("legacy")
     raw_path = web_store._tenant_path("legacy")
     raw_path.write_text(
         '{"tenant_id":"legacy","widget_key":"k123456789012345678901234","site_url":"","enabled":false,'

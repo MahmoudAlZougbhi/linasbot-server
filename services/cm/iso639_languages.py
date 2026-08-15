@@ -192,17 +192,21 @@ ISO639_LANGUAGES: tuple[tuple[str, str, str], ...] = (
 
 _ISO639_BY_ID: dict[str, tuple[str, str, str]] = {row[0]: row for row in ISO639_LANGUAGES}
 
+
 def iso639_catalog() -> list[dict[str, str]]:
     """Return catalog entries as {id, label, native} dicts."""
     return [{"id": code, "label": label, "native": native} for code, label, native in ISO639_LANGUAGES]
+
 
 def iso639_label(code: str | None) -> str:
     row = _ISO639_BY_ID.get(str(code or "").strip().lower())
     return row[1] if row else str(code or "")
 
+
 def iso639_native_label(code: str | None) -> str:
     row = _ISO639_BY_ID.get(str(code or "").strip().lower())
     return row[2] if row else iso639_label(code)
+
 
 def is_valid_iso639_code(code: str | None) -> bool:
     return str(code or "").strip().lower() in _ISO639_BY_ID

@@ -55,21 +55,20 @@ describe('AI Setup hub restructure', () => {
     assert.match(screen, /displaySummary\.percent/);
   });
 
-  it('lists Knowledge first and places Products after Prices', () => {
+  it('lists Knowledge first and places Products in mosaic after Prices', () => {
     const sections = read('features/cm/cmSections.ts');
     const cardsBlock = sections.match(/export const CM_SECTION_CARDS[\s\S]*?\];/)?.[0] ?? '';
     const firstId = cardsBlock.match(/id: '([^']+)'/)?.[1];
     assert.equal(firstId, 'knowledge');
 
+    const layout = read('features/cm/aiSetupHubLayout.ts');
+    assert.match(layout, /AI_SETUP_FULL_WIDTH_IDS.*knowledge.*dynamic_messages.*services/s);
+    assert.match(layout, /tile\.id === 'prices'/);
+    assert.match(layout, /kind: 'products'/);
+
     const screen = read('features/cm/CmScreen.tsx');
-    assert.match(screen, /tilesBeforeProducts/);
-    assert.match(screen, /tile\.id === 'comments'/);
-    const jsx = screen.slice(screen.indexOf('<AiSetupFilterTabs'));
-    const beforeGridIdx = jsx.indexOf('tiles={tilesBeforeProducts}');
-    const productsIdx = jsx.indexOf('AiSetupProductsCard');
-    const afterGridIdx = jsx.indexOf('tiles={tilesAfterProducts}');
-    assert.ok(beforeGridIdx !== -1 && productsIdx !== -1 && afterGridIdx !== -1);
-    assert.ok(beforeGridIdx < productsIdx && productsIdx < afterGridIdx);
+    assert.match(screen, /AiSetupHubSections/);
+    assert.match(screen, /onOpenProducts/);
   });
 
   it('has i18n keys for new AI Setup strings in en/ar/fr', () => {

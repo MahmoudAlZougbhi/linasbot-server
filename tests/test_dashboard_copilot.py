@@ -9,7 +9,7 @@ from pathlib import Path
 from services.owner_ai_model_router import OwnerChatUsageTracker, RouteDecision
 from services.owner_chat_store import OwnerChatStore
 from services.tenant_mobile_dashboard.activity import build_activity_summary
-from services.tenant_mobile_dashboard.copilot import build_owner_copilot_summary, credits_from_tokens, _safe_ts
+from services.tenant_mobile_dashboard.copilot import _safe_ts, build_owner_copilot_summary, credits_from_tokens
 
 
 def _route() -> RouteDecision:

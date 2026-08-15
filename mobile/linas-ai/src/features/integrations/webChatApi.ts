@@ -41,7 +41,10 @@ const CheckInstallSchema = z.object({
 });
 
 export async function fetchWebChatSettings(): Promise<WebChatSettings> {
-  const res = await apiFetch('/api/mobile/web-chat', { method: 'GET' }, WebChatEnvelopeSchema);
+  const res = await apiFetch('/api/mobile/web-chat', {
+    method: 'GET',
+    schema: WebChatEnvelopeSchema,
+  });
   return res.web_chat;
 }
 
@@ -51,20 +54,20 @@ export async function saveWebChatSettings(body: {
   integration_mode?: 'linas_widget' | 'custom_chat';
   appearance?: WebChatSettings['appearance'];
 }): Promise<WebChatSettings> {
-  const res = await apiFetch(
-    '/api/mobile/web-chat',
-    { method: 'PUT', body: JSON.stringify(body) },
-    WebChatEnvelopeSchema,
-  );
+  const res = await apiFetch('/api/mobile/web-chat', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+    schema: WebChatEnvelopeSchema,
+  });
   return res.web_chat;
 }
 
 export async function rotateWebChatKey(): Promise<WebChatSettings> {
-  const res = await apiFetch(
-    '/api/mobile/web-chat/rotate-key',
-    { method: 'POST', body: '{}' },
-    WebChatEnvelopeSchema,
-  );
+  const res = await apiFetch('/api/mobile/web-chat/rotate-key', {
+    method: 'POST',
+    body: '{}',
+    schema: WebChatEnvelopeSchema,
+  });
   return res.web_chat;
 }
 
@@ -72,10 +75,9 @@ export async function checkWebChatInstallation(): Promise<{
   installation_status: WebChatSettings['installation_status'];
   installation: WebChatSettings['installation'];
 }> {
-  const res = await apiFetch(
-    '/api/mobile/web-chat/check-installation',
-    { method: 'POST', body: '{}' },
-    CheckInstallSchema,
-  );
-  return res;
+  return apiFetch('/api/mobile/web-chat/check-installation', {
+    method: 'POST',
+    body: '{}',
+    schema: CheckInstallSchema,
+  });
 }

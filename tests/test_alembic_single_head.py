@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 VERSIONS = ROOT / "alembic" / "versions"
 MERGE_ID = "20260815_merge_sfu_meta_cred"
+HEAD_ID = "20260818_ai_products_phase2"
 PARENTS = frozenset(
     {
         "20260813_sfu_channels_enabled",
@@ -58,7 +59,7 @@ def test_alembic_has_exactly_one_head() -> None:
     revisions = _revisions()
     referenced = {parent for parents in revisions.values() for parent in parents}
     heads = sorted(revision for revision in revisions if revision not in referenced)
-    assert heads == [MERGE_ID]
+    assert heads == [HEAD_ID]
 
 
 def test_every_path_to_the_long_revision_goes_through_the_short_widen() -> None:

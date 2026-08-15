@@ -27,17 +27,14 @@ class UserServiceAuthMixin:
     def _hash_password(self, password: str) -> str:
         """Hash a password using bcrypt"""
         salt = bcrypt.gensalt(rounds=12)
-        return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
+        return str(bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8"))
 
     def _verify_password(self, password: str, hashed: str) -> bool:
         """Verify a password against its bcrypt hash"""
         t0 = time.monotonic()
         print("[auth:_verify_password] entry t=0.00s", flush=True)
         try:
-            result = bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
-            elapsed = time.monotonic() - t0
-            print(f"[auth:_verify_password] done in {elapsed:.3f}s", flush=True)
-            return result
+            return bool(bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8")))
         except Exception:
             elapsed = time.monotonic() - t0
             print(f"[auth:_verify_password] ERROR after {elapsed:.3f}s", flush=True)

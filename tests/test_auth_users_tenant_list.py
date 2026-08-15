@@ -83,7 +83,6 @@ def test_get_users_for_tenant_queries_both_tenant_fields(monkeypatch: pytest.Mon
 
     def _where(*, filter: Any) -> MagicMock:
         field = filter.field_path
-        value = filter.value
         q = MagicMock()
         q.stream.side_effect = lambda **_kwargs: iter(docs_by_field[field])
         return q

@@ -71,7 +71,10 @@ def schedule_pending_downgrade(
     ent.pending_plan_id = pid
     ent.pending_plan_effective_at = float(when)
     entitlements_store.save(ent)
-    return pending_downgrade_public(ent)
+    public = pending_downgrade_public(ent)
+    if public is None:
+        raise RuntimeError("pending_downgrade_state_missing")
+    return public
 
 
 def pending_downgrade_public(ent: Any) -> dict[str, Any] | None:

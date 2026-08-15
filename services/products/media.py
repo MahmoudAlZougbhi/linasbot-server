@@ -89,6 +89,8 @@ def load_media_meta(*, tenant_id: str, media_id: str) -> dict[str, Any] | None:
         meta = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
+    if not isinstance(meta, dict):
+        return None
     if str(meta.get("tenant_id") or "") != tenant_id:
         return None
     return meta

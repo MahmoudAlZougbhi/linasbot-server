@@ -202,14 +202,6 @@ class LiveChatUnifiedMixin:
         state_values = self._state_filter_values(filter_state)
         wanted_channel = normalize_live_chat_channel(channel)
         page_num = max(1, int(page))
-        can_use_stale_cache = (
-            page_num == 1
-            and not search_val
-            and not cursor
-            and not state_values
-            and not wanted_channel
-            and bool(self._unified_chats_cache)
-        )
         use_cache_fallback = (
             page_num == 1
             and not search_val
@@ -230,7 +222,7 @@ class LiveChatUnifiedMixin:
             request_started = utc_now()
             db = get_firestore_db()
             if not db:
-                stale = self._stale_unified_fallback(page_num, safe_size, filter_state, search)
+                stale = self._stale_unified_fallback(page_num, safe_size, filter_state, search)  # type: ignore[attr-defined]
                 if stale:
                     return stale
                 return self._empty_unified_response(
@@ -318,7 +310,7 @@ class LiveChatUnifiedMixin:
                 )
 
             if not docs:
-                stale = self._stale_unified_fallback(page_num, safe_size, filter_state, search)
+                stale = self._stale_unified_fallback(page_num, safe_size, filter_state, search)  # type: ignore[attr-defined]
                 if stale:
                     return stale
                 # Never N+1 full-scan conversations on the list path.
@@ -479,7 +471,7 @@ class LiveChatUnifiedMixin:
 
             traceback.print_exc()
             # Never fall back to legacy full-scan on errors — use cache or empty + rebuild signal.
-            stale = self._stale_unified_fallback(page_num, safe_size, filter_state, search)
+            stale = self._stale_unified_fallback(page_num, safe_size, filter_state, search)  # type: ignore[attr-defined]
             if stale:
                 return stale
             empty = self._empty_unified_response(

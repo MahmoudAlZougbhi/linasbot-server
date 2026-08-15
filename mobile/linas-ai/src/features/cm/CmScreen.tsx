@@ -7,9 +7,8 @@ import { useI18n } from '../../i18n/LanguageContext';
 import { spacing, useTheme } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import { AiSetupFilterTabs, type AiSetupFilter } from './AiSetupFilterTabs';
-import { AiSetupProductsCard } from '../products/AiSetupProductsCard';
+import { AiSetupHubSections } from './AiSetupHubSections';
 import { AiSetupProgressCard } from './AiSetupProgressCard';
-import { AiSetupSectionGrid } from './AiSetupSectionGrid';
 import { fetchCmMeta, type CmMeta } from './cmApi';
 import {
   buildFillMissingPrompt,
@@ -112,18 +111,6 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
     });
   }, [meta, filter, statusBySection]);
 
-  /** Products hub card sits where Knowledge used to be — after Prices, before Comments. */
-  const { tilesBeforeProducts, tilesAfterProducts } = useMemo(() => {
-    const splitAt = tiles.findIndex((tile) => tile.id === 'comments');
-    if (splitAt === -1) {
-      return { tilesBeforeProducts: tiles, tilesAfterProducts: [] as typeof tiles };
-    }
-    return {
-      tilesBeforeProducts: tiles.slice(0, splitAt),
-      tilesAfterProducts: tiles.slice(splitAt),
-    };
-  }, [tiles]);
-
   const titleMap = useMemo(
     () => Object.fromEntries(CM_HUB_CARDS.map((c) => [c.id, tr(cmSectionTitleKey(c.id))])),
     [tr],
@@ -157,21 +144,12 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
             onChange={setFilter}
           />
 
-          <AiSetupSectionGrid
-            tiles={tilesBeforeProducts}
+          <AiSetupHubSections
+            tiles={tiles}
             statusBySection={statusBySection}
             onOpenSection={onOpenSection}
+            onOpenProducts={onOpenProducts}
           />
-
-          {onOpenProducts ? <AiSetupProductsCard onOpenProducts={onOpenProducts} /> : null}
-
-          {tilesAfterProducts.length > 0 ? (
-            <AiSetupSectionGrid
-              tiles={tilesAfterProducts}
-              statusBySection={statusBySection}
-              onOpenSection={onOpenSection}
-            />
-          ) : null}
 
           {!loading && !meta && !error ? (
             <EmptyState title={tr('aiSetupUnavailable')} body={tr('aiSetupUnavailableBody')} />

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Pressable,
   StyleSheet,
@@ -8,6 +7,7 @@ import {
   View,
 } from 'react-native';
 
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts, radii, spacing, useTheme } from '../../theme';
@@ -17,13 +17,15 @@ import { deleteProduct, fetchProducts, type Product } from './productsApi';
 type Props = {
   onBack?: () => void;
   onAdd: () => void;
+  onImport: () => void;
   onEdit: (productId: string) => void;
 };
 
-export function ProductsScreen({ onBack, onAdd, onEdit }: Props) {
+export function ProductsScreen({ onBack, onAdd, onImport, onEdit }: Props) {
   const { colors } = useTheme();
   const { tr } = useI18n();
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
 
@@ -37,6 +39,7 @@ export function ProductsScreen({ onBack, onAdd, onEdit }: Props) {
       setError(tr('productsLoadError'));
     } finally {
       setLoading(false);
+      setHasLoadedOnce(true);
     }
   }, [tr]);
 
@@ -55,24 +58,28 @@ export function ProductsScreen({ onBack, onAdd, onEdit }: Props) {
 
   return (
     <ScreenChrome title={tr('productsTitle')} subtitle={tr('productsSubtitle')} onBack={onBack}>
-      {loading ? <ActivityIndicator color={colors.accent} style={styles.loader} /> : null}
-      {error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
+      {loading && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" style={styles.loader} /> : null}
+      {hasLoadedOnce && error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
+      {hasLoadedOnce ? (
+        <>
       <PrimaryButton label={tr('productsAdd')} onPress={onAdd} />
+      <PrimaryButton label={tr('productsImport')} onPress={onImport} />
       <FlatList
         data={products}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          !loading ? (
-            <Text style={[styles.empty, { color: colors.muted }]}>{tr('productsEmpty')}</Text>
-          ) : null
+          <Text style={[styles.empty, { color: colors.textMuted }]}>{tr('productsEmpty')}</Text>
         }
         renderItem={({ item }) => (
           <View style={[styles.card, { borderColor: colors.border }]}>
             <Pressable onPress={() => onEdit(item.id)} style={styles.cardMain}>
               <Text style={styles.name}>{item.name}</Text>
-              {item.price ? <Text style={{ color: colors.muted }}>{item.price}</Text> : null}
-              <Text style={{ color: colors.muted, fontSize: 12 }}>
+              {item.availability === 'out_of_stock' ? (
+                <Text style={styles.badge}>{tr('productsOutOfStockBadge')}</Text>
+              ) : null}
+              {item.price ? <Text style={{ color: colors.textMuted }}>{item.price}</Text> : null}
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>
                 {item.images?.length ?? 0} {tr('productsImagesLabel')}
               </Text>
             </Pressable>
@@ -82,6 +89,8 @@ export function ProductsScreen({ onBack, onAdd, onEdit }: Props) {
           </View>
         )}
       />
+        </>
+      ) : null}
     </ScreenChrome>
   );
 }
@@ -100,4 +109,14 @@ const styles = StyleSheet.create({
   },
   cardMain: { flex: 1, gap: 4 },
   name: { fontFamily: fonts.bodyMedium, fontSize: 16, color: '#10221A' },
+  badge: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 11,
+    color: '#B45309',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
 });

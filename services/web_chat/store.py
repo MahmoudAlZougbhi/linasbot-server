@@ -11,8 +11,6 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from storage.persistent_storage import _DATA_ROOT
-
 from services.web_chat.appearance import normalize_appearance, normalize_integration_mode
 from services.web_chat.config_models import (
     WebChatInstallation,
@@ -21,6 +19,7 @@ from services.web_chat.config_models import (
     config_to_raw,
 )
 from services.web_chat.domain import normalize_site_url, origin_allowed_for_site
+from storage.persistent_storage import _DATA_ROOT
 
 
 @dataclass
@@ -172,13 +171,9 @@ class WebChatStore:
         new_site = normalize_site_url(site_url) if site_url is not None else config.site_url
         new_enabled = config.enabled if enabled is None else bool(enabled)
         new_mode = (
-            normalize_integration_mode(integration_mode)
-            if integration_mode is not None
-            else config.integration_mode
+            normalize_integration_mode(integration_mode) if integration_mode is not None else config.integration_mode
         )
-        new_appearance = (
-            normalize_appearance(appearance) if appearance is not None else config.appearance
-        )
+        new_appearance = normalize_appearance(appearance) if appearance is not None else config.appearance
         updated = WebChatWidgetConfig(
             tenant_id=config.tenant_id,
             widget_key=config.widget_key,
@@ -291,9 +286,7 @@ class WebChatStore:
             if session is None:
                 raise KeyError("session not found")
             now = time.time()
-            session.messages.append(
-                WebChatMessage(id=uuid.uuid4().hex, role="user", content=user_text, created_at=now)
-            )
+            session.messages.append(WebChatMessage(id=uuid.uuid4().hex, role="user", content=user_text, created_at=now))
             session.messages.append(
                 WebChatMessage(
                     id=uuid.uuid4().hex,

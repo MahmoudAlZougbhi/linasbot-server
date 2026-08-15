@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from services.cm.iso639_languages import (
+    is_valid_iso639_code,
     iso639_catalog,
     iso639_label,
     iso639_native_label,
-    is_valid_iso639_code,
     normalize_language_code,
 )
 

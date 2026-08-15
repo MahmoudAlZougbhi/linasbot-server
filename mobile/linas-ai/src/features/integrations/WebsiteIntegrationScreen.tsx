@@ -14,6 +14,7 @@ import * as Clipboard from 'expo-clipboard';
 import { ApiError } from '../../api/client';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { useI18n } from '../../i18n/LanguageContext';
+import type { StringKey } from '../../i18n';
 import { colors, fonts, radii, spacing } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import { WebChatCustomModePanel } from './WebChatCustomModePanel';
@@ -38,7 +39,7 @@ type Props = {
   onNotice?: (message: string) => void;
 };
 
-function statusLabel(status: WebChatInstallationStatus, tr: (k: string) => string) {
+function statusLabel(status: WebChatInstallationStatus, tr: (key: StringKey) => string) {
   if (status === 'connected') return tr('webChatStatusConnected');
   if (status === 'domain_mismatch') return tr('webChatStatusDomainMismatch');
   if (status === 'disabled') return tr('webChatStatusDisabled');

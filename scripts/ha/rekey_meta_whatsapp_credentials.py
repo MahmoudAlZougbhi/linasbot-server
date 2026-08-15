@@ -1260,7 +1260,7 @@ def apply_rekey_transaction(
             )
             .values(sealed=new_sealed)
         )
-        if result.rowcount != 1:
+        if int(getattr(result, "rowcount", 0) or 0) != 1:
             raise RuntimeError("Meta credential CAS update failed")
         updates_done += 1
         if fail_after_updates is not None and updates_done >= fail_after_updates:
@@ -1292,7 +1292,7 @@ def apply_rekey_transaction(
                 updated_at=old_updated_at,
             )
         )
-        if result.rowcount != 1:
+        if int(getattr(result, "rowcount", 0) or 0) != 1:
             raise RuntimeError("WhatsApp credential CAS update failed")
         updates_done += 1
         if fail_after_updates is not None and updates_done >= fail_after_updates:
@@ -1406,7 +1406,7 @@ def restore_preimage_transaction(
             )
             .values(sealed=str(meta_desired["sealed"]))
         )
-        if meta_result.rowcount != 1:
+        if int(getattr(meta_result, "rowcount", 0) or 0) != 1:
             raise RuntimeError("Meta preimage CAS restore failed")
         updates_done += 1
         if fail_after_updates is not None and updates_done >= fail_after_updates:
@@ -1428,7 +1428,7 @@ def restore_preimage_transaction(
                 updated_at=wa_row.updated_at,
             )
         )
-        if wa_result.rowcount != 1:
+        if int(getattr(wa_result, "rowcount", 0) or 0) != 1:
             raise RuntimeError("WhatsApp preimage CAS restore failed")
         updates_done += 1
         if fail_after_updates is not None and updates_done >= fail_after_updates:

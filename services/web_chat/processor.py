@@ -129,7 +129,9 @@ async def process_web_chat_message(
             request_id=f"web:{visitor_id}:{int(asyncio.get_event_loop().time() * 1000)}",
         )
     except PermissionError as exc:
-        raise WebChatError("insufficient_credits", "AI replies are paused until credits are available.", status_code=402) from exc
+        raise WebChatError(
+            "insufficient_credits", "AI replies are paused until credits are available.", status_code=402
+        ) from exc
 
     reply_text = ""
     try:
@@ -184,7 +186,12 @@ async def process_web_chat_message(
         try:
             from services.credit_ledger_service import credit_ledger_service
 
-            credit_ledger_service.capture(tenant_id=tid, reservation_id=reservation_id)
+            credit_ledger_service.capture(
+                tenant_id=tid,
+                reservation_id=reservation_id,
+                provider_cost_usd=None,
+                model_provider=None,
+            )
         except Exception:
             _release_reservation(tid, reservation_id)
 
@@ -259,20 +266,22 @@ async def _persist_web_turn(
 
     await save_conversation_message_to_firestore(
         user_id,
+        "user",
         user_text,
-        is_user=True,
-        user_data=user_data,
-        channel=CHANNEL_ID,
+        conversation_id=conversation_id,
         metadata={"channel": CHANNEL_ID, "source": SOURCE_CHANNEL_WEB_CHAT, "widget_key": widget.widget_key},
     )
     await save_conversation_message_to_firestore(
         user_id,
+        "assistant",
         reply_text,
-        is_user=False,
-        user_data=user_data,
-        channel=CHANNEL_ID,
-        handled_by="ai",
-        metadata={"channel": CHANNEL_ID, "source": SOURCE_CHANNEL_WEB_CHAT, "widget_key": widget.widget_key},
+        conversation_id=conversation_id,
+        metadata={
+            "channel": CHANNEL_ID,
+            "source": SOURCE_CHANNEL_WEB_CHAT,
+            "widget_key": widget.widget_key,
+            "handled_by": "ai",
+        },
     )
 
     try:
@@ -282,12 +291,9 @@ async def _persist_web_turn(
             log_interaction(
                 user_id=user_id,
                 user_message=user_text,
-                bot_response=reply_text,
-                channel=CHANNEL_ID,
-                tenant_id=tenant_id,
-                conversation_id=conversation_id,
-                bot_to_user=True,
+                bot_to_user=reply_text,
                 source="web_chat",
+                conversation_id=conversation_id,
             )
     except Exception:
         pass
@@ -295,6 +301,12 @@ async def _persist_web_turn(
     try:
         from services.whatsapp_cloud.observability import record_analytics_channel_usage
 
-        record_analytics_channel_usage(tenant_id=tenant_id, channel=CHANNEL_ID)
+        record_analytics_channel_usage(
+            tenant_id=tenant_id,
+            connection_id=f"web:{widget.widget_key}",
+            conversation_id=conversation_id,
+            provider_message_id="web_chat",
+            source="web_chat",
+        )
     except Exception:
         pass

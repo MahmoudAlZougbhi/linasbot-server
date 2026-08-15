@@ -75,6 +75,8 @@ async def test_unified_chats_empty_index_sets_rebuild_flag_without_legacy():
         patch("services.live_chat_service_unified.get_firestore_db", return_value=MagicMock()),
         patch.object(svc, "_run_blocking_with_timeout", new_callable=AsyncMock, return_value=[]),
     ):
+        svc._unified_chats_cache = {}
+        svc._unified_chats_cache_time = None
         result = await svc.get_unified_chats(search="", page=1, page_size=20, filter_state="all")
     assert (
         result.get("requires_index_rebuild") is True or result.get("index_empty") is True or result.get("chats") == []

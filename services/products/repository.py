@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from db.models.products import Product, ProductImage, ProductLink
+from services.products.availability import CUSTOMER_SEARCH_AVAILABILITY, is_customer_searchable
 from services.products.schemas import normalize_product_name
 
 
@@ -60,6 +61,7 @@ class ProductsRepository:
             sizes=fields.get("sizes"),
             colors=fields.get("colors"),
             note=fields.get("note"),
+            availability=fields.get("availability") or "in_stock",
             created_at=_now(),
             updated_at=_now(),
         )
@@ -79,17 +81,23 @@ class ProductsRepository:
             row.colors = fields["colors"]
         if "note" in fields:
             row.note = fields["note"]
+        if "availability" in fields:
+            row.availability = fields["availability"]
         row.updated_at = _now()
         self.session.flush()
         return row
 
     def replace_images(self, *, tenant_id: str, product_id: str, images: list[dict[str, Any]]) -> None:
-        existing = self.session.execute(
-            select(ProductImage).where(
-                ProductImage.tenant_id == tenant_id,
-                ProductImage.product_id == product_id,
+        existing = (
+            self.session.execute(
+                select(ProductImage).where(
+                    ProductImage.tenant_id == tenant_id,
+                    ProductImage.product_id == product_id,
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for row in existing:
             self.session.delete(row)
         self.session.flush()
@@ -107,12 +115,16 @@ class ProductsRepository:
         self.session.flush()
 
     def replace_links(self, *, tenant_id: str, product_id: str, links: list[dict[str, Any]]) -> None:
-        existing = self.session.execute(
-            select(ProductLink).where(
-                ProductLink.tenant_id == tenant_id,
-                ProductLink.product_id == product_id,
+        existing = (
+            self.session.execute(
+                select(ProductLink).where(
+                    ProductLink.tenant_id == tenant_id,
+                    ProductLink.product_id == product_id,
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for row in existing:
             self.session.delete(row)
         self.session.flush()
@@ -142,26 +154,53 @@ class ProductsRepository:
         tenant_id: str,
         query: str,
         limit: int = 10,
+        customer_facing: bool = True,
     ) -> list[Product]:
         normalized = normalize_product_name(query)
         if not normalized:
             return []
+        filters = [Product.tenant_id == tenant_id, Product.name_normalized.contains(normalized)]
+        if customer_facing:
+            filters.append(Product.availability.in_(list(CUSTOMER_SEARCH_AVAILABILITY)))
         stmt = (
             select(Product)
-            .where(
-                Product.tenant_id == tenant_id,
-                Product.name_normalized.contains(normalized),
-            )
+            .where(*filters)
             .options(selectinload(Product.images), selectinload(Product.links))
             .order_by(Product.updated_at.desc())
             .limit(limit)
         )
         return list(self.session.execute(stmt).scalars().all())
 
-    def list_all_for_tenant(self, *, tenant_id: str) -> list[Product]:
+    def list_all_for_tenant(self, *, tenant_id: str, customer_facing: bool = True) -> list[Product]:
+        filters = [Product.tenant_id == tenant_id]
+        if customer_facing:
+            filters.append(Product.availability.in_(list(CUSTOMER_SEARCH_AVAILABILITY)))
+        stmt = select(Product).where(*filters).options(selectinload(Product.images), selectinload(Product.links))
+        return list(self.session.execute(stmt).scalars().all())
+
+    def find_by_link_url(self, *, tenant_id: str, normalized_url: str) -> Product | None:
+        from urllib.parse import urlparse
+
+        needle = str(normalized_url or "").strip().lower()
+        if not needle:
+            return None
         stmt = (
             select(Product)
-            .where(Product.tenant_id == tenant_id)
+            .join(ProductLink, ProductLink.product_id == Product.id)
+            .where(Product.tenant_id == tenant_id, ProductLink.tenant_id == tenant_id)
             .options(selectinload(Product.images), selectinload(Product.links))
         )
-        return list(self.session.execute(stmt).scalars().all())
+        for row in self.session.execute(stmt).scalars().all():
+            if not is_customer_searchable(row.availability):
+                continue
+            for link in row.links or []:
+                raw = str(link.url or "").strip()
+                if not raw:
+                    continue
+                parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+                host = (parsed.netloc or "").removeprefix("www.")
+                path = (parsed.path or "").rstrip("/")
+                candidate = f"{host}{path}".lower()
+                if candidate == needle or needle in candidate or candidate in needle:
+                    return row
+        return None

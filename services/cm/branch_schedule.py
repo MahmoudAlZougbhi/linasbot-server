@@ -7,7 +7,7 @@ from typing import Any
 
 from services.cm.schemas import (
     BranchesSection,
-    BranchRecord,
+    OffDayRule,
     OffDaysSection,
     OpeningHoursDay,
     OpeningHoursSchedule,
@@ -282,7 +282,5 @@ def derive_opening_hours_section(
 
 def derive_off_days_section(branches: BranchesSection | dict[str, Any]) -> OffDaysSection:
     section = branches if isinstance(branches, BranchesSection) else BranchesSection.model_validate(branches or {})
-    rules: list[dict[str, Any]] = []
-    for rule in section.specific_off_rules:
-        rules.append(rule.model_dump(mode="json"))
+    rules: list[OffDayRule] = list(section.specific_off_rules)
     return OffDaysSection(timezone=section.timezone, rules=rules, notes=section.notes)

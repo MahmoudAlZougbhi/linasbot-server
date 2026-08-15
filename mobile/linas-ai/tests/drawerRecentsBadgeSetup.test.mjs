@@ -97,13 +97,12 @@ describe('AI Setup status is not missing before load resolves', () => {
 
   it('does not paint section status until the first fetch hydrates', () => {
     const screen = read('features/cm/CmScreen.tsx');
-    const grid = read('features/cm/AiSetupSectionGrid.tsx');
+    const tile = read('features/cm/AiSetupSectionTile.tsx');
     assert.match(screen, /const \[hydrated, setHydrated\] = useState\(false\)/);
     assert.match(screen, /setHydrated\(true\)/);
-    assert.match(screen, /\{hydrated \? \(/);
-    assert.match(screen, /loading && !hydrated/);
-    assert.match(grid, /resolveAiSetupSectionPaint/);
-    assert.match(grid, /paint === 'missing'/);
-    assert.doesNotMatch(grid, /fill !== 'complete'/);
+    assert.match(screen, /hasLoadedOnce && hydrated/);
+    assert.match(tile, /resolveAiSetupSectionPaint/);
+    assert.match(tile, /paint === 'missing'/);
+    assert.doesNotMatch(tile, /fill !== 'complete'/);
   });
 });

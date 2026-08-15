@@ -60,7 +60,9 @@ def config_from_raw(tenant_id: str, raw: dict[str, Any]) -> WebChatWidgetConfig:
         updated_at=float(raw.get("updated_at") or time.time()),
         integration_mode=normalize_integration_mode(raw.get("integration_mode")),
         appearance=normalize_appearance(raw.get("appearance") if isinstance(raw.get("appearance"), dict) else None),
-        installation=installation_from_raw(raw.get("installation") if isinstance(raw.get("installation"), dict) else None),
+        installation=installation_from_raw(
+            raw.get("installation") if isinstance(raw.get("installation"), dict) else None
+        ),
     )
 
 

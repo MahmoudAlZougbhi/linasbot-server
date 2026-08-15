@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import Body, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from modules.api_security import require_permission, require_session
 from modules.core import app

@@ -107,6 +107,10 @@ async def run_retrieval_luna(
     comment_context: dict[str, Any] | None = None,
     llm_fn: LlmFn | None = None,
     scripted_tool_calls: list[list[dict[str, Any]]] | None = None,
+    conversation_id: str | None = None,
+    channel: str = "customer",
+    reply_to_message_id: str | None = None,
+    active_product_id: str | None = None,
 ) -> RetrievalResult:
     """Run Retrieval Luna with server-enforced max 2 rounds.
 
@@ -147,11 +151,45 @@ async def run_retrieval_luna(
     ctx = ToolContext(
         tenant_id=tenant_id,
         published_revision=revision,
-        channel="customer",
+        channel=channel,
         customer_profile=customer_profile,
         dm_window=list(dm_window or []),
         comment_context=dict(comment_context or {}),
+        conversation_id=conversation_id,
+        reply_to_message_id=reply_to_message_id,
+        active_product_id=active_product_id,
     )
+
+    if reply_to_message_id and conversation_id:
+        from db.session import whatsapp_session
+        from services.products.crv2_tools import crv2_resolve_reply_to_product
+
+        try:
+            with whatsapp_session(require=True) as db:
+                reply_hit = crv2_resolve_reply_to_product(
+                    db,
+                    tenant_id=tenant_id,
+                    channel=channel,
+                    reply_to_message_id=reply_to_message_id,
+                    conversation_id=conversation_id,
+                )
+                match = reply_hit.get("match")
+                if match:
+                    ctx.active_product_id = str(match.get("id") or "") or None
+        except Exception:
+            pass
+
+    if not ctx.active_product_id and conversation_id:
+        from db.session import whatsapp_session
+        from services.products.active_context import get_active_product
+
+        try:
+            with whatsapp_session(require=True) as db:
+                active = get_active_product(db, tenant_id=tenant_id, conversation_id=conversation_id)
+                if active:
+                    ctx.active_product_id = str(active.get("active_product_id") or "") or None
+        except Exception:
+            pass
 
     if scripted_tool_calls is not None:
         return await _run_scripted(ctx, scripted_tool_calls, model=model)
