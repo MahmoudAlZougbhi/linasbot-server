@@ -1,4 +1,6 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppModal } from '../../components/AppModal';
+import { ModalScrim } from '../../components/ModalScrim';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { fonts, radii, spacing, useTheme } from '../../theme';
 
@@ -16,8 +18,8 @@ type Props = {
 export function RequestPickSheet({ visible, title, options, selectedId, onPick, onClose }: Props) {
   const { colors } = useTheme();
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+    <AppModal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <ModalScrim onPress={onClose}>
         <Pressable
           style={[styles.sheet, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={(e) => e.stopPropagation()}
@@ -46,13 +48,12 @@ export function RequestPickSheet({ visible, title, options, selectedId, onPick, 
             })}
           </ScrollView>
         </Pressable>
-      </Pressable>
-    </Modal>
+      </ModalScrim>
+    </AppModal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: radii.xl,
     borderTopRightRadius: radii.xl,

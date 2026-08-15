@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { AppModal } from '../../components/AppModal';
+import { ModalScrim } from '../../components/ModalScrim';
 
 import { AppIcon, feather, ion } from '../../components/AppIcon';
 import type { StringKey } from '../../i18n';
@@ -59,8 +61,8 @@ export function BuyCreditsSheet({
     .replace('{price}', priceLabel);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={[styles.scrim, { backgroundColor: colors.overlay }]} onPress={onClose}>
+    <AppModal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <ModalScrim onPress={onClose}>
         <Pressable
           style={[
             styles.sheet,
@@ -171,8 +173,8 @@ export function BuyCreditsSheet({
             <Text style={[styles.cancelText, { color: colors.accent }]}>{tr('subCancel')}</Text>
           </Pressable>
         </Pressable>
-      </Pressable>
-    </Modal>
+      </ModalScrim>
+    </AppModal>
   );
 }
 
@@ -181,7 +183,6 @@ function formatUsd(amount: number): string {
 }
 
 const styles = StyleSheet.create({
-  scrim: { flex: 1, justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,

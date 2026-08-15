@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+
+import { AppModal } from '../../components/AppModal';
+import { ModalScrim } from '../../components/ModalScrim';
 
 import { tokenStore } from '../../auth/tokenStore';
 import { PrimaryButton } from '../../components/PrimaryButton';
@@ -76,8 +78,8 @@ export function LiveChatAssignSheet({ visible, busy, onClose, onPick }: Props) {
   }, [visible]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={[styles.backdrop, { backgroundColor: colors.overlay }]}>
+    <AppModal visible={visible} animationType="fade" onRequestClose={onClose}>
+      <ModalScrim justify="center" style={styles.backdrop}>
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text style={[styles.title, { color: colors.text }]}>Assign to staff</Text>
           {listRestricted ? (
@@ -108,13 +110,13 @@ export function LiveChatAssignSheet({ visible, busy, onClose, onPick }: Props) {
           </ScrollView>
           <PrimaryButton label="Cancel" onPress={onClose} variant="ghost" disabled={busy} />
         </View>
-      </View>
-    </Modal>
+      </ModalScrim>
+    </AppModal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'center', padding: spacing.xl },
+  backdrop: { padding: spacing.xl },
   card: { borderWidth: 1, borderRadius: radii.lg, padding: spacing.xl, maxHeight: '70%' },
   title: { fontFamily: fonts.bodyMedium, fontSize: 18, marginBottom: spacing.sm },
   hint: { fontFamily: fonts.body, fontSize: 13, marginBottom: spacing.md },

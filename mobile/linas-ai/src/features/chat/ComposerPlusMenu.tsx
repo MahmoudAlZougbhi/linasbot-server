@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import {
   Keyboard,
-  Modal,
   Platform,
   Pressable,
   StyleSheet,
   Text,
 } from 'react-native';
+
+import { AppModal } from '../../components/AppModal';
 
 import { AppIcon, feather } from '../../components/AppIcon';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -55,13 +56,10 @@ export function ComposerPlusMenu({ open, onClose, onAction, anchor }: Props) {
   }
 
   return (
-    <Modal
+    <AppModal
       visible={open}
-      transparent
       animationType="fade"
       onRequestClose={onClose}
-      statusBarTranslucent
-      presentationStyle="overFullScreen"
     >
       <Pressable style={styles.scrim} onPress={onClose}>
         <Pressable
@@ -91,7 +89,7 @@ export function ComposerPlusMenu({ open, onClose, onAction, anchor }: Props) {
           ))}
         </Pressable>
       </Pressable>
-    </Modal>
+    </AppModal>
   );
 }
 

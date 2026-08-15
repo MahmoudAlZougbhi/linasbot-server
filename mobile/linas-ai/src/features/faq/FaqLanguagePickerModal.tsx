@@ -1,5 +1,8 @@
 import React from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+
+import { AppModal } from '../../components/AppModal';
+import { ModalScrim } from '../../components/ModalScrim';
 
 import { PrimaryButton } from '../../components/PrimaryButton';
 import type { StringKey } from '../../i18n';
@@ -47,8 +50,8 @@ export function FaqLanguagePickerModal({ visible, selected, saving, onClose, onS
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.backdrop}>
+    <AppModal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <ModalScrim onPress={onClose}>
         <View style={styles.sheet}>
           <View style={styles.handle} />
           <View style={styles.header}>
@@ -87,13 +90,12 @@ export function FaqLanguagePickerModal({ visible, selected, saving, onClose, onS
           <Text style={styles.footer}>{tr('faqLangAutoTranslate')}</Text>
           <PrimaryButton label={tr('faqLangSave')} onPress={() => onSave(draft)} loading={saving} />
         </View>
-      </View>
-    </Modal>
+      </ModalScrim>
+    </AppModal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.bg,
     borderTopLeftRadius: 20,

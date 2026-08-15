@@ -1,4 +1,7 @@
-import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { AppModal } from '../../components/AppModal';
+import { ModalScrim } from '../../components/ModalScrim';
 
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { LinasStarMark } from '../../components/LinasStarMark';
@@ -28,11 +31,8 @@ export function AuthGateModal({
   const { colors } = useTheme();
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={hardLimit ? undefined : onClose}>
-      <Pressable
-        style={[styles.backdrop, { backgroundColor: colors.overlay }]}
-        onPress={hardLimit ? undefined : onClose}
-      >
+    <AppModal visible={visible} animationType="fade" onRequestClose={hardLimit ? undefined : onClose}>
+      <ModalScrim onPress={hardLimit ? undefined : onClose} justify="flex-end" style={styles.backdrop}>
         <Pressable
           style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={(e) => e.stopPropagation()}
@@ -77,8 +77,8 @@ export function AuthGateModal({
             </Pressable>
           )}
         </Pressable>
-      </Pressable>
-    </Modal>
+      </ModalScrim>
+    </AppModal>
   );
 }
 

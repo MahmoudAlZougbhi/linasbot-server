@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+
+import { AppModal } from '../../components/AppModal';
+import { ModalScrim } from '../../components/ModalScrim';
 
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import { SFU_CARD_BORDER } from './smartFollowUpDesign';
@@ -52,8 +55,8 @@ export function SmartFollowUpDropdown({
         <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
       </Pressable>
 
-      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
+      <AppModal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}>
+        <ModalScrim onPress={() => setOpen(false)}>
           <Pressable
             style={[styles.sheet, { backgroundColor: colors.surface }]}
             onPress={(e) => e.stopPropagation()}
@@ -80,8 +83,8 @@ export function SmartFollowUpDropdown({
               })}
             </ScrollView>
           </Pressable>
-        </Pressable>
-      </Modal>
+        </ModalScrim>
+      </AppModal>
     </>
   );
 }
@@ -101,11 +104,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: fonts.bodyMedium,
     fontSize: 13,
-  },
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'flex-end',
   },
   sheet: {
     maxHeight: '70%',

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,6 +10,8 @@ import {
 } from 'react-native';
 
 import type { PublicUser } from '../../api/types';
+import { AppModal } from '../../components/AppModal';
+import { ModalScrim } from '../../components/ModalScrim';
 import { EmptyState } from '../../components/EmptyState';
 import { tokenStore } from '../../auth/tokenStore';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -298,8 +299,8 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
         </>
       ) : null}
 
-      <Modal visible={menuUser !== null} transparent animationType="fade" onRequestClose={() => setMenuUser(null)}>
-        <Pressable style={styles.scrim} onPress={() => setMenuUser(null)}>
+      <AppModal visible={menuUser !== null} animationType="fade" onRequestClose={() => setMenuUser(null)}>
+        <ModalScrim onPress={() => setMenuUser(null)}>
           {menuUser ? (
             <Pressable style={styles.sheetWrap} onPress={(e) => e.stopPropagation()}>
               <UserActionSheet
@@ -324,8 +325,8 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
               />
             </Pressable>
           ) : null}
-        </Pressable>
-      </Modal>
+        </ModalScrim>
+      </AppModal>
 
       <UserResetPasswordSheet
         visible={resetUser !== null}
@@ -380,7 +381,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   error: { color: colors.danger, fontFamily: fonts.body, fontSize: 14, marginTop: 8 },
-  scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay },
   sheetWrap: { width: '100%' },
   pressed: { opacity: 0.55 },
 });

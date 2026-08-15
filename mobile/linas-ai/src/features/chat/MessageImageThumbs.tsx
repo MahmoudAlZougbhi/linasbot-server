@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { AppModal } from '../../components/AppModal';
+import { ModalScrim } from '../../components/ModalScrim';
 
 import { radii, spacing, useTheme } from '../../theme';
 
@@ -26,14 +29,14 @@ export function MessageImageThumbs({ uris }: Props) {
           </Pressable>
         ))}
       </View>
-      <Modal visible={Boolean(previewUri)} transparent animationType="fade" onRequestClose={() => setPreviewUri(null)}>
-        <Pressable style={[styles.lightbox, { backgroundColor: colors.overlay }]} onPress={() => setPreviewUri(null)}>
+      <AppModal visible={Boolean(previewUri)} animationType="fade" onRequestClose={() => setPreviewUri(null)}>
+        <ModalScrim onPress={() => setPreviewUri(null)} justify="center" style={styles.lightbox}>
           {previewUri ? (
             <Image source={{ uri: previewUri }} style={styles.full} resizeMode="contain" />
           ) : null}
           <Text style={[styles.closeHint, { color: colors.onAccent }]}>Tap to close</Text>
-        </Pressable>
-      </Modal>
+        </ModalScrim>
+      </AppModal>
     </>
   );
 }

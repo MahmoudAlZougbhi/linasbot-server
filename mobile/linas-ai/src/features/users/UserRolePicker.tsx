@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { AppModal } from '../../components/AppModal';
+import { ModalScrim } from '../../components/ModalScrim';
 
 import { AppIcon, feather } from '../../components/AppIcon';
 import { PrimaryButton } from '../../components/PrimaryButton';
@@ -52,8 +55,8 @@ export function UserRolePicker({ roleId, roles, disabled, onSelect, onCreate, cr
         </View>
       </Pressable>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.scrim} onPress={() => setOpen(false)}>
+      <AppModal visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
+        <ModalScrim onPress={() => setOpen(false)}>
           <Pressable
             style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + spacing.md }]}
             onPress={(e) => e.stopPropagation()}
@@ -86,11 +89,11 @@ export function UserRolePicker({ roleId, roles, disabled, onSelect, onCreate, cr
               <Text style={styles.create}>{tr('usersCreateRole')}</Text>
             </Pressable>
           </Pressable>
-        </Pressable>
-      </Modal>
+        </ModalScrim>
+      </AppModal>
 
-      <Modal visible={creatingOpen} transparent animationType="fade" onRequestClose={() => setCreatingOpen(false)}>
-        <Pressable style={styles.scrim} onPress={() => setCreatingOpen(false)}>
+      <AppModal visible={creatingOpen} animationType="fade" onRequestClose={() => setCreatingOpen(false)}>
+        <ModalScrim onPress={() => setCreatingOpen(false)} justify="center">
           <Pressable style={styles.card} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.cardTitle}>{tr('usersCreateRole')}</Text>
             <Text style={styles.cardSub}>{tr('usersCreateRoleHint')}</Text>
@@ -116,15 +119,14 @@ export function UserRolePicker({ roleId, roles, disabled, onSelect, onCreate, cr
               <Text style={styles.cancel}>{tr('usersCancel')}</Text>
             </Pressable>
           </Pressable>
-        </Pressable>
-      </Modal>
+        </ModalScrim>
+      </AppModal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   chevron: { position: 'absolute', right: 14, top: 22 },
-  scrim: { flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay },
   sheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radii.xl,

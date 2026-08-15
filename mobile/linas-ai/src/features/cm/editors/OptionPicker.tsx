@@ -1,5 +1,8 @@
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useState } from 'react';
+
+import { AppModal } from '../../../components/AppModal';
+import { ModalScrim } from '../../../components/ModalScrim';
 
 import { colors } from '../../../theme';
 import { cmFormStyles } from '../cmFormStyles';
@@ -21,11 +24,8 @@ export function OptionPicker({ label, value, options, onChange }: Props) {
       <Pressable style={[cmFormStyles.chip, { alignSelf: 'stretch' }]} onPress={() => setOpen(true)}>
         <Text style={cmFormStyles.chipText}>{display}</Text>
       </Pressable>
-      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-        <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}
-          onPress={() => setOpen(false)}
-        >
+      <AppModal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}>
+        <ModalScrim onPress={() => setOpen(false)}>
           <Pressable
             style={{
               maxHeight: '70%',
@@ -56,8 +56,8 @@ export function OptionPicker({ label, value, options, onChange }: Props) {
               })}
             </ScrollView>
           </Pressable>
-        </Pressable>
-      </Modal>
+        </ModalScrim>
+      </AppModal>
     </View>
   );
 }
