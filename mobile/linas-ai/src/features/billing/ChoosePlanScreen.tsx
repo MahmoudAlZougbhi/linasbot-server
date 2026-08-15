@@ -9,6 +9,7 @@ import { PlanDetailCard } from './PlanDetailCard';
 import type { BillingPeriod } from './appleProductIds';
 import type { PlanId } from './planCatalog';
 import { PLAN_CHOOSE_CTA } from './planEntitlements';
+import { accentForPlan, planOnAccent } from './planColors';
 
 type Props = {
   selected: PlanId;
@@ -42,6 +43,7 @@ export function ChoosePlanScreen({
   const isCurrent = currentPlan === selected;
   const ctaLabel = isCurrent ? tr('subYourPlan') : tr(PLAN_CHOOSE_CTA[selected]);
   const periodSuffix = period === 'yearly' ? tr('subPricePerYear') : tr('subPricePerMonth');
+  const ctaAccent = accentForPlan(selected);
 
   return (
     <View style={styles.root}>
@@ -71,7 +73,7 @@ export function ChoosePlanScreen({
           style={({ pressed }) => [
             styles.cta,
             {
-              backgroundColor: ctaEnabled && !isCurrent ? colors.accent : colors.surfaceAlt,
+              backgroundColor: ctaEnabled && !isCurrent ? ctaAccent : colors.surfaceAlt,
               opacity: pressed && ctaEnabled && !isCurrent ? 0.88 : 1,
             },
           ]}
@@ -79,7 +81,10 @@ export function ChoosePlanScreen({
           <Text
             style={[
               styles.ctaText,
-              { color: ctaEnabled && !isCurrent ? colors.onAccent : colors.textMuted },
+              {
+                color:
+                  ctaEnabled && !isCurrent ? planOnAccent(selected) : colors.textMuted,
+              },
             ]}
           >
             {ctaLabel}

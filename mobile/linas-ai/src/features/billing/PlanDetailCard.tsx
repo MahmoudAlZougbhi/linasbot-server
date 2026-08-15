@@ -7,6 +7,7 @@ import { PlanIncludedList } from './PlanIncludedList';
 import { PlanNotIncluded } from './PlanNotIncluded';
 import { SmartAnswersInfo } from './SmartAnswersInfo';
 import type { PlanId } from './planCatalog';
+import { accentForPlan, planNameColor, planSoftColor } from './planColors';
 import {
   entitlementsForPlanId,
   PLAN_BADGE_KEY,
@@ -23,16 +24,23 @@ type Props = {
 };
 
 export function PlanDetailCard({ planId, priceLabel, periodSuffix, locale, tr }: Props) {
-  const { colors } = useTheme();
+  const { colors, resolved } = useTheme();
+  const planAccent = accentForPlan(planId);
+  const nameColor = planNameColor(planId, resolved);
   const ents = entitlementsForPlanId(planId);
   const credits = ents.includedCredits.toLocaleString(locale);
   return (
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={[styles.badge, { backgroundColor: colors.mintSoft }]}>
-        <Text style={[styles.badgeText, { color: colors.accent }]}>{tr(PLAN_BADGE_KEY[planId])}</Text>
+    <View
+      style={[
+        styles.card,
+        { backgroundColor: colors.surface, borderColor: colors.border, borderLeftColor: planAccent },
+      ]}
+    >
+      <View style={[styles.badge, { backgroundColor: planSoftColor(planId, resolved) }]}>
+        <Text style={[styles.badgeText, { color: nameColor }]}>{tr(PLAN_BADGE_KEY[planId])}</Text>
       </View>
       <View style={styles.head}>
-        <Text style={[styles.name, { color: colors.text }]}>{tr(PLAN_NAME_KEY[planId])}</Text>
+        <Text style={[styles.name, { color: nameColor }]}>{tr(PLAN_NAME_KEY[planId])}</Text>
         <Text style={[styles.price, { color: colors.text }]}>
           {priceLabel}
           <Text style={[styles.period, { color: colors.textMuted }]}> {periodSuffix}</Text>
@@ -41,8 +49,8 @@ export function PlanDetailCard({ planId, priceLabel, periodSuffix, locale, tr }:
       <Text style={[styles.tagline, { color: colors.textMuted }]}>{tr(PLAN_TAGLINE_KEY[planId])}</Text>
 
       <View style={[styles.credits, { backgroundColor: colors.surfaceAlt }]}>
-        <LinasSparkleIcon size={18} color={colors.accent} />
-        <Text style={[styles.creditsText, { color: colors.accent }]}>
+        <LinasSparkleIcon size={18} color={planAccent} />
+        <Text style={[styles.creditsText, { color: planAccent }]}>
           <Text style={styles.creditsStrong}>{credits}</Text>
           {` ${tr('subAiCreditsIncluded')}`}
         </Text>
@@ -65,6 +73,7 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: radii.lg,
     borderWidth: 1,
+    borderLeftWidth: 4,
     padding: spacing.lg,
     gap: spacing.md,
   },

@@ -203,3 +203,33 @@ test('planEntitlements maps included/not-included from catalog flags', () => {
   assert.match(catalog, /pro:[\s\S]*?whatsapp:\s*true[\s\S]*?tiktok:\s*true/);
   assert.match(catalog, /max:[\s\S]*?whatsapp:\s*true[\s\S]*?tiktok:\s*true/);
 });
+
+test('planColors defines distinct premium palette per tier', () => {
+  const src = read('features/billing/planColors.ts');
+  for (const id of PLAN_ORDER) {
+    assert.match(src, new RegExp(`${id}:`));
+  }
+  assert.match(src, /accentForPlan/);
+  assert.match(src, /planNameColor/);
+  assert.match(src, /planNameOnForest/);
+  assert.match(src, /lite:[\s\S]*?#64748B/);
+  assert.match(src, /starter:[\s\S]*?#008B8B/);
+  assert.match(src, /growth:[\s\S]*?#059669/);
+  assert.match(src, /pro:[\s\S]*?#6366F1/);
+  assert.match(src, /max:[\s\S]*?#D97706/);
+});
+
+test('billing surfaces tint plan names from planColors', () => {
+  for (const [file, pattern] of [
+    ['features/billing/PlanCardView.tsx', /planNameColor/],
+    ['features/billing/PlanDetailCard.tsx', /planNameColor/],
+    ['features/billing/PlanChipRow.tsx', /planNameColor/],
+    ['features/billing/CurrentPlanHeroCard.tsx', /planNameColor/],
+    ['features/billing/CurrentPlanSummary.tsx', /planNameColor/],
+    ['features/billing/ChoosePlanScreen.tsx', /accentForPlan/],
+    ['features/dashboard/sections/GrowthPlanCard.tsx', /planNameOnForest/],
+  ]) {
+    assert.match(read(file), pattern, file);
+  }
+  assert.match(read('features/billing/subscriptionCta.ts'), /export \{ accentForPlan \} from '\.\/planColors'/);
+});

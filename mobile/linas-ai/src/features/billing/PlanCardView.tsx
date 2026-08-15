@@ -6,7 +6,7 @@ import { fonts, radii, spacing, useTheme } from '../../theme';
 import type { BillingPeriod } from './appleProductIds';
 import type { PlanDefinition, PlanId } from './planCatalog';
 import type { PlanCta } from './subscriptionCta';
-import { accentForPlan } from './subscriptionCta';
+import { accentForPlan, planNameColor } from './planColors';
 import type { StorePrice } from './storePricing';
 
 type Props = {
@@ -36,8 +36,9 @@ export function PlanCardView({
   onPressCta,
   onRetryPrice,
 }: Props) {
-  const { colors } = useTheme();
+  const { colors, resolved } = useTheme();
   const accent = accentForPlan(plan.id);
+  const nameColor = planNameColor(plan.id, resolved);
   const priceUnavailable = !price?.available;
   const showPreview = Boolean(price?.preview);
   const periodSuffix = period === 'yearly' ? tr('subPerYear') : tr('subPerMonth');
@@ -59,7 +60,7 @@ export function PlanCardView({
     >
       <View style={[styles.accentBar, { backgroundColor: accent }]} />
       <View style={styles.head}>
-        <Text style={[styles.name, { color: colors.accentDeep }]}>{tr(planNameKey(plan.id))}</Text>
+        <Text style={[styles.name, { color: nameColor }]}>{tr(planNameKey(plan.id))}</Text>
         <View style={styles.badges}>
           {plan.recommended ? (
             <View style={[styles.badge, { backgroundColor: colors.accentSoft }]}>

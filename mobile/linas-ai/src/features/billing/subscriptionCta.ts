@@ -1,5 +1,7 @@
 import type { StringKey } from '../../i18n';
-import { type PlanId, PLAN_CATALOG, planRank } from './planCatalog';
+import { type PlanId, planRank } from './planCatalog';
+
+export { accentForPlan } from './planColors';
 
 export type EntitlementStatus =
   | 'none'
@@ -105,19 +107,3 @@ export function resolvePlanCta(
   return { kind: 'switch_renewal', labelKey: CTA_SWITCH[target], enabled: true };
 }
 
-export function accentForPlan(id: PlanId): string {
-  switch (id) {
-    case 'lite':
-      return '#0D9488';
-    case 'starter':
-      return '#0891B2';
-    case 'growth':
-      return '#2563EB';
-    case 'pro':
-      return '#7C3AED';
-    case 'max':
-      return '#DB2777';
-    default:
-      return PLAN_CATALOG.lite.catalogPriceUsd ? '#0D9488' : '#0D9488';
-  }
-}
