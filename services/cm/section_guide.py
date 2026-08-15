@@ -186,9 +186,7 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
     "requests_appointments": {
         "title": "Requests & Appointments",
         "title_ar": "الطلبات والمواعيد",
-        "purpose": (
-            "Optional customer Orders / Appointment requests / Other capture via simple request rules."
-        ),
+        "purpose": ("Optional customer Orders / Appointment requests / Other capture via simple request rules."),
         "why": "Lets owners collect structured requests without forced wa.me booking handoff.",
         "what_to_fill": [
             "rules[] with type (ORDER | APPOINTMENT | OTHER), title (name), and custom note",
