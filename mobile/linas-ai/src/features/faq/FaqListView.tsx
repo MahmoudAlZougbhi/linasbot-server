@@ -1,23 +1,27 @@
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { AppIcon, feather } from '../../components/AppIcon';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import type { StringKey } from '../../i18n';
-import { colors, fonts, radii, spacing } from '../../theme';
+import { fonts, spacing } from '../../theme';
 import type { FaqEntitlement, FaqGroup } from './faqApi';
-import { langLabel } from './faqLanguages';
-import { variantForLang, variantPreview } from './faqPreview';
+import { FAQ_TEAL } from './faqChrome';
+import { FaqInfoBanner } from './FaqInfoBanner';
+import { FaqLanguagesCard } from './FaqLanguagesCard';
+import { FaqListToolbar } from './FaqListToolbar';
+import { FaqQaCard } from './FaqQaCard';
+import { sortLangIds } from './faqLanguages';
 
 type Props = {
   items: FaqGroup[];
   entitlement: FaqEntitlement | null;
-  quotaDisplay: string | null;
   smartAnswerLanguages: string[];
   query: string;
   onQueryChange: (value: string) => void;
   onCreate: () => void;
-  onAskLinas: () => void;
   onSelect: (group: FaqGroup) => void;
-  onRefresh: () => void;
+  onDelete: (group: FaqGroup) => void;
   onAddLanguage: () => void;
   onRemoveLanguage: (langId: string) => void;
   tr: (key: StringKey) => string;
@@ -26,159 +30,77 @@ type Props = {
 export function FaqListView({
   items,
   entitlement,
-  quotaDisplay,
   smartAnswerLanguages,
   query,
   onQueryChange,
   onCreate,
-  onAskLinas,
   onSelect,
-  onRefresh,
+  onDelete,
   onAddLanguage,
   onRemoveLanguage,
   tr,
 }: Props) {
-  const remaining =
-    entitlement && typeof entitlement.faq_remaining_entries === 'number'
-      ? entitlement.faq_remaining_entries
-      : null;
+  const languages = useMemo(() => sortLangIds(smartAnswerLanguages), [smartAnswerLanguages]);
+  const [previewLang, setPreviewLang] = useState('en');
+
+  useEffect(() => {
+    if (languages.includes(previewLang)) return;
+    const next = languages.includes('en') ? 'en' : languages[0];
+    if (next) setPreviewLang(next);
+  }, [languages, previewLang]);
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.banner}>
-        <Text style={styles.bannerTitle}>{tr('faqWhyTitle')}</Text>
-        <Text style={styles.bannerBody}>{tr('faqWhyBody')}</Text>
-        {quotaDisplay ? (
-          <Text style={styles.quota}>
-            {tr('faqQuota')}: {quotaDisplay}
-            {remaining != null ? ` · ${remaining} ${tr('faqRemaining')}` : ''}
-          </Text>
-        ) : null}
-        {entitlement?.upgrade_message ? <Text style={styles.warn}>{entitlement.upgrade_message}</Text> : null}
-      </View>
+      <FaqInfoBanner upgradeMessage={entitlement?.upgrade_message} tr={tr} />
 
-      <PrimaryButton label={tr('faqCreateNew')} onPress={onCreate} />
-      <PrimaryButton label={tr('faqAskLinas')} variant="ghost" onPress={onAskLinas} />
+      <PrimaryButton
+        label={tr('faqCreateNew')}
+        onPress={onCreate}
+        style={styles.createBtn}
+        icon={
+          <View style={styles.plusCircle}>
+            <AppIcon icon={feather('plus')} size={14} color="#FFFFFF" />
+          </View>
+        }
+      />
 
-      <View style={styles.langHeader}>
-        <Text style={styles.section}>{tr('faqLangSection')}</Text>
-        <Pressable onPress={onAddLanguage} style={styles.addLangBtn}>
-          <Text style={styles.addLangText}>+ {tr('faqAddLanguage')}</Text>
-        </Pressable>
-      </View>
-      <Text style={styles.hint}>{tr('faqLangHint')}</Text>
-      <View style={styles.chips}>
-        {smartAnswerLanguages.map((langId) => (
-          <Pressable key={langId} style={styles.chip} onLongPress={() => onRemoveLanguage(langId)}>
-            <Text style={styles.chipText}>{langLabel(langId)}</Text>
-            <Text style={styles.chipX}>×</Text>
-          </Pressable>
-        ))}
-      </View>
+      <FaqLanguagesCard
+        languages={languages}
+        previewLang={languages.includes(previewLang) ? previewLang : languages[0] || 'en'}
+        onPreviewLang={setPreviewLang}
+        onAddLanguage={onAddLanguage}
+        onRemoveLanguage={onRemoveLanguage}
+        tr={tr}
+      />
 
-      <View style={styles.listHeader}>
-        <Text style={styles.count}>
-          {items.length} {tr('faqAnswersCount')}
-        </Text>
-        <TextInput
-          value={query}
-          onChangeText={onQueryChange}
-          placeholder={tr('faqSearchPlaceholder')}
-          placeholderTextColor={colors.textMuted}
-          style={styles.search}
+      <FaqListToolbar count={items.length} query={query} onQueryChange={onQueryChange} tr={tr} />
+
+      {items.length === 0 ? <Text style={styles.empty}>{tr('faqEmpty')}</Text> : null}
+      {items.map((item) => (
+        <FaqQaCard
+          key={String(item.qa_group_id)}
+          item={item}
+          previewLang={previewLang}
+          onEdit={onSelect}
+          onDelete={onDelete}
+          tr={tr}
         />
-      </View>
-
-      {items.length === 0 ? <Text style={styles.hint}>{tr('faqEmpty')}</Text> : null}
-      {items.map((item) => {
-        const preview = variantPreview(item);
-        const complete = !item.incomplete;
-        return (
-          <Pressable key={String(item.qa_group_id)} style={styles.card} onPress={() => onSelect(item)}>
-            <Text style={styles.qLabel}>{tr('likeFaqQuestion').toUpperCase()}</Text>
-            <Text style={styles.question}>{preview || tr('faqEmptyQuestion')}</Text>
-            <Text style={styles.aLabel}>{tr('likeFaqAnswer').toUpperCase()}</Text>
-            <Text style={styles.answer} numberOfLines={2}>
-              {variantForLang(item, smartAnswerLanguages[0] || 'en')?.answer || ''}
-            </Text>
-            <Text style={styles.status}>
-              {complete ? tr('faqTranslatedStatus') : tr('faqIncomplete')}
-            </Text>
-          </Pressable>
-        );
-      })}
-      <PrimaryButton label={tr('retry')} variant="ghost" onPress={onRefresh} />
+      ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { gap: spacing.md, paddingBottom: 40 },
-  banner: {
-    backgroundColor: '#E8F7F7',
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-    gap: 6,
-  },
-  bannerTitle: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 15 },
-  bannerBody: { color: colors.textDim, fontFamily: fonts.body, fontSize: 13, lineHeight: 18 },
-  section: {
-    color: colors.textDim,
-    fontFamily: fonts.bodyMedium,
-    fontSize: 12,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  langHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  addLangBtn: {
-    borderWidth: 1,
-    borderColor: colors.accent,
-    borderRadius: radii.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  addLangText: { color: colors.accent, fontFamily: fonts.bodyMedium, fontSize: 12 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    flexDirection: 'row',
+  createBtn: { backgroundColor: FAQ_TEAL, borderRadius: 12 },
+  plusCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
     alignItems: 'center',
-    gap: 6,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: colors.surface,
+    justifyContent: 'center',
   },
-  chipText: { color: colors.accent, fontFamily: fonts.body, fontSize: 12 },
-  chipX: { color: colors.accent, fontSize: 14 },
-  listHeader: { gap: spacing.sm },
-  count: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 13 },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 4,
-  },
-  qLabel: { color: colors.accent, fontFamily: fonts.bodyMedium, fontSize: 10, letterSpacing: 0.6 },
-  aLabel: { color: colors.accent, fontFamily: fonts.bodyMedium, fontSize: 10, letterSpacing: 0.6, marginTop: 6 },
-  question: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 15 },
-  answer: { color: colors.textDim, fontFamily: fonts.body, fontSize: 13, lineHeight: 18 },
-  status: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 12, marginTop: 8 },
-  hint: { color: colors.textDim, fontFamily: fonts.body, fontSize: 13, lineHeight: 18 },
-  quota: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 13, marginTop: 4 },
-  warn: { color: colors.danger, fontFamily: fonts.body, fontSize: 12, marginTop: 4 },
-  search: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    color: colors.text,
-    fontFamily: fonts.body,
-    fontSize: 14,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-  },
+  empty: { color: '#94A3B8', fontFamily: fonts.body, fontSize: 13, lineHeight: 18 },
 });
