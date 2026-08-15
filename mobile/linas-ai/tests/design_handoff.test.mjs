@@ -97,6 +97,20 @@ test('drawer module order matches binding product order', () => {
     'users',
     'subscription',
   ]);
+  assert.match(text, /titleKey:\s*'navSmartFollowUp'/);
+});
+
+test('drawer Smart Follow-Up tile uses short Follow up labels', () => {
+  const en = read('i18n/locales/smartFollowUpEn.ts');
+  const ar = read('i18n/locales/smartFollowUpAr.ts');
+  const fr = read('i18n/locales/smartFollowUpFr.ts');
+  const grid = read('features/nav/DrawerNavGrid.tsx');
+  assert.match(grid, /tr\(mod\.titleKey\)/);
+  assert.match(en, /navSmartFollowUp:\s*'Follow up',/);
+  assert.match(ar, /navSmartFollowUp:\s*'المتابعة',/);
+  assert.match(fr, /navSmartFollowUp:\s*'Relance',/);
+  assert.doesNotMatch(en, /navSmartFollowUp:\s*'Smart Follow-Up'/);
+  assert.match(en, /sfuTitle:\s*'Smart Follow-Up',/);
 });
 
 test('drawer and CM module tiles expose design handoff icons', () => {
