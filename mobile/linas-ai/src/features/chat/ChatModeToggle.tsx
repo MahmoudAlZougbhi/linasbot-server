@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import type { OwnerChatMode } from './ownerChatMode';
@@ -8,21 +9,23 @@ type Props = {
   onChange: (mode: OwnerChatMode) => void;
 };
 
-/** Segmented Chat | Work control under logo on new chat. Work = high, Chat = low. */
+/** Segmented Chat | Work control on a new thread. Work = high, Chat = low. */
 export function ChatModeToggle({ mode, onChange }: Props) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   return (
-    <View
-      style={[
-        styles.wrap,
-        {
-          backgroundColor: colors.bgElevated,
-          borderColor: colors.borderSoft,
-          shadowColor: colors.text,
-        },
-      ]}
-      accessibilityRole="tablist"
-    >
+    <View pointerEvents="box-none" style={[styles.overlay, { paddingTop: insets.top + spacing.sm }]}>
+      <View
+        style={[
+          styles.wrap,
+          {
+            backgroundColor: colors.bgElevated,
+            borderColor: colors.borderSoft,
+            shadowColor: colors.text,
+          },
+        ]}
+        accessibilityRole="tablist"
+      >
       {(['chat', 'work'] as const).map((id) => {
         const selected = mode === id;
         return (
@@ -48,19 +51,25 @@ export function ChatModeToggle({ mode, onChange }: Props) {
           </Pressable>
         );
       })}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 15,
+    alignItems: 'center',
+  },
   wrap: {
-    alignSelf: 'center',
     flexDirection: 'row',
     borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 3,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 3,

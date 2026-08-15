@@ -19,20 +19,22 @@ from modules.auth_api_common import (  # noqa: F401
     AUTH_SESSION_TIMEOUT_SECONDS,
     ChangePasswordRequest,
     CreateUserRequest,
-    ForgotPasswordRequest,
     LoginRequest,
     RegisterRequest,
-    ResendVerificationRequest,
-    ResetPasswordRequest,
     UpdateUserRequest,
-    VerifyEmailRequest,
     _clear_auth_cookies,
     _cookie_samesite,
     _cookie_secure,
     _set_auth_cookies,
 )
 
-# Register user CRUD routes; re-export handlers for tests (`auth_api.get_users`, …).
+# Register user CRUD + public email-token routes (LOC split).
+from modules.auth_email_routes import (  # noqa: E402, F401
+    forgot_password,
+    resend_verification,
+    reset_password,
+    verify_email,
+)
 from modules.auth_users_api import (  # noqa: E402, F401
     create_user,
     delete_user,
@@ -194,7 +196,7 @@ async def register(request: RegisterRequest, response: Response) -> Any:
         from services.auth_email_tokens import auth_email_token_service
         from services.email_dispatch import send_verify_email
 
-        raw_verify = auth_email_token_service.issue(
+        issued = auth_email_token_service.issue(
             purpose="email_verify",
             user_id=str(user["id"]),
             email=str(user.get("email") or request.email),
@@ -202,7 +204,8 @@ async def register(request: RegisterRequest, response: Response) -> Any:
         )
         send_verify_email(
             to_email=str(user.get("email") or request.email),
-            raw_token=raw_verify,
+            raw_token=issued,
+            otp_code=issued.otp,
             locale=str(user.get("preferredLanguage") or request.preferred_language or "en"),
             user_id=str(user["id"]),
         )
@@ -226,173 +229,6 @@ async def register(request: RegisterRequest, response: Response) -> Any:
         "csrf_token": record.csrf_token,
         "email_verification_required": not bool(user.get("emailVerified")),
     }
-
-
-@app.post("/api/auth/forgot-password")
-async def forgot_password(body: ForgotPasswordRequest) -> Any:
-    """
-    Always return a generic success message (do not reveal whether email exists).
-    When mail is configured, send a time-limited reset link.
-    """
-    from services.auth_email_tokens import auth_email_token_service
-    from services.email_dispatch import send_reset_password_email
-    from services.mail_service import mail_configured
-
-    email = (body.email or "").strip().lower()
-    generic = {
-        "success": True,
-        "message": "If an account exists for that email, a password reset link has been sent.",
-        "mail_configured": mail_configured(),
-    }
-    if not email or "@" not in email:
-        return generic
-
-    try:
-        user = await asyncio.wait_for(
-            asyncio.to_thread(user_service.get_user_by_email, email),
-            timeout=AUTH_LOGIN_TIMEOUT_SECONDS,
-        )
-    except Exception:
-        return generic
-
-    if not user or user.get("status") != "active":
-        return generic
-
-    tenant_id = str(user.get("tenantId") or "").strip()
-    if not tenant_id:
-        return generic
-
-    auth_email_token_service.revoke_unused_for_user(str(user["id"]), "password_reset")
-    raw_token = auth_email_token_service.issue(
-        purpose="password_reset",
-        user_id=str(user["id"]),
-        email=str(user.get("email") or email),
-        tenant_id=tenant_id,
-    )
-    result = send_reset_password_email(
-        to_email=email,
-        raw_token=raw_token,
-        locale=str(user.get("preferredLanguage") or "en"),
-        user_id=str(user["id"]),
-    )
-    payload = dict(generic)
-    payload["mail_sent"] = bool(result.sent)
-    if not result.sent and "not_configured" in result.reason:
-        payload["message"] = (
-            "If an account exists for that email, a password reset was prepared. "
-            "Mail delivery requires Resend/SMTP configuration on the server."
-        )
-    return payload
-
-
-@app.post("/api/auth/reset-password")
-async def reset_password(body: ResetPasswordRequest, response: Response) -> Any:
-    from services.admin_provisioning_service import validate_provision_password
-    from services.auth_email_tokens import auth_email_token_service
-
-    token = (body.token or "").strip()
-    if not token:
-        return {"success": False, "error": "Reset token is required"}
-    try:
-        validate_provision_password(body.new_password or "")
-    except ValueError as e:
-        return {"success": False, "error": str(e)}
-
-    record = auth_email_token_service.consume(token, "password_reset")
-    if record is None:
-        return {"success": False, "error": "Invalid or expired reset link"}
-
-    try:
-        await asyncio.wait_for(
-            asyncio.to_thread(user_service.set_password_with_reset, record.user_id, body.new_password),
-            timeout=AUTH_LOGIN_TIMEOUT_SECONDS,
-        )
-    except ValueError as e:
-        return {"success": False, "error": str(e)}
-    except Exception as e:
-        print(f"[auth_api] reset-password error: {e}", flush=True)
-        return {"success": False, "error": "Failed to reset password"}
-
-    session_service.revoke_all_for_user(record.user_id)
-    _clear_auth_cookies(response)
-    try:
-        from modules.auth_email_change_api import notify_password_changed
-
-        notify_password_changed(user_id=record.user_id, email=record.email)
-    except Exception:
-        pass
-    return {"success": True, "message": "Password updated. You can sign in with your new password."}
-
-
-@app.post("/api/auth/verify-email")
-async def verify_email(body: VerifyEmailRequest) -> Any:
-    from services.auth_email_tokens import auth_email_token_service
-
-    token = (body.token or "").strip()
-    if not token:
-        return {"success": False, "error": "Verification token is required"}
-    record = auth_email_token_service.consume(token, "email_verify")
-    if record is None:
-        return {"success": False, "error": "Invalid or expired verification link"}
-    try:
-        user = await asyncio.wait_for(
-            asyncio.to_thread(user_service.mark_email_verified, record.user_id),
-            timeout=AUTH_LOGIN_TIMEOUT_SECONDS,
-        )
-    except ValueError as e:
-        return {"success": False, "error": str(e)}
-    except Exception as e:
-        print(f"[auth_api] verify-email error: {e}", flush=True)
-        return {"success": False, "error": "Failed to verify email"}
-    return {"success": True, "message": "Email verified", "user": user}
-
-
-@app.post("/api/auth/resend-verification")
-async def resend_verification(body: ResendVerificationRequest, request: Request) -> Any:
-    from services.auth_email_tokens import auth_email_token_service
-    from services.email_dispatch import send_verify_email
-    from services.mail_service import mail_configured
-
-    email = (body.email or "").strip().lower()
-    cookie = request.cookies.get(SESSION_COOKIE_NAME)
-    session = session_service.get_valid_session(cookie)
-
-    user = None
-    if session is not None:
-        user = user_service.get_user_by_id(session.user_id)
-    elif email:
-        user = user_service.get_user_by_email(email)
-
-    generic = {
-        "success": True,
-        "message": "If verification is required, a new email has been sent.",
-        "mail_configured": mail_configured(),
-    }
-    if not user or user.get("status") != "active":
-        return generic
-    if user_service.is_email_verified(user):
-        return {"success": True, "message": "Email is already verified", "mail_configured": mail_configured()}
-
-    tenant_id = str(user.get("tenantId") or "").strip()
-    if not tenant_id:
-        return generic
-
-    auth_email_token_service.revoke_unused_for_user(str(user["id"]), "email_verify")
-    raw_token = auth_email_token_service.issue(
-        purpose="email_verify",
-        user_id=str(user["id"]),
-        email=str(user.get("email") or ""),
-        tenant_id=tenant_id,
-    )
-    result = send_verify_email(
-        to_email=str(user.get("email") or ""),
-        raw_token=raw_token,
-        locale=str(user.get("preferredLanguage") or "en"),
-        user_id=str(user["id"]),
-    )
-    payload = dict(generic)
-    payload["mail_sent"] = bool(result.sent)
-    return payload
 
 
 @app.post("/api/auth/logout")

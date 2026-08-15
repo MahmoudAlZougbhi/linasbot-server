@@ -123,8 +123,8 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
   },
   {
     id: 'ai_limits',
-    title: 'AI Limits',
-    description: 'Handoff, photo analysis, voice, and usage limits.',
+    title: 'Customer AI Limits',
+    description: 'Protect credits by limiting each customer’s AI usage.',
     mobileSupported: true,
     showInCmHub: false,
   },

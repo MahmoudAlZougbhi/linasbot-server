@@ -28,6 +28,7 @@ function localeBundle(lang) {
     'faqUi',
     'requests',
     'usersUi',
+    'authFlow',
   ].map((prefix) => {
     try {
       return readFileSync(join(root, `src/i18n/locales/${prefix}${cap}.ts`), 'utf8');

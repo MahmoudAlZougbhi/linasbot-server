@@ -2,7 +2,7 @@ import { AuthGateModal } from '../auth/AuthGateModal';
 import type { ControlArea } from '../control/controlAreas';
 import type { HistoryItem } from '../nav/HistoryRows';
 import { NavDrawer } from '../nav/NavDrawer';
-import { ComposerPlusSheet, type PlusAction } from './ComposerPlusSheet';
+import { ComposerPlusMenu, type PlusAction } from './ComposerPlusMenu';
 import { handlePlusAction } from './handlePlusAction';
 import type { PendingFile } from './v2/pickAttachment';
 
@@ -66,7 +66,7 @@ export function ChatScreenOverlays(props: Props) {
       />
 
       {props.isAuthenticated ? (
-        <ComposerPlusSheet
+        <ComposerPlusMenu
           open={props.plusOpen}
           onClose={props.onClosePlus}
           onAction={(a: PlusAction) =>

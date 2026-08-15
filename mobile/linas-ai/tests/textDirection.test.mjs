@@ -38,6 +38,7 @@ exports.textDirectionStyle = textDirectionStyle;
 exports.contentStartAlign = contentStartAlign;
 exports.aiMessageRowStyle = aiMessageRowStyle;
 exports.aiMessageColStyle = aiMessageColStyle;
+exports.aiMessageHeaderStyle = aiMessageHeaderStyle;
 exports.AI_MESSAGE_EDGE_HUG = AI_MESSAGE_EDGE_HUG;`,
   );
   fn(exports);
@@ -50,6 +51,7 @@ const {
   contentStartAlign,
   aiMessageRowStyle,
   aiMessageColStyle,
+  aiMessageHeaderStyle,
   AI_MESSAGE_EDGE_HUG,
 } = loadTextDirection(false);
 
@@ -130,15 +132,34 @@ test('RTL app: contentStartAlign still maps to physical EN-left / AR-right', () 
   });
 });
 
-test('ChatBubble uses content direction and AI edge align helpers', () => {
+test('ChatBubble uses content direction; AI hugs script start, user stays right', () => {
   const bubble = readFileSync(join(root, 'src/features/chat/ChatBubble.tsx'), 'utf8');
   assert.match(bubble, /textDirectionStyle/);
+  assert.match(bubble, /styles\.rowAi/);
+  assert.match(bubble, /styles\.rowUser/);
+  assert.match(bubble, /lib\/textDirection/);
   assert.match(bubble, /aiMessageRowStyle/);
   assert.match(bubble, /aiMessageColStyle/);
-  assert.match(bubble, /lib\/textDirection/);
+  assert.match(bubble, /aiMessageHeaderStyle/);
   assert.doesNotMatch(bubble, /isRtl\s*\|\|/);
   assert.doesNotMatch(bubble, /useI18n/);
   assert.doesNotMatch(bubble, /detectRtl/);
+});
+
+test('AI sparkle+name header stays LTR left; body still follows script', () => {
+  const bubble = readFileSync(join(root, 'src/features/chat/ChatBubble.tsx'), 'utf8');
+  const thinking = readFileSync(join(root, 'src/features/chat/ThinkingRow.tsx'), 'utf8');
+  const mark = readFileSync(join(root, 'src/components/LinasStarMark.tsx'), 'utf8');
+  assert.deepEqual(aiMessageHeaderStyle, {
+    alignSelf: 'flex-start',
+    direction: 'ltr',
+  });
+  assert.match(bubble, /aiMessageHeaderStyle/);
+  assert.match(thinking, /aiMessageHeaderStyle/);
+  assert.match(bubble, /aiMessageColStyle\(message\.content\)/);
+  assert.match(thinking, /aiMessageColStyle\(label\)/);
+  assert.match(mark, /direction:\s*'ltr'/);
+  assert.doesNotMatch(mark, /lineHeight:\s*size/);
 });
 
 test('composer and live chat wire the same helper', () => {
@@ -147,8 +168,9 @@ test('composer and live chat wire the same helper', () => {
   const thinking = readFileSync(join(root, 'src/features/chat/ThinkingRow.tsx'), 'utf8');
   assert.match(composer, /textDirectionStyle\(draft\)/);
   assert.match(composer, /inputTextAlign/);
-  assert.match(composer, /draftEmpty \? 'center'/);
+  assert.match(composer, /draftEmpty \? idleAlign/);
+  assert.match(composer, /isRtl \? 'right' : 'left'/);
   assert.match(live, /textDirectionStyle\(body\)/);
   assert.match(thinking, /textDirectionStyle\(label\)/);
-  assert.match(thinking, /aiMessageRowStyle\(label\)/);
+  assert.match(thinking, /styles\.rowAi/);
 });

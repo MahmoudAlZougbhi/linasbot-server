@@ -51,6 +51,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     marginBottom: spacing.sm,
     paddingHorizontal: 2,
+    direction: 'ltr',
   },
   chip: {
     flexDirection: 'row',

@@ -3,7 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 
 import App from './App';
 
-// Hold the warm native splash until BootSplash mounts and calls hideAsync.
+// Hold the native splash until BootSplash mounts and calls hideAsync.
 void SplashScreen.preventAutoHideAsync().catch(() => {
   // Non-fatal on web / Expo Go edge cases.
 });

@@ -4,6 +4,8 @@ import { Linking } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { onAuthCleared } from '../api/client';
+import { rotateGuestSessionId, rotateGuestSessionOnAppLaunch } from '../auth/guestSession';
+import { bootPersistedAuth } from '../auth/restoreOwnerSession';
 import { tokenStore } from '../auth/tokenStore';
 import { API_BASE } from '../config';
 import { AppUpdateBanner } from '../features/appVersion/AppUpdateBanner';
@@ -14,7 +16,6 @@ import { BootSplash } from '../features/boot/BootSplash';
 import type { CmProposalReview } from '../features/cm/cmProposalReview';
 import { isCmProposalSection } from '../features/cm/cmProposalReview';
 import type { ControlArea } from '../features/control/controlAreas';
-import { markPreferFreshOwnerChat } from '../features/chat/preferFreshOwnerChat';
 import { tryRegisterOwnerPushScaffold } from '../features/notifications/pushScaffold';
 import { ModuleNavProvider } from '../features/nav/ModuleNavContext';
 import { useTheme } from '../theme';
@@ -51,20 +52,24 @@ export function AppShell() {
 
   useEffect(() => {
     void (async () => {
-      const access = await tokenStore.getAccessToken();
-      await tokenStore.getUser();
-      setHasAccess(Boolean(access));
-      setAuthReady(true);
-      if (access) {
-        void tryRegisterOwnerPushScaffold();
+      try {
+        const has = await bootPersistedAuth(tokenStore, rotateGuestSessionOnAppLaunch);
+        setHasAccess(has);
+        if (has) {
+          void tryRegisterOwnerPushScaffold();
+        }
+      } finally {
+        setAuthReady(true);
       }
     })();
   }, []);
 
   useEffect(() => {
     return onAuthCleared(() => {
-      setHasAccess(false);
-      void markPreferFreshOwnerChat().finally(() => bumpAuthEpoch());
+      void rotateGuestSessionId().then(() => {
+        setHasAccess(false);
+        bumpAuthEpoch();
+      });
     });
   }, [bumpAuthEpoch]);
 
@@ -92,15 +97,13 @@ export function AppShell() {
 
   const finishBoot = useCallback(() => {
     setBootDone(true);
-    if (!authReady) return;
-    setScreen({ name: 'chat' });
-  }, [authReady]);
+    setScreen((current) => (current.name === 'boot' ? { name: 'chat' } : current));
+  }, []);
 
   useEffect(() => {
-    if (bootDone && authReady) {
-      setScreen({ name: 'chat' });
-    }
-  }, [bootDone, authReady]);
+    if (!bootDone) return;
+    setScreen((current) => (current.name === 'boot' ? { name: 'chat' } : current));
+  }, [bootDone]);
 
   function openAreaAuthed(area: ControlArea) {
     bumpAreaFocus();
@@ -216,7 +219,7 @@ export function AppShell() {
       // Local clear still proceeds.
     }
     await tokenStore.clear();
-    await markPreferFreshOwnerChat();
+    await rotateGuestSessionId();
     setHasAccess(false);
     setResumeArea(null);
     bumpAuthEpoch();
@@ -267,10 +270,10 @@ export function AppShell() {
     screen,
   });
 
-  if (!bootDone || !authReady || screen.name === 'boot') {
+  if (!bootDone) {
     return (
       <SafeAreaProvider>
-        <StatusBar style={resolved === 'dark' ? 'light' : 'dark'} />
+        <StatusBar style="light" />
         <BootSplash appReady={authReady} onDone={finishBoot} />
       </SafeAreaProvider>
     );

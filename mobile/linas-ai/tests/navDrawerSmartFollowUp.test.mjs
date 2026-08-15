@@ -46,7 +46,7 @@ describe('nav drawer Smart Follow-Up + AI Setup featured tile', () => {
     assert.match(drawer, /DrawerNavGrid/);
     assert.match(drawer, /DrawerHeader/);
     assert.match(drawer, /DrawerRecents/);
-    assert.match(drawer, /DrawerFooter/);
+    assert.doesNotMatch(drawer, /DrawerFooter/);
     assert.doesNotMatch(drawer, /NavDrawerAiSetupTile/);
   });
 

@@ -214,6 +214,8 @@ def get_tenant_entitlement_public(tenant_id: str) -> dict[str, Any]:
         "additional_seats": additional_seats,
         "additional_seats_unlimited": additional_seats is None if ent.plan_id in PLAN_PRICES_USD else False,
         "comment_automation": comment_automation,
+        "whatsapp": bool(features.get("whatsapp")),
+        "tiktok": bool(features.get("tiktok")),
         "features": features,
         "faq_enabled": faq.get("faq_enabled"),
         "faq_max_entries": faq.get("faq_max_entries", PLAN_FAQ_MAX_ENTRIES.get(ent.plan_id, 0)),

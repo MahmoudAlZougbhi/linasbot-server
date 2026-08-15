@@ -17,14 +17,17 @@ function read(rel) {
 
 test('brand sparkle renders without react-native-svg (no Uni placeholder)', () => {
   const sparkle = read('components/LinasSparkleIcon.tsx');
+  const png = read('components/linasSparklePng.ts');
   const fade = read('features/nav/DrawerFadeSeparator.tsx');
   const pkg = readFileSync(join(root, 'package.json'), 'utf8');
-  assert.match(sparkle, /linas-sparkle-light\.png/);
-  assert.match(sparkle, /linas-sparkle-light-deep\.png/);
-  assert.match(sparkle, /linas-sparkle-dark\.png/);
-  assert.match(sparkle, /linas-sparkle-dark-deep\.png/);
+  assert.match(sparkle, /SPARKLE_LIGHT_URI/);
+  assert.match(sparkle, /SPARKLE_LIGHT_DEEP_URI/);
+  assert.match(sparkle, /SPARKLE_DARK_URI/);
+  assert.match(sparkle, /SPARKLE_DARK_DEEP_URI/);
   assert.match(sparkle, /sparkleSource\(color\)/);
+  assert.match(png, /data:image\/png;base64,/);
   assert.doesNotMatch(sparkle, /tintColor/);
+  assert.doesNotMatch(sparkle, /require\(/);
   assert.doesNotMatch(sparkle, /react-native-svg/);
   assert.doesNotMatch(fade, /react-native-svg/);
   assert.doesNotMatch(pkg, /react-native-svg/);
@@ -39,29 +42,19 @@ test('brand sparkle renders without react-native-svg (no Uni placeholder)', () =
   }
 });
 
-test('drawer AI Setup active tile uses light grey sparkle chrome', () => {
+test('drawer AI Setup active tile uses the same selected chrome as other modules', () => {
   const grid = read('features/nav/DrawerNavGrid.tsx');
-  const tokens = read('theme/tokens.ts');
   const header = read('features/nav/DrawerHeader.tsx');
   const fade = read('features/nav/DrawerFadeSeparator.tsx');
   assert.match(grid, /modId === 'cm'/);
-  assert.match(grid, /colors\.featuredIconBg/);
-  assert.match(grid, /colors\.featuredIconBorder/);
-  assert.match(tokens, /featuredIconBg:\s*'#F4F6F6'/);
-  assert.match(tokens, /featuredIconBorder:\s*'#D0D4D4'/);
+  assert.match(grid, /const active = activeArea === mod\.id/);
+  assert.match(grid, /const tileBg = active \? colors\.activeRow : 'transparent'/);
+  assert.doesNotMatch(grid, /isAiSetup/);
+  assert.doesNotMatch(grid, /aiSetupTile/);
+  assert.doesNotMatch(grid, /featuredIconWrap/);
+  assert.doesNotMatch(grid, /featuredIconShadow/);
   assert.doesNotMatch(grid, /colors\.mintSoft/);
   assert.doesNotMatch(grid, /colors\.accentSoft/);
-  assert.doesNotMatch(grid, /colors\.borderSoft/);
-  assert.match(grid, /const isAiSetup = mod\.id === 'cm'/);
-  assert.match(grid, /active && !isAiSetup \? colors\.activeRow : 'transparent'/);
-  assert.match(grid, /isAiSetup \? styles\.aiSetupTile : null/);
-  assert.match(grid, /aiSetupTile:[\s\S]*backgroundColor:\s*'transparent'/);
-  assert.match(grid, /styles\.featuredIconShadow/);
-  assert.match(grid, /shadowColor:\s*colors\.accentDeep/);
-  assert.match(grid, /shadowOffset:\s*\{\s*width:\s*0,\s*height:\s*2\s*\}/);
-  assert.match(grid, /shadowOpacity:\s*0\.14/);
-  assert.match(grid, /shadowRadius:\s*7/);
-  assert.match(grid, /elevation:\s*3/);
   assert.match(grid, /LinasSparkleIcon[\s\S]*color=\{colors\.accentDeep\}/);
   assert.match(header, /LinasSparkleIcon size=\{20\} color=\{colors\.accentDeep\}/);
   assert.match(
@@ -188,31 +181,29 @@ test('cold open is branded star splash then chat (no character mash / progress b
   const appJson = readFileSync(join(root, 'app.json'), 'utf8');
   const chat = read('features/chat/ChatScreen.tsx');
   const login = read('features/auth/LoginScreen.tsx');
-  assert.match(boot, /LinasSparkleMark/);
-  assert.match(boot, /BootSplashAiLine/);
+  const authChrome = read('features/auth/AuthChrome.tsx');
+  assert.match(boot, /splash-native\.png/);
   assert.match(boot, /bootSplashTokens/);
-  assert.match(boot, /#FBFAFA|bootSplashTokens/);
-  assert.match(tokens, /background:\s*'#FBFAFA'/);
-  assert.match(tokens, /glowColor:\s*'#DFF4F1'/);
+  assert.match(tokens, /background:\s*'#083A37'/);
+  assert.match(tokens, /markSize:\s*220/);
   assert.match(tokens, /minDisplayMs:\s*900/);
+  assert.match(tokens, /maxHoldMs:\s*2500/);
   assert.match(tokens, /exitFadeMs:\s*220/);
   assert.match(boot, /appReady/);
+  assert.match(boot, /splashExitDelayMs/);
   assert.match(boot, /isReduceMotionEnabled|reduceMotionChanged/);
   assert.match(boot, /SplashScreen\.hideAsync/);
   assert.doesNotMatch(boot, /LinasAvatar/);
   assert.doesNotMatch(boot, /Opening Linas AI/);
   assert.doesNotMatch(boot, /progressTrack/);
-  const aiLine = read('features/boot/BootSplashAiLine.tsx');
-  assert.match(aiLine, /Animated\.loop/);
-  assert.match(aiLine, /useNativeDriver:\s*true/);
-  assert.match(aiLine, /reduceMotion/);
-  assert.match(aiLine, /bootSplashTokens/);
-  // Native splash must stay logo-free (warm #FBFAFA) so Android 12+ does not
-  // circular-mask splash-icon into a different first shape before BootSplash.
-  assert.match(boot, /splash-native|logo-free|no logo/i);
+  assert.doesNotMatch(boot, /BootSplashAiLine/);
+  assert.doesNotMatch(boot, /Linas AI/);
+  assert.equal(existsSync(join(root, 'src/features/boot/BootSplashAiLine.tsx')), false);
   assert.match(index, /preventAutoHideAsync/);
-  assert.match(appJson, /"backgroundColor":\s*"#FBFAFA"/);
+  assert.match(appJson, /"backgroundColor":\s*"#083A37"/);
+  assert.match(appJson, /"imageWidth":\s*220/);
   assert.match(appJson, /splash-native\.png/);
+  assert.doesNotMatch(appJson, /#FBFAFA/);
   assert.doesNotMatch(
     appJson,
     /expo-splash-screen[\s\S]*"image":\s*"\.\/assets\/splash-icon\.png"/,
@@ -228,7 +219,8 @@ test('cold open is branded star splash then chat (no character mash / progress b
     /if \(loading\) \{\s*return \(\s*<GradientBackground>\s*<View style=\{styles\.center\}>/,
   );
   assert.match(chat, /loading \? \(/);
-  assert.match(login, /BrandMark/);
+  assert.match(login, /AuthChrome/);
+  assert.match(authChrome, /LinasSparkleIcon/);
   assert.doesNotMatch(login, /linasAssets|authHero|LinasAvatar|avatarAssets/);
 });
 
@@ -343,7 +335,9 @@ test('voice STT wires transcript into composer draft (no auto-send)', () => {
   assert.match(composer, /tr\('composerListening'\)/);
   assert.match(composer, /tr\('composerPaused'\)/);
   assert.match(composer, /tr\('composerTranscribing'\)/);
-  assert.match(composer, /formatVoiceElapsed/);
+  assert.doesNotMatch(composer, /formatVoiceElapsed/);
+  assert.match(controls, /formatVoiceElapsed\(elapsedMs\)/);
+  assert.match(controls, /timerBeside/);
   assert.match(composer, /StopGlyph/);
   const en = read('i18n/locales/en.ts');
   assert.match(en, /composerListening:\s*'Listening…'/);
@@ -381,19 +375,30 @@ test('LIN effort chip opens Low/High picker synced with Chat|Work', () => {
 
 test('composer bar matches design handoff (pill, grow, placeholders)', () => {
   const composer = read('features/chat/ChatComposer.tsx');
+  const styles = read('features/chat/composerStyles.ts');
+  const height = read('features/chat/composerInputHeight.ts');
   const autoGrow = read('features/chat/useComposerInputAutoGrow.ts');
   const en = read('i18n/locales/en.ts');
+  const field = read('features/chat/ComposerDraftField.tsx');
   assert.match(composer, /styles\.pill/);
   assert.match(composer, /PlusCircleGlyph/);
   assert.match(composer, /SendArrowGlyph/);
-  assert.match(composer, /sendOutside/);
-  assert.match(composer, /scrollEnabled=\{atMaxHeight\}/);
+  assert.match(composer, /sendInside/);
+  assert.match(field, /scrollEnabled=\{fillHeight \|\| atMaxHeight\}/);
   assert.match(composer, /composerPlaceholderChat/);
   assert.match(composer, /composerPlaceholderWork/);
-  assert.match(autoGrow, /COMPOSER_INPUT_MAX_LINES = 8/);
-  assert.match(autoGrow, /COMPOSER_INPUT_MAX_H = COMPOSER_INPUT_LINE_HEIGHT \* COMPOSER_INPUT_MAX_LINES/);
+  assert.match(styles, /minHeight:\s*COMPOSER_PILL_MIN_H/);
+  assert.match(styles, /justifyContent:\s*'center'/);
+  assert.match(styles, /direction:\s*'ltr'/);
+  assert.match(height, /COMPOSER_PILL_MIN_H = 44/);
+  assert.match(height, /COMPOSER_INPUT_MAX_LINES = 8/);
+  assert.match(height, /COMPOSER_INPUT_MAX_H =/);
+  assert.match(autoGrow, /composerLineBucketChanged/);
   assert.match(en, /composerPlaceholderChat:\s*'Chat with Linas'/);
   assert.match(en, /composerPlaceholderWork:\s*'Work with Linas'/);
+  assert.match(composer, /placeholder=\{placeholder\}/);
+  assert.match(composer, /pillStacked/);
+  assert.match(styles, /actionRow/);
 });
 
 test('Live Chat inbox matches design handoff (search, All/Human, platform row)', () => {
@@ -401,6 +406,7 @@ test('Live Chat inbox matches design handoff (search, All/Human, platform row)',
   const inbox = read('features/livechat/LiveChatInbox.tsx');
   const search = read('features/livechat/InboxSearchBar.tsx');
   const pills = read('features/livechat/InboxFilterPills.tsx');
+  const chips = read('features/livechat/InboxChannelChips.tsx');
   const row = read('features/livechat/ConversationRow.tsx');
   const icon = read('features/livechat/PlatformChannelIcon.tsx');
   const types = read('features/livechat/liveChatTypes.ts');
@@ -415,6 +421,10 @@ test('Live Chat inbox matches design handoff (search, All/Human, platform row)',
   assert.match(pills, /colors\.accentSoft/);
   assert.match(pills, /active \? colors\.text : colors\.textMuted/);
   assert.doesNotMatch(pills, /Waiting|Closed/);
+  assert.match(chips, /id: 'whatsapp'/);
+  assert.match(chips, /id: 'instagram'/);
+  assert.match(chips, /id: 'facebook'/);
+  assert.match(chips, /id: 'tiktok'/);
   assert.match(row, /PlatformChannelIcon/);
   assert.match(row, /assigneeLabel/);
   assert.match(row, /unread/);
@@ -430,61 +440,59 @@ test('Live Chat inbox matches design handoff (search, All/Human, platform row)',
   assert.doesNotMatch(thread, /Read-only/);
 });
 
-test('drawer search chrome is header icon; New chat + Settings in footer dock', () => {
+test('drawer search chrome is header icon; Settings beside search; New chat on Recent row', () => {
   const nav = read('features/nav/NavDrawer.tsx');
   const drawerHeader = read('features/nav/DrawerHeader.tsx');
-  const footer = read('features/nav/DrawerFooter.tsx');
+  const recents = read('features/nav/DrawerRecents.tsx');
   const chat = read('features/chat/ChatScreen.tsx');
   const overlays = read('features/chat/ChatScreenOverlays.tsx');
   const drawer = read('components/SideDrawer.tsx');
-  assert.match(nav, /DrawerFooter/);
-  assert.match(footer, /newChatBtn/);
-  assert.match(footer, /settingsBtn/);
+  assert.doesNotMatch(nav, /DrawerFooter/);
   assert.match(drawerHeader, /DRAWER_TOOL_ICONS\.search/);
+  assert.match(drawerHeader, /DRAWER_TOOL_ICONS\.settings/);
+  assert.match(drawerHeader, /onOpenSettings/);
+  assert.match(drawerHeader, /headerActions/);
   assert.match(drawerHeader, /DrawerFadeSeparator/);
   assert.match(drawerHeader, /searchConversationTitles/);
+  assert.match(recents, /NEW_CHAT_ICON/);
+  assert.match(recents, /onNewChat/);
+  assert.match(recents, /headingRow/);
+  assert.doesNotMatch(recents, /tr\('newChat'\)[\s\S]*Text/);
   assert.match(nav, /noChatsMatch/);
   assert.match(nav, /emptyLabel/);
-  assert.match(footer, /APP_VERSION_LABEL/);
   const configSrc = read('config.ts');
   assert.match(configSrc, /Constants\.expoConfig\?\.version/);
   assert.match(configSrc, /APP_VERSION_LABEL/);
   assert.match(configSrc, /APP_BUILD_LABEL/);
   const settings = read('features/settings/SettingsScreen.tsx');
+  const settingsChrome = read('features/settings/SettingsChrome.tsx');
+  const settingsEn = read('i18n/locales/settingsUiEn.ts');
   assert.match(settings, /APP_VERSION/);
   assert.match(settings, /APP_BUILD_LABEL/);
-  assert.match(settings, /build \{APP_BUILD_LABEL\}/);
+  assert.match(settings, /SettingsFooter version=\{APP_VERSION\} build=\{APP_BUILD_LABEL\}/);
+  assert.match(settingsChrome, /settingsVersionFooter/);
+  assert.match(settingsEn, /Linas AI • Version \{version\} \(\{build\}\)/);
   // EAS: remote version source + autoIncrement so each TF/store ship bumps build without a commit.
   const easJson = readFileSync(join(root, 'eas.json'), 'utf8');
   assert.match(easJson, /"appVersionSource":\s*"remote"/);
   assert.match(easJson, /"production"[\s\S]*"autoIncrement":\s*true/);
   assert.match(easJson, /"testflight"[\s\S]*"autoIncrement":\s*true/);
-  // Version centered below action row; New Chat left, Settings right, spread full width.
-  assert.match(footer, /textAlign:\s*'center'/);
-  assert.match(footer, /actionRow:[\s\S]*justifyContent:\s*'space-between'/);
-  assert.match(footer, /actionRow:[\s\S]*width:\s*'100%'/);
-  assert.match(footer, /styles\.actionRow[\s\S]*newChatBtn[\s\S]*settingsBtn/);
-  assert.match(footer, /newChatBtn:[\s\S]*alignSelf:\s*'flex-start'/);
-  assert.doesNotMatch(footer, /newChatBtn:[\s\S]*flex:\s*1/);
-  assert.match(footer, /APP_VERSION_LABEL/);
   assert.match(drawerHeader, /wordmark/);
   assert.match(drawerHeader, /DrawerFadeSeparator/);
   // Search mode hides module grid; filter starts at first character.
   assert.match(nav, /const searching = searchOpen \|\| queryTrimmed\.length > 0/);
   assert.match(nav, /\{\!searching \? \(/);
   assert.match(nav, /onChangeQuery=\{setQuery\}|onChangeText=\{setQuery\}/);
-  assert.match(footer, /NewChatIcon/);
-  assert.match(footer, /<NewChatIcon color=\{colors\.onAccent\} size=\{14\}/);
-  assert.match(footer, /tr\('newChat'\)/);
-  assert.match(footer, /minHeight:\s*34/);
-  assert.match(footer, /width:\s*32/);
-  assert.match(footer, /height:\s*32/);
-  assert.match(footer, /fontSize:\s*10/);
-  // Dock sits on safe area only — no extra lift above the home indicator.
-  assert.match(drawer, /paddingBottom:\s*Math\.max\(insets\.bottom,\s*4\)/);
+  assert.match(recents, /NEW_CHAT_ICON/);
+  assert.match(recents, /accessibilityLabel=\{tr\('newChat'\)\}/);
+  assert.doesNotMatch(recents, /newChatBtn/);
+  // No footer dock / bottom padding strip — Recents fills to the screen bottom.
+  assert.match(drawer, /paddingBottom:\s*0/);
+  assert.match(drawer, /height/);
+  assert.match(drawer, /styles\.body/);
+  assert.doesNotMatch(drawer, /paddingBottom:\s*Math\.max\(insets\.bottom/);
   assert.doesNotMatch(drawer, /insets\.bottom\s*\+\s*12/);
   assert.doesNotMatch(nav, /DRAWER_TOOL_ICONS\.newChat/);
-  assert.doesNotMatch(footer, /DRAWER_TOOL_ICONS\.newChat/);
   assert.match(drawer, /Keyboard\.dismiss/);
   assert.match(drawer, /pointerEvents=\{hitActive/);
   assert.match(drawer, /DRAWER_CLOSE_MS/);
@@ -494,33 +502,35 @@ test('drawer search chrome is header icon; New chat + Settings in footer dock', 
   assert.match(overlays, /<NavDrawer[\s\S]*onNewChat=/);
 
   const modules = read('features/nav/moduleIcons.ts');
-  const headerIcons = read('features/chat/ChatHeaderIcons.tsx');
-  const header = read('features/chat/ChatHeader.tsx');
   assert.match(modules, /NEW_CHAT_ICON\s*=\s*ion\('create-outline'\)/);
   assert.doesNotMatch(modules, /newChat:\s*feather\('plus'\)/);
-  assert.match(headerIcons, /export function NewChatIcon/);
-  assert.match(headerIcons, /NEW_CHAT_ICON/);
-  assert.match(headerIcons, /AppIcon/);
-  assert.match(header, /<NewChatIcon color=\{iconColor\}/);
 });
 
 test('Settings hosts AI Limits only (no Actions)', () => {
   const settings = read('features/settings/SettingsScreen.tsx');
   const tree = read('app/AppScreenTree.tsx');
   assert.match(settings, /onOpenAiLimits/);
+  assert.match(settings, /settingsAiLimits/);
+  assert.doesNotMatch(settings, /SettingsAboutSheet/);
+  assert.doesNotMatch(settings, /settingsAboutLinas/);
   assert.doesNotMatch(settings, /onOpenActions/);
   assert.doesNotMatch(settings, /settingsActions/);
   assert.doesNotMatch(tree, /section: 'actions'/);
+  assert.match(tree, /section: 'ai_limits'/);
+  assert.match(tree, /backTo: 'settings'/);
 });
 
 test('Settings hosts Notifications and Logout; drawer does not', () => {
   const settings = read('features/settings/SettingsScreen.tsx');
+  const chrome = read('features/settings/SettingsChrome.tsx');
   const nav = read('features/nav/NavDrawer.tsx');
   const chat = read('features/chat/ChatScreen.tsx');
   const tree = read('app/AppScreenTree.tsx');
   assert.match(settings, /onOpenNotifications/);
   assert.match(settings, /notificationsTitle/);
-  assert.match(settings, /tr\('logout'\)/);
+  assert.match(settings, /SettingsLogoutButton/);
+  assert.match(settings, /onLogout/);
+  assert.match(chrome, /tr\('logout'\)/);
   assert.doesNotMatch(nav, /onOpenNotifications/);
   assert.doesNotMatch(nav, /onLogout/);
   assert.doesNotMatch(nav, /Notifications/);
@@ -531,11 +541,16 @@ test('Settings hosts Notifications and Logout; drawer does not', () => {
 
 test('Settings does not duplicate AI Basics CM store', () => {
   const settings = read('features/settings/SettingsScreen.tsx');
-  assert.match(settings, /settingsBusinessProfileNote/);
+  const chrome = read('features/settings/SettingsChrome.tsx');
+  assert.doesNotMatch(settings, /settingsBusinessProfile/);
+  assert.doesNotMatch(settings, /settingsLinkApple/);
+  assert.doesNotMatch(settings, /settingsUnlinkApple/);
   assert.doesNotMatch(settings, /MFA/);
   assert.doesNotMatch(settings, /Passkey/);
+  assert.doesNotMatch(chrome, /MFA/);
   const en = read('i18n/locales/en.ts');
-  assert.match(en, /Open AI Setup → AI Basics/);
+  assert.doesNotMatch(en, /Open AI Setup → AI Basics/);
+  assert.doesNotMatch(en, /settingsBusinessProfile/);
 });
 
 test('Integrations header refresh is customer-facing', () => {
@@ -579,4 +594,134 @@ test('no bottom tab navigator wiring', () => {
   assert.doesNotMatch(app, /createBottomTabNavigator|BottomTab|Tab\.Navigator/);
   assert.doesNotMatch(shell, /createBottomTabNavigator|BottomTab|Tab\.Navigator/);
   assert.doesNotMatch(tree, /createBottomTabNavigator|BottomTab|Tab\.Navigator/);
+});
+
+test('Subscription current plan matches design handoff', () => {
+  const current = read('features/billing/CurrentPlanScreen.tsx');
+  const hero = read('features/billing/CurrentPlanHeroCard.tsx');
+  const chrome = read('features/shared/ScreenChrome.tsx');
+  const billing = read('features/billing/BillingScreen.tsx');
+  assert.match(billing, /navSubscription/);
+  assert.match(billing, /subCurrentSubtitle/);
+  assert.match(chrome, /MenuIcon/);
+  assert.match(hero, /subCurrentPlanKicker/);
+  assert.match(hero, /subAvailableCredits/);
+  assert.match(hero, /subBuyCredits/);
+  assert.match(current, /subWhatIncludes/);
+  assert.match(current, /SmartAnswersInfo/);
+  assert.match(current, /PlanNotIncluded/);
+  assert.match(current, /subUpgradePlan/);
+  assert.match(current, /subCreditsRefreshNote/);
+  assert.match(hero, /borderColor:\s*colors\.accent/);
+});
+
+test('Subscription choose-a-plan matches design handoff', () => {
+  const choose = read('features/billing/ChoosePlanScreen.tsx');
+  const chips = read('features/billing/PlanChipRow.tsx');
+  const detail = read('features/billing/PlanDetailCard.tsx');
+  const toggle = read('features/billing/BillingPeriodToggle.tsx');
+  const billing = read('features/billing/BillingScreen.tsx');
+  assert.match(billing, /subChooseTitle/);
+  assert.match(billing, /onBack/);
+  assert.match(choose, /BillingPeriodToggle/);
+  assert.match(choose, /PlanChipRow/);
+  assert.match(choose, /PlanDetailCard/);
+  assert.match(choose, /subCtaChooseLite|PLAN_CHOOSE_CTA/);
+  assert.match(chips, /PLAN_ORDER\.map/);
+  assert.match(chips, /subYourPlan/);
+  assert.match(chips, /subTapToCompare/);
+  assert.match(toggle, /subPeriodMonthly/);
+  assert.match(toggle, /subPeriodYearly/);
+  assert.match(toggle, /borderColor:\s*active \? colors\.accent/);
+  assert.match(detail, /PLAN_BADGE_KEY/);
+  assert.match(detail, /LinasSparkleIcon/);
+  assert.match(detail, /subAiCreditsIncluded/);
+  assert.match(detail, /SmartAnswersInfo/);
+});
+
+test('Buy credits sheet matches design handoff', () => {
+  const sheet = read('features/billing/BuyCreditsSheet.tsx');
+  const en = read('i18n/locales/subscriptionEn.ts');
+  assert.match(sheet, /subBuyCredits/);
+  assert.match(sheet, /subChooseCreditPack/);
+  assert.match(sheet, /accessibilityRole="radio"/);
+  assert.match(sheet, /DEFAULT_CREDIT_PACK/);
+  assert.match(sheet, /subBuyCreditsCta/);
+  assert.match(sheet, /subPurchasedNoExpire/);
+  assert.match(sheet, /subFooterStore/);
+  assert.match(sheet, /subCancel/);
+  assert.match(en, /Buy \{n\} credits • \{price\}/);
+  assert.match(en, /Payment is completed securely through the App Store or Google Play/);
+  assert.match(en, /Purchased credits do not expire/);
+});
+
+test('Dashboard sections match design handoff', () => {
+  const screen = read('features/dashboard/DashboardScreen.tsx');
+  const header = read('features/dashboard/sections/DashboardHeader.tsx');
+  const plan = read('features/dashboard/sections/GrowthPlanCard.tsx');
+  const grid = read('features/dashboard/sections/TotalActivityGrid.tsx');
+  const table = read('features/dashboard/sections/ChannelActivityTable.tsx');
+  const copilot = read('features/dashboard/sections/OwnerCopilotCard.tsx');
+  const chrome = read('features/dashboard/dashboardChrome.ts');
+  const en = read('i18n/locales/dashboardEn.ts');
+  const ar = read('i18n/locales/dashboardAr.ts');
+  const fr = read('i18n/locales/dashboardFr.ts');
+  assert.match(chrome, /DASH_FOREST = '#064E3B'/);
+  assert.match(chrome, /DASH_MINT = '#4ADE80'/);
+  assert.match(chrome, /DASH_CARD_RADIUS = 16/);
+  assert.match(chrome, /DASH_BAR_HEIGHT = 6/);
+  assert.match(screen, /BuyCreditsSheet/);
+  assert.match(screen, /useBuyCreditsFlow/);
+  assert.match(screen, /onBuyCredits=\{\(\) => credits\.setOpen\(true\)\}/);
+  assert.match(screen, /onUpgrade=\{\(\) => onNavigate\('subscription'\)\}/);
+  assert.doesNotMatch(screen, /centerTitle/);
+  assert.match(header, /calendar-outline/);
+  assert.match(header, /dashCustomRange/);
+  assert.match(header, /chevron-down/);
+  assert.match(plan, /dashPlanTitle/);
+  assert.match(plan, /dashBuyCredits/);
+  assert.match(plan, /DASH_MINT/);
+  assert.match(plan, /buyBtn/);
+  assert.match(grid, /dashTotalActivity/);
+  assert.match(grid, /bag-handle-outline/);
+  assert.match(grid, /DASH_ICON_BG/);
+  assert.match(table, /dashActivityByChannel/);
+  assert.match(table, /IntegrationPlatformIcon/);
+  assert.match(copilot, /dashOwnerCopilot/);
+  assert.match(copilot, /by_user/);
+  assert.match(copilot, /dashCopilotUserMeta/);
+  assert.match(en, /Owner Copilot/);
+  assert.match(ar, /مساعد المالك/);
+  assert.match(fr, /Copilote propriétaire/);
+});
+
+test('Customer AI Limits screen matches design handoff', () => {
+  const editor = read('features/cm/editors/AiLimitsEditor.tsx');
+  const field = read('features/cm/editors/AiLimitsPencilField.tsx');
+  const screen = read('features/cm/CmSectionScreen.tsx');
+  const en = read('i18n/locales/aiSetupEn.ts');
+  const ar = read('i18n/locales/aiSetupAr.ts');
+  const fr = read('i18n/locales/aiSetupFr.ts');
+  assert.match(screen, /tr\('aiLimitsTitle'\)/);
+  assert.match(screen, /tr\('aiLimitsSubtitle'\)/);
+  assert.match(editor, /aiLimitsBanner/);
+  assert.match(editor, /aiLimitsTextChat/);
+  assert.match(editor, /aiLimitsPhotos/);
+  assert.match(editor, /aiLimitsVoice/);
+  assert.match(editor, /aiLimitsReadPerMessage/);
+  assert.match(editor, /aiLimitsPhotosPerMessage/);
+  assert.match(editor, /aiLimitsMinutesPerMessage/);
+  assert.match(editor, /text_replies_per_day/);
+  assert.match(editor, /image_per_month/);
+  assert.match(editor, /voice_minutes_per_month/);
+  assert.match(editor, /aiLimitsAutoTitle/);
+  assert.match(editor, /aiLimitsSave/);
+  assert.match(editor, /aiLimitsApplyNow/);
+  assert.match(field, /feather\('edit-2'\)/);
+  assert.doesNotMatch(editor, /human_handoff_enabled/);
+  assert.doesNotMatch(editor, /TikTok/);
+  assert.match(en, /Customer AI Limits/);
+  assert.match(en, /Protect credits by limiting each customer/);
+  assert.match(ar, /حدود الذكاء الاصطناعي للزبائن/);
+  assert.match(fr, /Limites IA clients/);
 });

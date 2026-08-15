@@ -8,8 +8,11 @@ duplicate prevention over automatic retry when the result is ambiguous:
 * permit retry only after a definitive provider rejection;
 * treat a crash/timeout or lost post-send acknowledgement as owner action.
 
-No provider/customer identifiers or message contents are stored.  The inbound
-event id is already a SHA-derived correlation id and provider ids are hashed.
+No provider/customer identifiers or user/provider message contents are stored.
+For image-quota notices only, schema v2 retains one bounded, validated copy of
+the system-generated notice so a crash replay never has to recalculate quota or
+change customer-facing copy.  The inbound event id is already a SHA-derived
+correlation id and provider ids are hashed.
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ import hashlib
 import re
 import secrets
 import time
+import unicodedata
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -33,6 +37,8 @@ _COLLECTION = "meta_outbound_attempts"
 _APP_DOCUMENT = "linas-ai-bot-backend"
 _MAX_TRANSACTION_ATTEMPTS = 5
 _PURPOSE_DOCUMENT_DOMAIN = "meta-outbound-purpose-v1"
+_IMAGE_QUOTA_NOTICE_DOMAIN = "meta-image-quota-notice-v1"
+_MAX_IMAGE_QUOTA_NOTICE_BYTES = 1_000
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 
 AttemptDecisionKind = Literal[
@@ -85,6 +91,8 @@ class MetaOutboundAttemptDecision:
     image_quota_disposition: str = ""
     image_quota_allowed_amount: int = 0
     image_quota_phase: str = ""
+    image_quota_notice_text: str = field(default="", repr=False)
+    image_quota_notice_sha256: str = ""
     attempt_token: str = ""
     attempt_sequence: int = 0
     binding_id: str = field(default="", repr=False)
@@ -99,6 +107,8 @@ class MetaOutboundAttemptReceipt:
     image_quota_disposition: str = ""
     image_quota_allowed_amount: int = 0
     image_quota_phase: str = ""
+    image_quota_notice_text: str = field(default="", repr=False)
+    image_quota_notice_sha256: str = ""
     attempt_sequence: int = 0
 
 
@@ -146,13 +156,18 @@ def _validate_quota_context(
     disposition: ImageQuotaDisposition | str,
     allowed_amount: int,
     phase: ImageQuotaPhase | str | None = None,
-) -> tuple[str, int, str]:
+    notice_text: str = "",
+    notice_sha256: str | None = None,
+) -> tuple[str, int, str, str, str]:
     value = str(disposition or "").strip().lower()
     safe_phase = "" if phase is None else str(phase or "").strip().lower()
+    if type(notice_text) is not str or (notice_sha256 is not None and type(notice_sha256) is not str):
+        raise ValueError("Meta outbound image-quota notice authority is invalid")
+    safe_notice_sha256 = "" if notice_sha256 is None else notice_sha256
     if type(allowed_amount) is not int or not 0 <= allowed_amount <= 100_000:
         raise ValueError("Meta outbound image-quota amount is invalid")
     if purpose != "image_quota_notice":
-        if value or allowed_amount or safe_phase:
+        if value or allowed_amount or safe_phase or notice_text or safe_notice_sha256:
             raise ValueError("Non-quota outbound purpose cannot carry image-quota context")
     else:
         if (
@@ -163,7 +178,27 @@ def _validate_quota_context(
             raise ValueError("Meta outbound image-quota disposition is invalid")
         if phase is not None and safe_phase not in _ALLOWED_QUOTA_PHASES:
             raise ValueError("Meta outbound image-quota phase is invalid")
-    return value, allowed_amount, safe_phase
+    carries_notice = purpose == "image_quota_notice" and value in {"blocked", "truncated"}
+    if not carries_notice:
+        if notice_text or safe_notice_sha256:
+            raise ValueError("Meta outbound image-quota notice authority is invalid")
+        return value, allowed_amount, safe_phase, "", ""
+    try:
+        notice_bytes = notice_text.encode("utf-8", errors="strict")
+    except UnicodeEncodeError as exc:
+        raise ValueError("Meta outbound image-quota notice text is invalid") from exc
+    if (
+        not notice_text.strip()
+        or len(notice_bytes) > _MAX_IMAGE_QUOTA_NOTICE_BYTES
+        or any(unicodedata.category(character).startswith("C") for character in notice_text)
+    ):
+        raise ValueError("Meta outbound image-quota notice text is invalid")
+    expected_sha256 = hashlib.sha256(
+        f"{_IMAGE_QUOTA_NOTICE_DOMAIN}\0{value}\0{allowed_amount}\0".encode() + notice_bytes
+    ).hexdigest()
+    if notice_sha256 is not None and notice_sha256 != expected_sha256:
+        raise ValueError("Meta outbound image-quota notice authority is invalid")
+    return value, allowed_amount, safe_phase, notice_text, expected_sha256
 
 
 def _owner_hash(token: str) -> str:
@@ -190,7 +225,7 @@ def _ref(db: Any, event_id: str, purpose: MetaOutboundPurpose | str) -> Any:
 
 def _validate_stored_identity(
     current: dict[str, Any], *, event_id: str, purpose: MetaOutboundPurpose
-) -> tuple[str, int, str]:
+) -> tuple[str, int, str, str, str]:
     schema_version = current.get("schema_version")
     if type(schema_version) is not int:
         raise MetaOutboundAttemptStoreError("Meta outbound-attempt schema changed")
@@ -200,10 +235,12 @@ def _validate_stored_identity(
             "image_quota_disposition",
             "image_quota_allowed_amount",
             "image_quota_phase",
+            "image_quota_notice_text",
+            "image_quota_notice_sha256",
         }
         if purpose != "primary_reply" or quota_keys.intersection(current):
             raise MetaOutboundAttemptStoreError("Meta outbound-attempt purpose changed")
-        quota_context = ("", 0, "")
+        quota_context = ("", 0, "", "", "")
     elif schema_version == 2:
         if current.get("purpose") != purpose:
             raise MetaOutboundAttemptStoreError("Meta outbound-attempt purpose changed")
@@ -214,12 +251,19 @@ def _validate_stored_identity(
         }
         if not required.issubset(current):
             raise MetaOutboundAttemptStoreError("Meta outbound-attempt quota context changed")
+        disposition = current["image_quota_disposition"]
+        notice_required = purpose == "image_quota_notice" and disposition in {"blocked", "truncated"}
+        notice_keys = {"image_quota_notice_text", "image_quota_notice_sha256"}
+        if notice_required and not notice_keys.issubset(current):
+            raise MetaOutboundAttemptStoreError("Meta outbound-attempt quota notice changed")
         try:
             quota_context = _validate_quota_context(
                 purpose,
-                current["image_quota_disposition"],
+                disposition,
                 current["image_quota_allowed_amount"],
                 current["image_quota_phase"],
+                current.get("image_quota_notice_text", ""),
+                current.get("image_quota_notice_sha256", ""),
             )
         except ValueError as exc:
             raise MetaOutboundAttemptStoreError("Meta outbound-attempt quota context changed") from exc
@@ -268,7 +312,7 @@ def _validate_stored_authority(
     surface: MetaEvidenceSurface,
     purpose: MetaOutboundPurpose,
     binding_digest: str,
-) -> tuple[MetaOutboundAttemptStatus, tuple[str, int, str], int]:
+) -> tuple[MetaOutboundAttemptStatus, tuple[str, int, str, str, str], int]:
     context = _validate_stored_identity(current, event_id=event_id, purpose=purpose)
     status = str(current.get("status") or "")
     if status not in _ALLOWED_STATUSES:
@@ -343,6 +387,8 @@ def _read_receipt_sync(
         image_quota_disposition=context[0],
         image_quota_allowed_amount=context[1],
         image_quota_phase=context[2],
+        image_quota_notice_text=context[3],
+        image_quota_notice_sha256=context[4],
         attempt_sequence=sequence,
     )
 
@@ -421,6 +467,8 @@ def _reconcile_image_quota_receipt_sync(
                 image_quota_disposition=context[0],
                 image_quota_allowed_amount=context[1],
                 image_quota_phase=context[2],
+                image_quota_notice_text=context[3],
+                image_quota_notice_sha256=context[4],
                 attempt_sequence=sequence,
             )
         except MetaOutboundAttemptStoreError:
@@ -545,6 +593,8 @@ def _reserve_image_quota_sync(
     binding_id: str,
     disposition: str,
     allowed_amount: int,
+    notice_text: str,
+    notice_sha256: str,
     token: str,
 ) -> MetaOutboundAttemptDecision:
     purpose: MetaOutboundPurpose = "image_quota_notice"
@@ -562,6 +612,8 @@ def _reserve_image_quota_sync(
                     purpose=purpose,
                     image_quota_disposition=disposition,
                     image_quota_allowed_amount=allowed_amount,
+                    image_quota_notice_text=notice_text,
+                    image_quota_notice_sha256=notice_sha256,
                     binding_id=binding_id,
                 )
             snapshot = reference.get(transaction=transaction)
@@ -576,7 +628,12 @@ def _reserve_image_quota_sync(
                     purpose=purpose,
                     binding_digest=binding_digest,
                 )
-                if context[:2] != (disposition, allowed_amount):
+                if (context[0], context[1], context[3], context[4]) != (
+                    disposition,
+                    allowed_amount,
+                    notice_text,
+                    notice_sha256,
+                ):
                     raise MetaOutboundAttemptStoreError("Meta outbound-attempt quota context changed")
                 return MetaOutboundAttemptDecision(
                     kind="duplicate_suppressed" if status == "accepted" else "needs_owner_action",
@@ -586,6 +643,8 @@ def _reserve_image_quota_sync(
                     image_quota_disposition=disposition,
                     image_quota_allowed_amount=allowed_amount,
                     image_quota_phase=context[2],
+                    image_quota_notice_text=context[3],
+                    image_quota_notice_sha256=context[4],
                     attempt_sequence=sequence,
                     binding_id=binding_id,
                 )
@@ -599,6 +658,8 @@ def _reserve_image_quota_sync(
                     "image_quota_disposition": disposition,
                     "image_quota_allowed_amount": allowed_amount,
                     "image_quota_phase": "reserved",
+                    "image_quota_notice_text": notice_text,
+                    "image_quota_notice_sha256": notice_sha256,
                     "surface": surface,
                     "status": "sending",
                     "attempt_sequence": 0,
@@ -619,6 +680,8 @@ def _reserve_image_quota_sync(
                 image_quota_disposition=disposition,
                 image_quota_allowed_amount=allowed_amount,
                 image_quota_phase="reserved",
+                image_quota_notice_text=notice_text,
+                image_quota_notice_sha256=notice_sha256,
                 attempt_token=token,
                 binding_id=binding_id,
             )
@@ -636,13 +699,19 @@ async def reserve_image_quota_notice(
     binding_id: str,
     disposition: ImageQuotaDisposition | str,
     allowed_amount: int,
+    notice_text: str = "",
 ) -> MetaOutboundAttemptDecision:
     """Publish one image-quota intent before the non-idempotent mutation."""
 
     safe_event_id = _validate_event_id(event_id)
     safe_surface = _validate_surface(surface)
     safe_binding_id = str(binding_id or "").strip()
-    safe_disposition, safe_allowed, _ = _validate_quota_context("image_quota_notice", disposition, allowed_amount)
+    safe_disposition, safe_allowed, _, safe_notice, safe_notice_sha256 = _validate_quota_context(
+        "image_quota_notice",
+        disposition,
+        allowed_amount,
+        notice_text=notice_text,
+    )
     db = _db_or_bypass()
     if db is not None and not safe_binding_id:
         from config import is_production_runtime
@@ -657,6 +726,8 @@ async def reserve_image_quota_notice(
             purpose="image_quota_notice",
             image_quota_disposition=safe_disposition,
             image_quota_allowed_amount=safe_allowed,
+            image_quota_notice_text=safe_notice,
+            image_quota_notice_sha256=safe_notice_sha256,
             binding_id=safe_binding_id,
         )
     return await asyncio.to_thread(
@@ -667,6 +738,8 @@ async def reserve_image_quota_notice(
         binding_id=safe_binding_id,
         disposition=safe_disposition,
         allowed_amount=safe_allowed,
+        notice_text=safe_notice,
+        notice_sha256=safe_notice_sha256,
         token=secrets.token_urlsafe(32),
     )
 
@@ -696,6 +769,8 @@ def _confirm_quota_consumed_sync(db: Any, decision: MetaOutboundAttemptDecision)
                     decision.image_quota_disposition,
                     decision.image_quota_allowed_amount,
                     "reserved",
+                    decision.image_quota_notice_text,
+                    decision.image_quota_notice_sha256,
                 )
                 or str(current.get("owner_hash") or "") != _owner_hash(decision.attempt_token)
             ):
@@ -765,7 +840,7 @@ def _finalize_allowed_quota_sync(
                 purpose=purpose,
                 binding_digest=binding_digest,
             )
-            if context != ("allowed", allowed_amount, "consumed"):
+            if context != ("allowed", allowed_amount, "consumed", "", ""):
                 raise MetaOutboundAttemptStoreError("Meta allowed-quota context changed")
             if status == "accepted":
                 return True
@@ -804,7 +879,7 @@ async def finalize_allowed_image_quota(
     safe_event_id = _validate_event_id(event_id)
     safe_surface = _validate_surface(surface)
     safe_binding_id = str(binding_id or "").strip()
-    _, safe_allowed, _ = _validate_quota_context("image_quota_notice", "allowed", allowed_amount)
+    _, safe_allowed, _, _, _ = _validate_quota_context("image_quota_notice", "allowed", allowed_amount)
     db = _db_or_bypass()
     if db is not None and not safe_binding_id:
         from config import is_production_runtime
@@ -833,6 +908,8 @@ def _begin_sync(
     purpose: MetaOutboundPurpose,
     image_quota_disposition: str,
     image_quota_allowed_amount: int,
+    image_quota_notice_text: str,
+    image_quota_notice_sha256: str,
 ) -> MetaOutboundAttemptDecision:
     reference = _ref(db, event_id, purpose)
     fence_reference, binding_digest = _binding_authority(db, binding_id)
@@ -845,7 +922,7 @@ def _begin_sync(
             current = snapshot.to_dict() if snapshot.exists else {}
             current = current if isinstance(current, dict) else {}
             status: str = ""
-            stored_context = ("", 0, "")
+            stored_context = ("", 0, "", "", "")
             if snapshot.exists:
                 stored_status, stored_context, _ = _validate_stored_authority(
                     current,
@@ -855,9 +932,11 @@ def _begin_sync(
                     binding_digest=binding_digest,
                 )
                 status = stored_status
-                if stored_context[:2] != (
+                if (stored_context[0], stored_context[1], stored_context[3], stored_context[4]) != (
                     image_quota_disposition,
                     image_quota_allowed_amount,
+                    image_quota_notice_text,
+                    image_quota_notice_sha256,
                 ):
                     raise MetaOutboundAttemptStoreError("Meta outbound-attempt quota context changed")
             if status != "accepted":
@@ -889,6 +968,8 @@ def _begin_sync(
                             image_quota_disposition=image_quota_disposition,
                             image_quota_allowed_amount=image_quota_allowed_amount,
                             image_quota_phase=stored_context[2],
+                            image_quota_notice_text=image_quota_notice_text,
+                            image_quota_notice_sha256=image_quota_notice_sha256,
                             attempt_sequence=int(current.get("attempt_sequence") or 0),
                             binding_id=binding_id,
                         )
@@ -918,6 +999,8 @@ def _begin_sync(
                     image_quota_disposition=image_quota_disposition,
                     image_quota_allowed_amount=image_quota_allowed_amount,
                     image_quota_phase=quota_phase,
+                    image_quota_notice_text=image_quota_notice_text,
+                    image_quota_notice_sha256=image_quota_notice_sha256,
                     attempt_sequence=int(current.get("attempt_sequence") or 0),
                     binding_id=binding_id,
                 )
@@ -930,6 +1013,8 @@ def _begin_sync(
                     image_quota_disposition=image_quota_disposition,
                     image_quota_allowed_amount=image_quota_allowed_amount,
                     image_quota_phase=quota_phase,
+                    image_quota_notice_text=image_quota_notice_text,
+                    image_quota_notice_sha256=image_quota_notice_sha256,
                     attempt_sequence=int(current.get("attempt_sequence") or 0),
                     binding_id=binding_id,
                 )
@@ -944,6 +1029,8 @@ def _begin_sync(
                     image_quota_disposition=image_quota_disposition,
                     image_quota_allowed_amount=image_quota_allowed_amount,
                     image_quota_phase=quota_phase,
+                    image_quota_notice_text=image_quota_notice_text,
+                    image_quota_notice_sha256=image_quota_notice_sha256,
                     attempt_sequence=int(current.get("attempt_sequence") or 0),
                     binding_id=binding_id,
                 )
@@ -962,6 +1049,8 @@ def _begin_sync(
                     "image_quota_disposition": image_quota_disposition,
                     "image_quota_allowed_amount": image_quota_allowed_amount,
                     "image_quota_phase": "provider" if purpose == "image_quota_notice" else "",
+                    "image_quota_notice_text": image_quota_notice_text,
+                    "image_quota_notice_sha256": image_quota_notice_sha256,
                     "surface": surface,
                     "status": "sending",
                     "attempt_sequence": sequence,
@@ -982,6 +1071,8 @@ def _begin_sync(
                 image_quota_disposition=image_quota_disposition,
                 image_quota_allowed_amount=image_quota_allowed_amount,
                 image_quota_phase="provider" if purpose == "image_quota_notice" else "",
+                image_quota_notice_text=image_quota_notice_text,
+                image_quota_notice_sha256=image_quota_notice_sha256,
                 attempt_token=token,
                 attempt_sequence=sequence,
                 binding_id=binding_id,
@@ -1001,14 +1092,18 @@ async def begin_meta_outbound_attempt(
     purpose: MetaOutboundPurpose | str = "primary_reply",
     image_quota_disposition: ImageQuotaDisposition | str = "",
     image_quota_allowed_amount: int = 0,
+    image_quota_notice_text: str = "",
 ) -> MetaOutboundAttemptDecision:
     """Reserve one provider call or return a safe non-send decision."""
 
     safe_event_id = _validate_event_id(event_id)
     safe_surface = _validate_surface(surface)
     safe_purpose = _validate_purpose(purpose)
-    quota_disposition, quota_allowed_amount, _ = _validate_quota_context(
-        safe_purpose, image_quota_disposition, image_quota_allowed_amount
+    quota_disposition, quota_allowed_amount, _, quota_notice_text, quota_notice_sha256 = _validate_quota_context(
+        safe_purpose,
+        image_quota_disposition,
+        image_quota_allowed_amount,
+        notice_text=image_quota_notice_text,
     )
     if safe_purpose == "image_quota_notice" and quota_disposition == "allowed":
         raise ValueError("Allowed image quota has no provider notice")
@@ -1027,6 +1122,8 @@ async def begin_meta_outbound_attempt(
             purpose=safe_purpose,
             image_quota_disposition=quota_disposition,
             image_quota_allowed_amount=quota_allowed_amount,
+            image_quota_notice_text=quota_notice_text,
+            image_quota_notice_sha256=quota_notice_sha256,
             binding_id=safe_binding_id,
         )
     token = secrets.token_urlsafe(32)
@@ -1040,6 +1137,8 @@ async def begin_meta_outbound_attempt(
         purpose=safe_purpose,
         image_quota_disposition=quota_disposition,
         image_quota_allowed_amount=quota_allowed_amount,
+        image_quota_notice_text=quota_notice_text,
+        image_quota_notice_sha256=quota_notice_sha256,
     )
 
 
@@ -1087,6 +1186,8 @@ def _finish_sync(
                     decision.image_quota_disposition,
                     decision.image_quota_allowed_amount,
                     decision.image_quota_phase,
+                    decision.image_quota_notice_text,
+                    decision.image_quota_notice_sha256,
                 ):
                     raise MetaOutboundAttemptStoreError("Meta outbound-attempt quota context changed")
             if (
@@ -1198,6 +1299,7 @@ async def execute_guarded_meta_send(
     purpose: MetaOutboundPurpose | str = "primary_reply",
     image_quota_disposition: ImageQuotaDisposition | str = "",
     image_quota_allowed_amount: int = 0,
+    image_quota_notice_text: str = "",
     send: Any,
 ) -> Any:
     """Execute one Meta send with crash-safe, fail-closed duplicate semantics."""
@@ -1209,6 +1311,7 @@ async def execute_guarded_meta_send(
         purpose=purpose,
         image_quota_disposition=image_quota_disposition,
         image_quota_allowed_amount=image_quota_allowed_amount,
+        image_quota_notice_text=image_quota_notice_text,
     )
     if decision.kind == "duplicate_suppressed":
         return duplicate_suppressed_result()

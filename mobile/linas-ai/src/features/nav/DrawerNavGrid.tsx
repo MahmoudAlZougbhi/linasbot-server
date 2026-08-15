@@ -6,7 +6,8 @@ import { useI18n } from '../../i18n/LanguageContext';
 import type { ThemeColors } from '../../theme';
 import { fonts, radii, spacing, useTheme } from '../../theme';
 import type { ControlArea } from '../control/controlAreas';
-import { drawerGridModules, type DrawerModule } from './drawerModules';
+import { drawerGridModules } from './drawerModules';
+import { drawerTileBadge } from './drawerTileBadge';
 import { MODULE_ICONS } from './moduleIcons';
 import type { DrawerBadges } from './useDrawerBadges';
 
@@ -19,53 +20,15 @@ type Props = {
 
 const GRID_ICON_SIZE = 28;
 
-function badgeForModule(
-  mod: DrawerModule,
-  badges: DrawerBadges,
-): { label: string; tone: 'teal' | 'danger' } | null {
-  if (mod.id === 'cm' && badges.aiSetupPercent != null && badges.aiSetupPercent < 100) {
-    return { label: `${badges.aiSetupPercent}%`, tone: 'teal' };
-  }
-  if (mod.id === 'livechat' && badges.liveChatUnread > 0) {
-    const n = badges.liveChatUnread > 99 ? '99+' : String(badges.liveChatUnread);
-    return { label: n, tone: 'danger' };
-  }
-  if (mod.id === 'requests' && badges.requestsPending > 0) {
-    const n = badges.requestsPending > 99 ? '99+' : String(badges.requestsPending);
-    return { label: n, tone: 'danger' };
-  }
-  return null;
-}
-
 function DrawerModuleIcon({
   modId,
   colors,
-  active,
 }: {
   modId: ControlArea;
   colors: ThemeColors;
-  active: boolean;
 }) {
   if (modId === 'cm') {
-    if (!active) {
-      return <LinasSparkleIcon size={GRID_ICON_SIZE} color={colors.accentDeep} />;
-    }
-
-    return (
-      <View
-        style={[
-          styles.featuredIconWrap,
-          styles.featuredIconShadow,
-          {
-            backgroundColor: colors.featuredIconBg,
-            borderColor: colors.featuredIconBorder,
-            shadowColor: colors.accentDeep,
-          },
-        ]}
-      >
-        <LinasSparkleIcon size={22} color={colors.accentDeep} />
-      </View>
-    );
+    return <LinasSparkleIcon size={GRID_ICON_SIZE} color={colors.accentDeep} />;
   }
 
   return <AppIcon icon={MODULE_ICONS[modId]} size={GRID_ICON_SIZE} color={colors.accentDeep} />;
@@ -79,21 +42,26 @@ export function DrawerNavGrid({ showUsers, activeArea, badges, onOpenArea }: Pro
   return (
     <View style={styles.grid}>
       {modules.map((mod) => {
-        const badge = badgeForModule(mod, badges);
+        const badge = drawerTileBadge(mod.id, badges);
         const active = activeArea === mod.id;
-        const isAiSetup = mod.id === 'cm';
-        const tileBg = active && !isAiSetup ? colors.activeRow : 'transparent';
+        const tileBg = active ? colors.activeRow : 'transparent';
 
         return (
-          <Pressable
-            key={mod.id}
-            style={[styles.tile, isAiSetup ? styles.aiSetupTile : null, { backgroundColor: tileBg }]}
-            onPress={() => onOpenArea(mod.id)}
-            accessibilityRole="button"
-            accessibilityLabel={tr(mod.titleKey)}
-          >
+          <View key={mod.id} style={styles.tileWrap}>
+            <Pressable
+              style={[styles.tile, { backgroundColor: tileBg }]}
+              onPress={() => onOpenArea(mod.id)}
+              accessibilityRole="button"
+              accessibilityLabel={tr(mod.titleKey)}
+            >
+              <DrawerModuleIcon modId={mod.id} colors={colors} />
+              <Text style={[styles.label, { color: colors.text }]} numberOfLines={2}>
+                {tr(mod.titleKey)}
+              </Text>
+            </Pressable>
             {badge ? (
               <View
+                pointerEvents="none"
                 style={[
                   styles.badge,
                   badge.tone === 'teal'
@@ -115,11 +83,7 @@ export function DrawerNavGrid({ showUsers, activeArea, badges, onOpenArea }: Pro
                 </Text>
               </View>
             ) : null}
-            <DrawerModuleIcon modId={mod.id} colors={colors} active={active} />
-            <Text style={[styles.label, { color: colors.text }]} numberOfLines={2}>
-              {tr(mod.titleKey)}
-            </Text>
-          </Pressable>
+          </View>
         );
       })}
     </View>
@@ -134,9 +98,15 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: TILE_GAP,
     marginBottom: spacing.lg,
+    overflow: 'visible',
+  },
+  tileWrap: {
+    width: '31.5%',
+    position: 'relative',
+    overflow: 'visible',
   },
   tile: {
-    width: '31.5%',
+    width: '100%',
     minHeight: 90,
     borderRadius: radii.md,
     paddingHorizontal: 4,
@@ -144,29 +114,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    position: 'relative',
-  },
-  aiSetupTile: {
-    backgroundColor: 'transparent',
-  },
-  featuredIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  featuredIconShadow: {
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.14,
-    shadowRadius: 7,
-    elevation: 3,
+    overflow: 'visible',
   },
   badge: {
     position: 'absolute',
-    top: 6,
-    right: 6,
+    top: -4,
+    right: -2,
+    zIndex: 4,
+    elevation: 4,
     minWidth: 22,
     height: 18,
     borderRadius: radii.pill,

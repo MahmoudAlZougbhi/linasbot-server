@@ -41,6 +41,7 @@ async def _prepare_notice(
     binding_id: str = "",
     disposition: attempts.ImageQuotaDisposition = "truncated",
     allowed_amount: int = 2,
+    notice_text: str = "quota notice",
 ) -> attempts.MetaOutboundAttemptDecision:
     reservation = await attempts.reserve_image_quota_notice(
         event_id=event_id,
@@ -48,6 +49,7 @@ async def _prepare_notice(
         binding_id=binding_id,
         disposition=disposition,
         allowed_amount=allowed_amount,
+        notice_text=notice_text,
     )
     assert reservation.kind in {"quota_reserved", "nonproduction_bypass"}
     assert await attempts.confirm_image_quota_consumed(reservation) is True
@@ -125,6 +127,7 @@ async def test_binding_deletion_fence_prevents_provider_call(
         purpose=purpose,
         image_quota_disposition="blocked" if purpose == "image_quota_notice" else "",
         image_quota_allowed_amount=0,
+        image_quota_notice_text="quota notice" if purpose == "image_quota_notice" else "",
         send=send,
     )
 
@@ -321,6 +324,7 @@ async def test_primary_and_notice_have_stable_independent_exactly_once_documents
         purpose="image_quota_notice",
         image_quota_disposition="truncated",
         image_quota_allowed_amount=2,
+        image_quota_notice_text="quota notice",
         send=lambda: send("notice"),
     )
     primary = await attempts.execute_guarded_meta_send(
@@ -337,6 +341,7 @@ async def test_primary_and_notice_have_stable_independent_exactly_once_documents
         purpose="image_quota_notice",
         image_quota_disposition="truncated",
         image_quota_allowed_amount=2,
+        image_quota_notice_text="quota notice",
         send=lambda: send("notice-retry"),
     )
     primary_retry = await attempts.execute_guarded_meta_send(
@@ -640,6 +645,7 @@ async def test_mutated_v2_notice_identity_fails_closed(
         purpose="image_quota_notice",
         image_quota_disposition="truncated",
         image_quota_allowed_amount=2,
+        image_quota_notice_text="quota notice",
         send=lambda: _accepted("notice-before-mutation"),
     )
     document_id = attempts._attempt_document_id(event_id, "image_quota_notice")
@@ -658,6 +664,7 @@ async def test_mutated_v2_notice_identity_fails_closed(
             purpose="image_quota_notice",
             image_quota_disposition="truncated",
             image_quota_allowed_amount=2,
+            image_quota_notice_text="quota notice",
             send=lambda: pytest.fail("mutated authority must not send"),
         )
 
@@ -758,11 +765,15 @@ async def test_quota_phases_remain_deletion_active_until_provider_terminal(
         binding_id="binding-quota-phases",
         disposition="truncated",
         allowed_amount=2,
+        notice_text="quota notice",
     )
     reserved = _document(outbound_store, event_id, "image_quota_notice")
     assert reservation.kind == "quota_reserved"
     assert reserved["status"] == "sending"
     assert reserved["image_quota_phase"] == "reserved"
+    assert reserved["image_quota_notice_text"] == "quota notice"
+    assert len(reserved["image_quota_notice_sha256"]) == 64
+    assert "quota notice" not in repr(reservation)
     assert _claim_is_active(reserved) is True
 
     assert await attempts.confirm_image_quota_consumed(reservation) is True
@@ -770,6 +781,55 @@ async def test_quota_phases_remain_deletion_active_until_provider_terminal(
     assert consumed["status"] == "sending"
     assert consumed["image_quota_phase"] == "consumed"
     assert _claim_is_active(consumed) is True
+
+
+@pytest.mark.parametrize(
+    "notice_text",
+    (
+        "x" * 1_001,
+        "unsafe\nnotice",
+        "unsafe\u202enotice",
+        "\ud800",
+    ),
+)
+@pytest.mark.asyncio
+async def test_quota_notice_snapshot_rejects_oversize_control_and_invalid_utf8(
+    outbound_store: _FakeFirestore,
+    notice_text: str,
+) -> None:
+    with pytest.raises(ValueError, match="notice text"):
+        await attempts.reserve_image_quota_notice(
+            event_id="ibe_" + "a" * 40,
+            surface="facebook_dm",
+            binding_id="binding-invalid-system-notice",
+            disposition="truncated",
+            allowed_amount=1,
+            notice_text=notice_text,
+        )
+
+
+@pytest.mark.asyncio
+async def test_quota_notice_snapshot_rejects_wrong_type_and_disposition_pair(
+    outbound_store: _FakeFirestore,
+) -> None:
+    with pytest.raises(ValueError, match="notice authority"):
+        await attempts.reserve_image_quota_notice(
+            event_id="ibe_" + "b" * 40,
+            surface="facebook_dm",
+            binding_id="binding-invalid-system-notice-type",
+            disposition="truncated",
+            allowed_amount=1,
+            notice_text=object(),  # type: ignore[arg-type]
+        )
+    with pytest.raises(ValueError, match="notice authority"):
+        await attempts.reserve_image_quota_notice(
+            event_id="ibe_" + "c" * 40,
+            surface="facebook_dm",
+            binding_id="binding-allowed-cannot-notice",
+            disposition="allowed",
+            allowed_amount=1,
+            notice_text="must stay empty",
+        )
 
 
 @pytest.mark.asyncio
@@ -783,6 +843,7 @@ async def test_reserved_quota_retry_requires_owner_and_never_calls_provider(
         binding_id="binding-reserved-crash",
         disposition="truncated",
         allowed_amount=1,
+        notice_text="quota notice",
     )
 
     result = await attempts.execute_guarded_meta_send(
@@ -792,6 +853,7 @@ async def test_reserved_quota_retry_requires_owner_and_never_calls_provider(
         purpose="image_quota_notice",
         image_quota_disposition="truncated",
         image_quota_allowed_amount=1,
+        image_quota_notice_text="quota notice",
         send=lambda: pytest.fail("reserved quota must not reach provider"),
     )
 
@@ -821,6 +883,7 @@ async def test_provider_phase_crash_blocks_every_automatic_notice_retry(
         purpose="image_quota_notice",
         image_quota_disposition="truncated",
         image_quota_allowed_amount=1,
+        image_quota_notice_text="quota notice",
     )
     assert decision.kind == "send"
     document = _document(outbound_store, event_id, "image_quota_notice")
@@ -837,6 +900,7 @@ async def test_provider_phase_crash_blocks_every_automatic_notice_retry(
         purpose="image_quota_notice",
         image_quota_disposition="truncated",
         image_quota_allowed_amount=1,
+        image_quota_notice_text="quota notice",
         send=lambda: pytest.fail("ambiguous provider phase must not resend"),
     )
     assert retry["needs_owner_action"] is True
@@ -888,6 +952,7 @@ async def test_fence_reconciles_reserved_quota_for_real_deletion_plan(
         binding_id=binding_id,
         disposition="truncated",
         allowed_amount=1,
+        notice_text="quota notice",
     )
     assert reservation.kind == "quota_reserved"
     firestore_binding_deletion_fence_ref(outbound_store, binding_id).set({"status": "fenced"})
@@ -922,6 +987,7 @@ async def test_fence_after_quota_consume_records_truth_and_blocks_provider(
         binding_id=binding_id,
         disposition="blocked",
         allowed_amount=0,
+        notice_text="quota notice",
     )
     # The caller has performed the one external quota mutation at this point.
     firestore_binding_deletion_fence_ref(outbound_store, binding_id).set({"status": "fenced"})
@@ -937,6 +1003,7 @@ async def test_fence_after_quota_consume_records_truth_and_blocks_provider(
         purpose="image_quota_notice",
         image_quota_disposition="blocked",
         image_quota_allowed_amount=0,
+        image_quota_notice_text="quota notice",
         send=lambda: pytest.fail("fenced consumed quota must not reach provider"),
     )
     assert result["needs_owner_action"] is True
@@ -949,6 +1016,9 @@ async def test_fence_after_quota_consume_records_truth_and_blocks_provider(
         ("image_quota_allowed_amount", 1, "quota context"),
         ("image_quota_phase", "reserved", "quota phase"),
         ("image_quota_phase", "unknown", "quota context"),
+        ("image_quota_notice_text", "mutated system notice", "quota context"),
+        ("image_quota_notice_sha256", "0" * 64, "quota context"),
+        ("image_quota_notice_sha256", "", "quota context"),
     ),
 )
 @pytest.mark.asyncio
@@ -972,6 +1042,7 @@ async def test_mutated_v2_notice_quota_authority_fails_closed(
         purpose="image_quota_notice",
         image_quota_disposition="truncated",
         image_quota_allowed_amount=2,
+        image_quota_notice_text="quota notice",
         send=lambda: _accepted("accepted-before-mutation"),
     )
     document_id = attempts._attempt_document_id(event_id, "image_quota_notice")
@@ -991,6 +1062,7 @@ async def test_mutated_v2_notice_quota_authority_fails_closed(
             purpose="image_quota_notice",
             image_quota_disposition="truncated",
             image_quota_allowed_amount=2,
+            image_quota_notice_text="quota notice",
             send=lambda: pytest.fail("mutated quota authority must not send"),
         )
 
@@ -1041,6 +1113,7 @@ async def test_concurrent_quota_reservation_has_one_consumption_authority(
             binding_id="binding-concurrent-quota",
             disposition="truncated",
             allowed_amount=2,
+            notice_text="quota notice",
         )
 
     decisions = await asyncio.gather(reserve(), reserve())

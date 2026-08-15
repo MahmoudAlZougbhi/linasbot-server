@@ -177,6 +177,26 @@ class OwnerChatUsageTracker:
                 by_kind[kind] = by_kind.get(kind, 0) + tok
         return {"turns": turns, "total_tokens": total, "by_kind": by_kind}
 
+    def rows_in_window(self, tenant_id: str, *, start_ts: float, end_ts: float) -> list[dict[str, Any]]:
+        """Owner-chat usage rows in [start_ts, end_ts). Empty file → empty list."""
+        path = self._path(tenant_id)
+        if not path.is_file():
+            return []
+        out: list[dict[str, Any]] = []
+        with self._lock:
+            for line in path.read_text(encoding="utf-8").splitlines():
+                try:
+                    row = json.loads(line)
+                except Exception:
+                    continue
+                if not isinstance(row, dict):
+                    continue
+                ts = float(row.get("ts") or 0)
+                if ts < start_ts or ts >= end_ts:
+                    continue
+                out.append(row)
+        return out
+
 
 owner_chat_usage_tracker = OwnerChatUsageTracker()
 

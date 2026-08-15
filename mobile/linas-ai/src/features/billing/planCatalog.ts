@@ -13,6 +13,10 @@ export type PlanDefinition = {
   /** null = unlimited additional members (owner excluded). */
   additionalSeats: number | null;
   commentAutomation: boolean;
+  /** WhatsApp messages — Lite excluded; Starter and above included. */
+  whatsapp: boolean;
+  /** TikTok DMs + comments — Growth, Pro, and Max. */
+  tiktok: boolean;
   recommended?: boolean;
   /**
    * Default Apple monthly product id (canonical ASC SKU).
@@ -32,6 +36,8 @@ export const PLAN_CATALOG: Record<PlanId, PlanDefinition> = {
     faqCapacity: 50,
     additionalSeats: 0,
     commentAutomation: false,
+    whatsapp: false,
+    tiktok: false,
     appleProductId: 'com.linasai.subscription.basic.monthly',
     googleProductId: 'linas_ai_lite_monthly',
   },
@@ -42,6 +48,8 @@ export const PLAN_CATALOG: Record<PlanId, PlanDefinition> = {
     faqCapacity: 110,
     additionalSeats: 2,
     commentAutomation: true,
+    whatsapp: true,
+    tiktok: false,
     appleProductId: 'com.linasai.subscription.plus.monthly',
     googleProductId: 'linas_ai_starter_monthly',
   },
@@ -52,6 +60,8 @@ export const PLAN_CATALOG: Record<PlanId, PlanDefinition> = {
     faqCapacity: 250,
     additionalSeats: 5,
     commentAutomation: true,
+    whatsapp: true,
+    tiktok: true,
     recommended: true,
     appleProductId: 'com.linasai.subscription.growth.monthly',
     googleProductId: 'linas_ai_growth_monthly',
@@ -63,6 +73,8 @@ export const PLAN_CATALOG: Record<PlanId, PlanDefinition> = {
     faqCapacity: 600,
     additionalSeats: null,
     commentAutomation: true,
+    whatsapp: true,
+    tiktok: true,
     appleProductId: 'com.linasai.subscription.pro.monthly',
     googleProductId: 'linas_ai_pro_monthly',
   },
@@ -73,6 +85,8 @@ export const PLAN_CATALOG: Record<PlanId, PlanDefinition> = {
     faqCapacity: 1500,
     additionalSeats: null,
     commentAutomation: true,
+    whatsapp: true,
+    tiktok: true,
     appleProductId: 'com.linasai.subscription.scale.monthly',
     googleProductId: 'linas_ai_max_monthly',
   },

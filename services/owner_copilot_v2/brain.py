@@ -31,6 +31,30 @@ CancelCheck = Callable[[], bool]
 MAX_TOOL_ROUNDS = 10
 
 
+def _record_owner_v2_usage(kwargs: dict[str, Any], result: OwnerV2TurnResult) -> None:
+    """Write V2 turns to the existing owner-chat usage file (same store as V1)."""
+    try:
+        from services.owner_ai_model_router import RouteDecision, owner_chat_usage_tracker
+
+        reply = result.reply_text or ""
+        owner_chat_usage_tracker.record(
+            tenant_id=str(kwargs.get("tenant_id") or ""),
+            user_id=str(kwargs.get("user_id") or ""),
+            conversation_id=str(kwargs.get("conversation_id") or ""),
+            route=RouteDecision(
+                kind="owner_help",
+                model=str(result.model or ""),
+                reason="owner_copilot_v2",
+                max_context_tokens=0,
+            ),
+            prompt_tokens=int(result.context_tokens or 0),
+            completion_tokens=max(1, len(reply) // 4),
+            meta={"source": "owner_copilot_v2", "ok": True},
+        )
+    except Exception:
+        return
+
+
 async def run_owner_turn_v2(**kwargs: Any) -> OwnerV2TurnResult:
     final: OwnerV2TurnResult | None = None
     async for ev in iter_owner_turn_v2_events(**kwargs):
@@ -49,6 +73,7 @@ async def run_owner_turn_v2(**kwargs: Any) -> OwnerV2TurnResult:
                 quick_actions=list(p.get("quick_actions") or []),
                 model=p.get("model"),
             )
+            _record_owner_v2_usage(kwargs, final)
         elif ev.type == "cancelled":
             return OwnerV2TurnResult(
                 reply_text=str(ev.payload.get("reply_text") or ""),
@@ -213,7 +238,12 @@ async def iter_owner_turn_v2_events(
     if attachment_ids:
         tool_args = {**(tool_args or {}), "attachment_id": attachment_ids[0]}
 
-    chat_messages = _build_messages(context=context, user_text=text, attachment_ids=attachment_ids)
+    chat_messages = _build_messages(
+        context=context,
+        user_text=text,
+        attachment_ids=attachment_ids,
+        tenant_id=tenant_id,
+    )
     tool_calls_acc: list[dict[str, Any]] = []
     cards_acc: list[dict[str, Any]] = []
     choices_acc: list[dict[str, Any]] = []

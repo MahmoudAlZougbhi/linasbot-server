@@ -3,6 +3,10 @@ import { z } from 'zod';
 export const InboxFilterSchema = z.enum(['all', 'waiting', 'with_operator', 'bot', 'closed']);
 export type InboxFilter = z.infer<typeof InboxFilterSchema>;
 
+export type ChatChannel = 'whatsapp' | 'instagram' | 'facebook' | 'tiktok';
+export const ChannelFilterSchema = z.enum(['all', 'whatsapp', 'instagram', 'facebook', 'tiktok']);
+export type ChannelFilter = z.infer<typeof ChannelFilterSchema>;
+
 export const LastMessageSchema = z.union([
   z.string(),
   z
@@ -15,47 +19,114 @@ export const LastMessageSchema = z.union([
     .passthrough(),
 ]);
 
+const optionalText = z.string().optional().nullable().catch(undefined);
+const optionalBool = z.boolean().optional().nullable().catch(undefined);
+const optionalNum = z.number().optional().nullable().catch(undefined);
+
 export const LiveChatItemSchema = z
   .object({
-    conversation_id: z.string(),
-    user_id: z.string(),
-    user_name: z.string().optional().nullable(),
-    user_phone: z.string().optional().nullable(),
-    phone_number: z.string().optional().nullable(),
-    phone_clean: z.string().optional().nullable(),
-    last_message_text: z.string().optional().nullable(),
-    last_message_at: z.string().optional().nullable(),
-    last_activity: z.string().optional().nullable(),
-    conversation_state: z.string().optional().nullable(),
-    status: z.string().optional().nullable(),
-    channel: z.string().optional().nullable(),
-    operator_id: z.string().optional().nullable(),
-    operator_name: z.string().optional().nullable(),
-    human_takeover_active: z.boolean().optional().nullable(),
-    unread_count: z.number().optional().nullable(),
-    language: z.string().optional().nullable(),
-    sentiment: z.string().optional().nullable(),
-    message_count: z.number().optional().nullable(),
-    is_new_customer: z.boolean().optional().nullable(),
-    last_message: LastMessageSchema.optional().nullable(),
+    conversation_id: z.preprocess((v) => (v == null ? undefined : String(v)), z.string().min(1)),
+    user_id: z.preprocess((v) => (v == null ? undefined : String(v)), z.string().min(1)),
+    user_name: optionalText,
+    user_phone: optionalText,
+    phone_number: optionalText,
+    phone_clean: optionalText,
+    last_message_text: optionalText,
+    last_message_at: optionalText,
+    last_activity: optionalText,
+    conversation_state: optionalText,
+    status: optionalText,
+    channel: optionalText,
+    customer_info: z.unknown().optional().nullable(),
+    operator_id: optionalText,
+    operator_name: optionalText,
+    human_takeover_active: optionalBool,
+    unread_count: optionalNum,
+    language: optionalText,
+    sentiment: optionalText,
+    message_count: optionalNum,
+    is_new_customer: optionalBool,
+    last_message: LastMessageSchema.optional().nullable().catch(undefined),
   })
   .passthrough();
 
 export type LiveChatItem = z.infer<typeof LiveChatItemSchema>;
 
+function firstText(...vals: unknown[]): string | undefined {
+  for (const value of vals) {
+    if (value == null || typeof value === 'object') continue;
+    const text = String(value).trim();
+    if (text && text !== 'null' && text !== 'undefined') return text;
+  }
+  return undefined;
+}
+
+/** Keep existing rows even when user_id is missing; never invents conversations. */
+function coerceInboxRow(row: unknown): unknown {
+  if (!row || typeof row !== 'object') return row;
+  const rec = row as Record<string, unknown>;
+  const info =
+    rec.customer_info && typeof rec.customer_info === 'object'
+      ? (rec.customer_info as Record<string, unknown>)
+      : {};
+  const conversation_id = firstText(rec.conversation_id, rec.conversationId, rec.id);
+  const user_id = firstText(
+    rec.user_id,
+    rec.userId,
+    info.user_id,
+    rec.phone_clean,
+    rec.phone_number,
+    rec.user_phone,
+    info.phone_full,
+    info.phone_clean,
+    conversation_id,
+  );
+  return { ...rec, conversation_id, user_id };
+}
+
+export function parseLiveChatItems(rows: unknown): LiveChatItem[] {
+  if (!Array.isArray(rows)) return [];
+  const out: LiveChatItem[] = [];
+  for (const row of rows) {
+    const parsed = LiveChatItemSchema.safeParse(coerceInboxRow(row));
+    if (parsed.success) out.push(parsed.data);
+  }
+  return out;
+}
+
 export const UnifiedChatsSchema = z
   .object({
-    success: z.boolean(),
-    chats: z.array(LiveChatItemSchema).default([]),
-    total: z.number().optional(),
-    page: z.number().optional(),
-    page_size: z.number().optional(),
-    has_more: z.boolean().optional(),
-    next_cursor: z.string().nullable().optional(),
-    filter: z.string().optional(),
-    error: z.string().optional(),
+    success: z.boolean().optional().catch(undefined),
+    chats: z
+      .unknown()
+      .optional()
+      .transform((v) => parseLiveChatItems(v)),
+    total: optionalNum,
+    page: optionalNum,
+    page_size: optionalNum,
+    has_more: optionalBool,
+    next_cursor: optionalText,
+    filter: optionalText,
+    error: optionalText,
+    source: optionalText,
+    index_empty: optionalBool,
+    requires_index_rebuild: optionalBool,
   })
   .passthrough();
+
+export type UnifiedChats = z.infer<typeof UnifiedChatsSchema>;
+
+/** Never throws — show whatever valid rows exist, even if the envelope is messy. */
+export function parseUnifiedChatsResponse(body: unknown): UnifiedChats {
+  const parsed = UnifiedChatsSchema.safeParse(body);
+  if (parsed.success) return parsed.data;
+  const rec = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+  return {
+    success: rec.success === true,
+    chats: parseLiveChatItems(rec.chats),
+    error: typeof rec.error === 'string' ? rec.error : 'Could not load conversations.',
+  };
+}
 
 export const LiveChatMessageSchema = z
   .object({
@@ -171,17 +242,38 @@ export function chatPreview(item: LiveChatItem): string {
   return text;
 }
 
-export type ChatChannel = 'whatsapp' | 'instagram' | 'facebook' | 'tiktok';
+function blobHasChannelToken(blob: string, token: string): boolean {
+  return blob.includes(`${token}:`) || blob.split(/[\s|/]+/).includes(token);
+}
 
-/** Infer platform from API channel or user_id prefix. Never invents TikTok rows. */
+function customerInfoChannel(item: LiveChatItem): string {
+  const info = item.customer_info;
+  if (!info || typeof info !== 'object') return '';
+  const rec = info as { channel?: unknown; platform?: unknown };
+  return String(rec.channel || rec.platform || '').toLowerCase().trim();
+}
+
+/** Infer platform from API channel, customer_info, or user_id. Never invents TikTok rows. */
 export function chatChannel(item: LiveChatItem): ChatChannel {
-  const ch = String(item.channel || '').toLowerCase();
-  const id = String(item.user_id || '').toLowerCase();
-  if (ch === 'tiktok' || id.includes('tiktok:')) return 'tiktok';
-  if (ch === 'instagram' || id.includes('instagram:')) return 'instagram';
-  if (ch === 'facebook' || ch === 'messenger' || id.includes('facebook:')) return 'facebook';
-  if (ch === 'whatsapp') return 'whatsapp';
+  const ch = String(item.channel || customerInfoChannel(item) || '').toLowerCase().trim();
+  if (ch === 'tiktok') return 'tiktok';
+  if (ch === 'instagram' || ch === 'instagram_dm' || ch === 'ig') return 'instagram';
+  if (ch === 'facebook' || ch === 'messenger' || ch === 'facebook_messenger') return 'facebook';
+  if (ch === 'whatsapp' || ch === 'whatsapp_cloud' || ch === 'wa') return 'whatsapp';
+  const blob = [item.channel, item.user_id, item.user_phone, item.phone_number, item.phone_clean]
+    .map((v) => String(v || '').toLowerCase())
+    .join(' ');
+  if (blobHasChannelToken(blob, 'tiktok')) return 'tiktok';
+  if (blobHasChannelToken(blob, 'instagram')) return 'instagram';
+  if (blobHasChannelToken(blob, 'facebook') || blobHasChannelToken(blob, 'messenger')) return 'facebook';
+  if (blobHasChannelToken(blob, 'whatsapp')) return 'whatsapp';
   return 'whatsapp';
+}
+
+/** All keeps every parsed row, including unlabeled (missing channel). */
+export function matchesChannelFilter(item: LiveChatItem, filter: ChannelFilter): boolean {
+  if (filter === 'all') return true;
+  return chatChannel(item) === filter;
 }
 
 export function channelLabel(item: LiveChatItem): string {

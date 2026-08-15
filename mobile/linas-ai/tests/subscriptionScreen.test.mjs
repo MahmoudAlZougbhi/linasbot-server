@@ -34,7 +34,7 @@ function resolvePlanCta(target, currentPlan, status, { storePriceAvailable, purc
   return { kind: 'switch_renewal', enabled: true };
 }
 
-test('planCatalog.ts encodes frozen five-plan matrix', () => {
+test('planCatalog.ts encodes frozen five-plan matrix with channel flags', () => {
   const src = read('features/billing/planCatalog.ts');
   for (const id of PLAN_ORDER) {
     assert.match(src, new RegExp(`${id}:`));
@@ -49,6 +49,8 @@ test('planCatalog.ts encodes frozen five-plan matrix', () => {
   assert.match(src, /catalogPriceUsd:\s*259/);
   assert.match(src, /additionalSeats:\s*null/);
   assert.match(src, /commentAutomation:\s*false/);
+  assert.match(src, /whatsapp:\s*false/);
+  assert.match(src, /tiktok:\s*true/);
   assert.match(src, /recommended:\s*true/);
 });
 
@@ -84,43 +86,51 @@ test('storePricing keeps preview unavailable and loads via IAP module', () => {
   assert.match(src, /loadIapModule/);
 });
 
-test('BillingScreen supports monthly/yearly toggle + Apple IAP actions', () => {
+test('BillingScreen routes no-sub to choose, has-sub to current, upgrade + credits', () => {
   const billing = read('features/billing/BillingScreen.tsx');
-  assert.match(billing, /BillingPeriodToggle/);
-  assert.match(billing, /yearly|BillingPeriod/);
-  assert.match(billing, /CommonFeaturesCard/);
-  assert.match(billing, /subCreditsExplain/);
-  assert.match(billing, /PlanCardView/);
-  assert.match(billing, /restorePurchases|onRestore/);
-  const card = read('features/billing/PlanCardView.tsx');
-  assert.match(card, /subPriceUnavailable/);
-  assert.match(card, /subPerYear|period/);
+  assert.match(billing, /CurrentPlanScreen/);
+  assert.match(billing, /ChoosePlanScreen/);
+  assert.match(billing, /BuyCreditsSheet/);
+  assert.match(billing, /hasSub/);
+  assert.match(billing, /setBrowsePlans\(true\)/);
+  assert.match(billing, /purchaseSubscription/);
+  assert.match(billing, /purchaseCredits/);
+  assert.match(billing, /onBack/);
+  const choose = read('features/billing/ChoosePlanScreen.tsx');
+  assert.match(choose, /BillingPeriodToggle/);
+  assert.match(choose, /PlanChipRow/);
+  assert.match(choose, /subYourPlan/);
+  const current = read('features/billing/CurrentPlanScreen.tsx');
+  assert.match(current, /subUpgradePlan/);
+  assert.match(current, /onBuyCredits/);
 });
 
 test('exact EN plan copy present in locale table', () => {
   const en = read('i18n/locales/subscriptionEn.ts') + read('i18n/locales/en.ts');
   for (const phrase of [
-    'Essential AI replies for a solo business.',
-    '7,000 AI credits every billing month',
-    'Comment automation is not included',
-    'Add comment automation and a small team.',
-    '17,500 AI credits every billing month',
-    'Owner + 2 additional members',
-    'More capacity for a growing business.',
-    '41,300 AI credits every billing month',
-    'Owner + 5 additional members',
-    'High-volume AI automation for growing teams.',
-    '76,300 AI credits every billing month',
-    'Unlimited additional members',
-    'Maximum monthly AI capacity for busy businesses.',
-    '181,300 AI credits every billing month',
-    'Up to 1,500 saved FAQ pairs',
-    'Included in every plan',
-    'Linas AI Owner Copilot',
-    'Content Management',
-    'Instagram DM automation',
-    'Facebook DM automation',
-    'Analytics and usage insights',
+    'Best for solo businesses with a light daily message volume.',
+    'Best for small businesses adding comments and WhatsApp.',
+    'Best for busy businesses handling high daily message volume.',
+    'Best for large businesses with the highest AI reply volume.',
+    'Instagram & Facebook DMs',
+    'Instagram & Facebook DMs + comments',
+    'WhatsApp messages',
+    'TikTok DMs + comments',
+    '{n} saved Smart Answers',
+    '1 owner account',
+    '{n} additional team members',
+    'Unlimited team members',
+    'Choose a plan',
+    'Your current plan',
+    'Upgrade plan',
+    'Buy credits',
+    'Choose a credit pack',
+    'Purchased credits do not expire.',
+    'SOLO BUSINESS',
+    'SMALL BUSINESS',
+    'HIGH VOLUME',
+    'MAXIMUM CAPACITY',
+    'Smart Answers save credits',
   ]) {
     assert.match(en, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
@@ -158,7 +168,8 @@ test('no provider cost / profit strings in billing sources', () => {
   for (const rel of [
     'features/billing/BillingScreen.tsx',
     'features/billing/planCatalog.ts',
-    'features/billing/PlanCardView.tsx',
+    'features/billing/planEntitlements.ts',
+    'features/billing/PlanDetailCard.tsx',
     'features/billing/storePricing.ts',
   ]) {
     const text = read(rel).toLowerCase();
@@ -166,4 +177,26 @@ test('no provider cost / profit strings in billing sources', () => {
     assert.equal(text.includes('provider cost'), false, rel);
     assert.equal(text.includes('profit'), false, rel);
   }
+});
+
+test('planEntitlements maps included/not-included from catalog flags', () => {
+  const src = read('features/billing/planEntitlements.ts');
+  const catalog = read('features/billing/planCatalog.ts');
+  assert.match(src, /plan\.commentAutomation/);
+  assert.match(src, /plan\.whatsapp/);
+  assert.match(src, /plan\.tiktok/);
+  assert.match(src, /plan\.faqCapacity/);
+  assert.match(src, /plan\.additionalSeats/);
+  assert.match(src, /subFeatDmOnly/);
+  assert.match(src, /subFeatDmComments/);
+  assert.match(src, /subFeatWhatsApp/);
+  assert.match(src, /subFeatTikTok/);
+  assert.match(src, /excluded\.push\('comments'\)/);
+  assert.match(src, /excluded\.push\('whatsapp'\)/);
+  assert.match(src, /excluded\.push\('tiktok'\)/);
+  assert.match(catalog, /lite:[\s\S]*?whatsapp:\s*false[\s\S]*?tiktok:\s*false/);
+  assert.match(catalog, /starter:[\s\S]*?whatsapp:\s*true[\s\S]*?tiktok:\s*false/);
+  assert.match(catalog, /growth:[\s\S]*?whatsapp:\s*true[\s\S]*?tiktok:\s*true/);
+  assert.match(catalog, /pro:[\s\S]*?whatsapp:\s*true[\s\S]*?tiktok:\s*true/);
+  assert.match(catalog, /max:[\s\S]*?whatsapp:\s*true[\s\S]*?tiktok:\s*true/);
 });

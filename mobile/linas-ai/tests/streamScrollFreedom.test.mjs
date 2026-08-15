@@ -38,7 +38,7 @@ describe('stream scroll freedom', () => {
     const screen = read('features/chat/ChatScreen.tsx');
     assert.match(screen, /followBottomIfStuck\(false\)/);
     // liveText effect dependency list must drive follow, not scrollToBottom.
-    const liveDep = screen.indexOf('turn.liveText');
+    const liveDep = screen.indexOf('turn.liveText,');
     assert.ok(liveDep >= 0);
     const around = screen.slice(Math.max(0, liveDep - 200), liveDep + 200);
     assert.match(around, /followBottomIfStuck/);

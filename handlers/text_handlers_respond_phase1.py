@@ -66,6 +66,21 @@ async def text_handlers_respond_phase1(ctx: dict) -> Any:
                 pass
             return _PHASE_HALT
 
+    from services.cm.constants import tenant_uses_cm_runtime
+
+    cm_tenant_id = str(user_data.get("tenant_id") or "").strip()
+    if user_input_to_process and not tenant_uses_cm_runtime(cm_tenant_id):
+        from services.ai_limits_enforcement import apply_inbound_word_limit
+
+        clipped, word_notice = apply_inbound_word_limit(
+            user_id=user_id, user_data=user_data, text=user_input_to_process
+        )
+        if word_notice:
+            user_data["_ai_limits_word_notice"] = word_notice
+            user_input_to_process = clipped
+            ctx["user_input_to_process"] = clipped
+            await send_message_func(user_id, word_notice)
+
     current_gender = config.user_gender.get(user_id, "unknown")
     current_preferred_lang = user_data.get("user_preferred_lang", "ar")
     current_conversation_id = user_data.get("current_conversation_id")

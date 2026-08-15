@@ -33,3 +33,7 @@ export async function loadPendingGuestDraft(): Promise<PendingGuestDraft | null>
 export async function clearPendingGuestDraft(): Promise<void> {
   await AsyncStorage.removeItem(KEY);
 }
+
+export function queueGuestDraft(text: string): void {
+  void savePendingGuestDraft({ text, createdAt: Date.now() });
+}

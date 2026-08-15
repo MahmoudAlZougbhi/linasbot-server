@@ -1,46 +1,36 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { LinasStarMark } from '../../components/LinasStarMark';
 import { useI18n } from '../../i18n/LanguageContext';
-import { fonts, spacing, useTheme } from '../../theme';
-import { MenuIcon, NewChatIcon } from './ChatHeaderIcons';
+import { spacing, useTheme } from '../../theme';
+import { HeaderIconBox, MenuIcon } from './ChatHeaderIcons';
+import { ChatTopFade } from './ChatTopFade';
 
-/** Compact header row; 44pt meets Apple HIG while shrinking chrome. */
+/** Compact 44pt hit around the 36pt silver menu square. */
 const HEADER_HIT = 44;
 /** Extra space below status bar / notch (on top of safe-area inset). */
 const HEADER_TOP_GAP = 2;
+/** Gap under the hamburger / fade so the first bubble is not cramped into them. */
+const LIST_BELOW_OVERLAY_GAP = spacing.md + spacing.sm;
+/** List padding so the first message sits just below the overlay, not in the notch. */
+export const CHAT_LIST_TOP_CLEARANCE = HEADER_HIT + HEADER_TOP_GAP + LIST_BELOW_OVERLAY_GAP;
 
 type Props = {
-  isAuthenticated: boolean;
-  workspaceLabel?: string | null;
   onOpenMenu: () => void;
-  onNewChat?: () => void;
-  onSignIn?: () => void;
 };
 
-/** Header: menu | ✦ Linas AI | new-chat (auth) or Sign in (guest). */
-export function ChatHeader({
-  isAuthenticated,
-  onOpenMenu,
-  onNewChat,
-  onSignIn,
-}: Props) {
+/** Overlay hamburger + light top fade — no title, sparkle, or new-chat. */
+export function ChatHeader({ onOpenMenu }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { tr } = useI18n();
-  const iconColor = colors.textMuted;
 
   return (
     <View
-      style={[
-        styles.bar,
-        {
-          paddingTop: insets.top + HEADER_TOP_GAP,
-          backgroundColor: colors.bg,
-        },
-      ]}
+      pointerEvents="box-none"
+      style={[styles.overlay, { paddingTop: insets.top + HEADER_TOP_GAP }]}
     >
+      <ChatTopFade insetTop={insets.top} color={colors.bg} />
       <Pressable
         onPress={onOpenMenu}
         style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
@@ -48,57 +38,23 @@ export function ChatHeader({
         accessibilityRole="button"
         hitSlop={4}
       >
-        <MenuIcon color={iconColor} />
+        <HeaderIconBox backgroundColor={colors.featuredIconBg} borderColor={colors.featuredIconBorder}>
+          <MenuIcon color={colors.text} />
+        </HeaderIconBox>
       </Pressable>
-
-      <View style={styles.center}>
-        <LinasStarMark
-          labeled
-          size={16}
-          label="Linas AI"
-          labelColor={colors.accentDeep}
-        />
-      </View>
-
-      {isAuthenticated && onNewChat ? (
-        <Pressable
-          onPress={onNewChat}
-          style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
-          accessibilityLabel={tr('newChat')}
-          accessibilityRole="button"
-          hitSlop={4}
-        >
-          <NewChatIcon color={iconColor} />
-        </Pressable>
-      ) : !isAuthenticated ? (
-        <Pressable
-          onPress={onSignIn}
-          style={({ pressed }) => [styles.signIn, pressed && styles.pressed]}
-          accessibilityLabel={tr('signIn')}
-          accessibilityRole="button"
-          hitSlop={8}
-        >
-          <Text style={{ color: colors.accent, fontFamily: fonts.bodyMedium, fontSize: 15 }}>
-            {tr('signIn')}
-          </Text>
-        </Pressable>
-      ) : (
-        <View
-          style={styles.hit}
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-        />
-      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  bar: {
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
+    direction: 'ltr',
   },
   hit: {
     width: HEADER_HIT,
@@ -108,18 +64,5 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.55,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-  },
-  signIn: {
-    minWidth: HEADER_HIT,
-    minHeight: HEADER_HIT,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
   },
 });

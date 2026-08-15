@@ -18,8 +18,22 @@ test('inbox is a flat list with All/Human filters and no section headers', () =>
   assert.doesNotMatch(hook, /Waiting for human|With operator|AI handling/);
   assert.doesNotMatch(inbox, /section\.title|kind === 'header'/);
   assert.match(inbox, /InboxSearchBar/);
+  assert.match(inbox, /InboxChannelChips/);
   assert.match(inbox, /InboxFilterPills/);
-  assert.match(inbox, /data=\{chats\}/);
+  assert.match(inbox, /<FlatList/);
+  assert.match(inbox, /data=\{visibleChats\}/);
+  assert.match(inbox, /styles\.toolbar/);
+  assert.match(inbox, /styles\.listWrap/);
+  assert.doesNotMatch(inbox, /if \(loading\) \{/);
+  const chips = read('features/livechat/InboxChannelChips.tsx');
+  assert.match(chips, /flexGrow:\s*0/);
+  assert.match(chips, /height:\s*CHIP_ROW_H/);
+  assert.match(inbox, /minHeight:\s*0/);
+  assert.match(inbox, /ConversationRow/);
+  assert.doesNotMatch(chips, /styles\.label/);
+  assert.doesNotMatch(chips, /<Text /);
+  assert.match(chips, /accessibilityLabel=\{`Channel \$\{chip.label\}`\}/);
+  assert.match(chips, /PlatformChannelIcon/);
 });
 
 test('row layout is icon / name+preview / time+badge+assignee', () => {

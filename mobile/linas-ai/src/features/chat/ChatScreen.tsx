@@ -23,7 +23,7 @@ import { ChatStatusBanners } from './ChatStatusBanners';
 import type { OwnerChatMode } from './ownerChatMode';
 import { resolveOwnerModeForOutgoing } from './ownerChatMode';
 import { PendingAttachmentsStrip } from './PendingAttachmentsStrip';
-import { savePendingGuestDraft } from './pendingGuestDraft';
+import { queueGuestDraft } from './pendingGuestDraft';
 import { buildApproveSendOpts, buildDiscardSendOpts } from './proposalBarActions';
 import { sendChatMessage } from './sendChatMessage';
 import { chatErrorLabelKey, retryAssistantMessage } from './chatRetryHandlers';
@@ -117,15 +117,15 @@ export function ChatScreen({
   const sessionReady = isAuthenticated && !owner.loading && Boolean(owner.conversationId);
   const sending = isAuthenticated ? turn.streaming || owner.loading : guest.sending;
   const error = isAuthenticated ? owner.error : guest.error;
-  const listKey = isAuthenticated ? owner.conversationId || 'owner' : 'guest';
+  const listKey = isAuthenticated ? owner.conversationId || 'owner' : guest.guestId || 'guest';
   // Greeting-seeded chats: show Chat|Work until first user message.
   const hasUserMessage = messages.some((m) => m.role === 'user');
   const showModeToggle = isAuthenticated && !hasUserMessage && !turn.liveText && !turn.streaming;
 
   useEffect(() => {
     if (loading) return;
-    armOpenAtLatest();
-  }, [armOpenAtLatest, loading, listKey]);
+    armOpenAtLatest({ pinToLatest: hasUserMessage });
+  }, [armOpenAtLatest, hasUserMessage, loading, listKey]);
 
   useEffect(() => {
     followBottomIfStuck(false);
@@ -140,8 +140,13 @@ export function ChatScreen({
   ]);
 
   function openAuthPreservingDraft(hard = false) {
-    void savePendingGuestDraft({ text: draft, createdAt: Date.now() });
+    queueGuestDraft(draft);
     setHardLimit(hard); setAuthGate(true);
+  }
+  function goToLoginPreservingDraft() {
+    Keyboard.dismiss();
+    queueGuestDraft(draft);
+    onRequestLogin();
   }
 
   useSetupHandoff({
@@ -174,18 +179,10 @@ export function ChatScreen({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
       >
-        <ChatHeader
-          isAuthenticated={isAuthenticated}
-          workspaceLabel={workspaceLabel}
-          onOpenMenu={() => {
-            Keyboard.dismiss();
-            setDrawerOpen(true);
-          }}
-          onNewChat={startNewChat}
-          onSignIn={() => openAuthPreservingDraft(false)}
-        />
-
-        {showModeToggle ? <ChatModeToggle mode={ownerMode} onChange={setOwnerMode} /> : null}
+        <View style={styles.flex}>
+        {showModeToggle && !drawerOpen ? (
+          <ChatModeToggle mode={ownerMode} onChange={setOwnerMode} />
+        ) : null}
 
         <ChatStatusBanners
           offline={offline}
@@ -347,7 +344,16 @@ export function ChatScreen({
             })
           }
         />
+        </View>
       </KeyboardAvoidingView>
+      {!drawerOpen ? (
+        <ChatHeader
+          onOpenMenu={() => {
+            Keyboard.dismiss();
+            setDrawerOpen(true);
+          }}
+        />
+      ) : null}
 
       <ChatScreenOverlays
         drawerOpen={drawerOpen}
@@ -370,7 +376,7 @@ export function ChatScreen({
         onUnarchive={(id) => void owner.setArchived(id, false)}
         onRename={(id, title) => void owner.renameConversation(id, title)}
         onDelete={(id) => void owner.deleteConversation(id)}
-        onLogin={() => openAuthPreservingDraft(false)}
+        onLogin={goToLoginPreservingDraft}
         onRegister={onRequestRegister}
         plusOpen={plusOpen}
         onClosePlus={() => setPlusOpen(false)}

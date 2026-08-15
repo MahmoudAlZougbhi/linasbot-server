@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterator
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -174,9 +175,7 @@ async def test_partial_images_keep_allowed_and_non_images_with_two_independent_s
         inbound_event_id=event_id,
     )
 
-    from services.ai_usage_limits import CUSTOMER_IMAGE_LIMIT_MESSAGE
-
-    assert adapter.messages == [CUSTOMER_IMAGE_LIMIT_MESSAGE, "primary reply"]
+    assert adapter.messages == ["quota notice", "primary reply"]
     assert runtime.quota_calls == [False, True]  # type: ignore[attr-defined]
     assert event["attachments"] == [
         {"type": "image", "id": "image-1"},
@@ -189,6 +188,103 @@ async def test_partial_images_keep_allowed_and_non_images_with_two_independent_s
     assert primary["status"] == notice["status"] == "accepted"
     assert primary["purpose"] == "primary_reply"
     assert notice["purpose"] == "image_quota_notice"
+    assert notice["image_quota_notice_text"] == "quota notice"
+    assert len(notice["image_quota_notice_sha256"]) == 64
+
+
+@pytest.mark.asyncio
+async def test_first_truncation_notice_preserves_exact_localized_planned_copy(
+    runtime: _FakeFirestore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import services.ai_limits_enforcement as limits
+    from services.ai_limits_messages import customer_photos_truncated_message
+    from services.ai_usage_limits import QuotaDecision
+
+    exact_notice = customer_photos_truncated_message(photo_limit=2, lang="ar")
+    quota_calls: list[bool] = []
+
+    def enforce(**kwargs: Any) -> QuotaDecision:
+        quota_calls.append(bool(kwargs["consume"]))
+        return QuotaDecision(
+            allowed=True,
+            allowed_amount=2,
+            customer_message=exact_notice,
+            reason="photos_per_message_truncated",
+        )
+
+    monkeypatch.setattr(limits, "enforce_image_analysis_quota", enforce)
+    adapter = _Adapter([_accepted("localized-notice"), _accepted("localized-primary")])
+    _install_adapter(monkeypatch, adapter)
+    _install_handler(monkeypatch, _send_primary)
+    event_id = "ibe_" + "1" * 40
+
+    result = await processor.process_meta_social_event(_event(), _settings(), inbound_event_id=event_id)
+
+    assert result["ok"] is True
+    assert quota_calls == [False, True]
+    assert adapter.messages == [exact_notice, "primary reply"]
+    notice = processor_meta_document(runtime, event_id, "image_quota_notice")
+    assert notice["image_quota_notice_text"] == exact_notice
+
+
+@pytest.mark.asyncio
+async def test_period_reset_notice_replays_exact_snapshot_without_quota_recheck(
+    runtime: _FakeFirestore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import services.ai_limits_enforcement as limits
+    from services.ai_limits_messages import customer_window_limit_message
+    from services.ai_usage_limits import QuotaDecision
+
+    exact_notice = customer_window_limit_message(
+        kind="image",
+        period="week",
+        lang="fr",
+        now=datetime(2026, 8, 15, 12, 0, tzinfo=UTC),
+    )
+    quota_calls: list[bool] = []
+
+    def enforce(**kwargs: Any) -> QuotaDecision:
+        quota_calls.append(bool(kwargs["consume"]))
+        return QuotaDecision(
+            allowed=False,
+            allowed_amount=0,
+            customer_message=exact_notice,
+            reason="image_week_limit",
+        )
+
+    monkeypatch.setattr(limits, "enforce_image_analysis_quota", enforce)
+    adapter = _Adapter([_accepted("period-notice-after-crash")])
+    _install_adapter(monkeypatch, adapter)
+
+    async def forbidden_handler(_kwargs: dict[str, Any]) -> None:
+        pytest.fail("blocked quota must not run the primary handler")
+
+    _install_handler(monkeypatch, forbidden_handler)
+    real_deliver = processor._deliver_image_quota_notice
+
+    async def crash_after_marker(**_kwargs: Any) -> dict[str, Any] | None:
+        raise RuntimeError("crash after persisted period notice")
+
+    monkeypatch.setattr(processor, "_deliver_image_quota_notice", crash_after_marker)
+    event_id = "ibe_" + "2" * 40
+    with pytest.raises(RuntimeError, match="persisted period notice"):
+        await processor.process_meta_social_event(_event(), _settings(), inbound_event_id=event_id)
+    notice = processor_meta_document(runtime, event_id, "image_quota_notice")
+    assert notice["image_quota_phase"] == "consumed"
+    assert notice["image_quota_notice_text"] == exact_notice
+
+    def quota_must_not_be_rechecked(**_kwargs: Any) -> Any:
+        pytest.fail("a consumed replay must not recheck or reconsume quota")
+
+    monkeypatch.setattr(limits, "enforce_image_analysis_quota", quota_must_not_be_rechecked)
+    monkeypatch.setattr(processor, "_deliver_image_quota_notice", real_deliver)
+    result = await processor.process_meta_social_event(_event(), _settings(), inbound_event_id=event_id)
+
+    assert result["delivery"] == "blocked_quota"
+    assert quota_calls == [False, True]
+    assert adapter.messages == [exact_notice]
 
 
 def processor_meta_document(
@@ -231,9 +327,7 @@ async def test_retry_after_notice_acceptance_sends_only_primary_reply(
         await processor.process_meta_social_event(event, _settings(), inbound_event_id=event_id)
     await processor.process_meta_social_event(_event(), _settings(), inbound_event_id=event_id)
 
-    from services.ai_usage_limits import CUSTOMER_IMAGE_LIMIT_MESSAGE
-
-    assert adapter.messages == [CUSTOMER_IMAGE_LIMIT_MESSAGE, "primary reply"]
+    assert adapter.messages == ["quota notice", "primary reply"]
     assert runtime.quota_calls == [False, True]  # type: ignore[attr-defined]
     assert processor_meta_document(runtime, event_id, "image_quota_notice")["status"] == "accepted"
     assert processor_meta_document(runtime, event_id, "primary_reply")["status"] == "accepted"
@@ -268,9 +362,7 @@ async def test_ambiguous_notice_blocks_primary_and_every_automatic_retry(
             "terminal": True,
         }
     )
-    from services.ai_usage_limits import CUSTOMER_IMAGE_LIMIT_MESSAGE
-
-    assert adapter.messages == [CUSTOMER_IMAGE_LIMIT_MESSAGE]
+    assert adapter.messages == ["quota notice"]
     assert runtime.quota_calls == [False, True]  # type: ignore[attr-defined]
     assert handler_calls == 0
     assert processor_meta_document(runtime, event_id, "image_quota_notice")["status"] == "needs_owner_action"
@@ -310,9 +402,7 @@ async def test_definitive_notice_failure_retries_before_primary_reply(
 
     await processor.process_meta_social_event(_event(), _settings(), inbound_event_id=event_id)
 
-    from services.ai_usage_limits import CUSTOMER_IMAGE_LIMIT_MESSAGE
-
-    assert adapter.messages == [CUSTOMER_IMAGE_LIMIT_MESSAGE, CUSTOMER_IMAGE_LIMIT_MESSAGE, "primary reply"]
+    assert adapter.messages == ["quota notice", "quota notice", "primary reply"]
     assert runtime.quota_calls == [False, True]  # type: ignore[attr-defined]
     assert handler_calls == 1
     assert processor_meta_document(runtime, event_id, "image_quota_notice")["attempt_sequence"] == 2
@@ -390,9 +480,7 @@ async def test_crash_after_consumed_marker_retries_notice_without_reconsume(
     result = await processor.process_meta_social_event(_event(), _settings(), inbound_event_id=event_id)
     assert result["ok"] is True
     assert runtime.quota_calls == [False, True]  # type: ignore[attr-defined]
-    from services.ai_usage_limits import CUSTOMER_IMAGE_LIMIT_MESSAGE
-
-    assert adapter.messages == [CUSTOMER_IMAGE_LIMIT_MESSAGE, "primary reply"]
+    assert adapter.messages == ["quota notice", "primary reply"]
     assert processor_meta_document(runtime, event_id, "primary_reply")["status"] == "accepted"
 
 

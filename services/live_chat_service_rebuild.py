@@ -6,6 +6,7 @@ from typing import Any
 from google.cloud import firestore
 
 import config
+from services.live_chat_channel import resolve_live_chat_channel
 from services.live_chat_contracts import (
     normalize_conversation_document,
     utc_now,
@@ -263,6 +264,7 @@ class LiveChatRebuildMixin:
             "language": language,
             "customer_info": customer_info,
             "is_new_customer": is_new_customer,
+            "channel": resolve_live_chat_channel(user_id, conv_data),
         }
         if recent_messages:
             out["recent_messages"] = recent_messages

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text } from 'react-native';
 
 import { EmptyState } from '../../components/EmptyState';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -27,6 +27,7 @@ export function CmScreen({ onOpenSection, onContinueSetup }: Props) {
   const { colors } = useTheme();
   const { tr } = useI18n();
   const [loading, setLoading] = useState(true);
+  const [hydrated, setHydrated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [meta, setMeta] = useState<CmMeta | null>(null);
   const [rows, setRows] = useState<CmProgressRow[]>([]);
@@ -69,6 +70,7 @@ export function CmScreen({ onOpenSection, onContinueSetup }: Props) {
           missing_sections: progressRows.filter((r) => r.status !== 'complete').map((r) => r.section),
         });
       }
+      setHydrated(true);
       setError(null);
     } catch {
       setError(tr('aiSetupLoadError'));
@@ -109,38 +111,40 @@ export function CmScreen({ onOpenSection, onContinueSetup }: Props) {
 
   return (
     <ScreenChrome title={tr('aiSetupTitle')}>
-      {loading ? <ActivityIndicator color={colors.accent} style={styles.loader} /> : null}
+      {loading && !hydrated ? <ActivityIndicator color={colors.accent} style={styles.loader} /> : null}
       {error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
-      <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
-        <AiSetupProgressCard
-          percent={summary.percent}
-          complete={summary.complete}
-          total={summary.total}
-          published={summary.published}
-          incomplete={summary.incomplete}
-          onContinueSetup={
-            onContinueSetup
-              ? () => onContinueSetup(buildFillMissingPrompt(summary.missing_sections, titleMap))
-              : undefined
-          }
-        />
+      {hydrated ? (
+        <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+          <AiSetupProgressCard
+            percent={summary.percent}
+            complete={summary.complete}
+            total={summary.total}
+            published={summary.published}
+            incomplete={summary.incomplete}
+            onContinueSetup={
+              onContinueSetup
+                ? () => onContinueSetup(buildFillMissingPrompt(summary.missing_sections, titleMap))
+                : undefined
+            }
+          />
 
-        <AiSetupFilterTabs
-          filter={filter}
-          missingCount={summary.incomplete}
-          onChange={setFilter}
-        />
+          <AiSetupFilterTabs
+            filter={filter}
+            missingCount={summary.incomplete}
+            onChange={setFilter}
+          />
 
-        <AiSetupSectionGrid
-          tiles={tiles}
-          statusBySection={statusBySection}
-          onOpenSection={onOpenSection}
-        />
+          <AiSetupSectionGrid
+            tiles={tiles}
+            statusBySection={statusBySection}
+            onOpenSection={onOpenSection}
+          />
 
-        {!loading && !meta && !error ? (
-          <EmptyState title={tr('aiSetupUnavailable')} body={tr('aiSetupUnavailableBody')} />
-        ) : null}
-      </ScrollView>
+          {!loading && !meta && !error ? (
+            <EmptyState title={tr('aiSetupUnavailable')} body={tr('aiSetupUnavailableBody')} />
+          ) : null}
+        </ScrollView>
+      ) : null}
     </ScreenChrome>
   );
 }

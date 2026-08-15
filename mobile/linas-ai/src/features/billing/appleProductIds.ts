@@ -42,6 +42,17 @@ export const APPLE_CREDIT_PRODUCTS: Record<CreditPackId, string> = {
 
 export const CREDIT_PACK_ORDER: CreditPackId[] = [2500, 5000, 12500, 25000, 50000];
 
+/** Catalog USD for display only — checkout must use store-localized price. */
+export const CREDIT_PACK_CATALOG_USD: Record<CreditPackId, number> = {
+  2500: 4.99,
+  5000: 9.99,
+  12500: 24.99,
+  25000: 49.99,
+  50000: 99.99,
+};
+
+export const DEFAULT_CREDIT_PACK: CreditPackId = 5000;
+
 export function appleProductIdForPlan(planId: PlanId, period: BillingPeriod): string {
   return APPLE_SUBSCRIPTION_PRODUCTS[planId][period];
 }

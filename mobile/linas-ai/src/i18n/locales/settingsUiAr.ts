@@ -1,0 +1,21 @@
+/** Settings screen copy (ar) — iOS handoff labels. */
+export const settingsUiAr = {
+  settingsChangeName: 'تغيير الاسم',
+  settingsNamePlaceholder: 'اسمك',
+  settingsNameRequired: 'أدخل اسماً.',
+  settingsNameSaveError: 'تعذّر تحديث الاسم. حاول مرة أخرى.',
+  settingsSave: 'حفظ',
+  settingsNewEmail: 'البريد الجديد',
+  settingsCurrentPassword: 'كلمة المرور الحالية',
+  settingsEmailChangeSent: 'إذا كان العنوان متاحاً، تم إرسال رسالة التأكيد.',
+  settingsEmailSaveError: 'تعذّر طلب تغيير البريد. حاول مرة أخرى.',
+  settingsNotificationsHint: 'تنبيهات الدردشات والطلبات',
+  settingsSupportLegal: 'الدعم والقانونية',
+  settingsTermsPrivacy: 'الشروط والخصوصية',
+  settingsAppearanceLight: 'فاتح',
+  settingsAppearanceDark: 'داكن',
+  settingsLangEn: 'الإنجليزية',
+  settingsLangAr: 'العربية',
+  settingsLangFr: 'الفرنسية',
+  settingsVersionFooter: 'Linas AI • الإصدار {version} ({build})',
+};

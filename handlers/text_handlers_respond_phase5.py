@@ -327,6 +327,8 @@ async def text_handlers_respond_phase5(ctx: dict) -> Any:
             from handlers.text_handlers_respond_phase5_gpt import text_handlers_respond_phase5_gpt
 
             await text_handlers_respond_phase5_gpt(ctx)
+            if ctx.get("_PHASE_HALT"):
+                return _PHASE_HALT
             gpt_response_data = cast(Any, ctx.get("gpt_response_data"))
             conversation_history = cast(Any, ctx.get("conversation_history"))
             last_ai_response_at = cast(Any, ctx.get("last_ai_response_at"))

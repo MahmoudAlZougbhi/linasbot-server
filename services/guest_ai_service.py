@@ -18,6 +18,7 @@ from services.system_knowledge_retrieval import (
     detect_message_language,
     retrieve_capabilities,
 )
+from services.welcome_pool import pick_welcome
 
 # Explicit denylist: guest path must never dispatch these (defence in depth).
 FORBIDDEN_GUEST_TOOLS = frozenset(
@@ -51,23 +52,15 @@ def guest_model_name() -> str:
     return (os.getenv("LINAS_GUEST_MODEL") or DEFAULT_GUEST_MODEL).strip() or DEFAULT_GUEST_MODEL
 
 
-def build_guest_greeting(*, language: str = "en") -> str:
-    if language == "ar":
-        return (
-            "مرحباً 👋 أنا Linas AI — هون لمساعدتك بوضوح وبدفء. "
-            "بشرح كيف منساعد الأعمال على أتمتة رسائل وتعليقات إنستغرام وفيسبوك "
-            "عبر معرفة نشاطك والتكاملات. اسألني أي سؤال عن المنتج ✨"
-        )
-    if language == "fr":
-        return (
-            "Bonjour 👋 je suis Linas AI — claire, chaleureuse et utile. "
-            "J’explique comment nous automatisons les messages et commentaires "
-            "Instagram/Facebook pour les entreprises. Posez vos questions sur le produit ✨"
-        )
-    return (
-        "Hi 👋 I’m Linas AI — warm, clear, and here to help. "
-        "I explain how we help businesses automate Instagram and Facebook "
-        "DMs and comments with AI Setup and integrations. Ask me anything about the product ✨"
+_GUEST_HI = {"ar": "مرحباً", "fr": "Bonjour", "en": "Hello"}
+
+
+def build_guest_greeting(*, language: str = "en", session_id: str = "guest") -> str:
+    lang = language if language in _GUEST_HI else "en"
+    return pick_welcome(
+        language=lang,
+        user_key=f"guest:{session_id}",
+        hi=_GUEST_HI[lang],
     )
 
 

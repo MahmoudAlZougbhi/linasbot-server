@@ -10,6 +10,7 @@ import {
   AI_SETUP_ORANGE,
   AI_SETUP_TEAL,
 } from './aiSetupDesign';
+import { resolveAiSetupSectionPaint } from './aiSetupSectionPaint';
 import { CM_SECTION_ICONS } from './cmSectionIcons';
 import { cmSectionTitleKey } from './cmSectionTitles';
 import type { CmSectionCard } from './cmSections';
@@ -28,9 +29,14 @@ export function AiSetupSectionGrid({ tiles, statusBySection, onOpenSection }: Pr
     <View style={styles.grid}>
       {tiles.map((tile) => {
         const supported = tile.mobileSupported !== false;
-        const fill = statusBySection.get(tile.id);
-        const missing = supported && fill !== 'complete';
+        const paint = resolveAiSetupSectionPaint(statusBySection.get(tile.id));
+        const missing = supported && paint === 'missing';
+        const complete = paint === 'complete';
         const title = tr(cmSectionTitleKey(tile.id));
+        const statusLabel =
+          paint === 'pending'
+            ? title
+            : `${title}, ${missing ? tr('aiSetupStatusMissing') : tr('aiSetupStatusComplete')}`;
 
         return (
           <Pressable
@@ -45,7 +51,7 @@ export function AiSetupSectionGrid({ tiles, statusBySection, onOpenSection }: Pr
             disabled={!supported}
             onPress={() => supported && onOpenSection(tile.id)}
             accessibilityRole="button"
-            accessibilityLabel={`${title}, ${missing ? tr('aiSetupStatusMissing') : tr('aiSetupStatusComplete')}`}
+            accessibilityLabel={statusLabel}
             accessibilityState={{ disabled: !supported }}
           >
             <AppIcon icon={CM_SECTION_ICONS[tile.id]} size={20} color={AI_SETUP_TEAL} />
@@ -57,9 +63,9 @@ export function AiSetupSectionGrid({ tiles, statusBySection, onOpenSection }: Pr
                 <View style={styles.orangeDot} />
                 <Text style={styles.missingText}>{tr('aiSetupStatusMissing')}</Text>
               </View>
-            ) : (
+            ) : complete ? (
               <AppIcon icon={feather('check')} size={18} color={AI_SETUP_TEAL} />
-            )}
+            ) : null}
           </Pressable>
         );
       })}

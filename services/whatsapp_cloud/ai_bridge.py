@@ -30,6 +30,86 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
     if not text_body:
         text_body = "Sent a message."
     expected_epoch = int(snapshot.get("control_epoch") or 0)
+    customer_wa_id = str(snapshot.get("customer_wa_id") or "")
+
+    from services.ai_limits_enforcement import (
+        apply_inbound_word_limit,
+        customer_image_limit_message,
+        customer_reply_limit_message,
+        customer_voice_limit_message,
+        enforce_image_analysis_quota,
+        enforce_text_reply_quota,
+        enforce_voice_minutes_quota,
+    )
+
+    limit_user = {
+        "tenant_id": tenant_id,
+        "social_sender_id": customer_wa_id,
+        "phone_number": customer_wa_id,
+        "user_preferred_lang": "",
+    }
+    uid = f"whatsapp:{customer_wa_id}"
+    text_body, word_notice = apply_inbound_word_limit(
+        user_id=uid,
+        user_data=limit_user,
+        text=text_body,
+    )
+    message_type = str(snapshot.get("message_type") or "").lower()
+    if message_type == "image":
+        image_quota = enforce_image_analysis_quota(
+            user_id=uid, user_data=limit_user, amount=1, consume=True
+        )
+        if not image_quota.allowed:
+            await _send_quota_notice(
+                tenant_id=tenant_id,
+                connection_id=connection_id,
+                conversation_id=conversation_id,
+                text=customer_image_limit_message(image_quota),
+            )
+            emit_wa_event("ai_image_limit", reason=image_quota.reason)
+            return
+        if image_quota.truncated and image_quota.customer_message:
+            word_notice = (
+                f"{image_quota.customer_message}\n\n{word_notice}"
+                if word_notice
+                else image_quota.customer_message
+            )
+    elif message_type == "audio":
+        voice_quota = enforce_voice_minutes_quota(
+            user_id=uid,
+            user_data=limit_user,
+            duration_seconds=3600,
+            consume=True,
+        )
+        if not voice_quota.allowed:
+            await _send_quota_notice(
+                tenant_id=tenant_id,
+                connection_id=connection_id,
+                conversation_id=conversation_id,
+                text=customer_voice_limit_message(voice_quota),
+            )
+            emit_wa_event("ai_voice_limit", reason=voice_quota.reason)
+            return
+        if voice_quota.truncated and voice_quota.customer_message:
+            word_notice = (
+                f"{voice_quota.customer_message}\n\n{word_notice}"
+                if word_notice
+                else voice_quota.customer_message
+            )
+    reply_precheck = enforce_text_reply_quota(
+        user_id=uid,
+        user_data=limit_user,
+        consume=False,
+    )
+    if not reply_precheck.allowed:
+        await _send_quota_notice(
+            tenant_id=tenant_id,
+            connection_id=connection_id,
+            conversation_id=conversation_id,
+            text=customer_reply_limit_message(reply_precheck),
+        )
+        emit_wa_event("ai_reply_limit", reason=reply_precheck.reason)
+        return
 
     # Reserve credits via canonical ledger before model call.
     reservation_id: str | None = None
@@ -77,6 +157,12 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
         ).strip()
         if not reply_text and isinstance(outcome, dict):
             reply_text = str(outcome.get("reply") or outcome.get("answer") or outcome.get("text") or "").strip()
+        reason = str(getattr(outcome, "reason", "") or "")
+        if reason.endswith("_limit") or reason == "ai_reply_limit":
+            _release_reservation(tenant_id, reservation_id)
+            reservation_id = None
+        if word_notice and reply_text and "limit" not in reason:
+            reply_text = f"{word_notice}\n\n{reply_text}"
     except Exception as exc:
         emit_wa_event("ai_generation_failed", error=type(exc).__name__)
         _release_reservation(tenant_id, reservation_id)
@@ -157,20 +243,21 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
         )
 
         # Capture credits once after valid reply is persisted — delivery retry must not re-charge.
-        try:
-            from services.credit_ledger_service import credit_ledger_service
+        if reservation_id is not None:
+            try:
+                from services.credit_ledger_service import credit_ledger_service
 
-            credit_ledger_service.capture(
-                tenant_id=tenant_id,
-                reservation_id=reservation_id,
-                provider_cost_usd=None,
-                model_provider="whatsapp_cloud",
-            )
-            reservation_id = None  # captured — never release on delivery failure
-        except Exception as exc:
-            emit_wa_event("credit_capture_failed", error=type(exc).__name__)
-            _release_reservation(tenant_id, reservation_id)
-            return
+                credit_ledger_service.capture(
+                    tenant_id=tenant_id,
+                    reservation_id=reservation_id,
+                    provider_cost_usd=None,
+                    model_provider="whatsapp_cloud",
+                )
+                reservation_id = None  # captured — never release on delivery failure
+            except Exception as exc:
+                emit_wa_event("credit_capture_failed", error=type(exc).__name__)
+                _release_reservation(tenant_id, reservation_id)
+                return
 
         repo.update_outbound_intent(intent, dispatch_state="sending", control_epoch_at_send=int(conv.control_epoch))
         try:
@@ -264,3 +351,28 @@ def _release_reservation(tenant_id: str, reservation_id: str | None) -> None:
         credit_ledger_service.release(tenant_id=tenant_id, reservation_id=reservation_id)
     except Exception:
         emit_wa_event("credit_release_failed", tenant_id=tenant_id)
+
+
+async def _send_quota_notice(
+    *,
+    tenant_id: str,
+    connection_id: str,
+    conversation_id: str,
+    text: str,
+) -> None:
+    with whatsapp_session() as session:
+        repo = WhatsAppCloudRepository(session)
+        conn = repo.get_connection(connection_id)
+        conv = repo.get_tenant_conversation(tenant_id=tenant_id, conversation_id=conversation_id)
+        if conn is None or conv is None:
+            return
+        try:
+            token = repo.load_access_token(conn)
+            await send_text_message(
+                access_token=token,
+                phone_number_id=conn.phone_number_id,
+                to_wa_id=conv.customer_wa_id,
+                text=text,
+            )
+        except Exception as exc:
+            emit_wa_event("ai_limits_send_failed", error=type(exc).__name__)

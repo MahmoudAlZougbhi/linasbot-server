@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { classifyLiveChatError, fetchUnifiedChats, setOperatorAvailable } from './liveChatApi';
-import { type InboxFilter, type LiveChatItem } from './liveChatTypes';
+import {
+  type InboxFilter,
+  type ChannelFilter,
+  type LiveChatItem,
+} from './liveChatTypes';
 
 const POLL_MS = 20_000;
 const PAGE_SIZE = 30;
@@ -15,9 +19,11 @@ export function useLiveChatInbox() {
   const [errorKind, setErrorKind] = useState<'forbidden' | 'auth' | 'other' | null>(null);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<InboxFilter>('all');
+  const [channel, setChannel] = useState<ChannelFilter>('all');
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
+  const [indexRebuild, setIndexRebuild] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -39,14 +45,18 @@ export function useLiveChatInbox() {
           page: 1,
           pageSize: PAGE_SIZE,
           filter,
+          channel,
         });
-        if (!data.success && data.error) {
-          throw new Error(data.error);
+        const rows = data.chats ?? [];
+        // Show whatever rows exist. success:false with no chats is a load error, not empty.
+        if (rows.length === 0 && data.success === false) {
+          throw new Error(data.error || 'Could not load conversations.');
         }
-        setChats(data.chats);
+        setChats(rows);
         setHasMore(Boolean(data.has_more));
         setNextCursor(data.next_cursor ?? null);
-        setTotal(typeof data.total === 'number' ? data.total : data.chats.length);
+        setTotal(typeof data.total === 'number' ? data.total : rows.length);
+        setIndexRebuild(Boolean(data.requires_index_rebuild || data.index_empty));
         setError(null);
         setErrorKind(null);
       } catch (err) {
@@ -60,14 +70,14 @@ export function useLiveChatInbox() {
                 ? err.message
                 : 'Could not load conversations.',
           );
-          setChats([]);
+          if (mode === 'initial') setChats([]);
         }
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [debouncedSearch, filter],
+    [debouncedSearch, filter, channel],
   );
 
   const loadMore = useCallback(async () => {
@@ -80,6 +90,7 @@ export function useLiveChatInbox() {
         pageSize: PAGE_SIZE,
         cursor: nextCursor,
         filter,
+        channel,
       });
       setChats((prev) => {
         const seen = new Set(prev.map((c) => c.conversation_id));
@@ -96,7 +107,7 @@ export function useLiveChatInbox() {
     } finally {
       setLoadingMore(false);
     }
-  }, [debouncedSearch, filter, hasMore, loadingMore, nextCursor]);
+  }, [debouncedSearch, filter, channel, hasMore, loadingMore, nextCursor]);
 
   useEffect(() => {
     void setOperatorAvailable();
@@ -119,8 +130,11 @@ export function useLiveChatInbox() {
     setSearch,
     filter,
     setFilter,
+    channel,
+    setChannel,
     hasMore,
     total,
+    indexRebuild,
     refresh: () => void load('refresh'),
     loadMore,
     reloadQuiet: () => void load('poll'),

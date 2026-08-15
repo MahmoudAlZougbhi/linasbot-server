@@ -20,6 +20,7 @@ from services.google_identity_service import (
     unlink_google_identity,
 )
 from services.google_sign_in_service import GoogleSignInError, verify_identity_token
+from services.social_account_sign_in import is_social_only_account
 from services.tenant_registration_service import allocate_tenant_id
 from services.user_service import user_service
 
@@ -129,6 +130,18 @@ async def mobile_google_sign_in(body: GoogleSignInRequest) -> Any:
 
     existing = user_service.get_user_by_email(email)
     if existing is not None:
+        if is_social_only_account(existing):
+            try:
+                link_google_identity(
+                    tenant_id=str(existing.get("tenantId") or ""),
+                    user_id=str(existing["id"]),
+                    sub=sub,
+                    email=email,
+                    display_name=display_name,
+                )
+            except GoogleIdentityError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+            return issue_mobile_tokens(existing)
         raise HTTPException(
             status_code=409,
             detail={

@@ -13,6 +13,7 @@ from services.live_chat_service_common import (
     _env_int,
     _live_chat_display_name,
 )
+from utils.phone_utils import phone_match_key
 from utils.utils import (
     get_firestore_db,
 )
@@ -47,7 +48,6 @@ class LiveChatTemplatesMixin:
     STATE_RESOLVED: Any
     STATE_WAITING_OPERATOR: Any
     _empty_counters: Any
-    _identity_keys_for_index_chat: Any
     _index_collection: Any
     _is_cache_fresh: Any
     _normalize_conversation_state: Any
@@ -263,3 +263,11 @@ class LiveChatTemplatesMixin:
             if self._index_counters_cache:
                 return dict(self._index_counters_cache)
             return counters
+
+    def _identity_keys_for_index_chat(self, user_id: Any, phone_full: str, phone_clean: str) -> set:
+        keys = set()
+        for part in (user_id, phone_full, phone_clean):
+            k = phone_match_key(part)
+            if k:
+                keys.add(k)
+        return keys

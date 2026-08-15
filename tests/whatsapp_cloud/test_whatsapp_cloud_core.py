@@ -424,12 +424,25 @@ def test_config_key_presence_has_no_values():
     assert "WHATSAPP_CLOUD_PUBLIC_AVAILABILITY" in presence
 
 
-def test_public_availability_skips_pilot(monkeypatch, wa_db):
+def _grant_whatsapp_plan(monkeypatch, tmp_path, tenant_id: str, plan_id: str = "starter") -> None:
+    from services import entitlements_service as es
+    from services.entitlements_service import EntitlementsStore
+    from services.membership import whatsapp_gate as wg
+
+    store = EntitlementsStore(root=tmp_path / "ent-wa-plan")
+    monkeypatch.setattr(es, "entitlements_store", store)
+    monkeypatch.setattr(wg, "entitlements_store", store)
+    monkeypatch.setenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", "linas")
+    store.set_plan(tenant_id=tenant_id, plan_id=plan_id, status="active", source="admin")
+
+
+def test_public_availability_skips_pilot(monkeypatch, wa_db, tmp_path):
     monkeypatch.setenv("WHATSAPP_CLOUD_PUBLIC_AVAILABILITY", "true")
     monkeypatch.setenv("WHATSAPP_CLOUD_CONNECTION_UI_ENABLED", "false")
     from services.whatsapp_cloud.config import get_whatsapp_cloud_flags
     from services.whatsapp_cloud.entitlement import assert_whatsapp_connection_allowed
 
+    _grant_whatsapp_plan(monkeypatch, tmp_path, "any_tenant")
     flags = get_whatsapp_cloud_flags()
     assert flags.public_availability is True
     assert flags.require_pilot_entitlement is False
@@ -437,12 +450,13 @@ def test_public_availability_skips_pilot(monkeypatch, wa_db):
     assert_whatsapp_connection_allowed(wa_db, "any_tenant")
 
 
-def test_pilot_required_when_public_off(monkeypatch, wa_db):
+def test_pilot_required_when_public_off(monkeypatch, wa_db, tmp_path):
     monkeypatch.setenv("WHATSAPP_CLOUD_PUBLIC_AVAILABILITY", "false")
     monkeypatch.setenv("WHATSAPP_CLOUD_CONNECTION_UI_ENABLED", "true")
     monkeypatch.setenv("WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT", "true")
     from services.whatsapp_cloud.entitlement import WhatsAppEntitlementError, assert_whatsapp_connection_allowed
 
+    _grant_whatsapp_plan(monkeypatch, tmp_path, "no_pilot_tenant")
     try:
         assert_whatsapp_connection_allowed(wa_db, "no_pilot_tenant")
         raise AssertionError("expected WHATSAPP_PILOT_REQUIRED")
@@ -450,12 +464,13 @@ def test_pilot_required_when_public_off(monkeypatch, wa_db):
         assert exc.code == "WHATSAPP_PILOT_REQUIRED"
 
 
-def test_grant_pilot_enables_connect(monkeypatch, wa_db):
+def test_grant_pilot_enables_connect(monkeypatch, wa_db, tmp_path):
     monkeypatch.setenv("WHATSAPP_CLOUD_PUBLIC_AVAILABILITY", "false")
     monkeypatch.setenv("WHATSAPP_CLOUD_CONNECTION_UI_ENABLED", "true")
     from services.whatsapp_cloud.entitlement import assert_whatsapp_connection_allowed
     from services.whatsapp_cloud.repository import WhatsAppCloudRepository
 
+    _grant_whatsapp_plan(monkeypatch, tmp_path, "pilot_t")
     repo = WhatsAppCloudRepository(wa_db)
     repo.grant_pilot(tenant_id="pilot_t", granted_by_user_id="owner", reason="internal film")
     wa_db.commit()

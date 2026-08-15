@@ -83,6 +83,7 @@ async def _deliver_image_quota_notice(
             purpose="image_quota_notice",
             image_quota_disposition=quota_disposition,
             image_quota_allowed_amount=quota_allowed_amount,
+            image_quota_notice_text=message,
             send=lambda: adapter.send_text_message(sender_id, message),
         )
     else:
@@ -335,7 +336,6 @@ async def process_meta_social_event(
                     surface=surface,
                     binding_id=resolved_binding_id,
                 )
-
             quota_disposition = ""
             quota_allowed_amount = 0
             quota_message = ""
@@ -343,7 +343,7 @@ async def process_meta_social_event(
             if receipt is not None:
                 quota_disposition = receipt.image_quota_disposition
                 quota_allowed_amount = receipt.image_quota_allowed_amount
-                quota_message = customer_image_limit_message()
+                quota_message = receipt.image_quota_notice_text
                 quota_reason = "image_quota_replay"
                 if receipt.status == "needs_owner_action" or (
                     receipt.status == "sending" and receipt.image_quota_phase in {"reserved", "provider"}
@@ -386,7 +386,7 @@ async def process_meta_social_event(
                     quota_allowed_amount = planned_allowed
 
                 if quota_disposition in {"blocked", "truncated"}:
-                    quota_message = customer_image_limit_message()
+                    quota_message = customer_image_limit_message(planned_quota)
                 quota_reason = str(planned_quota.reason or "image_quota_limited")
                 reservation = None
                 if guarded_quota:
@@ -396,6 +396,7 @@ async def process_meta_social_event(
                         binding_id=resolved_binding_id,
                         disposition=quota_disposition,
                         allowed_amount=quota_allowed_amount,
+                        notice_text=quota_message,
                     )
                     if reservation.kind == "needs_owner_action":
                         return {
@@ -493,7 +494,6 @@ async def process_meta_social_event(
                     kept = _truncate_image_attachments(attachments, quota_allowed_amount)
                     event["attachments"] = kept
                     attachments = kept
-
         if not text and event.get("attachments"):
             text = "أرسلت صورة أو ملف. اكتبلي شو حابب تعرف عنه كرمال ساعدك."
         if not text:

@@ -180,7 +180,9 @@ async def publish_draft_sections(
         previous_pointer = read_published_pointer(tid)
         write_published_pointer(tid, pointer_out)
 
-    _sync_ai_limits_from_published(tid, sections.get("ai_limits") or {})
+    from services.ai_limits_source import sync_enforcement_from_payload
+
+    sync_enforcement_from_payload(tid, sections.get("ai_limits") or {})
 
     return PublishResult(
         tenant_id=tid,
@@ -190,31 +192,6 @@ async def publish_draft_sections(
         pointer=pointer_out.model_dump(mode="json"),
         previous_pointer=previous_pointer.model_dump(mode="json") if previous_pointer else None,
     )
-
-
-def _sync_ai_limits_from_published(tenant_id: str, payload: dict[str, object]) -> None:
-    """Push published CM ai_limits into the Limit AI enforcement store (single business SoT)."""
-    try:
-        from services.ai_usage_limits import ai_usage_limits_service
-        from services.cm.schemas import AiLimitsSection
-
-        limits = AiLimitsSection.model_validate(payload or {})
-        ai_usage_limits_service.save_settings(
-            tenant_id,
-            {
-                "unlimited": limits.unlimited,
-                "image_per_day": limits.image_per_day,
-                "image_per_week": limits.image_per_week,
-                "context_lines_per_day": limits.context_lines_per_day,
-                "context_lines_per_week": limits.context_lines_per_week,
-                "enforce_image_day": limits.enforce_image_day,
-                "enforce_image_week": limits.enforce_image_week,
-                "enforce_context_day": limits.enforce_context_day,
-                "enforce_context_week": limits.enforce_context_week,
-            },
-        )
-    except Exception as exc:
-        print(f"[cm-publish] ai_limits sync failed for {tenant_id}: {exc}")
 
 
 async def publish_faq_only(

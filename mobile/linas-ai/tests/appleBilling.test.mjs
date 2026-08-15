@@ -74,12 +74,17 @@ test('iapPurchases verifies before finishTransaction', () => {
 
 test('BillingScreen wires period toggle + Apple IAP copy', () => {
   const billing = read('features/billing/BillingScreen.tsx');
-  assert.match(billing, /BillingPeriodToggle/);
-  assert.match(billing, /CreditPacksSection/);
+  assert.match(billing, /ChoosePlanScreen/);
+  assert.match(billing, /BuyCreditsSheet/);
   assert.match(billing, /purchaseSubscription/);
-  assert.match(billing, /restorePurchases/);
-  assert.match(billing, /openManageSubscriptions/);
+  assert.match(billing, /purchaseCredits/);
   assert.doesNotMatch(billing, /Apple Pay/);
+  const sheet = read('features/billing/BuyCreditsSheet.tsx');
+  assert.match(sheet, /CREDIT_PACK_ORDER/);
+  assert.match(sheet, /com\.linasai\.credits|CREDIT_PACK_CATALOG_USD/);
+  const ids = read('features/billing/appleProductIds.ts');
+  assert.match(ids, /4\.99/);
+  assert.match(ids, /DEFAULT_CREDIT_PACK:\s*CreditPackId\s*=\s*5000/);
   const en = read('i18n/locales/subscriptionEn.ts');
   assert.match(en, /Apple In-App Purchase/);
   assert.doesNotMatch(en, /Apple Pay/);

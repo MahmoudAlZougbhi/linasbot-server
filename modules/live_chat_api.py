@@ -91,14 +91,16 @@ async def get_unified_chats(
     page_size: int = Query(default=30, ge=1, le=100),
     cursor: str = Query(default=None, description="Cursor string returned by previous page"),
     filter: str = Query(default="all", description="Badge filter: all|waiting|with_operator|bot|closed"),
+    channel: str = Query(default="all", description="Channel: all|whatsapp|instagram|facebook|tiktok"),
 ) -> Any:
     """WhatsApp-style inbox (single master list) powered by live_chat_index."""
     _log.info(
-        "live_chat_api.get_unified_chats search=%s page=%s page_size=%s filter=%s cursor=%s",
+        "live_chat_api.get_unified_chats search=%s page=%s page_size=%s filter=%s channel=%s cursor=%s",
         bool(search and search.strip()),
         page,
         page_size,
         filter,
+        channel,
         bool(cursor),
     )
     effective_page = int(cursor) if (cursor and cursor.isdigit()) else page
@@ -110,9 +112,10 @@ async def get_unified_chats(
             page_size=page_size,
             filter_state=filter,
             cursor=None if (cursor and cursor.isdigit()) else cursor,
+            channel=channel,
         )
 
-    fallback = {"success": False, "chats": [], "total": 0, "has_more": False}
+    fallback = {"success": False, "chats": [], "total": 0, "has_more": False, "error": "request_failed"}
     return await _run_endpoint(_handler, fallback=fallback)
 
 

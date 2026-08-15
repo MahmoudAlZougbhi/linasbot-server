@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { textDirectionStyle } from '../../lib/textDirection';
+import { contentStartAlign, textDirectionStyle } from '../../lib/textDirection';
 import { fonts, spacing, typography, useTheme } from '../../theme';
 
 type Block =
@@ -76,18 +76,26 @@ export function AiMessageBody({ content }: Props) {
 
   if (blocks.length === 0) {
     return (
-      <Text style={[styles.line, { color: colors.bubbleAiText }, dirStyle]}>
+      <Text style={[styles.line, { color: colors.bubbleAiText, width: '100%' }, dirStyle]}>
         {content}
       </Text>
     );
   }
 
+  const rtl = dirStyle.writingDirection === 'rtl';
+
   return (
-    <View>
+    <View style={{ width: '100%', alignItems: contentStartAlign(content) }}>
       {blocks.map((block, index) => {
         if (block.kind === 'section') {
           return (
-            <View key={`s-${index}`} style={styles.sectionRow}>
+            <View
+              key={`s-${index}`}
+              style={[
+                styles.sectionRow,
+                { flexDirection: rtl ? 'row-reverse' : 'row' },
+              ]}
+            >
               <Text style={[styles.sectionDash, { color: colors.accent }]}>—</Text>
               <Text style={[styles.sectionTitle, { color: colors.bubbleAiText }, dirStyle]}>
                 {block.title}
@@ -102,10 +110,14 @@ export function AiMessageBody({ content }: Props) {
               key={`b-${index}`}
               style={[
                 styles.bulletRow,
-                { flexDirection: dirStyle.writingDirection === 'rtl' ? 'row-reverse' : 'row' },
+                {
+                  flexDirection: rtl ? 'row-reverse' : 'row',
+                  paddingLeft: rtl ? 0 : 4,
+                  paddingRight: rtl ? 4 : 0,
+                },
               ]}
             >
-              <Text style={[styles.bulletDot, { color: colors.bubbleAiText }]}>•</Text>
+              <Text style={[styles.bulletDot, { color: colors.accent }]}>•</Text>
               <RichLine text={block.text} />
             </View>
           );

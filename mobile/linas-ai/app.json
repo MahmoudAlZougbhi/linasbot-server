@@ -25,7 +25,7 @@
       "package": "com.linasai.app",
       "versionCode": 23,
       "adaptiveIcon": {
-        "backgroundColor": "#0B3D34",
+        "backgroundColor": "#083A37",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -61,12 +61,12 @@
         "expo-splash-screen",
         {
           "image": "./assets/splash-native.png",
-          "imageWidth": 200,
+          "imageWidth": 220,
           "resizeMode": "contain",
-          "backgroundColor": "#FBFAFA",
+          "backgroundColor": "#083A37",
           "dark": {
             "image": "./assets/splash-native.png",
-            "backgroundColor": "#FBFAFA"
+            "backgroundColor": "#083A37"
           }
         }
       ],
@@ -77,6 +77,9 @@
     ],
     "extra": {
       "apiBaseUrl": "https://linasaibot.com",
+      "googleWebClientId": "513717053157-bqn6moo5q15q4c54bnmcgct07hrn8e1g.apps.googleusercontent.com",
+      "googleIosClientId": "513717053157-sp9fa5fqpg2f7pj5evbtkeucon1v4mm1.apps.googleusercontent.com",
+      "googleAndroidClientId": "513717053157-gegscca3fjh5e3qthacbs5k5a7gelrhn.apps.googleusercontent.com",
       "eas": {
         "projectId": "d15fe78a-09df-4d7c-81a5-2b307956fddf"
       }

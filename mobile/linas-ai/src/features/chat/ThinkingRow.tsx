@@ -4,6 +4,7 @@ import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-nat
 import { LinasStarMark } from '../../components/LinasStarMark';
 import {
   aiMessageColStyle,
+  aiMessageHeaderStyle,
   aiMessageRowStyle,
   textDirectionStyle,
 } from '../../lib/textDirection';
@@ -63,18 +64,26 @@ export function ThinkingRow({ label }: Props) {
 
   return (
     <View
-      style={[styles.row, aiMessageRowStyle(label)]}
+      style={[styles.row, styles.rowAi, aiMessageRowStyle(label)]}
       accessibilityLiveRegion="polite"
       accessibilityRole="text"
       accessibilityLabel={label}
     >
-      <View style={[styles.col, aiMessageColStyle(label)]}>
-        <View style={styles.aiLabelRow}>
-          <LinasStarMark size={12} labeled label="Linas" labelColor={colors.accentDeep} />
+      <View style={[styles.col, styles.colAi]}>
+        <View style={[styles.aiLabelRow, aiMessageHeaderStyle]}>
+          <LinasStarMark
+            size={16}
+            labelSize={13}
+            labeled
+            label="Linas"
+            labelColor={colors.text}
+          />
         </View>
-        <Animated.Text style={[styles.text, { color: colors.textMuted, opacity }, dirStyle]}>
-          {label}
-        </Animated.Text>
+        <View style={[styles.bodyCol, aiMessageColStyle(label)]}>
+          <Animated.Text style={[styles.text, { color: colors.textMuted, opacity }, dirStyle]}>
+            {label}
+          </Animated.Text>
+        </View>
       </View>
     </View>
   );
@@ -84,9 +93,19 @@ const styles = StyleSheet.create({
   row: {
     marginBottom: spacing.md,
   },
+  rowAi: { alignSelf: 'flex-start', maxWidth: '88%' },
   col: { flexShrink: 1 },
+  colAi: { width: '100%' },
   aiLabelRow: {
+    alignSelf: 'flex-start',
+    paddingTop: 4,
+    paddingBottom: 2,
     marginBottom: 4,
+    overflow: 'visible',
+  },
+  bodyCol: {
+    width: '100%',
+    alignSelf: 'stretch',
   },
   text: {
     ...typography.chatAi,

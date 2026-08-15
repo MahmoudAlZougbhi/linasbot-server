@@ -51,19 +51,30 @@ from services.cm.schemas_requests import (  # noqa: F401
 
 
 class AiLimitsSection(CmBaseModel):
-    """Tenant-configurable AI usage limits (enforced from published CM)."""
+    """Tenant-configurable AI usage limits (enforced from CM ai_limits)."""
 
     unlimited: bool = False
     # Capability switches (moved from Settings Features into AI Setup).
     voice_processing_enabled: bool = True
     image_analysis_enabled: bool = True
     human_handoff_enabled: bool = True
-    image_per_day: int = Field(default=20, ge=0)
-    image_per_week: int = Field(default=100, ge=0)
+    text_words_per_message: int = Field(default=500, ge=0)
+    text_replies_per_day: int = Field(default=20, ge=0)
+    text_replies_per_week: int = Field(default=100, ge=0)
+    text_replies_per_month: int = Field(default=300, ge=0)
+    photos_per_message: int = Field(default=2, ge=0)
+    image_per_day: int = Field(default=5, ge=0)
+    image_per_week: int = Field(default=20, ge=0)
+    image_per_month: int = Field(default=60, ge=0)
+    voice_minutes_per_message: int = Field(default=2, ge=0)
+    voice_minutes_per_day: int = Field(default=10, ge=0)
+    voice_minutes_per_week: int = Field(default=40, ge=0)
+    voice_minutes_per_month: int = Field(default=120, ge=0)
     context_lines_per_day: int = Field(default=500, ge=0)
     context_lines_per_week: int = Field(default=2000, ge=0)
     enforce_image_day: bool = True
     enforce_image_week: bool = True
+    enforce_image_month: bool = True
     enforce_context_day: bool = True
     enforce_context_week: bool = True
     notes: str | None = None
