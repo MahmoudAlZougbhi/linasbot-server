@@ -11,7 +11,6 @@ import { requestsFr } from './requestsFr';
 import { usersUiFr } from './usersUiFr';
 import { authFlowFr } from './authFlowFr';
 import { settingsUiFr } from './settingsUiFr';
-import { webChatUiEn } from './webChatUiEn';
 import type { StringKey } from './en';
 
 export const fr = {
@@ -107,20 +106,6 @@ export const fr = {
     'Cela déconnecte le compte lié et désactive les réponses DM et commentaires pour ce canal.',
   integrationsLoadError: 'Impossible de charger les intégrations.',
   integrationsActionError: 'Impossible de mettre à jour la connexion. Réessayez.',
-  webChatSubtitle: 'Intégrez le chat IA sur votre site',
-  webChatSiteUrl: 'URL du site',
-  webChatSave: 'Enregistrer le site',
-  webChatEnable: 'Activer',
-  webChatDisable: 'Désactiver',
-  webChatEmbedTitle: 'Code d’intégration',
-  webChatCopyEmbed: 'Copier le code',
-  webChatEmbedCopied: 'Code copié',
-  webChatSaved: 'Chat web mis à jour',
-  webChatPlanRequired: 'Le chat web est inclus avec Starter et au-dessus.',
-  webChatRotateKey: 'Rotation de la clé d’intégration ?',
-  webChatRotateKeyConfirm: 'L’ancien code ne fonctionnera plus jusqu’à mise à jour du site.',
-  webChatRotateKeyAction: 'Rotation de la clé',
-  webChatKeyRotated: 'Clé d’intégration rotée — mettez à jour le code',
   integrationsToggleError: 'Impossible de mettre à jour le réglage du canal. Réessayez.',
   metaOAuthSuccess: 'Accès Meta mis à jour. Actualisation du statut…',
   metaOAuthCancelled: 'Autorisation Meta annulée.',
@@ -339,7 +324,6 @@ export const fr = {
   ...usersUiFr,
   ...dashboardFr,
   ...aiSetupFr,
-  ...webChatUiEn,
 
   proposalChangeTitle: 'Modification Configuration IA',
   proposalDeleteTitle: 'Supprimer de la Configuration IA',

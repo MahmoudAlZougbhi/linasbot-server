@@ -11,7 +11,6 @@ import { requestsAr } from './requestsAr';
 import { usersUiAr } from './usersUiAr';
 import { authFlowAr } from './authFlowAr';
 import { settingsUiAr } from './settingsUiAr';
-import { webChatUiEn } from './webChatUiEn';
 import type { StringKey } from './en';
 
 export const ar = {
@@ -104,20 +103,6 @@ export const ar = {
     'سيؤدي هذا إلى فصل الحساب المرتبط وإيقاف ردود الرسائل والتعليقات لهذه القناة.',
   integrationsLoadError: 'تعذر تحميل التكاملات.',
   integrationsActionError: 'تعذر تحديث الاتصال. حاول مجدداً.',
-  webChatSubtitle: 'أضف دردشة الذكاء الاصطناعي إلى موقعك',
-  webChatSiteUrl: 'رابط الموقع',
-  webChatSave: 'حفظ الموقع',
-  webChatEnable: 'تفعيل',
-  webChatDisable: 'تعطيل',
-  webChatEmbedTitle: 'كود التضمين',
-  webChatCopyEmbed: 'نسخ كود التضمين',
-  webChatEmbedCopied: 'تم نسخ كود التضمين',
-  webChatSaved: 'تم تحديث دردشة الموقع',
-  webChatPlanRequired: 'دردشة الموقع متاحة في Starter وما فوق.',
-  webChatRotateKey: 'تدوير مفتاح التكامل؟',
-  webChatRotateKeyConfirm: 'كود التضمين القديم لن يعمل حتى تحدّث موقعك.',
-  webChatRotateKeyAction: 'تدوير المفتاح',
-  webChatKeyRotated: 'تم تدوير مفتاح التكامل — حدّث كود التضمين',
   integrationsToggleError: 'تعذر تحديث إعداد القناة. حاول مجدداً.',
   metaOAuthSuccess: 'تم تحديث وصول Meta. جاري تحديث حالة الاتصال…',
   metaOAuthCancelled: 'تم إلغاء تفويض Meta.',
@@ -335,7 +320,6 @@ export const ar = {
   ...usersUiAr,
   ...dashboardAr,
   ...aiSetupAr,
-  ...webChatUiEn,
 
   proposalChangeTitle: 'تعديل إعداد الذكاء الاصطناعي',
   proposalDeleteTitle: 'حذف من إعداد الذكاء الاصطناعي',
