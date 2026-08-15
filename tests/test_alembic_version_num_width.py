@@ -234,4 +234,4 @@ def test_fresh_and_older_head_postgres_can_stamp_the_long_revision(postgres_url:
     assert relative.returncode == 0
     maxlen, current = _version_meta(postgres_url)
     assert maxlen == 64
-    assert current == {"20260818_ai_products_phase2"}
+    assert current == {"20260818_ai_services"}
