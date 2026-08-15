@@ -1,8 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { AppIcon, ion, type AppIconName } from '../../../components/AppIcon';
 import { useI18n } from '../../../i18n/LanguageContext';
 import { fonts, spacing, useTheme } from '../../../theme';
+import { MODULE_ICONS } from '../../nav/moduleIcons';
 import { DASH_CARD_RADIUS, DASH_HAIRLINE, DASH_ICON_BG, DASH_NAVY } from '../dashboardChrome';
 import { formatCount } from '../dashboardFormat';
 import type { TenantDashboard } from '../dashboardTypes';
@@ -14,26 +15,30 @@ type Props = {
   unavailable?: boolean;
 };
 
-const TILES = [
+const TILES: Array<{
+  key: keyof Activity;
+  labelKey: 'dashMessagesReplied' | 'dashCommentsReplied' | 'dashSmartAnswers' | 'dashRequests';
+  icon: AppIconName;
+}> = [
   {
-    key: 'messages_replied' as const,
-    labelKey: 'dashMessagesReplied' as const,
-    icon: 'chatbox-ellipses-outline' as const,
+    key: 'messages_replied',
+    labelKey: 'dashMessagesReplied',
+    icon: ion('chatbox-ellipses-outline'),
   },
   {
-    key: 'comments_replied' as const,
-    labelKey: 'dashCommentsReplied' as const,
-    icon: 'chatbubble-outline' as const,
+    key: 'comments_replied',
+    labelKey: 'dashCommentsReplied',
+    icon: ion('chatbubble-outline'),
   },
   {
-    key: 'smart_answers' as const,
-    labelKey: 'dashSmartAnswers' as const,
-    icon: 'sparkles-outline' as const,
+    key: 'smart_answers',
+    labelKey: 'dashSmartAnswers',
+    icon: MODULE_ICONS.faq,
   },
   {
-    key: 'requests' as const,
-    labelKey: 'dashRequests' as const,
-    icon: 'briefcase-outline' as const,
+    key: 'requests',
+    labelKey: 'dashRequests',
+    icon: ion('briefcase-outline'),
   },
 ];
 
@@ -52,7 +57,7 @@ export function TotalActivityGrid({ activity, unavailable }: Props) {
           return (
             <View key={tile.key} style={styles.cell}>
               <View style={styles.iconWrap}>
-                <Ionicons name={tile.icon} size={20} color={DASH_NAVY} />
+                <AppIcon icon={tile.icon} size={20} color={DASH_NAVY} />
               </View>
               <View style={styles.copy}>
                 <Text style={styles.value}>
