@@ -20,10 +20,7 @@ test('chat header: overlay hamburger only in light-gray square', () => {
   const icons = read('features/chat/ChatHeaderIcons.tsx');
   const chat = read('features/chat/ChatScreen.tsx');
   const footer = read('features/nav/DrawerFooter.tsx');
-  assert.match(header, /HeaderIconBox/);
-  assert.match(header, /colors\.featuredIconBg/);
-  assert.match(header, /colors\.featuredIconBorder/);
-  assert.match(header, /MenuIcon/);
+  assert.match(header, /HeaderMenuButton/);
   assert.match(header, /ChatTopFade/);
   assert.match(header, /LIST_BELOW_OVERLAY_GAP = spacing\.md \+ spacing\.sm/);
   assert.match(header, /CHAT_LIST_TOP_CLEARANCE = HEADER_HIT \+ HEADER_TOP_GAP \+ LIST_BELOW_OVERLAY_GAP/);
@@ -37,8 +34,13 @@ test('chat header: overlay hamburger only in light-gray square', () => {
   assert.doesNotMatch(header, /onNewChat/);
   assert.doesNotMatch(header, /borderBottomWidth/);
   assert.doesNotMatch(header, /from ['"]expo-blur['"]/);
+  assert.match(icons, /export function HeaderMenuButton/);
   assert.match(icons, /export function HeaderIconBox/);
-  assert.match(icons, /HEADER_ICON_BOX/);
+  assert.match(icons, /HEADER_ICON_BOX = 36/);
+  assert.match(icons, /HEADER_HIT = 44/);
+  assert.match(icons, /colors\.featuredIconBg/);
+  assert.match(icons, /colors\.featuredIconBorder/);
+  assert.match(icons, /<MenuIcon color=\{colors\.text\}/);
   assert.match(chat, /<ChatHeader[\s\S]*onOpenMenu=/);
   assert.doesNotMatch(chat, /<ChatHeader[\s\S]{0,180}onNewChat=/);
   assert.doesNotMatch(chat, /styles\.flex, \{ paddingTop: insets\.top \}/);
@@ -54,6 +56,22 @@ test('chat header: overlay hamburger only in light-gray square', () => {
   assert.match(listStyles, /paddingTop:\s*16/);
   assert.match(footer, /tr\('newChat'\)/);
   assert.match(footer, /<NewChatIcon /);
+});
+
+test('module screens reuse the same silver HeaderMenuButton as chat', () => {
+  const chrome = read('features/shared/ScreenChrome.tsx');
+  const billing = read('features/billing/BillingScreen.tsx');
+  const dash = read('features/dashboard/DashboardScreen.tsx');
+  const settings = read('features/settings/SettingsScreen.tsx');
+  assert.match(chrome, /HeaderMenuButton/);
+  assert.match(chrome, /setDrawerOpen\(true\)/);
+  assert.doesNotMatch(chrome, /<MenuIcon /);
+  assert.match(chrome, /justifyContent:\s*'center'/);
+  assert.doesNotMatch(chrome, /paddingTop:\s*10/);
+  assert.doesNotMatch(dash, /stackedHeader/);
+  assert.match(settings, /stackedHeader/);
+  assert.match(billing, /view === 'choose' && hasSub/);
+  assert.doesNotMatch(billing, /nav\.goChat\(\)/);
 });
 
 test('composer: pill with plus, placeholder, mic, in-pill send, disclaimer', () => {

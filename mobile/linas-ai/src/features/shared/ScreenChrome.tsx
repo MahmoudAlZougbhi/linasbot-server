@@ -6,7 +6,7 @@ import { AppIcon, feather } from '../../components/AppIcon';
 import { GradientBackground } from '../../components/GradientBackground';
 import { useI18n } from '../../i18n/LanguageContext';
 import { HIT, fonts, spacing, typography, useTheme } from '../../theme';
-import { MenuIcon } from '../chat/ChatHeaderIcons';
+import { HEADER_HIT, HeaderMenuButton } from '../chat/ChatHeaderIcons';
 import { NavDrawer } from '../nav/NavDrawer';
 import { useModuleNav } from '../nav/ModuleNavContext';
 import { useModuleDrawerHistory } from '../nav/useModuleDrawerHistory';
@@ -27,8 +27,8 @@ type Props = {
 };
 
 /**
- * Module screen chrome: hamburger opens the side drawer.
- * Pass onBack to show a back chevron instead (Choose a plan).
+ * Module screen chrome: shared silver hamburger opens the side drawer.
+ * Pass onBack only for nested steps (Choose a plan from Current plan).
  */
 export function ScreenChrome({
   title,
@@ -49,20 +49,18 @@ export function ScreenChrome({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawer = useModuleDrawerHistory(nav.isAuthenticated, drawerOpen);
   const leadColor = iconColor ?? colors.text;
-  const menu = (
+  const menu = onBack ? (
     <Pressable
-      onPress={() => (onBack ? onBack() : setDrawerOpen(true))}
+      onPress={onBack}
       style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
-      accessibilityLabel={onBack ? tr('back') : tr('openMenu')}
+      accessibilityLabel={tr('back')}
       accessibilityRole="button"
       hitSlop={4}
     >
-      {onBack ? (
-        <AppIcon icon={feather('chevron-left')} size={26} color={leadColor} />
-      ) : (
-        <MenuIcon color={leadColor} />
-      )}
+      <AppIcon icon={feather('chevron-left')} size={26} color={leadColor} />
     </Pressable>
+  ) : (
+    <HeaderMenuButton onPress={() => setDrawerOpen(true)} accessibilityLabel={tr('openMenu')} />
   );
 
   return (
@@ -181,8 +179,8 @@ const styles = StyleSheet.create({
     marginLeft: -spacing.sm,
   },
   hitSpacer: {
-    width: HIT,
-    height: HIT,
+    width: HEADER_HIT,
+    height: HEADER_HIT,
   },
   headerRight: {
     minWidth: HIT,
@@ -196,7 +194,7 @@ const styles = StyleSheet.create({
   },
   titleBlock: {
     flex: 1,
-    paddingTop: 10,
+    justifyContent: 'center',
   },
   titleBlockCentered: {
     paddingTop: 0,

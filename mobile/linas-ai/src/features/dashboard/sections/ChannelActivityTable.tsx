@@ -117,7 +117,7 @@ function DataCell({
 
 const styles = StyleSheet.create({
   card: { borderRadius: DASH_CARD_RADIUS, borderWidth: 1, padding: spacing.lg, gap: spacing.sm },
-  title: { fontFamily: fonts.bodyMedium, fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  title: { fontFamily: fonts.bodyMedium, fontSize: 16, marginBottom: 4 },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -142,8 +142,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
   },
-  platformName: { fontFamily: fonts.bodyMedium, fontSize: 14, flexShrink: 1 },
+  platformName: { fontFamily: fonts.bodyMedium, fontSize: 13, flexShrink: 1 },
   headerCell: { flex: 0.55, fontFamily: fonts.body, fontSize: 11, textAlign: 'right' },
-  dataCell: { flex: 0.55, fontFamily: fonts.bodyMedium, fontSize: 13, textAlign: 'right' },
+  dataCell: { flex: 0.55, fontFamily: fonts.body, fontSize: 13, textAlign: 'right' },
   wideCell: { flex: 0.75 },
 });
