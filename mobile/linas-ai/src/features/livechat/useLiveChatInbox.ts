@@ -48,15 +48,17 @@ export function useLiveChatInbox() {
           channel,
         });
         const rows = data.chats ?? [];
-        // Show whatever rows exist. success:false with no chats is a load error, not empty.
-        if (rows.length === 0 && data.success === false) {
+        const rebuild = Boolean(data.requires_index_rebuild || data.index_empty);
+        // Show whatever rows exist. success:false with no chats is a load error, not empty —
+        // unless the server signaled an empty index / rebuild (not a hard outage).
+        if (rows.length === 0 && data.success === false && !rebuild) {
           throw new Error(data.error || 'Could not load conversations.');
         }
         setChats(rows);
         setHasMore(Boolean(data.has_more));
         setNextCursor(data.next_cursor ?? null);
         setTotal(typeof data.total === 'number' ? data.total : rows.length);
-        setIndexRebuild(Boolean(data.requires_index_rebuild || data.index_empty));
+        setIndexRebuild(rebuild);
         setError(null);
         setErrorKind(null);
       } catch (err) {

@@ -4,10 +4,10 @@ import { ApiError, apiFetch } from '../../api/client';
 import { tokenStore } from '../../auth/tokenStore';
 import {
   ActionResultSchema,
-  ConversationDetailsSchema,
   type InboxFilter,
   type ChannelFilter,
   type LiveChatItem,
+  parseConversationDetailsResponse,
   parseUnifiedChatsResponse,
   idempotencyKey,
 } from './liveChatTypes';
@@ -67,7 +67,8 @@ export async function fetchConversation(
   const q = params.toString();
   const path = `/api/live-chat/conversation/${encodeURIComponent(userId)}/${encodeURIComponent(conversationId)}${q ? `?${q}` : ''}`;
   try {
-    return await apiFetch(path, { schema: ConversationDetailsSchema });
+    const body = await apiFetch(path, { schema: z.unknown() });
+    return parseConversationDetailsResponse(body);
   } catch (err) {
     rethrow(err, 'Could not load messages.');
   }

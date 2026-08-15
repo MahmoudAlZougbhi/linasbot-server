@@ -146,6 +146,40 @@ export const LiveChatMessageSchema = z
 
 export type LiveChatMessage = z.infer<typeof LiveChatMessageSchema>;
 
+function coerceMessageRow(row: unknown): unknown {
+  if (!row || typeof row !== 'object') return row;
+  const rec = row as Record<string, unknown>;
+  let isUser = rec.is_user;
+  if (typeof isUser === 'number') isUser = isUser !== 0;
+  if (typeof isUser === 'string') {
+    const lowered = isUser.toLowerCase();
+    isUser = lowered === 'true' || lowered === '1';
+  }
+  if (isUser == null && rec.role != null) {
+    isUser = String(rec.role).toLowerCase() === 'user';
+  }
+  const ts = rec.timestamp;
+  const timestamp = ts == null ? ts : typeof ts === 'string' ? ts : String(ts);
+  const text = rec.text ?? rec.content;
+  return {
+    ...rec,
+    is_user: typeof isUser === 'boolean' ? isUser : rec.is_user,
+    timestamp,
+    content: rec.content ?? text,
+    text,
+  };
+}
+
+export function parseLiveChatMessages(rows: unknown): LiveChatMessage[] {
+  if (!Array.isArray(rows)) return [];
+  const out: LiveChatMessage[] = [];
+  for (const row of rows) {
+    const parsed = LiveChatMessageSchema.safeParse(coerceMessageRow(row));
+    if (parsed.success) out.push(parsed.data);
+  }
+  return out;
+}
+
 export const ConversationDetailsSchema = z
   .object({
     success: z.boolean(),
@@ -159,6 +193,29 @@ export const ConversationDetailsSchema = z
     error: z.string().optional(),
   })
   .passthrough();
+
+export type ConversationDetails = z.infer<typeof ConversationDetailsSchema>;
+
+/** Never throws — keep valid messages even when the envelope is messy. */
+export function parseConversationDetailsResponse(body: unknown): ConversationDetails {
+  const rec = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+  const messages = parseLiveChatMessages(rec.messages);
+  const success =
+    rec.success === true ? true : rec.success === false ? false : messages.length > 0;
+  const parsed = ConversationDetailsSchema.safeParse({ ...rec, messages, success });
+  if (parsed.success) return parsed.data;
+  return {
+    success,
+    conversation_id: typeof rec.conversation_id === 'string' ? rec.conversation_id : undefined,
+    messages,
+    total_messages: typeof rec.total_messages === 'number' ? rec.total_messages : undefined,
+    returned_messages: typeof rec.returned_messages === 'number' ? rec.returned_messages : messages.length,
+    has_more: rec.has_more === true,
+    sentiment: typeof rec.sentiment === 'string' ? rec.sentiment : undefined,
+    status: typeof rec.status === 'string' ? rec.status : undefined,
+    error: typeof rec.error === 'string' ? rec.error : undefined,
+  };
+}
 
 export const ActionResultSchema = z
   .object({
