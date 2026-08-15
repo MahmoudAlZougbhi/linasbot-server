@@ -20,8 +20,9 @@ def assert_web_plan_allowed(tenant_id: str) -> None:
     if is_subscription_exempt_tenant(tenant_id):
         return
     ent = entitlements_store.get(tenant_id)
-    if ent.status not in {"active", "trial", "grace"} or ent.plan_id in {"", "none"}:
+    plan_id = (ent.plan_id or "").strip().lower()
+    if ent.status not in {"active", "trial", "grace"} or plan_id in {"", "none"}:
         raise WebPlanDenied(f"Web Chat requires an active paid plan (plan={ent.plan_id}, status={ent.status}).")
-    features = PLAN_FEATURES.get(ent.plan_id) or ent.features or {}
+    features = PLAN_FEATURES.get(plan_id) or ent.features or {}
     if not features.get("web"):
         raise WebPlanDenied(f"Web Chat is not included on plan={ent.plan_id}. Upgrade required.")
