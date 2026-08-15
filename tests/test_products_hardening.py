@@ -13,8 +13,12 @@ os.environ["LINAS_WHATSAPP_ALLOW_SQLITE"] = "true"
 
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests, whatsapp_session  # noqa: E402
-from services.products.image_fingerprint import combined_image_similarity, compute_color_histogram, compute_fingerprint  # noqa: E402
-from services.products.image_index import build_index_from_media, find_image_candidates  # noqa: E402
+from services.products.image_fingerprint import (  # noqa: E402
+    combined_image_similarity,
+    compute_color_histogram,
+    compute_fingerprint,
+)
+from services.products.image_index import find_image_candidates  # noqa: E402
 from services.products.luna_title_resolver import TITLES_PER_CHUNK  # noqa: E402
 from services.products.media import store_product_media  # noqa: E402
 from services.products.outbound_hook import (  # noqa: E402
