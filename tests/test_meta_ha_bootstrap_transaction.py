@@ -1715,6 +1715,59 @@ def test_postgres_probe_tree_modes_are_deterministic_under_umask_077(tmp_path: P
     assert "lib/python3.13/site-packages/example/module.py" in names
 
 
+def test_postgres_probe_tree_uses_scoped_bounds_for_copied_runtime(tmp_path: Path) -> None:
+    root = tmp_path / "probe-env"
+    executable = root / "bin/python3.13"
+    executable.parent.mkdir(parents=True)
+    root.chmod(0o700)
+    executable.write_bytes(b"x" * (bootstrap.MAX_RELEASE_TREE_FILE_BYTES + 1))
+    bootstrap._normalize_probe_tree_permissions(
+        root,
+        expected_uid=os.getuid(),
+        expected_gid=os.getgid(),
+    )
+
+    with pytest.raises(PermissionError, match="unsafe bootstrap authority file"):
+        bootstrap._release_tree_evidence(
+            root,
+            expected_uid=os.getuid(),
+            expected_gid=os.getgid(),
+        )
+
+    tree_sha, file_count, total_size, names = bootstrap._release_tree_evidence(
+        root,
+        expected_uid=os.getuid(),
+        expected_gid=os.getgid(),
+        file_limit=bootstrap.MAX_PROBE_TREE_FILE_BYTES,
+        total_limit=bootstrap.MAX_PROBE_TREE_TOTAL_BYTES,
+    )
+    assert len(tree_sha) == 64
+    assert file_count == 1
+    assert total_size == executable.stat().st_size
+    assert names == {"bin", "bin/python3.13"}
+
+
+def test_postgres_probe_tree_total_size_is_bounded(tmp_path: Path) -> None:
+    root = tmp_path / "probe-env"
+    root.mkdir(mode=0o700)
+    (root / "one").write_bytes(b"1234")
+    (root / "two").write_bytes(b"5678")
+    bootstrap._normalize_probe_tree_permissions(
+        root,
+        expected_uid=os.getuid(),
+        expected_gid=os.getgid(),
+    )
+
+    with pytest.raises(RuntimeError, match="total-size limit"):
+        bootstrap._release_tree_evidence(
+            root,
+            expected_uid=os.getuid(),
+            expected_gid=os.getgid(),
+            file_limit=4,
+            total_limit=7,
+        )
+
+
 def test_postgres_probe_tree_mode_normalization_rejects_links(tmp_path: Path) -> None:
     root = tmp_path / "probe-env"
     root.mkdir(mode=0o700)
@@ -1737,6 +1790,14 @@ def test_probe_normalization_runs_after_install_and_before_hashing() -> None:
     normalize = prepare.index("_normalize_probe_tree_permissions(")
     evidence = prepare.index("_release_tree_evidence(")
     assert install_done < normalize < evidence
+    assert prepare.count("file_limit=MAX_PROBE_TREE_FILE_BYTES") == 1
+    assert prepare.count("total_limit=MAX_PROBE_TREE_TOTAL_BYTES") == 1
+
+    source_assert = source[
+        source.index("def _assert_probe_environment") : source.index("def _prepare_probe_environment")
+    ]
+    assert source_assert.count("file_limit=MAX_PROBE_TREE_FILE_BYTES") == 1
+    assert source_assert.count("total_limit=MAX_PROBE_TREE_TOTAL_BYTES") == 1
 
 
 def test_bootstrap_first_transition_orders_unit_and_bytecode_authority_before_commit() -> None:

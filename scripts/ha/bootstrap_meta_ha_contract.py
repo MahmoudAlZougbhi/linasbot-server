@@ -233,6 +233,9 @@ MAX_RELEASE_PAYLOAD_BYTES = 4 * 1024**3
 MAX_PYTHON_RUNTIME_ARCHIVE_BYTES = 256 * 1024**2
 MAX_WHEELHOUSE_BYTES = 4 * 1024**3
 MAX_GIT_METADATA_BYTES = 128 * 1024**2
+MAX_RELEASE_TREE_FILE_BYTES = 8 * 1024**2
+MAX_PROBE_TREE_FILE_BYTES = 64 * 1024**2
+MAX_PROBE_TREE_TOTAL_BYTES = 512 * 1024**2
 RUNTIME_TX_RE = re.compile(r"^pyr_[0-9a-f]{32}$")
 RELEASE_TREE_DOMAIN = b"linasbot-release-tree-v1\0"
 RUNTIME_NODE_RECEIPT_KEYS = {
@@ -665,8 +668,13 @@ def _release_tree_evidence(
     *,
     expected_uid: int = 0,
     expected_gid: int = 0,
+    file_limit: int = MAX_RELEASE_TREE_FILE_BYTES,
+    total_limit: int | None = None,
 ) -> tuple[str, int, int, frozenset[str]]:
     """Recompute the QG normalized tree before importing any control module."""
+
+    if file_limit < 1 or total_limit is not None and total_limit < 1:
+        raise ValueError("release tree evidence limits must be positive")
 
     _secure_authority_dir(
         root,
@@ -713,7 +721,7 @@ def _release_tree_evidence(
         else:
             raw = _read_authority_file(
                 path,
-                limit=8 * 1024**2,
+                limit=file_limit,
                 expected_uid=expected_uid,
                 expected_gid=expected_gid,
                 mode=stat.S_IMODE(info.st_mode),
@@ -727,6 +735,8 @@ def _release_tree_evidence(
             ]
             file_count += 1
             total_size += len(raw)
+            if total_limit is not None and total_size > total_limit:
+                raise RuntimeError("authenticated control tree exceeds its total-size limit")
         digest.update(json.dumps(record, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
         digest.update(b"\n")
     return digest.hexdigest(), file_count, total_size, frozenset(names)
@@ -2313,6 +2323,8 @@ def _assert_probe_environment(
         root / "probe-env",
         expected_uid=expected_uid,
         expected_gid=expected_gid,
+        file_limit=MAX_PROBE_TREE_FILE_BYTES,
+        total_limit=MAX_PROBE_TREE_TOTAL_BYTES,
     )
     if (probe_sha, probe_count, probe_size) != (
         proof.get("probe_tree_sha256"),
@@ -2431,6 +2443,8 @@ def _prepare_probe_environment(
         venv_root,
         expected_uid=expected_uid,
         expected_gid=expected_gid,
+        file_limit=MAX_PROBE_TREE_FILE_BYTES,
+        total_limit=MAX_PROBE_TREE_TOTAL_BYTES,
     )
     payload = {
         **_probe_authority_payload(runtime_authority),
