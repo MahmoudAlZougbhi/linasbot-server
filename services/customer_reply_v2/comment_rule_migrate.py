@@ -18,7 +18,19 @@ LEGACY_TO_V10_ACTIONS = {
 def migrate_comment_rule(raw: dict[str, Any]) -> tuple[dict[str, Any], str]:
     rule = dict(raw or {})
     notes: list[str] = []
-    if str(rule.get("post_id") or "").strip():
+    post_ids: list[str] = []
+    raw_ids = rule.get("post_ids")
+    if isinstance(raw_ids, list):
+        for item in raw_ids:
+            value = str(item or "").strip()
+            if value and value not in post_ids:
+                post_ids.append(value)
+    single = str(rule.get("post_id") or "").strip()
+    if single and single not in post_ids:
+        post_ids.append(single)
+    if post_ids:
+        rule["post_ids"] = post_ids
+        rule["post_id"] = post_ids[0]
         rule["scope"] = "specific_post"
         notes.append("scope:specific_post")
     elif not str(rule.get("scope") or "").strip():

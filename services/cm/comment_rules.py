@@ -55,11 +55,23 @@ def _channel_ok(rule: CommentRule, channel: str) -> bool:
     return want == (channel or "").strip().lower()
 
 
+def _wanted_post_ids(rule: CommentRule) -> list[str]:
+    ids: list[str] = []
+    for raw in getattr(rule, "post_ids", None) or []:
+        value = str(raw or "").strip()
+        if value and value not in ids:
+            ids.append(value)
+    single = (rule.post_id or "").strip()
+    if single and single not in ids:
+        ids.append(single)
+    return ids
+
+
 def _post_ok(rule: CommentRule, post_id: str) -> bool:
-    want = (rule.post_id or "").strip()
-    if not want:
+    wanted = _wanted_post_ids(rule)
+    if not wanted:
         return True
-    return want == (post_id or "").strip()
+    return (post_id or "").strip() in wanted
 
 
 def _text_matches(rule: CommentRule, text: str) -> bool:

@@ -367,6 +367,8 @@ class CommentRule(CmBaseModel):
     dm_template: str = ""
     ai_instructions: str = ""
     ai_action_mode: Literal["reply_comment", "send_dm", "reply_comment_and_dm"] = "reply_comment"
+    post_ids: list[str] = Field(default_factory=list)
+    attachments: list[ArticleAttachment] = Field(default_factory=list)
     notes: str | None = None
 
 

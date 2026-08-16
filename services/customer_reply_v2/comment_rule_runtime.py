@@ -106,6 +106,8 @@ def merge_applicable_comment_rules(
         return retrieval
     existing = {e.source_id for e in retrieval.evidence}
     extra: list[EvidenceRecord] = []
+    from services.cm.article_media import format_attachments_block
+
     for row in engine.ai_guidance_rules:
         rule_id = str(row.get("id") or "").strip()
         if not rule_id:
@@ -113,6 +115,8 @@ def merge_applicable_comment_rules(
         source_id = f"comments:{rule_id}"
         if source_id in existing:
             continue
+        att_block = format_attachments_block(list(row.get("attachments") or []))
+        post_ids = [str(x).strip() for x in (row.get("post_ids") or []) if str(x).strip()]
         extra.append(
             EvidenceRecord(
                 source_id=source_id,
@@ -121,8 +125,9 @@ def merge_applicable_comment_rules(
                 content=(
                     f"Comment Rule (AI guidance, not business knowledge). "
                     f"scope={row.get('scope') or ''} action={row.get('ai_action_mode') or ''} "
-                    f"post_id={row.get('post_id') or ''}\n"
+                    f"post_id={row.get('post_id') or ''} post_ids={','.join(post_ids)}\n"
                     f"{str(row.get('ai_instructions') or '').strip()}"
+                    + (f"\n{att_block}" if att_block else "")
                 ),
                 published_revision=published_revision,
             )

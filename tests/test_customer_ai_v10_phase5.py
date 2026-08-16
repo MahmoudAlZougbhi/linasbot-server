@@ -79,6 +79,36 @@ def test_global_keyword_static_dm_and_specific_override() -> None:
     assert specific.scope == "specific_post"
 
 
+def test_post_ids_match_any_selected_post() -> None:
+    from services.customer_reply_v2.comment_rule_engine import evaluate_comment_engine
+    from services.customer_reply_v2.comment_rule_migrate import migrate_comment_rule
+
+    migrated, _ = migrate_comment_rule({"id": "r1", "post_id": "POST_A", "keywords": ["x"]})
+    assert migrated["post_ids"] == ["POST_A"]
+    assert migrated["scope"] == "specific_post"
+
+    section = _section(
+        rules=[
+            {
+                "id": "multi",
+                "enabled": True,
+                "keywords": ["price"],
+                "action": "reply_comment",
+                "reply_template": "ok",
+                "scope": "specific_post",
+                "post_id": "POST_A",
+                "post_ids": ["POST_A", "POST_B"],
+                "priority": 5,
+            }
+        ]
+    )
+    hit_b = evaluate_comment_engine(section, comment_text="price", post_id="POST_B")
+    assert hit_b.matched is True
+    assert hit_b.rule_id == "multi"
+    miss = evaluate_comment_engine(section, comment_text="price", post_id="POST_C")
+    assert miss.matched is False
+
+
 def test_priority_and_ignore_and_all_comments() -> None:
     from services.customer_reply_v2.comment_rule_engine import evaluate_comment_engine
 
