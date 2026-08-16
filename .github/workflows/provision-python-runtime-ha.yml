@@ -189,7 +189,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          TRUST_ROOT="/run/linas-python-runtime-qg-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          TRUST_ROOT="/run/linas-python-runtime-qg-${QUALITY_GATES_RUN_ID}-${RELEASE_RUN_ATTEMPT}"
           PREPARED="$(sudo env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/sbin:/usr/bin:/sbin:/bin \
             /usr/bin/python3 -B -I -S "$GITHUB_WORKSPACE/transfer/workflow-bootstrap.py" prepare \
             "$GITHUB_WORKSPACE/release-download" "$TRUST_ROOT" "$GITHUB_WORKSPACE/transfer" \
