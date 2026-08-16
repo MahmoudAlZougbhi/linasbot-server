@@ -1541,8 +1541,23 @@ def test_bootstrap_refuses_controlled_failover_and_registry_nfs_retirement() -> 
 
 @pytest.mark.parametrize("key", ["PYTHONPATH", "PYTHONHOME", "LD_PRELOAD", "LD_AUDIT", "BASH_ENV", "NODE_OPTIONS"])
 def test_bootstrap_rejects_code_loader_environment_controls(key: str) -> None:
-    with pytest.raises(RuntimeError, match="forbidden code-loader control"):
+    with pytest.raises(RuntimeError, match=rf"forbidden code-loader controls: {key}"):
         bootstrap._assert_no_execution_env_injection({key: "/outside"})
+
+
+def test_bootstrap_code_loader_diagnostic_is_sorted_bounded_and_sanitized() -> None:
+    controls = {f"PYTHON_INJECT_{index:02d}": "/outside" for index in range(20)}
+    controls["PYTHON_BAD\x1b[31m"] = "/outside"
+
+    with pytest.raises(RuntimeError) as captured:
+        bootstrap._assert_no_execution_env_injection(controls)
+
+    message = str(captured.value)
+    assert "\x1b" not in message
+    assert "<invalid-key>" in message
+    assert "PYTHON_INJECT_00" in message
+    assert "PYTHON_INJECT_14" in message
+    assert "PYTHON_INJECT_15" not in message
 
 
 def test_bootstrap_no_replace_authority_adopts_the_post_link_crash_state(tmp_path: Path) -> None:

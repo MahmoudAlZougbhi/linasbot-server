@@ -1189,13 +1189,20 @@ def _parse_env(payload: bytes) -> dict[str, str]:
 
 
 def _assert_no_execution_env_injection(values: dict[str, str]) -> None:
-    if any(
-        key in FORBIDDEN_EXECUTION_ENV_KEYS
+    forbidden = sorted(
+        key
+        for key in values
+        if key in FORBIDDEN_EXECUTION_ENV_KEYS
         or key.startswith(FORBIDDEN_EXECUTION_ENV_PREFIXES)
         or (key.startswith("PYTHON") and key not in {"PYTHONUNBUFFERED", "PYTHONDONTWRITEBYTECODE"})
-        for key in values
-    ):
-        raise RuntimeError("canonical environment contains a forbidden code-loader control")
+    )
+    if forbidden:
+        safe_names = [
+            key if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", key) else "<invalid-key>" for key in forbidden
+        ]
+        raise RuntimeError(
+            "canonical environment contains forbidden code-loader controls: " + ",".join(safe_names[:16])
+        )
 
 
 def _render_env(payload: bytes, node_id: str) -> bytes:
