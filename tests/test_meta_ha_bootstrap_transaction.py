@@ -1558,6 +1558,10 @@ def test_bootstrap_only_allows_legacy_path_before_canonical_publication() -> Non
     assert b"PATH=" not in rendered
     assert b"OPENAI_API_KEY=kept\n" in rendered
 
+    source = BOOTSTRAP_PATH.read_text(encoding="utf-8")
+    process_contract = source[source.index("def _assert_process_contract") : source.index("def _node_admit")]
+    assert "process_values, allow_legacy_path=not require_bootstrapped_contract" in process_contract
+
 
 def test_bootstrap_code_loader_diagnostic_is_sorted_bounded_and_sanitized() -> None:
     controls = {f"PYTHON_INJECT_{index:02d}": "/outside" for index in range(20)}

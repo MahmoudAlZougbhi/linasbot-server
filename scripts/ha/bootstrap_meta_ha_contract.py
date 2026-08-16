@@ -3930,7 +3930,7 @@ def _assert_process_contract(
             if b"=" in entry:
                 key, value = entry.split(b"=", 1)
                 process_values[key.decode(errors="strict")] = value.decode(errors="strict")
-        _assert_no_execution_env_injection(process_values)
+        _assert_no_execution_env_injection(process_values, allow_legacy_path=not require_bootstrapped_contract)
         expected = dict(env_expected)
         if expected_queue is not None:
             expected["LINAS_WORKER_QUEUE"] = expected_queue
