@@ -1,3 +1,4 @@
-_live_cert/data/
-_live_cert/out/
-_live_cert/assets/
+data/
+out/
+assets/
+*.sqlite
