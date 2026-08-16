@@ -136,6 +136,7 @@ async def run_retrieval_luna(
     reply_to_message_id: str | None = None,
     active_product_id: str | None = None,
     channel_metadata: dict[str, Any] | None = None,
+    faq_candidates: list[dict[str, Any]] | None = None,
 ) -> RetrievalResult:
     """Run Retrieval Luna with server-enforced max 2 rounds.
 
@@ -242,6 +243,7 @@ async def run_retrieval_luna(
             )
             if comment_context and k in comment_context
         },
+        "faq_candidates": list(faq_candidates or []),
         "note": "Use tools to list/read selectable sections only. Do not write the reply.",
     }
     messages: list[dict[str, Any]] = [

@@ -19,10 +19,11 @@ def _truthy(name: str, default: str = "false") -> bool:
 
 
 def customer_ai_v10_runtime_enabled() -> bool:
-    """Customer AI V10 runtime (safety, 90m history, channel metadata, metering).
+    """Customer AI V10 runtime (safety, 90m history, channel metadata, metering, FAQ direct).
 
-    Rollback: CUSTOMER_AI_V10_RUNTIME=false restores the pre-v10 window and skips
-    the new safety/metadata packaging. Default on.
+    Rollback: CUSTOMER_AI_V10_RUNTIME=false restores the pre-v10 window, skips
+    the new safety/metadata packaging, and uses the legacy FAQ localize path.
+    Default on.
     """
     raw = os.getenv("CUSTOMER_AI_V10_RUNTIME")
     if raw is None or not str(raw).strip():

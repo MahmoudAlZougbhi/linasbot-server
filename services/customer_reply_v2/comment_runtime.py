@@ -8,7 +8,7 @@ from typing import Any
 from services.customer_reply_v2.answer_luna import run_answer_luna
 from services.customer_reply_v2.channel_metadata import build_channel_metadata
 from services.customer_reply_v2.customer_facts import load_customer_facts
-from services.customer_reply_v2.faq_fast_path import try_faq_fast_path
+from services.customer_reply_v2.faq_evidence import merge_faq_evidence
 from services.customer_reply_v2.flags import (
     customer_ai_v10_runtime_enabled,
     customer_answer_model_name,
@@ -22,6 +22,7 @@ from services.customer_reply_v2.manifest import get_cached_manifest
 from services.customer_reply_v2.media_context import build_comment_media_context, media_context_to_dict
 from services.customer_reply_v2.models import CustomerReplyOutcome
 from services.customer_reply_v2.observability import build_safe_trace
+from services.customer_reply_v2.orchestrator_faq import evaluate_faq_turn, faq_direct_outcome_kwargs, faq_trace_fields
 from services.customer_reply_v2.orchestrator_validate import safe_failure_reply, validate_candidate
 from services.customer_reply_v2.policy import enforce_restricted_and_handoff
 from services.customer_reply_v2.retrieval_luna import run_retrieval_luna
@@ -170,20 +171,28 @@ async def run_customer_reply_v2_comment(
             metadata={**policy.get("metadata", {}), "comment_context": comment_ctx, "flags": flags_snapshot()},
         )
 
-    faq = await try_faq_fast_path(
+    faq = await evaluate_faq_turn(
         tenant_id=tenant_id,
         message=comment_text,
         detected_language=detected_language,
         response_language=response_language,
+        channel=channel,
+        customer_id=provider_sender_id,
+        attachment_types=None,
+        reply_to=str(comment_ctx.get("parent_comment") or parent_comment or ""),
         has_unresolved_context_refs=bool(comment_ctx.get("caption")) and len(comment_text.split()) <= 3,
     )
     if faq.hit and not uncertainty:
         return CustomerReplyOutcome(
-            stop=True,
-            reply=faq.answer,
-            reason=faq.reason,
-            evidence_status="faq_hit",
-            metadata={"faq": faq.metadata or {}, "comment_context": comment_ctx, "flags": flags_snapshot()},
+            **faq_direct_outcome_kwargs(
+                tenant_id=tenant_id,
+                channel=channel,
+                revision=revision,
+                faq=faq,
+                started=started,
+                meter=meter,
+                extra_metadata={"comment_context": comment_ctx, "channel_metadata": channel_meta},
+            )
         )
 
     try:
@@ -208,7 +217,9 @@ async def run_customer_reply_v2_comment(
         scripted_tool_calls=scripted_retrieval,
         channel=channel,
         channel_metadata=channel_meta,
+        faq_candidates=faq.evidence_candidates,
     )
+    retrieval = merge_faq_evidence(retrieval, faq.evidence_candidates)
 
     answer = await run_answer_luna(
         tenant_id=tenant_id,
@@ -337,7 +348,8 @@ async def run_customer_reply_v2_comment(
             "media_status": comment_ctx.get("media_status"),
             "validated": validation_ok,
             "failed_rules": failed_rules,
-            "trace": trace,
+            "trace": {**trace, **faq_trace_fields(faq)},
+            "faq_direct_reply": False,
             "classic_fallback": False,
             "prompt_tokens": prompt_tokens or None,
             "completion_tokens": completion_tokens or None,

@@ -29,6 +29,7 @@ class InvocationRecord:
     latency_ms: float | None = None
     success: bool = True
     failure_stage: str | None = None
+    is_ai: bool = True
 
 
 @dataclass
@@ -64,13 +65,14 @@ class CustomerTurnMeter:
                     "latency_ms": inv.latency_ms,
                     "success": inv.success,
                     "failure_stage": inv.failure_stage,
+                    "is_ai": inv.is_ai,
                 }
             )
         return {
             "customer_turn_id": self.customer_turn_id,
             "tenant_id": self.tenant_id,
             "invocations": rows,
-            "ai_invocation_count": len(rows),
+            "ai_invocation_count": sum(1 for inv in self.invocations if inv.is_ai),
             "latency_ms": (time.perf_counter() - self.started) * 1000,
         }
 

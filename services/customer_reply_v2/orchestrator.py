@@ -10,7 +10,7 @@ from services.customer_reply_v2.answer_luna import run_answer_luna
 from services.customer_reply_v2.channel_metadata import build_channel_metadata
 from services.customer_reply_v2.conversation_window import filter_rolling_window, load_dm_conversation_window
 from services.customer_reply_v2.customer_facts import apply_message_fact_updates, load_customer_facts
-from services.customer_reply_v2.faq_fast_path import try_faq_fast_path
+from services.customer_reply_v2.faq_evidence import merge_faq_evidence
 from services.customer_reply_v2.flags import (
     customer_ai_v10_runtime_enabled,
     customer_answer_model_name,
@@ -25,6 +25,7 @@ from services.customer_reply_v2.manifest import get_cached_manifest, load_fixed_
 from services.customer_reply_v2.models import CustomerReplyOutcome
 from services.customer_reply_v2.observability import build_safe_trace
 from services.customer_reply_v2.orchestrator_answer import finalize_answer_with_repair
+from services.customer_reply_v2.orchestrator_faq import evaluate_faq_turn, faq_direct_outcome_kwargs, faq_trace_fields
 from services.customer_reply_v2.orchestrator_validate import safe_failure_reply
 from services.customer_reply_v2.policy import enforce_restricted_and_handoff
 from services.customer_reply_v2.retrieval_luna import run_retrieval_luna
@@ -242,38 +243,29 @@ async def run_customer_reply_v2_dm(
         luna_history = [{"role": m["role"], "content": m["content"]} for m in history_for_model][-6:]
         tera_history = [{"role": m["role"], "content": m["content"]} for m in history_for_model]
 
-    faq = await try_faq_fast_path(
+    faq = await evaluate_faq_turn(
         tenant_id=tenant_id,
         message=message,
         detected_language=detected_language,
         response_language=response_language,
-        has_unresolved_context_refs=False,
+        channel=channel,
+        customer_id=provider_sender_id or user_id,
+        attachment_types=attachment_types,
+        reply_to=reply_to_message_id,
     )
     if faq.hit:
-        trace = build_safe_trace(
-            tenant_id=tenant_id,
-            channel=channel,
-            published_revision=revision,
-            faq_category=faq.reason,
-            retrieval_rounds=0,
-            selected_source_ids=[],
-            evidence_status="faq_hit",
-            validation_ok=True,
-            repair_attempts=0,
-            requested_models={},
-            returned_models={},
-            context_message_count=len(window.messages),
-            context_compacted=window.context_compacted,
-            delivery_result="faq_reply",
-            latency_ms=(time.perf_counter() - started) * 1000,
-            stage="faq",
-        )
         return _out(
-            stop=True,
-            reply=faq.answer,
-            reason=faq.reason,
-            evidence_status="faq_hit",
-            metadata={"faq": faq.metadata or {}, "trace": trace, "flags": flags_snapshot()},
+            **faq_direct_outcome_kwargs(
+                tenant_id=tenant_id,
+                channel=channel,
+                revision=revision,
+                faq=faq,
+                started=started,
+                meter=meter,
+                context_message_count=len(window.messages),
+                context_compacted=window.context_compacted,
+                extra_metadata={"channel_metadata": channel_meta},
+            )
         )
 
     if not customer_semantic_retrieval_enabled():
@@ -309,7 +301,9 @@ async def run_customer_reply_v2_dm(
         channel=channel,
         reply_to_message_id=reply_to_message_id or None,
         channel_metadata=channel_meta,
+        faq_candidates=faq.evidence_candidates,
     )
+    retrieval = merge_faq_evidence(retrieval, faq.evidence_candidates)
     meter.record(
         InvocationRecord(
             operation="luna_retrieval",
@@ -423,6 +417,10 @@ async def run_customer_reply_v2_dm(
         prompt_tokens=prompt_tokens or None,
         completion_tokens=completion_tokens or None,
         total_tokens=total_tokens or None,
+        faq_checked=True,
+        faq_match_id=str((faq.metadata or {}).get("faq_id") or ""),
+        faq_match_score=(faq.metadata or {}).get("match_score"),
+        faq_direct_reply=False,
     )
 
     return _out(
@@ -459,7 +457,9 @@ async def run_customer_reply_v2_dm(
             "tokens": total_tokens or None,
             "validated": validation_ok,
             "failed_rules": failed_rules,
-            "trace": trace,
+            "trace": {**trace, **faq_trace_fields(faq)},
+            "faq": faq.metadata or {},
+            "faq_direct_reply": False,
             "flags": flags_snapshot(),
             "authoritative_selector": "retrieval_luna",
             "classic_fallback": False,
