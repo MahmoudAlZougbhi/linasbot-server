@@ -182,7 +182,7 @@ async def run_customer_reply_v2_comment(
         return deterministic_rule_outcome(
             engine=engine,
             meter=meter,
-            channel_meta=channel_meta,
+            channel_meta={**channel_meta, "tenant_id": tenant_id},
             channel_capabilities=dict(channel_meta.get("channel_capabilities") or {}),
         )
     if engine.ai_guidance_rules:

@@ -118,6 +118,9 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
         media_delivery = cm_metadata.get("media_delivery") or {}
         if isinstance(media_delivery, dict) and media_delivery.get("ok") and media_delivery.get("items"):
             user_data["_pending_product_media"] = media_delivery
+        resource_delivery = cm_metadata.get("resource_delivery") or {}
+        if isinstance(resource_delivery, dict) and resource_delivery.get("ok") and resource_delivery.get("items"):
+            user_data["_pending_setup_resources"] = resource_delivery
         cm_steps = [
             {
                 "step": 1,

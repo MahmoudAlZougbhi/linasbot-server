@@ -6,7 +6,7 @@ import os
 from typing import Any
 
 from fastapi import Header, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
 from modules.core import app
@@ -225,3 +225,18 @@ async def web_chat_ack_messages(
         )
     except SessionAuthorityError as exc:
         return _session_auth_response(exc)
+
+
+@app.get("/web-chat/resources/{token}")
+async def web_chat_signed_resource(token: str) -> Response:
+    from services.customer_reply_v2.resource_signed_urls import load_verified_resource_bytes
+
+    hit = load_verified_resource_bytes(token)
+    if not hit.get("ok"):
+        raise HTTPException(status_code=404, detail="resource_not_found")
+    filename = str(hit.get("filename") or "resource.bin").replace('"', "")
+    return Response(
+        content=hit["bytes"],
+        media_type=str(hit.get("mime") or "application/octet-stream"),
+        headers={"Content-Disposition": f'inline; filename="{filename}"', "Cache-Control": "private, max-age=60"},
+    )

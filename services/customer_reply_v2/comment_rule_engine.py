@@ -29,6 +29,7 @@ class CommentEngineResult:
     conflict_event: str = ""
     mapping: list[dict[str, str]] = field(default_factory=list)
     reason: str = ""
+    attachments: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _needles(rule: dict[str, Any]) -> list[str]:
@@ -147,6 +148,7 @@ def evaluate_comment_engine(
             result.dm_text = str(rule.get("dm_template") or "").strip() or (
                 result.reply_text if action in {"send_dm_static", "reply_dm"} else ""
             )
+            result.attachments = list(rule.get("attachments") or [])
             result.reason = f"rule_match:{result.rule_id}"
             return result
 

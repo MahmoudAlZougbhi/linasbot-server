@@ -78,7 +78,31 @@ def deterministic_rule_outcome(
             "channel_metadata": channel_meta,
             "metering": meter.to_public_dict(),
             "flags": flags_snapshot(),
+            "resource_delivery": _deterministic_resources(engine, channel_meta),
         },
+    )
+
+
+def _deterministic_resources(engine: CommentEngineResult, channel_meta: dict[str, Any]) -> dict[str, Any]:
+    from services.customer_reply_v2.resource_actions import resolve_resource_actions
+
+    refs = []
+    for att in list(engine.attachments or []):
+        if not isinstance(att, dict):
+            continue
+        ref = str(att.get("id") or "").strip()
+        if ref:
+            refs.append({"action": "send_resource", "resource_ref": ref})
+    if not refs:
+        return {"ok": True, "items": [], "ai_charged": False, "claimed_sent": False}
+    tenant_id = str((channel_meta or {}).get("tenant_id") or "")
+    if not tenant_id:
+        return {"ok": True, "items": refs, "ai_charged": False, "claimed_sent": False, "pending_send": True}
+    return resolve_resource_actions(
+        tenant_id=tenant_id,
+        actions=refs,
+        allowed_source_ids=[f"comments:{engine.rule_id}"] if engine.rule_id else None,
+        channel_capabilities={"max_media_items": 8},
     )
 
 
@@ -106,7 +130,7 @@ def merge_applicable_comment_rules(
         return retrieval
     existing = {e.source_id for e in retrieval.evidence}
     extra: list[EvidenceRecord] = []
-    from services.cm.article_media import format_attachments_block
+    from services.cm.setup_resources import descriptors_for_item
 
     for row in engine.ai_guidance_rules:
         rule_id = str(row.get("id") or "").strip()
@@ -115,7 +139,6 @@ def merge_applicable_comment_rules(
         source_id = f"comments:{rule_id}"
         if source_id in existing:
             continue
-        att_block = format_attachments_block(list(row.get("attachments") or []))
         post_ids = [str(x).strip() for x in (row.get("post_ids") or []) if str(x).strip()]
         extra.append(
             EvidenceRecord(
@@ -126,9 +149,10 @@ def merge_applicable_comment_rules(
                     f"Comment Rule (AI guidance, not business knowledge). "
                     f"scope={row.get('scope') or ''} action={row.get('ai_action_mode') or ''} "
                     f"post_id={row.get('post_id') or ''} post_ids={','.join(post_ids)}\n"
-                    f"{str(row.get('ai_instructions') or '').strip()}" + (f"\n{att_block}" if att_block else "")
+                    f"{str(row.get('ai_instructions') or '').strip()}"
                 ),
                 published_revision=published_revision,
+                allowed_resources=descriptors_for_item(source_item_id=source_id, item=row),
             )
         )
         existing.add(source_id)

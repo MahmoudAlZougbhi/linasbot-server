@@ -32,6 +32,7 @@ class CommentRuleDecision:
     dm_text: str = ""
     ai_guidance_rules: tuple[dict[str, Any], ...] = field(default_factory=tuple)
     conflict_event: str = ""
+    attachments: tuple[dict[str, Any], ...] = field(default_factory=tuple)
 
 
 def load_published_comments_section(tenant_id: str) -> CommentsSection | None:
@@ -198,6 +199,7 @@ def evaluate_comment_rules(
             dm_text="",
             ai_guidance_rules=tuple(engine.ai_guidance_rules),
             conflict_event=engine.conflict_event,
+            attachments=tuple(engine.attachments or []),
         )
     return CommentRuleDecision(
         action=_action_from_engine(engine.action),
@@ -213,6 +215,7 @@ def evaluate_comment_rules(
         dm_text=engine.dm_text,
         ai_guidance_rules=tuple(engine.ai_guidance_rules),
         conflict_event=engine.conflict_event,
+        attachments=tuple(engine.attachments or []),
     )
 
 
@@ -249,4 +252,5 @@ def decision_to_dict(decision: CommentRuleDecision) -> dict[str, Any]:
         "dm_text": decision.dm_text,
         "ai_guidance_rules": list(decision.ai_guidance_rules),
         "conflict_event": decision.conflict_event,
+        "attachments": list(decision.attachments),
     }

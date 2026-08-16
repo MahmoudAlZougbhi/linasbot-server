@@ -15,6 +15,8 @@ MetaOutboundPurpose = Literal[
     "image_quota_notice",
     "comment_private_dm",
     "product_media",
+    "ai_setup_resource",
+    "comment_rule_resource",
 ]
 
 ALLOWED_PURPOSES = frozenset(
@@ -25,6 +27,8 @@ ALLOWED_PURPOSES = frozenset(
         "image_quota_notice",
         "comment_private_dm",
         "product_media",
+        "ai_setup_resource",
+        "comment_rule_resource",
     }
 )
 
@@ -38,4 +42,6 @@ PURPOSE_PREDECESSORS: dict[MetaOutboundPurpose, tuple[MetaOutboundPurpose, ...]]
     "image_quota_notice": (),
     "comment_private_dm": (),
     "product_media": (),
+    "ai_setup_resource": (),
+    "comment_rule_resource": (),
 }

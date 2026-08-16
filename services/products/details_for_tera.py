@@ -11,6 +11,18 @@ from services.products.schemas import product_to_dict
 def product_details_for_tera(row: Any) -> dict[str, Any]:
     raw = product_to_dict(row)
     images = list(raw.get("images") or [])
+    video_count = 0
+    image_count = 0
+    tenant_id = str(raw.get("tenant_id") or getattr(row, "tenant_id", "") or "")
+    from services.products.media import load_media_meta
+
+    for img in images:
+        media_id = str((img or {}).get("media_id") or "")
+        mime = str((load_media_meta(tenant_id=tenant_id, media_id=media_id) or {}).get("mime") or "").lower()
+        if mime.startswith("video/"):
+            video_count += 1
+        else:
+            image_count += 1
     availability = normalize_availability(raw.get("availability"))
     return {
         "id": raw.get("id"),
@@ -24,8 +36,8 @@ def product_details_for_tera(row: Any) -> dict[str, Any]:
         "availability": availability,
         "status": availability,
         "in_stock": availability == "in_stock",
-        "image_count": len(images),
-        "video_count": 0,
+        "image_count": image_count,
+        "video_count": video_count,
         "related_services": raw.get("related_services") or [],
         "related_requests": raw.get("related_requests") or [],
     }
