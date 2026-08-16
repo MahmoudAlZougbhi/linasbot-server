@@ -188,8 +188,9 @@ class ToolContext:
     channel: str
     round_index: int = 1
     customer_profile: dict[str, Any] = field(default_factory=dict)
-    dm_window: list[dict[str, str]] = field(default_factory=list)
+    dm_window: list[dict[str, Any]] = field(default_factory=list)
     comment_context: dict[str, Any] = field(default_factory=dict)
+    channel_metadata: dict[str, Any] = field(default_factory=dict)
     active_product_id: str | None = None
     conversation_id: str | None = None
     reply_to_message_id: str | None = None

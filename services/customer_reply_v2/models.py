@@ -126,6 +126,10 @@ class RetrievalResult:
     refused_third_round: bool = False
     error: str | None = None
     active_product_id: str | None = None
+    requested_reasoning_effort: str | None = None
+    effective_reasoning_effort: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
 
 
 @dataclass
@@ -140,6 +144,8 @@ class AnswerLunaResult:
     requested_model: str = ""
     returned_model: str = ""
     reasoning_effort: str = "medium"
+    requested_reasoning_effort: str | None = None
+    effective_reasoning_effort: str | None = None
     stage: str = "answer"
     prompt_tokens: int | None = None
     completion_tokens: int | None = None

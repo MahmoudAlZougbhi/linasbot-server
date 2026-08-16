@@ -85,7 +85,7 @@ def build_answer_messages(
     evidence: list[EvidenceRecord],
     evidence_status: str,
     customer_profile: dict[str, Any],
-    history_messages: list[dict[str, str]] | None,
+    history_messages: list[dict[str, Any]] | None,
     comment_context: dict[str, Any] | None,
     channel: str,
     published_revision: str,
@@ -93,6 +93,7 @@ def build_answer_messages(
     detected_language: str = "",
     repair_failures: list[str] | None = None,
     request_capture_guidance: str | None = None,
+    channel_metadata: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Build Answer Tera messages. Includes full AI Basics + Style. No retrieval tools."""
     evidence_blob = [
@@ -124,7 +125,9 @@ def build_answer_messages(
         "style": fixed_context.get("style") or {},
         "evidence_status": evidence_status,
         "evidence": evidence_blob,
+        "conversation_history": history_messages or [],
         "dm_history": history_messages or [],
+        "channel_metadata": dict(channel_metadata or {}),
         "comment_context": comment_ctx,
         "media_status": str(comment_ctx.get("media_status") or "not_applicable"),
     }
@@ -202,8 +205,17 @@ async def _default_llm(
     if tools:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"
-    emit_model_policy_trace(policy, extra={"role": "answer", "stage": "answer" if not regeneration else "repair"})
-    return await client.chat.completions.create(**kwargs)
+    extra = {
+        "role": "answer",
+        "stage": "answer" if not regeneration else "repair",
+        "requested_reasoning_effort": str(policy.reasoning_effort),
+        "effective_reasoning_effort": kwargs.get("reasoning_effort"),
+    }
+    emit_model_policy_trace(policy, extra=extra)
+    response = await client.chat.completions.create(**kwargs)
+    response._linas_requested_reasoning_effort = str(policy.reasoning_effort)
+    response._linas_effective_reasoning_effort = kwargs.get("reasoning_effort")
+    return response
 
 
 def _parse_answer(content: str) -> dict[str, Any]:
@@ -238,7 +250,7 @@ async def run_answer_luna(
     message: str,
     retrieval: RetrievalResult,
     customer_profile: dict[str, Any],
-    history_messages: list[dict[str, str]] | None = None,
+    history_messages: list[dict[str, Any]] | None = None,
     comment_context: dict[str, Any] | None = None,
     channel: str = "instagram_dm",
     conversation_id: str | None = None,
@@ -249,6 +261,7 @@ async def run_answer_luna(
     llm_fn: LlmFn | None = None,
     fixture_reply: dict[str, Any] | None = None,
     repair_failures: list[str] | None = None,
+    channel_metadata: dict[str, Any] | None = None,
 ) -> AnswerLunaResult:
     """Run Answer Tera (kept export name for callers/tests)."""
     model = customer_answer_model_name()
@@ -276,6 +289,7 @@ async def run_answer_luna(
         detected_language=detected_language,
         repair_failures=repair_failures,
         request_capture_guidance=request_guidance or None,
+        channel_metadata=channel_metadata,
     )
     assert answer_context_has_full_basics_and_style(messages)
 
@@ -292,6 +306,8 @@ async def run_answer_luna(
             requested_model=model,
             returned_model=model,
             reasoning_effort="medium",
+            requested_reasoning_effort="medium",
+            effective_reasoning_effort="medium",
             stage="repair" if repair_failures else "answer",
             raw_structured=data,
         )
@@ -338,6 +354,8 @@ async def run_answer_luna(
             requested_model=model,
             returned_model="",
             reasoning_effort="medium",
+            requested_reasoning_effort="medium",
+            effective_reasoning_effort="medium",
             stage="repair" if repair_failures else "answer",
             raw_structured={"error": str(exc), "blocker": "answer_model_unavailable"},
         )
@@ -346,6 +364,8 @@ async def run_answer_luna(
     content = getattr(response.choices[0].message, "content", None) or ""
     data = _parse_answer(content)
     usage = _usage_from_response(response)
+    requested_effort = getattr(response, "_linas_requested_reasoning_effort", None) or "medium"
+    effective_effort = getattr(response, "_linas_effective_reasoning_effort", None) or requested_effort
     return AnswerLunaResult(
         reply_text=str(data.get("reply_text") or "").strip(),
         detected_language=str(data.get("detected_language") or ""),
@@ -356,7 +376,9 @@ async def run_answer_luna(
         safe_failure_category=data.get("safe_failure_category"),
         requested_model=model,
         returned_model=str(returned),
-        reasoning_effort="medium",
+        reasoning_effort=str(effective_effort),
+        requested_reasoning_effort=str(requested_effort),
+        effective_reasoning_effort=str(effective_effort),
         stage="repair" if repair_failures else "answer",
         prompt_tokens=usage.get("prompt_tokens"),  # type: ignore[arg-type]
         completion_tokens=usage.get("completion_tokens"),  # type: ignore[arg-type]

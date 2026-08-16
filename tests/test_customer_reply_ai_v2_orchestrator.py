@@ -220,7 +220,10 @@ async def test_validation_failure_never_sends_invalid(v2_env, monkeypatch):
             return False, ["price_not_in_evidence"]
         return True, []
 
-    monkeypatch.setattr(orch, "_validate_candidate", _fake_validate)
+    monkeypatch.setattr(
+        "services.customer_reply_v2.orchestrator_answer.validate_candidate",
+        _fake_validate,
+    )
     out = await orch.run_customer_reply_v2_dm(
         tenant_id="t_val",
         message="price?",

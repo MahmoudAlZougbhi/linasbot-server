@@ -9,7 +9,11 @@ import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from services.customer_reply_v2.flags import customer_retrieval_model_name, max_retrieval_rounds
+from services.customer_reply_v2.flags import (
+    customer_ai_v10_runtime_enabled,
+    customer_retrieval_model_name,
+    max_retrieval_rounds,
+)
 from services.customer_reply_v2.manifest import FIXED_ANSWER_SECTIONS, manifest_for_retrieval_luna
 from services.customer_reply_v2.models import RetrievalResult
 from services.customer_reply_v2.retrieval_tools import RETRIEVAL_TOOL_SCHEMAS, ToolContext, dispatch_retrieval_tool
@@ -43,6 +47,26 @@ def _strip_fixed_from_prompt(text: str) -> str:
         if needle in lowered and len(text) > 4000:
             return text[:500] + "…[redacted_fixed_answer_context]"
     return text
+
+
+def _luna_requested_effort() -> str:
+    from services.model_policy import resolve_customer_retrieval_policy
+
+    return str(resolve_customer_retrieval_policy().reasoning_effort)
+
+
+def _luna_effective_effort(model: str) -> str:
+    from services.llm_core_service import effective_chat_completions_reasoning_effort
+
+    requested = _luna_requested_effort()
+    return str(
+        effective_chat_completions_reasoning_effort(
+            model=model,
+            reasoning_effort=requested,
+            has_function_tools=True,
+        )
+        or requested
+    )
 
 
 async def _default_llm(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None) -> Any:
@@ -111,6 +135,7 @@ async def run_retrieval_luna(
     channel: str = "customer",
     reply_to_message_id: str | None = None,
     active_product_id: str | None = None,
+    channel_metadata: dict[str, Any] | None = None,
 ) -> RetrievalResult:
     """Run Retrieval Luna with server-enforced max 2 rounds.
 
@@ -158,6 +183,7 @@ async def run_retrieval_luna(
         conversation_id=conversation_id,
         reply_to_message_id=reply_to_message_id,
         active_product_id=active_product_id,
+        channel_metadata=dict(channel_metadata or {}),
     )
 
     if reply_to_message_id and conversation_id:
@@ -195,11 +221,16 @@ async def run_retrieval_luna(
         return await _run_scripted(ctx, scripted_tool_calls, model=model)
 
     llm = llm_fn or _default_llm
+    history_for_luna = list(dm_window or [])
+    if not customer_ai_v10_runtime_enabled():
+        history_for_luna = history_for_luna[-6:]
     user_payload = {
         "current_message": _strip_fixed_from_prompt(message),
         "manifest": manifest,
         "customer_facts": customer_profile,
-        "dm_window_preview": list(dm_window or [])[-6:],
+        "conversation_history": history_for_luna,
+        "channel_metadata": dict(channel_metadata or ctx.channel_metadata or {}),
+        "dm_window_preview": history_for_luna,
         "comment_context_preview": {
             k: comment_context.get(k)
             for k in (
@@ -296,6 +327,8 @@ async def run_retrieval_luna(
         returned_model=str(returned_model),
         refused_third_round=ctx.refused_third_round,
         active_product_id=ctx.active_product_id,
+        requested_reasoning_effort=_luna_requested_effort(),
+        effective_reasoning_effort=_luna_effective_effort(model),
     )
 
 
@@ -337,6 +370,8 @@ async def _run_scripted(
         returned_model=model,
         refused_third_round=ctx.refused_third_round,
         active_product_id=ctx.active_product_id,
+        requested_reasoning_effort=_luna_requested_effort(),
+        effective_reasoning_effort=_luna_effective_effort(model),
     )
 
 
