@@ -2192,6 +2192,59 @@ def _fsync_private_tree(root: Path) -> None:
         _fsync_dir(directory)
 
 
+def _normalize_probe_tree_permissions(
+    root: Path,
+    *,
+    expected_uid: int = 0,
+    expected_gid: int = 0,
+) -> None:
+    """Make generated venv/pip output deterministic under the remote umask."""
+
+    _secure_authority_dir(
+        root,
+        expected_uid=expected_uid,
+        expected_gid=expected_gid,
+    )
+    for path in root.rglob("*"):
+        before = path.lstat()
+        if (
+            stat.S_ISLNK(before.st_mode)
+            or before.st_uid != expected_uid
+            or before.st_gid != expected_gid
+            or not (stat.S_ISDIR(before.st_mode) or stat.S_ISREG(before.st_mode))
+            or (stat.S_ISREG(before.st_mode) and before.st_nlink != 1)
+        ):
+            raise PermissionError("generated PostgreSQL probe object is unsafe")
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        if stat.S_ISDIR(before.st_mode):
+            flags |= getattr(os, "O_DIRECTORY", 0)
+            expected_mode = 0o755
+        else:
+            expected_mode = 0o755 if stat.S_IMODE(before.st_mode) & 0o111 else 0o644
+        descriptor = os.open(path, flags)
+        try:
+            opened = os.fstat(descriptor)
+            if (
+                (before.st_dev, before.st_ino, before.st_mode, before.st_uid, before.st_gid)
+                != (opened.st_dev, opened.st_ino, opened.st_mode, opened.st_uid, opened.st_gid)
+                or stat.S_ISLNK(opened.st_mode)
+                or not (stat.S_ISDIR(opened.st_mode) or stat.S_ISREG(opened.st_mode))
+                or (stat.S_ISREG(opened.st_mode) and opened.st_nlink != 1)
+            ):
+                raise PermissionError("generated PostgreSQL probe object changed")
+            os.fchmod(descriptor, expected_mode)
+            normalized = os.fstat(descriptor)
+            if (opened.st_dev, opened.st_ino, opened.st_uid, opened.st_gid) != (
+                normalized.st_dev,
+                normalized.st_ino,
+                normalized.st_uid,
+                normalized.st_gid,
+            ) or stat.S_IMODE(normalized.st_mode) != expected_mode:
+                raise PermissionError("generated PostgreSQL probe mode normalization failed")
+        finally:
+            os.close(descriptor)
+
+
 def _assert_no_probe_bytecode(root: Path) -> None:
     for path in root.rglob("*"):
         relative = path.relative_to(root)
@@ -2367,6 +2420,11 @@ def _prepare_probe_environment(
     )
     if result.returncode:
         raise RuntimeError("hash-locked PostgreSQL probe dependency installation failed")
+    _normalize_probe_tree_permissions(
+        venv_root,
+        expected_uid=expected_uid,
+        expected_gid=expected_gid,
+    )
     _assert_no_probe_bytecode(root)
     _fsync_private_tree(root)
     probe_sha, probe_count, probe_size, _ = _release_tree_evidence(
