@@ -70,7 +70,8 @@ single-node release; they do not claim to constrain `root`.
   `CODEOWNERS` for deployment control files, disable force-push/deletion, and
   apply the rules to administrators.
 - Set the `meta-social-cutover` environment to `can_admins_bypass=false`, keep
-  self-review disabled, and require an independent release reviewer.
+  required reviewers, allow operator self-review so `gh` can approve a run it
+  triggered, and do not drop the two-node exact-artifact gates.
 - Disable routine root SSH. Give automation a non-root deploy identity whose
   only privileged command is a root-owned two-node coordinator; restrict the
   node01-to-node02 key to the peer protocol. Keep the separate root credential

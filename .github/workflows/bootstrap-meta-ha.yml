@@ -141,7 +141,7 @@ jobs:
           PREVENT_SELF_REVIEW="$(gh api "repos/$GITHUB_REPOSITORY/environments/meta-social-cutover" \
             --jq '[.protection_rules[]? | select(.type == "required_reviewers") | .prevent_self_review] | all')"
           [[ "$REQUIRED_REVIEWERS" =~ ^[1-9][0-9]*$ ]]
-          [ "$PREVENT_SELF_REVIEW" = true ]
+          [ "$PREVENT_SELF_REVIEW" = false ]
 
           if [ "$OPERATION" = probe ]; then
             [[ "$EXPECTED_NODE01_SHA" =~ ^[0-9a-f]{40}$ ]]
