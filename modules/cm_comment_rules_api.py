@@ -23,12 +23,16 @@ async def comment_rule_posts(
     request: Request,
     platform: str = "",
     connected_account_id: str = "",
+    after: str = "",
+    limit: int = 25,
 ) -> Any:
     session = require_session(request)
     result = await list_connected_posts(
         tenant_id=session.tenant_id,
         platform=platform,
         connected_account_id=connected_account_id,
+        after=after,
+        limit=limit,
     )
     return {"success": bool(result.get("ok")), **result}
 

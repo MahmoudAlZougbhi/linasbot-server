@@ -359,19 +359,6 @@ async def process_meta_comment_event(
         if rule_decision.action == "ignore" and rule_decision.rule_mode != "ai_guidance":
             _mark_sent_reply(binding, comment_id)
             return CommentReplyResult(status="ignored", reason=rule_decision.reason or "comment_rule_ignore")
-        if rule_decision.action == "reply_comment_and_dm" and rule_decision.rule_mode == "deterministic":
-            from services.meta_comment_rule_both import apply_comment_and_dm_rule
-
-            both = apply_comment_and_dm_rule(
-                rule_decision=rule_decision,
-                binding=binding,
-                comment_id=comment_id,
-                simulation=simulation,
-                capture_send=capture_send,
-            )
-            if isinstance(both, CommentReplyResult):
-                return both
-            rule_decision = both
 
     graph_version = settings.graph_api_version or "v24.0"
     token = settings.page_access_token
@@ -393,8 +380,23 @@ async def process_meta_comment_event(
                 str(exc),
             )
             return CommentReplyResult(status="failed", reason="reply_dedupe_check_failed")
-        if already_replied:
+        from services.meta_comment_rule_both import is_deterministic_comment_and_dm, maybe_handle_comment_and_dm
+
+        if already_replied and not is_deterministic_comment_and_dm(rule_decision):
             return CommentReplyResult(status="ignored", reason="human_replied")
+        if is_deterministic_comment_and_dm(rule_decision):
+            return await maybe_handle_comment_and_dm(
+                rule_decision=rule_decision,
+                binding=binding,
+                comment_id=comment_id,
+                simulation=simulation,
+                capture_send=capture_send,
+                inbound_event_id=inbound_event_id,
+                token=token,
+                graph_api_version=graph_version,
+                client=client,
+                skip_public=already_replied,
+            )
 
         # CM rule: reply via private DM — never fall back to a public comment reply.
         if rule_decision is not None and rule_decision.action == "reply_dm":
