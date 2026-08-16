@@ -32,6 +32,7 @@ describe('AI Setup hub restructure', () => {
     assert.match(basics, /GreetingsEditor/);
     assert.match(basics, /AiBasicsStyleSection/);
     const screen = read('features/cm/CmSectionScreen.tsx');
+    assert.match(screen, /function AiBasicsSectionScreen/);
     assert.match(screen, /useCmMultiDraft\(\['ai_basics', 'style', 'dynamic_messages'\]/);
   });
 
