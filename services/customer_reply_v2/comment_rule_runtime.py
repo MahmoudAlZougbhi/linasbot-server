@@ -126,8 +126,7 @@ def merge_applicable_comment_rules(
                     f"Comment Rule (AI guidance, not business knowledge). "
                     f"scope={row.get('scope') or ''} action={row.get('ai_action_mode') or ''} "
                     f"post_id={row.get('post_id') or ''} post_ids={','.join(post_ids)}\n"
-                    f"{str(row.get('ai_instructions') or '').strip()}"
-                    + (f"\n{att_block}" if att_block else "")
+                    f"{str(row.get('ai_instructions') or '').strip()}" + (f"\n{att_block}" if att_block else "")
                 ),
                 published_revision=published_revision,
             )
