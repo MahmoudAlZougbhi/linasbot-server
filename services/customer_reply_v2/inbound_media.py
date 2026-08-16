@@ -77,7 +77,8 @@ def classify_attachment(item: Any) -> str:
         return "file" if item else ""
     raw_type = str(item.get("type") or "").strip().lower()
     mime = str(item.get("mime") or item.get("mime_type") or "").strip().lower()
-    payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+    payload_raw = item.get("payload")
+    payload: dict[str, Any] = payload_raw if isinstance(payload_raw, dict) else {}
     mime = mime or str(payload.get("mime_type") or payload.get("mime") or "").strip().lower()
     if raw_type in {"image", "video", "audio", "file"}:
         return raw_type
@@ -96,7 +97,8 @@ def classify_attachment(item: Any) -> str:
 
 
 def _attachment_url(item: dict[str, Any]) -> str:
-    payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+    payload_raw = item.get("payload")
+    payload: dict[str, Any] = payload_raw if isinstance(payload_raw, dict) else {}
     for key in ("url", "link"):
         value = str(item.get(key) or payload.get(key) or "").strip()
         if value:
@@ -105,7 +107,8 @@ def _attachment_url(item: dict[str, Any]) -> str:
 
 
 def _filename(item: dict[str, Any], kind: str) -> str:
-    payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+    payload_raw = item.get("payload")
+    payload: dict[str, Any] = payload_raw if isinstance(payload_raw, dict) else {}
     name = str(item.get("filename") or payload.get("filename") or payload.get("name") or "").strip()
     if name:
         return name[:180]

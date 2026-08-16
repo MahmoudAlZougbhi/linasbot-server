@@ -39,7 +39,8 @@ def chat_messages_to_responses_input(messages: list[dict[str, Any]]) -> list[dic
                 for call in tool_calls:
                     if not isinstance(call, dict):
                         continue
-                    fn = call.get("function") if isinstance(call.get("function"), dict) else {}
+                    fn_raw = call.get("function")
+                    fn = fn_raw if isinstance(fn_raw, dict) else {}
                     items.append(
                         {
                             "type": "function_call",
