@@ -12,6 +12,8 @@ const DAYS = [
 
 const FIELD_CLASS = "w-full rounded-xl border border-slate-200 px-3 py-2 text-sm";
 
+/** @typedef {{ enabled: boolean, open: string, close: string, off_day: boolean, note: string | null }} BranchDay */
+
 export function emptyHours() {
   return {
     monday: "",
@@ -25,19 +27,23 @@ export function emptyHours() {
   };
 }
 
+/** @returns {BranchDay} */
 export function emptyBranchDay() {
   return { enabled: false, open: "", close: "", off_day: false, note: null };
 }
 
+/** @returns {Record<string, BranchDay>} */
 export function emptyWeeklySchedule() {
   return Object.fromEntries(DAYS.map((day) => [day.key, emptyBranchDay()]));
 }
 
 /**
  * @param {unknown} raw
+ * @returns {Record<string, BranchDay>}
  */
 export function normalizeWeeklySchedule(raw) {
   const src = asRecord(raw);
+  /** @type {Record<string, BranchDay>} */
   const out = emptyWeeklySchedule();
   for (const day of DAYS) {
     const row = asRecord(src[day.key]);
@@ -54,8 +60,8 @@ export function normalizeWeeklySchedule(raw) {
 
 /**
  * @param {{
- *   schedule: Record<string, { enabled: boolean, open: string, close: string, off_day: boolean, note: string | null }>;
- *   onChange: (next: Record<string, unknown>) => void;
+ *   schedule: unknown;
+ *   onChange: (next: Record<string, BranchDay>) => void;
  * }} props
  */
 export function CmBranchHoursFields({ schedule, onChange }) {
@@ -63,16 +69,17 @@ export function CmBranchHoursFields({ schedule, onChange }) {
 
   /**
    * @param {string} dayKey
-   * @param {Record<string, unknown>} patch
+   * @param {Partial<BranchDay>} patch
    */
   const patchDay = (dayKey, patch) => {
-    onChange({ ...rows, [dayKey]: { ...rows[dayKey], ...patch } });
+    const current = rows[dayKey] || emptyBranchDay();
+    onChange({ ...rows, [dayKey]: { ...current, ...patch } });
   };
 
   return (
     <div className="rounded-xl border border-slate-200 divide-y">
       {DAYS.map((day) => {
-        const row = rows[day.key];
+        const row = rows[day.key] || emptyBranchDay();
         const off = Boolean(row.enabled && row.off_day);
         return (
           <div key={day.key} className="grid grid-cols-[110px_1fr_auto] gap-2 items-center p-2">
