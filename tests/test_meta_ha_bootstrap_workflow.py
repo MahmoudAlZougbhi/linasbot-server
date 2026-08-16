@@ -93,7 +93,8 @@ def test_bootstrap_workflow_uses_only_retained_receipt_bound_control() -> None:
 def test_bootstrap_workflow_attestation_transport_is_data_only_and_digest_bound() -> None:
     source = WORKFLOW.read_text(encoding="utf-8")
     assert source.count("uses: appleboy/scp-action@") == 2
-    assert "if: inputs.OPERATION == 'install-lb'" in source
+    assert "if: inputs.OPERATION == 'install-lb' || inputs.OPERATION == 'apply'" in source
+    assert "if: inputs.OPERATION != 'install-lb' && inputs.OPERATION != 'apply'" in source
     assert 'source: "transfer/workflow-bootstrap.py,transfer/lb-attestation.json"' in source
     assert 'source: "transfer/workflow-bootstrap.py"' in source
     assert "base64.b64decode(encoded, validate=True)" in source
@@ -104,6 +105,20 @@ def test_bootstrap_workflow_attestation_transport_is_data_only_and_digest_bound(
     assert "trusted workflow bridge parent is unsafe" in source
     assert "run_bootstrap install-lb-ready-attestation" in source
     assert '<"$TRUSTED_LB"' in source
+
+
+def test_bootstrap_apply_installs_fresh_attestation_in_the_same_protected_run() -> None:
+    source = WORKFLOW.read_text(encoding="utf-8")
+    gate = source[source.index('if [ "$OPERATION" = probe ]') : source.index("- name: Stage exact")]
+    apply_gate = gate[gate.index('elif [ "$OPERATION" = apply ]') : gate.index("rollback-interrupted")]
+    assert '[ -n "$LB_ATTESTATION_BASE64" ]' in apply_gate
+    assert '[[ "$LB_ATTESTATION_SHA256" =~ ^[0-9a-f]{64}$ ]]' in apply_gate
+    assert '[[ "$LB_READY_PROJECTION_SHA256" =~ ^[0-9a-f]{64}$ ]]' in apply_gate
+    script = source[source.index("install_lb_attestation()") :]
+    apply_case = script[script.index("apply)") : script.index("rollback-interrupted)")]
+    assert apply_case.index("install_lb_attestation") < apply_case.index("run_bootstrap apply")
+    assert "INSTALL_CONFIRM=" in script
+    assert '--confirm "$INSTALL_CONFIRM"' in script
 
 
 def test_bootstrap_workflow_has_both_closed_recovery_lanes() -> None:

@@ -126,10 +126,19 @@ Run the operations in this order:
    through `manage_do_lb_ready_healthcheck.py`. Run `install-lb` with strict base64
    of that canonical attestation and its two exact digests.
 3. Run `plan` with both baseline SHAs, the probe's PostgreSQL digest, and the LB
-   digests. Record the exact bootstrap plan digest and confirmation.
-4. Run `apply` with those unchanged authorities before the attestation freshness
-   window closes. Save the committed bootstrap plan digest for the release
-   workflow.
+   digests. Record the exact bootstrap plan digest and confirmation. The plan
+   binds the fixed LB identity, full reviewed `/api/ready` projection, target,
+   node probes, and PostgreSQL state; it deliberately excludes the observation
+   timestamp and attestation artifact digest.
+4. Immediately before `apply`, create a new canonical owner-workstation LB
+   attestation for that same projection. Supply its strict base64 and new artifact
+   digest directly to the `apply` dispatch, together with the unchanged ready
+   projection digest, plan digest, and confirmation. The protected apply run
+   installs and validates that evidence before creating its coordinator journal
+   or changing service state. A stale observation, different LB/projection/target,
+   or any other plan-authority drift fails closed; retry with fresh matching
+   evidence without re-planning. Save the committed bootstrap plan digest for the
+   release workflow.
 
 If interruption occurs before a durable coordinator decision, run
 `rollback-interrupted` with the exact bootstrap transaction ID, plan digest, and

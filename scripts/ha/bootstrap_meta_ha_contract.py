@@ -3,8 +3,8 @@
 
 Normal deploy and environment-sync paths intentionally refuse the live drift
 this tool repairs.  This transaction verifies the fixed topology and exact
-per-node Git baselines, binds the owner's exact local DigitalOcean /api/ready
-attestation and proves the shared writable PostgreSQL authority, archives every historical .env* file,
+per-node Git baselines, binds the stable DigitalOcean /api/ready authority plus
+one fresh apply observation and proves the shared writable PostgreSQL authority, archives every historical .env* file,
 sets the nonsecret HA contract atomically, and retires (without deleting) the
 node01 legacy service.  Any failed or uncertain operation keeps both nodes
 stopped behind persistent maintenance until exact rollback is proved.
@@ -137,6 +137,10 @@ LB_NAME = "linas-http-lb-lon1"
 LB_IP = "157.245.31.104"
 LB_DROPLETS = [510629908, 591901417]
 LB_READY_ATTESTATION_SCHEMA = 2
+LB_PLAN_AUTHORITY_SCHEMA = 1
+LB_APPLY_EVIDENCE_SCHEMA = 1
+BOOTSTRAP_PLAN_SCHEMA = 2
+BOOTSTRAP_COORDINATOR_SCHEMA = 2
 LB_PROJECT_ID = "70160077-6e21-4fc7-9c81-45e6b60d8919"
 LB_READY_PROJECTION_KEYS = _lb_contract.LB_READY_PROJECTION_KEYS
 LB_HEALTH_CONTRACT = _lb_contract.LB_HEALTH_CONTRACT_READY
@@ -1064,7 +1068,7 @@ def _unlink_durable(path: Path) -> None:
     _fsync_dir(path.parent)
 
 
-def _write_coordinator_journal(payload: dict[str, Any]) -> None:
+def _validate_coordinator_journal(payload: Any) -> dict[str, Any]:
     expected_keys = {
         "schema",
         "tx_id",
@@ -1073,33 +1077,49 @@ def _write_coordinator_journal(payload: dict[str, Any]) -> None:
         "node01_previous_sha",
         "node02_previous_sha",
         "expected_pg_state_sha256",
-        "lb_attestation_sha256",
+        "lb_plan_authority",
+        "lb_apply_evidence",
         "source_sha256",
         "peer_host",
         "phase",
         "decision",
     }
-    if set(payload) != expected_keys or payload.get("schema") != 1:
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != expected_keys
+        or payload.get("schema") != BOOTSTRAP_COORDINATOR_SCHEMA
+    ):
         raise RuntimeError("bootstrap coordinator journal schema is invalid")
     if not TX_RE.fullmatch(str(payload.get("tx_id") or "")):
         raise RuntimeError("bootstrap coordinator transaction ID is invalid")
     for key in ("target_sha", "node01_previous_sha", "node02_previous_sha"):
         _validate_sha(str(payload.get(key) or ""), f"bootstrap coordinator {key}")
-    for key in ("plan_sha256", "expected_pg_state_sha256", "lb_attestation_sha256", "source_sha256"):
+    for key in ("plan_sha256", "expected_pg_state_sha256", "source_sha256"):
         _validate_digest(str(payload.get(key) or ""), f"bootstrap coordinator {key}")
+    lb_authority = _validate_lb_plan_authority(payload.get("lb_plan_authority"))
+    _validate_lb_apply_evidence(
+        payload.get("lb_apply_evidence"),
+        lb_authority,
+        str(payload["target_sha"]),
+    )
     if payload.get("peer_host") != FIXED_NODES["node01"]["peer_ip"]:
         raise RuntimeError("bootstrap coordinator peer is invalid")
     if payload.get("decision") not in {"rollback", "commit"} or not re.fullmatch(
         r"[a-z0-9-]{3,64}", str(payload.get("phase") or "")
     ):
         raise RuntimeError("bootstrap coordinator state is invalid")
+    return payload
+
+
+def _write_coordinator_journal(payload: dict[str, Any]) -> None:
+    _validate_coordinator_journal(payload)
     _secure_dir(STATE_ROOT, create=True)
     if COORDINATOR_PATH.exists() or COORDINATOR_PATH.is_symlink():
         _secure_regular(COORDINATOR_PATH)
         current_payload, _ = _read_regular_any_owner(COORDINATOR_PATH)
-        current = json.loads(current_payload)
-        immutable = expected_keys - {"phase", "decision"}
-        if set(current) != expected_keys or any(current.get(key) != payload[key] for key in immutable):
+        current = _validate_coordinator_journal(json.loads(current_payload))
+        immutable = set(payload) - {"phase", "decision"}
+        if any(current.get(key) != payload[key] for key in immutable):
             raise RuntimeError("bootstrap coordinator immutable contract changed")
         if current.get("decision") == "commit" and payload.get("decision") != "commit":
             raise RuntimeError("durable bootstrap commit decision cannot be reversed")
@@ -1119,35 +1139,7 @@ def _read_coordinator_journal(expected_sha256: str) -> dict[str, Any]:
 def _read_current_coordinator_journal() -> tuple[dict[str, Any], bytes]:
     _secure_regular(COORDINATOR_PATH)
     payload_bytes, _ = _read_regular_any_owner(COORDINATOR_PATH)
-    payload = json.loads(payload_bytes)
-    expected_keys = {
-        "schema",
-        "tx_id",
-        "plan_sha256",
-        "target_sha",
-        "node01_previous_sha",
-        "node02_previous_sha",
-        "expected_pg_state_sha256",
-        "lb_attestation_sha256",
-        "source_sha256",
-        "peer_host",
-        "phase",
-        "decision",
-    }
-    if set(payload) != expected_keys or payload.get("schema") != 1:
-        raise RuntimeError("bootstrap coordinator journal schema is invalid")
-    if not TX_RE.fullmatch(str(payload.get("tx_id") or "")):
-        raise RuntimeError("bootstrap coordinator journal transaction ID is invalid")
-    for key in ("target_sha", "node01_previous_sha", "node02_previous_sha"):
-        _validate_sha(str(payload.get(key) or ""), f"bootstrap coordinator {key}")
-    for key in ("plan_sha256", "expected_pg_state_sha256", "lb_attestation_sha256", "source_sha256"):
-        _validate_digest(str(payload.get(key) or ""), f"bootstrap coordinator {key}")
-    if payload.get("peer_host") != FIXED_NODES["node01"]["peer_ip"]:
-        raise RuntimeError("bootstrap coordinator journal peer is invalid")
-    if not re.fullmatch(r"[a-z0-9-]{3,64}", str(payload.get("phase") or "")):
-        raise RuntimeError("bootstrap coordinator journal phase is invalid")
-    if payload.get("decision") not in {"rollback", "commit"}:
-        raise RuntimeError("bootstrap coordinator journal decision is invalid")
+    payload = _validate_coordinator_journal(json.loads(payload_bytes))
     return payload, payload_bytes
 
 
@@ -2674,6 +2666,99 @@ def _validate_lb_ready_attestation(payload: Any, expected_ready_sha256: str) -> 
     return str(payload["observed_at"])
 
 
+def _validate_lb_plan_authority(authority: Any) -> dict[str, Any]:
+    expected_keys = {
+        "schema",
+        "load_balancer_id",
+        "load_balancer_name",
+        "load_balancer_ip",
+        "project_id",
+        "droplet_ids",
+        "ready_mutable_sha256",
+        "ready_projection",
+        "health_check",
+        "minimum_drain_seconds",
+    }
+    if (
+        not isinstance(authority, dict)
+        or set(authority) != expected_keys
+        or authority.get("schema") != LB_PLAN_AUTHORITY_SCHEMA
+    ):
+        raise RuntimeError("bootstrap LB plan authority schema is invalid")
+    if (
+        authority.get("load_balancer_id") != LB_ID
+        or authority.get("load_balancer_name") != LB_NAME
+        or authority.get("load_balancer_ip") != LB_IP
+        or authority.get("project_id") != LB_PROJECT_ID
+        or authority.get("droplet_ids") != LB_DROPLETS
+    ):
+        raise RuntimeError("bootstrap LB plan authority identity changed")
+    ready_sha256 = str(authority.get("ready_mutable_sha256") or "")
+    _validate_digest(ready_sha256, "bootstrap LB plan ready projection")
+    if ready_sha256 == "0" * 64:
+        raise RuntimeError("bootstrap LB plan ready projection is invalid")
+    projection = _validate_lb_ready_projection(authority.get("ready_projection"), ready_sha256)
+    if (
+        authority.get("health_check") != LB_HEALTH_CONTRACT
+        or authority.get("health_check") != projection["health_check"]
+    ):
+        raise RuntimeError("bootstrap LB plan health authority changed")
+    check_interval = LB_HEALTH_CONTRACT["check_interval_seconds"]
+    unhealthy_threshold = LB_HEALTH_CONTRACT["unhealthy_threshold"]
+    minimum_drain = check_interval * unhealthy_threshold + 10
+    if authority.get("minimum_drain_seconds") != minimum_drain:
+        raise RuntimeError("bootstrap LB plan drain authority changed")
+    return authority
+
+
+def _validate_lb_apply_evidence(
+    evidence: Any,
+    authority: dict[str, Any],
+    expected_target_sha: str,
+) -> dict[str, Any]:
+    expected_keys = {
+        "schema",
+        "target_sha",
+        "authority_sha256",
+        "attestation_sha256",
+        "load_balancer_id",
+        "ready_mutable_sha256",
+        "observed_at",
+        "transaction_before_sha256",
+    }
+    if (
+        not isinstance(evidence, dict)
+        or set(evidence) != expected_keys
+        or evidence.get("schema") != LB_APPLY_EVIDENCE_SCHEMA
+    ):
+        raise RuntimeError("bootstrap LB apply evidence schema is invalid")
+    _validate_sha(expected_target_sha, "bootstrap LB apply target")
+    if evidence.get("target_sha") != expected_target_sha:
+        raise RuntimeError("bootstrap LB apply evidence target changed")
+    authority = _validate_lb_plan_authority(authority)
+    authority_sha256 = str(evidence.get("authority_sha256") or "")
+    attestation_sha256 = str(evidence.get("attestation_sha256") or "")
+    ready_sha256 = str(evidence.get("ready_mutable_sha256") or "")
+    _validate_digest(authority_sha256, "bootstrap LB apply authority")
+    _validate_digest(attestation_sha256, "bootstrap LB apply attestation")
+    _validate_digest(ready_sha256, "bootstrap LB apply ready projection")
+    if (
+        authority_sha256 == "0" * 64
+        or attestation_sha256 == "0" * 64
+        or authority_sha256 != _digest(authority)
+        or evidence.get("load_balancer_id") != LB_ID
+        or ready_sha256 != authority["ready_mutable_sha256"]
+    ):
+        raise RuntimeError("bootstrap LB apply evidence does not match the stable plan authority")
+    _parse_utc(evidence.get("observed_at"), "bootstrap LB apply evidence observation")
+    before = evidence.get("transaction_before_sha256")
+    if before is not None:
+        _validate_digest(str(before), "bootstrap LB apply evidence prior projection")
+        if before == "0" * 64:
+            raise RuntimeError("bootstrap LB apply evidence prior projection is invalid")
+    return evidence
+
+
 def _lb_attestation_install_confirmation(attestation_sha256: str, ready_sha256: str) -> str:
     _validate_digest(attestation_sha256, "DigitalOcean ready attestation artifact")
     _validate_digest(ready_sha256, "DigitalOcean ready mutable projection")
@@ -2738,9 +2823,11 @@ def _lb_owner_attestation(
     path: Path,
     expected_attestation_sha256: str,
     expected_ready_sha256: str,
-) -> dict[str, Any]:
+    target_sha: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """Consume one exact protected provider observation without a prod token."""
 
+    _validate_sha(target_sha, "bootstrap LB attestation target")
     if path != LB_BOOTSTRAP_ATTESTATION_PATH or path.resolve(strict=True) != LB_BOOTSTRAP_ATTESTATION_PATH:
         raise PermissionError("bootstrap LB attestation path is not the canonical protected path")
     _secure_dir(STATE_ROOT)
@@ -2769,17 +2856,31 @@ def _lb_owner_attestation(
     configured_drain = int(CONTRACT_KEYS["META_HA_LB_DRAIN_SECONDS"])
     if configured_drain < minimum_drain or not 30 <= configured_drain <= 300:
         raise RuntimeError("configured HA drain does not safely exceed the attested LB unhealthy window")
-    return {
-        "owner_attested_ready_mutable_sha256": expected_ready_sha256,
-        "attestation_sha256": expected_attestation_sha256,
-        "observed_at": observed_at,
-        "id": LB_ID,
-        "name": LB_NAME,
-        "ip": LB_IP,
+    authority = {
+        "schema": LB_PLAN_AUTHORITY_SCHEMA,
+        "load_balancer_id": LB_ID,
+        "load_balancer_name": LB_NAME,
+        "load_balancer_ip": LB_IP,
+        "project_id": LB_PROJECT_ID,
         "droplet_ids": LB_DROPLETS,
+        "ready_mutable_sha256": expected_ready_sha256,
+        "ready_projection": payload["ready_projection"],
         "health_check": LB_HEALTH_CONTRACT,
         "minimum_drain_seconds": minimum_drain,
     }
+    evidence = {
+        "schema": LB_APPLY_EVIDENCE_SCHEMA,
+        "target_sha": target_sha,
+        "authority_sha256": _digest(authority),
+        "attestation_sha256": expected_attestation_sha256,
+        "load_balancer_id": LB_ID,
+        "ready_mutable_sha256": expected_ready_sha256,
+        "observed_at": observed_at,
+        "transaction_before_sha256": payload.get("transaction_before_sha256"),
+    }
+    _validate_lb_plan_authority(authority)
+    _validate_lb_apply_evidence(evidence, authority, target_sha)
+    return authority, evidence
 
 
 def _helper_source() -> tuple[bytes, str]:
@@ -2830,7 +2931,7 @@ def _assert_exact_helper(target_sha: str, source_sha: str) -> None:
         raise RuntimeError("running bootstrap helper is not the authenticated QG control blob")
 
 
-def _combined_plan(args: argparse.Namespace) -> tuple[dict[str, Any], bytes, str]:
+def _combined_plan(args: argparse.Namespace) -> tuple[dict[str, Any], bytes, str, dict[str, Any]]:
     source, source_sha = _helper_source()
     node01 = _node_probe("node01", args.expected_node01_sha)
     node02_raw = _remote(
@@ -2854,22 +2955,23 @@ def _combined_plan(args: argparse.Namespace) -> tuple[dict[str, Any], bytes, str
         node01["nested_runtime"]
     ) != _nested_evidence.portable_content_identity(node02["nested_runtime"]):
         raise RuntimeError("nodes do not share one identical nested runtime authority")
-    lb = _lb_owner_attestation(
+    lb_authority, lb_evidence = _lb_owner_attestation(
         args.lb_ready_attestation,
         args.expected_lb_attestation_sha256,
         args.expected_lb_ready_sha256,
+        args.target_sha,
     )
     plan = {
-        "schema": 1,
+        "schema": BOOTSTRAP_PLAN_SCHEMA,
         "target_sha": args.target_sha,
         "expected_pg_state_sha256": args.expected_pg_state_sha256,
-        "lb": lb,
+        "lb": lb_authority,
         "node01": node01,
         "node02": node02,
         "drain_seconds": 30,
         "credential_rotation_required": True,
     }
-    return plan, source, source_sha
+    return plan, source, source_sha, lb_evidence
 
 
 def _cluster_probe(args: argparse.Namespace) -> int:
@@ -2910,6 +3012,21 @@ def _cluster_probe(args: argparse.Namespace) -> int:
 
 def _confirmation(plan_sha256: str) -> str:
     return f"BOOTSTRAP_META_HA_{plan_sha256[:16].upper()}_AND_ROTATE_EXPOSED_CREDENTIALS"
+
+
+def _validated_apply_context(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any], bytes, str, dict[str, Any], str]:
+    """Rebuild stable authority and validate fresh evidence before mutation."""
+
+    plan, source, source_sha, lb_evidence = _combined_plan(args)
+    plan_sha = _digest(plan)
+    if plan_sha != args.expected_plan_sha256:
+        raise RuntimeError("bootstrap plan changed after owner dry-run")
+    if args.confirm != _confirmation(plan_sha):
+        raise PermissionError("exact bootstrap/credential-rotation confirmation is missing")
+    _validate_lb_apply_evidence(lb_evidence, plan["lb"], args.target_sha)
+    return plan, source, source_sha, lb_evidence, plan_sha
 
 
 def _recovery_confirmation(tx_id: str, plan_sha256: str) -> str:
@@ -4248,23 +4365,19 @@ def _remote_phase(source: bytes, source_sha: str, command: str, **kwargs: str) -
 
 
 def _orchestrate_apply(args: argparse.Namespace) -> int:
-    plan, source, source_sha = _combined_plan(args)
-    plan_sha = _digest(plan)
-    if plan_sha != args.expected_plan_sha256:
-        raise RuntimeError("bootstrap plan changed after owner dry-run")
-    if args.confirm != _confirmation(plan_sha):
-        raise PermissionError("exact bootstrap/credential-rotation confirmation is missing")
+    plan, source, source_sha, lb_evidence, plan_sha = _validated_apply_context(args)
     tx_id = uuid.uuid4().hex
     decision = "rollback"
     coordinator = {
-        "schema": 1,
+        "schema": BOOTSTRAP_COORDINATOR_SCHEMA,
         "tx_id": tx_id,
         "plan_sha256": plan_sha,
         "target_sha": args.target_sha,
         "node01_previous_sha": args.expected_node01_sha,
         "node02_previous_sha": args.expected_node02_sha,
         "expected_pg_state_sha256": args.expected_pg_state_sha256,
-        "lb_attestation_sha256": str(plan["lb"]["attestation_sha256"]),
+        "lb_plan_authority": plan["lb"],
+        "lb_apply_evidence": lb_evidence,
         "source_sha256": source_sha,
         "peer_host": FIXED_NODES["node01"]["peer_ip"],
         "phase": "planned",
@@ -4954,14 +5067,16 @@ def main(argv: list[str] | None = None) -> int:
                 if args.command == "cluster-probe":
                     return _cluster_probe(args)
                 if args.command == "plan":
-                    plan, _, _ = _combined_plan(args)
+                    plan, _, _, lb_evidence = _combined_plan(args)
                     plan_sha = _digest(plan)
                     print(f"plan_sha256={plan_sha}")
                     print(f"confirmation={_confirmation(plan_sha)}")
                     print(f"node01_previous_sha={plan['node01']['previous_sha']}")
                     print(f"node02_previous_sha={plan['node02']['previous_sha']}")
                     print(f"postgres_state_sha256={plan['node01']['pg']['state_sha256']}")
-                    print(f"digitalocean_ready_mutable_sha256={plan['lb']['owner_attested_ready_mutable_sha256']}")
+                    print(f"digitalocean_ready_mutable_sha256={plan['lb']['ready_mutable_sha256']}")
+                    print(f"digitalocean_plan_evidence_sha256={lb_evidence['attestation_sha256']}")
+                    print(f"digitalocean_plan_evidence_observed_at={lb_evidence['observed_at']}")
                     print(f"safe_plan_manifest_json={_canonical(plan).decode('utf-8')}")
                     print(ROTATION_WARNING)
                     return 0

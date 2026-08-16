@@ -41,11 +41,11 @@ on:
         required: false
         type: string
       LB_ATTESTATION_BASE64:
-        description: "Install only: strict base64 of canonical fresh owner-workstation attestation"
+        description: "Install/apply: strict base64 of canonical fresh owner-workstation attestation"
         required: false
         type: string
       LB_ATTESTATION_SHA256:
-        description: "Install/plan/apply: exact attestation artifact SHA-256"
+        description: "Install/plan/apply: exact current attestation artifact SHA-256 (apply may refresh it)"
         required: false
         type: string
       LB_READY_PROJECTION_SHA256:
@@ -158,20 +158,25 @@ jobs:
             [ "$CONFIRMATION" = "INSTALL_BOOTSTRAP_LB_READY_${LB_PREFIX^^}_${READY_PREFIX^^}" ]
             [ -z "$EXPECTED_NODE01_SHA$EXPECTED_NODE02_SHA$EXPECTED_PG_STATE_SHA256" ]
             [ -z "$BOOTSTRAP_PLAN_SHA256$BOOTSTRAP_TRANSACTION_ID$BOOTSTRAP_JOURNAL_SHA256" ]
-          elif [ "$OPERATION" = plan ] || [ "$OPERATION" = apply ]; then
+          elif [ "$OPERATION" = plan ]; then
             [[ "$EXPECTED_NODE01_SHA" =~ ^[0-9a-f]{40}$ ]]
             [[ "$EXPECTED_NODE02_SHA" =~ ^[0-9a-f]{40}$ ]]
             [[ "$EXPECTED_PG_STATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
             [[ "$LB_ATTESTATION_SHA256" =~ ^[0-9a-f]{64}$ ]]
             [[ "$LB_READY_PROJECTION_SHA256" =~ ^[0-9a-f]{64}$ ]]
             [ -z "$LB_ATTESTATION_BASE64$BOOTSTRAP_TRANSACTION_ID$BOOTSTRAP_JOURNAL_SHA256" ]
-            if [ "$OPERATION" = apply ]; then
-              [[ "$BOOTSTRAP_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]]
-              PLAN_PREFIX="${BOOTSTRAP_PLAN_SHA256:0:16}"
-              [ "$CONFIRMATION" = "BOOTSTRAP_META_HA_${PLAN_PREFIX^^}_AND_ROTATE_EXPOSED_CREDENTIALS" ]
-            else
-              [ -z "$BOOTSTRAP_PLAN_SHA256$CONFIRMATION" ]
-            fi
+            [ -z "$BOOTSTRAP_PLAN_SHA256$CONFIRMATION" ]
+          elif [ "$OPERATION" = apply ]; then
+            [[ "$EXPECTED_NODE01_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$EXPECTED_NODE02_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$EXPECTED_PG_STATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            [[ "$LB_ATTESTATION_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            [[ "$LB_READY_PROJECTION_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            [[ "$BOOTSTRAP_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            [ -n "$LB_ATTESTATION_BASE64" ]
+            [ -z "$BOOTSTRAP_TRANSACTION_ID$BOOTSTRAP_JOURNAL_SHA256" ]
+            PLAN_PREFIX="${BOOTSTRAP_PLAN_SHA256:0:16}"
+            [ "$CONFIRMATION" = "BOOTSTRAP_META_HA_${PLAN_PREFIX^^}_AND_ROTATE_EXPOSED_CREDENTIALS" ]
           elif [ "$OPERATION" = rollback-interrupted ]; then
             [[ "$BOOTSTRAP_TRANSACTION_ID" =~ ^[0-9a-f]{32}$ ]]
             [[ "$BOOTSTRAP_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]]
@@ -209,7 +214,7 @@ jobs:
           [ "$(/usr/bin/sha256sum transfer/workflow-bootstrap.py | /usr/bin/awk '{print $1}')" = "$EXPECTED" ]
 
       - name: Decode exact bootstrap LB attestation
-        if: inputs.OPERATION == 'install-lb'
+        if: inputs.OPERATION == 'install-lb' || inputs.OPERATION == 'apply'
         env:
           LB_ATTESTATION_BASE64: ${{ inputs.LB_ATTESTATION_BASE64 }}
           LB_ATTESTATION_SHA256: ${{ inputs.LB_ATTESTATION_SHA256 }}
@@ -257,7 +262,7 @@ jobs:
           PY
 
       - name: Transfer exact bridge and bootstrap LB attestation
-        if: inputs.OPERATION == 'install-lb'
+        if: inputs.OPERATION == 'install-lb' || inputs.OPERATION == 'apply'
         uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -269,7 +274,7 @@ jobs:
           strip_components: 1
 
       - name: Transfer only the exact bootstrap workflow bridge
-        if: inputs.OPERATION != 'install-lb'
+        if: inputs.OPERATION != 'install-lb' && inputs.OPERATION != 'apply'
         uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -396,15 +401,9 @@ jobs:
               --drain-seconds 30
             )
 
-            case "$OPERATION" in
-              probe)
-                run_bootstrap cluster-probe --target-sha "$TARGET_SHA" \
-                  --expected-node01-sha "$EXPECTED_NODE01_SHA" \
-                  --expected-node02-sha "$EXPECTED_NODE02_SHA"
-                ;;
-              install-lb)
-                SOURCE="$UPLOAD/lb-attestation.json"
-                sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+            install_lb_attestation() {
+              SOURCE="$UPLOAD/lb-attestation.json"
+              sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
                   PATH=/usr/sbin:/usr/bin:/sbin:/bin \
                   /usr/bin/python3 -B -I -S - "$SOURCE" "$TRUSTED_LB" \
                   "$LB_ATTESTATION_SHA256" "$SOURCE_UID" <<'PY'
@@ -449,15 +448,29 @@ jobs:
             finally:
                 os.close(output)
             PY
-                run_bootstrap install-lb-ready-attestation --target-sha "$TARGET_SHA" \
-                  --expected-attestation-sha256 "$LB_ATTESTATION_SHA256" \
-                  --expected-ready-sha256 "$LB_READY_PROJECTION_SHA256" \
-                  --confirm "$CONFIRMATION" <"$TRUSTED_LB"
+              ATTESTATION_PREFIX="${LB_ATTESTATION_SHA256:0:16}"
+              READY_PREFIX="${LB_READY_PROJECTION_SHA256:0:16}"
+              INSTALL_CONFIRM="INSTALL_BOOTSTRAP_LB_READY_${ATTESTATION_PREFIX^^}_${READY_PREFIX^^}"
+              run_bootstrap install-lb-ready-attestation --target-sha "$TARGET_SHA" \
+                --expected-attestation-sha256 "$LB_ATTESTATION_SHA256" \
+                --expected-ready-sha256 "$LB_READY_PROJECTION_SHA256" \
+                --confirm "$INSTALL_CONFIRM" <"$TRUSTED_LB"
+            }
+
+            case "$OPERATION" in
+              probe)
+                run_bootstrap cluster-probe --target-sha "$TARGET_SHA" \
+                  --expected-node01-sha "$EXPECTED_NODE01_SHA" \
+                  --expected-node02-sha "$EXPECTED_NODE02_SHA"
+                ;;
+              install-lb)
+                install_lb_attestation
                 ;;
               plan)
                 run_bootstrap plan "${COMMON_ARGS[@]}"
                 ;;
               apply)
+                install_lb_attestation
                 run_bootstrap apply "${COMMON_ARGS[@]}" \
                   --expected-plan-sha256 "$BOOTSTRAP_PLAN_SHA256" --confirm "$CONFIRMATION"
                 ;;
