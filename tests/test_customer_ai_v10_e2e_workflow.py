@@ -253,7 +253,7 @@ async def test_s09_comment_and_dm_simulation_independent(v2_env) -> None:
         simulation=True,
         capture_send=sent,
     )
-    assert first.status == "simulated"
+    assert first.status == "simulated_both"
     assert [row["delivery"] for row in sent] == ["public_reply", "private_reply"]
     second_sent: list[dict] = []
     second = await apply_comment_and_dm_rule(
@@ -263,7 +263,7 @@ async def test_s09_comment_and_dm_simulation_independent(v2_env) -> None:
         simulation=True,
         capture_send=second_sent,
     )
-    assert second.reason == "" or second.status in {"simulated", "ignored"}
+    assert second.reason == "" or second.status in {"simulated", "simulated_both", "ignored"}
     # In-memory already-replied is owned by process_meta_comment_event; dual sim itself is idempotent per comment cache.
     assert len(sent) == 2
 

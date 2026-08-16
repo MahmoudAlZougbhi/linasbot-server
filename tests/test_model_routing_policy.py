@@ -392,31 +392,33 @@ async def test_customer_v2_answer_terra_tools_keeps_requested_effort(monkeypatch
 
 @pytest.mark.asyncio
 async def test_customer_v2_retrieval_payload_luna(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
     from services.customer_reply_v2 import retrieval_luna as rl
     from services.model_policy import MODEL_CUSTOMER_LUNA
 
     captured: dict[str, Any] = {}
 
-    class _FakeClient:
-        class chat:
-            class completions:
-                @staticmethod
-                async def create(**kwargs: Any) -> Any:
-                    captured.update(kwargs)
-                    msg = MagicMock()
-                    msg.content = "{}"
-                    msg.tool_calls = None
-                    choice = MagicMock()
-                    choice.message = msg
-                    resp = MagicMock()
-                    resp.choices = [choice]
-                    resp.model = MODEL_CUSTOMER_LUNA
-                    return resp
+    async def _responses_create(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return SimpleNamespace(
+            output_text="{}",
+            output=[],
+            model=MODEL_CUSTOMER_LUNA,
+            usage=SimpleNamespace(input_tokens=3, output_tokens=1, total_tokens=4),
+        )
 
-    monkeypatch.setattr("services.llm_core_service.client", _FakeClient)
+    async def _chat_create(**kwargs: Any) -> Any:
+        raise AssertionError("V10 Luna+tools must use /v1/responses, not chat.completions")
+
+    fake = SimpleNamespace(
+        responses=SimpleNamespace(create=_responses_create),
+        chat=SimpleNamespace(completions=SimpleNamespace(create=_chat_create)),
+    )
+    monkeypatch.setattr("services.llm_core_service.client", fake)
     await rl._default_llm([{"role": "user", "content": "{}"}], tools=[{"type": "function"}])
     assert captured["model"] == MODEL_CUSTOMER_LUNA
-    assert captured["reasoning_effort"] == "low"
+    assert captured["reasoning"]["effort"] == "low"
 
 
 def test_model_router_and_provider_defaults_are_sol_terra(monkeypatch: pytest.MonkeyPatch) -> None:

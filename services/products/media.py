@@ -13,7 +13,7 @@ from typing import Any
 from services.products.paths import product_media_dir
 
 MEDIA_ID_PREFIX = "prdim_"
-ALLOWED_MIME = frozenset(
+IMAGE_MIME = frozenset(
     {
         "image/jpeg",
         "image/png",
@@ -22,15 +22,27 @@ ALLOWED_MIME = frozenset(
         "image/webp",
     }
 )
+VIDEO_MIME = frozenset(
+    {
+        "video/mp4",
+        "video/quicktime",
+        "video/webm",
+        "video/3gpp",
+    }
+)
+ALLOWED_MIME = IMAGE_MIME | VIDEO_MIME
 MAX_BYTES = 8 * 1024 * 1024  # 8 MiB per product image
+MAX_VIDEO_BYTES = 12 * 1024 * 1024
 
 
 def validate_upload(*, filename: str, content_type: str | None, size: int) -> dict[str, Any]:
     mime = (content_type or mimetypes.guess_type(filename)[0] or "").lower()
     if size <= 0:
         return {"ok": False, "error": "empty_file"}
-    if size > MAX_BYTES:
-        return {"ok": False, "error": "file_too_large", "max_bytes": MAX_BYTES}
+    suffix = Path(filename).suffix.lower()
+    limit = MAX_VIDEO_BYTES if mime in VIDEO_MIME or suffix in {".mp4", ".mov", ".webm", ".3gp"} else MAX_BYTES
+    if size > limit:
+        return {"ok": False, "error": "file_too_large", "max_bytes": limit}
     if mime not in ALLOWED_MIME:
         ext = Path(filename).suffix.lower()
         ext_map = {
@@ -40,6 +52,10 @@ def validate_upload(*, filename: str, content_type: str | None, size: int) -> di
             ".jpeg": "image/jpeg",
             ".png": "image/png",
             ".webp": "image/webp",
+            ".mp4": "video/mp4",
+            ".mov": "video/quicktime",
+            ".webm": "video/webm",
+            ".3gp": "video/3gpp",
         }
         if ext in ext_map and mime in {"", "application/octet-stream"}:
             mime = ext_map[ext]

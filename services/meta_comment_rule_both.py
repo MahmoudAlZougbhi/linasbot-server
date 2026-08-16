@@ -76,7 +76,18 @@ async def maybe_handle_comment_and_dm(
                     _dm_payload(comment_id=comment_id, binding=binding, text=dm_text, rule_id=rule_decision.rule_id)
                 )
         _mark_sent_reply(binding, comment_id)
-        return CommentReplyResult(status="simulated", reply_id="simulated_both")
+        from services.meta_comment_resource_send import send_comment_rule_resources
+
+        await send_comment_rule_resources(
+            tenant_id=binding.tenant_id,
+            rule_decision=rule_decision,
+            comment_id=comment_id,
+            channel=binding.channel,
+            binding_id=binding.binding_id,
+            simulation=True,
+            capture_send=capture_send,
+        )
+        return CommentReplyResult(status="simulated_both", reply_id="simulated_both")
 
     if client is None:
         return CommentReplyResult(status="failed", reason="comment_and_dm_client_missing")
@@ -117,6 +128,17 @@ async def maybe_handle_comment_and_dm(
     _mark_sent_reply(binding, comment_id)
     public_ok = bool(public_result.get("ok") or public_result.get("skipped") or public_result.get("duplicate"))
     dm_ok = bool(dm_result.get("ok") or dm_result.get("skipped") or dm_result.get("duplicate"))
+    from services.meta_comment_resource_send import send_comment_rule_resources
+
+    await send_comment_rule_resources(
+        tenant_id=binding.tenant_id,
+        rule_decision=rule_decision,
+        comment_id=comment_id,
+        channel=binding.channel,
+        binding_id=binding.binding_id,
+        simulation=False,
+        capture_send=None,
+    )
     reply_id = str(public_result.get("reply_id") or dm_result.get("reply_id") or "")
     if public_ok and dm_ok:
         return CommentReplyResult(status="sent_comment_and_dm", reply_id=reply_id)

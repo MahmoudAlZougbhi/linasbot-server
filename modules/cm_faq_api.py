@@ -17,6 +17,7 @@ from services.cm.faq_integration import (
     get_cm_faq_group,
     list_cm_faq,
     regenerate_cm_faq_variants,
+    replace_cm_faq_attachments,
     update_cm_faq_variant,
 )
 from services.dashboard_session_service import SessionRecord
@@ -192,6 +193,28 @@ async def cm_patch_faq_variant(
     except FaqIntegrationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return result
+
+
+@app.put("/api/cm/faq/{qa_group_id}/attachments")
+async def cm_put_faq_attachments(
+    request: Request,
+    qa_group_id: str,
+    body: dict[str, Any] = Body(default={}),
+) -> Any:
+    session = require_permission(request, "contentManagers")
+    tenant_id = _session_tenant(session)
+    raw = body.get("attachments")
+    if not isinstance(raw, list):
+        raise HTTPException(status_code=400, detail="attachments array is required")
+    try:
+        return replace_cm_faq_attachments(
+            qa_group_id=qa_group_id,
+            attachments=raw,
+            updated_by=_actor(session),
+            tenant_id=tenant_id,
+        )
+    except FaqIntegrationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/api/cm/faq/{qa_group_id}/regenerate")

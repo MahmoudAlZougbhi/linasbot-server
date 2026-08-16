@@ -292,7 +292,7 @@ async def test_s18_product_media_send_no_second_tera(v2_env, products_db) -> Non
         channel_capabilities={"max_media_items": 10},
     )
     assert video["ok"] is False
-    assert video["error"] == "product_video_not_supported"
+    assert video["error"] == "product_video_not_found"
 
 
 @pytest.mark.asyncio

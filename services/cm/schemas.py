@@ -38,6 +38,7 @@ from services.cm.schemas_content import (  # noqa: F401
     LanguagePolicy,
     LocalizedLabels,
     PriceRecord,
+    ResourceAttachment,
     RestrictedPolicy,
     RestrictedTopic,
     ServiceRecord,
@@ -123,6 +124,7 @@ class OpeningHoursSchedule(CmBaseModel):
     saturday: OpeningHoursDay = Field(default_factory=OpeningHoursDay)
     sunday: OpeningHoursDay = Field(default_factory=OpeningHoursDay)
     notes: str | None = None
+    attachments: list[ArticleAttachment] = Field(default_factory=list)
 
     def summary_line(self) -> str:
         days = (
@@ -231,6 +233,7 @@ class FaqRecord(CmBaseModel):
     reviewed: bool = False
     provenance: str | None = None
     revision: int = 1
+    attachments: list[ArticleAttachment] = Field(default_factory=list)
 
     def is_complete_for_languages(self, required: list[str] | tuple[str, ...]) -> bool:
         required_set = {str(lang).strip().lower() for lang in required if str(lang).strip()}

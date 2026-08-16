@@ -1,6 +1,6 @@
-"""Upload stored product media bytes to Meta and send as a DM attachment.
+"""Upload stored media bytes to Meta and send as a Messenger attachment.
 
-Uses Graph message_attachments (multipart) so product files never need a public URL.
+Uses Graph message_attachments (multipart) so files never need a public URL.
 """
 
 from __future__ import annotations
@@ -11,7 +11,18 @@ from typing import Any
 import httpx
 
 
-async def send_stored_product_media(
+def attachment_type_for_mime(mime: str) -> str:
+    mime_l = str(mime or "").lower()
+    if mime_l.startswith("video/"):
+        return "video"
+    if mime_l.startswith("audio/"):
+        return "audio"
+    if mime_l.startswith("image/"):
+        return "image"
+    return "file"
+
+
+async def send_stored_meta_attachment(
     adapter: Any,
     *,
     recipient_id: str,
@@ -19,17 +30,13 @@ async def send_stored_product_media(
     mime: str,
     filename: str,
     product_id: str = "",
+    recipient_field: str = "id",
 ) -> dict[str, Any]:
     to_id = str(recipient_id or "").strip()
     if not to_id or not media_bytes:
         return {"success": False, "error": "missing_recipient_or_bytes"}
     mime_l = str(mime or "image/jpeg").lower()
-    if mime_l.startswith("video/"):
-        att_type = "video"
-    elif mime_l.startswith("audio/"):
-        att_type = "audio"
-    else:
-        att_type = "image"
+    att_type = attachment_type_for_mime(mime_l)
     base = str(getattr(adapter, "graph_base_url", "") or "https://graph.facebook.com").rstrip("/")
     version = str(getattr(adapter, "graph_api_version", "") or "v24.0")
     account_id = str(getattr(adapter, "account_id", "") or "").strip()
@@ -55,8 +62,9 @@ async def send_stored_product_media(
     attachment_id = str(body.get("attachment_id") or body.get("id") or "").strip()
     if not attachment_id:
         return {"success": False, "error": "missing_attachment_id"}
+    field = "comment_id" if recipient_field == "comment_id" else "id"
     payload = {
-        "recipient": {"id": to_id},
+        "recipient": {field: to_id},
         "messaging_type": "RESPONSE",
         "message": {"attachment": {"type": att_type, "payload": {"attachment_id": attachment_id}}},
     }
@@ -69,3 +77,22 @@ async def send_stored_product_media(
         return {"success": False, "provider": "meta", "error": "meta_send_missing_message_id"}
     _ = product_id
     return {"success": True, "provider": "meta", "message_id": message_id, "attachment_id": attachment_id}
+
+
+async def send_stored_product_media(
+    adapter: Any,
+    *,
+    recipient_id: str,
+    media_bytes: bytes,
+    mime: str,
+    filename: str,
+    product_id: str = "",
+) -> dict[str, Any]:
+    return await send_stored_meta_attachment(
+        adapter,
+        recipient_id=recipient_id,
+        media_bytes=media_bytes,
+        mime=mime,
+        filename=filename,
+        product_id=product_id,
+    )

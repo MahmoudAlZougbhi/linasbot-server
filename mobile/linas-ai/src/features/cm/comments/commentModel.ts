@@ -8,6 +8,8 @@ export type CommentReplyIn = 'comment' | 'dm' | 'both';
 export type CommentAttachment = {
   id: string;
   kind: CommentKind;
+  title: string;
+  description: string;
   caption: string;
   mime: string;
   filename: string;
@@ -57,6 +59,23 @@ function asStringList(value: unknown): string[] {
   return out;
 }
 
+function parseResourceFields(row: Record<string, unknown>): { title: string; description: string } {
+  return {
+    title: String(row.title || '').trim(),
+    description: String(row.description || row.caption || '').trim(),
+  };
+}
+
+function serializeResourceFields(fields: { title: string; description: string }): {
+  title: string;
+  description: string;
+  caption: string;
+} {
+  const title = fields.title.trim();
+  const description = fields.description.trim();
+  return { title, description, caption: description };
+}
+
 export function parseAttachment(row: Record<string, unknown>): CommentAttachment {
   const durationRaw = row.duration_seconds;
   const duration =
@@ -69,10 +88,13 @@ export function parseAttachment(row: Record<string, unknown>): CommentAttachment
   else if (row.kind === 'video' || mime.startsWith('video/')) kind = 'video';
   else if (row.kind === 'image' || mime.startsWith('image/')) kind = 'image';
   else if (row.kind === 'file') kind = 'file';
+  const meta = parseResourceFields(row);
   return {
     id: String(row.id || ''),
     kind,
-    caption: String(row.caption || ''),
+    title: meta.title,
+    description: meta.description,
+    caption: meta.description,
     mime: String(row.mime || ''),
     filename: String(row.filename || ''),
     size: typeof row.size === 'number' && Number.isFinite(row.size) ? row.size : 0,
@@ -159,16 +181,22 @@ export function ruleToRecord(item: CommentRuleItem): Record<string, unknown> {
     ai_instructions: isAi ? item.ai_instructions : '',
     ai_action_mode: isAi ? aiActionOf(replyIn) : 'reply_comment',
     notes: item.notes,
-    attachments: filterAttachmentsForReplyIn(item.attachments, replyIn).map((att) => ({
-      id: att.id,
-      kind: att.kind,
-      caption: att.caption,
-      mime: att.mime,
-      filename: att.filename,
-      size: att.size,
-      url: att.url,
-      duration_seconds: att.duration_seconds,
-    })),
+    attachments: filterAttachmentsForReplyIn(item.attachments, replyIn).map((att) => {
+      const meta = serializeResourceFields({ title: att.title, description: att.description || att.caption });
+      return {
+        id: att.id,
+        kind: att.kind,
+        title: meta.title,
+        description: meta.description,
+        caption: meta.caption,
+        mime: att.mime,
+        filename: att.filename,
+        size: att.size,
+        url: att.url,
+        duration_seconds: att.duration_seconds,
+        status: 'active',
+      };
+    }),
   };
 }
 

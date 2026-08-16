@@ -51,8 +51,12 @@ def test_handwritten_v10_files_under_500_lines() -> None:
 
 def test_owner_ui_files_exist() -> None:
     root = Path(__file__).resolve().parents[1]
-    assert (root / "mobile/linas-ai/src/features/cm/comments/CommentsScreen.tsx").is_file()
+    comments = (root / "mobile/linas-ai/src/features/cm/comments/CommentsScreen.tsx").read_text(encoding="utf-8")
+    assert "ResourceMetaModal" in comments
     assert (root / "mobile/linas-ai/src/features/cm/requestRules/RequestRulesScreen.tsx").is_file()
+    assert (root / "mobile/linas-ai/src/features/faq/FaqResourcesEditor.tsx").is_file()
+    faq_detail = (root / "mobile/linas-ai/src/features/faq/FaqDetailView.tsx").read_text(encoding="utf-8")
+    assert "children" in faq_detail
 
 
 def test_alembic_head_is_request_drafts() -> None:

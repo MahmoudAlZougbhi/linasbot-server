@@ -11,6 +11,7 @@ from services.customer_reply_v2.faq_eligibility import (
     FaqTurnGuards,
     canonical_faq_language,
     channel_incompatible,
+    faq_published_has_resources,
     is_context_dependent_question,
     languages_compatible,
     mixed_or_uncovered_reason,
@@ -223,6 +224,20 @@ async def _finish_match(
     if uncovered:
         return _ineligible(
             reason=uncovered,
+            answer=answer,
+            question=question,
+            metadata=_meta(
+                faq_id=faq_id,
+                faq_revision=faq_revision,
+                match_type=match_type,
+                match_score=match_score,
+                channel=channel,
+                extra=meta_extra,
+            ),
+        )
+    if faq_published_has_resources(tenant_id=tenant_id, faq_id=faq_id):
+        return _ineligible(
+            reason="faq_needs_resource",
             answer=answer,
             question=question,
             metadata=_meta(

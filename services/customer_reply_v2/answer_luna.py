@@ -15,6 +15,7 @@ from services.customer_reply_v2.flags import customer_answer_model_name
 from services.customer_reply_v2.media_actions import parse_media_actions
 from services.customer_reply_v2.models import AnswerLunaResult, EvidenceRecord, RetrievalResult
 from services.customer_reply_v2.open_drafts import list_open_collecting_drafts
+from services.customer_reply_v2.resource_actions import parse_resource_actions
 from services.customer_reply_v2.tera_llm import create_tera_completion, normalize_tera_effort
 from services.response_formatting import RESPONSE_FORMATTING_RULES
 
@@ -60,11 +61,16 @@ Return a single JSON object (no markdown):
   "safe_failure_category": null,
   "media_actions": [],
   "draft_actions": [],
-  "request_actions": []
+  "request_actions": [],
+  "resource_actions": []
 }}
-Do not send files. If the customer asked for product photos or videos, put media_actions
+Do not send files yourself. Never invent URLs, storage keys, or resource IDs.
+If the customer asked for product photos or videos, put media_actions
 for stored catalog media only: {{"product_id":"...","media_type":"images|videos","max_items":5,"order":"configured_order"}}.
-The system sends stored media. Never invent URLs, prices, or product IDs.
+If the customer asked for an AI Setup resource, return resource_actions using only
+resource_ref values from allowed_resources on the selected evidence:
+{{"action":"send_resource","resource_ref":"..."}}.
+The system validates tenant, published file, and channel, then sends. Never claim a file was sent.
 If the customer is providing request fields, return draft_actions. The system validates IDs, field names, and types.
 Never invent field keys or draft IDs. Ask only for missing_fields returned by the system.
 Never say an appointment is confirmed. After the system submits, say the request was sent and is pending.
@@ -119,6 +125,7 @@ def build_answer_messages(
             "section_id": e.section_id,
             "title": e.title,
             "content": e.content,
+            "allowed_resources": list(getattr(e, "allowed_resources", None) or []),
         }
         for e in evidence
     ]
@@ -312,6 +319,7 @@ async def run_answer_luna(
             media_actions=parse_media_actions(data.get("media_actions")),
             draft_actions=parse_draft_actions(data.get("draft_actions")),
             request_actions=parse_request_actions(data.get("request_actions")),
+            resource_actions=parse_resource_actions(data.get("resource_actions")),
         )
 
     from services.requests.capture import is_public_comment_channel
@@ -396,6 +404,7 @@ async def run_answer_luna(
         media_actions=parse_media_actions(data.get("media_actions")),
         draft_actions=parse_draft_actions(data.get("draft_actions")),
         request_actions=parse_request_actions(data.get("request_actions")),
+        resource_actions=parse_resource_actions(data.get("resource_actions")),
     )
 
 

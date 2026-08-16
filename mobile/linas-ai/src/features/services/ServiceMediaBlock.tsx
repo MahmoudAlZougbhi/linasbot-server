@@ -79,10 +79,10 @@ export function ServiceMediaRows({ attachments, onRemove, onReplace, onEditCapti
             accessibilityLabel={tr('servicesEditCaption')}
           >
             <Text style={styles.rowTitle} numberOfLines={1}>
-              {att.filename || att.url || att.id}
+              {att.title || att.filename || att.url || att.id}
             </Text>
-            <Text style={styles.rowMeta} numberOfLines={1}>
-              {att.caption || att.kind}
+            <Text style={styles.rowMeta} numberOfLines={2}>
+              {att.description || att.caption || att.kind}
             </Text>
           </Pressable>
           <Pressable

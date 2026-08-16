@@ -37,6 +37,7 @@ def build_channel_metadata(
     can_reply_publicly: bool | None = None,
     can_send_dm: bool | None = None,
     max_media_items: int | None = None,
+    inbound_media: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     platform, surface, is_public = parse_channel(channel)
     if can_reply_publicly is None:
@@ -68,4 +69,5 @@ def build_channel_metadata(
             "max_media_items": int(max_media_items),
         },
         "legacy_channel": channel,
+        "inbound_media": dict(inbound_media) if inbound_media else {},
     }

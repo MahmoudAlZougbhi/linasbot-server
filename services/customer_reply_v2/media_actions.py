@@ -90,14 +90,6 @@ def resolve_media_actions(
                 }
             media_rows = sorted(list(getattr(row, "images", None) or []), key=lambda img: int(img.sort_order or 0))
             want_video = action["media_type"] == "videos"
-            if want_video:
-                return {
-                    "ok": False,
-                    "error": "product_video_not_supported",
-                    "items": delivered,
-                    "ai_charged": False,
-                    "owner_diagnostic": "Product catalog stores images only; video send is not supported.",
-                }
             selected = []
             for img in media_rows:
                 media_id = str(getattr(img, "media_id", "") or "")
@@ -107,6 +99,15 @@ def resolve_media_actions(
                 if want_video != is_video:
                     continue
                 selected.append(img)
+            if want_video and not selected:
+                return {
+                    "ok": False,
+                    "error": "product_video_not_found",
+                    "product_id": action["product_id"],
+                    "items": delivered,
+                    "ai_charged": False,
+                    "owner_diagnostic": "This product has no stored video to send.",
+                }
             limit = min(action["max_items"], max_channel)
             for img in selected[:limit]:
                 delivered.append(

@@ -73,6 +73,53 @@ def get_cm_faq_group(*, qa_group_id: str, tenant_id: str | None = None) -> dict[
     return None
 
 
+def replace_cm_faq_attachments(
+    *,
+    qa_group_id: str,
+    attachments: list[Any],
+    tenant_id: str | None = None,
+    updated_by: str = "content_manager",
+) -> dict[str, Any]:
+    from services.cm.resource_attachment import validate_owner_resource_fields
+    from services.cm.schemas import ArticleAttachment
+
+    rows: list[ArticleAttachment] = []
+    for raw in attachments:
+        att = ArticleAttachment.model_validate(raw)
+        check = validate_owner_resource_fields(
+            title=att.title,
+            description=att.description or att.caption,
+            kind=att.kind,
+            url=att.url,
+        )
+        if not check.get("ok"):
+            raise FaqIntegrationError(str(check.get("error") or "invalid_resource"))
+        rows.append(att)
+    env = get_draft(FAQ_SECTION, tenant_id=tenant_id, create_default=True)
+    section = FaqSection.model_validate(env.payload)
+    found = False
+    items: list[FaqRecord] = []
+    for item in section.items:
+        if item.qa_group_id == qa_group_id:
+            found = True
+            items.append(item.model_copy(update={"attachments": rows, "revision": item.revision + 1}))
+        else:
+            items.append(item)
+    if not found:
+        raise FaqIntegrationError(f"FAQ group not found: {qa_group_id}")
+    put_draft(
+        FAQ_SECTION,
+        payload=FaqSection(items=items, notes=section.notes).model_dump(mode="json"),
+        if_match=env.etag,
+        tenant_id=tenant_id,
+        updated_by=updated_by,
+    )
+    group = get_cm_faq_group(qa_group_id=qa_group_id, tenant_id=tenant_id)
+    if group is None:
+        raise FaqIntegrationError(f"FAQ group not found: {qa_group_id}")
+    return {"success": True, "data": group}
+
+
 def archive_cm_faq_group(
     *,
     qa_group_id: str,

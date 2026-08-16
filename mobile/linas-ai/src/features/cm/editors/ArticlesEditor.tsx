@@ -20,6 +20,8 @@ type Props = {
 type AttachmentRow = {
   id: string;
   kind: string;
+  title: string;
+  description: string;
   caption: string;
   mime: string;
   filename: string;
@@ -30,7 +32,9 @@ function asAttachments(value: unknown): AttachmentRow[] {
   return asRecordList(value).map((row) => ({
     id: String(row.id || ''),
     kind: String(row.kind || 'file'),
-    caption: String(row.caption || ''),
+    title: String(row.title || ''),
+    description: String(row.description || row.caption || ''),
+    caption: String(row.description || row.caption || ''),
     mime: String(row.mime || ''),
     filename: String(row.filename || ''),
     size: typeof row.size === 'number' ? row.size : 0,
@@ -93,6 +97,8 @@ export function ArticlesEditor({ section, payload, onChange }: Props) {
         {
           id: uploaded.media_id,
           kind: uploaded.kind || (picked.mimeType.startsWith('image/') ? 'image' : 'file'),
+          title: '',
+          description: '',
           caption: '',
           mime: uploaded.mime || picked.mimeType,
           filename: uploaded.filename || picked.name,
@@ -147,11 +153,19 @@ export function ArticlesEditor({ section, payload, onChange }: Props) {
                 {att.kind}: {att.filename || att.id}
               </Text>
               <Field
-                label="When to use (caption)"
-                value={att.caption}
+                label="Title"
+                value={att.title}
+                onChange={(v) => {
+                  const next = attachments.map((row, i) => (i === index ? { ...row, title: v } : row));
+                  setAttachments(next);
+                }}
+              />
+              <Field
+                label="Short description"
+                value={att.description || att.caption}
                 onChange={(v) => {
                   const next = attachments.map((row, i) =>
-                    i === index ? { ...row, caption: v } : row,
+                    i === index ? { ...row, description: v, caption: v } : row,
                   );
                   setAttachments(next);
                 }}

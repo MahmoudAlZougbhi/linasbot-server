@@ -6,7 +6,6 @@ import asyncio
 import json
 import os
 import subprocess
-import sys
 import threading
 import time
 import urllib.error
@@ -20,7 +19,7 @@ from typing import Any, TypeVar
 from sqlalchemy import create_engine, func, select, text
 
 from services.web_chat.pg_models import WebChatMessageRow, WebChatOperationRow
-from tests.web_chat_acceptance_support import ROOT, _free_port, _probe_live_http
+from tests.web_chat_acceptance_support import ROOT, _alembic_python, _free_port, _probe_live_http
 
 T = TypeVar("T")
 
@@ -167,16 +166,7 @@ def _web_chat_server_env(
 
 
 def _python_executable() -> str:
-    configured = (os.getenv("LINAS_TEST_ALEMBIC_PYTHON") or "").strip()
-    candidates = [
-        configured,
-        "/private/tmp/linas-wa-venv/bin/python",
-        "/tmp/linas-alembic-114/bin/python",
-    ]
-    for candidate in candidates:
-        if candidate and Path(candidate).is_file():
-            return candidate
-    return sys.executable
+    return _alembic_python()
 
 
 def spawn_web_chat_server(

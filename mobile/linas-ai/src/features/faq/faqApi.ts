@@ -176,3 +176,19 @@ export async function regenerateFaq(qaGroupId: string): Promise<void> {
     body: JSON.stringify({}),
   });
 }
+
+const PutAttachmentsSchema = z
+  .object({
+    success: z.literal(true),
+    data: FaqGroupSchema.optional(),
+  })
+  .passthrough();
+
+export async function putFaqAttachments(qaGroupId: string, attachments: unknown[]): Promise<FaqGroup> {
+  const res = await apiFetch(`/api/cm/faq/${encodeURIComponent(qaGroupId)}/attachments`, {
+    method: 'PUT',
+    schema: PutAttachmentsSchema,
+    body: JSON.stringify({ attachments }),
+  });
+  return res.data ?? { qa_group_id: qaGroupId, attachments };
+}

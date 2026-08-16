@@ -40,6 +40,18 @@ async def send_meta_social_outbound(
                 capture_send=capture_send,
                 capture_to=namespaced_id,
             )
+            from services.customer_reply_v2.setup_resource_outbound import send_pending_setup_resources
+
+            await send_pending_setup_resources(
+                user_data=user_data,
+                sender_id=sender_id,
+                adapter=None,
+                inbound_event_id=inbound_event_id,
+                channel=channel,
+                binding_id=binding_id,
+                capture_send=capture_send,
+                capture_to=namespaced_id,
+            )
         return {"success": True, "simulated": True, "delivered_externally": False}
     if adapter is None:
         return {"success": False, "error": "Meta adapter unavailable"}
@@ -74,7 +86,19 @@ async def send_meta_social_outbound(
         binding_id=binding_id,
         capture_send=None,
     )
+    from services.customer_reply_v2.setup_resource_outbound import send_pending_setup_resources
+
+    resource_result = await send_pending_setup_resources(
+        user_data=user_data,
+        sender_id=sender_id,
+        adapter=adapter,
+        inbound_event_id=inbound_event_id,
+        channel=channel,
+        binding_id=binding_id,
+        capture_send=None,
+    )
     if isinstance(text_result, dict):
         text_result = dict(text_result)
         text_result["product_media_delivery"] = media_result
+        text_result["setup_resource_delivery"] = resource_result
     return text_result

@@ -7,6 +7,8 @@ export type KnowledgeKind = 'image' | 'file' | 'video' | 'link';
 export type KnowledgeAttachment = {
   id: string;
   kind: KnowledgeKind;
+  title: string;
+  description: string;
   caption: string;
   mime: string;
   filename: string;
@@ -83,16 +85,36 @@ export function normalizeAttachmentKind(row: KnowledgeAttachment): KnowledgeAtta
   return { ...row, kind: 'file' };
 }
 
+function parseResourceFields(row: Record<string, unknown>): { title: string; description: string } {
+  return {
+    title: String(row.title || '').trim(),
+    description: String(row.description || row.caption || '').trim(),
+  };
+}
+
+function serializeResourceFields(fields: { title: string; description: string }): {
+  title: string;
+  description: string;
+  caption: string;
+} {
+  const title = fields.title.trim();
+  const description = fields.description.trim();
+  return { title, description, caption: description };
+}
+
 export function parseAttachment(row: Record<string, unknown>): KnowledgeAttachment {
   const durationRaw = row.duration_seconds;
   const duration =
     typeof durationRaw === 'number' && Number.isFinite(durationRaw) && durationRaw >= 0
       ? Math.round(durationRaw)
       : null;
+  const meta = parseResourceFields(row);
   return normalizeAttachmentKind({
     id: String(row.id || ''),
     kind: row.kind === 'image' || row.kind === 'video' || row.kind === 'link' ? row.kind : 'file',
-    caption: String(row.caption || ''),
+    title: meta.title,
+    description: meta.description,
+    caption: meta.description,
     mime: String(row.mime || ''),
     filename: String(row.filename || ''),
     size: typeof row.size === 'number' && Number.isFinite(row.size) ? row.size : 0,
@@ -139,16 +161,22 @@ export function itemToRecord(item: KnowledgeItem): Record<string, unknown> {
     linked_service_ids: item.linked_service_ids,
     linked_branch_ids: item.linked_branch_ids,
     notes: item.notes,
-    attachments: item.attachments.map((att) => ({
-      id: att.id,
-      kind: att.kind,
-      caption: att.caption,
-      mime: att.mime,
-      filename: att.filename,
-      size: att.size,
-      url: att.url,
-      duration_seconds: att.duration_seconds,
-    })),
+    attachments: item.attachments.map((att) => {
+      const meta = serializeResourceFields({ title: att.title, description: att.description || att.caption });
+      return {
+        id: att.id,
+        kind: att.kind,
+        title: meta.title,
+        description: meta.description,
+        caption: meta.caption,
+        mime: att.mime,
+        filename: att.filename,
+        size: att.size,
+        url: att.url,
+        duration_seconds: att.duration_seconds,
+        status: 'active',
+      };
+    }),
     updated_at: item.updated_at,
   };
 }

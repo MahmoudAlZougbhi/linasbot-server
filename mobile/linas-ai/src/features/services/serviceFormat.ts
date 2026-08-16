@@ -5,6 +5,8 @@ export type ServiceKind = 'image' | 'file' | 'video' | 'link';
 export type ServiceAttachment = {
   id: string;
   kind: ServiceKind;
+  title: string;
+  description: string;
   caption: string;
   mime: string;
   filename: string;

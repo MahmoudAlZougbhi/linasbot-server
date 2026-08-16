@@ -12,6 +12,8 @@ import {
   pickVideoAttachment,
 } from '../../../chat/v2/pickAttachment';
 import { uploadCmArticleMedia } from '../../cmMediaApi';
+import { ResourceMetaModal } from '../../resources/ResourceMetaModal';
+import { suggestedTitleFromFilename } from '../../resources/resourceMeta';
 import {
   asBranchAttachments,
   hrefForOpen,
@@ -35,6 +37,10 @@ export function BranchMediaSection({ mapsUrl, attachments, onMapsUrl, onAttachme
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [linkTitle, setLinkTitle] = useState('');
+  const [linkDesc, setLinkDesc] = useState('');
+  const [pending, setPending] = useState<BranchAttachment | null>(null);
+  const [metaTitle, setMetaTitle] = useState('');
+  const [metaDesc, setMetaDesc] = useState('');
 
   const attachPicked = async (picked: { uri: string; name: string; mimeType: string } | null, kindHint?: string) => {
     if (!picked) return;
@@ -48,18 +54,20 @@ export function BranchMediaSection({ mapsUrl, attachments, onMapsUrl, onAttachme
           : kindHint === 'video'
             ? 'video'
             : 'file';
-      onAttachments([
-        ...rows,
-        {
+      const next: BranchAttachment = {
           id: uploaded.media_id,
           kind,
+          title: '',
+          description: '',
           caption: '',
           mime: uploaded.mime || picked.mimeType,
           filename: uploaded.filename || picked.name,
           size: uploaded.size || 0,
           url: '',
-        },
-      ]);
+        };
+      setPending(next);
+      setMetaTitle(suggestedTitleFromFilename(next.filename));
+      setMetaDesc('');
     } catch (err) {
       setError(err instanceof Error ? err.message : tr('aiSetupLocUploadFailed'));
     } finally {
@@ -126,9 +134,17 @@ export function BranchMediaSection({ mapsUrl, attachments, onMapsUrl, onAttachme
         <MediaRow
           key={row.id}
           icon={row.kind === 'link' ? 'link' : row.kind === 'video' ? 'video' : row.kind === 'image' ? 'image' : 'file'}
-          name={row.filename || row.url || row.id}
+          name={row.title || row.filename || row.url || row.id}
           kind={
-            row.kind === 'image'
+            row.description || row.caption
+              ? `${row.kind === 'image'
+              ? tr('aiSetupLocMediaImage')
+              : row.kind === 'video'
+                ? tr('aiSetupLocMediaVideo')
+                : row.kind === 'link'
+                  ? tr('aiSetupLocMediaLink')
+                  : tr('aiSetupLocMediaFile')} · ${row.description || row.caption}`
+              : row.kind === 'image'
               ? tr('aiSetupLocMediaImage')
               : row.kind === 'video'
                 ? tr('aiSetupLocMediaVideo')
@@ -152,16 +168,27 @@ export function BranchMediaSection({ mapsUrl, attachments, onMapsUrl, onAttachme
               autoCapitalize="none"
               placeholder="https://"
             />
+            <Text style={locStyles.fieldLabel}>{tr('resourceFieldDescription')}</Text>
+            <TextField value={linkDesc} onChangeText={setLinkDesc} />
             <Pressable
               style={locStyles.saveBtn}
               onPress={() => {
+                if (!linkTitle.trim()) {
+                  setError(tr('resourceTitleRequired'));
+                  return;
+                }
+                if (!linkDesc.trim()) {
+                  setError(tr('resourceDescriptionRequired'));
+                  return;
+                }
                 if (!linkUrl.trim()) {
                   setError(tr('aiSetupLocLinkRequired'));
                   return;
                 }
-                onAttachments([...rows, newLinkAttachment(hrefForOpen(linkUrl), linkTitle)]);
+                onAttachments([...rows, newLinkAttachment(hrefForOpen(linkUrl), linkTitle, linkDesc)]);
                 setLinkUrl('');
                 setLinkTitle('');
+                setLinkDesc('');
                 setLinkOpen(false);
                 setError(null);
               }}
@@ -171,6 +198,49 @@ export function BranchMediaSection({ mapsUrl, attachments, onMapsUrl, onAttachme
           </Pressable>
         </ModalScrim>
       </AppModal>
+      <ResourceMetaModal
+        visible={Boolean(pending)}
+        heading={tr('resourceMetaHeading')}
+        preview={pending?.filename}
+        url=""
+        title={metaTitle}
+        description={metaDesc}
+        error={error}
+        titleLabel={tr('resourceFieldTitle')}
+        descriptionLabel={tr('resourceFieldDescription')}
+        urlLabel=""
+        titlePlaceholder={tr('resourceTitlePlaceholder')}
+        descriptionPlaceholder={tr('resourceDescriptionPlaceholder')}
+        urlPlaceholder=""
+        saveLabel={tr('aiSetupLocAddLink')}
+        cancelLabel={tr('aiSetupLocCancel')}
+        onChangeUrl={() => undefined}
+        onChangeTitle={setMetaTitle}
+        onChangeDescription={setMetaDesc}
+        onSave={() => {
+          if (!pending) return;
+          if (!metaTitle.trim()) {
+            setError(tr('resourceTitleRequired'));
+            return;
+          }
+          if (!metaDesc.trim()) {
+            setError(tr('resourceDescriptionRequired'));
+            return;
+          }
+          onAttachments([
+            ...rows,
+            { ...pending, title: metaTitle.trim(), description: metaDesc.trim(), caption: metaDesc.trim() },
+          ]);
+          setPending(null);
+          setMetaTitle('');
+          setMetaDesc('');
+          setError(null);
+        }}
+        onClose={() => {
+          setPending(null);
+          setError(null);
+        }}
+      />
     </View>
   );
 }

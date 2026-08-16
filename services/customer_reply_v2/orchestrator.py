@@ -8,7 +8,7 @@ from typing import Any
 from services.cm.version_store import PublishedVersionError
 from services.customer_reply_v2.answer_luna import run_answer_luna
 from services.customer_reply_v2.channel_metadata import build_channel_metadata
-from services.customer_reply_v2.conversation_window import filter_rolling_window, load_dm_conversation_window
+from services.customer_reply_v2.conversation_window import load_dm_conversation_window
 from services.customer_reply_v2.customer_facts import apply_message_fact_updates, load_customer_facts
 from services.customer_reply_v2.faq_evidence import merge_faq_evidence
 from services.customer_reply_v2.flags import (
@@ -48,6 +48,7 @@ async def run_customer_reply_v2_dm(
     reply_to_message_id: str = "",
     message_id: str = "",
     attachment_types: list[str] | None = None,
+    inbound_media: dict[str, Any] | None = None,
     injected_history: list[dict[str, Any]] | None = None,
     scripted_retrieval: list[Any] | None = None,
     fixture_answer: dict[str, Any] | None = None,
@@ -144,12 +145,16 @@ async def run_customer_reply_v2_dm(
     facts = apply_message_fact_updates(facts, message, detected_language)
     profile = facts.to_safe_dict()
     meter = CustomerTurnMeter(tenant_id=tenant_id)
+    inbound = dict(inbound_media or {})
+    if inbound and not attachment_types:
+        attachment_types = [str(t) for t in (inbound.get("attachment_types") or []) if str(t).strip()]
     channel_meta = build_channel_metadata(
         channel=channel,
         account_id=asset_id,
         message_id=message_id,
         conversation_id=conversation_id,
         reply_to=reply_to_message_id or None,
+        inbound_media=inbound or None,
     )
     v10 = customer_ai_v10_runtime_enabled()
     if v10:
@@ -161,6 +166,7 @@ async def run_customer_reply_v2_dm(
             response_language=response_language,
             is_public=bool(channel_meta["is_public"]),
             attachment_types=attachment_types,
+            image_urls=list(inbound.get("safety_image_urls") or []),
         )
         if safety.blocked:
             meter.record(
@@ -397,6 +403,7 @@ async def run_customer_reply_v2_dm(
         channel_metadata=channel_meta,
         meter=meter,
         idempotency_key=meter.customer_turn_id,
+        allowed_source_ids=list(retrieval.selected_source_ids or []),
     )
     trace = build_safe_trace(
         tenant_id=tenant_id,
@@ -490,5 +497,4 @@ from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_com
 __all__ = [
     "run_customer_reply_v2_dm",
     "run_customer_reply_v2_comment",
-    "filter_rolling_window",
 ]

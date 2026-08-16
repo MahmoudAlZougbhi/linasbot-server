@@ -9,7 +9,7 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
-from services.cm.schemas_content import CmBaseModel, LocalizedLabels
+from services.cm.schemas_content import ArticleAttachment, CmBaseModel, LocalizedLabels
 
 RequestTypeCode = Literal["ORDER", "APPOINTMENT", "OTHER"]
 NotificationLanguage = Literal["auto", "ar", "en", "fr", "franco"]
@@ -69,6 +69,7 @@ class RequestRule(CmBaseModel):
     name: str = ""
     notes: str | None = None
     enabled: bool = True
+    attachments: list[ArticleAttachment] = Field(default_factory=list)
 
 
 class RequestsAppointmentsSection(CmBaseModel):

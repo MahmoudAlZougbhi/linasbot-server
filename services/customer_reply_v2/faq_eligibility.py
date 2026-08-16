@@ -148,6 +148,32 @@ def mixed_or_uncovered_reason(*, message: str, faq_question: str) -> str | None:
     return None
 
 
+def faq_published_has_resources(*, tenant_id: str, faq_id: str) -> bool:
+    """True when the published FAQ item has customer-visible Image/Video/File/Link resources."""
+    from services.cm.resource_attachment import resource_summary
+    from services.cm.version_store import load_published_content
+
+    want = str(faq_id or "").strip()
+    if not want or not str(tenant_id or "").strip():
+        return False
+    try:
+        _pointer, sections = load_published_content(tenant_id)
+    except Exception:
+        return False
+    payload = sections.get("faq") or {}
+    items = payload.get("items") if isinstance(payload, dict) else []
+    if not isinstance(items, list):
+        return False
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        gid = str(item.get("qa_group_id") or item.get("id") or "").strip()
+        if gid != want:
+            continue
+        return bool(resource_summary(item.get("attachments")).get("has_resources"))
+    return False
+
+
 def channel_incompatible(*, channel: str, answer: str, tags: list[str] | None) -> str | None:
     channel_tags = {str(t).strip().lower() for t in (tags or [])} & _CHANNEL_TAGS
     ch = (channel or "").strip().lower()

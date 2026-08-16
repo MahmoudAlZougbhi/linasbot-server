@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ApiError } from '../../../api/client';
 import { AppIcon, feather } from '../../../components/AppIcon';
 import { LinasLoadingIndicator } from '../../../components/LinasLoadingIndicator';
 import { PrimaryButton } from '../../../components/PrimaryButton';
@@ -19,34 +18,29 @@ import { useI18n } from '../../../i18n/LanguageContext';
 import { fonts } from '../../../theme';
 import { ScreenChrome } from '../../shared/ScreenChrome';
 import { asRecordList, newId } from '../cmApi';
-import { uploadCmArticleMedia } from '../cmMediaApi';
 import type { CmProposalReview } from '../cmProposalReview';
+import { ResourceMetaModal } from '../resources/ResourceMetaModal';
+import { moveById } from '../resources/resourceMeta';
 import { useCmDraft } from '../useCmDraft';
 import { KnowledgeEditView } from './KnowledgeEditView';
 import { KnowledgeListView } from './KnowledgeListView';
-import { KnowledgeTextModal } from './KnowledgeTextModal';
 import { KN_CANVAS, KN_TEAL } from './knowledgeChrome';
 import {
   buildKnowledgeList,
   createKnowledgeItem,
-  isValidHttpUrl,
   itemToRecord,
   parseKnowledgeItem,
   togglePublishedStatus,
   touchUpdated,
-  type KnowledgeAttachment,
   type KnowledgeItem,
-  type KnowledgeKind,
 } from './knowledgeModel';
-import { pickKnowledgeFile, pickKnowledgeImage, pickKnowledgeVideo } from './knowledgePick';
+import { useKnowledgeMedia } from './useKnowledgeMedia';
 
 type Props = {
   proposalReview?: CmProposalReview | null;
   onBack?: () => void;
   onOpenLocations?: () => void;
 };
-
-type PromptMode = { kind: 'link' | 'caption'; attachId?: string; replaceId?: string };
 
 export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Props) {
   const { tr } = useI18n();
@@ -55,10 +49,6 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
   const [mode, setMode] = useState<'list' | 'edit'>('list');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [prompt, setPrompt] = useState<PromptMode | null>(null);
-  const [promptValue, setPromptValue] = useState('');
 
   const items = useMemo(
     () => asRecordList(draft.payload.items).map(parseKnowledgeItem),
@@ -77,6 +67,8 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
     setItems(items.map((item) => (item.id === selected.id ? touchUpdated({ ...item, ...patch }, now) : item)));
   }
 
+  const media = useKnowledgeMedia(selected, patchSelected, tr);
+
   function handleAdd() {
     const item = createKnowledgeItem(newId('knowledge'), new Date().toISOString());
     setItems([item, ...items]);
@@ -87,7 +79,7 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
   function goList() {
     setMode('list');
     setSelectedId(null);
-    setUploadError(null);
+    media.setUploadError(null);
   }
 
   async function handleSave() {
@@ -114,124 +106,6 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
         onPress: () => void handleDelete(),
       },
     ]);
-  }
-
-  function uploadFailMessage(err: unknown): string {
-    const detail =
-      err instanceof ApiError && err.body && typeof err.body === 'object' && 'detail' in err.body
-        ? JSON.stringify((err.body as { detail: unknown }).detail)
-        : err instanceof Error
-          ? err.message
-          : '';
-    if (detail.includes('file_too_large')) return tr('knowledgeVideoTooLarge');
-    if (detail.includes('unsupported_mime')) return tr('knowledgeUnsupported');
-    return tr('knowledgeUploadFailed');
-  }
-
-  async function attachPicked(
-    picked: { uri: string; name: string; mimeType: string; durationSeconds?: number } | null,
-    kind: KnowledgeKind,
-    replaceId?: string,
-  ) {
-    if (!selected || !picked) return;
-    setUploading(true);
-    setUploadError(null);
-    try {
-      const uploaded = await uploadCmArticleMedia(picked);
-      const nextAtt: KnowledgeAttachment = {
-        id: uploaded.media_id,
-        kind: uploaded.kind === 'image' || uploaded.kind === 'video' ? uploaded.kind : kind === 'video' ? 'video' : kind === 'image' ? 'image' : 'file',
-        caption: '',
-        mime: uploaded.mime || picked.mimeType,
-        filename: uploaded.filename || picked.name,
-        size: uploaded.size || 0,
-        url: '',
-        duration_seconds: picked.durationSeconds ?? null,
-      };
-      const current = selected.attachments;
-      const next = replaceId
-        ? current.map((row) => (row.id === replaceId ? { ...nextAtt, caption: row.caption } : row))
-        : [...current, nextAtt];
-      patchSelected({ attachments: next });
-    } catch (err) {
-      setUploadError(uploadFailMessage(err));
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  async function handleAddResource(kind: KnowledgeKind, replaceId?: string) {
-    if (kind === 'link') {
-      const existing = replaceId ? selected?.attachments.find((row) => row.id === replaceId) : null;
-      setPrompt({ kind: 'link', replaceId });
-      setPromptValue(existing?.url || '');
-      return;
-    }
-    if (kind === 'image') {
-      const picked = await pickKnowledgeImage();
-      await attachPicked(picked, 'image', replaceId);
-      return;
-    }
-    if (kind === 'video') {
-      const picked = await pickKnowledgeVideo();
-      await attachPicked(picked, 'video', replaceId);
-      return;
-    }
-    const picked = await pickKnowledgeFile();
-    await attachPicked(picked, 'file', replaceId);
-  }
-
-  function handleReplace(att: KnowledgeAttachment) {
-    void handleAddResource(att.kind, att.id);
-  }
-
-  function handleEditCaption(att: KnowledgeAttachment) {
-    setPrompt({ kind: 'caption', attachId: att.id });
-    setPromptValue(att.caption);
-  }
-
-  function commitPrompt() {
-    if (!selected || !prompt) return;
-    if (prompt.kind === 'link') {
-      if (!isValidHttpUrl(promptValue)) {
-        setUploadError(tr('knowledgeLinkInvalid'));
-        return;
-      }
-      const url = promptValue.trim();
-      let host = url;
-      try {
-        host = new URL(url).hostname;
-      } catch {
-        host = url;
-      }
-      const nextAtt: KnowledgeAttachment = {
-        id: prompt.replaceId || newId('link'),
-        kind: 'link',
-        caption: '',
-        mime: '',
-        filename: host,
-        size: 0,
-        url,
-        duration_seconds: null,
-      };
-      const current = selected.attachments;
-      const next = prompt.replaceId
-        ? current.map((row) => (row.id === prompt.replaceId ? { ...nextAtt, caption: row.caption } : row))
-        : [...current, nextAtt];
-      patchSelected({ attachments: next });
-      setPrompt(null);
-      setPromptValue('');
-      setUploadError(null);
-      return;
-    }
-    if (!prompt.attachId) return;
-    patchSelected({
-      attachments: selected.attachments.map((row) =>
-        row.id === prompt.attachId ? { ...row, caption: promptValue } : row,
-      ),
-    });
-    setPrompt(null);
-    setPromptValue('');
   }
 
   const addPill = (
@@ -284,17 +158,20 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
           <ScrollView contentContainerStyle={styles.editScroll} showsVerticalScrollIndicator={false}>
             <KnowledgeEditView
               item={selected}
-              uploading={uploading}
-              uploadError={uploadError}
+              uploading={media.uploading}
+              uploadError={media.uploadError}
               onTitle={(title) => patchSelected({ title })}
               onBody={(body) => patchSelected({ body })}
               onTogglePublished={() => patchSelected({ status: togglePublishedStatus(selected.status) })}
-              onAddResource={(kind) => void handleAddResource(kind)}
+              onAddResource={(kind) => void media.addResource(kind)}
               onRemoveResource={(id) =>
                 patchSelected({ attachments: selected.attachments.filter((row) => row.id !== id) })
               }
-              onReplaceResource={handleReplace}
-              onEditCaption={handleEditCaption}
+              onReplaceResource={(att) => void media.addResource(att.kind, att.id)}
+              onEditCaption={media.editResource}
+              onMoveResource={(id, direction) =>
+                patchSelected({ attachments: moveById(selected.attachments, id, direction) })
+              }
               tr={tr}
             />
           </ScrollView>
@@ -319,19 +196,28 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
         </KeyboardAvoidingView>
       ) : null}
 
-      <KnowledgeTextModal
-        visible={Boolean(prompt)}
-        title={prompt?.kind === 'caption' ? tr('knowledgeEditCaption') : tr('knowledgeLinkTitle')}
-        value={promptValue}
-        placeholder={prompt?.kind === 'caption' ? tr('knowledgeCaption') : tr('knowledgeLinkPlaceholder')}
-        saveLabel={prompt?.kind === 'caption' ? tr('knowledgeSave') : tr('knowledgeLinkSave')}
+      <ResourceMetaModal
+        visible={Boolean(media.prompt)}
+        heading={media.prompt?.kind === 'link' ? tr('knowledgeLinkTitle') : tr('resourceMetaHeading')}
+        preview={media.prompt?.preview}
+        showUrl={media.prompt?.kind === 'link'}
+        url={media.prompt?.url || ''}
+        title={media.prompt?.title || ''}
+        description={media.prompt?.description || ''}
+        error={media.promptError}
+        titleLabel={tr('resourceFieldTitle')}
+        descriptionLabel={tr('resourceFieldDescription')}
+        urlLabel={tr('knowledgeLinkTitle')}
+        titlePlaceholder={tr('resourceTitlePlaceholder')}
+        descriptionPlaceholder={tr('resourceDescriptionPlaceholder')}
+        urlPlaceholder={tr('knowledgeLinkPlaceholder')}
+        saveLabel={tr('knowledgeSave')}
         cancelLabel={tr('usersCancel')}
-        onChange={setPromptValue}
-        onSave={commitPrompt}
-        onClose={() => {
-          setPrompt(null);
-          setPromptValue('');
-        }}
+        onChangeUrl={(url) => media.setPrompt((row) => (row ? { ...row, url } : row))}
+        onChangeTitle={(title) => media.setPrompt((row) => (row ? { ...row, title } : row))}
+        onChangeDescription={(description) => media.setPrompt((row) => (row ? { ...row, description } : row))}
+        onSave={media.commitPrompt}
+        onClose={media.closePrompt}
       />
     </ScreenChrome>
   );

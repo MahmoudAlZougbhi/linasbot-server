@@ -13,6 +13,7 @@ from services.cm.constants import (
     RESPONSE_LANGUAGE_MAP,
     SUPPORTED_LANGUAGES,
 )
+from services.cm.resource_attachment import ResourceAttachment
 
 LangCode = Literal["ar", "en", "fr", "franco"]
 Audience = Literal["men", "women", "general"]
@@ -93,6 +94,7 @@ class ServiceRecord(CmBaseModel):
     aliases: list[str] = Field(default_factory=list)
     audience: Audience = "general"
     notes: str | None = None
+    attachments: list[ResourceAttachment] = Field(default_factory=list)
 
 
 class BranchHours(CmBaseModel):
@@ -154,16 +156,8 @@ class BranchWeeklySchedule(CmBaseModel):
         return f"{head}: " + "; ".join(parts) if head else "; ".join(parts)
 
 
-class BranchAttachment(CmBaseModel):
+class BranchAttachment(ResourceAttachment):
     """Image, video, file, or link on a branch. Bytes live in the CM media store."""
-
-    id: str
-    kind: Literal["image", "video", "file", "link"] = "file"
-    caption: str = ""
-    mime: str = ""
-    filename: str = ""
-    size: int = Field(default=0, ge=0)
-    url: str = ""
 
 
 class BranchRecord(CmBaseModel):
@@ -214,21 +208,12 @@ class PriceRecord(CmBaseModel):
         return value
 
 
-class ArticleAttachment(CmBaseModel):
+class ArticleAttachment(ResourceAttachment):
     """Case/example media on a knowledge or care article (bytes live in CM media store).
 
-    ``caption`` tells the AI when this image/file applies (e.g. filled form vs blank template).
-    ``url`` is for kind=link (no binary). ``duration_seconds`` is optional video metadata.
+    ``title`` and ``description`` are the owner-facing fields. ``caption`` remains as a
+    legacy alias for description. Bytes live in the CM media store; ``url`` is for links.
     """
-
-    id: str
-    kind: Literal["image", "file", "video", "link"] = "file"
-    caption: str = ""
-    mime: str = ""
-    filename: str = ""
-    size: int = Field(default=0, ge=0)
-    url: str = ""
-    duration_seconds: int | None = Field(default=None, ge=0)
 
 
 class ArticleRecord(CmBaseModel):

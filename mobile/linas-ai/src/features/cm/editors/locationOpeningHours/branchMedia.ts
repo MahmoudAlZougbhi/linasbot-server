@@ -3,6 +3,8 @@ import { asRecordList, newId } from '../../cmApi';
 export type BranchAttachment = {
   id: string;
   kind: 'image' | 'video' | 'file' | 'link';
+  title: string;
+  description: string;
   caption: string;
   mime: string;
   filename: string;
@@ -18,7 +20,9 @@ export function asBranchAttachments(value: unknown): BranchAttachment[] {
     return {
       id: String(row.id || ''),
       kind,
-      caption: String(row.caption || ''),
+      title: String(row.title || '').trim(),
+      description: String(row.description || row.caption || '').trim(),
+      caption: String(row.description || row.caption || '').trim(),
       mime: String(row.mime || ''),
       filename: String(row.filename || ''),
       size: typeof row.size === 'number' ? row.size : 0,
@@ -27,13 +31,16 @@ export function asBranchAttachments(value: unknown): BranchAttachment[] {
   });
 }
 
-export function newLinkAttachment(url: string, title: string): BranchAttachment {
+export function newLinkAttachment(url: string, title: string, description = ''): BranchAttachment {
   const href = url.trim();
   const name = title.trim() || href;
+  const desc = description.trim();
   return {
     id: newId('link'),
     kind: 'link',
-    caption: '',
+    title: name,
+    description: desc,
+    caption: desc,
     mime: '',
     filename: name,
     size: 0,

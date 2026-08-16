@@ -11,6 +11,7 @@ import { FaqCreateView } from './FaqCreateView';
 import { FaqDetailView } from './FaqDetailView';
 import { FaqLanguagePickerModal } from './FaqLanguagePickerModal';
 import { FaqListView } from './FaqListView';
+import { FaqResourcesEditor } from './FaqResourcesEditor';
 import {
   archiveFaq,
   createFaq,
@@ -326,7 +327,13 @@ export function FaqScreen({ proposalReview }: Props) {
               setMode('list');
             }}
             tr={tr}
-          />
+          >
+            <FaqResourcesEditor
+              group={selected}
+              onUpdated={(next) => setSelected(next)}
+              tr={tr}
+            />
+          </FaqDetailView>
         ) : null}
       </ScrollView>
       ) : null}
