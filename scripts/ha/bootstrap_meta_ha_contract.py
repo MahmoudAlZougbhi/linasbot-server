@@ -2415,32 +2415,37 @@ def _prepare_probe_environment(
         _fsync_dir(venv_root)
     site_packages = venv_root / "lib/python3.13/site-packages"
     site_packages.mkdir(parents=True, exist_ok=True)
-    result = subprocess.run(
-        [
-            str(SYSTEM_PYTHON),
-            "-B",
-            "-I",
-            "-m",
-            "pip",
-            "--isolated",
-            "install",
-            "--no-index",
-            "--no-cache-dir",
-            "--find-links",
-            str(root / "wheels"),
-            "--require-hashes",
-            "--only-binary=:all:",
-            "--no-compile",
-            "--target",
-            str(site_packages),
-            "-r",
-            str(control_root / "requirements.lock"),
-        ],
-        env=environment,
-        capture_output=True,
-        timeout=600,
-        check=False,
-    )
+    # The system /tmp can be a small tmpfs.  Keep transient pip extraction
+    # beneath this private transaction root, which is provisioned on durable
+    # storage and removed before the probe tree becomes authenticated evidence.
+    with tempfile.TemporaryDirectory(prefix=".pip-tmp.", dir=root) as pip_temp:
+        pip_environment = {**environment, "TMPDIR": pip_temp}
+        result = subprocess.run(
+            [
+                str(SYSTEM_PYTHON),
+                "-B",
+                "-I",
+                "-m",
+                "pip",
+                "--isolated",
+                "install",
+                "--no-index",
+                "--no-cache-dir",
+                "--find-links",
+                str(root / "wheels"),
+                "--require-hashes",
+                "--only-binary=:all:",
+                "--no-compile",
+                "--target",
+                str(site_packages),
+                "-r",
+                str(control_root / "requirements.lock"),
+            ],
+            env=pip_environment,
+            capture_output=True,
+            timeout=600,
+            check=False,
+        )
     if result.returncode:
         raise RuntimeError("hash-locked PostgreSQL probe dependency installation failed")
     _normalize_probe_tree_permissions(

@@ -1652,7 +1652,10 @@ def test_bootstrap_runtime_launcher_and_probe_never_execute_the_legacy_venv(
     probe = source[source.index("def _prepare_probe_environment") : source.index("def _service_state")]
     assert "wheelhouse.tar" in probe
     assert 'str(SYSTEM_PYTHON), "-B", "-I", "-m", "venv"' in probe
-    assert 'str(SYSTEM_PYTHON),\n            "-B",\n            "-I",\n            "-m",\n            "pip"' in probe
+    assert (
+        'str(SYSTEM_PYTHON),\n                "-B",\n                "-I",\n                "-m",\n                "pip"'
+        in probe
+    )
     for option in (
         '"--isolated"',
         '"--no-index"',
@@ -1664,7 +1667,6 @@ def test_bootstrap_runtime_launcher_and_probe_never_execute_the_legacy_venv(
         assert option in probe
     assert 'REPO_DIR / "venv/bin/python"' not in probe
     assert '[str(SYSTEM_PYTHON), "-B", "-I", "-S", "-c", runner' in probe
-
     helper = BOOTSTRAP_PATH.read_bytes()
     helper_sha = bootstrap._digest_bytes(helper)
     authority = {
@@ -1691,6 +1693,14 @@ def test_bootstrap_runtime_launcher_and_probe_never_execute_the_legacy_venv(
         "c" * 64,
     ]
     assert "python3.11" not in " ".join(command)
+
+
+def test_bootstrap_probe_pip_uses_private_transaction_tempdir() -> None:
+    source = BOOTSTRAP_PATH.read_text(encoding="utf-8")
+    probe = source[source.index("def _prepare_probe_environment") : source.index("def _service_state")]
+    assert 'TemporaryDirectory(prefix=".pip-tmp.", dir=root)' in probe
+    assert 'pip_environment = {**environment, "TMPDIR": pip_temp}' in probe
+    assert "env=pip_environment" in probe
 
 
 def test_postgres_probe_tree_modes_are_deterministic_under_umask_077(tmp_path: Path) -> None:
