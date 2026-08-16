@@ -1678,6 +1678,67 @@ def test_bootstrap_runtime_launcher_and_probe_never_execute_the_legacy_venv(
     assert "python3.11" not in " ".join(command)
 
 
+def test_postgres_probe_tree_modes_are_deterministic_under_umask_077(tmp_path: Path) -> None:
+    root = tmp_path / "probe-env"
+    previous_umask = os.umask(0o077)
+    try:
+        root.mkdir(mode=0o700)
+        package = root / "lib/python3.13/site-packages/example"
+        package.mkdir(parents=True)
+        module = package / "module.py"
+        module.write_bytes(b"VALUE = 1\n")
+        executable = root / "bin/python3.13"
+        executable.parent.mkdir()
+        executable.write_bytes(b"#!/bin/sh\nexit 0\n")
+        executable.chmod(0o700)
+    finally:
+        os.umask(previous_umask)
+
+    bootstrap._normalize_probe_tree_permissions(
+        root,
+        expected_uid=os.getuid(),
+        expected_gid=os.getgid(),
+    )
+
+    assert stat.S_IMODE(root.stat().st_mode) == 0o700
+    for path in root.rglob("*"):
+        expected = 0o755 if path.is_dir() or path == executable else 0o644
+        assert stat.S_IMODE(path.stat().st_mode) == expected
+    tree_sha, file_count, total_size, names = bootstrap._release_tree_evidence(
+        root,
+        expected_uid=os.getuid(),
+        expected_gid=os.getgid(),
+    )
+    assert len(tree_sha) == 64
+    assert file_count == 2
+    assert total_size == len(module.read_bytes()) + len(executable.read_bytes())
+    assert "lib/python3.13/site-packages/example/module.py" in names
+
+
+def test_postgres_probe_tree_mode_normalization_rejects_links(tmp_path: Path) -> None:
+    root = tmp_path / "probe-env"
+    root.mkdir(mode=0o700)
+    target = root / "target"
+    target.write_text("safe", encoding="utf-8")
+    (root / "alias").symlink_to(target)
+
+    with pytest.raises(PermissionError, match="probe object is unsafe"):
+        bootstrap._normalize_probe_tree_permissions(
+            root,
+            expected_uid=os.getuid(),
+            expected_gid=os.getgid(),
+        )
+
+
+def test_probe_normalization_runs_after_install_and_before_hashing() -> None:
+    source = BOOTSTRAP_PATH.read_text(encoding="utf-8")
+    prepare = source[source.index("def _prepare_probe_environment") : source.index("def _pg_probe")]
+    install_done = prepare.index('"hash-locked PostgreSQL probe dependency installation failed"')
+    normalize = prepare.index("_normalize_probe_tree_permissions(")
+    evidence = prepare.index("_release_tree_evidence(")
+    assert install_done < normalize < evidence
+
+
 def test_bootstrap_first_transition_orders_unit_and_bytecode_authority_before_commit() -> None:
     source = BOOTSTRAP_PATH.read_text(encoding="utf-8")
     prepare = source[source.index("def _node_prepare") : source.index("def _node_abort_prepare")]
