@@ -33,6 +33,7 @@ from services.cm.faq_integration_ops import (  # noqa: F401
     list_cm_faq,
     purge_smart_answer_language_data,
     regenerate_cm_faq_variants,
+    replace_cm_faq_attachments,
     translate_existing_faq_groups_to_language,
     update_cm_faq_variant,
 )

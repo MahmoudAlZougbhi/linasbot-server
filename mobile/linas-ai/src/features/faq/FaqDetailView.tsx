@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '../../components/PrimaryButton';
@@ -23,6 +24,7 @@ type Props = {
   onArchive: () => void;
   onBack: () => void;
   tr: (key: StringKey) => string;
+  children?: ReactNode;
 };
 
 export function FaqDetailView({
@@ -40,6 +42,7 @@ export function FaqDetailView({
   onArchive,
   onBack,
   tr,
+  children,
 }: Props) {
   return (
     <View style={styles.wrap}>
@@ -67,6 +70,7 @@ export function FaqDetailView({
         <Field label={tr('likeFaqQuestion')} value={question} onChange={onQuestion} multiline />
         <Field label={tr('likeFaqAnswer')} value={answer} onChange={onAnswer} multiline />
       </View>
+      {children}
       <PrimaryButton label={tr('faqSaveVariant')} onPress={onSaveVariant} loading={saving} />
       <PrimaryButton label={tr('faqRegenerate')} variant="ghost" onPress={onRegenerate} loading={saving} />
       <PrimaryButton label={tr('faqArchive')} variant="ghost" onPress={onArchive} loading={saving} />

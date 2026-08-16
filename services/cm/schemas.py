@@ -233,6 +233,7 @@ class FaqRecord(CmBaseModel):
     reviewed: bool = False
     provenance: str | None = None
     revision: int = 1
+    attachments: list[ArticleAttachment] = Field(default_factory=list)
 
     def is_complete_for_languages(self, required: list[str] | tuple[str, ...]) -> bool:
         required_set = {str(lang).strip().lower() for lang in required if str(lang).strip()}
