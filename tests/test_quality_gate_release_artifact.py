@@ -217,10 +217,14 @@ def test_portable_runtime_self_checks_are_bytecode_free_and_tree_stable() -> Non
         "linas-production-runtime-contract",
         "sudo -n /usr/bin/install -m 0600 -o root -g root",
         "/usr/bin/python3 -B -I -S",
+        "os.umask(0o077)",
         "extract_runtime_archive",
         "verify_runtime_before_use",
     ):
         assert expected in release_contract
+    assert release_contract.index("os.umask(0o077)") < release_contract.index(
+        "extract_runtime_archive(Path(sys.argv[2])"
+    )
 
     for job_name, step_name in (
         ("backend", "Install exact production Python runtime"),
