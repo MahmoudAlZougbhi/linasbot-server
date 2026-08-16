@@ -80,6 +80,7 @@ jobs:
       - name: Gate protected operation and immutable authorities
         env:
           GH_TOKEN: ${{ github.token }}
+          DISPATCH_SHA: ${{ github.sha }}
           OPERATION: ${{ inputs.OPERATION }}
           TARGET_SHA: ${{ inputs.TARGET_SHA }}
           QUALITY_GATES_RUN_ID: ${{ inputs.QUALITY_GATES_RUN_ID }}
@@ -104,6 +105,7 @@ jobs:
 
           if [ "$OPERATION" = plan ] || [ "$OPERATION" = dry-run ] || [ "$OPERATION" = apply ]; then
             [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] && [ "$TARGET_SHA" != "$(printf '%040d' 0)" ]
+            [ "$TARGET_SHA" = "$DISPATCH_SHA" ]
             [[ "$QUALITY_GATES_RUN_ID" =~ ^[1-9][0-9]*$ ]]
             [[ "$RELEASE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
             [[ "$RELEASE_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
