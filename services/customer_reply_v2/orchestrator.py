@@ -22,11 +22,11 @@ from services.customer_reply_v2.flags import (
 from services.customer_reply_v2.history_format import history_records_from_window, same_history_for_agents
 from services.customer_reply_v2.invocation_meter import CustomerTurnMeter, InvocationRecord
 from services.customer_reply_v2.manifest import get_cached_manifest, load_fixed_answer_context
-from services.customer_reply_v2.media_actions import plan_media_for_turn
 from services.customer_reply_v2.models import CustomerReplyOutcome
 from services.customer_reply_v2.observability import build_safe_trace
 from services.customer_reply_v2.orchestrator_answer import finalize_answer_with_repair
 from services.customer_reply_v2.orchestrator_faq import evaluate_faq_turn, faq_direct_outcome_kwargs, faq_trace_fields
+from services.customer_reply_v2.orchestrator_side_effects import plan_turn_side_effects
 from services.customer_reply_v2.orchestrator_validate import safe_failure_reply
 from services.customer_reply_v2.policy import enforce_restricted_and_handoff
 from services.customer_reply_v2.retrieval_luna import run_retrieval_luna
@@ -303,6 +303,7 @@ async def run_customer_reply_v2_dm(
         reply_to_message_id=reply_to_message_id or None,
         channel_metadata=channel_meta,
         faq_candidates=faq.evidence_candidates,
+        customer_id=provider_sender_id or user_id,
     )
     retrieval = merge_faq_evidence(retrieval, faq.evidence_candidates)
     meter.record(
@@ -386,8 +387,11 @@ async def run_customer_reply_v2_dm(
     assert "ai_basics" in fixed and "style" in fixed
 
     total_tokens = prompt_tokens + completion_tokens
-    media_meta = plan_media_for_turn(
+    side_meta = plan_turn_side_effects(
         tenant_id=tenant_id,
+        customer_id=provider_sender_id or user_id,
+        conversation_id=conversation_id,
+        channel=channel,
         answer=answer,
         channel_metadata=channel_meta,
         meter=meter,
@@ -473,7 +477,7 @@ async def run_customer_reply_v2_dm(
             "authoritative_selector": "retrieval_luna",
             "classic_fallback": False,
             "active_product_id": retrieval.active_product_id,
-            **media_meta,
+            **side_meta,
         },
         error=retrieval.error,
     )

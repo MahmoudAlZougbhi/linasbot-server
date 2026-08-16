@@ -10,9 +10,11 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from services.customer_reply_v2.ai_profile import load_tera_ai_context
+from services.customer_reply_v2.draft_actions import parse_draft_actions, parse_request_actions
 from services.customer_reply_v2.flags import customer_answer_model_name
 from services.customer_reply_v2.media_actions import parse_media_actions
 from services.customer_reply_v2.models import AnswerLunaResult, EvidenceRecord, RetrievalResult
+from services.customer_reply_v2.open_drafts import list_open_collecting_drafts
 from services.customer_reply_v2.tera_llm import create_tera_completion, normalize_tera_effort
 from services.response_formatting import RESPONSE_FORMATTING_RULES
 
@@ -54,11 +56,17 @@ Return a single JSON object (no markdown):
   "customer_fact_updates": {{}},
   "handoff_intent": null,
   "safe_failure_category": null,
-  "media_actions": []
+  "media_actions": [],
+  "draft_actions": [],
+  "request_actions": []
 }}
 Do not send files. If the customer asked for product photos or videos, put media_actions
 for stored catalog media only: {{"product_id":"...","media_type":"images|videos","max_items":5,"order":"configured_order"}}.
 The system sends stored media. Never invent URLs, prices, or product IDs.
+If the customer is providing request fields, return draft_actions. The system validates IDs, field names, and types.
+Never invent field keys or draft IDs. Ask only for missing_fields returned by the system.
+Never say an appointment is confirmed. After the system submits, say the request was sent and is pending.
+Use pause/resume/cancel/add_item/replace_item/remove_item when the customer means those operations.
 """
 
 
@@ -100,6 +108,7 @@ def build_answer_messages(
     repair_failures: list[str] | None = None,
     request_capture_guidance: str | None = None,
     channel_metadata: dict[str, Any] | None = None,
+    open_drafts: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Build Answer Tera messages. Includes full AI Basics + Style. No retrieval tools."""
     evidence_blob = [
@@ -137,6 +146,7 @@ def build_answer_messages(
         "channel_metadata": dict(channel_metadata or {}),
         "comment_context": comment_ctx,
         "media_status": str(comment_ctx.get("media_status") or "not_applicable"),
+        "open_drafts": list(open_drafts or []),
     }
     if repair_failures:
         payload["validator_failures"] = repair_failures
@@ -273,6 +283,10 @@ async def run_answer_luna(
         repair_failures=repair_failures,
         request_capture_guidance=request_guidance or None,
         channel_metadata=channel_metadata,
+        open_drafts=list_open_collecting_drafts(
+            tenant_id=tenant_id,
+            customer_id=str(provider_sender_id or ""),
+        ),
     )
     assert answer_context_has_full_basics_and_style(messages)
 
@@ -294,6 +308,8 @@ async def run_answer_luna(
             stage="repair" if repair_failures else "answer",
             raw_structured=data,
             media_actions=parse_media_actions(data.get("media_actions")),
+            draft_actions=parse_draft_actions(data.get("draft_actions")),
+            request_actions=parse_request_actions(data.get("request_actions")),
         )
 
     from services.requests.capture import is_public_comment_channel
@@ -376,6 +392,8 @@ async def run_answer_luna(
         total_tokens=usage.get("total_tokens"),  # type: ignore[arg-type]
         raw_structured=data,
         media_actions=parse_media_actions(data.get("media_actions")),
+        draft_actions=parse_draft_actions(data.get("draft_actions")),
+        request_actions=parse_request_actions(data.get("request_actions")),
     )
 
 

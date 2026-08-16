@@ -188,6 +188,14 @@ RETRIEVAL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "list_open_drafts",
+            "description": "List this customer's open request drafts (ids, missing fields, status). Values are not included.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "list_request_definitions",
             "description": "List active compiled request definition titles for this tenant only (no field values, no other tenants).",
             "parameters": {"type": "object", "properties": {}},

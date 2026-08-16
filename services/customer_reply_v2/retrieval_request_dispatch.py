@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-REQUEST_GRAPH_TOOL_NAMES = {"list_request_definitions", "get_request_definition"}
+REQUEST_GRAPH_TOOL_NAMES = {"list_request_definitions", "get_request_definition", "list_open_drafts"}
 
 
 def dispatch_request_graph_tool(name: str, args: dict[str, Any], ctx: Any) -> dict[str, Any]:
@@ -16,6 +16,14 @@ def dispatch_request_graph_tool(name: str, args: dict[str, Any], ctx: Any) -> di
         return {"ok": False, "error": "db_unavailable"}
     try:
         with whatsapp_session(require=True) as db:
+            if name == "list_open_drafts":
+                from services.request_drafts.engine import luna_draft_summary
+                from services.request_drafts.repository import DraftRepository
+
+                rows = DraftRepository(db).list_open(tenant_id=ctx.tenant_id, customer_id=str(ctx.customer_id or ""))
+                summaries = [luna_draft_summary(row) for row in rows]
+                ctx.audit.append({"tool": name, "ok": True, "class": "open_drafts", "count": len(summaries)})
+                return {"ok": True, "data": {"drafts": summaries}}
             if name == "list_request_definitions":
                 rows = list_active_graphs(db, tenant_id=ctx.tenant_id)
                 titles = [

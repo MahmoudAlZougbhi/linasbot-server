@@ -24,11 +24,11 @@ from services.customer_reply_v2.flags import (
 from services.customer_reply_v2.history_format import comment_thread_records, same_history_for_agents
 from services.customer_reply_v2.invocation_meter import CustomerTurnMeter
 from services.customer_reply_v2.manifest import get_cached_manifest
-from services.customer_reply_v2.media_actions import plan_media_for_turn
 from services.customer_reply_v2.media_context import build_comment_media_context, media_context_to_dict
 from services.customer_reply_v2.models import CustomerReplyOutcome
 from services.customer_reply_v2.observability import build_safe_trace
 from services.customer_reply_v2.orchestrator_faq import evaluate_faq_turn, faq_direct_outcome_kwargs, faq_trace_fields
+from services.customer_reply_v2.orchestrator_side_effects import plan_turn_side_effects
 from services.customer_reply_v2.orchestrator_validate import safe_failure_reply, validate_candidate
 from services.customer_reply_v2.policy import enforce_restricted_and_handoff
 from services.customer_reply_v2.retrieval_luna import run_retrieval_luna
@@ -247,6 +247,7 @@ async def run_customer_reply_v2_comment(
         channel=channel,
         channel_metadata=channel_meta,
         faq_candidates=faq.evidence_candidates,
+        customer_id=provider_sender_id,
     )
     retrieval = merge_faq_evidence(retrieval, faq.evidence_candidates)
 
@@ -325,8 +326,11 @@ async def run_customer_reply_v2_comment(
     # Observability strip: do not dump multimodal data URLs into traces.
     trace_ctx = {k: v for k, v in comment_ctx.items() if k != "image_inputs"}
     total_tokens = prompt_tokens + completion_tokens
-    media_meta = plan_media_for_turn(
+    side_meta = plan_turn_side_effects(
         tenant_id=tenant_id,
+        customer_id=provider_sender_id,
+        conversation_id=f"comment:{tenant_id}:{channel}",
+        channel=channel,
         answer=answer,
         channel_metadata=channel_meta,
         meter=meter,
@@ -391,6 +395,6 @@ async def run_customer_reply_v2_comment(
             "completion_tokens": completion_tokens or None,
             "tokens": total_tokens or None,
             **engine_trace_fields(engine),
-            **media_meta,
+            **side_meta,
         },
     )

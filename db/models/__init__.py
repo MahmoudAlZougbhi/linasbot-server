@@ -38,6 +38,7 @@ from db.models.products import (
     ProductLink,
     ProductSentMessage,
 )
+from db.models.request_drafts import CustomerRequestDraft
 from db.models.request_graphs import RequestDefinitionGraph, RequestDefinitionLink
 from db.models.requests import CustomerRequest, CustomerRequestCounter
 from db.models.requests_support import (
@@ -79,6 +80,7 @@ __all__ = [
     "CreditLedgerEntryRow",
     "CustomerRequest",
     "CustomerRequestCounter",
+    "CustomerRequestDraft",
     "CustomerRequestEvent",
     "CustomerRequestIdempotency",
     "CustomerRequestNote",

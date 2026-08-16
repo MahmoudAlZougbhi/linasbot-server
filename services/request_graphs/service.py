@@ -132,6 +132,9 @@ def delete_graph(session: Any, *, tenant_id: str, definition_id: str) -> dict[st
     repo = RequestGraphRepository(session)
     count = repo.mark_deleted(tenant_id=tenant_id, definition_id=definition_id)
     session.flush()
+    from services.request_drafts.engine import mark_definition_deleted
+
+    mark_definition_deleted(session, tenant_id=tenant_id, definition_id=definition_id)
     return {"ok": True, "deleted": count, "definition_id": definition_id, "is_ai": False}
 
 
