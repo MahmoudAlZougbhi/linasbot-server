@@ -16,6 +16,7 @@ from typing import Any
 
 import httpx
 
+from services.customer_reply_v2.inbound_video_comment import attach_comment_video_frames, ig_video_source
 from services.customer_reply_v2.media_context import (
     MAX_CAROUSEL_THUMBS,
     MAX_VIDEO_FRAMES,
@@ -225,6 +226,7 @@ async def build_production_comment_context(
     carousel_truncated = False
     media_status = "missing"
     graph_error = ""
+    video_source = ""
 
     # Parent + bounded thread (untrusted text).
     if comment_id:
@@ -320,6 +322,7 @@ async def build_production_comment_context(
                 caption = str(media.get("caption") or "").strip()
                 permalink = str(media.get("permalink") or "").strip()
                 media_type, image_urls, carousel_truncated = _collect_ig_urls(media)
+                video_source = ig_video_source(media)
 
     image_inputs: list[dict[str, str]] = []
     if image_urls:
@@ -339,6 +342,20 @@ async def build_production_comment_context(
     elif media_status != "failed" and not target_id:
         media_status = "missing"
 
+    revision = hashlib.sha256(f"{tenant_id}:{target_id}:{media_type}".encode()).hexdigest()[:24]
+    if not video_source and media_type in {"video", "reel"} and image_urls:
+        video_source = image_urls[0]
+    if video_source and injected_cache is None:
+        extra = await attach_comment_video_frames(
+            tenant_id=tenant_id,
+            media_revision=revision,
+            video_url=video_source,
+            image_inputs=image_inputs,
+        )
+        image_inputs = list(extra.get("image_inputs") or image_inputs)
+        if extra.get("frame_count"):
+            media_status = "available" if not carousel_truncated else "partial"
+
     ctx: CommentMediaContext = build_comment_media_context(
         tenant_id=tenant_id,
         comment_text=comment_text,
@@ -348,7 +365,7 @@ async def build_production_comment_context(
         nearby_replies=nearby,
         image_urls=image_urls,
         media_id=target_id,
-        media_revision=hashlib.sha256(f"{tenant_id}:{target_id}:{media_type}".encode()).hexdigest()[:24],
+        media_revision=revision,
         injected_cache=injected_cache,
         media_status=media_status,
         permalink=permalink,

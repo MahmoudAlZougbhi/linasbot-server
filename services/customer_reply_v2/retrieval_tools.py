@@ -63,6 +63,7 @@ class ToolContext:
     refused_third_round: bool = False
     audit: list[dict[str, Any]] = field(default_factory=list)
     customer_id: str = ""
+    inbound_image_media_id: str = ""
 
 
 def _load_sections(ctx: ToolContext) -> dict[str, dict[str, Any]]:

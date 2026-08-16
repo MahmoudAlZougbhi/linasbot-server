@@ -6,7 +6,7 @@ import hashlib
 import uuid
 from typing import Any
 
-from services.web_chat.constants import CHANNEL_ID, CUSTOMER_REPLY_CHANNEL, SOURCE_CHANNEL_WEB_CHAT, USER_ID_PREFIX
+from services.web_chat.constants import CHANNEL_ID, SOURCE_CHANNEL_WEB_CHAT, USER_ID_PREFIX
 from services.web_chat.credit_fsm import CreditFsmState, WebChatCreditHandle, tenant_scoped_user_data
 from services.web_chat.operation import (
     advance_operation,
@@ -19,6 +19,7 @@ from services.web_chat.operation import (
 from services.web_chat.operation_fence import fenced_failure_release
 from services.web_chat.operation_fsm import OperationFsmError, OperationState, stable_operation_key
 from services.web_chat.persistence import PersistFailure, PersistOutcome, persist_web_chat_message
+from services.web_chat.processor_v2_reply import generate_web_chat_reply_text as _generate_reply_text
 from services.web_chat.session_authority import verified_session_snapshot
 from services.web_chat.store import WebChatStoreBackend, WebChatVisitorSession, WebChatWidgetConfig, web_chat_store
 
@@ -150,6 +151,7 @@ async def process_web_chat_message(
     user_text: str,
     store: WebChatStoreBackend | None = None,
     idempotency_key: str | None = None,
+    attachments: list[Any] | None = None,
 ) -> str:
     """Run Customer Reply V2 for a website visitor turn; persist to Firestore + live chat index."""
     tid = widget.tenant_id
@@ -169,6 +171,21 @@ async def process_web_chat_message(
         )
 
     text = (user_text or "").strip()
+    inbound_media: dict[str, Any] | None = None
+    attachment_types: list[str] | None = None
+    if attachments:
+        from services.customer_reply_v2.inbound_media import ingest_inbound_attachments, luna_inbound_view
+
+        inbound = await ingest_inbound_attachments(
+            tenant_id=tid,
+            attachments=attachments,
+            caption=text,
+        )
+        inbound_media = luna_inbound_view(inbound)
+        if inbound.safety_image_urls:
+            inbound_media["safety_image_urls"] = list(inbound.safety_image_urls)
+        attachment_types = list(inbound.attachment_types)
+        text = inbound.pipeline_text or text
     if not text:
         raise WebChatError("empty_message", "Message cannot be empty.")
 
@@ -344,6 +361,8 @@ async def process_web_chat_message(
             reply_precheck=reply_precheck,
             credit=credit,
             runtime=runtime,
+            inbound_media=inbound_media,
+            attachment_types=attachment_types,
         )
 
     turn_result = {"reply_text": reply_text, "conversation_id": conversation_id, "operation_key": operation_key}
@@ -379,75 +398,6 @@ async def process_web_chat_message(
         active_store=store or web_chat_store,
         past_reply_ready=past_reply_ready,
     )
-
-
-async def _generate_reply_text(
-    *,
-    tid: str,
-    text: str,
-    conversation_id: str,
-    widget: WebChatWidgetConfig,
-    visitor_id: str,
-    user_id: str,
-    word_notice: str | None,
-    reply_precheck: Any,
-    credit: WebChatCreditHandle,
-    runtime: Any,
-) -> str:
-    from services.ai_limits_enforcement import customer_reply_limit_message
-    from services.cm.language_policy import detect_and_resolve_customer_languages
-    from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
-
-    reply_text = ""
-    from services.web_chat.operation_heartbeat import OperationLeaseHeartbeat
-
-    heartbeat = OperationLeaseHeartbeat(runtime)
-    await heartbeat.start()
-    try:
-        _lang = detect_and_resolve_customer_languages(
-            tenant_id=tid,
-            message=text,
-            conversation_id=conversation_id,
-        )
-        outcome = await run_customer_reply_v2_dm(
-            tenant_id=tid,
-            message=text,
-            detected_language=_lang["detected_language"],
-            response_language=_lang["response_language"],
-            channel=CUSTOMER_REPLY_CHANNEL,
-            asset_id=widget.widget_key,
-            provider_sender_id=visitor_id,
-            provider_display_name="Website visitor",
-            user_id=user_id,
-            conversation_id=conversation_id,
-        )
-        if heartbeat.lost_lease:
-            fenced_failure_release(runtime, credit)
-            raise WebChatError("operation_in_progress", "Operation lease lost during AI.", status_code=409)
-        reply_text = str(
-            getattr(outcome, "reply", None) or getattr(outcome, "answer", None) or getattr(outcome, "text", None) or ""
-        ).strip()
-        if not reply_text and isinstance(outcome, dict):
-            reply_text = str(outcome.get("reply") or outcome.get("answer") or outcome.get("text") or "").strip()
-        reason = str(getattr(outcome, "reason", "") or "")
-        if reason.endswith("_limit") or reason == "ai_reply_limit":
-            fenced_failure_release(runtime, credit)
-            raise WebChatError("ai_reply_limit", customer_reply_limit_message(reply_precheck), status_code=429)
-        if word_notice and reply_text:
-            reply_text = f"{word_notice}\n\n{reply_text}"
-    except WebChatError:
-        fenced_failure_release(runtime, credit)
-        raise
-    except Exception as exc:
-        fenced_failure_release(runtime, credit)
-        raise WebChatError("ai_failed", "Could not generate a reply right now.", status_code=503) from exc
-    finally:
-        await heartbeat.stop()
-
-    if not reply_text:
-        fenced_failure_release(runtime, credit)
-        raise WebChatError("empty_reply", "Could not generate a reply right now.", status_code=503)
-    return reply_text
 
 
 async def _persist_web_turn(

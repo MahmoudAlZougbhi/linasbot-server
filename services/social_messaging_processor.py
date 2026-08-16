@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Awaitable, Callable
-from typing import Any, cast
+from typing import Any
 
 import config
 from handlers.text_handlers import handle_message
-from handlers.text_handlers_firestore import _delayed_processing_tasks
 from services.meta_messaging import (
     SOCIAL_DISPLAY_NAME_FALLBACK,
     MetaMessagingAdapter,
@@ -16,6 +14,16 @@ from services.meta_messaging import (
     is_unresolved_social_display_name,
     pick_meta_participant_display_name,
     resolve_meta_send_account_id,
+)
+from services.social_delayed_wait import await_delayed_processing as _await_delayed_processing
+from services.social_image_quota import (
+    deliver_image_quota_notice as _deliver_image_quota_notice,
+)
+from services.social_image_quota import (
+    is_image_attachment as _is_image_attachment,
+)
+from services.social_image_quota import (
+    truncate_image_attachments as _truncate_image_attachments,
 )
 from utils.utils import get_user_state_from_firestore, save_user_name_to_firestore
 
@@ -32,117 +40,6 @@ def meta_social_outcome_requires_retry(outcome: dict[str, Any] | None) -> bool:
         return explicit
     delivery = str(result.get("delivery") or "unknown").strip().lower()
     return delivery not in _TERMINAL_META_DELIVERIES
-
-
-def _is_image_attachment(item: Any) -> bool:
-    return bool(item) and (not isinstance(item, dict) or str(item.get("type") or "").lower() == "image")
-
-
-def _truncate_image_attachments(attachments: list[Any], allowed_amount: int) -> list[Any]:
-    kept: list[Any] = []
-    seen = 0
-    limit = max(0, int(allowed_amount))
-    for item in attachments:
-        if _is_image_attachment(item):
-            if seen < limit:
-                kept.append(item)
-            seen += 1
-        else:
-            kept.append(item)
-    return kept
-
-
-async def _deliver_image_quota_notice(
-    *,
-    message: str,
-    user_id: str,
-    sender_id: str,
-    channel: str,
-    binding_id: str,
-    inbound_event_id: str | None,
-    quota_disposition: str,
-    quota_allowed_amount: int,
-    adapter: MetaMessagingAdapter | None,
-    capture_send: SendFunc | None,
-) -> dict[str, Any] | None:
-    if not message:
-        return None
-    if capture_send is not None:
-        await capture_send(user_id, message, None, None)
-        return None
-    if adapter is None:
-        return None
-    if inbound_event_id:
-        from services.meta_controlled_evidence import meta_evidence_surface
-        from services.meta_outbound_attempts import execute_guarded_meta_send
-
-        result = await execute_guarded_meta_send(
-            event_id=inbound_event_id,
-            surface=meta_evidence_surface(kind="meta_dm", channel=channel),
-            binding_id=binding_id,
-            purpose="image_quota_notice",
-            image_quota_disposition=quota_disposition,
-            image_quota_allowed_amount=quota_allowed_amount,
-            image_quota_notice_text=message,
-            send=lambda: adapter.send_text_message(sender_id, message),
-        )
-    else:
-        result = await adapter.send_text_message(sender_id, message)
-
-    from services.ai_reply_delivery import classify_send_result
-
-    evidence = classify_send_result(result)
-    if evidence.get("success") or evidence.get("duplicate_suppressed"):
-        return None
-    if evidence.get("needs_owner_action"):
-        return {
-            "ok": False,
-            "delivery": "needs_owner_action",
-            "retryable": False,
-            "terminal": True,
-        }
-    retryable = bool(evidence.get("retryable", True))
-    return {
-        "ok": False,
-        "delivery": "quota_notice_failed",
-        "retryable": retryable,
-        "terminal": not retryable,
-    }
-
-
-async def _await_delayed_processing(user_id: str) -> None:
-    """Await the latest combine task without deleting a newer replacement.
-
-    Rapid messages intentionally cancel the old combine-delay task and install a
-    replacement that owns the whole pending batch. Every accepted webhook waiter
-    must follow that replacement so its durable event reaches the same terminal
-    outcome; an older waiter must never pop or cancel the newer task.
-    """
-
-    while True:
-        maybe_task = cast(asyncio.Task[Any] | None, _delayed_processing_tasks.get(user_id))
-        if maybe_task is None:
-            return
-        task: asyncio.Task[Any] = maybe_task
-        try:
-            # Multiple accepted events may await the same replacement. Shield it
-            # so cancellation of one webhook waiter cannot cancel the shared work.
-            await asyncio.shield(task)
-        except asyncio.CancelledError:
-            current = asyncio.current_task()
-            if current is not None and current.cancelling():
-                raise
-            replacement = _delayed_processing_tasks.get(user_id)
-            if replacement is None or replacement is task:
-                raise
-            continue
-        finally:
-            if _delayed_processing_tasks.get(user_id) is task and task.done():
-                _delayed_processing_tasks.pop(user_id, None)
-
-        replacement = _delayed_processing_tasks.get(user_id)
-        if replacement is None or replacement is task:
-            return
 
 
 async def _resolve_social_customer_display_name(
@@ -494,8 +391,20 @@ async def process_meta_social_event(
                     kept = _truncate_image_attachments(attachments, quota_allowed_amount)
                     event["attachments"] = kept
                     attachments = kept
-        if not text and event.get("attachments"):
-            text = "أرسلت صورة أو ملف. اكتبلي شو حابب تعرف عنه كرمال ساعدك."
+        if isinstance(attachments, list) and attachments:
+            from services.customer_reply_v2.inbound_media import ingest_inbound_attachments, luna_inbound_view
+
+            inbound = await ingest_inbound_attachments(
+                tenant_id=resolved_tenant_id,
+                attachments=attachments,
+                caption=text,
+            )
+            user_data["inbound_attachment_types"] = list(inbound.attachment_types)
+            user_data["inbound_media_for_luna"] = luna_inbound_view(inbound)
+            user_data["inbound_image_media_id"] = inbound.image_media_id or ""
+            if inbound.safety_image_urls:
+                user_data["inbound_safety_image_urls"] = list(inbound.safety_image_urls)
+            text = inbound.pipeline_text or text
         if not text:
             return {
                 "ok": True,

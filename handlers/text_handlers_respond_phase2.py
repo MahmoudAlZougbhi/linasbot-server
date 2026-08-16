@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 import config
+from services.customer_reply_v2.inbound_media import inbound_payload_from_user_data as _inbound_from_user_data
 
 _PHASE_HALT = "_PHASE_HALT"
 
@@ -94,6 +95,8 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
             channel=str(user_data.get("channel") or user_data.get("platform") or ""),
             asset_id=str(user_data.get("asset_id") or user_data.get("page_id") or ""),
             provider_display_name=str(user_data.get("display_name") or user_data.get("name") or ""),
+            inbound_media=_inbound_from_user_data(user_data),
+            attachment_types=list(user_data.get("inbound_attachment_types") or []),
         )
         # Safe diagnostic view for Testing Lab + Interaction Logs (IDs/titles only).
         cm_diag = {

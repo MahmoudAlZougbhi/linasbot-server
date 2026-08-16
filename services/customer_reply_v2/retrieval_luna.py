@@ -48,6 +48,7 @@ recommended_tera_effort is required. Use "low" for a single simple question. Use
 At most two retrieval rounds are allowed. Prefer reading exact items over guessing.
 If operational_titles_has_more is true, call list_operational_titles until every title page is available. Never assume missing titles are unimportant.
 Each operational title and item index may include resource_summary with image/video/file/link counts only. You never receive resource bytes, URLs, or storage keys. If the customer asks for photos, videos, files, or links, select the parent file whose title and resource_summary match. Do not invent resource IDs.
+If inbound_media.image_media_id is present, call find_product_by_image with that id. If a product name is already clear, pass product_name so name wins and vision is skipped. If inbound_media.inbound_link is present, call find_product_by_url.
 If the customer mentions an appointment, order, or request, call list_request_definitions then get_request_definition for selected IDs. Deleted definitions are absent.
 Call list_open_drafts when the customer is continuing, pausing, or changing an existing request.
 You NEVER receive AI Basics, Style, assistant identity, greeting, or tone bodies.
@@ -237,6 +238,7 @@ async def run_retrieval_luna(
         active_product_id=active_product_id,
         channel_metadata=dict(channel_metadata or {}),
         customer_id=str(customer_id or ""),
+        inbound_image_media_id=str(((channel_metadata or {}).get("inbound_media") or {}).get("image_media_id") or ""),
     )
 
     if reply_to_message_id and conversation_id:
@@ -297,6 +299,11 @@ async def run_retrieval_luna(
         },
         "faq_candidates": list(faq_candidates or []),
         "open_drafts": [],
+        "inbound_media": {
+            k: v
+            for k, v in dict((channel_metadata or ctx.channel_metadata or {}).get("inbound_media") or {}).items()
+            if k != "safety_image_urls"
+        },
         "note": "Use tools to list/read selectable sections only. Do not write the reply. Never request AI Basics or Style bodies. Call list_open_drafts when the customer is continuing a request. If channel is a Comment, Comment Rule is reply-surface guidance only — also retrieve services/locations/hours/products/knowledge/requests needed to answer.",
     }
     try:

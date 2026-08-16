@@ -92,7 +92,7 @@ def dispatch_product_tool(name: str, args: dict[str, Any], ctx: Any) -> dict[str
                 if data.get("match"):
                     ctx.active_product_id = str(data["match"].get("id") or "") or None
             else:
-                media_id = str(args.get("image_media_id") or "").strip()
+                media_id = str(args.get("image_media_id") or getattr(ctx, "inbound_image_media_id", "") or "").strip()
                 raw = load_media_bytes(tenant_id=ctx.tenant_id, media_id=media_id)
                 if raw is None:
                     data = {"tool": name, "ok": False, "error": "image_not_found"}
