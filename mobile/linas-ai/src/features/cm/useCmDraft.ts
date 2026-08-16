@@ -30,7 +30,8 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
       if (proposalReview && proposalReview.section === section) {
         if (proposalReview.proposedItem) {
           const idKey = section === 'faq' ? 'qa_group_id' : 'id';
-          next = applyProposedItem(draft.payload, proposalReview.proposedItem, idKey);
+          const listKey = section === 'prices' ? 'catalog' : 'items';
+          next = applyProposedItem(draft.payload, proposalReview.proposedItem, idKey, listKey);
           overlay = true;
         } else if (proposalReview.patch && Object.keys(proposalReview.patch).length) {
           next = mergeProposalPatch(draft.payload, proposalReview.patch);

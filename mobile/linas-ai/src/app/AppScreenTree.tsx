@@ -12,7 +12,6 @@ import { CmSectionScreen } from '../features/cm/CmSectionScreen';
 import { AddProductScreen } from '../features/products/AddProductScreen';
 import { ProductsImportScreen } from '../features/products/ProductsImportScreen';
 import { ProductsScreen } from '../features/products/ProductsScreen';
-import { AddServiceScreen } from '../features/services/AddServiceScreen';
 import { ServicesScreen } from '../features/services/ServicesScreen';
 import type { CmProposalReview } from '../features/cm/cmProposalReview';
 import type { ControlArea } from '../features/control/controlAreas';
@@ -245,28 +244,14 @@ export function AppScreenTree({
       {name === 'services' ? (
         <EphemeralRoute>
           <ServicesScreen
-            onBack={screen.backTo === 'cm' ? () => setScreen({ name: 'cm' }) : undefined}
-            onAdd={() => setScreen({ name: 'services_add', backTo: 'services' })}
-            onEdit={(serviceId) =>
-              setScreen({ name: 'services_edit', serviceId, backTo: 'services' })
+            proposalReview={screen.proposalReview ?? null}
+            onBack={
+              screen.backTo === 'cm'
+                ? () => setScreen({ name: 'cm' })
+                : screen.backTo === 'chat'
+                  ? () => setScreen({ name: 'chat' })
+                  : undefined
             }
-          />
-        </EphemeralRoute>
-      ) : null}
-      {name === 'services_add' ? (
-        <EphemeralRoute>
-          <AddServiceScreen
-            onBack={() => setScreen({ name: 'services', backTo: 'cm' })}
-            onSaved={() => setScreen({ name: 'services', backTo: 'cm' })}
-          />
-        </EphemeralRoute>
-      ) : null}
-      {name === 'services_edit' ? (
-        <EphemeralRoute>
-          <AddServiceScreen
-            serviceId={screen.serviceId}
-            onBack={() => setScreen({ name: 'services', backTo: 'cm' })}
-            onSaved={() => setScreen({ name: 'services', backTo: 'cm' })}
           />
         </EphemeralRoute>
       ) : null}

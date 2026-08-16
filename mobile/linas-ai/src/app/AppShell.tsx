@@ -194,6 +194,10 @@ export function AppShell() {
       setScreen({ name: 'faq', proposalReview: review });
       return;
     }
+    if (review.section === 'prices' || review.section === 'services') {
+      setScreen({ name: 'services', backTo: 'chat', proposalReview: review });
+      return;
+    }
     if (isCmProposalSection(review.section)) {
       setScreen({
         name: 'cm_section',

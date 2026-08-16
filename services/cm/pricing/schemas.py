@@ -68,6 +68,19 @@ class ItemVariant(CmBaseModel):
     notes: str | None = None
 
 
+class CatalogAttachment(CmBaseModel):
+    """Media/link a service needs to share (bytes live in the CM media store)."""
+
+    id: str
+    kind: Literal["image", "file", "video", "link"] = "file"
+    caption: str = ""
+    mime: str = ""
+    filename: str = ""
+    size: int = Field(default=0, ge=0)
+    url: str = ""
+    duration_seconds: int | None = None
+
+
 class CatalogItem(CmBaseModel):
     """Tenant-owned sellable/reference item. Types are tenant-defined via ``item_type``."""
 
@@ -89,6 +102,7 @@ class CatalogItem(CmBaseModel):
     provenance: str | None = None
     revision: int = 1
     notes: str | None = None
+    attachments: list[CatalogAttachment] = Field(default_factory=list)
 
     @field_validator("base_price")
     @classmethod

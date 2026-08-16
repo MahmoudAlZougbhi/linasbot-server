@@ -86,8 +86,8 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
   },
   {
     id: 'prices',
-    title: 'Service',
-    description: 'Service name with priced options (machine, body part, staff, price).',
+    title: 'Services',
+    description: 'Add services and pricing options.',
     mobileSupported: true,
   },
   {
