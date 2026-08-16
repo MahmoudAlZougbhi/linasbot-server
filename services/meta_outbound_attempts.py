@@ -30,6 +30,9 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from services.meta_controlled_evidence import MetaEvidenceSurface
+from services.meta_outbound_purposes import ALLOWED_PURPOSES as _ALLOWED_PURPOSES
+from services.meta_outbound_purposes import PURPOSE_PREDECESSORS as _PURPOSE_PREDECESSORS
+from services.meta_outbound_purposes import MetaOutboundPurpose
 
 _EVENT_ID_RE = re.compile(r"ibe_[0-9a-f]{40}")
 _ALLOWED_SURFACES = frozenset({"facebook_dm", "instagram_dm", "facebook_comment", "instagram_comment"})
@@ -48,12 +51,6 @@ AttemptDecisionKind = Literal[
     "needs_owner_action",
     "nonproduction_bypass",
 ]
-MetaOutboundPurpose = Literal[
-    "primary_reply",
-    "session_greeting",
-    "gender_ack",
-    "image_quota_notice",
-]
 ImageQuotaDisposition = Literal["allowed", "blocked", "truncated"]
 ImageQuotaPhase = Literal["reserved", "consumed", "provider"]
 MetaOutboundAttemptStatus = Literal[
@@ -62,16 +59,9 @@ MetaOutboundAttemptStatus = Literal[
     "definitive_failure",
     "needs_owner_action",
 ]
-_ALLOWED_PURPOSES = frozenset({"primary_reply", "session_greeting", "gender_ack", "image_quota_notice"})
 _ALLOWED_QUOTA_DISPOSITIONS = frozenset({"allowed", "blocked", "truncated"})
 _ALLOWED_QUOTA_PHASES = frozenset({"reserved", "consumed", "provider"})
 _ALLOWED_STATUSES = frozenset({"sending", "accepted", "definitive_failure", "needs_owner_action"})
-_PURPOSE_PREDECESSORS: dict[MetaOutboundPurpose, tuple[MetaOutboundPurpose, ...]] = {
-    "primary_reply": ("session_greeting", "gender_ack"),
-    "session_greeting": ("primary_reply",),
-    "gender_ack": ("session_greeting", "primary_reply"),
-    "image_quota_notice": (),
-}
 _SEND_PURPOSE: ContextVar[MetaOutboundPurpose] = ContextVar(
     "meta_outbound_send_purpose",
     default="primary_reply",
