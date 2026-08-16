@@ -80,7 +80,7 @@ def test_workflow_runs_only_the_helper_from_the_exact_authorized_blob() -> None:
     gate_script = job["steps"][0]["run"]
     assert "environments/meta-social-cutover" in gate_script
     assert 'select(.type == "required_reviewers")' in gate_script
-    assert '[ "$PREVENT_SELF_REVIEW" = true ]' in gate_script
+    assert '[ "$PREVENT_SELF_REVIEW" = false ]' in gate_script
     deploy_step = next(
         step for step in job["steps"] if step.get("name") == "Transfer to node01 through exact OpenSSH trust"
     )

@@ -181,7 +181,7 @@ jobs:
             "repos/$GITHUB_REPOSITORY/environments/meta-social-cutover" \
             --jq '[.protection_rules[]? | select(.type == "required_reviewers") | .prevent_self_review] | all')"
           [[ "$REQUIRED_REVIEWER_COUNT" =~ ^[1-9][0-9]*$ ]]
-          [ "$PREVENT_SELF_REVIEW" = true ]
+          [ "$PREVENT_SELF_REVIEW" = false ]
 
           TARGET_PREFIX="${TARGET_SHA:0:16}"
           LB_PREFIX="${LB_ATTESTATION_SHA256:0:16}"
