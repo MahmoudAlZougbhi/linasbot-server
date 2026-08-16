@@ -10,13 +10,14 @@ from sqlalchemy.orm import Session
 
 from services.products.active_context import get_active_product, set_active_product
 from services.products.availability import is_customer_searchable
+from services.products.details_for_tera import product_details_for_tera
 from services.products.image_index import find_image_candidates
 from services.products.image_vision_rerank import vision_rerank_candidates
 from services.products.media import load_media_bytes, load_media_meta
 from services.products.reply_to_map import resolve_reply_to_product
 from services.products.repository import ProductsRepository
-from services.products.schemas import product_to_dict
 from services.products.search import search_product_by_title
+from services.products.title_pages import list_active_product_titles, slim_product_match
 
 SIMILARITY_THRESHOLD = float(os.getenv("LINAS_PRODUCT_IMAGE_SIMILARITY_THRESHOLD", "0.85"))
 TOP_K_DEFAULT = int(os.getenv("LINAS_PRODUCT_IMAGE_TOP_K", "8"))
@@ -82,7 +83,7 @@ def crv2_resolve_reply_to_product(
             product_id=product_id,
             source="reply_to_product",
         )
-    return {"tool": "resolve_reply_to_product", "ok": True, "resolver": "reply_to", "match": product_to_dict(row)}
+    return {"tool": "resolve_reply_to_product", "ok": True, "resolver": "reply_to", "match": slim_product_match(row)}
 
 
 def crv2_get_active_product_context(
@@ -105,7 +106,7 @@ def crv2_get_active_product_context(
         "ok": True,
         "active_product_id": row.id,
         "source": ctx.get("source"),
-        "product": product_to_dict(row),
+        "product": slim_product_match(row),
     }
 
 
@@ -117,33 +118,57 @@ def crv2_search_product_by_title(
     limit: int = 5,
     use_luna_fallback: bool = False,
     conversation_id: str | None = None,
+    title_offset: int = 0,
 ) -> dict[str, Any]:
     matches = search_product_by_title(session, tenant_id=tenant_id, title=title, limit=limit)
     resolver = "deterministic"
+    extra_luna_agent = False
+    titles_fallback: dict[str, Any] | None = None
     if not matches and use_luna_fallback:
         from services.products.luna_title_resolver import resolve_product_titles_with_luna
 
         luna_matches = _run_async(
             resolve_product_titles_with_luna(session, tenant_id=tenant_id, query=title, limit=limit)
         )
+        extra_luna_agent = True
         if luna_matches:
             matches = luna_matches
             resolver = "luna"
-    if len(matches) == 1 and conversation_id:
+    if not matches and not use_luna_fallback:
+        titles_fallback = list_active_product_titles(session, tenant_id=tenant_id, offset=title_offset)
+        resolver = "titles_fallback"
+    slim = [slim_product_match(row) for row in matches]
+    if len(slim) == 1 and conversation_id:
         _set_context(
             session,
             tenant_id=tenant_id,
             conversation_id=conversation_id,
-            product_id=str(matches[0]["id"]),
+            product_id=str(slim[0]["id"]),
             source="luna_title_match" if resolver == "luna" else "title_search",
         )
-    return {
+    out: dict[str, Any] = {
         "tool": "search_product_by_title",
         "query": title,
         "resolver": resolver,
-        "match_count": len(matches),
-        "matches": matches,
+        "match_count": len(slim),
+        "matches": slim,
+        "extra_luna_agent": extra_luna_agent,
+        "full_catalog": False,
     }
+    if titles_fallback is not None:
+        out["titles_fallback"] = titles_fallback
+    return out
+
+
+def crv2_list_product_titles(
+    session: Session,
+    *,
+    tenant_id: str,
+    offset: int = 0,
+    limit: int = 80,
+) -> dict[str, Any]:
+    page = list_active_product_titles(session, tenant_id=tenant_id, offset=offset, limit=limit)
+    return {"tool": "list_product_titles", "ok": True, "full_catalog": False, **page}
 
 
 def crv2_get_product_details(
@@ -167,7 +192,7 @@ def crv2_get_product_details(
             product_id=product_id,
             source=context_source,
         )
-    return {"tool": "get_product_details", "ok": True, "product": product_to_dict(row)}
+    return {"tool": "get_product_details", "ok": True, "product": product_details_for_tera(row)}
 
 
 def crv2_get_product_images(session: Session, *, tenant_id: str, product_id: str) -> dict[str, Any]:
@@ -208,7 +233,15 @@ def crv2_find_product_by_url(
             product_id=row.id,
             source="url_match",
         )
-    return {"tool": "find_product_by_url", "ok": True, "match": product_to_dict(row)}
+    return {"tool": "find_product_by_url", "ok": True, "match": slim_product_match(row)}
+
+
+def _clamp_image_top_k(top_k: int) -> int:
+    try:
+        value = int(top_k)
+    except (TypeError, ValueError):
+        value = TOP_K_DEFAULT
+    return min(max(value, 3), 8)
 
 
 def crv2_find_product_by_image(
@@ -218,12 +251,34 @@ def crv2_find_product_by_image(
     image_bytes: bytes,
     top_k: int = TOP_K_DEFAULT,
     conversation_id: str | None = None,
+    known_title: str = "",
 ) -> dict[str, Any]:
+    known = str(known_title or "").strip()
+    if known:
+        titled = crv2_search_product_by_title(
+            session,
+            tenant_id=tenant_id,
+            title=known,
+            limit=5,
+            use_luna_fallback=False,
+            conversation_id=conversation_id,
+        )
+        if int(titled.get("match_count") or 0) >= 1:
+            return {
+                "tool": "find_product_by_image",
+                "ok": True,
+                "resolver": "name_first",
+                "vision_used": False,
+                "candidate_count": 0,
+                "match_count": titled["match_count"],
+                "matches": titled["matches"],
+                "ambiguous": int(titled["match_count"]) != 1,
+            }
     candidates = find_image_candidates(
         session,
         tenant_id=tenant_id,
         query_bytes=image_bytes,
-        top_k=min(max(top_k, TOP_K_DEFAULT), 8),
+        top_k=_clamp_image_top_k(top_k),
         similarity_threshold=SIMILARITY_THRESHOLD,
     )
     repo = ProductsRepository(session)
@@ -260,7 +315,7 @@ def crv2_find_product_by_image(
     if resolved_id:
         row = repo.get_product(tenant_id=tenant_id, product_id=resolved_id)
         if row is not None and is_customer_searchable(row.availability):
-            matches = [product_to_dict(row)]
+            matches = [slim_product_match(row)]
             if conversation_id:
                 _set_context(
                     session,
@@ -270,10 +325,10 @@ def crv2_find_product_by_image(
                     source="image_match",
                 )
     else:
-        for cand in candidates[:5]:
+        for cand in candidates:
             row = repo.get_product(tenant_id=tenant_id, product_id=str(cand.get("product_id") or ""))
             if row is not None and is_customer_searchable(row.availability):
-                payload = product_to_dict(row)
+                payload = slim_product_match(row)
                 payload["similarity"] = cand.get("similarity")
                 matches.append(payload)
 
@@ -281,6 +336,7 @@ def crv2_find_product_by_image(
         "tool": "find_product_by_image",
         "ok": True,
         "resolver": resolver,
+        "vision_used": resolver == "vision_rerank",
         "candidate_count": len(candidates),
         "match_count": len(matches),
         "matches": matches,

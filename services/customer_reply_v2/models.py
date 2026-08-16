@@ -126,6 +126,11 @@ class RetrievalResult:
     refused_third_round: bool = False
     error: str | None = None
     active_product_id: str | None = None
+    requested_reasoning_effort: str | None = None
+    effective_reasoning_effort: str | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    recommended_tera_effort: str | None = None
 
 
 @dataclass
@@ -140,11 +145,16 @@ class AnswerLunaResult:
     requested_model: str = ""
     returned_model: str = ""
     reasoning_effort: str = "medium"
+    requested_reasoning_effort: str | None = None
+    effective_reasoning_effort: str | None = None
     stage: str = "answer"
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     total_tokens: int | None = None
     raw_structured: dict[str, Any] = field(default_factory=dict)
+    media_actions: list[dict[str, Any]] = field(default_factory=list)
+    draft_actions: list[dict[str, Any]] = field(default_factory=list)
+    request_actions: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass

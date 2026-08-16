@@ -10,11 +10,25 @@ from __future__ import annotations
 import os
 
 MAX_CUSTOMER_RETRIEVAL_ROUNDS = 2
-DM_CONTEXT_WINDOW_HOURS = 3
+DM_CONTEXT_WINDOW_HOURS = 1.5  # 90 minutes
+LEGACY_DM_CONTEXT_WINDOW_HOURS = 3.0
 
 
 def _truthy(name: str, default: str = "false") -> bool:
     return (os.getenv(name) or default).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def customer_ai_v10_runtime_enabled() -> bool:
+    """Customer AI V10 runtime (safety, 90m history, metering, FAQ, Luna low, Tera low/medium).
+
+    Rollback: CUSTOMER_AI_V10_RUNTIME=false restores the pre-v10 window, legacy FAQ
+    localize path, Luna effort none, and chat.completions Tera+tools clamp.
+    Default on.
+    """
+    raw = os.getenv("CUSTOMER_AI_V10_RUNTIME")
+    if raw is None or not str(raw).strip():
+        return True
+    return _truthy("CUSTOMER_AI_V10_RUNTIME", "true")
 
 
 def customer_semantic_retrieval_enabled() -> bool:
@@ -61,11 +75,21 @@ def max_retrieval_rounds() -> int:
 
 
 def dm_context_window_hours() -> float:
+    if not customer_ai_v10_runtime_enabled():
+        raw_legacy = (os.getenv("CUSTOMER_DM_CONTEXT_WINDOW_HOURS") or str(LEGACY_DM_CONTEXT_WINDOW_HOURS)).strip()
+        try:
+            return max(0.25, min(24.0, float(raw_legacy)))
+        except ValueError:
+            return float(LEGACY_DM_CONTEXT_WINDOW_HOURS)
     raw = (os.getenv("CUSTOMER_DM_CONTEXT_WINDOW_HOURS") or str(DM_CONTEXT_WINDOW_HOURS)).strip()
     try:
         return max(0.25, min(24.0, float(raw)))
     except ValueError:
         return float(DM_CONTEXT_WINDOW_HOURS)
+
+
+def dm_context_window_minutes() -> float:
+    return dm_context_window_hours() * 60.0
 
 
 def customer_context_token_budget() -> int:
@@ -86,4 +110,6 @@ def flags_snapshot() -> dict[str, object]:
         "LINAS_CUSTOMER_ANSWER_MODEL": customer_answer_model_name(),
         "MAX_CUSTOMER_RETRIEVAL_ROUNDS": max_retrieval_rounds(),
         "CUSTOMER_DM_CONTEXT_WINDOW_HOURS": dm_context_window_hours(),
+        "CUSTOMER_AI_V10_RUNTIME": customer_ai_v10_runtime_enabled(),
+        "history_window_minutes": dm_context_window_minutes(),
     }

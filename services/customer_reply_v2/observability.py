@@ -34,6 +34,10 @@ def build_safe_trace(
     completion_tokens: int | None = None,
     total_tokens: int | None = None,
     cost_usd: float | None = None,
+    faq_checked: bool | None = None,
+    faq_match_id: str | None = None,
+    faq_match_score: float | None = None,
+    faq_direct_reply: bool | None = None,
 ) -> dict[str, Any]:
     """Privacy-safe trace: stage, models, effort, channel, tenant hash, tokens/cost — no secrets."""
     return {
@@ -60,4 +64,8 @@ def build_safe_trace(
         "total_tokens": total_tokens,
         "cost_usd": cost_usd,
         "classic_fallback": False,
+        "faq_checked": faq_checked,
+        "faq_match_id": faq_match_id,
+        "faq_match_score": faq_match_score,
+        "faq_direct_reply": faq_direct_reply,
     }

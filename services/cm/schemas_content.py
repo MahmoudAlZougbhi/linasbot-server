@@ -312,22 +312,44 @@ class ActionsSection(CmBaseModel):
 
 
 class CommentRule(CmBaseModel):
-    """Structured comment behavior: match customer text → public reply, DM, or ignore.
+    """Comment behavior: deterministic no-AI or AI-guidance, global or post-specific.
 
-    Optional ``post_id`` targets a Meta post/media id when known. Full Meta post picker
-    is a follow-up; owners can paste ids today.
+    Priority: higher number wins. Tie-break is stable rule id (ascending).
+    Post-specific rules are always evaluated before all-post rules.
     """
 
     id: str
     enabled: bool = True
     name: str = ""
+    scope: Literal["all_posts", "specific_post"] = "all_posts"
+    rule_mode: Literal["deterministic", "ai_guidance"] = "deterministic"
+    trigger_type: Literal["all_comments", "exact_text", "contains_any", "contains_all", "keyword_set"] = "contains_any"
+    priority: int = 0
+    revision: int = 1
     match_mode: Literal["contains", "any_keyword", "regex"] = "any_keyword"
     keywords: list[str] = Field(default_factory=list)
     pattern: str = ""
     post_id: str = ""
+    platform: str = ""
+    connected_account_id: str = ""
+    page_or_ig_account_id: str = ""
+    post_permalink: str = ""
+    post_caption_snapshot: str = ""
+    post_status: str = ""
     channel: Literal["any", "facebook", "instagram"] = "any"
-    action: Literal["reply_comment", "reply_dm", "ignore"] = "reply_comment"
+    action: Literal[
+        "reply_comment",
+        "reply_dm",
+        "ignore",
+        "reply_comment_and_dm",
+        "reply_comment_static",
+        "send_dm_static",
+        "reply_comment_and_dm_static",
+    ] = "reply_comment"
     reply_template: str = ""
+    dm_template: str = ""
+    ai_instructions: str = ""
+    ai_action_mode: Literal["reply_comment", "send_dm", "reply_comment_and_dm"] = "reply_comment"
     notes: str | None = None
 
 

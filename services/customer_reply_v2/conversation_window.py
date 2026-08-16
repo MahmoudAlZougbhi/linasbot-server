@@ -1,4 +1,7 @@
-"""Rolling three-hour DM conversation window (time-based, not last-20 / not 600-char)."""
+"""Rolling DM conversation window (time-based, not last-N / not 600-char).
+
+Default window is 90 minutes under Customer AI V10 (CUSTOMER_AI_V10_RUNTIME).
+"""
 
 from __future__ import annotations
 
@@ -121,6 +124,7 @@ async def load_dm_conversation_window(
             max_messages=0,
             window_hours=int(max(1, round(hours))),
             alternate_user_id=alternate_user_id,
+            include_metadata=True,
         )
     except Exception:
         history = []

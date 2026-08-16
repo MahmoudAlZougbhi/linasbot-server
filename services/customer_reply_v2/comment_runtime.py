@@ -5,85 +5,34 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from services.cm.answer_packet import build_answer_packet
-from services.cm.response_validator import validate_response
-from services.cm.schemas import AnswerChunk, AnswerFact
-from services.cm.version_store import load_published_content
 from services.customer_reply_v2.answer_luna import run_answer_luna
+from services.customer_reply_v2.channel_metadata import build_channel_metadata
+from services.customer_reply_v2.comment_rule_runtime import (
+    deterministic_rule_outcome,
+    engine_trace_fields,
+    evaluate_turn_comment_rules,
+)
 from services.customer_reply_v2.customer_facts import load_customer_facts
-from services.customer_reply_v2.faq_fast_path import try_faq_fast_path
+from services.customer_reply_v2.faq_evidence import merge_faq_evidence
 from services.customer_reply_v2.flags import (
+    customer_ai_v10_runtime_enabled,
     customer_answer_model_name,
     customer_retrieval_model_name,
+    dm_context_window_minutes,
     flags_snapshot,
 )
+from services.customer_reply_v2.history_format import comment_thread_records, same_history_for_agents
+from services.customer_reply_v2.invocation_meter import CustomerTurnMeter
 from services.customer_reply_v2.manifest import get_cached_manifest
 from services.customer_reply_v2.media_context import build_comment_media_context, media_context_to_dict
-from services.customer_reply_v2.models import CustomerReplyOutcome, RetrievalResult
+from services.customer_reply_v2.models import CustomerReplyOutcome
 from services.customer_reply_v2.observability import build_safe_trace
+from services.customer_reply_v2.orchestrator_faq import evaluate_faq_turn, faq_direct_outcome_kwargs, faq_trace_fields
+from services.customer_reply_v2.orchestrator_side_effects import plan_turn_side_effects
+from services.customer_reply_v2.orchestrator_validate import safe_failure_reply, validate_candidate
 from services.customer_reply_v2.policy import enforce_restricted_and_handoff
 from services.customer_reply_v2.retrieval_luna import run_retrieval_luna
-
-
-def _safe_failure_reply(response_language: str, *, kind: str = "validation") -> str:
-    if kind == "model":
-        messages = {
-            "ar": "الخدمة الذكية غير متاحة حالياً. تواصل معنا مباشرة وسنساعدك.",
-            "en": "Our AI reply service is temporarily unavailable. Please contact us directly.",
-            "fr": "Le service de réponse IA est temporairement indisponible. Contactez-nous directement.",
-            "franco": "El AI reply mesh available halla2. Contactuna mubasharan.",
-        }
-    elif kind == "insufficient":
-        messages = {
-            "ar": "ما قدرت أكد المعلومة من المحتوى المنشور حالياً. بقدر وجهك لفريقنا إذا حابب.",
-            "en": "I couldn't confirm that from our published content. I can connect you with our team if you'd like.",
-            "fr": "Je n'ai pas pu confirmer cela dans notre contenu publié. Je peux vous mettre en relation avec notre équipe.",
-            "franco": "Ma ederet akked el maaloome men el content. Fini a3teek el team iza baddak.",
-        }
-    else:
-        # Public-comment safe: invite DM only — never phone / wa.me destinations.
-        messages = {
-            "ar": "خليني تأكدلك المعلومة صح — راسلنا بالخاص (DM) لنساعدك بدقة.",
-            "en": "Let me make sure this is accurate — please message us in DM for a precise answer.",
-            "fr": "Laissez-moi vérifier — écrivez-nous en message privé (DM) pour une réponse précise.",
-            "franco": "Khallini akked el maaloome — rasilna bil DM la jawab sahih.",
-        }
-    return messages.get(response_language, messages["en"])
-
-
-def _facts_to_answer_facts(retrieval: RetrievalResult) -> tuple[list[AnswerFact], list[AnswerChunk]]:
-    facts: list[AnswerFact] = []
-    chunks: list[AnswerChunk] = []
-    for ev in retrieval.evidence:
-        if ev.section_id in {"prices", "services", "branches", "handoff", "off_days"}:
-            facts.append(AnswerFact(kind=ev.section_id, value=ev.content[:500], source_id=ev.source_id))
-        else:
-            chunks.append(AnswerChunk(source_id=ev.source_id, text=ev.content, score=None))
-    return facts, chunks
-
-
-def _validate_candidate(
-    *,
-    tenant_id: str,
-    candidate: str,
-    retrieval: RetrievalResult,
-    detected_language: str,
-    response_language: str,
-) -> tuple[bool, list[str]]:
-    pointer, sections = load_published_content(tenant_id)
-    facts, chunks = _facts_to_answer_facts(retrieval)
-    packet = build_answer_packet(
-        tenant_id=tenant_id,
-        content_version_id=pointer.content_version_id,
-        index_version_id=pointer.index_version_id,
-        detected_language=detected_language,
-        response_language=response_language,
-        sections=sections,
-        facts=facts,
-        chunks=chunks,
-    )
-    result = validate_response(candidate, packet)
-    return result.ok, list(result.failed_rules or [])
+from services.customer_reply_v2.safety_gate import evaluate_customer_safety
 
 
 async def run_customer_reply_v2_comment(
@@ -106,6 +55,8 @@ async def run_customer_reply_v2_comment(
     scripted_retrieval: list[Any] | None = None,
     fixture_answer: dict[str, Any] | None = None,
     injected_media_cache: dict[str, Any] | None = None,
+    comment_id: str = "",
+    post_id: str = "",
 ) -> CustomerReplyOutcome:
     """Comment runtime — no DM 3-hour window; shared visual context; one Tera repair."""
     started = time.perf_counter()
@@ -142,6 +93,8 @@ async def run_customer_reply_v2_comment(
         provider_display_name=provider_display_name,
     )
     profile = facts.to_safe_dict()
+    meter = CustomerTurnMeter(tenant_id=tenant_id)
+    v10 = customer_ai_v10_runtime_enabled()
 
     if comment_context is not None:
         comment_ctx = dict(comment_context)
@@ -161,6 +114,73 @@ async def run_customer_reply_v2_comment(
         comment_ctx["parent_comment"] = media.parent_comment
 
     uncertainty = bool(comment_ctx.get("uncertainty_required"))
+    channel_meta = build_channel_metadata(
+        channel=channel,
+        account_id=asset_id,
+        post_id=post_id or str(comment_ctx.get("post_id") or ""),
+        comment_id=comment_id or str(comment_ctx.get("comment_id") or ""),
+        conversation_id=f"comment:{tenant_id}:{channel}",
+        can_reply_publicly=True,
+        max_media_items=0,
+    )
+    thread_history = same_history_for_agents(
+        comment_thread_records(
+            channel=channel,
+            comment_text=comment_text,
+            parent_comment=str(comment_ctx.get("parent_comment") or parent_comment or ""),
+            nearby_replies=list(comment_ctx.get("nearby_replies") or []),
+            comment_id=str(channel_meta.get("comment_id") or ""),
+            post_id=str(channel_meta.get("post_id") or ""),
+        )
+    )
+    if v10:
+        safety = await evaluate_customer_safety(
+            tenant_id=tenant_id,
+            text=comment_text,
+            channel=channel,
+            user_id=provider_sender_id or None,
+            response_language=response_language,
+            is_public=True,
+            attachment_types=[str(comment_ctx.get("media_type") or "")] if comment_ctx.get("media_type") else None,
+            image_urls=list(comment_ctx.get("image_urls") or image_urls or []),
+        )
+        if safety.blocked:
+            return CustomerReplyOutcome(
+                stop=True,
+                reply=safety.reply,
+                reason="safety_block",
+                evidence_status="policy_stop",
+                metadata={
+                    "ai_called": False,
+                    "cost_status": "none",
+                    "safety_result": safety.certainty,
+                    "safety_policy_version": safety.policy_version,
+                    "channel_metadata": channel_meta,
+                    "metering": meter.to_public_dict(),
+                    "flags": flags_snapshot(),
+                },
+            )
+
+    engine = evaluate_turn_comment_rules(
+        tenant_id=tenant_id,
+        comment_text=comment_text,
+        channel=channel,
+        post_id=str(channel_meta.get("post_id") or post_id or ""),
+        account_id=str(channel_meta.get("account_id") or asset_id or ""),
+        channel_capabilities=dict(channel_meta.get("channel_capabilities") or {}),
+    )
+    if v10 and engine.rule_mode == "deterministic" and engine.matched:
+        return deterministic_rule_outcome(
+            engine=engine,
+            meter=meter,
+            channel_meta=channel_meta,
+            channel_capabilities=dict(channel_meta.get("channel_capabilities") or {}),
+        )
+    if engine.ai_guidance_rules:
+        comment_ctx["ai_guidance_comment_rules"] = engine.ai_guidance_rules
+        comment_ctx["applicable_ai_comment_rule_titles"] = [
+            {"id": row["id"], "title": row["title"], "scope": row.get("scope")} for row in engine.ai_guidance_rules
+        ]
 
     policy = enforce_restricted_and_handoff(
         tenant_id=tenant_id,
@@ -178,20 +198,29 @@ async def run_customer_reply_v2_comment(
             metadata={**policy.get("metadata", {}), "comment_context": comment_ctx, "flags": flags_snapshot()},
         )
 
-    faq = await try_faq_fast_path(
+    faq = await evaluate_faq_turn(
         tenant_id=tenant_id,
         message=comment_text,
         detected_language=detected_language,
         response_language=response_language,
+        channel=channel,
+        customer_id=provider_sender_id,
+        attachment_types=None,
+        reply_to=str(comment_ctx.get("parent_comment") or parent_comment or ""),
         has_unresolved_context_refs=bool(comment_ctx.get("caption")) and len(comment_text.split()) <= 3,
+        has_ai_guidance_comment_rule=bool(engine.ai_guidance_rules),
     )
     if faq.hit and not uncertainty:
         return CustomerReplyOutcome(
-            stop=True,
-            reply=faq.answer,
-            reason=faq.reason,
-            evidence_status="faq_hit",
-            metadata={"faq": faq.metadata or {}, "comment_context": comment_ctx, "flags": flags_snapshot()},
+            **faq_direct_outcome_kwargs(
+                tenant_id=tenant_id,
+                channel=channel,
+                revision=revision,
+                faq=faq,
+                started=started,
+                meter=meter,
+                extra_metadata={"comment_context": comment_ctx, "channel_metadata": channel_meta},
+            )
         )
 
     try:
@@ -200,7 +229,7 @@ async def run_customer_reply_v2_comment(
     except Exception as exc:
         return CustomerReplyOutcome(
             stop=True,
-            reply=_safe_failure_reply(response_language, kind="model"),
+            reply=safe_failure_reply(response_language, kind="model"),
             reason="model_misconfigured",
             error=str(exc),
             evidence_status="insufficient_final",
@@ -212,8 +241,14 @@ async def run_customer_reply_v2_comment(
         message=comment_text,
         customer_profile=profile,
         comment_context=comment_ctx,
+        dm_window=thread_history,
         scripted_tool_calls=scripted_retrieval,
+        channel=channel,
+        channel_metadata=channel_meta,
+        faq_candidates=faq.evidence_candidates,
+        customer_id=provider_sender_id,
     )
+    retrieval = merge_faq_evidence(retrieval, faq.evidence_candidates)
 
     answer = await run_answer_luna(
         tenant_id=tenant_id,
@@ -225,6 +260,8 @@ async def run_customer_reply_v2_comment(
         response_language=response_language,
         detected_language=detected_language,
         fixture_reply=fixture_answer,
+        history_messages=thread_history,
+        channel_metadata=channel_meta,
     )
 
     repair_attempts = 0
@@ -235,14 +272,14 @@ async def run_customer_reply_v2_comment(
     completion_tokens = int(answer.completion_tokens or 0)
 
     if answer.safe_failure_category == "model_unavailable" and not reply_text:
-        reply_text = _safe_failure_reply(response_language, kind="model")[:900]
+        reply_text = safe_failure_reply(response_language, kind="model")[:900]
         failed_rules = ["answer_model_unavailable"]
 
     if retrieval.evidence_status == "insufficient_final" and not reply_text:
-        reply_text = _safe_failure_reply(response_language, kind="insufficient")[:900]
+        reply_text = safe_failure_reply(response_language, kind="insufficient")[:900]
 
     if reply_text and retrieval.evidence and "answer_model_unavailable" not in failed_rules:
-        validation_ok, failed_rules = _validate_candidate(
+        validation_ok, failed_rules = validate_candidate(
             tenant_id=tenant_id,
             candidate=reply_text,
             retrieval=retrieval,
@@ -266,12 +303,14 @@ async def run_customer_reply_v2_comment(
                     else None
                 ),
                 repair_failures=failed_rules,
+                history_messages=thread_history,
+                channel_metadata=channel_meta,
             )
             reply_text = (repaired.reply_text or "")[:900]
             prompt_tokens += int(repaired.prompt_tokens or 0)
             completion_tokens += int(repaired.completion_tokens or 0)
             answer = repaired
-            validation_ok, failed_rules = _validate_candidate(
+            validation_ok, failed_rules = validate_candidate(
                 tenant_id=tenant_id,
                 candidate=reply_text,
                 retrieval=retrieval,
@@ -279,13 +318,23 @@ async def run_customer_reply_v2_comment(
                 response_language=response_language,
             )
             if not validation_ok:
-                reply_text = _safe_failure_reply(response_language, kind="validation")[:900]
+                reply_text = safe_failure_reply(response_language, kind="validation", public=True)[:900]
                 validation_ok = True
                 failed_rules = failed_rules + ["safe_failure_fallback"]
 
     # Observability strip: do not dump multimodal data URLs into traces.
     trace_ctx = {k: v for k, v in comment_ctx.items() if k != "image_inputs"}
     total_tokens = prompt_tokens + completion_tokens
+    side_meta = plan_turn_side_effects(
+        tenant_id=tenant_id,
+        customer_id=provider_sender_id,
+        conversation_id=f"comment:{tenant_id}:{channel}",
+        channel=channel,
+        answer=answer,
+        channel_metadata=channel_meta,
+        meter=meter,
+        idempotency_key=meter.customer_turn_id,
+    )
     trace = build_safe_trace(
         tenant_id=tenant_id,
         channel=channel,
@@ -298,12 +347,17 @@ async def run_customer_reply_v2_comment(
         repair_attempts=repair_attempts,
         requested_models={"retrieval": retrieval_model, "answer": answer_model},
         returned_models={"retrieval": retrieval.returned_model, "answer": answer.returned_model},
-        context_message_count=0,
+        context_message_count=len(thread_history),
         context_compacted=False,
         delivery_result="ready_to_send",
         latency_ms=(time.perf_counter() - started) * 1000,
         stage="repair" if repair_attempts else "answer",
-        reasoning_effort={"retrieval": "none", "answer": "medium"},
+        reasoning_effort={
+            "retrieval_requested": retrieval.requested_reasoning_effort or "none",
+            "retrieval_effective": retrieval.effective_reasoning_effort or "none",
+            "answer_requested": answer.requested_reasoning_effort or answer.reasoning_effort,
+            "answer_effective": answer.effective_reasoning_effort or answer.reasoning_effort,
+        },
         prompt_tokens=prompt_tokens or None,
         completion_tokens=completion_tokens or None,
         total_tokens=total_tokens or None,
@@ -325,14 +379,21 @@ async def run_customer_reply_v2_comment(
             "model": answer.returned_model or answer_model,
             "requested_model_retrieval": retrieval.requested_model,
             "requested_model_answer": answer.requested_model,
-            "reasoning_effort_answer": "medium",
+            "reasoning_effort_answer": answer.effective_reasoning_effort or answer.reasoning_effort,
+            "channel_metadata": channel_meta,
+            "history_window_minutes": dm_context_window_minutes(),
+            "history_messages_loaded": len(thread_history),
+            "metering": meter.to_public_dict(),
             "media_status": comment_ctx.get("media_status"),
             "validated": validation_ok,
             "failed_rules": failed_rules,
-            "trace": trace,
+            "trace": {**trace, **faq_trace_fields(faq)},
+            "faq_direct_reply": False,
             "classic_fallback": False,
             "prompt_tokens": prompt_tokens or None,
             "completion_tokens": completion_tokens or None,
             "tokens": total_tokens or None,
+            **engine_trace_fields(engine),
+            **side_meta,
         },
     )

@@ -111,6 +111,7 @@ async def get_conversation_history_from_firestore(
     max_messages: int = 0,
     window_hours: int | None = None,
     alternate_user_id: str | None = None,
+    include_metadata: bool = False,
 ) -> list:
     """
     Fetches conversation history from Firestore for a specific conversation.
@@ -244,6 +245,20 @@ async def get_conversation_history_from_firestore(
             elif src == "qa_database":
                 content = f"[FAQ answer we sent to user]\n{content}"
             openai_messages.append({"role": role, "content": content})
+            if include_metadata:
+                row = openai_messages[-1]
+                ts_keep = msg.get("timestamp")
+                if ts_keep is not None:
+                    row["timestamp"] = ts_keep
+                mid = str(msg.get("id") or msg.get("message_id") or meta.get("message_id") or "").strip()
+                if mid:
+                    row["message_id"] = mid
+                att = meta.get("attachment_type") or meta.get("media_type")
+                if att:
+                    row["attachment_type"] = att
+                reply_to = meta.get("reply_to") or msg.get("reply_to")
+                if reply_to:
+                    row["reply_to"] = reply_to
 
         print(
             f"✅ Fetched {len(openai_messages)} messages from Firestore for conversation {conversation_id} "

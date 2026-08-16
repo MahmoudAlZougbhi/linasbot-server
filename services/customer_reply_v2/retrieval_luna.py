@@ -9,10 +9,16 @@ import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from services.customer_reply_v2.flags import customer_retrieval_model_name, max_retrieval_rounds
+from services.customer_reply_v2.flags import (
+    customer_ai_v10_runtime_enabled,
+    customer_retrieval_model_name,
+    max_retrieval_rounds,
+)
 from services.customer_reply_v2.manifest import FIXED_ANSWER_SECTIONS, manifest_for_retrieval_luna
 from services.customer_reply_v2.models import RetrievalResult
+from services.customer_reply_v2.operational_titles import collect_operational_titles, inline_titles_for_luna
 from services.customer_reply_v2.retrieval_tools import RETRIEVAL_TOOL_SCHEMAS, ToolContext, dispatch_retrieval_tool
+from services.customer_reply_v2.tera_llm import normalize_tera_effort
 
 # Optional injectable for fixtures: async (messages, tools) -> OpenAI-like response
 LlmFn = Callable[..., Awaitable[Any]]
@@ -30,9 +36,15 @@ After reading evidence, respond with a single JSON object (no markdown) containi
   "missing_information_category": "",
   "confidence_category": "high|medium|low",
   "multi_intent": false,
-  "reason_codes": ["..."]
+  "reason_codes": ["..."],
+  "recommended_tera_effort": "low" | "medium"
 }
+recommended_tera_effort is required. Use "low" for a single simple question. Use "medium" for multi-intent, drafts, products+services, or comments that need careful public wording. Never use high or xhigh.
 At most two retrieval rounds are allowed. Prefer reading exact items over guessing.
+If operational_titles_has_more is true, call list_operational_titles until every title page is available. Never assume missing titles are unimportant.
+If the customer mentions an appointment, order, or request, call list_request_definitions then get_request_definition for selected IDs. Deleted definitions are absent.
+Call list_open_drafts when the customer is continuing, pausing, or changing an existing request.
+You NEVER receive AI Basics, Style, assistant identity, greeting, or tone bodies.
 """
 
 
@@ -43,6 +55,26 @@ def _strip_fixed_from_prompt(text: str) -> str:
         if needle in lowered and len(text) > 4000:
             return text[:500] + "…[redacted_fixed_answer_context]"
     return text
+
+
+def _luna_requested_effort() -> str:
+    from services.model_policy import resolve_customer_retrieval_policy
+
+    return str(resolve_customer_retrieval_policy().reasoning_effort)
+
+
+def _luna_effective_effort(model: str) -> str:
+    from services.llm_core_service import effective_chat_completions_reasoning_effort
+
+    requested = _luna_requested_effort()
+    return str(
+        effective_chat_completions_reasoning_effort(
+            model=model,
+            reasoning_effort=requested,
+            has_function_tools=True,
+        )
+        or requested
+    )
 
 
 async def _default_llm(messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None) -> Any:
@@ -111,6 +143,9 @@ async def run_retrieval_luna(
     channel: str = "customer",
     reply_to_message_id: str | None = None,
     active_product_id: str | None = None,
+    channel_metadata: dict[str, Any] | None = None,
+    faq_candidates: list[dict[str, Any]] | None = None,
+    customer_id: str = "",
 ) -> RetrievalResult:
     """Run Retrieval Luna with server-enforced max 2 rounds.
 
@@ -158,6 +193,8 @@ async def run_retrieval_luna(
         conversation_id=conversation_id,
         reply_to_message_id=reply_to_message_id,
         active_product_id=active_product_id,
+        channel_metadata=dict(channel_metadata or {}),
+        customer_id=str(customer_id or ""),
     )
 
     if reply_to_message_id and conversation_id:
@@ -195,11 +232,16 @@ async def run_retrieval_luna(
         return await _run_scripted(ctx, scripted_tool_calls, model=model)
 
     llm = llm_fn or _default_llm
-    user_payload = {
+    history_for_luna = list(dm_window or [])
+    if not customer_ai_v10_runtime_enabled():
+        history_for_luna = history_for_luna[-6:]
+    user_payload: dict[str, Any] = {
         "current_message": _strip_fixed_from_prompt(message),
         "manifest": manifest,
         "customer_facts": customer_profile,
-        "dm_window_preview": list(dm_window or [])[-6:],
+        "conversation_history": history_for_luna,
+        "channel_metadata": dict(channel_metadata or ctx.channel_metadata or {}),
+        "dm_window_preview": history_for_luna,
         "comment_context_preview": {
             k: comment_context.get(k)
             for k in (
@@ -211,8 +253,24 @@ async def run_retrieval_luna(
             )
             if comment_context and k in comment_context
         },
-        "note": "Use tools to list/read selectable sections only. Do not write the reply.",
+        "faq_candidates": list(faq_candidates or []),
+        "open_drafts": [],
+        "note": "Use tools to list/read selectable sections only. Do not write the reply. Never request AI Basics or Style bodies. Call list_open_drafts when the customer is continuing a request.",
     }
+    try:
+        from services.cm.version_store import load_published_content as _load_pub
+
+        _pointer, published_sections = _load_pub(tenant_id)
+        user_payload.update(inline_titles_for_luna(collect_operational_titles(published_sections)))
+    except Exception:
+        user_payload["operational_titles"] = []
+        user_payload["operational_title_count"] = 0
+    from services.customer_reply_v2.open_drafts import list_open_drafts_for_luna
+
+    user_payload["open_drafts"] = list_open_drafts_for_luna(
+        tenant_id=tenant_id,
+        customer_id=str(customer_id or ctx.customer_id or ""),
+    )
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": _RETRIEVAL_SYSTEM},
         {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
@@ -296,6 +354,9 @@ async def run_retrieval_luna(
         returned_model=str(returned_model),
         refused_third_round=ctx.refused_third_round,
         active_product_id=ctx.active_product_id,
+        requested_reasoning_effort=_luna_requested_effort(),
+        effective_reasoning_effort=_luna_effective_effort(model),
+        recommended_tera_effort=normalize_tera_effort(final_plan.get("recommended_tera_effort")),
     )
 
 
@@ -337,6 +398,9 @@ async def _run_scripted(
         returned_model=model,
         refused_third_round=ctx.refused_third_round,
         active_product_id=ctx.active_product_id,
+        requested_reasoning_effort=_luna_requested_effort(),
+        effective_reasoning_effort=_luna_effective_effort(model),
+        recommended_tera_effort=normalize_tera_effort(final_plan.get("recommended_tera_effort")),
     )
 
 

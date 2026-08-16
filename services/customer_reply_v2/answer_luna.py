@@ -9,9 +9,13 @@ import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from services.customer_reply_v2.ai_profile import load_tera_ai_context
+from services.customer_reply_v2.draft_actions import parse_draft_actions, parse_request_actions
 from services.customer_reply_v2.flags import customer_answer_model_name
-from services.customer_reply_v2.manifest import load_fixed_answer_context
+from services.customer_reply_v2.media_actions import parse_media_actions
 from services.customer_reply_v2.models import AnswerLunaResult, EvidenceRecord, RetrievalResult
+from services.customer_reply_v2.open_drafts import list_open_collecting_drafts
+from services.customer_reply_v2.tera_llm import create_tera_completion, normalize_tera_effort
 from services.response_formatting import RESPONSE_FORMATTING_RULES
 
 LlmFn = Callable[..., Awaitable[Any]]
@@ -51,8 +55,18 @@ Return a single JSON object (no markdown):
   "evidence_source_ids": ["..."],
   "customer_fact_updates": {{}},
   "handoff_intent": null,
-  "safe_failure_category": null
+  "safe_failure_category": null,
+  "media_actions": [],
+  "draft_actions": [],
+  "request_actions": []
 }}
+Do not send files. If the customer asked for product photos or videos, put media_actions
+for stored catalog media only: {{"product_id":"...","media_type":"images|videos","max_items":5,"order":"configured_order"}}.
+The system sends stored media. Never invent URLs, prices, or product IDs.
+If the customer is providing request fields, return draft_actions. The system validates IDs, field names, and types.
+Never invent field keys or draft IDs. Ask only for missing_fields returned by the system.
+Never say an appointment is confirmed. After the system submits, say the request was sent and is pending.
+Use pause/resume/cancel/add_item/replace_item/remove_item when the customer means those operations.
 """
 
 
@@ -85,7 +99,7 @@ def build_answer_messages(
     evidence: list[EvidenceRecord],
     evidence_status: str,
     customer_profile: dict[str, Any],
-    history_messages: list[dict[str, str]] | None,
+    history_messages: list[dict[str, Any]] | None,
     comment_context: dict[str, Any] | None,
     channel: str,
     published_revision: str,
@@ -93,6 +107,8 @@ def build_answer_messages(
     detected_language: str = "",
     repair_failures: list[str] | None = None,
     request_capture_guidance: str | None = None,
+    channel_metadata: dict[str, Any] | None = None,
+    open_drafts: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Build Answer Tera messages. Includes full AI Basics + Style. No retrieval tools."""
     evidence_blob = [
@@ -120,13 +136,17 @@ def build_answer_messages(
         "language_rule": _language_rule(reply_lang),
         "language_policy": fixed_context.get("languages") or {},
         "customer_facts": customer_profile,
+        "ai_profile": fixed_context.get("ai_profile") or {},
         "ai_basics": fixed_context.get("ai_basics") or {},
         "style": fixed_context.get("style") or {},
         "evidence_status": evidence_status,
         "evidence": evidence_blob,
+        "conversation_history": history_messages or [],
         "dm_history": history_messages or [],
+        "channel_metadata": dict(channel_metadata or {}),
         "comment_context": comment_ctx,
         "media_status": str(comment_ctx.get("media_status") or "not_applicable"),
+        "open_drafts": list(open_drafts or []),
     }
     if repair_failures:
         payload["validator_failures"] = repair_failures
@@ -155,7 +175,10 @@ def answer_context_has_full_basics_and_style(messages: list[dict[str, Any]]) -> 
     blob = json.dumps(messages, ensure_ascii=False)
     # Nested user payload is itself JSON-encoded, so quotes may be escaped.
     return (
-        ("ai_basics" in blob) and ("style" in blob) and ("advanced_instructions" in blob or "identity_summary" in blob)
+        ("ai_profile" in blob)
+        and ("ai_basics" in blob)
+        and ("style" in blob)
+        and ("advanced_instructions" in blob or "identity_summary" in blob)
     )
 
 
@@ -176,34 +199,15 @@ async def _default_llm(
     *,
     channel: str = "instagram_dm",
     regeneration: bool = False,
+    reasoning_effort: str = "medium",
 ) -> Any:
-    from services.llm_core_service import build_chat_completion_kwargs, client
-    from services.model_policy import emit_model_policy_trace, resolve_customer_social_policy
-
-    if tools:
-        from services.requests.capture_answer_loop import capture_tools_allowed
-
-        if not capture_tools_allowed(tools):
-            raise RuntimeError("Answer Tera must not receive retrieval tools")
-    policy = resolve_customer_social_policy(channel=channel, regeneration=regeneration)
-    model = customer_answer_model_name()
-    if model != policy.model:
-        raise RuntimeError(f"customer_answer_model_misconfigured: answer model {model!r} != policy {policy.model!r}")
-    kwargs = build_chat_completion_kwargs(
-        model=model,
-        messages=[{"role": "user", "content": "placeholder"}],
-        max_tokens=900,
-        temperature=0.3,
-        reasoning_effort=str(policy.reasoning_effort),
-        has_function_tools=bool(tools),
+    return await create_tera_completion(
+        messages=messages,
+        tools=tools,
+        channel=channel,
+        regeneration=regeneration,
+        reasoning_effort=reasoning_effort,
     )
-    kwargs["messages"] = messages
-    kwargs["model"] = model
-    if tools:
-        kwargs["tools"] = tools
-        kwargs["tool_choice"] = "auto"
-    emit_model_policy_trace(policy, extra={"role": "answer", "stage": "answer" if not regeneration else "repair"})
-    return await client.chat.completions.create(**kwargs)
 
 
 def _parse_answer(content: str) -> dict[str, Any]:
@@ -238,7 +242,7 @@ async def run_answer_luna(
     message: str,
     retrieval: RetrievalResult,
     customer_profile: dict[str, Any],
-    history_messages: list[dict[str, str]] | None = None,
+    history_messages: list[dict[str, Any]] | None = None,
     comment_context: dict[str, Any] | None = None,
     channel: str = "instagram_dm",
     conversation_id: str | None = None,
@@ -249,10 +253,12 @@ async def run_answer_luna(
     llm_fn: LlmFn | None = None,
     fixture_reply: dict[str, Any] | None = None,
     repair_failures: list[str] | None = None,
+    channel_metadata: dict[str, Any] | None = None,
 ) -> AnswerLunaResult:
     """Run Answer Tera (kept export name for callers/tests)."""
     model = customer_answer_model_name()
-    fixed = load_fixed_answer_context(tenant_id)
+    tera_effort = normalize_tera_effort(getattr(retrieval, "recommended_tera_effort", None))
+    fixed = load_tera_ai_context(tenant_id)
     revision = str(fixed.get("published_revision") or "")
     request_guidance = ""
     from services.requests.config_loader import load_published_requests_config, requests_capture_active
@@ -276,6 +282,11 @@ async def run_answer_luna(
         detected_language=detected_language,
         repair_failures=repair_failures,
         request_capture_guidance=request_guidance or None,
+        channel_metadata=channel_metadata,
+        open_drafts=list_open_collecting_drafts(
+            tenant_id=tenant_id,
+            customer_id=str(provider_sender_id or ""),
+        ),
     )
     assert answer_context_has_full_basics_and_style(messages)
 
@@ -291,9 +302,14 @@ async def run_answer_luna(
             safe_failure_category=data.get("safe_failure_category"),
             requested_model=model,
             returned_model=model,
-            reasoning_effort="medium",
+            reasoning_effort=tera_effort,
+            requested_reasoning_effort=tera_effort,
+            effective_reasoning_effort=tera_effort,
             stage="repair" if repair_failures else "answer",
             raw_structured=data,
+            media_actions=parse_media_actions(data.get("media_actions")),
+            draft_actions=parse_draft_actions(data.get("draft_actions")),
+            request_actions=parse_request_actions(data.get("request_actions")),
         )
 
     from services.requests.capture import is_public_comment_channel
@@ -318,7 +334,14 @@ async def run_answer_luna(
         else None
     )
 
-    llm = llm_fn or (lambda **kw: _default_llm(**kw, channel=channel, regeneration=bool(repair_failures)))
+    llm = llm_fn or (
+        lambda **kw: _default_llm(
+            **kw,
+            channel=channel,
+            regeneration=bool(repair_failures),
+            reasoning_effort=tera_effort,
+        )
+    )
     try:
         response = await llm(messages=messages, tools=capture_tools or None)
         if capture_tools and capture_ctx is not None:
@@ -337,7 +360,9 @@ async def run_answer_luna(
             safe_failure_category="model_unavailable",
             requested_model=model,
             returned_model="",
-            reasoning_effort="medium",
+            reasoning_effort=tera_effort,
+            requested_reasoning_effort=tera_effort,
+            effective_reasoning_effort=tera_effort,
             stage="repair" if repair_failures else "answer",
             raw_structured={"error": str(exc), "blocker": "answer_model_unavailable"},
         )
@@ -346,6 +371,8 @@ async def run_answer_luna(
     content = getattr(response.choices[0].message, "content", None) or ""
     data = _parse_answer(content)
     usage = _usage_from_response(response)
+    requested_effort = getattr(response, "_linas_requested_reasoning_effort", None) or "medium"
+    effective_effort = getattr(response, "_linas_effective_reasoning_effort", None) or requested_effort
     return AnswerLunaResult(
         reply_text=str(data.get("reply_text") or "").strip(),
         detected_language=str(data.get("detected_language") or ""),
@@ -356,12 +383,17 @@ async def run_answer_luna(
         safe_failure_category=data.get("safe_failure_category"),
         requested_model=model,
         returned_model=str(returned),
-        reasoning_effort="medium",
+        reasoning_effort=str(effective_effort),
+        requested_reasoning_effort=str(requested_effort),
+        effective_reasoning_effort=str(effective_effort),
         stage="repair" if repair_failures else "answer",
         prompt_tokens=usage.get("prompt_tokens"),  # type: ignore[arg-type]
         completion_tokens=usage.get("completion_tokens"),  # type: ignore[arg-type]
         total_tokens=usage.get("total_tokens"),  # type: ignore[arg-type]
         raw_structured=data,
+        media_actions=parse_media_actions(data.get("media_actions")),
+        draft_actions=parse_draft_actions(data.get("draft_actions")),
+        request_actions=parse_request_actions(data.get("request_actions")),
     )
 
 

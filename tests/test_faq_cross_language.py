@@ -53,13 +53,18 @@ async def test_faq_fast_path_localizes_cross_language_tier_hit(v2_env, monkeypat
             "tier": "direct",
             "match_score": 0.95,
             "matched_language": "en",
-            "qa_pair": {"answer": "We open 10am to 6pm.", "language": "en"},
+            "qa_pair": {
+                "qa_group_id": "faq_hours",
+                "question": "What are your hours?",
+                "answer": "We open 10am to 6pm.",
+                "language": "en",
+            },
         }
 
     async def _fake_translate(
         answer: str, *, source_language: str | None = None, target_language: str | None = None
     ) -> str:
-        return "ہم صبح دس بجے سے شام چھ بجے تک کھلے رہتے ہیں۔"
+        raise AssertionError("V10 FAQ direct must not auto-translate")
 
     monkeypatch.setattr("services.local_qa_service.local_qa_service.find_match_with_tier", _fake_tier)
     monkeypatch.setattr(
@@ -73,11 +78,9 @@ async def test_faq_fast_path_localizes_cross_language_tier_hit(v2_env, monkeypat
         detected_language="ur",
         response_language="ur",
     )
-    assert hit.hit is True
-    assert hit.answer == "ہم صبح دس بجے سے شام چھ بجے تک کھلے رہتے ہیں۔"
-    assert hit.metadata is not None
-    assert hit.metadata.get("matched_language") == "en"
-    assert hit.metadata.get("response_language") == "ur"
+    assert hit.hit is False
+    assert hit.reason in {"language_mismatch", "partial_coverage"}
+    assert hit.evidence_candidates
 
 
 @pytest.mark.asyncio
@@ -112,7 +115,7 @@ async def test_faq_fast_path_semantic_cross_language_fallback(v2_env, monkeypatc
     async def _fake_translate(
         answer: str, *, source_language: str | None = None, target_language: str | None = None
     ) -> str:
-        return "لیزر سیشن بیس ڈالر سے شروع ہوتے ہیں۔"
+        raise AssertionError("V10 FAQ direct must not auto-translate")
 
     monkeypatch.setattr("services.cm.semantic_index.search", _fake_semantic)
     monkeypatch.setattr(
@@ -126,7 +129,6 @@ async def test_faq_fast_path_semantic_cross_language_fallback(v2_env, monkeypatc
         detected_language="ur",
         response_language="ur",
     )
-    assert hit.hit is True
-    assert hit.reason == "faq_semantic"
+    assert hit.hit is False
+    assert hit.reason in {"language_mismatch", "partial_coverage"}
     assert calls == ["ur", None]
-    assert hit.answer == "لیزر سیشن بیس ڈالر سے شروع ہوتے ہیں۔"

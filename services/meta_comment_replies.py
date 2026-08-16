@@ -354,10 +354,24 @@ async def process_meta_comment_event(
             comment_text=comment_text,
             channel=binding.channel,
             post_id=post_id,
+            account_id=binding.asset_id,
         )
-        if rule_decision.action == "ignore":
+        if rule_decision.action == "ignore" and rule_decision.rule_mode != "ai_guidance":
             _mark_sent_reply(binding, comment_id)
             return CommentReplyResult(status="ignored", reason=rule_decision.reason or "comment_rule_ignore")
+        if rule_decision.action == "reply_comment_and_dm" and rule_decision.rule_mode == "deterministic":
+            from services.meta_comment_rule_both import apply_comment_and_dm_rule
+
+            both = apply_comment_and_dm_rule(
+                rule_decision=rule_decision,
+                binding=binding,
+                comment_id=comment_id,
+                simulation=simulation,
+                capture_send=capture_send,
+            )
+            if isinstance(both, CommentReplyResult):
+                return both
+            rule_decision = both
 
     graph_version = settings.graph_api_version or "v24.0"
     token = settings.page_access_token

@@ -351,36 +351,43 @@ async def test_customer_v2_answer_payload_terra_medium(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
-async def test_customer_v2_answer_terra_tools_forces_none_effort(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_customer_v2_answer_terra_tools_keeps_requested_effort(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
     from services.customer_reply_v2 import answer_luna as al
 
     captured: dict[str, Any] = {}
 
     class _FakeClient:
+        class responses:
+            @staticmethod
+            async def create(**kwargs: Any) -> Any:
+                captured.update(kwargs)
+                return SimpleNamespace(
+                    output_text='{"reply_text":"hi","grounding_status":"grounded"}',
+                    output=[],
+                    model=MODEL_CUSTOMER_TERRA,
+                    usage=None,
+                )
+
         class chat:
             class completions:
                 @staticmethod
                 async def create(**kwargs: Any) -> Any:
-                    captured.update(kwargs)
-                    msg = MagicMock()
-                    msg.content = '{"reply_text":"hi","grounding_status":"grounded"}'
-                    msg.tool_calls = None
-                    choice = MagicMock()
-                    choice.message = msg
-                    resp = MagicMock()
-                    resp.choices = [choice]
-                    resp.model = MODEL_CUSTOMER_TERRA
-                    return resp
+                    raise AssertionError("Tera+tools must not use chat.completions under V10")
 
     monkeypatch.setattr("services.llm_core_service.client", _FakeClient)
-    await al._default_llm(
+    response = await al._default_llm(
         [{"role": "user", "content": "{}"}],
         tools=[{"type": "function", "function": {"name": "create_customer_request", "parameters": {}}}],
         channel="instagram_dm",
+        reasoning_effort="medium",
     )
     assert captured["model"] == MODEL_CUSTOMER_TERRA
-    assert captured["reasoning_effort"] == "none"
+    assert captured["reasoning"]["effort"] == "medium"
     assert captured.get("tools")
+    assert response._linas_requested_reasoning_effort == "medium"
+    assert response._linas_effective_reasoning_effort == "medium"
 
 
 @pytest.mark.asyncio
@@ -409,7 +416,7 @@ async def test_customer_v2_retrieval_payload_luna(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr("services.llm_core_service.client", _FakeClient)
     await rl._default_llm([{"role": "user", "content": "{}"}], tools=[{"type": "function"}])
     assert captured["model"] == MODEL_CUSTOMER_LUNA
-    assert captured["reasoning_effort"] == "none"
+    assert captured["reasoning_effort"] == "low"
 
 
 def test_model_router_and_provider_defaults_are_sol_terra(monkeypatch: pytest.MonkeyPatch) -> None:
