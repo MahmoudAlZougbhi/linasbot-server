@@ -1747,6 +1747,39 @@ def test_postgres_probe_tree_uses_scoped_bounds_for_copied_runtime(tmp_path: Pat
     assert names == {"bin", "bin/python3.13"}
 
 
+def test_postgres_probe_tree_allows_empty_installed_metadata_only_when_scoped(tmp_path: Path) -> None:
+    root = tmp_path / "probe-env"
+    marker = root / "lib/python3.13/site-packages/APScheduler-3.10.4.dist-info/REQUESTED"
+    marker.parent.mkdir(parents=True)
+    root.chmod(0o700)
+    marker.write_bytes(b"")
+    bootstrap._normalize_probe_tree_permissions(
+        root,
+        expected_uid=os.getuid(),
+        expected_gid=os.getgid(),
+    )
+
+    with pytest.raises(PermissionError, match="unsafe bootstrap authority file"):
+        bootstrap._release_tree_evidence(
+            root,
+            expected_uid=os.getuid(),
+            expected_gid=os.getgid(),
+        )
+
+    tree_sha, file_count, total_size, names = bootstrap._release_tree_evidence(
+        root,
+        expected_uid=os.getuid(),
+        expected_gid=os.getgid(),
+        file_limit=bootstrap.MAX_PROBE_TREE_FILE_BYTES,
+        total_limit=bootstrap.MAX_PROBE_TREE_TOTAL_BYTES,
+        allow_empty_files=True,
+    )
+    assert len(tree_sha) == 64
+    assert file_count == 1
+    assert total_size == 0
+    assert "lib/python3.13/site-packages/APScheduler-3.10.4.dist-info/REQUESTED" in names
+
+
 def test_postgres_probe_tree_total_size_is_bounded(tmp_path: Path) -> None:
     root = tmp_path / "probe-env"
     root.mkdir(mode=0o700)
@@ -1792,12 +1825,14 @@ def test_probe_normalization_runs_after_install_and_before_hashing() -> None:
     assert install_done < normalize < evidence
     assert prepare.count("file_limit=MAX_PROBE_TREE_FILE_BYTES") == 1
     assert prepare.count("total_limit=MAX_PROBE_TREE_TOTAL_BYTES") == 1
+    assert prepare.count("allow_empty_files=True") == 1
 
     source_assert = source[
         source.index("def _assert_probe_environment") : source.index("def _prepare_probe_environment")
     ]
     assert source_assert.count("file_limit=MAX_PROBE_TREE_FILE_BYTES") == 1
     assert source_assert.count("total_limit=MAX_PROBE_TREE_TOTAL_BYTES") == 1
+    assert source_assert.count("allow_empty_files=True") == 1
 
 
 def test_bootstrap_first_transition_orders_unit_and_bytecode_authority_before_commit() -> None:
