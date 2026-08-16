@@ -292,6 +292,39 @@ def test_protected_release_transport_pins_node01_and_retains_internal_peer_contr
         assert "StrictHostKeyChecking=yes" in source, path.name
 
 
+def test_protected_release_remote_scripts_are_rendered_and_syntax_checked() -> None:
+    delimiters = {
+        "bootstrap-meta-ha.yml": "REMOTE_BOOTSTRAP",
+        "deploy.yml": "REMOTE_DEPLOY",
+        "provision-python-runtime-ha.yml": "REMOTE_PROVISION",
+    }
+    for name, delimiter in delimiters.items():
+        payload = yaml.safe_load((WORKFLOW_DIR / name).read_text(encoding="utf-8"))
+        run_steps = [
+            step["run"]
+            for job in payload["jobs"].values()
+            for step in job.get("steps", [])
+            if isinstance(step.get("run"), str)
+        ]
+        marker = f"<<'{delimiter}'\n"
+        run_script = next(script for script in run_steps if marker in script)
+        assert "/usr/bin/sed 's/^  //' >\"$REMOTE_SCRIPT\"" in run_script
+        assert '/bin/bash -n "$REMOTE_SCRIPT"' in run_script
+        assert '"${NODE01_SSH[@]}" "$REMOTE_COMMAND" <"$REMOTE_SCRIPT"' in run_script
+        remote_block = run_script.split(marker, 1)[1].split(f"\n{delimiter}\n", 1)[0]
+        remote_lines = remote_block.splitlines()
+        assert remote_lines
+        assert all(not line or line.startswith("  ") for line in remote_lines), name
+        rendered = "\n".join(line[2:] if line else "" for line in remote_lines) + "\n"
+        subprocess.run(
+            ["/bin/bash", "-n"],
+            input=rendered,
+            text=True,
+            check=True,
+            capture_output=True,
+        )
+
+
 def test_protected_release_transport_shell_and_host_pin_setup_are_executable(tmp_path: Path) -> None:
     for name in PROTECTED_RELEASE_TRANSPORT_WORKFLOWS:
         workflow = yaml.safe_load((WORKFLOW_DIR / name).read_text(encoding="utf-8"))

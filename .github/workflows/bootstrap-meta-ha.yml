@@ -295,6 +295,7 @@ jobs:
           install -d -m 0700 -- "$SSH_ROOT"
           cleanup_local_ssh() {
             set +e
+            unlink "$SSH_ROOT/remote-bootstrap.sh" 2>/dev/null || true
             unlink "$SSH_ROOT/node01.key" 2>/dev/null || true
             unlink "$SSH_ROOT/node01.known_hosts" 2>/dev/null || true
             rmdir "$SSH_ROOT" 2>/dev/null || true
@@ -419,8 +420,8 @@ jobs:
             REMOTE_COMMAND+=" $variable=$quoted"
           done
           REMOTE_COMMAND+=' /bin/bash --noprofile --norc -s'
-          /usr/bin/timeout --signal=TERM --kill-after=30s 6900 \
-            "${NODE01_SSH[@]}" "$REMOTE_COMMAND" <<'REMOTE_BOOTSTRAP'
+          REMOTE_SCRIPT="$SSH_ROOT/remote-bootstrap.sh"
+          /usr/bin/sed 's/^  //' >"$REMOTE_SCRIPT" <<'REMOTE_BOOTSTRAP'
             set -euo pipefail
             umask 077
             UPLOAD="/tmp/linasbot-meta-ha-bootstrap-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
@@ -596,3 +597,7 @@ jobs:
               *) exit 1 ;;
             esac
           REMOTE_BOOTSTRAP
+          /bin/chmod 0600 -- "$REMOTE_SCRIPT"
+          /bin/bash -n "$REMOTE_SCRIPT"
+          /usr/bin/timeout --signal=TERM --kill-after=30s 6900 \
+            "${NODE01_SSH[@]}" "$REMOTE_COMMAND" <"$REMOTE_SCRIPT"
