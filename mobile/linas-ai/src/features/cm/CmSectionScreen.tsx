@@ -131,12 +131,39 @@ function SectionBody({
 }
 
 export function CmSectionScreen({ section, proposalReview, onBack }: Props) {
+  if (section === 'ai_basics' || section === 'style' || section === 'dynamic_messages') {
+    return (
+      <AiBasicsSectionScreen proposalReview={proposalReview} onBack={onBack} />
+    );
+  }
+  return (
+    <StandardCmSectionScreen section={section} proposalReview={proposalReview} onBack={onBack} />
+  );
+}
+
+function AiBasicsSectionScreen({
+  proposalReview,
+  onBack,
+}: {
+  proposalReview?: CmProposalReview | null;
+  onBack?: () => void;
+}) {
+  const { tr } = useI18n();
+  return (
+    <ScreenChrome title={tr('aiSetupSec_ai_basics')} subtitle={tr('aiSetupBasicsSubtitle')} onBack={onBack}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
+        <AiBasicsComposite proposalReview={proposalReview} />
+      </ScrollView>
+    </ScreenChrome>
+  );
+}
+
+function StandardCmSectionScreen({ section, proposalReview, onBack }: Props) {
   const meta = getCmSection(section);
   const draft = useCmDraft(section, proposalReview);
   const { tr } = useI18n();
   const [savedFlash, setSavedFlash] = useState(false);
   const isAiLimits = section === 'ai_limits';
-  const isAiBasics = section === 'ai_basics' || section === 'style' || section === 'dynamic_messages';
   const isLanguagesRemoved = section === 'languages';
   const isRequests = section === 'requests_appointments';
 
@@ -146,16 +173,6 @@ export function CmSectionScreen({ section, proposalReview, onBack }: Props) {
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
     }
-  }
-
-  if (isAiBasics) {
-    return (
-      <ScreenChrome title={tr('aiSetupSec_ai_basics')} subtitle={tr('aiSetupBasicsSubtitle')} onBack={onBack}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
-          <AiBasicsComposite proposalReview={proposalReview} />
-        </ScrollView>
-      </ScreenChrome>
-    );
   }
 
   if (isLanguagesRemoved) {
