@@ -9,6 +9,7 @@ from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
 
+from services.cm.resource_attachment import ResourceAttachment
 from services.cm.schemas import CmBaseModel, LocalizedLabels
 
 CatalogItemType = Literal[
@@ -68,17 +69,8 @@ class ItemVariant(CmBaseModel):
     notes: str | None = None
 
 
-class CatalogAttachment(CmBaseModel):
+class CatalogAttachment(ResourceAttachment):
     """Media/link a service needs to share (bytes live in the CM media store)."""
-
-    id: str
-    kind: Literal["image", "file", "video", "link"] = "file"
-    caption: str = ""
-    mime: str = ""
-    filename: str = ""
-    size: int = Field(default=0, ge=0)
-    url: str = ""
-    duration_seconds: int | None = None
 
 
 class CatalogItem(CmBaseModel):

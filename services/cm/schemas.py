@@ -38,6 +38,7 @@ from services.cm.schemas_content import (  # noqa: F401
     LanguagePolicy,
     LocalizedLabels,
     PriceRecord,
+    ResourceAttachment,
     RestrictedPolicy,
     RestrictedTopic,
     ServiceRecord,
@@ -123,6 +124,7 @@ class OpeningHoursSchedule(CmBaseModel):
     saturday: OpeningHoursDay = Field(default_factory=OpeningHoursDay)
     sunday: OpeningHoursDay = Field(default_factory=OpeningHoursDay)
     notes: str | None = None
+    attachments: list[ArticleAttachment] = Field(default_factory=list)
 
     def summary_line(self) -> str:
         days = (
