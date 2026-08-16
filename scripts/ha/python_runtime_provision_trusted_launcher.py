@@ -196,8 +196,12 @@ def _verify_control(root: Path, expected: dict[str, Any]) -> None:
 def _run(control_root: Path, arguments: list[str]) -> int:
     sys.path.insert(0, str(control_root))
     from scripts.ha.provision_python_runtime_ha import main
+    from scripts.ha.python_runtime_archive_contract import ProvisionError
 
-    return main(arguments)
+    try:
+        return main(arguments)
+    except ProvisionError as exc:
+        raise LaunchError(f"runtime transaction failed: {exc}") from None
 
 
 def _run_ingest(values: list[str]) -> int:

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import selectors
 import shlex
 import subprocess
@@ -32,6 +33,7 @@ SSH_OPTIONS: Final = (
     "-o",
     "StrictHostKeyChecking=yes",
 )
+SENSITIVE_PEER_VALUE_RE: Final = re.compile(r"(?i)\b(authorization|cookie|key|password|secret|token)\s*[:=]\s*\S+")
 REMOTE_STAGE = r"""
 import fcntl,hashlib,json,os,posixpath,stat,sys,tarfile,tempfile
 from pathlib import Path,PurePosixPath
@@ -243,6 +245,14 @@ def _payload_chunks(
                 yield chunk
 
 
+def _peer_failure_detail(stderr: bytes) -> str:
+    decoded = stderr.decode("utf-8", "replace")
+    lines = [line.strip() for line in decoded.splitlines() if line.strip()]
+    detail = lines[-1] if lines else "no diagnostic detail"
+    detail = "".join(character if 32 <= ord(character) < 127 else "?" for character in detail)
+    return SENSITIVE_PEER_VALUE_RE.sub(r"\1=[REDACTED]", detail)[:400]
+
+
 def _bounded_pump(command: list[str], chunks: Iterable[bytes], *, timeout: int) -> tuple[int, bytes, bytes]:
     process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     assert process.stdin is not None and process.stdout is not None and process.stderr is not None
@@ -375,7 +385,7 @@ def stage_peer(paths: state.ProvisionPaths, plan: dict[str, object], plan_sha256
     )
     returncode, stdout, stderr = _bounded_pump(command, _payload_chunks(plan_raw, files, evidence), timeout=600)
     if returncode:
-        raise archive.ProvisionError(f"peer authority staging failed: {stderr.decode('utf-8', 'replace')[:400]}")
+        raise archive.ProvisionError(f"peer authority staging failed: {_peer_failure_detail(stderr)}")
     expected_ack = {
         "schema": 1,
         "status": "staged",
@@ -415,7 +425,7 @@ def call_peer(
         timeout=timeout,
     )
     if result.returncode:
-        raise archive.ProvisionError(f"peer runtime operation failed: {result.stderr.decode('utf-8', 'replace')[:400]}")
+        raise archive.ProvisionError(f"peer runtime operation failed: {_peer_failure_detail(result.stderr)}")
     try:
         payload = json.loads(result.stdout.decode("utf-8", "strict"))
     except (UnicodeError, json.JSONDecodeError) as exc:

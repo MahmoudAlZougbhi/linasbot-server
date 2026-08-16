@@ -27,6 +27,7 @@ jobs:
           curl --fail --location --proto '=https' --tlsv1.2 \
             --output "$archive" "$LINAS_PYTHON_RUNTIME_URL"
           echo "$LINAS_PYTHON_RUNTIME_SHA256  $archive" | sha256sum --check --strict
+          python3 -B -c 'import sys; from pathlib import Path; from scripts.ha.python_runtime_archive_contract import verify_runtime_archive_layout; verify_runtime_archive_layout(Path(sys.argv[1]))' "$archive"
           if tar -tzf "$archive" | awk '
             $0 !~ /^python\// || $0 ~ /(^|\/)\.\.(\/|$)/ || $0 ~ /^\// { bad=1 }
             END { exit bad ? 0 : 1 }
@@ -260,6 +261,24 @@ jobs:
           runtime_archive="$RUNNER_TEMP/linas-downloaded-backend/$LINAS_PYTHON_RUNTIME_NAME"
           runtime="$RUNNER_TEMP/linas-release-cpython-3.13.15"
           echo "$LINAS_PYTHON_RUNTIME_SHA256  $runtime_archive" | sha256sum --check --strict
+          python3 -B -c 'import sys; from pathlib import Path; from scripts.ha.python_runtime_archive_contract import verify_runtime_archive_layout; verify_runtime_archive_layout(Path(sys.argv[1]))' "$runtime_archive"
+          production_contract_root="$RUNNER_TEMP/linas-production-runtime-contract"
+          test ! -e "$production_contract_root"
+          sudo -n /usr/bin/install -d -m 0755 -o root -g root "$production_contract_root"
+          sudo -n /usr/bin/install -m 0600 -o root -g root \
+            "$runtime_archive" "$production_contract_root/$LINAS_PYTHON_RUNTIME_NAME"
+          sudo -n /usr/bin/env -i \
+            HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+            /usr/bin/python3 -B -I -S -c '
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, sys.argv[1])
+          from scripts.ha.python_runtime_archive_contract import extract_runtime_archive, verify_runtime_before_use
+          extract_runtime_archive(Path(sys.argv[2]), Path(sys.argv[3]))
+          verify_runtime_before_use(Path(sys.argv[3]))
+          ' "$GITHUB_WORKSPACE" \
+            "$production_contract_root/$LINAS_PYTHON_RUNTIME_NAME" \
+            "$production_contract_root/runtime"
           if tar -tzf "$runtime_archive" | awk '
             $0 !~ /^python\// || $0 ~ /(^|\/)\.\.(\/|$)/ || $0 ~ /^\// { bad=1 }
             END { exit bad ? 0 : 1 }
@@ -355,6 +374,7 @@ jobs:
           curl --fail --location --proto '=https' --tlsv1.2 \
             --output "$archive" "$LINAS_PYTHON_RUNTIME_URL"
           echo "$LINAS_PYTHON_RUNTIME_SHA256  $archive" | sha256sum --check --strict
+          python3 -B -c 'import sys; from pathlib import Path; from scripts.ha.python_runtime_archive_contract import verify_runtime_archive_layout; verify_runtime_archive_layout(Path(sys.argv[1]))' "$archive"
           if tar -tzf "$archive" | awk '
             $0 !~ /^python\// || $0 ~ /(^|\/)\.\.(\/|$)/ || $0 ~ /^\// { bad=1 }
             END { exit bad ? 0 : 1 }
