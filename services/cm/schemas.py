@@ -22,6 +22,7 @@ from services.cm.schemas_content import (  # noqa: F401
     ArticleAttachment,
     ArticleRecord,
     Audience,
+    BranchAttachment,
     BranchDaySchedule,
     BranchHours,
     BranchRecord,

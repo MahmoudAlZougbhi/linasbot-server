@@ -154,6 +154,18 @@ class BranchWeeklySchedule(CmBaseModel):
         return f"{head}: " + "; ".join(parts) if head else "; ".join(parts)
 
 
+class BranchAttachment(CmBaseModel):
+    """Image, video, file, or link on a branch. Bytes live in the CM media store."""
+
+    id: str
+    kind: Literal["image", "video", "file", "link"] = "file"
+    caption: str = ""
+    mime: str = ""
+    filename: str = ""
+    size: int = Field(default=0, ge=0)
+    url: str = ""
+
+
 class BranchRecord(CmBaseModel):
     id: str
     labels: LocalizedLabels = Field(default_factory=LocalizedLabels)
@@ -167,6 +179,7 @@ class BranchRecord(CmBaseModel):
     weekly_schedule: BranchWeeklySchedule = Field(default_factory=BranchWeeklySchedule)
     available: bool = True
     notes: str | None = None
+    attachments: list[BranchAttachment] = Field(default_factory=list)
 
     def composed_address(self) -> str:
         parts = [p.strip() for p in (self.street, self.building, self.floor, self.country) if p and p.strip()]

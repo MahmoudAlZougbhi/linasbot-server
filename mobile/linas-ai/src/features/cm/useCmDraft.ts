@@ -74,16 +74,17 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
     });
   }, []);
 
-  const save = useCallback(async () => {
+  const save = useCallback(async (override?: Record<string, unknown>) => {
     if (!etag) {
       setError('Missing ETag — reload before saving.');
       return false;
     }
+    const body = override ?? payload;
     setSaving(true);
     setError(null);
     setConflict(null);
     try {
-      const draft = await putCmDraft(section, payload, etag);
+      const draft = await putCmDraft(section, body, etag);
       setPayloadState(sanitizeCmSectionPayload(section, draft.payload));
       setEtag(draft.etag);
       setDirty(false);

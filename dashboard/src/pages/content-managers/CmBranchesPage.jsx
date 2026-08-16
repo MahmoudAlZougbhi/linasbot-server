@@ -1,28 +1,28 @@
 import { useState } from "react";
 import { PlusIcon } from "@heroicons/react/24/outline";
+import { CmArticleAttachments } from "./CmArticleAttachments";
+import { CmBranchHoursFields, emptyHours, emptyWeeklySchedule } from "./CmBranchHoursFields";
 import CmSectionShell from "./CmSectionShell";
 import { asRecord, asRecordList, emptyLabels, newId, primaryLabel } from "./cmDraftHelpers";
 import { useCmSectionDraft } from "./useCmSectionDraft";
 
 const FIELD_CLASS = "w-full rounded-xl border border-slate-200 px-3 py-2 text-sm";
-const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
-
-const emptyHours = () => ({
-  monday: "",
-  tuesday: "",
-  wednesday: "",
-  thursday: "",
-  friday: "",
-  saturday: "",
-  sunday: "",
-  summary: "",
-});
 
 const CmBranchesPage = () => {
   const draft = useCmSectionDraft("branches");
   const items = asRecordList(draft.payload.items);
   const [selectedId, setSelectedId] = useState(/** @type {string | null} */ (null));
+  const [query, setQuery] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkTitle, setLinkTitle] = useState("");
   const selected = items.find((item) => String(item.id) === selectedId) || items[0] || null;
+  const visible = items.filter((item) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    const name = primaryLabel(item.labels).toLowerCase();
+    const address = String(item.address || "").toLowerCase();
+    return name.includes(q) || address.includes(q);
+  });
 
   /**
    * @param {Array<Record<string, unknown>>} next
@@ -36,9 +36,12 @@ const CmBranchesPage = () => {
         id,
         labels: emptyLabels(),
         address: "",
+        maps_url: "",
         hours: emptyHours(),
+        weekly_schedule: emptyWeeklySchedule(),
         available: true,
         notes: null,
+        attachments: [],
       },
       ...items,
     ]);
@@ -47,16 +50,16 @@ const CmBranchesPage = () => {
 
   /**
    * @param {string} id
-   * @param {Record<string, unknown>} patch
+   * @param {Record<string, unknown>} data
    */
-  const patch = (id, patch) => setItems(items.map((item) => (String(item.id) === id ? { ...item, ...patch } : item)));
+  const patch = (id, data) => setItems(items.map((item) => (String(item.id) === id ? { ...item, ...data } : item)));
 
-  const hours = asRecord(selected?.hours);
+  const attachments = Array.isArray(selected?.attachments) ? selected.attachments : [];
 
   return (
     <CmSectionShell
-      title="Branches & Hours"
-      description="Locations, addresses, and weekly opening hours recovered from your existing data. Blank fields mean no proven value was found — nothing is invented."
+      title="Locations & hours"
+      description="Manage every branch in one place. Each branch keeps its own details, hours, and media & files."
       countLabel={`${items.length} branches`}
       loading={draft.loading}
       dirty={draft.dirty}
@@ -69,58 +72,48 @@ const CmBranchesPage = () => {
       onSave={() => void draft.save()}
       onValidate={() => void draft.validate()}
     >
-      <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 space-y-2">
-        <label className="block space-y-1">
-          <span className="text-sm font-medium text-slate-800">Location policy</span>
-          <p className="text-xs text-slate-500">
-            Branch routing rules and location guidance recovered from Knowledge. Blank means nothing proven was found — nothing is invented.
-          </p>
-          <textarea
-            className={FIELD_CLASS}
-            rows={6}
-            value={String(draft.payload.policy_text || "")}
-            onChange={(e) => draft.setPayload({ ...draft.payload, policy_text: e.target.value })}
-          />
-        </label>
-      </div>
-      <div className="mb-3">
-        <button type="button" onClick={add} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm text-white">
+      <div className="mb-3 flex flex-wrap gap-2">
+        <button type="button" onClick={add} className="inline-flex items-center gap-2 rounded-lg bg-teal-800 px-3 py-2 text-sm text-white">
           <PlusIcon className="w-4 h-4" /> Add branch
         </button>
+        <input
+          className={`${FIELD_CLASS} max-w-sm`}
+          placeholder="Search branches"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
       </div>
       <div className="grid lg:grid-cols-5 gap-4">
         <ul className="lg:col-span-2 space-y-2">
-          {items.map((item) => (
+          {visible.map((item) => (
             <li key={String(item.id)}>
               <button
                 type="button"
                 onClick={() => setSelectedId(String(item.id))}
                 className={`w-full text-left rounded-xl border px-3 py-3 ${
-                  selected && String(selected.id) === String(item.id) ? "border-slate-900 bg-slate-50" : "border-slate-200 bg-white"
+                  selected && String(selected.id) === String(item.id) ? "border-teal-800 bg-teal-50" : "border-slate-200 bg-white"
                 }`}
               >
                 <div className="font-medium text-sm">{primaryLabel(item.labels) || String(item.id)}</div>
-                <div className="text-xs text-slate-500 mt-1 truncate">{String(item.address || "No address on file")}</div>
+                <div className="text-xs text-slate-500 mt-1 truncate">{String(item.address || "No address")}</div>
               </button>
             </li>
           ))}
         </ul>
         {selected ? (
           <div className="lg:col-span-3 rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
-            {["en", "ar", "fr"].map((lang) => (
-              <label key={lang} className="block space-y-1">
-                <span className="text-sm font-medium">Branch name ({lang})</span>
-                <input
-                  className={FIELD_CLASS}
-                  value={String(asRecord(selected.labels)[lang] || "")}
-                  onChange={(e) =>
-                    patch(String(selected.id), {
-                      labels: { ...emptyLabels(), ...asRecord(selected.labels), [lang]: e.target.value },
-                    })
-                  }
-                />
-              </label>
-            ))}
+            <label className="block space-y-1">
+              <span className="text-sm font-medium">Branch name</span>
+              <input
+                className={FIELD_CLASS}
+                value={String(asRecord(selected.labels).en || "")}
+                onChange={(e) =>
+                  patch(String(selected.id), {
+                    labels: { ...emptyLabels(), ...asRecord(selected.labels), en: e.target.value },
+                  })
+                }
+              />
+            </label>
             <label className="block space-y-1">
               <span className="text-sm font-medium">Address</span>
               <textarea
@@ -130,45 +123,17 @@ const CmBranchesPage = () => {
                 onChange={(e) => patch(String(selected.id), { address: e.target.value })}
               />
             </label>
-            <div className="grid sm:grid-cols-2 gap-2">
-              {DAYS.map((day) => (
-                <label key={day} className="block space-y-1">
-                  <span className="text-sm font-medium capitalize">{day}</span>
-                  <input
-                    className={FIELD_CLASS}
-                    value={String(hours[day] || "")}
-                    onChange={(e) =>
-                      patch(String(selected.id), {
-                        hours: { ...emptyHours(), ...hours, [day]: e.target.value },
-                      })
-                    }
-                    placeholder="e.g. 10:00-19:00 or Closed"
-                  />
-                </label>
-              ))}
-            </div>
             <label className="block space-y-1">
-              <span className="text-sm font-medium">Hours summary</span>
+              <span className="text-sm font-medium">Map link</span>
               <input
                 className={FIELD_CLASS}
-                value={String(hours.summary || "")}
-                onChange={(e) =>
-                  patch(String(selected.id), {
-                    hours: { ...emptyHours(), ...hours, summary: e.target.value },
-                  })
-                }
+                value={String(selected.maps_url || "")}
+                onChange={(e) => patch(String(selected.id), { maps_url: e.target.value })}
+                placeholder="https://maps.google.com/…"
               />
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={selected.available !== false}
-                onChange={(e) => patch(String(selected.id), { available: e.target.checked })}
-              />
-              Branch available
             </label>
             <label className="block space-y-1">
-              <span className="text-sm font-medium">Branch notes</span>
+              <span className="text-sm font-medium">Branch note</span>
               <textarea
                 className={FIELD_CLASS}
                 rows={3}
@@ -176,6 +141,67 @@ const CmBranchesPage = () => {
                 onChange={(e) => patch(String(selected.id), { notes: e.target.value })}
               />
             </label>
+            <div className="space-y-1">
+              <span className="text-sm font-medium">Weekly hours</span>
+              <CmBranchHoursFields
+                schedule={asRecord(selected.weekly_schedule)}
+                onChange={(weekly_schedule) => patch(String(selected.id), { weekly_schedule })}
+              />
+            </div>
+            <CmArticleAttachments
+              attachments={attachments}
+              onChange={(next) => patch(String(selected.id), { attachments: next })}
+            />
+            <div className="flex gap-2">
+              <input
+                className={FIELD_CLASS}
+                placeholder="Link title"
+                value={linkTitle}
+                onChange={(e) => setLinkTitle(e.target.value)}
+              />
+              <input
+                className={FIELD_CLASS}
+                placeholder="https://…"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+              />
+              <button
+                type="button"
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm shrink-0"
+                onClick={() => {
+                  const url = linkUrl.trim();
+                  if (!url) return;
+                  patch(String(selected.id), {
+                    attachments: [
+                      ...attachments,
+                      {
+                        id: newId("link"),
+                        kind: "link",
+                        filename: linkTitle.trim() || url,
+                        url,
+                        caption: "",
+                        mime: "",
+                        size: 0,
+                      },
+                    ],
+                  });
+                  setLinkUrl("");
+                  setLinkTitle("");
+                }}
+              >
+                Add link
+              </button>
+            </div>
+            <button
+              type="button"
+              className="text-red-600 text-sm"
+              onClick={() => {
+                setItems(items.filter((item) => String(item.id) !== String(selected.id)));
+                setSelectedId(null);
+              }}
+            >
+              Delete branch
+            </button>
           </div>
         ) : (
           <p className="lg:col-span-3 text-sm text-slate-500">No branches yet.</p>
