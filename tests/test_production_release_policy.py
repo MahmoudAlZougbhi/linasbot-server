@@ -18,6 +18,7 @@ ALL_WORKFLOWS = frozenset(
     {
         "cm-linas-content-audit.yml",
         "cm-production-cutover.yml",
+        "bootstrap-meta-ha.yml",
         "copilot-v2-flags-apply.yml",
         "dashboard-auth-secret-apply.yml",
         "deploy.yml",
@@ -58,6 +59,7 @@ REMOTE_WORKFLOWS = frozenset(
     {
         "cm-linas-content-audit.yml",
         "cm-production-cutover.yml",
+        "bootstrap-meta-ha.yml",
         "deploy.yml",
         "instagram-login-secrets-apply.yml",
         "meta-app-a-login-config-apply.yml",
@@ -225,7 +227,7 @@ def test_every_non_release_workflow_is_free_of_application_release_mutations() -
 
 
 def test_non_release_remote_workflows_cannot_add_source_transport() -> None:
-    allowed_scp = {"deploy.yml", "provision-python-runtime-ha.yml"}
+    allowed_scp = {"bootstrap-meta-ha.yml", "deploy.yml", "provision-python-runtime-ha.yml"}
     for name in REMOTE_WORKFLOWS - {"deploy.yml"}:
         source = (WORKFLOW_DIR / name).read_text(encoding="utf-8")
         if name not in allowed_scp:

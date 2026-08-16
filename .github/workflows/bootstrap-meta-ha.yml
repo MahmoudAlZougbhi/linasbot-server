@@ -1,0 +1,477 @@
+name: Bootstrap Protected Meta HA Contract
+
+on:
+  workflow_dispatch:
+    inputs:
+      OPERATION:
+        description: "Exact receipt-bound bootstrap operation"
+        required: true
+        type: choice
+        options: [probe, install-lb, plan, apply, rollback-interrupted, recovery-status, recover-decided]
+      TARGET_SHA:
+        description: "Exact main/QG SHA that provisioned the retained runtime authority"
+        required: true
+        type: string
+      RUNTIME_TRANSACTION_ID:
+        description: "Exact committed pyr_<32hex> runtime transaction"
+        required: true
+        type: string
+      RUNTIME_PLAN_SHA256:
+        description: "Exact committed Python runtime provision plan SHA-256"
+        required: true
+        type: string
+      RUNTIME_ARTIFACT_ID:
+        description: "Exact QG release artifact ID retained by runtime provisioning"
+        required: true
+        type: string
+      RUNTIME_ARTIFACT_API_SHA256:
+        description: "Exact bare GitHub artifact REST SHA-256"
+        required: true
+        type: string
+      EXPECTED_NODE01_SHA:
+        description: "Probe/plan/apply: exact serving node01 baseline SHA"
+        required: false
+        type: string
+      EXPECTED_NODE02_SHA:
+        description: "Probe/plan/apply: exact serving node02 baseline SHA"
+        required: false
+        type: string
+      EXPECTED_PG_STATE_SHA256:
+        description: "Plan/apply: exact digest emitted by probe"
+        required: false
+        type: string
+      LB_ATTESTATION_BASE64:
+        description: "Install only: strict base64 of canonical fresh owner-workstation attestation"
+        required: false
+        type: string
+      LB_ATTESTATION_SHA256:
+        description: "Install/plan/apply: exact attestation artifact SHA-256"
+        required: false
+        type: string
+      LB_READY_PROJECTION_SHA256:
+        description: "Install/plan/apply: exact reviewed /api/ready projection SHA-256"
+        required: false
+        type: string
+      BOOTSTRAP_PLAN_SHA256:
+        description: "Apply/rollback-interrupted: exact plan digest emitted by plan"
+        required: false
+        type: string
+      BOOTSTRAP_TRANSACTION_ID:
+        description: "Rollback-interrupted: exact 32hex bootstrap transaction ID"
+        required: false
+        type: string
+      BOOTSTRAP_JOURNAL_SHA256:
+        description: "Recover only: exact digest emitted by recovery-status"
+        required: false
+        type: string
+      CONFIRMATION:
+        description: "Install/apply/recover: exact digest-bound confirmation"
+        required: false
+        type: string
+      PROTECTION_CONFIRM:
+        description: "Type I_CONFIRMED_META_SOCIAL_CUTOVER_HAS_REQUIRED_REVIEWERS"
+        required: true
+        type: string
+
+concurrency:
+  group: meta-social-cutover
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  bootstrap:
+    name: Receipt-Bound Two-Node Bootstrap Transaction
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    environment: meta-social-cutover
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout reviewed workflow trust bridge only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Gate protected operation and closed input contract
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPERATION: ${{ inputs.OPERATION }}
+          TARGET_SHA: ${{ inputs.TARGET_SHA }}
+          RUNTIME_TRANSACTION_ID: ${{ inputs.RUNTIME_TRANSACTION_ID }}
+          RUNTIME_PLAN_SHA256: ${{ inputs.RUNTIME_PLAN_SHA256 }}
+          RUNTIME_ARTIFACT_ID: ${{ inputs.RUNTIME_ARTIFACT_ID }}
+          RUNTIME_ARTIFACT_API_SHA256: ${{ inputs.RUNTIME_ARTIFACT_API_SHA256 }}
+          EXPECTED_NODE01_SHA: ${{ inputs.EXPECTED_NODE01_SHA }}
+          EXPECTED_NODE02_SHA: ${{ inputs.EXPECTED_NODE02_SHA }}
+          EXPECTED_PG_STATE_SHA256: ${{ inputs.EXPECTED_PG_STATE_SHA256 }}
+          LB_ATTESTATION_BASE64: ${{ inputs.LB_ATTESTATION_BASE64 }}
+          LB_ATTESTATION_SHA256: ${{ inputs.LB_ATTESTATION_SHA256 }}
+          LB_READY_PROJECTION_SHA256: ${{ inputs.LB_READY_PROJECTION_SHA256 }}
+          BOOTSTRAP_PLAN_SHA256: ${{ inputs.BOOTSTRAP_PLAN_SHA256 }}
+          BOOTSTRAP_TRANSACTION_ID: ${{ inputs.BOOTSTRAP_TRANSACTION_ID }}
+          BOOTSTRAP_JOURNAL_SHA256: ${{ inputs.BOOTSTRAP_JOURNAL_SHA256 }}
+          CONFIRMATION: ${{ inputs.CONFIRMATION }}
+          PROTECTION_CONFIRM: ${{ inputs.PROTECTION_CONFIRM }}
+          META_HA_PROTECTED_ENVIRONMENT_APPROVED: ${{ vars.META_HA_PROTECTED_ENVIRONMENT_APPROVED }}
+          DISPATCH_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$RUNTIME_TRANSACTION_ID" =~ ^pyr_[0-9a-f]{32}$ ]]
+          [[ "$RUNTIME_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$RUNTIME_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$RUNTIME_ARTIFACT_API_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [ "$RUNTIME_PLAN_SHA256" != "$(printf '%064d' 0)" ]
+          [ "$RUNTIME_ARTIFACT_API_SHA256" != "$(printf '%064d' 0)" ]
+          [ "$PROTECTION_CONFIRM" = "I_CONFIRMED_META_SOCIAL_CUTOVER_HAS_REQUIRED_REVIEWERS" ]
+          [ "$META_HA_PROTECTED_ENVIRONMENT_APPROVED" = true ]
+          case "$OPERATION" in
+            probe | install-lb | plan | apply) [ "$TARGET_SHA" = "$DISPATCH_SHA" ] ;;
+            rollback-interrupted | recovery-status | recover-decided) ;;
+            *) exit 1 ;;
+          esac
+
+          REQUIRED_REVIEWERS="$(gh api "repos/$GITHUB_REPOSITORY/environments/meta-social-cutover" \
+            --jq '[.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[]?] | length')"
+          PREVENT_SELF_REVIEW="$(gh api "repos/$GITHUB_REPOSITORY/environments/meta-social-cutover" \
+            --jq '[.protection_rules[]? | select(.type == "required_reviewers") | .prevent_self_review] | all')"
+          [[ "$REQUIRED_REVIEWERS" =~ ^[1-9][0-9]*$ ]]
+          [ "$PREVENT_SELF_REVIEW" = true ]
+
+          if [ "$OPERATION" = probe ]; then
+            [[ "$EXPECTED_NODE01_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$EXPECTED_NODE02_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [ -z "$EXPECTED_PG_STATE_SHA256$LB_ATTESTATION_BASE64$LB_ATTESTATION_SHA256" ]
+            [ -z "$LB_READY_PROJECTION_SHA256$BOOTSTRAP_PLAN_SHA256$BOOTSTRAP_TRANSACTION_ID" ]
+            [ -z "$BOOTSTRAP_JOURNAL_SHA256$CONFIRMATION" ]
+          elif [ "$OPERATION" = install-lb ]; then
+            [[ "$LB_ATTESTATION_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            [[ "$LB_READY_PROJECTION_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            [ -n "$LB_ATTESTATION_BASE64" ]
+            LB_PREFIX="${LB_ATTESTATION_SHA256:0:16}"
+            READY_PREFIX="${LB_READY_PROJECTION_SHA256:0:16}"
+            [ "$CONFIRMATION" = "INSTALL_BOOTSTRAP_LB_READY_${LB_PREFIX^^}_${READY_PREFIX^^}" ]
+            [ -z "$EXPECTED_NODE01_SHA$EXPECTED_NODE02_SHA$EXPECTED_PG_STATE_SHA256" ]
+            [ -z "$BOOTSTRAP_PLAN_SHA256$BOOTSTRAP_TRANSACTION_ID$BOOTSTRAP_JOURNAL_SHA256" ]
+          elif [ "$OPERATION" = plan ] || [ "$OPERATION" = apply ]; then
+            [[ "$EXPECTED_NODE01_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$EXPECTED_NODE02_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$EXPECTED_PG_STATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            [[ "$LB_ATTESTATION_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            [[ "$LB_READY_PROJECTION_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            [ -z "$LB_ATTESTATION_BASE64$BOOTSTRAP_TRANSACTION_ID$BOOTSTRAP_JOURNAL_SHA256" ]
+            if [ "$OPERATION" = apply ]; then
+              [[ "$BOOTSTRAP_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]]
+              PLAN_PREFIX="${BOOTSTRAP_PLAN_SHA256:0:16}"
+              [ "$CONFIRMATION" = "BOOTSTRAP_META_HA_${PLAN_PREFIX^^}_AND_ROTATE_EXPOSED_CREDENTIALS" ]
+            else
+              [ -z "$BOOTSTRAP_PLAN_SHA256$CONFIRMATION" ]
+            fi
+          elif [ "$OPERATION" = rollback-interrupted ]; then
+            [[ "$BOOTSTRAP_TRANSACTION_ID" =~ ^[0-9a-f]{32}$ ]]
+            [[ "$BOOTSTRAP_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            TX_PREFIX="${BOOTSTRAP_TRANSACTION_ID:0:12}"
+            PLAN_PREFIX="${BOOTSTRAP_PLAN_SHA256:0:12}"
+            [ "$CONFIRMATION" = "ROLLBACK_META_HA_${TX_PREFIX^^}_${PLAN_PREFIX^^}" ]
+            [ -z "$EXPECTED_NODE01_SHA$EXPECTED_NODE02_SHA$EXPECTED_PG_STATE_SHA256" ]
+            [ -z "$LB_ATTESTATION_BASE64$LB_ATTESTATION_SHA256$LB_READY_PROJECTION_SHA256" ]
+            [ -z "$BOOTSTRAP_JOURNAL_SHA256" ]
+          elif [ "$OPERATION" = recovery-status ]; then
+            [ -z "$EXPECTED_NODE01_SHA$EXPECTED_NODE02_SHA$EXPECTED_PG_STATE_SHA256" ]
+            [ -z "$LB_ATTESTATION_BASE64$LB_ATTESTATION_SHA256$LB_READY_PROJECTION_SHA256" ]
+            [ -z "$BOOTSTRAP_PLAN_SHA256$BOOTSTRAP_TRANSACTION_ID$BOOTSTRAP_JOURNAL_SHA256$CONFIRMATION" ]
+          elif [ "$OPERATION" = recover-decided ]; then
+            [[ "$BOOTSTRAP_JOURNAL_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            [[ "$CONFIRMATION" =~ ^RECOVER_BOOTSTRAP_[0-9A-F]{12}_[0-9A-F]{12}_TO_(COMMIT|ROLLBACK)$ ]]
+            [ -z "$EXPECTED_NODE01_SHA$EXPECTED_NODE02_SHA$EXPECTED_PG_STATE_SHA256" ]
+            [ -z "$LB_ATTESTATION_BASE64$LB_ATTESTATION_SHA256$LB_READY_PROJECTION_SHA256" ]
+            [ -z "$BOOTSTRAP_PLAN_SHA256$BOOTSTRAP_TRANSACTION_ID" ]
+          else
+            exit 1
+          fi
+
+      - name: Stage exact hash-pinned workflow trust bridge
+        run: |
+          set -euo pipefail
+          umask 077
+          BRIDGE=scripts/ha/python_runtime_provision_workflow_bootstrap.py
+          EXPECTED=4618bde835b73cde2a646a029023e07b0bc2e62f360a88ef033f4275aa3f1612
+          test -f "$BRIDGE" && test ! -L "$BRIDGE"
+          [ "$(/usr/bin/sha256sum "$BRIDGE" | /usr/bin/awk '{print $1}')" = "$EXPECTED" ]
+          mkdir -m 0700 transfer
+          cp -- "$BRIDGE" transfer/workflow-bootstrap.py
+          chmod 0600 transfer/workflow-bootstrap.py
+          [ "$(/usr/bin/sha256sum transfer/workflow-bootstrap.py | /usr/bin/awk '{print $1}')" = "$EXPECTED" ]
+
+      - name: Decode exact bootstrap LB attestation
+        if: inputs.OPERATION == 'install-lb'
+        env:
+          LB_ATTESTATION_BASE64: ${{ inputs.LB_ATTESTATION_BASE64 }}
+          LB_ATTESTATION_SHA256: ${{ inputs.LB_ATTESTATION_SHA256 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          [ -d transfer ] && [ ! -L transfer ] && [ "$(stat -c '%a' transfer)" = 700 ]
+          python3 -B -I -S - "$LB_ATTESTATION_SHA256" transfer/lb-attestation.json <<'PY'
+          import base64
+          import hashlib
+          import json
+          import os
+          import sys
+
+          expected, destination = sys.argv[1:]
+          encoded = os.environ.get("LB_ATTESTATION_BASE64", "")
+          try:
+              raw = base64.b64decode(encoded, validate=True)
+          except ValueError as exc:
+              raise SystemExit("LB attestation is not strict base64") from exc
+          if not 1 <= len(raw) <= 131_072 or hashlib.sha256(raw).hexdigest() != expected:
+              raise SystemExit("LB attestation bytes differ from dispatch authority")
+          def no_duplicates(pairs):
+              result = {}
+              for key, value in pairs:
+                  if key in result:
+                      raise ValueError("duplicate JSON key")
+                  result[key] = value
+              return result
+          payload = json.loads(raw, object_pairs_hook=no_duplicates)
+          canonical = (json.dumps(payload, allow_nan=False, separators=(",", ":"), sort_keys=True) + "\n").encode()
+          if raw != canonical:
+              raise SystemExit("LB attestation is not canonical JSON")
+          descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+          try:
+              view = memoryview(raw)
+              while view:
+                  written = os.write(descriptor, view)
+                  if written < 1:
+                      raise SystemExit("LB attestation write stalled")
+                  view = view[written:]
+              os.fsync(descriptor)
+          finally:
+              os.close(descriptor)
+          PY
+
+      - name: Transfer exact bridge and bootstrap LB attestation
+        if: inputs.OPERATION == 'install-lb'
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "transfer/workflow-bootstrap.py,transfer/lb-attestation.json"
+          target: "/tmp/linasbot-meta-ha-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}"
+          strip_components: 1
+
+      - name: Transfer only the exact bootstrap workflow bridge
+        if: inputs.OPERATION != 'install-lb'
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "transfer/workflow-bootstrap.py"
+          target: "/tmp/linasbot-meta-ha-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}"
+          strip_components: 1
+
+      - name: Execute exact receipt-bound bootstrap operation
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
+        env:
+          OPERATION: ${{ inputs.OPERATION }}
+          TARGET_SHA: ${{ inputs.TARGET_SHA }}
+          RUNTIME_TRANSACTION_ID: ${{ inputs.RUNTIME_TRANSACTION_ID }}
+          RUNTIME_PLAN_SHA256: ${{ inputs.RUNTIME_PLAN_SHA256 }}
+          RUNTIME_ARTIFACT_ID: ${{ inputs.RUNTIME_ARTIFACT_ID }}
+          RUNTIME_ARTIFACT_API_SHA256: ${{ inputs.RUNTIME_ARTIFACT_API_SHA256 }}
+          EXPECTED_NODE01_SHA: ${{ inputs.EXPECTED_NODE01_SHA }}
+          EXPECTED_NODE02_SHA: ${{ inputs.EXPECTED_NODE02_SHA }}
+          EXPECTED_PG_STATE_SHA256: ${{ inputs.EXPECTED_PG_STATE_SHA256 }}
+          LB_ATTESTATION_SHA256: ${{ inputs.LB_ATTESTATION_SHA256 }}
+          LB_READY_PROJECTION_SHA256: ${{ inputs.LB_READY_PROJECTION_SHA256 }}
+          BOOTSTRAP_PLAN_SHA256: ${{ inputs.BOOTSTRAP_PLAN_SHA256 }}
+          BOOTSTRAP_TRANSACTION_ID: ${{ inputs.BOOTSTRAP_TRANSACTION_ID }}
+          BOOTSTRAP_JOURNAL_SHA256: ${{ inputs.BOOTSTRAP_JOURNAL_SHA256 }}
+          CONFIRMATION: ${{ inputs.CONFIRMATION }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 115m
+          envs: OPERATION,TARGET_SHA,RUNTIME_TRANSACTION_ID,RUNTIME_PLAN_SHA256,RUNTIME_ARTIFACT_ID,RUNTIME_ARTIFACT_API_SHA256,EXPECTED_NODE01_SHA,EXPECTED_NODE02_SHA,EXPECTED_PG_STATE_SHA256,LB_ATTESTATION_SHA256,LB_READY_PROJECTION_SHA256,BOOTSTRAP_PLAN_SHA256,BOOTSTRAP_TRANSACTION_ID,BOOTSTRAP_JOURNAL_SHA256,CONFIRMATION,WORKFLOW_RUN_ID,WORKFLOW_RUN_ATTEMPT
+          script: |
+            set -euo pipefail
+            umask 077
+            UPLOAD="/tmp/linasbot-meta-ha-bootstrap-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
+            BRIDGE_SOURCE="$UPLOAD/workflow-bootstrap.py"
+            TRUSTED_BRIDGE="/run/linas-meta-ha-bootstrap-workflow-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}.py"
+            TRUSTED_LB="/run/linas-meta-ha-bootstrap-lb-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}.json"
+            cleanup() {
+              set +e
+              sudo unlink "$TRUSTED_LB" 2>/dev/null || true
+              sudo unlink "$TRUSTED_BRIDGE" 2>/dev/null || true
+              unlink "$UPLOAD/lb-attestation.json" 2>/dev/null || true
+              unlink "$BRIDGE_SOURCE" 2>/dev/null || true
+              rmdir "$UPLOAD" 2>/dev/null || true
+            }
+            trap cleanup EXIT
+            SOURCE_UID="$(id -u)"
+            sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+              PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+              /usr/bin/python3 -B -I -S - "$BRIDGE_SOURCE" "$TRUSTED_BRIDGE" \
+              4618bde835b73cde2a646a029023e07b0bc2e62f360a88ef033f4275aa3f1612 "$SOURCE_UID" <<'PY'
+            import hashlib, os, re, stat, sys
+            from pathlib import Path
+            source, target, expected, uid = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], int(sys.argv[4])
+            if re.fullmatch(r"/run/linas-meta-ha-bootstrap-workflow-[1-9][0-9]*-[1-9][0-9]*\.py", str(target)) is None:
+                raise SystemExit("trusted workflow bridge target is invalid")
+            parent = target.parent.lstat()
+            if (not stat.S_ISDIR(parent.st_mode) or stat.S_ISLNK(parent.st_mode)
+                    or parent.st_uid != 0 or parent.st_gid != 0 or stat.S_IMODE(parent.st_mode) != 0o755):
+                raise SystemExit("trusted workflow bridge parent is unsafe")
+            before = source.lstat()
+            if (not stat.S_ISREG(before.st_mode) or stat.S_ISLNK(before.st_mode) or before.st_uid != uid
+                    or before.st_nlink != 1 or not 1 <= before.st_size <= 1024 * 1024
+                    or stat.S_IMODE(before.st_mode) != 0o600):
+                raise SystemExit("workflow bridge source is unsafe")
+            descriptor = os.open(source, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+            try:
+                opened = os.fstat(descriptor); chunks = []; consumed = 0
+                while consumed < opened.st_size:
+                    chunk = os.read(descriptor, min(1024 * 1024, opened.st_size - consumed))
+                    if not chunk: raise SystemExit("workflow bridge source is truncated")
+                    chunks.append(chunk); consumed += len(chunk)
+                after = os.fstat(descriptor); raw = b"".join(chunks)
+            finally:
+                os.close(descriptor)
+            identity = ("st_dev", "st_ino", "st_size", "st_mtime_ns")
+            if (any(getattr(before, key) != getattr(opened, key) for key in identity)
+                    or any(getattr(opened, key) != getattr(after, key) for key in identity)
+                    or hashlib.sha256(raw).hexdigest() != expected):
+                raise SystemExit("workflow bridge source changed")
+            output = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+            try:
+                os.fchmod(output, 0o600); os.fchown(output, 0, 0); view = memoryview(raw)
+                while view:
+                    written = os.write(output, view)
+                    if written < 1: raise SystemExit("workflow bridge write stalled")
+                    view = view[written:]
+                os.fsync(output)
+            finally:
+                os.close(output)
+            PY
+
+            run_bootstrap() {
+              sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+                PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+                /usr/bin/python3 -B -I -S "$TRUSTED_BRIDGE" bootstrap \
+                "$RUNTIME_TRANSACTION_ID" "$RUNTIME_PLAN_SHA256" \
+                "$RUNTIME_ARTIFACT_ID" "$RUNTIME_ARTIFACT_API_SHA256" "$TARGET_SHA" "$@"
+            }
+
+            COMMON_ARGS=(
+              --target-sha "$TARGET_SHA"
+              --expected-node01-sha "$EXPECTED_NODE01_SHA"
+              --expected-node02-sha "$EXPECTED_NODE02_SHA"
+              --expected-pg-state-sha256 "$EXPECTED_PG_STATE_SHA256"
+              --expected-lb-ready-sha256 "$LB_READY_PROJECTION_SHA256"
+              --expected-lb-attestation-sha256 "$LB_ATTESTATION_SHA256"
+              --lb-ready-attestation /var/lib/linasbot/meta-ha/lb-ready-bootstrap-attestation.json
+              --node01-hostname ubuntu-s-2vcpu-2gb-90gb-intel-lon1-01
+              --node01-public-ip 139.59.167.62
+              --node01-private-ip 10.106.0.3
+              --node02-hostname linas-app-lon1-02
+              --node02-public-ip 167.99.89.243
+              --node02-private-ip 10.106.0.4
+              --peer-host 10.106.0.4
+              --drain-seconds 30
+            )
+
+            case "$OPERATION" in
+              probe)
+                run_bootstrap cluster-probe --target-sha "$TARGET_SHA" \
+                  --expected-node01-sha "$EXPECTED_NODE01_SHA" \
+                  --expected-node02-sha "$EXPECTED_NODE02_SHA"
+                ;;
+              install-lb)
+                SOURCE="$UPLOAD/lb-attestation.json"
+                sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+                  PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+                  /usr/bin/python3 -B -I -S - "$SOURCE" "$TRUSTED_LB" \
+                  "$LB_ATTESTATION_SHA256" "$SOURCE_UID" <<'PY'
+            import hashlib, os, stat, sys
+            from pathlib import Path
+            source, target, expected, uid = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], int(sys.argv[4])
+            parent = target.parent.lstat()
+            if (not stat.S_ISDIR(parent.st_mode) or stat.S_ISLNK(parent.st_mode)
+                    or parent.st_uid != 0 or parent.st_gid != 0 or stat.S_IMODE(parent.st_mode) != 0o755):
+                raise SystemExit("trusted LB attestation parent is unsafe")
+            before = source.lstat()
+            if (not stat.S_ISREG(before.st_mode) or stat.S_ISLNK(before.st_mode)
+                    or before.st_uid != uid or before.st_nlink != 1 or before.st_size < 1
+                    or before.st_size > 131_072 or stat.S_IMODE(before.st_mode) & 0o022):
+                raise SystemExit("uploaded LB attestation is unsafe")
+            descriptor = os.open(source, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+            try:
+                opened = os.fstat(descriptor); chunks = []; consumed = 0
+                while consumed < opened.st_size:
+                    chunk = os.read(descriptor, min(131_072, opened.st_size - consumed))
+                    if not chunk: raise SystemExit("uploaded LB attestation is truncated")
+                    chunks.append(chunk); consumed += len(chunk)
+                after = os.fstat(descriptor); raw = b"".join(chunks)
+            finally:
+                os.close(descriptor)
+            if ((before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+                    != (opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns)
+                    or (opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns)
+                    != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+                    or len(raw) > 131_072 or hashlib.sha256(raw).hexdigest() != expected):
+                raise SystemExit("uploaded LB attestation changed")
+            output = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+            try:
+                os.fchmod(output, 0o600); os.fchown(output, 0, 0)
+                view = memoryview(raw)
+                while view:
+                    written = os.write(output, view)
+                    if written < 1:
+                        raise SystemExit("trusted LB attestation write stalled")
+                    view = view[written:]
+                os.fsync(output)
+            finally:
+                os.close(output)
+            PY
+                run_bootstrap install-lb-ready-attestation --target-sha "$TARGET_SHA" \
+                  --expected-attestation-sha256 "$LB_ATTESTATION_SHA256" \
+                  --expected-ready-sha256 "$LB_READY_PROJECTION_SHA256" \
+                  --confirm "$CONFIRMATION" <"$TRUSTED_LB"
+                ;;
+              plan)
+                run_bootstrap plan "${COMMON_ARGS[@]}"
+                ;;
+              apply)
+                run_bootstrap apply "${COMMON_ARGS[@]}" \
+                  --expected-plan-sha256 "$BOOTSTRAP_PLAN_SHA256" --confirm "$CONFIRMATION"
+                ;;
+              rollback-interrupted)
+                run_bootstrap recover-rollback --target-sha "$TARGET_SHA" \
+                  --tx-id "$BOOTSTRAP_TRANSACTION_ID" --plan-sha256 "$BOOTSTRAP_PLAN_SHA256" \
+                  --peer-host 10.106.0.4 --confirm "$CONFIRMATION"
+                ;;
+              recovery-status)
+                run_bootstrap recovery-status --target-sha "$TARGET_SHA"
+                ;;
+              recover-decided)
+                run_bootstrap recover-decided --journal-sha256 "$BOOTSTRAP_JOURNAL_SHA256" \
+                  --confirm "$CONFIRMATION"
+                ;;
+              *) exit 1 ;;
+            esac

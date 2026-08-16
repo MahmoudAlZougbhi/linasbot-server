@@ -2872,6 +2872,42 @@ def _combined_plan(args: argparse.Namespace) -> tuple[dict[str, Any], bytes, str
     return plan, source, source_sha
 
 
+def _cluster_probe(args: argparse.Namespace) -> int:
+    """Read one exact, receipt-bound two-node baseline before LB authorization."""
+
+    _validate_sha(args.target_sha, "bootstrap probe target SHA")
+    _validate_sha(args.expected_node01_sha, "node01 expected SHA")
+    _validate_sha(args.expected_node02_sha, "node02 expected SHA")
+    source, source_sha = _helper_source()
+    _assert_exact_helper(args.target_sha, source_sha)
+    node01 = _node_probe("node01", args.expected_node01_sha)
+    node02_raw = _remote(
+        FIXED_NODES["node01"]["peer_ip"],
+        source,
+        source_sha,
+        ["node-probe", "--node-id", "node02", "--expected-sha", args.expected_node02_sha],
+    )
+    node02 = json.loads(node02_raw)
+    if node01["runtime_authority"]["shared"] != node02["runtime_authority"]["shared"]:
+        raise RuntimeError("nodes do not share one identical committed Python runtime authority")
+    if node01["runtime_authority"]["shared"]["qg_target_sha"] != args.target_sha:
+        raise RuntimeError("bootstrap probe target differs from the authenticated QG release authority")
+    if node01["live_units"] != node02["live_units"]:
+        raise RuntimeError("nodes do not share one identical rollback-safe canonical unit baseline")
+    if node01["pg"] != node02["pg"]:
+        raise RuntimeError("nodes do not observe one identical authoritative PostgreSQL registry")
+    if _nested_evidence.portable_content_identity(
+        node01["nested_runtime"]
+    ) != _nested_evidence.portable_content_identity(node02["nested_runtime"]):
+        raise RuntimeError("nodes do not share one identical nested runtime authority")
+    print(f"target_sha={args.target_sha}")
+    print(f"node01_previous_sha={node01['previous_sha']}")
+    print(f"node02_previous_sha={node02['previous_sha']}")
+    print(f"postgres_state_sha256={node01['pg']['state_sha256']}")
+    print(f"python_runtime_plan_sha256={node01['runtime_authority']['shared']['plan_sha256']}")
+    return 0
+
+
 def _confirmation(plan_sha256: str) -> str:
     return f"BOOTSTRAP_META_HA_{plan_sha256[:16].upper()}_AND_ROTATE_EXPOSED_CREDENTIALS"
 
@@ -4822,6 +4858,13 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     plan = commands.add_parser("plan", help="read-only exact two-node/LB/PG plan")
     _common_orchestrator_args(plan)
+    cluster_probe = commands.add_parser(
+        "cluster-probe",
+        help="read-only exact two-node runtime and PostgreSQL baseline",
+    )
+    cluster_probe.add_argument("--target-sha", required=True)
+    cluster_probe.add_argument("--expected-node01-sha", required=True)
+    cluster_probe.add_argument("--expected-node02-sha", required=True)
     apply = commands.add_parser("apply", help="execute the confirmed one-time transaction")
     _common_orchestrator_args(apply)
     apply.add_argument("--expected-plan-sha256", required=True)
@@ -4887,6 +4930,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         if args.command in {
+            "cluster-probe",
             "plan",
             "apply",
             "install-lb-ready-attestation",
@@ -4897,6 +4941,8 @@ def main(argv: list[str] | None = None) -> int:
             _require_root()
             if args.command in {"plan", "apply"}:
                 _validate_explicit_topology(args)
+            elif args.command == "cluster-probe":
+                _validate_sha(args.target_sha, "bootstrap probe target SHA")
             elif args.command == "install-lb-ready-attestation":
                 _validate_sha(args.target_sha, "target SHA")
                 _, source_sha = _helper_source()
@@ -4905,6 +4951,8 @@ def main(argv: list[str] | None = None) -> int:
                 _validate_sha(args.target_sha, "target SHA")
             with _exclusive_lock():
                 _assert_authenticated_entry("node01")
+                if args.command == "cluster-probe":
+                    return _cluster_probe(args)
                 if args.command == "plan":
                     plan, _, _ = _combined_plan(args)
                     plan_sha = _digest(plan)

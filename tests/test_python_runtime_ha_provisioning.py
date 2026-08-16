@@ -817,6 +817,128 @@ def test_workflow_never_contacts_production_for_plan_or_dry_run() -> None:
         assert len(line.rsplit("@", 1)[1].strip()) == 40
 
 
+def _workflow_launcher_authority(tmp_path: Path) -> tuple[str, str, int, str, Path]:
+    tx_id = "pyr_" + "1" * 32
+    plan = {
+        "transaction_id": tx_id,
+        "qg_artifact_id": 123,
+        "qg_artifact_api_sha256": "2" * 64,
+        "qg_manifest_sha256": "3" * 64,
+        "qg_run_id": 456,
+        "qg_run_attempt": 1,
+        "qg_target_sha": "4" * 40,
+        "control_plane_archive_sha256": "5" * 64,
+        "control_plane_tree_sha256": "6" * 64,
+    }
+    plan_raw = workflow_bridge._canonical(plan)
+    plan_sha = hashlib.sha256(plan_raw).hexdigest()
+    authority = tmp_path / "python-runtime-transactions" / tx_id / "authority"
+    authority.mkdir(parents=True, mode=0o700)
+    for directory in (tmp_path, authority.parent.parent, authority.parent, authority):
+        directory.chmod(0o700)
+    (authority / "plan.json").write_bytes(plan_raw)
+    (authority / "plan.json").chmod(0o600)
+    key = f"{plan['qg_artifact_id']}-{plan['qg_artifact_api_sha256']}"
+    control = tmp_path / "python-runtime-provision-control" / key
+    launcher = control / "scripts/ha/python_runtime_provision_trusted_launcher.py"
+    launcher.parent.mkdir(parents=True, mode=0o700)
+    (tmp_path / "python-runtime-provision-control").chmod(0o700)
+    control.chmod(0o700)
+    launcher.write_bytes(b"trusted launcher\n")
+    launcher.chmod(0o600)
+    receipt = {
+        "schema": 1,
+        "format": "linas-python-runtime-launcher-v1",
+        "artifact_id": plan["qg_artifact_id"],
+        "artifact_api_sha256": plan["qg_artifact_api_sha256"],
+        "manifest_sha256": plan["qg_manifest_sha256"],
+        "run_id": plan["qg_run_id"],
+        "run_attempt": plan["qg_run_attempt"],
+        "target_sha": plan["qg_target_sha"],
+        "bundle_root": str(tmp_path / "release-bundles" / key),
+        "control_root": str(control),
+        "control_plane_archive_sha256": plan["control_plane_archive_sha256"],
+        "control_plane_tree_sha256": plan["control_plane_tree_sha256"],
+        "launcher_path": str(launcher),
+        "launcher_sha256": hashlib.sha256(launcher.read_bytes()).hexdigest(),
+        "launcher_size": launcher.stat().st_size,
+    }
+    receipt_path = tmp_path / "python-runtime-provision-launchers" / f"{key}.json"
+    receipt_path.parent.mkdir(parents=True, mode=0o700)
+    receipt_path.parent.chmod(0o700)
+    receipt_path.write_bytes(workflow_bridge._canonical(receipt))
+    receipt_path.chmod(0o600)
+    return tx_id, plan_sha, int(plan["qg_artifact_id"]), str(plan["qg_artifact_api_sha256"]), receipt_path
+
+
+def test_workflow_bootstrap_binds_plan_artifact_receipt_and_launcher_bytes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(workflow_bridge, "STATE_ROOT", tmp_path)
+    trusted_read = workflow_bridge._read
+    monkeypatch.setattr(
+        workflow_bridge,
+        "_read",
+        lambda path, _uid, maximum, **kwargs: trusted_read(path, os.getuid(), maximum, **kwargs),
+    )
+    trusted_directory = workflow_bridge._directory
+    monkeypatch.setattr(
+        workflow_bridge,
+        "_directory",
+        lambda path, mode, _uid, _gid, **kwargs: trusted_directory(path, mode, os.getuid(), os.getgid(), **kwargs),
+    )
+    tx_id, plan_sha, artifact_id, api_sha, _receipt = _workflow_launcher_authority(tmp_path)
+    tx_root, launcher, verified = workflow_bridge._launcher_authority(
+        tx_id,
+        expected_plan_sha256=plan_sha,
+        expected_artifact_id=artifact_id,
+        expected_artifact_api_sha256=api_sha,
+        expected_target_sha="4" * 40,
+    )
+    assert tx_root == tmp_path / "python-runtime-transactions" / tx_id
+    assert launcher.read_bytes() == b"trusted launcher\n"
+    assert verified == plan_sha
+
+
+@pytest.mark.parametrize("mismatch", ["plan", "artifact-id", "artifact-api", "target", "receipt", "launcher"])
+def test_workflow_bootstrap_rejects_mismatched_authority_before_exec(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mismatch: str
+) -> None:
+    monkeypatch.setattr(workflow_bridge, "STATE_ROOT", tmp_path)
+    trusted_read = workflow_bridge._read
+    monkeypatch.setattr(
+        workflow_bridge,
+        "_read",
+        lambda path, _uid, maximum, **kwargs: trusted_read(path, os.getuid(), maximum, **kwargs),
+    )
+    trusted_directory = workflow_bridge._directory
+    monkeypatch.setattr(
+        workflow_bridge,
+        "_directory",
+        lambda path, mode, _uid, _gid, **kwargs: trusted_directory(path, mode, os.getuid(), os.getgid(), **kwargs),
+    )
+    tx_id, plan_sha, artifact_id, api_sha, receipt_path = _workflow_launcher_authority(tmp_path)
+    expected_plan = "9" * 64 if mismatch == "plan" else plan_sha
+    expected_id = artifact_id + 1 if mismatch == "artifact-id" else artifact_id
+    expected_api = "8" * 64 if mismatch == "artifact-api" else api_sha
+    expected_target = "8" * 40 if mismatch == "target" else "4" * 40
+    if mismatch in {"receipt", "launcher"}:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        if mismatch == "receipt":
+            receipt["target_sha"] = "7" * 40
+        else:
+            receipt["launcher_sha256"] = "7" * 64
+        receipt_path.write_bytes(workflow_bridge._canonical(receipt))
+    with pytest.raises(workflow_bridge.BootstrapError):
+        workflow_bridge._launcher_authority(
+            tx_id,
+            expected_plan_sha256=expected_plan,
+            expected_artifact_id=expected_id,
+            expected_artifact_api_sha256=expected_api,
+            expected_target_sha=expected_target,
+        )
+
+
 @pytest.mark.parametrize(
     "name",
     ["python-runtime-provision.active", "python-runtime-provision.coordinator.json"],

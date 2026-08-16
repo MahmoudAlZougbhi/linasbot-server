@@ -301,10 +301,11 @@ def _prepare(values: list[str]) -> int:
     return 0
 
 
-def _invoke(command: list[str]) -> str:
+def _invoke(command: list[str], *, input_bytes: bytes | None = None) -> str:
     result = subprocess.run(
         command,
-        stdin=subprocess.DEVNULL,
+        input=input_bytes,
+        stdin=subprocess.DEVNULL if input_bytes is None else None,
         capture_output=True,
         check=False,
         timeout=3600,
@@ -313,6 +314,85 @@ def _invoke(command: list[str]) -> str:
     if result.returncode:
         raise BootstrapError(f"trusted child failed: {result.stderr.decode('utf-8', 'replace')[:400]}")
     return result.stdout.decode("utf-8", "strict")
+
+
+def _launcher_authority(
+    tx_id: str,
+    *,
+    expected_plan_sha256: str | None = None,
+    expected_artifact_id: int | None = None,
+    expected_artifact_api_sha256: str | None = None,
+    expected_target_sha: str | None = None,
+) -> tuple[Path, Path, str]:
+    if TX_RE.fullmatch(tx_id) is None:
+        raise BootstrapError("launcher transaction authority is invalid")
+    tx_root = STATE_ROOT / "python-runtime-transactions" / tx_id
+    for directory in (
+        STATE_ROOT,
+        STATE_ROOT / "python-runtime-transactions",
+        tx_root,
+        tx_root / "authority",
+        STATE_ROOT / "python-runtime-provision-launchers",
+        STATE_ROOT / "python-runtime-provision-control",
+    ):
+        _directory(directory, 0o700, 0, 0)
+    plan, plan_raw = _json(tx_root / "authority/plan.json", 0, 1024 * 1024, mode=0o600)
+    plan_sha256 = hashlib.sha256(plan_raw).hexdigest()
+    if plan.get("transaction_id") != tx_id:
+        raise BootstrapError("launcher plan transaction binding is invalid")
+    if expected_plan_sha256 is not None and _digest(expected_plan_sha256) != plan_sha256:
+        raise BootstrapError("launcher plan differs from workflow authority")
+    artifact_id, api_sha = plan.get("qg_artifact_id"), str(plan.get("qg_artifact_api_sha256"))
+    if type(artifact_id) is not int or artifact_id < 1 or _digest(api_sha) != api_sha:
+        raise BootstrapError("launcher plan QG authority is invalid")
+    if expected_artifact_id is not None and artifact_id != expected_artifact_id:
+        raise BootstrapError("launcher artifact ID differs from workflow authority")
+    if expected_artifact_api_sha256 is not None and _digest(expected_artifact_api_sha256) != api_sha:
+        raise BootstrapError("launcher artifact digest differs from workflow authority")
+    if expected_target_sha is not None and (
+        SHA_RE.fullmatch(expected_target_sha) is None or plan.get("qg_target_sha") != expected_target_sha
+    ):
+        raise BootstrapError("launcher target differs from workflow authority")
+    receipt_path = STATE_ROOT / "python-runtime-provision-launchers" / f"{artifact_id}-{api_sha}.json"
+    receipt, _raw = _json(receipt_path, 0, 1024 * 1024, mode=0o600)
+    # fmt: off
+    expected_keys = {
+        "schema", "format", "artifact_id", "artifact_api_sha256", "manifest_sha256", "run_id", "run_attempt",
+        "target_sha", "bundle_root", "control_root", "control_plane_archive_sha256", "control_plane_tree_sha256",
+        "launcher_path", "launcher_sha256", "launcher_size",
+    }
+    # fmt: on
+    if (
+        set(receipt) != expected_keys
+        or receipt.get("schema") != 1
+        or receipt.get("format") != "linas-python-runtime-launcher-v1"
+        or receipt.get("artifact_id") != artifact_id
+        or receipt.get("artifact_api_sha256") != api_sha
+        or receipt.get("manifest_sha256") != plan.get("qg_manifest_sha256")
+        or receipt.get("run_id") != plan.get("qg_run_id")
+        or receipt.get("run_attempt") != plan.get("qg_run_attempt")
+        or receipt.get("target_sha") != plan.get("qg_target_sha")
+        or receipt.get("control_plane_archive_sha256") != plan.get("control_plane_archive_sha256")
+        or receipt.get("control_plane_tree_sha256") != plan.get("control_plane_tree_sha256")
+    ):
+        raise BootstrapError("launcher receipt differs from the transaction")
+    key = f"{artifact_id}-{api_sha}"
+    expected_bundle = STATE_ROOT / "release-bundles" / key
+    expected_control = STATE_ROOT / "python-runtime-provision-control" / key
+    _directory(expected_control, 0o700, 0, 0)
+    launcher = Path(str(receipt["launcher_path"]))
+    if (
+        receipt.get("bundle_root") != str(expected_bundle)
+        or receipt.get("control_root") != str(expected_control)
+        or launcher != expected_control / NODE_MODULES["launcher.py"]
+    ):
+        raise BootstrapError("launcher receipt paths are invalid")
+    launcher_raw = _read(launcher, 0, 8 * 1024**2)
+    if len(launcher_raw) != receipt.get("launcher_size") or hashlib.sha256(launcher_raw).hexdigest() != _digest(
+        receipt.get("launcher_sha256")
+    ):
+        raise BootstrapError("launcher differs from its receipt")
+    return tx_root, launcher, plan_sha256
 
 
 def _initial(values: list[str]) -> int:
@@ -405,51 +485,7 @@ def _resume(values: list[str]) -> int:
         raise BootstrapError("resume transaction authority is invalid")
     if operation != "status":
         _digest(values[2])
-    tx_root = STATE_ROOT / "python-runtime-transactions" / tx_id
-    plan, plan_raw = _json(tx_root / "authority/plan.json", 0, 1024 * 1024, mode=0o600)
-    if plan.get("transaction_id") != tx_id:
-        raise BootstrapError("resume plan transaction binding is invalid")
-    artifact_id, api_sha = plan.get("qg_artifact_id"), str(plan.get("qg_artifact_api_sha256"))
-    if type(artifact_id) is not int or artifact_id < 1 or _digest(api_sha) != api_sha:
-        raise BootstrapError("resume plan QG authority is invalid")
-    receipt_path = STATE_ROOT / "python-runtime-provision-launchers" / f"{artifact_id}-{api_sha}.json"
-    receipt, _raw = _json(receipt_path, 0, 1024 * 1024, mode=0o600)
-    # fmt: off
-    expected_keys = {
-        "schema", "format", "artifact_id", "artifact_api_sha256", "manifest_sha256", "run_id", "run_attempt",
-        "target_sha", "bundle_root", "control_root", "control_plane_archive_sha256", "control_plane_tree_sha256",
-        "launcher_path", "launcher_sha256", "launcher_size",
-    }
-    # fmt: on
-    if (
-        set(receipt) != expected_keys
-        or receipt.get("schema") != 1
-        or receipt.get("format") != "linas-python-runtime-launcher-v1"
-        or receipt.get("artifact_id") != artifact_id
-        or receipt.get("artifact_api_sha256") != api_sha
-        or receipt.get("manifest_sha256") != plan.get("qg_manifest_sha256")
-        or receipt.get("run_id") != plan.get("qg_run_id")
-        or receipt.get("run_attempt") != plan.get("qg_run_attempt")
-        or receipt.get("target_sha") != plan.get("qg_target_sha")
-        or receipt.get("control_plane_archive_sha256") != plan.get("control_plane_archive_sha256")
-        or receipt.get("control_plane_tree_sha256") != plan.get("control_plane_tree_sha256")
-    ):
-        raise BootstrapError("resume launcher receipt differs from the transaction")
-    key = f"{artifact_id}-{api_sha}"
-    expected_bundle = STATE_ROOT / "release-bundles" / key
-    expected_control = STATE_ROOT / "python-runtime-provision-control" / key
-    launcher = Path(str(receipt["launcher_path"]))
-    if (
-        receipt.get("bundle_root") != str(expected_bundle)
-        or receipt.get("control_root") != str(expected_control)
-        or launcher != expected_control / NODE_MODULES["launcher.py"]
-    ):
-        raise BootstrapError("resume launcher receipt paths are invalid")
-    launcher_raw = _read(launcher, 0, 8 * 1024**2)
-    if len(launcher_raw) != receipt.get("launcher_size") or hashlib.sha256(launcher_raw).hexdigest() != _digest(
-        receipt.get("launcher_sha256")
-    ):
-        raise BootstrapError("resume launcher differs from its receipt")
+    tx_root, launcher, plan_sha256 = _launcher_authority(tx_id)
     arguments = [operation, tx_id] if operation == "status" else values
     output = _invoke(
         [
@@ -461,9 +497,58 @@ def _resume(values: list[str]) -> int:
             "run-transaction",
             str(tx_root),
             str(tx_root / "control"),
-            hashlib.sha256(plan_raw).hexdigest(),
+            plan_sha256,
             *arguments,
         ]
+    )
+    print(output, end="")
+    return 0
+
+
+def _bootstrap(values: list[str]) -> int:
+    if len(values) < 6:
+        raise BootstrapError("bootstrap dispatch arguments are incomplete")
+    tx_id, plan_sha256, artifact_id_raw, api_sha, target_sha, operation = values[:6]
+    if not artifact_id_raw.isdecimal() or int(artifact_id_raw) < 1:
+        raise BootstrapError("bootstrap dispatch artifact ID is invalid")
+    allowed = {
+        "cluster-probe",
+        "install-lb-ready-attestation",
+        "plan",
+        "apply",
+        "recover-rollback",
+        "recovery-status",
+        "recover-decided",
+    }
+    if operation not in allowed:
+        raise BootstrapError("bootstrap dispatch operation is outside the closed contract")
+    tx_root, launcher, verified_plan_sha256 = _launcher_authority(
+        tx_id,
+        expected_plan_sha256=plan_sha256,
+        expected_artifact_id=int(artifact_id_raw),
+        expected_artifact_api_sha256=api_sha,
+        expected_target_sha=target_sha,
+    )
+    input_bytes: bytes | None = None
+    if operation == "install-lb-ready-attestation":
+        input_bytes = sys.stdin.buffer.read(131_073)
+        if not 1 <= len(input_bytes) <= 131_072 or sys.stdin.buffer.read(1):
+            raise BootstrapError("bootstrap LB attestation input is invalid")
+    output = _invoke(
+        [
+            OS_PYTHON,
+            "-B",
+            "-I",
+            "-S",
+            str(launcher),
+            "run-bootstrap",
+            str(tx_root),
+            str(tx_root / "control"),
+            verified_plan_sha256,
+            operation,
+            *values[6:],
+        ],
+        input_bytes=input_bytes,
     )
     print(output, end="")
     return 0
@@ -486,6 +571,8 @@ def main(argv: list[str] | None = None) -> int:
         return _initial(arguments)
     if operation == "resume":
         return _resume(arguments)
+    if operation == "bootstrap":
+        return _bootstrap(arguments)
     raise BootstrapError("workflow bootstrap operation is invalid")
 
 
