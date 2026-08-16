@@ -563,6 +563,109 @@ def test_runtime_extraction_retries_partial_writes_and_rejects_hardlinks(
         archive.extract_runtime_archive(hardlink_tar, tmp_path / "rejected")
 
 
+def test_runtime_extraction_under_umask_077_preserves_exact_provider_tree_and_abi(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    tmp_path.chmod(0o755)
+    runtime_tar = tmp_path / "runtime.tar.gz"
+    python_payload = b"synthetic-python-3.13.15"
+    libpython_payload = b"synthetic-libpython-3.13.15"
+    metadata_payload = b"Metadata-Version: 2.4\nName: pip\nVersion: 26.2.1\n"
+    members = [
+        ("python/bin/python3.13", 0o777, python_payload),
+        ("python/lib/libpython3.13.so.1.0", 0o666, libpython_payload),
+        (
+            "python/lib/python3.13/site-packages/pip-26.2.1.dist-info/METADATA",
+            0o666,
+            metadata_payload,
+        ),
+        ("python/empty", 0o666, b""),
+        *[(f"python/provider-{index:03d}/empty", 0o666, b"") for index in range(192)],
+    ]
+    with tarfile.open(runtime_tar, "w:gz") as bundle:
+        for name, mode, payload in members:
+            item = tarfile.TarInfo(name)
+            item.mode, item.size = mode, len(payload)
+            bundle.addfile(item, io.BytesIO(payload))
+
+    monkeypatch.setattr(archive, "EXPECTED_UID", os.getuid())
+    monkeypatch.setattr(archive, "EXPECTED_GID", os.getgid())
+    monkeypatch.setattr(archive, "RUNTIME_SHA256", hashlib.sha256(runtime_tar.read_bytes()).hexdigest())
+    destination = tmp_path / "runtime"
+    previous_umask = os.umask(0o077)
+    try:
+        archive.extract_runtime_archive(runtime_tar, destination)
+    finally:
+        os.umask(previous_umask)
+
+    implicit_directories = sorted(path for path in destination.rglob("*") if path.is_dir())
+    assert len(implicit_directories) == 197
+    assert destination.stat().st_mode & 0o777 == 0o755
+    assert all(path.stat().st_mode & 0o777 == 0o755 for path in implicit_directories)
+    assert (destination / "bin/python3.13").stat().st_mode & 0o777 == 0o755
+    assert (destination / "lib/libpython3.13.so.1.0").stat().st_mode & 0o777 == 0o644
+    assert (destination / "empty").stat().st_mode & 0o777 == 0o644
+    assert (destination / "empty").read_bytes() == b""
+    assert all((destination / f"provider-{index:03d}/empty").stat().st_size == 0 for index in range(192))
+
+    tree_sha, object_count = archive.runtime_tree_evidence(destination)
+    monkeypatch.setattr(archive, "RUNTIME_TREE_SHA256", tree_sha)
+    monkeypatch.setattr(archive, "PYTHON_SHA256", hashlib.sha256(python_payload).hexdigest())
+    monkeypatch.setattr(archive, "LIBPYTHON_SHA256", hashlib.sha256(libpython_payload).hexdigest())
+
+    def exact_abi_check(command: list[str], **kwargs: Any) -> SimpleNamespace:
+        assert command[:5] == [str(destination / "bin/python3.13"), "-B", "-I", "-S", "-c"]
+        check = command[5]
+        for expected in (
+            "platform.python_version()=='3.13.15'",
+            "sys.implementation.cache_tag=='cpython-313'",
+            "sysconfig.get_config_var('SOABI')=='cpython-313-x86_64-linux-gnu'",
+            "sys.platform=='linux' and os.uname().machine=='x86_64'",
+        ):
+            assert expected in check
+        assert kwargs["env"] == {
+            "HOME": "/nonexistent",
+            "LANG": "C.UTF-8",
+            "LC_ALL": "C.UTF-8",
+            "PATH": "/usr/bin:/bin",
+        }
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(archive.subprocess, "run", exact_abi_check)
+    assert archive.verify_runtime_before_use(destination) == (tree_sha, object_count)
+
+
+@pytest.mark.parametrize("ignored_fchmod_call", [1, 2])
+def test_runtime_extraction_rejects_unapplied_root_or_implicit_parent_mode(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, ignored_fchmod_call: int
+) -> None:
+    tmp_path.chmod(0o755)
+    runtime_tar = tmp_path / "runtime.tar.gz"
+    with tarfile.open(runtime_tar, "w:gz") as bundle:
+        item = tarfile.TarInfo("python/implicit/empty")
+        item.mode, item.size = 0o644, 0
+        bundle.addfile(item, io.BytesIO(b""))
+    monkeypatch.setattr(archive, "EXPECTED_UID", os.getuid())
+    monkeypatch.setattr(archive, "EXPECTED_GID", os.getgid())
+    monkeypatch.setattr(archive, "RUNTIME_SHA256", hashlib.sha256(runtime_tar.read_bytes()).hexdigest())
+    original_fchmod = archive.os.fchmod
+    calls = 0
+
+    def selectively_ignore_fchmod(descriptor: int, mode: int) -> None:
+        nonlocal calls
+        calls += 1
+        if calls != ignored_fchmod_call:
+            original_fchmod(descriptor, mode)
+
+    monkeypatch.setattr(archive.os, "fchmod", selectively_ignore_fchmod)
+    previous_umask = os.umask(0o077)
+    try:
+        with pytest.raises(archive.ProvisionError, match="directory metadata is unsafe"):
+            archive.extract_runtime_archive(runtime_tar, tmp_path / "rejected")
+    finally:
+        os.umask(previous_umask)
+
+
 @pytest.mark.parametrize("root_type", [tarfile.REGTYPE, tarfile.SYMTYPE])
 def test_runtime_archive_rejects_explicit_non_directory_root(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, root_type: bytes

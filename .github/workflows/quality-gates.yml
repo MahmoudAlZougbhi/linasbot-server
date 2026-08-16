@@ -270,10 +270,12 @@ jobs:
           sudo -n /usr/bin/env -i \
             HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/sbin:/usr/bin:/sbin:/bin \
             /usr/bin/python3 -B -I -S -c '
+          import os
           import sys
           from pathlib import Path
           sys.path.insert(0, sys.argv[1])
           from scripts.ha.python_runtime_archive_contract import extract_runtime_archive, verify_runtime_before_use
+          os.umask(0o077)
           extract_runtime_archive(Path(sys.argv[2]), Path(sys.argv[3]))
           verify_runtime_before_use(Path(sys.argv[3]))
           ' "$GITHUB_WORKSPACE" \

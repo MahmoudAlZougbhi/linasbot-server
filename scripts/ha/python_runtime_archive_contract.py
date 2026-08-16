@@ -273,6 +273,28 @@ def _open_parent(root_fd: int, parts: tuple[str, ...]) -> int:
         raise
 
 
+def _normalize_directory(descriptor: int, *, mode: int) -> None:
+    """Set and read back exact metadata on a newly controlled directory."""
+
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISDIR(before.st_mode):
+            raise ProvisionError("runtime extraction directory is not a directory")
+        os.fchown(descriptor, EXPECTED_UID, EXPECTED_GID)
+        os.fchmod(descriptor, mode)
+        after = os.fstat(descriptor)
+    except OSError as exc:
+        raise ProvisionError("runtime extraction directory metadata cannot be secured") from exc
+    if (
+        (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino)
+        or not stat.S_ISDIR(after.st_mode)
+        or after.st_uid != EXPECTED_UID
+        or after.st_gid != EXPECTED_GID
+        or stat.S_IMODE(after.st_mode) != mode
+    ):
+        raise ProvisionError("runtime extraction directory metadata is unsafe")
+
+
 def extract_runtime_archive(
     archive: Path,
     destination: Path,
@@ -288,10 +310,10 @@ def extract_runtime_archive(
     if temporary.exists() or temporary.is_symlink():
         raise ProvisionError("interrupted runtime extraction requires recovery")
     temporary.mkdir(mode=0o755)
-    os.chown(temporary, EXPECTED_UID, EXPECTED_GID, follow_symlinks=False)
     root_fd = os.open(temporary, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0))
-    directories: set[tuple[str, ...]] = {()}
     try:
+        _normalize_directory(root_fd, mode=0o755)
+        directories: set[tuple[str, ...]] = {()}
         with open_regular(archive, max_bytes=MAX_ARCHIVE_BYTES) as (raw, _before):
             with tarfile.open(fileobj=raw, mode="r:gz") as bundle:
                 for member in _members(bundle):
@@ -306,16 +328,19 @@ def extract_runtime_archive(
                             continue
                         parent_fd = _open_parent(root_fd, parent_parts[:-1])
                         try:
-                            os.mkdir(parent_parts[-1], 0o755, dir_fd=parent_fd)
-                            os.chown(
+                            try:
+                                os.mkdir(parent_parts[-1], 0o755, dir_fd=parent_fd)
+                            except FileExistsError as exc:
+                                raise ProvisionError("runtime implicit directory already exists") from exc
+                            implicit_fd = os.open(
                                 parent_parts[-1],
-                                EXPECTED_UID,
-                                EXPECTED_GID,
+                                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
                                 dir_fd=parent_fd,
-                                follow_symlinks=False,
                             )
-                        except FileExistsError:
-                            pass
+                            try:
+                                _normalize_directory(implicit_fd, mode=0o755)
+                            finally:
+                                os.close(implicit_fd)
                         finally:
                             os.close(parent_fd)
                         directories.add(parent_parts)
