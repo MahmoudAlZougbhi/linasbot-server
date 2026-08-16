@@ -28,6 +28,7 @@ import { SettingsScreen } from '../features/settings/SettingsScreen';
 import { SmartFollowUpScreen } from '../features/smartFollowUp/SmartFollowUpScreen';
 import { SimpleResourceScreen } from '../features/shared/SimpleResourceScreen';
 import { UsersScreen } from '../features/users/UsersScreen';
+import { EphemeralRoute } from './EphemeralRoute';
 import { KeepMountedPane } from './KeepMountedPane';
 import type { Screen } from './navigation';
 
@@ -204,75 +205,93 @@ export function AppScreenTree({
       </KeepMountedPane>
 
       {name === 'products' ? (
-        <ProductsScreen
-          onBack={screen.backTo === 'cm' ? () => setScreen({ name: 'cm' }) : undefined}
-          onAdd={() => setScreen({ name: 'products_add', backTo: 'products' })}
-          onImport={() => setScreen({ name: 'products_import', backTo: 'products' })}
-          onEdit={(productId) =>
-            setScreen({ name: 'products_edit', productId, backTo: 'products' })
-          }
-        />
+        <EphemeralRoute>
+          <ProductsScreen
+            onBack={screen.backTo === 'cm' ? () => setScreen({ name: 'cm' }) : undefined}
+            onAdd={() => setScreen({ name: 'products_add', backTo: 'products' })}
+            onImport={() => setScreen({ name: 'products_import', backTo: 'products' })}
+            onEdit={(productId) =>
+              setScreen({ name: 'products_edit', productId, backTo: 'products' })
+            }
+          />
+        </EphemeralRoute>
       ) : null}
       {name === 'products_import' ? (
-        <ProductsImportScreen
-          onBack={() => setScreen({ name: 'products', backTo: 'cm' })}
-          onImported={() => setScreen({ name: 'products', backTo: 'cm' })}
-        />
+        <EphemeralRoute>
+          <ProductsImportScreen
+            onBack={() => setScreen({ name: 'products', backTo: 'cm' })}
+            onImported={() => setScreen({ name: 'products', backTo: 'cm' })}
+          />
+        </EphemeralRoute>
       ) : null}
       {name === 'products_add' ? (
-        <AddProductScreen
-          onBack={() => setScreen({ name: 'products', backTo: 'cm' })}
-          onSaved={() => setScreen({ name: 'products', backTo: 'cm' })}
-        />
+        <EphemeralRoute>
+          <AddProductScreen
+            onBack={() => setScreen({ name: 'products', backTo: 'cm' })}
+            onSaved={() => setScreen({ name: 'products', backTo: 'cm' })}
+          />
+        </EphemeralRoute>
       ) : null}
       {name === 'products_edit' ? (
-        <AddProductScreen
-          productId={screen.productId}
-          onBack={() => setScreen({ name: 'products', backTo: 'cm' })}
-          onSaved={() => setScreen({ name: 'products', backTo: 'cm' })}
-        />
+        <EphemeralRoute>
+          <AddProductScreen
+            productId={screen.productId}
+            onBack={() => setScreen({ name: 'products', backTo: 'cm' })}
+            onSaved={() => setScreen({ name: 'products', backTo: 'cm' })}
+          />
+        </EphemeralRoute>
       ) : null}
 
       {name === 'services' ? (
-        <ServicesScreen
-          onBack={screen.backTo === 'cm' ? () => setScreen({ name: 'cm' }) : undefined}
-          onAdd={() => setScreen({ name: 'services_add', backTo: 'services' })}
-          onEdit={(serviceId) =>
-            setScreen({ name: 'services_edit', serviceId, backTo: 'services' })
-          }
-        />
+        <EphemeralRoute>
+          <ServicesScreen
+            onBack={screen.backTo === 'cm' ? () => setScreen({ name: 'cm' }) : undefined}
+            onAdd={() => setScreen({ name: 'services_add', backTo: 'services' })}
+            onEdit={(serviceId) =>
+              setScreen({ name: 'services_edit', serviceId, backTo: 'services' })
+            }
+          />
+        </EphemeralRoute>
       ) : null}
       {name === 'services_add' ? (
-        <AddServiceScreen
-          onBack={() => setScreen({ name: 'services', backTo: 'cm' })}
-          onSaved={() => setScreen({ name: 'services', backTo: 'cm' })}
-        />
+        <EphemeralRoute>
+          <AddServiceScreen
+            onBack={() => setScreen({ name: 'services', backTo: 'cm' })}
+            onSaved={() => setScreen({ name: 'services', backTo: 'cm' })}
+          />
+        </EphemeralRoute>
       ) : null}
       {name === 'services_edit' ? (
-        <AddServiceScreen
-          serviceId={screen.serviceId}
-          onBack={() => setScreen({ name: 'services', backTo: 'cm' })}
-          onSaved={() => setScreen({ name: 'services', backTo: 'cm' })}
-        />
+        <EphemeralRoute>
+          <AddServiceScreen
+            serviceId={screen.serviceId}
+            onBack={() => setScreen({ name: 'services', backTo: 'cm' })}
+            onSaved={() => setScreen({ name: 'services', backTo: 'cm' })}
+          />
+        </EphemeralRoute>
       ) : null}
 
       {name === 'cm_section' ? (
-        <CmSectionScreen
-          section={screen.section}
-          proposalReview={screen.proposalReview ?? null}
-          onBack={
-            screen.backTo === 'settings'
-              ? () => setScreen({ name: 'settings' })
-              : screen.backTo === 'cm'
-                ? () => setScreen({ name: 'cm' })
-                : screen.backTo === 'chat'
-                  ? () => setScreen({ name: 'chat' })
-                  : undefined
-          }
-        />
+        <EphemeralRoute>
+          <CmSectionScreen
+            section={screen.section}
+            proposalReview={screen.proposalReview ?? null}
+            onBack={
+              screen.backTo === 'settings'
+                ? () => setScreen({ name: 'settings' })
+                : screen.backTo === 'cm'
+                  ? () => setScreen({ name: 'cm' })
+                  : screen.backTo === 'chat'
+                    ? () => setScreen({ name: 'chat' })
+                    : undefined
+            }
+          />
+        </EphemeralRoute>
       ) : null}
       {name === 'resource' ? (
-        <SimpleResourceScreen title={screen.title} path={screen.path} />
+        <EphemeralRoute>
+          <SimpleResourceScreen title={screen.title} path={screen.path} />
+        </EphemeralRoute>
       ) : null}
     </View>
   );
