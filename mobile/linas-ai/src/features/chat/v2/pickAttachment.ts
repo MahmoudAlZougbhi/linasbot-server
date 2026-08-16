@@ -101,6 +101,29 @@ export async function pickDocumentAttachment(): Promise<PendingFile | null> {
   }
 }
 
+export async function pickVideoAttachment(): Promise<PendingFile | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ImagePicker = require('expo-image-picker') as typeof import('expo-image-picker');
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return null;
+    const picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      quality: 0.8,
+      allowsMultipleSelection: false,
+    });
+    if (picked.canceled || !picked.assets?.[0]) return null;
+    const asset = picked.assets[0];
+    return assetToPending({
+      uri: asset.uri,
+      fileName: asset.fileName || 'video.mp4',
+      mimeType: asset.mimeType || 'video/mp4',
+    });
+  } catch {
+    return null;
+  }
+}
+
 export function isImageMime(mime: string): boolean {
   return mime.startsWith('image/');
 }

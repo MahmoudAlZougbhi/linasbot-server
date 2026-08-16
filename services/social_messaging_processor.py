@@ -511,32 +511,21 @@ async def process_meta_social_event(
             image_url: str | None = None,
             audio_url: str | None = None,
         ) -> Any:
-            if capture_send is not None:
-                await capture_send(_namespaced_id, message_text, image_url, audio_url)
-                return {
-                    "success": True,
-                    "simulated": True,
-                    "delivered_externally": False,
-                }
-            if adapter is None:
-                return {"success": False, "error": "Meta adapter unavailable"}
-            if message_text:
-                if inbound_event_id:
-                    from services.meta_controlled_evidence import meta_evidence_surface
-                    from services.meta_outbound_attempts import (
-                        current_meta_outbound_send_purpose,
-                        execute_guarded_meta_send,
-                    )
+            from services.meta_social_text_send import send_meta_social_outbound
 
-                    return await execute_guarded_meta_send(
-                        event_id=inbound_event_id,
-                        surface=meta_evidence_surface(kind="meta_dm", channel=channel),
-                        binding_id=resolved_binding_id,
-                        purpose=current_meta_outbound_send_purpose(),
-                        send=lambda: adapter.send_text_message(sender_id, message_text),
-                    )
-                return await adapter.send_text_message(sender_id, message_text)
-            return {"success": False, "error": "Only text replies are enabled for Meta social DMs"}
+            return await send_meta_social_outbound(
+                namespaced_id=_namespaced_id,
+                message_text=message_text,
+                image_url=image_url,
+                audio_url=audio_url,
+                capture_send=capture_send,
+                adapter=adapter,
+                inbound_event_id=inbound_event_id,
+                channel=channel,
+                binding_id=resolved_binding_id,
+                sender_id=sender_id,
+                user_data=user_data,
+            )
 
         from services.ai_reply_delivery import wrap_tracked_send
 

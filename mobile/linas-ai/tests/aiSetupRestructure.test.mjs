@@ -60,7 +60,7 @@ describe('AI Setup hub restructure', () => {
     const firstId = cardsBlock.match(/id: '([^']+)'/)?.[1];
     assert.equal(firstId, 'knowledge');
     assert.match(sections, /id: 'prices'[\s\S]*title: 'Service'/);
-    assert.match(sections, /id: 'branches'[\s\S]*title: 'Location and Opening Hours'/);
+    assert.match(sections, /id: 'branches'[\s\S]*title: 'Locations & hours'/);
     const openingHoursCard = cardsBlock.match(/\{\s*id: 'opening_hours'[\s\S]*?\},/)?.[0] ?? '';
     assert.match(openingHoursCard, /title: 'Opening Hours'/);
     assert.match(openingHoursCard, /showInCmHub: false/);

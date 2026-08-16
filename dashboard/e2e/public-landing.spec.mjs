@@ -30,12 +30,11 @@ test.describe("public marketing landing smoke", () => {
     });
 
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Turn every DM and comment into a helpful answer." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Talk to Linas. Linas talks to your customers." })).toBeVisible();
     await expect(page.getByText("Linas AI").first()).toBeVisible();
     await expect(page.getByRole("link", { name: "Create Account" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Log in" })).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: /Talk to Linas/i })).toBeAttached();
-    await page.getByRole("button", { name: /Chat with Linas/i }).click();
+    await page.getByRole("button", { name: /Ask Linas/i }).click();
     await expect(page.getByText(/reply assistant/i)).toBeVisible();
     await expect(page.getByRole("group", { name: "Download Linas AI" }).first()).toBeVisible();
     await expect(page).not.toHaveURL(/\/login$/);

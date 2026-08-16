@@ -332,7 +332,7 @@ def _scan_improve_opportunities(tenant_id: str, summary: dict[str, Any]) -> list
                     section="opening_hours",
                     title="Locations without opening hours",
                     detail="Locations are filled but hours are not — customers will ask when you are open.",
-                    hint="Add per-day schedules in Location and Opening Hours.",
+                    hint="Add per-day schedules in Locations & hours.",
                 )
             )
     return out

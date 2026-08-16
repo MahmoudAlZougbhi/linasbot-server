@@ -11,7 +11,8 @@ import { getCmSection, type CmSectionId } from './cmSections';
 import { AiBasicsEditor } from './editors/AiBasicsEditor';
 import { ArticlesEditor } from './editors/ArticlesEditor';
 import { KnowledgeScreen } from './knowledge/KnowledgeScreen';
-import { LocationOpeningHoursEditor } from './editors/LocationOpeningHoursEditor';
+import { LocationHoursSectionScreen } from './LocationHoursSectionScreen';
+import { OpeningHoursEditor } from './editors/OpeningHoursEditor';
 import { GreetingsEditor } from './editors/GreetingsEditor';
 import { HandoffEditor } from './editors/HandoffEditor';
 import { OffDaysEditor } from './editors/OffDaysEditor';
@@ -103,9 +104,9 @@ function SectionBody({
     case 'dynamic_messages':
       return <GreetingsEditor payload={payload} onChange={onChange} />;
     case 'branches':
-      return <LocationOpeningHoursEditor payload={payload} onChange={onChange} />;
+      return null;
     case 'opening_hours':
-      return <LocationOpeningHoursEditor payload={payload} onChange={onChange} />;
+      return <OpeningHoursEditor payload={payload} onChange={onChange} />;
     case 'restricted':
       return <RestrictedEditor payload={payload} onChange={onChange} />;
     case 'comments':
@@ -144,6 +145,9 @@ export function CmSectionScreen({ section, proposalReview, onBack, onOpenLocatio
     return (
       <AiBasicsSectionScreen proposalReview={proposalReview} onBack={onBack} />
     );
+  }
+  if (section === 'branches') {
+    return <LocationHoursSectionScreen proposalReview={proposalReview} onBack={onBack} />;
   }
   return (
     <StandardCmSectionScreen section={section} proposalReview={proposalReview} onBack={onBack} />

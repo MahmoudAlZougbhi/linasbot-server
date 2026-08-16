@@ -79,12 +79,12 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
       setError('Missing ETag — reload before saving.');
       return false;
     }
-    const toWrite = override ?? payload;
+    const body = override ?? payload;
     setSaving(true);
     setError(null);
     setConflict(null);
     try {
-      const draft = await putCmDraft(section, toWrite, etag);
+      const draft = await putCmDraft(section, body, etag);
       setPayloadState(sanitizeCmSectionPayload(section, draft.payload));
       setEtag(draft.etag);
       setDirty(false);

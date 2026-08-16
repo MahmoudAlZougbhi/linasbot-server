@@ -1,0 +1,117 @@
+.landing-page {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  background: #f7f8f5;
+  color: #171a19;
+}
+
+.landing-page .lp-hide-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.landing-page .lp-hide-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.landing-page .lp-ease {
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes lp-pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.45;
+  }
+  100% {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+
+.landing-page .lp-live-dot {
+  position: relative;
+}
+.landing-page .lp-live-dot::before,
+.landing-page .lp-live-dot::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(6, 113, 95, 0.35);
+  animation: lp-pulse-ring 1.8s ease-out infinite;
+}
+.landing-page .lp-live-dot::after {
+  animation-delay: 0.7s;
+}
+
+@keyframes lp-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes lp-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes lp-dots {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+.landing-page .lp-play .lp-fill {
+  transform-origin: left center;
+  animation: lp-fill 700ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.landing-page .lp-play .lp-fade-up {
+  animation: lp-fade-up 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.landing-page .lp-typing span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 2px;
+  border-radius: 999px;
+  background: #06715f;
+  animation: lp-dots 1s infinite;
+}
+.landing-page .lp-typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.landing-page .lp-typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-page .lp-live-dot::before,
+  .landing-page .lp-live-dot::after,
+  .landing-page .lp-play .lp-fill,
+  .landing-page .lp-play .lp-fade-up,
+  .landing-page .lp-typing span {
+    animation: none !important;
+  }
+  .landing-page .lp-play .lp-fill,
+  .landing-page .lp-play .lp-fade-up {
+    opacity: 1;
+    transform: none;
+  }
+}

@@ -62,6 +62,11 @@ export function formatMediaSummary(attachments) {
   }
   /** @type {string[]} */
   const bits = [];
+  /**
+   * @param {number} n
+   * @param {string} one
+   * @param {string} many
+   */
   const part = (n, one, many) => {
     if (n > 0) bits.push(`${n} ${n === 1 ? one : many}`);
   };

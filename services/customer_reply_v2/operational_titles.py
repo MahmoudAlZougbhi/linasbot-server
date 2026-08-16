@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.customer_reply_v2.comment_rule_select import is_luna_selectable_comment_rule
 from services.customer_reply_v2.manifest import FIXED_ANSWER_SECTIONS
 from services.customer_reply_v2.retrieval_item_index import label_of
 
@@ -46,11 +47,8 @@ def _walk_nodes(
         children_rows = raw.get("children")
         nested_items = children_rows if isinstance(children_rows, list) else []
         child_count = len([c for c in nested_items if isinstance(c, dict)])
-        if section_id == "comments":
-            mode = str(raw.get("rule_mode") or "").strip().lower()
-            template = str(raw.get("reply_template") or "").strip()
-            if mode == "deterministic" or (not mode and (str(raw.get("action") or "") == "ignore" or template)):
-                continue
+        if section_id == "comments" and not is_luna_selectable_comment_rule(raw):
+            continue
         out.append(
             {
                 "id": source_id,

@@ -81,6 +81,7 @@ import modules.owner_notifications_api  # noqa: E402, F401
 import modules.plans_api  # noqa: E402, F401
 import modules.platform_api  # noqa: E402, F401
 import modules.products_media_api  # noqa: E402, F401
+import modules.public_landing_stats_api  # noqa: E402, F401
 import modules.qa_api  # noqa: E402, F401
 import modules.queue_api  # noqa: E402, F401
 import modules.requests_api  # noqa: E402, F401
