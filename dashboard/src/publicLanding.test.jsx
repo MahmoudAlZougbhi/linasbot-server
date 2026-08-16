@@ -20,10 +20,24 @@ vi.mock("./contexts/AuthContext", () => ({
 
 describe("public marketing landing", () => {
   beforeEach(() => {
+    window.matchMedia = (query) => ({
+      matches: String(query).includes("prefers-reduced-motion"),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+    });
+    window.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url) => {
-        if (String(url).includes("/api/guest-ai/session")) {
+        const href = String(url);
+        if (href.includes("/api/guest-ai/session")) {
           return {
             ok: true,
             status: 200,
@@ -44,9 +58,56 @@ describe("public marketing landing", () => {
                   ],
                 },
               }),
+            json: async () => ({
+              success: true,
+              session: {
+                id: "guest-test",
+                limit_reached: false,
+                max_input_tokens: 500,
+                messages: [
+                  {
+                    id: "g1",
+                    role: "assistant",
+                    content: "Hi — I’m Linas, your reply assistant.",
+                    created_at: 1,
+                  },
+                ],
+              },
+            }),
           };
         }
-        return { ok: false, status: 404, text: async () => "{}" };
+        if (href.includes("/api/public/landing-stats")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              success: true,
+              businesses_using_linas: 4,
+              messages_replied: 10,
+              comments_replied: 2,
+              ai_replies: 12,
+              requests: 1,
+            }),
+          };
+        }
+        if (href.includes("/api/public/plans")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              success: true,
+              plans: [
+                {
+                  plan_id: "lite",
+                  display_name: "Lite",
+                  price_usd: 9.99,
+                  included_credits: 7000,
+                },
+              ],
+            }),
+          };
+        }
+        return { ok: false, status: 404, text: async () => "{}", json: async () => ({}) };
       }),
     );
   });
@@ -64,7 +125,7 @@ describe("public marketing landing", () => {
       </MemoryRouter>
     );
 
-  it("renders marketing home without login or create-account CTAs", async () => {
+  it("renders approved marketing home without login or create-account CTAs", async () => {
     renderLanding("/");
 
     expect(screen.getByRole("heading", { name: PUBLIC_SITE.heroHeadline })).toBeInTheDocument();
@@ -72,21 +133,12 @@ describe("public marketing landing", () => {
     expect(screen.queryByRole("link", { name: "Create Account" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Log in" })).not.toBeInTheDocument();
     expect(screen.queryByText("login-page")).not.toBeInTheDocument();
-    expect(screen.getByRole("group", { name: "Page language" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Page language" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("group", { name: "Download Linas AI" }).length).toBeGreaterThan(0);
-    expect(screen.getByRole("heading", { name: /Talk to Linas/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Chat with Linas" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ask Linas" }));
     await waitFor(() => {
       expect(screen.getByText(/reply assistant/i)).toBeInTheDocument();
     });
-  });
-
-  it("switches page language control", async () => {
-    renderLanding("/");
-    expect(screen.getByRole("group", { name: "Page language" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "ع" }));
-    fireEvent.click(screen.getByRole("button", { name: "FR" }));
-    expect(screen.getByRole("button", { name: "FR" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("keeps privacy/terms/data-deletion footer targets", () => {
@@ -98,10 +150,21 @@ describe("public marketing landing", () => {
     expect(privacy).toHaveAttribute("href", PUBLIC_PATHS.privacy);
     expect(terms).toHaveAttribute("href", PUBLIC_PATHS.terms);
     expect(deletion).toHaveAttribute("href", PUBLIC_PATHS.dataDeletion);
-    expect(screen.getByRole("link", { name: "About" })).toHaveAttribute("href", PUBLIC_PATHS.about);
     expect(screen.getAllByRole("link", { name: /Contact/i })[0]).toBeInTheDocument();
     expect(PUBLIC_SITE.contactEmail).toBe("support@linasai.com");
-    expect(screen.getAllByRole("link", { name: PUBLIC_SITE.contactEmail }).length).toBeGreaterThan(0);
+  });
+
+  it("shows live impact copy", async () => {
+    renderLanding("/");
+    expect(screen.getByRole("heading", { name: /Every reply/i })).toBeInTheDocument();
+    expect(screen.getByText(/Messages answered by Linas/i)).toBeInTheDocument();
+    expect(screen.getByText(/Businesses using Linas/i)).toBeInTheDocument();
+    await waitFor(() => {
+      const replies = screen.getByText(/Messages answered by Linas/i).closest("div");
+      const businesses = screen.getByText(/Businesses using Linas/i).closest("div");
+      expect(replies).toHaveTextContent("12");
+      expect(businesses).toHaveTextContent("4");
+    });
   });
 
   it("redirects /analytics to /app dashboard home", () => {

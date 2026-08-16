@@ -46,6 +46,7 @@ def test_auth_email_routes_are_public() -> None:
     assert is_public_api("POST", "/api/auth/confirm-email-change")
     assert is_public_api("GET", "/api/billing/packages")
     assert is_public_api("GET", "/api/public/plans")
+    assert is_public_api("GET", "/api/public/landing-stats")
     assert is_public_api("POST", "/api/billing/stripe/webhook")
     assert is_public_api("POST", "/api/webhooks/resend")
 
