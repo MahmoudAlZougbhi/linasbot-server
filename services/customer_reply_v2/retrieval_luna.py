@@ -17,7 +17,12 @@ from services.customer_reply_v2.flags import (
 from services.customer_reply_v2.manifest import FIXED_ANSWER_SECTIONS, manifest_for_retrieval_luna
 from services.customer_reply_v2.models import RetrievalResult
 from services.customer_reply_v2.operational_titles import collect_operational_titles, inline_titles_for_luna
-from services.customer_reply_v2.retrieval_tools import RETRIEVAL_TOOL_SCHEMAS, ToolContext, dispatch_retrieval_tool
+from services.customer_reply_v2.retrieval_tools import (
+    MAX_ITEMS_PER_READ,
+    RETRIEVAL_TOOL_SCHEMAS,
+    ToolContext,
+    dispatch_retrieval_tool,
+)
 from services.customer_reply_v2.tera_llm import normalize_tera_effort
 
 # Optional injectable for fixtures: async (messages, tools) -> OpenAI-like response
@@ -71,6 +76,8 @@ def _luna_effective_effort(model: str) -> str:
     from services.llm_core_service import effective_chat_completions_reasoning_effort
 
     requested = _luna_requested_effort()
+    if customer_ai_v10_runtime_enabled() and requested not in {"", "none"}:
+        return requested
     return str(
         effective_chat_completions_reasoning_effort(
             model=model,
@@ -91,12 +98,34 @@ async def _default_llm(messages: list[dict[str, Any]], tools: list[dict[str, Any
         raise RuntimeError(
             f"customer_retrieval_model_misconfigured: retrieval model {model!r} != policy {policy.model!r}"
         )
+    effort = str(policy.reasoning_effort)
+    v10 = customer_ai_v10_runtime_enabled()
+    if v10 and tools:
+        from services.customer_reply_v2.responses_transport import create_via_responses
+
+        extra = {
+            "role": "retrieval",
+            "stage": "retrieval",
+            "has_tools": True,
+            "requested_reasoning_effort": effort,
+            "effective_reasoning_effort": effort,
+            "transport": "responses",
+        }
+        emit_model_policy_trace(policy, extra=extra)
+        return await create_via_responses(
+            client=client,
+            model=model,
+            messages=messages,
+            tools=tools,
+            effort=effort,
+            max_output_tokens=1200,
+        )
     kwargs = build_chat_completion_kwargs(
         model=model,
         messages=[{"role": "user", "content": "placeholder"}],
         max_tokens=1200,
         temperature=0.2,
-        reasoning_effort=str(policy.reasoning_effort),
+        reasoning_effort=effort,
         has_function_tools=bool(tools),
     )
     kwargs["messages"] = messages
@@ -104,7 +133,15 @@ async def _default_llm(messages: list[dict[str, Any]], tools: list[dict[str, Any
     if tools is not None:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"
-    emit_model_policy_trace(policy, extra={"role": "retrieval", "stage": "retrieval", "has_tools": tools is not None})
+    extra = {
+        "role": "retrieval",
+        "stage": "retrieval",
+        "has_tools": tools is not None,
+        "requested_reasoning_effort": effort,
+        "effective_reasoning_effort": str(kwargs.get("reasoning_effort") or effort),
+        "transport": "chat.completions",
+    }
+    emit_model_policy_trace(policy, extra=extra)
     return await client.chat.completions.create(**kwargs)
 
 
@@ -338,15 +375,41 @@ async def run_retrieval_luna(
             "reason_codes": ["loop_exhausted"],
         }
 
+    return _result_from_plan(ctx, final_plan, model=model, returned_model=str(returned_model))
+
+
+def _hydrate_unread_selected(ctx: ToolContext, selected: list[str]) -> None:
+    """Read CM bodies Luna named in the plan but never loaded into Tera evidence."""
+    have = {str(e.source_id) for e in ctx.evidence_acc}
+    missing: list[str] = []
+    for sid in selected:
+        key = str(sid).strip()
+        if not key or key in have:
+            continue
+        prefix = key.split(":", 1)[0]
+        if prefix in {"product", "products", "faq"}:
+            continue
+        missing.append(key)
+    if not missing:
+        return
+    dispatch_retrieval_tool("read_published_cm_items", {"item_ids": missing[:MAX_ITEMS_PER_READ]}, ctx)
+
+
+def _result_from_plan(
+    ctx: ToolContext,
+    final_plan: dict[str, Any],
+    *,
+    model: str,
+    returned_model: str,
+) -> RetrievalResult:
     status = str(final_plan.get("evidence_status") or "insufficient_final")
     if status == "insufficient_can_retry" and ctx.round_index >= max_retrieval_rounds():
         status = "insufficient_final"
     if status not in {"sufficient", "insufficient_can_retry", "insufficient_final"}:
         status = "insufficient_final"
-
     selected = list(final_plan.get("selected_source_ids") or [e.source_id for e in ctx.evidence_acc])
+    _hydrate_unread_selected(ctx, selected)
     sections = list(final_plan.get("selected_section_ids") or sorted({e.section_id for e in ctx.evidence_acc}))
-
     return RetrievalResult(
         evidence=list(ctx.evidence_acc),
         evidence_status=status,  # type: ignore[arg-type]
@@ -355,7 +418,7 @@ async def run_retrieval_luna(
         selected_source_ids=selected,
         tool_trace=list(ctx.audit),
         requested_model=model,
-        returned_model=str(returned_model),
+        returned_model=returned_model,
         refused_third_round=ctx.refused_third_round,
         active_product_id=ctx.active_product_id,
         requested_reasoning_effort=_luna_requested_effort(),
@@ -386,26 +449,7 @@ async def _run_scripted(
                 continue
             dispatch_retrieval_tool(name, args, ctx)
 
-    status = str(final_plan.get("evidence_status") or "insufficient_final")
-    if status == "insufficient_can_retry" and ctx.round_index >= max_retrieval_rounds():
-        status = "insufficient_final"
-    selected = list(final_plan.get("selected_source_ids") or [e.source_id for e in ctx.evidence_acc])
-    sections = list(final_plan.get("selected_section_ids") or sorted({e.section_id for e in ctx.evidence_acc}))
-    return RetrievalResult(
-        evidence=list(ctx.evidence_acc),
-        evidence_status=status,  # type: ignore[arg-type]
-        rounds_used=ctx.round_index,
-        selected_section_ids=sections,
-        selected_source_ids=selected,
-        tool_trace=list(ctx.audit),
-        requested_model=model,
-        returned_model=model,
-        refused_third_round=ctx.refused_third_round,
-        active_product_id=ctx.active_product_id,
-        requested_reasoning_effort=_luna_requested_effort(),
-        effective_reasoning_effort=_luna_effective_effort(model),
-        recommended_tera_effort=normalize_tera_effort(final_plan.get("recommended_tera_effort")),
-    )
+    return _result_from_plan(ctx, final_plan, model=model, returned_model=model)
 
 
 def retrieval_prompt_contains_full_basics_or_style(system_and_user: str) -> bool:
