@@ -7,6 +7,11 @@ from typing import Any
 
 from services.customer_reply_v2.answer_luna import run_answer_luna
 from services.customer_reply_v2.channel_metadata import build_channel_metadata
+from services.customer_reply_v2.comment_rule_runtime import (
+    deterministic_rule_outcome,
+    engine_trace_fields,
+    evaluate_turn_comment_rules,
+)
 from services.customer_reply_v2.customer_facts import load_customer_facts
 from services.customer_reply_v2.faq_evidence import merge_faq_evidence
 from services.customer_reply_v2.flags import (
@@ -156,6 +161,28 @@ async def run_customer_reply_v2_comment(
                 },
             )
 
+    engine = evaluate_turn_comment_rules(
+        tenant_id=tenant_id,
+        comment_text=comment_text,
+        channel=channel,
+        post_id=str(channel_meta.get("post_id") or post_id or ""),
+        account_id=str(channel_meta.get("account_id") or asset_id or ""),
+        channel_capabilities=dict(channel_meta.get("channel_capabilities") or {}),
+    )
+    if v10 and engine.rule_mode == "deterministic" and engine.matched:
+        return deterministic_rule_outcome(
+            engine=engine,
+            meter=meter,
+            channel_meta=channel_meta,
+            channel_capabilities=dict(channel_meta.get("channel_capabilities") or {}),
+        )
+    if engine.ai_guidance_rules:
+        comment_ctx["ai_guidance_comment_rules"] = engine.ai_guidance_rules
+        comment_ctx["applicable_ai_comment_rule_titles"] = [
+            {"id": row["id"], "title": row["title"], "scope": row.get("scope")}
+            for row in engine.ai_guidance_rules
+        ]
+
     policy = enforce_restricted_and_handoff(
         tenant_id=tenant_id,
         message=comment_text,
@@ -182,6 +209,7 @@ async def run_customer_reply_v2_comment(
         attachment_types=None,
         reply_to=str(comment_ctx.get("parent_comment") or parent_comment or ""),
         has_unresolved_context_refs=bool(comment_ctx.get("caption")) and len(comment_text.split()) <= 3,
+        has_ai_guidance_comment_rule=bool(engine.ai_guidance_rules),
     )
     if faq.hit and not uncertainty:
         return CustomerReplyOutcome(
@@ -362,6 +390,7 @@ async def run_customer_reply_v2_comment(
             "prompt_tokens": prompt_tokens or None,
             "completion_tokens": completion_tokens or None,
             "tokens": total_tokens or None,
+            **engine_trace_fields(engine),
             **media_meta,
         },
     )

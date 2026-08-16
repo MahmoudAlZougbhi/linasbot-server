@@ -48,6 +48,7 @@ import modules.cm_api  # noqa: E402, F401
 import modules.cm_faq_api  # noqa: E402, F401
 import modules.cm_media_api  # noqa: E402, F401
 import modules.cm_setup_api  # noqa: E402, F401
+import modules.cm_comment_rules_api  # noqa: E402, F401
 import modules.content_files_api  # noqa: E402, F401
 import modules.creative_api  # noqa: E402, F401
 import modules.dashboard_api  # noqa: E402, F401

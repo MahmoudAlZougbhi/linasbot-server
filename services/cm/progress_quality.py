@@ -125,14 +125,21 @@ def assess_section_fill(
             if rule.get("enabled") is False:
                 continue
             has_match = bool(
-                any(str(k).strip() for k in (rule.get("keywords") or []) if k is not None)
+                str(rule.get("trigger_type") or "").strip().lower() == "all_comments"
+                or any(str(k).strip() for k in (rule.get("keywords") or []) if k is not None)
                 or str(rule.get("pattern") or "").strip()
             )
             if not has_match:
                 gaps.append("comment_rule_keywords_or_pattern")
                 break
             action = str(rule.get("action") or "")
-            if action == "reply_dm" and not str(rule.get("reply_template") or "").strip():
+            mode = str(rule.get("rule_mode") or "")
+            if mode == "ai_guidance" and not str(rule.get("ai_instructions") or "").strip():
+                gaps.append("comment_rule_ai_instructions")
+                break
+            if action in {"reply_dm", "send_dm_static"} and not (
+                str(rule.get("reply_template") or "").strip() or str(rule.get("dm_template") or "").strip()
+            ):
                 gaps.append("comment_rule_dm_template")
                 break
         if gaps:

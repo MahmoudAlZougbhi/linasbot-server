@@ -130,7 +130,11 @@ def record_content(section_id: str, raw: dict[str, Any]) -> str:
                 "keywords": raw.get("keywords") or [],
                 "post_id": raw.get("post_id"),
                 "notes": raw.get("notes") or "",
-                "reply_template": raw.get("reply_template") or "",
+                "ai_instructions": raw.get("ai_instructions") or "",
+                "ai_action_mode": raw.get("ai_action_mode") or raw.get("action"),
+                "scope": raw.get("scope") or ("specific_post" if raw.get("post_id") else "all_posts"),
+                "priority": raw.get("priority") or 0,
+                "revision": raw.get("revision") or 1,
             },
             ensure_ascii=False,
         )

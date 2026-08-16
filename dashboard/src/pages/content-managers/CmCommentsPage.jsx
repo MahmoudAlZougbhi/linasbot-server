@@ -148,6 +148,30 @@ const CmCommentsPage = () => {
             </label>
             <div className="grid sm:grid-cols-2 gap-2">
               <label className="block space-y-1">
+                <span className="text-sm font-medium">Scope</span>
+                <select
+                  className={FIELD_CLASS}
+                  value={String(selected.scope || (selected.post_id ? "specific_post" : "all_posts"))}
+                  onChange={(e) => patch(String(selected.id), { scope: e.target.value })}
+                >
+                  <option value="all_posts">All posts</option>
+                  <option value="specific_post">Specific post</option>
+                </select>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-sm font-medium">Rule type</span>
+                <select
+                  className={FIELD_CLASS}
+                  value={String(selected.rule_mode || "deterministic")}
+                  onChange={(e) => patch(String(selected.id), { rule_mode: e.target.value })}
+                >
+                  <option value="deterministic">Automated / No AI</option>
+                  <option value="ai_guidance">AI-guided</option>
+                </select>
+              </label>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-2">
+              <label className="block space-y-1">
                 <span className="text-sm font-medium">Match mode</span>
                 <select
                   className={FIELD_CLASS}
@@ -237,6 +261,26 @@ const CmCommentsPage = () => {
                 }
               />
             </label>
+            <label className="block space-y-1">
+              <span className="text-sm font-medium">Priority (higher wins)</span>
+              <input
+                className={FIELD_CLASS}
+                type="number"
+                value={String(selected.priority ?? 0)}
+                onChange={(e) => patch(String(selected.id), { priority: Number(e.target.value) || 0 })}
+              />
+            </label>
+            {String(selected.rule_mode) === "ai_guidance" ? (
+              <label className="block space-y-1">
+                <span className="text-sm font-medium">AI instructions</span>
+                <textarea
+                  className={FIELD_CLASS}
+                  rows={3}
+                  value={String(selected.ai_instructions || "")}
+                  onChange={(e) => patch(String(selected.id), { ai_instructions: e.target.value })}
+                />
+              </label>
+            ) : null}
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
