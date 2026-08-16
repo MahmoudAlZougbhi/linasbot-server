@@ -4,6 +4,9 @@ import { useMediaQuery, usePrefersReducedMotion } from '../../../hooks/usePrefer
 
 const SEGMENTS = HOW_IT_WORKS_STEPS.length;
 
+/** @typedef {{ n: string, kicker: string, title: string, body: string, flow: string[], image: string, alt: string }} HowItWorksStep */
+
+/** @param {{ flow: string[] }} props */
 function FlowPill({ flow }) {
   return (
     <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-[#E4E8E6] bg-white px-4 py-2 text-sm text-[#06715F] shadow-sm">
@@ -18,6 +21,7 @@ function FlowPill({ flow }) {
   );
 }
 
+/** @param {{ step: HowItWorksStep }} props */
 function Story({ step }) {
   return (
     <div>
@@ -34,6 +38,7 @@ function Story({ step }) {
   );
 }
 
+/** @param {{ step: HowItWorksStep, reduced: boolean }} props */
 function Phone({ step, reduced }) {
   return (
     <img
@@ -47,7 +52,10 @@ function Phone({ step, reduced }) {
   );
 }
 
+/** @param {{ index: number }} props */
 function Progress({ index }) {
+  const current = HOW_IT_WORKS_STEPS[index];
+  if (!current) return null;
   const pct = ((index + 1) / SEGMENTS) * 100;
   return (
     <div className="mt-10 max-w-sm">
@@ -55,7 +63,7 @@ function Progress({ index }) {
         <div className="h-full rounded-full bg-[#06715F] lp-ease" style={{ width: `${pct}%`, transitionDuration: '420ms' }} />
       </div>
       <p className="mt-2 text-sm text-[#5C6663]">
-        {HOW_IT_WORKS_STEPS[index].n} / {String(SEGMENTS).padStart(2, '0')}
+        {current.n} / {String(SEGMENTS).padStart(2, '0')}
       </p>
     </div>
   );
@@ -84,8 +92,6 @@ export default function LandingHowItWorks() {
     return () => window.removeEventListener('scroll', onScroll);
   }, [pin]);
 
-  const step = HOW_IT_WORKS_STEPS[index];
-
   useEffect(() => {
     HOW_IT_WORKS_STEPS.slice(index + 1, index + 3).forEach((item) => {
       const img = new Image();
@@ -93,8 +99,10 @@ export default function LandingHowItWorks() {
     });
   }, [index]);
 
+  const step = HOW_IT_WORKS_STEPS[index];
+  if (!step) return null;
+
   if (!pin) {
-    const item = HOW_IT_WORKS_STEPS[index];
     return (
       <section
         id="how-it-works"
@@ -111,9 +119,9 @@ export default function LandingHowItWorks() {
         }}
       >
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <Phone step={item} reduced={reduced} />
+          <Phone step={step} reduced={reduced} />
           <div className="mt-6">
-            <Story step={item} />
+            <Story step={step} />
             <Progress index={index} />
           </div>
           <div className="mt-6 flex items-center justify-between gap-3">

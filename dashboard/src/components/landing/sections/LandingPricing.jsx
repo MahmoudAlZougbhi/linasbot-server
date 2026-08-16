@@ -4,6 +4,7 @@ import { PLAN_LANDING_COPY } from '../../../constants/landingPlansCopy';
 import { PUBLIC_PATHS } from '../../../constants/publicSite';
 import LinasStar from '../LinasStar';
 
+/** @param {unknown} value */
 function formatPrice(value) {
   const n = Number(value);
   if (Number.isNaN(n)) return null;
@@ -71,7 +72,10 @@ export default function LandingPricing() {
 
         <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           {plans.map((plan) => {
-            const copy = PLAN_LANDING_COPY[plan.plan_id] || { tier: '', blurb: '', included: [], missing: null };
+            const catalog = /** @type {Record<string, { tier: string, blurb: string, included: string[], missing: string | null, recommended?: boolean }>} */ (
+              PLAN_LANDING_COPY
+            );
+            const copy = catalog[String(plan.plan_id)] || { tier: '', blurb: '', included: [], missing: null };
             const recommended = Boolean(copy.recommended);
             const price = formatPrice(plan.price_usd);
             return (
@@ -95,7 +99,7 @@ export default function LandingPricing() {
                   {Number(plan.included_credits).toLocaleString()} AI credits.
                 </p>
                 <ul className="mt-4 flex-1 space-y-2 text-sm text-[#171A19]">
-                  {copy.included.map((item) => (
+                  {copy.included.map((/** @type {string} */ item) => (
                     <li key={item} className="flex gap-2">
                       <span className="text-[#06715F]">✓</span>
                       {item}

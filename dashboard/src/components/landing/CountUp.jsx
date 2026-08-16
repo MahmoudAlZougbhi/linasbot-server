@@ -20,6 +20,7 @@ export default function CountUp({ value, duration = 2000, className = '' }) {
     const startVal = fromRef.current;
     const start = performance.now();
     let frame = 0;
+    /** @param {number} now */
     const tick = (now) => {
       const t = Math.min(1, (now - start) / duration);
       const eased = 1 - (1 - t) ** 3;

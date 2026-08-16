@@ -1,5 +1,8 @@
 import MiniFrame from './MiniFrame';
 
+/** @typedef {{ play?: boolean }} MiniPlay */
+
+/** @param {MiniPlay} props */
 export function TeachAiSetup({ play }) {
   return (
     <MiniFrame play={play}>
@@ -32,6 +35,7 @@ export function TeachAiSetup({ play }) {
   );
 }
 
+/** @param {MiniPlay} props */
 export function TeachKnowledge({ play }) {
   const kinds = ['Text', 'Image', 'Link', 'Doc', 'Video'];
   return (
@@ -57,6 +61,7 @@ export function TeachKnowledge({ play }) {
   );
 }
 
+/** @param {MiniPlay} props */
 export function TeachOwnerCopilot({ play }) {
   return (
     <MiniFrame play={play}>
@@ -77,6 +82,7 @@ export function TeachOwnerCopilot({ play }) {
   );
 }
 
+/** @param {MiniPlay} props */
 export function TeachServices({ play }) {
   return (
     <MiniFrame play={play}>
@@ -104,6 +110,7 @@ export function TeachServices({ play }) {
   );
 }
 
+/** @param {MiniPlay} props */
 export function TeachProducts({ play }) {
   return (
     <MiniFrame play={play}>

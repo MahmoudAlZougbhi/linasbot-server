@@ -1,5 +1,8 @@
 import MiniFrame from './MiniFrame';
 
+/** @typedef {{ play?: boolean }} MiniPlay */
+
+/** @param {MiniPlay} props */
 export function ControlHandoff({ play }) {
   return (
     <MiniFrame play={play}>
@@ -14,6 +17,7 @@ export function ControlHandoff({ play }) {
   );
 }
 
+/** @param {MiniPlay} props */
 export function ControlRoles({ play }) {
   const rows = [
     { role: 'Admin', checks: [true, true, true] },
@@ -46,6 +50,7 @@ export function ControlRoles({ play }) {
   );
 }
 
+/** @param {MiniPlay} props */
 export function ControlLiveChat({ play }) {
   return (
     <MiniFrame play={play}>
@@ -75,6 +80,7 @@ export function ControlLiveChat({ play }) {
   );
 }
 
+/** @param {MiniPlay} props */
 export function ControlAssignment({ play }) {
   return (
     <MiniFrame play={play}>
@@ -92,6 +98,7 @@ export function ControlAssignment({ play }) {
   );
 }
 
+/** @param {MiniPlay} props */
 export function ControlLimits({ play }) {
   return (
     <MiniFrame play={play}>

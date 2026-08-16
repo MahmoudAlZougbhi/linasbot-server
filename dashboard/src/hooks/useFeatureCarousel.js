@@ -7,6 +7,7 @@ const MANUAL_PAUSE_MS = 8000;
 /**
  * Feature carousel state: one-step moves, autoplay, pause on hover/focus/touch/hidden.
  * @param {number} count
+ * @param {number} [initialIndex]
  */
 export function useFeatureCarousel(count, initialIndex = 2) {
   const reduced = usePrefersReducedMotion();
@@ -16,6 +17,10 @@ export function useFeatureCarousel(count, initialIndex = 2) {
   const interacting = useRef(false);
 
   const go = useCallback(
+    /**
+     * @param {number} next
+     * @param {boolean} [manual]
+     */
     (next, manual = false) => {
       if (count <= 0) return;
       const wrapped = ((next % count) + count) % count;

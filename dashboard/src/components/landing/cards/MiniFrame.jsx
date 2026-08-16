@@ -19,6 +19,9 @@ export function CoreBadge() {
   );
 }
 
+/**
+ * @param {{ title: string, description: string, core?: boolean }} props
+ */
 export function CardHead({ title, description, core = false }) {
   return (
     <div>

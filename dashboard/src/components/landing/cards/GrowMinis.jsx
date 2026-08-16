@@ -1,6 +1,9 @@
 import MiniFrame from './MiniFrame';
 import CountUp from '../CountUp';
 
+/** @typedef {{ play?: boolean }} MiniPlay */
+
+/** @param {MiniPlay} props */
 export function GrowFollowUp({ play }) {
   return (
     <MiniFrame play={play}>
@@ -16,6 +19,7 @@ export function GrowFollowUp({ play }) {
   );
 }
 
+/** @param {MiniPlay} props */
 export function GrowRequests({ play }) {
   const rows = [
     { name: 'Laser appointment', status: 'New', cls: 'bg-[#E8F5F1] text-[#06715F]', delay: '0ms' },
@@ -42,6 +46,7 @@ export function GrowRequests({ play }) {
   );
 }
 
+/** @param {MiniPlay} props */
 export function GrowSmartAnswers({ play }) {
   return (
     <MiniFrame play={play}>
@@ -104,6 +109,7 @@ export function GrowDashboard({ play, stats }) {
   );
 }
 
+/** @param {MiniPlay} props */
 export function GrowInsights({ play }) {
   const rows = [
     { name: 'Instagram', pct: 42 },

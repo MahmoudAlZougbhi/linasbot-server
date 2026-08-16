@@ -1,6 +1,9 @@
 import MiniFrame from './MiniFrame';
 import { CHANNELS } from '../ChannelIcons';
 
+/** @typedef {{ play?: boolean }} MiniPlay */
+
+/** @param {MiniPlay} props */
 export function ReplyCustomer({ play }) {
   return (
     <MiniFrame play={play}>
@@ -14,6 +17,7 @@ export function ReplyCustomer({ play }) {
   );
 }
 
+/** @param {MiniPlay} props */
 export function ReplyLanguage({ play }) {
   const langs = ['AR', 'EN', 'FR', 'Arabizi'];
   return (
@@ -42,6 +46,7 @@ export function ReplyLanguage({ play }) {
   );
 }
 
+/** @param {MiniPlay} props */
 export function ReplyComments({ play }) {
   return (
     <MiniFrame play={play}>
@@ -61,6 +66,7 @@ export function ReplyComments({ play }) {
   );
 }
 
+/** @param {MiniPlay} props */
 export function ReplyVoiceVision({ play }) {
   return (
     <MiniFrame play={play}>
@@ -82,6 +88,7 @@ export function ReplyVoiceVision({ play }) {
   );
 }
 
+/** @param {MiniPlay} props */
 export function ReplyChannels({ play }) {
   return (
     <MiniFrame play={play}>

@@ -20,13 +20,16 @@ vi.mock("./contexts/AuthContext", () => ({
 
 describe("public marketing landing", () => {
   beforeEach(() => {
+    /** @param {string} query */
     window.matchMedia = (query) => ({
       matches: String(query).includes("prefers-reduced-motion"),
       media: query,
+      onchange: null,
       addEventListener: () => {},
       removeEventListener: () => {},
       addListener: () => {},
       removeListener: () => {},
+      dispatchEvent: () => false,
     });
     window.ResizeObserver = class {
       observe() {}
