@@ -261,33 +261,10 @@ jobs:
               os.close(descriptor)
           PY
 
-      - name: Transfer exact bridge and bootstrap LB attestation
-        if: inputs.OPERATION == 'install-lb' || inputs.OPERATION == 'apply'
-        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          source: "transfer/workflow-bootstrap.py,transfer/lb-attestation.json"
-          target: "/tmp/linasbot-meta-ha-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}"
-          strip_components: 1
-
-      - name: Transfer only the exact bootstrap workflow bridge
-        if: inputs.OPERATION != 'install-lb' && inputs.OPERATION != 'apply'
-        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          source: "transfer/workflow-bootstrap.py"
-          target: "/tmp/linasbot-meta-ha-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}"
-          strip_components: 1
-
-      - name: Execute exact receipt-bound bootstrap operation
-        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
+      - name: Transfer to node01 through exact OpenSSH trust
         env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           OPERATION: ${{ inputs.OPERATION }}
           TARGET_SHA: ${{ inputs.TARGET_SHA }}
           RUNTIME_TRANSACTION_ID: ${{ inputs.RUNTIME_TRANSACTION_ID }}
@@ -305,15 +282,145 @@ jobs:
           CONFIRMATION: ${{ inputs.CONFIRMATION }}
           WORKFLOW_RUN_ID: ${{ github.run_id }}
           WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          script_stop: true
-          command_timeout: 115m
-          envs: OPERATION,TARGET_SHA,RUNTIME_TRANSACTION_ID,RUNTIME_PLAN_SHA256,RUNTIME_ARTIFACT_ID,RUNTIME_ARTIFACT_API_SHA256,EXPECTED_NODE01_SHA,EXPECTED_NODE02_SHA,EXPECTED_PG_STATE_SHA256,LB_ATTESTATION_SHA256,LB_READY_PROJECTION_SHA256,BOOTSTRAP_PLAN_SHA256,BOOTSTRAP_TRANSACTION_ID,BOOTSTRAP_JOURNAL_SHA256,CONFIRMATION,WORKFLOW_RUN_ID,WORKFLOW_RUN_ATTEMPT
-          script: |
+        run: |
+          set -euo pipefail
+          umask 077
+          # Reviewed node01 ED25519 identity. Node02 remains coordinator-only over the fixed private peer.
+          NODE01_HOST=139.59.167.62
+          NODE01_HOST_KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM21a0E0v4XBUVRgai2Z4Zcr+GSDVsztarkAoDRBQ+77'
+          NODE01_HOST_FINGERPRINT='SHA256:Y/L3vFTsLbzePNG/lbUyNGiBORV52U8D9Q4JlSsdqps'
+          SSH_ROOT="$RUNNER_TEMP/linasbot-meta-ha-ssh-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
+          [[ "$WORKFLOW_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$WORKFLOW_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          install -d -m 0700 -- "$SSH_ROOT"
+          cleanup_local_ssh() {
+            set +e
+            unlink "$SSH_ROOT/node01.key" 2>/dev/null || true
+            unlink "$SSH_ROOT/node01.known_hosts" 2>/dev/null || true
+            rmdir "$SSH_ROOT" 2>/dev/null || true
+          }
+          trap cleanup_local_ssh EXIT
+
+          SSH_ROOT="$SSH_ROOT" NODE01_HOST="$NODE01_HOST" \
+            NODE01_HOST_KEY="$NODE01_HOST_KEY" NODE01_HOST_FINGERPRINT="$NODE01_HOST_FINGERPRINT" \
+            python3 -B -I -S - <<'PY'
+          import base64
+          import hashlib
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path(os.environ["SSH_ROOT"])
+          node01_host = os.environ["NODE01_HOST"]
+          allowed_key_types = {"ssh-ed25519"}
+
+          def write_private_key() -> None:
+              value = os.environ.get("SSH_PRIVATE_KEY", "")
+              if not value or "\x00" in value or not value.startswith("-----BEGIN "):
+                  raise SystemExit("node01 private key secret is invalid")
+              first = value.splitlines()[0] if value.splitlines() else ""
+              if not first.endswith(" PRIVATE KEY-----"):
+                  raise SystemExit("node01 private key secret is invalid")
+              path = root / "node01.key"
+              descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+              try:
+                  os.write(descriptor, (value.rstrip("\n") + "\n").encode("utf-8"))
+                  os.fsync(descriptor)
+              finally:
+                  os.close(descriptor)
+
+          def write_known_hosts(expected_host: str) -> None:
+              line = f"{expected_host} {os.environ['NODE01_HOST_KEY']}"
+              fields = line.split(" ")
+              if len(fields) != 3 or fields[0] != expected_host or fields[1] not in allowed_key_types:
+                  raise SystemExit("node01 known_hosts identity is not the fixed node")
+              try:
+                  decoded = base64.b64decode(fields[2], validate=True)
+              except ValueError as exc:
+                  raise SystemExit("node01 known_hosts key is not strict base64") from exc
+              if not 32 <= len(decoded) <= 16_384:
+                  raise SystemExit("node01 known_hosts key size is invalid")
+              name_size = int.from_bytes(decoded[:4], "big")
+              if name_size < 1 or 4 + name_size > len(decoded):
+                  raise SystemExit("node01 known_hosts key blob is malformed")
+              try:
+                  embedded_type = decoded[4 : 4 + name_size].decode("ascii")
+              except UnicodeDecodeError as exc:
+                  raise SystemExit("node01 known_hosts key type is invalid") from exc
+              if embedded_type != fields[1]:
+                  raise SystemExit("node01 known_hosts key type does not match its blob")
+              fingerprint = "SHA256:" + base64.b64encode(hashlib.sha256(decoded).digest()).decode("ascii").rstrip("=")
+              if fingerprint != os.environ["NODE01_HOST_FINGERPRINT"]:
+                  raise SystemExit("node01 pinned SSH host fingerprint does not match its key")
+              path = root / "node01.known_hosts"
+              descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+              try:
+                  os.write(descriptor, (line + "\n").encode("ascii"))
+                  os.fsync(descriptor)
+              finally:
+                  os.close(descriptor)
+          if re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", os.environ.get("SSH_USER", "")) is None:
+              raise SystemExit("node01 SSH user secret is invalid")
+          write_private_key()
+          write_known_hosts(node01_host)
+          PY
+          unset SSH_PRIVATE_KEY
+
+          SSH_HARDENING=(
+            -F /dev/null
+            -o BatchMode=yes
+            -o PasswordAuthentication=no
+            -o KbdInteractiveAuthentication=no
+            -o PreferredAuthentications=publickey
+            -o IdentitiesOnly=yes
+            -o IdentityAgent=none
+            -o HostKeyAlgorithms=ssh-ed25519
+            -o StrictHostKeyChecking=yes
+            -o GlobalKnownHostsFile=/dev/null
+            -o UpdateHostKeys=no
+            -o VerifyHostKeyDNS=no
+            -o CheckHostIP=yes
+            -o ForwardAgent=no
+            -o ClearAllForwardings=yes
+            -o ControlMaster=no
+            -o ConnectTimeout=10
+            -o ServerAliveInterval=15
+            -o ServerAliveCountMax=3
+            -o LogLevel=ERROR
+          )
+          NODE01_SSH=(
+            /usr/bin/ssh "${SSH_HARDENING[@]}"
+            -i "$SSH_ROOT/node01.key"
+            -o "UserKnownHostsFile=$SSH_ROOT/node01.known_hosts"
+            "$SSH_USER@$NODE01_HOST"
+          )
+          "${NODE01_SSH[@]}" /usr/bin/true
+
+          UPLOAD="/tmp/linasbot-meta-ha-bootstrap-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
+          "${NODE01_SSH[@]}" "/usr/bin/test ! -e '$UPLOAD' && /usr/bin/install -d -m 0700 -- '$UPLOAD'"
+          TRANSFER_FILES=(transfer/workflow-bootstrap.py)
+          if [ "$OPERATION" = install-lb ] || [ "$OPERATION" = apply ]; then
+            TRANSFER_FILES+=(transfer/lb-attestation.json)
+          fi
+          /usr/bin/scp "${SSH_HARDENING[@]}" \
+            -i "$SSH_ROOT/node01.key" \
+            -o "UserKnownHostsFile=$SSH_ROOT/node01.known_hosts" \
+            -- "${TRANSFER_FILES[@]}" "$SSH_USER@$NODE01_HOST:$UPLOAD/"
+
+          REMOTE_COMMAND='/usr/bin/env -i HOME=/nonexistent LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/sbin:/usr/bin:/sbin:/bin'
+          for variable in \
+            OPERATION TARGET_SHA RUNTIME_TRANSACTION_ID RUNTIME_PLAN_SHA256 \
+            RUNTIME_ARTIFACT_ID RUNTIME_ARTIFACT_API_SHA256 EXPECTED_NODE01_SHA \
+            EXPECTED_NODE02_SHA EXPECTED_PG_STATE_SHA256 LB_ATTESTATION_SHA256 \
+            LB_READY_PROJECTION_SHA256 BOOTSTRAP_PLAN_SHA256 BOOTSTRAP_TRANSACTION_ID \
+            BOOTSTRAP_JOURNAL_SHA256 CONFIRMATION WORKFLOW_RUN_ID WORKFLOW_RUN_ATTEMPT
+          do
+            printf -v quoted '%q' "${!variable}"
+            REMOTE_COMMAND+=" $variable=$quoted"
+          done
+          REMOTE_COMMAND+=' /bin/bash --noprofile --norc -s'
+          /usr/bin/timeout --signal=TERM --kill-after=30s 6900 \
+            "${NODE01_SSH[@]}" "$REMOTE_COMMAND" <<'REMOTE_BOOTSTRAP'
             set -euo pipefail
             umask 077
             UPLOAD="/tmp/linasbot-meta-ha-bootstrap-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
@@ -488,3 +595,4 @@ jobs:
                 ;;
               *) exit 1 ;;
             esac
+          REMOTE_BOOTSTRAP

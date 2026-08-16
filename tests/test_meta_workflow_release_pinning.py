@@ -44,10 +44,13 @@ def test_every_meta_workflow_is_pinned_to_the_exact_deployed_release() -> None:
 
 
 def test_privileged_meta_ssh_action_is_pinned_to_an_immutable_commit() -> None:
-    for workflow in [*_meta_workflows(), WORKFLOW_DIR / "deploy.yml"]:
+    for workflow in _meta_workflows():
         source = workflow.read_text(encoding="utf-8")
         assert PINNED_SSH_ACTION in source, workflow.name
         assert "appleboy/ssh-action@v" not in source, workflow.name
+    deploy = (WORKFLOW_DIR / "deploy.yml").read_text(encoding="utf-8")
+    assert "appleboy/" not in deploy
+    assert "/usr/bin/ssh" in deploy and "/usr/bin/scp" in deploy
 
 
 def test_retired_app_mutation_workflows_expose_no_ssh_or_secrets() -> None:

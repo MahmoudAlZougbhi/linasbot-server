@@ -812,9 +812,12 @@ def test_workflow_never_contacts_production_for_plan_or_dry_run() -> None:
     assert "if: inputs.OPERATION == 'apply' || inputs.OPERATION == 'status'" in workflow
     assert "if: inputs.OPERATION == 'plan' || inputs.OPERATION == 'dry-run' || inputs.OPERATION == 'apply'" in workflow
     assert "persist-credentials: false" in workflow
-    for action in ("actions/checkout@", "actions/download-artifact@", "appleboy/scp-action@", "appleboy/ssh-action@"):
+    for action in ("actions/checkout@", "actions/download-artifact@"):
         line = next(line for line in workflow.splitlines() if action in line)
         assert len(line.rsplit("@", 1)[1].strip()) == 40
+    assert "appleboy/" not in workflow
+    assert "/usr/bin/ssh" in workflow
+    assert "/usr/bin/scp" in workflow
 
 
 def _workflow_launcher_authority(tmp_path: Path) -> tuple[str, str, int, str, Path]:

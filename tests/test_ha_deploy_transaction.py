@@ -82,12 +82,12 @@ def test_workflow_runs_only_the_helper_from_the_exact_authorized_blob() -> None:
     assert 'select(.type == "required_reviewers")' in gate_script
     assert '[ "$PREVENT_SELF_REVIEW" = true ]' in gate_script
     deploy_step = next(
-        step
-        for step in job["steps"]
-        if step.get("uses") == "appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17"
+        step for step in job["steps"] if step.get("name") == "Transfer to node01 through exact OpenSSH trust"
     )
-    assert deploy_step["uses"] == ("appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17")
-    script = deploy_step["with"]["script"]
+    assert "appleboy/" not in source
+    script = deploy_step["run"]
+    assert "/usr/bin/ssh" in script
+    assert "/usr/bin/scp" in script
     assert "materialize_recovery_helper" in script
     assert "root_copy_exact" in script
     assert "os.O_EXCL" in script

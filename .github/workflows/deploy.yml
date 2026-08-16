@@ -839,33 +839,10 @@ jobs:
           PY
           printf 'lb_size=%s\n' "$(stat -c '%s' transfer/lb-attestation.json)" >>"$GITHUB_OUTPUT"
 
-      - name: Transfer exact release and LB artifacts to fixed node01
-        if: inputs.DEPLOY_OPERATION == 'steady' || inputs.DEPLOY_OPERATION == 'reconcile_exact'
-        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          source: "transfer/deploy_meta_release_ha.sh,transfer/lb-attestation.json,transfer/release"
-          target: "/tmp/linasbot-ha-upload-${{ github.run_id }}-${{ github.run_attempt }}"
-          strip_components: 1
-
-      - name: Transfer fresh LB artifact for durable transaction recovery
-        if: inputs.DEPLOY_OPERATION != 'steady' && inputs.DEPLOY_OPERATION != 'reconcile_exact'
-        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          source: "transfer/lb-attestation.json"
-          target: "/tmp/linasbot-ha-upload-${{ github.run_id }}-${{ github.run_attempt }}"
-          strip_components: 1
-
-      - name: Execute exact peer-first HA transaction
-        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+      - name: Transfer to node01 through exact OpenSSH trust
         env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           DEPLOY_OPERATION: ${{ inputs.DEPLOY_OPERATION }}
           TARGET_SHA: ${{ inputs.TARGET_SHA }}
           QUALITY_GATES_RUN_ID: ${{ inputs.QUALITY_GATES_RUN_ID }}
@@ -904,15 +881,146 @@ jobs:
           LB_ATTESTATION_SIZE: ${{ steps.lb_contract.outputs.lb_size }}
           WORKFLOW_RUN_ID: ${{ github.run_id }}
           WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          script_stop: true
-          command_timeout: 115m
-          envs: DEPLOY_OPERATION,TARGET_SHA,QUALITY_GATES_RUN_ID,RELEASE_RUN_ATTEMPT,RELEASE_ARTIFACT_ID,RELEASE_ARTIFACT_API_SHA256,RELEASE_MANIFEST_SHA256,RELEASE_TARGET_TREE_SHA,RELEASE_INSTALL_CONFIRM,NODE01_BASELINE_SHA,NODE02_BASELINE_SHA,BOOTSTRAP_PLAN_SHA256,RECONCILE_CONFIRM,DEPLOY_CONFIRM,RECOVERY_JOURNAL_SHA256,COMMIT_CONFIRM,RECOVERY_CONFIRM,RETRY_RECONCILE_CONFIRM,LB_ATTESTATION_SHA256,LB_READY_PROJECTION_SHA256,LB_INSTALL_CONFIRM,LB_OWNER_CONFIRM,RELEASE_CONTROL_SHA,RELEASE_CONTROL_SIZE,RELEASE_SOURCE_SHA,RELEASE_SOURCE_SIZE,RELEASE_WHEELHOUSE_SHA,RELEASE_WHEELHOUSE_SIZE,RELEASE_DASHBOARD_SHA,RELEASE_DASHBOARD_SIZE,RELEASE_RUNTIME_SHA,RELEASE_RUNTIME_SIZE,RELEASE_MANIFEST_SIZE,EXPECTED_HELPER_SHA,EXPECTED_HELPER_SIZE,LB_ATTESTATION_SIZE,WORKFLOW_RUN_ID,WORKFLOW_RUN_ATTEMPT
-          script: |
+        run: |
+          set -euo pipefail
+          umask 077
+          # Reviewed node01 ED25519 identity. Node02 remains coordinator-only over the fixed private peer.
+          NODE01_HOST=139.59.167.62
+          NODE01_HOST_KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM21a0E0v4XBUVRgai2Z4Zcr+GSDVsztarkAoDRBQ+77'
+          NODE01_HOST_FINGERPRINT='SHA256:Y/L3vFTsLbzePNG/lbUyNGiBORV52U8D9Q4JlSsdqps'
+          SSH_ROOT="$RUNNER_TEMP/linasbot-deploy-ha-ssh-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
+          [[ "$WORKFLOW_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$WORKFLOW_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          install -d -m 0700 -- "$SSH_ROOT"
+          cleanup_local_ssh() {
+            set +e
+            unlink "$SSH_ROOT/node01.key" 2>/dev/null || true
+            unlink "$SSH_ROOT/node01.known_hosts" 2>/dev/null || true
+            rmdir "$SSH_ROOT" 2>/dev/null || true
+          }
+          trap cleanup_local_ssh EXIT
+
+          SSH_ROOT="$SSH_ROOT" NODE01_HOST="$NODE01_HOST" \
+            NODE01_HOST_KEY="$NODE01_HOST_KEY" NODE01_HOST_FINGERPRINT="$NODE01_HOST_FINGERPRINT" \
+            python3 -B -I -S - <<'PY'
+          import base64
+          import hashlib
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path(os.environ["SSH_ROOT"])
+          allowed_key_types = {"ssh-ed25519"}
+
+          def write_secret(path: Path, value: str) -> None:
+              descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+              try:
+                  os.write(descriptor, value.encode("utf-8"))
+                  os.fsync(descriptor)
+              finally:
+                  os.close(descriptor)
+
+          def private_key() -> None:
+              value = os.environ.get("SSH_PRIVATE_KEY", "")
+              if not value or "\x00" in value or not value.startswith("-----BEGIN "):
+                  raise SystemExit("node01 private key secret is invalid")
+              first = value.splitlines()[0] if value.splitlines() else ""
+              if not first.endswith(" PRIVATE KEY-----"):
+                  raise SystemExit("node01 private key secret is invalid")
+              write_secret(root / "node01.key", value.rstrip("\n") + "\n")
+
+          def known_hosts(host: str) -> None:
+              line = f"{host} {os.environ['NODE01_HOST_KEY']}"
+              fields = line.split(" ")
+              if len(fields) != 3 or fields[0] != host or fields[1] not in allowed_key_types:
+                  raise SystemExit("node01 known_hosts identity is not the fixed node")
+              try:
+                  decoded = base64.b64decode(fields[2], validate=True)
+              except ValueError as exc:
+                  raise SystemExit("node01 known_hosts key is not strict base64") from exc
+              if not 32 <= len(decoded) <= 16_384:
+                  raise SystemExit("node01 known_hosts key size is invalid")
+              name_size = int.from_bytes(decoded[:4], "big")
+              if name_size < 1 or 4 + name_size > len(decoded):
+                  raise SystemExit("node01 known_hosts key blob is malformed")
+              try:
+                  embedded_type = decoded[4 : 4 + name_size].decode("ascii")
+              except UnicodeDecodeError as exc:
+                  raise SystemExit("node01 known_hosts key type is invalid") from exc
+              if embedded_type != fields[1]:
+                  raise SystemExit("node01 known_hosts key type does not match its blob")
+              fingerprint = "SHA256:" + base64.b64encode(hashlib.sha256(decoded).digest()).decode("ascii").rstrip("=")
+              if fingerprint != os.environ["NODE01_HOST_FINGERPRINT"]:
+                  raise SystemExit("node01 pinned SSH host fingerprint does not match its key")
+              write_secret(root / "node01.known_hosts", line + "\n")
+
+          if re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", os.environ.get("SSH_USER", "")) is None:
+              raise SystemExit("node01 SSH user secret is invalid")
+          private_key()
+          known_hosts(os.environ["NODE01_HOST"])
+          PY
+          unset SSH_PRIVATE_KEY
+
+          SSH_HARDENING=(
+            -F /dev/null
+            -o BatchMode=yes
+            -o PasswordAuthentication=no
+            -o KbdInteractiveAuthentication=no
+            -o PreferredAuthentications=publickey
+            -o IdentitiesOnly=yes
+            -o IdentityAgent=none
+            -o HostKeyAlgorithms=ssh-ed25519
+            -o StrictHostKeyChecking=yes
+            -o GlobalKnownHostsFile=/dev/null
+            -o UpdateHostKeys=no
+            -o VerifyHostKeyDNS=no
+            -o CheckHostIP=yes
+            -o ForwardAgent=no
+            -o ClearAllForwardings=yes
+            -o ControlMaster=no
+            -o ConnectTimeout=10
+            -o ServerAliveInterval=15
+            -o ServerAliveCountMax=3
+            -o LogLevel=ERROR
+          )
+          NODE01_SSH=(
+            /usr/bin/ssh "${SSH_HARDENING[@]}"
+            -i "$SSH_ROOT/node01.key"
+            -o "UserKnownHostsFile=$SSH_ROOT/node01.known_hosts"
+            "$SSH_USER@$NODE01_HOST"
+          )
+          "${NODE01_SSH[@]}" /usr/bin/true
+
+          UPLOAD_ROOT="/tmp/linasbot-ha-upload-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
+          "${NODE01_SSH[@]}" "/usr/bin/test ! -e '$UPLOAD_ROOT' && /usr/bin/install -d -m 0700 -- '$UPLOAD_ROOT'"
+          if [ "$DEPLOY_OPERATION" = steady ] || [ "$DEPLOY_OPERATION" = reconcile_exact ]; then
+            TRANSFER_FILES=(transfer/deploy_meta_release_ha.sh transfer/lb-attestation.json transfer/release)
+          else
+            TRANSFER_FILES=(transfer/lb-attestation.json)
+          fi
+          /usr/bin/scp -r "${SSH_HARDENING[@]}" \
+            -i "$SSH_ROOT/node01.key" \
+            -o "UserKnownHostsFile=$SSH_ROOT/node01.known_hosts" \
+            -- "${TRANSFER_FILES[@]}" "$SSH_USER@$NODE01_HOST:$UPLOAD_ROOT/"
+
+          REMOTE_COMMAND='/usr/bin/env -i HOME=/nonexistent LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/sbin:/usr/bin:/sbin:/bin'
+          for variable in \
+            DEPLOY_OPERATION TARGET_SHA QUALITY_GATES_RUN_ID RELEASE_RUN_ATTEMPT RELEASE_ARTIFACT_ID \
+            RELEASE_ARTIFACT_API_SHA256 RELEASE_MANIFEST_SHA256 RELEASE_TARGET_TREE_SHA \
+            RELEASE_INSTALL_CONFIRM NODE01_BASELINE_SHA NODE02_BASELINE_SHA BOOTSTRAP_PLAN_SHA256 \
+            RECONCILE_CONFIRM DEPLOY_CONFIRM RECOVERY_JOURNAL_SHA256 COMMIT_CONFIRM RECOVERY_CONFIRM \
+            RETRY_RECONCILE_CONFIRM LB_ATTESTATION_SHA256 LB_READY_PROJECTION_SHA256 LB_INSTALL_CONFIRM \
+            LB_OWNER_CONFIRM RELEASE_CONTROL_SHA RELEASE_CONTROL_SIZE RELEASE_SOURCE_SHA \
+            RELEASE_SOURCE_SIZE RELEASE_WHEELHOUSE_SHA RELEASE_WHEELHOUSE_SIZE RELEASE_DASHBOARD_SHA \
+            RELEASE_DASHBOARD_SIZE RELEASE_RUNTIME_SHA RELEASE_RUNTIME_SIZE RELEASE_MANIFEST_SIZE \
+            EXPECTED_HELPER_SHA EXPECTED_HELPER_SIZE LB_ATTESTATION_SIZE WORKFLOW_RUN_ID WORKFLOW_RUN_ATTEMPT
+          do
+            printf -v quoted '%q' "${!variable}"
+            REMOTE_COMMAND+=" $variable=$quoted"
+          done
+          REMOTE_COMMAND+=' /bin/bash --noprofile --norc -s'
+          /usr/bin/timeout --signal=TERM --kill-after=30s 6900 \
+            "${NODE01_SSH[@]}" "$REMOTE_COMMAND" <<'REMOTE_DEPLOY'
             set -euo pipefail
             umask 077
             UPLOAD_ROOT="/tmp/linasbot-ha-upload-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
@@ -1336,3 +1444,4 @@ jobs:
                 "$RECOVERY_JOURNAL_SHA256" "$RETRY_RECONCILE_CONFIRM" \
                 "$LB_ATTESTATION_SHA256" "$LB_READY_PROJECTION_SHA256" "$LB_OWNER_CONFIRM"
             fi
+          REMOTE_DEPLOY

@@ -14,8 +14,7 @@ from scripts.ha import bootstrap_meta_ha_contract as bootstrap
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/bootstrap-meta-ha.yml"
-PINNED_SSH = "appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17"
-PINNED_SCP = "appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345"
+NODE01_KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM21a0E0v4XBUVRgai2Z4Zcr+GSDVsztarkAoDRBQ+77"
 EXPECTED_INPUTS = {
     "OPERATION",
     "TARGET_SHA",
@@ -44,10 +43,9 @@ def test_bootstrap_workflow_is_protected_serialized_and_closed() -> None:
     assert parsed["concurrency"] == {"group": "meta-social-cutover", "cancel-in-progress": False}
     assert job["environment"] == "meta-social-cutover"
     assert "github.ref == 'refs/heads/main'" in str(job["if"])
-    assert PINNED_SSH in source
-    assert PINNED_SCP in source
-    assert "appleboy/ssh-action@v" not in source
-    assert "appleboy/scp-action@v" not in source
+    assert "appleboy/" not in source
+    assert "/usr/bin/ssh" in source
+    assert "/usr/bin/scp" in source
     assert "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" in source
     assert "persist-credentials: false" in source
     bridge = ROOT / "scripts/ha/python_runtime_provision_workflow_bootstrap.py"
@@ -92,11 +90,10 @@ def test_bootstrap_workflow_uses_only_retained_receipt_bound_control() -> None:
 
 def test_bootstrap_workflow_attestation_transport_is_data_only_and_digest_bound() -> None:
     source = WORKFLOW.read_text(encoding="utf-8")
-    assert source.count("uses: appleboy/scp-action@") == 2
-    assert "if: inputs.OPERATION == 'install-lb' || inputs.OPERATION == 'apply'" in source
-    assert "if: inputs.OPERATION != 'install-lb' && inputs.OPERATION != 'apply'" in source
-    assert 'source: "transfer/workflow-bootstrap.py,transfer/lb-attestation.json"' in source
-    assert 'source: "transfer/workflow-bootstrap.py"' in source
+    assert "TRANSFER_FILES=(transfer/workflow-bootstrap.py)" in source
+    assert 'if [ "$OPERATION" = install-lb ] || [ "$OPERATION" = apply ]; then' in source
+    assert "TRANSFER_FILES+=(transfer/lb-attestation.json)" in source
+    assert '-- "${TRANSFER_FILES[@]}" "$SSH_USER@$NODE01_HOST:$UPLOAD/"' in source
     assert "base64.b64decode(encoded, validate=True)" in source
     assert "hashlib.sha256(raw).hexdigest() != expected" in source
     assert "duplicate JSON key" in source
@@ -119,6 +116,37 @@ def test_bootstrap_apply_installs_fresh_attestation_in_the_same_protected_run() 
     assert apply_case.index("install_lb_attestation") < apply_case.index("run_bootstrap apply")
     assert "INSTALL_CONFIRM=" in script
     assert '--confirm "$INSTALL_CONFIRM"' in script
+
+
+def test_bootstrap_workflow_pins_fixed_node01_transport_and_leaves_node02_to_coordinator() -> None:
+    source = WORKFLOW.read_text(encoding="utf-8")
+    assert "NODE01_HOST=139.59.167.62" in source
+    assert NODE01_KEY in source
+    for name in ("SSH_USER", "SSH_PRIVATE_KEY"):
+        assert f"secrets.{name}" in source
+    assert "secrets.SSH_HOST" not in source
+    assert "SSH_NODE02_USER" not in source
+    assert "SSH_NODE02_PRIVATE_KEY" not in source
+    assert "NODE02_SSH=(" not in source
+    assert "ssh-keyscan" not in source
+    assert "StrictHostKeyChecking=yes" in source
+    assert "HostKeyAlgorithms=ssh-ed25519" in source
+    assert "GlobalKnownHostsFile=/dev/null" in source
+    assert "UserKnownHostsFile=$SSH_ROOT/node01.known_hosts" in source
+    assert '"${NODE01_SSH[@]}" /usr/bin/true' in source
+    assert '"$SSH_USER@$NODE01_HOST"' in source
+    assert "--peer-host 10.106.0.4" in source
+    helper = (ROOT / "scripts/ha/bootstrap_meta_ha_contract.py").read_text(encoding="utf-8")
+    assert '"StrictHostKeyChecking=yes"' in helper
+    assert '"private_ip": "10.106.0.4"' in helper
+    for forbidden in (
+        "StrictHostKeyChecking=no",
+        "StrictHostKeyChecking=accept-new",
+        "UserKnownHostsFile=/dev/null",
+        "curl ",
+        "wget ",
+    ):
+        assert forbidden not in source
 
 
 def test_bootstrap_workflow_has_both_closed_recovery_lanes() -> None:
