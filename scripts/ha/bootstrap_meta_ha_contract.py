@@ -1188,11 +1188,11 @@ def _parse_env(payload: bytes) -> dict[str, str]:
     return values
 
 
-def _assert_no_execution_env_injection(values: dict[str, str]) -> None:
+def _assert_no_execution_env_injection(values: dict[str, str], *, allow_legacy_path: bool = False) -> None:
     forbidden = sorted(
         key
         for key in values
-        if key in FORBIDDEN_EXECUTION_ENV_KEYS
+        if (key in FORBIDDEN_EXECUTION_ENV_KEYS and not (allow_legacy_path and key == "PATH"))
         or key.startswith(FORBIDDEN_EXECUTION_ENV_PREFIXES)
         or (key.startswith("PYTHON") and key not in {"PYTHONUNBUFFERED", "PYTHONDONTWRITEBYTECODE"})
     )
@@ -1216,7 +1216,7 @@ def _render_env(payload: bytes, node_id: str) -> bytes:
     for line in text.splitlines():
         if "=" in line and not line.lstrip().startswith("#"):
             key = line.split("=", 1)[0].strip()
-            if key in replacements:
+            if key in replacements or key == "PATH":
                 continue
         output.append(line)
     output.extend(f"{key}={replacements[key]}" for key in sorted(replacements))
@@ -2630,7 +2630,11 @@ def _node_probe(
         raise RuntimeError("pre-existing maintenance requires recovery, not bootstrap")
     env_payload, env_info = _read_regular_any_owner(ENV_PATH)
     values = _parse_env(env_payload)
-    _assert_no_execution_env_injection(values)
+    # Old single-node deployments stored PATH in .env.  It is never trusted
+    # for bootstrap execution and _render_env removes it before the canonical
+    # HA environment is published; accepting only this one legacy key lets the
+    # transaction archive and retire it without weakening any other guard.
+    _assert_no_execution_env_injection(values, allow_legacy_path=True)
     pg = _pg_probe(values, runtime_authority)
     legacy_payload = b""
     legacy_info: os.stat_result | None = None
@@ -3878,7 +3882,7 @@ def _assert_process_contract(
     """
 
     env_expected = _parse_env(ENV_PATH.read_bytes())
-    _assert_no_execution_env_injection(env_expected)
+    _assert_no_execution_env_injection(env_expected, allow_legacy_path=not require_bootstrapped_contract)
     env_expected.update(
         {
             "PYTHONUNBUFFERED": "1",

@@ -1539,10 +1539,24 @@ def test_bootstrap_refuses_controlled_failover_and_registry_nfs_retirement() -> 
     assert "PYTHON_RUNTIME_PROVISION_COORDINATOR" in installer
 
 
-@pytest.mark.parametrize("key", ["PYTHONPATH", "PYTHONHOME", "LD_PRELOAD", "LD_AUDIT", "BASH_ENV", "NODE_OPTIONS"])
+@pytest.mark.parametrize(
+    "key", ["PATH", "PYTHONPATH", "PYTHONHOME", "LD_PRELOAD", "LD_AUDIT", "BASH_ENV", "NODE_OPTIONS"]
+)
 def test_bootstrap_rejects_code_loader_environment_controls(key: str) -> None:
     with pytest.raises(RuntimeError, match=rf"forbidden code-loader controls: {key}"):
         bootstrap._assert_no_execution_env_injection({key: "/outside"})
+
+
+def test_bootstrap_only_allows_legacy_path_before_canonical_publication() -> None:
+    bootstrap._assert_no_execution_env_injection({"PATH": "/legacy"}, allow_legacy_path=True)
+    with pytest.raises(RuntimeError, match="PYTHONPATH"):
+        bootstrap._assert_no_execution_env_injection(
+            {"PATH": "/legacy", "PYTHONPATH": "/outside"}, allow_legacy_path=True
+        )
+
+    rendered = bootstrap._render_env(b"PATH=/legacy\nOPENAI_API_KEY=kept\n", "node01")
+    assert b"PATH=" not in rendered
+    assert b"OPENAI_API_KEY=kept\n" in rendered
 
 
 def test_bootstrap_code_loader_diagnostic_is_sorted_bounded_and_sanitized() -> None:
