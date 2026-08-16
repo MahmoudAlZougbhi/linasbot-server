@@ -23,6 +23,7 @@ PROTECTED_RELEASE_TRANSPORT_WORKFLOWS = (
     "deploy.yml",
     "provision-python-runtime-ha.yml",
 )
+PRIVATE_WORKFLOW_UPLOAD_ROOT = "/var/lib/linasbot/meta-ha/workflow-uploads"
 NODE01_SSH_HOST_KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM21a0E0v4XBUVRgai2Z4Zcr+GSDVsztarkAoDRBQ+77"
 
 ALL_WORKFLOWS = frozenset(
@@ -267,6 +268,9 @@ def test_protected_release_transport_pins_node01_and_retains_internal_peer_contr
         assert "StrictHostKeyChecking=yes" in source, name
         assert "GlobalKnownHostsFile=/dev/null" in source, name
         assert "UpdateHostKeys=no" in source, name
+        assert PRIVATE_WORKFLOW_UPLOAD_ROOT in source, name
+        assert "/tmp/linasbot-" not in source, name
+        assert "install -d -o root -g root -m 0700" in source, name
         assert "UserKnownHostsFile=$SSH_ROOT/node01.known_hosts" in source, name
         assert '"$SSH_USER@$NODE01_HOST"' in source, name
         assert '"${NODE01_SSH[@]}" /usr/bin/true' in source, name

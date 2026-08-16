@@ -422,7 +422,7 @@ def _initial(values: list[str]) -> int:
         or SHA_RE.fullmatch(target) is None
     ):
         raise BootstrapError("initial QG authority is invalid")
-    if upload != Path(f"/tmp/linasbot-python-runtime-upload-{workflow_run}-{workflow_attempt}"):
+    if upload != Path(f"/var/lib/linasbot/meta-ha/workflow-uploads/python-runtime-{workflow_run}-{workflow_attempt}"):
         raise BootstrapError("initial upload root is not fixed")
     bootstrap = upload / "bootstrap"
     trusted = Path(f"/run/linas-python-runtime-bootstrap-{workflow_run}-{workflow_attempt}")

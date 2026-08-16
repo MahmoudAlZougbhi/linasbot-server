@@ -905,7 +905,7 @@ def test_clean_host_initial_ingests_before_transaction_apply(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     module_bytes = {name: f"trusted-{name}\n".encode() for name in workflow_bridge.NODE_MODULES}
-    upload = Path("/tmp/linasbot-python-runtime-upload-100-2")
+    upload = Path("/var/lib/linasbot/meta-ha/workflow-uploads/python-runtime-100-2")
     state_root = tmp_path / "state"
     commands: list[list[str]] = []
     monkeypatch.setattr(workflow_bridge, "STATE_ROOT", state_root)
