@@ -42,8 +42,8 @@ export const CM_SECTION_CARDS = [
   {
     slug: "branches",
     section: "branches",
-    name: "Locations",
-    description: "Branches, stores, offices, hours, and availability (optional).",
+    name: "Locations & hours",
+    description: "Manage every branch in one place — details, hours, and media & files.",
   },
   {
     slug: "opening-hours",
@@ -67,7 +67,7 @@ export const CM_SECTION_CARDS = [
     slug: "knowledge",
     section: "knowledge",
     name: "Knowledge",
-    description: "Narrative knowledge for retrieval after FAQ miss — educational articles only.",
+    description: "Teach Linas what your business knows.",
   },
   {
     slug: "faq",

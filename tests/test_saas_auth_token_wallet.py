@@ -46,6 +46,7 @@ def test_auth_email_routes_are_public() -> None:
     assert is_public_api("POST", "/api/auth/confirm-email-change")
     assert is_public_api("GET", "/api/billing/packages")
     assert is_public_api("GET", "/api/public/plans")
+    assert is_public_api("GET", "/api/public/landing-stats")
     assert is_public_api("POST", "/api/billing/stripe/webhook")
     assert is_public_api("POST", "/api/webhooks/resend")
 
@@ -120,9 +121,8 @@ def test_landing_pricing_section_in_source() -> None:
     # Design ZIP moved the pricing section into LandingPricing; Landing composes it.
     assert "LandingPricing" in landing_text
     assert 'id="pricing"' in pricing_text
-    # Marketing pricing preview points to in-app billing catalog (no wallet packages fetch).
-    assert "billing catalog" in pricing_text.lower()
-    assert "app" in pricing_text.lower()
+    # Marketing prices come from the public plans catalog (not wallet packages).
+    assert "/api/public/plans" in pricing_text
     assert "/api/billing/packages" not in pricing_text
     assert "/api/billing/packages" not in landing_text
     assert "30% profit" not in pricing_text

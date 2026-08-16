@@ -42,6 +42,7 @@ def enforce_restricted_and_handoff(
         }
 
     from services.cm.capability_gates import human_handoff_enabled
+    from services.customer_reply_v2.flags import customer_ai_v10_runtime_enabled
     from services.requests.capture import (
         comment_capture_policy_reply,
         is_public_comment_channel,
@@ -53,25 +54,23 @@ def enforce_restricted_and_handoff(
     # Exact public-comment channels only — never substring-match (comment_linked_dm is private).
     public_comment = is_public_comment_channel(channel)
     handoff_intent = _detect_booking_or_human(message)
-    if handoff_intent == "booking" and skip_forced_booking_wa_me(tenant_id):
-        if public_comment:
-            return comment_capture_policy_reply(
-                tenant_id=tenant_id,
-                message=message,
-                response_language=response_language,
-                booking_or_order_intent=True,
-            )
-        # DM/private (incl. comment_linked_dm): let Requests capture AI continue (no forced wa.me).
-        return None
-    if public_comment and skip_forced_booking_wa_me(tenant_id) and is_appointment_or_order_intent(message):
+    capture_on = skip_forced_booking_wa_me(tenant_id)
+    booking_or_order = handoff_intent == "booking" or is_appointment_or_order_intent(message)
+    # V10: Luna still retrieves comment-rule + business evidence; Tera writes the public
+    # reply. System refuses public draft PII later. Regex invite is pre-V10 only.
+    v10_comment_ai = bool(customer_ai_v10_runtime_enabled() and public_comment and booking_or_order)
+    if capture_on and public_comment and booking_or_order and not v10_comment_ai:
         return comment_capture_policy_reply(
             tenant_id=tenant_id,
             message=message,
             response_language=response_language,
             booking_or_order_intent=True,
         )
+    if handoff_intent == "booking" and capture_on and not public_comment:
+        # DM/private (incl. comment_linked_dm): let Requests capture AI continue (no forced wa.me).
+        return None
 
-    if handoff_intent and human_handoff_enabled(tenant_id):
+    if handoff_intent and human_handoff_enabled(tenant_id) and not v10_comment_ai:
         # Public comments must never receive phone / wa.me / email destinations.
         if public_comment:
             return {

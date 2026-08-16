@@ -11,6 +11,7 @@ from services.customer_reply_v2.comment_rule_runtime import (
     deterministic_rule_outcome,
     engine_trace_fields,
     evaluate_turn_comment_rules,
+    merge_applicable_comment_rules,
 )
 from services.customer_reply_v2.customer_facts import load_customer_facts
 from services.customer_reply_v2.faq_evidence import merge_faq_evidence
@@ -22,7 +23,7 @@ from services.customer_reply_v2.flags import (
     flags_snapshot,
 )
 from services.customer_reply_v2.history_format import comment_thread_records, same_history_for_agents
-from services.customer_reply_v2.invocation_meter import CustomerTurnMeter
+from services.customer_reply_v2.invocation_meter import CustomerTurnMeter, InvocationRecord
 from services.customer_reply_v2.manifest import get_cached_manifest
 from services.customer_reply_v2.media_context import build_comment_media_context, media_context_to_dict
 from services.customer_reply_v2.models import CustomerReplyOutcome
@@ -145,6 +146,14 @@ async def run_customer_reply_v2_comment(
             image_urls=list(comment_ctx.get("image_urls") or image_urls or []),
         )
         if safety.blocked:
+            meter.record(
+                InvocationRecord(
+                    operation="moderation",
+                    success=True,
+                    is_ai=False,
+                    failure_stage="safety_block",
+                )
+            )
             return CustomerReplyOutcome(
                 stop=True,
                 reply=safety.reply,
@@ -248,7 +257,21 @@ async def run_customer_reply_v2_comment(
         faq_candidates=faq.evidence_candidates,
         customer_id=provider_sender_id,
     )
+    retrieval = merge_applicable_comment_rules(retrieval, engine, published_revision=revision)
     retrieval = merge_faq_evidence(retrieval, faq.evidence_candidates)
+    meter.record(
+        InvocationRecord(
+            operation="luna_retrieval",
+            model=retrieval.requested_model or retrieval_model,
+            requested_reasoning_effort=retrieval.requested_reasoning_effort,
+            effective_reasoning_effort=retrieval.effective_reasoning_effort,
+            input_tokens=retrieval.prompt_tokens,
+            output_tokens=retrieval.completion_tokens,
+            tool_rounds=retrieval.rounds_used,
+            success=not bool(retrieval.error),
+            failure_stage=retrieval.error,
+        )
+    )
 
     answer = await run_answer_luna(
         tenant_id=tenant_id,
@@ -323,6 +346,18 @@ async def run_customer_reply_v2_comment(
                 failed_rules = failed_rules + ["safe_failure_fallback"]
 
     # Observability strip: do not dump multimodal data URLs into traces.
+    meter.record(
+        InvocationRecord(
+            operation="tera_repair" if repair_attempts else "tera_answer",
+            model=answer.returned_model or answer_model,
+            requested_reasoning_effort=answer.requested_reasoning_effort,
+            effective_reasoning_effort=answer.effective_reasoning_effort,
+            input_tokens=answer.prompt_tokens,
+            output_tokens=answer.completion_tokens,
+            repair=bool(repair_attempts),
+            success=bool(reply_text),
+        )
+    )
     trace_ctx = {k: v for k, v in comment_ctx.items() if k != "image_inputs"}
     total_tokens = prompt_tokens + completion_tokens
     side_meta = plan_turn_side_effects(

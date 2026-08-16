@@ -1,12 +1,17 @@
 import { useState } from 'react';
 import { Pressable, Switch, Text, View } from 'react-native';
 
+import { AppIcon, feather } from '../../../../components/AppIcon';
+import { AppModal } from '../../../../components/AppModal';
+import { ModalScrim } from '../../../../components/ModalScrim';
 import { useI18n } from '../../../../i18n/LanguageContext';
-import { cmFormStyles } from '../../cmFormStyles';
-import { Field } from '../Field';
+import type { StringKey } from '../../../../i18n/locales/en';
 import type { BranchDaySchedule, WeekdayKey } from './branchScheduleTypes';
+import { dayOffPatch, DEFAULT_CLOSE, DEFAULT_OPEN, openDayPatch } from './branchScheduleHelpers';
+import { locOrange, locStyles } from './locationHoursStyles';
+import { TimeField } from './TimeField';
 
-const WEEKDAY_I18N: Record<WeekdayKey, string> = {
+const WEEKDAY_I18N: Record<WeekdayKey, StringKey> = {
   monday: 'aiSetupLocDay_monday',
   tuesday: 'aiSetupLocDay_tuesday',
   wednesday: 'aiSetupLocDay_wednesday',
@@ -20,71 +25,74 @@ type Props = {
   dayKey: WeekdayKey;
   day: BranchDaySchedule;
   onChange: (next: BranchDaySchedule) => void;
+  last?: boolean;
 };
 
-export function BranchDayRow({ dayKey, day, onChange }: Props) {
+export function BranchDayRow({ dayKey, day, onChange, last }: Props) {
   const { tr } = useI18n();
-  const [noteOpen, setNoteOpen] = useState(Boolean(day.note && day.note.trim()));
+  const [menu, setMenu] = useState(false);
+  const isOff = day.enabled && day.off_day;
 
   return (
-    <View style={{ marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#E8E8E8' }}>
-      <View style={cmFormStyles.row}>
-        <Text style={cmFormStyles.rowTitle}>{tr(WEEKDAY_I18N[dayKey] as never)}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={cmFormStyles.hint}>{tr('aiSetupLocDayEnabled')}</Text>
-          <Switch value={day.enabled} onValueChange={(enabled) => onChange({ ...day, enabled })} />
-        </View>
-      </View>
-      {day.enabled ? (
+    <View style={[locStyles.dayRow, last && { borderBottomWidth: 0 }]}>
+      <Text style={locStyles.dayName}>{tr(WEEKDAY_I18N[dayKey])}</Text>
+      {isOff ? (
         <>
-          <View style={[cmFormStyles.row, { marginTop: 6 }]}>
-            <Text style={cmFormStyles.hint}>{tr('aiSetupLocDayOff')}</Text>
-            <Switch
-              value={day.off_day}
-              onValueChange={(off_day) =>
-                onChange({
-                  ...day,
-                  off_day,
-                  ...(off_day ? { open: '', close: '' } : {}),
-                })
-              }
-            />
-          </View>
-          {!day.off_day ? (
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
-              <View style={{ flex: 1 }}>
-                <Field
-                  label={tr('aiSetupLocFrom')}
-                  value={day.open}
-                  onChange={(open) => onChange({ ...day, open })}
-                  placeholder="09:00"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Field
-                  label={tr('aiSetupLocTo')}
-                  value={day.close}
-                  onChange={(close) => onChange({ ...day, close })}
-                  placeholder="18:00"
-                />
-              </View>
-            </View>
-          ) : null}
-          <Pressable style={{ marginTop: 8 }} onPress={() => setNoteOpen((v) => !v)}>
-            <Text style={cmFormStyles.chipText}>
-              {noteOpen ? tr('aiSetupLocHideDayNote') : tr('aiSetupLocAddDayNote')}
-            </Text>
-          </Pressable>
-          {noteOpen ? (
-            <Field
-              label={tr('aiSetupLocDayNote')}
-              value={day.note || ''}
-              onChange={(note) => onChange({ ...day, note: note || null })}
-              multiline
-            />
-          ) : null}
+          <Text style={locStyles.dayOffLabel}>{tr('aiSetupLocDayOff')}</Text>
+          <Switch
+            value
+            onValueChange={(on) => {
+              if (on) return;
+              onChange(openDayPatch(day.open || DEFAULT_OPEN, day.close || DEFAULT_CLOSE));
+            }}
+            trackColor={{ false: '#E5E7EB', true: '#FDBA74' }}
+            thumbColor={locOrange}
+          />
         </>
-      ) : null}
+      ) : (
+        <>
+          <TimeField
+            value={day.open}
+            onChange={(open) => onChange({ ...openDayPatch(open || DEFAULT_OPEN, day.close || DEFAULT_CLOSE), open })}
+          />
+          <Text style={locStyles.dash}>–</Text>
+          <TimeField
+            value={day.close}
+            onChange={(close) =>
+              onChange({ ...openDayPatch(day.open || DEFAULT_OPEN, close || DEFAULT_CLOSE), close })
+            }
+          />
+          <Pressable style={locStyles.openBtn} onPress={() => setMenu(true)} accessibilityRole="button">
+            <Text style={locStyles.openText}>{tr('aiSetupLocOpen')}</Text>
+            <AppIcon icon={feather('chevron-down')} size={14} color="#15803D" />
+          </Pressable>
+        </>
+      )}
+      <AppModal visible={menu} onRequestClose={() => setMenu(false)}>
+        <ModalScrim onPress={() => setMenu(false)}>
+          <Pressable style={locStyles.sheet} onPress={(e) => e.stopPropagation()}>
+            <Text style={locStyles.sheetTitle}>{tr(WEEKDAY_I18N[dayKey])}</Text>
+            <Pressable
+              style={locStyles.dayRow}
+              onPress={() => {
+                onChange(openDayPatch(day.open || DEFAULT_OPEN, day.close || DEFAULT_CLOSE));
+                setMenu(false);
+              }}
+            >
+              <Text style={locStyles.openText}>{tr('aiSetupLocOpen')}</Text>
+            </Pressable>
+            <Pressable
+              style={[locStyles.dayRow, { borderBottomWidth: 0 }]}
+              onPress={() => {
+                onChange(dayOffPatch());
+                setMenu(false);
+              }}
+            >
+              <Text style={locStyles.dayOffLabel}>{tr('aiSetupLocDayOff')}</Text>
+            </Pressable>
+          </Pressable>
+        </ModalScrim>
+      </AppModal>
     </View>
   );
 }

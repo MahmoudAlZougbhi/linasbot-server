@@ -1,0 +1,9 @@
+export const locTeal = '#0F6E6B';
+export const locTealSoft = '#D8F3EE';
+export const locGreen = '#15803D';
+export const locGreenBg = '#E8F8EF';
+export const locOrange = '#EA580C';
+export const locOrangeBg = '#FFF4E8';
+export const locDraftBg = '#EEF1F1';
+export const locDraftText = '#5B6B6A';
+export const locRadius = 10;

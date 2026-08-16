@@ -1,110 +1,95 @@
-import { LANDING_ASSETS } from '../../../constants/landingDesignAssets';
+import { useEffect, useState } from 'react';
+import { PUBLIC_SITE } from '../../../constants/publicSite';
+import { CHANNELS } from '../ChannelIcons';
+import LinasStar from '../LinasStar';
+import StoreBadges from '../StoreBadges';
+import { usePrefersReducedMotion } from '../../../hooks/usePrefersReducedMotion';
 
-/**
- * Hero section — matches linas-landing-01-hero.jpg composition.
- * @param {{ onOpenGuest?: () => void }} props
- */
-export default function LandingHero({ onOpenGuest }) {
+const LINES = [
+  { role: 'linas', text: 'What would you like to teach me about your business?' },
+  { role: 'you', text: "We're closed tomorrow." },
+  { role: 'linas', text: 'Done — I added tomorrow as an off day.' },
+  { role: 'you', text: 'If someone asks how long we’ve been in business, tell them the company was founded in 1977.' },
+  { role: 'linas', text: 'Got it — I saved this in your Business Knowledge.' },
+];
+
+export default function LandingHero() {
+  const reduced = usePrefersReducedMotion();
+  const [visible, setVisible] = useState(reduced ? LINES.length : 0);
+
+  useEffect(() => {
+    if (reduced) {
+      setVisible(LINES.length);
+      return undefined;
+    }
+    setVisible(0);
+    const timers = LINES.map((_, i) => setTimeout(() => setVisible(i + 1), 450 + i * 700));
+    return () => timers.forEach(clearTimeout);
+  }, [reduced]);
+
   return (
-    <section className="relative overflow-hidden border-b border-[#E4E8E6] bg-[#F6F7F6]">
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-[55%] opacity-70" aria-hidden="true">
-        <div className="absolute right-[8%] top-1/2 h-[28rem] w-[28rem] -translate-y-1/2 rounded-full border border-[#06715F]/10" />
-        <div className="absolute right-[4%] top-1/2 h-[36rem] w-[36rem] -translate-y-1/2 rounded-full border border-[#06715F]/08" />
-        <div className="absolute right-0 top-1/2 h-[44rem] w-[44rem] -translate-y-1/2 rounded-full border border-[#06715F]/05" />
+    <section className="relative overflow-hidden bg-[#F7F8F5]">
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div className="absolute -right-24 top-10 h-[28rem] w-[28rem] rounded-full bg-[#D7EFE8]/70 blur-3xl" />
+        <div className="absolute right-[12%] top-24 h-[36rem] w-[36rem] rounded-full border border-[#06715F]/10" />
+        <LinasStar className="absolute right-[18%] top-16 h-6 w-6 opacity-70" />
+        <LinasStar className="absolute bottom-24 left-[42%] h-4 w-4 opacity-40" />
       </div>
 
-      <div className="relative mx-auto grid max-w-6xl gap-10 px-4 pb-16 pt-14 sm:px-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:items-center lg:pb-20 lg:pt-16">
+      <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 pb-16 pt-10 sm:px-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:pb-24 lg:pt-14">
         <div>
-          <p className="flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[#06715F]">
-            <span className="inline-block h-px w-5 bg-[#06715F]" aria-hidden="true" />
-            AI messaging for social media
-          </p>
-          <h1 className="mt-4 max-w-xl text-4xl font-semibold tracking-tight text-[#171A19] sm:text-5xl lg:text-[3.25rem] lg:leading-[1.08]">
-            Turn every DM and comment into a helpful answer.
+          <p className="text-sm font-semibold text-[#06715F]">{PUBLIC_SITE.heroKicker}</p>
+          <h1 className="mt-4 max-w-xl text-4xl font-semibold tracking-tight text-[#171A19] sm:text-5xl lg:text-[3.35rem] lg:leading-[1.08]">
+            Talk to Linas. Linas talks to <span className="text-[#06715F]">your customers.</span>
           </h1>
-          <p className="mt-5 max-w-lg text-base leading-relaxed text-[#5C6663] sm:text-lg">
-            Linas AI answers customers using business facts you approve—while one chat-first Owner Copilot keeps setup,
-            control, and visibility in your hands.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={onOpenGuest}
-              className="rounded-full bg-[#06715F] px-5 py-3 text-base font-semibold text-white shadow-lg shadow-[#06715F]/25 hover:bg-[#0B3D34] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#06715F] focus-visible:ring-offset-2"
-            >
-              Try Guest AI →
-            </button>
-            <a
-              href="#get-app"
-              className="rounded-full border border-[#D5DCD8] bg-white px-5 py-3 text-base font-semibold text-[#171A19] hover:bg-[#F0F3F1] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#06715F]"
-            >
-              Get the app
-            </a>
+          <p className="mt-5 max-w-lg text-base leading-relaxed text-[#5C6663] sm:text-lg">{PUBLIC_SITE.heroSupport}</p>
+          <div className="mt-8">
+            <StoreBadges variant="hero" />
           </div>
-
-          <dl className="mt-10 grid max-w-md grid-cols-3 gap-0 border-t border-[#E4E8E6] pt-6">
-            {[
-              { value: '4', label: 'Meta reply surfaces' },
-              { value: '1', label: 'Owner Copilot' },
-              { value: '10', label: 'guest prompts' },
-            ].map((stat, i) => (
-              <div key={stat.label} className={`px-3 ${i > 0 ? 'border-l border-[#E4E8E6]' : 'pl-0'}`}>
-                <dt className="sr-only">{stat.label}</dt>
-                <dd>
-                  <p className="text-2xl font-semibold text-[#171A19]">{stat.value}</p>
-                  <p className="mt-1 text-xs leading-snug text-[#5C6663]">{stat.label}</p>
-                </dd>
-              </div>
-            ))}
-          </dl>
-          <p className="mt-5 flex items-start gap-2 text-sm text-[#5C6663]">
-            <span className="mt-0.5 text-[#06715F]" aria-hidden="true">
-              ✓
-            </span>
-            Built for DMs and comments. No post, Story, Reel, or video publishing.
-          </p>
-        </div>
-
-        <div className="relative mx-auto w-full max-w-md lg:max-w-none">
-          <div className="relative mx-auto aspect-[4/5] w-full max-w-[26rem]">
-            <img
-              src={LANDING_ASSETS.appScreens.integrations}
-              alt="Meta integrations connected in Linas AI"
-              className="absolute left-0 top-6 w-[58%] rotate-[-6deg] rounded-[1.6rem] border border-black/10 shadow-2xl"
-              width={320}
-              height={640}
-            />
-            <img
-              src={LANDING_ASSETS.appScreens.ownerCopilot}
-              alt="Owner Copilot chat drafting a greeting"
-              className="absolute bottom-0 right-0 w-[68%] rotate-[4deg] rounded-[1.6rem] border border-black/10 shadow-2xl"
-              width={360}
-              height={720}
-            />
-            <div className="absolute left-[8%] top-[42%] z-10 flex items-center gap-2 rounded-full border border-[#E4E8E6] bg-white px-3 py-2 text-sm font-medium text-[#171A19] shadow-lg">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#06715F] text-[0.65rem] text-white">
-                ✓
-              </span>
-              Customer reply ready
+          <div className="mt-8 max-w-lg rounded-2xl border border-[#E4E8E6] bg-white p-4 shadow-sm">
+            <p className="text-sm text-[#5C6663]">Connect the AI you train in Linas to reply on:</p>
+            <div className="mt-3 flex flex-wrap gap-4">
+              {CHANNELS.map((ch) => (
+                <div key={ch.id} className="flex flex-col items-center gap-1">
+                  <ch.Icon className="h-8 w-8" />
+                  <span className="text-[0.65rem] font-medium text-[#5C6663]">{ch.label}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="bg-[#171A19] text-white">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p className="text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-white/80">
-            One system for the conversations that matter
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {['Social media DMs', 'Comments', 'Approved facts', 'Owner Copilot'].map((label) => (
-              <span
-                key={label}
-                className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-white/90"
-              >
-                {label}
-              </span>
-            ))}
+        <div className="mx-auto w-full max-w-[22rem]">
+          <div className="rounded-[1.8rem] border border-black/10 bg-white p-4 shadow-2xl shadow-[#06715F]/10">
+            <div className="mb-3 flex items-center gap-2 text-[#171A19]">
+              <span className="text-lg">☰</span>
+            </div>
+            <div className="min-h-[22rem] space-y-3">
+              {LINES.slice(0, visible).map((line) =>
+                line.role === 'you' ? (
+                  <div key={line.text} className="lp-fade-up flex justify-end">
+                    <div>
+                      <p className="mb-1 text-right text-[0.65rem] text-[#8A938F]">You</p>
+                      <p className="max-w-[16rem] rounded-2xl bg-[#D7EFE8] px-3 py-2 text-sm text-[#171A19]">{line.text}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div key={line.text} className="lp-fade-up">
+                    <p className="mb-1 flex items-center gap-1 text-[0.65rem] text-[#06715F]">
+                      <LinasStar className="h-3.5 w-3.5" /> Linas
+                    </p>
+                    <p className="text-sm leading-relaxed text-[#171A19]">{line.text}</p>
+                  </div>
+                ),
+              )}
+            </div>
+            <div className="mt-3 flex items-center gap-2 rounded-full border border-[#E4E8E6] px-3 py-2">
+              <span className="text-[#8A938F]">+</span>
+              <span className="flex-1 text-sm text-[#8A938F]">Work with Linas</span>
+              <span className="text-[#8A938F]">🎤</span>
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#06715F] text-white">↑</span>
+            </div>
+            <p className="mt-2 text-center text-[0.65rem] text-[#8A938F]">Linas can make mistakes. Check important info.</p>
           </div>
         </div>
       </div>

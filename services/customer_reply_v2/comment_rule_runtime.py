@@ -7,7 +7,7 @@ from typing import Any
 from services.customer_reply_v2.comment_rule_engine import CommentEngineResult, evaluate_published_comment_engine
 from services.customer_reply_v2.flags import flags_snapshot
 from services.customer_reply_v2.invocation_meter import CustomerTurnMeter, InvocationRecord
-from services.customer_reply_v2.models import CustomerReplyOutcome
+from services.customer_reply_v2.models import CustomerReplyOutcome, EvidenceRecord, RetrievalResult
 
 
 def evaluate_turn_comment_rules(
@@ -93,3 +93,47 @@ def engine_trace_fields(engine: CommentEngineResult) -> dict[str, Any]:
         "comment_rule_conflict": engine.conflict_event,
         "ai_guidance_comment_rules": engine.ai_guidance_rules,
     }
+
+
+def merge_applicable_comment_rules(
+    retrieval: RetrievalResult,
+    engine: CommentEngineResult,
+    *,
+    published_revision: str,
+) -> RetrievalResult:
+    """Configured applicable AI-guidance rules are evidence. They do not replace business retrieval."""
+    if engine.rule_mode != "ai_guidance" or not engine.ai_guidance_rules:
+        return retrieval
+    existing = {e.source_id for e in retrieval.evidence}
+    extra: list[EvidenceRecord] = []
+    for row in engine.ai_guidance_rules:
+        rule_id = str(row.get("id") or "").strip()
+        if not rule_id:
+            continue
+        source_id = f"comments:{rule_id}"
+        if source_id in existing:
+            continue
+        extra.append(
+            EvidenceRecord(
+                source_id=source_id,
+                section_id="comments",
+                title=str(row.get("title") or rule_id),
+                content=(
+                    f"Comment Rule (AI guidance, not business knowledge). "
+                    f"scope={row.get('scope') or ''} action={row.get('ai_action_mode') or ''} "
+                    f"post_id={row.get('post_id') or ''}\n"
+                    f"{str(row.get('ai_instructions') or '').strip()}"
+                ),
+                published_revision=published_revision,
+            )
+        )
+        existing.add(source_id)
+    if not extra:
+        return retrieval
+    retrieval.evidence = extra + list(retrieval.evidence)
+    for rec in extra:
+        if rec.source_id not in retrieval.selected_source_ids:
+            retrieval.selected_source_ids = [rec.source_id, *retrieval.selected_source_ids]
+        if rec.section_id not in retrieval.selected_section_ids:
+            retrieval.selected_section_ids = ["comments", *retrieval.selected_section_ids]
+    return retrieval

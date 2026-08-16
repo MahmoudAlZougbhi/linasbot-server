@@ -26,6 +26,7 @@ ALLOWED_MIME = frozenset(
         "video/mp4",
         "video/quicktime",
         "video/webm",
+        "video/3gpp",
         "application/pdf",
         "text/plain",
         "text/markdown",
@@ -65,6 +66,7 @@ def validate_upload(*, filename: str, content_type: str | None, size: int) -> di
             ".mp4": "video/mp4",
             ".mov": "video/quicktime",
             ".webm": "video/webm",
+            ".3gp": "video/3gpp",
             ".pdf": "application/pdf",
             ".txt": "text/plain",
             ".md": "text/markdown",
@@ -170,7 +172,14 @@ def format_attachments_block(
         caption = str(att.get("caption") or "").strip() or "(no caption — describe when to use this)"
         mid = str(att.get("id") or "")
         mime = str(att.get("mime") or "")
-        line = f"- [{kind}] {filename}: {caption}"
+        url = str(att.get("url") or "").strip()
+        duration = att.get("duration_seconds")
+        extra = ""
+        if url:
+            extra += f" url={url}"
+        if isinstance(duration, int) and duration >= 0:
+            extra += f" duration_seconds={duration}"
+        line = f"- [{kind}] {filename}{extra}: {caption}"
         if tenant_id and mid and mime in {"text/plain", "text/markdown", "application/json"}:
             excerpt = text_excerpt_for_media(tenant_id=tenant_id, media_id=mid, mime=mime)
             if excerpt:

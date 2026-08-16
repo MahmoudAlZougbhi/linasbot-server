@@ -10,8 +10,10 @@ from services.cm.version_store import PublishedVersionError, load_published_cont
 from services.customer_reply_v2.models import ManifestSection
 
 # Full AI Basics / Style are Answer-only; never selectable by Retrieval Luna.
+# Comment AI-guidance rules ARE selectable. They are reply-surface guidance, not
+# business knowledge — Luna must still retrieve services/locations/hours/products.
 FIXED_ANSWER_SECTIONS = frozenset({"ai_basics", "style"})
-NON_SELECTABLE_SECTIONS = frozenset({"comments"})
+NON_SELECTABLE_SECTIONS: frozenset[str] = frozenset()
 
 SECTION_DESCRIPTIONS: dict[str, str] = {
     "ai_basics": "Business identity and assistant personality (fixed Answer context).",
@@ -27,7 +29,7 @@ SECTION_DESCRIPTIONS: dict[str, str] = {
     "handoff": "Human/WhatsApp handoff destinations (server-enforced).",
     "restricted": "Restricted topics that must be refused (server-enforced).",
     "actions": "Allowed AI actions / capability gates.",
-    "comments": "Comment keyword rules: reply publicly, reply via DM, or ignore (server-enforced).",
+    "comments": "AI-guidance Comment Rules: how to reply on comments (short/public, continue in DM). Not business knowledge. Always also retrieve services, locations, hours, prices, products, knowledge, and request definitions when the comment asks about them.",
     "ai_limits": "AI usage and behavior limits.",
     "off_days": "Closed days and holiday schedules.",
     "opening_hours": "Named opening-hour calendars.",

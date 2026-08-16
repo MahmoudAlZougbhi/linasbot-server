@@ -8,15 +8,23 @@ from services.cm.schemas import AnswerChunk, AnswerFact
 from services.cm.version_store import load_published_content
 from services.customer_reply_v2.models import RetrievalResult
 
+# Validator looks for kind="price", not the CM section id "prices".
+_PRICE_EVIDENCE_SECTIONS = frozenset({"prices", "products", "services", "knowledge"})
+_STRUCTURED_FACT_SECTIONS = frozenset({"prices", "services", "branches", "handoff", "off_days", "products"})
+
 
 def facts_to_answer_facts(retrieval: RetrievalResult) -> tuple[list[AnswerFact], list[AnswerChunk]]:
     facts: list[AnswerFact] = []
     chunks: list[AnswerChunk] = []
     for ev in retrieval.evidence:
-        if ev.section_id in {"prices", "services", "branches", "handoff", "off_days"}:
-            facts.append(AnswerFact(kind=ev.section_id, value=ev.content[:500], source_id=ev.source_id))
+        snippet = ev.content[:500]
+        if ev.section_id in _STRUCTURED_FACT_SECTIONS:
+            kind = "price" if ev.section_id in {"prices", "products"} else ev.section_id
+            facts.append(AnswerFact(kind=kind, value=snippet, source_id=ev.source_id))
         else:
             chunks.append(AnswerChunk(source_id=ev.source_id, text=ev.content, score=None))
+        if ev.section_id in _PRICE_EVIDENCE_SECTIONS and ev.section_id not in {"prices", "products"}:
+            facts.append(AnswerFact(kind="price", value=snippet, source_id=ev.source_id))
     return facts, chunks
 
 

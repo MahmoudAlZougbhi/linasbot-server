@@ -90,6 +90,14 @@ def resolve_media_actions(
                 }
             media_rows = sorted(list(getattr(row, "images", None) or []), key=lambda img: int(img.sort_order or 0))
             want_video = action["media_type"] == "videos"
+            if want_video:
+                return {
+                    "ok": False,
+                    "error": "product_video_not_supported",
+                    "items": delivered,
+                    "ai_charged": False,
+                    "owner_diagnostic": "Product catalog stores images only; video send is not supported.",
+                }
             selected = []
             for img in media_rows:
                 media_id = str(getattr(img, "media_id", "") or "")

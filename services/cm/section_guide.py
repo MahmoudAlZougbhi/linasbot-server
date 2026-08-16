@@ -67,7 +67,7 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
         "app_path": "AI Setup → Services",
     },
     "branches": {
-        "title": "Location and Opening Hours",
+        "title": "Locations & hours",
         "purpose": "Branches with address, map link, and per-day opening hours / off days.",
         "why": "Customers ask where you are and when you are open; weak data forces vague answers.",
         "what_to_fill": [
@@ -76,7 +76,7 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
             "specific_off_rules for holiday closures (optional)",
         ],
         "useful": "timezone, policy_text, branch notes.",
-        "app_path": "AI Setup → Location and Opening Hours",
+        "app_path": "AI Setup → Locations & hours",
     },
     "opening_hours": {
         "title": "Opening Hours",

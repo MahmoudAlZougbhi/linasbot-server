@@ -115,6 +115,9 @@ async def text_handlers_respond_phase2(ctx: dict) -> Any:
             from services.products.outbound_hook import set_pending_product_outbound
 
             set_pending_product_outbound(user_data, product_id=active_product_id, source="crv2_reply")
+        media_delivery = cm_metadata.get("media_delivery") or {}
+        if isinstance(media_delivery, dict) and media_delivery.get("ok") and media_delivery.get("items"):
+            user_data["_pending_product_media"] = media_delivery
         cm_steps = [
             {
                 "step": 1,
