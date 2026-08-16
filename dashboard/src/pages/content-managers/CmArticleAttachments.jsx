@@ -59,15 +59,18 @@ export function CmArticleAttachments({ attachments, onChange, variant = "care" }
         {
           id: res.media_id,
           kind,
+          title: "",
+          description: "",
           caption: "",
           mime,
           filename: res.filename || file.name,
           size: res.size || file.size || 0,
           url: "",
           duration_seconds: null,
+          status: "active",
         },
       ]);
-      toast.success("Attachment uploaded — add a caption, then Save changes");
+      toast.success("Attachment uploaded — add a title and short description, then Save changes");
     } finally {
       setUploading(false);
     }
@@ -90,12 +93,15 @@ export function CmArticleAttachments({ attachments, onChange, variant = "care" }
       {
         id: `link_${Date.now().toString(36)}`,
         kind: "link",
+        title: host,
+        description: "",
         caption: "",
         mime: "",
         filename: host,
         size: 0,
         url,
         duration_seconds: null,
+        status: "active",
       },
     ]);
     setLinkUrl("");
@@ -143,13 +149,24 @@ export function CmArticleAttachments({ attachments, onChange, variant = "care" }
             </button>
           </div>
           <label className="block space-y-1">
-            <span className="text-sm font-medium">When to use (caption)</span>
+            <span className="text-sm font-medium">Title</span>
+            <input
+              className={FIELD_CLASS}
+              value={String(row.title || "")}
+              onChange={(e) => patchRow(index, { title: e.target.value })}
+              placeholder="e.g. Women Before Laser Hair Removal"
+              required
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-sm font-medium">Short description</span>
             <textarea
               className={FIELD_CLASS}
               rows={2}
-              value={String(row.caption || "")}
-              onChange={(e) => patchRow(index, { caption: e.target.value })}
-              placeholder="e.g. Use when the customer asks how a filled form looks"
+              value={String(row.description || row.caption || "")}
+              onChange={(e) => patchRow(index, { description: e.target.value, caption: e.target.value })}
+              placeholder="Send this when the customer asks for a before-treatment example."
+              required
             />
           </label>
         </div>

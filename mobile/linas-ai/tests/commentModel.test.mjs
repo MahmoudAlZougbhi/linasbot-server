@@ -62,8 +62,8 @@ test('public comment resources are image/link only', () => {
   assert.deepEqual(allowedResourceKinds('dm'), ['image', 'video', 'file', 'link']);
   const kept = filterAttachmentsForReplyIn(
     [
-      { id: '1', kind: 'image', caption: '', mime: '', filename: 'a.jpg', size: 1, url: '', duration_seconds: null },
-      { id: '2', kind: 'video', caption: '', mime: '', filename: 'b.mp4', size: 1, url: '', duration_seconds: 18 },
+      { id: '1', kind: 'image', title: '', description: '', caption: '', mime: '', filename: 'a.jpg', size: 1, url: '', duration_seconds: null },
+      { id: '2', kind: 'video', title: '', description: '', caption: '', mime: '', filename: 'b.mp4', size: 1, url: '', duration_seconds: 18 },
     ],
     'comment',
   );

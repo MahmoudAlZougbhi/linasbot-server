@@ -5,9 +5,24 @@ import type { StringKey } from '../../../i18n';
 import { newId } from '../cmApi';
 import { uploadCmArticleMedia } from '../cmMediaApi';
 import { pickKnowledgeFile, pickKnowledgeImage, pickKnowledgeVideo } from '../knowledge/knowledgePick';
+import {
+  resourceMetaError,
+  serializeResourceFields,
+  suggestedTitleFromFilename,
+} from '../resources/resourceMeta';
 import { isValidHttpUrl, type CommentAttachment, type CommentKind, type CommentRuleItem } from './commentModel';
 
-export type CommentPrompt = { kind: 'link' | 'caption'; attachId?: string; replaceId?: string };
+export type CommentResourcePrompt = {
+  mode: 'create' | 'edit';
+  kind: CommentKind;
+  attachId?: string;
+  replaceId?: string;
+  preview: string;
+  url: string;
+  title: string;
+  description: string;
+  pending?: CommentAttachment;
+};
 
 export function useCommentMedia(
   selected: CommentRuleItem | null,
@@ -16,8 +31,8 @@ export function useCommentMedia(
 ) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [prompt, setPrompt] = useState<CommentPrompt | null>(null);
-  const [promptValue, setPromptValue] = useState('');
+  const [prompt, setPrompt] = useState<CommentResourcePrompt | null>(null);
+  const [promptError, setPromptError] = useState<string | null>(null);
 
   function failMessage(err: unknown): string {
     const detail =
@@ -49,6 +64,8 @@ export function useCommentMedia(
             : kind === 'video' || kind === 'image'
               ? kind
               : 'file',
+        title: '',
+        description: '',
         caption: '',
         mime: uploaded.mime || picked.mimeType,
         filename: uploaded.filename || picked.name,
@@ -56,11 +73,19 @@ export function useCommentMedia(
         url: '',
         duration_seconds: picked.durationSeconds ?? null,
       };
-      const current = selected.attachments;
-      const next = replaceId
-        ? current.map((row) => (row.id === replaceId ? { ...nextAtt, caption: row.caption } : row))
-        : [...current, nextAtt];
-      patchSelected({ attachments: next });
+      const existing = replaceId ? selected.attachments.find((row) => row.id === replaceId) : null;
+      setPrompt({
+        mode: replaceId ? 'edit' : 'create',
+        kind: nextAtt.kind,
+        replaceId,
+        attachId: replaceId,
+        preview: nextAtt.filename,
+        url: '',
+        title: existing?.title || suggestedTitleFromFilename(nextAtt.filename),
+        description: existing?.description || existing?.caption || '',
+        pending: nextAtt,
+      });
+      setPromptError(null);
     } catch (err) {
       setUploadError(failMessage(err));
     } finally {
@@ -71,8 +96,17 @@ export function useCommentMedia(
   async function addResource(kind: CommentKind, replaceId?: string) {
     if (kind === 'link') {
       const existing = replaceId ? selected?.attachments.find((row) => row.id === replaceId) : null;
-      setPrompt({ kind: 'link', replaceId });
-      setPromptValue(existing?.url || '');
+      setPrompt({
+        mode: replaceId ? 'edit' : 'create',
+        kind: 'link',
+        replaceId,
+        attachId: replaceId,
+        preview: existing?.filename || '',
+        url: existing?.url || '',
+        title: existing?.title || '',
+        description: existing?.description || existing?.caption || '',
+      });
+      setPromptError(null);
       return;
     }
     if (kind === 'image') {
@@ -86,14 +120,37 @@ export function useCommentMedia(
     await attachPicked(await pickKnowledgeFile(), 'file', replaceId);
   }
 
+  function editResource(att: CommentAttachment) {
+    setPrompt({
+      mode: 'edit',
+      kind: att.kind,
+      attachId: att.id,
+      preview: att.filename || att.url,
+      url: att.url,
+      title: att.title,
+      description: att.description || att.caption,
+    });
+    setPromptError(null);
+  }
+
   function commitPrompt() {
     if (!selected || !prompt) return;
+    const err = resourceMetaError(prompt.kind, { title: prompt.title, description: prompt.description }, prompt.url);
+    if (err === 'title') {
+      setPromptError(tr('resourceTitleRequired'));
+      return;
+    }
+    if (err === 'description') {
+      setPromptError(tr('resourceDescriptionRequired'));
+      return;
+    }
+    if (err === 'url' || (prompt.kind === 'link' && !isValidHttpUrl(prompt.url))) {
+      setPromptError(tr('commentsLinkInvalid'));
+      return;
+    }
+    const meta = serializeResourceFields({ title: prompt.title, description: prompt.description });
     if (prompt.kind === 'link') {
-      if (!isValidHttpUrl(promptValue)) {
-        setUploadError(tr('commentsLinkInvalid'));
-        return;
-      }
-      const url = promptValue.trim();
+      const url = prompt.url.trim();
       let host = url;
       try {
         host = new URL(url).hostname;
@@ -101,9 +158,11 @@ export function useCommentMedia(
         host = url;
       }
       const nextAtt: CommentAttachment = {
-        id: prompt.replaceId || newId('link'),
+        id: prompt.replaceId || prompt.attachId || newId('link'),
         kind: 'link',
-        caption: '',
+        title: meta.title,
+        description: meta.description,
+        caption: meta.caption,
         mime: '',
         filename: host,
         size: 0,
@@ -111,23 +170,31 @@ export function useCommentMedia(
         duration_seconds: null,
       };
       const current = selected.attachments;
+      const target = prompt.replaceId || prompt.attachId;
+      const next = target ? current.map((row) => (row.id === target ? nextAtt : row)) : [...current, nextAtt];
+      patchSelected({ attachments: next });
+      setPrompt(null);
+      setPromptError(null);
+      setUploadError(null);
+      return;
+    }
+    if (prompt.pending) {
+      const nextAtt: CommentAttachment = { ...prompt.pending, ...meta };
+      const current = selected.attachments;
       const next = prompt.replaceId
-        ? current.map((row) => (row.id === prompt.replaceId ? { ...nextAtt, caption: row.caption } : row))
+        ? current.map((row) => (row.id === prompt.replaceId ? { ...nextAtt, id: row.id } : row))
         : [...current, nextAtt];
       patchSelected({ attachments: next });
       setPrompt(null);
-      setPromptValue('');
-      setUploadError(null);
+      setPromptError(null);
       return;
     }
     if (!prompt.attachId) return;
     patchSelected({
-      attachments: selected.attachments.map((row) =>
-        row.id === prompt.attachId ? { ...row, caption: promptValue } : row,
-      ),
+      attachments: selected.attachments.map((row) => (row.id === prompt.attachId ? { ...row, ...meta } : row)),
     });
     setPrompt(null);
-    setPromptValue('');
+    setPromptError(null);
   }
 
   return {
@@ -135,14 +202,14 @@ export function useCommentMedia(
     uploadError,
     setUploadError,
     prompt,
-    promptValue,
-    setPromptValue,
+    promptError,
     setPrompt,
     addResource,
+    editResource,
     commitPrompt,
     closePrompt: () => {
       setPrompt(null);
-      setPromptValue('');
+      setPromptError(null);
     },
   };
 }

@@ -26,6 +26,7 @@ type Props = {
   onRemoveResource: (id: string) => void;
   onReplaceResource: (att: KnowledgeAttachment) => void;
   onEditCaption: (att: KnowledgeAttachment) => void;
+  onMoveResource?: (id: string, direction: -1 | 1) => void;
   tr: (key: StringKey) => string;
 };
 
@@ -40,6 +41,7 @@ export function KnowledgeEditView({
   onRemoveResource,
   onReplaceResource,
   onEditCaption,
+  onMoveResource,
   tr,
 }: Props) {
   const words = countWords(item.body);
@@ -103,6 +105,7 @@ export function KnowledgeEditView({
         onRemove={onRemoveResource}
         onReplace={onReplaceResource}
         onEditCaption={onEditCaption}
+        onMove={onMoveResource}
         tr={tr}
       />
     </View>

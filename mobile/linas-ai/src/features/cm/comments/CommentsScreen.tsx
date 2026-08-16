@@ -24,8 +24,8 @@ import { useCmDraft } from '../useCmDraft';
 import { CommentEditView } from './CommentEditView';
 import { CommentListView } from './CommentListView';
 import { CommentPostsView } from './CommentPostsView';
-import { CommentTextModal } from './CommentTextModal';
 import { CM_CANVAS, CM_TEAL } from './commentChrome';
+import { ResourceMetaModal } from '../resources/ResourceMetaModal';
 import {
   applyPostsMode,
   applyReplyIn,
@@ -276,10 +276,7 @@ export function CommentsScreen({ proposalReview, onBack }: Props) {
                 patchSelected({ attachments: selected.attachments.filter((row) => row.id !== id) })
               }
               onReplaceResource={(att) => void media.addResource(att.kind, att.id)}
-              onEditCaption={(att) => {
-                media.setPrompt({ kind: 'caption', attachId: att.id });
-                media.setPromptValue(att.caption);
-              }}
+              onEditCaption={(att) => media.editResource(att)}
               tr={tr}
             />
           </ScrollView>
@@ -345,15 +342,26 @@ export function CommentsScreen({ proposalReview, onBack }: Props) {
         </ScrollView>
       ) : null}
 
-      <CommentTextModal
+      <ResourceMetaModal
         visible={Boolean(media.prompt)}
-        title={media.prompt?.kind === 'caption' ? tr('commentsEditCaption') : tr('commentsLinkTitle')}
-        value={media.promptValue}
-        placeholder={media.prompt?.kind === 'caption' ? tr('commentsCaption') : tr('commentsLinkPlaceholder')}
-        keyboardType={media.prompt?.kind === 'link' ? 'url' : 'default'}
+        heading={media.prompt?.kind === 'link' ? tr('commentsLinkTitle') : tr('resourceMetaHeading')}
+        preview={media.prompt?.preview}
+        showUrl={media.prompt?.kind === 'link'}
+        url={media.prompt?.url || ''}
+        title={media.prompt?.title || ''}
+        description={media.prompt?.description || ''}
+        error={media.promptError}
+        titleLabel={tr('resourceFieldTitle')}
+        descriptionLabel={tr('resourceFieldDescription')}
+        urlLabel={tr('commentsLinkTitle')}
+        titlePlaceholder={tr('resourceTitlePlaceholder')}
+        descriptionPlaceholder={tr('resourceDescriptionPlaceholder')}
+        urlPlaceholder={tr('commentsLinkPlaceholder')}
         saveLabel={tr('commentsSave')}
         cancelLabel={tr('usersCancel')}
-        onChange={media.setPromptValue}
+        onChangeUrl={(url) => media.setPrompt((row) => (row ? { ...row, url } : row))}
+        onChangeTitle={(title) => media.setPrompt((row) => (row ? { ...row, title } : row))}
+        onChangeDescription={(description) => media.setPrompt((row) => (row ? { ...row, description } : row))}
         onSave={media.commitPrompt}
         onClose={media.closePrompt}
       />

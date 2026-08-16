@@ -82,22 +82,23 @@ export function CommentResourceRows({ attachments, onRemove, onReplace, onEditCa
             accessibilityLabel={tr('commentsTapToOpen')}
           >
             <Text style={styles.rowTitle} numberOfLines={1}>
-              {att.filename || att.url || att.id}
+              {att.title || att.filename || att.url || att.id}
             </Text>
-            <Text style={styles.rowMeta} numberOfLines={1}>
-              {rowMeta(att, tr)}
+            <Text style={styles.rowMeta} numberOfLines={2}>
+              {att.description || att.caption || rowMeta(att, tr)}
             </Text>
           </Pressable>
           <Pressable
             onPress={() =>
               Alert.alert(att.filename || att.url || tr('commentsResources'), undefined, [
+                { text: tr('resourceEdit'), onPress: () => onEditCaption(att) },
                 att.kind === 'link' && att.url
                   ? { text: tr('commentsOpen'), onPress: () => void Linking.openURL(att.url) }
-                  : { text: tr('commentsEditCaption'), onPress: () => onEditCaption(att) },
+                  : undefined,
                 { text: tr('commentsReplace'), onPress: () => onReplace(att) },
                 { text: tr('commentsRemove'), style: 'destructive', onPress: () => onRemove(att.id) },
                 { text: tr('usersCancel'), style: 'cancel' },
-              ])
+              ].filter(Boolean) as { text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }[])
             }
             accessibilityRole="button"
             accessibilityLabel={tr('commentsResourceMenu')}

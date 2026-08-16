@@ -81,6 +81,7 @@ type ListProps = {
   onRemove: (id: string) => void;
   onReplace: (att: KnowledgeAttachment) => void;
   onEditCaption: (att: KnowledgeAttachment) => void;
+  onMove?: (id: string, direction: -1 | 1) => void;
   tr: (key: StringKey) => string;
 };
 
@@ -89,12 +90,15 @@ export function KnowledgeResourceRows({
   onRemove,
   onReplace,
   onEditCaption,
+  onMove,
   tr,
 }: ListProps) {
   return (
     <View style={styles.rows}>
       {attachments.map((raw) => {
         const att = normalizeAttachmentKind(raw);
+        const heading = att.title || att.filename || att.url || att.id;
+        const detail = att.description || att.caption || rowMeta(att, tr);
         return (
           <View key={att.id} style={styles.row}>
             <View style={[styles.rowIcon, att.kind === 'file' && isPdfAttachment(att) && styles.pdfIcon]}>
@@ -108,25 +112,33 @@ export function KnowledgeResourceRows({
               onPress={() => onEditCaption(att)}
               style={styles.rowCopy}
               accessibilityRole="button"
-              accessibilityLabel={tr('knowledgeEditCaption')}
+              accessibilityLabel={tr('resourceEdit')}
             >
               <Text style={styles.rowTitle} numberOfLines={1}>
-                {att.filename || att.url || att.id}
+                {heading}
               </Text>
-              <Text style={styles.rowMeta} numberOfLines={1}>
+              <Text style={styles.rowMeta} numberOfLines={2}>
                 {rowMeta(att, tr)}
+                {detail && detail !== rowMeta(att, tr) ? ` · ${detail}` : ''}
               </Text>
             </Pressable>
             <Pressable
               onPress={() =>
-                Alert.alert(att.filename || att.url || tr('knowledgeResources'), undefined, [
+                Alert.alert(heading, undefined, [
+                  { text: tr('resourceEdit'), onPress: () => onEditCaption(att) },
                   { text: tr('knowledgeReplace'), onPress: () => onReplace(att) },
+                  ...(onMove
+                    ? [
+                        { text: tr('resourceMoveUp'), onPress: () => onMove(att.id, -1) },
+                        { text: tr('resourceMoveDown'), onPress: () => onMove(att.id, 1) },
+                      ]
+                    : []),
                   {
                     text: tr('knowledgeRemove'),
-                    style: 'destructive',
+                    style: 'destructive' as const,
                     onPress: () => onRemove(att.id),
                   },
-                  { text: tr('usersCancel'), style: 'cancel' },
+                  { text: tr('usersCancel'), style: 'cancel' as const },
                 ])
               }
               accessibilityRole="button"

@@ -24,7 +24,6 @@ import type { CmProposalReview } from '../cmProposalReview';
 import { useCmDraft } from '../useCmDraft';
 import { KnowledgeEditView } from './KnowledgeEditView';
 import { KnowledgeListView } from './KnowledgeListView';
-import { KnowledgeTextModal } from './KnowledgeTextModal';
 import { KN_CANVAS, KN_TEAL } from './knowledgeChrome';
 import {
   buildKnowledgeList,
@@ -39,6 +38,13 @@ import {
   type KnowledgeKind,
 } from './knowledgeModel';
 import { pickKnowledgeFile, pickKnowledgeImage, pickKnowledgeVideo } from './knowledgePick';
+import { ResourceMetaModal } from '../resources/ResourceMetaModal';
+import {
+  moveById,
+  resourceMetaError,
+  serializeResourceFields,
+  suggestedTitleFromFilename,
+} from '../resources/resourceMeta';
 
 type Props = {
   proposalReview?: CmProposalReview | null;
@@ -46,7 +52,17 @@ type Props = {
   onOpenLocations?: () => void;
 };
 
-type PromptMode = { kind: 'link' | 'caption'; attachId?: string; replaceId?: string };
+type ResourcePrompt = {
+  mode: 'create' | 'edit';
+  kind: KnowledgeKind;
+  attachId?: string;
+  replaceId?: string;
+  preview: string;
+  url: string;
+  title: string;
+  description: string;
+  pending?: KnowledgeAttachment;
+};
 
 export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Props) {
   const { tr } = useI18n();
@@ -57,8 +73,8 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
   const [query, setQuery] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [prompt, setPrompt] = useState<PromptMode | null>(null);
-  const [promptValue, setPromptValue] = useState('');
+  const [prompt, setPrompt] = useState<ResourcePrompt | null>(null);
+  const [promptError, setPromptError] = useState<string | null>(null);
 
   const items = useMemo(
     () => asRecordList(draft.payload.items).map(parseKnowledgeItem),
@@ -141,6 +157,8 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
       const nextAtt: KnowledgeAttachment = {
         id: uploaded.media_id,
         kind: uploaded.kind === 'image' || uploaded.kind === 'video' ? uploaded.kind : kind === 'video' ? 'video' : kind === 'image' ? 'image' : 'file',
+        title: '',
+        description: '',
         caption: '',
         mime: uploaded.mime || picked.mimeType,
         filename: uploaded.filename || picked.name,
@@ -148,11 +166,19 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
         url: '',
         duration_seconds: picked.durationSeconds ?? null,
       };
-      const current = selected.attachments;
-      const next = replaceId
-        ? current.map((row) => (row.id === replaceId ? { ...nextAtt, caption: row.caption } : row))
-        : [...current, nextAtt];
-      patchSelected({ attachments: next });
+      const existing = replaceId ? selected.attachments.find((row) => row.id === replaceId) : null;
+      setPrompt({
+        mode: replaceId ? 'edit' : 'create',
+        kind: nextAtt.kind,
+        replaceId,
+        attachId: replaceId,
+        preview: nextAtt.filename,
+        url: '',
+        title: existing?.title || suggestedTitleFromFilename(nextAtt.filename),
+        description: existing?.description || existing?.caption || '',
+        pending: nextAtt,
+      });
+      setPromptError(null);
     } catch (err) {
       setUploadError(uploadFailMessage(err));
     } finally {
@@ -163,8 +189,17 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
   async function handleAddResource(kind: KnowledgeKind, replaceId?: string) {
     if (kind === 'link') {
       const existing = replaceId ? selected?.attachments.find((row) => row.id === replaceId) : null;
-      setPrompt({ kind: 'link', replaceId });
-      setPromptValue(existing?.url || '');
+      setPrompt({
+        mode: replaceId ? 'edit' : 'create',
+        kind: 'link',
+        replaceId,
+        attachId: replaceId,
+        preview: existing?.filename || '',
+        url: existing?.url || '',
+        title: existing?.title || '',
+        description: existing?.description || existing?.caption || '',
+      });
+      setPromptError(null);
       return;
     }
     if (kind === 'image') {
@@ -185,19 +220,37 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
     void handleAddResource(att.kind, att.id);
   }
 
-  function handleEditCaption(att: KnowledgeAttachment) {
-    setPrompt({ kind: 'caption', attachId: att.id });
-    setPromptValue(att.caption);
+  function handleEditResource(att: KnowledgeAttachment) {
+    setPrompt({
+      mode: 'edit',
+      kind: att.kind,
+      attachId: att.id,
+      preview: att.filename || att.url,
+      url: att.url,
+      title: att.title,
+      description: att.description || att.caption,
+    });
+    setPromptError(null);
   }
 
   function commitPrompt() {
     if (!selected || !prompt) return;
+    const err = resourceMetaError(prompt.kind, { title: prompt.title, description: prompt.description }, prompt.url);
+    if (err === 'title') {
+      setPromptError(tr('resourceTitleRequired'));
+      return;
+    }
+    if (err === 'description') {
+      setPromptError(tr('resourceDescriptionRequired'));
+      return;
+    }
+    if (err === 'url' || (prompt.kind === 'link' && !isValidHttpUrl(prompt.url))) {
+      setPromptError(tr('knowledgeLinkInvalid'));
+      return;
+    }
+    const meta = serializeResourceFields({ title: prompt.title, description: prompt.description });
     if (prompt.kind === 'link') {
-      if (!isValidHttpUrl(promptValue)) {
-        setUploadError(tr('knowledgeLinkInvalid'));
-        return;
-      }
-      const url = promptValue.trim();
+      const url = prompt.url.trim();
       let host = url;
       try {
         host = new URL(url).hostname;
@@ -205,9 +258,11 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
         host = url;
       }
       const nextAtt: KnowledgeAttachment = {
-        id: prompt.replaceId || newId('link'),
+        id: prompt.replaceId || prompt.attachId || newId('link'),
         kind: 'link',
-        caption: '',
+        title: meta.title,
+        description: meta.description,
+        caption: meta.caption,
         mime: '',
         filename: host,
         size: 0,
@@ -215,23 +270,34 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
         duration_seconds: null,
       };
       const current = selected.attachments;
-      const next = prompt.replaceId
-        ? current.map((row) => (row.id === prompt.replaceId ? { ...nextAtt, caption: row.caption } : row))
+      const next = prompt.replaceId || prompt.attachId
+        ? current.map((row) => (row.id === (prompt.replaceId || prompt.attachId) ? nextAtt : row))
         : [...current, nextAtt];
       patchSelected({ attachments: next });
       setPrompt(null);
-      setPromptValue('');
+      setPromptError(null);
       setUploadError(null);
+      return;
+    }
+    if (prompt.pending) {
+      const nextAtt: KnowledgeAttachment = { ...prompt.pending, ...meta };
+      const current = selected.attachments;
+      const next = prompt.replaceId
+        ? current.map((row) => (row.id === prompt.replaceId ? { ...nextAtt, id: row.id } : row))
+        : [...current, nextAtt];
+      patchSelected({ attachments: next });
+      setPrompt(null);
+      setPromptError(null);
       return;
     }
     if (!prompt.attachId) return;
     patchSelected({
       attachments: selected.attachments.map((row) =>
-        row.id === prompt.attachId ? { ...row, caption: promptValue } : row,
+        row.id === prompt.attachId ? { ...row, ...meta } : row,
       ),
     });
     setPrompt(null);
-    setPromptValue('');
+    setPromptError(null);
   }
 
   const addPill = (
@@ -294,7 +360,10 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
                 patchSelected({ attachments: selected.attachments.filter((row) => row.id !== id) })
               }
               onReplaceResource={handleReplace}
-              onEditCaption={handleEditCaption}
+              onEditCaption={handleEditResource}
+              onMoveResource={(id, direction) =>
+                patchSelected({ attachments: moveById(selected.attachments, id, direction) })
+              }
               tr={tr}
             />
           </ScrollView>
@@ -319,18 +388,30 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
         </KeyboardAvoidingView>
       ) : null}
 
-      <KnowledgeTextModal
+      <ResourceMetaModal
         visible={Boolean(prompt)}
-        title={prompt?.kind === 'caption' ? tr('knowledgeEditCaption') : tr('knowledgeLinkTitle')}
-        value={promptValue}
-        placeholder={prompt?.kind === 'caption' ? tr('knowledgeCaption') : tr('knowledgeLinkPlaceholder')}
-        saveLabel={prompt?.kind === 'caption' ? tr('knowledgeSave') : tr('knowledgeLinkSave')}
+        heading={prompt?.kind === 'link' ? tr('knowledgeLinkTitle') : tr('resourceMetaHeading')}
+        preview={prompt?.preview}
+        showUrl={prompt?.kind === 'link'}
+        url={prompt?.url || ''}
+        title={prompt?.title || ''}
+        description={prompt?.description || ''}
+        error={promptError}
+        titleLabel={tr('resourceFieldTitle')}
+        descriptionLabel={tr('resourceFieldDescription')}
+        urlLabel={tr('knowledgeLinkTitle')}
+        titlePlaceholder={tr('resourceTitlePlaceholder')}
+        descriptionPlaceholder={tr('resourceDescriptionPlaceholder')}
+        urlPlaceholder={tr('knowledgeLinkPlaceholder')}
+        saveLabel={tr('knowledgeSave')}
         cancelLabel={tr('usersCancel')}
-        onChange={setPromptValue}
+        onChangeUrl={(url) => setPrompt((row) => (row ? { ...row, url } : row))}
+        onChangeTitle={(title) => setPrompt((row) => (row ? { ...row, title } : row))}
+        onChangeDescription={(description) => setPrompt((row) => (row ? { ...row, description } : row))}
         onSave={commitPrompt}
         onClose={() => {
           setPrompt(null);
-          setPromptValue('');
+          setPromptError(null);
         }}
       />
     </ScreenChrome>
