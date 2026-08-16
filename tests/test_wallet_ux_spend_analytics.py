@@ -95,11 +95,11 @@ def test_landing_pricing_has_no_profit_copy() -> None:
     assert 'id="pricing"' in text
     assert "30% profit" not in text
     assert "OpenAI cost" not in text
-    # Cost-model jargon stays off the marketing landing; live amounts come from in-app checkout.
+    # Cost-model jargon stays off the marketing landing; live amounts come from public plans.
     assert "input tokens" not in text
     assert "output tokens" not in text
-    assert "billing catalog" in text.lower()
-    assert "checkout" in text.lower()
+    assert "/api/public/plans" in text
+    assert "/api/billing/packages" not in text
 
 
 def test_settings_wallet_removed_and_ai_limits_in_cm() -> None:

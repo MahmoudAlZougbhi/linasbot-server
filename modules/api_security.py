@@ -160,6 +160,7 @@ _PUBLIC_EXACT: set[tuple[str, str]] = {
     ("GET", "/api/public/plans"),
     ("GET", "/api/public/app-version"),
     ("POST", "/api/public/app-version/check"),
+    ("GET", "/api/public/landing-stats"),
     ("POST", "/api/billing/stripe/webhook"),
     ("POST", "/api/webhooks/resend"),
     ("POST", "/api/auth/mobile/login"),

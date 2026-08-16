@@ -1,67 +1,174 @@
-const STEPS = [
-  {
-    n: '01',
-    title: 'Create your account',
-    body: 'Start in chat, authenticate, then resolve the correct workspace.',
-  },
-  {
-    n: '02',
-    title: 'Teach Linas your business',
-    body: 'Add services, branches, prices, care details, languages, tone, and FAQs.',
-  },
-  {
-    n: '03',
-    title: 'Connect verified Meta assets',
-    body: 'Approve the required scopes and verify each DM or comment capability.',
-  },
-  {
-    n: '04',
-    title: 'Review, activate, and audit',
-    body: 'Activate one complete configuration and inspect customer conversations in read-only Live Chat.',
-  },
-];
+import { useEffect, useRef, useState } from 'react';
+import { HOW_IT_WORKS_STEPS } from '../../../constants/landingHowItWorks';
+import { useMediaQuery, usePrefersReducedMotion } from '../../../hooks/usePrefersReducedMotion';
 
-/**
- * How it works — matches linas-landing-03-how-it-works.jpg
- * Step copy describes product flow; no website signup CTA.
- * @param {{ onOpenGuest?: () => void }} props
- */
-export default function LandingHowItWorks({ onOpenGuest }) {
+const SEGMENTS = HOW_IT_WORKS_STEPS.length;
+
+/** @typedef {{ n: string, kicker: string, title: string, body: string, flow: string[], image: string, alt: string }} HowItWorksStep */
+
+/** @param {{ flow: string[] }} props */
+function FlowPill({ flow }) {
   return (
-    <section id="how-it-works" className="scroll-mt-24 bg-[#0B0D0C] py-20 text-white sm:py-24">
-      <div className="mx-auto grid max-w-6xl gap-12 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:items-start">
-        <div>
-          <p className="flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[#54C7AC]">
-            <span className="inline-block h-px w-5 bg-[#54C7AC]" aria-hidden="true" />
-            How it works
-          </p>
-          <h2 className="mt-4 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
-            From account to active replies—without losing control.
-          </h2>
-          <p className="mt-4 max-w-md text-base leading-relaxed text-white/70">
-            Linas guides the owner through a safe, visible sequence. Customer automation only begins after the business,
-            connection, and reply configuration are ready.
-          </p>
-          <button
-            type="button"
-            onClick={onOpenGuest}
-            className="mt-8 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#171A19] hover:bg-[#F0F3F1] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#54C7AC]"
-          >
-            Ask the guest guide →
-          </button>
-        </div>
+    <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-[#E4E8E6] bg-white px-4 py-2 text-sm text-[#06715F] shadow-sm">
+      <span className="h-2.5 w-2.5 rounded-full bg-[#06715F]" />
+      {flow.map((step, i) => (
+        <span key={step} className="flex items-center gap-2">
+          {i > 0 ? <span className="text-[#9AA39F]">→</span> : null}
+          <span className={i === 0 ? 'font-semibold' : ''}>{step}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
 
-        <ol className="divide-y divide-white/10">
-          {STEPS.map((step) => (
-            <li key={step.n} className="grid grid-cols-[3rem_minmax(0,1fr)] gap-4 py-5 first:pt-0 last:pb-0">
-              <span className="text-sm font-semibold text-[#54C7AC]">{step.n}</span>
-              <div>
-                <h3 className="text-lg font-semibold tracking-tight">{step.title}</h3>
-                <p className="mt-1 text-sm leading-relaxed text-white/65">{step.body}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
+/** @param {{ step: HowItWorksStep }} props */
+function Story({ step }) {
+  return (
+    <div>
+      <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[#06715F]">+ How it works</p>
+      <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[#171A19] sm:text-4xl">One app. Every step clear.</h2>
+      <div className="relative mt-10">
+        <p className="text-7xl font-semibold text-[#D7EFE8]">{step.n}</p>
+        <p className="mt-1 text-sm font-semibold uppercase tracking-[0.14em] text-[#06715F]">{step.kicker}</p>
+        <h3 className="mt-3 text-2xl font-semibold text-[#171A19]">{step.title}</h3>
+        <p className="mt-3 max-w-md text-base leading-relaxed text-[#5C6663]">{step.body}</p>
+        <FlowPill flow={step.flow} />
+      </div>
+    </div>
+  );
+}
+
+/** @param {{ step: HowItWorksStep, reduced: boolean }} props */
+function Phone({ step, reduced }) {
+  return (
+    <img
+      src={step.image}
+      alt={step.alt}
+      width={880}
+      height={1021}
+      className="mx-auto h-auto w-full max-w-[28rem] object-contain"
+      style={{ transition: reduced ? 'opacity 120ms linear' : 'opacity 420ms cubic-bezier(.22,1,.36,1), transform 420ms cubic-bezier(.22,1,.36,1)' }}
+    />
+  );
+}
+
+/** @param {{ index: number }} props */
+function Progress({ index }) {
+  const current = HOW_IT_WORKS_STEPS[index];
+  if (!current) return null;
+  const pct = ((index + 1) / SEGMENTS) * 100;
+  return (
+    <div className="mt-10 max-w-sm">
+      <div className="h-1.5 overflow-hidden rounded-full bg-[#E4EBE8]">
+        <div className="h-full rounded-full bg-[#06715F] lp-ease" style={{ width: `${pct}%`, transitionDuration: '420ms' }} />
+      </div>
+      <p className="mt-2 text-sm text-[#5C6663]">
+        {current.n} / {String(SEGMENTS).padStart(2, '0')}
+      </p>
+    </div>
+  );
+}
+
+export default function LandingHowItWorks() {
+  const reduced = usePrefersReducedMotion();
+  const mobile = useMediaQuery('(max-width: 767px)');
+  const pin = !reduced && !mobile;
+  const ref = useRef(/** @type {HTMLElement | null} */ (null));
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (!pin) return undefined;
+    const onScroll = () => {
+      const el = ref.current;
+      if (!el) return;
+      const scrolled = -el.getBoundingClientRect().top;
+      const total = el.offsetHeight - window.innerHeight;
+      if (total <= 0) return;
+      const p = Math.min(1, Math.max(0, scrolled / total));
+      setIndex(Math.min(SEGMENTS - 1, Math.floor(p * SEGMENTS + 1e-4)));
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [pin]);
+
+  useEffect(() => {
+    HOW_IT_WORKS_STEPS.slice(index + 1, index + 3).forEach((item) => {
+      const img = new Image();
+      img.src = item.image;
+    });
+  }, [index]);
+
+  const step = HOW_IT_WORKS_STEPS[index];
+  if (!step) return null;
+
+  if (!pin) {
+    return (
+      <section
+        id="how-it-works"
+        className="scroll-mt-24 bg-[#F7F8F5] py-16"
+        onPointerUp={(event) => {
+          const el = event.currentTarget;
+          const start = Number(el.dataset.startX || 0);
+          const dx = event.clientX - start;
+          if (dx > 40) setIndex((i) => Math.max(0, i - 1));
+          if (dx < -40) setIndex((i) => Math.min(SEGMENTS - 1, i + 1));
+        }}
+        onPointerDown={(event) => {
+          event.currentTarget.dataset.startX = String(event.clientX);
+        }}
+      >
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <Phone step={step} reduced={reduced} />
+          <div className="mt-6">
+            <Story step={step} />
+            <Progress index={index} />
+          </div>
+          <div className="mt-6 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              className="rounded-full border border-[#E4E8E6] bg-white px-4 py-2 text-sm font-semibold text-[#171A19]"
+              onClick={() => setIndex((i) => Math.max(0, i - 1))}
+            >
+              Previous
+            </button>
+            <div className="flex gap-1.5">
+              {HOW_IT_WORKS_STEPS.map((row, i) => (
+                <button
+                  key={row.n}
+                  type="button"
+                  aria-label={`Screen ${row.n}`}
+                  aria-current={i === index ? 'true' : undefined}
+                  className={`h-2 rounded-full ${i === index ? 'w-5 bg-[#06715F]' : 'w-2 bg-[#D5DCD8]'}`}
+                  onClick={() => setIndex(i)}
+                />
+              ))}
+            </div>
+            <button
+              type="button"
+              className="rounded-full border border-[#E4E8E6] bg-white px-4 py-2 text-sm font-semibold text-[#171A19]"
+              onClick={() => setIndex((i) => Math.min(SEGMENTS - 1, i + 1))}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section id="how-it-works" ref={ref} className="relative bg-[#F7F8F5]" style={{ height: `${SEGMENTS * 85}vh` }}>
+      <div className="sticky top-0 flex min-h-screen items-center">
+        <div className="mx-auto grid w-full max-w-6xl items-center gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+          <div key={step.n} className="lp-fade-up">
+            <Story step={step} />
+            <Progress index={index} />
+          </div>
+          <div key={`${step.n}-img`} className="lp-fade-up" style={{ transform: reduced ? undefined : 'translateY(-24px)' }}>
+            <Phone step={step} reduced={reduced} />
+          </div>
+        </div>
       </div>
     </section>
   );
