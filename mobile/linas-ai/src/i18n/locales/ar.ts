@@ -1,4 +1,6 @@
 import { aiSetupAr } from './aiSetupAr';
+import { commentsSetupAr } from './commentsSetupAr';
+import { requestSetupAr } from './requestSetupAr';
 import { dashboardAr } from './dashboardAr';
 import { appleAccountAr } from './appleAccountAr';
 import { integrationsDisplayAr } from './integrationsDisplayAr';
@@ -334,6 +336,8 @@ export const ar = {
   ...usersUiAr,
   ...dashboardAr,
   ...aiSetupAr,
+  ...commentsSetupAr,
+  ...requestSetupAr,
 
   proposalChangeTitle: 'تعديل إعداد الذكاء الاصطناعي',
   proposalDeleteTitle: 'حذف من إعداد الذكاء الاصطناعي',

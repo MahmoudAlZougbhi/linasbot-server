@@ -12,15 +12,15 @@ import { AiBasicsEditor } from './editors/AiBasicsEditor';
 import { ArticlesEditor } from './editors/ArticlesEditor';
 import { KnowledgeScreen } from './knowledge/KnowledgeScreen';
 import { LocationHoursSectionScreen } from './LocationHoursSectionScreen';
+import { CommentsScreen } from './comments/CommentsScreen';
+import { RequestRulesScreen } from './requestRules/RequestRulesScreen';
 import { OpeningHoursEditor } from './editors/OpeningHoursEditor';
 import { GreetingsEditor } from './editors/GreetingsEditor';
 import { HandoffEditor } from './editors/HandoffEditor';
 import { OffDaysEditor } from './editors/OffDaysEditor';
 import { AiLimitsEditor } from './editors/AiLimitsEditor';
 import { RestrictedEditor } from './editors/PolicyEditors';
-import { CommentsEditor } from './editors/CommentsEditor';
 import { PricesEditor } from './editors/PricesEditor';
-import { RequestsAppointmentsEditor } from './editors/RequestsAppointmentsEditor';
 import { ServicesEditor } from './editors/ServicesEditor';
 import { useCmDraft } from './useCmDraft';
 import { useCmMultiDraft } from './useCmMultiDraft';
@@ -109,8 +109,6 @@ function SectionBody({
       return <OpeningHoursEditor payload={payload} onChange={onChange} />;
     case 'restricted':
       return <RestrictedEditor payload={payload} onChange={onChange} />;
-    case 'comments':
-      return <CommentsEditor payload={payload} onChange={onChange} />;
     case 'ai_limits':
       return (
         <AiLimitsEditor
@@ -124,8 +122,6 @@ function SectionBody({
       );
     case 'off_days':
       return <OffDaysEditor payload={payload} onChange={onChange} />;
-    case 'requests_appointments':
-      return <RequestsAppointmentsEditor payload={payload} onChange={onChange} />;
     default:
       return <Text style={cmFormStyles.error}>Unknown section.</Text>;
   }
@@ -140,6 +136,12 @@ export function CmSectionScreen({ section, proposalReview, onBack, onOpenLocatio
         onOpenLocations={onOpenLocations}
       />
     );
+  }
+  if (section === 'comments') {
+    return <CommentsScreen proposalReview={proposalReview} onBack={onBack} />;
+  }
+  if (section === 'requests_appointments') {
+    return <RequestRulesScreen proposalReview={proposalReview} onBack={onBack} />;
   }
   if (section === 'ai_basics' || section === 'style' || section === 'dynamic_messages') {
     return (

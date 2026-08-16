@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from services.cm.comment_rules import evaluate_comment_rules
 from services.cm.constants import CM_SECTIONS
-from services.cm.schemas import CommentRule, CommentsSection, default_section_payload
+from services.cm.schemas import ArticleAttachment, CommentRule, CommentsSection, default_section_payload
 
 
 def test_comments_in_cm_sections() -> None:
@@ -93,3 +93,20 @@ def test_default_ignore() -> None:
     assert decision.matched is False
     assert decision.action == "ignore"
     assert decision.policy_text == "Be brief"
+
+
+def test_comment_rule_accepts_post_ids_and_attachments() -> None:
+    rule = CommentRule(
+        id="r5",
+        name="Price questions",
+        post_ids=["POST_A", "POST_B"],
+        post_id="POST_A",
+        scope="specific_post",
+        attachments=[ArticleAttachment(id="m1", kind="image", filename="summer-offer.jpg")],
+    )
+    dumped = rule.model_dump(mode="json")
+    assert dumped["post_ids"] == ["POST_A", "POST_B"]
+    assert dumped["attachments"][0]["filename"] == "summer-offer.jpg"
+    roundtrip = CommentRule.model_validate(dumped)
+    assert roundtrip.post_ids == ["POST_A", "POST_B"]
+    assert roundtrip.attachments[0].kind == "image"

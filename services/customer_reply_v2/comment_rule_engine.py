@@ -56,12 +56,28 @@ def trigger_matches(rule: dict[str, Any], comment_text: str) -> str:
     return ""
 
 
+def _wanted_post_ids(rule: dict[str, Any]) -> list[str]:
+    ids: list[str] = []
+    raw_ids = rule.get("post_ids")
+    if isinstance(raw_ids, list):
+        for raw in raw_ids:
+            value = str(raw or "").strip()
+            if value and value not in ids:
+                ids.append(value)
+    single = str(rule.get("post_id") or "").strip()
+    if single and single not in ids:
+        ids.append(single)
+    return ids
+
+
 def _scope_ok(rule: dict[str, Any], *, post_id: str, account_id: str) -> bool:
+    wanted = _wanted_post_ids(rule)
     scope = str(rule.get("scope") or "all_posts")
+    if wanted:
+        scope = "specific_post"
     if scope != "specific_post":
         return True
-    want_post = str(rule.get("post_id") or "").strip()
-    if not want_post or want_post != str(post_id or "").strip():
+    if not wanted or str(post_id or "").strip() not in wanted:
         return False
     want_account = str(rule.get("connected_account_id") or rule.get("page_or_ig_account_id") or "").strip()
     if want_account and account_id and want_account != str(account_id or "").strip():
@@ -169,6 +185,8 @@ def evaluate_comment_engine(
                 "ai_action_mode": str(g.get("ai_action_mode") or "reply_comment"),
                 "ai_instructions": str(g.get("ai_instructions") or ""),
                 "post_id": str(g.get("post_id") or ""),
+                "post_ids": _wanted_post_ids(g),
+                "attachments": list(g.get("attachments") or []),
             }
             for g in chosen
         ]

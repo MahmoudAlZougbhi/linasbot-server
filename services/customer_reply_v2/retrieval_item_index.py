@@ -133,6 +133,8 @@ def record_content(section_id: str, raw: dict[str, Any]) -> str:
                 "match_mode": raw.get("match_mode"),
                 "keywords": raw.get("keywords") or [],
                 "post_id": raw.get("post_id"),
+                "post_ids": raw.get("post_ids") or [],
+                "attachments": raw.get("attachments") or [],
                 "notes": raw.get("notes") or "",
                 "ai_instructions": raw.get("ai_instructions") or "",
                 "ai_action_mode": raw.get("ai_action_mode") or raw.get("action"),

@@ -51,8 +51,8 @@ def test_handwritten_v10_files_under_500_lines() -> None:
 
 def test_owner_ui_files_exist() -> None:
     root = Path(__file__).resolve().parents[1]
-    assert (root / "mobile/linas-ai/src/features/cm/editors/CommentsEditor.tsx").is_file()
-    assert (root / "mobile/linas-ai/src/features/cm/editors/RequestsAppointmentsEditor.tsx").is_file()
+    assert (root / "mobile/linas-ai/src/features/cm/comments/CommentsScreen.tsx").is_file()
+    assert (root / "mobile/linas-ai/src/features/cm/requestRules/RequestRulesScreen.tsx").is_file()
 
 
 def test_alembic_head_is_request_drafts() -> None:

@@ -90,10 +90,9 @@ describe('AI Setup hub restructure', () => {
   });
 
   it('requests editor uses type title note only', () => {
-    const src = read('features/cm/editors/RequestsAppointmentsEditor.tsx');
-    assert.match(src, /aiSetupAddRequestRule/);
-    assert.match(src, /aiSetupRequestNote/);
+    const src = read('features/cm/requestRules/RequestRuleEditView.tsx');
     assert.match(src, /aiSetupRequestTypeAppointment/);
+    assert.match(src, /requestRulesNote/);
     assert.doesNotMatch(src, /Seed common fields/);
     assert.doesNotMatch(src, /enabled_types/);
     assert.doesNotMatch(src, /module_enabled/);

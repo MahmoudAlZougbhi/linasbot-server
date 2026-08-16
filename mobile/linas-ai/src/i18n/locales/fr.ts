@@ -1,4 +1,6 @@
 import { aiSetupFr } from './aiSetupFr';
+import { commentsSetupFr } from './commentsSetupFr';
+import { requestSetupFr } from './requestSetupFr';
 import { dashboardFr } from './dashboardFr';
 import { appleAccountFr } from './appleAccountFr';
 import { integrationsDisplayFr } from './integrationsDisplayFr';
@@ -338,6 +340,8 @@ export const fr = {
   ...usersUiFr,
   ...dashboardFr,
   ...aiSetupFr,
+  ...commentsSetupFr,
+  ...requestSetupFr,
 
   proposalChangeTitle: 'Modification Configuration IA',
   proposalDeleteTitle: 'Supprimer de la Configuration IA',

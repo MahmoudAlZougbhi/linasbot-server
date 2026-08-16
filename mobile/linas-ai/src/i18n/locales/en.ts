@@ -1,4 +1,6 @@
 import { aiSetupEn } from './aiSetupEn';
+import { commentsSetupEn } from './commentsSetupEn';
+import { requestSetupEn } from './requestSetupEn';
 import { dashboardEn } from './dashboardEn';
 import { appleAccountEn } from './appleAccountEn';
 import { integrationsDisplayEn } from './integrationsDisplayEn';
@@ -332,6 +334,8 @@ export const en = {
   ...usersUiEn,
   ...dashboardEn,
   ...aiSetupEn,
+  ...commentsSetupEn,
+  ...requestSetupEn,
 
   proposalChangeTitle: 'AI Setup change',
   proposalDeleteTitle: 'Delete from AI Setup',
