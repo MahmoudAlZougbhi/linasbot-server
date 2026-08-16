@@ -23,9 +23,7 @@ export type Screen =
   | { name: 'products_import'; backTo?: 'products' }
   | { name: 'products_add'; backTo?: 'products' }
   | { name: 'products_edit'; productId: string; backTo?: 'products' }
-  | { name: 'services'; backTo?: 'cm' }
-  | { name: 'services_add'; backTo?: 'services' }
-  | { name: 'services_edit'; serviceId: string; backTo?: 'services' }
+  | { name: 'services'; backTo?: 'cm' | 'chat'; proposalReview?: CmProposalReview | null }
   | {
       name: 'cm_section';
       section: CmSectionId;

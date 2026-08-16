@@ -18,6 +18,10 @@ type Props = {
   iconColor?: string;
   centerTitle?: boolean;
   headerRight?: ReactNode;
+  /** Extra control immediately after back/menu (e.g. sparkle on Services list). */
+  headerLead?: ReactNode;
+  /** Hide the title text while keeping back / lead / right alignment. */
+  hideTitle?: boolean;
   /** Settings handoff: title under the hamburger, inset hairline, optional pale canvas. */
   stackedHeader?: boolean;
   /** Section-style title (16px) — Dashboard “Total activity” parity for Settings sub-screens. */
@@ -39,6 +43,8 @@ export function ScreenChrome({
   iconColor,
   centerTitle,
   headerRight,
+  headerLead,
+  hideTitle,
   stackedHeader,
   sectionTitle: sectionTitleStyle,
   canvasColor,
@@ -96,6 +102,7 @@ export function ScreenChrome({
             ]}
           >
             {menu}
+            {headerLead ? <View style={styles.headerLead}>{headerLead}</View> : null}
             <View
               style={[
                 styles.titleBlock,
@@ -103,15 +110,17 @@ export function ScreenChrome({
                 Boolean(subtitle) && !centerTitle && styles.titleBlockWithSub,
               ]}
             >
-              <Text
-                style={[
-                  centerTitle ? styles.centeredTitle : headerTitleStyle,
-                  { color: titleColor ?? colors.text },
-                ]}
-                numberOfLines={1}
-              >
-                {title}
-              </Text>
+              {hideTitle ? null : (
+                <Text
+                  style={[
+                    centerTitle ? styles.centeredTitle : headerTitleStyle,
+                    { color: titleColor ?? colors.text },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {title}
+                </Text>
+              )}
               {subtitle ? (
                 <Text
                   style={[
@@ -201,6 +210,10 @@ const styles = StyleSheet.create({
   hitSpacer: {
     width: HEADER_HIT,
     height: HEADER_HIT,
+  },
+  headerLead: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerRight: {
     minWidth: HIT,

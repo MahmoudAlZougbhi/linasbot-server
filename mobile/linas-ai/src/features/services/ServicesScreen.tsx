@@ -1,107 +1,330 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  FlatList,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
+import { LinasSparkleIcon } from '../../components/LinasSparkleIcon';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useI18n } from '../../i18n/LanguageContext';
-import { fonts, radii, spacing, useTheme } from '../../theme';
+import { fonts } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
-import { deleteService, fetchServices, type Service } from './servicesApi';
+import { asRecordList, newId } from '../cm/cmApi';
+import type { CmProposalReview } from '../cm/cmProposalReview';
+import { useCmDraft } from '../cm/useCmDraft';
+import { ServiceEditView } from './ServiceEditView';
+import { ServiceListView } from './ServiceListView';
+import { ServicePriceView } from './ServicePriceView';
+import { ServiceTextModal } from './ServiceTextModal';
+import { SV_CANVAS, SV_TEAL } from './serviceChrome';
+import {
+  buildPriceEntry,
+  createCatalogItem,
+  emptyPriceDraft,
+  ensureDimensionDefs,
+  matchesServiceQuery,
+  parseAmount,
+  parseServices,
+  patchCatalogItem,
+  priceDraftFromEntry,
+  type PriceDraft,
+  type ServiceItem,
+} from './serviceModel';
+import { useServiceMedia } from './useServiceMedia';
 
 type Props = {
+  proposalReview?: CmProposalReview | null;
   onBack?: () => void;
-  onAdd: () => void;
-  onEdit: (serviceId: string) => void;
 };
 
-export function ServicesScreen({ onBack, onAdd, onEdit }: Props) {
-  const { colors } = useTheme();
+type Mode = 'list' | 'edit' | 'price';
+
+export function ServicesScreen({ proposalReview, onBack }: Props) {
   const { tr } = useI18n();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [services, setServices] = useState<Service[]>([]);
+  const insets = useSafeAreaInsets();
+  const pricesReview =
+    proposalReview && (proposalReview.section === 'prices' || proposalReview.section === 'services')
+      ? { ...proposalReview, section: 'prices' as const }
+      : proposalReview;
+  const draft = useCmDraft('prices', pricesReview);
+  const [mode, setMode] = useState<Mode>('list');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [priceDraft, setPriceDraft] = useState<PriceDraft>(emptyPriceDraft());
+  const [priceError, setPriceError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetchServices();
-      setServices(res.services);
-      setError(null);
-    } catch {
-      setError(tr('servicesLoadError'));
-    } finally {
-      setLoading(false);
+  const items = useMemo(() => parseServices(draft.payload), [draft.payload]);
+  const selected = items.find((item) => item.id === selectedId) || null;
+  const visible = useMemo(
+    () => items.filter((item) => matchesServiceQuery(item, query)),
+    [items, query],
+  );
+
+  function setCatalogAndEntries(
+    catalog: Record<string, unknown>[],
+    entries: Record<string, unknown>[],
+    dimensions?: Record<string, unknown>[],
+  ) {
+    draft.setPayload({
+      ...draft.payload,
+      catalog,
+      price_entries: entries,
+      ...(dimensions ? { dimension_definitions: dimensions } : {}),
+    });
+  }
+
+  function catalogRows(): Record<string, unknown>[] {
+    return asRecordList(draft.payload.catalog);
+  }
+
+  function entryRows(): Record<string, unknown>[] {
+    return asRecordList(draft.payload.price_entries);
+  }
+
+  function patchSelected(patch: Partial<Pick<ServiceItem, 'name' | 'note' | 'attachments'>>) {
+    if (!selected) return;
+    setCatalogAndEntries(
+      catalogRows().map((row) =>
+        String(row.id) === selected.id
+          ? patchCatalogItem(row, {
+              name: patch.name ?? selected.name,
+              note: patch.note ?? selected.note,
+              attachments: patch.attachments ?? selected.attachments,
+            })
+          : row,
+      ),
+      entryRows(),
+    );
+  }
+
+  const media = useServiceMedia(selected, patchSelected, tr);
+
+  function handleAdd() {
+    const id = newId('svc');
+    setCatalogAndEntries([createCatalogItem(id), ...catalogRows()], entryRows());
+    setSelectedId(id);
+    setMode('edit');
+    media.setUploadError(null);
+    setSaveError(null);
+  }
+
+  function goList() {
+    if (
+      selected &&
+      !selected.name.trim() &&
+      !selected.note.trim() &&
+      !selected.prices.length &&
+      !selected.attachments.length
+    ) {
+      setCatalogAndEntries(
+        catalogRows().filter((row) => String(row.id) !== selected.id),
+        entryRows(),
+      );
     }
-  }, [tr]);
+    setMode('list');
+    setSelectedId(null);
+    media.setUploadError(null);
+    setSaveError(null);
+  }
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  function goEdit() {
+    setMode('edit');
+    setPriceDraft(emptyPriceDraft());
+    setPriceError(null);
+  }
 
-  const handleDelete = async (serviceId: string) => {
-    try {
-      await deleteService(serviceId);
-      setServices((rows) => rows.filter((row) => row.id !== serviceId));
-    } catch {
-      setError(tr('servicesDeleteError'));
+  async function handleSaveService() {
+    if (!selected?.name.trim()) {
+      setSaveError(tr('servicesNameRequired'));
+      return;
     }
-  };
+    if (!draft.dirty) {
+      goList();
+      return;
+    }
+    const ok = await draft.save();
+    if (ok) goList();
+  }
+
+  function upsertPrice(andAddAnother: boolean) {
+    if (!selected) return;
+    const amount = parseAmount(priceDraft.amountText);
+    if (amount == null) {
+      setPriceError(tr('servicesPriceRequired'));
+      return;
+    }
+    const id = priceDraft.id || newId('entry');
+    const nextEntry = buildPriceEntry(id, selected.id, priceDraft, amount);
+    const existing = entryRows();
+    const nextEntries = priceDraft.id
+      ? existing.map((row) => (String(row.id) === id ? nextEntry : row))
+      : [...existing, nextEntry];
+    const dims = ensureDimensionDefs(asRecordList(draft.payload.dimension_definitions), priceDraft.details);
+    setCatalogAndEntries(catalogRows(), nextEntries, dims);
+    if (andAddAnother) {
+      setPriceDraft(emptyPriceDraft());
+      setPriceError(null);
+      return;
+    }
+    goEdit();
+  }
+
+  function deletePrice() {
+    if (!priceDraft.id) return;
+    setCatalogAndEntries(
+      catalogRows(),
+      entryRows().filter((row) => String(row.id) !== priceDraft.id),
+    );
+    goEdit();
+  }
+
+  const chromeTitle =
+    mode === 'list'
+      ? ' '
+      : mode === 'price'
+        ? tr(priceDraft.id ? 'servicesEditPriceTitle' : 'servicesAddPriceTitle')
+        : tr('servicesEditTitle');
 
   return (
-    <ScreenChrome title={tr('servicesTitle')} subtitle={tr('servicesSubtitle')} onBack={onBack}>
-      {loading ? <ActivityIndicator color={colors.accent} style={styles.loader} /> : null}
-      {error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
-      <PrimaryButton label={tr('servicesAdd')} onPress={onAdd} />
-      <FlatList
-        data={services}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          !loading ? (
-            <Text style={[styles.empty, { color: colors.textDim }]}>{tr('servicesEmpty')}</Text>
-          ) : null
-        }
-        renderItem={({ item }) => (
-          <View style={[styles.card, { borderColor: colors.border }]}>
-            <Pressable onPress={() => onEdit(item.id)} style={styles.cardMain}>
-              <Text style={styles.name}>{item.name}</Text>
-              {item.price_summary ? (
-                <Text style={{ color: colors.textDim }}>{item.price_summary}</Text>
-              ) : null}
-              <Text style={{ color: colors.textDim, fontSize: 12 }}>
-                {(item.options?.length ?? 0) === 1
-                  ? tr('servicesOneOption')
-                  : `${item.options?.length ?? 0} ${tr('servicesOptionsLabel')}`}
-              </Text>
-            </Pressable>
-            <Pressable onPress={() => void handleDelete(item.id)} accessibilityRole="button">
-              <Text style={{ color: colors.danger }}>{tr('servicesDelete')}</Text>
+    <ScreenChrome
+      title={chromeTitle}
+      subtitle={mode === 'price' ? tr('servicesAddPriceSubtitle') : undefined}
+      centerTitle={mode !== 'list'}
+      hideTitle={mode === 'list'}
+      headerLead={mode === 'list' ? <LinasSparkleIcon size={18} color={SV_TEAL} /> : undefined}
+      onBack={mode === 'list' ? onBack : mode === 'price' ? goEdit : goList}
+      headerRight={mode === 'list' ? undefined : <LinasSparkleIcon size={18} color={SV_TEAL} />}
+      canvasColor={SV_CANVAS}
+    >
+      {draft.loading ? <LinasLoadingIndicator variant="screen" /> : null}
+      {draft.error ? <Text style={styles.error}>{draft.error}</Text> : null}
+      {draft.conflict ? <Text style={styles.warn}>{draft.conflict}</Text> : null}
+      {draft.proposalActive ? <Text style={styles.warn}>{tr('servicesProposalPreview')}</Text> : null}
+
+      {!draft.loading && mode === 'list' ? (
+        <ScrollView contentContainerStyle={styles.listScroll} showsVerticalScrollIndicator={false}>
+          <ServiceListView
+            items={visible}
+            query={query}
+            onQueryChange={setQuery}
+            onAdd={handleAdd}
+            onSelect={(id) => {
+              setSelectedId(id);
+              setMode('edit');
+            }}
+            tr={tr}
+          />
+        </ScrollView>
+      ) : null}
+
+      {!draft.loading && mode === 'edit' && selected ? (
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={styles.editScroll} showsVerticalScrollIndicator={false}>
+            {saveError ? <Text style={styles.error}>{saveError}</Text> : null}
+            <ServiceEditView
+              item={selected}
+              uploading={media.uploading}
+              uploadError={media.uploadError}
+              onName={(name) => patchSelected({ name })}
+              onNote={(note) => patchSelected({ note })}
+              onAddPrice={() => {
+                setPriceDraft(emptyPriceDraft());
+                setPriceError(null);
+                setMode('price');
+              }}
+              onEditPrice={(id) => {
+                const price = selected.prices.find((row) => row.id === id);
+                if (!price) return;
+                setPriceDraft(priceDraftFromEntry(price));
+                setPriceError(null);
+                setMode('price');
+              }}
+              onAddResource={(kind) => void media.addResource(kind)}
+              onRemoveResource={(id) =>
+                patchSelected({ attachments: selected.attachments.filter((row) => row.id !== id) })
+              }
+              onReplaceResource={(att) => void media.addResource(att.kind, att.id)}
+              onEditCaption={(att) => {
+                media.setPrompt({ kind: 'caption', attachId: att.id });
+                media.setPromptValue(att.caption);
+              }}
+              tr={tr}
+            />
+          </ScrollView>
+          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+            <PrimaryButton
+              label={tr('servicesSave')}
+              onPress={() => void handleSaveService()}
+              loading={draft.saving}
+              disabled={!draft.etag}
+              style={styles.saveBtn}
+            />
+          </View>
+        </KeyboardAvoidingView>
+      ) : null}
+
+      {!draft.loading && mode === 'price' && selected ? (
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={styles.editScroll} showsVerticalScrollIndicator={false}>
+            <ServicePriceView
+              draft={priceDraft}
+              error={priceError}
+              canDelete={Boolean(priceDraft.id)}
+              onTitle={(title) => setPriceDraft((row) => ({ ...row, title }))}
+              onAmount={(amountText) => setPriceDraft((row) => ({ ...row, amountText }))}
+              onDetails={(details) => setPriceDraft((row) => ({ ...row, details }))}
+              onDelete={deletePrice}
+              tr={tr}
+            />
+          </ScrollView>
+          <View style={[styles.priceFooter, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+            <PrimaryButton label={tr('servicesSavePrice')} onPress={() => upsertPrice(false)} style={styles.saveBtn} />
+            <Pressable onPress={() => upsertPrice(true)} accessibilityRole="button">
+              <Text style={styles.another}>{tr('servicesSaveAndAddAnother')}</Text>
             </Pressable>
           </View>
-        )}
+        </KeyboardAvoidingView>
+      ) : null}
+
+      <ServiceTextModal
+        visible={Boolean(media.prompt)}
+        title={media.prompt?.kind === 'caption' ? tr('servicesEditCaption') : tr('servicesLinkTitle')}
+        value={media.promptValue}
+        placeholder={media.prompt?.kind === 'caption' ? tr('servicesCaption') : tr('servicesLinkPlaceholder')}
+        keyboardType={media.prompt?.kind === 'link' ? 'url' : 'default'}
+        saveLabel={tr('servicesSave')}
+        cancelLabel={tr('usersCancel')}
+        onChange={media.setPromptValue}
+        onSave={media.commitPrompt}
+        onClose={media.closePrompt}
       />
     </ScreenChrome>
   );
 }
 
 const styles = StyleSheet.create({
-  loader: { marginVertical: spacing.sm },
-  list: { gap: spacing.sm, paddingTop: spacing.md, paddingBottom: spacing.xl },
-  empty: { textAlign: 'center', marginTop: spacing.lg, fontFamily: fonts.body },
-  card: {
-    borderWidth: 1,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+  flex: { flex: 1 },
+  listScroll: { flexGrow: 1, paddingBottom: 16 },
+  editScroll: { paddingBottom: 16 },
+  error: { color: '#DC2626', fontFamily: fonts.body, marginBottom: 8 },
+  warn: { color: '#D97706', fontFamily: fonts.body, marginBottom: 8 },
+  footer: { paddingTop: 8 },
+  priceFooter: { paddingTop: 8, gap: 10 },
+  saveBtn: { backgroundColor: SV_TEAL, borderRadius: 12 },
+  another: {
+    color: SV_TEAL,
+    fontFamily: fonts.bodyMedium,
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    paddingVertical: 6,
   },
-  cardMain: { flex: 1, gap: 4 },
-  name: { fontFamily: fonts.bodyMedium, fontSize: 16, color: '#10221A' },
 });

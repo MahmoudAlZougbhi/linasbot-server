@@ -59,7 +59,7 @@ describe('AI Setup hub restructure', () => {
     const cardsBlock = sections.match(/export const CM_SECTION_CARDS[\s\S]*?\];/)?.[0] ?? '';
     const firstId = cardsBlock.match(/id: '([^']+)'/)?.[1];
     assert.equal(firstId, 'knowledge');
-    assert.match(sections, /id: 'prices'[\s\S]*title: 'Service'/);
+    assert.match(sections, /id: 'prices'[\s\S]*title: 'Services'/);
     assert.match(sections, /id: 'branches'[\s\S]*title: 'Location and Opening Hours'/);
     const openingHoursCard = cardsBlock.match(/\{\s*id: 'opening_hours'[\s\S]*?\},/)?.[0] ?? '';
     assert.match(openingHoursCard, /title: 'Opening Hours'/);
@@ -84,8 +84,8 @@ describe('AI Setup hub restructure', () => {
       assert.match(src, /aiSetupGreetingNote/);
       assert.match(src, /aiSetupAddRequestRule/);
       assert.match(src, /aiSetupRequestNote/);
-      assert.match(src, /servicesAddOption.*Add more option|Ajouter une option|إضافة خيار/);
-      assert.match(src, /servicesTitle: 'Service'|servicesTitle: 'الخدمة'/);
+      assert.match(src, /servicesAddPriceOption/);
+      assert.match(src, /servicesTitle: 'Services'|servicesTitle: 'الخدمات'/);
     }
   });
 
@@ -100,12 +100,18 @@ describe('AI Setup hub restructure', () => {
   });
 });
 
-describe('Service option row UX', () => {
-  it('groups option fields with price as the only labeled input', () => {
-    const row = read('features/services/ServiceOptionRow.tsx');
-    assert.match(row, /styles\.group/);
-    assert.match(row, /label=\{tr\('servicesPrice'\)\}/);
-    assert.doesNotMatch(row, /servicesMachineOptional/);
-    assert.match(row, /servicesMachinePlaceholder/);
+describe('Services AI Setup screens', () => {
+  it('lists, edits, and adds prices over the CM prices catalog', () => {
+    const screen = read('features/services/ServicesScreen.tsx');
+    const list = read('features/services/ServiceListView.tsx');
+    const edit = read('features/services/ServiceEditView.tsx');
+    const price = read('features/services/ServicePriceView.tsx');
+    assert.match(screen, /useCmDraft\('prices'/);
+    assert.match(list, /servicesSearch/);
+    assert.match(list, /servicesFooter/);
+    assert.match(edit, /servicesAddPriceOption/);
+    assert.match(edit, /servicesMediaSection/);
+    assert.match(price, /servicesSaveAndAddAnother|servicesAddDetail/);
+    assert.match(price, /servicesPriceHelp/);
   });
 });

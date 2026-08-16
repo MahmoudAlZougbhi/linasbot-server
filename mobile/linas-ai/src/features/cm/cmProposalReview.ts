@@ -43,17 +43,19 @@ export function applyProposedItem(
   base: Record<string, unknown>,
   item: Record<string, unknown>,
   idKey: 'id' | 'qa_group_id',
+  listKey: 'items' | 'catalog' = 'items',
 ): Record<string, unknown> {
-  const items = Array.isArray(base.items)
-    ? base.items.filter((row): row is Record<string, unknown> => isPlainObject(row))
+  const raw = base[listKey];
+  const items = Array.isArray(raw)
+    ? raw.filter((row): row is Record<string, unknown> => isPlainObject(row))
     : [];
   const id = String(item[idKey] || '');
   if (!id) {
-    return { ...base, items: [...items, item] };
+    return { ...base, [listKey]: [...items, item] };
   }
   const idx = items.findIndex((row) => String(row[idKey] || '') === id);
   const next = [...items];
   if (idx >= 0) next[idx] = item;
   else next.push(item);
-  return { ...base, items: next };
+  return { ...base, [listKey]: next };
 }
