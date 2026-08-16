@@ -84,7 +84,16 @@ async def test_connected_posts_graph_fetch_pagination() -> None:
     async def _fetch(*, platform: str, account_id: str, after: str = "", limit: int = 25) -> list[dict[str, str]]:
         assert platform == "instagram"
         assert account_id == "ig-1"
-        return [{"id": "1789", "preview": "hello", "created_time": "1", "permalink": "https://ig/p", "thumbnail": "", "media_type": "IMAGE"}]
+        return [
+            {
+                "id": "1789",
+                "preview": "hello",
+                "created_time": "1",
+                "permalink": "https://ig/p",
+                "thumbnail": "",
+                "media_type": "IMAGE",
+            }
+        ]
 
     # Injected graph_fetch still requires tenant ownership; mock belongs check via monkeypatch in caller.
     # Direct unit: graph_fetch path after ownership.

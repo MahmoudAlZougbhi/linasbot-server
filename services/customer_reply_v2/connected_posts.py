@@ -126,7 +126,9 @@ async def _graph_list_posts(
         return {"ok": False, "error": "graph_request_failed", "posts": [], "allow_manual_post_id": True}
     if not isinstance(payload, dict):
         return {"ok": False, "error": "graph_invalid_response", "posts": [], "allow_manual_post_id": True}
-    if response.status_code == 403 or (isinstance(payload.get("error"), dict) and int(payload["error"].get("code") or 0) in {10, 200, 190}):
+    if response.status_code == 403 or (
+        isinstance(payload.get("error"), dict) and int(payload["error"].get("code") or 0) in {10, 200, 190}
+    ):
         return {"ok": False, "error": "graph_permission_denied", "posts": [], "allow_manual_post_id": True}
     if response.status_code >= 300 or payload.get("error"):
         return {"ok": False, "error": f"graph_http_{response.status_code}", "posts": [], "allow_manual_post_id": True}
@@ -169,7 +171,9 @@ async def list_connected_posts(
     page_size = max(1, min(int(limit or _POST_PAGE_SIZE), 50))
     cursor = str(after or "").strip()
     if graph_fetch is not None:
-        posts = list(await graph_fetch(platform=platform, account_id=connected_account_id, after=cursor, limit=page_size) or [])
+        posts = list(
+            await graph_fetch(platform=platform, account_id=connected_account_id, after=cursor, limit=page_size) or []
+        )
         return {
             "ok": True,
             "posts": posts[:page_size],
@@ -180,4 +184,6 @@ async def list_connected_posts(
     binding = _binding_for_account(tenant_id=tenant_id, platform=platform, connected_account_id=connected_account_id)
     if binding is None:
         return {"ok": False, "error": "account_not_in_tenant", "posts": [], "allow_manual_post_id": True}
-    return await _graph_list_posts(binding=binding, platform=str(platform or "").strip().lower(), after=cursor, limit=page_size)
+    return await _graph_list_posts(
+        binding=binding, platform=str(platform or "").strip().lower(), after=cursor, limit=page_size
+    )

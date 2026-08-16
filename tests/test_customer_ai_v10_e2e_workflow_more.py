@@ -284,7 +284,9 @@ async def test_s18_product_media_send_no_second_tera(v2_env, products_db) -> Non
     assert sent["delivery_result"] == "simulated"
     assert captured
     assert str(captured[0][2]).startswith("product-media:")
-    video = __import__("services.customer_reply_v2.media_actions", fromlist=["resolve_media_actions"]).resolve_media_actions(
+    video = __import__(
+        "services.customer_reply_v2.media_actions", fromlist=["resolve_media_actions"]
+    ).resolve_media_actions(
         tenant_id="t_e2e_s18",
         actions=[{"product_id": product["id"], "media_type": "videos", "max_items": 1, "order": "configured_order"}],
         channel_capabilities={"max_media_items": 10},

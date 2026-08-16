@@ -70,9 +70,7 @@ async def maybe_handle_comment_and_dm(
                 )
             if dm_text:
                 capture_send.append(
-                    _dm_payload(
-                        comment_id=comment_id, binding=binding, text=dm_text, rule_id=rule_decision.rule_id
-                    )
+                    _dm_payload(comment_id=comment_id, binding=binding, text=dm_text, rule_id=rule_decision.rule_id)
                 )
         _mark_sent_reply(binding, comment_id)
         return CommentReplyResult(status="simulated", reply_id="simulated_both")
@@ -93,7 +91,10 @@ async def maybe_handle_comment_and_dm(
             inbound_event_id=inbound_event_id,
         )
         if public_result.get("hard_fail"):
-            return CommentReplyResult(status=str(public_result.get("status") or "failed"), reason=str(public_result.get("reason") or "public_reply_failed"))
+            return CommentReplyResult(
+                status=str(public_result.get("status") or "failed"),
+                reason=str(public_result.get("reason") or "public_reply_failed"),
+            )
     if dm_text:
         dm_result = await _guarded_private_dm(
             client=client,
@@ -105,7 +106,10 @@ async def maybe_handle_comment_and_dm(
             inbound_event_id=inbound_event_id,
         )
         if dm_result.get("hard_fail") and not public_result.get("ok"):
-            return CommentReplyResult(status=str(dm_result.get("status") or "failed"), reason=str(dm_result.get("reason") or "private_reply_failed"))
+            return CommentReplyResult(
+                status=str(dm_result.get("status") or "failed"),
+                reason=str(dm_result.get("reason") or "private_reply_failed"),
+            )
 
     _mark_sent_reply(binding, comment_id)
     public_ok = bool(public_result.get("ok") or public_result.get("skipped") or public_result.get("duplicate"))

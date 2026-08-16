@@ -98,7 +98,9 @@ async def send_pending_product_media(
     from services.ai_reply_delivery import classify_send_result
 
     evidence = classify_send_result(result)
-    delivery = "channel_sent" if evidence.get("success") or evidence.get("duplicate_suppressed") else "channel_send_failed"
+    delivery = (
+        "channel_sent" if evidence.get("success") or evidence.get("duplicate_suppressed") else "channel_send_failed"
+    )
     if evidence.get("duplicate_suppressed"):
         delivery = "duplicate_suppressed"
     if evidence.get("needs_owner_action"):
@@ -109,5 +111,9 @@ async def send_pending_product_media(
         "ai_charged": False,
         "extra_tera_call": False,
         "delivery_result": delivery,
-        "provider_result": {k: result.get(k) for k in ("success", "error", "message_id", "duplicate_suppressed") if isinstance(result, dict)},
+        "provider_result": {
+            k: result.get(k)
+            for k in ("success", "error", "message_id", "duplicate_suppressed")
+            if isinstance(result, dict)
+        },
     }

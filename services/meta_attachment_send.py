@@ -39,9 +39,7 @@ async def send_stored_product_media(
         return {"success": False, "error": "adapter_not_ready"}
     upload_url = f"{base}/{version}/{account_id}/message_attachments"
     files = {"filedata": (filename or "media.bin", media_bytes, mime_l)}
-    data = {
-        "message": json.dumps({"attachment": {"type": att_type, "payload": {"is_reusable": True}}})
-    }
+    data = {"message": json.dumps({"attachment": {"type": att_type, "payload": {"is_reusable": True}}})}
     try:
         uploaded = await client.post(
             upload_url,
