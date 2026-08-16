@@ -19,7 +19,7 @@ function read(rel) {
 const SAMPLE_TILES = [
   { id: 'ai_basics', title: 'AI Basics', description: 'd', mobileSupported: true },
   { id: 'knowledge', title: 'Knowledge', description: 'd', mobileSupported: true },
-  { id: 'branches', title: 'Location and Opening Hours', description: 'd', mobileSupported: true },
+  { id: 'branches', title: 'Locations & hours', description: 'd', mobileSupported: true },
   { id: 'prices', title: 'Service', description: 'd', mobileSupported: true },
   { id: 'comments', title: 'Comments', description: 'd', mobileSupported: true },
   { id: 'requests_appointments', title: 'Requests', description: 'd', mobileSupported: true },

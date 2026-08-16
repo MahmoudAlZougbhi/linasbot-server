@@ -200,6 +200,25 @@ def resolve_branch_facts(branches: BranchesSection | dict[str, Any], branch_id: 
             facts.append(AnswerFact(kind="branch_hours", value=branch.hours.summary, source_id=f"branch:{branch.id}"))
         if branch.notes:
             facts.append(AnswerFact(kind="branch_notes", value=branch.notes, source_id=f"branch:{branch.id}:notes"))
+        for att in branch.attachments:
+            label = (att.filename or att.caption or att.url or att.id).strip()
+            if att.kind == "link" and (att.url or "").strip():
+                facts.append(
+                    AnswerFact(
+                        kind="branch_link",
+                        value=f"{label}: {att.url.strip()}",
+                        source_id=f"branch:{branch.id}:att:{att.id}",
+                    )
+                )
+            elif (att.caption or "").strip() or label:
+                facts.append(
+                    AnswerFact(
+                        kind="branch_media",
+                        value=f"{att.kind}: {label}"
+                        + (f" ({att.caption.strip()})" if (att.caption or "").strip() else ""),
+                        source_id=f"branch:{branch.id}:att:{att.id}",
+                    )
+                )
         if section.policy_text:
             facts.append(
                 AnswerFact(kind="branches_policy", value=section.policy_text, source_id="branches:policy_text")

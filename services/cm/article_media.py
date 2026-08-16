@@ -23,6 +23,10 @@ ALLOWED_MIME = frozenset(
         "image/heic",
         "image/heif",
         "image/webp",
+        "video/mp4",
+        "video/quicktime",
+        "video/webm",
+        "video/3gpp",
         "application/pdf",
         "text/plain",
         "text/markdown",
@@ -35,7 +39,10 @@ IMAGE_MIME_PREFIX = "image/"
 
 
 def _kind_for_mime(mime: str) -> str:
-    return "image" if (mime or "").startswith(IMAGE_MIME_PREFIX) else "file"
+    raw = (mime or "").lower()
+    if raw.startswith("video/"):
+        return "video"
+    return "image" if raw.startswith(IMAGE_MIME_PREFIX) else "file"
 
 
 def validate_upload(*, filename: str, content_type: str | None, size: int) -> dict[str, Any]:
@@ -53,6 +60,10 @@ def validate_upload(*, filename: str, content_type: str | None, size: int) -> di
             ".jpeg": "image/jpeg",
             ".png": "image/png",
             ".webp": "image/webp",
+            ".mp4": "video/mp4",
+            ".mov": "video/quicktime",
+            ".webm": "video/webm",
+            ".3gp": "video/3gpp",
             ".pdf": "application/pdf",
             ".txt": "text/plain",
             ".md": "text/markdown",
