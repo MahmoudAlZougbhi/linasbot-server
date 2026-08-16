@@ -29,6 +29,24 @@ def row_to_dict(row: TenantEntitlementRow) -> dict[str, Any]:
     }
 
 
+_ACTIVE_SUB_STATUSES = ("active", "trial", "grace")
+
+
+def count_active_subscribers(session: Session) -> int:
+    """Aggregate-only count of tenants with a live paid/trial/grace plan."""
+    from sqlalchemy import func, select
+
+    stmt = (
+        select(func.count())
+        .select_from(TenantEntitlementRow)
+        .where(
+            TenantEntitlementRow.status.in_(_ACTIVE_SUB_STATUSES),
+            TenantEntitlementRow.plan_id.notin_(("none", "")),
+        )
+    )
+    return int(session.execute(stmt).scalar_one() or 0)
+
+
 def get_entitlement(session: Session, tenant_id: str) -> dict[str, Any] | None:
     row = session.get(TenantEntitlementRow, tenant_id)
     if row is None:

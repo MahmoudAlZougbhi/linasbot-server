@@ -70,8 +70,12 @@ def iter_section_items(section_id: str, payload: dict[str, Any]) -> list[ItemInd
         return entries
     rules = payload.get("rules")
     if isinstance(rules, list):
+        from services.customer_reply_v2.comment_rule_select import is_luna_selectable_comment_rule
+
         for raw in rules[:MAX_ITEMS_PER_SECTION]:
             if not isinstance(raw, dict):
+                continue
+            if section_id == "comments" and not is_luna_selectable_comment_rule(raw):
                 continue
             item_id = str(raw.get("id") or "").strip()
             if not item_id:

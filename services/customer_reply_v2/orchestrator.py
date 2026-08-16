@@ -169,6 +169,7 @@ async def run_customer_reply_v2_dm(
                     requested_reasoning_effort=None,
                     effective_reasoning_effort=None,
                     success=True,
+                    is_ai=False,
                     failure_stage="safety_block",
                 )
             )

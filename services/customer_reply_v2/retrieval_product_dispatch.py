@@ -78,6 +78,7 @@ def dispatch_product_tool(name: str, args: dict[str, Any], ctx: Any) -> dict[str
                     conversation_id=conversation_id,
                     context_source="active_context",
                 )
+                _remember_product_evidence(ctx, data)
             elif name == "get_product_images":
                 product_id = str(args.get("product_id") or ctx.active_product_id or "")
                 data = crv2_get_product_images(db, tenant_id=ctx.tenant_id, product_id=product_id)
@@ -114,3 +115,31 @@ def dispatch_product_tool(name: str, args: dict[str, Any], ctx: Any) -> dict[str
     if ctx.active_product_id and name == "get_product_details":
         data["active_product_context"] = ctx.active_product_id
     return {"ok": True, "data": data}
+
+
+def _remember_product_evidence(ctx: Any, data: dict[str, Any] | None) -> None:
+    """Copy selected product details into Tera evidence. Luna tools are not Tera context."""
+    import json
+
+    from services.customer_reply_v2.models import EvidenceRecord
+
+    if not isinstance(data, dict) or not data.get("ok"):
+        return
+    product = data.get("product")
+    if not isinstance(product, dict):
+        return
+    product_id = str(product.get("id") or "").strip()
+    if not product_id:
+        return
+    source_id = f"products:{product_id}"
+    if any(getattr(row, "source_id", "") == source_id for row in (ctx.evidence_acc or [])):
+        return
+    ctx.evidence_acc.append(
+        EvidenceRecord(
+            source_id=source_id,
+            section_id="products",
+            title=str(product.get("name") or product.get("title") or source_id),
+            content=json.dumps(product, ensure_ascii=False),
+            published_revision=str(getattr(ctx, "published_revision", "") or ""),
+        )
+    )

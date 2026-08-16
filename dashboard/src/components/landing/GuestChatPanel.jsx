@@ -64,9 +64,9 @@ const COPY = {
 
 /**
  * Guest AI floating widget — same product chat feel as the app, without limit meters.
- * @param {{ open: boolean, onOpen: () => void, onClose: () => void }} props
+ * @param {{ open: boolean, onOpen: () => void, onClose: () => void, showFab?: boolean }} props
  */
-export default function GuestChatPanel({ open = false, onOpen = () => {}, onClose = () => {} }) {
+export default function GuestChatPanel({ open = false, onOpen = () => {}, onClose = () => {}, showFab = true }) {
   const { locale } = usePublicLandingLocale();
   const copy = COPY[locale] || COPY.en;
   const dir = locale === 'ar' ? 'rtl' : 'ltr';
@@ -290,6 +290,7 @@ export default function GuestChatPanel({ open = false, onOpen = () => {}, onClos
         </div>
       )}
 
+      {showFab ? (
       <button
         type="button"
         onClick={open ? onClose : onOpen}
@@ -305,6 +306,7 @@ export default function GuestChatPanel({ open = false, onOpen = () => {}, onClos
           </>
         )}
       </button>
+      ) : null}
 
       {/* Accessible heading for tests / skip targets when widget closed */}
       <h2 className="sr-only">{copy.title}</h2>

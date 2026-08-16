@@ -65,6 +65,7 @@ _ROUTE_MODULES = (
     "modules.meta_social_posts_api",
     "modules.wallet_api",
     "modules.plans_api",
+    "modules.public_landing_stats_api",
     "modules.whatsapp_smart_followup_api",
 )
 
@@ -211,6 +212,7 @@ class TestRouteInventory:
             ("GET", "/api/public/plans"),
             ("GET", "/api/public/app-version"),
             ("POST", "/api/public/app-version/check"),
+            ("GET", "/api/public/landing-stats"),
             ("POST", "/api/billing/stripe/webhook"),
             ("POST", "/api/webhooks/resend"),
             ("POST", "/api/auth/mobile/login"),
