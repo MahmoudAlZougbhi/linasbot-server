@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from services.cm.resource_attachment import resource_summary
+from services.cm.setup_resources import descriptors_for_item
 from services.cm.version_store import load_published_content
 from services.customer_reply_v2.flags import max_retrieval_rounds
 from services.customer_reply_v2.manifest import FIXED_ANSWER_SECTIONS, manifest_for_retrieval_luna
@@ -128,6 +130,7 @@ def _read_items(ctx: ToolContext, args: dict[str, Any], listed: dict[str, Any] |
             title=str(raw.get("title") or raw.get("name") or label_of(raw.get("labels")) or source_id),
             content=content,
             published_revision=ctx.published_revision,
+            allowed_resources=descriptors_for_item(source_item_id=source_id, item=raw),
         )
         ctx.evidence_acc.append(rec)
         evidence.append(
@@ -136,6 +139,7 @@ def _read_items(ctx: ToolContext, args: dict[str, Any], listed: dict[str, Any] |
                 "section_id": rec.section_id,
                 "title": rec.title,
                 "content": rec.content,
+                "resource_summary": resource_summary(list(raw.get("attachments") or [])),
                 "published_revision": rec.published_revision,
                 "path": f"{sid}/{source_id.split(':', 1)[-1]}",
             }
@@ -200,6 +204,7 @@ def dispatch_retrieval_tool(name: str, args: dict[str, Any], ctx: ToolContext) -
                         "status": entry.status,
                         "relations": entry.relations,
                         "published_revision": ctx.published_revision,
+                        "resource_summary": dict(entry.resource_summary or {}),
                     }
                 )
         ctx.audit.append({"tool": name, "ok": True, "class": "item_index", "count": len(items)})

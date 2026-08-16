@@ -6,6 +6,7 @@ from typing import Any
 
 from services.customer_reply_v2.draft_actions import plan_drafts_for_turn
 from services.customer_reply_v2.media_actions import plan_media_for_turn
+from services.customer_reply_v2.resource_actions import plan_resources_for_turn
 
 
 def plan_turn_side_effects(
@@ -18,6 +19,7 @@ def plan_turn_side_effects(
     channel_metadata: dict[str, Any] | None,
     meter: Any | None,
     idempotency_key: str,
+    allowed_source_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     media = plan_media_for_turn(
         tenant_id=tenant_id,
@@ -25,6 +27,14 @@ def plan_turn_side_effects(
         channel_metadata=channel_metadata,
         meter=meter,
         idempotency_key=idempotency_key,
+    )
+    resources = plan_resources_for_turn(
+        tenant_id=tenant_id,
+        answer=answer,
+        channel_metadata=channel_metadata,
+        meter=meter,
+        idempotency_key=idempotency_key,
+        allowed_source_ids=allowed_source_ids,
     )
     drafts = plan_drafts_for_turn(
         tenant_id=tenant_id,
@@ -36,4 +46,4 @@ def plan_turn_side_effects(
         idempotency_key=idempotency_key,
         is_public=bool((channel_metadata or {}).get("is_public")),
     )
-    return {**media, **drafts}
+    return {**media, **resources, **drafts}

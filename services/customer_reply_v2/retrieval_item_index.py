@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from services.cm.resource_attachment import resource_summary
 from services.customer_reply_v2.models import ItemIndexEntry
 
 MAX_ITEMS_PER_SECTION = 80
@@ -18,37 +19,55 @@ def label_of(labels: Any) -> str:
     return str(getattr(labels, "en", "") or getattr(labels, "ar", "") or "").strip()
 
 
+def _summary_of(raw: dict[str, Any]) -> dict[str, Any]:
+    return resource_summary(list(raw.get("attachments") or []))
+
+
+def _items_like_entries(section_id: str, rows: list[Any]) -> list[ItemIndexEntry]:
+    entries: list[ItemIndexEntry] = []
+    for raw in rows[:MAX_ITEMS_PER_SECTION]:
+        if not isinstance(raw, dict):
+            continue
+        item_id = str(raw.get("id") or raw.get("qa_group_id") or "").strip()
+        if not item_id:
+            continue
+        title = str(raw.get("title") or label_of(raw.get("labels")) or item_id)
+        desc = str(raw.get("notes") or raw.get("body") or raw.get("short_introduction") or "")[:240]
+        status = str(raw.get("status") or ("active" if raw.get("available", True) else "inactive"))
+        if status == "draft":
+            continue
+        entries.append(
+            ItemIndexEntry(
+                item_id=f"{section_id}:{item_id}",
+                section_id=section_id,
+                title=title,
+                short_description=desc,
+                language=str(raw.get("language") or ""),
+                status=status,
+                relations={
+                    "service_id": raw.get("service_id"),
+                    "linked_service_ids": raw.get("linked_service_ids") or [],
+                    "linked_branch_ids": raw.get("linked_branch_ids") or [],
+                    "category": raw.get("category"),
+                },
+                resource_summary=_summary_of(raw),
+            )
+        )
+    return entries
+
+
 def iter_section_items(section_id: str, payload: dict[str, Any]) -> list[ItemIndexEntry]:
     entries: list[ItemIndexEntry] = []
     items = payload.get("items")
     if isinstance(items, list):
-        for raw in items[:MAX_ITEMS_PER_SECTION]:
-            if not isinstance(raw, dict):
-                continue
-            item_id = str(raw.get("id") or raw.get("qa_group_id") or "").strip()
-            if not item_id:
-                continue
-            title = str(raw.get("title") or label_of(raw.get("labels")) or item_id)
-            desc = str(raw.get("notes") or raw.get("body") or raw.get("short_introduction") or "")[:240]
-            status = str(raw.get("status") or ("active" if raw.get("available", True) else "inactive"))
-            if status == "draft":
-                continue
-            entries.append(
-                ItemIndexEntry(
-                    item_id=f"{section_id}:{item_id}",
-                    section_id=section_id,
-                    title=title,
-                    short_description=desc,
-                    language=str(raw.get("language") or ""),
-                    status=status,
-                    relations={
-                        "service_id": raw.get("service_id"),
-                        "linked_service_ids": raw.get("linked_service_ids") or [],
-                        "linked_branch_ids": raw.get("linked_branch_ids") or [],
-                        "category": raw.get("category"),
-                    },
-                )
-            )
+        entries.extend(_items_like_entries(section_id, items))
+    catalog = payload.get("catalog")
+    if isinstance(catalog, list):
+        have = {e.item_id for e in entries}
+        for entry in _items_like_entries(section_id, catalog):
+            if entry.item_id not in have:
+                entries.append(entry)
+    if entries:
         return entries
     topics = payload.get("topics")
     if isinstance(topics, list):
@@ -65,6 +84,7 @@ def iter_section_items(section_id: str, payload: dict[str, Any]) -> list[ItemInd
                     title=label_of(raw.get("labels")) or item_id,
                     short_description="restricted topic" if section_id == "restricted" else "",
                     status="active" if raw.get("active", True) else "inactive",
+                    resource_summary=_summary_of(raw),
                 )
             )
         return entries
@@ -90,12 +110,14 @@ def iter_section_items(section_id: str, payload: dict[str, Any]) -> list[ItemInd
                     short_description=str(raw.get("notes") or raw.get("action") or "")[:240],
                     status=status,
                     relations={"post_id": raw.get("post_id"), "action": raw.get("action")},
+                    resource_summary=_summary_of(raw),
                 )
             )
     return entries
 
 
 def record_content(section_id: str, raw: dict[str, Any]) -> str:
+    """File body for Luna/Tera. Never include resource bytes, URLs, or storage keys."""
     if section_id == "faq":
         variants = raw.get("variants") or []
         bits = []
@@ -134,7 +156,6 @@ def record_content(section_id: str, raw: dict[str, Any]) -> str:
                 "keywords": raw.get("keywords") or [],
                 "post_id": raw.get("post_id"),
                 "post_ids": raw.get("post_ids") or [],
-                "attachments": raw.get("attachments") or [],
                 "notes": raw.get("notes") or "",
                 "ai_instructions": raw.get("ai_instructions") or "",
                 "ai_action_mode": raw.get("ai_action_mode") or raw.get("action"),
@@ -146,19 +167,23 @@ def record_content(section_id: str, raw: dict[str, Any]) -> str:
         )
     body = raw.get("body") or raw.get("notes") or ""
     title = raw.get("title") or label_of(raw.get("labels"))
-    text = f"{title}\n{body}".strip()
-    if section_id in {"knowledge", "care"}:
-        from services.cm.article_media import format_attachments_block
-
-        att_block = format_attachments_block(list(raw.get("attachments") or []))
-        if att_block:
-            text = f"{text}\n\n{att_block}".strip() if text else att_block
-    return text
+    return f"{title}\n{body}".strip()
 
 
 def raw_rows_for_section(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    for key in ("items", "topics", "rules"):
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for key in ("items", "topics", "rules", "catalog"):
         rows = payload.get(key)
-        if isinstance(rows, list):
-            return [r for r in rows if isinstance(r, dict)]
-    return []
+        if not isinstance(rows, list):
+            continue
+        for raw in rows:
+            if not isinstance(raw, dict):
+                continue
+            rid = str(raw.get("id") or raw.get("qa_group_id") or "").strip()
+            if rid and rid in seen:
+                continue
+            if rid:
+                seen.add(rid)
+            out.append(raw)
+    return out

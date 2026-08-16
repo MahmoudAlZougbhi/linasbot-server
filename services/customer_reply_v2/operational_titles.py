@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.cm.resource_attachment import resource_summary
 from services.customer_reply_v2.comment_rule_select import is_luna_selectable_comment_rule
 from services.customer_reply_v2.manifest import FIXED_ANSWER_SECTIONS
 from services.customer_reply_v2.retrieval_item_index import label_of
@@ -63,6 +64,7 @@ def _walk_nodes(
                 "linked_entity_type": raw.get("linked_entity_type") or raw.get("entity_type"),
                 "scope": raw.get("post_id") or raw.get("scope"),
                 "sort_order": sort_base + index,
+                "resource_summary": resource_summary(list(raw.get("attachments") or [])),
             }
         )
         if nested_items:
@@ -85,11 +87,20 @@ def collect_operational_titles(sections: dict[str, Any]) -> list[dict[str, Any]]
         if section_id in EXCLUDED_TITLE_SECTIONS or not isinstance(payload, dict):
             continue
         rows: list[Any] = []
-        for key in ("items", "topics", "rules"):
+        seen_ids: set[str] = set()
+        for key in ("items", "topics", "rules", "catalog"):
             maybe = payload.get(key)
-            if isinstance(maybe, list) and maybe:
-                rows = maybe
-                break
+            if not isinstance(maybe, list) or not maybe:
+                continue
+            for row in maybe:
+                if not isinstance(row, dict):
+                    continue
+                rid = str(row.get("id") or row.get("qa_group_id") or "").strip()
+                if rid and rid in seen_ids:
+                    continue
+                if rid:
+                    seen_ids.add(rid)
+                rows.append(row)
         titles.extend(
             _walk_nodes(
                 section_id=section_id,

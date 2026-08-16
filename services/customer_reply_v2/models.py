@@ -89,6 +89,7 @@ class ItemIndexEntry:
     status: str = "active"
     relations: dict[str, Any] = field(default_factory=dict)
     published_revision: str = ""
+    resource_summary: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -98,6 +99,7 @@ class EvidenceRecord:
     title: str
     content: str
     published_revision: str
+    allowed_resources: list[dict[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -155,6 +157,7 @@ class AnswerLunaResult:
     media_actions: list[dict[str, Any]] = field(default_factory=list)
     draft_actions: list[dict[str, Any]] = field(default_factory=list)
     request_actions: list[dict[str, Any]] = field(default_factory=list)
+    resource_actions: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass

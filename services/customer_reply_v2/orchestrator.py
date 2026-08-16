@@ -397,6 +397,7 @@ async def run_customer_reply_v2_dm(
         channel_metadata=channel_meta,
         meter=meter,
         idempotency_key=meter.customer_turn_id,
+        allowed_source_ids=list(retrieval.selected_source_ids or []),
     )
     trace = build_safe_trace(
         tenant_id=tenant_id,
