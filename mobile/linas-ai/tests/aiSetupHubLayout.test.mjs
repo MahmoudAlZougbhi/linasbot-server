@@ -1,5 +1,5 @@
 /**
- * AI Setup hub mosaic layout — full-width rows + big/two-small mosaic.
+ * AI Setup hub mosaic layout — full-width rows + side-by-side pair rows.
  * Run: node --test mobile/linas-ai/tests/aiSetupHubLayout.test.mjs
  */
 import assert from 'node:assert/strict';
@@ -17,42 +17,46 @@ function read(rel) {
 }
 
 const SAMPLE_TILES = [
-  { id: 'knowledge', title: 'Knowledge', description: 'd', mobileSupported: true },
   { id: 'ai_basics', title: 'AI Basics', description: 'd', mobileSupported: true },
-  { id: 'branches', title: 'Branches', description: 'd', mobileSupported: true },
+  { id: 'knowledge', title: 'Knowledge', description: 'd', mobileSupported: true },
+  { id: 'branches', title: 'Location and Opening Hours', description: 'd', mobileSupported: true },
   { id: 'prices', title: 'Service', description: 'd', mobileSupported: true },
   { id: 'comments', title: 'Comments', description: 'd', mobileSupported: true },
   { id: 'requests_appointments', title: 'Requests', description: 'd', mobileSupported: true },
 ];
 
 describe('AI Setup hub layout', () => {
-  it('places Knowledge and Service (prices) as full-width rows at the top', () => {
+  it('places AI Basics, Knowledge, and Location as full-width rows at the top', () => {
     const rows = buildAiSetupHubRows(SAMPLE_TILES, true);
-    assert.equal(rows[0].type, 'full');
-    assert.equal(rows[0].item.kind, 'section');
-    assert.equal(rows[0].item.tile.id, 'knowledge');
-    assert.equal(rows[1].type, 'full');
-    assert.equal(rows[1].item.tile.id, 'prices');
+    const fullRows = rows.filter((r) => r.type === 'full');
+    assert.equal(fullRows.length, 3);
+    assert.equal(fullRows[0].item.kind, 'section');
+    assert.equal(fullRows[0].item.tile.id, 'ai_basics');
+    assert.equal(fullRows[1].item.tile.id, 'knowledge');
+    assert.equal(fullRows[2].item.tile.id, 'branches');
   });
 
-  it('chunks remaining sections into big + two-small mosaic rows with Products at the end', () => {
+  it('orders pair rows: Service+Products, Comments+Requests', () => {
     const rows = buildAiSetupHubRows(SAMPLE_TILES, true);
-    const mosaic = rows.filter((r) => r.type === 'mosaic');
-    assert.equal(mosaic.length, 2);
+    const pairs = rows.filter((r) => r.type === 'pair');
+    assert.equal(pairs.length, 2);
 
-    assert.equal(mosaic[0].big.kind, 'section');
-    assert.equal(mosaic[0].big.tile.id, 'ai_basics');
-    assert.deepEqual(
-      mosaic[0].smalls.map((s) => s.tile.id),
-      ['branches', 'comments'],
-    );
+    assert.equal(pairs[0].left.kind, 'section');
+    assert.equal(pairs[0].left.tile.id, 'prices');
+    assert.equal(pairs[0].right.kind, 'products');
 
-    assert.equal(mosaic[1].big.kind, 'section');
-    assert.equal(mosaic[1].big.tile.id, 'requests_appointments');
-    assert.deepEqual(
-      mosaic[1].smalls.map((s) => (s.kind === 'products' ? 'products' : s.tile.id)),
-      ['products'],
-    );
+    assert.equal(pairs[1].left.kind, 'section');
+    assert.equal(pairs[1].left.tile.id, 'comments');
+    assert.equal(pairs[1].right.kind, 'section');
+    assert.equal(pairs[1].right.tile.id, 'requests_appointments');
+  });
+
+  it('puts Comments + Requests as the last row', () => {
+    const rows = buildAiSetupHubRows(SAMPLE_TILES, true);
+    const last = rows[rows.length - 1];
+    assert.equal(last.type, 'pair');
+    assert.equal(last.left.tile.id, 'comments');
+    assert.equal(last.right.tile.id, 'requests_appointments');
   });
 
   it('CmScreen renders AiSetupHubSections instead of split product grids', () => {

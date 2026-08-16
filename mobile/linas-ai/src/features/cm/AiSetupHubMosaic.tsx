@@ -6,8 +6,8 @@ import type { HubItem } from './aiSetupHubLayout';
 import type { CmSectionCard } from './cmSections';
 
 type Props = {
-  big: HubItem;
-  smalls: HubItem[];
+  left: HubItem;
+  right: HubItem;
   statusBySection: Map<string, 'complete' | 'incomplete'>;
   onOpenSection: (id: CmSectionCard['id']) => void;
   onOpenProducts?: () => void;
@@ -15,46 +15,36 @@ type Props = {
 
 function renderItem(
   item: HubItem,
-  variant: 'big' | 'small',
   statusBySection: Map<string, 'complete' | 'incomplete'>,
   onOpenSection: (id: CmSectionCard['id']) => void,
   onOpenProducts?: () => void,
 ) {
   if (item.kind === 'products') {
     if (!onOpenProducts) return null;
-    return <AiSetupSectionTile kind="products" variant={variant} onPress={onOpenProducts} />;
+    return <AiSetupSectionTile kind="products" variant="big" onPress={onOpenProducts} />;
   }
   return (
     <AiSetupSectionTile
       kind="section"
       tile={item.tile}
-      variant={variant}
+      variant="big"
       statusBySection={statusBySection}
       onPress={() => onOpenSection(item.tile.id)}
     />
   );
 }
 
-/** One large tile with up to two stacked small tiles — alternating hub mosaic row. */
-export function AiSetupHubMosaic({ big, smalls, statusBySection, onOpenSection, onOpenProducts }: Props) {
+/** Two equal tiles side by side — hub pair mosaic row. */
+export function AiSetupHubMosaic({ left, right, statusBySection, onOpenSection, onOpenProducts }: Props) {
   return (
     <View style={styles.row}>
-      {renderItem(big, 'big', statusBySection, onOpenSection, onOpenProducts)}
-      {smalls.length > 0 ? (
-        <View style={styles.smallColumn}>
-          {smalls.map((item, index) => (
-            <View key={item.kind === 'products' ? 'products' : item.tile.id} style={index > 0 ? styles.smallGap : undefined}>
-              {renderItem(item, 'small', statusBySection, onOpenSection, onOpenProducts)}
-            </View>
-          ))}
-        </View>
-      ) : null}
+      <View style={styles.cell}>{renderItem(left, statusBySection, onOpenSection, onOpenProducts)}</View>
+      <View style={styles.cell}>{renderItem(right, statusBySection, onOpenSection, onOpenProducts)}</View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: spacing.sm, alignItems: 'stretch' },
-  smallColumn: { flex: 1, justifyContent: 'space-between' },
-  smallGap: { marginTop: spacing.sm },
+  cell: { flex: 1 },
 });

@@ -13,7 +13,7 @@ type Props = {
   onOpenProducts?: () => void;
 };
 
-/** AI Setup hub — full-width Knowledge/Service, then big + two-small mosaic rows. */
+/** AI Setup hub — full-width Basics, Knowledge, Location; then pair mosaic rows. */
 export function AiSetupHubSections({ tiles, statusBySection, onOpenSection, onOpenProducts }: Props) {
   const rows = buildAiSetupHubRows(tiles, Boolean(onOpenProducts));
 
@@ -48,9 +48,9 @@ export function AiSetupHubSections({ tiles, statusBySection, onOpenSection, onOp
 
         return (
           <AiSetupHubMosaic
-            key={`mosaic-${index}`}
-            big={row.big}
-            smalls={row.smalls}
+            key={`pair-${index}`}
+            left={row.left}
+            right={row.right}
             statusBySection={statusBySection}
             onOpenSection={onOpenSection}
             onOpenProducts={onOpenProducts}
