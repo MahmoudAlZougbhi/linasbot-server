@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import copy
 import importlib.util
+import io
 import json
 import os
 import stat
@@ -78,6 +80,113 @@ def _observed_lb() -> dict[str, object]:
     }
 
 
+def _provider_observed_lb() -> dict[str, object]:
+    observed = copy.deepcopy(_observed_lb())
+    rules = observed["forwarding_rules"]
+    assert isinstance(rules, list)
+    for rule in rules:
+        assert isinstance(rule, dict)
+        rule["tls_passthrough"] = False
+        if rule["entry_protocol"] == "http":
+            rule["certificate_id"] = ""
+    return observed
+
+
+def _ready_projection() -> dict[str, object]:
+    observed = _observed_lb()
+    observed["health_check"] = {**observed["health_check"], "path": "/api/ready"}  # type: ignore[index]
+    return lb.validate_observed_identity(observed)
+
+
+def _bootstrap_lb_authority_and_evidence(
+    *,
+    target_sha: str = "c" * 40,
+    attestation_sha256: str = "9" * 64,
+    observed_at: str = "2026-08-16T00:00:00Z",
+) -> tuple[dict[str, object], dict[str, object]]:
+    ready = _ready_projection()
+    ready_sha256 = bootstrap._digest(ready)
+    authority: dict[str, object] = {
+        "schema": bootstrap.LB_PLAN_AUTHORITY_SCHEMA,
+        "load_balancer_id": bootstrap.LB_ID,
+        "load_balancer_name": bootstrap.LB_NAME,
+        "load_balancer_ip": bootstrap.LB_IP,
+        "project_id": bootstrap.LB_PROJECT_ID,
+        "droplet_ids": bootstrap.LB_DROPLETS,
+        "ready_mutable_sha256": ready_sha256,
+        "ready_projection": ready,
+        "health_check": bootstrap.LB_HEALTH_CONTRACT,
+        "minimum_drain_seconds": 25,
+    }
+    evidence: dict[str, object] = {
+        "schema": bootstrap.LB_APPLY_EVIDENCE_SCHEMA,
+        "target_sha": target_sha,
+        "authority_sha256": bootstrap._digest(authority),
+        "attestation_sha256": attestation_sha256,
+        "load_balancer_id": bootstrap.LB_ID,
+        "ready_mutable_sha256": ready_sha256,
+        "observed_at": observed_at,
+        "transaction_before_sha256": None,
+    }
+    return authority, evidence
+
+
+def _patch_bootstrap_plan_context(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    payload: dict[str, object],
+    *,
+    target_sha: str = "a" * 40,
+    expected_ready_sha256: str | None = None,
+) -> tuple[SimpleNamespace, Path, bytes]:
+    raw = bootstrap._canonical(payload) + b"\n"
+    state_root = tmp_path / "meta-ha"
+    state_root.mkdir(exist_ok=True)
+    path = state_root / "lb-ready-bootstrap-attestation.json"
+    path.write_bytes(raw)
+    monkeypatch.setattr(bootstrap, "STATE_ROOT", state_root)
+    monkeypatch.setattr(bootstrap, "LB_BOOTSTRAP_ATTESTATION_PATH", path)
+    monkeypatch.setattr(bootstrap, "_secure_dir", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(bootstrap, "_secure_regular", lambda *_args, **_kwargs: path.stat())
+    shared = {"qg_target_sha": target_sha, "plan_sha256": "1" * 64}
+
+    def probe(node_id: str, expected_sha: str) -> dict[str, object]:
+        return {
+            "previous_sha": expected_sha,
+            "runtime_authority": {"shared": shared},
+            "live_units": {"api": "same"},
+            "pg": {"state_sha256": "d" * 64},
+            "nested_runtime": {"portable_content": "same"},
+            "node_id": node_id,
+        }
+
+    monkeypatch.setattr(bootstrap, "_helper_source", lambda: (b"helper", "2" * 64))
+    monkeypatch.setattr(bootstrap, "_node_probe", probe)
+    monkeypatch.setattr(
+        bootstrap,
+        "_remote",
+        lambda *_args: json.dumps(probe("node02", "c" * 40), separators=(",", ":")),
+    )
+    monkeypatch.setattr(
+        bootstrap._nested_evidence,
+        "portable_content_identity",
+        lambda value: value["portable_content"],
+    )
+    ready_sha256 = expected_ready_sha256 or str(payload["ready_mutable_sha256"])
+    args = SimpleNamespace(
+        target_sha=target_sha,
+        expected_node01_sha="b" * 40,
+        expected_node02_sha="c" * 40,
+        expected_pg_state_sha256="d" * 64,
+        expected_lb_ready_sha256=ready_sha256,
+        expected_lb_attestation_sha256=bootstrap._digest_bytes(raw),
+        lb_ready_attestation=path,
+        expected_plan_sha256="0" * 64,
+        confirm="",
+    )
+    return args, path, raw
+
+
 def test_do_lb_update_is_full_projection_cas_and_changes_only_health_path() -> None:
     observed = _observed_lb()
     before = lb.validate_observed_identity(observed)
@@ -102,6 +211,128 @@ def test_do_lb_update_is_full_projection_cas_and_changes_only_health_path() -> N
     old_health = dict(before["health_check"])
     new_health = dict(desired["health_check"])
     assert {**new_health, "path": old_health["path"]} == old_health
+
+
+def test_do_lb_current_provider_get_shape_normalizes_to_the_existing_canonical_digest() -> None:
+    canonical = lb.validate_observed_identity(_observed_lb())
+    provider = lb.validate_observed_identity(_provider_observed_lb())
+    reordered = _provider_observed_lb()
+    reordered_rules = reordered["forwarding_rules"]
+    assert isinstance(reordered_rules, list)
+    reordered["forwarding_rules"] = list(reversed(reordered_rules))
+
+    assert provider == canonical
+    assert lb.validate_observed_identity(reordered) == canonical
+    assert lb._digest(provider) == lb._digest(canonical)
+    assert provider["forwarding_rules"] == [
+        {
+            "entry_protocol": "http",
+            "entry_port": 80,
+            "target_protocol": "http",
+            "target_port": 80,
+        },
+        {
+            "entry_protocol": "https",
+            "entry_port": 443,
+            "target_protocol": "http",
+            "target_port": 80,
+            "certificate_id": "ccd5-observed",
+        },
+    ]
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    [
+        lambda rules: rules[0].update({"unknown": True}),
+        lambda rules: rules[0].update({"tls_passthrough": True}),
+        lambda rules: rules[1].update({"tls_passthrough": True}),
+        lambda rules: rules[0].update({"certificate_id": "unexpected"}),
+        lambda rules: rules[1].update({"certificate_id": ""}),
+        lambda rules: rules[1].pop("certificate_id"),
+        lambda rules: rules[0].update({"entry_port": True}),
+        lambda rules: rules[1].update({"target_port": "80"}),
+    ],
+)
+def test_do_lb_provider_get_shape_rejects_unknown_or_unsafe_defaults(mutator: object) -> None:
+    observed = _provider_observed_lb()
+    rules = observed["forwarding_rules"]
+    assert isinstance(rules, list)
+    mutator(rules)  # type: ignore[operator]
+
+    with pytest.raises(RuntimeError, match="DigitalOcean (?:observed|ready projection)"):
+        lb.validate_observed_identity(observed)
+
+
+def test_do_lb_provider_defaults_are_get_only_not_part_of_ready_attestation_projection() -> None:
+    ready = _ready_projection_from_observed()
+    rules = ready["forwarding_rules"]
+    assert isinstance(rules, list)
+    for rule in rules:
+        assert isinstance(rule, dict)
+        rule["tls_passthrough"] = False
+        rule.setdefault("certificate_id", "")
+
+    with pytest.raises(RuntimeError, match="forwarding rules"):
+        contract.validate_ready_projection_values(ready)
+
+
+def test_do_lb_current_provider_shape_works_for_plan_readback_and_attestation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider_old = _provider_observed_lb()
+    canonical_old = lb.validate_observed_identity(_observed_lb())
+    canonical_ready = lb.desired_projection(canonical_old)
+    provider_ready = _provider_observed_lb()
+    provider_ready["health_check"] = dict(contract.LB_HEALTH_CONTRACT_READY)
+    state_root = tmp_path / "operator-state"
+
+    monkeypatch.setattr(lb, "_get_load_balancer", lambda: provider_old)
+    assert lb._plan(SimpleNamespace(state_dir=state_root)) == 0
+
+    monkeypatch.setattr(lb, "_get_load_balancer", lambda: provider_ready)
+    assert lb._wait_projection(canonical_ready, attempts=1) is True
+
+    ready_sha = lb._digest(canonical_ready)
+    args = SimpleNamespace(
+        state_dir=state_root,
+        expected_current_sha256=ready_sha,
+        confirm=lb.attest_confirmation(ready_sha),
+    )
+    assert lb._attest(args) == 0
+    path = lb.attestation_path_for(ready_sha, state_root)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["ready_projection"] == canonical_ready
+    lb._validate_attestation(payload, ready_sha)
+
+
+def test_do_lb_apply_rejects_unsafe_provider_defaults_before_any_put(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed = _provider_observed_lb()
+    rules = observed["forwarding_rules"]
+    assert isinstance(rules, list) and isinstance(rules[1], dict)
+    rules[1]["tls_passthrough"] = True
+    requests: list[tuple[str, object]] = []
+    monkeypatch.setattr(lb, "_get_load_balancer", lambda: observed)
+
+    def request(method: str, *, payload: object = None) -> dict[str, object]:
+        requests.append((method, payload))
+        return {}
+
+    monkeypatch.setattr(lb, "_request", request)
+    args = SimpleNamespace(
+        state_dir=tmp_path / "operator-state",
+        expected_before_sha256="0" * 64,
+        snapshot=tmp_path / "never-used.json",
+        confirm="never-used",
+    )
+
+    with pytest.raises(RuntimeError, match="TLS passthrough"):
+        lb._apply(args)
+    assert requests == []
 
 
 def test_do_lb_immutable_network_shape_is_validated_and_preserved_in_full_put() -> None:
@@ -490,7 +721,8 @@ def test_bootstrap_consumes_exact_protected_lb_attestation_without_provider_cred
     assert "--expected-lb-attestation-sha256" in source
     assert "--lb-ready-attestation" in source
     assert "install-lb-ready-attestation" in source
-    assert "owner_attested_ready_mutable_sha256" in source
+    assert "LB_PLAN_AUTHORITY_SCHEMA" in source
+    assert "LB_APPLY_EVIDENCE_SCHEMA" in source
     assert "DIGITALOCEAN_TOKEN" not in source
     assert "DIGITALOCEAN_ACCESS_TOKEN" not in source
     observed = _observed_lb()
@@ -509,11 +741,15 @@ def test_bootstrap_consumes_exact_protected_lb_attestation_without_provider_cred
     monkeypatch.setattr(bootstrap, "_secure_dir", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(bootstrap, "_secure_regular", lambda *_args, **_kwargs: path.stat())
 
-    proof = bootstrap._lb_owner_attestation(path, artifact_sha, ready_sha)
-    assert proof["owner_attested_ready_mutable_sha256"] == ready_sha
-    assert proof["attestation_sha256"] == artifact_sha
-    assert proof["observed_at"] == payload["observed_at"]
-    assert proof["health_check"] == {
+    target_sha = "a" * 40
+    authority, evidence = bootstrap._lb_owner_attestation(path, artifact_sha, ready_sha, target_sha)
+    assert authority["ready_mutable_sha256"] == ready_sha
+    assert authority["ready_projection"] == ready
+    assert evidence["attestation_sha256"] == artifact_sha
+    assert evidence["authority_sha256"] == bootstrap._digest(authority)
+    assert evidence["target_sha"] == target_sha
+    assert evidence["observed_at"] == payload["observed_at"]
+    assert authority["health_check"] == {
         "protocol": "http",
         "port": 8003,
         "path": "/api/ready",
@@ -522,11 +758,11 @@ def test_bootstrap_consumes_exact_protected_lb_attestation_without_provider_cred
         "healthy_threshold": 2,
         "unhealthy_threshold": 3,
     }
-    assert proof["minimum_drain_seconds"] == 25
+    assert authority["minimum_drain_seconds"] == 25
     with pytest.raises(RuntimeError, match="artifact digest changed"):
-        bootstrap._lb_owner_attestation(path, "0" * 64, ready_sha)
+        bootstrap._lb_owner_attestation(path, "0" * 64, ready_sha, target_sha)
     with pytest.raises(RuntimeError, match="artifact digest changed"):
-        bootstrap._lb_owner_attestation(path, "1" * 64, ready_sha)
+        bootstrap._lb_owner_attestation(path, "1" * 64, ready_sha, target_sha)
     with pytest.raises(TypeError):
         bootstrap._lb_owner_attestation(ready_sha)
 
@@ -537,7 +773,7 @@ def test_bootstrap_consumes_exact_protected_lb_attestation_without_provider_cred
     stale_raw = bootstrap._canonical(stale_payload) + b"\n"
     path.write_bytes(stale_raw)
     with pytest.raises(RuntimeError, match="not fresh enough"):
-        bootstrap._lb_owner_attestation(path, bootstrap._digest_bytes(stale_raw), ready_sha)
+        bootstrap._lb_owner_attestation(path, bootstrap._digest_bytes(stale_raw), ready_sha, target_sha)
     path.write_bytes(raw)
 
     parsed = bootstrap.build_parser().parse_args(
@@ -586,6 +822,178 @@ def test_bootstrap_consumes_exact_protected_lb_attestation_without_provider_cred
     ]
     with pytest.raises(SystemExit):
         bootstrap.build_parser().parse_args(missing_artifact_args)
+
+
+def test_bootstrap_old_stable_plan_accepts_fresh_matching_apply_attestation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ready = _ready_projection()
+    ready_sha = bootstrap._digest(ready)
+    first_payload = lb._attestation_payload(ready, None)
+    first_payload["observed_at"] = (
+        (datetime.now(UTC) - timedelta(minutes=2)).isoformat(timespec="seconds").replace("+00:00", "Z")
+    )
+    args, path, _ = _patch_bootstrap_plan_context(monkeypatch, tmp_path, first_payload)
+    first_plan, _, _, first_evidence = bootstrap._combined_plan(args)
+    old_plan_sha = bootstrap._digest(first_plan)
+
+    refreshed_payload = lb._attestation_payload(ready, None)
+    refreshed_payload["observed_at"] = (
+        (datetime.now(UTC) - timedelta(seconds=5)).isoformat(timespec="seconds").replace("+00:00", "Z")
+    )
+    refreshed_raw = bootstrap._canonical(refreshed_payload) + b"\n"
+    path.write_bytes(refreshed_raw)
+    args.expected_lb_attestation_sha256 = bootstrap._digest_bytes(refreshed_raw)
+    args.expected_lb_ready_sha256 = ready_sha
+    args.expected_plan_sha256 = old_plan_sha
+    args.confirm = bootstrap._confirmation(old_plan_sha)
+
+    refreshed_plan, _, _, refreshed_evidence, validated_sha = bootstrap._validated_apply_context(args)
+
+    assert refreshed_plan == first_plan
+    assert validated_sha == old_plan_sha
+    assert refreshed_evidence["attestation_sha256"] != first_evidence["attestation_sha256"]
+    assert refreshed_evidence["observed_at"] != first_evidence["observed_at"]
+    assert refreshed_evidence["authority_sha256"] == first_evidence["authority_sha256"]
+    assert "attestation_sha256" not in refreshed_plan["lb"]
+    assert "observed_at" not in refreshed_plan["lb"]
+
+
+def test_bootstrap_stale_apply_attestation_fails_before_any_transaction_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ready = _ready_projection()
+    payload = lb._attestation_payload(ready, None)
+    payload["observed_at"] = (
+        (datetime.now(UTC) - timedelta(minutes=6)).isoformat(timespec="seconds").replace("+00:00", "Z")
+    )
+    args, _, _ = _patch_bootstrap_plan_context(monkeypatch, tmp_path, payload)
+    args.expected_plan_sha256 = "1" * 64
+    args.confirm = bootstrap._confirmation(args.expected_plan_sha256)
+    mutations: list[str] = []
+    monkeypatch.setattr(bootstrap, "_write_coordinator_journal", lambda *_args: mutations.append("journal"))
+    monkeypatch.setattr(bootstrap, "_node_call_local", lambda *_args, **_kwargs: mutations.append("local"))
+    monkeypatch.setattr(bootstrap, "_remote_phase", lambda *_args, **_kwargs: mutations.append("remote"))
+
+    with pytest.raises(RuntimeError, match="not fresh enough"):
+        bootstrap._orchestrate_apply(args)
+
+    assert mutations == []
+
+
+@pytest.mark.parametrize("invalid", ["stale", "projection", "load-balancer"])
+def test_bootstrap_apply_evidence_install_rejects_invalid_bytes_before_publication(
+    invalid: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ready = _ready_projection()
+    payload = lb._attestation_payload(ready, None)
+    expected_ready_sha = bootstrap._digest(ready)
+    if invalid == "stale":
+        payload["observed_at"] = (
+            (datetime.now(UTC) - timedelta(minutes=6)).isoformat(timespec="seconds").replace("+00:00", "Z")
+        )
+    elif invalid == "projection":
+        changed_projection = copy.deepcopy(ready)
+        changed_projection["enable_backend_keepalive"] = False
+        payload["ready_projection"] = changed_projection
+        payload["ready_mutable_sha256"] = bootstrap._digest(changed_projection)
+        expected_ready_sha = str(payload["ready_mutable_sha256"])
+    else:
+        payload["load_balancer_id"] = "ffffffff-ffff-4fff-bfff-ffffffffffff"
+    raw = bootstrap._canonical(payload) + b"\n"
+    artifact_sha = bootstrap._digest_bytes(raw)
+    publications: list[Path] = []
+    monkeypatch.setattr(bootstrap, "_require_root", lambda: None)
+    monkeypatch.setattr(bootstrap, "_assert_identity", lambda *_args: None)
+    monkeypatch.setattr(bootstrap.sys, "stdin", SimpleNamespace(buffer=io.BytesIO(raw)))
+    monkeypatch.setattr(bootstrap, "STATE_ROOT", tmp_path)
+    monkeypatch.setattr(bootstrap, "LB_BOOTSTRAP_ATTESTATION_PATH", tmp_path / "lb-attestation.json")
+    monkeypatch.setattr(bootstrap, "_atomic_write", lambda path, *_args, **_kwargs: publications.append(path))
+
+    with pytest.raises(RuntimeError):
+        bootstrap._install_lb_ready_attestation(
+            artifact_sha,
+            expected_ready_sha,
+            bootstrap._lb_attestation_install_confirmation(artifact_sha, expected_ready_sha),
+        )
+
+    assert publications == []
+
+
+@pytest.mark.parametrize("drift", ["projection", "load-balancer", "target"])
+def test_bootstrap_apply_authority_drift_fails_before_any_transaction_mutation(
+    drift: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ready = _ready_projection()
+    payload = lb._attestation_payload(ready, None)
+    args, path, _ = _patch_bootstrap_plan_context(monkeypatch, tmp_path, payload)
+    plan, _, _, _ = bootstrap._combined_plan(args)
+    args.expected_plan_sha256 = bootstrap._digest(plan)
+    args.confirm = bootstrap._confirmation(args.expected_plan_sha256)
+
+    if drift == "projection":
+        changed_projection = copy.deepcopy(ready)
+        changed_projection["enable_backend_keepalive"] = False
+        payload["ready_projection"] = changed_projection
+        payload["ready_mutable_sha256"] = bootstrap._digest(changed_projection)
+        args.expected_lb_ready_sha256 = str(payload["ready_mutable_sha256"])
+    elif drift == "load-balancer":
+        payload["load_balancer_id"] = "ffffffff-ffff-4fff-bfff-ffffffffffff"
+    else:
+        args.target_sha = "e" * 40
+    if drift != "target":
+        raw = bootstrap._canonical(payload) + b"\n"
+        path.write_bytes(raw)
+        args.expected_lb_attestation_sha256 = bootstrap._digest_bytes(raw)
+
+    mutations: list[str] = []
+    monkeypatch.setattr(bootstrap, "_write_coordinator_journal", lambda *_args: mutations.append("journal"))
+    monkeypatch.setattr(bootstrap, "_node_call_local", lambda *_args, **_kwargs: mutations.append("local"))
+    monkeypatch.setattr(bootstrap, "_remote_phase", lambda *_args, **_kwargs: mutations.append("remote"))
+
+    with pytest.raises(RuntimeError):
+        bootstrap._orchestrate_apply(args)
+
+    assert mutations == []
+
+
+def test_bootstrap_coordinator_records_the_actual_refreshed_apply_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ready = _ready_projection()
+    payload = lb._attestation_payload(ready, None)
+    args, _, raw = _patch_bootstrap_plan_context(monkeypatch, tmp_path, payload)
+    plan, _, _, _ = bootstrap._combined_plan(args)
+    args.expected_plan_sha256 = bootstrap._digest(plan)
+    args.confirm = bootstrap._confirmation(args.expected_plan_sha256)
+    captured: list[dict[str, object]] = []
+
+    class JournalCaptured(Exception):
+        pass
+
+    def capture(payload_value: dict[str, object]) -> None:
+        captured.append(copy.deepcopy(payload_value))
+        raise JournalCaptured
+
+    monkeypatch.setattr(bootstrap, "_write_coordinator_journal", capture)
+    with pytest.raises(JournalCaptured):
+        bootstrap._orchestrate_apply(args)
+
+    assert len(captured) == 1
+    journal = captured[0]
+    evidence = journal["lb_apply_evidence"]
+    assert isinstance(evidence, dict)
+    assert evidence["attestation_sha256"] == bootstrap._digest_bytes(raw)
+    assert evidence["observed_at"] == payload["observed_at"]
+    assert evidence["authority_sha256"] == bootstrap._digest(journal["lb_plan_authority"])
+    assert evidence["target_sha"] == args.target_sha
 
 
 def test_bootstrap_pg_probe_is_self_contained_for_observed_old_baselines() -> None:
@@ -1020,15 +1428,17 @@ def test_standalone_bootstrap_rollback_redrains_only_unreleased_mutated_nodes(
 
 
 def test_bootstrap_commit_memory_never_precedes_durable_readback(monkeypatch: pytest.MonkeyPatch) -> None:
+    lb_authority, lb_evidence = _bootstrap_lb_authority_and_evidence()
     payload = {
-        "schema": 1,
+        "schema": bootstrap.BOOTSTRAP_COORDINATOR_SCHEMA,
         "tx_id": "a" * 32,
         "plan_sha256": "b" * 64,
         "target_sha": "c" * 40,
         "node01_previous_sha": "d" * 40,
         "node02_previous_sha": "e" * 40,
         "expected_pg_state_sha256": "f" * 64,
-        "lb_attestation_sha256": "9" * 64,
+        "lb_plan_authority": lb_authority,
+        "lb_apply_evidence": lb_evidence,
         "source_sha256": "1" * 64,
         "peer_host": bootstrap.FIXED_NODES["node01"]["peer_ip"],
         "phase": "both-verified",
@@ -1042,6 +1452,53 @@ def test_bootstrap_commit_memory_never_precedes_durable_readback(monkeypatch: py
     with pytest.raises(OSError, match="before-replace"):
         bootstrap._publish_commit_decision(payload)
     assert payload["decision"] == "rollback"
+
+
+def test_bootstrap_recovery_journal_keeps_apply_evidence_exact(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    lb_authority, lb_evidence = _bootstrap_lb_authority_and_evidence()
+    state_root = tmp_path / "state"
+    state_root.mkdir()
+    coordinator_path = state_root / "bootstrap.coordinator.json"
+    payload = {
+        "schema": bootstrap.BOOTSTRAP_COORDINATOR_SCHEMA,
+        "tx_id": "a" * 32,
+        "plan_sha256": "b" * 64,
+        "target_sha": "c" * 40,
+        "node01_previous_sha": "d" * 40,
+        "node02_previous_sha": "e" * 40,
+        "expected_pg_state_sha256": "f" * 64,
+        "lb_plan_authority": lb_authority,
+        "lb_apply_evidence": lb_evidence,
+        "source_sha256": "1" * 64,
+        "peer_host": bootstrap.FIXED_NODES["node01"]["peer_ip"],
+        "phase": "planned",
+        "decision": "rollback",
+    }
+
+    def local_atomic_write(path: Path, body: bytes, **_kwargs: object) -> None:
+        path.write_bytes(body)
+
+    monkeypatch.setattr(bootstrap, "STATE_ROOT", state_root)
+    monkeypatch.setattr(bootstrap, "COORDINATOR_PATH", coordinator_path)
+    monkeypatch.setattr(bootstrap, "_secure_dir", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(bootstrap, "_secure_regular", lambda *_args, **_kwargs: coordinator_path.stat())
+    monkeypatch.setattr(bootstrap, "_atomic_write", local_atomic_write)
+
+    bootstrap._write_coordinator_journal(payload)
+    advanced = {**payload, "phase": "node01-prepared"}
+    bootstrap._write_coordinator_journal(advanced)
+    raw = coordinator_path.read_bytes()
+    recovered = bootstrap._read_coordinator_journal(bootstrap._digest_bytes(raw))
+    assert recovered["lb_apply_evidence"] == lb_evidence
+
+    changed_evidence = {**lb_evidence, "attestation_sha256": "8" * 64}
+    with pytest.raises(RuntimeError, match="immutable contract changed"):
+        bootstrap._write_coordinator_journal({**advanced, "lb_apply_evidence": changed_evidence})
+    with pytest.raises(RuntimeError, match="changed after owner confirmation"):
+        bootstrap._read_coordinator_journal("7" * 64)
 
 
 def test_bootstrap_durable_decision_recovery_survives_finalize_ack_loss() -> None:

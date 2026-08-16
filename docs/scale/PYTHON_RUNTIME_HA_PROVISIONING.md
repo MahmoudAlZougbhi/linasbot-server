@@ -109,6 +109,45 @@ node binding, and pristine runtime before executing the fixed authenticated
 `scripts.ha.bootstrap_meta_ha_contract` module under canonical Python. It never
 imports code from the live checkout.
 
+### Protected Meta HA bootstrap workflow
+
+After runtime provisioning commits on both nodes, use `Bootstrap Protected Meta
+HA Contract` from `main`. Every operation shares the `meta-social-cutover`
+environment and concurrency lane. Supply the exact runtime transaction ID, runtime
+plan digest, QG artifact ID/API digest, and QG target SHA from the committed runtime
+receipt; the hash-pinned OS-Python bridge verifies those authorities and the closed
+launcher receipt before executing any retained launcher bytes.
+
+Run the operations in this order:
+
+1. `probe` with both exact serving baseline SHAs. Record the emitted PostgreSQL
+   state digest.
+2. On the owner workstation, change/attest the fixed load balancer's health path
+   through `manage_do_lb_ready_healthcheck.py`. Run `install-lb` with strict base64
+   of that canonical attestation and its two exact digests.
+3. Run `plan` with both baseline SHAs, the probe's PostgreSQL digest, and the LB
+   digests. Record the exact bootstrap plan digest and confirmation. The plan
+   binds the fixed LB identity, full reviewed `/api/ready` projection, target,
+   node probes, and PostgreSQL state; it deliberately excludes the observation
+   timestamp and attestation artifact digest.
+4. Immediately before `apply`, create a new canonical owner-workstation LB
+   attestation for that same projection. Supply its strict base64 and new artifact
+   digest directly to the `apply` dispatch, together with the unchanged ready
+   projection digest, plan digest, and confirmation. The protected apply run
+   installs and validates that evidence before creating its coordinator journal
+   or changing service state. A stale observation, different LB/projection/target,
+   or any other plan-authority drift fails closed; retry with fresh matching
+   evidence without re-planning. Save the committed bootstrap plan digest for the
+   release workflow.
+
+If interruption occurs before a durable coordinator decision, run
+`rollback-interrupted` with the exact bootstrap transaction ID, plan digest, and
+displayed rollback confirmation. If a coordinator journal exists, run
+`recovery-status` first and then `recover-decided` with the emitted journal digest
+and confirmation. Recovery accepts the older exact target after `main` advances,
+but the bridge still requires that target to match the retained runtime plan. Never
+delete a bootstrap sentinel, journal, guard, or backup manually.
+
 ## Abort conditions
 
 Stop and use `status`; do not improvise if any identity, digest, confirmation,

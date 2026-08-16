@@ -155,7 +155,7 @@ jobs:
           set -euo pipefail
           umask 077
           BOOTSTRAP=scripts/ha/python_runtime_provision_workflow_bootstrap.py
-          EXPECTED=04fb2449fa341242c287c24f5b861220b4663566870bb45d42ee989b0a50764c
+          EXPECTED=4618bde835b73cde2a646a029023e07b0bc2e62f360a88ef033f4275aa3f1612
           test -f "$BOOTSTRAP" && test ! -L "$BOOTSTRAP"
           [ "$(/usr/bin/sha256sum "$BOOTSTRAP" | /usr/bin/awk '{print $1}')" = "$EXPECTED" ]
           mkdir -m 0700 transfer
@@ -219,34 +219,11 @@ jobs:
             done
           } >>"$GITHUB_OUTPUT"
 
-      - name: Transfer exact release and bootstrap authority to fixed node01
-        if: inputs.OPERATION == 'apply'
-        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          source: "transfer/release,transfer/bootstrap,transfer/workflow-bootstrap.py"
-          target: "/tmp/linasbot-python-runtime-upload-${{ github.run_id }}-${{ github.run_attempt }}"
-          strip_components: 1
-
-      - name: Transfer only pinned recovery bridge
-        if: inputs.OPERATION == 'status' || inputs.OPERATION == 'recover' || inputs.OPERATION == 'rollback'
-        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          source: "transfer/workflow-bootstrap.py"
-          target: "/tmp/linasbot-python-runtime-upload-${{ github.run_id }}-${{ github.run_attempt }}"
-          strip_components: 1
-
-      - name: Execute authenticated OS-Python HA operation
+      - name: Transfer to node01 through exact OpenSSH trust
         if: inputs.OPERATION == 'apply' || inputs.OPERATION == 'status' || inputs.OPERATION == 'recover' || inputs.OPERATION == 'rollback'
-        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
         env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           OPERATION: ${{ inputs.OPERATION }}
           TARGET_SHA: ${{ inputs.TARGET_SHA }}
           QUALITY_GATES_RUN_ID: ${{ inputs.QUALITY_GATES_RUN_ID }}
@@ -266,15 +243,141 @@ jobs:
           INGEST_SIZE: ${{ steps.plan.outputs.ingest_size }}
           INGEST_CONTRACT_SHA256: ${{ steps.plan.outputs.ingest_contract_sha256 }}
           INGEST_CONTRACT_SIZE: ${{ steps.plan.outputs.ingest_contract_size }}
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          script_stop: false
-          command_timeout: 115m
-          envs: OPERATION,TARGET_SHA,QUALITY_GATES_RUN_ID,RELEASE_RUN_ATTEMPT,RELEASE_ARTIFACT_ID,RELEASE_ARTIFACT_API_SHA256,RELEASE_MANIFEST_SHA256,TRANSACTION_ID,PLAN_SHA256,JOURNAL_SHA256,CONFIRMATION,WORKFLOW_RUN_ID,WORKFLOW_RUN_ATTEMPT,LAUNCHER_SHA256,LAUNCHER_SIZE,INGEST_SHA256,INGEST_SIZE,INGEST_CONTRACT_SHA256,INGEST_CONTRACT_SIZE
-          script: |
+        run: |
+          set -euo pipefail
+          umask 077
+          # Reviewed node01 ED25519 identity. Node02 remains coordinator-only over the fixed private peer.
+          NODE01_HOST=139.59.167.62
+          NODE01_HOST_KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM21a0E0v4XBUVRgai2Z4Zcr+GSDVsztarkAoDRBQ+77'
+          NODE01_HOST_FINGERPRINT='SHA256:Y/L3vFTsLbzePNG/lbUyNGiBORV52U8D9Q4JlSsdqps'
+          SSH_ROOT="$RUNNER_TEMP/linasbot-runtime-ha-ssh-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
+          [[ "$WORKFLOW_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$WORKFLOW_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          install -d -m 0700 -- "$SSH_ROOT"
+          cleanup_local_ssh() {
+            set +e
+            unlink "$SSH_ROOT/remote-provision.sh" 2>/dev/null || true
+            unlink "$SSH_ROOT/node01.key" 2>/dev/null || true
+            unlink "$SSH_ROOT/node01.known_hosts" 2>/dev/null || true
+            rmdir "$SSH_ROOT" 2>/dev/null || true
+          }
+          trap cleanup_local_ssh EXIT
+
+          SSH_ROOT="$SSH_ROOT" NODE01_HOST="$NODE01_HOST" \
+            NODE01_HOST_KEY="$NODE01_HOST_KEY" NODE01_HOST_FINGERPRINT="$NODE01_HOST_FINGERPRINT" \
+            python3 -B -I -S - <<'PY'
+          import base64
+          import hashlib
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path(os.environ["SSH_ROOT"])
+          allowed_key_types = {"ssh-ed25519"}
+
+          def write_secret(path: Path, value: str) -> None:
+              descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+              try:
+                  os.write(descriptor, value.encode("utf-8"))
+                  os.fsync(descriptor)
+              finally:
+                  os.close(descriptor)
+
+          def private_key() -> None:
+              value = os.environ.get("SSH_PRIVATE_KEY", "")
+              if not value or "\x00" in value or not value.startswith("-----BEGIN "):
+                  raise SystemExit("node01 private key secret is invalid")
+              first = value.splitlines()[0] if value.splitlines() else ""
+              if not first.endswith(" PRIVATE KEY-----"):
+                  raise SystemExit("node01 private key secret is invalid")
+              write_secret(root / "node01.key", value.rstrip("\n") + "\n")
+
+          def known_hosts(host: str) -> None:
+              line = f"{host} {os.environ['NODE01_HOST_KEY']}"
+              fields = line.split(" ")
+              if len(fields) != 3 or fields[0] != host or fields[1] not in allowed_key_types:
+                  raise SystemExit("node01 known_hosts identity is not the fixed node")
+              try:
+                  decoded = base64.b64decode(fields[2], validate=True)
+              except ValueError as exc:
+                  raise SystemExit("node01 known_hosts key is not strict base64") from exc
+              if not 32 <= len(decoded) <= 16_384:
+                  raise SystemExit("node01 known_hosts key size is invalid")
+              name_size = int.from_bytes(decoded[:4], "big")
+              if name_size < 1 or 4 + name_size > len(decoded):
+                  raise SystemExit("node01 known_hosts key blob is malformed")
+              try:
+                  embedded_type = decoded[4 : 4 + name_size].decode("ascii")
+              except UnicodeDecodeError as exc:
+                  raise SystemExit("node01 known_hosts key type is invalid") from exc
+              if embedded_type != fields[1]:
+                  raise SystemExit("node01 known_hosts key type does not match its blob")
+              fingerprint = "SHA256:" + base64.b64encode(hashlib.sha256(decoded).digest()).decode("ascii").rstrip("=")
+              if fingerprint != os.environ["NODE01_HOST_FINGERPRINT"]:
+                  raise SystemExit("node01 pinned SSH host fingerprint does not match its key")
+              write_secret(root / "node01.known_hosts", line + "\n")
+
+          if re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", os.environ.get("SSH_USER", "")) is None:
+              raise SystemExit("node01 SSH user secret is invalid")
+          private_key()
+          known_hosts(os.environ["NODE01_HOST"])
+          PY
+          unset SSH_PRIVATE_KEY
+
+          SSH_HARDENING=(
+            -F /dev/null
+            -o BatchMode=yes
+            -o PasswordAuthentication=no
+            -o KbdInteractiveAuthentication=no
+            -o PreferredAuthentications=publickey
+            -o IdentitiesOnly=yes
+            -o IdentityAgent=none
+            -o HostKeyAlgorithms=ssh-ed25519
+            -o StrictHostKeyChecking=yes
+            -o GlobalKnownHostsFile=/dev/null
+            -o UpdateHostKeys=no
+            -o VerifyHostKeyDNS=no
+            -o CheckHostIP=yes
+            -o ForwardAgent=no
+            -o ClearAllForwardings=yes
+            -o ControlMaster=no
+            -o ConnectTimeout=10
+            -o ServerAliveInterval=15
+            -o ServerAliveCountMax=3
+            -o LogLevel=ERROR
+          )
+          NODE01_SSH=(
+            /usr/bin/ssh "${SSH_HARDENING[@]}"
+            -i "$SSH_ROOT/node01.key"
+            -o "UserKnownHostsFile=$SSH_ROOT/node01.known_hosts"
+            "$SSH_USER@$NODE01_HOST"
+          )
+          "${NODE01_SSH[@]}" /usr/bin/true
+
+          UPLOAD="/tmp/linasbot-python-runtime-upload-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
+          "${NODE01_SSH[@]}" "/usr/bin/test ! -e '$UPLOAD' && /usr/bin/install -d -m 0700 -- '$UPLOAD'"
+          TRANSFER_FILES=(transfer/workflow-bootstrap.py)
+          if [ "$OPERATION" = apply ]; then
+            TRANSFER_FILES=(transfer/release transfer/bootstrap transfer/workflow-bootstrap.py)
+          fi
+          /usr/bin/scp -r "${SSH_HARDENING[@]}" \
+            -i "$SSH_ROOT/node01.key" \
+            -o "UserKnownHostsFile=$SSH_ROOT/node01.known_hosts" \
+            -- "${TRANSFER_FILES[@]}" "$SSH_USER@$NODE01_HOST:$UPLOAD/"
+
+          REMOTE_COMMAND='/usr/bin/env -i HOME=/nonexistent LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/sbin:/usr/bin:/sbin:/bin'
+          for variable in \
+            OPERATION TARGET_SHA QUALITY_GATES_RUN_ID RELEASE_RUN_ATTEMPT RELEASE_ARTIFACT_ID \
+            RELEASE_ARTIFACT_API_SHA256 RELEASE_MANIFEST_SHA256 TRANSACTION_ID PLAN_SHA256 \
+            JOURNAL_SHA256 CONFIRMATION WORKFLOW_RUN_ID WORKFLOW_RUN_ATTEMPT LAUNCHER_SHA256 \
+            LAUNCHER_SIZE INGEST_SHA256 INGEST_SIZE INGEST_CONTRACT_SHA256 INGEST_CONTRACT_SIZE
+          do
+            printf -v quoted '%q' "${!variable}"
+            REMOTE_COMMAND+=" $variable=$quoted"
+          done
+          REMOTE_COMMAND+=' /bin/bash --noprofile --norc -s'
+          REMOTE_SCRIPT="$SSH_ROOT/remote-provision.sh"
+          /usr/bin/sed 's/^  //' >"$REMOTE_SCRIPT" <<'REMOTE_PROVISION'
             set -euo pipefail
             umask 077
             UPLOAD="/tmp/linasbot-python-runtime-upload-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
@@ -283,7 +386,7 @@ jobs:
             SOURCE_UID="$(id -u)"
             sudo env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/sbin:/usr/bin:/sbin:/bin \
               /usr/bin/python3 -B -I -S - "$SOURCE" "$TRUSTED" \
-              04fb2449fa341242c287c24f5b861220b4663566870bb45d42ee989b0a50764c "$SOURCE_UID" <<'PY'
+              4618bde835b73cde2a646a029023e07b0bc2e62f360a88ef033f4275aa3f1612 "$SOURCE_UID" <<'PY'
             import hashlib, os, re, stat, sys
             from pathlib import Path
             source, target, expected, uid = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], int(sys.argv[4])
@@ -347,3 +450,8 @@ jobs:
                 /usr/bin/python3 -B -I -S "$TRUSTED" resume "$OPERATION" "$TRANSACTION_ID" \
                 "$JOURNAL_SHA256" "$CONFIRMATION"
             fi
+          REMOTE_PROVISION
+          /bin/chmod 0600 -- "$REMOTE_SCRIPT"
+          /bin/bash -n "$REMOTE_SCRIPT"
+          /usr/bin/timeout --signal=TERM --kill-after=30s 6900 \
+            "${NODE01_SSH[@]}" "$REMOTE_COMMAND" <"$REMOTE_SCRIPT"

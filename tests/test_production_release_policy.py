@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import os
 import re
+import stat
 import subprocess
+import sys
 from pathlib import Path
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
@@ -13,11 +18,18 @@ SECURITY_WORKFLOW = WORKFLOW_DIR / "security-checks.yml"
 HA_HELPER = ROOT / "scripts" / "ha" / "deploy_meta_release_ha.sh"
 BREAK_GLASS = ROOT / "scripts" / "ha" / "release_break_glass.sh"
 TWO_NODE_POLICY = ROOT / "docs" / "release" / "TWO_NODE_RELEASE_POLICY.md"
+PROTECTED_RELEASE_TRANSPORT_WORKFLOWS = (
+    "bootstrap-meta-ha.yml",
+    "deploy.yml",
+    "provision-python-runtime-ha.yml",
+)
+NODE01_SSH_HOST_KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM21a0E0v4XBUVRgai2Z4Zcr+GSDVsztarkAoDRBQ+77"
 
 ALL_WORKFLOWS = frozenset(
     {
         "cm-linas-content-audit.yml",
         "cm-production-cutover.yml",
+        "bootstrap-meta-ha.yml",
         "copilot-v2-flags-apply.yml",
         "dashboard-auth-secret-apply.yml",
         "deploy.yml",
@@ -58,6 +70,7 @@ REMOTE_WORKFLOWS = frozenset(
     {
         "cm-linas-content-audit.yml",
         "cm-production-cutover.yml",
+        "bootstrap-meta-ha.yml",
         "deploy.yml",
         "instagram-login-secrets-apply.yml",
         "meta-app-a-login-config-apply.yml",
@@ -183,6 +196,13 @@ def test_security_check_context_is_unique_for_branch_protection() -> None:
     assert "name: security-secret-scan" not in (WORKFLOW_DIR / "quality-gates.yml").read_text(encoding="utf-8")
 
 
+def test_required_checks_run_for_every_pull_request_and_push_only_on_main() -> None:
+    for name in ("quality-gates.yml", "security-checks.yml"):
+        source = (WORKFLOW_DIR / name).read_text(encoding="utf-8")
+        trigger = source.split("\n\n", 2)[1]
+        assert trigger == "on:\n  pull_request:\n  push:\n    branches: [main]", name
+
+
 def test_remote_production_workflow_inventory_is_closed() -> None:
     found = {workflow.name for workflow in _workflows() if REMOTE_ACCESS.search(workflow.read_text(encoding="utf-8"))}
     assert found == REMOTE_WORKFLOWS
@@ -218,12 +238,139 @@ def test_every_non_release_workflow_is_free_of_application_release_mutations() -
 
 
 def test_non_release_remote_workflows_cannot_add_source_transport() -> None:
-    allowed_scp = {"deploy.yml", "provision-python-runtime-ha.yml"}
+    allowed_scp = {"bootstrap-meta-ha.yml", "deploy.yml", "provision-python-runtime-ha.yml"}
     for name in REMOTE_WORKFLOWS - {"deploy.yml"}:
         source = (WORKFLOW_DIR / name).read_text(encoding="utf-8")
         if name not in allowed_scp:
             assert "appleboy/scp-action" not in source, name
             assert "actions/checkout" not in source, name
+
+
+def test_protected_release_transport_pins_node01_and_retains_internal_peer_contract() -> None:
+    for name in PROTECTED_RELEASE_TRANSPORT_WORKFLOWS:
+        source = (WORKFLOW_DIR / name).read_text(encoding="utf-8")
+        assert "appleboy/" not in source, name
+        assert "drone-ssh" not in source and "drone-scp" not in source, name
+        assert re.search(r"\b(?:curl|wget|ssh-keyscan)\b", source) is None, name
+        assert "NODE01_HOST=139.59.167.62" in source, name
+        assert source.count(NODE01_SSH_HOST_KEY) == 1, name
+        assert "NODE01_HOST_FINGERPRINT='SHA256:Y/L3vFTsLbzePNG/lbUyNGiBORV52U8D9Q4JlSsdqps'" in source, name
+        for secret in ("SSH_USER", "SSH_PRIVATE_KEY"):
+            assert f"secrets.{secret}" in source, (name, secret)
+        assert "secrets.SSH_HOST" not in source, name
+        assert "SSH_NODE02_USER" not in source, name
+        assert "SSH_NODE02_PRIVATE_KEY" not in source, name
+        assert "NODE02_SSH=(" not in source, name
+        assert source.index("unset SSH_PRIVATE_KEY") < source.index("SSH_HARDENING=("), name
+        assert "-F /dev/null" in source, name
+        assert "HostKeyAlgorithms=ssh-ed25519" in source, name
+        assert "StrictHostKeyChecking=yes" in source, name
+        assert "GlobalKnownHostsFile=/dev/null" in source, name
+        assert "UpdateHostKeys=no" in source, name
+        assert "UserKnownHostsFile=$SSH_ROOT/node01.known_hosts" in source, name
+        assert '"$SSH_USER@$NODE01_HOST"' in source, name
+        assert '"${NODE01_SSH[@]}" /usr/bin/true' in source, name
+        assert "/usr/bin/scp" in source, name
+        assert "REMOTE_COMMAND='/usr/bin/env -i HOME=/nonexistent" in source, name
+        assert " /bin/bash --noprofile --norc -s'" in source, name
+        assert "/usr/bin/timeout --signal=TERM --kill-after=30s 6900" in source, name
+        for forbidden in (
+            "StrictHostKeyChecking=no",
+            "StrictHostKeyChecking=accept-new",
+            "UserKnownHostsFile=/dev/null",
+        ):
+            assert forbidden not in source, (name, forbidden)
+
+    internal_peer_contracts = (
+        ROOT / "scripts/ha/bootstrap_meta_ha_contract.py",
+        ROOT / "scripts/ha/python_runtime_provision_peer.py",
+        ROOT / "scripts/ha/deploy_meta_release_ha.sh",
+    )
+    for path in internal_peer_contracts:
+        source = path.read_text(encoding="utf-8")
+        assert "10.106.0.4" in source, path.name
+        assert "StrictHostKeyChecking=yes" in source, path.name
+
+
+def test_protected_release_remote_scripts_are_rendered_and_syntax_checked() -> None:
+    delimiters = {
+        "bootstrap-meta-ha.yml": "REMOTE_BOOTSTRAP",
+        "deploy.yml": "REMOTE_DEPLOY",
+        "provision-python-runtime-ha.yml": "REMOTE_PROVISION",
+    }
+    for name, delimiter in delimiters.items():
+        payload = yaml.safe_load((WORKFLOW_DIR / name).read_text(encoding="utf-8"))
+        run_steps = [
+            step["run"]
+            for job in payload["jobs"].values()
+            for step in job.get("steps", [])
+            if isinstance(step.get("run"), str)
+        ]
+        marker = f"<<'{delimiter}'\n"
+        run_script = next(script for script in run_steps if marker in script)
+        assert "/usr/bin/sed 's/^  //' >\"$REMOTE_SCRIPT\"" in run_script
+        assert '/bin/bash -n "$REMOTE_SCRIPT"' in run_script
+        assert '"${NODE01_SSH[@]}" "$REMOTE_COMMAND" <"$REMOTE_SCRIPT"' in run_script
+        remote_block = run_script.split(marker, 1)[1].split(f"\n{delimiter}\n", 1)[0]
+        remote_lines = remote_block.splitlines()
+        assert remote_lines
+        assert all(not line or line.startswith("  ") for line in remote_lines), name
+        rendered = "\n".join(line[2:] if line else "" for line in remote_lines) + "\n"
+        subprocess.run(
+            ["/bin/bash", "-n"],
+            input=rendered,
+            text=True,
+            check=True,
+            capture_output=True,
+        )
+
+
+def test_protected_release_transport_shell_and_host_pin_setup_are_executable(tmp_path: Path) -> None:
+    for name in PROTECTED_RELEASE_TRANSPORT_WORKFLOWS:
+        workflow = yaml.safe_load((WORKFLOW_DIR / name).read_text(encoding="utf-8"))
+        job = next(iter(workflow["jobs"].values()))
+        step = next(
+            item for item in job["steps"] if item.get("name") == "Transfer to node01 through exact OpenSSH trust"
+        )
+        script = step["run"]
+        syntax = subprocess.run(
+            ["/bin/bash", "-n"],
+            input=script,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert syntax.returncode == 0, (name, syntax.stderr)
+
+        marker = "python3 -B -I -S - <<'PY'\n"
+        start = script.index(marker) + len(marker)
+        inline = script[start : script.index("\nPY\n", start)]
+        ssh_root = tmp_path / name
+        ssh_root.mkdir(mode=0o700)
+        env = {
+            "NODE01_HOST": "139.59.167.62",
+            "NODE01_HOST_FINGERPRINT": "SHA256:Y/L3vFTsLbzePNG/lbUyNGiBORV52U8D9Q4JlSsdqps",
+            "NODE01_HOST_KEY": NODE01_SSH_HOST_KEY,
+            "SSH_PRIVATE_KEY": (
+                "-----BEGIN OPENSSH PRIVATE KEY-----\ntest-only-non-key\n-----END OPENSSH PRIVATE KEY-----\n"
+            ),
+            "SSH_ROOT": str(ssh_root),
+            "SSH_USER": "ubuntu",
+        }
+        setup = subprocess.run(
+            [sys.executable, "-B", "-I", "-S", "-"],
+            input=inline,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert setup.returncode == 0, (name, setup.stderr)
+        assert (ssh_root / "node01.known_hosts").read_text(encoding="ascii") == (
+            f"139.59.167.62 {NODE01_SSH_HOST_KEY}\n"
+        )
+        assert stat.S_IMODE(os.stat(ssh_root / "node01.key").st_mode) == 0o600
+        assert stat.S_IMODE(os.stat(ssh_root / "node01.known_hosts").st_mode) == 0o600
 
 
 def test_deploy_workflow_exposes_no_single_node_or_host_selector() -> None:

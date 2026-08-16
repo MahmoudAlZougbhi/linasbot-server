@@ -3,7 +3,7 @@ name: Security Checks
 on:
   pull_request:
   push:
-    branches: [main, fix/**]
+    branches: [main]
 
 permissions:
   contents: read
