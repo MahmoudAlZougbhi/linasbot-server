@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 from services.cm.comment_rules import CommentRuleDecision
 from services.meta_app_registry import MetaAssetBinding
+
+if TYPE_CHECKING:
+    from services.meta_comment_replies import CommentReplyResult
 
 _runtime_logger = logging.getLogger("uvicorn.error")
 
@@ -31,7 +34,7 @@ def _dm_payload(*, comment_id: str, binding: MetaAssetBinding, text: str, rule_i
     }
 
 
-def is_deterministic_comment_and_dm(rule_decision: Any) -> bool:
+def is_deterministic_comment_and_dm(rule_decision: Any) -> TypeGuard[CommentRuleDecision]:
     return (
         rule_decision is not None
         and getattr(rule_decision, "action", "") == "reply_comment_and_dm"
@@ -51,7 +54,7 @@ async def maybe_handle_comment_and_dm(
     graph_api_version: str = "v24.0",
     client: Any | None = None,
     skip_public: bool = False,
-) -> Any:
+) -> CommentReplyResult:
     """Send public comment + private DM with separate outbound purposes, or simulate both."""
     from services.meta_comment_replies import CommentReplyResult, _mark_sent_reply
 

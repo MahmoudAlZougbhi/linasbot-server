@@ -13,7 +13,7 @@ from services.customer_reply_v2.models import ManifestSection
 # Comment AI-guidance rules ARE selectable. They are reply-surface guidance, not
 # business knowledge — Luna must still retrieve services/locations/hours/products.
 FIXED_ANSWER_SECTIONS = frozenset({"ai_basics", "style"})
-NON_SELECTABLE_SECTIONS = frozenset()
+NON_SELECTABLE_SECTIONS: frozenset[str] = frozenset()
 
 SECTION_DESCRIPTIONS: dict[str, str] = {
     "ai_basics": "Business identity and assistant personality (fixed Answer context).",
