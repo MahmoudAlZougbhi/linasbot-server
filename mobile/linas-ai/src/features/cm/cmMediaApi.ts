@@ -11,7 +11,7 @@ const UploadSchema = z
     media_id: z.string(),
     filename: z.string().optional(),
     mime: z.string().optional(),
-    kind: z.enum(['image', 'file']).optional(),
+    kind: z.enum(['image', 'file', 'video']).optional(),
     size: z.number().optional(),
   })
   .passthrough();

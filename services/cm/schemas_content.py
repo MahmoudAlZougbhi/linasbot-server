@@ -205,14 +205,17 @@ class ArticleAttachment(CmBaseModel):
     """Case/example media on a knowledge or care article (bytes live in CM media store).
 
     ``caption`` tells the AI when this image/file applies (e.g. filled form vs blank template).
+    ``url`` is for kind=link (no binary). ``duration_seconds`` is optional video metadata.
     """
 
     id: str
-    kind: Literal["image", "file"] = "file"
+    kind: Literal["image", "file", "video", "link"] = "file"
     caption: str = ""
     mime: str = ""
     filename: str = ""
     size: int = Field(default=0, ge=0)
+    url: str = ""
+    duration_seconds: int | None = Field(default=None, ge=0)
 
 
 class ArticleRecord(CmBaseModel):
@@ -230,6 +233,7 @@ class ArticleRecord(CmBaseModel):
     linked_branch_ids: list[str] = Field(default_factory=list)
     notes: str | None = None
     attachments: list[ArticleAttachment] = Field(default_factory=list)
+    updated_at: str | None = None
 
 
 class HandoffContact(CmBaseModel):

@@ -34,7 +34,7 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
   {
     id: 'knowledge',
     title: 'Knowledge',
-    description: 'Knowledge articles: title and note.',
+    description: 'Teach Linas what your business knows.',
     mobileSupported: true,
   },
   {

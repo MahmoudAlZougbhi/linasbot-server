@@ -23,6 +23,9 @@ ALLOWED_MIME = frozenset(
         "image/heic",
         "image/heif",
         "image/webp",
+        "video/mp4",
+        "video/quicktime",
+        "video/webm",
         "application/pdf",
         "text/plain",
         "text/markdown",
@@ -32,10 +35,16 @@ ALLOWED_MIME = frozenset(
 MAX_BYTES = 12 * 1024 * 1024  # 12 MiB
 MAX_TEXT_EXCERPT = 2000
 IMAGE_MIME_PREFIX = "image/"
+VIDEO_MIME_PREFIX = "video/"
 
 
 def _kind_for_mime(mime: str) -> str:
-    return "image" if (mime or "").startswith(IMAGE_MIME_PREFIX) else "file"
+    lowered = (mime or "").lower()
+    if lowered.startswith(IMAGE_MIME_PREFIX):
+        return "image"
+    if lowered.startswith(VIDEO_MIME_PREFIX):
+        return "video"
+    return "file"
 
 
 def validate_upload(*, filename: str, content_type: str | None, size: int) -> dict[str, Any]:
@@ -53,6 +62,9 @@ def validate_upload(*, filename: str, content_type: str | None, size: int) -> di
             ".jpeg": "image/jpeg",
             ".png": "image/png",
             ".webp": "image/webp",
+            ".mp4": "video/mp4",
+            ".mov": "video/quicktime",
+            ".webm": "video/webm",
             ".pdf": "application/pdf",
             ".txt": "text/plain",
             ".md": "text/markdown",
@@ -158,7 +170,14 @@ def format_attachments_block(
         caption = str(att.get("caption") or "").strip() or "(no caption — describe when to use this)"
         mid = str(att.get("id") or "")
         mime = str(att.get("mime") or "")
-        line = f"- [{kind}] {filename}: {caption}"
+        url = str(att.get("url") or "").strip()
+        duration = att.get("duration_seconds")
+        extra = ""
+        if url:
+            extra += f" url={url}"
+        if isinstance(duration, int) and duration >= 0:
+            extra += f" duration_seconds={duration}"
+        line = f"- [{kind}] {filename}{extra}: {caption}"
         if tenant_id and mid and mime in {"text/plain", "text/markdown", "application/json"}:
             excerpt = text_excerpt_for_media(tenant_id=tenant_id, media_id=mid, mime=mime)
             if excerpt:

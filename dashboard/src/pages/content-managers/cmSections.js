@@ -67,7 +67,7 @@ export const CM_SECTION_CARDS = [
     slug: "knowledge",
     section: "knowledge",
     name: "Knowledge",
-    description: "Narrative knowledge for retrieval after FAQ miss — educational articles only.",
+    description: "Teach Linas what your business knows.",
   },
   {
     slug: "faq",
