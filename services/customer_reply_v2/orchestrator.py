@@ -22,6 +22,7 @@ from services.customer_reply_v2.flags import (
 from services.customer_reply_v2.history_format import history_records_from_window, same_history_for_agents
 from services.customer_reply_v2.invocation_meter import CustomerTurnMeter, InvocationRecord
 from services.customer_reply_v2.manifest import get_cached_manifest, load_fixed_answer_context
+from services.customer_reply_v2.media_actions import plan_media_for_turn
 from services.customer_reply_v2.models import CustomerReplyOutcome
 from services.customer_reply_v2.observability import build_safe_trace
 from services.customer_reply_v2.orchestrator_answer import finalize_answer_with_repair
@@ -385,6 +386,13 @@ async def run_customer_reply_v2_dm(
     assert "ai_basics" in fixed and "style" in fixed
 
     total_tokens = prompt_tokens + completion_tokens
+    media_meta = plan_media_for_turn(
+        tenant_id=tenant_id,
+        answer=answer,
+        channel_metadata=channel_meta,
+        meter=meter,
+        idempotency_key=meter.customer_turn_id,
+    )
     trace = build_safe_trace(
         tenant_id=tenant_id,
         channel=channel,
@@ -465,6 +473,7 @@ async def run_customer_reply_v2_dm(
             "authoritative_selector": "retrieval_luna",
             "classic_fallback": False,
             "active_product_id": retrieval.active_product_id,
+            **media_meta,
         },
         error=retrieval.error,
     )

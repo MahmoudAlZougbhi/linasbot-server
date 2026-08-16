@@ -152,6 +152,7 @@ class AnswerLunaResult:
     completion_tokens: int | None = None
     total_tokens: int | None = None
     raw_structured: dict[str, Any] = field(default_factory=dict)
+    media_actions: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass

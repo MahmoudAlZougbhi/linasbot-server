@@ -6,6 +6,7 @@ from typing import Any
 
 PRODUCT_TOOL_NAMES = {
     "search_product_by_title",
+    "list_product_titles",
     "get_product_details",
     "get_product_images",
     "find_product_by_url",
@@ -17,12 +18,14 @@ PRODUCT_TOOL_NAMES = {
 
 def dispatch_product_tool(name: str, args: dict[str, Any], ctx: Any) -> dict[str, Any]:
     from db.session import whatsapp_session
+    from services.customer_reply_v2.flags import customer_ai_v10_runtime_enabled
     from services.products.crv2_tools import (
         crv2_find_product_by_image,
         crv2_find_product_by_url,
         crv2_get_active_product_context,
         crv2_get_product_details,
         crv2_get_product_images,
+        crv2_list_product_titles,
         crv2_resolve_reply_to_product,
         crv2_search_product_by_title,
     )
@@ -55,8 +58,16 @@ def dispatch_product_tool(name: str, args: dict[str, Any], ctx: Any) -> dict[str
                     tenant_id=ctx.tenant_id,
                     title=str(args.get("title") or "").strip(),
                     limit=int(args.get("limit") or 5),
-                    use_luna_fallback=True,
+                    use_luna_fallback=not customer_ai_v10_runtime_enabled(),
                     conversation_id=conversation_id,
+                    title_offset=int(args.get("offset") or 0),
+                )
+            elif name == "list_product_titles":
+                data = crv2_list_product_titles(
+                    db,
+                    tenant_id=ctx.tenant_id,
+                    offset=int(args.get("offset") or 0),
+                    limit=int(args.get("limit") or 80),
                 )
             elif name == "get_product_details":
                 product_id = str(args.get("product_id") or ctx.active_product_id or "")
@@ -91,6 +102,7 @@ def dispatch_product_tool(name: str, args: dict[str, Any], ctx: Any) -> dict[str
                         image_bytes=raw,
                         top_k=int(args.get("top_k") or 8),
                         conversation_id=conversation_id,
+                        known_title=str(args.get("product_name") or args.get("title") or ""),
                     )
                     if data.get("matches"):
                         first = data["matches"][0]

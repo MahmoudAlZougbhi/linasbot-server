@@ -19,6 +19,7 @@ from services.customer_reply_v2.flags import (
 from services.customer_reply_v2.history_format import comment_thread_records, same_history_for_agents
 from services.customer_reply_v2.invocation_meter import CustomerTurnMeter
 from services.customer_reply_v2.manifest import get_cached_manifest
+from services.customer_reply_v2.media_actions import plan_media_for_turn
 from services.customer_reply_v2.media_context import build_comment_media_context, media_context_to_dict
 from services.customer_reply_v2.models import CustomerReplyOutcome
 from services.customer_reply_v2.observability import build_safe_trace
@@ -296,6 +297,13 @@ async def run_customer_reply_v2_comment(
     # Observability strip: do not dump multimodal data URLs into traces.
     trace_ctx = {k: v for k, v in comment_ctx.items() if k != "image_inputs"}
     total_tokens = prompt_tokens + completion_tokens
+    media_meta = plan_media_for_turn(
+        tenant_id=tenant_id,
+        answer=answer,
+        channel_metadata=channel_meta,
+        meter=meter,
+        idempotency_key=meter.customer_turn_id,
+    )
     trace = build_safe_trace(
         tenant_id=tenant_id,
         channel=channel,
@@ -354,5 +362,6 @@ async def run_customer_reply_v2_comment(
             "prompt_tokens": prompt_tokens or None,
             "completion_tokens": completion_tokens or None,
             "tokens": total_tokens or None,
+            **media_meta,
         },
     )

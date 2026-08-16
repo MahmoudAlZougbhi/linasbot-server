@@ -11,6 +11,7 @@ from typing import Any
 
 from services.customer_reply_v2.ai_profile import load_tera_ai_context
 from services.customer_reply_v2.flags import customer_answer_model_name
+from services.customer_reply_v2.media_actions import parse_media_actions
 from services.customer_reply_v2.models import AnswerLunaResult, EvidenceRecord, RetrievalResult
 from services.customer_reply_v2.tera_llm import create_tera_completion, normalize_tera_effort
 from services.response_formatting import RESPONSE_FORMATTING_RULES
@@ -52,8 +53,12 @@ Return a single JSON object (no markdown):
   "evidence_source_ids": ["..."],
   "customer_fact_updates": {{}},
   "handoff_intent": null,
-  "safe_failure_category": null
+  "safe_failure_category": null,
+  "media_actions": []
 }}
+Do not send files. If the customer asked for product photos or videos, put media_actions
+for stored catalog media only: {{"product_id":"...","media_type":"images|videos","max_items":5,"order":"configured_order"}}.
+The system sends stored media. Never invent URLs, prices, or product IDs.
 """
 
 
@@ -288,6 +293,7 @@ async def run_answer_luna(
             effective_reasoning_effort=tera_effort,
             stage="repair" if repair_failures else "answer",
             raw_structured=data,
+            media_actions=parse_media_actions(data.get("media_actions")),
         )
 
     from services.requests.capture import is_public_comment_channel
@@ -369,6 +375,7 @@ async def run_answer_luna(
         completion_tokens=usage.get("completion_tokens"),  # type: ignore[arg-type]
         total_tokens=usage.get("total_tokens"),  # type: ignore[arg-type]
         raw_structured=data,
+        media_actions=parse_media_actions(data.get("media_actions")),
     )
 
 

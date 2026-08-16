@@ -98,12 +98,13 @@ RETRIEVAL_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "search_product_by_title",
-            "description": "Search tenant product catalog by title (deterministic first, Luna fallback).",
+            "description": "Search tenant products by title (exact/normalized first). On miss, returns a titles-only page in this same retrieval loop. Never dumps price, images, or the full catalog.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "title": {"type": "string"},
                     "limit": {"type": "integer"},
+                    "offset": {"type": "integer"},
                 },
                 "required": ["title"],
             },
@@ -112,8 +113,22 @@ RETRIEVAL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "list_product_titles",
+            "description": "Page active product titles only (id, title, status) for the current tenant. No prices, notes, or media.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "offset": {"type": "integer"},
+                    "limit": {"type": "integer"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_product_details",
-            "description": "Read one product by product_id (tenant-scoped).",
+            "description": "Read details for one selected product (name, price, status, counts). No full catalog and no image bytes.",
             "parameters": {
                 "type": "object",
                 "properties": {"product_id": {"type": "string"}},
@@ -149,12 +164,14 @@ RETRIEVAL_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "find_product_by_image",
-            "description": "Find product candidates by customer image (vector search; vision rerank if ambiguous).",
+            "description": "Find 3-8 tenant product candidates from a customer image. If product_name is already clear, name wins and vision is skipped.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "image_media_id": {"type": "string"},
                     "top_k": {"type": "integer"},
+                    "product_name": {"type": "string"},
+                    "title": {"type": "string"},
                 },
                 "required": ["image_media_id"],
             },
