@@ -289,7 +289,8 @@ def _update_fields(session: Any, row: Any, action: dict[str, Any]) -> dict[str, 
         row.status = "definition_deleted"
         return {"ok": False, "error": "definition_deleted", "status": "definition_deleted"}
     allowed = _field_map(graph)
-    updates = action.get("field_updates") if isinstance(action.get("field_updates"), dict) else {}
+    raw_updates = action.get("field_updates")
+    updates: dict[str, Any] = dict(raw_updates) if isinstance(raw_updates, dict) else {}
     values = dict(row.values_json or {})
     rejected: list[dict[str, str]] = []
     for key, raw_value in updates.items():

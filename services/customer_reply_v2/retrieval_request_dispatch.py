@@ -20,12 +20,14 @@ def dispatch_request_graph_tool(name: str, args: dict[str, Any], ctx: Any) -> di
                 from services.request_drafts.engine import luna_draft_summary
                 from services.request_drafts.repository import DraftRepository
 
-                rows = DraftRepository(db).list_open(tenant_id=ctx.tenant_id, customer_id=str(ctx.customer_id or ""))
-                summaries = [luna_draft_summary(row) for row in rows]
+                draft_rows = DraftRepository(db).list_open(
+                    tenant_id=ctx.tenant_id, customer_id=str(ctx.customer_id or "")
+                )
+                summaries = [luna_draft_summary(row) for row in draft_rows]
                 ctx.audit.append({"tool": name, "ok": True, "class": "open_drafts", "count": len(summaries)})
                 return {"ok": True, "data": {"drafts": summaries}}
             if name == "list_request_definitions":
-                rows = list_active_graphs(db, tenant_id=ctx.tenant_id)
+                graphs = list_active_graphs(db, tenant_id=ctx.tenant_id)
                 titles = [
                     {
                         "definition_id": row.get("definition_id"),
@@ -35,7 +37,7 @@ def dispatch_request_graph_tool(name: str, args: dict[str, Any], ctx: Any) -> di
                         "source_item_id": row.get("source_item_id"),
                         "status": row.get("status"),
                     }
-                    for row in rows
+                    for row in graphs
                 ]
                 ctx.audit.append({"tool": name, "ok": True, "class": "request_definitions", "count": len(titles)})
                 return {"ok": True, "data": {"definitions": titles}}

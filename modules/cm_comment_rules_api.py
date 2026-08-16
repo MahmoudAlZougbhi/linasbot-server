@@ -37,7 +37,8 @@ async def comment_rule_posts(
 async def comment_rule_preview(request: Request, body: dict[str, Any] = Body(default={})) -> Any:
     session = require_session(request)
     _ = session.tenant_id
-    rule = body.get("rule") if isinstance(body.get("rule"), dict) else {}
+    raw_rule = body.get("rule")
+    rule: dict[str, Any] = dict(raw_rule) if isinstance(raw_rule, dict) else {}
     preview = preview_comment_rule(
         rule,
         comment_text=str(body.get("comment_text") or ""),

@@ -235,7 +235,7 @@ async def run_retrieval_luna(
     history_for_luna = list(dm_window or [])
     if not customer_ai_v10_runtime_enabled():
         history_for_luna = history_for_luna[-6:]
-    user_payload = {
+    user_payload: dict[str, Any] = {
         "current_message": _strip_fixed_from_prompt(message),
         "manifest": manifest,
         "customer_facts": customer_profile,
