@@ -529,6 +529,7 @@ def _read_authority_file(
     path: Path,
     *,
     limit: int = MAX_AUTHORITY_BYTES,
+    allow_empty: bool = False,
     expected_uid: int = 0,
     expected_gid: int = 0,
     mode: int = 0o600,
@@ -550,7 +551,7 @@ def _read_authority_file(
         or before.st_gid != expected_gid
         or stat.S_IMODE(before.st_mode) != mode
         or before.st_nlink != 1
-        or not 1 <= before.st_size <= limit
+        or not (0 if allow_empty else 1) <= before.st_size <= limit
     ):
         raise PermissionError(f"unsafe bootstrap authority file: {path}")
     descriptor = os.open(
@@ -670,6 +671,7 @@ def _release_tree_evidence(
     expected_gid: int = 0,
     file_limit: int = MAX_RELEASE_TREE_FILE_BYTES,
     total_limit: int | None = None,
+    allow_empty_files: bool = False,
 ) -> tuple[str, int, int, frozenset[str]]:
     """Recompute the QG normalized tree before importing any control module."""
 
@@ -722,6 +724,7 @@ def _release_tree_evidence(
             raw = _read_authority_file(
                 path,
                 limit=file_limit,
+                allow_empty=allow_empty_files,
                 expected_uid=expected_uid,
                 expected_gid=expected_gid,
                 mode=stat.S_IMODE(info.st_mode),
@@ -2325,6 +2328,7 @@ def _assert_probe_environment(
         expected_gid=expected_gid,
         file_limit=MAX_PROBE_TREE_FILE_BYTES,
         total_limit=MAX_PROBE_TREE_TOTAL_BYTES,
+        allow_empty_files=True,
     )
     if (probe_sha, probe_count, probe_size) != (
         proof.get("probe_tree_sha256"),
@@ -2445,6 +2449,7 @@ def _prepare_probe_environment(
         expected_gid=expected_gid,
         file_limit=MAX_PROBE_TREE_FILE_BYTES,
         total_limit=MAX_PROBE_TREE_TOTAL_BYTES,
+        allow_empty_files=True,
     )
     payload = {
         **_probe_authority_payload(runtime_authority),
