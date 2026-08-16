@@ -19,41 +19,36 @@ function read(rel) {
 const SAMPLE_TILES = [
   { id: 'ai_basics', title: 'AI Basics', description: 'd', mobileSupported: true },
   { id: 'knowledge', title: 'Knowledge', description: 'd', mobileSupported: true },
-  { id: 'opening_hours', title: 'Opening Hours', description: 'd', mobileSupported: true },
-  { id: 'branches', title: 'Location', description: 'd', mobileSupported: true },
+  { id: 'branches', title: 'Location and Opening Hours', description: 'd', mobileSupported: true },
   { id: 'prices', title: 'Service', description: 'd', mobileSupported: true },
   { id: 'comments', title: 'Comments', description: 'd', mobileSupported: true },
   { id: 'requests_appointments', title: 'Requests', description: 'd', mobileSupported: true },
 ];
 
 describe('AI Setup hub layout', () => {
-  it('places AI Basics then Knowledge as full-width rows at the top', () => {
+  it('places AI Basics, Knowledge, and Location as full-width rows at the top', () => {
     const rows = buildAiSetupHubRows(SAMPLE_TILES, true);
-    assert.equal(rows[0].type, 'full');
-    assert.equal(rows[0].item.kind, 'section');
-    assert.equal(rows[0].item.tile.id, 'ai_basics');
-    assert.equal(rows[1].type, 'full');
-    assert.equal(rows[1].item.tile.id, 'knowledge');
+    const fullRows = rows.filter((r) => r.type === 'full');
+    assert.equal(fullRows.length, 3);
+    assert.equal(fullRows[0].item.kind, 'section');
+    assert.equal(fullRows[0].item.tile.id, 'ai_basics');
+    assert.equal(fullRows[1].item.tile.id, 'knowledge');
+    assert.equal(fullRows[2].item.tile.id, 'branches');
   });
 
-  it('orders pair rows: Opening Hours+Location, Service+Products, Comments+Requests', () => {
+  it('orders pair rows: Service+Products, Comments+Requests', () => {
     const rows = buildAiSetupHubRows(SAMPLE_TILES, true);
     const pairs = rows.filter((r) => r.type === 'pair');
-    assert.equal(pairs.length, 3);
+    assert.equal(pairs.length, 2);
 
     assert.equal(pairs[0].left.kind, 'section');
-    assert.equal(pairs[0].left.tile.id, 'opening_hours');
-    assert.equal(pairs[0].right.kind, 'section');
-    assert.equal(pairs[0].right.tile.id, 'branches');
+    assert.equal(pairs[0].left.tile.id, 'prices');
+    assert.equal(pairs[0].right.kind, 'products');
 
     assert.equal(pairs[1].left.kind, 'section');
-    assert.equal(pairs[1].left.tile.id, 'prices');
-    assert.equal(pairs[1].right.kind, 'products');
-
-    assert.equal(pairs[2].left.kind, 'section');
-    assert.equal(pairs[2].left.tile.id, 'comments');
-    assert.equal(pairs[2].right.kind, 'section');
-    assert.equal(pairs[2].right.tile.id, 'requests_appointments');
+    assert.equal(pairs[1].left.tile.id, 'comments');
+    assert.equal(pairs[1].right.kind, 'section');
+    assert.equal(pairs[1].right.tile.id, 'requests_appointments');
   });
 
   it('puts Comments + Requests as the last row', () => {

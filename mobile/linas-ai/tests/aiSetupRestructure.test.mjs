@@ -59,15 +59,16 @@ describe('AI Setup hub restructure', () => {
     const firstId = cardsBlock.match(/id: '([^']+)'/)?.[1];
     assert.equal(firstId, 'knowledge');
     assert.match(sections, /id: 'prices'[\s\S]*title: 'Service'/);
+    assert.match(sections, /id: 'branches'[\s\S]*title: 'Location and Opening Hours'/);
     const openingHoursCard = cardsBlock.match(/\{\s*id: 'opening_hours'[\s\S]*?\},/)?.[0] ?? '';
     assert.match(openingHoursCard, /title: 'Opening Hours'/);
-    assert.doesNotMatch(openingHoursCard, /showInCmHub: false/);
+    assert.match(openingHoursCard, /showInCmHub: false/);
 
     const layout = read('features/cm/aiSetupHubLayout.ts');
-    assert.match(layout, /AI_SETUP_FULL_WIDTH_IDS.*ai_basics.*knowledge/s);
-    assert.match(layout, /AI_SETUP_PAIR_ROWS[\s\S]*opening_hours.*branches/s);
+    assert.match(layout, /AI_SETUP_FULL_WIDTH_IDS.*ai_basics.*knowledge.*branches/s);
     assert.match(layout, /AI_SETUP_PAIR_ROWS[\s\S]*prices.*products/s);
     assert.match(layout, /AI_SETUP_PAIR_ROWS[\s\S]*comments.*requests_appointments/s);
+    assert.doesNotMatch(layout, /opening_hours/);
     assert.doesNotMatch(layout, /dynamic_messages/);
 
     const tree = read('app/AppScreenTree.tsx');

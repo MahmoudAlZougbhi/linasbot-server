@@ -1,11 +1,10 @@
 import type { CmSectionCard } from './cmSections';
 
 /** Full-width hub rows appear in this order at the top of AI Setup. */
-export const AI_SETUP_FULL_WIDTH_IDS = ['ai_basics', 'knowledge'] as const;
+export const AI_SETUP_FULL_WIDTH_IDS = ['ai_basics', 'knowledge', 'branches'] as const;
 
 /** Side-by-side pair rows (left → right). Use `products` for the Products tile. */
 export const AI_SETUP_PAIR_ROWS: readonly (readonly (CmSectionCard['id'] | 'products')[])[] = [
-  ['opening_hours', 'branches'],
   ['prices', 'products'],
   ['comments', 'requests_appointments'],
 ];
@@ -30,7 +29,7 @@ function resolveHubItem(
   return tile ? { kind: 'section', tile } : null;
 }
 
-/** Build hub rows: full-width AI Basics + Knowledge, then three pair mosaic rows. */
+/** Build hub rows: full-width Basics, Knowledge, Location; then two pair mosaic rows. */
 export function buildAiSetupHubRows(
   tiles: CmSectionCard[],
   includeProducts: boolean,
