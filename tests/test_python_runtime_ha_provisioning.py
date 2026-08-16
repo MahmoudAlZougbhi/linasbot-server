@@ -100,6 +100,10 @@ def test_control_plane_allowlists_and_workflow_bridge_are_closed() -> None:
     assert "/usr/bin/python3 -B -I -S" in workflow
     assert "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093" in workflow
     assert "if: inputs.OPERATION == 'apply'" in workflow
+    assert "DISPATCH_SHA: ${{ github.sha }}" in workflow
+    assert '[ "$TARGET_SHA" = "$DISPATCH_SHA" ]' in workflow
+    assert 'TRUST_ROOT="/run/linas-python-runtime-qg-${QUALITY_GATES_RUN_ID}-${RELEASE_RUN_ATTEMPT}"' in workflow
+    assert 'TRUST_ROOT="/run/linas-python-runtime-qg-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"' not in workflow
 
 
 def test_actual_control_archive_contains_every_trusted_import(tmp_path: Path) -> None:

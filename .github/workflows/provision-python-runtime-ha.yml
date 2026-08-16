@@ -80,6 +80,7 @@ jobs:
       - name: Gate protected operation and immutable authorities
         env:
           GH_TOKEN: ${{ github.token }}
+          DISPATCH_SHA: ${{ github.sha }}
           OPERATION: ${{ inputs.OPERATION }}
           TARGET_SHA: ${{ inputs.TARGET_SHA }}
           QUALITY_GATES_RUN_ID: ${{ inputs.QUALITY_GATES_RUN_ID }}
@@ -104,6 +105,7 @@ jobs:
 
           if [ "$OPERATION" = plan ] || [ "$OPERATION" = dry-run ] || [ "$OPERATION" = apply ]; then
             [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] && [ "$TARGET_SHA" != "$(printf '%040d' 0)" ]
+            [ "$TARGET_SHA" = "$DISPATCH_SHA" ]
             [[ "$QUALITY_GATES_RUN_ID" =~ ^[1-9][0-9]*$ ]]
             [[ "$RELEASE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
             [[ "$RELEASE_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
@@ -189,7 +191,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          TRUST_ROOT="/run/linas-python-runtime-qg-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          TRUST_ROOT="/run/linas-python-runtime-qg-${QUALITY_GATES_RUN_ID}-${RELEASE_RUN_ATTEMPT}"
           PREPARED="$(sudo env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/sbin:/usr/bin:/sbin:/bin \
             /usr/bin/python3 -B -I -S "$GITHUB_WORKSPACE/transfer/workflow-bootstrap.py" prepare \
             "$GITHUB_WORKSPACE/release-download" "$TRUST_ROOT" "$GITHUB_WORKSPACE/transfer" \
