@@ -45,6 +45,10 @@ If operational_titles_has_more is true, call list_operational_titles until every
 If the customer mentions an appointment, order, or request, call list_request_definitions then get_request_definition for selected IDs. Deleted definitions are absent.
 Call list_open_drafts when the customer is continuing, pausing, or changing an existing request.
 You NEVER receive AI Basics, Style, assistant identity, greeting, or tone bodies.
+Comment Rule is NOT business knowledge. When the incoming channel is a Comment, select the applicable
+AI-guidance Comment Rule AND the same business evidence you would select for a DM: services, products,
+locations, opening hours, knowledge, prices, request definitions, and drafts. Selecting a Comment Rule
+does not complete retrieval. Prefer one plan that includes comment_rule + every needed business item.
 """
 
 
@@ -255,7 +259,7 @@ async def run_retrieval_luna(
         },
         "faq_candidates": list(faq_candidates or []),
         "open_drafts": [],
-        "note": "Use tools to list/read selectable sections only. Do not write the reply. Never request AI Basics or Style bodies. Call list_open_drafts when the customer is continuing a request.",
+        "note": "Use tools to list/read selectable sections only. Do not write the reply. Never request AI Basics or Style bodies. Call list_open_drafts when the customer is continuing a request. If channel is a Comment, Comment Rule is reply-surface guidance only — also retrieve services/locations/hours/products/knowledge/requests needed to answer.",
     }
     try:
         from services.cm.version_store import load_published_content as _load_pub

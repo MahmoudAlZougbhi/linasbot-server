@@ -301,6 +301,7 @@ def test_policy_public_comment_never_posts_wa_me(monkeypatch):
 def test_policy_public_comment_booking_with_capture_invites_dm(monkeypatch):
     from services.customer_reply_v2.policy import enforce_restricted_and_handoff
 
+    monkeypatch.setenv("CUSTOMER_AI_V10_RUNTIME", "false")
     monkeypatch.setattr(
         "services.customer_reply_v2.policy.load_published_content",
         lambda _tid: (object(), _policy_sections_with_handoff_phone()),
@@ -317,3 +318,21 @@ def test_policy_public_comment_booking_with_capture_invites_dm(monkeypatch):
     reply = str(out["reply"] or "").lower()
     assert "wa.me" not in reply
     assert "phone" not in reply
+
+
+def test_v10_public_comment_booking_does_not_regex_stop(monkeypatch):
+    from services.customer_reply_v2.policy import enforce_restricted_and_handoff
+
+    monkeypatch.setenv("CUSTOMER_AI_V10_RUNTIME", "true")
+    monkeypatch.setattr(
+        "services.customer_reply_v2.policy.load_published_content",
+        lambda _tid: (object(), _policy_sections_with_handoff_phone()),
+    )
+    monkeypatch.setattr("services.requests.capture.requests_capture_active", lambda _tid: True)
+    out = enforce_restricted_and_handoff(
+        tenant_id="tenant-a",
+        message="I want to book an appointment tomorrow",
+        response_language="en",
+        channel="instagram_comment",
+    )
+    assert out is None
