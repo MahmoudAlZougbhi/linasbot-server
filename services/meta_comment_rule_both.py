@@ -48,9 +48,7 @@ def apply_comment_and_dm_rule(
                 )
         _mark_sent_reply(binding, comment_id)
         return CommentReplyResult(status="simulated", reply_id="simulated_both")
-    _runtime_logger.warning(
-        "[meta-comment] comment_and_dm_second_send_blocked reason=single_primary_reply_purpose"
-    )
+    _runtime_logger.warning("[meta-comment] comment_and_dm_second_send_blocked reason=single_primary_reply_purpose")
     if public_text:
         return CommentRuleDecision(
             action="reply_comment",

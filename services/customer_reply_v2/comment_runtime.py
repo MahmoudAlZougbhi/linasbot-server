@@ -179,8 +179,7 @@ async def run_customer_reply_v2_comment(
     if engine.ai_guidance_rules:
         comment_ctx["ai_guidance_comment_rules"] = engine.ai_guidance_rules
         comment_ctx["applicable_ai_comment_rule_titles"] = [
-            {"id": row["id"], "title": row["title"], "scope": row.get("scope")}
-            for row in engine.ai_guidance_rules
+            {"id": row["id"], "title": row["title"], "scope": row.get("scope")} for row in engine.ai_guidance_rules
         ]
 
     policy = enforce_restricted_and_handoff(

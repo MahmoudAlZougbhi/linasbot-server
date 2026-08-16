@@ -37,7 +37,12 @@ def deterministic_rule_outcome(
 ) -> CustomerReplyOutcome:
     caps = dict(channel_capabilities or (channel_meta or {}).get("channel_capabilities") or {})
     action = engine.action
-    needs_public = action in {"reply_comment_static", "reply_comment", "reply_comment_and_dm_static", "reply_comment_and_dm"}
+    needs_public = action in {
+        "reply_comment_static",
+        "reply_comment",
+        "reply_comment_and_dm_static",
+        "reply_comment_and_dm",
+    }
     needs_dm = action in {"send_dm_static", "reply_dm", "reply_comment_and_dm_static", "reply_comment_and_dm"}
     diagnostic = ""
     if needs_public and not caps.get("can_reply_publicly", True):
@@ -56,9 +61,9 @@ def deterministic_rule_outcome(
     return CustomerReplyOutcome(
         stop=True,
         reply=reply,
-        reason="comment_rule_capability_denied" if diagnostic else (
-            "comment_rule_ignore" if action == "ignore" else "comment_rule_deterministic"
-        ),
+        reason="comment_rule_capability_denied"
+        if diagnostic
+        else ("comment_rule_ignore" if action == "ignore" else "comment_rule_deterministic"),
         evidence_status="policy_stop",
         metadata={
             "ai_called": False,
