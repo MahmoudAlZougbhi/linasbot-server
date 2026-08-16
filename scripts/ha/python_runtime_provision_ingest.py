@@ -390,7 +390,10 @@ def _install(
 ) -> int:
     resolved = source.resolve(strict=True)
     if retained_transaction_id is None:
-        allowed = re.fullmatch(r"/tmp/linasbot-python-runtime-upload-[1-9][0-9]*-[1-9][0-9]*/release", str(resolved))
+        allowed = re.fullmatch(
+            r"/var/lib/linasbot/meta-ha/workflow-uploads/python-runtime-[1-9][0-9]*-[1-9][0-9]*/release",
+            str(resolved),
+        )
     else:
         allowed = re.fullmatch(r"pyr_[0-9a-f]{32}", retained_transaction_id)
         expected = STATE_ROOT / "python-runtime-transactions" / retained_transaction_id / "authority"

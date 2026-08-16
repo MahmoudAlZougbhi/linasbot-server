@@ -205,7 +205,7 @@ jobs:
           set -euo pipefail
           umask 077
           BRIDGE=scripts/ha/python_runtime_provision_workflow_bootstrap.py
-          EXPECTED=50ee3efa146d4439946f176764afb603067ad107cf362316865eafbe3e818e73
+          EXPECTED=25fafaade5a187adbf9f60393e010081ad0ec5caa013a5877bd2d8a37b8df6a7
           test -f "$BRIDGE" && test ! -L "$BRIDGE"
           [ "$(/usr/bin/sha256sum "$BRIDGE" | /usr/bin/awk '{print $1}')" = "$EXPECTED" ]
           mkdir -m 0700 transfer
@@ -397,8 +397,8 @@ jobs:
           )
           "${NODE01_SSH[@]}" /usr/bin/true
 
-          UPLOAD="/tmp/linasbot-meta-ha-bootstrap-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
-          "${NODE01_SSH[@]}" "/usr/bin/test ! -e '$UPLOAD' && /usr/bin/install -d -m 0700 -- '$UPLOAD'"
+          UPLOAD="/var/lib/linasbot/meta-ha/workflow-uploads/bootstrap-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
+          "${NODE01_SSH[@]}" "/usr/bin/install -d -o root -g root -m 0700 -- /var/lib/linasbot/meta-ha/workflow-uploads && /usr/bin/test ! -e '$UPLOAD' && /usr/bin/install -d -o root -g root -m 0700 -- '$UPLOAD'"
           TRANSFER_FILES=(transfer/workflow-bootstrap.py)
           if [ "$OPERATION" = install-lb ] || [ "$OPERATION" = apply ]; then
             TRANSFER_FILES+=(transfer/lb-attestation.json)
@@ -424,7 +424,7 @@ jobs:
           /usr/bin/sed 's/^  //' >"$REMOTE_SCRIPT" <<'REMOTE_BOOTSTRAP'
             set -euo pipefail
             umask 077
-            UPLOAD="/tmp/linasbot-meta-ha-bootstrap-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
+            UPLOAD="/var/lib/linasbot/meta-ha/workflow-uploads/bootstrap-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
             BRIDGE_SOURCE="$UPLOAD/workflow-bootstrap.py"
             TRUSTED_BRIDGE="/run/linas-meta-ha-bootstrap-workflow-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}.py"
             TRUSTED_LB="/run/linas-meta-ha-bootstrap-lb-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}.json"
@@ -441,7 +441,7 @@ jobs:
             sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
               PATH=/usr/sbin:/usr/bin:/sbin:/bin \
               /usr/bin/python3 -B -I -S - "$BRIDGE_SOURCE" "$TRUSTED_BRIDGE" \
-              50ee3efa146d4439946f176764afb603067ad107cf362316865eafbe3e818e73 "$SOURCE_UID" <<'PY'
+              25fafaade5a187adbf9f60393e010081ad0ec5caa013a5877bd2d8a37b8df6a7 "$SOURCE_UID" <<'PY'
             import hashlib, os, re, stat, sys
             from pathlib import Path
             source, target, expected, uid = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], int(sys.argv[4])

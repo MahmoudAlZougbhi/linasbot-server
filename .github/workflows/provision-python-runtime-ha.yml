@@ -157,7 +157,7 @@ jobs:
           set -euo pipefail
           umask 077
           BOOTSTRAP=scripts/ha/python_runtime_provision_workflow_bootstrap.py
-          EXPECTED=50ee3efa146d4439946f176764afb603067ad107cf362316865eafbe3e818e73
+          EXPECTED=25fafaade5a187adbf9f60393e010081ad0ec5caa013a5877bd2d8a37b8df6a7
           test -f "$BOOTSTRAP" && test ! -L "$BOOTSTRAP"
           [ "$(/usr/bin/sha256sum "$BOOTSTRAP" | /usr/bin/awk '{print $1}')" = "$EXPECTED" ]
           mkdir -m 0700 transfer
@@ -356,8 +356,8 @@ jobs:
           )
           "${NODE01_SSH[@]}" /usr/bin/true
 
-          UPLOAD="/tmp/linasbot-python-runtime-upload-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
-          "${NODE01_SSH[@]}" "/usr/bin/test ! -e '$UPLOAD' && /usr/bin/install -d -m 0700 -- '$UPLOAD'"
+          UPLOAD="/var/lib/linasbot/meta-ha/workflow-uploads/python-runtime-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
+          "${NODE01_SSH[@]}" "/usr/bin/install -d -o root -g root -m 0700 -- /var/lib/linasbot/meta-ha/workflow-uploads && /usr/bin/test ! -e '$UPLOAD' && /usr/bin/install -d -o root -g root -m 0700 -- '$UPLOAD'"
           TRANSFER_FILES=(transfer/workflow-bootstrap.py)
           if [ "$OPERATION" = apply ]; then
             TRANSFER_FILES=(transfer/release transfer/bootstrap transfer/workflow-bootstrap.py)
@@ -382,13 +382,13 @@ jobs:
           /usr/bin/sed 's/^  //' >"$REMOTE_SCRIPT" <<'REMOTE_PROVISION'
             set -euo pipefail
             umask 077
-            UPLOAD="/tmp/linasbot-python-runtime-upload-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
+            UPLOAD="/var/lib/linasbot/meta-ha/workflow-uploads/python-runtime-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
             SOURCE="$UPLOAD/workflow-bootstrap.py"
             TRUSTED="/run/linas-python-runtime-workflow-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}.py"
             SOURCE_UID="$(id -u)"
             sudo env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/sbin:/usr/bin:/sbin:/bin \
               /usr/bin/python3 -B -I -S - "$SOURCE" "$TRUSTED" \
-              50ee3efa146d4439946f176764afb603067ad107cf362316865eafbe3e818e73 "$SOURCE_UID" <<'PY'
+              25fafaade5a187adbf9f60393e010081ad0ec5caa013a5877bd2d8a37b8df6a7 "$SOURCE_UID" <<'PY'
             import hashlib, os, re, stat, sys
             from pathlib import Path
             source, target, expected, uid = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], int(sys.argv[4])

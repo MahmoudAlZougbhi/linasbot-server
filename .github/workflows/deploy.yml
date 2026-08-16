@@ -992,8 +992,8 @@ jobs:
           )
           "${NODE01_SSH[@]}" /usr/bin/true
 
-          UPLOAD_ROOT="/tmp/linasbot-ha-upload-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
-          "${NODE01_SSH[@]}" "/usr/bin/test ! -e '$UPLOAD_ROOT' && /usr/bin/install -d -m 0700 -- '$UPLOAD_ROOT'"
+          UPLOAD_ROOT="/var/lib/linasbot/meta-ha/workflow-uploads/deploy-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
+          "${NODE01_SSH[@]}" "/usr/bin/install -d -o root -g root -m 0700 -- /var/lib/linasbot/meta-ha/workflow-uploads && /usr/bin/test ! -e '$UPLOAD_ROOT' && /usr/bin/install -d -o root -g root -m 0700 -- '$UPLOAD_ROOT'"
           if [ "$DEPLOY_OPERATION" = steady ] || [ "$DEPLOY_OPERATION" = reconcile_exact ]; then
             TRANSFER_FILES=(transfer/deploy_meta_release_ha.sh transfer/lb-attestation.json transfer/release)
           else
@@ -1024,7 +1024,7 @@ jobs:
           /usr/bin/sed 's/^  //' >"$REMOTE_SCRIPT" <<'REMOTE_DEPLOY'
             set -euo pipefail
             umask 077
-            UPLOAD_ROOT="/tmp/linasbot-ha-upload-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
+            UPLOAD_ROOT="/var/lib/linasbot/meta-ha/workflow-uploads/deploy-${WORKFLOW_RUN_ID}-${WORKFLOW_RUN_ATTEMPT}"
             [ -d "$UPLOAD_ROOT" ] && [ ! -L "$UPLOAD_ROOT" ]
             HELPER_SOURCE="$UPLOAD_ROOT/deploy_meta_release_ha.sh"
             LB_SOURCE="$UPLOAD_ROOT/lb-attestation.json"
