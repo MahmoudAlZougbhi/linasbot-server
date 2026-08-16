@@ -1,0 +1,68 @@
+{
+  "items": [
+    {
+      "aliases": [
+        "full body",
+        "فل بودي"
+      ],
+      "audience": "women",
+      "available": true,
+      "id": "svc_full_body",
+      "labels": {
+        "ar": "فل بودي",
+        "en": "Full Body",
+        "fr": "Full Body",
+        "franco": ""
+      },
+      "notes": "Full Body laser session. Published price 299 USD."
+    },
+    {
+      "aliases": [
+        "laser hair removal",
+        "laser hair removal women",
+        "ليزر شعر"
+      ],
+      "attachments": [
+        {
+          "caption": "Before and after photos for women laser hair removal only",
+          "description": "Before and after photos for women laser hair removal only",
+          "filename": "laser_women.png",
+          "id": "cmed_39efb54963a04f248fa410f699cbe92f",
+          "kind": "image",
+          "mime": "image/png",
+          "size": 5196,
+          "sort_order": 0,
+          "status": "active",
+          "title": "Women Laser Hair Removal photos",
+          "url": ""
+        }
+      ],
+      "audience": "women",
+      "available": true,
+      "id": "svc_laser_women",
+      "labels": {
+        "ar": "ليزر شعر للنساء",
+        "en": "Laser Hair Removal Women",
+        "fr": "Épilation laser femmes",
+        "franco": ""
+      },
+      "notes": "Women laser hair removal. Send only the women photo resources on this service."
+    },
+    {
+      "aliases": [
+        "underarms",
+        "underarm"
+      ],
+      "audience": "women",
+      "available": true,
+      "id": "svc_underarms",
+      "labels": {
+        "ar": "تحت الإبط",
+        "en": "Underarms",
+        "fr": "Aisselles",
+        "franco": ""
+      },
+      "notes": "Underarms laser session. Published price 49 USD."
+    }
+  ]
+}

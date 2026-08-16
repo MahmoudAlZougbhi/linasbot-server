@@ -1,0 +1,84 @@
+{
+  "items": [
+    {
+      "friday": {
+        "close": "20:00",
+        "closed": false,
+        "open": "10:00"
+      },
+      "id": "oh_beirut",
+      "monday": {
+        "close": "20:00",
+        "closed": false,
+        "open": "10:00"
+      },
+      "notes": "Beirut 10:00–20:00",
+      "saturday": {
+        "close": "20:00",
+        "closed": false,
+        "open": "10:00"
+      },
+      "sunday": {
+        "close": "",
+        "closed": true,
+        "open": ""
+      },
+      "thursday": {
+        "close": "20:00",
+        "closed": false,
+        "open": "10:00"
+      },
+      "title": "Beirut Opening Hours",
+      "tuesday": {
+        "close": "20:00",
+        "closed": false,
+        "open": "10:00"
+      },
+      "wednesday": {
+        "close": "20:00",
+        "closed": false,
+        "open": "10:00"
+      }
+    },
+    {
+      "friday": {
+        "close": "19:00",
+        "closed": false,
+        "open": "11:00"
+      },
+      "id": "oh_antelias",
+      "monday": {
+        "close": "19:00",
+        "closed": false,
+        "open": "11:00"
+      },
+      "notes": "فرع أنطلياس بيسكر الساعة 19:00.",
+      "saturday": {
+        "close": "19:00",
+        "closed": false,
+        "open": "11:00"
+      },
+      "sunday": {
+        "close": "",
+        "closed": true,
+        "open": ""
+      },
+      "thursday": {
+        "close": "19:00",
+        "closed": false,
+        "open": "11:00"
+      },
+      "title": "Antelias Opening Hours",
+      "tuesday": {
+        "close": "19:00",
+        "closed": false,
+        "open": "11:00"
+      },
+      "wednesday": {
+        "close": "19:00",
+        "closed": false,
+        "open": "11:00"
+      }
+    }
+  ]
+}

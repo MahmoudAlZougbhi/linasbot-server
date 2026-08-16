@@ -1,0 +1,16 @@
+{
+  "items": [
+    {
+      "amount": 299.0,
+      "currency": "USD",
+      "id": "price_full",
+      "service_id": "svc_full_body"
+    },
+    {
+      "amount": 49.0,
+      "currency": "USD",
+      "id": "price_underarms",
+      "service_id": "svc_underarms"
+    }
+  ]
+}

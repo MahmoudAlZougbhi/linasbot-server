@@ -1,0 +1,13 @@
+{
+  "image_analysis_enabled": true,
+  "image_per_day": 50,
+  "image_per_month": 800,
+  "image_per_week": 200,
+  "photos_per_message": 8,
+  "text_replies_per_day": 500,
+  "text_replies_per_month": 8000,
+  "text_replies_per_week": 2000,
+  "text_words_per_message": 2000,
+  "unlimited": true,
+  "voice_processing_enabled": true
+}

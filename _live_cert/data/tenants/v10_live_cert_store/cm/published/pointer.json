@@ -1,0 +1,30 @@
+{
+  "checksums": {
+    "actions": "c79487b2407797b33ca87edb60ff2952f18cb214e3a24cd9c1fe88bc2f45b129",
+    "ai_basics": "a804a836932882d2873855c0b011c824cd5b1e7bbe3cf9054f7ce4f93063e476",
+    "ai_limits": "d8ca79bda7ae588d569cccf917e57e9fe71c8c86c96f9e207472ed029b2996d4",
+    "branches": "547ccd292d636bae4a53bd5c6284b16687697c7ff023f2cdeced5a34a0fbb5f3",
+    "care": "92b9bb4b108c09c42d8be43eec33e4c54bbb97e21080195011cc076cf12ceccb",
+    "comments": "067661509285b22e6270df570387498f63d862fb9d9dc20955d0ce14cd8e29f3",
+    "dynamic_messages": "47698d2feb2dcf7b89cb37264bf69da885e642929049fb6077c5941d375e3ac0",
+    "faq": "f5eb3e2fbeda3bbcfb106e38bdad6880a22fab8def9dfaabffd405538528b137",
+    "handoff": "3a70966fbc9ff3daa1bf4602bec8b5f4cd0cf0711986624d6882163bd846edb7",
+    "knowledge": "d5922e07d3a057ef1d4b61590ec55b9ea47264daa475da604195ce18ee79934f",
+    "languages": "d8f63f5ddaa74a4947424e824d7e63f35ef202644f90396fb1b0cec735f1588f",
+    "off_days": "ecb4cf63bd9167f8e9db47e7a1a834be998291d2ef2c83222db6a4d0d48f0d65",
+    "opening_hours": "d3dc462e3fe76344fa8e43417a544b5c1c881ce8b3cf9d86bd8438bc21c0c682",
+    "prices": "d7639d51e15fbf7fdf4dd7d37e3bcab56efdd86368d9583e325dbf89d7291038",
+    "requests_appointments": "72a942b9f44b0d6b105f98222a9ab76ec38c019ce2dc08063c443bd98f5ae943",
+    "restricted": "8f76d6f8e7f5a60d80c1462e64d328f58db1b99c778540c068f2c858474ab175",
+    "services": "4dc421dce056e5d8378251d49806507ecd5eced0b68187b2c9017daf643ca171",
+    "style": "14863e1fae48bbada53d45b96c4e5e0701d9139aa76cf8b60c8f3ee373c51e85"
+  },
+  "content_version_id": "v_v10_live_cert_store",
+  "embedding_dimensions": 1536,
+  "embedding_model": "text-embedding-3-small",
+  "embedding_provider": "openai",
+  "embedding_version": "1",
+  "index_version_id": "idx_v10_live_cert_store",
+  "schema_version": 1,
+  "updated_at": null
+}

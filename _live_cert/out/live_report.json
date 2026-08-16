@@ -1,0 +1,2205 @@
+{
+  "tenant_id": "v10_live_cert_store",
+  "openai_key_fp": "50f6d0326ee9e141",
+  "results": [
+    {
+      "name": "openai_connectivity",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "latency_ms": 1014.6,
+      "models_present": {
+        "gpt-5.6-luna": true,
+        "gpt-5.6-terra": true,
+        "text-embedding-3-small": true,
+        "gpt-4o-transcribe": true
+      },
+      "embedding_dim": 1536,
+      "embed_tokens": 5,
+      "model_count": 124
+    },
+    {
+      "name": "greeting_ar",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "v2_generated",
+      "trace": {
+        "message": "مرحبا",
+        "channel": "instagram_dm",
+        "reason": "v2_generated",
+        "reply": "مرحباً! كيف فيني ساعدك اليوم؟",
+        "error": null,
+        "faq_direct": false,
+        "luna_called": true,
+        "tera_called": true,
+        "selected_source_ids": [],
+        "tool_trace": [
+          {
+            "tool": "list_published_cm_items",
+            "ok": true,
+            "class": "item_index",
+            "count": 0
+          }
+        ],
+        "luna_recommended_tera_effort": "low",
+        "retrieval_requested": "low",
+        "retrieval_effective": "low",
+        "answer_requested": "low",
+        "answer_effective": "low",
+        "media_actions": [],
+        "media_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "resource_actions": [],
+        "resource_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "draft_result": {
+          "ok": true,
+          "results": [],
+          "is_ai": false
+        },
+        "comment_rule_id": null,
+        "comment_rule_mode": null,
+        "comment_rule_action": null,
+        "metering": {
+          "customer_turn_id": "6211665675b845e19ecf534d5adb40df",
+          "tenant_id": "v10_live_cert_store",
+          "invocations": [
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "6211665675b845e19ecf534d5adb40df",
+              "operation": "luna_retrieval",
+              "provider": "openai",
+              "model": "gpt-5.6-luna",
+              "requested_reasoning_effort": "low",
+              "effective_reasoning_effort": "low",
+              "input_tokens": null,
+              "cached_input_tokens": null,
+              "output_tokens": null,
+              "reasoning_tokens": null,
+              "tool_rounds": 1,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            },
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "6211665675b845e19ecf534d5adb40df",
+              "operation": "tera_answer",
+              "provider": "openai",
+              "model": "gpt-5.6-terra",
+              "requested_reasoning_effort": "low",
+              "effective_reasoning_effort": "low",
+              "input_tokens": 1987,
+              "cached_input_tokens": null,
+              "output_tokens": 75,
+              "reasoning_tokens": null,
+              "tool_rounds": 0,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            }
+          ],
+          "ai_invocation_count": 2,
+          "latency_ms": 7893.803832936101
+        },
+        "prompt_tokens": 1987,
+        "cost_status": null,
+        "ai_called": true,
+        "claimed_sent": false
+      }
+    },
+    {
+      "name": "service_price_full_body",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "v2_generated",
+      "trace": {
+        "message": "قدي سعر Full Body؟",
+        "channel": "instagram_dm",
+        "reason": "v2_generated",
+        "reply": "سعر جلسة Full Body هو 299 دولار أمريكي.",
+        "error": null,
+        "faq_direct": false,
+        "luna_called": true,
+        "tera_called": true,
+        "selected_source_ids": [
+          "services:svc_full_body",
+          "prices:price_full"
+        ],
+        "tool_trace": [
+          {
+            "tool": "list_published_cm_items",
+            "ok": true,
+            "class": "item_index",
+            "count": 5
+          },
+          {
+            "tool": "read_published_cm_items",
+            "ok": true,
+            "class": "read_items",
+            "count": 2
+          }
+        ],
+        "luna_recommended_tera_effort": "low",
+        "retrieval_requested": "low",
+        "retrieval_effective": "low",
+        "answer_requested": "low",
+        "answer_effective": "low",
+        "media_actions": [],
+        "media_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "resource_actions": [],
+        "resource_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "draft_result": {
+          "ok": true,
+          "results": [],
+          "is_ai": false
+        },
+        "comment_rule_id": null,
+        "comment_rule_mode": null,
+        "comment_rule_action": null,
+        "metering": {
+          "customer_turn_id": "c93b34c4f76a4aaf8cfe721d97a16c1d",
+          "tenant_id": "v10_live_cert_store",
+          "invocations": [
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "c93b34c4f76a4aaf8cfe721d97a16c1d",
+              "operation": "luna_retrieval",
+              "provider": "openai",
+              "model": "gpt-5.6-luna",
+              "requested_reasoning_effort": "low",
+              "effective_reasoning_effort": "low",
+              "input_tokens": null,
+              "cached_input_tokens": null,
+              "output_tokens": null,
+              "reasoning_tokens": null,
+              "tool_rounds": 1,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            },
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "c93b34c4f76a4aaf8cfe721d97a16c1d",
+              "operation": "tera_answer",
+              "provider": "openai",
+              "model": "gpt-5.6-terra",
+              "requested_reasoning_effort": "low",
+              "effective_reasoning_effort": "low",
+              "input_tokens": 2127,
+              "cached_input_tokens": null,
+              "output_tokens": 86,
+              "reasoning_tokens": null,
+              "tool_rounds": 0,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            }
+          ],
+          "ai_invocation_count": 2,
+          "latency_ms": 6956.029791967012
+        },
+        "prompt_tokens": 2127,
+        "cost_status": null,
+        "ai_called": true,
+        "claimed_sent": false
+      },
+      "evidence_has_service": true
+    },
+    {
+      "name": "location_hours_antelias",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "v2_generated",
+      "trace": {
+        "message": "إيمتى بتسكروا بأنطلياس؟",
+        "channel": "instagram_dm",
+        "reason": "v2_generated",
+        "reply": "فرع أنطلياس بيسكّر الساعة ٧:٠٠ المسا.",
+        "error": null,
+        "faq_direct": false,
+        "luna_called": true,
+        "tera_called": true,
+        "selected_source_ids": [
+          "branches:br_antelias",
+          "opening_hours:oh_antelias"
+        ],
+        "tool_trace": [
+          {
+            "tool": "list_published_cm_items",
+            "ok": true,
+            "class": "item_index",
+            "count": 4
+          },
+          {
+            "tool": "read_published_cm_items",
+            "ok": true,
+            "class": "read_items",
+            "count": 2
+          }
+        ],
+        "luna_recommended_tera_effort": "low",
+        "retrieval_requested": "low",
+        "retrieval_effective": "low",
+        "answer_requested": "low",
+        "answer_effective": "low",
+        "media_actions": [],
+        "media_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "resource_actions": [],
+        "resource_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "draft_result": {
+          "ok": true,
+          "results": [],
+          "is_ai": false
+        },
+        "comment_rule_id": null,
+        "comment_rule_mode": null,
+        "comment_rule_action": null,
+        "metering": {
+          "customer_turn_id": "d289437db28341b283c798a9b72fbeda",
+          "tenant_id": "v10_live_cert_store",
+          "invocations": [
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "d289437db28341b283c798a9b72fbeda",
+              "operation": "luna_retrieval",
+              "provider": "openai",
+              "model": "gpt-5.6-luna",
+              "requested_reasoning_effort": "low",
+              "effective_reasoning_effort": "low",
+              "input_tokens": null,
+              "cached_input_tokens": null,
+              "output_tokens": null,
+              "reasoning_tokens": null,
+              "tool_rounds": 1,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            },
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "d289437db28341b283c798a9b72fbeda",
+              "operation": "tera_answer",
+              "provider": "openai",
+              "model": "gpt-5.6-terra",
+              "requested_reasoning_effort": "low",
+              "effective_reasoning_effort": "low",
+              "input_tokens": 2310,
+              "cached_input_tokens": null,
+              "output_tokens": 96,
+              "reasoning_tokens": null,
+              "tool_rounds": 0,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            }
+          ],
+          "ai_invocation_count": 2,
+          "latency_ms": 6886.376000009477
+        },
+        "prompt_tokens": 2310,
+        "cost_status": null,
+        "ai_called": true,
+        "claimed_sent": false
+      }
+    },
+    {
+      "name": "faq_direct_hours",
+      "label": "REAL DATABASE/RETRIEVAL",
+      "ok": true,
+      "reason": "faq_exact",
+      "trace": {
+        "message": "شو أوقات الدوام؟",
+        "channel": "instagram_dm",
+        "reason": "faq_exact",
+        "reply": "بيروت من 10:00 إلى 20:00. أنطلياس من 11:00 إلى 19:00.",
+        "error": null,
+        "faq_direct": true,
+        "luna_called": false,
+        "tera_called": false,
+        "selected_source_ids": [],
+        "tool_trace": [],
+        "luna_recommended_tera_effort": null,
+        "retrieval_requested": null,
+        "retrieval_effective": null,
+        "answer_requested": null,
+        "answer_effective": null,
+        "media_actions": [],
+        "media_delivery": {},
+        "resource_actions": [],
+        "resource_delivery": {},
+        "draft_result": {},
+        "comment_rule_id": null,
+        "comment_rule_mode": null,
+        "comment_rule_action": null,
+        "metering": {
+          "customer_turn_id": "6a654b572a5a4f6c838075457f4a5b76",
+          "tenant_id": "v10_live_cert_store",
+          "invocations": [
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "6a654b572a5a4f6c838075457f4a5b76",
+              "operation": "faq_direct_reply",
+              "provider": "none",
+              "model": "",
+              "requested_reasoning_effort": null,
+              "effective_reasoning_effort": null,
+              "input_tokens": null,
+              "cached_input_tokens": null,
+              "output_tokens": null,
+              "reasoning_tokens": null,
+              "tool_rounds": 0,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": false
+            }
+          ],
+          "ai_invocation_count": 0,
+          "latency_ms": 943.2297089369968
+        },
+        "prompt_tokens": null,
+        "cost_status": "none",
+        "ai_called": false,
+        "claimed_sent": false
+      }
+    },
+    {
+      "name": "faq_mixed_not_direct",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "v2_generated",
+      "trace": {
+        "message": "شو أوقات الدوام وبدي موعد الخميس؟",
+        "channel": "instagram_dm",
+        "reason": "v2_generated",
+        "reply": "أهلاً! أوقات الدوام يوم الخميس:\n\n1. بيروت: من 10:00 صباحاً إلى 8:00 مساءً\n2. أنطلياس: من 11:00 صباحاً إلى 7:00 مساءً\n\nلترتيب موعد الخميس، بأي فرع بتحب؟ وبعتلنا الاسم، العمر، الطول والمنطقة.",
+        "error": null,
+        "faq_direct": false,
+        "luna_called": true,
+        "tera_called": true,
+        "selected_source_ids": [
+          "opening_hours:oh_beirut",
+          "opening_hours:oh_antelias",
+          "branches:br_beirut",
+          "branches:br_antelias",
+          "requests_appointments:req_full_body"
+        ],
+        "tool_trace": [
+          {
+            "tool": "list_published_cm_items",
+            "ok": true,
+            "class": "item_index",
+            "count": 9
+          },
+          {
+            "tool": "list_request_definitions",
+            "ok": true,
+            "class": "request_definitions",
+            "count": 2
+          },
+          {
+            "tool": "get_safe_customer_profile",
+            "ok": true,
+            "class": "profile"
+          },
+          {
+            "tool": "get_request_definition",
+            "ok": true,
+            "class": "request_definition"
+          },
+          {
+            "tool": "read_published_cm_items",
+            "ok": true,
+            "class": "read_items",
+            "count": 5
+          }
+        ],
+        "luna_recommended_tera_effort": "medium",
+        "retrieval_requested": "low",
+        "retrieval_effective": "low",
+        "answer_requested": "medium",
+        "answer_effective": "medium",
+        "media_actions": [],
+        "media_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "resource_actions": [],
+        "resource_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "draft_result": {
+          "ok": true,
+          "results": [],
+          "is_ai": false
+        },
+        "comment_rule_id": null,
+        "comment_rule_mode": null,
+        "comment_rule_action": null,
+        "metering": {
+          "customer_turn_id": "04fb8b62b6174ea586c2cefc957fec40",
+          "tenant_id": "v10_live_cert_store",
+          "invocations": [
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "04fb8b62b6174ea586c2cefc957fec40",
+              "operation": "luna_retrieval",
+              "provider": "openai",
+              "model": "gpt-5.6-luna",
+              "requested_reasoning_effort": "low",
+              "effective_reasoning_effort": "low",
+              "input_tokens": null,
+              "cached_input_tokens": null,
+              "output_tokens": null,
+              "reasoning_tokens": null,
+              "tool_rounds": 1,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            },
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "04fb8b62b6174ea586c2cefc957fec40",
+              "operation": "tera_answer",
+              "provider": "openai",
+              "model": "gpt-5.6-terra",
+              "requested_reasoning_effort": "medium",
+              "effective_reasoning_effort": "medium",
+              "input_tokens": 3123,
+              "cached_input_tokens": null,
+              "output_tokens": 308,
+              "reasoning_tokens": null,
+              "tool_rounds": 0,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            }
+          ],
+          "ai_invocation_count": 2,
+          "latency_ms": 13028.461458045058
+        },
+        "prompt_tokens": 3123,
+        "cost_status": null,
+        "ai_called": true,
+        "claimed_sent": false
+      }
+    },
+    {
+      "name": "product_exact",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "v2_generated",
+      "trace": {
+        "message": "بدي After Care Cream",
+        "channel": "instagram_dm",
+        "reason": "v2_generated",
+        "reply": "أكيد، كريم After Care Cream متوفر بسعر 19 USD.\n\nإذا بدك تطلبه، ابعتلي:\n1. الاسم\n2. الكمية المطلوبة",
+        "error": null,
+        "faq_direct": false,
+        "luna_called": true,
+        "tera_called": true,
+        "selected_source_ids": [
+          "requests_appointments:req_cream"
+        ],
+        "tool_trace": [
+          {
+            "tool": "search_product_by_title",
+            "ok": true,
+            "class": "products"
+          },
+          {
+            "tool": "list_request_definitions",
+            "ok": true,
+            "class": "request_definitions",
+            "count": 2
+          },
+          {
+            "tool": "get_product_details",
+            "ok": true,
+            "class": "products"
+          },
+          {
+            "tool": "get_request_definition",
+            "ok": true,
+            "class": "request_definition"
+          },
+          {
+            "tool": "read_published_cm_items",
+            "ok": true,
+            "class": "read_items",
+            "count": 1
+          }
+        ],
+        "luna_recommended_tera_effort": "medium",
+        "retrieval_requested": "low",
+        "retrieval_effective": "low",
+        "answer_requested": "medium",
+        "answer_effective": "medium",
+        "media_actions": [],
+        "media_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "resource_actions": [],
+        "resource_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "draft_result": {
+          "ok": true,
+          "results": [],
+          "is_ai": false
+        },
+        "comment_rule_id": null,
+        "comment_rule_mode": null,
+        "comment_rule_action": null,
+        "metering": {
+          "customer_turn_id": "c66c22691b37499f923aef44ee1e222d",
+          "tenant_id": "v10_live_cert_store",
+          "invocations": [
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "c66c22691b37499f923aef44ee1e222d",
+              "operation": "luna_retrieval",
+              "provider": "openai",
+              "model": "gpt-5.6-luna",
+              "requested_reasoning_effort": "low",
+              "effective_reasoning_effort": "low",
+              "input_tokens": null,
+              "cached_input_tokens": null,
+              "output_tokens": null,
+              "reasoning_tokens": null,
+              "tool_rounds": 1,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            },
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "c66c22691b37499f923aef44ee1e222d",
+              "operation": "tera_answer",
+              "provider": "openai",
+              "model": "gpt-5.6-terra",
+              "requested_reasoning_effort": "medium",
+              "effective_reasoning_effort": "medium",
+              "input_tokens": 2591,
+              "cached_input_tokens": null,
+              "output_tokens": 133,
+              "reasoning_tokens": null,
+              "tool_rounds": 0,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            }
+          ],
+          "ai_invocation_count": 2,
+          "latency_ms": 7525.7498329738155
+        },
+        "prompt_tokens": 2591,
+        "cost_status": null,
+        "ai_called": true,
+        "claimed_sent": false
+      }
+    },
+    {
+      "name": "product_typo",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "v2_generated",
+      "trace": {
+        "message": "After Car Cream",
+        "channel": "instagram_dm",
+        "reason": "v2_generated",
+        "reply": "أهلاً! كريم After Care Cream متوفر بسعر 19 USD، ومتوفر بمقاسين Small وLarge.\n\nإذا بتحب تطلبه، خبرني:\n1. الاسم\n2. الكمية المطلوبة",
+        "error": null,
+        "faq_direct": false,
+        "luna_called": true,
+        "tera_called": true,
+        "selected_source_ids": [
+          "requests_appointments:req_cream",
+          "product:e4f9011d-97af-4d52-aea9-459f7abb43b1"
+        ],
+        "tool_trace": [
+          {
+            "tool": "list_request_definitions",
+            "ok": true,
+            "class": "request_definitions",
+            "count": 2
+          },
+          {
+            "tool": "search_product_by_title",
+            "ok": true,
+            "class": "products"
+          },
+          {
+            "tool": "list_published_cm_items",
+            "ok": true,
+            "class": "item_index",
+            "count": 4
+          },
+          {
+            "tool": "get_product_details",
+            "ok": true,
+            "class": "products"
+          },
+          {
+            "tool": "get_request_definition",
+            "ok": true,
+            "class": "request_definition"
+          },
+          {
+            "tool": "read_published_cm_items",
+            "ok": true,
+            "class": "read_items",
+            "count": 1
+          }
+        ],
+        "luna_recommended_tera_effort": "medium",
+        "retrieval_requested": "low",
+        "retrieval_effective": "low",
+        "answer_requested": "medium",
+        "answer_effective": "medium",
+        "media_actions": [],
+        "media_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "resource_actions": [],
+        "resource_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "draft_result": {
+          "ok": true,
+          "results": [],
+          "is_ai": false
+        },
+        "comment_rule_id": null,
+        "comment_rule_mode": null,
+        "comment_rule_action": null,
+        "metering": {
+          "customer_turn_id": "8b39b7c5d8eb4f6dadd97b11c5f554a9",
+          "tenant_id": "v10_live_cert_store",
+          "invocations": [
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "8b39b7c5d8eb4f6dadd97b11c5f554a9",
+              "operation": "luna_retrieval",
+              "provider": "openai",
+              "model": "gpt-5.6-luna",
+              "requested_reasoning_effort": "low",
+              "effective_reasoning_effort": "low",
+              "input_tokens": null,
+              "cached_input_tokens": null,
+              "output_tokens": null,
+              "reasoning_tokens": null,
+              "tool_rounds": 1,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            },
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "8b39b7c5d8eb4f6dadd97b11c5f554a9",
+              "operation": "tera_answer",
+              "provider": "openai",
+              "model": "gpt-5.6-terra",
+              "requested_reasoning_effort": "medium",
+              "effective_reasoning_effort": "medium",
+              "input_tokens": 2590,
+              "cached_input_tokens": null,
+              "output_tokens": 204,
+              "reasoning_tokens": null,
+              "tool_rounds": 0,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            }
+          ],
+          "ai_invocation_count": 2,
+          "latency_ms": 10075.808583991602
+        },
+        "prompt_tokens": 2590,
+        "cost_status": null,
+        "ai_called": true,
+        "claimed_sent": false
+      }
+    },
+    {
+      "name": "appointment_draft_create",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "v2_generated",
+      "trace": {
+        "message": "بدي احجز Full Body الخميس",
+        "channel": "instagram_dm",
+        "reason": "v2_generated",
+        "reply": "أكيد، فينا نرتّب طلب موعد Full Body ليوم الخميس. السعر المنشور للجلسة هو 299 دولار.\n\nبدي منك:\n1. الاسم\n2. العمر\n3. الطول\n4. المنطقة\n\nوبعدها بأكّد معك تفاصيل الطلب قبل إرساله.",
+        "error": null,
+        "faq_direct": false,
+        "luna_called": true,
+        "tera_called": true,
+        "selected_source_ids": [
+          "services:svc_full_body",
+          "prices:price_full",
+          "requests_appointments:req_full_body"
+        ],
+        "tool_trace": [
+          {
+            "tool": "list_open_drafts",
+            "ok": true,
+            "class": "open_drafts",
+            "count": 0
+          },
+          {
+            "tool": "list_request_definitions",
+            "ok": true,
+            "class": "request_definitions",
+            "count": 2
+          },
+          {
+            "tool": "list_published_cm_items",
+            "ok": true,
+            "class": "item_index",
+            "count": 11
+          },
+          {
+            "tool": "get_request_definition",
+            "ok": true,
+            "class": "request_definition"
+          },
+          {
+            "tool": "read_published_cm_items",
+            "ok": true,
+            "class": "read_items",
+            "count": 3
+          }
+        ],
+        "luna_recommended_tera_effort": "medium",
+        "retrieval_requested": "low",
+        "retrieval_effective": "low",
+        "answer_requested": "medium",
+        "answer_effective": "medium",
+        "media_actions": [],
+        "media_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "resource_actions": [],
+        "resource_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "draft_result": {
+          "ok": true,
+          "results": [],
+          "is_ai": false
+        },
+        "comment_rule_id": null,
+        "comment_rule_mode": null,
+        "comment_rule_action": null,
+        "metering": {
+          "customer_turn_id": "12e88f48cd714cab8ff4e88a10f08a44",
+          "tenant_id": "v10_live_cert_store",
+          "invocations": [
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "12e88f48cd714cab8ff4e88a10f08a44",
+              "operation": "luna_retrieval",
+              "provider": "openai",
+              "model": "gpt-5.6-luna",
+              "requested_reasoning_effort": "low",
+              "effective_reasoning_effort": "low",
+              "input_tokens": null,
+              "cached_input_tokens": null,
+              "output_tokens": null,
+              "reasoning_tokens": null,
+              "tool_rounds": 1,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            },
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "12e88f48cd714cab8ff4e88a10f08a44",
+              "operation": "tera_answer",
+              "provider": "openai",
+              "model": "gpt-5.6-terra",
+              "requested_reasoning_effort": "medium",
+              "effective_reasoning_effort": "medium",
+              "input_tokens": 2641,
+              "cached_input_tokens": null,
+              "output_tokens": 304,
+              "reasoning_tokens": null,
+              "tool_rounds": 0,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            }
+          ],
+          "ai_invocation_count": 2,
+          "latency_ms": 12550.978583050892
+        },
+        "prompt_tokens": 2641,
+        "cost_status": null,
+        "ai_called": true,
+        "claimed_sent": false
+      }
+    },
+    {
+      "name": "appointment_fields_add_replace",
+      "label": "REAL DATABASE/RETRIEVAL",
+      "ok": true,
+      "result": {
+        "created": {
+          "draft_id": "draft_0be68928f6a04450",
+          "tenant_id": "v10_live_cert_store",
+          "customer_id": "u_draft_fields",
+          "definition_id": "reqdef_d8bef87966c5",
+          "definition_revision": 1,
+          "destination": "appointment",
+          "values": {},
+          "missing_fields": [
+            "name",
+            "age",
+            "height",
+            "area",
+            "day"
+          ],
+          "items": [],
+          "linked_entities": [],
+          "status": "collecting",
+          "collected": [],
+          "ready_to_submit": false,
+          "submitted_request_id": null,
+          "created_at": "2026-08-16T21:39:19",
+          "updated_at": "2026-08-16T21:39:19",
+          "ok": true
+        },
+        "updated": {
+          "draft_id": "draft_0be68928f6a04450",
+          "tenant_id": "v10_live_cert_store",
+          "customer_id": "u_draft_fields",
+          "definition_id": "reqdef_d8bef87966c5",
+          "definition_revision": 1,
+          "destination": "appointment",
+          "values": {
+            "name": "نور",
+            "age": 28,
+            "height": 170,
+            "area": "Antelias",
+            "day": "Thursday"
+          },
+          "missing_fields": [],
+          "items": [],
+          "linked_entities": [],
+          "status": "ready",
+          "collected": [
+            "name",
+            "age",
+            "height",
+            "area",
+            "day"
+          ],
+          "ready_to_submit": true,
+          "submitted_request_id": null,
+          "created_at": "2026-08-16T21:39:19",
+          "updated_at": "2026-08-16T21:39:19",
+          "ok": true,
+          "rejected_fields": []
+        },
+        "added": {
+          "ok": false,
+          "error": "item_id_required"
+        },
+        "replaced": {
+          "draft_id": "draft_0be68928f6a04450",
+          "tenant_id": "v10_live_cert_store",
+          "customer_id": "u_draft_fields",
+          "definition_id": "reqdef_d8bef87966c5",
+          "definition_revision": 1,
+          "destination": "appointment",
+          "values": {
+            "name": "نور",
+            "age": 28,
+            "height": 170,
+            "area": "Antelias",
+            "day": "Thursday"
+          },
+          "missing_fields": [],
+          "items": [],
+          "linked_entities": [],
+          "status": "ready",
+          "collected": [
+            "name",
+            "age",
+            "height",
+            "area",
+            "day"
+          ],
+          "ready_to_submit": true,
+          "submitted_request_id": null,
+          "created_at": "2026-08-16T21:39:19",
+          "updated_at": "2026-08-16T21:39:19.928087",
+          "ok": true
+        }
+      }
+    },
+    {
+      "name": "multi_intent_appointment_order",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "v2_generated",
+      "trace": {
+        "message": "بدي موعد Full Body وكمان After Care Cream",
+        "channel": "instagram_dm",
+        "reason": "v2_generated",
+        "reply": "أكيد! جلسة Full Body سعرها 299 USD، وAfter Care Cream متوفر بسعر 19 USD.\n\nلنكمل الطلبين، ابعتيلي:\n1. الاسم\n2. العمر والطول والمنطقة للجلسة\n3. اليوم المفضّل للموعد\n4. كمية الكريم المطلوبة",
+        "error": null,
+        "faq_direct": false,
+        "luna_called": true,
+        "tera_called": true,
+        "selected_source_ids": [
+          "services:svc_full_body",
+          "prices:price_full",
+          "requests_appointments:req_full_body",
+          "requests_appointments:req_cream",
+          "product:e4f9011d-97af-4d52-aea9-459f7abb43b1"
+        ],
+        "tool_trace": [
+          {
+            "tool": "list_request_definitions",
+            "ok": true,
+            "class": "request_definitions",
+            "count": 2
+          },
+          {
+            "tool": "list_published_cm_items",
+            "ok": true,
+            "class": "item_index",
+            "count": 9
+          },
+          {
+            "tool": "search_product_by_title",
+            "ok": true,
+            "class": "products"
+          },
+          {
+            "tool": "get_request_definition",
+            "ok": true,
+            "class": "request_definition"
+          },
+          {
+            "tool": "get_request_definition",
+            "ok": true,
+            "class": "request_definition"
+          },
+          {
+            "tool": "read_published_cm_items",
+            "ok": true,
+            "class": "read_items",
+            "count": 3
+          },
+          {
+            "tool": "get_product_details",
+            "ok": true,
+            "class": "products"
+          },
+          {
+            "tool": "read_published_cm_items",
+            "ok": true,
+            "class": "read_items",
+            "count": 2
+          }
+        ],
+        "luna_recommended_tera_effort": "medium",
+        "retrieval_requested": "low",
+        "retrieval_effective": "low",
+        "answer_requested": "medium",
+        "answer_effective": "medium",
+        "media_actions": [],
+        "media_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "resource_actions": [],
+        "resource_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "draft_result": {
+          "ok": true,
+          "results": [],
+          "is_ai": false
+        },
+        "comment_rule_id": null,
+        "comment_rule_mode": null,
+        "comment_rule_action": null,
+        "metering": {
+          "customer_turn_id": "ad801d924fe844ae819fc880da26e5cd",
+          "tenant_id": "v10_live_cert_store",
+          "invocations": [
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "ad801d924fe844ae819fc880da26e5cd",
+              "operation": "luna_retrieval",
+              "provider": "openai",
+              "model": "gpt-5.6-luna",
+              "requested_reasoning_effort": "low",
+              "effective_reasoning_effort": "low",
+              "input_tokens": null,
+              "cached_input_tokens": null,
+              "output_tokens": null,
+              "reasoning_tokens": null,
+              "tool_rounds": 1,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            },
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "ad801d924fe844ae819fc880da26e5cd",
+              "operation": "tera_answer",
+              "provider": "openai",
+              "model": "gpt-5.6-terra",
+              "requested_reasoning_effort": "medium",
+              "effective_reasoning_effort": "medium",
+              "input_tokens": 3300,
+              "cached_input_tokens": null,
+              "output_tokens": 249,
+              "reasoning_tokens": null,
+              "tool_rounds": 0,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            }
+          ],
+          "ai_invocation_count": 2,
+          "latency_ms": 10555.142540950328
+        },
+        "prompt_tokens": 3300,
+        "cost_status": null,
+        "ai_called": true,
+        "claimed_sent": false
+      }
+    },
+    {
+      "name": "history_90min_window",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "injected_history filtered by conversation_window; 3h message excluded, 1m included",
+      "old_reason": "v2_generated",
+      "new_reason": "v2_generated",
+      "old_reply": "أكيد، لنكمّل موعد الـ Full Body 😊\n\nبعتيلنا:\n1. الاسم\n2. العمر\n3. الطول\n4. المنطقة\n5. اليوم المناسب إلك",
+      "new_reply": "أكيد 😊 لنكمّل طلب موعد Full Body، بحتاج منك:\n\n1. الاسم\n2. العمر\n3. الطول\n4. المنطقة\n5. اليوم المطلوب"
+    },
+    {
+      "name": "draft_pause_resume",
+      "label": "REAL DATABASE/RETRIEVAL",
+      "ok": true,
+      "result": {
+        "paused": {
+          "draft_id": "draft_bcbaefd4c6dd432b",
+          "tenant_id": "v10_live_cert_store",
+          "customer_id": "u_pause",
+          "definition_id": "reqdef_d8bef87966c5",
+          "definition_revision": 1,
+          "destination": "appointment",
+          "values": {},
+          "missing_fields": [
+            "name",
+            "age",
+            "height",
+            "area",
+            "day"
+          ],
+          "items": [],
+          "linked_entities": [],
+          "status": "paused",
+          "collected": [],
+          "ready_to_submit": false,
+          "submitted_request_id": null,
+          "created_at": "2026-08-16T21:39:50",
+          "updated_at": "2026-08-16T21:39:50",
+          "ok": true
+        },
+        "resumed": {
+          "draft_id": "draft_bcbaefd4c6dd432b",
+          "tenant_id": "v10_live_cert_store",
+          "customer_id": "u_pause",
+          "definition_id": "reqdef_d8bef87966c5",
+          "definition_revision": 1,
+          "destination": "appointment",
+          "values": {},
+          "missing_fields": [
+            "name",
+            "age",
+            "height",
+            "area",
+            "day"
+          ],
+          "items": [],
+          "linked_entities": [],
+          "status": "collecting",
+          "collected": [],
+          "ready_to_submit": false,
+          "submitted_request_id": null,
+          "created_at": "2026-08-16T21:39:50",
+          "updated_at": "2026-08-16T21:39:50.542896",
+          "ok": true
+        }
+      }
+    },
+    {
+      "name": "safety_benign_real_moderation",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "certainty": "allow",
+      "provider": "openai",
+      "reasons": [],
+      "note": "Block-path illegal strings were not sent to the public API."
+    },
+    {
+      "name": "ig_comment_business_knowledge",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "v2_comment_generated",
+      "trace": {
+        "message": "قدي سعر Full Body بأنطلياس وإيمتى بتسكروا؟",
+        "channel": "instagram_comment",
+        "reason": "v2_comment_generated",
+        "reply": "Full Body سعره 299 USD.\n\nفرع أنطلياس بيسكّر الساعة 19:00. للحجز ابعتولنا رسالة خاصة 😊",
+        "error": null,
+        "faq_direct": false,
+        "luna_called": true,
+        "tera_called": true,
+        "selected_source_ids": [
+          "comments:rule_ai_global",
+          "services:svc_full_body",
+          "prices:price_full",
+          "branches:br_antelias",
+          "opening_hours:oh_antelias"
+        ],
+        "tool_trace": [],
+        "luna_recommended_tera_effort": null,
+        "retrieval_requested": null,
+        "retrieval_effective": null,
+        "answer_requested": null,
+        "answer_effective": "medium",
+        "media_actions": [],
+        "media_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "resource_actions": [],
+        "resource_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "draft_result": {
+          "ok": true,
+          "results": [],
+          "is_ai": false
+        },
+        "comment_rule_id": "rule_ai_global",
+        "comment_rule_mode": "ai_guidance",
+        "comment_rule_action": "reply_comment",
+        "metering": {
+          "customer_turn_id": "610e8c6fc436461e823e070a7b0b575b",
+          "tenant_id": "v10_live_cert_store",
+          "invocations": [
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "610e8c6fc436461e823e070a7b0b575b",
+              "operation": "luna_retrieval",
+              "provider": "openai",
+              "model": "gpt-5.6-luna",
+              "requested_reasoning_effort": "low",
+              "effective_reasoning_effort": "low",
+              "input_tokens": null,
+              "cached_input_tokens": null,
+              "output_tokens": null,
+              "reasoning_tokens": null,
+              "tool_rounds": 1,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            },
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "610e8c6fc436461e823e070a7b0b575b",
+              "operation": "tera_answer",
+              "provider": "openai",
+              "model": "gpt-5.6-terra",
+              "requested_reasoning_effort": "medium",
+              "effective_reasoning_effort": "medium",
+              "input_tokens": 2759,
+              "cached_input_tokens": null,
+              "output_tokens": 123,
+              "reasoning_tokens": null,
+              "tool_rounds": 0,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            }
+          ],
+          "ai_invocation_count": 2,
+          "latency_ms": 8164.129290962592
+        },
+        "prompt_tokens": 2759,
+        "cost_status": null,
+        "ai_called": null,
+        "claimed_sent": false
+      },
+      "note": "Comment runtime only. No Meta Graph comment was posted."
+    },
+    {
+      "name": "fb_comment_business_knowledge",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "v2_comment_generated",
+      "trace": {
+        "message": "قدي سعر Full Body بأنطلياس وإيمتى بتسكروا؟",
+        "channel": "facebook_comment",
+        "reason": "v2_comment_generated",
+        "reply": "سعر جلسة Full Body هو 299 USD.\n\nفرع أنطلياس بيسكّر الساعة 7:00 مساءً. للحجز، فيك تبعتي لنا رسالة خاصة.",
+        "error": null,
+        "faq_direct": false,
+        "luna_called": true,
+        "tera_called": true,
+        "selected_source_ids": [
+          "comments:rule_ai_global",
+          "services:svc_full_body",
+          "prices:price_full",
+          "branches:br_antelias",
+          "opening_hours:oh_antelias"
+        ],
+        "tool_trace": [],
+        "luna_recommended_tera_effort": null,
+        "retrieval_requested": null,
+        "retrieval_effective": null,
+        "answer_requested": null,
+        "answer_effective": "medium",
+        "media_actions": [],
+        "media_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "resource_actions": [],
+        "resource_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "draft_result": {
+          "ok": true,
+          "results": [],
+          "is_ai": false
+        },
+        "comment_rule_id": "rule_ai_global",
+        "comment_rule_mode": "ai_guidance",
+        "comment_rule_action": "reply_comment",
+        "metering": {
+          "customer_turn_id": "dd19f525d11048e196dbd8f454a69a37",
+          "tenant_id": "v10_live_cert_store",
+          "invocations": [
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "dd19f525d11048e196dbd8f454a69a37",
+              "operation": "luna_retrieval",
+              "provider": "openai",
+              "model": "gpt-5.6-luna",
+              "requested_reasoning_effort": "low",
+              "effective_reasoning_effort": "low",
+              "input_tokens": null,
+              "cached_input_tokens": null,
+              "output_tokens": null,
+              "reasoning_tokens": null,
+              "tool_rounds": 1,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            },
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "dd19f525d11048e196dbd8f454a69a37",
+              "operation": "tera_answer",
+              "provider": "openai",
+              "model": "gpt-5.6-terra",
+              "requested_reasoning_effort": "medium",
+              "effective_reasoning_effort": "medium",
+              "input_tokens": 2756,
+              "cached_input_tokens": null,
+              "output_tokens": 136,
+              "reasoning_tokens": null,
+              "tool_rounds": 0,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            }
+          ],
+          "ai_invocation_count": 2,
+          "latency_ms": 7475.99695797544
+        },
+        "prompt_tokens": 2756,
+        "cost_status": null,
+        "ai_called": null,
+        "claimed_sent": false
+      },
+      "note": "Comment runtime only. No Meta Graph comment was posted."
+    },
+    {
+      "name": "deterministic_livev10test_dm",
+      "label": "REAL DATABASE/RETRIEVAL",
+      "ok": true,
+      "reason": "comment_rule_deterministic",
+      "trace": {
+        "message": "LIVEV10TEST",
+        "channel": "instagram_comment",
+        "reason": "comment_rule_deterministic",
+        "reply": "V10 live cert static DM. No second copy.",
+        "error": null,
+        "faq_direct": null,
+        "luna_called": false,
+        "tera_called": false,
+        "selected_source_ids": [],
+        "tool_trace": [],
+        "luna_recommended_tera_effort": null,
+        "retrieval_requested": null,
+        "retrieval_effective": null,
+        "answer_requested": null,
+        "answer_effective": null,
+        "media_actions": [],
+        "media_delivery": {},
+        "resource_actions": [],
+        "resource_delivery": {
+          "ok": true,
+          "items": [
+            {
+              "resource_ref": "cmed_3101f2989dd84d97a4dca0f09a7f9f14",
+              "resource_type": "file",
+              "source_item_id": "comments:rule_livev10",
+              "title": "Static comment file",
+              "status": "active"
+            }
+          ],
+          "ai_charged": false,
+          "idempotency_key": "",
+          "delivery_result": "resolved_pending_channel_send",
+          "claimed_sent": false,
+          "extra_tera_call": false
+        },
+        "draft_result": {},
+        "comment_rule_id": "rule_livev10",
+        "comment_rule_mode": "deterministic",
+        "comment_rule_action": "send_dm_static",
+        "metering": {
+          "customer_turn_id": "8073a883cdf7423e98d0a1109fcb20aa",
+          "tenant_id": "v10_live_cert_store",
+          "invocations": [
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "8073a883cdf7423e98d0a1109fcb20aa",
+              "operation": "comment_rule_deterministic",
+              "provider": "openai",
+              "model": "",
+              "requested_reasoning_effort": null,
+              "effective_reasoning_effort": null,
+              "input_tokens": null,
+              "cached_input_tokens": null,
+              "output_tokens": null,
+              "reasoning_tokens": null,
+              "tool_rounds": 0,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": false
+            }
+          ],
+          "ai_invocation_count": 0,
+          "latency_ms": 219.9237080058083
+        },
+        "prompt_tokens": null,
+        "cost_status": "none",
+        "ai_called": false,
+        "claimed_sent": false
+      }
+    },
+    {
+      "name": "deterministic_duplicate_second_dm",
+      "label": "BLOCKED",
+      "ok": false,
+      "blocker": "Meta already_replied layer not exercised; no safe test IG/FB account",
+      "first_failing_layer": "services/meta_comment_replies.py already_replied requires live Meta comment id",
+      "local_second_call_still_returns_static": true,
+      "trace": {
+        "message": "LIVEV10TEST",
+        "channel": "instagram_comment",
+        "reason": "comment_rule_deterministic",
+        "reply": "V10 live cert static DM. No second copy.",
+        "error": null,
+        "faq_direct": null,
+        "luna_called": false,
+        "tera_called": false,
+        "selected_source_ids": [],
+        "tool_trace": [],
+        "luna_recommended_tera_effort": null,
+        "retrieval_requested": null,
+        "retrieval_effective": null,
+        "answer_requested": null,
+        "answer_effective": null,
+        "media_actions": [],
+        "media_delivery": {},
+        "resource_actions": [],
+        "resource_delivery": {
+          "ok": true,
+          "items": [
+            {
+              "resource_ref": "cmed_3101f2989dd84d97a4dca0f09a7f9f14",
+              "resource_type": "file",
+              "source_item_id": "comments:rule_livev10",
+              "title": "Static comment file",
+              "status": "active"
+            }
+          ],
+          "ai_charged": false,
+          "idempotency_key": "",
+          "delivery_result": "resolved_pending_channel_send",
+          "claimed_sent": false,
+          "extra_tera_call": false
+        },
+        "draft_result": {},
+        "comment_rule_id": "rule_livev10",
+        "comment_rule_mode": "deterministic",
+        "comment_rule_action": "send_dm_static",
+        "metering": {
+          "customer_turn_id": "bd9727991f2541fd8208c58107d5b790",
+          "tenant_id": "v10_live_cert_store",
+          "invocations": [
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "bd9727991f2541fd8208c58107d5b790",
+              "operation": "comment_rule_deterministic",
+              "provider": "openai",
+              "model": "",
+              "requested_reasoning_effort": null,
+              "effective_reasoning_effort": null,
+              "input_tokens": null,
+              "cached_input_tokens": null,
+              "output_tokens": null,
+              "reasoning_tokens": null,
+              "tool_rounds": 0,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": false
+            }
+          ],
+          "ai_invocation_count": 0,
+          "latency_ms": 248.43295896425843
+        },
+        "prompt_tokens": null,
+        "cost_status": "none",
+        "ai_called": false,
+        "claimed_sent": false
+      }
+    },
+    {
+      "name": "comment_and_dm_dual",
+      "label": "REAL DATABASE/RETRIEVAL",
+      "ok": true,
+      "reason": "comment_rule_deterministic",
+      "trace": {
+        "message": "V10DUAL",
+        "channel": "instagram_comment",
+        "reason": "comment_rule_deterministic",
+        "reply": "تم، شيكي الخاص.",
+        "error": null,
+        "faq_direct": null,
+        "luna_called": false,
+        "tera_called": false,
+        "selected_source_ids": [],
+        "tool_trace": [],
+        "luna_recommended_tera_effort": null,
+        "retrieval_requested": null,
+        "retrieval_effective": null,
+        "answer_requested": null,
+        "answer_effective": null,
+        "media_actions": [],
+        "media_delivery": {},
+        "resource_actions": [],
+        "resource_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false,
+          "claimed_sent": false
+        },
+        "draft_result": {},
+        "comment_rule_id": "rule_both",
+        "comment_rule_mode": "deterministic",
+        "comment_rule_action": "reply_comment_and_dm_static",
+        "metering": {
+          "customer_turn_id": "dc16d8f9c2c64cdb89c87d8f9d02a45b",
+          "tenant_id": "v10_live_cert_store",
+          "invocations": [
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "dc16d8f9c2c64cdb89c87d8f9d02a45b",
+              "operation": "comment_rule_deterministic",
+              "provider": "openai",
+              "model": "",
+              "requested_reasoning_effort": null,
+              "effective_reasoning_effort": null,
+              "input_tokens": null,
+              "cached_input_tokens": null,
+              "output_tokens": null,
+              "reasoning_tokens": null,
+              "tool_rounds": 0,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": false
+            }
+          ],
+          "ai_invocation_count": 0,
+          "latency_ms": 210.5955840088427
+        },
+        "prompt_tokens": null,
+        "cost_status": "none",
+        "ai_called": false,
+        "claimed_sent": false
+      }
+    },
+    {
+      "name": "post_specific_rule",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "v2_comment_generated",
+      "trace": {
+        "message": "قدي سعر Full Body بأنطلياس وإيمتى بتسكروا؟",
+        "channel": "instagram_comment",
+        "reason": "v2_comment_generated",
+        "reply": "سعر جلسة Full Body هو 299 USD.\n\nفرع أنطلياس بيسكّر الساعة 19:00. للحجز، ابعتولنا رسالة خاصة.",
+        "error": null,
+        "faq_direct": false,
+        "luna_called": true,
+        "tera_called": true,
+        "selected_source_ids": [
+          "services:svc_full_body",
+          "prices:price_full",
+          "branches:br_antelias",
+          "opening_hours:oh_antelias",
+          "comments:rule_post_branch",
+          "comments:rule_ai_global"
+        ],
+        "tool_trace": [],
+        "luna_recommended_tera_effort": null,
+        "retrieval_requested": null,
+        "retrieval_effective": null,
+        "answer_requested": null,
+        "answer_effective": "medium",
+        "media_actions": [],
+        "media_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "resource_actions": [],
+        "resource_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "draft_result": {
+          "ok": true,
+          "results": [],
+          "is_ai": false
+        },
+        "comment_rule_id": "rule_post_branch",
+        "comment_rule_mode": "ai_guidance",
+        "comment_rule_action": "reply_comment",
+        "metering": {
+          "customer_turn_id": "ec9311f96acf4cddb231169f133d7cd9",
+          "tenant_id": "v10_live_cert_store",
+          "invocations": [
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "ec9311f96acf4cddb231169f133d7cd9",
+              "operation": "luna_retrieval",
+              "provider": "openai",
+              "model": "gpt-5.6-luna",
+              "requested_reasoning_effort": "low",
+              "effective_reasoning_effort": "low",
+              "input_tokens": null,
+              "cached_input_tokens": null,
+              "output_tokens": null,
+              "reasoning_tokens": null,
+              "tool_rounds": 1,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            },
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "ec9311f96acf4cddb231169f133d7cd9",
+              "operation": "tera_answer",
+              "provider": "openai",
+              "model": "gpt-5.6-terra",
+              "requested_reasoning_effort": "medium",
+              "effective_reasoning_effort": "medium",
+              "input_tokens": 3038,
+              "cached_input_tokens": null,
+              "output_tokens": 126,
+              "reasoning_tokens": null,
+              "tool_rounds": 0,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            }
+          ],
+          "ai_invocation_count": 2,
+          "latency_ms": 8065.0904580252245
+        },
+        "prompt_tokens": 3038,
+        "cost_status": null,
+        "ai_called": null,
+        "claimed_sent": false
+      }
+    },
+    {
+      "name": "inbound_product_image_tool",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "vision_rerank",
+      "trace": {
+        "tool": {
+          "ok": true,
+          "data": {
+            "tool": "find_product_by_image",
+            "ok": true,
+            "resolver": "vision_rerank",
+            "vision_used": true,
+            "candidate_count": 3,
+            "match_count": 1,
+            "matches": [
+              {
+                "id": "e4f9011d-97af-4d52-aea9-459f7abb43b1",
+                "title": "After Care Cream",
+                "name": "After Care Cream",
+                "status": "in_stock"
+              }
+            ],
+            "ambiguous": false
+          }
+        }
+      }
+    },
+    {
+      "name": "inbound_product_image_then_name",
+      "label": "REAL DATABASE/RETRIEVAL",
+      "ok": true,
+      "reason": "name_first",
+      "trace": {
+        "tool": {
+          "ok": true,
+          "data": {
+            "tool": "find_product_by_image",
+            "ok": true,
+            "resolver": "name_first",
+            "vision_used": false,
+            "candidate_count": 0,
+            "match_count": 1,
+            "matches": [
+              {
+                "id": "e4f9011d-97af-4d52-aea9-459f7abb43b1",
+                "title": "After Care Cream",
+                "name": "After Care Cream",
+                "status": "in_stock"
+              }
+            ],
+            "ambiguous": false
+          }
+        }
+      }
+    },
+    {
+      "name": "burger_vs_tattoo_images",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "burger_ids": [
+        "1205f9f2-7410-460d-9c2d-595f27d998c1"
+      ],
+      "tattoo_ids": [
+        "fc756de1-1ccd-4dc8-9969-f37c3ed689e8"
+      ]
+    },
+    {
+      "name": "inbound_image_wired_to_v2",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "v2_generated",
+      "trace": {
+        "message": "شو هيدا؟",
+        "channel": "instagram_dm",
+        "reason": "v2_generated",
+        "reply": "هيدا After Care Cream، متوفر حالياً وسعره 19 USD. متوفر بمقاس Small أو Large وباللون الأبيض.",
+        "error": null,
+        "faq_direct": false,
+        "luna_called": true,
+        "tera_called": true,
+        "selected_source_ids": [
+          "product:e4f9011d-97af-4d52-aea9-459f7abb43b1"
+        ],
+        "tool_trace": [
+          {
+            "tool": "find_product_by_image",
+            "ok": true,
+            "class": "products"
+          },
+          {
+            "tool": "list_published_cm_items",
+            "ok": true,
+            "class": "item_index",
+            "count": 3
+          },
+          {
+            "tool": "get_product_details",
+            "ok": true,
+            "class": "products"
+          }
+        ],
+        "luna_recommended_tera_effort": "medium",
+        "retrieval_requested": "low",
+        "retrieval_effective": "low",
+        "answer_requested": "medium",
+        "answer_effective": "medium",
+        "media_actions": [],
+        "media_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "resource_actions": [],
+        "resource_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "draft_result": {
+          "ok": true,
+          "results": [],
+          "is_ai": false
+        },
+        "comment_rule_id": null,
+        "comment_rule_mode": null,
+        "comment_rule_action": null,
+        "metering": {
+          "customer_turn_id": "75ab8d2097904389a1a18ff3165c8538",
+          "tenant_id": "v10_live_cert_store",
+          "invocations": [
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "75ab8d2097904389a1a18ff3165c8538",
+              "operation": "luna_retrieval",
+              "provider": "openai",
+              "model": "gpt-5.6-luna",
+              "requested_reasoning_effort": "low",
+              "effective_reasoning_effort": "low",
+              "input_tokens": null,
+              "cached_input_tokens": null,
+              "output_tokens": null,
+              "reasoning_tokens": null,
+              "tool_rounds": 1,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            },
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "75ab8d2097904389a1a18ff3165c8538",
+              "operation": "tera_answer",
+              "provider": "openai",
+              "model": "gpt-5.6-terra",
+              "requested_reasoning_effort": "medium",
+              "effective_reasoning_effort": "medium",
+              "input_tokens": 2258,
+              "cached_input_tokens": null,
+              "output_tokens": 200,
+              "reasoning_tokens": null,
+              "tool_rounds": 0,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            }
+          ],
+          "ai_invocation_count": 2,
+          "latency_ms": 14711.415416910313
+        },
+        "prompt_tokens": 2258,
+        "cost_status": null,
+        "ai_called": true,
+        "claimed_sent": false
+      },
+      "note": "image_media_id passed into V2; Meta social path no longer collapses to generic text."
+    },
+    {
+      "name": "voice_stt_then_v2",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "v2_generated",
+      "trace": {
+        "message": "مرحبا، بدي أعرف سعر Full Body",
+        "channel": "instagram_dm",
+        "reason": "v2_generated",
+        "reply": "أهلاً! سعر جلسة Full Body هو 299 دولار أمريكي.",
+        "error": null,
+        "faq_direct": false,
+        "luna_called": true,
+        "tera_called": true,
+        "selected_source_ids": [
+          "services:svc_full_body",
+          "prices:price_full"
+        ],
+        "tool_trace": [
+          {
+            "tool": "list_published_cm_items",
+            "ok": true,
+            "class": "item_index",
+            "count": 5
+          },
+          {
+            "tool": "read_published_cm_items",
+            "ok": true,
+            "class": "read_items",
+            "count": 2
+          }
+        ],
+        "luna_recommended_tera_effort": "low",
+        "retrieval_requested": "low",
+        "retrieval_effective": "low",
+        "answer_requested": "low",
+        "answer_effective": "low",
+        "media_actions": [],
+        "media_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "resource_actions": [],
+        "resource_delivery": {
+          "ok": true,
+          "items": [],
+          "ai_charged": false
+        },
+        "draft_result": {
+          "ok": true,
+          "results": [],
+          "is_ai": false
+        },
+        "comment_rule_id": null,
+        "comment_rule_mode": null,
+        "comment_rule_action": null,
+        "metering": {
+          "customer_turn_id": "c684d36e900c49bcb306016c09c0c8b9",
+          "tenant_id": "v10_live_cert_store",
+          "invocations": [
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "c684d36e900c49bcb306016c09c0c8b9",
+              "operation": "luna_retrieval",
+              "provider": "openai",
+              "model": "gpt-5.6-luna",
+              "requested_reasoning_effort": "low",
+              "effective_reasoning_effort": "low",
+              "input_tokens": null,
+              "cached_input_tokens": null,
+              "output_tokens": null,
+              "reasoning_tokens": null,
+              "tool_rounds": 1,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            },
+            {
+              "tenant_id": "v10_live_cert_store",
+              "customer_turn_id": "c684d36e900c49bcb306016c09c0c8b9",
+              "operation": "tera_answer",
+              "provider": "openai",
+              "model": "gpt-5.6-terra",
+              "requested_reasoning_effort": "low",
+              "effective_reasoning_effort": "low",
+              "input_tokens": 2151,
+              "cached_input_tokens": null,
+              "output_tokens": 89,
+              "reasoning_tokens": null,
+              "tool_rounds": 0,
+              "repair": false,
+              "provider_cost_usd": null,
+              "latency_ms": null,
+              "success": true,
+              "failure_stage": null,
+              "is_ai": true
+            }
+          ],
+          "ai_invocation_count": 2,
+          "latency_ms": 5937.271749950014
+        },
+        "prompt_tokens": 2151,
+        "cost_status": null,
+        "ai_called": true,
+        "claimed_sent": false
+      },
+      "transcript": "مرحبا، بدي أعرف سعر Full Body",
+      "stt_model": "whisper-1"
+    },
+    {
+      "name": "inbound_video_frames",
+      "label": "BLOCKED",
+      "ok": false,
+      "blocker": "ffmpeg_unavailable",
+      "first_failing_layer": "services/customer_reply_v2/inbound_video.py extract_bounded_video"
+    },
+    {
+      "name": "inbound_file_extract",
+      "label": "REAL DATABASE/RETRIEVAL",
+      "ok": true,
+      "pdf_status": "empty_pdf",
+      "txt_preview": "V10 test file: After Care Cream is in stock. Small/Large. White. $19.\n"
+    },
+    {
+      "name": "inbound_link_ssrf",
+      "label": "REAL DATABASE/RETRIEVAL",
+      "ok": true,
+      "error": "SSRFValidationError"
+    },
+    {
+      "name": "women_laser_photos",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "v2_generated",
+      "selected_source_ids": [
+        "services:svc_laser_women"
+      ],
+      "resource_refs": [
+        "cmed_39efb54963a04f248fa410f699cbe92f"
+      ],
+      "claimed_sent": false,
+      "luna_recommended_tera_effort": "low",
+      "answer_effective": "low",
+      "note": "Luna sees resource counts only. Tera send_resource is validated; claimed_sent stays false until channel send.",
+      "reply": "أكيد، رح أبعتلك صور إزالة الشعر بالليزر للنساء."
+    },
+    {
+      "name": "women_vs_service_files",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "service_ref": "cmed_7588d4791118480b8c1f3d9d7402fa0e",
+      "women_ref": "cmed_39efb54963a04f248fa410f699cbe92f",
+      "resource_refs": [
+        "cmed_39efb54963a04f248fa410f699cbe92f"
+      ]
+    },
+    {
+      "name": "product_image_outbound",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "v2_generated",
+      "media_delivery_ok": true,
+      "claimed_sent": false,
+      "note": "Meta Graph send not executed. media_actions/plan only."
+    },
+    {
+      "name": "product_video_outbound",
+      "label": "REAL DATABASE/RETRIEVAL",
+      "ok": true,
+      "result": {
+        "ok": true,
+        "items": [
+          {
+            "product_id": "e4f9011d-97af-4d52-aea9-459f7abb43b1",
+            "media_id": "prdim_7771479b4875411eb1b775dae9f415f3",
+            "media_type": "videos",
+            "sort_order": 1
+          }
+        ],
+        "ai_charged": false,
+        "idempotency_key": "c338802d46cd52ca",
+        "delivery_fingerprint": "c338802d46cd52ca",
+        "delivery_result": "resolved_pending_channel_send",
+        "extra_tera_call": false
+      },
+      "claimed_sent": false,
+      "note": "Stored product video MIME is sent where the channel supports video. No Meta Graph send in this cert."
+    },
+    {
+      "name": "link_outbound",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "v2_generated",
+      "reply": "ما عندي رابط متاح لـ After Care Cream حالياً. فيني أساعدك بأي تفاصيل ثانية عنه أو نكمل طلبه إذا حابّة."
+    },
+    {
+      "name": "file_outbound",
+      "label": "REAL OPENAI",
+      "ok": true,
+      "reason": "v2_generated",
+      "resource_delivery": {
+        "ok": true,
+        "items": [],
+        "ai_charged": false
+      },
+      "note": "AI Setup file send is planned via resource_actions; never claimed_sent before channel success."
+    },
+    {
+      "name": "meta_instagram_live",
+      "label": "BLOCKED",
+      "ok": false,
+      "blocker": "No isolated Meta App Role / test IG account bound to this test tenant",
+      "first_failing_layer": "safe test Instagram asset + webhook to isolated tenant"
+    },
+    {
+      "name": "meta_facebook_live",
+      "label": "BLOCKED",
+      "ok": false,
+      "blocker": "No isolated test Facebook Page bound to this test tenant",
+      "first_failing_layer": "safe test Facebook asset + webhook to isolated tenant"
+    },
+    {
+      "name": "real_webhook",
+      "label": "BLOCKED",
+      "ok": false,
+      "blocker": "No Meta test webhook delivery into this isolated process",
+      "first_failing_layer": "Meta signed webhook → tenant resolve → AI start → delivery"
+    },
+    {
+      "name": "whatsapp",
+      "label": "DISABLED BY PRODUCT POLICY",
+      "ok": false,
+      "blocker": "WHATSAPP_CLOUD_PUBLIC_AVAILABILITY is off; no approved test number in this isolated cert",
+      "first_failing_layer": "product policy public-availability OFF + missing approved test WA number",
+      "prod_flags_readonly": {
+        "public_availability": false,
+        "outbound_sends_enabled": false
+      }
+    }
+  ]
+}

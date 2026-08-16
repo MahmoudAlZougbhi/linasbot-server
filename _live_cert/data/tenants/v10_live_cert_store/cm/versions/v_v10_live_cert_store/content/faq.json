@@ -1,0 +1,31 @@
+{
+  "items": [
+    {
+      "qa_group_id": "faq_hours",
+      "revision": 7,
+      "status": "active",
+      "variants": [
+        {
+          "answer": "بيروت من 10:00 إلى 20:00. أنطلياس من 11:00 إلى 19:00.",
+          "language": "ar",
+          "question": "شو أوقات الدوام؟"
+        },
+        {
+          "answer": "Beirut 10:00–20:00. Antelias 11:00–19:00.",
+          "language": "en",
+          "question": "What are your opening hours?"
+        },
+        {
+          "answer": "Beyrouth 10:00–20:00. Antelias 11:00–19:00.",
+          "language": "fr",
+          "question": "Quels sont vos horaires ?"
+        },
+        {
+          "answer": "بيروت من 10:00 إلى 20:00. أنطلياس من 11:00 إلى 19:00.",
+          "language": "franco",
+          "question": "shu aw2at el dawam?"
+        }
+      ]
+    }
+  ]
+}

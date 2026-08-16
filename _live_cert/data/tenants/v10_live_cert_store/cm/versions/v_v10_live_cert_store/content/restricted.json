@@ -1,0 +1,17 @@
+{
+  "topics": [
+    {
+      "active": true,
+      "id": "tattoo_removal",
+      "keywords": [
+        "tattoo removal",
+        "إزالة الوشم"
+      ],
+      "labels": {
+        "ar": "إزالة الوشم",
+        "en": "Tattoo removal"
+      },
+      "refuse_template": "We do not offer tattoo removal."
+    }
+  ]
+}
