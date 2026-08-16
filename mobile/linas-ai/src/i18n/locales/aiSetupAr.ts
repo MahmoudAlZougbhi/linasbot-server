@@ -20,7 +20,7 @@ export const aiSetupAr = {
   aiSetupSec_style: 'الأسلوب والنبرة',
   aiSetupSec_dynamic_messages: 'التحيات',
   aiSetupSec_services: 'الخدمات',
-  aiSetupSec_branches: 'الموقع وساعات العمل',
+  aiSetupSec_branches: 'الموقع',
   aiSetupSec_opening_hours: 'ساعات العمل',
   aiSetupSec_prices: 'الخدمة',
   aiSetupSec_care: 'الرعاية',

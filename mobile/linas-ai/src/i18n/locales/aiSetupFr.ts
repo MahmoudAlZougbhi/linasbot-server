@@ -20,7 +20,7 @@ export const aiSetupFr = {
   aiSetupSec_style: 'Style et ton',
   aiSetupSec_dynamic_messages: 'Salutations',
   aiSetupSec_services: 'Services',
-  aiSetupSec_branches: 'Emplacement et horaires',
+  aiSetupSec_branches: 'Emplacement',
   aiSetupSec_opening_hours: 'Horaires',
   aiSetupSec_prices: 'Service',
   aiSetupSec_care: 'Soins',

@@ -73,7 +73,7 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
   },
   {
     id: 'branches',
-    title: 'Location and Opening Hours',
+    title: 'Location',
     description: 'Branches with map link and per-day opening hours.',
     mobileSupported: true,
   },
@@ -82,7 +82,6 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
     title: 'Opening Hours',
     description: 'Named schedules with Mon–Sun open hours or day off.',
     mobileSupported: true,
-    showInCmHub: false,
   },
   {
     id: 'prices',
