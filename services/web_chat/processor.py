@@ -19,7 +19,6 @@ from services.web_chat.operation import (
 from services.web_chat.operation_fence import fenced_failure_release
 from services.web_chat.operation_fsm import OperationFsmError, OperationState, stable_operation_key
 from services.web_chat.persistence import PersistFailure, PersistOutcome, persist_web_chat_message
-from services.web_chat.processor_v2_reply import generate_web_chat_reply_text as _generate_reply_text
 from services.web_chat.session_authority import verified_session_snapshot
 from services.web_chat.store import WebChatStoreBackend, WebChatVisitorSession, WebChatWidgetConfig, web_chat_store
 
@@ -30,6 +29,12 @@ class WebChatError(Exception):
         self.code = code
         self.message = message
         self.status_code = status_code
+
+
+async def _generate_reply_text(**kwargs: Any) -> str:
+    from services.web_chat.processor_v2_reply import generate_web_chat_reply_text
+
+    return await generate_web_chat_reply_text(**kwargs)
 
 
 def compose_web_user_id(visitor_session_id: str) -> str:
