@@ -16,7 +16,9 @@ from services.customer_reply_v2.flags import (
 )
 from services.customer_reply_v2.manifest import FIXED_ANSWER_SECTIONS, manifest_for_retrieval_luna
 from services.customer_reply_v2.models import RetrievalResult
+from services.customer_reply_v2.operational_titles import collect_operational_titles, inline_titles_for_luna
 from services.customer_reply_v2.retrieval_tools import RETRIEVAL_TOOL_SCHEMAS, ToolContext, dispatch_retrieval_tool
+from services.customer_reply_v2.tera_llm import normalize_tera_effort
 
 # Optional injectable for fixtures: async (messages, tools) -> OpenAI-like response
 LlmFn = Callable[..., Awaitable[Any]]
@@ -34,9 +36,13 @@ After reading evidence, respond with a single JSON object (no markdown) containi
   "missing_information_category": "",
   "confidence_category": "high|medium|low",
   "multi_intent": false,
-  "reason_codes": ["..."]
+  "reason_codes": ["..."],
+  "recommended_tera_effort": "low" | "medium"
 }
+recommended_tera_effort is required. Use "low" for a single simple question. Use "medium" for multi-intent, drafts, products+services, or comments that need careful public wording. Never use high or xhigh.
 At most two retrieval rounds are allowed. Prefer reading exact items over guessing.
+If operational_titles_has_more is true, call list_operational_titles until every title page is available. Never assume missing titles are unimportant.
+You NEVER receive AI Basics, Style, assistant identity, greeting, or tone bodies.
 """
 
 
@@ -244,8 +250,16 @@ async def run_retrieval_luna(
             if comment_context and k in comment_context
         },
         "faq_candidates": list(faq_candidates or []),
-        "note": "Use tools to list/read selectable sections only. Do not write the reply.",
+        "note": "Use tools to list/read selectable sections only. Do not write the reply. Never request AI Basics or Style bodies.",
     }
+    try:
+        from services.cm.version_store import load_published_content as _load_pub
+
+        _pointer, published_sections = _load_pub(tenant_id)
+        user_payload.update(inline_titles_for_luna(collect_operational_titles(published_sections)))
+    except Exception:
+        user_payload["operational_titles"] = []
+        user_payload["operational_title_count"] = 0
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": _RETRIEVAL_SYSTEM},
         {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
@@ -331,6 +345,7 @@ async def run_retrieval_luna(
         active_product_id=ctx.active_product_id,
         requested_reasoning_effort=_luna_requested_effort(),
         effective_reasoning_effort=_luna_effective_effort(model),
+        recommended_tera_effort=normalize_tera_effort(final_plan.get("recommended_tera_effort")),
     )
 
 
@@ -374,6 +389,7 @@ async def _run_scripted(
         active_product_id=ctx.active_product_id,
         requested_reasoning_effort=_luna_requested_effort(),
         effective_reasoning_effort=_luna_effective_effort(model),
+        recommended_tera_effort=normalize_tera_effort(final_plan.get("recommended_tera_effort")),
     )
 
 

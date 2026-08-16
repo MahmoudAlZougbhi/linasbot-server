@@ -2,8 +2,8 @@
 
 Binding rules:
 - Owner surfaces → gpt-5.6-sol + reasoning mode standard + effort low|high
-- Customer social retrieval (evidence selection) → gpt-5.6-luna
-- Customer social final answer + repair → gpt-5.6-terra + standard + medium
+- Customer social retrieval (evidence selection) → gpt-5.6-luna + low
+- Customer social final answer + repair → gpt-5.6-terra + standard + low|medium
 - Never Luna for final customer replies; never silent model substitutes.
 - No Pro mode. No silent model/effort overrides from env.
 """
@@ -18,7 +18,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
 OwnerEffort = Literal["low", "high"]
-CustomerEffort = Literal["medium"]
+CustomerEffort = Literal["low", "medium"]
 ReasoningMode = Literal["standard"]
 ReasoningEffort = Literal["none", "low", "medium", "high"]
 ModelSurface = Literal[
@@ -336,8 +336,9 @@ def resolve_customer_social_policy(
     continuation: bool = False,
     regeneration: bool = False,
     request_id: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> ModelPolicyDecision:
-    """Customer final answer + repair LLM calls → Terra + medium. Never Luna."""
+    """Customer final answer + repair LLM calls → Terra + low|medium. Never Luna."""
     ch = (channel or "").strip().lower()
     if surface is None:
         if regeneration or continuation:
@@ -348,7 +349,10 @@ def resolve_customer_social_policy(
             surface = "customer_fb_dm"
         else:
             surface = "customer_ig_dm"
-    reason = "customer_social_terra_medium"
+    effort: CustomerEffort = "medium"
+    if str(reasoning_effort or "").strip().lower() == "low":
+        effort = "low"
+    reason = f"customer_social_terra_{effort}"
     if regeneration:
         reason = "customer_social_regeneration"
     elif continuation:
@@ -357,7 +361,7 @@ def resolve_customer_social_policy(
         surface=surface,
         model=MODEL_CUSTOMER_TERRA,
         reasoning_mode=REASONING_MODE_STANDARD,
-        reasoning_effort="medium",
+        reasoning_effort=effort,
         reason=reason,
         request_id=request_id or _new_request_id(surface),
     )
@@ -368,13 +372,21 @@ def resolve_customer_retrieval_policy(
     channel: str = "instagram_dm",
     request_id: str | None = None,
 ) -> ModelPolicyDecision:
-    """Customer evidence retrieval only → Luna. Never writes the customer reply."""
+    """Customer evidence retrieval only → Luna low. Never writes the customer reply."""
     _ = channel  # channel reserved for telemetry callers
+    effort: ReasoningEffort = "low"
+    try:
+        from services.customer_reply_v2.flags import customer_ai_v10_runtime_enabled
+
+        if not customer_ai_v10_runtime_enabled():
+            effort = "none"
+    except Exception:
+        effort = "low"
     return ModelPolicyDecision(
         surface="customer_social_retrieval",
         model=MODEL_CUSTOMER_LUNA,
         reasoning_mode=REASONING_MODE_STANDARD,
-        reasoning_effort="none",
+        reasoning_effort=effort,
         reason="customer_social_retrieval_luna",
         request_id=request_id or _new_request_id("customer_social_retrieval"),
     )

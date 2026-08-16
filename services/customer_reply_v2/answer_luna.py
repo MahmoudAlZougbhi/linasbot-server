@@ -9,9 +9,10 @@ import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from services.customer_reply_v2.ai_profile import load_tera_ai_context
 from services.customer_reply_v2.flags import customer_answer_model_name
-from services.customer_reply_v2.manifest import load_fixed_answer_context
 from services.customer_reply_v2.models import AnswerLunaResult, EvidenceRecord, RetrievalResult
+from services.customer_reply_v2.tera_llm import create_tera_completion, normalize_tera_effort
 from services.response_formatting import RESPONSE_FORMATTING_RULES
 
 LlmFn = Callable[..., Awaitable[Any]]
@@ -121,6 +122,7 @@ def build_answer_messages(
         "language_rule": _language_rule(reply_lang),
         "language_policy": fixed_context.get("languages") or {},
         "customer_facts": customer_profile,
+        "ai_profile": fixed_context.get("ai_profile") or {},
         "ai_basics": fixed_context.get("ai_basics") or {},
         "style": fixed_context.get("style") or {},
         "evidence_status": evidence_status,
@@ -158,7 +160,10 @@ def answer_context_has_full_basics_and_style(messages: list[dict[str, Any]]) -> 
     blob = json.dumps(messages, ensure_ascii=False)
     # Nested user payload is itself JSON-encoded, so quotes may be escaped.
     return (
-        ("ai_basics" in blob) and ("style" in blob) and ("advanced_instructions" in blob or "identity_summary" in blob)
+        ("ai_profile" in blob)
+        and ("ai_basics" in blob)
+        and ("style" in blob)
+        and ("advanced_instructions" in blob or "identity_summary" in blob)
     )
 
 
@@ -179,43 +184,15 @@ async def _default_llm(
     *,
     channel: str = "instagram_dm",
     regeneration: bool = False,
+    reasoning_effort: str = "medium",
 ) -> Any:
-    from services.llm_core_service import build_chat_completion_kwargs, client
-    from services.model_policy import emit_model_policy_trace, resolve_customer_social_policy
-
-    if tools:
-        from services.requests.capture_answer_loop import capture_tools_allowed
-
-        if not capture_tools_allowed(tools):
-            raise RuntimeError("Answer Tera must not receive retrieval tools")
-    policy = resolve_customer_social_policy(channel=channel, regeneration=regeneration)
-    model = customer_answer_model_name()
-    if model != policy.model:
-        raise RuntimeError(f"customer_answer_model_misconfigured: answer model {model!r} != policy {policy.model!r}")
-    kwargs = build_chat_completion_kwargs(
-        model=model,
-        messages=[{"role": "user", "content": "placeholder"}],
-        max_tokens=900,
-        temperature=0.3,
-        reasoning_effort=str(policy.reasoning_effort),
-        has_function_tools=bool(tools),
+    return await create_tera_completion(
+        messages=messages,
+        tools=tools,
+        channel=channel,
+        regeneration=regeneration,
+        reasoning_effort=reasoning_effort,
     )
-    kwargs["messages"] = messages
-    kwargs["model"] = model
-    if tools:
-        kwargs["tools"] = tools
-        kwargs["tool_choice"] = "auto"
-    extra = {
-        "role": "answer",
-        "stage": "answer" if not regeneration else "repair",
-        "requested_reasoning_effort": str(policy.reasoning_effort),
-        "effective_reasoning_effort": kwargs.get("reasoning_effort"),
-    }
-    emit_model_policy_trace(policy, extra=extra)
-    response = await client.chat.completions.create(**kwargs)
-    response._linas_requested_reasoning_effort = str(policy.reasoning_effort)
-    response._linas_effective_reasoning_effort = kwargs.get("reasoning_effort")
-    return response
 
 
 def _parse_answer(content: str) -> dict[str, Any]:
@@ -265,7 +242,8 @@ async def run_answer_luna(
 ) -> AnswerLunaResult:
     """Run Answer Tera (kept export name for callers/tests)."""
     model = customer_answer_model_name()
-    fixed = load_fixed_answer_context(tenant_id)
+    tera_effort = normalize_tera_effort(getattr(retrieval, "recommended_tera_effort", None))
+    fixed = load_tera_ai_context(tenant_id)
     revision = str(fixed.get("published_revision") or "")
     request_guidance = ""
     from services.requests.config_loader import load_published_requests_config, requests_capture_active
@@ -305,9 +283,9 @@ async def run_answer_luna(
             safe_failure_category=data.get("safe_failure_category"),
             requested_model=model,
             returned_model=model,
-            reasoning_effort="medium",
-            requested_reasoning_effort="medium",
-            effective_reasoning_effort="medium",
+            reasoning_effort=tera_effort,
+            requested_reasoning_effort=tera_effort,
+            effective_reasoning_effort=tera_effort,
             stage="repair" if repair_failures else "answer",
             raw_structured=data,
         )
@@ -334,7 +312,14 @@ async def run_answer_luna(
         else None
     )
 
-    llm = llm_fn or (lambda **kw: _default_llm(**kw, channel=channel, regeneration=bool(repair_failures)))
+    llm = llm_fn or (
+        lambda **kw: _default_llm(
+            **kw,
+            channel=channel,
+            regeneration=bool(repair_failures),
+            reasoning_effort=tera_effort,
+        )
+    )
     try:
         response = await llm(messages=messages, tools=capture_tools or None)
         if capture_tools and capture_ctx is not None:
@@ -353,9 +338,9 @@ async def run_answer_luna(
             safe_failure_category="model_unavailable",
             requested_model=model,
             returned_model="",
-            reasoning_effort="medium",
-            requested_reasoning_effort="medium",
-            effective_reasoning_effort="medium",
+            reasoning_effort=tera_effort,
+            requested_reasoning_effort=tera_effort,
+            effective_reasoning_effort=tera_effort,
             stage="repair" if repair_failures else "answer",
             raw_structured={"error": str(exc), "blocker": "answer_model_unavailable"},
         )

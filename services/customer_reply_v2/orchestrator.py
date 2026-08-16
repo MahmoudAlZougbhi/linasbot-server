@@ -461,6 +461,7 @@ async def run_customer_reply_v2_dm(
             "faq": faq.metadata or {},
             "faq_direct_reply": False,
             "flags": flags_snapshot(),
+            "luna_recommended_tera_effort": retrieval.recommended_tera_effort,
             "authoritative_selector": "retrieval_luna",
             "classic_fallback": False,
             "active_product_id": retrieval.active_product_id,

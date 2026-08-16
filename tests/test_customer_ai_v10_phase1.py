@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -173,38 +172,42 @@ async def test_dm_payload_includes_channel_and_history(v2_env):
 
 
 @pytest.mark.asyncio
-async def test_tera_tools_telemetry_does_not_lie_about_medium(monkeypatch: pytest.MonkeyPatch):
+async def test_tera_tools_telemetry_matches_requested_effort(monkeypatch: pytest.MonkeyPatch):
+    from types import SimpleNamespace
+
     from services.customer_reply_v2 import answer_luna as al
     from services.model_policy import MODEL_CUSTOMER_TERRA
 
     captured: dict = {}
 
     class _FakeClient:
+        class responses:
+            @staticmethod
+            async def create(**kwargs):
+                captured.update(kwargs)
+                return SimpleNamespace(
+                    output_text='{"reply_text":"hi","grounding_status":"grounded"}',
+                    output=[],
+                    model=MODEL_CUSTOMER_TERRA,
+                    usage=None,
+                )
+
         class chat:
             class completions:
                 @staticmethod
                 async def create(**kwargs):
-                    captured.update(kwargs)
-                    msg = MagicMock()
-                    msg.content = '{"reply_text":"hi","grounding_status":"grounded"}'
-                    msg.tool_calls = None
-                    choice = MagicMock()
-                    choice.message = msg
-                    resp = MagicMock()
-                    resp.choices = [choice]
-                    resp.model = MODEL_CUSTOMER_TERRA
-                    resp.usage = None
-                    return resp
+                    raise AssertionError("V10 Tera+tools must use Responses API")
 
     monkeypatch.setattr("services.llm_core_service.client", _FakeClient)
     response = await al._default_llm(
         [{"role": "user", "content": "{}"}],
         tools=[{"type": "function", "function": {"name": "create_customer_request", "parameters": {}}}],
         channel="instagram_dm",
+        reasoning_effort="low",
     )
-    assert captured["reasoning_effort"] == "none"
-    assert response._linas_requested_reasoning_effort == "medium"
-    assert response._linas_effective_reasoning_effort == "none"
+    assert captured["reasoning"]["effort"] == "low"
+    assert response._linas_requested_reasoning_effort == "low"
+    assert response._linas_effective_reasoning_effort == "low"
 
 
 def test_v10_flag_rollback_restores_three_hour_window(monkeypatch):

@@ -19,10 +19,10 @@ def _truthy(name: str, default: str = "false") -> bool:
 
 
 def customer_ai_v10_runtime_enabled() -> bool:
-    """Customer AI V10 runtime (safety, 90m history, channel metadata, metering, FAQ direct).
+    """Customer AI V10 runtime (safety, 90m history, metering, FAQ, Luna low, Tera low/medium).
 
-    Rollback: CUSTOMER_AI_V10_RUNTIME=false restores the pre-v10 window, skips
-    the new safety/metadata packaging, and uses the legacy FAQ localize path.
+    Rollback: CUSTOMER_AI_V10_RUNTIME=false restores the pre-v10 window, legacy FAQ
+    localize path, Luna effort none, and chat.completions Tera+tools clamp.
     Default on.
     """
     raw = os.getenv("CUSTOMER_AI_V10_RUNTIME")

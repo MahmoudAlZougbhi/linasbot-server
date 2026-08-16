@@ -130,6 +130,7 @@ class RetrievalResult:
     effective_reasoning_effort: str | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    recommended_tera_effort: str | None = None
 
 
 @dataclass
