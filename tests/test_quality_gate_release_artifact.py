@@ -211,6 +211,16 @@ def test_portable_runtime_self_checks_are_bytecode_free_and_tree_stable() -> Non
     source = WORKFLOW.read_text(encoding="utf-8")
     assert f"LINAS_PYTHON_RUNTIME_TREE_SHA256: {RUNTIME_TREE}" in source
     assert "e63f572b11b2cdf1bb9b07abecca61b6f25df5312601d7c6cf55b1139ece4726" not in source
+    assert source.count("verify_runtime_archive_layout(Path(sys.argv[1]))") == 3
+    release_contract = _step(parsed["jobs"]["release-artifact"], "Assemble and verify closed release artifact")["run"]
+    for expected in (
+        "linas-production-runtime-contract",
+        "sudo -n /usr/bin/install -m 0600 -o root -g root",
+        "/usr/bin/python3 -B -I -S",
+        "extract_runtime_archive",
+        "verify_runtime_before_use",
+    ):
+        assert expected in release_contract
 
     for job_name, step_name in (
         ("backend", "Install exact production Python runtime"),

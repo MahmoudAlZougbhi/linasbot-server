@@ -43,7 +43,14 @@ def write_all(descriptor: int, payload: bytes) -> None:
 
 
 @contextmanager
-def open_regular(path: Path, *, max_bytes: int) -> Iterator[tuple[BinaryIO, os.stat_result]]:
+def open_regular(
+    path: Path,
+    *,
+    max_bytes: int,
+    min_bytes: int = 1,
+) -> Iterator[tuple[BinaryIO, os.stat_result]]:
+    if not 0 <= min_bytes <= max_bytes:
+        raise ProvisionError("authenticated file size bounds are invalid")
     try:
         before = path.lstat()
         if (
@@ -52,7 +59,7 @@ def open_regular(path: Path, *, max_bytes: int) -> Iterator[tuple[BinaryIO, os.s
             or before.st_uid != EXPECTED_UID
             or before.st_gid != EXPECTED_GID
             or before.st_nlink != 1
-            or before.st_size < 1
+            or before.st_size < min_bytes
             or before.st_size > max_bytes
         ):
             raise ProvisionError(f"unsafe root-owned regular file: {path}")
@@ -81,9 +88,9 @@ def read_regular(path: Path, *, max_bytes: int) -> bytes:
         return payload
 
 
-def file_evidence(path: Path, *, max_bytes: int) -> tuple[str, int]:
+def file_evidence(path: Path, *, max_bytes: int, min_bytes: int = 1) -> tuple[str, int]:
     digest = hashlib.sha256()
-    with open_regular(path, max_bytes=max_bytes) as (handle, before):
+    with open_regular(path, max_bytes=max_bytes, min_bytes=min_bytes) as (handle, before):
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
         return digest.hexdigest(), before.st_size
@@ -199,8 +206,10 @@ def _members(bundle: tarfile.TarFile) -> list[tarfile.TarInfo]:
         members.append(member)
         if len(members) > MAX_MEMBERS or total > MAX_TOTAL_BYTES:
             raise ProvisionError("runtime archive exceeds reviewed resource bounds")
-    if not members or kinds.get("python") != "directory":
-        raise ProvisionError("runtime archive lacks its exact root directory")
+    if not members:
+        raise ProvisionError("runtime archive is empty")
+    if kinds.get("python") not in {None, "directory"}:
+        raise ProvisionError("runtime archive fixed root is not a directory")
     for name in kinds:
         parent = posixpath.dirname(name)
         while parent and parent != "python":
@@ -208,6 +217,34 @@ def _members(bundle: tarfile.TarFile) -> list[tarfile.TarInfo]:
                 raise ProvisionError("runtime archive places a member beneath a link or file")
             parent = posixpath.dirname(parent)
     return members
+
+
+def verify_runtime_archive_layout(path: Path) -> tuple[int, int]:
+    """Validate the provider archive layout without claiming root-owned file authority."""
+
+    try:
+        before = path.lstat()
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or stat.S_ISLNK(before.st_mode)
+            or before.st_nlink != 1
+            or not 1 <= before.st_size <= MAX_ARCHIVE_BYTES
+        ):
+            raise ProvisionError("runtime archive layout input is unsafe")
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0))
+        with os.fdopen(descriptor, "rb") as raw:
+            opened = os.fstat(raw.fileno())
+            identity = ("st_dev", "st_ino", "st_size", "st_mtime_ns")
+            if any(getattr(before, key) != getattr(opened, key) for key in identity):
+                raise ProvisionError("runtime archive changed while opening")
+            with tarfile.open(fileobj=raw, mode="r:gz") as bundle:
+                members = _members(bundle)
+            after = os.fstat(raw.fileno())
+            if any(getattr(opened, key) != getattr(after, key) for key in identity):
+                raise ProvisionError("runtime archive changed while inspecting")
+    except (OSError, tarfile.TarError) as exc:
+        raise ProvisionError("runtime archive layout cannot be inspected") from exc
+    return len(members), sum(member.size for member in members if member.isfile())
 
 
 def _mode(member: tarfile.TarInfo) -> int:
@@ -383,7 +420,7 @@ def runtime_tree_evidence(root: Path) -> tuple[str, int]:
             elif stat.S_ISREG(info.st_mode) and info.st_nlink == 1:
                 if stat.S_IMODE(info.st_mode) & 0o022:
                     raise ProvisionError("runtime file is group/world writable")
-                file_sha, size = file_evidence(path, max_bytes=MAX_MEMBER_BYTES)
+                file_sha, size = file_evidence(path, max_bytes=MAX_MEMBER_BYTES, min_bytes=0)
                 record.update({"type": "file", "size": size, "sha256": file_sha})
             else:
                 raise ProvisionError("runtime tree contains a hardlink or special object")

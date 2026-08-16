@@ -205,7 +205,7 @@ jobs:
           set -euo pipefail
           umask 077
           BRIDGE=scripts/ha/python_runtime_provision_workflow_bootstrap.py
-          EXPECTED=4618bde835b73cde2a646a029023e07b0bc2e62f360a88ef033f4275aa3f1612
+          EXPECTED=50ee3efa146d4439946f176764afb603067ad107cf362316865eafbe3e818e73
           test -f "$BRIDGE" && test ! -L "$BRIDGE"
           [ "$(/usr/bin/sha256sum "$BRIDGE" | /usr/bin/awk '{print $1}')" = "$EXPECTED" ]
           mkdir -m 0700 transfer
@@ -441,7 +441,7 @@ jobs:
             sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
               PATH=/usr/sbin:/usr/bin:/sbin:/bin \
               /usr/bin/python3 -B -I -S - "$BRIDGE_SOURCE" "$TRUSTED_BRIDGE" \
-              4618bde835b73cde2a646a029023e07b0bc2e62f360a88ef033f4275aa3f1612 "$SOURCE_UID" <<'PY'
+              50ee3efa146d4439946f176764afb603067ad107cf362316865eafbe3e818e73 "$SOURCE_UID" <<'PY'
             import hashlib, os, re, stat, sys
             from pathlib import Path
             source, target, expected, uid = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], int(sys.argv[4])

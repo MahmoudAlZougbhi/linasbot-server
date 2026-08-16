@@ -31,6 +31,7 @@ SHA_RE: Final = re.compile(r"[0-9a-f]{40}")
 TX_RE: Final = re.compile(r"pyr_[0-9a-f]{32}")
 OS_PYTHON: Final = "/usr/bin/python3"
 CHILD_ENV: Final = {"HOME": "/root", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PATH": "/usr/sbin:/usr/bin:/sbin:/bin"}
+SENSITIVE_CHILD_VALUE_RE: Final = re.compile(r"(?i)\b(authorization|cookie|key|password|secret|token)\s*[:=]\s*\S+")
 
 
 class BootstrapError(RuntimeError):
@@ -301,6 +302,14 @@ def _prepare(values: list[str]) -> int:
     return 0
 
 
+def _child_failure_detail(stderr: bytes) -> str:
+    decoded = stderr.decode("utf-8", "replace")
+    lines = [line.strip() for line in decoded.splitlines() if line.strip()]
+    detail = lines[-1] if lines else "no diagnostic detail"
+    detail = "".join(character if 32 <= ord(character) < 127 else "?" for character in detail)
+    return SENSITIVE_CHILD_VALUE_RE.sub(r"\1=[REDACTED]", detail)[:400]
+
+
 def _invoke(command: list[str], *, input_bytes: bytes | None = None) -> str:
     result = subprocess.run(
         command,
@@ -312,7 +321,7 @@ def _invoke(command: list[str], *, input_bytes: bytes | None = None) -> str:
         env=CHILD_ENV,
     )
     if result.returncode:
-        raise BootstrapError(f"trusted child failed: {result.stderr.decode('utf-8', 'replace')[:400]}")
+        raise BootstrapError(f"trusted child failed: {_child_failure_detail(result.stderr)}")
     return result.stdout.decode("utf-8", "strict")
 
 

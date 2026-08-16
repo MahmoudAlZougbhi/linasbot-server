@@ -523,13 +523,13 @@ def test_runtime_extraction_retries_partial_writes_and_rejects_hardlinks(
     tmp_path.chmod(0o755)
     runtime_tar = tmp_path / "runtime.tar.gz"
     with tarfile.open(runtime_tar, "w:gz") as bundle:
-        root = tarfile.TarInfo("python")
-        root.type, root.mode = tarfile.DIRTYPE, 0o777
-        bundle.addfile(root)
         data = b"runtime-member" * 1000
         item = tarfile.TarInfo("python/data")
         item.mode, item.size = 0o666, len(data)
         bundle.addfile(item, io.BytesIO(data))
+        empty = tarfile.TarInfo("python/empty")
+        empty.mode, empty.size = 0o644, 0
+        bundle.addfile(empty, io.BytesIO(b""))
         link = tarfile.TarInfo("python/link")
         link.type, link.mode, link.linkname = tarfile.SYMTYPE, 0o777, "data"
         bundle.addfile(link)
@@ -545,8 +545,10 @@ def test_runtime_extraction_retries_partial_writes_and_rejects_hardlinks(
     destination = tmp_path / "runtime"
     archive.extract_runtime_archive(runtime_tar, destination)
     assert (destination / "data").read_bytes() == data
+    assert (destination / "empty").read_bytes() == b""
     assert os.readlink(destination / "link") == "data"
     assert (destination / "data").stat().st_mode & 0o777 == 0o644
+    assert archive.runtime_tree_evidence(destination)[1] == 4
 
     hardlink_tar = tmp_path / "hardlink.tar.gz"
     with tarfile.open(hardlink_tar, "w:gz") as bundle:
@@ -559,6 +561,94 @@ def test_runtime_extraction_retries_partial_writes_and_rejects_hardlinks(
     monkeypatch.setattr(archive, "RUNTIME_SHA256", hashlib.sha256(hardlink_tar.read_bytes()).hexdigest())
     with pytest.raises(archive.ProvisionError, match="hardlink or device"):
         archive.extract_runtime_archive(hardlink_tar, tmp_path / "rejected")
+
+
+@pytest.mark.parametrize("root_type", [tarfile.REGTYPE, tarfile.SYMTYPE])
+def test_runtime_archive_rejects_explicit_non_directory_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, root_type: bytes
+) -> None:
+    tmp_path.chmod(0o755)
+    runtime_tar = tmp_path / "runtime.tar.gz"
+    with tarfile.open(runtime_tar, "w:gz") as bundle:
+        root = tarfile.TarInfo("python")
+        root.type, root.mode = root_type, 0o755
+        if root_type == tarfile.SYMTYPE:
+            root.linkname = "python/data"
+        bundle.addfile(root, io.BytesIO(b"") if root_type == tarfile.REGTYPE else None)
+    monkeypatch.setattr(archive, "EXPECTED_UID", os.getuid())
+    monkeypatch.setattr(archive, "EXPECTED_GID", os.getgid())
+    monkeypatch.setattr(archive, "RUNTIME_SHA256", hashlib.sha256(runtime_tar.read_bytes()).hexdigest())
+    with pytest.raises(archive.ProvisionError, match="fixed root is not a directory"):
+        archive.extract_runtime_archive(runtime_tar, tmp_path / "rejected")
+
+
+def test_runtime_archive_layout_verifier_accepts_provider_implicit_root(tmp_path: Path) -> None:
+    runtime_tar = tmp_path / "runtime.tar.gz"
+    with tarfile.open(runtime_tar, "w:gz") as bundle:
+        item = tarfile.TarInfo("python/bin/python3.13")
+        item.mode, item.size = 0o755, 1
+        bundle.addfile(item, io.BytesIO(b"x"))
+        empty = tarfile.TarInfo("python/lib/python3.13/email/mime/__init__.py")
+        empty.mode, empty.size = 0o644, 0
+        bundle.addfile(empty, io.BytesIO(b""))
+    assert archive.verify_runtime_archive_layout(runtime_tar) == (2, 1)
+
+
+def test_empty_files_require_explicit_runtime_tree_authority(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    empty = tmp_path / "empty"
+    empty.write_bytes(b"")
+    monkeypatch.setattr(archive, "EXPECTED_UID", os.getuid())
+    monkeypatch.setattr(archive, "EXPECTED_GID", os.getgid())
+    with pytest.raises(archive.ProvisionError, match="unsafe root-owned regular file"):
+        archive.file_evidence(empty, max_bytes=1)
+    assert archive.file_evidence(empty, max_bytes=1, min_bytes=0) == (
+        hashlib.sha256(b"").hexdigest(),
+        0,
+    )
+    with pytest.raises(archive.ProvisionError, match="size bounds"):
+        archive.file_evidence(empty, max_bytes=1, min_bytes=2)
+
+
+@pytest.mark.parametrize("escape", ["member", "symlink"])
+def test_implicit_runtime_root_does_not_relax_path_confinement(tmp_path: Path, escape: str) -> None:
+    runtime_tar = tmp_path / "runtime.tar.gz"
+    with tarfile.open(runtime_tar, "w:gz") as bundle:
+        if escape == "member":
+            item = tarfile.TarInfo("python/../escape")
+            item.size = 1
+            bundle.addfile(item, io.BytesIO(b"x"))
+        else:
+            item = tarfile.TarInfo("python/link")
+            item.type, item.linkname = tarfile.SYMTYPE, "../../escape"
+            bundle.addfile(item)
+    with pytest.raises(archive.ProvisionError, match="not canonical|symlink escapes"):
+        archive.verify_runtime_archive_layout(runtime_tar)
+
+
+def test_child_failure_summaries_keep_terminal_cause_and_redact_secrets() -> None:
+    stderr = (
+        b"authorization=should-not-leak\n"
+        + b"long traceback prefix\n" * 100
+        + b"ProvisionError: token=should-not-leak runtime archive fixed root is not a directory\n"
+    )
+    workflow_detail = workflow_bridge._child_failure_detail(stderr)
+    peer_detail = peer._peer_failure_detail(stderr)
+    for detail in (workflow_detail, peer_detail):
+        assert "ProvisionError" in detail
+        assert "runtime archive fixed root is not a directory" in detail
+        assert "should-not-leak" not in detail
+        assert "token=[REDACTED]" in detail
+
+
+def test_trusted_launcher_wraps_imported_runtime_contract_errors(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def fail(_arguments: list[str]) -> int:
+        raise archive.ProvisionError("runtime archive contract sentinel")
+
+    monkeypatch.setattr(provisioner, "main", fail)
+    with pytest.raises(launcher.LaunchError, match="runtime transaction failed: runtime archive contract sentinel"):
+        launcher._run(tmp_path, ["apply"])
 
 
 def test_nlink_two_publication_is_adopted_without_deleting_live_writer(
