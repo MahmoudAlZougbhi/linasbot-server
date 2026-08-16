@@ -188,6 +188,28 @@ RETRIEVAL_TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "list_request_definitions",
+            "description": "List active compiled request definition titles for this tenant only (no field values, no other tenants).",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_request_definition",
+            "description": "Read one selected compiled request definition graph. Deleted definitions are not returned.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "definition_id": {"type": "string"},
+                    "source_item_id": {"type": "string"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "resolve_reply_to_product",
             "description": "Resolve product from customer reply-to message id (0 AI credits).",
             "parameters": {

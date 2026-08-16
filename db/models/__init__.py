@@ -38,7 +38,7 @@ from db.models.products import (
     ProductLink,
     ProductSentMessage,
 )
-from db.models.tenant_services import ServiceOption, TenantService
+from db.models.request_graphs import RequestDefinitionGraph, RequestDefinitionLink
 from db.models.requests import CustomerRequest, CustomerRequestCounter
 from db.models.requests_support import (
     CustomerRequestEvent,
@@ -46,6 +46,7 @@ from db.models.requests_support import (
     CustomerRequestNote,
     CustomerRequestOutbox,
 )
+from db.models.tenant_services import ServiceOption, TenantService
 from db.models.whatsapp_cloud import (
     WhatsAppAuditEvent,
     WhatsAppConnection,
@@ -94,6 +95,8 @@ __all__ = [
     "ProductImageFingerprint",
     "ProductLink",
     "ProductSentMessage",
+    "RequestDefinitionGraph",
+    "RequestDefinitionLink",
     "ServiceOption",
     "TenantService",
     "StripeProcessedEventRow",

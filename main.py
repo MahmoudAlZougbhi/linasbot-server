@@ -45,10 +45,11 @@ import modules.auth_email_change_api  # noqa: E402, F401
 import modules.auth_users_roles_api  # noqa: E402, F401
 import modules.chat_history_api  # noqa: E402, F401
 import modules.cm_api  # noqa: E402, F401
+import modules.cm_comment_rules_api  # noqa: E402, F401
 import modules.cm_faq_api  # noqa: E402, F401
 import modules.cm_media_api  # noqa: E402, F401
+import modules.cm_request_graphs_api  # noqa: E402, F401
 import modules.cm_setup_api  # noqa: E402, F401
-import modules.cm_comment_rules_api  # noqa: E402, F401
 import modules.content_files_api  # noqa: E402, F401
 import modules.creative_api  # noqa: E402, F401
 import modules.dashboard_api  # noqa: E402, F401

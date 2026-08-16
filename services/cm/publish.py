@@ -184,6 +184,10 @@ async def publish_draft_sections(
 
     sync_enforcement_from_payload(tid, sections.get("ai_limits") or {})
 
+    from services.request_graphs.publish_hook import sync_request_graphs_after_publish
+
+    sync_request_graphs_after_publish(tenant_id=tid, sections=sections)
+
     return PublishResult(
         tenant_id=tid,
         content_version_id=content_version_id,

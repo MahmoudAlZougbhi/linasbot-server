@@ -24,6 +24,11 @@ from services.customer_reply_v2.retrieval_item_index import (
     record_content,
 )
 from services.customer_reply_v2.retrieval_product_dispatch import PRODUCT_TOOL_NAMES, dispatch_product_tool
+from services.customer_reply_v2.retrieval_request_dispatch import (
+    REQUEST_GRAPH_TOOL_NAMES,
+    compiled_graph_content,
+    dispatch_request_graph_tool,
+)
 from services.customer_reply_v2.retrieval_tool_schemas import RETRIEVAL_TOOL_SCHEMAS
 
 TOOL_TIMEOUT_HINT_MS = 5000
@@ -99,6 +104,12 @@ def _read_items(ctx: ToolContext, args: dict[str, Any], listed: dict[str, Any] |
             continue
         sid, raw = hit
         content = record_content(sid, raw)
+        if sid == "requests_appointments":
+            content = compiled_graph_content(
+                tenant_id=ctx.tenant_id,
+                source_item_id=str(raw.get("id") or "").strip(),
+                fallback=content,
+            )
         if len(content) > MAX_EVIDENCE_CHARS:
             rejected.append({"item_id": iid, "reason": "file_too_large"})
             ctx.audit.append(
@@ -227,6 +238,9 @@ def dispatch_retrieval_tool(name: str, args: dict[str, Any], ctx: ToolContext) -
 
     if name in PRODUCT_TOOL_NAMES:
         return dispatch_product_tool(name, args, ctx)
+
+    if name in REQUEST_GRAPH_TOOL_NAMES:
+        return dispatch_request_graph_tool(name, args, ctx)
 
     ctx.audit.append({"tool": name, "ok": False, "class": "unknown"})
     return {"ok": False, "error": "unknown_tool"}

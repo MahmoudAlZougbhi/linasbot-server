@@ -94,7 +94,7 @@ def _tables(url: str) -> set[str]:
 
 @pytest.mark.integration
 def test_clean_upgrade_creates_web_chat_tables(postgres_url: str) -> None:
-    completed = _alembic(postgres_url, "upgrade", "head")
+    completed = _alembic(postgres_url, "upgrade", HEAD_ID)
     assert completed.returncode == 0, completed.stderr or completed.stdout
     assert _tables(postgres_url) == set(MIGRATION_TABLES)
     engine = create_engine(postgres_url, pool_pre_ping=True)
@@ -122,9 +122,9 @@ def test_schema_absence_before_upgrade_has_no_web_chat_tables(postgres_url: str)
 
 @pytest.mark.integration
 def test_rollback_and_replay_web_chat_migration(postgres_url: str) -> None:
-    assert _alembic(postgres_url, "upgrade", "head").returncode == 0
+    assert _alembic(postgres_url, "upgrade", HEAD_ID).returncode == 0
     assert _tables(postgres_url) == set(MIGRATION_TABLES)
     assert _alembic(postgres_url, "downgrade", "-1").returncode == 0
     assert _tables(postgres_url) == set()
-    assert _alembic(postgres_url, "upgrade", "head").returncode == 0
+    assert _alembic(postgres_url, "upgrade", HEAD_ID).returncode == 0
     assert _tables(postgres_url) == set(MIGRATION_TABLES)

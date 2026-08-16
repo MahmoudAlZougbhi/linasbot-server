@@ -42,6 +42,7 @@ After reading evidence, respond with a single JSON object (no markdown) containi
 recommended_tera_effort is required. Use "low" for a single simple question. Use "medium" for multi-intent, drafts, products+services, or comments that need careful public wording. Never use high or xhigh.
 At most two retrieval rounds are allowed. Prefer reading exact items over guessing.
 If operational_titles_has_more is true, call list_operational_titles until every title page is available. Never assume missing titles are unimportant.
+If the customer mentions an appointment, order, or request, call list_request_definitions then get_request_definition for selected IDs. Deleted definitions are absent.
 You NEVER receive AI Basics, Style, assistant identity, greeting, or tone bodies.
 """
 
