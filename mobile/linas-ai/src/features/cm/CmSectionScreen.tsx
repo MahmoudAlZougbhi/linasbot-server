@@ -10,6 +10,7 @@ import { cmFormStyles } from './cmFormStyles';
 import { getCmSection, type CmSectionId } from './cmSections';
 import { AiBasicsEditor } from './editors/AiBasicsEditor';
 import { ArticlesEditor } from './editors/ArticlesEditor';
+import { KnowledgeScreen } from './knowledge/KnowledgeScreen';
 import { LocationHoursSectionScreen } from './LocationHoursSectionScreen';
 import { OpeningHoursEditor } from './editors/OpeningHoursEditor';
 import { GreetingsEditor } from './editors/GreetingsEditor';
@@ -28,6 +29,7 @@ type Props = {
   section: CmSectionId;
   proposalReview?: CmProposalReview | null;
   onBack?: () => void;
+  onOpenLocations?: () => void;
 };
 
 function AiBasicsComposite({ proposalReview }: { proposalReview?: CmProposalReview | null }) {
@@ -95,8 +97,6 @@ function SectionBody({
       return <ServicesEditor payload={payload} onChange={onChange} />;
     case 'prices':
       return <PricesEditor payload={payload} onChange={onChange} />;
-    case 'knowledge':
-      return <ArticlesEditor section="knowledge" payload={payload} onChange={onChange} />;
     case 'care':
       return <ArticlesEditor section="care" payload={payload} onChange={onChange} />;
     case 'handoff':
@@ -131,7 +131,16 @@ function SectionBody({
   }
 }
 
-export function CmSectionScreen({ section, proposalReview, onBack }: Props) {
+export function CmSectionScreen({ section, proposalReview, onBack, onOpenLocations }: Props) {
+  if (section === 'knowledge') {
+    return (
+      <KnowledgeScreen
+        proposalReview={proposalReview}
+        onBack={onBack}
+        onOpenLocations={onOpenLocations}
+      />
+    );
+  }
   if (section === 'ai_basics' || section === 'style' || section === 'dynamic_messages') {
     return (
       <AiBasicsSectionScreen proposalReview={proposalReview} onBack={onBack} />

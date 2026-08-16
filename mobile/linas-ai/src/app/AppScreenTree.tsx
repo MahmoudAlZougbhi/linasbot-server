@@ -276,6 +276,7 @@ export function AppScreenTree({
           <CmSectionScreen
             section={screen.section}
             proposalReview={screen.proposalReview ?? null}
+            onOpenLocations={() => setScreen({ name: 'cm_section', section: 'branches', backTo: 'cm' })}
             onBack={
               screen.backTo === 'settings'
                 ? () => setScreen({ name: 'settings' })

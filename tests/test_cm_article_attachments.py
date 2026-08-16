@@ -37,6 +37,45 @@ def test_article_record_accepts_attachments() -> None:
     assert roundtrip.attachments[0].id == "cmed_abc"
 
 
+def test_article_record_accepts_video_and_link_attachments() -> None:
+    article = ArticleRecord(
+        id="a3",
+        title="Laser guide",
+        body="Suitable areas.",
+        updated_at="2026-08-16T10:00:00Z",
+        attachments=[
+            ArticleAttachment(
+                id="cmed_vid",
+                kind="video",
+                caption="Show aftercare clip",
+                mime="video/mp4",
+                filename="aftercare-video.mp4",
+                size=800_000,
+                duration_seconds=84,
+            ),
+            ArticleAttachment(
+                id="link_1",
+                kind="link",
+                caption="Official page",
+                filename="example.com",
+                url="https://example.com/guide",
+            ),
+        ],
+    )
+    dumped = article.model_dump(mode="json")
+    assert dumped["attachments"][0]["kind"] == "video"
+    assert dumped["attachments"][0]["duration_seconds"] == 84
+    assert dumped["attachments"][1]["url"].startswith("https://")
+    roundtrip = ArticleRecord.model_validate(dumped)
+    assert roundtrip.attachments[1].kind == "link"
+
+
+def test_validate_upload_accepts_mp4() -> None:
+    ok = validate_upload(filename="clip.mp4", content_type="video/mp4", size=1024)
+    assert ok["ok"] is True
+    assert ok["kind"] == "video"
+
+
 def test_article_record_default_attachments_empty() -> None:
     article = ArticleRecord(id="a2", title="Plain", body="text only")
     assert article.attachments == []

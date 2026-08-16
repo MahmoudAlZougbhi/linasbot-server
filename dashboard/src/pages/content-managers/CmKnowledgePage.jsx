@@ -4,6 +4,7 @@ import { CmArticleAttachments } from "./CmArticleAttachments";
 import CmSectionShell from "./CmSectionShell";
 import { asRecordList, newId, primaryLabel, statusBadgeClass } from "./cmDraftHelpers";
 import { useCmSectionDraft } from "./useCmSectionDraft";
+import { CmKnowledgeWorkspace } from "./CmKnowledgeWorkspace";
 
 const FIELD_CLASS = "w-full rounded-xl border border-slate-200 px-3 py-2 text-sm";
 
@@ -252,12 +253,6 @@ export const CmArticlesPage = ({ section, title, description }) => {
   );
 };
 
-const CmKnowledgePage = () => (
-  <CmArticlesPage
-    section="knowledge"
-    title="Knowledge"
-    description="Educational clinic articles for AI retrieval after FAQ miss. Location, booking, greeting, and price rules live in their dedicated sections (archived copies stay filterable here)."
-  />
-);
+const CmKnowledgePage = () => <CmKnowledgeWorkspace />;
 
 export default CmKnowledgePage;
