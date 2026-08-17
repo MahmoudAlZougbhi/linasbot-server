@@ -33,11 +33,11 @@ describe('Locations & hours design wiring', () => {
     assert.match(list, /aiSetupLocBanner/);
     assert.match(details, /aiSetupLocAddress/);
     assert.match(details, /external-link/);
-    assert.match(media, /aiSetupLocMediaImage/);
-    assert.match(media, /aiSetupLocMediaVideo/);
-    assert.match(media, /pickVideoAttachment/);
-    assert.match(media, /aiSetupLocMediaFile/);
-    assert.match(media, /aiSetupLocMediaLink/);
+    assert.match(media, /KnowledgeResourceGrid/);
+    assert.match(media, /KnowledgeResourceRows/);
+    assert.match(media, /knowledgeResources/);
+    assert.match(media, /useFaqMedia/);
+    assert.doesNotMatch(media, /pickVideoAttachment/);
     assert.match(hours, /aiSetupLocSetMultiple/);
     assert.match(hours, /aiSetupLocSaveHours/);
     assert.match(edit, /aiSetupLocSaveChanges/);

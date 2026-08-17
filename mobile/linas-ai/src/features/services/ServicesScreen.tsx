@@ -23,6 +23,7 @@ import { ServiceEditView } from './ServiceEditView';
 import { ServiceListView } from './ServiceListView';
 import { ServicePriceView } from './ServicePriceView';
 import { SV_CANVAS, SV_TEAL } from './serviceChrome';
+import { confirmAiSetupDelete } from '../cm/confirmAiSetupDelete';
 import { ResourceMetaModal } from '../cm/resources/ResourceMetaModal';
 import {
   buildPriceEntry,
@@ -177,6 +178,41 @@ export function ServicesScreen({ proposalReview, onBack }: Props) {
     goEdit();
   }
 
+  function requestDeleteService(id: string) {
+    confirmAiSetupDelete({
+      title: tr('servicesDeleteTitle'),
+      body: tr('servicesDeleteBody'),
+      confirmLabel: tr('servicesRemove'),
+      cancelLabel: tr('usersCancel'),
+      onConfirm: () => {
+        const nextPayload = {
+          ...draft.payload,
+          catalog: catalogRows().filter((row) => String(row.id) !== id),
+          price_entries: entryRows().filter((row) => String(row.catalog_item_id) !== id),
+        };
+        void draft.save(nextPayload).then((ok) => {
+          if (ok && selectedId === id) goList();
+        });
+      },
+    });
+  }
+
+  function requestDeletePrice(id: string) {
+    confirmAiSetupDelete({
+      title: tr('servicesRemovePriceTitle'),
+      body: tr('servicesRemovePriceBody'),
+      confirmLabel: tr('servicesRemove'),
+      cancelLabel: tr('usersCancel'),
+      onConfirm: () => {
+        setCatalogAndEntries(
+          catalogRows(),
+          entryRows().filter((row) => String(row.id) !== id),
+        );
+        if (mode === 'price') goEdit();
+      },
+    });
+  }
+
   function deletePrice() {
     if (!priceDraft.id) return;
     setCatalogAndEntries(
@@ -223,6 +259,7 @@ export function ServicesScreen({ proposalReview, onBack }: Props) {
               setSelectedId(id);
               setMode('edit');
             }}
+            onRequestDelete={requestDeleteService}
             tr={tr}
           />
         </ScrollView>
@@ -243,6 +280,7 @@ export function ServicesScreen({ proposalReview, onBack }: Props) {
                 setPriceError(null);
                 setMode('price');
               }}
+              onDeletePrice={requestDeletePrice}
               onEditPrice={(id) => {
                 const price = selected.prices.find((row) => row.id === id);
                 if (!price) return;

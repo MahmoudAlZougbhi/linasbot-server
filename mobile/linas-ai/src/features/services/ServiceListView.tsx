@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppIcon, feather } from '../../components/AppIcon';
 import type { StringKey } from '../../i18n';
 import { fonts } from '../../theme';
+import { AiSetupDeletableRow } from '../cm/AiSetupDeletableRow';
 import { AiSetupListHeader } from '../cm/AiSetupListHeader';
 import { SV_BORDER, SV_ICON_SQ, SV_MUTED, SV_RADIUS, SV_TEAL, SV_TEAL_DARK, SV_TEAL_SOFT } from './serviceChrome';
 import { formatMoney, lowestAmount, type ServiceItem } from './serviceModel';
@@ -13,10 +14,11 @@ type Props = {
   onQueryChange: (value: string) => void;
   onAdd: () => void;
   onSelect: (id: string) => void;
+  onRequestDelete: (id: string) => void;
   tr: (key: StringKey) => string;
 };
 
-export function ServiceListView({ items, query, onQueryChange, onAdd, onSelect, tr }: Props) {
+export function ServiceListView({ items, query, onQueryChange, onAdd, onSelect, onRequestDelete, tr }: Props) {
   const countLabel =
     items.length === 1 ? `1 ${tr('servicesCountOne')}` : `${items.length} ${tr('servicesCount')}`;
   return (
@@ -32,7 +34,18 @@ export function ServiceListView({ items, query, onQueryChange, onAdd, onSelect, 
 
       {items.length === 0 ? <Text style={styles.empty}>{tr('servicesEmpty')}</Text> : null}
       {items.map((item) => (
-        <ServiceCard key={item.id} item={item} onPress={() => onSelect(item.id)} tr={tr} />
+        <AiSetupDeletableRow
+          key={item.id}
+          deleteLabel={tr('servicesRemove')}
+          onRequestDelete={() => onRequestDelete(item.id)}
+        >
+          <ServiceCard
+            item={item}
+            onPress={() => onSelect(item.id)}
+            onLongPress={() => onRequestDelete(item.id)}
+            tr={tr}
+          />
+        </AiSetupDeletableRow>
       ))}
 
       <Text style={styles.footer}>{tr('servicesFooter')}</Text>
@@ -58,15 +71,19 @@ function priceFooterLabel(item: ServiceItem, tr: (key: StringKey) => string): st
 function ServiceCard({
   item,
   onPress,
+  onLongPress,
   tr,
 }: {
   item: ServiceItem;
   onPress: () => void;
+  onLongPress?: () => void;
   tr: (key: StringKey) => string;
 }) {
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={380}
       accessibilityRole="button"
       accessibilityLabel={item.name}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}

@@ -7,6 +7,7 @@ import {
   type CmProposalReview,
 } from './cmProposalReview';
 import { getCmDraft, putCmDraft } from './cmApi';
+import { isDraftDirty, stableSerialize } from './cmDraftDirty';
 import { sanitizeCmSectionPayload } from './stripProvenanceHeaders';
 
 type SectionDraft = {
@@ -27,6 +28,7 @@ export function useCmMultiDraft(
   const [drafts, setDrafts] = useState<Record<string, SectionDraft>>({});
   const [proposalActive, setProposalActive] = useState(false);
   const saveLock = useRef(false);
+  const baselines = useRef<Record<string, string>>({});
   const sectionKey = sections.join(',');
 
   const load = useCallback(async () => {
@@ -51,6 +53,7 @@ export function useCmMultiDraft(
             overlay = true;
           }
         }
+        baselines.current[section] = stableSerialize(payload);
         next[section] = { payload, etag: draft.etag, dirty: overlay };
       });
       setDrafts(next);
@@ -78,7 +81,10 @@ export function useCmMultiDraft(
     setDrafts((prev) => {
       const cur = prev[section];
       if (!cur) return prev;
-      return { ...prev, [section]: { ...cur, payload: next, dirty: true } };
+      return {
+        ...prev,
+        [section]: { ...cur, payload: next, dirty: isDraftDirty(baselines.current[section] || '', next) },
+      };
     });
     setProposalActive(false);
   }, []);
@@ -102,8 +108,10 @@ export function useCmMultiDraft(
         const cur = drafts[section];
         if (!cur?.etag) continue;
         const draft = await putCmDraft(section, cur.payload, cur.etag);
+        const payload = sanitizeCmSectionPayload(section, draft.payload);
+        baselines.current[section] = stableSerialize(payload);
         updated[section] = {
-          payload: sanitizeCmSectionPayload(section, draft.payload),
+          payload,
           etag: draft.etag,
           dirty: false,
         };

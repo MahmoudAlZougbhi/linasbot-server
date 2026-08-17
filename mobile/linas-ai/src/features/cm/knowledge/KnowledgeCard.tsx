@@ -17,13 +17,16 @@ type Props = {
   summary: string;
   updated: string;
   onPress: () => void;
+  onLongPress?: () => void;
 };
 
-export function KnowledgeCard({ title, summary, updated, onPress }: Props) {
+export function KnowledgeCard({ title, summary, updated, onPress, onLongPress }: Props) {
   const meta = updated ? `${summary} • ${updated}` : summary;
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={380}
       accessibilityRole="button"
       accessibilityLabel={title}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
@@ -48,11 +51,13 @@ export function KnowledgeArticleCard({
   item,
   untitled,
   onPress,
+  onLongPress,
   tr,
 }: {
   item: KnowledgeItem;
   untitled: string;
   onPress: () => void;
+  onLongPress?: () => void;
   tr: (key: StringKey) => string;
 }) {
   const summary = formatMediaSummary(countMedia(item.attachments));
@@ -69,6 +74,7 @@ export function KnowledgeArticleCard({
       summary={summary === 'Text only' ? tr('knowledgeTextOnly') : summary}
       updated={updated}
       onPress={onPress}
+      onLongPress={onLongPress}
     />
   );
 }

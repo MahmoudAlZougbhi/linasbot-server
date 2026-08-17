@@ -70,13 +70,7 @@ export function CommentResourceRows({ attachments, onRemove, onReplace, onEditCa
             <AppIcon icon={KIND_META[att.kind].icon} size={16} color={CM_TEAL} />
           </View>
           <Pressable
-            onPress={() => {
-              if (att.kind === 'link' && att.url) {
-                void Linking.openURL(att.url);
-                return;
-              }
-              onEditCaption(att);
-            }}
+            onPress={() => onEditCaption(att)}
             style={styles.rowCopy}
             accessibilityRole="button"
             accessibilityLabel={tr('commentsTapToOpen')}

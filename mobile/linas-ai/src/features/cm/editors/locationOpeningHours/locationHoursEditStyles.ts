@@ -44,7 +44,7 @@ export const locEditStyles = StyleSheet.create({
   tabText: {
     fontFamily: fonts.bodyMedium,
     fontSize: 15,
-    color: '#10221A',
+    color: '#000000',
   },
   tabTextOn: { color: '#FFFFFF', fontWeight: '700' },
   fieldLabel: {
@@ -65,7 +65,7 @@ export const locEditStyles = StyleSheet.create({
   },
   mapInput: {
     flex: 1,
-    color: '#10221A',
+    color: '#000000',
     fontFamily: fonts.body,
     fontSize: 16,
     paddingHorizontal: 14,
@@ -117,7 +117,7 @@ export const locEditStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   mediaName: {
-    color: '#10221A',
+    color: '#000000',
     fontFamily: fonts.bodyMedium,
     fontSize: 14,
   },
@@ -217,7 +217,7 @@ export const locEditStyles = StyleSheet.create({
   },
   dayName: {
     width: 78,
-    color: '#10221A',
+    color: '#000000',
     fontFamily: fonts.bodyMedium,
     fontSize: 14,
   },
@@ -233,7 +233,7 @@ export const locEditStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   timeText: {
-    color: '#10221A',
+    color: '#000000',
     fontFamily: fonts.body,
     fontSize: 13,
     textAlign: 'center',
@@ -272,7 +272,7 @@ export const locEditStyles = StyleSheet.create({
     maxHeight: '80%',
   },
   sheetTitle: {
-    color: '#10221A',
+    color: '#000000',
     fontFamily: fonts.bodyMedium,
     fontSize: 16,
     fontWeight: '700',

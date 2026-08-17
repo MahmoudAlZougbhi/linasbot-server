@@ -1,6 +1,7 @@
 import { Text, View } from 'react-native';
 
 import { TextField } from '../../../components/TextField';
+import { AI_SETUP_INK } from '../aiSetupDesign';
 import { ClampedLongField } from '../ClampedLongField';
 import { cmFormStyles } from '../cmFormStyles';
 
@@ -30,7 +31,12 @@ export function Field({ label, value, onChange, multiline, placeholder, hint }: 
   return (
     <View>
       {label ? <Text style={cmFormStyles.label}>{label}</Text> : null}
-      <TextField value={value} onChangeText={onChange} placeholder={placeholder} />
+      <TextField
+        value={value}
+        onChangeText={onChange}
+        placeholder={placeholder}
+        style={{ color: AI_SETUP_INK }}
+      />
       {hint ? <Text style={cmFormStyles.hint}>{hint}</Text> : null}
     </View>
   );

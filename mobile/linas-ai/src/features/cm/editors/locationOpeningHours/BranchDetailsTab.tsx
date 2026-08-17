@@ -29,27 +29,34 @@ export function BranchDetailsTab({ branch, onPatch }: Props) {
       <Field
         label={tr('aiSetupLocBranchName')}
         value={String(asRecord(branch.labels).en || '')}
-        onChange={(v) => onPatch({ labels: { ...asRecord(branch.labels), en: v } })}
+        onChange={(v) => {
+          if (v === String(asRecord(branch.labels).en || '')) return;
+          onPatch({ labels: { ...asRecord(branch.labels), en: v } });
+        }}
       />
       <Field
         label={tr('aiSetupLocAddress')}
         value={branchAddress(branch)}
-        onChange={(v) =>
+        onChange={(v) => {
+          if (v === branchAddress(branch)) return;
           onPatch({
             address: v,
             street: '',
             building: '',
             floor: '',
             country: '',
-          })
-        }
+          });
+        }}
       />
       <Text style={locStyles.fieldLabel}>{tr('aiSetupLocMapLink')}</Text>
       <View style={locStyles.mapWrap}>
         <TextInput
           style={locStyles.mapInput}
           value={mapsUrl}
-          onChangeText={(maps_url) => onPatch({ maps_url })}
+          onChangeText={(maps_url) => {
+            if (maps_url === mapsUrl) return;
+            onPatch({ maps_url });
+          }}
           autoCapitalize="none"
           autoCorrect={false}
           placeholder="maps.google.com/…"
@@ -62,13 +69,15 @@ export function BranchDetailsTab({ branch, onPatch }: Props) {
       <Field
         label={tr('aiSetupLocBranchNote')}
         value={String(branch.notes || '')}
-        onChange={(notes) => onPatch({ notes: notes || null })}
+        onChange={(notes) => {
+          const next = notes || null;
+          if (next === (branch.notes || null) && notes === String(branch.notes || '')) return;
+          onPatch({ notes: next });
+        }}
         multiline
       />
       <BranchMediaSection
-        mapsUrl={mapsUrl}
         attachments={branch.attachments}
-        onMapsUrl={(url) => onPatch({ maps_url: url })}
         onAttachments={(next: BranchAttachment[]) => onPatch({ attachments: next })}
       />
     </View>

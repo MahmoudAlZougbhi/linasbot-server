@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { LinasSparkleIcon } from '../../../components/LinasSparkleIcon';
 import type { StringKey } from '../../../i18n';
 import { fonts } from '../../../theme';
+import { AiSetupDeletableRow } from '../AiSetupDeletableRow';
 import { AiSetupListHeader } from '../AiSetupListHeader';
 import { KnowledgeArticleCard, KnowledgeLocationsCard } from './KnowledgeCard';
 import { KN_MUTED, KN_TEAL } from './knowledgeChrome';
@@ -15,6 +16,7 @@ type Props = {
   onQueryChange: (value: string) => void;
   onAdd: () => void;
   onSelect: (id: string) => void;
+  onRequestDelete: (id: string) => void;
   onOpenLocations: () => void;
   tr: (key: StringKey) => string;
 };
@@ -26,6 +28,7 @@ export function KnowledgeListView({
   onQueryChange,
   onAdd,
   onSelect,
+  onRequestDelete,
   onOpenLocations,
   tr,
 }: Props) {
@@ -48,13 +51,19 @@ export function KnowledgeListView({
         row.type === 'locations' ? (
           <KnowledgeLocationsCard key="locations" onPress={onOpenLocations} tr={tr} />
         ) : (
-          <KnowledgeArticleCard
+          <AiSetupDeletableRow
             key={row.item.id}
-            item={row.item}
-            untitled={tr('knowledgeUntitled')}
-            onPress={() => onSelect(row.item.id)}
-            tr={tr}
-          />
+            deleteLabel={tr('knowledgeDelete')}
+            onRequestDelete={() => onRequestDelete(row.item.id)}
+          >
+            <KnowledgeArticleCard
+              item={row.item}
+              untitled={tr('knowledgeUntitled')}
+              onPress={() => onSelect(row.item.id)}
+              onLongPress={() => onRequestDelete(row.item.id)}
+              tr={tr}
+            />
+          </AiSetupDeletableRow>
         ),
       )}
 

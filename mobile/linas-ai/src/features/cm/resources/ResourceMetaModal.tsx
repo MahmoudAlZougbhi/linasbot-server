@@ -5,7 +5,7 @@ import { fonts } from '../../../theme';
 import { ClampedLongField } from '../ClampedLongField';
 
 const TEAL = '#107C75';
-const TEAL_DARK = '#0F4C4A';
+const INK = '#000000';
 const MUTED = '#6B7280';
 const BORDER = '#D7E4E2';
 
@@ -124,10 +124,10 @@ const styles = StyleSheet.create({
     padding: 18,
     gap: 12,
   },
-  heading: { color: TEAL_DARK, fontFamily: fonts.bodyMedium, fontSize: 17, fontWeight: '700' },
+  heading: { color: INK, fontFamily: fonts.bodyMedium, fontSize: 17, fontWeight: '700' },
   preview: { color: MUTED, fontFamily: fonts.body, fontSize: 13 },
   field: { gap: 6 },
-  label: { color: TEAL_DARK, fontFamily: fonts.bodyMedium, fontSize: 13, fontWeight: '600' },
+  label: { color: INK, fontFamily: fonts.bodyMedium, fontSize: 13, fontWeight: '600' },
   input: {
     borderWidth: 1,
     borderColor: BORDER,
@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontFamily: fonts.body,
     fontSize: 15,
-    color: TEAL_DARK,
+    color: INK,
   },
   error: { color: '#DC2626', fontFamily: fonts.body, fontSize: 13 },
   row: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },

@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { AppIcon, feather } from '../../components/AppIcon';
 import type { StringKey } from '../../i18n';
 import { fonts } from '../../theme';
+import { AiSetupDeletableRow } from '../cm/AiSetupDeletableRow';
 import { ClampedLongField } from '../cm/ClampedLongField';
 import { ServiceMediaGrid, ServiceMediaRows } from './ServiceMediaBlock';
 import { SV_BORDER, SV_MUTED, SV_RADIUS, SV_RADIUS_SM, SV_TEAL, SV_TEAL_DARK, SV_TEAL_SOFT } from './serviceChrome';
@@ -16,6 +17,7 @@ type Props = {
   onNote: (value: string) => void;
   onAddPrice: () => void;
   onEditPrice: (id: string) => void;
+  onDeletePrice: (id: string) => void;
   onAddResource: (kind: ServiceKind) => void;
   onRemoveResource: (id: string) => void;
   onReplaceResource: (att: ServiceAttachment) => void;
@@ -31,6 +33,7 @@ export function ServiceEditView({
   onNote,
   onAddPrice,
   onEditPrice,
+  onDeletePrice,
   onAddResource,
   onRemoveResource,
   onReplaceResource,
@@ -63,12 +66,18 @@ export function ServiceEditView({
       {item.prices.length ? (
         <View style={styles.priceCard}>
           {item.prices.map((price, index) => (
-            <PriceRow
+            <AiSetupDeletableRow
               key={price.id}
-              price={price}
-              last={index === item.prices.length - 1}
-              onEdit={() => onEditPrice(price.id)}
-            />
+              deleteLabel={tr('servicesRemove')}
+              onRequestDelete={() => onDeletePrice(price.id)}
+            >
+              <PriceRow
+                price={price}
+                last={index === item.prices.length - 1}
+                onEdit={() => onEditPrice(price.id)}
+                onLongPress={() => onDeletePrice(price.id)}
+              />
+            </AiSetupDeletableRow>
           ))}
         </View>
       ) : null}
@@ -101,13 +110,19 @@ function PriceRow({
   price,
   last,
   onEdit,
+  onLongPress,
 }: {
   price: ServicePrice;
   last: boolean;
   onEdit: () => void;
+  onLongPress?: () => void;
 }) {
   return (
-    <View style={[styles.priceRow, !last && styles.priceRowBorder]}>
+    <Pressable
+      onLongPress={onLongPress}
+      delayLongPress={380}
+      style={[styles.priceRow, !last && styles.priceRowBorder]}
+    >
       <View style={styles.priceIcon}>
         <AppIcon icon={feather('tag')} size={16} color={SV_TEAL} />
       </View>
@@ -121,7 +136,7 @@ function PriceRow({
       <Pressable onPress={onEdit} accessibilityRole="button" style={styles.pencil}>
         <AppIcon icon={feather('edit-2')} size={16} color={SV_TEAL} />
       </Pressable>
-    </View>
+    </Pressable>
   );
 }
 

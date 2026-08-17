@@ -24,7 +24,12 @@ export function BranchListView({ items, query, onQuery, onAdd, onOpen }: Props) 
       : `${visible.length} ${tr('aiSetupLocCount')}`;
 
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      contentContainerStyle={{ paddingBottom: 48 }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      showsHorizontalScrollIndicator={false}
+    >
       <AiSetupListHeader
         query={query}
         onQueryChange={onQuery}

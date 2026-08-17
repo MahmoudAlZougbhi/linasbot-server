@@ -7,6 +7,7 @@ import {
   type CmProposalReview,
 } from './cmProposalReview';
 import { getCmDraft, putCmDraft } from './cmApi';
+import { isDraftDirty, stableSerialize } from './cmDraftDirty';
 import { sanitizeCmSectionPayload } from './stripProvenanceHeaders';
 
 export function useCmDraft(section: string, proposalReview?: CmProposalReview | null) {
@@ -19,6 +20,7 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
   const [dirty, setDirty] = useState(false);
   const [proposalActive, setProposalActive] = useState(false);
   const saveLock = useRef(false);
+  const baselineRef = useRef('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -41,6 +43,7 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
       }
       setPayloadState(next);
       setEtag(draft.etag);
+      baselineRef.current = stableSerialize(next);
       setDirty(overlay);
       setProposalActive(overlay);
     } catch (err) {
@@ -64,15 +67,16 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
 
   const setPayload = useCallback((next: Record<string, unknown>) => {
     setPayloadState(next);
-    setDirty(true);
+    setDirty(isDraftDirty(baselineRef.current, next));
     setProposalActive(false);
   }, []);
 
   const patchPayload = useCallback((patch: Record<string, unknown>) => {
     setPayloadState((prev) => {
-      setDirty(true);
+      const next = { ...prev, ...patch };
+      setDirty(isDraftDirty(baselineRef.current, next));
       setProposalActive(false);
-      return { ...prev, ...patch };
+      return next;
     });
   }, []);
 
@@ -89,8 +93,10 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
     setConflict(null);
     try {
       const draft = await putCmDraft(section, body, etag);
-      setPayloadState(sanitizeCmSectionPayload(section, draft.payload));
+      const saved = sanitizeCmSectionPayload(section, draft.payload);
+      setPayloadState(saved);
       setEtag(draft.etag);
+      baselineRef.current = stableSerialize(saved);
       setDirty(false);
       setProposalActive(false);
       return true;

@@ -32,7 +32,7 @@ export const cmFormStyles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSoft,
   },
-  rowTitle: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 15, flex: 1 },
+  rowTitle: { color: '#000000', fontFamily: fonts.bodyMedium, fontSize: 15, flex: 1 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md },
   chip: {
     borderWidth: 1,
@@ -43,7 +43,7 @@ export const cmFormStyles = StyleSheet.create({
     backgroundColor: colors.bgElevated,
   },
   chipOn: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
-  chipText: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 13 },
+  chipText: { color: '#000000', fontFamily: fonts.bodyMedium, fontSize: 13 },
   itemCard: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: radii.md,
@@ -52,7 +52,7 @@ export const cmFormStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderSoft,
   },
-  itemTitle: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 15 },
+  itemTitle: { color: '#000000', fontFamily: fonts.bodyMedium, fontSize: 15 },
   itemSub: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 12, marginTop: 2 },
   actions: { flexDirection: 'row', gap: 8, marginTop: spacing.md, marginBottom: spacing.xl },
   error: { color: colors.danger, fontFamily: fonts.body, marginBottom: spacing.sm },

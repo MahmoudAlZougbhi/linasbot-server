@@ -7,7 +7,7 @@ import { AiSetupListHeader } from '../cm/AiSetupListHeader';
 import { AI_SETUP_TEAL } from '../cm/aiSetupDesign';
 import type { Product } from './productsApi';
 
-const TEAL_DARK = '#0F4C4A';
+const INK = '#000000';
 const MUTED = '#94A3B8';
 const BORDER = '#E2E8F0';
 const SOFT = '#E6F3F2';
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   copy: { flex: 1, gap: 4 },
-  name: { color: TEAL_DARK, fontFamily: fonts.bodyMedium, fontSize: 16, fontWeight: '700' },
+  name: { color: INK, fontFamily: fonts.bodyMedium, fontSize: 16, fontWeight: '700' },
   meta: { color: MUTED, fontFamily: fonts.body, fontSize: 13 },
   pressed: { opacity: 0.7 },
 });

@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -19,6 +18,7 @@ import { fonts } from '../../../theme';
 import { ScreenChrome } from '../../shared/ScreenChrome';
 import { asRecordList, newId } from '../cmApi';
 import type { CmProposalReview } from '../cmProposalReview';
+import { confirmAiSetupDelete } from '../confirmAiSetupDelete';
 import { ResourceMetaModal } from '../resources/ResourceMetaModal';
 import { moveById } from '../resources/resourceMeta';
 import { useCmDraft } from '../useCmDraft';
@@ -86,26 +86,25 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
     await draft.save();
   }
 
-  async function handleDelete() {
-    if (!selected) return;
+  async function handleDelete(id: string) {
     const nextPayload = {
       ...draft.payload,
-      items: items.filter((item) => item.id !== selected.id).map(itemToRecord),
+      items: items.filter((item) => item.id !== id).map(itemToRecord),
     };
     const ok = await draft.save(nextPayload);
-    if (ok) goList();
+    if (ok && selectedId === id) goList();
   }
 
-  function confirmDelete() {
-    if (!selected) return;
-    Alert.alert(tr('knowledgeDeleteTitle'), tr('knowledgeDeleteBody'), [
-      { text: tr('usersCancel'), style: 'cancel' },
-      {
-        text: tr('knowledgeDeleteConfirm'),
-        style: 'destructive',
-        onPress: () => void handleDelete(),
-      },
-    ]);
+  function confirmDelete(id?: string) {
+    const target = id || selectedId;
+    if (!target) return;
+    confirmAiSetupDelete({
+      title: tr('knowledgeDeleteTitle'),
+      body: tr('knowledgeDeleteBody'),
+      confirmLabel: tr('knowledgeDeleteConfirm'),
+      cancelLabel: tr('usersCancel'),
+      onConfirm: () => void handleDelete(target),
+    });
   }
 
   return (
@@ -134,6 +133,7 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
               setSelectedId(id);
               setMode('edit');
             }}
+            onRequestDelete={(id) => confirmDelete(id)}
             onOpenLocations={() => onOpenLocations?.()}
             tr={tr}
           />

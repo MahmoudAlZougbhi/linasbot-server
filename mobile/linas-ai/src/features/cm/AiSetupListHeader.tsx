@@ -4,7 +4,7 @@ import { AppIcon, feather } from '../../components/AppIcon';
 import { fonts } from '../../theme';
 import { AI_SETUP_TEAL } from './aiSetupDesign';
 
-const TEAL_DARK = '#0F4C4A';
+const INK = '#000000';
 const MUTED = '#94A3B8';
 const BORDER = '#E2E8F0';
 const RADIUS = 12;
@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    color: TEAL_DARK,
+    color: INK,
     fontFamily: fonts.body,
     fontSize: 15,
     padding: 0,
