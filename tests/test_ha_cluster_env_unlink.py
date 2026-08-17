@@ -8,9 +8,7 @@ HELPER = Path(__file__).resolve().parents[1] / "scripts" / "ha" / "deploy_meta_r
 def test_cluster_env_compare_unlinks_each_evidence_file() -> None:
     helper = HELPER.read_text(encoding="utf-8")
     body = helper[
-        helper.index("compare_cluster_runtime_env_evidence() {") : helper.index(
-            "assert_cluster_runtime_env_parity() {"
-        )
+        helper.index("compare_cluster_runtime_env_evidence() {") : helper.index("assert_cluster_runtime_env_parity() {")
     ]
     assert 'unlink "$node01_path" "$node02_path"' not in body
     assert 'unlink "$node01_path"' in body
