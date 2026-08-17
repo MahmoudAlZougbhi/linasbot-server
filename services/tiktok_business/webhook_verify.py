@@ -24,7 +24,9 @@ def parse_tiktok_signature_header(header: str) -> tuple[str, str]:
         elif key == "s":
             signature = value.strip()
     if not timestamp or not signature:
-        raise TikTokBusinessError("TikTok-Signature header is invalid", code="TIKTOK_SIGNATURE_INVALID", http_status=403)
+        raise TikTokBusinessError(
+            "TikTok-Signature header is invalid", code="TIKTOK_SIGNATURE_INVALID", http_status=403
+        )
     return timestamp, signature
 
 
@@ -34,7 +36,9 @@ def verify_tiktok_signature(*, raw_body: bytes, header: str, now: int | None = N
     try:
         ts = int(timestamp)
     except ValueError as exc:
-        raise TikTokBusinessError("TikTok-Signature timestamp is invalid", code="TIKTOK_SIGNATURE_INVALID", http_status=403) from exc
+        raise TikTokBusinessError(
+            "TikTok-Signature timestamp is invalid", code="TIKTOK_SIGNATURE_INVALID", http_status=403
+        ) from exc
     current = int(now if now is not None else time.time())
     if abs(current - ts) > WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS:
         raise TikTokBusinessError("TikTok-Signature timestamp is stale", code="TIKTOK_SIGNATURE_STALE", http_status=403)

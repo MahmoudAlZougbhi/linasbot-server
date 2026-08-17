@@ -33,7 +33,9 @@ def upgrade() -> None:
         sa.Column("outcome_code", sa.String(length=64), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")),
         sa.UniqueConstraint("state_hash", name="uq_tt_oauth_state_hash"),
-        sa.CheckConstraint("status IN ('pending','consumed','expired','cancelled','failed')", name="ck_tt_oauth_status"),
+        sa.CheckConstraint(
+            "status IN ('pending','consumed','expired','cancelled','failed')", name="ck_tt_oauth_status"
+        ),
         sa.CheckConstraint("return_surface IN ('mobile','web')", name="ck_tt_oauth_surface"),
     )
     op.create_index("ix_tt_oauth_tenant_status", "tiktok_oauth_attempts", ["tenant_id", "status"])
@@ -220,7 +222,9 @@ def upgrade() -> None:
         sa.Column("id", sa.String(length=36), primary_key=True),
         sa.Column("tenant_id", sa.String(length=64), nullable=False),
         sa.Column("connection_id", sa.String(length=36), sa.ForeignKey("tiktok_connections.id"), nullable=False),
-        sa.Column("conversation_row_id", sa.String(length=36), sa.ForeignKey("tiktok_conversations.id"), nullable=False),
+        sa.Column(
+            "conversation_row_id", sa.String(length=36), sa.ForeignKey("tiktok_conversations.id"), nullable=False
+        ),
         sa.Column("provider_message_id", sa.String(length=128), nullable=False),
         sa.Column("direction", sa.String(length=16), nullable=False),
         sa.Column("text", sa.Text(), nullable=False, server_default=""),

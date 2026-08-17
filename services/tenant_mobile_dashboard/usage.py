@@ -35,9 +35,7 @@ def _normalize_usage_bucket(entry: dict[str, Any]) -> str:
     handler = str(entry.get("handler_path") or "").strip().lower()
     outcome = str(entry.get("outcome") or "").strip().lower()
 
-    if channel in {"tiktok_comment", "tiktok_comments"} or (
-        "tiktok" in channel and "comment" in channel
-    ):
+    if channel in {"tiktok_comment", "tiktok_comments"} or ("tiktok" in channel and "comment" in channel):
         return "tiktok_comments"
     if channel in {"tiktok", "tiktok_dm"} or ("tiktok" in channel and "comment" not in channel):
         return "tiktok_dm"

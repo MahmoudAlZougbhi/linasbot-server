@@ -68,8 +68,8 @@ def test_oauth_consume_replay_and_cross_tenant(tt_db) -> None:
 
 def test_oauth_callback_module_never_reads_query_tenant() -> None:
     source = Path("modules/tiktok_business_oauth.py").read_text(encoding="utf-8")
-    assert "params.get(\"tenant_id\")" not in source
-    assert "query_params.get(\"tenant_id\")" not in source
+    assert 'params.get("tenant_id")' not in source
+    assert 'query_params.get("tenant_id")' not in source
     assert "Never read tenant_id" in source
 
 

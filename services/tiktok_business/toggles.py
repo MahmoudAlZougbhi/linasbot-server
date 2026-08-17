@@ -112,7 +112,9 @@ async def set_tiktok_toggle(
 ) -> dict[str, Any]:
     row = tiktok_integration_row(tenant_id)
     if enabled and not row.get("binding_ids"):
-        raise TikTokToggleError("Connect TikTok before enabling this capability.", status_code=409, code="CONNECT_REQUIRED")
+        raise TikTokToggleError(
+            "Connect TikTok before enabling this capability.", status_code=409, code="CONNECT_REQUIRED"
+        )
     scopes = row.get("granted_scopes") or []
     if toggle == "dm" and enabled and not messaging_send_ready(scopes):
         raise TikTokToggleError(
@@ -137,7 +139,9 @@ async def set_tiktok_toggle(
         _set_action(tenant_id=tenant_id, action_id=_action_id(toggle), enabled=enabled, actor=actor)
         await _publish(tenant_id=tenant_id, actor=actor)
     except ConflictError as exc:
-        raise TikTokToggleError("Actions draft changed; reload and retry.", status_code=409, code="DRAFT_CONFLICT") from exc
+        raise TikTokToggleError(
+            "Actions draft changed; reload and retry.", status_code=409, code="DRAFT_CONFLICT"
+        ) from exc
     return {
         "toggles": {
             "dm": bool(tiktok_integration_row(tenant_id).get("dm_state", {}).get("requested_enabled")),

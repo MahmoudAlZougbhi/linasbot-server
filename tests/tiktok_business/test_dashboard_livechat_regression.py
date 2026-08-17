@@ -76,9 +76,7 @@ def test_dashboard_counts_from_logs_only() -> None:
 
 
 def test_live_chat_tiktok_filter() -> None:
-    user_id = compose_social_user_id(
-        tenant_id="shop-1", channel="tiktok", asset_id="conn-1", sender_id="cust-9"
-    )
+    user_id = compose_social_user_id(tenant_id="shop-1", channel="tiktok", asset_id="conn-1", sender_id="cust-9")
     assert "tiktok" in user_id
     assert resolve_live_chat_channel(user_id) == "tiktok"
     assert live_chat_channel_matches({"user_id": user_id}, "tiktok") is True

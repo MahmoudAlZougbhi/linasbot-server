@@ -12,9 +12,7 @@ def assert_tiktok_plan_allowed(tenant_id: str) -> None:
         return
     ent = entitlements_store.get(tenant_id)
     if ent.status not in {"active", "trial", "grace"} or ent.plan_id in {"", "none"}:
-        raise TikTokPlanDeniedError(
-            f"TikTok requires an active paid plan (plan={ent.plan_id}, status={ent.status})."
-        )
+        raise TikTokPlanDeniedError(f"TikTok requires an active paid plan (plan={ent.plan_id}, status={ent.status}).")
     features = PLAN_FEATURES.get(ent.plan_id) or ent.features or {}
     if not features.get("tiktok"):
         raise TikTokPlanDeniedError(f"TikTok is not included on plan={ent.plan_id}. Upgrade required.")

@@ -151,7 +151,9 @@ async def test_comment_ai_credits_and_success(tt_db, monkeypatch) -> None:
     monkeypatch.setattr("services.tiktok_business.comment_ai.ai_generation_blocked", lambda *_a, **_k: False)
 
     async def _reply(**_k):
-        return SimpleNamespace(stop=False, reply="thanks", reason="ok", metadata={"model": "m", "tokens": 3, "cost_usd": 0.0})
+        return SimpleNamespace(
+            stop=False, reply="thanks", reason="ok", metadata={"model": "m", "tokens": 3, "cost_usd": 0.0}
+        )
 
     async def _publish(**_k):
         return {"request_id": "req-9", "comment_id": "reply-9"}

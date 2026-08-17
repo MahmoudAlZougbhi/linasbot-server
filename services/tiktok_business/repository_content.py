@@ -97,9 +97,7 @@ class TikTokContentRepository:
         if not comment_id:
             raise ValueError("comment_id required")
         existing = self.session.scalar(
-            select(TikTokComment).where(
-                TikTokComment.tenant_id == tenant_id, TikTokComment.comment_id == comment_id
-            )
+            select(TikTokComment).where(TikTokComment.tenant_id == tenant_id, TikTokComment.comment_id == comment_id)
         )
         created = existing is None
         row = existing or TikTokComment(

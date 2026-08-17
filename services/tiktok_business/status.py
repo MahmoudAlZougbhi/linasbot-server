@@ -131,9 +131,7 @@ def tiktok_integration_row(tenant_id: str) -> dict[str, Any]:
 
 
 def _empty_state(status: str, blocker: str) -> dict[str, Any]:
-    return _state_from_connection(
-        requested=False, permission=False, healthy=False, status=status, blocker=blocker
-    )
+    return _state_from_connection(requested=False, permission=False, healthy=False, status=status, blocker=blocker)
 
 
 def _state_from_connection(

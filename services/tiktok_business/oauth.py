@@ -124,7 +124,9 @@ def start_tiktok_oauth(*, tenant_id: str, actor_user_id: str, return_surface: st
     }
 
 
-async def complete_tiktok_oauth(*, state: str, code: str | None, error: str | None, error_description: str | None) -> dict[str, Any]:
+async def complete_tiktok_oauth(
+    *, state: str, code: str | None, error: str | None, error_description: str | None
+) -> dict[str, Any]:
     parsed = parse_signed_state(state)
     tenant_id = parsed["tenant_id"]
     actor = parsed["actor_user_id"]

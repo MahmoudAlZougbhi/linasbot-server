@@ -19,7 +19,9 @@ from services.tiktok_business.scopes import comments_manage_ready
 MAX_ATTEMPTS = 5
 
 
-def _log_usage(*, tenant_id: str, comment_id: str, outcome: str, model: str = "", tokens: int = 0, cost: float = 0.0) -> None:
+def _log_usage(
+    *, tenant_id: str, comment_id: str, outcome: str, model: str = "", tokens: int = 0, cost: float = 0.0
+) -> None:
     try:
         from services.interaction_flow_logger import log_interaction
 
@@ -41,7 +43,9 @@ def _log_usage(*, tenant_id: str, comment_id: str, outcome: str, model: str = ""
         pass
 
 
-async def process_tiktok_comment_ai(*, tenant_id: str, connection_id: str, comment_id: str, item_id: str) -> dict[str, Any]:
+async def process_tiktok_comment_ai(
+    *, tenant_id: str, connection_id: str, comment_id: str, item_id: str
+) -> dict[str, Any]:
     with whatsapp_session() as session:
         repo = TikTokRepository(session)
         content = TikTokContentRepository(session)
@@ -104,7 +108,14 @@ async def process_tiktok_comment_ai(*, tenant_id: str, connection_id: str, comme
             job.last_error = (reason or "ai_no_reply")[:255]
             job.model = model[:64]
             session.commit()
-        _log_usage(tenant_id=tenant_id, comment_id=comment_id, outcome=reason or "ai_no_reply", model=model, tokens=tokens, cost=cost)
+        _log_usage(
+            tenant_id=tenant_id,
+            comment_id=comment_id,
+            outcome=reason or "ai_no_reply",
+            model=model,
+            tokens=tokens,
+            cost=cost,
+        )
         return {"skipped": True, "reason": reason or "ai_no_reply"}
 
     with whatsapp_session() as session:

@@ -19,7 +19,9 @@ from services.tiktok_business.repository_content import TikTokContentRepository
 from services.tiktok_business.scopes import messaging_read_ready, messaging_send_ready
 
 
-async def send_business_message(*, access_token: str, business_id: str, conversation_id: str, text: str) -> dict[str, Any]:
+async def send_business_message(
+    *, access_token: str, business_id: str, conversation_id: str, text: str
+) -> dict[str, Any]:
     return await tiktok_request(
         method="POST",
         path="/business/message/send/",
