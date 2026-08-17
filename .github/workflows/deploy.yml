@@ -1381,7 +1381,8 @@ jobs:
                 "$RELEASE_ROOT" "$TARGET_SHA" "$RELEASE_ARTIFACT_ID" \
                 "$RELEASE_ARTIFACT_API_SHA256" "$RELEASE_MANIFEST_SHA256" \
                 "$QUALITY_GATES_RUN_ID" "$RELEASE_RUN_ATTEMPT" "$RELEASE_CONTROL_SHA" \
-                "$RELEASE_SOURCE_SHA" "$RELEASE_TARGET_TREE_SHA" "$RELEASE_INSTALL_CONFIRM"
+                "$RELEASE_SOURCE_SHA" "$RELEASE_TARGET_TREE_SHA" "$RELEASE_INSTALL_CONFIRM" \
+                </dev/null
             fi
 
             if [ "$DEPLOY_OPERATION" = steady ] || [ "$DEPLOY_OPERATION" = reconcile_exact ]; then
@@ -1402,7 +1403,8 @@ jobs:
               /bin/bash --noprofile --norc "$HELPER_PATH" install-lb-attestation-cluster \
               "$LB_ROOT" "$LB_OPERATION" "$TARGET_SHA" "$LB_ATTESTATION_SHA256" \
               "$LB_READY_PROJECTION_SHA256" "$LB_JOURNAL" "$LB_INSTALL_CONFIRM" \
-              "$LB_OWNER_CONFIRM"
+              "$LB_OWNER_CONFIRM" \
+              </dev/null
 
             if [ "$DEPLOY_OPERATION" = steady ]; then
               sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
@@ -1413,7 +1415,8 @@ jobs:
                 "$LB_READY_PROJECTION_SHA256" "$LB_OWNER_CONFIRM" \
                 "$RELEASE_ARTIFACT_ID" "$RELEASE_ARTIFACT_API_SHA256" \
                 "$RELEASE_MANIFEST_SHA256" "$QUALITY_GATES_RUN_ID" \
-                "$RELEASE_RUN_ATTEMPT" "$RELEASE_TARGET_TREE_SHA"
+                "$RELEASE_RUN_ATTEMPT" "$RELEASE_TARGET_TREE_SHA" \
+                </dev/null>
             elif [ "$DEPLOY_OPERATION" = reconcile_exact ]; then
               sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
                 PATH=/usr/sbin:/usr/bin:/sbin:/bin \
@@ -1423,27 +1426,31 @@ jobs:
                 "$LB_ATTESTATION_SHA256" "$LB_READY_PROJECTION_SHA256" \
                 "$LB_OWNER_CONFIRM" "$RELEASE_ARTIFACT_ID" \
                 "$RELEASE_ARTIFACT_API_SHA256" "$RELEASE_MANIFEST_SHA256" \
-                "$QUALITY_GATES_RUN_ID" "$RELEASE_RUN_ATTEMPT" "$RELEASE_TARGET_TREE_SHA"
+                "$QUALITY_GATES_RUN_ID" "$RELEASE_RUN_ATTEMPT" "$RELEASE_TARGET_TREE_SHA" \
+                </dev/null>
             elif [ "$DEPLOY_OPERATION" = commit_exact ]; then
               sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
                 PATH=/usr/sbin:/usr/bin:/sbin:/bin \
                 /bin/bash --noprofile --norc "$HELPER_PATH" commit-target-confirmed \
                 "$TARGET_SHA" "$RECOVERY_JOURNAL_SHA256" "$COMMIT_CONFIRM" \
-                "$LB_ATTESTATION_SHA256" "$LB_READY_PROJECTION_SHA256" "$LB_OWNER_CONFIRM"
+                "$LB_ATTESTATION_SHA256" "$LB_READY_PROJECTION_SHA256" "$LB_OWNER_CONFIRM" \
+                </dev/null>
             elif [ "$DEPLOY_OPERATION" = recover_exact ]; then
               sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
                 PATH=/usr/sbin:/usr/bin:/sbin:/bin \
                 /bin/bash --noprofile --norc "$HELPER_PATH" recover-confirmed \
                 "$TARGET_SHA" "$NODE01_BASELINE_SHA" "$NODE02_BASELINE_SHA" \
                 "$RECOVERY_JOURNAL_SHA256" "$RECOVERY_CONFIRM" \
-                "$LB_ATTESTATION_SHA256" "$LB_READY_PROJECTION_SHA256" "$LB_OWNER_CONFIRM"
+                "$LB_ATTESTATION_SHA256" "$LB_READY_PROJECTION_SHA256" "$LB_OWNER_CONFIRM" \
+                </dev/null>
             else
               sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
                 PATH=/usr/sbin:/usr/bin:/sbin:/bin \
                 /bin/bash --noprofile --norc "$HELPER_PATH" retry-reconcile-confirmed \
                 "$TARGET_SHA" "$NODE01_BASELINE_SHA" "$NODE02_BASELINE_SHA" \
                 "$RECOVERY_JOURNAL_SHA256" "$RETRY_RECONCILE_CONFIRM" \
-                "$LB_ATTESTATION_SHA256" "$LB_READY_PROJECTION_SHA256" "$LB_OWNER_CONFIRM"
+                "$LB_ATTESTATION_SHA256" "$LB_READY_PROJECTION_SHA256" "$LB_OWNER_CONFIRM" \
+                </dev/null>
             fi
           REMOTE_DEPLOY
           /bin/chmod 0600 -- "$REMOTE_SCRIPT"
