@@ -21,7 +21,7 @@ def _canonical_process(extra: bytes = b"") -> bytes:
         b"LINAS_HA_PEER_HOST=10.106.0.4\0PYTHONUNBUFFERED=1\0"
         b"PYTHONDONTWRITEBYTECODE=1\0"
         b"PATH=/opt/linasbot/venv/bin:/usr/local/bin:/usr/bin:/bin\0"
-        b"HOME=/root\0USER=root\0LOGNAME=root\0SHELL=/bin/bash\0" + extra
+        b"HOME=/root\0USER=root\0LOGNAME=root\0" + extra
     )
 
 
@@ -47,11 +47,25 @@ def test_process_projection_accepts_systemd_pwd_and_c_utf8_locale(tmp_path: Path
     verify_process_environment({"OPENAI_API_KEY": "expected"}, process, node_id="node01")
 
 
+def test_process_projection_accepts_posix_root_shells(tmp_path: Path) -> None:
+    process = tmp_path / "environ"
+    for shell in (b"/bin/bash", b"/bin/sh"):
+        process.write_bytes(
+            b"OPENAI_API_KEY=expected\0META_DELETION_NODE_ID=node01\0"
+            b"LINAS_HA_PEER_HOST=10.106.0.4\0PYTHONUNBUFFERED=1\0"
+            b"PYTHONDONTWRITEBYTECODE=1\0"
+            b"PATH=/opt/linasbot/venv/bin:/usr/local/bin:/usr/bin:/bin\0"
+            b"HOME=/root\0USER=root\0LOGNAME=root\0SHELL=" + shell + b"\0"
+        )
+        verify_process_environment({"OPENAI_API_KEY": "expected"}, process, node_id="node01")
+
+
 @pytest.mark.parametrize(
     ("extra", "match"),
     [
         (b"LANG=en_US.UTF-8\0", "invalid root identity"),
         (b"PWD=/tmp\0", "invalid root identity"),
+        (b"SHELL=/usr/sbin/nologin\0", "invalid root identity"),
         (b"WHATSAPP_DISABLED=true\0", "unauthorized extra key: WHATSAPP_DISABLED"),
     ],
 )
