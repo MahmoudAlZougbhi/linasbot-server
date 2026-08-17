@@ -7,6 +7,7 @@ import { describe, it } from 'node:test';
 
 import {
   applyScheduleToDays,
+  branchAddress,
   branchMediaCount,
   formatClock12,
   hoursAreSet,
@@ -70,5 +71,9 @@ describe('list search and media count', () => {
     assert.equal(matchesBranchQuery(branch, 'aziz'), true);
     assert.equal(matchesBranchQuery(branch, 'tripoli'), false);
     assert.equal(branchMediaCount(branch), 3);
+  });
+
+  it('keeps trailing spaces in the typed address field', () => {
+    assert.equal(branchAddress({ address: 'Abdul Aziz St ' }), 'Abdul Aziz St ');
   });
 });

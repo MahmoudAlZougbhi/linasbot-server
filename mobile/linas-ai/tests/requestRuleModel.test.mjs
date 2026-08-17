@@ -23,6 +23,11 @@ test('parseRequestRule defaults type and search', () => {
   assert.equal(matchesRequestQuery(item, 'laser'), true);
   assert.equal(matchesRequestQuery(item, 'order'), false);
   assert.equal(ruleToRecord(createRequestRule('r2')).enabled, true);
+  const spaced = ruleToRecord({
+    ...createRequestRule('r3'),
+    notes: 'Collect name and phone ',
+  });
+  assert.equal(spaced.notes, 'Collect name and phone ');
 });
 
 test('collects footer and published status come from graph payload', () => {

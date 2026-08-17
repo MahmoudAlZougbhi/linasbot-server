@@ -176,7 +176,7 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
               <Text style={styles.deleteText}>{tr('knowledgeDelete')}</Text>
             </Pressable>
             <PrimaryButton
-              label={tr('knowledgeSave')}
+              label={tr('aiSetupSave')}
               onPress={() => void handleSave()}
               loading={draft.saving}
               disabled={!draft.dirty || !draft.etag}
@@ -201,7 +201,7 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
         titlePlaceholder={tr('resourceTitlePlaceholder')}
         descriptionPlaceholder={tr('resourceDescriptionPlaceholder')}
         urlPlaceholder={tr('knowledgeLinkPlaceholder')}
-        saveLabel={tr('knowledgeSave')}
+        saveLabel={tr('aiSetupSave')}
         cancelLabel={tr('usersCancel')}
         onChangeUrl={(url) => media.setPrompt((row) => (row ? { ...row, url } : row))}
         onChangeTitle={(title) => media.setPrompt((row) => (row ? { ...row, title } : row))}

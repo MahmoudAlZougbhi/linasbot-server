@@ -93,3 +93,18 @@ test('patchCatalogItem writes name and note onto CM catalog fields', () => {
   assert.equal(patched.labels.en, 'HydraFacial');
   assert.equal(patched.description, 'Glow treatment');
 });
+
+test('parseServices keeps trailing spaces so Note and Name stay typeable', () => {
+  const patched = patchCatalogItem(createCatalogItem('svc_space'), {
+    name: 'HydraFacial ',
+    note: 'Glow treatment ',
+  });
+  const items = parseServices({ catalog: [patched], price_entries: [] });
+  assert.equal(items[0].name, 'HydraFacial ');
+  assert.equal(items[0].note, 'Glow treatment ');
+  const bookOnly = parseServices({
+    catalog: [{ id: 'svc_book', labels: { en: 'X' }, notes: 'book_legacy' }],
+    price_entries: [],
+  });
+  assert.equal(bookOnly[0].note, '');
+});

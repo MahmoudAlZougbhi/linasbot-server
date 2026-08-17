@@ -25,11 +25,10 @@ function ruleNote(item: Record<string, unknown>): string {
 
 /** Persist note to notes + en so runtime greeting resolution keeps working. */
 function withNote(item: Record<string, unknown>, note: string): Record<string, unknown> {
-  const trimmed = note.trim();
   return {
     ...item,
-    notes: trimmed || null,
-    en: trimmed,
+    notes: note || null,
+    en: note,
     trigger_mode: item.trigger_mode || 'always',
     enabled: item.enabled !== false,
   };

@@ -325,6 +325,7 @@ export const aiSetupEn = {
   knowledgeKindLink: 'Link',
   knowledgeDelete: 'Delete',
   knowledgeSave: 'Save changes',
+  aiSetupSave: 'Save',
   knowledgeRemove: 'Remove',
   knowledgeReplace: 'Replace',
   knowledgeEditCaption: 'Edit caption',

@@ -325,6 +325,7 @@ export const aiSetupFr = {
   knowledgeKindLink: 'Lien',
   knowledgeDelete: 'Supprimer',
   knowledgeSave: 'Enregistrer les modifications',
+  aiSetupSave: 'Enregistrer',
   knowledgeRemove: 'Retirer',
   knowledgeReplace: 'Remplacer',
   knowledgeEditCaption: 'Modifier la légende',

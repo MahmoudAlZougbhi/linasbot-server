@@ -59,7 +59,7 @@ export function ResourceMetaModal({
   return (
     <AppModal visible={visible} animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.scrim} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => undefined}>
+        <View style={styles.sheet} onStartShouldSetResponder={() => true}>
           <Text style={styles.heading}>{heading}</Text>
           {preview ? <Text style={styles.preview}>{preview}</Text> : null}
           {showUrl ? (
@@ -105,7 +105,7 @@ export function ResourceMetaModal({
               <Text style={styles.saveText}>{saveLabel}</Text>
             </Pressable>
           </View>
-        </Pressable>
+        </View>
       </Pressable>
     </AppModal>
   );

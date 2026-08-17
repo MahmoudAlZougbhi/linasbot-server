@@ -83,11 +83,11 @@ function attachmentToRecord(att: ServiceAttachment): Record<string, unknown> {
 }
 
 function serviceNoteFromCatalog(row: Record<string, unknown>): string {
-  const desc = String(row.description || '').trim();
-  if (desc) return desc;
-  const notes = String(row.notes || '').trim();
-  if (!notes) return '';
-  if (/^book[_-]/i.test(notes)) return '';
+  const desc = String(row.description || '');
+  if (desc.trim()) return desc;
+  const notes = String(row.notes || '');
+  if (!notes.trim()) return '';
+  if (/^book[_-]/i.test(notes.trim())) return '';
   return notes;
 }
 

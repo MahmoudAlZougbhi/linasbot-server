@@ -324,6 +324,7 @@ export const aiSetupAr = {
   knowledgeKindLink: 'رابط',
   knowledgeDelete: 'حذف',
   knowledgeSave: 'حفظ التغييرات',
+  aiSetupSave: 'حفظ',
   knowledgeRemove: 'إزالة',
   knowledgeReplace: 'استبدال',
   knowledgeEditCaption: 'تعديل التعليق',

@@ -97,6 +97,8 @@ export function ServicePriceView({
           keyboardType="decimal-pad"
           placeholder="0"
           placeholderTextColor={SV_MUTED}
+          textAlignVertical="center"
+          underlineColorAndroid="transparent"
         />
       </View>
 
@@ -188,22 +190,32 @@ const styles = StyleSheet.create({
     borderColor: SV_BORDER,
     borderRadius: SV_RADIUS_SM,
     paddingHorizontal: 14,
-    minHeight: 56,
+    height: 56,
+    overflow: 'visible',
   },
   dollar: {
     color: SV_TEAL_DARK,
     fontFamily: fonts.bodyMedium,
     fontSize: 22,
+    lineHeight: 30,
     fontWeight: '700',
     marginRight: 8,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   amountInput: {
     flex: 1,
+    height: 56,
     color: SV_TEAL_DARK,
     fontFamily: fonts.bodyMedium,
     fontSize: 22,
+    lineHeight: 30,
     fontWeight: '700',
-    paddingVertical: 12,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    margin: 0,
+    includeFontPadding: false,
   },
   info: {
     flexDirection: 'row',

@@ -212,7 +212,7 @@ export function BranchMediaSection({ mapsUrl, attachments, onMapsUrl, onAttachme
         titlePlaceholder={tr('resourceTitlePlaceholder')}
         descriptionPlaceholder={tr('resourceDescriptionPlaceholder')}
         urlPlaceholder=""
-        saveLabel={tr('aiSetupLocAddLink')}
+        saveLabel={tr('aiSetupSave')}
         cancelLabel={tr('aiSetupLocCancel')}
         onChangeUrl={() => undefined}
         onChangeTitle={setMetaTitle}

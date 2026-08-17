@@ -305,7 +305,7 @@ export function ServicesScreen({ proposalReview, onBack }: Props) {
         titlePlaceholder={tr('resourceTitlePlaceholder')}
         descriptionPlaceholder={tr('resourceDescriptionPlaceholder')}
         urlPlaceholder={tr('servicesLinkPlaceholder')}
-        saveLabel={tr('servicesSave')}
+        saveLabel={tr('aiSetupSave')}
         cancelLabel={tr('usersCancel')}
         onChangeUrl={(url) => media.setPrompt((row) => (row ? { ...row, url } : row))}
         onChangeTitle={(title) => media.setPrompt((row) => (row ? { ...row, title } : row))}
