@@ -1326,7 +1326,7 @@ def test_git_common_directory_attribute_authority_is_rejected(tmp_path: Path) ->
     trust = _helper()[_helper().index("assert_git_repository_trust() {") : _helper().index("current_head() {")]
     assert '"$REPO_DIR/.git/commondir"' in trust
     assert "rev-parse --path-format=absolute --git-common-dir" in trust
-    assert "rev-parse --git-path info/attributes" in trust
+    assert "rev-parse --path-format=absolute --git-path info/attributes" in trust
 
 
 def test_release_import_ref_lock_recovery_is_repeatable_and_closed(tmp_path: Path) -> None:
