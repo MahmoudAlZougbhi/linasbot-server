@@ -26,6 +26,9 @@ export const requestSetupFr: Record<keyof typeof requestSetupEn, string> = {
   requestRulesPreviewFailed: 'Impossible de prévisualiser ce graphe de demande.',
   requestRulesPublishFailed: 'Brouillon enregistré, mais la publication du graphe a échoué.',
   requestRulesGraphLoadFailed: 'Impossible de charger les graphes de demande publiés.',
+  requestRulesGraphUnmigrated:
+    'Les tables de graphes de demande ne sont pas encore migrées sur ce serveur. Les règles restent en brouillon.',
+  requestRulesGraphDbUnavailable: 'Base client indisponible pour les graphes de demande.',
   requestRulesDeleteGraphFailed:
     'Règle retirée du brouillon, mais le graphe publié n’a pas pu être supprimé.',
 };
