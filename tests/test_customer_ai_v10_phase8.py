@@ -59,14 +59,14 @@ def test_owner_ui_files_exist() -> None:
     assert "children" in faq_detail
 
 
-def test_alembic_head_is_request_drafts() -> None:
+def test_alembic_head_is_product_images_max5() -> None:
     from tests.test_alembic_single_head import HEAD_ID, _revisions
 
     revisions = _revisions()
     referenced = {parent for parents in revisions.values() for parent in parents}
     heads = [revision for revision in revisions if revision not in referenced]
     assert heads == [HEAD_ID]
-    assert HEAD_ID == "20260821_request_drafts"
+    assert HEAD_ID == "20260822_product_images_max5"
 
 
 @pytest.mark.asyncio

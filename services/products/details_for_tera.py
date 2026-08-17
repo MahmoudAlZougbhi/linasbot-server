@@ -11,7 +11,8 @@ from services.products.schemas import product_to_dict
 def product_details_for_tera(row: Any) -> dict[str, Any]:
     raw = product_to_dict(row)
     images = list(raw.get("images") or [])
-    video_count = 0
+    links = list(raw.get("links") or [])
+    video_count = sum(1 for link in links if str(link.get("label") or "") == "asset:video")
     image_count = 0
     tenant_id = str(raw.get("tenant_id") or getattr(row, "tenant_id", "") or "")
     from services.products.media import load_media_meta

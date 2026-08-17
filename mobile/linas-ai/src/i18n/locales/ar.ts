@@ -1,4 +1,5 @@
 import { aiSetupAr } from './aiSetupAr';
+import { productsSetupAr } from './productsSetupAr';
 import { commentsSetupAr } from './commentsSetupAr';
 import { requestSetupAr } from './requestSetupAr';
 import { dashboardAr } from './dashboardAr';
@@ -336,6 +337,7 @@ export const ar = {
   ...usersUiAr,
   ...dashboardAr,
   ...aiSetupAr,
+  ...productsSetupAr,
   ...commentsSetupAr,
   ...requestSetupAr,
 

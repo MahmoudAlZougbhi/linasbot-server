@@ -22,7 +22,8 @@ export type Screen =
   | { name: 'products'; backTo?: 'cm' }
   | { name: 'products_import'; backTo?: 'products' }
   | { name: 'products_add'; backTo?: 'products' }
-  | { name: 'products_edit'; productId: string; backTo?: 'products' }
+  | { name: 'products_details'; productId: string; backTo?: 'products' }
+  | { name: 'products_edit'; productId: string; backTo?: 'products' | 'products_details' }
   | { name: 'services'; backTo?: 'cm' | 'chat'; proposalReview?: CmProposalReview | null }
   | {
       name: 'cm_section';

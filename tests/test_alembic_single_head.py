@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 VERSIONS = ROOT / "alembic" / "versions"
 MERGE_ID = "20260815_merge_sfu_meta_cred"
-HEAD_ID = "20260821_request_drafts"
+HEAD_ID = "20260822_product_images_max5"
 PARENTS = frozenset(
     {
         "20260813_sfu_channels_enabled",

@@ -10,6 +10,7 @@ import { queueSetupHandoff } from '../features/chat/pendingSetupHandoff';
 import { CmScreen } from '../features/cm/CmScreen';
 import { CmSectionScreen } from '../features/cm/CmSectionScreen';
 import { AddProductScreen } from '../features/products/AddProductScreen';
+import { ProductDetailsScreen } from '../features/products/ProductDetailsScreen';
 import { ProductsImportScreen } from '../features/products/ProductsImportScreen';
 import { ProductsScreen } from '../features/products/ProductsScreen';
 import { ServicesScreen } from '../features/services/ServicesScreen';
@@ -209,8 +210,8 @@ export function AppScreenTree({
             onBack={screen.backTo === 'cm' ? () => setScreen({ name: 'cm' }) : undefined}
             onAdd={() => setScreen({ name: 'products_add', backTo: 'products' })}
             onImport={() => setScreen({ name: 'products_import', backTo: 'products' })}
-            onEdit={(productId) =>
-              setScreen({ name: 'products_edit', productId, backTo: 'products' })
+            onOpenDetails={(productId) =>
+              setScreen({ name: 'products_details', productId, backTo: 'products' })
             }
           />
         </EphemeralRoute>
@@ -231,12 +232,42 @@ export function AppScreenTree({
           />
         </EphemeralRoute>
       ) : null}
+      {name === 'products_details' ? (
+        <EphemeralRoute>
+          <ProductDetailsScreen
+            productId={screen.productId}
+            onBack={() => setScreen({ name: 'products', backTo: 'cm' })}
+            onEdit={() =>
+              setScreen({
+                name: 'products_edit',
+                productId: screen.productId,
+                backTo: 'products_details',
+              })
+            }
+            onDeleted={() => setScreen({ name: 'products', backTo: 'cm' })}
+          />
+        </EphemeralRoute>
+      ) : null}
       {name === 'products_edit' ? (
         <EphemeralRoute>
           <AddProductScreen
             productId={screen.productId}
-            onBack={() => setScreen({ name: 'products', backTo: 'cm' })}
-            onSaved={() => setScreen({ name: 'products', backTo: 'cm' })}
+            onBack={() =>
+              screen.backTo === 'products_details'
+                ? setScreen({
+                    name: 'products_details',
+                    productId: screen.productId,
+                    backTo: 'products',
+                  })
+                : setScreen({ name: 'products', backTo: 'cm' })
+            }
+            onSaved={() =>
+              setScreen({
+                name: 'products_details',
+                productId: screen.productId,
+                backTo: 'products',
+              })
+            }
           />
         </EphemeralRoute>
       ) : null}
