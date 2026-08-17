@@ -29,4 +29,5 @@ def test_remote_helper_invocations_redirect_stdin_away_from_bash_s() -> None:
         start = script.index(needle)
         after = script[start : start + 900]
         assert "</dev/null" in after, operation
+        assert "</dev/null>" not in after, operation
     assert script.count("</dev/null") >= len(HELPER_OPS)
