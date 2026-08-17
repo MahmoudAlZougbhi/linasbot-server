@@ -110,8 +110,8 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
 
   return (
     <ScreenChrome
-      title={mode === 'edit' ? tr('aiSetupSec_knowledge') : ' '}
-      hideTitle={mode === 'list'}
+      title={tr('aiSetupSec_knowledge')}
+      subtitle={mode === 'list' ? tr('knowledgeSubtitle') : undefined}
       onBack={mode === 'edit' ? goList : onBack}
       canvasColor={KN_CANVAS}
     >

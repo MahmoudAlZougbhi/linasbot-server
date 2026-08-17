@@ -27,8 +27,7 @@ const LISTS = [
 describe('AI Setup first-open list chrome', () => {
   it('shared header is title, subtitle, search, and a teal plus square', () => {
     const header = read('features/cm/AiSetupListHeader.tsx');
-    assert.match(header, /styles\.hero/);
-    assert.match(header, /styles\.subtitle/);
+    assert.doesNotMatch(header, /styles\.hero/);
     assert.match(header, /feather\('search'\)/);
     assert.match(header, /feather\('plus'\)/);
     assert.match(header, /styles\.addSq/);
@@ -43,6 +42,14 @@ describe('AI Setup first-open list chrome', () => {
       assert.match(src, /AiSetupListHeader/, rel);
       assert.doesNotMatch(src, /PrimaryButton/, rel);
     }
+  });
+
+  it('ScreenChrome keeps back and title on one compact row', () => {
+    const chrome = read('features/shared/ScreenChrome.tsx');
+    assert.match(chrome, /compactTitle/);
+    assert.match(chrome, /styles\.navTitle/);
+    assert.match(chrome, /headerRowCompact/);
+    assert.doesNotMatch(chrome, /stackedHeader && styles\.hero/);
   });
 
   it('Knowledge subtitle and footer use the Linas sparkle mark', () => {

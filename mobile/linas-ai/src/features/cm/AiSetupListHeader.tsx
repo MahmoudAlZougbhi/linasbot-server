@@ -10,8 +10,6 @@ const BORDER = '#E2E8F0';
 const RADIUS = 12;
 
 type Props = {
-  title: string;
-  subtitle: string;
   query: string;
   onQueryChange: (value: string) => void;
   searchPlaceholder: string;
@@ -20,10 +18,8 @@ type Props = {
   countLabel?: string;
 };
 
-/** First-open AI Setup list chrome: title, subtitle, search + teal add square, count. */
+/** First-open AI Setup list chrome: search + teal add square, count. Title lives in ScreenChrome. */
 export function AiSetupListHeader({
-  title,
-  subtitle,
   query,
   onQueryChange,
   searchPlaceholder,
@@ -33,8 +29,6 @@ export function AiSetupListHeader({
 }: Props) {
   return (
     <View style={styles.wrap}>
-      <Text style={styles.hero}>{title}</Text>
-      <Text style={styles.subtitle}>{subtitle}</Text>
       <View style={styles.searchRow}>
         <View style={styles.search}>
           <AppIcon icon={feather('search')} size={18} color={MUTED} />
@@ -65,14 +59,6 @@ export function AiSetupListHeader({
 
 const styles = StyleSheet.create({
   wrap: { gap: 12 },
-  hero: {
-    color: TEAL_DARK,
-    fontFamily: fonts.bodyMedium,
-    fontSize: 28,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  subtitle: { color: MUTED, fontFamily: fonts.body, fontSize: 15, marginTop: -4 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   search: {
     flex: 1,

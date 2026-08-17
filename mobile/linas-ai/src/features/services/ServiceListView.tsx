@@ -22,8 +22,6 @@ export function ServiceListView({ items, query, onQueryChange, onAdd, onSelect, 
   return (
     <View style={styles.wrap}>
       <AiSetupListHeader
-        title={tr('servicesTitle')}
-        subtitle={tr('servicesSubtitle')}
         query={query}
         onQueryChange={onQueryChange}
         searchPlaceholder={tr('servicesSearch')}

@@ -26,8 +26,6 @@ export function BranchListView({ items, query, onQuery, onAdd, onOpen }: Props) 
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
       <AiSetupListHeader
-        title={tr('aiSetupSec_branches')}
-        subtitle={tr('aiSetupLocSubtitle')}
         query={query}
         onQueryChange={onQuery}
         searchPlaceholder={tr('aiSetupLocSearch')}

@@ -43,7 +43,7 @@ export function ProductsScreen({ onBack, onAdd, onImport, onEdit }: Props) {
   }, [reload]);
 
   return (
-    <ScreenChrome title={tr('productsTitle')} hideTitle onBack={onBack}>
+    <ScreenChrome title={tr('productsTitle')} subtitle={tr('productsSubtitle')} compactTitle onBack={onBack}>
       {loading && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" style={styles.loader} /> : null}
       {hasLoadedOnce && error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
       {hasLoadedOnce ? (

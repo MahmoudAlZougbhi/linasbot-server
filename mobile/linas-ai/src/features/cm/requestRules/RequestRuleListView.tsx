@@ -34,8 +34,6 @@ export function RequestRuleListView({
   return (
     <View style={styles.wrap}>
       <AiSetupListHeader
-        title={tr('aiSetupSec_requests_appointments')}
-        subtitle={tr('requestRulesSubtitle')}
         query={query}
         onQueryChange={onQueryChange}
         searchPlaceholder={tr('requestRulesSearch')}

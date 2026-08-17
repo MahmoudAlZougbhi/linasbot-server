@@ -188,7 +188,7 @@ export function ServicesScreen({ proposalReview, onBack }: Props) {
 
   const chromeTitle =
     mode === 'list'
-      ? ' '
+      ? tr('servicesTitle')
       : mode === 'price'
         ? tr(priceDraft.id ? 'servicesEditPriceTitle' : 'servicesAddPriceTitle')
         : tr('servicesEditTitle');
@@ -196,9 +196,13 @@ export function ServicesScreen({ proposalReview, onBack }: Props) {
   return (
     <ScreenChrome
       title={chromeTitle}
-      subtitle={mode === 'price' ? tr('servicesAddPriceSubtitle') : undefined}
-      centerTitle={mode !== 'list'}
-      hideTitle={mode === 'list'}
+      subtitle={
+        mode === 'list'
+          ? tr('servicesSubtitle')
+          : mode === 'price'
+            ? tr('servicesAddPriceSubtitle')
+            : undefined
+      }
       onBack={mode === 'list' ? onBack : mode === 'price' ? goEdit : goList}
       headerRight={mode === 'list' ? undefined : <LinasSparkleIcon size={18} color={SV_TEAL} />}
       canvasColor={SV_CANVAS}

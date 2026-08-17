@@ -216,12 +216,10 @@ export function CommentsScreen({ proposalReview, onBack }: Props) {
     setMode('edit');
   }
 
-  const chromeTitle = mode === 'list' ? ' ' : tr('aiSetupSec_comments');
-
   return (
     <ScreenChrome
-      title={chromeTitle}
-      hideTitle={mode === 'list'}
+      title={tr('aiSetupSec_comments')}
+      subtitle={mode === 'list' ? tr('commentsSubtitle') : undefined}
       onBack={mode === 'list' ? onBack : mode === 'posts' ? () => setMode('edit') : goList}
       canvasColor={CM_CANVAS}
     >

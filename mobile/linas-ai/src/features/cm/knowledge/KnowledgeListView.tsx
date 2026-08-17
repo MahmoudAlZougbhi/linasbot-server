@@ -35,8 +35,6 @@ export function KnowledgeListView({
   return (
     <View style={styles.wrap}>
       <AiSetupListHeader
-        title={tr('aiSetupSec_knowledge')}
-        subtitle={tr('knowledgeSubtitle')}
         query={query}
         onQueryChange={onQueryChange}
         searchPlaceholder={tr('knowledgeSearch')}

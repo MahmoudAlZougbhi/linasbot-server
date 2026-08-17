@@ -258,7 +258,11 @@ export function FaqScreen({ proposalReview }: Props) {
     .join('\n\n');
 
   return (
-    <ScreenChrome title={tr('faqTitle')} hideTitle={mode === 'list'}>
+    <ScreenChrome
+      title={tr('faqTitle')}
+      subtitle={mode === 'list' ? tr('faqSub') : undefined}
+      compactTitle
+    >
       {loading && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" /> : null}
       {hasLoadedOnce && error ? <Text style={styles.error}>{error}</Text> : null}
       {hasLoadedOnce && savedFlash ? <Text style={styles.ok}>{tr('faqSaved')}</Text> : null}

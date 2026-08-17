@@ -49,8 +49,6 @@ export function FaqListView({
   return (
     <View style={styles.wrap}>
       <AiSetupListHeader
-        title={tr('faqTitle')}
-        subtitle={tr('faqSub')}
         query={query}
         onQueryChange={onQueryChange}
         searchPlaceholder={tr('faqSearchPlaceholder')}

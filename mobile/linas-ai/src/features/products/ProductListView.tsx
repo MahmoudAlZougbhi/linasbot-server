@@ -39,8 +39,6 @@ export function ProductListView({
   return (
     <View style={styles.wrap}>
       <AiSetupListHeader
-        title={tr('productsTitle')}
-        subtitle={tr('productsSubtitle')}
         query={query}
         onQueryChange={onQueryChange}
         searchPlaceholder={tr('productsSearch')}

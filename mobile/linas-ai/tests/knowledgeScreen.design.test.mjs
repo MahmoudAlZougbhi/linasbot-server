@@ -26,7 +26,7 @@ describe('Knowledge screens match screenshot handoff', () => {
     assert.match(en, /knowledgeAdd: '\+ Add knowledge'/);
     assert.match(en, /knowledgeSearch: 'Search knowledge'/);
     assert.match(en, /knowledgeFooter: 'Linas uses published knowledge when replying\.'/);
-    assert.match(list, /tr\('knowledgeSubtitle'\)/);
+    assert.match(screen, /tr\('knowledgeSubtitle'\)/);
     assert.match(list, /tr\('knowledgeSearch'\)/);
     assert.match(list, /knowledgeCount/);
     assert.match(list, /AiSetupListHeader/);

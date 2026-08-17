@@ -23,8 +23,6 @@ export function CommentListView({ items, query, onQueryChange, onAdd, onSelect, 
   return (
     <View style={styles.wrap}>
       <AiSetupListHeader
-        title={tr('aiSetupSec_comments')}
-        subtitle={tr('commentsSubtitle')}
         query={query}
         onQueryChange={onQueryChange}
         searchPlaceholder={tr('commentsSearch')}

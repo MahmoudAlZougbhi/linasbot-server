@@ -56,7 +56,7 @@ describe('AI Products Phase 1 mobile', () => {
     const screen = read('features/products/ProductsScreen.tsx');
     const list = read('features/products/ProductListView.tsx');
     assert.match(screen, /ProductListView/);
-    assert.match(screen, /hideTitle/);
+    assert.match(screen, /compactTitle/);
     assert.match(list, /AiSetupListHeader/);
     assert.match(list, /productsSearch/);
     assert.doesNotMatch(list, /PrimaryButton/);

@@ -97,7 +97,7 @@ export function LocationHoursSectionScreen({ proposalReview, onBack }: Props) {
   return (
     <ScreenChrome
       title={tr('aiSetupSec_branches')}
-      hideTitle={!selected}
+      subtitle={!selected ? tr('aiSetupLocSubtitle') : undefined}
       onBack={handleBack}
     >
       {draft.loading ? <LinasLoadingIndicator variant="screen" /> : null}
