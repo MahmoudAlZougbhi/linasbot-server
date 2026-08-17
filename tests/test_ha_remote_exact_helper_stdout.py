@@ -21,7 +21,7 @@ def _function_body(name: str, terminator: str) -> str:
 def test_prepare_discards_peer_copy_stdout_before_printing_root() -> None:
     body = _function_body("prepare_remote_exact_helper", "cleanup_remote_exact_helper() {")
     assert 'scp -q "${SSH_OPTIONS[@]}" -- "$0" "root@${peer_host}:$remote_helper"' in body
-    assert "bash \"$remote_helper\" \"$helper_hash\" >/dev/null" in body
+    assert 'bash "$remote_helper" "$helper_hash" >/dev/null' in body
     scp_index = body.index("/usr/bin/scp -q")
     scp_redirect = body.index(">/dev/null", scp_index)
     printf_index = body.index("printf '%s\\n' \"$remote_root\"")
