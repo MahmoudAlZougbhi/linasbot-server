@@ -40,6 +40,9 @@ COLLISION_NAMES: Final = (
 )
 CONSUMER_NAMES: Final = ("bootstrap.active", "bootstrap.coordinator.json", "deploy.active", "deploy-node.active")
 BOOTSTRAP_COMMIT_OVERLAP: Final = ("bootstrap.active", "bootstrap.coordinator.json")
+BOOTSTRAP_COMMIT_JOURNAL_STATUSES: Final = frozenset(
+    {"applied", "admitted", "commit_proved", "committed"}
+)
 _SNAPSHOT_MARKERS: Final = (
     "manifest_snapshot",
     "control_snapshot",
@@ -273,7 +276,7 @@ def _commit_decided_bootstrap(paths: ProvisionPaths) -> bool:
     if not (journal.exists() or journal.is_symlink()):
         return False
     payload = _load_json(journal)
-    return payload.get("status") == "applied" and payload.get("tx_id") == tx_id
+    return payload.get("tx_id") == tx_id and payload.get("status") in BOOTSTRAP_COMMIT_JOURNAL_STATUSES
 
 
 def assert_no_collisions(paths: ProvisionPaths, tx_id: str | None = None) -> None:

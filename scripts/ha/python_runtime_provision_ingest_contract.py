@@ -105,6 +105,9 @@ INGEST_COLLISIONS: Final = (
     "python-runtime-provision.coordinator.json",
 )
 BOOTSTRAP_COMMIT_OVERLAP: Final = ("bootstrap.active", "bootstrap.coordinator.json")
+BOOTSTRAP_COMMIT_JOURNAL_STATUSES: Final = frozenset(
+    {"applied", "admitted", "commit_proved", "committed"}
+)
 RUNTIME_SNAPSHOT_OVERLAP: Final = (
     "python-runtime-provision.active",
     "python-runtime-provision.coordinator.json",
@@ -229,7 +232,11 @@ def _commit_decided_bootstrap(state_root: Path) -> bool:
         payload = json.loads(_root_read(journal, 65_536).decode("utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError, IngestError):
         return False
-    return isinstance(payload, dict) and payload.get("status") == "applied" and payload.get("tx_id") == tx_id
+    return (
+        isinstance(payload, dict)
+        and payload.get("tx_id") == tx_id
+        and payload.get("status") in BOOTSTRAP_COMMIT_JOURNAL_STATUSES
+    )
 
 
 def _incomplete_runtime_snapshot(state_root: Path) -> bool:

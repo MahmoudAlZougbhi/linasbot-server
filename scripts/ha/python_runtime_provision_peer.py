@@ -141,7 +141,7 @@ def commit_bootstrap():
  if not os.path.lexists(journal): return False
  try: payload=json.loads(read_safe(journal,65536))
  except Exception: return False
- return isinstance(payload,dict) and payload.get("status")=="applied" and payload.get("tx_id")==tx
+ return isinstance(payload,dict) and payload.get("tx_id")==tx and payload.get("status") in {"applied","admitted","commit_proved","committed"}
 skip=commit_bootstrap()
 for rel in ("bootstrap.active","bootstrap.coordinator.json","transaction.json","env.before","deploy.active","deploy-node.active","controlled-failover.active","registry-nfs-retire.active","rekey/runtime.guard"):
  if skip and rel in ("bootstrap.active","bootstrap.coordinator.json"): continue
