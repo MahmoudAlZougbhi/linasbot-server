@@ -91,6 +91,10 @@ import modules.schedule_api  # noqa: E402, F401
 import modules.settings_api  # noqa: E402, F401
 import modules.smart_messaging_api  # noqa: E402, F401
 import modules.store_iap_api  # noqa: E402, F401
+import modules.tiktok_business_api  # noqa: E402, F401
+import modules.tiktok_business_oauth  # noqa: E402, F401
+import modules.tiktok_business_webhook  # noqa: E402, F401
+import modules.tiktok_comments_api  # noqa: E402, F401
 import modules.training_files_api  # noqa: E402, F401
 import modules.wallet_api  # noqa: E402, F401
 import modules.web_chat_api  # noqa: E402, F401
@@ -100,10 +104,6 @@ import modules.whatsapp_cloud_api  # noqa: E402, F401
 import modules.whatsapp_cloud_ops_api  # noqa: E402, F401
 import modules.whatsapp_cloud_webhook  # noqa: E402, F401
 import modules.whatsapp_smart_followup_api  # noqa: E402, F401
-import modules.tiktok_business_api  # noqa: E402, F401
-import modules.tiktok_business_oauth  # noqa: E402, F401
-import modules.tiktok_business_webhook  # noqa: E402, F401
-import modules.tiktok_comments_api  # noqa: E402, F401
 
 
 @app.get("/downloads/live-chat-android.apk")

@@ -47,6 +47,7 @@ from db.models.requests_support import (
     CustomerRequestNote,
     CustomerRequestOutbox,
 )
+from db.models.tenant_services import ServiceOption, TenantService
 from db.models.tiktok_business import (
     TikTokAuditEvent,
     TikTokConnection,
@@ -61,7 +62,6 @@ from db.models.tiktok_content import (
     TikTokMedia,
     TikTokMessage,
 )
-from db.models.tenant_services import ServiceOption, TenantService
 from db.models.whatsapp_cloud import (
     WhatsAppAuditEvent,
     WhatsAppConnection,

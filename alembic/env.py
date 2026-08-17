@@ -30,6 +30,10 @@ from db.models import (  # noqa: E402, F401 — register models on metadata
     MetaBindingCredentialRow,
     MetaOAuthStateRow,
     MetaRegistryAuditEvent,
+    TikTokConnection,
+    TikTokCredential,
+    TikTokOAuthAttempt,
+    TikTokWebhookEvent,
     WhatsAppAuditEvent,
     WhatsAppConnection,
     WhatsAppConnectionAttempt,
@@ -39,10 +43,6 @@ from db.models import (  # noqa: E402, F401 — register models on metadata
     WhatsAppOutboundIntent,
     WhatsAppPilotEntitlement,
     WhatsAppWebhookEvent,
-    TikTokConnection,
-    TikTokOAuthAttempt,
-    TikTokCredential,
-    TikTokWebhookEvent,
 )
 
 config = context.config
