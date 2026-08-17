@@ -2988,7 +2988,8 @@ PY
   else
     rc=$?
   fi
-  unlink "$node01_path" "$node02_path" || cleanup_rc=$?
+  unlink "$node01_path" || cleanup_rc=$?
+  unlink "$node02_path" || cleanup_rc=$?
   cleanup_cluster_env_helper "$helper_root" || cleanup_rc=$?
   test "$cleanup_rc" = "0" || die "cluster environment comparison cleanup failed closed"
   return "$rc"
