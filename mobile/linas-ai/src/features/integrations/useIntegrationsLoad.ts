@@ -45,9 +45,11 @@ export function useIntegrationsLoad({
       }
       const data = await apiFetch('/api/mobile/integrations', { schema: ListSchema });
       setRows(data.integrations);
+      // List succeeded — never keep a stale "could not load" while channels render.
+      setError(null);
+      // WhatsApp / Website chat are separate cards; their failures must not fail the list.
       await Promise.all([refreshWhatsApp(), prefetchWebChatCardSnapshot()]);
       setWebChatReady(true);
-      setError(null);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setAuthGate(true);
