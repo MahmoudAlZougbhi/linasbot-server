@@ -199,7 +199,6 @@ export function ServicesScreen({ proposalReview, onBack }: Props) {
       subtitle={mode === 'price' ? tr('servicesAddPriceSubtitle') : undefined}
       centerTitle={mode !== 'list'}
       hideTitle={mode === 'list'}
-      headerLead={mode === 'list' ? <LinasSparkleIcon size={18} color={SV_TEAL} /> : undefined}
       onBack={mode === 'list' ? onBack : mode === 'price' ? goEdit : goList}
       headerRight={mode === 'list' ? undefined : <LinasSparkleIcon size={18} color={SV_TEAL} />}
       canvasColor={SV_CANVAS}

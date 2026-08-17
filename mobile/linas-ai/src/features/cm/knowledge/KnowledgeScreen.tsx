@@ -108,22 +108,11 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
     ]);
   }
 
-  const addPill = (
-    <Pressable
-      onPress={handleAdd}
-      accessibilityRole="button"
-      accessibilityLabel={tr('knowledgeAdd')}
-      style={({ pressed }) => [styles.addPill, pressed && styles.pressed]}
-    >
-      <Text style={styles.addPillText}>{tr('knowledgeAdd')}</Text>
-    </Pressable>
-  );
-
   return (
     <ScreenChrome
       title={mode === 'edit' ? tr('aiSetupSec_knowledge') : ' '}
+      hideTitle={mode === 'list'}
       onBack={mode === 'edit' ? goList : onBack}
-      headerRight={mode === 'list' ? addPill : undefined}
       canvasColor={KN_CANVAS}
     >
       {draft.loading ? <LinasLoadingIndicator variant="screen" /> : null}
@@ -140,6 +129,7 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
             query={query}
             count={rows.length}
             onQueryChange={setQuery}
+            onAdd={handleAdd}
             onSelect={(id) => {
               setSelectedId(id);
               setMode('edit');
@@ -227,13 +217,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   listScroll: { flexGrow: 1, paddingBottom: 16 },
   editScroll: { paddingBottom: 16 },
-  addPill: {
-    backgroundColor: KN_TEAL,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  addPillText: { color: '#FFFFFF', fontFamily: fonts.bodyMedium, fontSize: 13, fontWeight: '700' },
   pressed: { opacity: 0.7 },
   error: { color: '#DC2626', fontFamily: fonts.body, marginBottom: 8 },
   warn: { color: '#D97706', fontFamily: fonts.body, marginBottom: 8 },

@@ -8,7 +8,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 
-import { countTextLines, needsSeeAll, SEE_ALL_MAX_LINES } from '../src/features/cm/longTextClamp.ts';
+import {
+  countTextLines,
+  needsSeeAll,
+  NOTE_TEXT_COLOR,
+  SEE_ALL_MAX_LINES,
+} from '../src/features/cm/longTextClamp.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -23,6 +28,7 @@ describe('See all long text', () => {
     assert.equal(needsSeeAll('short'), false);
     assert.equal(needsSeeAll(Array.from({ length: 10 }, (_, i) => `L${i}`).join('\n')), false);
     assert.equal(needsSeeAll(Array.from({ length: 11 }, (_, i) => `L${i}`).join('\n')), true);
+    assert.equal(NOTE_TEXT_COLOR, '#000000');
   });
 
   it('wires clamp + fullscreen Copy/X on Note and Description fields', () => {
@@ -34,9 +40,15 @@ describe('See all long text', () => {
     assert.match(field, /ClampedLongField/);
     assert.match(clamp, /SEE_ALL_MAX_LINES|seeAllMaxHeight/);
     assert.match(clamp, /tr\('aiSetupSeeAll'\)/);
+    assert.match(clamp, /ScrollView/);
+    assert.match(clamp, /pointerEvents="none"/);
+    assert.match(clamp, /keyboardShouldPersistTaps="never"/);
+    assert.match(clamp, /NOTE_TEXT_COLOR/);
     assert.match(modal, /feather\('x'\)/);
     assert.match(modal, /Clipboard\.setStringAsync/);
     assert.match(modal, /tr\('aiSetupCopy'\)/);
+    assert.match(modal, /onChangeText=\{persist\}/);
+    assert.match(modal, /NOTE_TEXT_COLOR/);
     assert.match(en, /aiSetupSeeAll: 'See all'/);
     assert.match(en, /aiSetupCopy: 'Copy'/);
     assert.match(read('features/cm/knowledge/KnowledgeEditView.tsx'), /ClampedLongField/);

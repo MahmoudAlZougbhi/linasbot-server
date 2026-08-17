@@ -1,6 +1,7 @@
 /** First N lines stay inline; longer Note/Description fields get See all. */
 export const SEE_ALL_MAX_LINES = 10;
 export const SEE_ALL_LINE_HEIGHT = 22;
+export const NOTE_TEXT_COLOR = '#000000';
 
 export function countTextLines(text: string): number {
   if (!text) return 0;

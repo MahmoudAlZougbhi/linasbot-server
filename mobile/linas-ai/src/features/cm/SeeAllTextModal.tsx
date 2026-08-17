@@ -1,5 +1,13 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -8,6 +16,7 @@ import { AppModal } from '../../components/AppModal';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts } from '../../theme';
 import { AI_SETUP_TEAL } from './aiSetupDesign';
+import { NOTE_TEXT_COLOR } from './longTextClamp';
 
 const TEAL_DARK = '#0F4C4A';
 
@@ -15,27 +24,49 @@ type Props = {
   visible: boolean;
   title: string;
   text: string;
+  onChange: (value: string) => void;
   onClose: () => void;
 };
 
-/** Full-screen Note/Description reader — Copy + X, then back to the same editor. */
-export function SeeAllTextModal({ visible, title, text, onClose }: Props) {
+/** Full-screen Note/Description editor — tap text for keyboard, Copy + X keep the draft. */
+export function SeeAllTextModal({ visible, title, text, onChange, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const { tr } = useI18n();
+  const [draft, setDraft] = useState(text);
   const [copied, setCopied] = useState(false);
 
+  useEffect(() => {
+    if (visible) {
+      setDraft(text);
+      setCopied(false);
+    }
+  }, [visible]);
+
+  function persist(next: string) {
+    setDraft(next);
+    onChange(next);
+  }
+
+  function close() {
+    onChange(draft);
+    onClose();
+  }
+
   async function copyAll() {
-    await Clipboard.setStringAsync(text);
+    await Clipboard.setStringAsync(draft);
     setCopied(true);
     setTimeout(() => setCopied(false), 1600);
   }
 
   return (
-    <AppModal visible={visible} animationType="fade" onRequestClose={onClose}>
-      <View style={[styles.root, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 12 }]}>
+    <AppModal visible={visible} animationType="fade" onRequestClose={close}>
+      <KeyboardAvoidingView
+        style={[styles.root, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 12 }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <View style={styles.bar}>
           <Pressable
-            onPress={onClose}
+            onPress={close}
             accessibilityRole="button"
             accessibilityLabel={tr('back')}
             style={styles.iconBtn}
@@ -54,10 +85,16 @@ export function SeeAllTextModal({ visible, title, text, onClose }: Props) {
             <Text style={styles.copyText}>{copied ? tr('aiSetupCopied') : tr('aiSetupCopy')}</Text>
           </Pressable>
         </View>
-        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator>
-          <Text style={styles.text}>{text}</Text>
-        </ScrollView>
-      </View>
+        <TextInput
+          value={draft}
+          onChangeText={persist}
+          multiline
+          scrollEnabled
+          textAlignVertical="top"
+          showSoftInputOnFocus
+          style={styles.editor}
+        />
+      </KeyboardAvoidingView>
     </AppModal>
   );
 }
@@ -89,9 +126,11 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   copyText: { color: AI_SETUP_TEAL, fontFamily: fonts.bodyMedium, fontSize: 13, fontWeight: '700' },
-  body: { paddingHorizontal: 20, paddingVertical: 16, paddingBottom: 48 },
-  text: {
-    color: TEAL_DARK,
+  editor: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    color: NOTE_TEXT_COLOR,
     fontFamily: fonts.body,
     fontSize: 16,
     lineHeight: 24,

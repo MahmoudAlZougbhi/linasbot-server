@@ -7,6 +7,8 @@ export const commentsSetupAr: Record<keyof typeof commentsSetupEn, string> = {
   commentsInfoBody:
     'من دون قاعدة، يرد Linas من معرفتك المنشورة. التلقائي مجاني ويرسل رسالتك كما هي. رد الذكاء يتبع ملاحظتك ويستخدم أرصدة.',
   commentsSearch: 'بحث قواعد التعليق',
+  commentsCount: 'قواعد تعليق',
+  commentsCountOne: 'قاعدة تعليق',
   commentsFooter: 'كل قاعدة تستخدم أيقونة التعليق نفسها.',
   commentsEmpty: 'لا قواعد بعد — اضغط إضافة قاعدة تعليق.',
   commentsUntitled: 'قاعدة بلا عنوان',

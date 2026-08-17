@@ -1,12 +1,10 @@
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { AppIcon, feather } from '../../../components/AppIcon';
-import { LinasSparkleIcon } from '../../../components/LinasSparkleIcon';
-import { PrimaryButton } from '../../../components/PrimaryButton';
 import type { StringKey } from '../../../i18n';
 import { fonts } from '../../../theme';
+import { AiSetupListHeader } from '../AiSetupListHeader';
 import { RequestRuleCard } from './RequestRuleCard';
-import { RQ_BORDER, RQ_MUTED, RQ_RADIUS, RQ_TEAL, RQ_TEAL_DARK, RQ_TEAL_SOFT } from './requestRuleChrome';
+import { RQ_MUTED, RQ_RADIUS, RQ_TEAL, RQ_TEAL_DARK, RQ_TEAL_SOFT } from './requestRuleChrome';
 import type { RequestGraphRow, RequestRuleItem } from './requestRuleModel';
 
 type Props = {
@@ -28,15 +26,23 @@ export function RequestRuleListView({
   onSelect,
   tr,
 }: Props) {
+  const countLabel =
+    items.length === 1
+      ? `1 ${tr('requestRulesCountOne')}`
+      : `${items.length} ${tr('requestRulesCount')}`;
+
   return (
     <View style={styles.wrap}>
-      <View style={styles.hero}>
-        <LinasSparkleIcon size={22} color={RQ_TEAL} />
-        <Text style={styles.title}>{tr('aiSetupSec_requests_appointments')}</Text>
-        <Text style={styles.subtitle}>{tr('requestRulesSubtitle')}</Text>
-      </View>
-
-      <PrimaryButton label={tr('requestRulesAdd')} onPress={onAdd} style={styles.addBtn} />
+      <AiSetupListHeader
+        title={tr('aiSetupSec_requests_appointments')}
+        subtitle={tr('requestRulesSubtitle')}
+        query={query}
+        onQueryChange={onQueryChange}
+        searchPlaceholder={tr('requestRulesSearch')}
+        addA11yLabel={tr('requestRulesAdd')}
+        onAdd={onAdd}
+        countLabel={countLabel}
+      />
 
       <View style={styles.info}>
         <View style={styles.infoIcon}>
@@ -46,20 +52,6 @@ export function RequestRuleListView({
           <Text style={styles.infoTitle}>{tr('requestRulesInfoTitle')}</Text>
           <Text style={styles.infoBody}>{tr('requestRulesInfoBody')}</Text>
         </View>
-      </View>
-
-      <View style={styles.search}>
-        <AppIcon icon={feather('search')} size={18} color={RQ_MUTED} />
-        <TextInput
-          value={query}
-          onChangeText={onQueryChange}
-          placeholder={tr('requestRulesSearch')}
-          placeholderTextColor={RQ_MUTED}
-          style={styles.searchInput}
-          autoCapitalize="none"
-          autoCorrect={false}
-          accessibilityLabel={tr('requestRulesSearch')}
-        />
       </View>
 
       {items.length === 0 ? <Text style={styles.empty}>{tr('requestRulesEmpty')}</Text> : null}
@@ -81,15 +73,6 @@ export function RequestRuleListView({
 
 const styles = StyleSheet.create({
   wrap: { gap: 12, paddingBottom: 28, flexGrow: 1 },
-  hero: { alignItems: 'center', gap: 6, marginTop: 4 },
-  title: {
-    color: RQ_TEAL_DARK,
-    fontFamily: fonts.bodyMedium,
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  subtitle: { color: RQ_MUTED, fontFamily: fonts.body, fontSize: 15, textAlign: 'center' },
-  addBtn: { backgroundColor: RQ_TEAL, borderRadius: RQ_RADIUS },
   info: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -116,24 +99,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   infoBody: { color: RQ_TEAL_DARK, fontFamily: fonts.body, fontSize: 13, lineHeight: 18 },
-  search: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: RQ_BORDER,
-    borderRadius: RQ_RADIUS,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  searchInput: {
-    flex: 1,
-    color: RQ_TEAL_DARK,
-    fontFamily: fonts.body,
-    fontSize: 15,
-    padding: 0,
-  },
   empty: { color: RQ_MUTED, fontFamily: fonts.body, fontSize: 14 },
   footer: {
     color: RQ_MUTED,

@@ -20,7 +20,6 @@ test('Smart Q&A list matches screenshot handoff', () => {
   const list = read('features/faq/FaqListView.tsx');
   const banner = read('features/faq/FaqInfoBanner.tsx');
   const langs = read('features/faq/FaqLanguagesCard.tsx');
-  const toolbar = read('features/faq/FaqListToolbar.tsx');
   const card = read('features/faq/FaqQaCard.tsx');
   const chrome = read('features/faq/faqChrome.ts');
   const en = read('i18n/locales/en.ts');
@@ -44,7 +43,9 @@ test('Smart Q&A list matches screenshot handoff', () => {
   assert.match(banner, /tr\('faqWhyTitle'\)/);
 
   assert.match(list, /tr\('faqCreateNew'\)/);
-  assert.match(list, /plusCircle/);
+  assert.match(list, /AiSetupListHeader/);
+  assert.doesNotMatch(list, /plusCircle/);
+  assert.doesNotMatch(list, /PrimaryButton/);
   assert.doesNotMatch(list, /faqAskLinas/);
   assert.doesNotMatch(list, /onAskLinas/);
   assert.doesNotMatch(list, /tr\('retry'\)/);
@@ -57,9 +58,8 @@ test('Smart Q&A list matches screenshot handoff', () => {
   assert.match(langs, /onRemoveLanguage/);
   assert.doesNotMatch(langs, /onLongPress/);
 
-  assert.match(toolbar, /\{count\} \{tr\('faqAnswersCount'\)\}/);
-  assert.match(toolbar, /feather\('search'\)/);
-  assert.match(toolbar, /FAQ_ICON_SQ/);
+  assert.match(list, /faqAnswersCount/);
+  assert.match(list, /faqSearchPlaceholder/);
 
   assert.match(card, /faqQuestionLabel/);
   assert.match(card, /faqAnswerLabel/);

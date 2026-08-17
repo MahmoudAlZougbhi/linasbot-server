@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -12,7 +13,7 @@ import {
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts } from '../../theme';
 import { AI_SETUP_TEAL } from './aiSetupDesign';
-import { needsSeeAll, seeAllMaxHeight, SEE_ALL_LINE_HEIGHT } from './longTextClamp';
+import { needsSeeAll, NOTE_TEXT_COLOR, seeAllMaxHeight, SEE_ALL_LINE_HEIGHT } from './longTextClamp';
 import { SeeAllTextModal } from './SeeAllTextModal';
 
 type Props = {
@@ -27,7 +28,7 @@ type Props = {
   hintStyle?: StyleProp<TextStyle>;
 };
 
-/** Editable Note/Description: 10 visible lines, then See all → full-screen copy. */
+/** Note/Description: 10-line preview (no keyboard). See all is the editor. */
 export function ClampedLongField({
   label,
   value,
@@ -44,21 +45,38 @@ export function ClampedLongField({
   const [contentH, setContentH] = useState(0);
   const showSeeAll = needsSeeAll(value, contentH);
   const maxH = seeAllMaxHeight(12);
+  const placeholderColor = placeholderTextColor ?? '#8A9A98';
 
   return (
     <View>
       {label ? <Text style={[styles.label, labelStyle]}>{label}</Text> : null}
-      <TextInput
-        value={value}
-        onChangeText={onChange}
-        placeholder={placeholder}
-        placeholderTextColor={placeholderTextColor ?? '#8A9A98'}
-        multiline
-        textAlignVertical="top"
-        scrollEnabled={showSeeAll}
-        onContentSizeChange={(e) => setContentH(e.nativeEvent.contentSize.height)}
-        style={[styles.input, { maxHeight: maxH, lineHeight: SEE_ALL_LINE_HEIGHT }, inputStyle]}
-      />
+      {showSeeAll ? (
+        <ScrollView
+          style={[styles.box, { maxHeight: maxH }]}
+          contentContainerStyle={styles.previewBody}
+          scrollEnabled
+          keyboardShouldPersistTaps="never"
+          nestedScrollEnabled
+          onContentSizeChange={(_, height) => setContentH(height)}
+        >
+          <Text style={styles.previewText} pointerEvents="none">
+            {value}
+          </Text>
+        </ScrollView>
+      ) : (
+        <TextInput
+          value={value}
+          onChangeText={onChange}
+          placeholder={placeholder}
+          placeholderTextColor={placeholderColor}
+          multiline
+          textAlignVertical="top"
+          scrollEnabled={false}
+          showSoftInputOnFocus
+          onContentSizeChange={(e) => setContentH(e.nativeEvent.contentSize.height)}
+          style={[styles.box, styles.shortInput, inputStyle, { color: NOTE_TEXT_COLOR }]}
+        />
+      )}
       {showSeeAll ? (
         <Pressable
           onPress={() => setOpen(true)}
@@ -74,6 +92,7 @@ export function ClampedLongField({
         visible={open}
         title={label || tr('aiSetupSeeAll')}
         text={value}
+        onChange={onChange}
         onClose={() => setOpen(false)}
       />
     </View>
@@ -87,17 +106,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginBottom: 6,
   },
-  input: {
+  box: {
     backgroundColor: '#F3F8F7',
     borderWidth: 1,
     borderColor: '#D7E5E3',
     borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: '#10221A',
+    marginBottom: 8,
+  },
+  previewBody: { paddingHorizontal: 14, paddingVertical: 12 },
+  previewText: {
+    color: NOTE_TEXT_COLOR,
     fontFamily: fonts.body,
     fontSize: 16,
-    marginBottom: 8,
+    lineHeight: SEE_ALL_LINE_HEIGHT,
+  },
+  shortInput: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontFamily: fonts.body,
+    fontSize: 16,
+    lineHeight: SEE_ALL_LINE_HEIGHT,
+    color: NOTE_TEXT_COLOR,
   },
   seeAll: { alignSelf: 'flex-start', paddingVertical: 4, marginBottom: 6 },
   seeAllText: { color: AI_SETUP_TEAL, fontFamily: fonts.bodyMedium, fontSize: 14, fontWeight: '700' },

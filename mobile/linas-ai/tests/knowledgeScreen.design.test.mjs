@@ -29,12 +29,14 @@ describe('Knowledge screens match screenshot handoff', () => {
     assert.match(list, /tr\('knowledgeSubtitle'\)/);
     assert.match(list, /tr\('knowledgeSearch'\)/);
     assert.match(list, /knowledgeCount/);
+    assert.match(list, /AiSetupListHeader/);
     assert.match(list, /LinasSparkleIcon/);
     assert.match(list, /tr\('knowledgeFooter'\)/);
+    assert.doesNotMatch(list, /PrimaryButton/);
     assert.match(card, /feather\('file-text'\)/);
     assert.match(card, /feather\('chevron-right'\)/);
     assert.match(card, /LOCATIONS_KNOWLEDGE_TITLE/);
-    assert.match(screen, /tr\('knowledgeAdd'\)/);
+    assert.match(screen, /onAdd=\{handleAdd\}/);
     assert.match(screen, /onOpenLocations/);
   });
 

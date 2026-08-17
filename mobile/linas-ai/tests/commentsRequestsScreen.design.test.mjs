@@ -16,7 +16,7 @@ function read(rel) {
 }
 
 describe('Comments screens match screenshot handoff', () => {
-  it('list uses sparkle, add, info, search, cards, and footer copy', () => {
+  it('list uses shared chrome, add square, info, search, cards, and footer copy', () => {
     const list = read('features/cm/comments/CommentListView.tsx');
     const card = read('features/cm/comments/CommentCard.tsx');
     const en = read('i18n/locales/commentsSetupEn.ts');
@@ -26,8 +26,9 @@ describe('Comments screens match screenshot handoff', () => {
     assert.match(en, /Automatic is free and sends your exact message/);
     assert.match(en, /commentsSearch: 'Search comment rules'/);
     assert.match(en, /commentsFooter: 'Every rule uses the same comment icon\.'/);
-    assert.match(list, /LinasSparkleIcon/);
+    assert.match(list, /AiSetupListHeader/);
     assert.match(list, /tr\('commentsAdd'\)/);
+    assert.doesNotMatch(list, /PrimaryButton/);
     assert.match(list, /tr\('commentsInfoTitle'\)/);
     assert.match(card, /feather\('message-circle'\)/);
     assert.match(card, /commentsActive/);
@@ -68,7 +69,7 @@ describe('Comments screens match screenshot handoff', () => {
 });
 
 describe('Requests screens match screenshot handoff', () => {
-  it('list uses sparkle, add, info, search, clipboard cards, published footer', () => {
+  it('list uses shared chrome, add, info, search, clipboard cards, published footer', () => {
     const list = read('features/cm/requestRules/RequestRuleListView.tsx');
     const card = read('features/cm/requestRules/RequestRuleCard.tsx');
     const en = read('i18n/locales/requestSetupEn.ts');
@@ -77,7 +78,8 @@ describe('Requests screens match screenshot handoff', () => {
     assert.match(en, /requestRulesInfoTitle: 'What is a request rule\?'/);
     assert.match(en, /requestRulesSearch: 'Search request rules'/);
     assert.match(en, /requestRulesFooter: 'Every rule uses the same request icon\.'/);
-    assert.match(list, /LinasSparkleIcon/);
+    assert.match(list, /AiSetupListHeader/);
+    assert.doesNotMatch(list, /PrimaryButton/);
     assert.match(card, /clipboard-text-outline/);
     assert.match(card, /requestRulesPublished/);
     assert.match(card, /requestRulesCollects/);

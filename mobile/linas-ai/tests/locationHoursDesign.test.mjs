@@ -28,6 +28,8 @@ describe('Locations & hours design wiring', () => {
     const hours = read('features/cm/editors/locationOpeningHours/BranchHoursTab.tsx');
     const edit = read('features/cm/editors/locationOpeningHours/BranchEditView.tsx');
     assert.match(list, /aiSetupLocSearch/);
+    assert.match(list, /AiSetupListHeader/);
+    assert.match(list, /LinasSparkleIcon/);
     assert.match(list, /aiSetupLocBanner/);
     assert.match(details, /aiSetupLocAddress/);
     assert.match(details, /external-link/);

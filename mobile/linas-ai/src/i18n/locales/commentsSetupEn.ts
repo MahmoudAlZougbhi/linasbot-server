@@ -5,6 +5,8 @@ export const commentsSetupEn = {
   commentsInfoBody:
     'Without a rule, Linas still replies using your published knowledge. Automatic is free and sends your exact message. AI Reply follows your note and uses credits.',
   commentsSearch: 'Search comment rules',
+  commentsCount: 'comment rules',
+  commentsCountOne: 'comment rule',
   commentsFooter: 'Every rule uses the same comment icon.',
   commentsEmpty: 'No comment rules yet — tap Add comment rule.',
   commentsUntitled: 'Untitled rule',
