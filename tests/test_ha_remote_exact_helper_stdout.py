@@ -18,15 +18,26 @@ def _function_body(name: str, terminator: str) -> str:
     return source[start:end]
 
 
-def test_prepare_discards_peer_copy_stdout_before_printing_root() -> None:
+def test_prepare_verifies_peer_helper_over_bash_stdin() -> None:
     body = _function_body("prepare_remote_exact_helper", "cleanup_remote_exact_helper() {")
     assert 'scp -q "${SSH_OPTIONS[@]}" -- "$0" "root@${peer_host}:$remote_helper"' in body
-    assert 'bash "$remote_helper" "$helper_hash" >/dev/null' in body
-    scp_index = body.index("/usr/bin/scp -q")
-    scp_redirect = body.index(">/dev/null", scp_index)
+    assert 'peer_root_bash_s "$peer_host" "$remote_helper" "$helper_hash"' in body
+    assert "/bin/bash --noprofile --norc -s --" in _function_body(
+        "peer_root_bash_s", "reap_stale_peer_release_staging() {"
+    )
+    assert 'awk "{print' not in body
     printf_index = body.index("printf '%s\\n' \"$remote_root\"")
-    assert scp_redirect < printf_index
+    verify_index = body.index("peer_root_bash_s")
+    assert verify_index < printf_index
     assert body.rstrip().endswith("printf '%s\\n' \"$remote_root\"\n}")
+
+
+def test_cluster_import_reaps_stale_volatile_peer_staging() -> None:
+    body = _function_body("install_release_bundle_cluster", "install_lb_ready_attestation_cluster() {")
+    assert 'reap_stale_peer_release_staging "$peer_host"' in body
+    reap = _function_body("reap_stale_peer_release_staging", "prepare_remote_exact_helper() {")
+    assert "/run/linasbot-release-import.????????" in reap
+    assert "/run/linasbot-release-helper.????????" in reap
 
 
 def test_helper_root_contract_rejects_scp_progress_pollution() -> None:

@@ -8206,6 +8206,45 @@ remote_node() {
     "$INTERNAL_NODE_DISPATCH_CONFIRM" "$@" <"$0"
 }
 
+peer_root_bash_s() {
+  local peer_host="$1"
+  shift
+  ssh "${SSH_OPTIONS[@]}" "root@${peer_host}" \
+    /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+    PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+    /bin/bash --noprofile --norc -s -- "$@"
+}
+
+reap_stale_peer_release_staging() {
+  local peer_host="$1"
+  peer_root_bash_s "$peer_host" "$PYTHON_RUNTIME_ARTIFACT" <<'EOF'
+set -euo pipefail
+artifact="$1"
+case "$artifact" in
+  cpython-3.13.15+20260814-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz) ;;
+  *) exit 1 ;;
+esac
+shopt -s nullglob
+for root in /run/linasbot-release-helper.????????; do
+  case "$root" in /run/linasbot-release-helper.????????) ;; *) exit 1 ;; esac
+  if [ -e "$root/deploy_meta_release_ha.sh" ] || [ -L "$root/deploy_meta_release_ha.sh" ]; then
+    unlink "$root/deploy_meta_release_ha.sh"
+  fi
+  rmdir "$root"
+done
+for root in /run/linasbot-release-import.????????; do
+  case "$root" in /run/linasbot-release-import.????????) ;; *) exit 1 ;; esac
+  for name in release-manifest.json wheelhouse.tar dashboard-build.tar control-plane.tar \
+    source.bundle "$artifact"; do
+    if [ -e "$root/$name" ] || [ -L "$root/$name" ]; then
+      unlink "$root/$name"
+    fi
+  done
+  rmdir "$root"
+done
+EOF
+}
+
 prepare_remote_exact_helper() {
   local peer_host="$1"
   local helper_hash remote_root remote_helper
@@ -8216,22 +8255,20 @@ prepare_remote_exact_helper() {
   [[ "$remote_root" =~ ^/run/linasbot-release-helper\.[A-Za-z0-9]{8}$ ]] || \
     die "remote exact-helper root is outside its volatile namespace"
   remote_helper="$remote_root/deploy_meta_release_ha.sh"
-  /usr/bin/scp -q "${SSH_OPTIONS[@]}" -- "$0" "root@${peer_host}:$remote_helper" \
-    >/dev/null
-  ssh "${SSH_OPTIONS[@]}" "root@${peer_host}" \
-    /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
-    PATH=/usr/sbin:/usr/bin:/sbin:/bin \
-    /bin/bash --noprofile --norc -c \
-    'set -euo pipefail
-     helper="$1"
-     expected="$2"
-     chmod 0700 "$helper"
-     test -f "$helper" && test ! -L "$helper"
-     test "$(stat -c "%F:%u:%g:%a:%h" "$helper")" = "regular file:0:0:700:1"
-     test "$(sha256sum "$helper" | awk "{print \\$1}")" = "$expected"
-     sync -d "$helper"
-     sync -f "$(dirname "$helper")"' \
-    bash "$remote_helper" "$helper_hash" >/dev/null
+  /usr/bin/scp -q "${SSH_OPTIONS[@]}" -- "$0" "root@${peer_host}:$remote_helper"
+  peer_root_bash_s "$peer_host" "$remote_helper" "$helper_hash" <<'EOF'
+set -euo pipefail
+helper="$1"
+expected="$2"
+chmod 0700 "$helper"
+test -f "$helper" && test ! -L "$helper"
+test "$(stat -c "%F:%u:%g:%a:%h" "$helper")" = "regular file:0:0:700:1"
+actual="$(sha256sum "$helper")"
+actual="${actual%% *}"
+test "$actual" = "$expected"
+sync -d "$helper"
+sync -f "$(dirname "$helper")"
+EOF
   printf '%s\n' "$remote_root"
 }
 
@@ -8240,15 +8277,13 @@ cleanup_remote_exact_helper() {
   local remote_root="$2"
   [[ "$remote_root" =~ ^/run/linasbot-release-helper\.[A-Za-z0-9]{8}$ ]] || \
     die "remote exact-helper cleanup root is invalid"
-  ssh "${SSH_OPTIONS[@]}" "root@${peer_host}" \
-    /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
-    PATH=/usr/sbin:/usr/bin:/sbin:/bin \
-    /bin/bash --noprofile --norc -c \
-    'set -euo pipefail
-     root="$1"
-     case "$root" in /run/linasbot-release-helper.????????) ;; *) exit 1 ;; esac
-     unlink "$root/deploy_meta_release_ha.sh"
-     rmdir "$root"' bash "$remote_root"
+  peer_root_bash_s "$peer_host" "$remote_root" <<'EOF'
+set -euo pipefail
+root="$1"
+case "$root" in /run/linasbot-release-helper.????????) ;; *) exit 1 ;; esac
+unlink "$root/deploy_meta_release_ha.sh"
+rmdir "$root"
+EOF
 }
 
 install_release_bundle_cluster() {
@@ -8276,6 +8311,7 @@ install_release_bundle_cluster() {
     "$RELEASE_INCOMING_PREFIX"????????) ;;
     *) die "cluster release import directory is outside its exact namespace" ;;
   esac
+  reap_stale_peer_release_staging "$peer_host"
   remote_helper_root="$(prepare_remote_exact_helper "$peer_host")"
   [[ "$remote_helper_root" =~ ^/run/linasbot-release-helper\.[A-Za-z0-9]{8}$ ]] || \
     die "remote exact-helper root capture is not a closed volatile path"
@@ -8307,16 +8343,14 @@ install_release_bundle_cluster() {
       "$control_sha" "$source_sha" "$target_tree_sha" "$confirmation" || rc=$?
   fi
   if [ -n "$remote_incoming" ]; then
-    ssh "${SSH_OPTIONS[@]}" "root@${peer_host}" \
-      /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
-      PATH=/usr/sbin:/usr/bin:/sbin:/bin \
-      /bin/bash --noprofile --norc -c \
-      'set -euo pipefail
-       root="$1"
-       shift
-       case "$root" in /run/linasbot-release-import.????????) ;; *) exit 1 ;; esac
-       for name in "$@"; do unlink "$root/$name"; done
-       rmdir "$root"' bash "$remote_incoming" "${expected_files[@]}" || cleanup_rc=$?
+    peer_root_bash_s "$peer_host" "$remote_incoming" "${expected_files[@]}" <<'EOF' || cleanup_rc=$?
+set -euo pipefail
+root="$1"
+shift
+case "$root" in /run/linasbot-release-import.????????) ;; *) exit 1 ;; esac
+for name in "$@"; do unlink "$root/$name"; done
+rmdir "$root"
+EOF
   fi
   if [ -n "$remote_helper_root" ]; then
     cleanup_remote_exact_helper "$peer_host" "$remote_helper_root" || cleanup_rc=$?
