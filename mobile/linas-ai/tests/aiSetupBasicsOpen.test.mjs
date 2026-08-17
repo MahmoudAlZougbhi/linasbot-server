@@ -37,21 +37,22 @@ describe('AI Setup hub opens AI Basics', () => {
     assert.doesNotMatch(pricesBlock, /ai_basics/);
   });
 
-  it('CmSectionScreen mounts AiBasicsSectionScreen before the standard draft screen', () => {
+  it('CmSectionScreen mounts AiBasicsScreen before the standard draft screen', () => {
     const screen = read('features/cm/CmSectionScreen.tsx');
+    const basics = read('features/cm/aiBasics/AiBasicsScreen.tsx');
     const hook = read('features/cm/useCmMultiDraft.ts');
-    assert.match(screen, /function AiBasicsSectionScreen/);
+    assert.match(screen, /AiBasicsScreen/);
     assert.match(
       screen,
       /if \(section === 'ai_basics' \|\| section === 'style' \|\| section === 'dynamic_messages'\)/,
     );
-    assert.match(screen, /AI_BASICS_COMPOSITE_SECTIONS = \['ai_basics', 'style', 'dynamic_messages'\]/);
-    assert.match(screen, /useCmMultiDraft\(AI_BASICS_COMPOSITE_SECTIONS/);
-    assert.doesNotMatch(screen, /useCmMultiDraft\(\[/);
+    assert.match(basics, /AI_BASICS_COMPOSITE_SECTIONS = \['ai_basics', 'style', 'dynamic_messages'\]/);
+    assert.match(basics, /useCmMultiDraft\(AI_BASICS_COMPOSITE_SECTIONS/);
+    assert.doesNotMatch(basics, /useCmMultiDraft\(\[/);
     assert.match(hook, /const sectionKey = sections\.join\(','\)/);
     assert.match(hook, /\[proposalReview, sectionKey\]/);
     const exported = screen.match(/export function CmSectionScreen[\s\S]*?\n\}/)?.[0] ?? '';
-    assert.match(exported, /AiBasicsSectionScreen/);
+    assert.match(exported, /AiBasicsScreen/);
     assert.doesNotMatch(exported, /useCmDraft/);
     assert.doesNotMatch(exported, /useCmMultiDraft/);
   });
