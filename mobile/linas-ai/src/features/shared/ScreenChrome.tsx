@@ -22,6 +22,8 @@ type Props = {
   headerLead?: ReactNode;
   /** Hide the title text while keeping back / lead / right alignment. */
   hideTitle?: boolean;
+  /** Smaller title on the same row as back (AI Setup nested screens). */
+  compactTitle?: boolean;
   /** Settings handoff: title under the hamburger, inset hairline, optional pale canvas. */
   stackedHeader?: boolean;
   /** Section-style title (16px) — Dashboard “Total activity” parity for Settings sub-screens. */
@@ -45,6 +47,7 @@ export function ScreenChrome({
   headerRight,
   headerLead,
   hideTitle,
+  compactTitle,
   stackedHeader,
   sectionTitle: sectionTitleStyle,
   canvasColor,
@@ -58,14 +61,19 @@ export function ScreenChrome({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawer = useModuleDrawerHistory(nav.isAuthenticated, drawerOpen);
   const leadColor = iconColor ?? colors.text;
-  const headerTitleStyle = sectionTitleStyle || stackedHeader ? typography.sectionTitle : typography.title;
+  const compactNav = (compactTitle ?? Boolean(onBack)) && !stackedHeader && !centerTitle;
+  const headerTitleStyle = sectionTitleStyle || stackedHeader
+    ? typography.sectionTitle
+    : compactNav
+      ? styles.navTitle
+      : typography.title;
   const menu = onBack ? (
     <Pressable
       onPress={onBack}
-      style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.hit, compactNav && styles.hitCompact, pressed && styles.pressed]}
       accessibilityLabel={tr('back')}
       accessibilityRole="button"
-      hitSlop={4}
+      hitSlop={compactNav ? 10 : 4}
     >
       <AppIcon icon={feather('chevron-left')} size={26} color={leadColor} />
     </Pressable>
@@ -97,6 +105,7 @@ export function ScreenChrome({
           <View
             style={[
               styles.headerRow,
+              compactNav && styles.headerRowCompact,
               centerTitle && styles.headerRowCentered,
               Boolean(subtitle) && !centerTitle && styles.headerRowTitleTop,
             ]}
@@ -108,6 +117,7 @@ export function ScreenChrome({
                 styles.titleBlock,
                 centerTitle && styles.titleBlockCentered,
                 Boolean(subtitle) && !centerTitle && styles.titleBlockWithSub,
+                compactNav && Boolean(subtitle) && styles.titleBlockCompactSub,
               ]}
             >
               {hideTitle ? null : (
@@ -193,6 +203,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
+  headerRowCompact: {
+    gap: 2,
+  },
+  navTitle: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '700',
+  },
   /** Title top matches the silver menu square; subtitle sits under the title only. */
   headerRowTitleTop: {
     alignItems: 'flex-start',
@@ -206,6 +225,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: -spacing.sm,
+  },
+  hitCompact: {
+    width: 32,
+    marginRight: -2,
   },
   hitSpacer: {
     width: HEADER_HIT,
@@ -231,6 +254,9 @@ const styles = StyleSheet.create({
   },
   titleBlockWithSub: {
     paddingTop: (HEADER_HIT - HEADER_ICON_BOX) / 2,
+  },
+  titleBlockCompactSub: {
+    paddingTop: 13,
   },
   titleBlockCentered: {
     paddingTop: 0,

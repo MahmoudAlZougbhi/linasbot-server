@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Pressable, Text } from 'react-native';
+import { Alert, Text } from 'react-native';
 
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { useI18n } from '../../i18n/LanguageContext';
@@ -10,7 +10,6 @@ import type { CmProposalReview } from './cmProposalReview';
 import { BranchEditView } from './editors/locationOpeningHours/BranchEditView';
 import { BranchListView } from './editors/locationOpeningHours/BranchListView';
 import { newBranchRecord } from './editors/locationOpeningHours/branchScheduleHelpers';
-import { locStyles } from './editors/locationOpeningHours/locationHoursStyles';
 import { useCmDraft } from './useCmDraft';
 
 type Props = {
@@ -98,21 +97,20 @@ export function LocationHoursSectionScreen({ proposalReview, onBack }: Props) {
   return (
     <ScreenChrome
       title={tr('aiSetupSec_branches')}
-      subtitle={selected ? undefined : tr('aiSetupLocSubtitle')}
+      subtitle={!selected ? tr('aiSetupLocSubtitle') : undefined}
       onBack={handleBack}
-      headerRight={
-        selected ? undefined : (
-          <Pressable style={locStyles.addBtn} onPress={addBranch} accessibilityRole="button">
-            <Text style={locStyles.addBtnText}>{tr('aiSetupLocAddBranch')}</Text>
-          </Pressable>
-        )
-      }
     >
       {draft.loading ? <LinasLoadingIndicator variant="screen" /> : null}
       {draft.error ? <Text style={cmFormStyles.error}>{draft.error}</Text> : null}
       {draft.conflict ? <Text style={cmFormStyles.warn}>{draft.conflict}</Text> : null}
       {!draft.loading && !selected ? (
-        <BranchListView items={items} query={query} onQuery={setQuery} onOpen={setSelectedId} />
+        <BranchListView
+          items={items}
+          query={query}
+          onQuery={setQuery}
+          onAdd={addBranch}
+          onOpen={setSelectedId}
+        />
       ) : null}
       {!draft.loading && selected ? (
         <BranchEditView

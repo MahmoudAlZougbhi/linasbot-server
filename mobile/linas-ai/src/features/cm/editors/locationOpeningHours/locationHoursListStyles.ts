@@ -30,7 +30,7 @@ export const locListStyles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    color: '#10221A',
+    color: '#000000',
     fontFamily: fonts.body,
     fontSize: 15,
     paddingVertical: 10,
@@ -56,7 +56,7 @@ export const locListStyles = StyleSheet.create({
   },
   cardBody: { flex: 1, minWidth: 0 },
   name: {
-    color: '#10221A',
+    color: '#000000',
     fontFamily: fonts.bodyMedium,
     fontSize: 16,
     fontWeight: '700',

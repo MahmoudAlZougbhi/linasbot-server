@@ -1,6 +1,6 @@
 /** Services list/edit tokens — screenshot handoff (teal, 8–12px radii). */
 export const SV_TEAL = '#107C75';
-export const SV_TEAL_DARK = '#0F4C4A';
+export const SV_TEAL_DARK = '#000000';
 export const SV_TEAL_SOFT = '#E6F3F2';
 export const SV_BORDER = '#E2E8F0';
 export const SV_MUTED = '#94A3B8';

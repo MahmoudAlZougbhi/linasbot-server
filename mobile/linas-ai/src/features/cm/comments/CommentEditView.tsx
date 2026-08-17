@@ -2,6 +2,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 
 import type { StringKey } from '../../../i18n';
 import { fonts } from '../../../theme';
+import { ClampedLongField } from '../ClampedLongField';
 import {
   CM_BORDER,
   CM_DOT,
@@ -126,17 +127,17 @@ export function CommentEditView({
 
       {isAi ? (
         <>
-          <Text style={styles.label}>{tr('commentsNote')}</Text>
-          <TextInput
+          <ClampedLongField
+            label={tr('commentsNote')}
             value={item.ai_instructions}
-            onChangeText={onNote}
-            style={[styles.input, styles.area]}
-            multiline
-            textAlignVertical="top"
+            onChange={onNote}
             placeholder={tr('commentsNote')}
             placeholderTextColor={CM_MUTED}
+            hint={tr('commentsNoteHint')}
+            labelStyle={styles.label}
+            inputStyle={styles.input}
+            hintStyle={styles.hint}
           />
-          <Text style={styles.hint}>{tr('commentsNoteHint')}</Text>
         </>
       ) : (
         <>
@@ -149,13 +150,13 @@ export function CommentEditView({
             placeholderTextColor={CM_MUTED}
             autoCapitalize="none"
           />
-          <Text style={styles.label}>{tr('commentsReplyMessage')}</Text>
-          <TextInput
+          <ClampedLongField
+            label={tr('commentsReplyMessage')}
             value={item.reply_template}
-            onChangeText={onReplyMessage}
-            style={[styles.input, styles.areaShort]}
-            multiline
-            textAlignVertical="top"
+            onChange={onReplyMessage}
+            placeholderTextColor={CM_MUTED}
+            labelStyle={styles.label}
+            inputStyle={styles.input}
           />
         </>
       )}
@@ -222,8 +223,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 15,
   },
-  area: { minHeight: 120 },
-  areaShort: { minHeight: 72 },
   hint: { color: CM_MUTED, fontFamily: fonts.body, fontSize: 13, lineHeight: 18 },
   section: {
     color: CM_TEAL_DARK,

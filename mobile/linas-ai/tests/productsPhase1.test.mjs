@@ -52,6 +52,17 @@ describe('AI Products Phase 1 mobile', () => {
     assert.match(api, /\/api\/mobile\/products\/media/);
   });
 
+  it('Products first-open list uses Knowledge chrome, not full-width add buttons', () => {
+    const screen = read('features/products/ProductsScreen.tsx');
+    const list = read('features/products/ProductListView.tsx');
+    assert.match(screen, /ProductListView/);
+    assert.match(screen, /compactTitle/);
+    assert.match(list, /AiSetupListHeader/);
+    assert.match(list, /productsSearch/);
+    assert.doesNotMatch(list, /PrimaryButton/);
+    assert.doesNotMatch(screen, /PrimaryButton/);
+  });
+
   it('has products i18n keys in en/ar/fr', () => {
     for (const loc of ['aiSetupEn.ts', 'aiSetupAr.ts', 'aiSetupFr.ts']) {
       const src = read(`i18n/locales/${loc}`);

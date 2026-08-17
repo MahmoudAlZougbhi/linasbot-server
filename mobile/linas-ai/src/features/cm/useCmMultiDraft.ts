@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ApiError } from '../../api/client';
 import {
@@ -7,6 +7,7 @@ import {
   type CmProposalReview,
 } from './cmProposalReview';
 import { getCmDraft, putCmDraft } from './cmApi';
+import { isDraftDirty, stableSerialize } from './cmDraftDirty';
 import { sanitizeCmSectionPayload } from './stripProvenanceHeaders';
 
 type SectionDraft = {
@@ -16,23 +17,30 @@ type SectionDraft = {
 };
 
 /** Load/save multiple CM draft sections as one composite editor (e.g. AI Basics + Style). */
-export function useCmMultiDraft(sections: string[], proposalReview?: CmProposalReview | null) {
+export function useCmMultiDraft(
+  sections: readonly string[],
+  proposalReview?: CmProposalReview | null,
+) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, SectionDraft>>({});
   const [proposalActive, setProposalActive] = useState(false);
+  const saveLock = useRef(false);
+  const baselines = useRef<Record<string, string>>({});
+  const sectionKey = sections.join(',');
 
   const load = useCallback(async () => {
+    const names = sectionKey.split(',').filter(Boolean);
     setLoading(true);
     setError(null);
     setConflict(null);
     try {
-      const loaded = await Promise.all(sections.map((section) => getCmDraft(section)));
+      const loaded = await Promise.all(names.map((section) => getCmDraft(section)));
       const next: Record<string, SectionDraft> = {};
       let overlay = false;
-      sections.forEach((section, idx) => {
+      names.forEach((section, idx) => {
         const draft = loaded[idx];
         let payload = sanitizeCmSectionPayload(section, draft.payload);
         if (proposalReview && proposalReview.section === section) {
@@ -45,6 +53,7 @@ export function useCmMultiDraft(sections: string[], proposalReview?: CmProposalR
             overlay = true;
           }
         }
+        baselines.current[section] = stableSerialize(payload);
         next[section] = { payload, etag: draft.etag, dirty: overlay };
       });
       setDrafts(next);
@@ -62,7 +71,7 @@ export function useCmMultiDraft(sections: string[], proposalReview?: CmProposalR
     } finally {
       setLoading(false);
     }
-  }, [proposalReview, sections]);
+  }, [proposalReview, sectionKey]);
 
   useEffect(() => {
     void load();
@@ -72,7 +81,10 @@ export function useCmMultiDraft(sections: string[], proposalReview?: CmProposalR
     setDrafts((prev) => {
       const cur = prev[section];
       if (!cur) return prev;
-      return { ...prev, [section]: { ...cur, payload: next, dirty: true } };
+      return {
+        ...prev,
+        [section]: { ...cur, payload: next, dirty: isDraftDirty(baselines.current[section] || '', next) },
+      };
     });
     setProposalActive(false);
   }, []);
@@ -81,10 +93,12 @@ export function useCmMultiDraft(sections: string[], proposalReview?: CmProposalR
   const canSave = sections.every((s) => drafts[s]?.etag);
 
   const save = useCallback(async () => {
+    if (saveLock.current) return false;
     if (!canSave) {
       setError('Missing ETag — reload before saving.');
       return false;
     }
+    saveLock.current = true;
     setSaving(true);
     setError(null);
     setConflict(null);
@@ -94,8 +108,10 @@ export function useCmMultiDraft(sections: string[], proposalReview?: CmProposalR
         const cur = drafts[section];
         if (!cur?.etag) continue;
         const draft = await putCmDraft(section, cur.payload, cur.etag);
+        const payload = sanitizeCmSectionPayload(section, draft.payload);
+        baselines.current[section] = stableSerialize(payload);
         updated[section] = {
-          payload: sanitizeCmSectionPayload(section, draft.payload),
+          payload,
           etag: draft.etag,
           dirty: false,
         };
@@ -111,6 +127,7 @@ export function useCmMultiDraft(sections: string[], proposalReview?: CmProposalR
       setError(err instanceof Error ? err.message : 'Save failed.');
       return false;
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   }, [canSave, drafts, sections]);

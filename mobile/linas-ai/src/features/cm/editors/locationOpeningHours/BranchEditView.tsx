@@ -34,7 +34,12 @@ export function BranchEditView({
   const published = hoursAreSet(normalizeWeeklySchedule(branch.weekly_schedule));
 
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      contentContainerStyle={{ paddingBottom: 48 }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      showsHorizontalScrollIndicator={false}
+    >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <Text style={[locStyles.name, { color: locTeal }]}>{tr('aiSetupLocEditTitle')}</Text>
         {published ? (

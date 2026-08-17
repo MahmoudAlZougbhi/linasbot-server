@@ -69,4 +69,14 @@ describe('AI Setup hub layout', () => {
     assert.match(hub, /AiSetupHubMosaic/);
     assert.match(hub, /variant="full"/);
   });
+
+  it('Complete with Linas uses the existing Linas sparkle mark, not Ionicons stars', () => {
+    const card = read('features/cm/AiSetupProgressCard.tsx');
+    const icon = read('components/LinasSparkleIcon.tsx');
+    assert.match(card, /LinasSparkleIcon size=\{16\} color=\{AI_SETUP_TEAL\}/);
+    assert.doesNotMatch(card, /sparkles-outline/);
+    assert.doesNotMatch(card, /ion\(/);
+    assert.match(icon, /assets\/linas-app-icon\.svg/);
+    assert.match(icon, /'#107c75': SPARKLE_LIGHT_URI/);
+  });
 });

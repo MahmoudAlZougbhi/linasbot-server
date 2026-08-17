@@ -1,6 +1,6 @@
 /** Comments list/edit tokens — screenshot handoff (teal, 8–12px radii). */
 export const CM_TEAL = '#107C75';
-export const CM_TEAL_DARK = '#0F4C4A';
+export const CM_TEAL_DARK = '#000000';
 export const CM_TEAL_SOFT = '#E6F3F2';
 export const CM_TEAL_PILL = '#D7EFEB';
 export const CM_BORDER = '#E2E8F0';

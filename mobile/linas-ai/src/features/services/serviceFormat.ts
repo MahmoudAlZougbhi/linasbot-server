@@ -62,7 +62,7 @@ export function primaryLabel(labels: unknown): string {
   const rec = asRecord(labels);
   for (const key of ['en', 'ar', 'fr', 'franco']) {
     const v = rec[key];
-    if (typeof v === 'string' && v.trim()) return v.trim();
+    if (typeof v === 'string' && v.trim()) return v;
   }
   return '';
 }

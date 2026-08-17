@@ -208,6 +208,7 @@ class DynamicMessageRecord(CmBaseModel):
     en: str = ""
     fr: str = ""
     notes: str | None = None
+    attachments: list[ResourceAttachment] = Field(default_factory=list)
 
 
 class DynamicMessagesSection(CmBaseModel):

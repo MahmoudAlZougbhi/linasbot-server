@@ -7,6 +7,8 @@ export const commentsSetupFr: Record<keyof typeof commentsSetupEn, string> = {
   commentsInfoBody:
     'Sans règle, Linas répond toujours avec vos connaissances publiées. Automatique est gratuit et envoie votre message exact. La réponse IA suit votre note et utilise des crédits.',
   commentsSearch: 'Rechercher des règles de commentaire',
+  commentsCount: 'règles de commentaire',
+  commentsCountOne: 'règle de commentaire',
   commentsFooter: 'Chaque règle utilise la même icône de commentaire.',
   commentsEmpty: 'Aucune règle — appuyez sur Ajouter une règle de commentaire.',
   commentsUntitled: 'Règle sans titre',

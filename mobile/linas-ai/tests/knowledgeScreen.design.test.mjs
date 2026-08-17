@@ -22,19 +22,21 @@ describe('Knowledge screens match screenshot handoff', () => {
     const screen = read('features/cm/knowledge/KnowledgeScreen.tsx');
     const en = read('i18n/locales/aiSetupEn.ts');
 
-    assert.match(en, /knowledgeSubtitle: 'Teach Linas what your business knows\.'/);
+    assert.match(en, /knowledgeSubtitle: 'Teach Linas AI about your business'/);
     assert.match(en, /knowledgeAdd: '\+ Add knowledge'/);
     assert.match(en, /knowledgeSearch: 'Search knowledge'/);
     assert.match(en, /knowledgeFooter: 'Linas uses published knowledge when replying\.'/);
-    assert.match(list, /tr\('knowledgeSubtitle'\)/);
+    assert.match(screen, /tr\('knowledgeSubtitle'\)/);
     assert.match(list, /tr\('knowledgeSearch'\)/);
     assert.match(list, /knowledgeCount/);
+    assert.match(list, /AiSetupListHeader/);
     assert.match(list, /LinasSparkleIcon/);
     assert.match(list, /tr\('knowledgeFooter'\)/);
+    assert.doesNotMatch(list, /PrimaryButton/);
     assert.match(card, /feather\('file-text'\)/);
     assert.match(card, /feather\('chevron-right'\)/);
     assert.match(card, /LOCATIONS_KNOWLEDGE_TITLE/);
-    assert.match(screen, /tr\('knowledgeAdd'\)/);
+    assert.match(screen, /onAdd=\{handleAdd\}/);
     assert.match(screen, /onOpenLocations/);
   });
 
@@ -58,8 +60,11 @@ describe('Knowledge screens match screenshot handoff', () => {
     );
     assert.match(en, /knowledgeResourcesHint: 'Add examples or files Linas can use when answering\.'/);
     assert.match(en, /knowledgeSave: 'Save changes'/);
+    assert.match(en, /aiSetupSave: 'Save'/);
     assert.match(edit, /tr\('knowledgeEditTitle'\)/);
+    assert.match(edit, /ClampedLongField/);
     assert.match(edit, /countWords/);
+    assert.match(edit, /countLabel=\{wordLabel\}/);
     assert.match(edit, /tr\('knowledgeInfoRecommended'\)/);
     assert.match(resources, /knowledgeAddImage/);
     assert.match(resources, /knowledgeAddVideo/);
@@ -67,7 +72,7 @@ describe('Knowledge screens match screenshot handoff', () => {
     assert.match(resources, /knowledgeAddLink/);
     assert.match(resources, /feather\('more-horizontal'\)/);
     assert.match(screen, /tr\('knowledgeDelete'\)/);
-    assert.match(screen, /tr\('knowledgeSave'\)/);
+    assert.match(screen, /tr\('aiSetupSave'\)/);
     assert.match(screen, /feather\('trash-2'\)/);
   });
 
@@ -82,10 +87,14 @@ describe('Knowledge screens match screenshot handoff', () => {
   });
 
   it('has ar/fr knowledge keys', () => {
-    for (const loc of ['aiSetupAr.ts', 'aiSetupFr.ts']) {
-      const srcText = read(`i18n/locales/${loc}`);
+    const ar = read('i18n/locales/aiSetupAr.ts');
+    const fr = read('i18n/locales/aiSetupFr.ts');
+    assert.match(ar, /knowledgeSubtitle: 'علّم Linas AI عن عملك'/);
+    assert.match(fr, /knowledgeSubtitle: 'Apprenez à Linas AI à connaître votre entreprise'/);
+    for (const srcText of [ar, fr]) {
       assert.match(srcText, /knowledgeAdd:/);
       assert.match(srcText, /knowledgeSave:/);
+      assert.match(srcText, /aiSetupSave:/);
       assert.match(srcText, /knowledgeInfoRecommended:/);
     }
   });

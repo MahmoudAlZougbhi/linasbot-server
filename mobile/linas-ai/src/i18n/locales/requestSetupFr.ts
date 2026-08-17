@@ -7,6 +7,8 @@ export const requestSetupFr: Record<keyof typeof requestSetupEn, string> = {
   requestRulesInfoBody:
     'Apprenez à Linas à gérer un rendez-vous, une commande ou une autre demande. Dans la note, indiquez les détails à collecter et les liens à envoyer. Le résultat apparaît dans Demandes.',
   requestRulesSearch: 'Rechercher des règles de demande',
+  requestRulesCount: 'règles de demande',
+  requestRulesCountOne: 'règle de demande',
   requestRulesFooter: 'Chaque règle utilise la même icône de demande.',
   requestRulesEmpty: 'Aucune règle — appuyez sur Ajouter une règle de demande.',
   requestRulesUntitled: 'Règle sans titre',

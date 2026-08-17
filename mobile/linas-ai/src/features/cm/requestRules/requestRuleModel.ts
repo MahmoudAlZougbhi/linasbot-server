@@ -54,7 +54,7 @@ export function ruleToRecord(item: RequestRuleItem): Record<string, unknown> {
     id: item.id,
     type: item.type,
     name: item.name,
-    notes: item.notes.trim() || null,
+    notes: item.notes,
     enabled: item.enabled,
   };
 }

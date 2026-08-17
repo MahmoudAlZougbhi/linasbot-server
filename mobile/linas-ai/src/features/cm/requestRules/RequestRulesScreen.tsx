@@ -190,8 +190,8 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
 
   return (
     <ScreenChrome
-      title={mode === 'list' ? ' ' : tr('aiSetupSec_requests_appointments')}
-      hideTitle={mode === 'list'}
+      title={tr('aiSetupSec_requests_appointments')}
+      subtitle={mode === 'list' ? tr('requestRulesSubtitle') : undefined}
       onBack={mode === 'list' ? onBack : goList}
       canvasColor={RQ_CANVAS}
     >

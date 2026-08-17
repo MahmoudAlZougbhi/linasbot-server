@@ -25,6 +25,9 @@ import { ServicesEditor } from './editors/ServicesEditor';
 import { useCmDraft } from './useCmDraft';
 import { useCmMultiDraft } from './useCmMultiDraft';
 
+/** Stable list — an inline array here retriggers draft load on every chrome re-render. */
+const AI_BASICS_COMPOSITE_SECTIONS = ['ai_basics', 'style', 'dynamic_messages'] as const;
+
 type Props = {
   section: CmSectionId;
   proposalReview?: CmProposalReview | null;
@@ -34,7 +37,7 @@ type Props = {
 
 function AiBasicsComposite({ proposalReview }: { proposalReview?: CmProposalReview | null }) {
   const { tr } = useI18n();
-  const multi = useCmMultiDraft(['ai_basics', 'style', 'dynamic_messages'], proposalReview);
+  const multi = useCmMultiDraft(AI_BASICS_COMPOSITE_SECTIONS, proposalReview);
   const basics = multi.drafts.ai_basics?.payload ?? {};
   const style = multi.drafts.style?.payload ?? {};
   const greetings = multi.drafts.dynamic_messages?.payload ?? {};

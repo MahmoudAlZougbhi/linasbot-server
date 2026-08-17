@@ -18,8 +18,11 @@ export function parseResourceFields(row: Record<string, unknown>): ResourceMetaF
 }
 
 export function suggestedTitleFromFilename(filename: string): string {
-  const base = filename.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
-  return base;
+  const base = filename.replace(/\.[^.]+$/, '').trim();
+  if (!base) return '';
+  const hex = base.replace(/[-_\s]/g, '');
+  if (/^[0-9a-f]{32,}$/i.test(hex)) return '';
+  return base.replace(/[_-]+/g, ' ').trim();
 }
 
 export function resourceMetaError(

@@ -46,5 +46,7 @@ describe('resourceMeta', () => {
 
   it('suggests a title from filename without publishing', () => {
     assert.equal(suggestedTitleFromFilename('women-before.png'), 'women before');
+    assert.equal(suggestedTitleFromFilename('7C7332B2-E048-4A1B-9C3D-1234567890AB.mp4'), '');
+    assert.equal(suggestedTitleFromFilename('7c7332b2_e048_4a1b_9c3d_1234567890ab.jpg'), '');
   });
 });

@@ -1,4 +1,5 @@
 /** AI Setup screen tokens — match design handoff (#107C75 teal, #D35400 orange). */
+export const AI_SETUP_INK = '#000000';
 export const AI_SETUP_TEAL = '#107C75';
 export const AI_SETUP_TEAL_SOFT = '#E6F3F2';
 export const AI_SETUP_ORANGE = '#D35400';

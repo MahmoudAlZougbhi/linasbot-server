@@ -5,6 +5,8 @@ export const requestSetupEn = {
   requestRulesInfoBody:
     'Teach Linas how to handle an appointment, order, or other request. In the Note, write what details to collect and which links to send. The result appears in Requests.',
   requestRulesSearch: 'Search request rules',
+  requestRulesCount: 'request rules',
+  requestRulesCountOne: 'request rule',
   requestRulesFooter: 'Every rule uses the same request icon.',
   requestRulesEmpty: 'No request rules yet — tap Add request rule.',
   requestRulesUntitled: 'Untitled rule',

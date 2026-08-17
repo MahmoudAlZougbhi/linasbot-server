@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -19,6 +18,7 @@ import { fonts } from '../../../theme';
 import { ScreenChrome } from '../../shared/ScreenChrome';
 import { asRecordList, newId } from '../cmApi';
 import type { CmProposalReview } from '../cmProposalReview';
+import { confirmAiSetupDelete } from '../confirmAiSetupDelete';
 import { ResourceMetaModal } from '../resources/ResourceMetaModal';
 import { moveById } from '../resources/resourceMeta';
 import { useCmDraft } from '../useCmDraft';
@@ -86,44 +86,32 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
     await draft.save();
   }
 
-  async function handleDelete() {
-    if (!selected) return;
+  async function handleDelete(id: string) {
     const nextPayload = {
       ...draft.payload,
-      items: items.filter((item) => item.id !== selected.id).map(itemToRecord),
+      items: items.filter((item) => item.id !== id).map(itemToRecord),
     };
     const ok = await draft.save(nextPayload);
-    if (ok) goList();
+    if (ok && selectedId === id) goList();
   }
 
-  function confirmDelete() {
-    if (!selected) return;
-    Alert.alert(tr('knowledgeDeleteTitle'), tr('knowledgeDeleteBody'), [
-      { text: tr('usersCancel'), style: 'cancel' },
-      {
-        text: tr('knowledgeDeleteConfirm'),
-        style: 'destructive',
-        onPress: () => void handleDelete(),
-      },
-    ]);
+  function confirmDelete(id?: string) {
+    const target = id || selectedId;
+    if (!target) return;
+    confirmAiSetupDelete({
+      title: tr('knowledgeDeleteTitle'),
+      body: tr('knowledgeDeleteBody'),
+      confirmLabel: tr('knowledgeDeleteConfirm'),
+      cancelLabel: tr('usersCancel'),
+      onConfirm: () => void handleDelete(target),
+    });
   }
-
-  const addPill = (
-    <Pressable
-      onPress={handleAdd}
-      accessibilityRole="button"
-      accessibilityLabel={tr('knowledgeAdd')}
-      style={({ pressed }) => [styles.addPill, pressed && styles.pressed]}
-    >
-      <Text style={styles.addPillText}>{tr('knowledgeAdd')}</Text>
-    </Pressable>
-  );
 
   return (
     <ScreenChrome
-      title={mode === 'edit' ? tr('aiSetupSec_knowledge') : ' '}
+      title={tr('aiSetupSec_knowledge')}
+      subtitle={mode === 'list' ? tr('knowledgeSubtitle') : undefined}
       onBack={mode === 'edit' ? goList : onBack}
-      headerRight={mode === 'list' ? addPill : undefined}
       canvasColor={KN_CANVAS}
     >
       {draft.loading ? <LinasLoadingIndicator variant="screen" /> : null}
@@ -140,10 +128,12 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
             query={query}
             count={rows.length}
             onQueryChange={setQuery}
+            onAdd={handleAdd}
             onSelect={(id) => {
               setSelectedId(id);
               setMode('edit');
             }}
+            onRequestDelete={(id) => confirmDelete(id)}
             onOpenLocations={() => onOpenLocations?.()}
             tr={tr}
           />
@@ -177,7 +167,7 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
           </ScrollView>
           <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
             <Pressable
-              onPress={confirmDelete}
+              onPress={() => confirmDelete()}
               accessibilityRole="button"
               accessibilityLabel={tr('knowledgeDelete')}
               style={({ pressed }) => [styles.deleteBtn, pressed && styles.pressed]}
@@ -186,7 +176,7 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
               <Text style={styles.deleteText}>{tr('knowledgeDelete')}</Text>
             </Pressable>
             <PrimaryButton
-              label={tr('knowledgeSave')}
+              label={tr('aiSetupSave')}
               onPress={() => void handleSave()}
               loading={draft.saving}
               disabled={!draft.dirty || !draft.etag}
@@ -211,7 +201,7 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
         titlePlaceholder={tr('resourceTitlePlaceholder')}
         descriptionPlaceholder={tr('resourceDescriptionPlaceholder')}
         urlPlaceholder={tr('knowledgeLinkPlaceholder')}
-        saveLabel={tr('knowledgeSave')}
+        saveLabel={tr('aiSetupSave')}
         cancelLabel={tr('usersCancel')}
         onChangeUrl={(url) => media.setPrompt((row) => (row ? { ...row, url } : row))}
         onChangeTitle={(title) => media.setPrompt((row) => (row ? { ...row, title } : row))}
@@ -227,13 +217,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   listScroll: { flexGrow: 1, paddingBottom: 16 },
   editScroll: { paddingBottom: 16 },
-  addPill: {
-    backgroundColor: KN_TEAL,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  addPillText: { color: '#FFFFFF', fontFamily: fonts.bodyMedium, fontSize: 13, fontWeight: '700' },
   pressed: { opacity: 0.7 },
   error: { color: '#DC2626', fontFamily: fonts.body, marginBottom: 8 },
   warn: { color: '#D97706', fontFamily: fonts.body, marginBottom: 8 },

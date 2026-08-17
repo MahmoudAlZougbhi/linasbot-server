@@ -3,6 +3,8 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppIcon, feather } from '../../components/AppIcon';
 import type { StringKey } from '../../i18n';
 import { fonts } from '../../theme';
+import { AiSetupDeletableRow } from '../cm/AiSetupDeletableRow';
+import { confirmAiSetupDelete } from '../cm/confirmAiSetupDelete';
 import { SV_BORDER, SV_MUTED, SV_RADIUS, SV_RADIUS_SM, SV_TEAL, SV_TEAL_DARK, SV_TEAL_SOFT } from './serviceChrome';
 import { type ServiceAttachment, type ServiceKind } from './serviceModel';
 
@@ -68,12 +70,35 @@ export function ServiceMediaRows({ attachments, onRemove, onReplace, onEditCapti
   return (
     <View style={styles.rows}>
       {attachments.map((att) => (
-        <View key={att.id} style={styles.row}>
+        <AiSetupDeletableRow
+          key={att.id}
+          deleteLabel={tr('servicesRemove')}
+          onRequestDelete={() =>
+            confirmAiSetupDelete({
+              title: tr('aiSetupResourceDeleteTitle'),
+              body: tr('aiSetupResourceDeleteBody'),
+              confirmLabel: tr('servicesRemove'),
+              cancelLabel: tr('usersCancel'),
+              onConfirm: () => onRemove(att.id),
+            })
+          }
+        >
+        <View style={styles.row}>
           <View style={styles.rowIcon}>
             <AppIcon icon={rowIcon(att.kind)} size={16} color={SV_TEAL} />
           </View>
           <Pressable
             onPress={() => onEditCaption(att)}
+            onLongPress={() =>
+              confirmAiSetupDelete({
+                title: tr('aiSetupResourceDeleteTitle'),
+                body: tr('aiSetupResourceDeleteBody'),
+                confirmLabel: tr('servicesRemove'),
+                cancelLabel: tr('usersCancel'),
+                onConfirm: () => onRemove(att.id),
+              })
+            }
+            delayLongPress={380}
             style={styles.rowCopy}
             accessibilityRole="button"
             accessibilityLabel={tr('servicesEditCaption')}
@@ -92,7 +117,14 @@ export function ServiceMediaRows({ attachments, onRemove, onReplace, onEditCapti
                 {
                   text: tr('servicesRemove'),
                   style: 'destructive',
-                  onPress: () => onRemove(att.id),
+                  onPress: () =>
+                    confirmAiSetupDelete({
+                      title: tr('aiSetupResourceDeleteTitle'),
+                      body: tr('aiSetupResourceDeleteBody'),
+                      confirmLabel: tr('servicesRemove'),
+                      cancelLabel: tr('usersCancel'),
+                      onConfirm: () => onRemove(att.id),
+                    }),
                 },
                 { text: tr('usersCancel'), style: 'cancel' },
               ])
@@ -104,6 +136,7 @@ export function ServiceMediaRows({ attachments, onRemove, onReplace, onEditCapti
             <AppIcon icon={feather('more-horizontal')} size={20} color={SV_MUTED} />
           </Pressable>
         </View>
+        </AiSetupDeletableRow>
       ))}
     </View>
   );

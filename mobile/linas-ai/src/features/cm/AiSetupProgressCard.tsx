@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AppIcon, feather, ion } from '../../components/AppIcon';
+import { AppIcon, feather } from '../../components/AppIcon';
+import { LinasSparkleIcon } from '../../components/LinasSparkleIcon';
 import { useI18n } from '../../i18n/LanguageContext';
 import { HIT, fonts, radii, spacing } from '../../theme';
 import {
@@ -75,7 +76,7 @@ export function AiSetupProgressCard({
             accessibilityRole="button"
             accessibilityLabel={tr('aiSetupCompleteWithLinas')}
           >
-            <AppIcon icon={ion('sparkles-outline')} size={16} color={AI_SETUP_TEAL} />
+            <LinasSparkleIcon size={16} color={AI_SETUP_TEAL} />
             <Text style={[styles.ctaText, { color: AI_SETUP_TEAL }]}>{tr('aiSetupCompleteWithLinas')}</Text>
           </Pressable>
         ) : null}

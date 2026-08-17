@@ -97,7 +97,7 @@ export function branchAddress(branch: Record<string, unknown>): string {
     .map((p) => String(p || '').trim())
     .filter(Boolean);
   if (parts.length) return parts.join(', ');
-  return String(branch.address || '').trim();
+  return String(branch.address || '');
 }
 
 export function hoursAreSet(schedule: WeeklySchedule): boolean {

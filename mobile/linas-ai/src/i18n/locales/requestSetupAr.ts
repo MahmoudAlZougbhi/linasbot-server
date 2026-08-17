@@ -7,6 +7,8 @@ export const requestSetupAr: Record<keyof typeof requestSetupEn, string> = {
   requestRulesInfoBody:
     'علّم Linas كيف يتعامل مع موعد أو طلب أو أي طلب آخر. في الملاحظة، اكتب التفاصيل التي يجب جمعها والروابط التي يجب إرسالها. النتيجة تظهر في الطلبات.',
   requestRulesSearch: 'بحث قواعد الطلب',
+  requestRulesCount: 'قواعد طلب',
+  requestRulesCountOne: 'قاعدة طلب',
   requestRulesFooter: 'كل قاعدة تستخدم أيقونة الطلب نفسها.',
   requestRulesEmpty: 'لا قواعد بعد — اضغط إضافة قاعدة طلب.',
   requestRulesUntitled: 'قاعدة بلا عنوان',

@@ -1,6 +1,6 @@
 /** Knowledge list/edit tokens — screenshot handoff (dark teal, 8–16px radii). */
 export const KN_TEAL = '#107C75';
-export const KN_TEAL_DARK = '#0F4C4A';
+export const KN_TEAL_DARK = '#000000';
 export const KN_TEAL_SOFT = '#E6F3F2';
 export const KN_TEAL_PILL = '#D7EFEB';
 export const KN_BORDER = '#E2E8F0';
