@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { API_BASE, ApiError, apiFetch } from '../../api/client';
 import { tokenStore } from '../../auth/tokenStore';
+import { resolveCmEtag } from './cmEtag';
 
 const EnvelopeSchema = z
   .object({
@@ -80,10 +81,10 @@ export async function getCmDraft(section: string): Promise<CmDraft> {
     throw new ApiError('Failed to load CM draft', response.status, body);
   }
   const parsed = EnvelopeSchema.parse(body);
-  const etagHeader = response.headers.get('etag') || response.headers.get('ETag');
-  const etag =
-    (typeof etagHeader === 'string' && etagHeader.replace(/^"|"$/g, '')) ||
-    (typeof parsed.data.etag === 'string' ? parsed.data.etag : '');
+  const etag = resolveCmEtag(
+    parsed.data.etag,
+    response.headers.get('etag') || response.headers.get('ETag'),
+  );
   if (!etag) {
     throw new ApiError('CM draft missing ETag', 500, body);
   }
@@ -117,10 +118,11 @@ export async function putCmDraft(
     throw new ApiError(detail, response.status, body);
   }
   const parsed = EnvelopeSchema.parse(body);
-  const etagHeader = response.headers.get('etag') || response.headers.get('ETag');
-  const etag =
-    (typeof etagHeader === 'string' && etagHeader.replace(/^"|"$/g, '')) ||
-    (typeof parsed.data.etag === 'string' ? parsed.data.etag : ifMatch);
+  const etag = resolveCmEtag(
+    parsed.data.etag,
+    response.headers.get('etag') || response.headers.get('ETag'),
+    ifMatch,
+  );
   return {
     payload: extractPayload(parsed.data),
     etag,

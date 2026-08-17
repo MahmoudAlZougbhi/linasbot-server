@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { StringKey } from '../../../i18n';
 import { fonts } from '../../../theme';
+import { ClampedLongField } from '../ClampedLongField';
 import { CommentSegmented } from '../comments/CommentSegmented';
 import { RQ_BORDER, RQ_DOT, RQ_MUTED, RQ_RADIUS, RQ_TEAL, RQ_TEAL_DARK, RQ_TEAL_PILL } from './requestRuleChrome';
 import {
@@ -69,17 +70,17 @@ export function RequestRuleEditView({
         placeholderTextColor={RQ_MUTED}
       />
 
-      <Text style={styles.label}>{tr('requestRulesNote')}</Text>
-      <TextInput
+      <ClampedLongField
+        label={tr('requestRulesNote')}
         value={item.notes}
-        onChangeText={onNote}
-        style={[styles.input, styles.area]}
-        multiline
-        textAlignVertical="top"
+        onChange={onNote}
         placeholder={tr('requestRulesNote')}
         placeholderTextColor={RQ_MUTED}
+        hint={tr('requestRulesNoteHint')}
+        labelStyle={styles.label}
+        inputStyle={styles.input}
+        hintStyle={styles.hint}
       />
-      <Text style={styles.hint}>{tr('requestRulesNoteHint')}</Text>
 
       <Pressable onPress={onPreview} accessibilityRole="button" style={styles.previewBtn}>
         <Text style={styles.previewText}>{tr('aiSetupRequestPreview')}</Text>
@@ -139,7 +140,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 15,
   },
-  area: { minHeight: 120 },
   hint: { color: RQ_MUTED, fontFamily: fonts.body, fontSize: 13, lineHeight: 18 },
   previewBtn: {
     borderWidth: 1.5,

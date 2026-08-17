@@ -349,4 +349,7 @@ export const aiSetupFr = {
   resourceMoveUp: 'Monter',
   resourceMoveDown: 'Descendre',
   resourceEdit: 'Modifier',
+  aiSetupSeeAll: 'Tout voir',
+  aiSetupCopy: 'Copier',
+  aiSetupCopied: 'Copié',
 } as const;

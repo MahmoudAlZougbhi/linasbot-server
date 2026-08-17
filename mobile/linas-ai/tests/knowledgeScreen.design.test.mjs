@@ -59,6 +59,7 @@ describe('Knowledge screens match screenshot handoff', () => {
     assert.match(en, /knowledgeResourcesHint: 'Add examples or files Linas can use when answering\.'/);
     assert.match(en, /knowledgeSave: 'Save changes'/);
     assert.match(edit, /tr\('knowledgeEditTitle'\)/);
+    assert.match(edit, /ClampedLongField/);
     assert.match(edit, /countWords/);
     assert.match(edit, /tr\('knowledgeInfoRecommended'\)/);
     assert.match(resources, /knowledgeAddImage/);

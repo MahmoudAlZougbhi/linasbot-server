@@ -2,6 +2,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 
 import type { StringKey } from '../../../i18n';
 import { fonts } from '../../../theme';
+import { ClampedLongField } from '../ClampedLongField';
 import {
   KN_BORDER,
   KN_DOT,
@@ -74,13 +75,12 @@ export function KnowledgeEditView({
         placeholderTextColor={KN_MUTED}
       />
 
-      <Text style={styles.label}>{tr('knowledgeFieldBody')}</Text>
-      <TextInput
+      <ClampedLongField
+        label={tr('knowledgeFieldBody')}
         value={item.body}
-        onChangeText={onBody}
-        style={[styles.input, styles.area]}
-        multiline
-        textAlignVertical="top"
+        onChange={onBody}
+        labelStyle={styles.label}
+        inputStyle={styles.input}
       />
       <Text style={styles.words}>{wordLabel}</Text>
 
@@ -163,7 +163,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 15,
   },
-  area: { minHeight: 140 },
   words: {
     color: KN_MUTED,
     fontFamily: fonts.body,

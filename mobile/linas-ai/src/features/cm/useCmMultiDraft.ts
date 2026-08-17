@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ApiError } from '../../api/client';
 import {
@@ -26,6 +26,7 @@ export function useCmMultiDraft(
   const [conflict, setConflict] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, SectionDraft>>({});
   const [proposalActive, setProposalActive] = useState(false);
+  const saveLock = useRef(false);
   const sectionKey = sections.join(',');
 
   const load = useCallback(async () => {
@@ -86,10 +87,12 @@ export function useCmMultiDraft(
   const canSave = sections.every((s) => drafts[s]?.etag);
 
   const save = useCallback(async () => {
+    if (saveLock.current) return false;
     if (!canSave) {
       setError('Missing ETag — reload before saving.');
       return false;
     }
+    saveLock.current = true;
     setSaving(true);
     setError(null);
     setConflict(null);
@@ -116,6 +119,7 @@ export function useCmMultiDraft(
       setError(err instanceof Error ? err.message : 'Save failed.');
       return false;
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   }, [canSave, drafts, sections]);

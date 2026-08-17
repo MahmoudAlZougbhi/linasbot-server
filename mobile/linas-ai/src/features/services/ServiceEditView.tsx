@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { AppIcon, feather } from '../../components/AppIcon';
 import type { StringKey } from '../../i18n';
 import { fonts } from '../../theme';
+import { ClampedLongField } from '../cm/ClampedLongField';
 import { ServiceMediaGrid, ServiceMediaRows } from './ServiceMediaBlock';
 import { SV_BORDER, SV_MUTED, SV_RADIUS, SV_RADIUS_SM, SV_TEAL, SV_TEAL_DARK, SV_TEAL_SOFT } from './serviceChrome';
 import { formatMoney, type ServiceAttachment, type ServiceItem, type ServiceKind, type ServicePrice } from './serviceModel';
@@ -47,15 +48,14 @@ export function ServiceEditView({
         placeholderTextColor={SV_MUTED}
       />
 
-      <Text style={styles.label}>{tr('servicesNote')}</Text>
-      <TextInput
+      <ClampedLongField
+        label={tr('servicesNote')}
         value={item.note}
-        onChangeText={onNote}
-        style={[styles.input, styles.area]}
-        multiline
-        textAlignVertical="top"
+        onChange={onNote}
         placeholder={tr('servicesNotePlaceholder')}
         placeholderTextColor={SV_MUTED}
+        labelStyle={styles.label}
+        inputStyle={styles.input}
       />
 
       <Text style={styles.section}>{tr('servicesPricingSection')}</Text>
@@ -145,7 +145,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 15,
   },
-  area: { minHeight: 96 },
   section: {
     color: SV_TEAL_DARK,
     fontFamily: fonts.bodyMedium,

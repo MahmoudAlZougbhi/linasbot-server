@@ -348,4 +348,7 @@ export const aiSetupAr = {
   resourceMoveUp: 'تحريك للأعلى',
   resourceMoveDown: 'تحريك للأسفل',
   resourceEdit: 'تعديل',
+  aiSetupSeeAll: 'عرض الكل',
+  aiSetupCopy: 'نسخ',
+  aiSetupCopied: 'تم النسخ',
 } as const;

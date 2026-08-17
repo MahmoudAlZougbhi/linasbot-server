@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ApiError } from '../../api/client';
 import {
@@ -18,6 +18,7 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
   const [payload, setPayloadState] = useState<Record<string, unknown>>({});
   const [dirty, setDirty] = useState(false);
   const [proposalActive, setProposalActive] = useState(false);
+  const saveLock = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,11 +77,13 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
   }, []);
 
   const save = useCallback(async (override?: Record<string, unknown>) => {
+    if (saveLock.current) return false;
     if (!etag) {
       setError('Missing ETag — reload before saving.');
       return false;
     }
     const body = override ?? payload;
+    saveLock.current = true;
     setSaving(true);
     setError(null);
     setConflict(null);
@@ -99,6 +102,7 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
       setError(err instanceof Error ? err.message : 'Save failed.');
       return false;
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   }, [etag, payload, section]);
