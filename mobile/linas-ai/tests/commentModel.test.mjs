@@ -81,3 +81,14 @@ test('choose posts persists ids and all posts clears them', () => {
   assert.equal(item.scope, 'all_posts');
   assert.deepEqual(parseKeywords('price, سعر, قدّي'), ['price', 'سعر', 'قدّي']);
 });
+
+test('legacy ignore action displays as comment in owner Reply in', () => {
+  const item = parseCommentRule({
+    id: 'r5',
+    name: 'Old ignore rule',
+    action: 'ignore',
+    rule_mode: 'deterministic',
+  });
+  assert.equal(replyInOf(item), 'comment');
+  assert.doesNotMatch(String(item.action), /dm/);
+});
