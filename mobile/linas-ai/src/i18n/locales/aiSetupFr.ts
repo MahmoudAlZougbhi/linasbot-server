@@ -289,7 +289,7 @@ export const aiSetupFr = {
   servicesUnsupported: 'Ce type de fichier n’est pas pris en charge.',
   servicesResourceMenu: 'Actions média',
   servicesProposalPreview: 'Aperçu de proposition IA — pas encore enregistré. Approuvez dans le chat, ou touchez Enregistrer le service.',
-  knowledgeSubtitle: 'Apprenez à Linas ce que votre entreprise sait.',
+  knowledgeSubtitle: 'Apprenez à Linas AI à connaître votre entreprise',
   knowledgeAdd: '+ Ajouter une connaissance',
   knowledgeSearch: 'Rechercher dans les connaissances',
   knowledgeCount: 'éléments de connaissance',

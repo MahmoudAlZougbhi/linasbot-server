@@ -16,23 +16,28 @@ type SectionDraft = {
 };
 
 /** Load/save multiple CM draft sections as one composite editor (e.g. AI Basics + Style). */
-export function useCmMultiDraft(sections: string[], proposalReview?: CmProposalReview | null) {
+export function useCmMultiDraft(
+  sections: readonly string[],
+  proposalReview?: CmProposalReview | null,
+) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, SectionDraft>>({});
   const [proposalActive, setProposalActive] = useState(false);
+  const sectionKey = sections.join(',');
 
   const load = useCallback(async () => {
+    const names = sectionKey.split(',').filter(Boolean);
     setLoading(true);
     setError(null);
     setConflict(null);
     try {
-      const loaded = await Promise.all(sections.map((section) => getCmDraft(section)));
+      const loaded = await Promise.all(names.map((section) => getCmDraft(section)));
       const next: Record<string, SectionDraft> = {};
       let overlay = false;
-      sections.forEach((section, idx) => {
+      names.forEach((section, idx) => {
         const draft = loaded[idx];
         let payload = sanitizeCmSectionPayload(section, draft.payload);
         if (proposalReview && proposalReview.section === section) {
@@ -62,7 +67,7 @@ export function useCmMultiDraft(sections: string[], proposalReview?: CmProposalR
     } finally {
       setLoading(false);
     }
-  }, [proposalReview, sections]);
+  }, [proposalReview, sectionKey]);
 
   useEffect(() => {
     void load();

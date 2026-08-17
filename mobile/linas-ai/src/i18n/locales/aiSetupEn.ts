@@ -289,7 +289,7 @@ export const aiSetupEn = {
   servicesUnsupported: 'That file type is not supported.',
   servicesResourceMenu: 'Media actions',
   servicesProposalPreview: 'AI proposal preview — not saved yet. Approve in chat, or tap Save service here.',
-  knowledgeSubtitle: 'Teach Linas what your business knows.',
+  knowledgeSubtitle: 'Teach Linas AI about your business',
   knowledgeAdd: '+ Add knowledge',
   knowledgeSearch: 'Search knowledge',
   knowledgeCount: 'knowledge items',

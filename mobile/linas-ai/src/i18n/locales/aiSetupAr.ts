@@ -288,7 +288,7 @@ export const aiSetupAr = {
   servicesUnsupported: 'نوع الملف غير مدعوم.',
   servicesResourceMenu: 'إجراءات الوسائط',
   servicesProposalPreview: 'معاينة اقتراح الذكاء — غير محفوظ بعد. وافق في الدردشة أو اضغط حفظ الخدمة هنا.',
-  knowledgeSubtitle: 'علّم Linas ما يعرفه عملك.',
+  knowledgeSubtitle: 'علّم Linas AI عن عملك',
   knowledgeAdd: '+ إضافة معرفة',
   knowledgeSearch: 'بحث في المعرفة',
   knowledgeCount: 'عناصر معرفة',

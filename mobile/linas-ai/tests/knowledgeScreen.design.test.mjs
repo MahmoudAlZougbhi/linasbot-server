@@ -22,7 +22,7 @@ describe('Knowledge screens match screenshot handoff', () => {
     const screen = read('features/cm/knowledge/KnowledgeScreen.tsx');
     const en = read('i18n/locales/aiSetupEn.ts');
 
-    assert.match(en, /knowledgeSubtitle: 'Teach Linas what your business knows\.'/);
+    assert.match(en, /knowledgeSubtitle: 'Teach Linas AI about your business'/);
     assert.match(en, /knowledgeAdd: '\+ Add knowledge'/);
     assert.match(en, /knowledgeSearch: 'Search knowledge'/);
     assert.match(en, /knowledgeFooter: 'Linas uses published knowledge when replying\.'/);
@@ -82,8 +82,11 @@ describe('Knowledge screens match screenshot handoff', () => {
   });
 
   it('has ar/fr knowledge keys', () => {
-    for (const loc of ['aiSetupAr.ts', 'aiSetupFr.ts']) {
-      const srcText = read(`i18n/locales/${loc}`);
+    const ar = read('i18n/locales/aiSetupAr.ts');
+    const fr = read('i18n/locales/aiSetupFr.ts');
+    assert.match(ar, /knowledgeSubtitle: 'علّم Linas AI عن عملك'/);
+    assert.match(fr, /knowledgeSubtitle: 'Apprenez à Linas AI à connaître votre entreprise'/);
+    for (const srcText of [ar, fr]) {
       assert.match(srcText, /knowledgeAdd:/);
       assert.match(srcText, /knowledgeSave:/);
       assert.match(srcText, /knowledgeInfoRecommended:/);
