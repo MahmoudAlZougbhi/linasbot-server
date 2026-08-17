@@ -36,6 +36,7 @@ export function WebChatCard({ onError, onNotice }: Props) {
   const [entitlementWeb, setEntitlementWeb] = useState<boolean | null>(cached?.entitlementWeb ?? null);
   const [ready, setReady] = useState(cached !== null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -46,12 +47,15 @@ export function WebChatCard({ onError, onNotice }: Props) {
       writeWebChatCardSnapshot({ settings: data, entitlementWeb: entitled });
       setSettings(data);
       setEntitlementWeb(entitled);
-      setReady(true);
+      setLoadFailed(false);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) return;
-      onError?.(tr('integrationsActionError'));
+      // Keep the card visible; do not escalate to Integrations list load error.
+      setLoadFailed(true);
+    } finally {
+      setReady(true);
     }
-  }, [onError, tr]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -71,14 +75,17 @@ export function WebChatCard({ onError, onNotice }: Props) {
     );
   }
 
+  // Parent screen already shows LinasLoadingIndicator until webChatReady.
   if (!ready) {
     return null;
   }
 
-  const webPlanAllowed = resolveWebPlanAllowed(settings, entitlementWeb);
+  // Unknown membership (failed fetch) must not hide Connect behind plan gating.
+  const webPlanAllowed = loadFailed ? true : resolveWebPlanAllowed(settings, entitlementWeb);
   const planBlocked = !webPlanAllowed;
   const connected = Boolean(settings?.connected);
   const statusLabel = tr(statusKey(settings?.installation_status));
+  const connectLabel = connected ? tr('webChatOpenSettings') : tr('connect');
 
   return (
     <View accessibilityRole="summary" style={styles.wrap}>
@@ -87,7 +94,7 @@ export function WebChatCard({ onError, onNotice }: Props) {
         title={tr('platformWeb')}
         subtitle={connected ? settings?.site_url || tr('platformWeb') : tr('webChatSubtitle')}
         connected={connected}
-        connectLabel={tr('webChatOpenSettings')}
+        connectLabel={connectLabel}
         connectedLabel={tr('connected')}
         notConnectedLabel={tr('notConnected')}
         comingSoonLabel={tr('comingSoon')}
@@ -100,7 +107,8 @@ export function WebChatCard({ onError, onNotice }: Props) {
         onMenu={() => setDetailOpen(true)}
       >
         {planBlocked ? <Text style={styles.warn}>{tr('webChatPlanRequired')}</Text> : null}
-        {!planBlocked ? (
+        {loadFailed ? <Text style={styles.warn}>{tr('integrationsActionError')}</Text> : null}
+        {!planBlocked && !loadFailed ? (
           <Pressable onPress={() => setDetailOpen(true)} style={styles.openBtn}>
             <Text style={styles.openText}>{tr('webChatOpenSettings')}</Text>
           </Pressable>
