@@ -5,6 +5,7 @@ import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { useI18n } from '../../i18n/LanguageContext';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import { asRecordList, newId, primaryLabel } from './cmApi';
+import { isDraftDirty, stableSerialize } from './cmDraftDirty';
 import { cmFormStyles } from './cmFormStyles';
 import type { CmProposalReview } from './cmProposalReview';
 import { BranchEditView } from './editors/locationOpeningHours/BranchEditView';
@@ -28,8 +29,11 @@ export function LocationHoursSectionScreen({ proposalReview, onBack }: Props) {
   const [query, setQuery] = useState('');
   const selected = items.find((item) => String(item.id) === selectedId) || null;
 
-  const setItems = (next: Record<string, unknown>[]) =>
-    draft.setPayload({ ...draft.payload, items: next });
+  const setItems = (next: Record<string, unknown>[]) => {
+    const nextPayload = { ...draft.payload, items: next };
+    if (!isDraftDirty(stableSerialize(draft.payload), nextPayload)) return;
+    draft.setPayload(nextPayload);
+  };
 
   const patchBranch = (id: string, data: Record<string, unknown>) => {
     setItems(items.map((item) => (String(item.id) === id ? { ...item, ...data } : item)));
@@ -45,9 +49,10 @@ export function LocationHoursSectionScreen({ proposalReview, onBack }: Props) {
   const handleBack = () => {
     if (selected) {
       setSelectedId(null);
+      setTab('details');
       return;
     }
-    if (!draft.dirty) {
+    if (!draft.hasUnsavedChanges()) {
       onBack?.();
       return;
     }
