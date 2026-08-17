@@ -2974,7 +2974,7 @@ assert_git_repository_trust() {
     die "Git directory resolves outside the canonical repository"
   test "$(git -C "$REPO_DIR" rev-parse --path-format=absolute --git-common-dir)" = \
     "$REPO_DIR/.git" || die "Git common directory is not canonical"
-  test "$(/usr/bin/realpath -m "$(git -C "$REPO_DIR" rev-parse --git-path info/attributes)")" = \
+  test "$(git -C "$REPO_DIR" rev-parse --path-format=absolute --git-path info/attributes)" = \
     "$REPO_DIR/.git/info/attributes" || \
     die "Git attribute authority resolves outside the canonical repository"
 }
