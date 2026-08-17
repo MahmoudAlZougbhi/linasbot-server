@@ -32,6 +32,7 @@ def test_rekey_guard_install_uses_git_blob_excl_not_gnu_dd() -> None:
     ]
     assert '["git", "-C", repo, "cat-file", "blob", git_object]' in body
     assert "os.O_EXCL" in body
+    assert "mktemp -d -p /run linasbot-rekey-guard." in body
     assert "oflag=excl" not in body
     assert "95-linasbot-credential-rekey-guard.conf" in body
     assert "systemctl daemon-reload" in body
