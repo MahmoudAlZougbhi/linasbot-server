@@ -82,7 +82,16 @@ def _assert_runtime_environment(expected: dict[str, str]) -> None:
     extra_names = []
     for key in unexpected:
         value = os.environ[key]
-        if key == "SHELL" and value in {"/bin/bash", "/bin/sh"}:
+        if key == "SHELL" and value.strip() in {
+            "/bin/bash",
+            "/bin/sh",
+            "/bin/dash",
+            "/usr/bin/bash",
+            "/usr/bin/sh",
+            "/usr/bin/dash",
+            "/usr/sbin/nologin",
+            "/sbin/nologin",
+        }:
             continue
         if key in fixed_root and value == fixed_root[key]:
             continue

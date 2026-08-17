@@ -49,7 +49,7 @@ def test_process_projection_accepts_systemd_pwd_and_c_utf8_locale(tmp_path: Path
 
 def test_process_projection_accepts_posix_root_shells(tmp_path: Path) -> None:
     process = tmp_path / "environ"
-    for shell in (b"/bin/bash", b"/bin/sh"):
+    for shell in (b"/bin/bash", b"/bin/sh", b"/usr/bin/bash", b"/usr/sbin/nologin"):
         process.write_bytes(
             b"OPENAI_API_KEY=expected\0META_DELETION_NODE_ID=node01\0"
             b"LINAS_HA_PEER_HOST=10.106.0.4\0PYTHONUNBUFFERED=1\0"
@@ -65,7 +65,7 @@ def test_process_projection_accepts_posix_root_shells(tmp_path: Path) -> None:
     [
         (b"LANG=en_US.UTF-8\0", "invalid root identity"),
         (b"PWD=/tmp\0", "invalid root identity"),
-        (b"SHELL=/usr/sbin/nologin\0", "invalid root identity"),
+        (b"SHELL=/tmp/evil\0", r"invalid root identity: SHELL=/tmp/evil"),
         (b"WHATSAPP_DISABLED=true\0", "unauthorized extra key: WHATSAPP_DISABLED"),
     ],
 )
