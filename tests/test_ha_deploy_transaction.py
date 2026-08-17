@@ -1738,7 +1738,9 @@ def test_materialize_lb_manager_materializes_manager_and_contract_in_closed_temp
     assert "$helper_root/scripts/ha/manage_do_lb_ready_healthcheck.py" in source
     assert "$helper_root/scripts/ha/do_lb_ready_contract.py" in cleanup
     assert 'rmdir "$helper_root/scripts/ha" "$helper_root/scripts"' in cleanup
-    assert 'git -C "$REPO_DIR" cat-file blob "$object"' in materialize
+    assert '["git", "-C", repo, "cat-file", "blob", git_object]' in materialize
+    assert "os.O_EXCL" in materialize
+    assert "oflag=excl" not in materialize
     assert 'git -C "$REPO_DIR" hash-object "$destination"' in materialize
     assert 'cat "$REPO_DIR/$path"' not in materialize
     assert 'cp "$REPO_DIR/$path"' not in materialize
