@@ -35,6 +35,8 @@ def test_peer_stage_skips_only_commit_bootstrap_markers() -> None:
     assert "skip=commit_bootstrap()" in peer.REMOTE_STAGE
     assert 'if skip and rel in ("bootstrap.active","bootstrap.coordinator.json"): continue' in peer.REMOTE_STAGE
     assert 'payload.get("decision")=="commit"' in peer.REMOTE_STAGE
+    assert 'payload.get("status")=="applied"' in peer.REMOTE_STAGE
+    assert "/opt/.linasbot-meta-bootstrap-" in peer.REMOTE_STAGE
 
 
 def test_ingest_skips_only_commit_bootstrap_markers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

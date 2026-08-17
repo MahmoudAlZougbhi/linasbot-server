@@ -201,13 +201,31 @@ def write_launcher_receipt(path: Path, payload: bytes) -> None:
 
 def _commit_decided_bootstrap(state_root: Path) -> bool:
     coordinator = state_root / "bootstrap.coordinator.json"
-    if not (coordinator.exists() or coordinator.is_symlink()):
+    if coordinator.exists() or coordinator.is_symlink():
+        try:
+            payload = json.loads(_root_read(coordinator, 65_536).decode("utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError, IngestError):
+            payload = None
+        if isinstance(payload, dict) and payload.get("schema") == 2 and payload.get("decision") == "commit":
+            return True
+    active = state_root / "bootstrap.active"
+    if not (active.exists() or active.is_symlink()):
         return False
     try:
-        payload = json.loads(_root_read(coordinator, 65_536).decode("utf-8"))
+        sent = json.loads(_root_read(active, 65_536).decode("utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError, IngestError):
         return False
-    return isinstance(payload, dict) and payload.get("schema") == 2 and payload.get("decision") == "commit"
+    tx_id = sent.get("tx_id") if isinstance(sent, dict) else None
+    if not isinstance(tx_id, str) or len(tx_id) != 32 or any(char not in "0123456789abcdef" for char in tx_id):
+        return False
+    journal = Path(f"/opt/.linasbot-meta-bootstrap-{tx_id}/journal.json")
+    if not (journal.exists() or journal.is_symlink()):
+        return False
+    try:
+        payload = json.loads(_root_read(journal, 65_536).decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError, IngestError):
+        return False
+    return isinstance(payload, dict) and payload.get("status") == "applied" and payload.get("tx_id") == tx_id
 
 
 @contextmanager
