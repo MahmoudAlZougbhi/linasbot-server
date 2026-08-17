@@ -1,9 +1,19 @@
-import { asRecordList, newId } from '../cmApi';
-import {
-  parseAttachment,
-  type KnowledgeAttachment,
-} from '../knowledge/knowledgeModel';
-import { serializeResourceFields } from '../resources/resourceMeta';
+/** Pure AI Basics / greeting helpers (no React Native, no cross-folder imports). */
+
+export type GreetingKind = 'image' | 'file' | 'video' | 'link';
+
+export type GreetingAttachment = {
+  id: string;
+  kind: GreetingKind;
+  title: string;
+  description: string;
+  caption: string;
+  mime: string;
+  filename: string;
+  size: number;
+  url: string;
+  duration_seconds: number | null;
+};
 
 export type GreetingRule = {
   id: string;
@@ -16,11 +26,49 @@ export type GreetingRule = {
   trigger_mode: string;
   trigger_pattern: string;
   keywords: string[];
-  attachments: KnowledgeAttachment[];
+  attachments: GreetingAttachment[];
 };
 
 function str(value: unknown): string {
   return value == null ? '' : String(value);
+}
+
+function asRecordList(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object');
+}
+
+function newId(prefix: string): string {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function parseAttachment(row: Record<string, unknown>): GreetingAttachment {
+  const durationRaw = row.duration_seconds;
+  const duration =
+    typeof durationRaw === 'number' && Number.isFinite(durationRaw) && durationRaw >= 0
+      ? Math.round(durationRaw)
+      : null;
+  const description = str(row.description || row.caption).trim();
+  const title = str(row.title).trim();
+  let kind: GreetingKind =
+    row.kind === 'image' || row.kind === 'video' || row.kind === 'link' ? row.kind : 'file';
+  const mime = str(row.mime).toLowerCase();
+  const url = str(row.url);
+  if (kind === 'link' || url.trim()) kind = 'link';
+  else if (mime.startsWith('video/')) kind = 'video';
+  else if (mime.startsWith('image/')) kind = 'image';
+  return {
+    id: str(row.id),
+    kind,
+    title,
+    description,
+    caption: description,
+    mime: str(row.mime),
+    filename: str(row.filename),
+    size: typeof row.size === 'number' && Number.isFinite(row.size) ? row.size : 0,
+    url,
+    duration_seconds: duration,
+  };
 }
 
 export function greetingNote(item: GreetingRule | Record<string, unknown>): string {
@@ -73,16 +121,14 @@ export function greetingToRecord(item: GreetingRule): Record<string, unknown> {
     fr: item.fr,
     notes: item.notes || null,
     attachments: item.attachments.map((att) => {
-      const meta = serializeResourceFields({
-        title: att.title,
-        description: att.description || att.caption,
-      });
+      const title = att.title.trim();
+      const description = (att.description || att.caption).trim();
       return {
         id: att.id,
         kind: att.kind,
-        title: meta.title,
-        description: meta.description,
-        caption: meta.caption,
+        title,
+        description,
+        caption: description,
         mime: att.mime,
         filename: att.filename,
         size: att.size,
