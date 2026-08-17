@@ -6,6 +6,7 @@ WORKFLOW = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "depl
 HELPER_OPS = (
     "install-release-bundle-cluster",
     "install-lb-attestation-cluster",
+    "prepare-live-ha-contract-cluster",
     "orchestrate-confirmed",
     "orchestrate-reconcile",
     "commit-target-confirmed",

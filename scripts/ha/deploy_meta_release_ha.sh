@@ -3257,7 +3257,10 @@ expected = (
 )
 for raw_path in sys.argv[1:]:
     path = Path(raw_path)
-    before = path.lstat()
+    try:
+        before = path.lstat()
+    except FileNotFoundError as exc:
+        raise SystemExit("credential rekey static guard is missing") from exc
     if (
         not stat.S_ISREG(before.st_mode)
         or stat.S_ISLNK(before.st_mode)
@@ -8404,6 +8407,174 @@ rmdir "$root"
 EOF
 }
 
+install_rekey_static_guard_from_target() {
+  local target_sha="$1"
+  local repo_path="deploy/systemd/95-linasbot-credential-rekey-guard.conf"
+  local object temp_blob dest changed=0
+  local -a destinations=(
+    /etc/systemd/system/linasbot.service.d/95-linasbot-credential-rekey-guard.conf
+    /etc/systemd/system/linasbot-worker@.service.d/95-linasbot-credential-rekey-guard.conf
+  )
+  validate_sha "$target_sha"
+  object="$(git -C "$REPO_DIR" rev-parse "$target_sha:$repo_path")"
+  test "$(git -C "$REPO_DIR" cat-file -t "$object")" = blob || \
+    die "authorized rekey static guard object is not a blob"
+  temp_blob="$(mktemp -p /run linasbot-rekey-guard.XXXXXXXX)"
+  run_system_python_control - "$REPO_DIR" "$object" "$temp_blob" <<'PY'
+import os
+import subprocess
+import sys
+
+repo, git_object, path = sys.argv[1:]
+expected = (
+    b"[Unit]\n"
+    b"# Managed only by rekey_meta_whatsapp_credentials.py.\n"
+    b"ConditionPathExists=!/var/lib/linasbot/meta-ha/rekey/runtime.guard\n"
+)
+descriptor = os.open(
+    path,
+    os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+    0o600,
+)
+try:
+    os.fchmod(descriptor, 0o600)
+    os.fchown(descriptor, 0, 0)
+    result = subprocess.run(
+        ["git", "-C", repo, "cat-file", "blob", git_object],
+        check=False,
+        stdin=subprocess.DEVNULL,
+        stdout=descriptor,
+        stderr=subprocess.DEVNULL,
+    )
+    if result.returncode:
+        raise SystemExit("authorized rekey static guard blob could not be read")
+    os.fsync(descriptor)
+finally:
+    os.close(descriptor)
+with open(path, "rb") as handle:
+    payload = handle.read()
+if payload != expected:
+    raise SystemExit("authorized rekey static guard blob differs from the deploy contract")
+PY
+  test "$(git -C "$REPO_DIR" hash-object "$temp_blob")" = "$object" || \
+    die "materialized rekey static guard differs from the authorized Git blob"
+  for dest in "${destinations[@]}"; do
+    if [ -e "$dest" ] || [ -L "$dest" ]; then
+      test -f "$dest" && test ! -L "$dest" || die "existing rekey static guard is unsafe: $dest"
+      test "$(stat -c '%F:%u:%g:%a:%h' "$dest")" = "regular file:0:0:644:1" || \
+        die "existing rekey static guard security is invalid: $dest"
+      test "$(sha256sum "$dest" | awk '{print $1}')" = \
+        "$(sha256sum "$temp_blob" | awk '{print $1}')" || \
+        die "existing rekey static guard differs from the authorized blob: $dest"
+    else
+      install -o root -g root -m 0644 "$temp_blob" "$dest"
+      changed=1
+    fi
+  done
+  unlink "$temp_blob"
+  if [ "$changed" = 1 ]; then
+    systemctl daemon-reload
+  fi
+  test "$(systemctl show -p NeedDaemonReload --value linasbot.service)" = no || \
+    die "rekey static guard was not durably loaded"
+}
+
+quarantine_untracked_owner_blockers() {
+  local target_sha="$1"
+  local path dest dest_root target_entry
+  local -a candidates=()
+  local -A seen=()
+  validate_sha "$target_sha"
+  dest_root="$BACKUP_ROOT/untracked-quarantine/$target_sha"
+  while IFS= read -r -d '' path; do
+    if [ -z "${seen[$path]+set}" ]; then
+      candidates+=("$path")
+      seen["$path"]=1
+    fi
+  done < <(git -C "$REPO_DIR" ls-files --others --exclude-standard -z -- \
+    '*.py' '*.pyi' '*.pyc' '*.pyo' '*.so' '*.pth' \
+    '*.sh' '*.bash' '*.zsh' \
+    '*.yml' '*.yaml' '*.toml' '*.ini' '*.cfg' '*.conf' '*.service' \
+    '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.jsx' \
+    '*.html' '*.css' '*.scss' '*.sql' '*.go' '*.rs' '*.c' '*.h' \
+    ':(exclude)venv/**' ':(exclude).venv/**' \
+    ':(exclude)dashboard/node_modules/**' ':(exclude)dashboard/build/**' \
+    ':(exclude)**/node_modules/**')
+  while IFS= read -r -d '' path; do
+    if [ -z "${seen[$path]+set}" ]; then
+      candidates+=("$path")
+      seen["$path"]=1
+    fi
+  done < <(git -C "$REPO_DIR" ls-files --others --ignored --exclude-standard -z -- \
+    '*.py' '*.pyi' '*.pyc' '*.pyo' '*.so' '*.pth' \
+    '*.sh' '*.bash' '*.zsh' \
+    '*.yml' '*.yaml' '*.toml' '*.ini' '*.cfg' '*.conf' '*.service' \
+    '*.js' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.jsx' \
+    '*.html' '*.css' '*.scss' '*.sql' '*.go' '*.rs' '*.c' '*.h' \
+    ':(exclude)venv/**' ':(exclude).venv/**' \
+    ':(exclude)dashboard/node_modules/**' ':(exclude)dashboard/build/**' \
+    ':(exclude)**/node_modules/**')
+  mkdir -p "$BACKUP_ROOT" "$BACKUP_ROOT/untracked-quarantine" "$dest_root"
+  chmod 0700 "$BACKUP_ROOT" "$BACKUP_ROOT/untracked-quarantine" "$dest_root"
+    if [ "${#candidates[@]}" -gt 0 ]; then
+    for path in "${candidates[@]}"; do
+    target_entry="$(git -C "$REPO_DIR" ls-tree "$target_sha" -- "$path")"
+    if [[ "$target_entry" =~ ^100(644|755)[[:space:]]blob[[:space:]]([0-9a-f]{40})$'\t' ]]; then
+      continue
+    fi
+    dest="$dest_root/$path"
+    mkdir -p "$(dirname "$dest")"
+    test ! -e "$dest" && test ! -L "$dest" || \
+      die "untracked quarantine destination already exists: $path"
+    mv -- "$REPO_DIR/$path" "$dest"
+    log "quarantined target-untracked runtime path: $path"
+  done
+  fi
+  audit_untracked_runtime "$BACKUP_ROOT/untracked-audit" "post-quarantine" "$target_sha" || \
+    die "untracked runtime still blocks after official quarantine"
+}
+
+prepare_live_ha_contract() {
+  local expected_node_id="$1"
+  local target_sha="$2"
+  case "$expected_node_id" in
+    node01 | node02) ;;
+    *) die "live HA contract preparation received an invalid node identity" ;;
+  esac
+  validate_sha "$target_sha"
+  require_root
+  install_rekey_static_guard_from_target "$target_sha"
+  quarantine_untracked_owner_blockers "$target_sha"
+  log "live HA contract prepared on $expected_node_id"
+}
+
+prepare_live_ha_contract_cluster() {
+  local target_sha="$1"
+  local peer_host="$DEFAULT_PEER_HOST"
+  local remote_helper_root remote_helper rc=0 cleanup_rc=0
+  require_root
+  validate_sha "$target_sha"
+  remote_helper_root="$(prepare_remote_exact_helper "$peer_host")"
+  [[ "$remote_helper_root" =~ ^/run/linasbot-release-helper\.[A-Za-z0-9]{8}$ ]] || \
+    die "remote exact-helper root capture is not a closed volatile path"
+  remote_helper="$remote_helper_root/deploy_meta_release_ha.sh"
+  set +e
+  ssh "${SSH_OPTIONS[@]}" "root@${peer_host}" \
+    /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+    PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+    /bin/bash --noprofile --norc "$remote_helper" prepare-live-ha-contract \
+    "$INTERNAL_NODE_DISPATCH_CONFIRM" node02 "$target_sha" </dev/null
+  rc=$?
+  set -e
+  if [ "$rc" = 0 ]; then
+    prepare_live_ha_contract node01 "$target_sha" || rc=$?
+  fi
+  cleanup_remote_exact_helper "$peer_host" "$remote_helper_root" || cleanup_rc=$?
+  test "$cleanup_rc" = 0 || die "remote live-contract helper cleanup failed closed"
+  test "$rc" = 0 || die "both-node live HA contract preparation failed"
+  log "live HA contract prepared on node02 then node01"
+}
+
 install_release_bundle_cluster() {
   local incoming_dir="$1"
   local target_sha="$2"
@@ -9653,6 +9824,13 @@ case "${1:-}" in
   install-lb-attestation-cluster)
     install_lb_ready_attestation_cluster \
       "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" "${7:-}" "${8:-}" "${9:-}"
+    ;;
+  prepare-live-ha-contract)
+    require_internal_node_dispatch "${2:-}"
+    prepare_live_ha_contract "${3:-}" "${4:-}"
+    ;;
+  prepare-live-ha-contract-cluster)
+    prepare_live_ha_contract_cluster "${2:-}"
     ;;
   orchestrate-confirmed)
     orchestrate "${2:-}" steady-confirmed "${3:-}" "${4:-}" "${5:-}" "" "${6:-}" \

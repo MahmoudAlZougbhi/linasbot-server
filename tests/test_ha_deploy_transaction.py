@@ -94,6 +94,7 @@ def test_workflow_runs_only_the_helper_from_the_exact_authorized_blob() -> None:
     assert 'getattr(os, "O_NOFOLLOW", 0)' in script
     assert '"$HELPER_PATH" install-release-bundle-cluster' in script
     assert '"$HELPER_PATH" install-lb-attestation-cluster' in script
+    assert '"$HELPER_PATH" prepare-live-ha-contract-cluster' in script
     assert '"$HELPER_PATH" orchestrate-confirmed' in script
     assert '"$HELPER_PATH" orchestrate-reconcile' in script
     assert '"$HELPER_PATH" commit-target-confirmed' in script
