@@ -64,33 +64,69 @@ def _mock_collection(svc: UserService, monkeypatch: pytest.MonkeyPatch, coll: Ma
     monkeypatch.setattr(svc, "_db", mock_db)
 
 
-def test_get_users_for_tenant_queries_both_tenant_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_users_for_tenant_includes_legacy_tenant_id_and_mixed_case(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     svc = UserService()
-    docs_by_field = {
-        "tenantId": [
-            _doc(
-                "u-admin",
-                {"email": "admin@linas.test", "role": "admin", "tenantId": "linas", "status": "active"},
-            ),
+    monkeypatch.setattr(
+        svc,
+        "get_all_users",
+        lambda: [
+            {
+                "id": "u-admin",
+                "email": "admin@linas.test",
+                "role": "admin",
+                "tenantId": "linas",
+                "status": "active",
+            },
+            {
+                "id": "u-operator",
+                "email": "op@linas.test",
+                "role": "operator",
+                "tenantId": "linas",
+                "status": "active",
+            },
+            {
+                "id": "other",
+                "email": "x@other.test",
+                "role": "viewer",
+                "tenantId": "other",
+                "status": "active",
+            },
         ],
-        "tenant_id": [
-            _doc(
-                "u-operator",
-                {"email": "op@linas.test", "role": "operator", "tenant_id": "linas", "status": "active"},
-            ),
-        ],
-    }
+    )
 
-    def _where(*, filter: Any) -> MagicMock:
-        field = filter.field_path
-        q = MagicMock()
-        q.stream.side_effect = lambda **_kwargs: iter(docs_by_field[field])
-        return q
+    users = svc.get_users_for_tenant("LINAS")
+    assert {u["id"] for u in users} == {"u-admin", "u-operator"}
 
-    _mock_collection(svc, monkeypatch, MagicMock(where=_where))
+
+def test_get_users_for_tenant_recovers_mixed_case_via_sanitize(monkeypatch: pytest.MonkeyPatch) -> None:
+    svc = UserService()
+    docs = [
+        _doc(
+            "legacy-op",
+            {
+                "email": "legacy@linas.test",
+                "role": "operator",
+                "tenantId": "Linas",
+                "status": "active",
+            },
+        ),
+        _doc(
+            "snake-admin",
+            {
+                "email": "snake@linas.test",
+                "role": "admin",
+                "tenant_id": "LINAS",
+                "status": "active",
+            },
+        ),
+    ]
+    _mock_collection(svc, monkeypatch, MagicMock(stream=lambda **_kwargs: iter(docs)))
 
     users = svc.get_users_for_tenant("linas")
-    assert {u["id"] for u in users} == {"u-admin", "u-operator"}
+    assert {u["id"] for u in users} == {"legacy-op", "snake-admin"}
+    assert all(u["tenantId"] == "linas" for u in users)
 
 
 def test_get_all_users_skips_bad_rows_instead_of_emptying_list(monkeypatch: pytest.MonkeyPatch) -> None:
