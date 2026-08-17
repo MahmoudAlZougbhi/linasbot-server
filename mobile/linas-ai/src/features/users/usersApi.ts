@@ -2,6 +2,48 @@ import { z } from 'zod';
 
 import { ApiError, apiFetch } from '../../api/client';
 
+function asTrimmedString(value: unknown, fallback = ''): string {
+  if (typeof value === 'string') return value.trim();
+  if (value == null) return fallback;
+  return String(value).trim() || fallback;
+}
+
+function coercePermissions(raw: unknown): Record<string, boolean> | null {
+  if (raw == null) return null;
+  if (typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === 'boolean') out[key] = value;
+    else if (value === 1 || value === '1' || value === 'true') out[key] = true;
+    else if (value === 0 || value === '0' || value === 'false') out[key] = false;
+  }
+  return out;
+}
+
+/** One bad legacy row must not wipe the whole tenant list (Zod .parse on array). */
+function parseTeamUser(raw: unknown): TeamUser | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  const id = asTrimmedString(row.id);
+  if (!id) return null;
+  const email = asTrimmedString(row.email);
+  const role = asTrimmedString(row.role, 'viewer');
+  return {
+    id,
+    email,
+    name: row.name == null ? null : asTrimmedString(row.name) || null,
+    role,
+    permissions: coercePermissions(row.permissions),
+    tenantId: row.tenantId == null ? undefined : asTrimmedString(row.tenantId) || undefined,
+    status: row.status == null ? null : asTrimmedString(row.status) || null,
+    lastLogin: row.lastLogin == null ? null : asTrimmedString(row.lastLogin) || null,
+    createdAt: row.createdAt == null ? null : asTrimmedString(row.createdAt) || null,
+    updatedAt: row.updatedAt == null ? null : asTrimmedString(row.updatedAt) || null,
+    emailVerified: typeof row.emailVerified === 'boolean' ? row.emailVerified : undefined,
+    displayName: row.displayName == null ? null : asTrimmedString(row.displayName) || null,
+  };
+}
+
 const TeamUserSchema = z.object({
   id: z.string(),
   email: z.string(),
@@ -19,7 +61,7 @@ const TeamUserSchema = z.object({
 
 const ListUsersSchema = z.object({
   success: z.boolean(),
-  users: z.array(TeamUserSchema).optional(),
+  users: z.array(z.unknown()).optional(),
   error: z.string().optional(),
 });
 
@@ -96,7 +138,12 @@ export async function listUsers(): Promise<TeamUser[]> {
     if (!data.success) {
       throw new Error(data.error || 'Failed to fetch users');
     }
-    return data.users ?? [];
+    const users: TeamUser[] = [];
+    for (const row of data.users ?? []) {
+      const parsed = parseTeamUser(row);
+      if (parsed) users.push(parsed);
+    }
+    return users;
   } catch (err) {
     if (err instanceof ApiError) throw err;
     throw new Error(usersErrorMessage(err, 'Could not load users.'));
