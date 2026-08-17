@@ -412,10 +412,18 @@ def log_interaction(
             print(f"[interaction_flow] TRACE persist skipped: {type(exc).__name__}", flush=True)
 
 
-def get_recent_flows(limit: int = 50, search_phone: str | None = None) -> list[dict[str, Any]]:
-    """Get recent flow entries for dashboard. Optionally filter by phone (partial match)."""
+def get_recent_flows(
+    limit: int = 50,
+    search_phone: str | None = None,
+    tenant_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Get recent flow entries, optionally restricted to one exact tenant."""
     _load_from_file()
-    entries = list(_FLOW_BUFFER)[-limit * 3 :]  # Fetch more when filtering
+    entries = list(_FLOW_BUFFER)
+    if tenant_id is not None:
+        tid = tenant_id.strip().lower()
+        entries = [entry for entry in entries if str(entry.get("tenant_id") or "").strip().lower() == tid]
+    entries = entries[-limit * 3 :]  # Fetch more when filtering
     if search_phone and search_phone.strip():
         q = search_phone.strip().replace(" ", "").replace("+", "").replace("-", "")
         if q:
