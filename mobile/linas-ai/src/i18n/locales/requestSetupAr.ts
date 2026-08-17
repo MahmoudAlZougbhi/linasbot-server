@@ -26,5 +26,8 @@ export const requestSetupAr: Record<keyof typeof requestSetupEn, string> = {
   requestRulesPreviewFailed: 'تعذّرت معاينة مخطط الطلب.',
   requestRulesPublishFailed: 'حُفظت المسودة، لكن نشر مخطط الطلب فشل.',
   requestRulesGraphLoadFailed: 'تعذّر تحميل مخططات الطلب المنشورة.',
+  requestRulesGraphUnmigrated:
+    'جداول مخطط الطلب غير مُرحَّلة على هذا السيرفر بعد. القواعد تُحفظ كمسودة.',
+  requestRulesGraphDbUnavailable: 'قاعدة بيانات الزبائن غير متاحة لمخططات الطلب.',
   requestRulesDeleteGraphFailed: 'أُزيلت القاعدة من المسودة، لكن تعذّر حذف المخطط المنشور.',
 };
