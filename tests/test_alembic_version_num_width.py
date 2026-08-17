@@ -232,6 +232,10 @@ def test_fresh_and_older_head_postgres_can_stamp_the_long_revision(postgres_url:
 
     _alembic_ok(postgres_url, "downgrade", "-1")
     maxlen, current = _version_meta(postgres_url)
+    assert current == {"20260822_product_images_max5"}
+
+    _alembic_ok(postgres_url, "downgrade", "-1")
+    maxlen, current = _version_meta(postgres_url)
     assert current == {"20260821_request_drafts"}
 
     _alembic_ok(postgres_url, "downgrade", "-1")
