@@ -114,7 +114,7 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
   {
     id: 'comments',
     title: 'Comments',
-    description: 'Rules: reply on comment, reply via DM, or ignore.',
+    description: 'Rules: reply on comment, reply via DM, or comment + DM.',
     mobileSupported: true,
   },
   {
