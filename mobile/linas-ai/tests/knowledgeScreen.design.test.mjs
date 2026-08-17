@@ -63,6 +63,7 @@ describe('Knowledge screens match screenshot handoff', () => {
     assert.match(edit, /tr\('knowledgeEditTitle'\)/);
     assert.match(edit, /ClampedLongField/);
     assert.match(edit, /countWords/);
+    assert.match(edit, /countLabel=\{wordLabel\}/);
     assert.match(edit, /tr\('knowledgeInfoRecommended'\)/);
     assert.match(resources, /knowledgeAddImage/);
     assert.match(resources, /knowledgeAddVideo/);

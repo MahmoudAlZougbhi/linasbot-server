@@ -44,6 +44,11 @@ describe('See all long text', () => {
     assert.match(clamp, /pointerEvents="none"/);
     assert.match(clamp, /keyboardShouldPersistTaps="never"/);
     assert.match(clamp, /NOTE_TEXT_COLOR/);
+    assert.match(clamp, /countLabel/);
+    assert.match(clamp, /position: 'absolute'/);
+    assert.match(clamp, /bottom: 8/);
+    assert.match(clamp, /right: 12/);
+    assert.match(read('features/cm/knowledge/KnowledgeEditView.tsx'), /countLabel=\{wordLabel\}/);
     assert.match(modal, /feather\('x'\)/);
     assert.match(modal, /Clipboard\.setStringAsync/);
     assert.match(modal, /tr\('aiSetupCopy'\)/);

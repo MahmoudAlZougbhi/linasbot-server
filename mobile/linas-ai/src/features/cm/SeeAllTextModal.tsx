@@ -24,12 +24,13 @@ type Props = {
   visible: boolean;
   title: string;
   text: string;
+  countLabel?: string;
   onChange: (value: string) => void;
   onClose: () => void;
 };
 
 /** Full-screen Note/Description editor — tap text for keyboard, Copy + X keep the draft. */
-export function SeeAllTextModal({ visible, title, text, onChange, onClose }: Props) {
+export function SeeAllTextModal({ visible, title, text, countLabel, onChange, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const { tr } = useI18n();
   const [draft, setDraft] = useState(text);
@@ -85,15 +86,22 @@ export function SeeAllTextModal({ visible, title, text, onChange, onClose }: Pro
             <Text style={styles.copyText}>{copied ? tr('aiSetupCopied') : tr('aiSetupCopy')}</Text>
           </Pressable>
         </View>
-        <TextInput
-          value={draft}
-          onChangeText={persist}
-          multiline
-          scrollEnabled
-          textAlignVertical="top"
-          showSoftInputOnFocus
-          style={styles.editor}
-        />
+        <View style={styles.editorWrap}>
+          <TextInput
+            value={draft}
+            onChangeText={persist}
+            multiline
+            scrollEnabled
+            textAlignVertical="top"
+            showSoftInputOnFocus
+            style={[styles.editor, countLabel ? styles.editorCountPad : null]}
+          />
+          {countLabel ? (
+            <Text pointerEvents="none" style={styles.count}>
+              {countLabel}
+            </Text>
+          ) : null}
+        </View>
       </KeyboardAvoidingView>
     </AppModal>
   );
@@ -126,6 +134,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   copyText: { color: AI_SETUP_TEAL, fontFamily: fonts.bodyMedium, fontSize: 13, fontWeight: '700' },
+  editorWrap: { flex: 1 },
   editor: {
     flex: 1,
     paddingHorizontal: 20,
@@ -134,5 +143,14 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 16,
     lineHeight: 24,
+  },
+  editorCountPad: { paddingBottom: 36 },
+  count: {
+    position: 'absolute',
+    bottom: 12,
+    right: 20,
+    color: '#8A9A98',
+    fontFamily: fonts.body,
+    fontSize: 12,
   },
 });

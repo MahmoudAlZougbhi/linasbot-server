@@ -22,6 +22,7 @@ type Props = {
   onChange: (value: string) => void;
   placeholder?: string;
   hint?: string;
+  countLabel?: string;
   placeholderTextColor?: string;
   labelStyle?: StyleProp<TextStyle>;
   inputStyle?: StyleProp<TextStyle>;
@@ -35,6 +36,7 @@ export function ClampedLongField({
   onChange,
   placeholder,
   hint,
+  countLabel,
   placeholderTextColor,
   labelStyle,
   inputStyle,
@@ -46,37 +48,45 @@ export function ClampedLongField({
   const showSeeAll = needsSeeAll(value, contentH);
   const maxH = seeAllMaxHeight(12);
   const placeholderColor = placeholderTextColor ?? '#8A9A98';
+  const countPad = countLabel ? styles.countPad : null;
 
   return (
     <View>
       {label ? <Text style={[styles.label, labelStyle]}>{label}</Text> : null}
-      {showSeeAll ? (
-        <ScrollView
-          style={[styles.box, { maxHeight: maxH }]}
-          contentContainerStyle={styles.previewBody}
-          scrollEnabled
-          keyboardShouldPersistTaps="never"
-          nestedScrollEnabled
-          onContentSizeChange={(_, height) => setContentH(height)}
-        >
-          <Text style={styles.previewText} pointerEvents="none">
-            {value}
+      <View style={[styles.box, showSeeAll ? { maxHeight: maxH } : null]}>
+        {showSeeAll ? (
+          <ScrollView
+            style={styles.boxFill}
+            contentContainerStyle={[styles.previewBody, countPad]}
+            scrollEnabled
+            keyboardShouldPersistTaps="never"
+            nestedScrollEnabled
+            onContentSizeChange={(_, height) => setContentH(height)}
+          >
+            <Text style={styles.previewText} pointerEvents="none">
+              {value}
+            </Text>
+          </ScrollView>
+        ) : (
+          <TextInput
+            value={value}
+            onChangeText={onChange}
+            placeholder={placeholder}
+            placeholderTextColor={placeholderColor}
+            multiline
+            textAlignVertical="top"
+            scrollEnabled={false}
+            showSoftInputOnFocus
+            onContentSizeChange={(e) => setContentH(e.nativeEvent.contentSize.height)}
+            style={[styles.shortInput, countPad, inputStyle, { color: NOTE_TEXT_COLOR }]}
+          />
+        )}
+        {countLabel ? (
+          <Text pointerEvents="none" style={styles.count}>
+            {countLabel}
           </Text>
-        </ScrollView>
-      ) : (
-        <TextInput
-          value={value}
-          onChangeText={onChange}
-          placeholder={placeholder}
-          placeholderTextColor={placeholderColor}
-          multiline
-          textAlignVertical="top"
-          scrollEnabled={false}
-          showSoftInputOnFocus
-          onContentSizeChange={(e) => setContentH(e.nativeEvent.contentSize.height)}
-          style={[styles.box, styles.shortInput, inputStyle, { color: NOTE_TEXT_COLOR }]}
-        />
-      )}
+        ) : null}
+      </View>
       {showSeeAll ? (
         <Pressable
           onPress={() => setOpen(true)}
@@ -92,6 +102,7 @@ export function ClampedLongField({
         visible={open}
         title={label || tr('aiSetupSeeAll')}
         text={value}
+        countLabel={countLabel}
         onChange={onChange}
         onClose={() => setOpen(false)}
       />
@@ -112,8 +123,19 @@ const styles = StyleSheet.create({
     borderColor: '#D7E5E3',
     borderRadius: 10,
     marginBottom: 8,
+    overflow: 'hidden',
   },
+  boxFill: { flexGrow: 0 },
   previewBody: { paddingHorizontal: 14, paddingVertical: 12 },
+  countPad: { paddingBottom: 28 },
+  count: {
+    position: 'absolute',
+    bottom: 8,
+    right: 12,
+    color: '#8A9A98',
+    fontFamily: fonts.body,
+    fontSize: 12,
+  },
   previewText: {
     color: NOTE_TEXT_COLOR,
     fontFamily: fonts.body,

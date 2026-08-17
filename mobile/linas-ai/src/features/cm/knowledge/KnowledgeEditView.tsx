@@ -79,10 +79,10 @@ export function KnowledgeEditView({
         label={tr('knowledgeFieldBody')}
         value={item.body}
         onChange={onBody}
+        countLabel={wordLabel}
         labelStyle={styles.label}
         inputStyle={styles.input}
       />
-      <Text style={styles.words}>{wordLabel}</Text>
 
       <View style={styles.info}>
         <View style={styles.infoIcon}>
@@ -162,13 +162,6 @@ const styles = StyleSheet.create({
     color: KN_TEAL_DARK,
     fontFamily: fonts.body,
     fontSize: 15,
-  },
-  words: {
-    color: KN_MUTED,
-    fontFamily: fonts.body,
-    fontSize: 12,
-    textAlign: 'right',
-    marginTop: -2,
   },
   info: {
     flexDirection: 'row',
