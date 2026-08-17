@@ -1312,14 +1312,17 @@ read_bootstrap_commit_proof() {
   local expected_plan_sha="$2"
   local expected_runtime_cluster_sha="$3"
   run_system_python_control - "$BOOTSTRAP_COMMIT_PROOF_FILE" "$expected_node_id" \
-    "$expected_plan_sha" "$expected_runtime_cluster_sha" <<'PY'
+    "$expected_plan_sha" "$expected_runtime_cluster_sha" \
+    "$PYTHON_RUNTIME_CLUSTER_RECEIPT" <<'PY'
+import hashlib
 import json
 import os
 import re
 import stat
 import sys
 
-path, expected_node, expected_plan, expected_runtime_cluster = sys.argv[1:]
+path, expected_node, expected_plan, expected_runtime_cluster = sys.argv[1:5]
+live_cluster_path = sys.argv[5] if len(sys.argv) > 5 else ""
 info = os.lstat(path)
 if (
     not stat.S_ISREG(info.st_mode)
@@ -1405,7 +1408,52 @@ if payload.get("nested_runtime_present") != payload.get("nested_runtime_quaranti
 if not re.fullmatch(r"[0-9a-f]{64}", str(payload.get("nested_runtime_evidence_sha256") or "")):
     raise SystemExit("bootstrap commit proof nested runtime digest is invalid")
 if payload.get("runtime_cluster_receipt_sha256") != expected_runtime_cluster:
-    raise SystemExit("bootstrap proof runtime certificate differs from the live committed certificate")
+    if not live_cluster_path:
+        raise SystemExit("bootstrap proof runtime certificate differs from the live committed certificate")
+    live_info = os.lstat(live_cluster_path)
+    if (
+        not stat.S_ISREG(live_info.st_mode)
+        or stat.S_ISLNK(live_info.st_mode)
+        or live_info.st_uid != 0
+        or live_info.st_gid != 0
+        or stat.S_IMODE(live_info.st_mode) != 0o600
+        or live_info.st_nlink != 1
+        or not 1 <= live_info.st_size <= 1 << 20
+    ):
+        raise SystemExit("live runtime certificate is not root:root mode 0600")
+    live_flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    live_fd = os.open(live_cluster_path, live_flags)
+    try:
+        live_opened = os.fstat(live_fd)
+        if (live_opened.st_dev, live_opened.st_ino) != (live_info.st_dev, live_info.st_ino):
+            raise SystemExit("live runtime certificate changed while opening")
+        live_raw = b""
+        while len(live_raw) < live_opened.st_size:
+            chunk = os.read(live_fd, live_opened.st_size - len(live_raw))
+            if not chunk:
+                raise SystemExit("live runtime certificate is truncated")
+            live_raw += chunk
+    finally:
+        os.close(live_fd)
+    if hashlib.sha256(live_raw).hexdigest() != expected_runtime_cluster:
+        raise SystemExit("live runtime certificate digest does not match the verified cluster receipt")
+    try:
+        live = json.loads(live_raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SystemExit("live runtime certificate is invalid JSON") from exc
+    live_tx = str(live.get("transaction_id") or "")
+    live_qg = str(live.get("qg_target_sha") or "")
+    planned_tx = str(payload.get("runtime_transaction_id") or "")
+    if (
+        not isinstance(live, dict)
+        or live.get("status") != "committed"
+        or live.get("decision") != "commit"
+        or live.get("format") != "linas-python-runtime-cluster-v2"
+        or re.fullmatch(r"pyr_[0-9a-f]{32}", live_tx) is None
+        or re.fullmatch(r"[0-9a-f]{40}", live_qg) is None
+        or live_tx == planned_tx
+    ):
+        raise SystemExit("bootstrap proof runtime is not a successor of the live committed certificate")
 print(payload["plan_sha256"])
 PY
 }
@@ -3943,10 +3991,13 @@ assert_target_object() {
   local target_sha="$1"
   local expected_helper_hash="$2"
   local actual_helper_hash
-  git -C "$REPO_DIR" fetch --no-tags origin main
+  local imported_ref="refs/linasbot-release-artifacts/$target_sha"
+  local imported_sha
+  imported_sha="$(git -C "$REPO_DIR" rev-parse --verify "${imported_ref}^{commit}")" || \
+    die "authorized target is not the imported Quality Gates source authority"
+  test "$imported_sha" = "$target_sha" || \
+    die "authorized target is not the imported Quality Gates source authority"
   git -C "$REPO_DIR" cat-file -e "${target_sha}^{commit}"
-  git -C "$REPO_DIR" merge-base --is-ancestor "$target_sha" origin/main || \
-    die "authorized target is not on fetched origin/main"
   git -C "$REPO_DIR" cat-file -e "$target_sha:main.py"
   git -C "$REPO_DIR" cat-file -e "$target_sha:deploy.sh"
   git -C "$REPO_DIR" cat-file -e "$target_sha:$HELPER_REPO_PATH"
