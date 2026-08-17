@@ -3952,7 +3952,7 @@ def _assert_process_contract(
 def _node_admit(node_id: str, tx_id: str, plan_sha256: str, expected_pg_state: str) -> None:
     backup = _assert_active(tx_id, plan_sha256)
     probe = json.loads((backup / "probe.before.json").read_text(encoding="utf-8"))
-    _assert_normalized_git_metadata(backup, probe["git_metadata"])
+    _normalize_git_metadata(backup, probe["git_metadata"])
     _assert_env_contract(
         node_id,
         expected_pg_state,
@@ -4169,6 +4169,33 @@ def _read_bootstrap_commit_proof(
     return payload
 
 
+def _successor_committed_runtime(planned: dict[str, Any], live: dict[str, Any]) -> bool:
+    """Allow commit-proof after an official runtime refresh of a commit journal.
+
+    BOOTSTRAP_COMMIT_OVERLAP may install a later committed Python runtime while
+    a commit-decided bootstrap journal is still retained. That is not mid-flight
+    drift: both authorities are committed receipts with distinct transactions.
+    """
+
+    planned_shared = planned.get("shared")
+    live_shared = live.get("shared")
+    if not isinstance(planned_shared, dict) or not isinstance(live_shared, dict):
+        return False
+    planned_tx = str(planned_shared.get("transaction_id") or "")
+    live_tx = str(live_shared.get("transaction_id") or "")
+    planned_receipt = str(planned_shared.get("cluster_receipt_sha256") or "")
+    live_receipt = str(live_shared.get("cluster_receipt_sha256") or "")
+    planned_qg = str(planned_shared.get("qg_target_sha") or "")
+    live_qg = str(live_shared.get("qg_target_sha") or "")
+    if RUNTIME_TX_RE.fullmatch(planned_tx) is None or RUNTIME_TX_RE.fullmatch(live_tx) is None:
+        return False
+    if DIGEST_RE.fullmatch(planned_receipt) is None or DIGEST_RE.fullmatch(live_receipt) is None:
+        return False
+    if SHA_RE.fullmatch(planned_qg) is None or SHA_RE.fullmatch(live_qg) is None:
+        return False
+    return planned_tx != live_tx and planned_receipt != live_receipt
+
+
 def _node_commit_proof(tx_id: str, plan_sha256: str) -> None:
     backup = _assert_active(tx_id, plan_sha256)
     active = json.loads(ACTIVE_PATH.read_text(encoding="utf-8"))
@@ -4179,7 +4206,9 @@ def _node_commit_proof(tx_id: str, plan_sha256: str) -> None:
         raise RuntimeError("bootstrap commit proof node identity is invalid")
     probe = json.loads((backup / "probe.before.json").read_text(encoding="utf-8"))
     _assert_normalized_git_metadata(backup, probe["git_metadata"])
-    if _runtime_authority(node_id) != probe["runtime_authority"]:
+    live_runtime = _runtime_authority(node_id)
+    planned_runtime = probe["runtime_authority"]
+    if live_runtime != planned_runtime and not _successor_committed_runtime(planned_runtime, live_runtime):
         raise RuntimeError("Python runtime authority changed before bootstrap commit proof")
     _assert_target_units(probe["runtime_authority"])
     _assert_repo_bytecode_absent()
@@ -4979,7 +5008,7 @@ def _orchestrate_decided_recovery(args: argparse.Namespace) -> int:
                 except BaseException:
                     pass
         raise RuntimeError(
-            f"bootstrap {decision} recovery is incomplete; durable coordinator journal retained"
+            f"bootstrap {decision} recovery is incomplete; durable coordinator journal retained: {exc}"
         ) from exc
     _unlink_durable(COORDINATOR_PATH)
     _log(f"durable bootstrap decision={decision} recovered on both fixed nodes")
@@ -5214,6 +5243,11 @@ def main(argv: list[str] | None = None) -> int:
         raise AssertionError("unreachable")
     except Exception as exc:  # noqa: BLE001 - never print env values, DSNs, provider bodies, or row data
         print(f"ERROR: Meta HA bootstrap failed ({type(exc).__name__}): {exc}", file=sys.stderr)
+        if exc.__cause__ is not None:
+            print(
+                f"ERROR: Meta HA bootstrap failed cause ({type(exc.__cause__).__name__}): {exc.__cause__}",
+                file=sys.stderr,
+            )
         return 2
 
 
