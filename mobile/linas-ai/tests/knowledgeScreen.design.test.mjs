@@ -60,6 +60,7 @@ describe('Knowledge screens match screenshot handoff', () => {
     );
     assert.match(en, /knowledgeResourcesHint: 'Add examples or files Linas can use when answering\.'/);
     assert.match(en, /knowledgeSave: 'Save changes'/);
+    assert.match(en, /aiSetupSave: 'Save'/);
     assert.match(edit, /tr\('knowledgeEditTitle'\)/);
     assert.match(edit, /ClampedLongField/);
     assert.match(edit, /countWords/);
@@ -71,7 +72,7 @@ describe('Knowledge screens match screenshot handoff', () => {
     assert.match(resources, /knowledgeAddLink/);
     assert.match(resources, /feather\('more-horizontal'\)/);
     assert.match(screen, /tr\('knowledgeDelete'\)/);
-    assert.match(screen, /tr\('knowledgeSave'\)/);
+    assert.match(screen, /tr\('aiSetupSave'\)/);
     assert.match(screen, /feather\('trash-2'\)/);
   });
 
@@ -93,6 +94,7 @@ describe('Knowledge screens match screenshot handoff', () => {
     for (const srcText of [ar, fr]) {
       assert.match(srcText, /knowledgeAdd:/);
       assert.match(srcText, /knowledgeSave:/);
+      assert.match(srcText, /aiSetupSave:/);
       assert.match(srcText, /knowledgeInfoRecommended:/);
     }
   });
