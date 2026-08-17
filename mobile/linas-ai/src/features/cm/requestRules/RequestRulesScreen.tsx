@@ -27,6 +27,7 @@ import {
   listRequestGraphs,
   previewRequestGraph,
   publishRequestGraph,
+  RequestGraphsApiError,
 } from './requestGraphsApi';
 import { RQ_CANVAS, RQ_TEAL } from './requestRuleChrome';
 import {
@@ -73,12 +74,28 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
     return map;
   }, [graphs]);
 
+  function graphErrorMessage(err: unknown): string {
+    if (err instanceof RequestGraphsApiError) {
+      if (err.code === 'REQUEST_GRAPHS_UNMIGRATED') return tr('requestRulesGraphUnmigrated');
+      if (err.code === 'REQUEST_GRAPHS_DB_UNAVAILABLE') return tr('requestRulesGraphDbUnavailable');
+      if (err.code === 'REQUEST_GRAPH_PREVIEW_FAILED') return tr('requestRulesPreviewFailed');
+      if (err.code === 'REQUEST_GRAPH_PUBLISH_FAILED') return tr('requestRulesPublishFailed');
+    }
+    return tr('requestRulesGraphLoadFailed');
+  }
+
   const loadGraphs = useCallback(async () => {
     try {
       setGraphs(await listRequestGraphs());
       setGraphError(null);
-    } catch {
-      setGraphError(tr('requestRulesGraphLoadFailed'));
+    } catch (err) {
+      if (err instanceof RequestGraphsApiError && err.code === 'REQUEST_GRAPHS_UNMIGRATED') {
+        setGraphError(tr('requestRulesGraphUnmigrated'));
+      } else if (err instanceof RequestGraphsApiError && err.code === 'REQUEST_GRAPHS_DB_UNAVAILABLE') {
+        setGraphError(tr('requestRulesGraphDbUnavailable'));
+      } else {
+        setGraphError(tr('requestRulesGraphLoadFailed'));
+      }
     }
   }, [tr]);
 
@@ -88,6 +105,10 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
 
   function setRules(next: RequestRuleItem[]) {
     draft.setPayload({ ...draft.payload, rules: next.map(ruleToRecord) });
+  }
+
+  function rulesPayload(next: RequestRuleItem[]): Record<string, unknown> {
+    return { ...draft.payload, rules: next.map(ruleToRecord) };
   }
 
   function patchSelected(patch: Partial<RequestRuleItem>) {
@@ -104,9 +125,19 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
     setMode('edit');
   }
 
-  function goList() {
+  async function goList() {
     if (selected && !selected.name.trim() && !selected.notes.trim()) {
-      setRules(items.filter((item) => item.id !== selected.id));
+      const next = items.filter((item) => item.id !== selected.id);
+      if (draft.dirty) {
+        const ok = await draft.save(rulesPayload(next));
+        if (!ok) return;
+      } else {
+        setRules(next);
+      }
+    } else if (draft.dirty) {
+      // Persist before leaving edit so re-open does not lose a rule that only lived in memory.
+      const ok = await draft.save(rulesPayload(items));
+      if (!ok) return;
     }
     setMode('list');
     setSelectedId(null);
@@ -124,8 +155,8 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
       });
       setPreview(row);
       setSaveError(row.status === 'draft' ? tr('aiSetupRequestNeedsClarification') : null);
-    } catch {
-      setSaveError(tr('requestRulesPreviewFailed'));
+    } catch (err) {
+      setSaveError(graphErrorMessage(err) || tr('requestRulesPreviewFailed'));
     }
   }
 
@@ -134,7 +165,8 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
       setSaveError(tr('requestRulesNameRequired'));
       return;
     }
-    const ok = await draft.save();
+    const nextPayload = rulesPayload(items);
+    const ok = await draft.save(nextPayload);
     if (!ok) return;
     try {
       const graph = await publishRequestGraph({
@@ -151,9 +183,12 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
         return;
       }
       await loadGraphs();
-      goList();
-    } catch {
-      setSaveError(tr('requestRulesPublishFailed'));
+      setMode('list');
+      setSelectedId(null);
+      setPreview(undefined);
+      setSaveError(null);
+    } catch (err) {
+      setSaveError(graphErrorMessage(err) || tr('requestRulesPublishFailed'));
     }
   }
 
@@ -167,10 +202,7 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
         onPress: () => {
           void (async () => {
             const definitionId = graphsBySource[selected.id]?.definition_id;
-            const nextPayload = {
-              ...draft.payload,
-              rules: items.filter((item) => item.id !== selected.id).map(ruleToRecord),
-            };
+            const nextPayload = rulesPayload(items.filter((item) => item.id !== selected.id));
             const ok = await draft.save(nextPayload);
             if (!ok) return;
             if (definitionId) {
@@ -181,7 +213,9 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
               }
             }
             await loadGraphs();
-            goList();
+            setMode('list');
+            setSelectedId(null);
+            setPreview(undefined);
           })();
         },
       },
@@ -192,7 +226,7 @@ export function RequestRulesScreen({ proposalReview, onBack }: Props) {
     <ScreenChrome
       title={tr('aiSetupSec_requests_appointments')}
       subtitle={mode === 'list' ? tr('requestRulesSubtitle') : undefined}
-      onBack={mode === 'list' ? onBack : goList}
+      onBack={mode === 'list' ? onBack : () => void goList()}
       canvasColor={RQ_CANVAS}
     >
       {draft.loading ? <LinasLoadingIndicator variant="screen" /> : null}
