@@ -17,6 +17,7 @@ export const integrationsDisplayAr = {
   integrationDisconnectHint: 'تتوقف ردود الذكاء الاصطناعي حتى تعيد الربط.',
   integrationWhatsAppHandle: 'رقم الأعمال',
   drawerRecents: 'الأخيرة',
+  drawerPin: 'مثبّت',
   appUpdateForceTitle: 'التحديث مطلوب',
   appUpdateForceBody:
     'الإصدار ({min}) لم يعد مدعوماً. ثبّت {latest} أو أحدث لمتابعة استخدام Linas AI.',

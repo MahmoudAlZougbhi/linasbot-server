@@ -52,7 +52,7 @@ describe('chat session isolation', () => {
     assert.match(session, /createOwnerConversation/);
     assert.doesNotMatch(session, /preferFresh/);
     assert.doesNotMatch(session, /listed\.conversations\.find/);
-    assert.match(session, /setHistory\(listedHistoryEntries\(listed\.conversations\)\)/);
+    assert.match(session, /mergeListedHistory\(prev, listedHistoryEntries\(listed\.conversations\)\)/);
     assert.doesNotMatch(session, /setHistory\(\(prev\) => \[\{ id: created/);
   });
 

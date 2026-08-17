@@ -12,6 +12,7 @@ import {
 } from './chatSessionSchemas';
 import {
   listedHistoryEntries,
+  mergeListedHistory,
   upsertStartedHistoryEntry,
   dropUnstartedHistoryEntry,
   type HistoryEntry,
@@ -74,6 +75,8 @@ export function useChatSession(enabled = true) {
   const hasMoreRef = useRef(hasMore);
   hasMoreRef.current = hasMore;
   const loadingMoreRef = useRef(false);
+  const listRequestIdRef = useRef(0);
+  const openRequestIdRef = useRef(0);
 
   const bootstrap = useCallback(async () => {
     if (!enabled) {
@@ -90,9 +93,12 @@ export function useChatSession(enabled = true) {
     }
     setLoading(true);
     setError(null);
+    const listRequestId = ++listRequestIdRef.current;
     try {
       const listed = await apiFetch('/api/owner-ai/conversations', { schema: ListConvSchema });
-      setHistory(listedHistoryEntries(listed.conversations));
+      if (listRequestId === listRequestIdRef.current) {
+        setHistory((prev) => mergeListedHistory(prev, listedHistoryEntries(listed.conversations)));
+      }
       const created = await createOwnerConversation();
       setConversationId(created.conversation.id);
       setTitle(created.conversation.title);
@@ -119,8 +125,11 @@ export function useChatSession(enabled = true) {
           if (SYNC_AFTER_TURN_RETRY_MS[attempt] > 0) {
             await new Promise((resolve) => setTimeout(resolve, SYNC_AFTER_TURN_RETRY_MS[attempt]));
           }
+          const listRequestId = ++listRequestIdRef.current;
           const listed = await apiFetch('/api/owner-ai/conversations', { schema: ListConvSchema });
-          setHistory(listedHistoryEntries(listed.conversations));
+          if (listRequestId === listRequestIdRef.current) {
+            setHistory((prev) => mergeListedHistory(prev, listedHistoryEntries(listed.conversations)));
+          }
           const full = await apiFetch(conversationMessagesUrl(activeId), { schema: GetConvSchema });
           if (conversationIdRef.current !== activeId) return false;
 
@@ -198,7 +207,9 @@ export function useChatSession(enabled = true) {
   }, [bootstrap]);
 
   async function openConversation(id: string) {
+    const requestId = ++openRequestIdRef.current;
     const full = await apiFetch(conversationMessagesUrl(id), { schema: GetConvSchema });
+    if (requestId !== openRequestIdRef.current) return;
     setConversationId(full.conversation.id);
     setTitle(full.conversation.title);
     setMessages(full.conversation.messages);
@@ -210,12 +221,14 @@ export function useChatSession(enabled = true) {
 
   async function newChat() {
     // Clear prior transcript immediately so Chat|Work can show under the logo while create resolves.
+    const requestId = ++openRequestIdRef.current;
     setMessages([]);
     setHasMore(false);
     setPendingConfirm(null);
     setProposedPatch(null);
     setSeedTypewriterMessageId(null);
     const created = await createOwnerConversation();
+    if (requestId !== openRequestIdRef.current) return;
     setConversationId(created.conversation.id);
     setTitle(created.conversation.title);
     setMessages(created.conversation.messages);
@@ -227,13 +240,15 @@ export function useChatSession(enabled = true) {
     if (!enabled || !conversationId || !hasMoreRef.current || loadingMoreRef.current) return;
     const oldest = messagesRef.current[0]?.id;
     if (!oldest || oldest.startsWith('local-')) return;
+    const activeId = conversationId;
     loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
       const page = await apiFetch(
-        conversationMessagesUrl(conversationId, { limit: OWNER_MESSAGE_PAGE, before: oldest }),
+        conversationMessagesUrl(activeId, { limit: OWNER_MESSAGE_PAGE, before: oldest }),
         { schema: GetConvSchema },
       );
+      if (conversationIdRef.current !== activeId) return;
       setMessages((prev) => prependOlderUnique(prev, page.conversation.messages));
       setHasMore(Boolean(page.conversation.has_more));
     } catch {

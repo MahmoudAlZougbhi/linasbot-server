@@ -17,6 +17,7 @@ export const integrationsDisplayEn = {
   integrationDisconnectHint: 'AI replies stop until you reconnect.',
   integrationWhatsAppHandle: 'Business number',
   drawerRecents: 'Recents',
+  drawerPin: 'Pin',
   appUpdateForceTitle: 'Update required',
   appUpdateForceBody:
     'This version ({min}) is no longer supported. Install {latest} or newer to continue using Linas AI.',

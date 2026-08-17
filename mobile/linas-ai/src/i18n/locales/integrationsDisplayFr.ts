@@ -17,6 +17,7 @@ export const integrationsDisplayFr = {
   integrationDisconnectHint: 'Les réponses IA s’arrêtent jusqu’à la reconnexion.',
   integrationWhatsAppHandle: 'Numéro professionnel',
   drawerRecents: 'Récents',
+  drawerPin: 'Épinglés',
   appUpdateForceTitle: 'Mise à jour requise',
   appUpdateForceBody:
     'Cette version ({min}) n’est plus prise en charge. Installez {latest} ou plus récent pour continuer.',

@@ -40,11 +40,13 @@ describe('drawer recents render when history exists', () => {
     const nav = read('features/nav/NavDrawer.tsx');
     const rows = read('features/nav/HistoryRows.tsx');
     assert.match(nav, /visibleRecentItems\(props\.history, props\.archivedIds\)/);
-    assert.match(recents, /items=\{props\.items\}/);
+    assert.match(recents, /items=\{pinned\}/);
+    assert.match(recents, /items=\{recent\}/);
+    assert.match(recents, /tr\('drawerPin'\)/);
     assert.match(recents, /<HistoryRows/);
     assert.doesNotMatch(recents, /ScrollView/);
     assert.match(rows, /if \(!items\.length\)/);
-    assert.match(rows, /drawerRows\.map\(renderRow\)/);
+    assert.match(rows, /items\.map\(renderRow\)/);
   });
 });
 

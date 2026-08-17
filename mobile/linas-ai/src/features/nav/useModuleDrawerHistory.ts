@@ -4,7 +4,10 @@ import { z } from 'zod';
 import { apiFetch } from '../../api/client';
 import { ConversationSummarySchema } from '../../api/types';
 import { tokenStore } from '../../auth/tokenStore';
-import { listedHistoryEntries } from '../chat/chatHistoryVisibility';
+import {
+  listedHistoryEntries,
+  mergeListedHistory,
+} from '../chat/chatHistoryVisibility';
 import type { HistoryItem } from './HistoryRows';
 import { usePinnedChats } from '../chat/usePinnedChats';
 import {
@@ -29,7 +32,7 @@ export function useModuleDrawerHistory(enabled: boolean, drawerOpen: boolean) {
   const [userId, setUserId] = useState<string | null>(null);
   const [workspaceLabel, setWorkspaceLabel] = useState<string | null>(null);
   const { pinnedIds, togglePin } = usePinnedChats(userId);
-  const inFlight = useRef<Promise<void> | null>(null);
+  const requestIdRef = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!enabled) {
@@ -37,22 +40,21 @@ export function useModuleDrawerHistory(enabled: boolean, drawerOpen: boolean) {
       setArchivedIds([]);
       return;
     }
-    if (inFlight.current) return inFlight.current;
-    inFlight.current = (async () => {
-      try {
-        const listed = await apiFetch('/api/owner-ai/conversations', { schema: ListConvSchema });
-        const nextHistory = listedHistoryEntries(listed.conversations);
-        const nextArchived = listed.conversations.filter((c) => c.archived).map((c) => c.id);
-        setHistory(nextHistory);
-        setArchivedIds(nextArchived);
-        replaceDrawerRecents(nextHistory, nextArchived);
-      } catch {
-        /* keep last good list */
-      }
-    })().finally(() => {
-      inFlight.current = null;
-    });
-    return inFlight.current;
+    const requestId = ++requestIdRef.current;
+    try {
+      const listed = await apiFetch('/api/owner-ai/conversations', { schema: ListConvSchema });
+      if (requestId !== requestIdRef.current) return;
+      const nextHistory = listedHistoryEntries(listed.conversations);
+      const nextArchived = listed.conversations.filter((c) => c.archived).map((c) => c.id);
+      setHistory((prev) => {
+        const merged = mergeListedHistory(prev, nextHistory);
+        replaceDrawerRecents(merged, nextArchived);
+        return merged;
+      });
+      setArchivedIds(nextArchived);
+    } catch {
+      /* keep last good list */
+    }
   }, [enabled]);
 
   useEffect(() => {
