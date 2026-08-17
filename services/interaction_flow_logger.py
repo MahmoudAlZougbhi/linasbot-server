@@ -422,11 +422,7 @@ def get_recent_flows(
     entries = list(_FLOW_BUFFER)
     if tenant_id is not None:
         tid = tenant_id.strip().lower()
-        entries = [
-            entry
-            for entry in entries
-            if str(entry.get("tenant_id") or "").strip().lower() == tid
-        ]
+        entries = [entry for entry in entries if str(entry.get("tenant_id") or "").strip().lower() == tid]
     entries = entries[-limit * 3 :]  # Fetch more when filtering
     if search_phone and search_phone.strip():
         q = search_phone.strip().replace(" ", "").replace("+", "").replace("-", "")

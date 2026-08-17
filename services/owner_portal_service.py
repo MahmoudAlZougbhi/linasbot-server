@@ -138,11 +138,7 @@ def analytics(range_key: str) -> dict[str, Any]:
     if range_key == "last_week":
         end = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
     users = user_service.get_all_users()
-    flows = [
-        row
-        for row in get_recent_flows(limit=500)
-        if _in_range(row.get("timestamp"), start, end)
-    ]
+    flows = [row for row in get_recent_flows(limit=500) if _in_range(row.get("timestamp"), start, end)]
     channels = Counter(str(row.get("channel") or "unknown") for row in flows)
     message_types = Counter(str(row.get("message_type") or "text") for row in flows)
     subscribers = list_subscribers(users)
