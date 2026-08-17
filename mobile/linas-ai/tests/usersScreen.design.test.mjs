@@ -14,12 +14,17 @@ const read = (...p) => readFileSync(src(...p), 'utf8');
 
 test('list chrome matches Users handoff', () => {
   const screen = read('features/users/UsersScreen.tsx');
+  const search = read('features/users/UsersSearchBar.tsx');
   const row = read('features/users/UserListRow.tsx');
   const ui = read('i18n/locales/usersUiEn.ts');
   assert.match(screen, /tr\('usersTitle'\)/);
   assert.match(screen, /tr\('usersSub'\)/);
-  assert.match(screen, /tr\('usersAdd'\)/);
   assert.match(screen, /UsersSearchBar/);
+  assert.match(search, /tr\('usersAdd'\)/);
+  assert.match(search, /feather\('plus'\)/);
+  assert.match(search, /styles\.addSq/);
+  assert.match(search, /styles\.row/);
+  assert.doesNotMatch(screen, /headerRight/);
   assert.match(ui, /Manage team access/);
   assert.match(ui, /'\+ Add user'/);
   assert.match(ui, /Search members/);
@@ -28,6 +33,21 @@ test('list chrome matches Users handoff', () => {
   assert.match(row, /#22C55E/);
   assert.match(row, /#FEE2E2/);
   assert.match(row, /UserAvatar/);
+});
+
+test('listUsers keeps valid members when one row is legacy-shaped', () => {
+  const api = read('features/users/usersApi.ts');
+  assert.match(api, /parseTeamUser/);
+  assert.match(api, /coercePermissions/);
+  assert.match(api, /z\.array\(z\.unknown\(\)\)/);
+  assert.match(api, /for \(const row of data\.users/);
+});
+
+test('Users load does not blank list when roles fail', () => {
+  const screen = read('features/users/UsersScreen.tsx');
+  assert.match(screen, /const list = await listUsers\(\)/);
+  assert.match(screen, /setRoles\(await listRoles\(\)\)/);
+  assert.doesNotMatch(screen, /Promise\.all\(\[listUsers\(\), listRoles\(\)\]\)/);
 });
 
 test('add user screen has login card, access grid, generate password', () => {
