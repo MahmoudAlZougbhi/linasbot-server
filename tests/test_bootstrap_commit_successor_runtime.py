@@ -48,6 +48,6 @@ def test_commit_proof_source_allows_successor_runtime_without_dropping_drift_gat
     assert "_successor_committed_runtime(" in proof
     assert "Python runtime authority changed before bootstrap commit proof" in proof
     admit = source[source.index("def _node_admit(") : source.index("def _node_redrain")]
-    assert "_normalize_git_metadata(backup, probe[\"git_metadata\"])" in admit
+    assert '_normalize_git_metadata(backup, probe["git_metadata"])' in admit
     recovery = source[source.index("def _orchestrate_decided_recovery") : source.index("def _decided_recovery_status")]
     assert "durable coordinator journal retained: {exc}" in recovery
