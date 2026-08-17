@@ -85,9 +85,14 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
         return;
       }
       setGate('none');
-      const [list, roleList] = await Promise.all([listUsers(), listRoles()]);
+      // Roles are optional chrome for forms; never blank the member list if roles fail.
+      const list = await listUsers();
       setUsers(list);
-      setRoles(roleList);
+      try {
+        setRoles(await listRoles());
+      } catch {
+        setRoles([]);
+      }
     } catch (err) {
       const kind = classifyUsersError(err);
       if (kind === 'auth') {
@@ -240,27 +245,7 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
   }
 
   return (
-    <ScreenChrome
-      title={tr('usersTitle')}
-      subtitle={tr('usersSub')}
-      headerRight={
-        showList ? (
-          <Pressable
-            onPress={() => {
-              setEditing(null);
-              setFormError(null);
-              setFormOpen(true);
-            }}
-            disabled={busy}
-            accessibilityRole="button"
-            accessibilityLabel={tr('usersAdd')}
-            style={({ pressed }) => [styles.addPill, pressed && styles.pressed]}
-          >
-            <Text style={styles.addText}>{tr('usersAdd')}</Text>
-          </Pressable>
-        ) : undefined
-      }
-    >
+    <ScreenChrome title={tr('usersTitle')} subtitle={tr('usersSub')}>
       {loading && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" style={styles.spinner} /> : null}
       {hasLoadedOnce && authGate ? <EmptyState title={tr('authGateTitle')} body={tr('usersAuthBody')} /> : null}
       {hasLoadedOnce && gate === 'forbidden' ? (
@@ -274,7 +259,16 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
             {' · '}
             <Text style={styles.activeCount}>{summary.split(' · ')[1]}</Text>
           </Text>
-          <UsersSearchBar value={query} onChange={setQuery} />
+          <UsersSearchBar
+            value={query}
+            onChange={setQuery}
+            addDisabled={busy}
+            onAdd={() => {
+              setEditing(null);
+              setFormError(null);
+              setFormOpen(true);
+            }}
+          />
           {error ? (
             <Text style={styles.error} onPress={() => void load()}>
               {error}
@@ -365,13 +359,6 @@ export function UsersScreen({ onRequestLogin, onRequestRegister }: Props) {
 
 const styles = StyleSheet.create({
   spinner: { marginTop: spacing.xl },
-  addPill: {
-    backgroundColor: colors.accent,
-    borderRadius: radii.pill,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  addText: { color: colors.onAccent, fontFamily: fonts.bodyMedium, fontSize: 14, fontWeight: '700' },
   summary: { fontFamily: fonts.body, fontSize: 14, color: colors.textMuted, marginBottom: 12 },
   activeCount: { color: colors.accent, fontFamily: fonts.bodyMedium },
   list: { paddingBottom: 40, paddingTop: 12, gap: spacing.md },
