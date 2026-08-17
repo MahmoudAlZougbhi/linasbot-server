@@ -13,6 +13,11 @@ import Features from './pages/public/Features';
 import { AuthProvider } from './contexts/AuthContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
 import { PublicLandingLocaleProvider } from './contexts/PublicLandingLocaleContext';
+import { useAuth } from './contexts/AuthContext';
+import OwnerPortalShell from './pages/owner/OwnerPortalShell';
+import OwnerOverview from './pages/owner/OwnerOverview';
+import OwnerUsers from './pages/owner/OwnerUsers';
+import OwnerCopilotSetup from './pages/owner/OwnerCopilotSetup';
 
 /**
  * Operator SPA shell removed after FINAL_WEB_TO_MOBILE_PARITY_MATRIX.csv.
@@ -39,6 +44,13 @@ function UseMobileAppPage() {
       <Toaster position="top-right" />
     </div>
   );
+}
+
+function AppEntry() {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="min-h-screen grid place-items-center">Loading…</div>;
+  if (user?.role === 'platform_owner') return <Navigate to="/owner" replace />;
+  return <UseMobileAppPage />;
 }
 
 function PublicMarketingShell() {
@@ -72,7 +84,12 @@ function App() {
 
             {/* Former operator SPA routes → mobile app CTA (parity matrix committed first). */}
             <Route path="/mobile/live-chat" element={<Navigate to="/#get-app" replace />} />
-            <Route path="/app" element={<UseMobileAppPage />} />
+            <Route path="/app" element={<AppEntry />} />
+            <Route path="/owner" element={<OwnerPortalShell />}>
+              <Route index element={<OwnerOverview />} />
+              <Route path="users" element={<OwnerUsers />} />
+              <Route path="copilot-setup" element={<OwnerCopilotSetup />} />
+            </Route>
             <Route path="/training" element={<Navigate to="/#get-app" replace />} />
             <Route path="/content-managers/*" element={<Navigate to="/#get-app" replace />} />
             <Route path="/activity-flow" element={<Navigate to="/#get-app" replace />} />
