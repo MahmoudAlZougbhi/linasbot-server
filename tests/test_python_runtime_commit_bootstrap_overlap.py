@@ -31,11 +31,47 @@ def test_runtime_collisions_allow_only_commit_decided_bootstrap(
         state.assert_no_collisions(paths)
 
 
+def test_runtime_overlap_allows_admitted_bootstrap_journal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    tx_id = "ab" * 16
+    paths = state.ProvisionPaths(state_root=tmp_path, runtime=tmp_path / "runtime", lock_path=tmp_path / "lock")
+    (tmp_path / "bootstrap.active").write_text("{}\n", encoding="utf-8")
+    journal = tmp_path / "journal.json"
+    journal.write_text("{}\n", encoding="utf-8")
+    real_path = state.Path
+
+    def fake_path(*args: object, **kwargs: object) -> Path:
+        if args and "linasbot-meta-bootstrap-" in str(args[0]):
+            return journal
+        return real_path(*args, **kwargs)
+
+    def fake_load(path: Path) -> dict[str, object]:
+        if path == tmp_path / "bootstrap.active":
+            return {"tx_id": tx_id}
+        if path == journal:
+            return {"status": "admitted", "tx_id": tx_id}
+        raise AssertionError(path)
+
+    monkeypatch.setattr(state, "Path", fake_path)
+    monkeypatch.setattr(state, "_load_json", fake_load)
+    state.assert_no_collisions(paths)
+
+    def fake_prepared(path: Path) -> dict[str, object]:
+        if path == tmp_path / "bootstrap.active":
+            return {"tx_id": tx_id}
+        if path == journal:
+            return {"status": "prepared", "tx_id": tx_id}
+        raise AssertionError(path)
+
+    monkeypatch.setattr(state, "_load_json", fake_prepared)
+    with pytest.raises(ProvisionError, match="bootstrap.active"):
+        state.assert_no_collisions(paths)
+
+
 def test_peer_stage_skips_only_commit_bootstrap_markers() -> None:
     assert "skip=commit_bootstrap()" in peer.REMOTE_STAGE
     assert 'if skip and rel in ("bootstrap.active","bootstrap.coordinator.json"): continue' in peer.REMOTE_STAGE
     assert 'payload.get("decision")=="commit"' in peer.REMOTE_STAGE
-    assert 'payload.get("status")=="applied"' in peer.REMOTE_STAGE
+    assert 'payload.get("status") in {"applied","admitted","commit_proved","committed"}' in peer.REMOTE_STAGE
     assert "/opt/.linasbot-meta-bootstrap-" in peer.REMOTE_STAGE
 
 
