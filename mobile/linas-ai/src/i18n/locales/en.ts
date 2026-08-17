@@ -92,7 +92,7 @@ export const en = {
   settingsAiLimits: 'Customer AI Limits',
   settingsAiLimitsSub: 'Protect credits by limiting each customer’s AI usage',
   faqTitle: 'Smart Q&A',
-  faqSub: 'Ready-made Q&A — auto-translate to 4 languages',
+  faqSub: 'Translate Q&A into any language you choose.',
   faqCreateNew: 'Create Q&A',
   faqSavedList: 'Saved Smart Q&A',
   faqEmpty: 'No Smart Q&A yet.',

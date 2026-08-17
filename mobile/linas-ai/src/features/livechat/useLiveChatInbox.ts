@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { classifyLiveChatError, fetchUnifiedChats, setOperatorAvailable } from './liveChatApi';
+import { appendInboxPage, mergeInboxPollPage } from './inboxListMerge';
 import {
   type InboxFilter,
   type ChannelFilter,
@@ -27,6 +28,11 @@ export function useLiveChatInbox() {
   const [indexRebuild, setIndexRebuild] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const requestIdRef = useRef(0);
+  const nextCursorRef = useRef<string | null>(null);
+  const hasMoreRef = useRef(false);
+  const paginatedBeyondFirstRef = useRef(false);
+  const loadingMoreRef = useRef(false);
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
@@ -38,6 +44,7 @@ export function useLiveChatInbox() {
 
   const load = useCallback(
     async (mode: 'initial' | 'refresh' | 'poll' = 'initial') => {
+      const requestId = ++requestIdRef.current;
       if (mode === 'initial') setLoading(true);
       if (mode === 'refresh') setRefreshing(true);
       try {
@@ -48,6 +55,7 @@ export function useLiveChatInbox() {
           filter,
           channel,
         });
+        if (requestId !== requestIdRef.current) return;
         const rows = data.chats ?? [];
         const rebuild = Boolean(data.requires_index_rebuild || data.index_empty);
         // Show whatever rows exist. success:false with no chats is a load error, not empty —
@@ -55,14 +63,24 @@ export function useLiveChatInbox() {
         if (rows.length === 0 && data.success === false && !rebuild) {
           throw new Error(data.error || 'Could not load conversations.');
         }
-        setChats(rows);
-        setHasMore(Boolean(data.has_more));
-        setNextCursor(data.next_cursor ?? null);
+        if (mode === 'poll' && paginatedBeyondFirstRef.current) {
+          setChats((prev) => mergeInboxPollPage(prev, rows));
+        } else {
+          paginatedBeyondFirstRef.current = false;
+          setChats(rows);
+          const more = Boolean(data.has_more);
+          const cursor = data.next_cursor ?? null;
+          hasMoreRef.current = more;
+          nextCursorRef.current = cursor;
+          setHasMore(more);
+          setNextCursor(cursor);
+        }
         setTotal(typeof data.total === 'number' ? data.total : rows.length);
         setIndexRebuild(rebuild);
         setError(null);
         setErrorKind(null);
       } catch (err) {
+        if (requestId !== requestIdRef.current) return;
         if (mode !== 'poll') {
           const kind = classifyLiveChatError(err);
           setErrorKind(kind);
@@ -76,42 +94,55 @@ export function useLiveChatInbox() {
           if (mode === 'initial') setChats([]);
         }
       } finally {
-        setLoading(false);
-        setHasLoadedOnce(true);
-        setRefreshing(false);
+        if (requestId === requestIdRef.current) {
+          setLoading(false);
+          setHasLoadedOnce(true);
+          setRefreshing(false);
+        }
       }
     },
     [debouncedSearch, filter, channel],
   );
 
   const loadMore = useCallback(async () => {
-    if (!hasMore || loadingMore) return;
+    if (!hasMoreRef.current || loadingMoreRef.current) return;
+    const cursor = nextCursorRef.current;
+    if (!cursor) {
+      hasMoreRef.current = false;
+      setHasMore(false);
+      return;
+    }
+    const requestId = requestIdRef.current;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
       const data = await fetchUnifiedChats({
         search: debouncedSearch,
         page: 1,
         pageSize: PAGE_SIZE,
-        cursor: nextCursor,
+        cursor,
         filter,
         channel,
       });
+      if (requestId !== requestIdRef.current) return;
       setChats((prev) => {
-        const seen = new Set(prev.map((c) => c.conversation_id));
-        const merged = [...prev];
-        for (const c of data.chats) {
-          if (!seen.has(c.conversation_id)) merged.push(c);
-        }
+        const merged = appendInboxPage(prev, data.chats ?? []);
+        if (merged.length > prev.length) paginatedBeyondFirstRef.current = true;
         return merged;
       });
-      setHasMore(Boolean(data.has_more));
-      setNextCursor(data.next_cursor ?? null);
+      const more = Boolean(data.has_more);
+      const next = data.next_cursor ?? null;
+      hasMoreRef.current = more;
+      nextCursorRef.current = next;
+      setHasMore(more);
+      setNextCursor(next);
     } catch {
       // Keep existing list.
     } finally {
+      loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, [debouncedSearch, filter, channel, hasMore, loadingMore, nextCursor]);
+  }, [debouncedSearch, filter, channel]);
 
   useEffect(() => {
     void setOperatorAvailable();

@@ -92,6 +92,8 @@ describe('drawer paints cache immediately and hides chat chrome', () => {
     assert.match(badges, /refreshDrawerBadges/);
     assert.match(history, /getCachedDrawerRecents/);
     assert.match(history, /void refresh\(\)/);
+    assert.match(history, /requestIdRef/);
+    assert.match(history, /mergeListedHistory/);
     assert.match(nav, /rememberDrawerRecents\(props\.history, props\.archivedIds\)/);
     assert.match(nav, /visibleRecentItems\(props\.history, props\.archivedIds\)/);
   });

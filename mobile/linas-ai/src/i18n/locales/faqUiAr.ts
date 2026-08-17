@@ -6,7 +6,7 @@ export const faqUiAr = {
   faqSaveTranslate: 'حفظ وترجمة',
   faqCreateFooter: 'يمكنك مراجعة كل ترجمة وتعديلها بعد الحفظ.',
   faqLangPickerTitle: 'لغات الأسئلة والأجوبة',
-  faqLangPickerSub: 'اختر اللغات التي تستخدمها ليناس للأسئلة والأجوبة المحفوظة.',
+  faqLangPickerSub: 'اختَر أي لغة — تترجم ليناس الأسئلة والأجوبة المحفوظة إلى كل لغة تختارها.',
   faqLangSearch: 'البحث في اللغات',
   faqLangSelected: 'مختارة',
   faqLangAutoTranslate: 'تُترجم الأسئلة والأجوبة الجديدة تلقائياً إلى كل لغة مختارة.',

@@ -5,6 +5,7 @@ import {
   conversationHasUserTurn,
   dropUnstartedHistoryEntry,
   listedHistoryEntries,
+  mergeListedHistory,
   upsertStartedHistoryEntry,
 } from '../src/features/chat/chatHistoryVisibility.ts';
 
@@ -44,4 +45,27 @@ test('dropUnstartedHistoryEntry removes chat after failed first send', () => {
   );
   const kept = dropUnstartedHistoryEntry(prev, 'c1', [{ role: 'user' }]);
   assert.equal(kept.length, 2);
+});
+
+test('mergeListedHistory keeps a better local title over a default list title', () => {
+  const prev = [
+    { id: 'a', title: 'Pricing help' },
+    { id: 'b', title: 'Hours question' },
+  ];
+  const next = [
+    { id: 'a', title: 'New chat' },
+    { id: 'b', title: 'Hours question' },
+    { id: 'c', title: 'Fresh thread' },
+  ];
+  const merged = mergeListedHistory(prev, next);
+  assert.deepEqual(
+    merged.map((h) => h.title),
+    ['Pricing help', 'Hours question', 'Fresh thread'],
+  );
+});
+
+test('mergeListedHistory still accepts a real server title change', () => {
+  const prev = [{ id: 'a', title: 'Old name' }];
+  const next = [{ id: 'a', title: 'Renamed on server' }];
+  assert.equal(mergeListedHistory(prev, next)[0].title, 'Renamed on server');
 });
