@@ -183,6 +183,7 @@ run_os_python_receipt_verifier() {
 assert_python_runtime_tree_pristine_os() {
   local digest
   digest="$(run_os_python_receipt_verifier - "$PYTHON_RUNTIME_ROOT" <<'PY'
+import hashlib
 import json
 import os
 import stat
