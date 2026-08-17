@@ -149,15 +149,15 @@ SECTION_GUIDE: dict[str, dict[str, Any]] = {
         "title": "Comments Policy",
         "purpose": (
             "Structured rules for public comments: match keywords → reply on the comment, "
-            "reply via private DM, or ignore. Optional post_id targeting."
+            "reply via private DM, or comment + DM. Optional post_id targeting."
         ),
         "why": "Gives owners precise control over comment behavior beyond the global Actions toggle.",
         "what_to_fill": [
-            "rules[] with keywords + action (reply_comment | reply_dm | ignore)",
+            "rules[] with keywords + action (reply_comment | reply_dm | reply_comment_and_dm)",
             "reply_template for fixed replies / DM text",
             "optional post_id when a rule applies to one post only",
         ],
-        "useful": "policy_text for AI when no rule matches; default_action reply_comment|ignore.",
+        "useful": "policy_text for AI when no rule matches; default_action reply_comment.",
         "app_path": "Content Management → Comments",
     },
     "ai_limits": {
