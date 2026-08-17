@@ -31,7 +31,7 @@ from tests.web_chat_acceptance_support import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD_ID = "20260821_request_drafts"
+HEAD_ID = "20260822_product_images_max5"
 
 
 @pytest.fixture()

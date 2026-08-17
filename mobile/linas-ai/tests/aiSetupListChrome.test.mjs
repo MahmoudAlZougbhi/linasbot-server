@@ -20,7 +20,6 @@ const LISTS = [
   'features/services/ServiceListView.tsx',
   'features/cm/comments/CommentListView.tsx',
   'features/cm/requestRules/RequestRuleListView.tsx',
-  'features/products/ProductListView.tsx',
   'features/faq/FaqListView.tsx',
 ];
 
@@ -42,6 +41,14 @@ describe('AI Setup first-open list chrome', () => {
       assert.match(src, /AiSetupListHeader/, rel);
       assert.doesNotMatch(src, /PrimaryButton/, rel);
     }
+  });
+
+  it('Products list uses its own design chrome (full-width Add + stock switch)', () => {
+    const list = read('features/products/ProductListView.tsx');
+    assert.doesNotMatch(list, /AiSetupListHeader/);
+    assert.match(list, /Switch/);
+    assert.match(list, /productsStockFooter/);
+    assert.match(list, /productsAdd/);
   });
 
   it('ScreenChrome keeps back and title on one compact row', () => {
