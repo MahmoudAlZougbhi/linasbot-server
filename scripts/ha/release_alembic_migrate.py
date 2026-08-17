@@ -72,11 +72,15 @@ def _assert_runtime_environment(expected: dict[str, str]) -> None:
         "USER": "root",
         "LOGNAME": "root",
         "SHELL": "/bin/bash",
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "PWD": "/opt/linasbot",
     }
     for key in _FORBIDDEN_SUBPROCESS_ENV:
         if os.environ.get(key):
             raise RuntimeError(f"migration authority loaded forbidden environment key: {key}")
     unexpected = set(os.environ) - set(expected)
+    extra_names = []
     for key in unexpected:
         value = os.environ[key]
         if key in fixed_root and value == fixed_root[key]:
@@ -96,7 +100,11 @@ def _assert_runtime_environment(expected: dict[str, str]) -> None:
             "@/org/freedesktop/systemd1/notify",
         }:
             continue
-        raise RuntimeError("migration authority loaded an extra non-system configuration key")
+        extra_names.append(key)
+    if extra_names:
+        raise RuntimeError(
+            "migration authority loaded an extra non-system configuration key: " + ",".join(sorted(extra_names))
+        )
 
 
 def load_migration_env_snapshot(release_sha: str) -> MigrationEnvSnapshot:

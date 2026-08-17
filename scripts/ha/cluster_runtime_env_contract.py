@@ -47,6 +47,9 @@ FIXED_ROOT_PROCESS_VALUES = {
     "USER": "root",
     "LOGNAME": "root",
     "SHELL": "/bin/bash",
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+    "PWD": "/opt/linasbot",
 }
 SYSTEMD_EPHEMERAL_KEYS = frozenset(
     {
@@ -219,6 +222,7 @@ def verify_process_environment(
     if any(actual.get(key) != value for key, value in expected.items()):
         raise RuntimeError("Runtime process environment is stale or divergent")
     unexpected = set(actual) - set(expected)
+    extra_names: list[str] = []
     for key in unexpected:
         value = actual[key]
         if key == "LINAS_WORKER_QUEUE":
@@ -246,7 +250,11 @@ def verify_process_environment(
             continue
         if key in SYSTEMD_EPHEMERAL_KEYS:
             raise RuntimeError("Runtime process systemd metadata is malformed")
-        raise RuntimeError("Runtime process environment contains an unauthorized extra key")
+        extra_names.append(key)
+    if extra_names:
+        raise RuntimeError(
+            "Runtime process environment contains an unauthorized extra key: " + ",".join(sorted(extra_names))
+        )
 
 
 def validate_evidence_pair(node01: dict[str, object], node02: dict[str, object], *, expected_sha: str) -> None:
@@ -337,4 +345,6 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except (OSError, RuntimeError, UnicodeError, json.JSONDecodeError) as exc:
         print(f"[cluster-env] blocked={type(exc).__name__}", file=sys.stderr)
+        if str(exc) and "=" not in str(exc):
+            print(f"[cluster-env] reason={exc}", file=sys.stderr)
         raise SystemExit(1) from None

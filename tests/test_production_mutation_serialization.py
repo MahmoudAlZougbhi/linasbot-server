@@ -403,7 +403,6 @@ def test_runtime_process_projection_detects_stale_application_value(tmp_path: Pa
         "META_REGISTRY_BACKEND=file",
         "OPENAI_API_BASE=shadow",
         "SYSTEMD_LOG_LEVEL=debug",
-        "LANG=en_US.UTF-8",
     ],
 )
 def test_runtime_process_projection_rejects_extra_application_or_behavior_key(tmp_path: Path, extra: str) -> None:
@@ -431,6 +430,7 @@ def test_runtime_process_projection_accepts_only_closed_systemd_metadata(tmp_pat
         b"PYTHONDONTWRITEBYTECODE=1\0"
         b"PATH=/opt/linasbot/venv/bin:/usr/local/bin:/usr/bin:/bin\0"
         b"HOME=/root\0USER=root\0LOGNAME=root\0SHELL=/bin/bash\0"
+        b"LANG=C.UTF-8\0LC_ALL=C.UTF-8\0PWD=/opt/linasbot\0"
         b"INVOCATION_ID=0123456789abcdef0123456789abcdef\0"
         b"JOURNAL_STREAM=8:12345\0SYSTEMD_EXEC_PID=123\0"
     )

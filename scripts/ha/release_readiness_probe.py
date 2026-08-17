@@ -46,8 +46,12 @@ def _assert_authority() -> str:
         "USER": "root",
         "LOGNAME": "root",
         "SHELL": "/bin/bash",
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "PWD": "/opt/linasbot",
     }
     unexpected = set(os.environ) - set(expected)
+    extra_names = []
     for key in unexpected:
         value = os.environ[key]
         if key in fixed_root and value == fixed_root[key]:
@@ -67,7 +71,11 @@ def _assert_authority() -> str:
             "@/org/freedesktop/systemd1/notify",
         }:
             continue
-        raise RuntimeError("readiness probe loaded an extra non-system configuration key")
+        extra_names.append(key)
+    if extra_names:
+        raise RuntimeError(
+            "readiness probe loaded an extra non-system configuration key: " + ",".join(sorted(extra_names))
+        )
     return release
 
 
