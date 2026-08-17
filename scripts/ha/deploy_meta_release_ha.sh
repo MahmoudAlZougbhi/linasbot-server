@@ -8410,7 +8410,7 @@ EOF
 install_rekey_static_guard_from_target() {
   local target_sha="$1"
   local repo_path="deploy/systemd/95-linasbot-credential-rekey-guard.conf"
-  local object temp_blob dest changed=0
+  local object temp_root temp_blob dest changed=0
   local -a destinations=(
     /etc/systemd/system/linasbot.service.d/95-linasbot-credential-rekey-guard.conf
     /etc/systemd/system/linasbot-worker@.service.d/95-linasbot-credential-rekey-guard.conf
@@ -8419,7 +8419,10 @@ install_rekey_static_guard_from_target() {
   object="$(git -C "$REPO_DIR" rev-parse "$target_sha:$repo_path")"
   test "$(git -C "$REPO_DIR" cat-file -t "$object")" = blob || \
     die "authorized rekey static guard object is not a blob"
-  temp_blob="$(mktemp -p /run linasbot-rekey-guard.XXXXXXXX)"
+  temp_root="$(mktemp -d -p /run linasbot-rekey-guard.XXXXXXXX)"
+  test "$(stat -c '%u:%g:%a' "$temp_root")" = "0:0:700" || \
+    die "rekey static guard temporary root is unsafe"
+  temp_blob="$temp_root/guard.conf"
   run_system_python_control - "$REPO_DIR" "$object" "$temp_blob" <<'PY'
 import os
 import subprocess
@@ -8472,6 +8475,7 @@ PY
     fi
   done
   unlink "$temp_blob"
+  rmdir "$temp_root"
   if [ "$changed" = 1 ]; then
     systemctl daemon-reload
   fi
