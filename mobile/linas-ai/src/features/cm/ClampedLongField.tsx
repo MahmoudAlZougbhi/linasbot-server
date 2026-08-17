@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  Keyboard,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -29,7 +30,7 @@ type Props = {
   hintStyle?: StyleProp<TextStyle>;
 };
 
-/** Note/Description: 10-line preview (no keyboard). See all is the editor. */
+/** Note/Description: tap to edit. Scroll never focuses. See all is read-only. */
 export function ClampedLongField({
   label,
   value,
@@ -43,32 +44,44 @@ export function ClampedLongField({
   hintStyle,
 }: Props) {
   const { tr } = useI18n();
+  const inputRef = useRef<TextInput>(null);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [contentH, setContentH] = useState(0);
   const showSeeAll = needsSeeAll(value, contentH);
   const maxH = seeAllMaxHeight(12);
   const placeholderColor = placeholderTextColor ?? '#8A9A98';
   const countPad = countLabel ? styles.countPad : null;
+  const canEdit = !open;
+
+  useEffect(() => {
+    if (!open) return;
+    setEditing(false);
+    Keyboard.dismiss();
+  }, [open]);
+
+  useEffect(() => {
+    if (editing && canEdit) inputRef.current?.focus();
+  }, [editing, canEdit]);
+
+  function startEdit() {
+    if (!canEdit) return;
+    setEditing(true);
+  }
+
+  function openSeeAll() {
+    setEditing(false);
+    Keyboard.dismiss();
+    setOpen(true);
+  }
 
   return (
     <View>
       {label ? <Text style={[styles.label, labelStyle]}>{label}</Text> : null}
-      <View style={[styles.box, showSeeAll ? { maxHeight: maxH } : null]}>
-        {showSeeAll ? (
-          <ScrollView
-            style={styles.boxFill}
-            contentContainerStyle={[styles.previewBody, countPad]}
-            scrollEnabled
-            keyboardShouldPersistTaps="never"
-            nestedScrollEnabled
-            onContentSizeChange={(_, height) => setContentH(height)}
-          >
-            <Text style={styles.previewText} pointerEvents="none">
-              {value}
-            </Text>
-          </ScrollView>
-        ) : (
+      <View style={[styles.box, showSeeAll && !editing ? { maxHeight: maxH } : null]}>
+        {editing && canEdit ? (
           <TextInput
+            ref={inputRef}
             value={value}
             onChangeText={onChange}
             placeholder={placeholder}
@@ -77,9 +90,39 @@ export function ClampedLongField({
             textAlignVertical="top"
             scrollEnabled={false}
             showSoftInputOnFocus
+            autoFocus
+            onBlur={() => setEditing(false)}
             onContentSizeChange={(e) => setContentH(e.nativeEvent.contentSize.height)}
             style={[styles.shortInput, countPad, inputStyle, { color: NOTE_TEXT_COLOR }]}
           />
+        ) : showSeeAll ? (
+          <ScrollView
+            style={styles.boxFill}
+            contentContainerStyle={[styles.previewBody, countPad]}
+            scrollEnabled
+            keyboardShouldPersistTaps="never"
+            nestedScrollEnabled
+            keyboardDismissMode="on-drag"
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={(_, height) => setContentH(height)}
+          >
+            <Pressable onPress={startEdit} accessibilityRole="button">
+              <Text style={styles.previewText}>{value}</Text>
+            </Pressable>
+          </ScrollView>
+        ) : (
+          <Pressable onPress={startEdit} accessibilityRole="button">
+            <Text
+              style={[
+                styles.shortInput,
+                countPad,
+                inputStyle,
+                { color: value ? NOTE_TEXT_COLOR : placeholderColor },
+              ]}
+            >
+              {value || placeholder || ' '}
+            </Text>
+          </Pressable>
         )}
         {countLabel ? (
           <Text pointerEvents="none" style={styles.count}>
@@ -89,7 +132,7 @@ export function ClampedLongField({
       </View>
       {showSeeAll ? (
         <Pressable
-          onPress={() => setOpen(true)}
+          onPress={openSeeAll}
           accessibilityRole="button"
           accessibilityLabel={tr('aiSetupSeeAll')}
           style={styles.seeAll}
@@ -103,7 +146,6 @@ export function ClampedLongField({
         title={label || tr('aiSetupSeeAll')}
         text={value}
         countLabel={countLabel}
-        onChange={onChange}
         onClose={() => setOpen(false)}
       />
     </View>

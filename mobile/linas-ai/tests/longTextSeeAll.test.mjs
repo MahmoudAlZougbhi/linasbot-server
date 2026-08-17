@@ -49,11 +49,17 @@ describe('See all long text', () => {
     assert.match(clamp, /bottom: 8/);
     assert.match(clamp, /right: 12/);
     assert.match(read('features/cm/knowledge/KnowledgeEditView.tsx'), /countLabel=\{wordLabel\}/);
+    assert.match(clamp, /startEdit/);
+    assert.match(clamp, /scrollEnabled=\{false\}/);
+    assert.match(clamp, /Keyboard\.dismiss/);
     assert.match(modal, /feather\('x'\)/);
     assert.match(modal, /Clipboard\.setStringAsync/);
     assert.match(modal, /tr\('aiSetupCopy'\)/);
-    assert.match(modal, /onChangeText=\{persist\}/);
+    assert.doesNotMatch(modal, /TextInput/);
+    assert.doesNotMatch(modal, /onChangeText/);
+    assert.match(modal, /ScrollView/);
     assert.match(modal, /NOTE_TEXT_COLOR/);
+    assert.match(modal, /selectable/);
     assert.match(en, /aiSetupSeeAll: 'See all'/);
     assert.match(en, /aiSetupCopy: 'Copy'/);
     assert.match(read('features/cm/knowledge/KnowledgeEditView.tsx'), /ClampedLongField/);

@@ -1,13 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -25,49 +17,31 @@ type Props = {
   title: string;
   text: string;
   countLabel?: string;
-  onChange: (value: string) => void;
   onClose: () => void;
 };
 
-/** Full-screen Note/Description editor — tap text for keyboard, Copy + X keep the draft. */
-export function SeeAllTextModal({ visible, title, text, countLabel, onChange, onClose }: Props) {
+/** Full-screen Note/Description preview — read-only, Copy + X, no keyboard. */
+export function SeeAllTextModal({ visible, title, text, countLabel, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const { tr } = useI18n();
-  const [draft, setDraft] = useState(text);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (visible) {
-      setDraft(text);
-      setCopied(false);
-    }
+    if (visible) setCopied(false);
   }, [visible]);
 
-  function persist(next: string) {
-    setDraft(next);
-    onChange(next);
-  }
-
-  function close() {
-    onChange(draft);
-    onClose();
-  }
-
   async function copyAll() {
-    await Clipboard.setStringAsync(draft);
+    await Clipboard.setStringAsync(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 1600);
   }
 
   return (
-    <AppModal visible={visible} animationType="fade" onRequestClose={close}>
-      <KeyboardAvoidingView
-        style={[styles.root, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 12 }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+    <AppModal visible={visible} animationType="fade" onRequestClose={onClose}>
+      <View style={[styles.root, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 12 }]}>
         <View style={styles.bar}>
           <Pressable
-            onPress={close}
+            onPress={onClose}
             accessibilityRole="button"
             accessibilityLabel={tr('back')}
             style={styles.iconBtn}
@@ -86,23 +60,25 @@ export function SeeAllTextModal({ visible, title, text, countLabel, onChange, on
             <Text style={styles.copyText}>{copied ? tr('aiSetupCopied') : tr('aiSetupCopy')}</Text>
           </Pressable>
         </View>
-        <View style={styles.editorWrap}>
-          <TextInput
-            value={draft}
-            onChangeText={persist}
-            multiline
-            scrollEnabled
-            textAlignVertical="top"
-            showSoftInputOnFocus
-            style={[styles.editor, countLabel ? styles.editorCountPad : null]}
-          />
+        <View style={styles.bodyWrap}>
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={[styles.body, countLabel ? styles.bodyCountPad : null]}
+            keyboardShouldPersistTaps="never"
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+          >
+            <Text style={styles.bodyText} selectable>
+              {text}
+            </Text>
+          </ScrollView>
           {countLabel ? (
             <Text pointerEvents="none" style={styles.count}>
               {countLabel}
             </Text>
           ) : null}
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </AppModal>
   );
 }
@@ -134,17 +110,16 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   copyText: { color: AI_SETUP_TEAL, fontFamily: fonts.bodyMedium, fontSize: 13, fontWeight: '700' },
-  editorWrap: { flex: 1 },
-  editor: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+  bodyWrap: { flex: 1 },
+  scroll: { flex: 1 },
+  body: { paddingHorizontal: 20, paddingVertical: 16, flexGrow: 1 },
+  bodyCountPad: { paddingBottom: 36 },
+  bodyText: {
     color: NOTE_TEXT_COLOR,
     fontFamily: fonts.body,
     fontSize: 16,
     lineHeight: 24,
   },
-  editorCountPad: { paddingBottom: 36 },
   count: {
     position: 'absolute',
     bottom: 12,
