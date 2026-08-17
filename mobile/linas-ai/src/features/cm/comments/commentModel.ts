@@ -248,6 +248,8 @@ export function postsModeOf(item: CommentRuleItem): CommentPostsMode {
 
 export function replyInOf(item: CommentRuleItem): CommentReplyIn {
   const raw = String(item.action || '').toLowerCase();
+  // Legacy "ignore" is not selectable in owner UI; show as Comment.
+  if (raw === 'ignore') return 'comment';
   if (raw.includes('comment') && raw.includes('dm')) return 'both';
   if (raw.includes('dm')) return 'dm';
   return 'comment';
