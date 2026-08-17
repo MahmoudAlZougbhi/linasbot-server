@@ -167,7 +167,7 @@ export function KnowledgeScreen({ proposalReview, onBack, onOpenLocations }: Pro
           </ScrollView>
           <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
             <Pressable
-              onPress={confirmDelete}
+              onPress={() => confirmDelete()}
               accessibilityRole="button"
               accessibilityLabel={tr('knowledgeDelete')}
               style={({ pressed }) => [styles.deleteBtn, pressed && styles.pressed]}

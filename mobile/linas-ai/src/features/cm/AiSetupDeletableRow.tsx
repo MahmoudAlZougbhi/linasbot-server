@@ -72,7 +72,7 @@ export function AiSetupDeletableRow({
 const styles = StyleSheet.create({
   clip: { overflow: 'hidden', borderRadius: 12 },
   behind: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'flex-end',
     justifyContent: 'center',
     backgroundColor: TEAL_DELETE,
