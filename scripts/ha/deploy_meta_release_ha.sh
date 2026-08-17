@@ -6303,7 +6303,7 @@ for index, path in enumerate(paths):
     visit(path, f"artifact-{index}")
     name = root_names[index] if index < len(root_names) else f"artifact-{index}"
     print(
-        f"[ha-deploy] baseline-root {name} records={records - before} "
+        f"[ha-deploy] baseline-artifact {name} records={records - before} "
         f"sha256={root_digest.hexdigest()}",
         file=sys.stderr,
     )
@@ -9532,6 +9532,8 @@ orchestrate() {
   local lb_observed_at peer_lb_observed_at
   local release_summary peer_release_summary
   local configured_peer peer_host tx_stamp tx_dir
+  local divergent_baseline_confirm="${DIVERGENT_BASELINE_CONFIRM:-}"
+  local local_baseline_projection peer_baseline_projection expected_divergent_confirm
   local local_preflight_rc peer_preflight_rc
   local tx_id current_journal_digest durable_decision=rollback
   local transaction_started=0 transaction_succeeded=0 rollback_ok=1 commit_decided=0
@@ -9682,7 +9684,27 @@ orchestrate() {
     if [ "$local_baseline_artifacts" != "$peer_baseline_artifacts" ]; then
       printf '[ha-deploy] node01 baseline artifacts: %s\n' "$local_baseline_artifacts" >&2
       printf '[ha-deploy] node02 baseline artifacts: %s\n' "$peer_baseline_artifacts" >&2
-      die "steady HA baselines have divergent venv, dashboard, nginx, or systemd bytes"
+      local_baseline_projection="$(
+        run_system_python_control -c \
+          'import json,sys; print(json.loads(sys.argv[1])["artifact_projection_sha256"])' \
+          "$local_baseline_artifacts"
+      )"
+      peer_baseline_projection="$(
+        run_system_python_control -c \
+          'import json,sys; print(json.loads(sys.argv[1])["artifact_projection_sha256"])' \
+          "$peer_baseline_artifacts"
+      )"
+      validate_digest "$local_baseline_projection"
+      validate_digest "$peer_baseline_projection"
+      expected_divergent_confirm="REPLACE_DIVERGENT_BASELINE_${local_baseline_projection:0:16}_${peer_baseline_projection:0:16}_WITH_RELEASE_${target_sha}"
+      printf '[ha-deploy] required divergent-baseline confirm: %s\n' \
+        "$expected_divergent_confirm" >&2
+      test "$divergent_baseline_confirm" = "$expected_divergent_confirm" || \
+        die "steady HA baselines have divergent venv, dashboard, nginx, or systemd bytes"
+      log "owner confirmed replacing divergent live baseline artifacts with the closed release bundle"
+    else
+      test -z "$divergent_baseline_confirm" || \
+        die "divergent-baseline confirm is only valid when live artifacts differ"
     fi
   else
     test "$previous_sha" = "$expected_local_previous" || \
