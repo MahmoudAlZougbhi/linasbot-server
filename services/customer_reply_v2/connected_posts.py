@@ -15,12 +15,12 @@ _PREVIEW_CHARS = 160
 
 def list_tenant_comment_accounts(tenant_id: str) -> list[dict[str, str]]:
     tenant = str(tenant_id or "").strip()
+    rows: list[dict[str, str]] = []
     try:
         registry = get_meta_app_registry()
         bindings = registry.list_bindings(include_inactive=False, include_superseded=False)
     except Exception:
-        return []
-    rows: list[dict[str, str]] = []
+        bindings = []
     for binding in bindings:
         if str(binding.tenant_id or "") != tenant:
             continue
@@ -35,7 +35,33 @@ def list_tenant_comment_accounts(tenant_id: str) -> list[dict[str, str]]:
                 "binding_id": binding.binding_id,
             }
         )
+    rows.extend(_tiktok_comment_accounts(tenant))
     return rows
+
+
+def _tiktok_comment_accounts(tenant_id: str) -> list[dict[str, str]]:
+    try:
+        from db.session import whatsapp_db_configured, whatsapp_session
+        from services.tiktok_business.repository import TikTokRepository
+        from services.tiktok_business.scopes import comments_read_ready
+
+        if not whatsapp_db_configured():
+            return []
+        with whatsapp_session() as session:
+            connection = TikTokRepository(session).get_active_for_tenant(tenant_id)
+            if connection is None or not comments_read_ready(connection.granted_scopes):
+                return []
+            return [
+                {
+                    "platform": "tiktok",
+                    "connected_account_id": connection.id,
+                    "page_or_ig_account_id": connection.open_id,
+                    "name": connection.display_name or connection.username or connection.open_id,
+                    "binding_id": connection.id,
+                }
+            ]
+    except Exception:
+        return []
 
 
 def account_belongs_to_tenant(*, tenant_id: str, platform: str, connected_account_id: str) -> bool:
@@ -170,6 +196,10 @@ async def list_connected_posts(
         return {"ok": False, "error": "account_not_in_tenant", "posts": [], "allow_manual_post_id": True}
     page_size = max(1, min(int(limit or _POST_PAGE_SIZE), 50))
     cursor = str(after or "").strip()
+    if str(platform or "").strip().lower() == "tiktok":
+        return _tiktok_connected_posts(
+            tenant_id=tenant_id, connection_id=connected_account_id, after=cursor, limit=page_size
+        )
     if graph_fetch is not None:
         posts = list(
             await graph_fetch(platform=platform, account_id=connected_account_id, after=cursor, limit=page_size) or []
@@ -187,3 +217,34 @@ async def list_connected_posts(
     return await _graph_list_posts(
         binding=binding, platform=str(platform or "").strip().lower(), after=cursor, limit=page_size
     )
+
+
+def _tiktok_connected_posts(*, tenant_id: str, connection_id: str, after: str, limit: int) -> dict[str, Any]:
+    from db.session import whatsapp_db_configured, whatsapp_session
+    from services.tiktok_business.repository_content import TikTokContentRepository
+
+    if not whatsapp_db_configured():
+        return {"ok": False, "error": "account_not_in_tenant", "posts": [], "allow_manual_post_id": True}
+    with whatsapp_session() as session:
+        rows = TikTokContentRepository(session).list_media(
+            tenant_id=tenant_id, connection_id=connection_id, limit=limit, after=after
+        )
+        posts = [
+            {
+                "id": row.item_id,
+                "preview": (row.caption or "")[:_PREVIEW_CHARS],
+                "created_time": row.create_time.isoformat() if row.create_time else "",
+                "permalink": row.share_url,
+                "thumbnail": row.thumbnail_url,
+                "media_type": "video",
+            }
+            for row in rows
+        ]
+        next_after = posts[-1]["id"] if len(posts) >= limit else ""
+    return {
+        "ok": True,
+        "posts": posts,
+        "posts_source": "tiktok_store",
+        "next_after": next_after,
+        "allow_manual_post_id": True,
+    }

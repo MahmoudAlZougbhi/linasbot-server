@@ -17,12 +17,18 @@ import {
   IntegrationChannelCard,
   channelSubtitle,
   commentsBlocker,
-  defaultToggles,
   type IntegrationRow,
 } from './IntegrationChannelCard';
 import { IntegrationRefreshButton } from './IntegrationRefreshButton';
 import { disconnectMetaPlatform, startMetaOAuth } from './integrationsOAuth';
+import { applyIntegrationToggle, mergeToggleResponse } from './integrationsToggleApply';
 import { ToggleResponseSchema, type IntegrationListRow } from './integrationsSchemas';
+import {
+  IntegrationsTikTokSection,
+  confirmDisconnectTikTok,
+  connectTikTokChannel,
+  tiktokSheetTarget,
+} from './IntegrationsTikTokSection';
 import { useIntegrationsLoad } from './useIntegrationsLoad';
 import { WhatsAppCloudCard, whatsappCardSubtitle } from './WhatsAppCloudCard';
 import { WebChatCard } from './WebChatCard';
@@ -45,7 +51,7 @@ const PLATFORM_LABEL: Record<string, StringKey> = {
 
 function isComingSoon(row: Row): boolean {
   if (row.coming_soon === true) return true;
-  return row.platform === 'tiktok' || row.platform === 'snapchat';
+  return row.platform === 'snapchat';
 }
 
 export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props) {
@@ -87,7 +93,27 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     }
   }
 
+  async function connectTikTok() {
+    await connectTikTokChannel({
+      onBusy: setBusyPlatform,
+      onError: setError,
+      onAuthGate: () => setAuthGate(true),
+      actionError: tr('integrationsActionError'),
+    });
+  }
+
   async function disconnectPlatform(row: Row) {
+    if (row.platform === 'tiktok') {
+      confirmDisconnectTikTok({
+        accountName: row.account?.display_name || row.accounts?.[0]?.display_name || tr('platformTikTok'),
+        tr,
+        onBusy: setBusyPlatform,
+        onError: setError,
+        onAuthGate: () => setAuthGate(true),
+        onReload: load,
+      });
+      return;
+    }
     const platform = row.platform === 'facebook' ? 'facebook' : 'instagram';
     const accountName =
       row.account?.display_name ||
@@ -128,18 +154,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
         { method: 'POST', schema: ToggleResponseSchema },
       );
       setRows((curr) =>
-        curr.map((r) =>
-          r.platform === row.platform
-            ? {
-                ...r,
-                toggles: res.toggles,
-                comments_state: res.comments_state ?? r.comments_state,
-                dm_state: res.dm_state ?? r.dm_state,
-                comments_blocker:
-                  res.comments_state?.blocker_code ?? res.comments_state?.blocker ?? undefined,
-              }
-            : r,
-        ),
+        curr.map((r) => (r.platform === row.platform ? mergeToggleResponse(r, res) : r)),
       );
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) setAuthGate(true);
@@ -154,7 +169,20 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
   }
 
   async function setToggle(row: Row, key: 'dm' | 'comments', value: boolean) {
-    const previous = defaultToggles(row as IntegrationRow);
+    if (row.platform === 'tiktok') {
+      if (value === true && !row.connected) {
+        setError(tr('commentsBlockerConnectFirst'));
+        await connectTikTok();
+        return;
+      }
+      if (key === 'dm' && value === true) {
+        const dmBlocker = row.dm_state?.blocker_code || row.dm_state?.blocker;
+        if (dmBlocker === 'tiktok_messaging_pending') {
+          setError(tr('tiktokMessagingPending'));
+          return;
+        }
+      }
+    } else {
     const platform = row.platform === 'facebook' ? 'facebook' : 'instagram';
 
     if (value === true && !row.connected) {
@@ -188,57 +216,19 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
         return;
       }
     }
-
-    setBusyToggle({ platform: row.platform, key });
-    setError(null);
-    setRows((curr) =>
-      curr.map((r) =>
-        r.platform === row.platform
-          ? { ...r, toggles: { ...defaultToggles(r as IntegrationRow), [key]: value } }
-          : r,
-      ),
-    );
-    try {
-      const res = await apiFetch(`/api/mobile/integrations/${encodeURIComponent(row.platform)}/toggles`, {
-        method: 'PATCH',
-        body: JSON.stringify({ [key]: value }),
-        schema: ToggleResponseSchema,
-      });
-      setRows((curr) =>
-        curr.map((r) =>
-          r.platform === row.platform
-            ? {
-                ...r,
-                toggles: res.toggles,
-                comments_state: res.comments_state ?? r.comments_state,
-                dm_state: res.dm_state ?? r.dm_state,
-                comments_blocker:
-                  res.comments_state?.blocker_code ?? res.comments_state?.blocker ?? undefined,
-              }
-            : r,
-        ),
-      );
-    } catch (err) {
-      setRows((curr) =>
-        curr.map((r) => (r.platform === row.platform ? { ...r, toggles: previous } : r)),
-      );
-      if (err instanceof ApiError && err.status === 401) setAuthGate(true);
-      else if (err instanceof ApiError && err.body && typeof err.body === 'object') {
-        const body = err.body as {
-          message?: unknown;
-          error?: unknown;
-          reauthorize_required?: unknown;
-        };
-        const msg = body.message;
-        const code = typeof body.error === 'string' ? body.error : '';
-        setError(typeof msg === 'string' && msg.trim() ? msg : tr('integrationsToggleError'));
-        if (body.reauthorize_required === true || code === 'COMMENT_SCOPES_MISSING') {
-          setError(`${typeof msg === 'string' && msg.trim() ? msg : tr('integrationsToggleError')} ${tr('disconnectThenConnectHint')}`);
-        }
-      } else setError(tr('integrationsToggleError'));
-    } finally {
-      setBusyToggle(null);
     }
+
+    await applyIntegrationToggle({
+      row,
+      key,
+      value,
+      setRows,
+      setBusyToggle,
+      setError,
+      onAuthGate: () => setAuthGate(true),
+      toggleError: tr('integrationsToggleError'),
+      disconnectHint: tr('disconnectThenConnectHint'),
+    });
   }
 
   function platformTitle(row: Row): string {
@@ -334,19 +324,19 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
         />
         <WebChatCard onError={setError} onNotice={setNotice} />
         {tiktokRow ? (
-          <IntegrationChannelCard
-            key="tiktok"
-            row={tiktokRow as IntegrationRow}
+          <IntegrationsTikTokSection
+            row={tiktokRow}
             title={platformTitle(tiktokRow)}
             soon={isComingSoon(tiktokRow)}
-            busy={false}
-            busyToggleKey={null}
-            actionsDisabled
+            busy={busyPlatform === 'tiktok'}
+            busyToggleKey={busyToggle?.platform === 'tiktok' ? busyToggle.key : null}
+            actionsDisabled={busyPlatform !== null || busyToggle !== null}
             tr={tr}
-            onToggle={() => undefined}
-            onReconcileComments={() => undefined}
-            onConnect={() => undefined}
-            onOpenMenu={() => undefined}
+            onToggle={(key, value) => void setToggle(tiktokRow, key, value)}
+            onBusy={setBusyPlatform}
+            onError={setError}
+            onAuthGate={() => setAuthGate(true)}
+            onOpenMenu={() => setSheet(tiktokSheetTarget(tiktokRow, platformTitle(tiktokRow)))}
           />
         ) : null}
       </ScrollView>

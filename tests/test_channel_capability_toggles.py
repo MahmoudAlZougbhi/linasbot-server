@@ -33,7 +33,7 @@ def test_action_ids_match_cm_schema() -> None:
     assert action_id_for("instagram", "comments") == ACTION_INSTAGRAM_COMMENTS
     assert action_id_for("facebook", "dm") == ACTION_FACEBOOK_DM
     assert action_id_for("facebook", "comments") == ACTION_FACEBOOK_COMMENTS
-    assert action_id_for("tiktok", "dm") is None
+    assert action_id_for("tiktok", "dm") == "respond_tiktok_dm"
 
 
 def test_attach_toggles_only_on_meta_channels(monkeypatch) -> None:

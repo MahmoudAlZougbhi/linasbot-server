@@ -237,6 +237,10 @@ async def ready() -> Any:
                 "note": "Redis optional; connection error ignored for readiness",
             }
 
+    from services.tiktok_business.health import tiktok_business_readiness
+
+    checks["tiktok_business"] = tiktok_business_readiness()
+
     status = 200 if overall_ok else 503
     from fastapi.responses import JSONResponse
 

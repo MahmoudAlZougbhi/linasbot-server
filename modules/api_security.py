@@ -336,6 +336,8 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
             or path.startswith("/api/billing/")
             or path.startswith("/api/owner-ai/")
             or path.startswith("/api/mobile/")
+            or path.startswith("/api/tiktok")
+            or path.startswith("/api/comments/inbox")
             or path.startswith("/api/entitlements/")
             or path.startswith("/api/creative/")
             or path.startswith("/api/schedule/")
@@ -376,7 +378,7 @@ class DashboardAuthMiddleware(BaseHTTPMiddleware):
 
 
 _SOCIAL_USER_RE = re.compile(
-    r"^(?:[a-z0-9][a-z0-9_-]{0,63}:)?(?:instagram|facebook):",
+    r"^(?:[a-z0-9][a-z0-9_-]{0,63}:)?(?:instagram|facebook|tiktok):",
     re.I,
 )
 

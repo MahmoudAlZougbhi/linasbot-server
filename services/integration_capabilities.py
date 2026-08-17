@@ -76,14 +76,22 @@ def _meta_base() -> dict[str, dict[str, Any]]:
 
 
 TIKTOK_CAPABILITIES: dict[str, dict[str, Any]] = {
-    "dm_read": _cap(level="unavailable", supported_in_code=False),
-    "dm_reply": _cap(level="unavailable", supported_in_code=False),
-    "comment_read": _cap(level="coming_later", supported_in_code=False),
-    "comment_reply": _cap(level="coming_later", supported_in_code=False),
+    "dm_read": _cap(
+        level="needs_permission",
+        supported_in_code=True,
+        notes="Business Messaging is capability-gated until TikTok product approval.",
+    ),
+    "dm_reply": _cap(
+        level="needs_permission",
+        supported_in_code=True,
+        notes="Not requested in OAuth; Permission pending until message scopes exist.",
+    ),
+    "comment_read": _cap(level="available", supported_in_code=True, notes="Get Account Comment"),
+    "comment_reply": _cap(level="available", supported_in_code=True, notes="Manage Account Comment"),
     "content_publish": _cap(level="coming_later", supported_in_code=False),
     "reel_publish": _cap(level="coming_later", supported_in_code=False),
-    "analytics": _cap(level="coming_later", supported_in_code=False),
-    "webhooks": _cap(level="coming_later", supported_in_code=False),
+    "analytics": _cap(level="available", supported_in_code=True, notes="Stored TikTok comment/DM metrics only"),
+    "webhooks": _cap(level="available", supported_in_code=True, notes="Messaging webhooks when approved"),
 }
 
 SNAP_CAPABILITIES: dict[str, dict[str, Any]] = {
@@ -318,16 +326,7 @@ def list_tenant_integration_status(tenant_id: str) -> list[dict[str, Any]]:
     rows.extend(
         [
             web_row,
-            {
-                "platform": "tiktok",
-                "label": "TikTok",
-                "connected": False,
-                "coming_soon": True,
-                "connectable": False,
-                "binding_ids": [],
-                "capabilities": {k: dict(v) for k, v in TIKTOK_CAPABILITIES.items()},
-                "audit_notes": "Official API capability audit pending Meta stability.",
-            },
+            tiktok_row_for_tenant(tenant_id),
             {
                 "platform": "snapchat",
                 "label": "Snapchat",
@@ -341,3 +340,9 @@ def list_tenant_integration_status(tenant_id: str) -> list[dict[str, Any]]:
         ]
     )
     return rows
+
+
+def tiktok_row_for_tenant(tenant_id: str) -> dict[str, Any]:
+    from services.tiktok_business.status import tiktok_integration_row
+
+    return tiktok_integration_row(tenant_id)

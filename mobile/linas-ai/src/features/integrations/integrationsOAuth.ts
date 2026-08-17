@@ -38,3 +38,19 @@ export async function disconnectMetaPlatform(platform: 'instagram' | 'facebook')
     schema: DisconnectSchema,
   });
 }
+
+export async function startTikTokOAuth(): Promise<void> {
+  const started = await apiFetch('/api/tiktok/connect/start', {
+    method: 'POST',
+    body: JSON.stringify({ return_surface: MOBILE_RETURN_SURFACE }),
+    schema: StartSchema,
+  });
+  await Linking.openURL(started.authorization_url);
+}
+
+export async function disconnectTikTok(): Promise<void> {
+  await apiFetch('/api/tiktok/disconnect', {
+    method: 'POST',
+    schema: DisconnectSchema,
+  });
+}

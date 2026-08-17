@@ -272,6 +272,8 @@ def build_tenant_mobile_dashboard(
             "facebook_dms": None,
             "instagram_comments": None,
             "facebook_comments": None,
+            "tiktok_dms": None,
+            "tiktok_comments": None,
         }
 
     features = dict(plan.get("features") or {}) if plan.get("availability") == "ok" else {}

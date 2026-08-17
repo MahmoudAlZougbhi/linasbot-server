@@ -47,6 +47,20 @@ from db.models.requests_support import (
     CustomerRequestNote,
     CustomerRequestOutbox,
 )
+from db.models.tiktok_business import (
+    TikTokAuditEvent,
+    TikTokConnection,
+    TikTokCredential,
+    TikTokOAuthAttempt,
+    TikTokWebhookEvent,
+)
+from db.models.tiktok_content import (
+    TikTokComment,
+    TikTokCommentReply,
+    TikTokConversation,
+    TikTokMedia,
+    TikTokMessage,
+)
 from db.models.tenant_services import ServiceOption, TenantService
 from db.models.whatsapp_cloud import (
     WhatsAppAuditEvent,
@@ -101,6 +115,16 @@ __all__ = [
     "RequestDefinitionLink",
     "ServiceOption",
     "TenantService",
+    "TikTokAuditEvent",
+    "TikTokComment",
+    "TikTokCommentReply",
+    "TikTokConnection",
+    "TikTokConversation",
+    "TikTokCredential",
+    "TikTokMedia",
+    "TikTokMessage",
+    "TikTokOAuthAttempt",
+    "TikTokWebhookEvent",
     "StripeProcessedEventRow",
     "TenantEntitlementRow",
     "TokenWalletLedgerRow",

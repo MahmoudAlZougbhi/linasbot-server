@@ -39,6 +39,10 @@ from db.models import (  # noqa: E402, F401 — register models on metadata
     WhatsAppOutboundIntent,
     WhatsAppPilotEntitlement,
     WhatsAppWebhookEvent,
+    TikTokConnection,
+    TikTokOAuthAttempt,
+    TikTokCredential,
+    TikTokWebhookEvent,
 )
 
 config = context.config

@@ -19,6 +19,8 @@ USAGE_BUCKETS = (
     "facebook_dm",
     "instagram_comments",
     "facebook_comments",
+    "tiktok_dm",
+    "tiktok_comments",
     "whatsapp_dm",
     "web_dm",
     "owner_copilot",
@@ -33,6 +35,12 @@ def _normalize_usage_bucket(entry: dict[str, Any]) -> str:
     handler = str(entry.get("handler_path") or "").strip().lower()
     outcome = str(entry.get("outcome") or "").strip().lower()
 
+    if channel in {"tiktok_comment", "tiktok_comments"} or (
+        "tiktok" in channel and "comment" in channel
+    ):
+        return "tiktok_comments"
+    if channel in {"tiktok", "tiktok_dm"} or ("tiktok" in channel and "comment" not in channel):
+        return "tiktok_dm"
     if channel in {"instagram_comment", "instagram_comments"}:
         return "instagram_comments"
     if channel in {"facebook_comment", "facebook_comments"}:
@@ -146,6 +154,8 @@ def aggregate_tenant_usage(
         "facebook_dms": by_bucket["facebook_dm"]["interactions"],
         "instagram_comments": by_bucket["instagram_comments"]["interactions"],
         "facebook_comments": by_bucket["facebook_comments"]["interactions"],
+        "tiktok_dms": by_bucket["tiktok_dm"]["interactions"],
+        "tiktok_comments": by_bucket["tiktok_comments"]["interactions"],
         "web_dms": by_bucket["web_dm"]["interactions"],
         "owner_copilot": by_bucket["owner_copilot"]["interactions"],
         "content_management_ai": by_bucket["content_management_ai"]["interactions"],

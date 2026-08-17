@@ -135,6 +135,11 @@ def attach_channel_toggles(rows: list[dict[str, Any]], *, tenant_id: str) -> lis
     out: list[dict[str, Any]] = []
     for row in rows:
         platform = str(row.get("platform") or "")
+        if platform == "tiktok" and row.get("coming_soon") is not True:
+            from services.tiktok_business.toggles import attach_tiktok_row_toggles
+
+            out.append(attach_tiktok_row_toggles(row))
+            continue
         if platform not in supported_platforms() or row.get("coming_soon") is True:
             out.append(row)
             continue

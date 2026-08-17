@@ -304,8 +304,10 @@ class ActionsSection(CmBaseModel):
         default_factory=lambda: [
             ActionCapability(id="respond_facebook_dm", enabled=True),
             ActionCapability(id="respond_instagram_dm", enabled=True),
+            ActionCapability(id="respond_tiktok_dm", enabled=False),
             ActionCapability(id="respond_facebook_comments", enabled=False),
             ActionCapability(id="respond_instagram_comments", enabled=False),
+            ActionCapability(id="respond_tiktok_comments", enabled=False),
             ActionCapability(id="human_handoff", enabled=True),
             ActionCapability(id="photo_analysis", enabled=False),
         ]
@@ -338,7 +340,7 @@ class CommentRule(CmBaseModel):
     post_permalink: str = ""
     post_caption_snapshot: str = ""
     post_status: str = ""
-    channel: Literal["any", "facebook", "instagram"] = "any"
+    channel: Literal["any", "facebook", "instagram", "tiktok"] = "any"
     action: Literal[
         "reply_comment",
         "reply_dm",
