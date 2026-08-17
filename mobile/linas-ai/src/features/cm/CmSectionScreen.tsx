@@ -1,14 +1,9 @@
-import { useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
-import { PrimaryButton } from '../../components/PrimaryButton';
-import { useI18n } from '../../i18n/LanguageContext';
-import { ScreenChrome } from '../shared/ScreenChrome';
 import type { CmProposalReview } from './cmProposalReview';
 import { cmFormStyles } from './cmFormStyles';
 import { getCmSection, type CmSectionId } from './cmSections';
-import { AiBasicsEditor } from './editors/AiBasicsEditor';
+import { AiBasicsScreen } from './aiBasics/AiBasicsScreen';
 import { ArticlesEditor } from './editors/ArticlesEditor';
 import { KnowledgeScreen } from './knowledge/KnowledgeScreen';
 import { LocationHoursSectionScreen } from './LocationHoursSectionScreen';
@@ -23,10 +18,12 @@ import { RestrictedEditor } from './editors/PolicyEditors';
 import { PricesEditor } from './editors/PricesEditor';
 import { ServicesEditor } from './editors/ServicesEditor';
 import { useCmDraft } from './useCmDraft';
-import { useCmMultiDraft } from './useCmMultiDraft';
-
-/** Stable list — an inline array here retriggers draft load on every chrome re-render. */
-const AI_BASICS_COMPOSITE_SECTIONS = ['ai_basics', 'style', 'dynamic_messages'] as const;
+import { useState } from 'react';
+import { ScrollView } from 'react-native';
+import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
+import { PrimaryButton } from '../../components/PrimaryButton';
+import { useI18n } from '../../i18n/LanguageContext';
+import { ScreenChrome } from '../shared/ScreenChrome';
 
 type Props = {
   section: CmSectionId;
@@ -34,49 +31,6 @@ type Props = {
   onBack?: () => void;
   onOpenLocations?: () => void;
 };
-
-function AiBasicsComposite({ proposalReview }: { proposalReview?: CmProposalReview | null }) {
-  const { tr } = useI18n();
-  const multi = useCmMultiDraft(AI_BASICS_COMPOSITE_SECTIONS, proposalReview);
-  const basics = multi.drafts.ai_basics?.payload ?? {};
-  const style = multi.drafts.style?.payload ?? {};
-  const greetings = multi.drafts.dynamic_messages?.payload ?? {};
-
-  return (
-    <>
-      {multi.loading ? <LinasLoadingIndicator variant="screen" /> : null}
-      {multi.error ? <Text style={cmFormStyles.error}>{multi.error}</Text> : null}
-      {multi.conflict ? <Text style={cmFormStyles.warn}>{multi.conflict}</Text> : null}
-      {!multi.loading ? (
-        <AiBasicsEditor
-          basicsPayload={basics}
-          stylePayload={style}
-          greetingsPayload={greetings}
-          onBasicsChange={(next) => multi.setPayload('ai_basics', next)}
-          onStyleChange={(next) => multi.setPayload('style', next)}
-          onGreetingsChange={(next) => multi.setPayload('dynamic_messages', next)}
-        />
-      ) : null}
-      {!multi.loading ? (
-        <View style={cmFormStyles.actions}>
-          <PrimaryButton
-            label={multi.dirty ? tr('aiSetupSaveDraft') : tr('aiSetupSaved')}
-            onPress={() => void multi.save()}
-            loading={multi.saving}
-            disabled={!multi.dirty || !multi.canSave}
-            style={{ flex: 1 }}
-          />
-          <PrimaryButton
-            label={tr('aiSetupReload')}
-            variant="ghost"
-            onPress={() => void multi.load()}
-            style={{ flex: 1 }}
-          />
-        </View>
-      ) : null}
-    </>
-  );
-}
 
 function SectionBody({
   section,
@@ -147,32 +101,13 @@ export function CmSectionScreen({ section, proposalReview, onBack, onOpenLocatio
     return <RequestRulesScreen proposalReview={proposalReview} onBack={onBack} />;
   }
   if (section === 'ai_basics' || section === 'style' || section === 'dynamic_messages') {
-    return (
-      <AiBasicsSectionScreen proposalReview={proposalReview} onBack={onBack} />
-    );
+    return <AiBasicsScreen proposalReview={proposalReview} onBack={onBack} />;
   }
   if (section === 'branches') {
     return <LocationHoursSectionScreen proposalReview={proposalReview} onBack={onBack} />;
   }
   return (
     <StandardCmSectionScreen section={section} proposalReview={proposalReview} onBack={onBack} />
-  );
-}
-
-function AiBasicsSectionScreen({
-  proposalReview,
-  onBack,
-}: {
-  proposalReview?: CmProposalReview | null;
-  onBack?: () => void;
-}) {
-  const { tr } = useI18n();
-  return (
-    <ScreenChrome title={tr('aiSetupSec_ai_basics')} subtitle={tr('aiSetupBasicsSubtitle')} onBack={onBack}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
-        <AiBasicsComposite proposalReview={proposalReview} />
-      </ScrollView>
-    </ScreenChrome>
   );
 }
 
