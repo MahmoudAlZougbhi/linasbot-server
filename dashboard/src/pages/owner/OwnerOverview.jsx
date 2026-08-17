@@ -63,7 +63,7 @@ export default function OwnerOverview() {
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
         <h3 className="font-semibold">Messages by channel</h3>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {['facebook', 'instagram', 'whatsapp', 'web', 'testing_lab', 'unknown'].map((channel) => (
+          {['facebook', 'instagram', 'tiktok', 'whatsapp', 'web', 'testing_lab', 'unknown'].map((channel) => (
             <div key={channel} className="rounded-lg bg-slate-950 p-3">
               <p className="capitalize text-slate-400">{channel.replace('_', ' ')}</p>
               <p className="mt-1 text-xl font-semibold">{Number(channels[channel] || 0).toLocaleString()}</p>

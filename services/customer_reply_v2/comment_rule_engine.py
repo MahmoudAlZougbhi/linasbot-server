@@ -95,6 +95,8 @@ def _channel_ok(rule: dict[str, Any], channel: str) -> bool:
         return "facebook" in ch or ch in {"fb", "messenger"}
     if want == "instagram":
         return "instagram" in ch or ch == "ig"
+    if want == "tiktok":
+        return "tiktok" in ch
     return want == ch
 
 

@@ -16,6 +16,8 @@ def parse_channel(channel: str) -> tuple[str, str, bool]:
         is_public = False
     if "facebook" in ch or ch in {"fb", "messenger", "page", "facebook_messenger"}:
         platform = "facebook"
+    elif "tiktok" in ch:
+        platform = "tiktok"
     elif "whatsapp" in ch:
         platform = "whatsapp"
     elif "web" in ch:

@@ -29,8 +29,10 @@ _BUCKET_PLATFORM_MAP = {
     "facebook_dm": "facebook",
     "whatsapp_dm": "whatsapp",
     "web_dm": "web",
+    "tiktok_dm": "tiktok",
     "instagram_comments": "instagram",
     "facebook_comments": "facebook",
+    "tiktok_comments": "tiktok",
 }
 
 
@@ -42,7 +44,7 @@ def _normalize_platform(channel: Any) -> str | None:
         return "facebook"
     if ch in {"whatsapp", "wa", "whatsapp_dm", "360dialog", "dialog360"}:
         return "whatsapp"
-    if ch in {"tiktok"}:
+    if ch in {"tiktok"} or "tiktok" in ch:
         return "tiktok"
     if ch in {"web", "web_chat", "website"}:
         return "web"
@@ -169,9 +171,9 @@ def build_activity_summary(
         if platform not in platform_rows:
             continue
 
-        if bucket in {"instagram_dm", "facebook_dm", "whatsapp_dm", "web_dm"}:
+        if bucket in {"instagram_dm", "facebook_dm", "whatsapp_dm", "web_dm", "tiktok_dm"}:
             platform_rows[platform]["messages"] += 1
-        elif bucket in {"instagram_comments", "facebook_comments"}:
+        elif bucket in {"instagram_comments", "facebook_comments", "tiktok_comments"}:
             platform_rows[platform]["comments"] += 1
 
         if source in _SMART_SOURCES:
@@ -197,7 +199,11 @@ def build_activity_summary(
     channels: list[dict[str, Any]] = []
     for platform in _ACTIVITY_PLATFORMS:
         is_connected = bool(connected.get(platform))
-        coming_soon = platform == "tiktok" and not is_connected
+        coming_soon = False
+        for item in integrations:
+            if isinstance(item, dict) and str(item.get("platform") or "") == platform:
+                coming_soon = bool(item.get("coming_soon"))
+                break
         row = platform_rows[platform]
         channels.append(
             {

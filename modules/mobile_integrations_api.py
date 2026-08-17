@@ -83,9 +83,6 @@ async def mobile_integration_toggles(
         raise HTTPException(status_code=403, detail="contentPublish permission required to apply toggles")
 
     platform_key = (platform or "").strip().lower()
-    if platform_key not in supported_platforms():
-        raise HTTPException(status_code=404, detail="Unknown platform")
-
     if "dm" in body and "comments" in body:
         raise HTTPException(status_code=400, detail="Set one toggle per request (dm or comments)")
     if "dm" in body:
@@ -96,6 +93,38 @@ async def mobile_integration_toggles(
         enabled = bool(body.get("comments"))
     else:
         raise HTTPException(status_code=400, detail="Body must include dm or comments boolean")
+
+    if platform_key == "tiktok":
+        from services.tiktok_business.toggles import TikTokToggleError, set_tiktok_toggle
+
+        try:
+            result = await set_tiktok_toggle(
+                tenant_id=session.tenant_id,
+                toggle=toggle,
+                enabled=enabled,
+                actor=session.user_id or session.email or "mobile",
+            )
+        except TikTokToggleError as exc:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={
+                    "success": False,
+                    "error": exc.code,
+                    "message": exc.message,
+                    "blocker_code": exc.code,
+                    "reauthorize_required": exc.code == "COMMENT_SCOPES_MISSING",
+                },
+            )
+        return {
+            "success": True,
+            "platform": platform_key,
+            "toggles": result["toggles"],
+            "comments_state": result.get("comments_state"),
+            "dm_state": result.get("dm_state"),
+        }
+
+    if platform_key not in supported_platforms():
+        raise HTTPException(status_code=404, detail="Unknown platform")
 
     try:
         result = await set_channel_toggle(
@@ -131,6 +160,20 @@ async def mobile_disconnect_platform(platform: str, request: Request) -> Any:
     """Disconnect all active bindings for a Meta platform (no OAuth / scope changes)."""
     session = require_permission(request, "settings")
     platform_key = (platform or "").strip().lower()
+    if platform_key == "tiktok":
+        from db.session import WhatsAppDatabaseUnavailable
+        from services.tiktok_business.errors import TikTokBusinessError
+        from services.tiktok_business.oauth import disconnect_tiktok
+        from services.tiktok_business.status import tiktok_integration_row
+
+        actor = session.user_id or session.email or "mobile_disconnect"
+        try:
+            await disconnect_tiktok(tenant_id=session.tenant_id, actor_user_id=actor)
+        except TikTokBusinessError as exc:
+            raise HTTPException(status_code=exc.http_status, detail=exc.message) from exc
+        except WhatsAppDatabaseUnavailable as exc:
+            raise HTTPException(status_code=503, detail="TikTok database unavailable") from exc
+        return {"success": True, "platform": "tiktok", "integration": tiktok_integration_row(session.tenant_id)}
     if platform_key not in supported_platforms():
         raise HTTPException(status_code=404, detail="Unknown platform")
 

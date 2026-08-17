@@ -32,7 +32,14 @@ export type IntegrationFeatures = {
   comment_replies: boolean;
 };
 
-export type ConnectionDisplayStatus = 'connected' | 'needs_reconnect' | 'error' | 'disconnected';
+export type ConnectionDisplayStatus =
+  | 'connected'
+  | 'needs_reconnect'
+  | 'error'
+  | 'disconnected'
+  | 'connecting'
+  | 'permission_required'
+  | 'token_expired';
 
 export type IntegrationRow = {
   platform: string;
@@ -91,6 +98,10 @@ function blockerCopy(blocker: string, tr: (key: StringKey) => string): string {
     case 'reauthorization_required':
     case 'connection_unhealthy':
       return tr('commentsBlockerReauthorization');
+    case 'tiktok_messaging_pending':
+      return tr('tiktokMessagingPending');
+    case 'token_expired':
+      return tr('integrationStatusTokenExpired');
     default:
       return tr('commentsBlockerGeneric');
   }
@@ -111,12 +122,28 @@ export function channelSubtitle(row: IntegrationRow): string {
     const handle = raw.replace(/^@/, '');
     return `@${handle}`;
   }
+  if (row.platform === 'tiktok') {
+    const handle = (acc.username || acc.display_name || '').trim();
+    const name = handle ? (handle.startsWith('@') ? handle : `@${handle.replace(/^@/, '')}`) : acc.display_name || '';
+    return name;
+  }
   return acc.display_name || acc.username || '';
 }
 
 function asPlatform(platform: string): IntegrationPlatform {
   if (platform === 'facebook' || platform === 'whatsapp' || platform === 'tiktok') return platform;
   return 'instagram';
+}
+
+function tiktokStatusLabel(
+  status: string,
+  tr: (key: StringKey) => string,
+): string | undefined {
+  if (status === 'connecting') return tr('integrationStatusConnecting');
+  if (status === 'permission_required') return tr('integrationStatusPermissionRequired');
+  if (status === 'token_expired') return tr('integrationStatusTokenExpired');
+  if (status === 'error') return tr('integrationStatusError');
+  return undefined;
 }
 
 export function IntegrationChannelCard({
@@ -133,29 +160,42 @@ export function IntegrationChannelCard({
   onOpenMenu,
 }: Props) {
   const platform = asPlatform(row.platform);
-  const showToggles = !soon && (platform === 'instagram' || platform === 'facebook') && row.connected;
+  const tiktok = platform === 'tiktok';
+  const status = String(row.connection_status || '');
+  const needsReconnect = tiktok && (status === 'token_expired' || status === 'permission_required' || status === 'error');
+  const showToggles =
+    !soon && (platform === 'instagram' || platform === 'facebook' || tiktok) && row.connected;
   const blocker = commentsBlocker(row);
+  const dmBlocker = row.dm_state?.blocker_code || row.dm_state?.blocker || null;
   const needsWebhook = blocker === 'missing_comment_webhook';
   const subtitle = channelSubtitle(row);
+  const lastSync =
+    typeof row.last_synced_at === 'number' && row.last_synced_at > 0
+      ? `${tr('integrationLastSynced')}: ${new Date(row.last_synced_at * 1000).toLocaleString()}`
+      : tiktok && row.connected
+        ? tr('tiktokLastSyncNever')
+        : '';
   const healthy = row.connected && row.connection_status !== 'error' && row.connection_status !== 'needs_reconnect';
+  const statusLabel = tiktok ? tiktokStatusLabel(status, tr) : undefined;
 
   return (
     <IntegrationCardShell
       platform={platform}
       title={title}
-      subtitle={subtitle}
+      subtitle={lastSync ? `${subtitle}${subtitle ? '\n' : ''}${lastSync}` : subtitle}
       connected={row.connected}
       soon={soon}
       busy={busy}
-      connectLabel={tr('connect')}
+      connectLabel={needsReconnect ? tr('integrationReconnect') : tr('connect')}
       connectedLabel={tr('connected')}
       notConnectedLabel={tr('notConnected')}
       comingSoonLabel={tr('comingSoon')}
+      statusLabel={statusLabel}
       healthLabel={tr('integrationStatusConnected')}
       menuLabel={tr('disconnectAccount')}
-      showConnect={!soon && !row.connected}
+      showConnect={!soon && (!row.connected || needsReconnect)}
       showMenu={!soon && row.connected}
-      showHealth={!soon && row.connected && healthy}
+      showHealth={!soon && row.connected && healthy && !needsReconnect}
       onConnect={onConnect}
       onMenu={onOpenMenu}
     >
@@ -170,6 +210,7 @@ export function IntegrationChannelCard({
             onToggle={onToggle}
           />
           {blocker ? <Text style={styles.blocker}>{blockerCopy(blocker, tr)}</Text> : null}
+          {tiktok && dmBlocker ? <Text style={styles.blocker}>{blockerCopy(String(dmBlocker), tr)}</Text> : null}
           {needsWebhook ? (
             <PrimaryButton
               label={tr('reconcileCommentWebhooks')}

@@ -19,6 +19,7 @@ type Props = {
   connectedLabel: string;
   notConnectedLabel: string;
   comingSoonLabel: string;
+  statusLabel?: string;
   healthLabel?: string;
   menuLabel: string;
   showConnect: boolean;
@@ -41,6 +42,7 @@ export function IntegrationCardShell({
   connectedLabel,
   notConnectedLabel,
   comingSoonLabel,
+  statusLabel,
   healthLabel,
   menuLabel,
   showConnect,
@@ -50,8 +52,10 @@ export function IntegrationCardShell({
   onMenu,
   children,
 }: Props) {
-  const pillLabel = soon ? comingSoonLabel : connected ? connectedLabel : notConnectedLabel;
-  const pillConnected = !soon && connected;
+  const pillLabel = soon
+    ? comingSoonLabel
+    : statusLabel || (connected ? connectedLabel : notConnectedLabel);
+  const pillConnected = !soon && connected && !statusLabel;
 
   return (
     <View style={styles.card}>
