@@ -46,6 +46,11 @@ describe('Comments screens match screenshot handoff', () => {
     assert.match(edit, /commentsTypeAutomatic/);
     assert.match(edit, /commentsChoosePosts/);
     assert.match(edit, /commentsReplyBoth/);
+    assert.match(edit, /id: 'comment'/);
+    assert.match(edit, /id: 'dm'/);
+    assert.match(edit, /id: 'both'/);
+    assert.doesNotMatch(edit, /id: 'ignore'|Ignore|commentsReplyIgnore/);
+    assert.doesNotMatch(en, /Ignore|commentsReplyIgnore/);
     assert.match(resources, /commentsAddImage/);
     assert.match(resources, /feather\('more-horizontal'\)/);
     assert.match(screen, /tr\('commentsDelete'\)/);
@@ -104,6 +109,12 @@ describe('Requests screens match screenshot handoff', () => {
     assert.match(section, /RequestRulesScreen/);
     assert.doesNotMatch(section, /CommentsEditor/);
     assert.doesNotMatch(section, /RequestsAppointmentsEditor/);
+  });
+
+  it('hub Comments copy has no Ignore reply option', () => {
+    const sections = read('features/cm/cmSections.ts');
+    assert.match(sections, /comment \+ DM/);
+    assert.doesNotMatch(sections, /or ignore/i);
   });
 
   it('has ar/fr keys', () => {

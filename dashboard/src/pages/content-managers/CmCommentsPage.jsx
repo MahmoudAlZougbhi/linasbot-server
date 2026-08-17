@@ -9,8 +9,18 @@ const FIELD_CLASS = "w-full rounded-xl border border-slate-200 px-3 py-2 text-sm
 const ACTIONS = [
   { value: "reply_comment", label: "Reply on the comment (public)" },
   { value: "reply_dm", label: "Reply via private DM" },
-  { value: "ignore", label: "Do not reply" },
+  { value: "reply_comment_and_dm", label: "Comment + DM" },
 ];
+
+/**
+ * Owner UI never offers Ignore; legacy saved ignore still loads and displays as comment.
+ * @param {unknown} raw
+ * @returns {string}
+ */
+function ownerActionValue(raw) {
+  const value = String(raw || "reply_comment");
+  return value === "ignore" ? "reply_comment" : value;
+}
 
 const CmCommentsPage = () => {
   const draft = useCmSectionDraft("comments");
@@ -54,7 +64,7 @@ const CmCommentsPage = () => {
   return (
     <CmSectionShell
       title="Comments Policy"
-      description="Control how the AI handles public comments: match keywords → reply publicly, send a private DM, or ignore. Turn on comment replies in Actions + per-asset settings; Meta Advanced Access is still required for live replies."
+      description="Control how the AI handles public comments: match keywords → reply publicly, send a private DM, or both. Turn on comment replies in Actions + per-asset settings; Meta Advanced Access is still required for live replies."
       countLabel={`${rules.length} rules`}
       loading={draft.loading}
       dirty={draft.dirty}
@@ -83,11 +93,10 @@ const CmCommentsPage = () => {
           <span className="text-sm font-medium">Default when no rule matches</span>
           <select
             className={FIELD_CLASS}
-            value={String(draft.payload.default_action || "reply_comment")}
+            value={ownerActionValue(draft.payload.default_action)}
             onChange={(e) => draft.setPayload({ ...draft.payload, default_action: e.target.value })}
           >
             <option value="reply_comment">AI replies on the comment</option>
-            <option value="ignore">Ignore (no reply)</option>
           </select>
         </label>
         <label className="block space-y-1">
@@ -235,7 +244,7 @@ const CmCommentsPage = () => {
               <span className="text-sm font-medium">Action</span>
               <select
                 className={FIELD_CLASS}
-                value={String(selected.action || "reply_comment")}
+                value={ownerActionValue(selected.action)}
                 onChange={(e) => patch(String(selected.id), { action: e.target.value })}
               >
                 {ACTIONS.map((opt) => (
