@@ -1406,6 +1406,14 @@ jobs:
               "$LB_OWNER_CONFIRM" \
               </dev/null
 
+            if [ "$DEPLOY_OPERATION" = steady ] || [ "$DEPLOY_OPERATION" = reconcile_exact ]; then
+              sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+                PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+                /bin/bash --noprofile --norc "$HELPER_PATH" prepare-live-ha-contract-cluster \
+                "$TARGET_SHA" \
+                </dev/null
+            fi
+
             if [ "$DEPLOY_OPERATION" = steady ]; then
               sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
                 PATH=/usr/sbin:/usr/bin:/sbin:/bin \

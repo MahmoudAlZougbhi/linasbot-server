@@ -102,6 +102,7 @@ DIRECT_RELEASE_MARKERS = (
     "/opt/linasbot/deploy.sh",
     "install-release-bundle-cluster",
     "install-lb-attestation-cluster",
+    "prepare-live-ha-contract-cluster",
     "orchestrate-confirmed",
     "orchestrate-reconcile",
     "commit-target-confirmed",
@@ -385,6 +386,7 @@ def test_deploy_workflow_exposes_no_single_node_or_host_selector() -> None:
     assert "host: ${{ inputs." not in source
     assert '"$HELPER_PATH" install-release-bundle-cluster' in source
     assert '"$HELPER_PATH" install-lb-attestation-cluster' in source
+    assert '"$HELPER_PATH" prepare-live-ha-contract-cluster' in source
     assert '"$HELPER_PATH" orchestrate-confirmed' in source
     assert '"$HELPER_PATH" orchestrate-reconcile' in source
     assert re.search(r'"\$HELPER_PATH"\s+install-release-bundle(?:\s|$)', source) is None
