@@ -47,11 +47,16 @@ describe('AI Setup hub restructure', () => {
 
   it('excludes hidden sections from hub progress summary', () => {
     const sections = read('features/cm/cmSections.ts');
+    assert.match(sections, /CM_HUB_PROGRESS_SECTION_IDS[\s\S]*ai_basics[\s\S]*knowledge[\s\S]*branches/s);
+    assert.match(sections, /CM_HUB_PROGRESS_TOTAL/);
     assert.match(sections, /CM_HUB_PROGRESS_EXCLUDED.*dynamic_messages.*services/s);
     const hub = read('features/cm/cmHubProgress.ts');
-    assert.match(hub, /CM_HUB_PROGRESS_EXCLUDED/);
+    assert.match(hub, /CM_HUB_PROGRESS_SECTION_IDS/);
+    assert.match(hub, /CM_HUB_PRODUCTS_PROGRESS_ID/);
+    assert.match(hub, /CM_HUB_PROGRESS_TOTAL/);
     const screen = read('features/cm/CmScreen.tsx');
     assert.match(screen, /summarizeHubProgress/);
+    assert.match(screen, /productsComplete/);
     assert.match(screen, /displaySummary\.percent/);
   });
 

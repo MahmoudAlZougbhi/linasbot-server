@@ -139,7 +139,26 @@ export const CM_SECTION_CARDS: CmSectionCard[] = [
   },
 ];
 
-/** Hub sections excluded from progress/badge calculations (hidden or merged in hub). */
+/**
+ * Hub progress allowlist — matches AI Setup tiles (excl. Products, counted separately).
+ * Greeting/Style/Languages/legacy Care/etc. never inflate the “N of 7” counter.
+ */
+export const CM_HUB_PROGRESS_SECTION_IDS: readonly CmSectionId[] = [
+  'ai_basics',
+  'knowledge',
+  'branches',
+  'prices',
+  'comments',
+  'requests_appointments',
+] as const;
+
+/** Synthetic hub tile counted in progress (Postgres products, not a CM section). */
+export const CM_HUB_PRODUCTS_PROGRESS_ID = 'products' as const;
+
+/** Total hub sections for progress UI: 6 CM tiles + Products. */
+export const CM_HUB_PROGRESS_TOTAL = CM_HUB_PROGRESS_SECTION_IDS.length + 1;
+
+/** @deprecated Prefer CM_HUB_PROGRESS_SECTION_IDS allowlist. Kept for older tests. */
 export const CM_HUB_PROGRESS_EXCLUDED: CmSectionId[] = [
   'languages',
   'style',

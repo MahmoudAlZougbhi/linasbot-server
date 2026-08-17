@@ -234,6 +234,28 @@ async def cm_publish(request: Request, body: dict[str, Any] = Body(default={})) 
     }
 
 
+@app.post("/api/cm/unpublish")
+async def cm_unpublish(request: Request) -> Any:
+    """Turn customer AI off by clearing the published CM pointer (versions kept)."""
+    session = require_permission(request, "contentPublish")
+    tenant_id = _session_tenant(session)
+    try:
+        ensure_publish_enabled()
+    except PublishDisabledError as exc:
+        return _publish_disabled_response(exc.message)
+
+    from services.cm.version_store import clear_published_pointer, read_published_pointer
+
+    previous = read_published_pointer(tenant_id)
+    cleared = clear_published_pointer(tenant_id)
+    return {
+        "success": True,
+        "cleared": cleared,
+        "live": False,
+        "previous_pointer": previous.model_dump(mode="json") if previous is not None else None,
+    }
+
+
 @app.get("/api/cm/versions")
 async def cm_list_versions(request: Request) -> Any:
     session = require_permission(request, "contentManagers")

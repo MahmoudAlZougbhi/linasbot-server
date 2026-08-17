@@ -68,6 +68,40 @@ export async function fetchCmMeta() {
   return apiFetch('/api/cm/meta', { schema: CmMetaSchema });
 }
 
+const PublishOkSchema = z
+  .object({
+    success: z.literal(true),
+    content_version_id: z.string().optional(),
+    index_version_id: z.string().optional(),
+  })
+  .passthrough();
+
+const UnpublishOkSchema = z
+  .object({
+    success: z.literal(true),
+    cleared: z.boolean().optional(),
+    live: z.boolean().optional(),
+  })
+  .passthrough();
+
+/** Publish CM drafts Live — customer AI starts answering from published content. */
+export async function publishCmLive(notes?: string): Promise<void> {
+  await apiFetch('/api/cm/publish', {
+    method: 'POST',
+    schema: PublishOkSchema,
+    body: JSON.stringify(notes ? { notes } : {}),
+  });
+}
+
+/** Clear published pointer — customer AI returns the unpublished guard (AI off). */
+export async function unpublishCmLive(): Promise<void> {
+  await apiFetch('/api/cm/unpublish', {
+    method: 'POST',
+    schema: UnpublishOkSchema,
+    body: JSON.stringify({}),
+  });
+}
+
 /** @deprecated Prefer getCmDraft — kept for any stub callers. */
 export async function fetchCmDraft(section: string) {
   return apiFetch(`/api/cm/draft/${section}`, { schema: EnvelopeSchema });
