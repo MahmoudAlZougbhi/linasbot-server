@@ -10,6 +10,7 @@ from services.cm.faq_integration_helpers import (
     _answer_in_arabic_script,
     _mirror_faq_record_into_draft,
     _translate_to_arabic_script,
+    faq_section_payload,
     load_faq_target_languages,
 )
 from services.cm.schemas import FaqRecord, FaqSection, FaqVariant
@@ -109,7 +110,11 @@ def replace_cm_faq_attachments(
         raise FaqIntegrationError(f"FAQ group not found: {qa_group_id}")
     put_draft(
         FAQ_SECTION,
-        payload=FaqSection(items=items, notes=section.notes).model_dump(mode="json"),
+        payload=faq_section_payload(
+            items=items,
+            notes=section.notes,
+            smart_answer_languages=section.smart_answer_languages,
+        ),
         if_match=env.etag,
         tenant_id=tenant_id,
         updated_by=updated_by,
@@ -140,7 +145,11 @@ def archive_cm_faq_group(
         raise FaqIntegrationError(f"FAQ group not found: {qa_group_id}")
     put_draft(
         FAQ_SECTION,
-        payload=FaqSection(items=items, notes=section.notes).model_dump(mode="json"),
+        payload=faq_section_payload(
+            items=items,
+            notes=section.notes,
+            smart_answer_languages=section.smart_answer_languages,
+        ),
         if_match=env.etag,
         tenant_id=tenant_id,
         updated_by=updated_by,
@@ -214,7 +223,11 @@ async def update_cm_faq_variant(
         raise FaqIntegrationError(f"FAQ group not found: {qa_group_id}")
     put_draft(
         FAQ_SECTION,
-        payload=FaqSection(items=items, notes=section.notes).model_dump(mode="json"),
+        payload=faq_section_payload(
+            items=items,
+            notes=section.notes,
+            smart_answer_languages=section.smart_answer_languages,
+        ),
         if_match=env.etag,
         tenant_id=tenant_id,
         updated_by=updated_by,
@@ -264,7 +277,8 @@ async def regenerate_cm_faq_variants(
         raise FaqIntegrationError("Translation failed — retry; nothing was saved as success")
 
     answer_ar = src_variant.answer
-    if not _answer_in_arabic_script(answer_ar):
+    needs_ar_script = any(lang in ("ar", "franco") for lang in targets)
+    if needs_ar_script and not _answer_in_arabic_script(answer_ar):
         answer_ar = await _translate_to_arabic_script(src_variant.answer, src_lang)
         if not _answer_in_arabic_script(answer_ar):
             raise FaqIntegrationError("Could not produce Arabic-script answer for AR/Franco")
@@ -274,7 +288,10 @@ async def regenerate_cm_faq_variants(
     for lang in targets:
         translated = translations.get(lang, {})
         q_text = translated.get("question", "") or (src_variant.question if lang == src_lang else "")
-        a_text = answer_ar if lang in ("ar", "franco") else (translated.get("answer", "") or "")
+        if lang in ("ar", "franco"):
+            a_text = answer_ar
+        else:
+            a_text = translated.get("answer", "") or (src_variant.answer if lang == src_lang else "")
         if not q_text or not a_text:
             continue
         by_lang[lang] = FaqVariant(
@@ -336,9 +353,14 @@ def purge_smart_answer_language_data(
     language: str,
     tenant_id: str | None = None,
     updated_by: str = "content_manager",
+    remove_from_config: bool = True,
 ) -> dict[str, Any]:
     """Permanently delete all Smart Q&A content for one language (variants + runtime rows)."""
-    from services.cm.smart_answer_languages import normalize_smart_answer_language, remove_smart_answer_language
+    from services.cm.smart_answer_languages import (
+        load_smart_answer_languages,
+        normalize_smart_answer_language,
+        remove_smart_answer_language,
+    )
 
     lang = normalize_smart_answer_language(language)
     if not lang:
@@ -377,11 +399,11 @@ def purge_smart_answer_language_data(
 
     put_draft(
         FAQ_SECTION,
-        payload=FaqSection(
+        payload=faq_section_payload(
             items=updated_items,
             notes=section.notes,
             smart_answer_languages=section.smart_answer_languages,
-        ).model_dump(mode="json"),
+        ),
         if_match=env.etag,
         tenant_id=tenant_id,
         updated_by=updated_by,
@@ -400,7 +422,10 @@ def purge_smart_answer_language_data(
         local_qa_service.qa_pairs = kept_pairs
         local_qa_service.save_to_jsonl()
 
-    lang_save = remove_smart_answer_language(tenant_id=tenant_id, language=lang, updated_by=updated_by)
+    if remove_from_config:
+        lang_save = remove_smart_answer_language(tenant_id=tenant_id, language=lang, updated_by=updated_by)
+    else:
+        lang_save = {"smart_answer_languages": load_smart_answer_languages(tenant_id=tenant_id)}
     return {
         "success": True,
         "language": lang,

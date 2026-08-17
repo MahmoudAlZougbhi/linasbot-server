@@ -7,7 +7,7 @@ export const faqUiFr = {
   faqCreateFooter: 'Vous pourrez vérifier et modifier chaque traduction après l’enregistrement.',
   faqLangPickerTitle: 'Langues des Q&R intelligentes',
   faqLangPickerSub:
-    'Choisissez les langues utilisées par Linas pour les Q&R intelligentes enregistrées.',
+    'Choisissez n’importe quelle langue — Linas traduit les Q&R enregistrées dans chaque langue sélectionnée.',
   faqLangSearch: 'Rechercher une langue',
   faqLangSelected: 'sélectionnées',
   faqLangAutoTranslate:

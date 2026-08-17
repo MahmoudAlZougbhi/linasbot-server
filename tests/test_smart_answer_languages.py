@@ -22,6 +22,33 @@ def test_normalize_dedupes_and_filters() -> None:
     assert langs == ["en", "es", "ar", "ur"]
 
 
+def test_normalize_explicit_list_does_not_reinject_defaults() -> None:
+    assert normalize_smart_answer_languages(["en", "zh"]) == ["en", "zh"]
+    assert normalize_smart_answer_languages([]) == []
+    assert normalize_smart_answer_languages(["bogus"]) == []
+
+
+def test_mirror_preserves_smart_answer_languages(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("storage.persistent_storage.get_data_root", lambda: str(tmp_path))
+    from services.cm.faq_integration_helpers import _mirror_faq_record_into_draft
+    from services.cm.schemas import FaqRecord, FaqVariant
+    from services.cm.storage import ensure_defaults, get_draft
+
+    tenant_id = "mirror_lang_preserve"
+    ensure_defaults(tenant_id=tenant_id)
+    save_smart_answer_languages(tenant_id=tenant_id, languages=["en", "zh"], updated_by="test")
+    record = FaqRecord(
+        qa_group_id="qa_mirror",
+        variants=[FaqVariant(language="en", question="Q", answer="A")],
+        status="draft",
+    )
+    _mirror_faq_record_into_draft(record, tenant_id=tenant_id, updated_by="test")
+    env = get_draft(FAQ_SECTION, tenant_id=tenant_id, create_default=True)
+    section = FaqSection.model_validate(env.payload)
+    assert section.smart_answer_languages == ["en", "zh"]
+    assert section.items[-1].qa_group_id == "qa_mirror"
+
+
 def test_catalog_includes_urdu() -> None:
     from services.cm.iso639_languages import iso639_catalog
 

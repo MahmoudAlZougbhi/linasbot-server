@@ -22,6 +22,20 @@ def load_faq_target_languages(*, tenant_id: str | None) -> list[str]:
     return load_smart_answer_languages(tenant_id=tenant_id)
 
 
+def faq_section_payload(
+    *,
+    items: list,
+    notes: str | None,
+    smart_answer_languages: list[str] | None,
+) -> dict[str, Any]:
+    """Serialize FAQ draft while preserving Smart Q&A languages (never silent-reset to defaults)."""
+    return FaqSection(
+        items=items,
+        notes=notes,
+        smart_answer_languages=list(smart_answer_languages or []),
+    ).model_dump(mode="json")
+
+
 class FaqIntegrationError(RuntimeError):
     code: str = "FAQ_INTEGRATION_ERROR"
 
@@ -77,11 +91,14 @@ def _mirror_faq_record_into_draft(record: FaqRecord, *, tenant_id: str | None, u
         section = FaqSection.model_validate(env.payload)
         items = [item for item in section.items if item.qa_group_id != record.qa_group_id]
         items.append(record)
-        new_section = FaqSection(items=items, notes=section.notes)
         try:
             updated_env = put_draft(
                 FAQ_SECTION,
-                payload=new_section.model_dump(mode="json"),
+                payload=faq_section_payload(
+                    items=items,
+                    notes=section.notes,
+                    smart_answer_languages=section.smart_answer_languages,
+                ),
                 if_match=env.etag,
                 tenant_id=tenant_id,
                 updated_by=updated_by,

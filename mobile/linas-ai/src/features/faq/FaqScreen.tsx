@@ -42,12 +42,12 @@ export function FaqScreen({ proposalReview }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<FaqGroup[]>([]);
   const [entitlement, setEntitlement] = useState<FaqEntitlement | null>(null);
-  const [smartAnswerLanguages, setSmartAnswerLanguages] = useState<string[]>(['ar', 'en', 'fr', 'franco']);
+  const [smartAnswerLanguages, setSmartAnswerLanguages] = useState<string[]>([]);
   const [languageCatalog, setLanguageCatalog] = useState<SmartAnswerLang[]>([]);
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<Mode>('list');
   const [selected, setSelected] = useState<FaqGroup | null>(null);
-  const [activeLang, setActiveLang] = useState<FaqLangId>('ar');
+  const [activeLang, setActiveLang] = useState<FaqLangId>('en');
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [savedFlash, setSavedFlash] = useState(false);
@@ -61,9 +61,7 @@ export function FaqScreen({ proposalReview }: Props) {
       const data = await listFaq({ q: query.trim() || undefined });
       setItems(data.items);
       setEntitlement(data.entitlement);
-      if (data.smartAnswerLanguages.length) {
-        setSmartAnswerLanguages(data.smartAnswerLanguages);
-      }
+      setSmartAnswerLanguages(data.smartAnswerLanguages);
       if (data.catalog.length) {
         setLanguageCatalog(data.catalog);
         setSmartAnswerLanguageCatalog(data.catalog);
@@ -127,6 +125,7 @@ export function FaqScreen({ proposalReview }: Props) {
     setError(null);
     try {
       await saveSmartAnswerLanguages({ languages, translateExisting });
+      setSmartAnswerLanguages(languages);
       setLangPickerOpen(false);
       setPendingLangSave(null);
       await load();
@@ -169,7 +168,10 @@ export function FaqScreen({ proposalReview }: Props) {
             setSaving(true);
             setError(null);
             void deleteSmartAnswerLanguage(langId)
-              .then(() => load())
+              .then(() => {
+                setSmartAnswerLanguages((prev) => prev.filter((id) => id !== langId));
+                return load();
+              })
               .catch((err) => {
                 setError(err instanceof ApiError ? err.message : tr('faqCreateError'));
               })

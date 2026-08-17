@@ -17,12 +17,15 @@ def normalize_smart_answer_language(code: str | None) -> str:
 
 
 def normalize_smart_answer_languages(codes: list[str] | tuple[str, ...] | None) -> list[str]:
+    """Normalize language codes. ``None`` → product defaults; explicit lists are never silently expanded."""
+    if codes is None:
+        return list(DEFAULT_SMART_ANSWER_LANGUAGES)
     out: list[str] = []
-    for code in codes or DEFAULT_SMART_ANSWER_LANGUAGES:
+    for code in codes:
         normalized = normalize_smart_answer_language(code)
         if normalized and normalized not in out:
             out.append(normalized)
-    return out or list(DEFAULT_SMART_ANSWER_LANGUAGES)
+    return out
 
 
 def _load_faq_section(*, tenant_id: str | None) -> FaqSection:
@@ -32,7 +35,9 @@ def _load_faq_section(*, tenant_id: str | None) -> FaqSection:
 
 def load_smart_answer_languages(*, tenant_id: str | None) -> list[str]:
     section = _load_faq_section(tenant_id=tenant_id)
-    return normalize_smart_answer_languages(section.smart_answer_languages)
+    langs = normalize_smart_answer_languages(section.smart_answer_languages)
+    # Legacy drafts / accidental empty wipe: seed defaults only then.
+    return langs or list(DEFAULT_SMART_ANSWER_LANGUAGES)
 
 
 def smart_answer_languages_public(*, tenant_id: str | None) -> dict[str, Any]:
