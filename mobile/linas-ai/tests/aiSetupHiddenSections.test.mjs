@@ -35,9 +35,10 @@ describe('AI Setup hub hides legacy sections', () => {
 
   it('excludes hidden sections from hub progress helper', () => {
     const src = read('features/cm/cmHubProgress.ts');
-    assert.match(src, /CM_HUB_PROGRESS_EXCLUDED/);
+    assert.match(src, /CM_HUB_PROGRESS_SECTION_IDS/);
     assert.match(src, /summarizeHubProgress/);
-    assert.match(src, /hubRows\.filter/);
+    assert.match(src, /CM_HUB_PROGRESS_TOTAL/);
+    assert.match(src, /productsComplete/);
   });
 
   it('CmScreen and drawer badge use hub-filtered progress', () => {
