@@ -99,7 +99,10 @@ describe('Requests screens match screenshot handoff', () => {
     assert.match(screen, /useCmDraft\('requests_appointments'/);
     assert.match(screen, /publishRequestGraph/);
     assert.match(screen, /listRequestGraphs/);
+    assert.match(screen, /draft\.dirty/);
+    assert.match(screen, /rulesPayload/);
     assert.match(api, /\/api\/cm\/request-graphs\/publish/);
+    assert.match(api, /REQUEST_GRAPHS_UNMIGRATED/);
     assert.doesNotMatch(screen, /enabled_types/);
   });
 
