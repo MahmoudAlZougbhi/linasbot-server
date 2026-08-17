@@ -159,6 +159,6 @@ def analytics(range_key: str) -> dict[str, Any]:
             "users": "Firestore dashboard users",
             "billing": "tenant entitlements + credit balances",
             "messages": "bounded Interaction Logs (latest 500 rows); not a full historical aggregate",
-            "tiktok": "blocked: no TikTok interaction source exists",
+            "tiktok": "stored TikTok comments/DMs + interaction logs when connected",
         },
     }

@@ -202,6 +202,7 @@ const CmCommentsPage = () => {
                   <option value="any">Any</option>
                   <option value="facebook">Facebook</option>
                   <option value="instagram">Instagram</option>
+                  <option value="tiktok">TikTok</option>
                 </select>
               </label>
             </div>

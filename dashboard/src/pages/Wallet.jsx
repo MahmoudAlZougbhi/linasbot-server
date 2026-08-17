@@ -13,6 +13,9 @@ const channelLabel = (key) => {
   /** @type {Record<string, string>} */
   const map = {
     facebook: 'Facebook',
+    tiktok: 'TikTok',
+    tiktok_comment: 'TikTok comments',
+    tiktok_dm: 'TikTok',
     instagram: 'Instagram',
     testing_lab: 'Testing Lab',
     whatsapp: 'WhatsApp',
@@ -258,7 +261,7 @@ const Wallet = () => {
                   <p className="mt-1 text-xs text-amber-700">USD cost unavailable for this period.</p>
                 )}
                 <div className="mt-4 space-y-2">
-                  {['facebook', 'instagram', 'testing_lab', 'whatsapp', 'unknown'].map((key) => {
+                  {['facebook', 'instagram', 'tiktok', 'testing_lab', 'whatsapp', 'unknown'].map((key) => {
                     const row = byChannel[key];
                     if (!row || !Number(row.interactions || 0)) return null;
                     return (

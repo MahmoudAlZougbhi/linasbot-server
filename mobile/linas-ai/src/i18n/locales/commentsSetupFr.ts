@@ -94,4 +94,18 @@ export const commentsSetupFr: Record<keyof typeof commentsSetupEn, string> = {
   commentsUnsupported: 'Ce type de fichier n’est pas pris en charge.',
   commentsProposalPreview:
     'Aperçu de proposition IA — pas encore enregistré. Approuvez dans le chat, ou enregistrez ici.',
+  commentsInboxTab: 'Boîte de réception',
+  commentsRulesTab: 'Règles',
+  commentsInboxLoading: 'Chargement des commentaires TikTok…',
+  commentsInboxEmpty: 'Aucun commentaire TikTok pour le moment.',
+  commentsInboxDisconnected: 'Connectez TikTok pour voir les commentaires.',
+  commentsInboxPermissionPending:
+    'Les permissions de commentaires TikTok sont encore requises. Reconnectez et approuvez Get Account Comment.',
+  commentsInboxError: 'Impossible de charger les commentaires TikTok.',
+  commentsFilterTikTok: 'TikTok',
+  commentsDeliveryNone: 'Pas encore de réponse IA',
+  commentsDeliverySent: 'Réponse envoyée',
+  commentsDeliveryFailed: 'Échec de la réponse',
+  commentsAutomationOn: 'Automatisation activée',
+  commentsAutomationOff: 'Automatisation désactivée',
 };

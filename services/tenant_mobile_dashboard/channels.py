@@ -38,7 +38,12 @@ def _capability_card(
     if not membership_allows and capability == "comments":
         action_code, action_label = "upgrade_plan", "Upgrade"
     elif blocker_code == "connect_channel_first":
-        action_code = "connect_instagram" if platform == "instagram" else "connect_facebook"
+        if platform == "instagram":
+            action_code = "connect_instagram"
+        elif platform == "tiktok":
+            action_code = "connect_tiktok"
+        else:
+            action_code = "connect_facebook"
         action_label = "Connect"
     elif blocker_code in {
         "missing_comment_permissions",
@@ -46,6 +51,7 @@ def _capability_card(
         "meta_approval_required",
         "reauthorization_required",
         "connection_unhealthy",
+        "tiktok_messaging_pending",
     }:
         action_code, action_label = "review_permissions", "Review permissions"
     elif not operational:
@@ -91,6 +97,8 @@ def build_channel_breakdown(
         ("facebook", "dm"): usage.get("facebook_dms"),
         ("instagram", "comments"): usage.get("instagram_comments"),
         ("facebook", "comments"): usage.get("facebook_comments"),
+        ("tiktok", "dm"): usage.get("tiktok_dms"),
+        ("tiktok", "comments"): usage.get("tiktok_comments"),
     }
 
     for platform in supported_platforms():
@@ -121,6 +129,36 @@ def build_channel_breakdown(
         comments_card["connected"] = connected
         if connected and not dm_card["connection_healthy"]:
             connection_issue = True
+        if dm_card["operational"]:
+            dm_ok = True
+        cards.append(dm_card)
+        cards.append(comments_card)
+
+    tiktok_row = _row_for_platform(integrations, "tiktok")
+    if tiktok_row is not None:
+        tt_connected = bool(tiktok_row.get("connected"))
+        if tt_connected:
+            any_connected = True
+        raw_comments = tiktok_row.get("comments_state")
+        raw_dm = tiktok_row.get("dm_state")
+        tt_comments_state: dict[str, Any] = raw_comments if isinstance(raw_comments, dict) else {}
+        tt_dm_state: dict[str, Any] = raw_dm if isinstance(raw_dm, dict) else {}
+        dm_card = _capability_card(
+            platform="tiktok",
+            capability="dm",
+            state=tt_dm_state,
+            membership_allows=True,
+            interactions=interaction_map.get(("tiktok", "dm")),
+        )
+        comments_card = _capability_card(
+            platform="tiktok",
+            capability="comments",
+            state=tt_comments_state,
+            membership_allows=membership_allows,
+            interactions=interaction_map.get(("tiktok", "comments")),
+        )
+        dm_card["connected"] = tt_connected
+        comments_card["connected"] = tt_connected
         if dm_card["operational"]:
             dm_ok = True
         cards.append(dm_card)

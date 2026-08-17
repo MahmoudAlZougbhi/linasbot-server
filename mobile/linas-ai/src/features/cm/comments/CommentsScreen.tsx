@@ -22,8 +22,8 @@ import { asRecordList, newId } from '../cmApi';
 import type { CmProposalReview } from '../cmProposalReview';
 import { useCmDraft } from '../useCmDraft';
 import { CommentEditView } from './CommentEditView';
-import { CommentListView } from './CommentListView';
 import { CommentPostsView } from './CommentPostsView';
+import { CommentsListPanel } from './CommentsListPanel';
 import { CM_CANVAS, CM_TEAL } from './commentChrome';
 import { ResourceMetaModal } from '../resources/ResourceMetaModal';
 import {
@@ -54,6 +54,7 @@ type Props = {
 };
 
 type Mode = 'list' | 'edit' | 'posts';
+type ListTab = 'rules' | 'inbox';
 
 function postsErrorMessage(code: string, tr: (key: StringKey) => string): string {
   if (code === 'graph_permission_denied' || code === 'credential_unavailable') return tr('commentsGraphDenied');
@@ -66,6 +67,7 @@ export function CommentsScreen({ proposalReview, onBack }: Props) {
   const insets = useSafeAreaInsets();
   const draft = useCmDraft('comments', proposalReview);
   const [mode, setMode] = useState<Mode>('list');
+  const [listTab, setListTab] = useState<ListTab>('rules');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -229,19 +231,19 @@ export function CommentsScreen({ proposalReview, onBack }: Props) {
       {draft.proposalActive ? <Text style={styles.warn}>{tr('commentsProposalPreview')}</Text> : null}
 
       {!draft.loading && mode === 'list' ? (
-        <ScrollView contentContainerStyle={styles.listScroll} showsVerticalScrollIndicator={false}>
-          <CommentListView
-            items={visible}
-            query={query}
-            onQueryChange={setQuery}
-            onAdd={handleAdd}
-            onSelect={(id) => {
-              setSelectedId(id);
-              setMode('edit');
-            }}
-            tr={tr}
-          />
-        </ScrollView>
+        <CommentsListPanel
+          listTab={listTab}
+          onChangeTab={setListTab}
+          items={visible}
+          query={query}
+          onQueryChange={setQuery}
+          onAdd={handleAdd}
+          onSelect={(id) => {
+            setSelectedId(id);
+            setMode('edit');
+          }}
+          tr={tr}
+        />
       ) : null}
 
       {!draft.loading && mode === 'edit' && selected ? (
@@ -369,7 +371,6 @@ export function CommentsScreen({ proposalReview, onBack }: Props) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  listScroll: { flexGrow: 1, paddingBottom: 16 },
   editScroll: { paddingBottom: 16 },
   error: { color: '#DC2626', fontFamily: fonts.body, marginBottom: 8 },
   warn: { color: '#D97706', fontFamily: fonts.body, marginBottom: 8 },

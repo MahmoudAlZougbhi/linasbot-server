@@ -17,6 +17,8 @@ from services.cm.actions import (
     ACTION_FACEBOOK_DM,
     ACTION_INSTAGRAM_COMMENTS,
     ACTION_INSTAGRAM_DM,
+    ACTION_TIKTOK_COMMENTS,
+    ACTION_TIKTOK_DM,
     action_enabled,
     load_actions_section,
 )
@@ -39,6 +41,7 @@ INTERNAL_STANDARD_ACCESS_TENANTS = frozenset({"linas"})
 _CHANNEL_ACTION_IDS: dict[str, dict[str, str]] = {
     "instagram": {"dm": ACTION_INSTAGRAM_DM, "comments": ACTION_INSTAGRAM_COMMENTS},
     "facebook": {"dm": ACTION_FACEBOOK_DM, "comments": ACTION_FACEBOOK_COMMENTS},
+    "tiktok": {"dm": ACTION_TIKTOK_DM, "comments": ACTION_TIKTOK_COMMENTS},
 }
 
 _DM_WEBHOOK_FIELDS = frozenset({"messages", "messaging_postbacks"})

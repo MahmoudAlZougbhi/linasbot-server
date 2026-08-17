@@ -133,11 +133,25 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
     return await _impl(job)
 
 
+async def handle_tiktok_comment_sync(job: QueueJob) -> dict[str, Any]:
+    from services.tiktok_business.jobs import handle_tiktok_comment_sync as _impl
+
+    return await _impl(job)
+
+
+async def handle_tiktok_comment_ai(job: QueueJob) -> dict[str, Any]:
+    from services.tiktok_business.jobs import handle_tiktok_comment_ai as _impl
+
+    return await _impl(job)
+
+
 HANDLERS: dict[str, Handler] = {
     "publish_scheduled": handle_publish_scheduled,
     "creative_image": handle_creative_expensive,
     "creative_video": handle_creative_expensive,
     "meta_inbound_process": handle_meta_inbound_process,
+    "tiktok_comment_sync": handle_tiktok_comment_sync,
+    "tiktok_comment_ai": handle_tiktok_comment_ai,
 }
 
 

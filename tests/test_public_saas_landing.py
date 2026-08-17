@@ -42,7 +42,8 @@ def test_meta_webhook_and_oauth_routes_still_registered() -> None:
     paths = {getattr(route, "path", "") for route in app.routes}
     assert "/webhook" in paths
     assert "/webhook/meta-messaging" in paths
-    assert "/oauth/meta/callback" in paths
+    assert "/oauth/tiktok/callback" in paths
+    assert "/webhooks/tiktok" in paths
     assert "/oauth/meta/deauthorize" in paths
     assert "/oauth/meta/data-deletion" in paths
     assert "/meta/deauthorize" in paths

@@ -10,14 +10,17 @@ from services.meta_app_registry import META_COMMENT_SCOPES, MetaChannel
 
 ACTION_FACEBOOK_COMMENTS = "respond_facebook_comments"
 ACTION_INSTAGRAM_COMMENTS = "respond_instagram_comments"
+ACTION_TIKTOK_COMMENTS = "respond_tiktok_comments"
 ACTION_FACEBOOK_DM = "respond_facebook_dm"
 ACTION_INSTAGRAM_DM = "respond_instagram_dm"
+ACTION_TIKTOK_DM = "respond_tiktok_dm"
 ACTION_HUMAN_HANDOFF = "human_handoff"
 ACTION_PHOTO_ANALYSIS = "photo_analysis"
 
 _CHANNEL_COMMENT_ACTION: dict[str, str] = {
     "facebook": ACTION_FACEBOOK_COMMENTS,
     "instagram": ACTION_INSTAGRAM_COMMENTS,
+    "tiktok": ACTION_TIKTOK_COMMENTS,
 }
 
 
