@@ -57,3 +57,18 @@ def test_ingest_skips_only_commit_bootstrap_markers(tmp_path: Path, monkeypatch:
     with pytest.raises(ingest_contract.IngestError, match="deploy.active"):
         with ingest_contract.common_lock(state_root):
             pytest.fail("deploy overlap must still collide")
+
+
+def test_ingest_skips_undecided_runtime_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    state_root = tmp_path / "state"
+    state_root.mkdir(mode=0o700)
+    (state_root / "python-runtime-provision.coordinator.json").write_bytes(b"{}")
+    monkeypatch.setattr(ingest_contract, "LOCK_PATH", tmp_path / "common.lock")
+    monkeypatch.setattr(ingest_contract.os, "fchown", lambda *_args: None)
+    monkeypatch.setattr(ingest_contract, "_incomplete_runtime_snapshot", lambda _root: False)
+    with pytest.raises(ingest_contract.IngestError, match="python-runtime-provision.coordinator.json"):
+        with ingest_contract.common_lock(state_root):
+            pytest.fail("decided runtime coordinator must still collide")
+    monkeypatch.setattr(ingest_contract, "_incomplete_runtime_snapshot", lambda _root: True)
+    with ingest_contract.common_lock(state_root):
+        pass
