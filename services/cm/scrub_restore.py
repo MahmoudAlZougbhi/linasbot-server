@@ -94,7 +94,11 @@ def restore_keyword_scrubbed_content(*, tenant_id: str, updated_by: str) -> dict
         report["faq_restored_ids"].append(group_id)
     _put_section(
         "faq",
-        FaqSection(items=list(by_faq.values()), notes=faq.notes).model_dump(mode="json"),
+        FaqSection(
+            items=list(by_faq.values()),
+            notes=faq.notes,
+            smart_answer_languages=faq.smart_answer_languages,
+        ).model_dump(mode="json"),
         tenant_id=tenant_id,
         updated_by=updated_by,
     )

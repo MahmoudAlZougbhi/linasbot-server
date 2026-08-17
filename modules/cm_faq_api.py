@@ -269,6 +269,16 @@ async def cm_put_smart_answer_languages(request: Request, body: dict[str, Any] =
     except FaqIntegrationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    from services.cm.faq_integration import purge_smart_answer_language_data
+
+    for lang in list(saved.get("removed") or []):
+        purge_smart_answer_language_data(
+            language=str(lang),
+            tenant_id=tenant_id,
+            updated_by=_actor(session),
+            remove_from_config=False,
+        )
+
     batch: dict[str, Any] | None = None
     added = list(saved.get("added") or [])
     if translate_existing and added:

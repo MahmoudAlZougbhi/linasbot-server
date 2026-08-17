@@ -224,7 +224,7 @@ export const fr = {
   settingsAiLimits: 'Limites IA clients',
   settingsAiLimitsSub: 'Protégez les crédits en limitant l’usage IA de chaque client',
   faqTitle: 'Q&R intelligentes',
-  faqSub: 'Q&R prêtes — traduction auto en 4 langues',
+  faqSub: 'Traduisez les Q&R dans n’importe quelle langue.',
   faqCreateNew: 'Créer une Q&R',
   faqSavedList: 'Q&R intelligentes enregistrées',
   faqEmpty: 'Aucune Q&R intelligente pour le moment.',

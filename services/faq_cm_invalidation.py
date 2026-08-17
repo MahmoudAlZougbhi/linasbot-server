@@ -108,9 +108,15 @@ def mark_faq_groups_stale(
             updated_items.append(item)
 
     if marked:
+        from services.cm.faq_integration_helpers import faq_section_payload
+
         put_draft(
             "faq",
-            payload=FaqSection(items=updated_items, notes=section.notes).model_dump(mode="json"),
+            payload=faq_section_payload(
+                items=updated_items,
+                notes=section.notes,
+                smart_answer_languages=section.smart_answer_languages,
+            ),
             if_match=env.etag,
             tenant_id=tenant_id,
             updated_by="faq_cm_invalidation",
