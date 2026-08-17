@@ -8212,12 +8212,11 @@ prepare_remote_exact_helper() {
   validate_digest "$helper_hash"
   remote_root="$(ssh "${SSH_OPTIONS[@]}" "root@${peer_host}" \
     /usr/bin/mktemp -d -p /run linasbot-release-helper.XXXXXXXX)"
-  case "$remote_root" in
-    /run/linasbot-release-helper.????????) ;;
-    *) die "remote exact-helper root is outside its volatile namespace" ;;
-  esac
+  [[ "$remote_root" =~ ^/run/linasbot-release-helper\.[A-Za-z0-9]{8}$ ]] || \
+    die "remote exact-helper root is outside its volatile namespace"
   remote_helper="$remote_root/deploy_meta_release_ha.sh"
-  /usr/bin/scp -q "${SSH_OPTIONS[@]}" -- "$0" "root@${peer_host}:$remote_helper"
+  /usr/bin/scp -q "${SSH_OPTIONS[@]}" -- "$0" "root@${peer_host}:$remote_helper" \
+    >/dev/null
   ssh "${SSH_OPTIONS[@]}" "root@${peer_host}" \
     /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
     PATH=/usr/sbin:/usr/bin:/sbin:/bin \
@@ -8231,17 +8230,15 @@ prepare_remote_exact_helper() {
      test "$(sha256sum "$helper" | awk "{print \\$1}")" = "$expected"
      sync -d "$helper"
      sync -f "$(dirname "$helper")"' \
-    bash "$remote_helper" "$helper_hash"
+    bash "$remote_helper" "$helper_hash" >/dev/null
   printf '%s\n' "$remote_root"
 }
 
 cleanup_remote_exact_helper() {
   local peer_host="$1"
   local remote_root="$2"
-  case "$remote_root" in
-    /run/linasbot-release-helper.????????) ;;
-    *) die "remote exact-helper cleanup root is invalid" ;;
-  esac
+  [[ "$remote_root" =~ ^/run/linasbot-release-helper\.[A-Za-z0-9]{8}$ ]] || \
+    die "remote exact-helper cleanup root is invalid"
   ssh "${SSH_OPTIONS[@]}" "root@${peer_host}" \
     /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
     PATH=/usr/sbin:/usr/bin:/sbin:/bin \
@@ -8279,6 +8276,8 @@ install_release_bundle_cluster() {
     *) die "cluster release import directory is outside its exact namespace" ;;
   esac
   remote_helper_root="$(prepare_remote_exact_helper "$peer_host")"
+  [[ "$remote_helper_root" =~ ^/run/linasbot-release-helper\.[A-Za-z0-9]{8}$ ]] || \
+    die "remote exact-helper root capture is not a closed volatile path"
   remote_helper="$remote_helper_root/deploy_meta_release_ha.sh"
   remote_incoming="$(ssh "${SSH_OPTIONS[@]}" "root@${peer_host}" \
     /usr/bin/mktemp -d -p /run linasbot-release-import.XXXXXXXX)"
@@ -8349,6 +8348,8 @@ install_lb_ready_attestation_cluster() {
   test "$(sha256sum "$attestation_path" | awk '{print $1}')" = "$attestation_sha" || \
     die "cluster LB upload differs from workflow authority"
   remote_helper_root="$(prepare_remote_exact_helper "$peer_host")"
+  [[ "$remote_helper_root" =~ ^/run/linasbot-release-helper\.[A-Za-z0-9]{8}$ ]] || \
+    die "remote exact-helper root capture is not a closed volatile path"
   remote_helper="$remote_helper_root/deploy_meta_release_ha.sh"
   set +e
   ssh "${SSH_OPTIONS[@]}" "root@${peer_host}" \
