@@ -25,24 +25,29 @@ describe('AI Setup hub restructure', () => {
     assert.doesNotMatch(src, /CM_HUB_CARDS[\s\S]*id: 'languages'/);
   });
 
-  it('uses composite AI Basics editor with greetings and style', () => {
-    const basics = read('features/cm/editors/AiBasicsEditor.tsx');
-    assert.match(basics, /clinic_name/);
-    assert.match(basics, /assistant_name/);
-    assert.match(basics, /GreetingsEditor/);
-    assert.match(basics, /AiBasicsStyleSection/);
+  it('uses composite AI Basics screen with greetings and style tabs', () => {
+    const basics = read('features/cm/aiBasics/AiBasicsScreen.tsx');
+    assert.match(basics, /AiBasicsIdentityTab/);
+    assert.match(basics, /AiBasicsStyleTab/);
+    assert.match(basics, /AiBasicsGreetingsList/);
+    assert.match(basics, /AI_BASICS_COMPOSITE_SECTIONS = \['ai_basics', 'style', 'dynamic_messages'\]/);
+    assert.match(basics, /useCmMultiDraft\(AI_BASICS_COMPOSITE_SECTIONS/);
+    const identity = read('features/cm/aiBasics/AiBasicsIdentityTab.tsx');
+    assert.match(identity, /clinic_name/);
+    assert.match(identity, /assistant_name/);
     const screen = read('features/cm/CmSectionScreen.tsx');
-    assert.match(screen, /function AiBasicsSectionScreen/);
-    assert.match(screen, /AI_BASICS_COMPOSITE_SECTIONS = \['ai_basics', 'style', 'dynamic_messages'\]/);
-    assert.match(screen, /useCmMultiDraft\(AI_BASICS_COMPOSITE_SECTIONS/);
+    assert.match(screen, /AiBasicsScreen/);
   });
 
-  it('greeting editor uses title and note only in the UI', () => {
-    const src = read('features/cm/editors/GreetingsEditor.tsx');
-    assert.match(src, /aiSetupAddGreetingRule/);
-    assert.match(src, /aiSetupGreetingNote/);
-    assert.doesNotMatch(src, /aiSetupGreetingTrigger/);
-    assert.doesNotMatch(src, /chipRow/);
+  it('greeting list and edit use title, note, and resources', () => {
+    const list = read('features/cm/aiBasics/AiBasicsGreetingsList.tsx');
+    const edit = read('features/cm/aiBasics/GreetingEditView.tsx');
+    assert.match(list, /aiSetupGreetingsSearch/);
+    assert.match(list, /AiSetupListHeader/);
+    assert.match(edit, /aiSetupGreetingNote/);
+    assert.match(edit, /countWords/);
+    assert.match(edit, /KnowledgeResourceGrid/);
+    assert.doesNotMatch(edit, /aiSetupGreetingTrigger/);
   });
 
   it('excludes hidden sections from hub progress summary', () => {

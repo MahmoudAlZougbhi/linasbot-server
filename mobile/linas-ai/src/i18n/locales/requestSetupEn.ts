@@ -24,5 +24,8 @@ export const requestSetupEn = {
   requestRulesPreviewFailed: 'Could not preview this request graph.',
   requestRulesPublishFailed: 'Draft saved, but publishing the request graph failed.',
   requestRulesGraphLoadFailed: 'Could not load published request graphs.',
+  requestRulesGraphUnmigrated:
+    'Request graph tables are not migrated on this server yet. Rules still save as drafts.',
+  requestRulesGraphDbUnavailable: 'Customer database unavailable for request graphs.',
   requestRulesDeleteGraphFailed: 'Rule removed from the draft, but the published graph could not be deleted.',
 } as const;
