@@ -6,7 +6,7 @@ export const faqUiEn = {
   faqSaveTranslate: 'Save & translate',
   faqCreateFooter: 'You can review and edit every translation after saving.',
   faqLangPickerTitle: 'Smart Q&A languages',
-  faqLangPickerSub: 'Choose which languages Linas uses for saved Smart Q&A.',
+  faqLangPickerSub: 'Pick any language — Linas translates saved Smart Q&A into every language you select.',
   faqLangSearch: 'Search languages',
   faqLangSelected: 'selected',
   faqLangAutoTranslate:

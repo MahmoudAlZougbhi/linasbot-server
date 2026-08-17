@@ -24,6 +24,7 @@ from services.cm.faq_integration_helpers import (  # noqa: F401
     _build_entry,
     _mirror_faq_record_into_draft,
     _translate_to_arabic_script,
+    faq_section_payload,
     load_faq_target_languages,
 )
 from services.cm.faq_integration_ops import (  # noqa: F401
@@ -74,35 +75,38 @@ async def create_faq_pair(
         default=language_detection_service.detect_training_language(question),
     )
 
+    target_langs = load_faq_target_languages(tenant_id=tenant_id)
+    needs_ar_script = any(lang in ("ar", "franco") for lang in target_langs)
     answer_ar_canonical = answer
-    if not _answer_in_arabic_script(answer_ar_canonical):
+    if needs_ar_script and not _answer_in_arabic_script(answer_ar_canonical):
         answer_ar_canonical = await _translate_to_arabic_script(answer, detected_language)
         if not _answer_in_arabic_script(answer_ar_canonical):
             answer_ar_canonical = await _translate_to_arabic_script(answer, "franco")
         if not _answer_in_arabic_script(answer_ar_canonical):
             answer_ar_canonical = answer  # translation failed; keep original rather than invent text
 
+    answer_for_translate = answer_ar_canonical if needs_ar_script else answer
     translation_result = await language_detection_service.translate_training_pair(
         question=question,
-        answer=answer_ar_canonical,
+        answer=answer_for_translate,
         source_language=detected_language,
-        target_languages=load_faq_target_languages(tenant_id=tenant_id),
+        target_languages=target_langs,
     )
     if not translation_result.get("success"):
-        raise FaqIntegrationError("Failed to auto-translate FAQ pair to all 4 languages")
+        raise FaqIntegrationError("Failed to auto-translate FAQ pair to selected Smart Q&A languages")
 
     translations = translation_result.get("translations", {})
     qa_group_id = f"qa_{uuid.uuid4().hex[:10]}"
-    target_langs = load_faq_target_languages(tenant_id=tenant_id)
     created_entries: list[dict[str, Any]] = []
     variants: list[FaqVariant] = []
 
     for lang in target_langs:
         translated = translations.get(lang, {})
         q_text = translated.get("question", "") or question
-        a_text = (
-            answer_ar_canonical if lang in ("ar", "franco") else (translated.get("answer", "") or answer_ar_canonical)
-        )
+        if lang in ("ar", "franco"):
+            a_text = answer_ar_canonical
+        else:
+            a_text = translated.get("answer", "") or answer
 
         if lang == "ar" and q_text and not _answer_in_arabic_script(q_text):
             q_text = await _translate_to_arabic_script(q_text, detected_language)
@@ -199,7 +203,11 @@ async def create_faq_pair_from_livechat(
                     items.append(item)
             put_draft(
                 FAQ_SECTION,
-                payload=FaqSection(items=items, notes=section.notes).model_dump(mode="json"),
+                payload=faq_section_payload(
+                    items=items,
+                    notes=section.notes,
+                    smart_answer_languages=section.smart_answer_languages,
+                ),
                 if_match=env.etag,
                 tenant_id=tenant_id,
                 updated_by=updated_by,

@@ -28,8 +28,9 @@ test('Smart Q&A list matches screenshot handoff', () => {
   const faqFr = read('i18n/locales/faqUiFr.ts');
 
   assert.match(screen, /title=\{tr\('faqTitle'\)\}/);
-  assert.doesNotMatch(screen, /subtitle=\{tr\('faqSub'\)\}/);
+  assert.match(screen, /subtitle=\{mode === 'list' \? tr\('faqSub'\) : undefined\}/);
   assert.match(en, /faqTitle:\s*'Smart Q&A'/);
+  assert.match(en, /faqSub:\s*'Translate Q&A into any language you choose\.'/);
   assert.match(en, /faqCreateNew:\s*'Create Q&A'/);
   assert.match(en, /faqWhyTitle:\s*'Save credits with Smart Q&A'/);
   assert.doesNotMatch(en, /Smart Answers/);
@@ -77,4 +78,11 @@ test('Smart Q&A list matches screenshot handoff', () => {
   assert.match(faqEn, /faqRemoveLangTitle/);
   assert.match(faqAr, /إزالة اللغة/);
   assert.match(faqFr, /Retirer la langue/);
+
+  const langsTs = read('features/faq/faqLanguages.ts');
+  const iso = read('features/faq/iso639Languages.ts');
+  assert.match(langsTs, /ISO639_LANGUAGE_CATALOG/);
+  assert.match(iso, /id: 'zh'/);
+  assert.match(iso, /id: 'aa'/);
+  assert.ok((iso.match(/id: '/g) || []).length >= 180);
 });

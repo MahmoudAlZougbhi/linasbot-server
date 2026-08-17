@@ -1,23 +1,9 @@
-export type SmartAnswerLang = {
-  id: string;
-  label: string;
-  native?: string;
-};
+import { ISO639_LANGUAGE_CATALOG, type Iso639Lang } from './iso639Languages';
 
-const FALLBACK_CATALOG: SmartAnswerLang[] = [
-  { id: 'en', label: 'English', native: 'English' },
-  { id: 'ar', label: 'Arabic', native: 'العربية' },
-  { id: 'franco', label: 'Franco / Arabizi', native: 'Franco' },
-  { id: 'fr', label: 'French', native: 'Français' },
-  { id: 'es', label: 'Spanish', native: 'Español' },
-  { id: 'de', label: 'German', native: 'Deutsch' },
-  { id: 'it', label: 'Italian', native: 'Italiano' },
-  { id: 'pt', label: 'Portuguese', native: 'Português' },
-  { id: 'zh', label: 'Chinese', native: '中文' },
-  { id: 'tr', label: 'Turkish', native: 'Türkçe' },
-  { id: 'ru', label: 'Russian', native: 'Русский' },
-  { id: 'ur', label: 'Urdu', native: 'اردو' },
-];
+export type SmartAnswerLang = Iso639Lang;
+
+/** Full world-language catalog (ISO 639-1 + franco). Prefer server catalog when available. */
+const FALLBACK_CATALOG: SmartAnswerLang[] = ISO639_LANGUAGE_CATALOG;
 
 let activeCatalog: SmartAnswerLang[] = FALLBACK_CATALOG;
 
@@ -41,7 +27,7 @@ export const FAQ_LANGS = FALLBACK_CATALOG.map((lang) => ({
 export type FaqLangId = string;
 
 function findLang(langId: string): SmartAnswerLang | undefined {
-  return activeCatalog.find((l) => l.id === langId);
+  return activeCatalog.find((l) => l.id === langId) || FALLBACK_CATALOG.find((l) => l.id === langId);
 }
 
 export function langLabel(langId: string): string {
@@ -63,4 +49,4 @@ export function sortLangIds(ids: string[]): string[] {
 }
 
 export const FAQ_ASK_LINAS_PROMPT =
-  'Explain Smart Q&A: saved Q&A so when a customer asks the same question, the bot replies from FAQ instead of full AI generation — saving credits. Owner picks Smart Q&A languages; new Q&A auto-translates into those languages only. Customer reply language is separate (multilingual auto-detect). Help me add a Smart Q&A if I want.';
+  'Explain Smart Q&A: saved Q&A so when a customer asks the same question, the bot replies from FAQ instead of full AI generation — saving credits. Owner picks Smart Q&A languages from any world language; new Q&A auto-translates into those languages only. Customer reply language is separate (multilingual auto-detect). Help me add a Smart Q&A if I want.';
