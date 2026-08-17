@@ -7,7 +7,7 @@ import {
   pickImageAttachment,
 } from '../../chat/v2/pickAttachment';
 import { asRecordList, newId } from '../cmApi';
-import { uploadCmArticleMedia } from '../cmMediaApi';
+import { runCmMediaUpload } from '../cmMediaAttach';
 import { cmFormStyles } from '../cmFormStyles';
 import { Field } from './Field';
 
@@ -88,28 +88,27 @@ export function ArticlesEditor({ section, payload, onChange }: Props) {
 
   const attachPicked = async (picked: { uri: string; name: string; mimeType: string } | null) => {
     if (!selected || !picked) return;
-    setUploading(true);
-    setUploadError(null);
-    try {
-      const uploaded = await uploadCmArticleMedia(picked);
+    await runCmMediaUpload({
+      picked,
+      failMessage: (err) => (err instanceof Error ? err.message : 'Upload failed'),
+      setUploading,
+      setUploadError,
+      onSuccess: (uploaded, file) => {
       setAttachments([
         ...attachments,
         {
           id: uploaded.media_id,
-          kind: uploaded.kind || (picked.mimeType.startsWith('image/') ? 'image' : 'file'),
+          kind: uploaded.kind || (file.mimeType.startsWith('image/') ? 'image' : 'file'),
           title: '',
           description: '',
           caption: '',
-          mime: uploaded.mime || picked.mimeType,
-          filename: uploaded.filename || picked.name,
+          mime: uploaded.mime || file.mimeType,
+          filename: uploaded.filename || file.name,
           size: uploaded.size || 0,
         },
       ]);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Upload failed');
-    } finally {
-      setUploading(false);
-    }
+      },
+    });
   };
 
   return (
