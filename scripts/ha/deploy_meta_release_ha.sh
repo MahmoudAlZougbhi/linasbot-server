@@ -1620,9 +1620,37 @@ materialize_lb_manager() {
     object="$(git -C "$REPO_DIR" rev-parse "$source_sha:$path")"
     test "$(git -C "$REPO_DIR" cat-file -t "$object")" = blob || \
       die "authorized LB validator object is not a blob"
-    git -C "$REPO_DIR" cat-file blob "$object" | \
-      /usr/bin/dd of="$destination" bs=65536 status=none conv=fsync oflag=excl,nofollow
-    chmod 0600 "$destination"
+    run_system_python_control - "$REPO_DIR" "$object" "$destination" <<'PY'
+import os
+import subprocess
+import sys
+
+repo, git_object, path = sys.argv[1:]
+descriptor = os.open(
+    path,
+    os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+    0o600,
+)
+try:
+    os.fchmod(descriptor, 0o600)
+    os.fchown(descriptor, 0, 0)
+    result = subprocess.run(
+        ["git", "-C", repo, "cat-file", "blob", git_object],
+        check=False,
+        stdin=subprocess.DEVNULL,
+        stdout=descriptor,
+        stderr=subprocess.DEVNULL,
+    )
+    if result.returncode:
+        raise SystemExit("authorized LB validator blob could not be read")
+    os.fsync(descriptor)
+finally:
+    os.close(descriptor)
+PY
+    test -f "$destination" && test ! -L "$destination" || \
+      die "materialized LB validator is unsafe"
+    test "$(stat -c '%u:%g:%a' "$destination")" = "0:0:600" || \
+      die "materialized LB validator ownership or mode is unsafe"
     actual_object="$(git -C "$REPO_DIR" hash-object "$destination")"
     test "$actual_object" = "$object" || \
       die "materialized LB validator differs from the authorized Git blob"
@@ -1653,9 +1681,37 @@ materialize_release_artifact_contract() {
     object="$(git -C "$REPO_DIR" rev-parse "$source_sha:$path")"
     test "$(git -C "$REPO_DIR" cat-file -t "$object")" = blob || \
       die "authorized release contract object is not a blob"
-    git -C "$REPO_DIR" cat-file blob "$object" | \
-      /usr/bin/dd of="$destination" bs=65536 status=none conv=fsync oflag=excl,nofollow
-    chmod 0600 "$destination"
+    run_system_python_control - "$REPO_DIR" "$object" "$destination" <<'PY'
+import os
+import subprocess
+import sys
+
+repo, git_object, path = sys.argv[1:]
+descriptor = os.open(
+    path,
+    os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+    0o600,
+)
+try:
+    os.fchmod(descriptor, 0o600)
+    os.fchown(descriptor, 0, 0)
+    result = subprocess.run(
+        ["git", "-C", repo, "cat-file", "blob", git_object],
+        check=False,
+        stdin=subprocess.DEVNULL,
+        stdout=descriptor,
+        stderr=subprocess.DEVNULL,
+    )
+    if result.returncode:
+        raise SystemExit("authorized release contract blob could not be read")
+    os.fsync(descriptor)
+finally:
+    os.close(descriptor)
+PY
+    test -f "$destination" && test ! -L "$destination" || \
+      die "materialized release contract is unsafe"
+    test "$(stat -c '%u:%g:%a' "$destination")" = "0:0:600" || \
+      die "materialized release contract ownership or mode is unsafe"
     actual_object="$(git -C "$REPO_DIR" hash-object "$destination")"
     test "$actual_object" = "$object" || \
       die "materialized release contract differs from the authorized Git blob"
