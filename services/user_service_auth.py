@@ -308,9 +308,9 @@ class UserServiceAuthMixin:
             pref_lang = "en"
         return {
             "id": user_id,
-            "email": user.get("email"),
+            "email": str(user.get("email") or "").strip(),
             "name": user.get("name"),
-            "role": user.get("role"),
+            "role": str(user.get("role") or "viewer").strip() or "viewer",
             "permissions": user.get("permissions"),
             "tenantId": tenant_id,
             "businessName": user.get("businessName"),
