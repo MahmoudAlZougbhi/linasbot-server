@@ -110,7 +110,8 @@ class TikTokContentRepository:
         )
         if created:
             self.session.add(row)
-        user = payload.get("user") if isinstance(payload.get("user"), dict) else {}
+        raw_user = payload.get("user")
+        user: dict[str, Any] = raw_user if isinstance(raw_user, dict) else {}
         row.parent_comment_id = str(payload.get("parent_comment_id") or "")[:64]
         row.author_user_id = str(user.get("unique_identifier") or user.get("open_id") or payload.get("user_id") or "")[
             :128

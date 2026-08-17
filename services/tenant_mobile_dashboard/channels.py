@@ -139,19 +139,21 @@ def build_channel_breakdown(
         tt_connected = bool(tiktok_row.get("connected"))
         if tt_connected:
             any_connected = True
-        comments_state = tiktok_row.get("comments_state") if isinstance(tiktok_row.get("comments_state"), dict) else {}
-        dm_state = tiktok_row.get("dm_state") if isinstance(tiktok_row.get("dm_state"), dict) else {}
+        raw_comments = tiktok_row.get("comments_state")
+        raw_dm = tiktok_row.get("dm_state")
+        tt_comments_state: dict[str, Any] = raw_comments if isinstance(raw_comments, dict) else {}
+        tt_dm_state: dict[str, Any] = raw_dm if isinstance(raw_dm, dict) else {}
         dm_card = _capability_card(
             platform="tiktok",
             capability="dm",
-            state=dm_state,
+            state=tt_dm_state,
             membership_allows=True,
             interactions=interaction_map.get(("tiktok", "dm")),
         )
         comments_card = _capability_card(
             platform="tiktok",
             capability="comments",
-            state=comments_state,
+            state=tt_comments_state,
             membership_allows=membership_allows,
             interactions=interaction_map.get(("tiktok", "comments")),
         )

@@ -25,8 +25,10 @@ class TikTokToggleError(Exception):
 
 
 def attach_tiktok_row_toggles(row: dict[str, Any]) -> dict[str, Any]:
-    comments = row.get("comments_state") if isinstance(row.get("comments_state"), dict) else {}
-    dm = row.get("dm_state") if isinstance(row.get("dm_state"), dict) else {}
+    raw_comments = row.get("comments_state")
+    raw_dm = row.get("dm_state")
+    comments: dict[str, Any] = raw_comments if isinstance(raw_comments, dict) else {}
+    dm: dict[str, Any] = raw_dm if isinstance(raw_dm, dict) else {}
     enriched = {
         **row,
         "toggles": {
