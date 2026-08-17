@@ -92,45 +92,49 @@ export function useCmMultiDraft(
   const dirty = Object.values(drafts).some((d) => d.dirty);
   const canSave = sections.every((s) => drafts[s]?.etag);
 
-  const save = useCallback(async () => {
-    if (saveLock.current) return false;
-    if (!canSave) {
-      setError('Missing ETag — reload before saving.');
-      return false;
-    }
-    saveLock.current = true;
-    setSaving(true);
-    setError(null);
-    setConflict(null);
-    try {
-      const updated: Record<string, SectionDraft> = { ...drafts };
-      for (const section of sections) {
-        const cur = drafts[section];
-        if (!cur?.etag) continue;
-        const draft = await putCmDraft(section, cur.payload, cur.etag);
-        const payload = sanitizeCmSectionPayload(section, draft.payload);
-        baselines.current[section] = stableSerialize(payload);
-        updated[section] = {
-          payload,
-          etag: draft.etag,
-          dirty: false,
-        };
-      }
-      setDrafts(updated);
-      setProposalActive(false);
-      return true;
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        setConflict('Someone else saved this section. Reload and retry.');
+  const save = useCallback(
+    async (overrides?: Partial<Record<string, Record<string, unknown>>>) => {
+      if (saveLock.current) return false;
+      if (!canSave) {
+        setError('Missing ETag — reload before saving.');
         return false;
       }
-      setError(err instanceof Error ? err.message : 'Save failed.');
-      return false;
-    } finally {
-      saveLock.current = false;
-      setSaving(false);
-    }
-  }, [canSave, drafts, sections]);
+      saveLock.current = true;
+      setSaving(true);
+      setError(null);
+      setConflict(null);
+      try {
+        const updated: Record<string, SectionDraft> = { ...drafts };
+        for (const section of sections) {
+          const cur = drafts[section];
+          if (!cur?.etag) continue;
+          const body = overrides?.[section] ?? cur.payload;
+          const draft = await putCmDraft(section, body, cur.etag);
+          const payload = sanitizeCmSectionPayload(section, draft.payload);
+          baselines.current[section] = stableSerialize(payload);
+          updated[section] = {
+            payload,
+            etag: draft.etag,
+            dirty: false,
+          };
+        }
+        setDrafts(updated);
+        setProposalActive(false);
+        return true;
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 409) {
+          setConflict('Someone else saved this section. Reload and retry.');
+          return false;
+        }
+        setError(err instanceof Error ? err.message : 'Save failed.');
+        return false;
+      } finally {
+        saveLock.current = false;
+        setSaving(false);
+      }
+    },
+    [canSave, drafts, sections],
+  );
 
   return {
     loading,
