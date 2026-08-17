@@ -267,7 +267,9 @@ jobs:
           fi
 
       - name: Download exact immutable release artifact ID
+        id: download_release
         if: inputs.DEPLOY_OPERATION == 'steady' || inputs.DEPLOY_OPERATION == 'reconcile_exact'
+        continue-on-error: true
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           artifact-ids: ${{ inputs.RELEASE_ARTIFACT_ID }}
@@ -275,6 +277,54 @@ jobs:
           github-token: ${{ github.token }}
           path: release-download
           merge-multiple: true
+
+      - name: Retry exact immutable release artifact download
+        if: >
+          (inputs.DEPLOY_OPERATION == 'steady' || inputs.DEPLOY_OPERATION == 'reconcile_exact') &&
+          steps.download_release.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ARTIFACT_ID: ${{ inputs.RELEASE_ARTIFACT_ID }}
+          RELEASE_ARTIFACT_API_SHA256: ${{ inputs.RELEASE_ARTIFACT_API_SHA256 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          rm -rf release-download
+          mkdir -m 0700 release-download
+          tmp="$(mktemp)"
+          attempt=1
+          while [ "$attempt" -le 8 ]; do
+            if gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${RELEASE_ARTIFACT_ID}/zip" >"$tmp"; then
+              actual="$(sha256sum "$tmp" | awk '{print $1}')"
+              [ "$actual" = "$RELEASE_ARTIFACT_API_SHA256" ]
+              /usr/bin/python3 -B -I -S - "$tmp" "$GITHUB_WORKSPACE/release-download" <<'PY'
+          import hashlib
+          import os
+          import sys
+          import zipfile
+          from pathlib import Path
+
+          archive = Path(sys.argv[1])
+          destination = Path(sys.argv[2])
+          raw = archive.read_bytes()
+          expected = os.environ["RELEASE_ARTIFACT_API_SHA256"]
+          if hashlib.sha256(raw).hexdigest() != expected:
+              raise SystemExit("retried release artifact zip digest is not the GitHub authority")
+          with zipfile.ZipFile(archive) as bundle:
+              for member in bundle.infolist():
+                  name = member.filename.replace("\\", "/")
+                  if name.startswith("/") or any(part == ".." for part in name.split("/")):
+                      raise SystemExit("retried release artifact zip contains an unsafe path")
+              bundle.extractall(destination)
+          PY
+              rm -f "$tmp"
+              exit 0
+            fi
+            sleep $((attempt * 8))
+            attempt=$((attempt + 1))
+          done
+          rm -f "$tmp"
+          exit 1
 
       - name: Validate release bundle and extract exact helper
         id: release_contract
