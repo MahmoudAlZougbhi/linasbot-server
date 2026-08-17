@@ -12,3 +12,8 @@ def test_release_bundle_extracts_control_plane_with_manifest_tree() -> None:
     assert 'control["tree_sha256"]' in snippet
     assert "expected_paths=CONTROL_PLANE_MEMBERS" in snippet
     assert snippet.count("extract_archive(") == 1
+    bash = source[source.rfind("control_parent=", 0, start) : start]
+    assert 'control_root="$control_parent/tree"' in bash
+    assert "mktemp -d -p /run linasbot-control-plane." in bash
+    assert "Path(destination)" in snippet
+    assert 'control["tree_sha256"]' in snippet

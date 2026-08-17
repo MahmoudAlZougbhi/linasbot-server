@@ -2184,7 +2184,7 @@ install_release_bundle() {
   local target_tree_sha="${11}"
   local confirmation="${12}"
   local expected_confirmation helper_root summary canonical_dir receipt
-  local runtime_cluster imported_ref source_bundle control_root control_helper
+  local runtime_cluster imported_ref source_bundle control_parent control_root control_helper
   local actual_summary canonical_summary
   case "$expected_node_id" in
     node01 | node02) ;;
@@ -2252,9 +2252,12 @@ install_release_bundle() {
     'import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest())' "$summary")"
   validate_digest "$actual_summary"
 
-  control_root="$(mktemp -d -p /run linasbot-control-plane.XXXXXXXX)"
-  test "$(stat -c '%u:%g:%a' "$control_root")" = "0:0:700" || \
+  control_parent="$(mktemp -d -p /run linasbot-control-plane.XXXXXXXX)"
+  test "$(stat -c '%u:%g:%a' "$control_parent")" = "0:0:700" || \
     die "release control-plane verification root is unsafe"
+  control_root="$control_parent/tree"
+  test ! -e "$control_root" && test ! -L "$control_root" || \
+    die "release control-plane extraction destination already exists"
   if ! run_system_python_control - \
       "$helper_root" "$incoming_dir/control-plane.tar" "$control_root" \
       "$control_sha" <<'PY'
@@ -2458,7 +2461,7 @@ PY
   test "$(stat -c '%F:%u:%g:%a:%h' "$receipt")" = "regular file:0:0:600:1" || \
     die "release bundle receipt security is invalid"
 
-  run_system_python_control - "$control_root" "$helper_root" <<'PY'
+  run_system_python_control - "$control_parent" "$helper_root" <<'PY'
 import shutil
 import stat
 import sys
