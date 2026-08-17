@@ -1,4 +1,4 @@
-"""AI Products CRUD, tenant isolation, and max-3-images enforcement."""
+"""AI Products CRUD, tenant isolation, and max-5-images enforcement."""
 
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ def _store_image(tenant_id: str, name: str = "shirt.jpg") -> str:
     return str(result["media_id"])
 
 
-def test_product_crud_and_max_three_images(products_env: Path) -> None:
+def test_product_crud_and_max_five_images(products_env: Path) -> None:
     from modules.core import app
 
     client = TestClient(app)
@@ -97,7 +97,7 @@ def test_product_crud_and_max_three_images(products_env: Path) -> None:
     assert listed.status_code == 200
     assert listed.json()["total"] == 1
 
-    media_ids = [_store_image("tenant-products", f"p{i}.jpg") for i in range(3)]
+    media_ids = [_store_image("tenant-products", f"p{i}.jpg") for i in range(5)]
     update = client.put(
         f"/api/mobile/products/{product_id}",
         headers=headers,
@@ -111,13 +111,16 @@ def test_product_crud_and_max_three_images(products_env: Path) -> None:
                 {"media_id": media_ids[0], "sort_order": 0},
                 {"media_id": media_ids[1], "sort_order": 1},
                 {"media_id": media_ids[2], "sort_order": 2},
+                {"media_id": media_ids[3], "sort_order": 3},
+                {"media_id": media_ids[4], "sort_order": 4},
             ],
             "links": [],
         },
     )
     assert update.status_code == 200, update.text
-    assert len(update.json()["product"]["images"]) == 3
+    assert len(update.json()["product"]["images"]) == 5
 
+    extra = _store_image("tenant-products", "p5.jpg")
     too_many = client.put(
         f"/api/mobile/products/{product_id}",
         headers=headers,
@@ -131,7 +134,9 @@ def test_product_crud_and_max_three_images(products_env: Path) -> None:
                 {"media_id": media_ids[0], "sort_order": 0},
                 {"media_id": media_ids[1], "sort_order": 1},
                 {"media_id": media_ids[2], "sort_order": 2},
-                {"media_id": media_ids[0], "sort_order": 0},
+                {"media_id": media_ids[3], "sort_order": 3},
+                {"media_id": media_ids[4], "sort_order": 4},
+                {"media_id": extra, "sort_order": 5},
             ],
             "links": [],
         },

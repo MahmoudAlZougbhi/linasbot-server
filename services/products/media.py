@@ -30,9 +30,18 @@ VIDEO_MIME = frozenset(
         "video/3gpp",
     }
 )
-ALLOWED_MIME = IMAGE_MIME | VIDEO_MIME
-MAX_BYTES = 8 * 1024 * 1024  # 8 MiB per product image
+FILE_MIME = frozenset(
+    {
+        "application/pdf",
+        "text/plain",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
+)
+ALLOWED_MIME = IMAGE_MIME | VIDEO_MIME | FILE_MIME
+MAX_BYTES = 8 * 1024 * 1024  # 8 MiB per product image/file
 MAX_VIDEO_BYTES = 12 * 1024 * 1024
+VIDEO_SUFFIXES = {".mp4", ".mov", ".webm", ".3gp"}
 
 
 def validate_upload(*, filename: str, content_type: str | None, size: int) -> dict[str, Any]:
@@ -40,11 +49,10 @@ def validate_upload(*, filename: str, content_type: str | None, size: int) -> di
     if size <= 0:
         return {"ok": False, "error": "empty_file"}
     suffix = Path(filename).suffix.lower()
-    limit = MAX_VIDEO_BYTES if mime in VIDEO_MIME or suffix in {".mp4", ".mov", ".webm", ".3gp"} else MAX_BYTES
+    limit = MAX_VIDEO_BYTES if mime in VIDEO_MIME or suffix in VIDEO_SUFFIXES else MAX_BYTES
     if size > limit:
         return {"ok": False, "error": "file_too_large", "max_bytes": limit}
     if mime not in ALLOWED_MIME:
-        ext = Path(filename).suffix.lower()
         ext_map = {
             ".heic": "image/heic",
             ".heif": "image/heif",
@@ -56,9 +64,13 @@ def validate_upload(*, filename: str, content_type: str | None, size: int) -> di
             ".mov": "video/quicktime",
             ".webm": "video/webm",
             ".3gp": "video/3gpp",
+            ".pdf": "application/pdf",
+            ".txt": "text/plain",
+            ".doc": "application/msword",
+            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         }
-        if ext in ext_map and mime in {"", "application/octet-stream"}:
-            mime = ext_map[ext]
+        if suffix in ext_map and mime in {"", "application/octet-stream"}:
+            mime = ext_map[suffix]
         else:
             return {"ok": False, "error": "unsupported_mime", "mime": mime}
     return {"ok": True, "mime": mime}

@@ -103,6 +103,30 @@ export async function updateProduct(productId: string, input: ProductWriteInput)
   return body.product;
 }
 
+/** Instant list stock toggle — full product rewrite preserving media/links. */
+export async function updateProductAvailability(
+  product: Product,
+  availability: 'in_stock' | 'out_of_stock',
+): Promise<Product> {
+  return updateProduct(product.id, {
+    name: product.name,
+    price: product.price ?? null,
+    sizes: product.sizes ?? [],
+    colors: product.colors ?? [],
+    note: product.note ?? null,
+    availability,
+    images: (product.images ?? []).map((img, index) => ({
+      media_id: img.media_id,
+      sort_order: img.sort_order ?? index,
+    })),
+    links: (product.links ?? []).map((link, index) => ({
+      url: link.url,
+      label: link.label ?? null,
+      sort_order: link.sort_order ?? index,
+    })),
+  });
+}
+
 export async function deleteProduct(productId: string): Promise<void> {
   await apiFetch(`/api/mobile/products/${productId}`, {
     method: 'DELETE',
@@ -190,11 +214,11 @@ export async function importProductsXlsx(fileBase64: string): Promise<{ created:
   return { created: body.created };
 }
 
-export async function uploadProductImage(file: {
+export async function uploadProductMedia(file: {
   uri: string;
   name: string;
   mimeType: string;
-}): Promise<{ media_id: string }> {
+}): Promise<{ media_id: string; filename?: string; mime?: string }> {
   const response = await apiUpload('/api/mobile/products/media', () => {
     const form = new FormData();
     appendLocalFile(form, 'file', file.uri, { name: file.name });
@@ -210,13 +234,22 @@ export async function uploadProductImage(file: {
     }
   }
   if (!response.ok) {
-    throw new ApiError('Product image upload failed', response.status, body);
+    throw new ApiError('Product media upload failed', response.status, body);
   }
   const parsed = UploadSchema.parse(body);
-  return { media_id: parsed.media_id };
+  return { media_id: parsed.media_id, filename: parsed.filename, mime: parsed.mime };
 }
 
-export const MAX_PRODUCT_IMAGES = 3;
+/** @deprecated use uploadProductMedia */
+export async function uploadProductImage(file: {
+  uri: string;
+  name: string;
+  mimeType: string;
+}): Promise<{ media_id: string }> {
+  return uploadProductMedia(file);
+}
+
+export const MAX_PRODUCT_IMAGES = 5;
 
 export function parseCommaList(value: string): string[] {
   return value

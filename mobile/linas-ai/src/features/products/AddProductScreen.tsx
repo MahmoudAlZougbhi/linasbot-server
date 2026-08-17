@@ -1,21 +1,25 @@
 import { useEffect, useState } from 'react';
-import {
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ScrollView, StyleSheet, Text } from 'react-native';
 
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
-
-import { PrimaryButton } from '../../components/PrimaryButton';
+import { LinasSparkleIcon } from '../../components/LinasSparkleIcon';
 import { pickImageAttachment } from '../chat/v2/pickAttachment';
 import { useI18n } from '../../i18n/LanguageContext';
-import { fonts, radii, spacing, useTheme } from '../../theme';
-import { Field } from '../cm/editors/Field';
+import { fonts } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
+import { pickServiceFile, pickServiceVideo } from '../services/servicePick';
+import { ProductDetailsStep } from './ProductDetailsStep';
+import { ProductMediaLinksStep } from './ProductMediaLinksStep';
+import { ProductStepper } from './ProductStepper';
+import { PR_CANVAS, PR_DANGER, PR_TEAL } from './productChrome';
+import {
+  mergeProductLinks,
+  splitProductLinks,
+  type AssetRef,
+  type ChannelLink,
+  type ChannelPlatform,
+  type ShareableLink,
+} from './productModel';
 import {
   MAX_PRODUCT_IMAGES,
   createProduct,
@@ -23,7 +27,7 @@ import {
   joinCommaList,
   parseCommaList,
   updateProduct,
-  uploadProductImage,
+  uploadProductMedia,
   type ProductWriteInput,
 } from './productsApi';
 
@@ -36,9 +40,9 @@ type Props = {
 };
 
 export function AddProductScreen({ productId, onBack, onSaved }: Props) {
-  const { colors } = useTheme();
   const { tr } = useI18n();
   const editing = Boolean(productId);
+  const [step, setStep] = useState<1 | 2>(1);
   const [loading, setLoading] = useState(editing);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -48,9 +52,12 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
   const [sizesText, setSizesText] = useState('');
   const [colorsText, setColorsText] = useState('');
   const [note, setNote] = useState('');
-  const [availability, setAvailability] = useState<'in_stock' | 'out_of_stock' | 'inactive'>('in_stock');
+  const [availability, setAvailability] = useState<'in_stock' | 'out_of_stock'>('in_stock');
   const [images, setImages] = useState<ImageRow[]>([]);
-  const [links, setLinks] = useState<{ url: string; label?: string }[]>([{ url: '', label: '' }]);
+  const [shareable, setShareable] = useState<ShareableLink[]>([]);
+  const [channel, setChannel] = useState<ChannelLink[]>([]);
+  const [video, setVideo] = useState<AssetRef | null>(null);
+  const [file, setFile] = useState<AssetRef | null>(null);
 
   useEffect(() => {
     if (!productId) return;
@@ -59,25 +66,22 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
       try {
         const product = await fetchProduct(productId);
         setName(product.name);
-        setPrice(product.price ?? '');
+        setPrice(String(product.price || '').replace(/^\$/, ''));
         setSizesText(joinCommaList(product.sizes ?? []));
         setColorsText(joinCommaList(product.colors ?? []));
         setNote(product.note ?? '');
-        setAvailability(
-          (product.availability as 'in_stock' | 'out_of_stock' | 'inactive') || 'in_stock',
-        );
+        setAvailability(product.availability === 'out_of_stock' ? 'out_of_stock' : 'in_stock');
         setImages(
           (product.images ?? []).map((img) => ({
             media_id: img.media_id,
             sort_order: img.sort_order,
           })),
         );
-        const productLinks = product.links ?? [];
-        setLinks(
-          productLinks.length
-            ? productLinks.map((link) => ({ url: link.url, label: link.label ?? '' }))
-            : [{ url: '', label: '' }],
-        );
+        const parts = splitProductLinks(product.links);
+        setShareable(parts.shareable);
+        setChannel(parts.channel);
+        setVideo(parts.video);
+        setFile(parts.file);
       } catch {
         setError(tr('productsLoadError'));
       } finally {
@@ -86,71 +90,61 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
     })();
   }, [productId, tr]);
 
-  const addImage = async () => {
-    if (images.length >= MAX_PRODUCT_IMAGES) {
-      setError(tr('productsMaxImages'));
-      return;
-    }
+  const upload = async (picked: { uri: string; name: string; mimeType: string } | null) => {
+    if (!picked) return null;
     setUploading(true);
     setError(null);
     try {
-      const picked = await pickImageAttachment();
-      if (!picked) return;
-      const uploaded = await uploadProductImage({
+      const uploaded = await uploadProductMedia({
         uri: picked.uri,
         name: picked.name,
         mimeType: picked.mimeType,
       });
-      setImages((rows) => [
-        ...rows,
-        { media_id: uploaded.media_id, sort_order: rows.length, previewUri: picked.uri },
-      ]);
+      return { media_id: uploaded.media_id, previewUri: picked.uri, filename: picked.name };
     } catch {
       setError(tr('productsUploadError'));
+      return null;
     } finally {
       setUploading(false);
     }
   };
 
-  const removeImage = (mediaId: string) => {
-    setImages((rows) =>
-      rows
-        .filter((row) => row.media_id !== mediaId)
-        .map((row, index) => ({ ...row, sort_order: index })),
-    );
+  const addImage = async () => {
+    if (images.length >= MAX_PRODUCT_IMAGES) {
+      setError(tr('productsMaxImages'));
+      return;
+    }
+    const uploaded = await upload(await pickImageAttachment());
+    if (!uploaded) return;
+    setImages((rows) => [
+      ...rows,
+      { media_id: uploaded.media_id, sort_order: rows.length, previewUri: uploaded.previewUri },
+    ]);
   };
 
   const buildPayload = (): ProductWriteInput => ({
     name: name.trim(),
-    price: price.trim() || null,
+    price: price.trim() ? (price.trim().startsWith('$') ? price.trim() : `$${price.trim()}`) : null,
     sizes: parseCommaList(sizesText),
     colors: parseCommaList(colorsText),
     note: note.trim() || null,
     availability,
     images: images.map((row, index) => ({ media_id: row.media_id, sort_order: index })),
-    links: links
-      .map((link, index) => ({
-        url: link.url.trim(),
-        label: (link.label || '').trim() || null,
-        sort_order: index,
-      }))
-      .filter((link) => link.url),
+    links: mergeProductLinks({ shareable, channel, video, file }),
   });
 
   const save = async () => {
     if (!name.trim()) {
       setError(tr('productsNameRequired'));
+      setStep(1);
       return;
     }
     setSaving(true);
     setError(null);
     try {
       const payload = buildPayload();
-      if (editing && productId) {
-        await updateProduct(productId, payload);
-      } else {
-        await createProduct(payload);
-      }
+      if (editing && productId) await updateProduct(productId, payload);
+      else await createProduct(payload);
       onSaved();
     } catch {
       setError(tr('productsSaveError'));
@@ -164,6 +158,8 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
       <ScreenChrome
         title={tr(editing ? 'productsEditTitle' : 'productsAddTitle')}
         onBack={onBack}
+        canvasColor={PR_CANVAS}
+        headerLead={<LinasSparkleIcon size={22} color={PR_TEAL} />}
       >
         <LinasLoadingIndicator variant="screen" />
       </ScreenChrome>
@@ -173,128 +169,90 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
   return (
     <ScreenChrome
       title={tr(editing ? 'productsEditTitle' : 'productsAddTitle')}
-      onBack={onBack}
+      onBack={step === 2 ? () => setStep(1) : onBack}
+      canvasColor={PR_CANVAS}
+      headerLead={<LinasSparkleIcon size={22} color={PR_TEAL} />}
     >
       <ScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-        {error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
-        <Field label={tr('productsName')} value={name} onChange={setName} />
-        <Field label={tr('productsPrice')} value={price} onChange={setPrice} />
-        <Field
-          label={tr('productsSizes')}
-          value={sizesText}
-          onChange={setSizesText}
-          placeholder={tr('productsCommaHint')}
+        <ProductStepper
+          step={step}
+          detailsLabel={tr('productsStepDetails')}
+          mediaLabel={tr('productsStepMedia')}
         />
-        <Field
-          label={tr('productsColors')}
-          value={colorsText}
-          onChange={setColorsText}
-          placeholder={tr('productsCommaHint')}
-        />
-        <Field label={tr('productsNote')} value={note} onChange={setNote} multiline />
-
-        <Text style={styles.section}>{tr('productsAvailabilitySection')}</Text>
-        <View style={styles.availabilityRow}>
-          {(['in_stock', 'out_of_stock', 'inactive'] as const).map((value) => (
-            <Pressable
-              key={value}
-              onPress={() => setAvailability(value)}
-              style={[
-                styles.availabilityChip,
-                {
-                  borderColor: colors.border,
-                  backgroundColor: availability === value ? colors.accentSoft : 'transparent',
-                },
-              ]}
-            >
-              <Text style={{ color: availability === value ? colors.accent : colors.textMuted, fontSize: 13 }}>
-                {tr(`productsAvailability_${value}`)}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Text style={styles.section}>{tr('productsImagesSection')}</Text>
-        <View style={styles.imageRow}>
-          {images.map((img) => (
-            <View key={img.media_id} style={styles.thumbWrap}>
-              {img.previewUri ? (
-                <Image source={{ uri: img.previewUri }} style={styles.thumb} />
-              ) : (
-                <View style={[styles.thumb, styles.thumbPlaceholder, { borderColor: colors.border }]}>
-                  <Text style={{ fontSize: 10, color: colors.textMuted }}>{img.media_id.slice(-6)}</Text>
-                </View>
-              )}
-              <Pressable onPress={() => removeImage(img.media_id)}>
-                <Text style={{ color: colors.danger, fontSize: 12 }}>{tr('productsRemove')}</Text>
-              </Pressable>
-            </View>
-          ))}
-        </View>
-        <PrimaryButton
-          label={uploading ? tr('productsUploading') : tr('productsAddImage')}
-          onPress={() => void addImage()}
-          disabled={uploading || images.length >= MAX_PRODUCT_IMAGES}
-        />
-
-        <Text style={styles.section}>{tr('productsLinksSection')}</Text>
-        {links.map((link, index) => (
-          <View key={`link-${index}`} style={styles.linkBlock}>
-            <Field
-              label={tr('productsLinkUrl')}
-              value={link.url}
-              onChange={(value) =>
-                setLinks((rows) =>
-                  rows.map((row, i) => (i === index ? { ...row, url: value } : row)),
-                )
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {step === 1 ? (
+          <ProductDetailsStep
+            name={name}
+            price={price}
+            sizesText={sizesText}
+            colorsText={colorsText}
+            note={note}
+            availability={availability}
+            onChangeName={setName}
+            onChangePrice={setPrice}
+            onChangeSizes={setSizesText}
+            onChangeColors={setColorsText}
+            onChangeNote={setNote}
+            onChangeAvailability={setAvailability}
+            onContinue={() => {
+              if (!name.trim()) {
+                setError(tr('productsNameRequired'));
+                return;
               }
-            />
-            <Field
-              label={tr('productsLinkLabel')}
-              value={link.label ?? ''}
-              onChange={(value) =>
-                setLinks((rows) =>
-                  rows.map((row, i) => (i === index ? { ...row, label: value } : row)),
-                )
-              }
-            />
-          </View>
-        ))}
-        <Pressable
-          onPress={() => setLinks((rows) => [...rows, { url: '', label: '' }])}
-          style={styles.addLink}
-        >
-          <Text style={{ color: colors.accent }}>{tr('productsAddLink')}</Text>
-        </Pressable>
-
-        <PrimaryButton
-          label={saving ? tr('productsSaving') : tr('productsSave')}
-          onPress={() => void save()}
-          disabled={saving}
-        />
+              setError(null);
+              setStep(2);
+            }}
+            tr={tr}
+          />
+        ) : (
+          <ProductMediaLinksStep
+            images={images}
+            video={video}
+            file={file}
+            shareable={shareable}
+            channel={channel}
+            uploading={uploading}
+            saving={saving}
+            onAddImage={() => void addImage()}
+            onRemoveImage={(mediaId) =>
+              setImages((rows) =>
+                rows
+                  .filter((row) => row.media_id !== mediaId)
+                  .map((row, index) => ({ ...row, sort_order: index })),
+              )
+            }
+            onAddVideo={() =>
+              void (async () => {
+                const uploaded = await upload(await pickServiceVideo());
+                if (uploaded) setVideo(uploaded);
+              })()
+            }
+            onClearVideo={() => setVideo(null)}
+            onAddFile={() =>
+              void (async () => {
+                const uploaded = await upload(await pickServiceFile());
+                if (uploaded) setFile(uploaded);
+              })()
+            }
+            onClearFile={() => setFile(null)}
+            onAddShareable={(url) => setShareable((rows) => [...rows, { url }])}
+            onRemoveShareable={(index) =>
+              setShareable((rows) => rows.filter((_, i) => i !== index))
+            }
+            onAddChannel={(platform: ChannelPlatform, url) =>
+              setChannel((rows) => [...rows, { platform, url }])
+            }
+            onRemoveChannel={(index) => setChannel((rows) => rows.filter((_, i) => i !== index))}
+            onSave={() => void save()}
+            tr={tr}
+          />
+        )}
       </ScrollView>
     </ScreenChrome>
   );
 }
 
 const styles = StyleSheet.create({
-  form: { gap: spacing.md, paddingBottom: spacing.xl },
-  section: { fontFamily: fonts.bodyMedium, fontSize: 15, color: '#10221A', marginTop: spacing.sm },
-  imageRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  thumbWrap: { alignItems: 'center', gap: 4 },
-  thumb: { width: 72, height: 72, borderRadius: radii.sm },
-  thumbPlaceholder: {
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  linkBlock: { gap: spacing.xs },
-  addLink: { paddingVertical: spacing.xs },
-  availabilityRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  availabilityChip: {
-    borderWidth: 1,
-    borderRadius: radii.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
+  form: { gap: 14, paddingBottom: 28 },
+  error: { color: PR_DANGER, fontFamily: fonts.body, marginBottom: 4 },
 });

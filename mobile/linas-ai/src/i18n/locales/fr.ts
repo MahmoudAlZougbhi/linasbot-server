@@ -1,4 +1,5 @@
 import { aiSetupFr } from './aiSetupFr';
+import { productsSetupFr } from './productsSetupFr';
 import { commentsSetupFr } from './commentsSetupFr';
 import { requestSetupFr } from './requestSetupFr';
 import { dashboardFr } from './dashboardFr';
@@ -340,6 +341,7 @@ export const fr = {
   ...usersUiFr,
   ...dashboardFr,
   ...aiSetupFr,
+  ...productsSetupFr,
   ...commentsSetupFr,
   ...requestSetupFr,
 

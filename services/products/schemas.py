@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from services.products.availability import AVAILABILITY_IN_STOCK, normalize_availability
 
-MAX_IMAGES = 3
+MAX_IMAGES = 5
 
 
 class ProductImageInput(BaseModel):

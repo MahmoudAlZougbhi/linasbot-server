@@ -66,7 +66,7 @@ class Product(Base):
 class ProductImage(Base):
     __tablename__ = "product_images"
     __table_args__ = (
-        CheckConstraint("sort_order >= 0 AND sort_order < 3", name="ck_product_images_sort_order"),
+        CheckConstraint("sort_order >= 0 AND sort_order < 5", name="ck_product_images_sort_order"),
         Index("ix_product_images_tenant_media", "tenant_id", "media_id"),
     )
 

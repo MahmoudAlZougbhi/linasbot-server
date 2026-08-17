@@ -1,4 +1,5 @@
 import { aiSetupEn } from './aiSetupEn';
+import { productsSetupEn } from './productsSetupEn';
 import { commentsSetupEn } from './commentsSetupEn';
 import { requestSetupEn } from './requestSetupEn';
 import { dashboardEn } from './dashboardEn';
@@ -334,6 +335,7 @@ export const en = {
   ...usersUiEn,
   ...dashboardEn,
   ...aiSetupEn,
+  ...productsSetupEn,
   ...commentsSetupEn,
   ...requestSetupEn,
 

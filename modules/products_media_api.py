@@ -1,4 +1,4 @@
-"""AI Products image upload/serve (tenant-scoped, max 3 per product enforced at product save)."""
+"""AI Products media upload/serve (tenant-scoped; max images enforced at product save)."""
 
 from __future__ import annotations
 
