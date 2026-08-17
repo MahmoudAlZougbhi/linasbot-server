@@ -231,6 +231,7 @@ def _new_apply(arguments: argparse.Namespace, paths: state.ProvisionPaths) -> di
             if not _clear_exact_terminal_remnant(paths, terminal):
                 raise ProvisionError("live runtime coordinator diverges from the terminal transaction")
             return _terminal_result(payload)
+        coordinator.abort_foreign_undecided_snapshot(paths, tx_id)
         state.assert_no_collisions(paths)
         state.snapshot_authority(paths, plan, plan_sha256, bundle)
         initial = coordinator.template(plan, plan_sha256)

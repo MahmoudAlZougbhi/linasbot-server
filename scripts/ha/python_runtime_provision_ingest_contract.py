@@ -105,6 +105,10 @@ INGEST_COLLISIONS: Final = (
     "python-runtime-provision.coordinator.json",
 )
 BOOTSTRAP_COMMIT_OVERLAP: Final = ("bootstrap.active", "bootstrap.coordinator.json")
+RUNTIME_SNAPSHOT_OVERLAP: Final = (
+    "python-runtime-provision.active",
+    "python-runtime-provision.coordinator.json",
+)
 
 
 class IngestError(RuntimeError):
@@ -228,6 +232,21 @@ def _commit_decided_bootstrap(state_root: Path) -> bool:
     return isinstance(payload, dict) and payload.get("status") == "applied" and payload.get("tx_id") == tx_id
 
 
+def _incomplete_runtime_snapshot(state_root: Path) -> bool:
+    coordinator = state_root / "python-runtime-provision.coordinator.json"
+    if not (coordinator.exists() or coordinator.is_symlink()):
+        return False
+    try:
+        payload = json.loads(_root_read(coordinator, 65_536).decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError, IngestError):
+        return False
+    return (
+        isinstance(payload, dict)
+        and payload.get("decision") == "undecided"
+        and payload.get("phase") == "authority-snapshotted"
+    )
+
+
 @contextmanager
 def common_lock(state_root: Path) -> Iterator[None]:
     LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -244,8 +263,11 @@ def common_lock(state_root: Path) -> Iterator[None]:
             raise IngestError("release ingest common lock is unsafe")
         fcntl.flock(descriptor, fcntl.LOCK_EX)
         allow_commit = _commit_decided_bootstrap(state_root)
+        allow_snapshot = _incomplete_runtime_snapshot(state_root)
         for relative in INGEST_COLLISIONS:
             if allow_commit and relative in BOOTSTRAP_COMMIT_OVERLAP:
+                continue
+            if allow_snapshot and relative in RUNTIME_SNAPSHOT_OVERLAP:
                 continue
             candidate = state_root / relative
             if candidate.exists() or candidate.is_symlink():

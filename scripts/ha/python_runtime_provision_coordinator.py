@@ -174,6 +174,18 @@ def load(paths: state.ProvisionPaths) -> tuple[dict[str, Any], str]:
     return load_path(paths.coordinator)
 
 
+def abort_foreign_undecided_snapshot(paths: state.ProvisionPaths, current_tx_id: str) -> None:
+    if not (paths.coordinator.exists() or paths.coordinator.is_symlink()):
+        return
+    payload, _digest = load(paths)
+    if payload["transaction_id"] == current_tx_id:
+        return
+    if payload.get("decision") != "undecided" or payload.get("phase") != "authority-snapshotted":
+        raise ProvisionError("another Python runtime coordinator is active")
+    paths.coordinator.unlink()
+    archive.fsync_directory(paths.coordinator.parent)
+
+
 def write(
     paths: state.ProvisionPaths,
     payload: Mapping[str, Any],
