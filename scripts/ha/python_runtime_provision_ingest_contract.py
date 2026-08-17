@@ -104,6 +104,7 @@ INGEST_COLLISIONS: Final = (
     "python-runtime-provision.active",
     "python-runtime-provision.coordinator.json",
 )
+BOOTSTRAP_COMMIT_OVERLAP: Final = ("bootstrap.active", "bootstrap.coordinator.json")
 
 
 class IngestError(RuntimeError):
@@ -198,6 +199,17 @@ def write_launcher_receipt(path: Path, payload: bytes) -> None:
     _sync_dir(path.parent)
 
 
+def _commit_decided_bootstrap(state_root: Path) -> bool:
+    coordinator = state_root / "bootstrap.coordinator.json"
+    if not (coordinator.exists() or coordinator.is_symlink()):
+        return False
+    try:
+        payload = json.loads(_root_read(coordinator, 65_536).decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError, IngestError):
+        return False
+    return isinstance(payload, dict) and payload.get("schema") == 2 and payload.get("decision") == "commit"
+
+
 @contextmanager
 def common_lock(state_root: Path) -> Iterator[None]:
     LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -213,7 +225,10 @@ def common_lock(state_root: Path) -> Iterator[None]:
         if not stat.S_ISREG(observed.st_mode) or observed.st_nlink != 1:
             raise IngestError("release ingest common lock is unsafe")
         fcntl.flock(descriptor, fcntl.LOCK_EX)
+        allow_commit = _commit_decided_bootstrap(state_root)
         for relative in INGEST_COLLISIONS:
+            if allow_commit and relative in BOOTSTRAP_COMMIT_OVERLAP:
+                continue
             candidate = state_root / relative
             if candidate.exists() or candidate.is_symlink():
                 raise IngestError(f"release ingest collides with {relative}")

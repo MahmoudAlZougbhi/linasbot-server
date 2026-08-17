@@ -124,7 +124,15 @@ def publish(path,data):
 lock.parent.mkdir(parents=True,exist_ok=True)
 lfd=os.open(lock,os.O_RDWR|os.O_CREAT|getattr(os,"O_NOFOLLOW",0),0o600); os.fchmod(lfd,0o600); os.fchown(lfd,0,0); fcntl.flock(lfd,fcntl.LOCK_EX)
 secure_dir(root,0o700,True)
+def commit_bootstrap():
+ coord=root/"bootstrap.coordinator.json"
+ if not os.path.lexists(coord): return False
+ try: payload=json.loads(read_safe(coord,65536))
+ except Exception: return False
+ return isinstance(payload,dict) and payload.get("schema")==2 and payload.get("decision")=="commit"
+skip=commit_bootstrap()
 for rel in ("bootstrap.active","bootstrap.coordinator.json","transaction.json","env.before","deploy.active","deploy-node.active","controlled-failover.active","registry-nfs-retire.active","rekey/runtime.guard"):
+ if skip and rel in ("bootstrap.active","bootstrap.coordinator.json"): continue
  if os.path.lexists(root/rel): raise SystemExit("collision: "+rel)
 txroot=root/"python-runtime-transactions"/tx; secure_dir(root/"python-runtime-transactions",0o700,True); secure_dir(txroot,0o700,True)
 active=root/"python-runtime-provision.active"; expected={"schema":1,"format":"linas-python-runtime-active-v1","transaction_id":tx,"node_id":"node02","plan_sha256":plan_sha}
