@@ -382,6 +382,7 @@ test('voice STT wires transcript into composer draft (no auto-send)', () => {
   assert.doesNotMatch(voice, /expo-av/);
   assert.doesNotMatch(voice, /form\.append\(\s*'audio'\s*,\s*\{/);
   assert.match(formData, /expo-file-system/);
+  assert.match(formData, /prepareUploadUri/);
   assert.match(formData, /Unsupported FormDataPart/);
   assert.match(chat, /useVoiceDraft\(\(text\) =>/);
   assert.match(chat, /appendVoiceTranscript\(prev, text\)/);

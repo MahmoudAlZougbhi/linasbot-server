@@ -3,9 +3,9 @@
 import { z } from 'zod';
 
 import { ApiError, apiUpload } from '../../api/client';
-import { appendLocalFile } from '../../api/formDataFile';
+import { appendLocalFile, prepareUploadUri } from '../../api/formDataFile';
 
-const UploadSchema = z
+export const CmMediaUploadSchema = z
   .object({
     success: z.literal(true),
     media_id: z.string(),
@@ -16,17 +16,22 @@ const UploadSchema = z
   })
   .passthrough();
 
-export type CmMediaUploadResult = z.infer<typeof UploadSchema>;
+export type CmMediaUploadResult = z.infer<typeof CmMediaUploadSchema>;
+
+export function parseCmMediaUploadBody(body: unknown): CmMediaUploadResult {
+  return CmMediaUploadSchema.parse(body);
+}
 
 export async function uploadCmArticleMedia(file: {
   uri: string;
   name: string;
   mimeType: string;
 }): Promise<CmMediaUploadResult> {
+  const uploadUri = await prepareUploadUri(file.uri, file.name);
   const response = await apiUpload('/api/cm/media', () => {
     const form = new FormData();
     // Expo 57 global fetch rejects RN `{uri,name,type}` FormData parts.
-    appendLocalFile(form, 'file', file.uri, { name: file.name });
+    appendLocalFile(form, 'file', uploadUri, { name: file.name });
     return form;
   });
   const text = await response.text();
@@ -41,5 +46,12 @@ export async function uploadCmArticleMedia(file: {
   if (!response.ok) {
     throw new ApiError('CM media upload failed', response.status, body);
   }
-  return UploadSchema.parse(body);
+  try {
+    return parseCmMediaUploadBody(body);
+  } catch (err) {
+    throw new ApiError('CM media upload response was invalid', response.status, {
+      parse_error: err instanceof Error ? err.message : 'invalid_response',
+      body,
+    });
+  }
 }

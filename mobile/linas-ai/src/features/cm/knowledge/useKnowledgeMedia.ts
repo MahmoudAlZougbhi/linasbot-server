@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { ApiError } from '../../../api/client';
 import type { StringKey } from '../../../i18n';
 import { newId } from '../cmApi';
-import { uploadCmArticleMedia } from '../cmMediaApi';
+import { runCmMediaUpload } from '../cmMediaAttach';
 import {
   resourceMetaError,
   serializeResourceFields,
@@ -57,10 +57,12 @@ export function useKnowledgeMedia(
     replaceId?: string,
   ) {
     if (!selected || !picked) return;
-    setUploading(true);
-    setUploadError(null);
-    try {
-      const uploaded = await uploadCmArticleMedia(picked);
+    await runCmMediaUpload({
+      picked,
+      failMessage,
+      setUploading,
+      setUploadError,
+      onSuccess: (uploaded, file) => {
       const nextAtt: KnowledgeAttachment = {
         id: uploaded.media_id,
         kind:
@@ -72,11 +74,11 @@ export function useKnowledgeMedia(
         title: '',
         description: '',
         caption: '',
-        mime: uploaded.mime || picked.mimeType,
-        filename: uploaded.filename || picked.name,
+        mime: uploaded.mime || file.mimeType,
+        filename: uploaded.filename || file.name,
         size: uploaded.size || 0,
         url: '',
-        duration_seconds: picked.durationSeconds ?? null,
+        duration_seconds: file.durationSeconds ?? null,
       };
       const existing = replaceId ? selected.attachments.find((row) => row.id === replaceId) : null;
       setPrompt({
@@ -91,11 +93,8 @@ export function useKnowledgeMedia(
         pending: nextAtt,
       });
       setPromptError(null);
-    } catch (err) {
-      setUploadError(failMessage(err));
-    } finally {
-      setUploading(false);
-    }
+      },
+    });
   }
 
   async function addResource(kind: KnowledgeKind, replaceId?: string) {
