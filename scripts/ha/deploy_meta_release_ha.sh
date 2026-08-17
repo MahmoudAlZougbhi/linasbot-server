@@ -3315,6 +3315,9 @@ assert_unit_file_contract() {
   local unit="$1"
   local working_directory exec_start environment_files fragment user exec_start_pre
   local exec_start_post exec_condition dropins environment expected_exec
+  if [ "$unit" = linasbot ]; then
+    unit=linasbot.service
+  fi
   working_directory="$(systemctl show "$unit" --property=WorkingDirectory --value)"
   exec_start="$(systemctl show "$unit" --property=ExecStart --value)"
   environment_files="$(systemctl show "$unit" --property=EnvironmentFiles --value)"
@@ -3484,6 +3487,9 @@ allowed_os_systemd = {
     "USER": "root",
     "LOGNAME": "root",
     "SHELL": "/bin/bash",
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+    "PWD": str(repo),
 }
 
 
@@ -3572,6 +3578,7 @@ for unit, (expected_argv, queue, should_run) in specs.items():
     if any(live_environment.get(key) != value for key, value in expected.items()):
         raise SystemExit("canonical runtime loaded a stale environment")
     unexpected = set(live_environment) - set(expected)
+    extra_names = []
     for key in unexpected:
         value = live_environment[key]
         if key in allowed_os_systemd and value == allowed_os_systemd[key]:
@@ -3593,7 +3600,12 @@ for unit, (expected_argv, queue, should_run) in specs.items():
             "@/org/freedesktop/systemd1/notify",
         }:
             continue
-        raise SystemExit("canonical runtime loaded an extra non-system configuration key")
+        extra_names.append(key)
+    if extra_names:
+        raise SystemExit(
+            "canonical runtime loaded an extra non-system configuration key: "
+            + ",".join(sorted(extra_names))
+        )
     stable_pid = run("systemctl", "show", unit, "--property=MainPID", "--value").stdout.strip()
     if stable_pid != main_pid or run("systemctl", "is-active", unit, check=False).returncode:
         raise SystemExit("canonical runtime PID changed during exact verification")
@@ -3735,8 +3747,12 @@ allowed_os_systemd = {
     "USER": "root",
     "LOGNAME": "root",
     "SHELL": "/bin/bash",
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+    "PWD": str(repo),
 }
 unexpected = set(environment) - set(expected)
+extra_names = []
 for key in unexpected:
     value = environment[key]
     if key in allowed_os_systemd and value == allowed_os_systemd[key]:
@@ -3758,7 +3774,12 @@ for key in unexpected:
         "@/org/freedesktop/systemd1/notify",
     }:
         continue
-    raise SystemExit("transient verification loaded an extra non-system configuration key")
+    extra_names.append(key)
+if extra_names:
+    raise SystemExit(
+        "transient verification loaded an extra non-system configuration key: "
+        + ",".join(sorted(extra_names))
+    )
 PY
   cluster_runtime_env_evidence \
     "$helper_source_sha" "$expected_release_sha" "$node_id" "/proc/$main_pid/environ" transient \
