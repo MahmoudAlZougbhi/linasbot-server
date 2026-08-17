@@ -48,6 +48,19 @@ describe('drawer layout and selected state', () => {
     assert.match(heading[1], /letterSpacing:\s*-0\.25/);
   });
 
+  it('Pin section sits above Recent with pin glyph on pinned rows', () => {
+    const recents = read('features/nav/DrawerRecents.tsx');
+    const rows = read('features/nav/HistoryRows.tsx');
+    assert.match(recents, /tr\('drawerPin'\)/);
+    assert.match(recents, /tr\('drawerRecents'\)/);
+    assert.match(recents, /pinned\.length/);
+    assert.match(recents, /items=\{pinned\}/);
+    assert.match(recents, /items=\{recent\}/);
+    assert.match(rows, /showPin/);
+    assert.match(rows, /DRAWER_TOOL_ICONS\.pin/);
+    assert.doesNotMatch(rows, /drawerRows/);
+  });
+
   it('header row is search + settings; Recent row is heading + icon-only new chat', () => {
     const header = read('features/nav/DrawerHeader.tsx');
     const recents = read('features/nav/DrawerRecents.tsx');

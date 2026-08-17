@@ -44,10 +44,10 @@ export function HistoryRows({
 
   const pinned = items.filter((h) => pinnedIds.includes(h.id));
   const rest = items.filter((h) => !pinnedIds.includes(h.id));
-  const drawerRows = drawer ? [...pinned, ...rest] : rest;
 
   const renderRow = (item: HistoryItem) => {
     const active = item.id === activeId;
+    const showPin = pinnedIds.includes(item.id) && !archivedMode;
     return (
       <View key={item.id}>
         <View
@@ -71,8 +71,8 @@ export function HistoryRows({
             accessibilityLabel={item.title || 'Untitled conversation'}
             accessibilityHint="Long press to rename, pin, archive, or delete"
           >
-            {!drawer && pinnedIds.includes(item.id) && !archivedMode ? (
-              <AppIcon icon={DRAWER_TOOL_ICONS.pin} size={14} color={colors.textDim} />
+            {showPin ? (
+              <AppIcon icon={DRAWER_TOOL_ICONS.pin} size={drawer ? 14 : 14} color={colors.textDim} />
             ) : null}
             {renameId === item.id ? (
               <TextInput
@@ -193,7 +193,7 @@ export function HistoryRows({
   }
 
   if (drawer) {
-    return <View>{drawerRows.map(renderRow)}</View>;
+    return <View>{items.map(renderRow)}</View>;
   }
 
   return (

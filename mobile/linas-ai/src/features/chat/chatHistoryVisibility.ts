@@ -7,6 +7,12 @@ type ListedConversation = {
   has_user_message?: boolean;
 };
 
+const WEAK_TITLES = new Set(['New chat', 'Chat', 'Untitled', 'Linas AI', '']);
+
+function isWeakHistoryTitle(title: string | null | undefined): boolean {
+  return WEAK_TITLES.has((title || '').trim());
+}
+
 /** History/recent only includes threads after the first user turn. */
 export function listedHistoryEntries(conversations: ListedConversation[]): HistoryEntry[] {
   return conversations
@@ -16,6 +22,22 @@ export function listedHistoryEntries(conversations: ListedConversation[]): Histo
       title: c.title,
       archived: Boolean(c.archived),
     }));
+}
+
+/**
+ * Apply a fresh list response without letting a stale/default title wipe a
+ * better title already shown for the same conversation id.
+ */
+export function mergeListedHistory(prev: HistoryEntry[], next: HistoryEntry[]): HistoryEntry[] {
+  if (!prev.length) return next;
+  const prevById = new Map(prev.map((h) => [h.id, h]));
+  return next.map((n) => {
+    const p = prevById.get(n.id);
+    if (p && isWeakHistoryTitle(n.title) && !isWeakHistoryTitle(p.title)) {
+      return { ...n, title: p.title };
+    }
+    return n;
+  });
 }
 
 export function conversationHasUserTurn(messages: Array<{ role: string }>): boolean {
