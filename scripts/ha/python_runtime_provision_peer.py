@@ -126,10 +126,22 @@ lfd=os.open(lock,os.O_RDWR|os.O_CREAT|getattr(os,"O_NOFOLLOW",0),0o600); os.fchm
 secure_dir(root,0o700,True)
 def commit_bootstrap():
  coord=root/"bootstrap.coordinator.json"
- if not os.path.lexists(coord): return False
- try: payload=json.loads(read_safe(coord,65536))
+ if os.path.lexists(coord):
+  try:
+   payload=json.loads(read_safe(coord,65536))
+   if isinstance(payload,dict) and payload.get("schema")==2 and payload.get("decision")=="commit": return True
+  except Exception: pass
+ active=root/"bootstrap.active"
+ if not os.path.lexists(active): return False
+ try: sent=json.loads(read_safe(active,65536))
  except Exception: return False
- return isinstance(payload,dict) and payload.get("schema")==2 and payload.get("decision")=="commit"
+ tx=sent.get("tx_id") if isinstance(sent,dict) else None
+ if not isinstance(tx,str) or len(tx)!=32 or any(c not in "0123456789abcdef" for c in tx): return False
+ journal=Path("/opt/.linasbot-meta-bootstrap-"+tx+"/journal.json")
+ if not os.path.lexists(journal): return False
+ try: payload=json.loads(read_safe(journal,65536))
+ except Exception: return False
+ return isinstance(payload,dict) and payload.get("status")=="applied" and payload.get("tx_id")==tx
 skip=commit_bootstrap()
 for rel in ("bootstrap.active","bootstrap.coordinator.json","transaction.json","env.before","deploy.active","deploy-node.active","controlled-failover.active","registry-nfs-retire.active","rekey/runtime.guard"):
  if skip and rel in ("bootstrap.active","bootstrap.coordinator.json"): continue

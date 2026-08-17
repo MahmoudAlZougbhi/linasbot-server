@@ -258,10 +258,22 @@ def claim_active(paths: ProvisionPaths, plan: Mapping[str, Any], plan_sha256: st
 
 def _commit_decided_bootstrap(paths: ProvisionPaths) -> bool:
     coordinator = paths.state_root / "bootstrap.coordinator.json"
-    if not (coordinator.exists() or coordinator.is_symlink()):
+    if coordinator.exists() or coordinator.is_symlink():
+        payload = _load_json(coordinator)
+        if payload.get("schema") == 2 and payload.get("decision") == "commit":
+            return True
+    active = paths.state_root / "bootstrap.active"
+    if not (active.exists() or active.is_symlink()):
         return False
-    payload = _load_json(coordinator)
-    return payload.get("schema") == 2 and payload.get("decision") == "commit"
+    sent = _load_json(active)
+    tx_id = sent.get("tx_id")
+    if not isinstance(tx_id, str) or len(tx_id) != 32 or any(char not in "0123456789abcdef" for char in tx_id):
+        return False
+    journal = Path(f"/opt/.linasbot-meta-bootstrap-{tx_id}/journal.json")
+    if not (journal.exists() or journal.is_symlink()):
+        return False
+    payload = _load_json(journal)
+    return payload.get("status") == "applied" and payload.get("tx_id") == tx_id
 
 
 def assert_no_collisions(paths: ProvisionPaths, tx_id: str | None = None) -> None:
