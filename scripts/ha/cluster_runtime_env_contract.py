@@ -50,7 +50,18 @@ FIXED_ROOT_PROCESS_VALUES = {
     "LC_ALL": "C.UTF-8",
     "PWD": "/opt/linasbot",
 }
-ALLOWED_ROOT_SHELLS = frozenset({"/bin/bash", "/bin/sh"})
+ALLOWED_ROOT_SHELLS = frozenset(
+    {
+        "/bin/bash",
+        "/bin/sh",
+        "/bin/dash",
+        "/usr/bin/bash",
+        "/usr/bin/sh",
+        "/usr/bin/dash",
+        "/usr/sbin/nologin",
+        "/sbin/nologin",
+    }
+)
 SYSTEMD_EPHEMERAL_KEYS = frozenset(
     {
         "INVOCATION_ID",
@@ -230,8 +241,12 @@ def verify_process_environment(
                 raise RuntimeError("Runtime process environment contains an invalid worker queue")
             continue
         if key == "SHELL":
-            if value not in ALLOWED_ROOT_SHELLS:
-                raise RuntimeError("Runtime process environment contains an invalid root identity")
+            shell = value.strip()
+            if shell not in ALLOWED_ROOT_SHELLS:
+                raise RuntimeError(
+                    "Runtime process environment contains an invalid root identity: SHELL="
+                    + (shell if re.fullmatch(r"/[A-Za-z0-9._/-]+", shell) else "invalid")
+                )
             continue
         if key in FIXED_ROOT_PROCESS_VALUES:
             if value != FIXED_ROOT_PROCESS_VALUES[key]:

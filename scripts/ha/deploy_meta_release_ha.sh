@@ -3580,7 +3580,16 @@ for unit, (expected_argv, queue, should_run) in specs.items():
     extra_names = []
     for key in unexpected:
         value = live_environment[key]
-        if key == "SHELL" and value in {"/bin/bash", "/bin/sh"}:
+        if key == "SHELL" and value.strip() in {
+            "/bin/bash",
+            "/bin/sh",
+            "/bin/dash",
+            "/usr/bin/bash",
+            "/usr/bin/sh",
+            "/usr/bin/dash",
+            "/usr/sbin/nologin",
+            "/sbin/nologin",
+        }:
             continue
         if key in allowed_os_systemd and value == allowed_os_systemd[key]:
             continue
@@ -3601,7 +3610,11 @@ for unit, (expected_argv, queue, should_run) in specs.items():
             "@/org/freedesktop/systemd1/notify",
         }:
             continue
-        extra_names.append(key)
+        extra_names.append(
+            f"{key}={value.strip()}"
+            if key == "SHELL" and re.fullmatch(r"/[A-Za-z0-9._/-]+", value.strip())
+            else key
+        )
     if extra_names:
         raise SystemExit(
             "canonical runtime loaded an extra non-system configuration key: "
@@ -3755,7 +3768,16 @@ unexpected = set(environment) - set(expected)
 extra_names = []
 for key in unexpected:
     value = environment[key]
-    if key == "SHELL" and value in {"/bin/bash", "/bin/sh"}:
+    if key == "SHELL" and value.strip() in {
+        "/bin/bash",
+        "/bin/sh",
+        "/bin/dash",
+        "/usr/bin/bash",
+        "/usr/bin/sh",
+        "/usr/bin/dash",
+        "/usr/sbin/nologin",
+        "/sbin/nologin",
+    }:
         continue
     if key in allowed_os_systemd and value == allowed_os_systemd[key]:
         continue
@@ -3776,7 +3798,11 @@ for key in unexpected:
         "@/org/freedesktop/systemd1/notify",
     }:
         continue
-    extra_names.append(key)
+    extra_names.append(
+        f"{key}={value.strip()}"
+        if key == "SHELL" and re.fullmatch(r"/[A-Za-z0-9._/-]+", value.strip())
+        else key
+    )
 if extra_names:
     raise SystemExit(
         "transient verification loaded an extra non-system configuration key: "
