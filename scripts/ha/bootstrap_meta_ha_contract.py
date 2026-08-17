@@ -3011,7 +3011,10 @@ def _remote(peer: str, helper_source: bytes, helper_sha: str, args: list[str]) -
     ]
     result = subprocess.run(command, capture_output=True, timeout=900, check=False)
     if result.returncode:
-        raise RuntimeError("peer bootstrap phase failed")
+        err = result.stderr.decode("utf-8", errors="replace")
+        marker = "ERROR: Meta HA bootstrap failed"
+        detail = next((line.strip() for line in reversed(err.splitlines()) if marker in line), "")
+        raise RuntimeError(detail or "peer bootstrap phase failed")
     return result.stdout.decode("utf-8", errors="strict")
 
 
@@ -3930,7 +3933,12 @@ def _assert_process_contract(
             if b"=" in entry:
                 key, value = entry.split(b"=", 1)
                 process_values[key.decode(errors="strict")] = value.decode(errors="strict")
-        _assert_no_execution_env_injection(process_values, allow_legacy_path=not require_bootstrapped_contract)
+        # systemd Environment=PATH is the unit contract, not a .env loader control.
+        unit_path = env_expected["PATH"]
+        if process_values.get("PATH") != unit_path:
+            raise RuntimeError(f"canonical process PATH is not the exact unit contract: {unit}")
+        injection_values = {key: value for key, value in process_values.items() if key != "PATH"}
+        _assert_no_execution_env_injection(injection_values, allow_legacy_path=not require_bootstrapped_contract)
         expected = dict(env_expected)
         if expected_queue is not None:
             expected["LINAS_WORKER_QUEUE"] = expected_queue
@@ -4921,11 +4929,11 @@ def _recover_decided_node(
 def _orchestrate_decided_recovery(args: argparse.Namespace) -> int:
     journal = _read_coordinator_journal(args.journal_sha256)
     source, source_sha = _helper_source()
-    if source_sha != journal["source_sha256"]:
-        raise RuntimeError("bootstrap recovery helper differs from the durable coordinator")
-    _assert_exact_helper(str(journal["target_sha"]), source_sha)
-    _assert_identity("node01")
     decision = str(journal["decision"])
+    if source_sha != journal["source_sha256"] and decision != "commit":
+        raise RuntimeError("bootstrap recovery helper differs from the durable coordinator")
+    _assert_exact_helper(str(_runtime_authority("node01")["shared"]["qg_target_sha"]), source_sha)
+    _assert_identity("node01")
     expected_confirmation = _decided_recovery_confirmation(str(journal["tx_id"]), args.journal_sha256, decision)
     if args.confirm != expected_confirmation:
         raise PermissionError("exact digest-bound bootstrap recovery confirmation is missing")
@@ -4956,7 +4964,7 @@ def _orchestrate_decided_recovery(args: argparse.Namespace) -> int:
             expected_pg_state=expected_pg,
         )
         _public_ready()
-    except BaseException:
+    except BaseException as exc:
         if decision == "rollback":
             for local in (True, False):
                 try:
@@ -4972,7 +4980,7 @@ def _orchestrate_decided_recovery(args: argparse.Namespace) -> int:
                     pass
         raise RuntimeError(
             f"bootstrap {decision} recovery is incomplete; durable coordinator journal retained"
-        ) from None
+        ) from exc
     _unlink_durable(COORDINATOR_PATH)
     _log(f"durable bootstrap decision={decision} recovered on both fixed nodes")
     return 0
@@ -4984,10 +4992,13 @@ def _decided_recovery_status(args: argparse.Namespace) -> int:
     raw, _ = _read_regular_any_owner(COORDINATOR_PATH)
     digest = _digest_bytes(raw)
     journal = _read_coordinator_journal(digest)
-    if journal["target_sha"] != args.target_sha:
+    if journal["target_sha"] != args.target_sha and (
+        str(journal["decision"]) != "commit"
+        or str(_runtime_authority("node01")["shared"]["qg_target_sha"]) != args.target_sha
+    ):
         raise RuntimeError("bootstrap recovery status target differs from the durable transaction")
     source, source_sha = _helper_source()
-    if source_sha != journal["source_sha256"]:
+    if source_sha != journal["source_sha256"] and str(journal["decision"]) != "commit":
         raise RuntimeError("bootstrap recovery-status helper differs from the durable transaction")
     _assert_exact_helper(args.target_sha, source_sha)
     confirmation = _decided_recovery_confirmation(str(journal["tx_id"]), digest, str(journal["decision"]))

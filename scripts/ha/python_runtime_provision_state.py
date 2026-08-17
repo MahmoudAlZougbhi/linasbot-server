@@ -39,6 +39,7 @@ COLLISION_NAMES: Final = (
     "rekey/runtime.guard",
 )
 CONSUMER_NAMES: Final = ("bootstrap.active", "bootstrap.coordinator.json", "deploy.active", "deploy-node.active")
+BOOTSTRAP_COMMIT_OVERLAP: Final = ("bootstrap.active", "bootstrap.coordinator.json")
 _SNAPSHOT_MARKERS: Final = (
     "manifest_snapshot",
     "control_snapshot",
@@ -255,8 +256,19 @@ def claim_active(paths: ProvisionPaths, plan: Mapping[str, Any], plan_sha256: st
     boundary("after_active_publish")
 
 
+def _commit_decided_bootstrap(paths: ProvisionPaths) -> bool:
+    coordinator = paths.state_root / "bootstrap.coordinator.json"
+    if not (coordinator.exists() or coordinator.is_symlink()):
+        return False
+    payload = _load_json(coordinator)
+    return payload.get("schema") == 2 and payload.get("decision") == "commit"
+
+
 def assert_no_collisions(paths: ProvisionPaths, tx_id: str | None = None) -> None:
+    allow_commit = _commit_decided_bootstrap(paths)
     for relative in COLLISION_NAMES:
+        if allow_commit and relative in BOOTSTRAP_COMMIT_OVERLAP:
+            continue
         candidate = paths.state_root / relative
         if candidate.exists() or candidate.is_symlink():
             raise ProvisionError(f"conflicting production transaction exists: {relative}")

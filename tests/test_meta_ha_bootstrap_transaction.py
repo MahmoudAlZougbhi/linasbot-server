@@ -1523,6 +1523,10 @@ def test_bootstrap_durable_decision_recovery_survives_finalize_ack_loss() -> Non
     assert "RECOVER_BOOTSTRAP_" in source
     assert "_recover_decided_node" in recovery
     assert recovery.index("_recover_decided_node(") < recovery.index("_unlink_durable(COORDINATOR_PATH)")
+    assert 'source_sha != journal["source_sha256"] and decision != "commit"' in recovery
+    assert '_assert_exact_helper(str(_runtime_authority("node01")["shared"]["qg_target_sha"]), source_sha)' in recovery
+    status = source[source.index("def _decided_recovery_status") : source.index("def _common_orchestrator_args")]
+    assert 'source_sha != journal["source_sha256"] and str(journal["decision"]) != "commit"' in status
 
 
 def test_bootstrap_refuses_controlled_failover_and_registry_nfs_retirement() -> None:
@@ -1560,7 +1564,9 @@ def test_bootstrap_only_allows_legacy_path_before_canonical_publication() -> Non
 
     source = BOOTSTRAP_PATH.read_text(encoding="utf-8")
     process_contract = source[source.index("def _assert_process_contract") : source.index("def _node_admit")]
-    assert "process_values, allow_legacy_path=not require_bootstrapped_contract" in process_contract
+    assert "canonical process PATH is not the exact unit contract" in process_contract
+    assert 'if key != "PATH"' in process_contract
+    assert "injection_values, allow_legacy_path=not require_bootstrapped_contract" in process_contract
 
 
 def test_bootstrap_code_loader_diagnostic_is_sorted_bounded_and_sanitized() -> None:
