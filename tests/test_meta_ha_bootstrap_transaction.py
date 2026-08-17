@@ -1565,7 +1565,7 @@ def test_bootstrap_only_allows_legacy_path_before_canonical_publication() -> Non
     source = BOOTSTRAP_PATH.read_text(encoding="utf-8")
     process_contract = source[source.index("def _assert_process_contract") : source.index("def _node_admit")]
     assert "canonical process PATH is not the exact unit contract" in process_contract
-    assert "if key != \"PATH\"" in process_contract
+    assert 'if key != "PATH"' in process_contract
     assert "injection_values, allow_legacy_path=not require_bootstrapped_contract" in process_contract
 
 
