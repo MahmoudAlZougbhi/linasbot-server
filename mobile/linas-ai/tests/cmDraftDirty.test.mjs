@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 
 import { isDraftDirty, stableSerialize } from '../src/features/cm/cmDraftDirty.ts';
+import { normalizeBranchesDraftPayload } from '../src/features/cm/editors/locationOpeningHours/branchDraftNormalize.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -21,14 +22,59 @@ describe('cmDraftDirty', () => {
     assert.equal(isDraftDirty(baseline, { ...loaded, items: [{ ...loaded.items[0], notes: 'x' }] }), true);
   });
 
-  it('useCmDraft and Locations back only prompt when snapshot differs', () => {
+  it('normalizes sparse branch rows so open-file schedule/media rewrites stay clean', () => {
+    const sparse = {
+      items: [
+        {
+          id: 'b1',
+          labels: { en: 'Hamra' },
+          maps_url: null,
+          notes: '',
+          weekly_schedule: { monday: { enabled: true, open: '09:00', close: '18:00' } },
+          attachments: [{ id: 'a1', kind: 'image', title: '  Lobby  ', url: '/x' }],
+        },
+      ],
+    };
+    const prepared = normalizeBranchesDraftPayload(sparse);
+    const baseline = stableSerialize(prepared);
+    const items = Array.isArray(prepared.items) ? prepared.items : [];
+    const afterOpen = normalizeBranchesDraftPayload({
+      ...prepared,
+      items: items.map((item) => ({ ...item })),
+    });
+    assert.equal(isDraftDirty(baseline, afterOpen), false);
+
+    const renamed = normalizeBranchesDraftPayload({
+      ...prepared,
+      items: items.map((item) => {
+        const row = item && typeof item === 'object' ? item : {};
+        const labels =
+          row.labels && typeof row.labels === 'object' && !Array.isArray(row.labels)
+            ? row.labels
+            : {};
+        return { ...row, labels: { ...labels, en: 'Verdun' } };
+      }),
+    });
+    assert.equal(isDraftDirty(baseline, renamed), true);
+  });
+
+  it('useCmDraft and Locations leave only prompt when snapshot differs', () => {
     const draft = readFileSync(join(root, 'src/features/cm/useCmDraft.ts'), 'utf8');
     const screen = readFileSync(join(root, 'src/features/cm/LocationHoursSectionScreen.tsx'), 'utf8');
+    const time = readFileSync(
+      join(root, 'src/features/cm/editors/locationOpeningHours/TimeField.tsx'),
+      'utf8',
+    );
+    const prepare = readFileSync(join(root, 'src/features/cm/prepareCmDraftPayload.ts'), 'utf8');
     assert.match(draft, /baselineRef/);
+    assert.match(draft, /prepareCmDraftPayload/);
+    assert.match(draft, /hasUnsavedChanges/);
     assert.match(draft, /isDraftDirty\(baselineRef\.current/);
     assert.match(draft, /setDirty\(overlay\)/);
     assert.doesNotMatch(draft, /setDirty\(true\)/);
-    assert.match(screen, /if \(!draft\.dirty\)/);
+    assert.match(prepare, /normalizeBranchesDraftPayload/);
+    assert.match(screen, /hasUnsavedChanges\(\)/);
     assert.match(screen, /aiSetupLocUnsavedTitle/);
+    assert.match(time, /parsed !== value/);
   });
 });
