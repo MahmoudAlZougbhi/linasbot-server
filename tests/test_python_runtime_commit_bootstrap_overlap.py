@@ -31,13 +31,9 @@ def test_runtime_collisions_allow_only_commit_decided_bootstrap(
         state.assert_no_collisions(paths)
 
 
-def test_runtime_overlap_allows_admitted_bootstrap_journal(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_runtime_overlap_allows_admitted_bootstrap_journal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     tx_id = "ab" * 16
-    paths = state.ProvisionPaths(
-        state_root=tmp_path, runtime=tmp_path / "runtime", lock_path=tmp_path / "lock"
-    )
+    paths = state.ProvisionPaths(state_root=tmp_path, runtime=tmp_path / "runtime", lock_path=tmp_path / "lock")
     (tmp_path / "bootstrap.active").write_text("{}\n", encoding="utf-8")
     journal = tmp_path / "journal.json"
     journal.write_text("{}\n", encoding="utf-8")

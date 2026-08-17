@@ -105,9 +105,7 @@ INGEST_COLLISIONS: Final = (
     "python-runtime-provision.coordinator.json",
 )
 BOOTSTRAP_COMMIT_OVERLAP: Final = ("bootstrap.active", "bootstrap.coordinator.json")
-BOOTSTRAP_COMMIT_JOURNAL_STATUSES: Final = frozenset(
-    {"applied", "admitted", "commit_proved", "committed"}
-)
+BOOTSTRAP_COMMIT_JOURNAL_STATUSES: Final = frozenset({"applied", "admitted", "commit_proved", "committed"})
 RUNTIME_SNAPSHOT_OVERLAP: Final = (
     "python-runtime-provision.active",
     "python-runtime-provision.coordinator.json",

@@ -40,9 +40,7 @@ COLLISION_NAMES: Final = (
 )
 CONSUMER_NAMES: Final = ("bootstrap.active", "bootstrap.coordinator.json", "deploy.active", "deploy-node.active")
 BOOTSTRAP_COMMIT_OVERLAP: Final = ("bootstrap.active", "bootstrap.coordinator.json")
-BOOTSTRAP_COMMIT_JOURNAL_STATUSES: Final = frozenset(
-    {"applied", "admitted", "commit_proved", "committed"}
-)
+BOOTSTRAP_COMMIT_JOURNAL_STATUSES: Final = frozenset({"applied", "admitted", "commit_proved", "committed"})
 _SNAPSHOT_MARKERS: Final = (
     "manifest_snapshot",
     "control_snapshot",
