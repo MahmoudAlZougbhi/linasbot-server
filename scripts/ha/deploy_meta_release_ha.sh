@@ -4276,6 +4276,7 @@ node_preflight() {
     "pre-existing HA worker boot guard requires owner recovery"
   assert_ready
   assert_lb_ready
+  log "baseline artifact evidence on $expected_node_id"
   baseline_artifacts="$(live_baseline_artifact_evidence)"
   printf 'NODE_ID=%s\nPREVIOUS_SHA=%s\nDRAIN_SECONDS=%s\nCONFIGURED_PEER=%s\nBOOTSTRAP_PLAN_SHA=%s\nPYTHON_RUNTIME_CLUSTER_SHA=%s\nSCHEMA_COMPATIBILITY_EVIDENCE=%s\nLB_ATTESTATION_OBSERVED_AT=%s\nBASELINE_ARTIFACT_EVIDENCE=%s\n' \
     "$node" "$head" "$drain" "$peer" "$expected_bootstrap_plan" \
@@ -6222,10 +6223,15 @@ digest = hashlib.sha256()
 records = 0
 
 
+root_digest = hashlib.sha256()
+
+
 def add_record(record: dict[str, object]) -> None:
     global records
     encoded = json.dumps(record, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    digest.update(len(encoded).to_bytes(8, "big") + encoded)
+    payload = len(encoded).to_bytes(8, "big") + encoded
+    digest.update(payload)
+    root_digest.update(payload)
     records += 1
 
 
@@ -6249,7 +6255,9 @@ def visit(path: Path, label: str) -> None:
         record["type"] = "directory"
         add_record(record)
         for child in sorted(path.iterdir(), key=lambda item: item.name):
-            if child.name == "90-meta-ha-maintenance.conf":
+            if child.name in {"90-meta-ha-maintenance.conf", "__pycache__"}:
+                continue
+            if child.suffix in {".pyc", ".pyo"}:
                 continue
             visit(child, f"{label}/{child.name}")
         return
@@ -6276,10 +6284,29 @@ def visit(path: Path, label: str) -> None:
     add_record(record)
 
 
+root_names = (
+    "venv",
+    "dashboard-build",
+    "nginx-available",
+    "nginx-enabled",
+    "nginx-privacy",
+    "unit-api",
+    "unit-worker-template",
+    "dropin-api",
+    "dropin-worker-template",
+)
 for index, path in enumerate(paths):
     if not path.exists() and not path.is_symlink():
         raise SystemExit(f"baseline artifact is missing: {path}")
+    root_digest = hashlib.sha256()
+    before = records
     visit(path, f"artifact-{index}")
+    name = root_names[index] if index < len(root_names) else f"artifact-{index}"
+    print(
+        f"[ha-deploy] baseline-root {name} records={records - before} "
+        f"sha256={root_digest.hexdigest()}",
+        file=sys.stderr,
+    )
 
 venv_python = paths[0] / "bin/python"
 resolved_python = Path(os.path.realpath(venv_python))
@@ -9652,8 +9679,11 @@ orchestrate() {
       die "node01 baseline differs from the explicitly confirmed steady SHA"
     test "$peer_previous_sha" = "$expected_peer_previous" || \
       die "node02 baseline differs from the explicitly confirmed steady SHA"
-    test "$local_baseline_artifacts" = "$peer_baseline_artifacts" || \
+    if [ "$local_baseline_artifacts" != "$peer_baseline_artifacts" ]; then
+      printf '[ha-deploy] node01 baseline artifacts: %s\n' "$local_baseline_artifacts" >&2
+      printf '[ha-deploy] node02 baseline artifacts: %s\n' "$peer_baseline_artifacts" >&2
       die "steady HA baselines have divergent venv, dashboard, nginx, or systemd bytes"
+    fi
   else
     test "$previous_sha" = "$expected_local_previous" || \
       die "node01 baseline differs from the explicitly authorized reconciliation SHA"
