@@ -45,7 +45,6 @@ def _assert_authority() -> str:
         "HOME": "/root",
         "USER": "root",
         "LOGNAME": "root",
-        "SHELL": "/bin/bash",
         "LANG": "C.UTF-8",
         "LC_ALL": "C.UTF-8",
         "PWD": "/opt/linasbot",
@@ -54,6 +53,8 @@ def _assert_authority() -> str:
     extra_names = []
     for key in unexpected:
         value = os.environ[key]
+        if key == "SHELL" and value in {"/bin/bash", "/bin/sh"}:
+            continue
         if key in fixed_root and value == fixed_root[key]:
             continue
         if key == "INVOCATION_ID" and re.fullmatch(r"[0-9a-f]{32}", value):

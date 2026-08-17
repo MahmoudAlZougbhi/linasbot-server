@@ -46,11 +46,11 @@ FIXED_ROOT_PROCESS_VALUES = {
     "HOME": "/root",
     "USER": "root",
     "LOGNAME": "root",
-    "SHELL": "/bin/bash",
     "LANG": "C.UTF-8",
     "LC_ALL": "C.UTF-8",
     "PWD": "/opt/linasbot",
 }
+ALLOWED_ROOT_SHELLS = frozenset({"/bin/bash", "/bin/sh"})
 SYSTEMD_EPHEMERAL_KEYS = frozenset(
     {
         "INVOCATION_ID",
@@ -228,6 +228,10 @@ def verify_process_environment(
         if key == "LINAS_WORKER_QUEUE":
             if value not in WORKER_QUEUES:
                 raise RuntimeError("Runtime process environment contains an invalid worker queue")
+            continue
+        if key == "SHELL":
+            if value not in ALLOWED_ROOT_SHELLS:
+                raise RuntimeError("Runtime process environment contains an invalid root identity")
             continue
         if key in FIXED_ROOT_PROCESS_VALUES:
             if value != FIXED_ROOT_PROCESS_VALUES[key]:

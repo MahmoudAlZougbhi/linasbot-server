@@ -3486,7 +3486,6 @@ allowed_os_systemd = {
     "HOME": "/root",
     "USER": "root",
     "LOGNAME": "root",
-    "SHELL": "/bin/bash",
     "LANG": "C.UTF-8",
     "LC_ALL": "C.UTF-8",
     "PWD": str(repo),
@@ -3581,6 +3580,8 @@ for unit, (expected_argv, queue, should_run) in specs.items():
     extra_names = []
     for key in unexpected:
         value = live_environment[key]
+        if key == "SHELL" and value in {"/bin/bash", "/bin/sh"}:
+            continue
         if key in allowed_os_systemd and value == allowed_os_systemd[key]:
             continue
         if key == "INVOCATION_ID" and re.fullmatch(r"[0-9a-f]{32}", value):
@@ -3746,7 +3747,6 @@ allowed_os_systemd = {
     "HOME": "/root",
     "USER": "root",
     "LOGNAME": "root",
-    "SHELL": "/bin/bash",
     "LANG": "C.UTF-8",
     "LC_ALL": "C.UTF-8",
     "PWD": str(repo),
@@ -3755,6 +3755,8 @@ unexpected = set(environment) - set(expected)
 extra_names = []
 for key in unexpected:
     value = environment[key]
+    if key == "SHELL" and value in {"/bin/bash", "/bin/sh"}:
+        continue
     if key in allowed_os_systemd and value == allowed_os_systemd[key]:
         continue
     if key == "INVOCATION_ID" and re.fullmatch(r"[0-9a-f]{32}", value):
@@ -4230,11 +4232,11 @@ node_preflight() {
   done
   systemctl is-active --quiet nginx || die "nginx is not active"
   nginx -t >/dev/null 2>&1 || die "nginx configuration is invalid"
-  grep -q 'root /opt/linasbot/dashboard/build;' /etc/nginx/sites-available/linasbot || \
+  grep -q 'root /opt/linasbot/dashboard/build;' /etc/nginx/sites-available/linasaibot || \
     die "nginx dashboard root is noncanonical"
-  grep -q 'proxy_pass http://127.0.0.1:8003;' /etc/nginx/sites-available/linasbot || \
+  grep -q 'proxy_pass http://127.0.0.1:8003;' /etc/nginx/sites-available/linasaibot || \
     die "nginx API upstream is noncanonical"
-  if grep -qE 'linaslaserbot-2\.7\.22|127\.0\.0\.1:8000' /etc/nginx/sites-available/linasbot; then
+  if grep -qE 'linaslaserbot-2\.7\.22|127\.0\.0\.1:8000' /etc/nginx/sites-available/linasaibot; then
     die "nginx still references a legacy runtime"
   fi
   assert_path_absent "$MAINTENANCE_FILE" \
@@ -7413,7 +7415,7 @@ nginx_base_authority_for_tx() {
 
 publish_nginx_config_atomic() {
   local source="$1"
-  local destination=/etc/nginx/sites-available/linasbot
+  local destination=/etc/nginx/sites-available/linasaibot
   run_system_python_control - "$source" "$destination" <<'PY'
 import hashlib
 import os
