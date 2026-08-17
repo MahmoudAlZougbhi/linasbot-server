@@ -102,3 +102,19 @@ test('initial load shows unified Linas loader until integrations and web chat ar
   assert.doesNotMatch(wa, /IntegrationCardLoading/);
   assert.doesNotMatch(wa, /loading && !status/);
 });
+
+test('Website chat stays visible and list load ignores web-chat prefetch failures', () => {
+  const screen = read('features/integrations/IntegrationsScreen.tsx');
+  const loadHook = read('features/integrations/useIntegrationsLoad.ts');
+  const loader = read('features/integrations/webChatCardLoader.ts');
+  const web = read('features/integrations/WebChatCard.tsx');
+  assert.match(screen, /<WebChatCard /);
+  assert.match(loadHook, /setError\(null\)/);
+  assert.match(loadHook, /prefetchWebChatCardSnapshot\(\)/);
+  assert.match(loader, /Soft-fails/);
+  assert.match(loader, /return false/);
+  assert.match(web, /setReady\(true\)/);
+  assert.match(web, /loadFailed \? true : resolveWebPlanAllowed/);
+  assert.match(web, /connectLabel = connected \? tr\('webChatOpenSettings'\) : tr\('connect'\)/);
+  assert.doesNotMatch(web, /onError\?\.\(tr\('integrationsActionError'\)\)/);
+});

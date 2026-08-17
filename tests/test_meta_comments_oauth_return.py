@@ -338,3 +338,23 @@ def test_mobile_integrations_oauth_and_deeplink_source_contract() -> None:
     assert "parseIntegrationsDeepLink" in nav
     assert "linasai://" in nav or "integrations" in nav
     assert "parseIntegrationsDeepLink" in shell
+
+
+def test_integrations_webchat_visibility_source_contract() -> None:
+    """Website chat is on main Integrations; list load must not fail when web-chat prefetch fails."""
+
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "mobile" / "linas-ai" / "src" / "features" / "integrations"
+    screen = (root / "IntegrationsScreen.tsx").read_text(encoding="utf-8")
+    load = (root / "useIntegrationsLoad.ts").read_text(encoding="utf-8")
+    loader = (root / "webChatCardLoader.ts").read_text(encoding="utf-8")
+    card = (root / "WebChatCard.tsx").read_text(encoding="utf-8")
+    assert "<WebChatCard" in screen
+    assert "prefetchWebChatCardSnapshot()" in load
+    assert "setError(null)" in load
+    assert "Soft-fails" in loader
+    assert "return false" in loader
+    assert "setReady(true)" in card
+    assert "loadFailed ? true : resolveWebPlanAllowed" in card
+    assert "tr('connect')" in card
