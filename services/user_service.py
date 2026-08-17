@@ -305,32 +305,23 @@ class UserService(UserServiceAuthMixin):
             return []
 
     def get_users_for_tenant(self, tenant_id: str) -> list[dict[str, Any]]:
-        """List sanitized dashboard users for one tenant (tenantId or legacy tenant_id)."""
+        """List sanitized dashboard users for one tenant.
+
+        Compare via sanitize-normalized tenantId (not raw Firestore equality) so
+        legacy mixed-case tenantId/tenant_id rows still appear on the Users screen.
+        Bad rows are skipped inside get_all_users.
+        """
         tid = self._normalize_tenant_id(tenant_id)
         users: list[dict[str, Any]] = []
         seen_ids: set[str] = set()
-        for field in ("tenantId", "tenant_id"):
-            try:
-                query = self.collection.where(filter=FieldFilter(field, "==", tid))
-                docs = query.stream(
-                    timeout=self.AUTH_QUERY_TIMEOUT_SECONDS,
-                    retry=None,
-                )
-                for doc in docs:
-                    try:
-                        user_data = doc.to_dict() or {}
-                        sanitized = self._sanitize_user(user_data, doc_id=doc.id)
-                        uid = str(sanitized.get("id") or "").strip() if sanitized else ""
-                        if sanitized is not None and uid and uid not in seen_ids:
-                            users.append(sanitized)
-                            seen_ids.add(uid)
-                    except Exception as exc:
-                        print(
-                            f"[auth:get_users_for_tenant] skip user {doc.id} ({field}={tid}): {exc}",
-                            flush=True,
-                        )
-            except Exception as exc:
-                print(f"[auth:get_users_for_tenant] query failed ({field}={tid}): {exc}", flush=True)
+        for sanitized in self.get_all_users():
+            uid = str(sanitized.get("id") or "").strip()
+            if not uid or uid in seen_ids:
+                continue
+            if str(sanitized.get("tenantId") or "").strip() != tid:
+                continue
+            users.append(sanitized)
+            seen_ids.add(uid)
         return users
 
     def update_user(self, user_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
