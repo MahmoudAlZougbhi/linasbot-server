@@ -14,9 +14,8 @@ def sync_request_graphs_after_publish(*, tenant_id: str, sections: dict[str, Any
     Skip only when this process has no customer DB URL or the graph tables are
     not migrated yet. Other errors propagate so publish does not hide graph failures.
     """
-    from sqlalchemy import inspect
-
     from db.session import WhatsAppDatabaseUnavailable, database_url, whatsapp_session
+    from services.request_graphs.db_guard import graphs_tables_ready
     from services.request_graphs.service import sync_graphs_from_request_rules
 
     if not database_url():
@@ -25,8 +24,7 @@ def sync_request_graphs_after_publish(*, tenant_id: str, sections: dict[str, Any
     rules = list((sections.get("requests_appointments") or {}).get("rules") or [])
     try:
         with whatsapp_session(require=True) as db:
-            bind = db.get_bind()
-            if bind is None or "request_definition_graphs" not in inspect(bind).get_table_names():
+            if not graphs_tables_ready(db):
                 logger.info("request_graph_sync_skipped_unmigrated tenant_id=%s", tenant_id)
                 return
             sync_graphs_from_request_rules(db, tenant_id=tenant_id, rules=rules)
