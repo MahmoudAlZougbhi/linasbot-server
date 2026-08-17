@@ -2258,6 +2258,7 @@ install_release_bundle() {
   if ! run_system_python_control - \
       "$helper_root" "$incoming_dir/control-plane.tar" "$control_root" \
       "$control_sha" <<'PY'
+import json
 import sys
 from pathlib import Path
 
@@ -2265,10 +2266,17 @@ helper, archive, destination, expected_sha = sys.argv[1:]
 sys.path.insert(0, helper)
 from scripts.ha.release_artifact_contract import CONTROL_PLANE_MEMBERS, extract_archive
 
+archive_path = Path(archive)
+control = json.loads((archive_path.parent / "release-manifest.json").read_bytes())[
+    "payloads"
+]["control_plane"]
+if control.get("archive_sha256") != expected_sha:
+    raise SystemExit("control-plane archive digest in manifest is not the workflow authority")
 extract_archive(
-    Path(archive),
+    archive_path,
     Path(destination),
     expected_sha,
+    control["tree_sha256"],
     expected_paths=CONTROL_PLANE_MEMBERS,
 )
 PY
