@@ -174,6 +174,7 @@ test('AI Setup hub hides care, handoff, and restricted topics', () => {
   for (const id of ['care', 'handoff', 'restricted']) {
     assert.match(sections, new RegExp(`id: '${id}'[\\s\\S]*?showInCmHub: false`));
   }
+  assert.match(sections, /CM_HUB_PROGRESS_SECTION_IDS/);
   assert.match(sections, /CM_HUB_PROGRESS_EXCLUDED/);
   assert.match(cm, /summarizeHubProgress/);
 });

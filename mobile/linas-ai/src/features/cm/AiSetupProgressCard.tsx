@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon, feather } from '../../components/AppIcon';
 import { LinasSparkleIcon } from '../../components/LinasSparkleIcon';
@@ -16,18 +16,23 @@ type Props = {
   percent: number;
   complete: number;
   total: number;
-  published: boolean;
+  /** True when customer AI is Live (published CM pointer present). */
+  live: boolean;
   incomplete: number;
+  liveBusy?: boolean;
+  onToggleLive?: () => void;
   onContinueSetup?: () => void;
 };
 
-/** Setup progress card — real fill %, Live badge, attention line, Linas CTA. */
+/** Setup progress card — hub section fill %, Live AI on/off control, Linas CTA. */
 export function AiSetupProgressCard({
   percent,
   complete,
   total,
-  published,
+  live,
   incomplete,
+  liveBusy,
+  onToggleLive,
   onContinueSetup,
 }: Props) {
   const { tr } = useI18n();
@@ -36,6 +41,8 @@ export function AiSetupProgressCard({
     incomplete > 0
       ? tr('aiSetupNeedAttention').replace('{count}', String(incomplete))
       : tr('aiSetupAllComplete');
+  const liveLabel = live ? tr('aiSetupLive') : tr('aiSetupOff');
+  const liveA11y = live ? tr('aiSetupLiveOnA11y') : tr('aiSetupLiveOffA11y');
 
   return (
     <View style={[styles.card, { borderColor: AI_SETUP_CARD_BORDER }]}>
@@ -46,11 +53,20 @@ export function AiSetupProgressCard({
           </View>
           <Text style={styles.progressLabel}>{tr('aiSetupProgressLabel')}</Text>
         </View>
-        <View style={[styles.liveBadge, { backgroundColor: published ? AI_SETUP_TEAL : AI_SETUP_TEAL_SOFT }]}>
-          <Text style={[styles.liveText, { color: published ? '#FFFFFF' : AI_SETUP_TEAL }]}>
-            {published ? tr('aiSetupLive') : tr('aiSetupDraft')}
-          </Text>
-        </View>
+        <Pressable
+          style={[styles.liveBadge, { backgroundColor: live ? AI_SETUP_TEAL : AI_SETUP_TEAL_SOFT }]}
+          onPress={onToggleLive}
+          disabled={!onToggleLive || liveBusy}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: live, disabled: !onToggleLive || Boolean(liveBusy) }}
+          accessibilityLabel={liveA11y}
+        >
+          {liveBusy ? (
+            <ActivityIndicator size="small" color={live ? '#FFFFFF' : AI_SETUP_TEAL} />
+          ) : (
+            <Text style={[styles.liveText, { color: live ? '#FFFFFF' : AI_SETUP_TEAL }]}>{liveLabel}</Text>
+          )}
+        </Pressable>
       </View>
 
       <Text style={styles.percentLine}>{tr('aiSetupPercentComplete').replace('{percent}', String(pct))}</Text>
@@ -105,9 +121,13 @@ const styles = StyleSheet.create({
   },
   progressLabel: { fontFamily: fonts.bodyMedium, fontSize: 15, color: '#10221A' },
   liveBadge: {
+    minWidth: 56,
+    minHeight: 28,
     borderRadius: radii.pill,
     paddingHorizontal: 12,
     paddingVertical: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   liveText: { fontFamily: fonts.bodyMedium, fontSize: 12 },
   percentLine: {

@@ -88,6 +88,18 @@ def write_published_pointer(tenant_id: str | None, pointer: PublishedPointer) ->
     atomic_write_json(published_pointer_path(tenant_id), pointer.model_dump(mode="json"))
 
 
+def clear_published_pointer(tenant_id: str | None = None) -> bool:
+    """Remove the published pointer so customer AI falls back to the unpublished guard.
+
+    Returns True when a pointer file was removed. Versions on disk are kept for history/rollback.
+    """
+    path = published_pointer_path(tenant_id)
+    if not path.exists():
+        return False
+    path.unlink()
+    return True
+
+
 def load_published_content(tenant_id: str | None = None) -> tuple[PublishedPointer, dict[str, dict[str, Any]]]:
     """Load the tenant's ONE published version content, with checksum verification.
 

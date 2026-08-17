@@ -1,4 +1,8 @@
-import { CM_HUB_PROGRESS_EXCLUDED, type CmSectionId } from './cmSections';
+import {
+  CM_HUB_PRODUCTS_PROGRESS_ID,
+  CM_HUB_PROGRESS_SECTION_IDS,
+  CM_HUB_PROGRESS_TOTAL,
+} from './cmSections';
 
 export type HubProgressRow = {
   section: string;
@@ -13,19 +17,41 @@ export type HubProgressSummary = {
   missing_sections: string[];
 };
 
-/** Owner-facing AI Setup progress — excludes hub-hidden sections. */
-export function summarizeHubProgress(rows: HubProgressRow[]): HubProgressSummary {
-  const hubRows = rows.filter(
-    (r) => !CM_HUB_PROGRESS_EXCLUDED.includes(r.section as CmSectionId),
-  );
-  const complete = hubRows.filter((r) => r.status === 'complete').length;
-  const total = hubRows.length;
+export type SummarizeHubProgressOptions = {
+  /** When true, Products hub tile counts as complete. */
+  productsComplete?: boolean;
+};
+
+/** Owner-facing AI Setup progress — only the 7 hub tiles (6 CM + Products). */
+export function summarizeHubProgress(
+  rows: HubProgressRow[],
+  opts?: SummarizeHubProgressOptions,
+): HubProgressSummary {
+  const byId = new Map(rows.map((r) => [r.section, r.status]));
+  const missing: string[] = [];
+  let complete = 0;
+
+  for (const id of CM_HUB_PROGRESS_SECTION_IDS) {
+    if (byId.get(id) === 'complete') {
+      complete += 1;
+    } else {
+      missing.push(id);
+    }
+  }
+
+  if (opts?.productsComplete) {
+    complete += 1;
+  } else {
+    missing.push(CM_HUB_PRODUCTS_PROGRESS_ID);
+  }
+
+  const total = CM_HUB_PROGRESS_TOTAL;
   const incomplete = total - complete;
   return {
     complete,
     incomplete,
     total,
     percent: total ? Math.round((complete / total) * 100) : 0,
-    missing_sections: hubRows.filter((r) => r.status !== 'complete').map((r) => r.section),
+    missing_sections: missing,
   };
 }

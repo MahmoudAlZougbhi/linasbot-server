@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
 
+import { ApiError } from '../../api/client';
 import { EmptyState } from '../../components/EmptyState';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { useI18n } from '../../i18n/LanguageContext';
 import { spacing, useTheme } from '../../theme';
+import { fetchProducts } from '../products/productsApi';
 import { ScreenChrome } from '../shared/ScreenChrome';
 import { AiSetupFilterTabs, type AiSetupFilter } from './AiSetupFilterTabs';
 import { AiSetupHubSections } from './AiSetupHubSections';
 import { AiSetupProgressCard } from './AiSetupProgressCard';
-import { fetchCmMeta, type CmMeta } from './cmApi';
+import { fetchCmMeta, publishCmLive, unpublishCmLive, type CmMeta } from './cmApi';
 import {
   buildFillMissingPrompt,
   fetchCmSetupProgress,
@@ -35,45 +37,24 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
   const [error, setError] = useState<string | null>(null);
   const [meta, setMeta] = useState<CmMeta | null>(null);
   const [rows, setRows] = useState<CmProgressRow[]>([]);
-  const [summary, setSummary] = useState({
-    complete: 0,
-    incomplete: 0,
-    total: 0,
-    percent: 0,
-    published: false,
-    missing_sections: [] as string[],
-  });
+  const [productsComplete, setProductsComplete] = useState(false);
+  const [live, setLive] = useState(false);
+  const [liveBusy, setLiveBusy] = useState(false);
   const [filter, setFilter] = useState<AiSetupFilter>('all');
 
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [metaRes, prog] = await Promise.all([fetchCmMeta(), fetchCmSetupProgress()]);
+      const [metaRes, prog, productsRes] = await Promise.all([
+        fetchCmMeta(),
+        fetchCmSetupProgress(),
+        fetchProducts().catch(() => ({ products: [], total: 0 })),
+      ]);
       setMeta(metaRes);
       const progressRows = prog.progress ?? [];
       setRows(progressRows);
-      const s = prog.summary;
-      if (s) {
-        setSummary({
-          complete: s.complete,
-          incomplete: s.incomplete,
-          total: s.total,
-          percent: s.percent,
-          published: Boolean(s.published ?? metaRes.has_published_content),
-          missing_sections: s.missing_sections ?? [],
-        });
-      } else {
-        const complete = progressRows.filter((r) => r.status === 'complete').length;
-        const total = progressRows.length || 1;
-        setSummary({
-          complete,
-          incomplete: total - complete,
-          total,
-          percent: Math.round((complete / total) * 100),
-          published: Boolean(metaRes.has_published_content),
-          missing_sections: progressRows.filter((r) => r.status !== 'complete').map((r) => r.section),
-        });
-      }
+      setProductsComplete((productsRes.total ?? productsRes.products.length) > 0);
+      setLive(Boolean(prog.summary?.published ?? metaRes.has_published_content));
       setHydrated(true);
       setError(null);
     } catch {
@@ -94,7 +75,10 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
     return map;
   }, [rows]);
 
-  const displaySummary = useMemo(() => summarizeHubProgress(rows), [rows]);
+  const displaySummary = useMemo(
+    () => summarizeHubProgress(rows, { productsComplete }),
+    [rows, productsComplete],
+  );
 
   const tiles = useMemo(() => {
     const apiSections = new Set((meta?.sections ?? []).map((s) => s.replace(/-/g, '_')));
@@ -116,6 +100,65 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
     [tr],
   );
 
+  const applyLiveToggle = useCallback(
+    async (nextLive: boolean) => {
+      setLiveBusy(true);
+      try {
+        if (nextLive) {
+          await publishCmLive('ai_setup_live_toggle');
+          setLive(true);
+        } else {
+          await unpublishCmLive();
+          setLive(false);
+        }
+        await reload();
+      } catch (err) {
+        const detail =
+          err instanceof ApiError && typeof err.body === 'object' && err.body
+            ? String(
+                (err.body as { message?: string; detail?: string; error?: string }).message ||
+                  (err.body as { detail?: string }).detail ||
+                  (err.body as { error?: string }).error ||
+                  '',
+              )
+            : '';
+        Alert.alert(
+          tr('aiSetupLiveToggleFailedTitle'),
+          detail.trim() || tr('aiSetupLiveToggleFailedBody'),
+        );
+      } finally {
+        setLiveBusy(false);
+      }
+    },
+    [reload, tr],
+  );
+
+  const onToggleLive = useCallback(() => {
+    if (liveBusy) return;
+    if (live) {
+      Alert.alert(tr('aiSetupTurnOffAiTitle'), tr('aiSetupTurnOffAiBody'), [
+        { text: tr('aiSetupCancel'), style: 'cancel' },
+        {
+          text: tr('aiSetupTurnOffAiConfirm'),
+          style: 'destructive',
+          onPress: () => void applyLiveToggle(false),
+        },
+      ]);
+      return;
+    }
+    if (meta?.publish_enabled === false) {
+      Alert.alert(
+        tr('aiSetupLiveToggleFailedTitle'),
+        meta.publish_disabled_message || tr('aiSetupLiveToggleFailedBody'),
+      );
+      return;
+    }
+    Alert.alert(tr('aiSetupTurnOnAiTitle'), tr('aiSetupTurnOnAiBody'), [
+      { text: tr('aiSetupCancel'), style: 'cancel' },
+      { text: tr('aiSetupTurnOnAiConfirm'), onPress: () => void applyLiveToggle(true) },
+    ]);
+  }, [applyLiveToggle, live, liveBusy, meta, tr]);
+
   return (
     <ScreenChrome title={tr('aiSetupTitle')}>
       {loading && !hasLoadedOnce ? <LinasLoadingIndicator variant="screen" style={styles.loader} /> : null}
@@ -126,8 +169,10 @@ export function CmScreen({ onOpenSection, onOpenProducts, onContinueSetup }: Pro
             percent={displaySummary.percent}
             complete={displaySummary.complete}
             total={displaySummary.total}
-            published={summary.published}
+            live={live}
+            liveBusy={liveBusy}
             incomplete={displaySummary.incomplete}
+            onToggleLive={onToggleLive}
             onContinueSetup={
               onContinueSetup
                 ? () =>
