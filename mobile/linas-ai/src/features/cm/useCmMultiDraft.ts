@@ -8,7 +8,7 @@ import {
 } from './cmProposalReview';
 import { getCmDraft, putCmDraft } from './cmApi';
 import { isDraftDirty, stableSerialize } from './cmDraftDirty';
-import { sanitizeCmSectionPayload } from './stripProvenanceHeaders';
+import { prepareCmDraftPayload } from './prepareCmDraftPayload';
 
 type SectionDraft = {
   payload: Record<string, unknown>;
@@ -42,14 +42,20 @@ export function useCmMultiDraft(
       let overlay = false;
       names.forEach((section, idx) => {
         const draft = loaded[idx];
-        let payload = sanitizeCmSectionPayload(section, draft.payload);
+        let payload = prepareCmDraftPayload(section, draft.payload);
         if (proposalReview && proposalReview.section === section) {
           if (proposalReview.proposedItem) {
             const idKey = section === 'faq' ? 'qa_group_id' : 'id';
-            payload = applyProposedItem(draft.payload, proposalReview.proposedItem, idKey);
+            payload = prepareCmDraftPayload(
+              section,
+              applyProposedItem(draft.payload, proposalReview.proposedItem, idKey),
+            );
             overlay = true;
           } else if (proposalReview.patch && Object.keys(proposalReview.patch).length) {
-            payload = mergeProposalPatch(draft.payload, proposalReview.patch);
+            payload = prepareCmDraftPayload(
+              section,
+              mergeProposalPatch(draft.payload, proposalReview.patch),
+            );
             overlay = true;
           }
         }
@@ -108,7 +114,7 @@ export function useCmMultiDraft(
         const cur = drafts[section];
         if (!cur?.etag) continue;
         const draft = await putCmDraft(section, cur.payload, cur.etag);
-        const payload = sanitizeCmSectionPayload(section, draft.payload);
+        const payload = prepareCmDraftPayload(section, draft.payload);
         baselines.current[section] = stableSerialize(payload);
         updated[section] = {
           payload,

@@ -8,7 +8,7 @@ import {
 } from './cmProposalReview';
 import { getCmDraft, putCmDraft } from './cmApi';
 import { isDraftDirty, stableSerialize } from './cmDraftDirty';
-import { sanitizeCmSectionPayload } from './stripProvenanceHeaders';
+import { prepareCmDraftPayload } from './prepareCmDraftPayload';
 
 export function useCmDraft(section: string, proposalReview?: CmProposalReview | null) {
   const [loading, setLoading] = useState(true);
@@ -21,6 +21,7 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
   const [proposalActive, setProposalActive] = useState(false);
   const saveLock = useRef(false);
   const baselineRef = useRef('');
+  const payloadRef = useRef<Record<string, unknown>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -28,19 +29,26 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
     setConflict(null);
     try {
       const draft = await getCmDraft(section);
-      let next = sanitizeCmSectionPayload(section, draft.payload);
+      let next = prepareCmDraftPayload(section, draft.payload);
       let overlay = false;
       if (proposalReview && proposalReview.section === section) {
         if (proposalReview.proposedItem) {
           const idKey = section === 'faq' ? 'qa_group_id' : 'id';
           const listKey = section === 'prices' ? 'catalog' : 'items';
-          next = applyProposedItem(draft.payload, proposalReview.proposedItem, idKey, listKey);
+          next = prepareCmDraftPayload(
+            section,
+            applyProposedItem(draft.payload, proposalReview.proposedItem, idKey, listKey),
+          );
           overlay = true;
         } else if (proposalReview.patch && Object.keys(proposalReview.patch).length) {
-          next = mergeProposalPatch(draft.payload, proposalReview.patch);
+          next = prepareCmDraftPayload(
+            section,
+            mergeProposalPatch(draft.payload, proposalReview.patch),
+          );
           overlay = true;
         }
       }
+      payloadRef.current = next;
       setPayloadState(next);
       setEtag(draft.etag);
       baselineRef.current = stableSerialize(next);
@@ -66,19 +74,39 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
   }, [load]);
 
   const setPayload = useCallback((next: Record<string, unknown>) => {
+    const changed = isDraftDirty(baselineRef.current, next);
+    if (!changed && !isDraftDirty(stableSerialize(payloadRef.current), next)) {
+      setDirty(false);
+      setProposalActive(false);
+      return;
+    }
+    payloadRef.current = next;
     setPayloadState(next);
-    setDirty(isDraftDirty(baselineRef.current, next));
+    setDirty(changed);
     setProposalActive(false);
   }, []);
 
   const patchPayload = useCallback((patch: Record<string, unknown>) => {
     setPayloadState((prev) => {
       const next = { ...prev, ...patch };
-      setDirty(isDraftDirty(baselineRef.current, next));
+      const changed = isDraftDirty(baselineRef.current, next);
+      if (!changed && !isDraftDirty(stableSerialize(prev), next)) {
+        setDirty(false);
+        setProposalActive(false);
+        return prev;
+      }
+      payloadRef.current = next;
+      setDirty(changed);
       setProposalActive(false);
       return next;
     });
   }, []);
+
+  const hasUnsavedChanges = useCallback(
+    (override?: Record<string, unknown>) =>
+      isDraftDirty(baselineRef.current, override ?? payloadRef.current),
+    [],
+  );
 
   const save = useCallback(async (override?: Record<string, unknown>) => {
     if (saveLock.current) return false;
@@ -93,7 +121,8 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
     setConflict(null);
     try {
       const draft = await putCmDraft(section, body, etag);
-      const saved = sanitizeCmSectionPayload(section, draft.payload);
+      const saved = prepareCmDraftPayload(section, draft.payload);
+      payloadRef.current = saved;
       setPayloadState(saved);
       setEtag(draft.etag);
       baselineRef.current = stableSerialize(saved);
@@ -122,6 +151,7 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
     payload,
     dirty,
     proposalActive,
+    hasUnsavedChanges,
     setPayload,
     patchPayload,
     load,

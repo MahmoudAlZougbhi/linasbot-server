@@ -28,12 +28,12 @@ export function TimeField({ value, onChange }: Props) {
       onBlur={() => {
         const parsed = parseClock12(text);
         if (parsed) {
-          onChange(parsed);
+          if (parsed !== value) onChange(parsed);
           setText(formatClock12(parsed));
           return;
         }
         if (!text.trim()) {
-          onChange('');
+          if (value !== '') onChange('');
           setText('');
           return;
         }
