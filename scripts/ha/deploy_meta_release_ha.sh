@@ -8594,8 +8594,11 @@ node_ensure_maintenance() {
     arm_deploy_node_sentinel "$tx_dir"
   fi
   disable_runtime_autostart
+  log "runtime autostart disabled"
   arm_maintenance_markers
+  log "maintenance markers armed"
   stop_queue_workers
+  log "queue workers stopped"
   if systemctl is-active --quiet linasbot.service && ! assert_direct_maintenance_readiness; then
     # A marker-unaware old release can only be withdrawn from the actual DO
     # :8003 health target by closing that port.
@@ -9772,14 +9775,18 @@ recover_deployment() {
       "$release_run_id" "$release_run_attempt" "$release_target_tree_sha"
   }
   HA_RECOVERY_TX_SUCCEEDED=0
+  HA_RECOVERY_TX_DIR=$tx_dir
+  HA_RECOVERY_PEER_HOST=$peer_host
+  HA_RECOVERY_DECISION=$decision
   fail_close_recovery() {
     local rc=$?
     trap - EXIT INT TERM
     if [ "${HA_RECOVERY_TX_SUCCEEDED:-0}" != "1" ]; then
       set +e
-      node_ensure_maintenance "$tx_dir" >/dev/null 2>&1
-      remote_node "$peer_host" ensure-maintenance "$tx_dir" >/dev/null 2>&1
-      log "recovery interrupted at durable decision=$decision; both nodes were forced fail-closed"
+      log "recovery fail-close rc=$rc"
+      node_ensure_maintenance "$HA_RECOVERY_TX_DIR" >/dev/null 2>&1
+      remote_node "$HA_RECOVERY_PEER_HOST" ensure-maintenance "$HA_RECOVERY_TX_DIR" >/dev/null 2>&1
+      log "recovery interrupted at durable decision=$HA_RECOVERY_DECISION; both nodes were forced fail-closed"
     fi
     exit "$rc"
   }
@@ -9972,30 +9979,37 @@ retry_distinct_reconciliation() {
     decision="${persisted[10]}"
   }
   HA_RETRY_TX_SUCCEEDED=0
+  HA_RETRY_TX_DIR=$tx_dir
+  HA_RETRY_PEER_HOST=$peer_host
+  HA_RETRY_DECISION=$decision
+  HA_RETRY_DRAIN_SECONDS=$drain_seconds
+  HA_RETRY_PREVIOUS_SHA=$previous_sha
+  HA_RETRY_PEER_PREVIOUS_SHA=$peer_previous_sha
   fail_close_retry() {
     local rc=$?
     local recovery_ok=1
     trap - EXIT INT TERM
     if [ "${HA_RETRY_TX_SUCCEEDED:-0}" != "1" ]; then
       set +e
-      node_ensure_maintenance "$tx_dir" >/dev/null 2>&1
-      remote_node "$peer_host" ensure-maintenance "$tx_dir" >/dev/null 2>&1
+      log "retry fail-close rc=$rc"
+      node_ensure_maintenance "$HA_RETRY_TX_DIR" >/dev/null 2>&1
+      remote_node "$HA_RETRY_PEER_HOST" ensure-maintenance "$HA_RETRY_TX_DIR" >/dev/null 2>&1
       if ! refresh_retry_decision; then
         log "retry durable decision is unreadable; no rollback or admission is authorized"
         exit "$rc"
       fi
-      if [ "$decision" = "rollback" ]; then
-        sleep "$drain_seconds"
-        node_recover_rollback "$previous_sha" "$tx_dir" >/dev/null 2>&1 || recovery_ok=0
-        remote_node "$peer_host" recover-rollback \
-          "$peer_previous_sha" "$tx_dir" >/dev/null 2>&1 || recovery_ok=0
+      if [ "$HA_RETRY_DECISION" = "rollback" ]; then
+        sleep "$HA_RETRY_DRAIN_SECONDS"
+        node_recover_rollback "$HA_RETRY_PREVIOUS_SHA" "$HA_RETRY_TX_DIR" >/dev/null 2>&1 || recovery_ok=0
+        remote_node "$HA_RETRY_PEER_HOST" recover-rollback \
+          "$HA_RETRY_PEER_PREVIOUS_SHA" "$HA_RETRY_TX_DIR" >/dev/null 2>&1 || recovery_ok=0
         if [ "$recovery_ok" = "1" ]; then
-          node_assert_exact_head "$previous_sha" "$tx_dir" >/dev/null 2>&1 || recovery_ok=0
-          remote_node "$peer_host" assert-head \
-            "$peer_previous_sha" "$tx_dir" >/dev/null 2>&1 || recovery_ok=0
-          node_assert_release_drained "$previous_sha" "$tx_dir" >/dev/null 2>&1 || recovery_ok=0
-          remote_node "$peer_host" assert-drained \
-            "$peer_previous_sha" "$tx_dir" >/dev/null 2>&1 || recovery_ok=0
+          node_assert_exact_head "$HA_RETRY_PREVIOUS_SHA" "$HA_RETRY_TX_DIR" >/dev/null 2>&1 || recovery_ok=0
+          remote_node "$HA_RETRY_PEER_HOST" assert-head \
+            "$HA_RETRY_PEER_PREVIOUS_SHA" "$HA_RETRY_TX_DIR" >/dev/null 2>&1 || recovery_ok=0
+          node_assert_release_drained "$HA_RETRY_PREVIOUS_SHA" "$HA_RETRY_TX_DIR" >/dev/null 2>&1 || recovery_ok=0
+          remote_node "$HA_RETRY_PEER_HOST" assert-drained \
+            "$HA_RETRY_PEER_PREVIOUS_SHA" "$HA_RETRY_TX_DIR" >/dev/null 2>&1 || recovery_ok=0
         fi
         if [ "$recovery_ok" = "1" ]; then
           update_retry_journal "distinct-rollback-drained" >/dev/null 2>&1 || recovery_ok=0
@@ -10004,7 +10018,7 @@ retry_distinct_reconciliation() {
           update_retry_journal "rollback-uncertain" >/dev/null 2>&1 || true
         fi
       fi
-      log "retry interrupted; durable decision=$decision and fail-closed recovery state were retained"
+      log "retry interrupted; durable decision=$HA_RETRY_DECISION and fail-closed recovery state were retained"
     fi
     exit "$rc"
   }
@@ -10254,13 +10268,16 @@ commit_target_deployment() {
     test "${persisted[21]}" = "$release_target_tree_sha" || return 1
   }
   HA_COMMIT_TX_SUCCEEDED=0
+  HA_COMMIT_TX_DIR=$tx_dir
+  HA_COMMIT_PEER_HOST=$peer_host
   fail_close_commit() {
     local rc=$?
     trap - EXIT INT TERM
     if [ "${HA_COMMIT_TX_SUCCEEDED:-0}" != 1 ]; then
       set +e
-      node_ensure_maintenance "$tx_dir" >/dev/null 2>&1
-      remote_node "$peer_host" ensure-maintenance "$tx_dir" >/dev/null 2>&1
+      log "commit fail-close rc=$rc"
+      node_ensure_maintenance "$HA_COMMIT_TX_DIR" >/dev/null 2>&1
+      remote_node "$HA_COMMIT_PEER_HOST" ensure-maintenance "$HA_COMMIT_TX_DIR" >/dev/null 2>&1
       log "commit interrupted; durable journal was retained and both nodes remain fail-closed"
     fi
     exit "$rc"

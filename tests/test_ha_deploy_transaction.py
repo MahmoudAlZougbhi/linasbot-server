@@ -1590,8 +1590,8 @@ def test_distinct_drained_rollback_has_an_exact_retryable_reconciliation_path() 
     assert local_exact < peer_exact < peer_stage < local_stage < both_drained < peer_activate < local_activate < parity
     assert 'remote_node "$peer_host" recover-admit "$target_sha" "$tx_dir"' not in retry
     assert 'node_recover_admit "$target_sha" "$tx_dir"' not in retry
-    assert 'node_recover_rollback "$previous_sha" "$tx_dir"' in retry
-    assert 'remote_node "$peer_host" recover-rollback' in retry
+    assert 'node_recover_rollback "$HA_RETRY_PREVIOUS_SHA" "$HA_RETRY_TX_DIR"' in retry
+    assert 'remote_node "$HA_RETRY_PEER_HOST" recover-rollback' in retry
     assert 'update_retry_journal "distinct-rollback-drained"' in retry
     retry_stage = source[source.index("prepare_retry_stage() {") : source.index("stop_runtime() {")]
     assert "preserved incomplete stage before exact retry" in retry_stage
