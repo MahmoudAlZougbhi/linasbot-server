@@ -12,6 +12,8 @@ def test_worker_need_daemon_reload_queries_instances_not_the_template() -> None:
     assert "worker_instances_need_daemon_reload_no() {" in source
     assert "systemd_unit_need_daemon_reload_is_no() {" in source
     assert 'systemd_unit_need_daemon_reload_is_no "linasbot-worker@${queue}.service"' in source
+    assert "worker_instances_are_positively_loaded() {" in source
+    assert 'test "$load_state" = "loaded"' in source
     for queue in ("high_priority", "interactive", "background", "expensive"):
         assert f"linasbot-worker@{queue}.service" in source
     assert "systemctl cat linasbot-worker@.service" not in source
@@ -20,6 +22,8 @@ def test_worker_need_daemon_reload_queries_instances_not_the_template() -> None:
     install = source[
         source.index("install_maintenance_boot_guard() {") : source.index("assert_maintenance_boot_guard_loaded() {")
     ]
+    assert "ensure_worker_template_before_maintenance_guard" in install
+    assert "worker_instances_are_positively_loaded" in install
     assert "worker_instances_need_daemon_reload_no" in install
     assert "worker_instances_maintenance_guard_readback" in install
     assert "systemd_unit_need_daemon_reload_is_no linasbot.service" in install
