@@ -2824,9 +2824,29 @@ install_lb_ready_attestation() {
   validate_digest "$runtime_cluster"
   test "$(configured_node_id)" = "$expected_node_id" || \
     die "canonical environment node identity differs from the LB installer authority"
-  test "$(git -C "$REPO_DIR" hash-object "$0")" = \
-    "$(git -C "$REPO_DIR" rev-parse "$target_sha:$HELPER_REPO_PATH")" || \
-    die "LB attestation installer is not the exact authorized target helper"
+  running_helper="$(git -C "$REPO_DIR" hash-object "$0")"
+  target_helper="$(git -C "$REPO_DIR" rev-parse "$target_sha:$HELPER_REPO_PATH")"
+  if [ "$running_helper" != "$target_helper" ]; then
+    # Pre-mutation recover must install a fresh LB observation with the
+    # checksummed dispatch helper; live/target SHA may predate that blob.
+    if [ "$operation" = recover ]; then
+      local -a recover_journal=()
+      mapfile -t recover_journal < <(read_deploy_journal "$journal_digest")
+      test "${#recover_journal[@]}" -eq 22 || die "deployment recovery journal is incomplete"
+      test "${recover_journal[1]}" = "$target_sha" || \
+        die "LB attestation target differs from the interrupted deployment"
+      case "${recover_journal[9]}" in
+        preflight-proven|peer-mark-started)
+          log "LB installer is a later exact blob than the open pre-mutation journal"
+          ;;
+        *)
+          die "LB attestation installer is not the exact authorized target helper"
+          ;;
+      esac
+    else
+      die "LB attestation installer is not the exact authorized target helper"
+    fi
+  fi
   assert_lb_attestation_install_collision_contract "$operation" "$target_sha" "$journal_digest"
 
   temporary="$(mktemp -p "$META_HA_STATE_ROOT" .lb-ready-deploy-install.XXXXXXXX)"
