@@ -18,7 +18,15 @@ def test_worker_need_daemon_reload_queries_instances_not_the_template() -> None:
         assert f"linasbot-worker@{queue}.service" in source
     assert "systemctl cat linasbot-worker@.service" not in source
     assert "worker_instances_maintenance_guard_readback() {" in source
+    assert "systemctl show -p DropInPaths --value --" in source
+    assert "ConditionPathExists=!/var/lib/linasbot/meta-ha/deploy-node.active" in source
     assert 'systemctl cat -- "linasbot-worker@${queue}.service"' in source
+    readback = source[
+        source.index("worker_instances_maintenance_guard_readback() {") : source.index("collect_stray_worker_pids() {")
+    ]
+    assert "DropInPaths" in readback
+    assert 'grep -Fq "$worker_guard"' not in readback
+    assert "NeedDaemonReload=no is not proof" in source
     install = source[
         source.index("install_maintenance_boot_guard() {") : source.index("assert_maintenance_boot_guard_loaded() {")
     ]

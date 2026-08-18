@@ -103,6 +103,8 @@ INTERNAL_NODE_DISPATCH_CONFIRM=LINAS_HA_COORDINATOR_INTERNAL_NODE_RPC_V1
 VERIFY_API_UNIT=linasbot-ha-verify.service
 VERIFY_READINESS_UNIT=linasbot-ha-readiness-probe.service
 WORKER_QUEUES=(high_priority interactive background expensive)
+WORKER_TEMPLATE_REQUIRED_MARKER=$META_HA_STATE_ROOT/worker-template-required
+WORKER_TEMPLATE_REQUIRED_TOKEN=legacy-workerless-migration-complete
 SSH_OPTIONS=(
   -o BatchMode=yes
   -o ConnectTimeout=8
@@ -223,6 +225,9 @@ TEMPLATE = "/etc/systemd/system/linasbot-worker@.service"
 def classify(probe):
     if not isinstance(probe, dict) or probe.get("schema") != "linas-ha-legacy-workerless-v1":
         raise SystemExit("worker template probe schema is invalid")
+    required = probe.get("worker_template_required")
+    if required is not True and required is not False:
+        raise SystemExit("worker template required flag is invalid")
     if probe.get("durable_queues_required") is True:
         raise SystemExit("old live config declares production workers required")
     if probe.get("stray_worker_pids"):
@@ -259,10 +264,14 @@ def classify(probe):
         if not exists:
             raise SystemExit("worker instances are loaded without a template file")
         return "loaded"
+    if exists:
+        raise SystemExit("worker template file exists but instances are not fully loaded")
     if loaded:
-        if exists:
-            raise SystemExit("worker template file exists but instances are not fully loaded")
         raise SystemExit("worker instances are loaded without a template file")
+    if required is True:
+        raise SystemExit(
+            "legacy workerless migration is not allowed after the worker template became required"
+        )
     return "legacy-absent"
 
 
@@ -302,10 +311,35 @@ else:
 PY
 }
 
+worker_template_required_marker_present() {
+  if [ ! -e "$WORKER_TEMPLATE_REQUIRED_MARKER" ] && \
+     [ ! -L "$WORKER_TEMPLATE_REQUIRED_MARKER" ]; then
+    return 1
+  fi
+  test -f "$WORKER_TEMPLATE_REQUIRED_MARKER" && \
+    test ! -L "$WORKER_TEMPLATE_REQUIRED_MARKER" || \
+    die "worker-template required marker is unsafe"
+  test "$(stat -c '%u:%g:%a' "$WORKER_TEMPLATE_REQUIRED_MARKER")" = "0:0:600" || \
+    die "worker-template required marker security is invalid"
+  test "$(tr -d '\n' <"$WORKER_TEMPLATE_REQUIRED_MARKER")" = \
+    "$WORKER_TEMPLATE_REQUIRED_TOKEN" || \
+    die "worker-template required marker is invalid"
+  return 0
+}
+
+arm_worker_template_required_marker() {
+  worker_instances_are_positively_loaded || \
+    die "target admission requires a positively loaded worker template"
+  if worker_template_required_marker_present; then
+    return 0
+  fi
+  write_private_state "$WORKER_TEMPLATE_REQUIRED_MARKER" "$WORKER_TEMPLATE_REQUIRED_TOKEN"
+}
+
 collect_worker_template_probe() {
   local target_sha="$1"
   local live_head queue load_state unit_file_state active_state fragment
-  local template_exists=0 template_symlink=0 durable=0
+  local template_exists=0 template_symlink=0 durable=0 required=0
   local stray listed
   validate_sha "$target_sha"
   live_head="$(current_head)"
@@ -318,6 +352,9 @@ collect_worker_template_probe() {
   if durable_queues_enabled; then
     durable=1
   fi
+  if worker_template_required_marker_present; then
+    required=1
+  fi
   stray="$(collect_stray_worker_pids)"
   listed="$(
     {
@@ -328,7 +365,7 @@ collect_worker_template_probe() {
     } | awk 'NF { print $1 }'
   )"
   run_system_python_control - "$live_head" "$target_sha" "$template_exists" \
-    "$template_symlink" "$durable" "$stray" "$listed" \
+    "$template_symlink" "$durable" "$required" "$stray" "$listed" \
     $(for queue in "${WORKER_QUEUES[@]}"; do
         load_state="$(systemctl show -p LoadState --value -- \
           "linasbot-worker@${queue}.service" 2>/dev/null || true)"
@@ -343,7 +380,7 @@ collect_worker_template_probe() {
 import json
 import sys
 
-live_head, target_sha, exists, symlink, durable, stray_raw, listed_raw, *rows = sys.argv[1:]
+live_head, target_sha, exists, symlink, durable, required, stray_raw, listed_raw, *rows = sys.argv[1:]
 queues = ("high_priority", "interactive", "background", "expensive")
 if len(rows) != len(queues):
     raise SystemExit("worker template probe instance rows are incomplete")
@@ -367,6 +404,7 @@ print(
             "template_file_exists": exists == "1",
             "template_is_symlink": symlink == "1",
             "durable_queues_required": durable == "1",
+            "worker_template_required": required == "1",
             "stray_worker_pids": [item for item in stray_raw.split("\n") if item],
             "listed_worker_units": [item for item in listed_raw.split("\n") if item],
             "instances": instances,
@@ -3400,7 +3438,8 @@ current_head() {
 }
 
 assert_canonical_repo() {
-  local top_level
+  local target_sha="${1:-}"
+  local top_level probe classification
   test "$(realpath -e "$REPO_DIR")" = "$REPO_DIR" || die "canonical repository path is not exact"
   top_level="$(git -C "$REPO_DIR" rev-parse --show-toplevel)"
   test "$top_level" = "$REPO_DIR" || die "Git top-level is not the canonical root"
@@ -3420,8 +3459,19 @@ assert_canonical_repo() {
     /etc/nginx/sites-available/linasaibot || die "canonical nginx enabled-site target is wrong"
   test -f /etc/systemd/system/linasbot.service && \
     test ! -L /etc/systemd/system/linasbot.service || die "canonical API unit is unsafe"
-  test -f /etc/systemd/system/linasbot-worker@.service && \
-    test ! -L /etc/systemd/system/linasbot-worker@.service || die "canonical worker unit is unsafe"
+  if [ -f /etc/systemd/system/linasbot-worker@.service ] && \
+     [ ! -L /etc/systemd/system/linasbot-worker@.service ]; then
+    :
+  elif [ -e /etc/systemd/system/linasbot-worker@.service ] || \
+       [ -L /etc/systemd/system/linasbot-worker@.service ]; then
+    die "canonical worker unit is unsafe"
+  else
+    validate_sha "$target_sha"
+    probe="$(collect_worker_template_probe "$target_sha")"
+    classification="$(printf '%s\n' "$probe" | legacy_workerless_eval classify)"
+    test "$classification" = "legacy-absent" || \
+      die "canonical worker unit is missing and is not a proven legacy workerless state"
+  fi
   if [ -e "$REPO_DIR/linaslaserbot-2.7.22" ] || [ -L "$REPO_DIR/linaslaserbot-2.7.22" ]; then
     die "legacy nested runtime still exists"
   fi
@@ -4511,7 +4561,7 @@ node_preflight() {
   local lb_observed_at
   local blocker=0
   python_runtime_cluster_sha="$(assert_python_runtime_contract "$expected_node_id")"
-  assert_canonical_repo
+  assert_canonical_repo "$target_sha"
   assert_no_other_meta_transaction
   if [ -n "$expected_bootstrap_plan" ]; then
     validate_digest "$expected_bootstrap_plan"
@@ -4601,6 +4651,10 @@ capture_service_state() {
        [ -f "$(dirname "$output")/legacy-workerless.decision" ] && \
        [ "$(tr -d '\n' <"$(dirname "$output")/legacy-workerless.decision")" = \
          "legacy-absent-migration" ]; then
+      if [ -e /etc/systemd/system/linasbot-worker@.service ] || \
+         [ -L /etc/systemd/system/linasbot-worker@.service ]; then
+        die "legacy-absent-migration cannot rewrite worker state while the template exists"
+      fi
       if [ "$enabled" = "not-found" ]; then
         enabled=disabled
       fi
@@ -6612,10 +6666,29 @@ root_names = (
     "dropin-api",
     "dropin-worker-template",
 )
+optional_absent = {6, 8}
 for index, path in enumerate(paths):
-    if not path.exists() and not path.is_symlink():
-        raise SystemExit(f"baseline artifact is missing: {path}")
     root_digest = hashlib.sha256()
+    if not path.exists() and not path.is_symlink():
+        if index not in optional_absent:
+            raise SystemExit(f"baseline artifact is missing: {path}")
+        before = records
+        add_record(
+            {
+                "path": f"artifact-{index}",
+                "type": "absent",
+                "mode": 0,
+                "uid": 0,
+                "gid": 0,
+            }
+        )
+        name = root_names[index] if index < len(root_names) else f"artifact-{index}"
+        print(
+            f"[ha-deploy] baseline-artifact {name} records={records - before} "
+            f"sha256={root_digest.hexdigest()}",
+            file=sys.stderr,
+        )
+        continue
     before = records
     visit(path, f"artifact-{index}")
     name = root_names[index] if index < len(root_names) else f"artifact-{index}"
@@ -6701,6 +6774,7 @@ backup_live_node() {
       ! -name sibling-path \
       ! -name 'incomplete-service-state-*' \
       ! -name 'incomplete-stage-*' \
+      ! -name 'legacy-workerless.*' \
       -print -quit | grep -q . && die "transaction directory already contains unexpected state"
   fi
   if [ -e "$tx_dir/predrain-service-state" ] || [ -L "$tx_dir/predrain-service-state" ]; then
@@ -6922,7 +6996,7 @@ prepare_retry_stage() {
     case "$name" in
       maintenance-nginx.conf | maintenance-nginx.candidate | maintenance-boot-guard.conf | \
         predrain-service-state | drain-guard.complete | drain-runtime-stopped | sibling-path | \
-        incomplete-service-state-* | incomplete-stage-*)
+        incomplete-service-state-* | incomplete-stage-* | legacy-workerless.*)
         continue
         ;;
     esac
@@ -7089,31 +7163,91 @@ install_trusted_worker_template_from_target() {
   object="$(git -C "$REPO_DIR" rev-parse "$target_sha:deploy/systemd/linasbot-worker@.service")"
   test "$(git -C "$REPO_DIR" cat-file -t "$object")" = blob || \
     die "trusted target worker template is not a blob"
-  run_system_python_control - "$REPO_DIR" "$object" <<'PY'
+  test ! -e /etc/systemd/system/linasbot-worker@.service && \
+    test ! -L /etc/systemd/system/linasbot-worker@.service || \
+    die "canonical worker template already exists; refusing overwrite"
+  run_system_python_control - "$REPO_DIR" "$object" "$target_sha" \
+    "$RELEASE_BUNDLE_RECEIPT_ROOT" "$RELEASE_BUNDLE_ROOT" <<'PY'
+import json
 import os
 import stat
 import subprocess
 import sys
+import tarfile
 import tempfile
 from pathlib import Path
 
-repo, git_object = sys.argv[1:]
+repo, git_object, target_sha, receipt_root_raw, bundle_root_raw = sys.argv[1:]
 destination = Path("/etc/systemd/system/linasbot-worker@.service")
+member_name = "deploy/systemd/linasbot-worker@.service"
+git = [
+    "/usr/bin/git",
+    "--no-replace-objects",
+    "-c",
+    "core.hooksPath=/dev/null",
+    "-C",
+    repo,
+]
+if destination.exists() or destination.is_symlink():
+    raise SystemExit("canonical worker template already exists; refusing overwrite")
 payload = subprocess.run(
-    ["git", "-C", repo, "cat-file", "blob", git_object],
+    [*git, "cat-file", "blob", git_object],
     check=False,
     stdin=subprocess.DEVNULL,
     stdout=subprocess.PIPE,
     stderr=subprocess.DEVNULL,
 ).stdout
-if not payload or subprocess.run(
-    ["git", "-C", repo, "hash-object", "--stdin"],
+hashed = subprocess.run(
+    [*git, "hash-object", "--stdin"],
     check=False,
     input=payload,
     stdout=subprocess.PIPE,
     stderr=subprocess.DEVNULL,
-).stdout.strip() != git_object.encode():
+).stdout.strip()
+if not payload or hashed != git_object.encode():
     raise SystemExit("trusted worker template blob could not be authenticated")
+receipt_root = Path(receipt_root_raw)
+bundle_root = Path(bundle_root_raw)
+matches = []
+for receipt in sorted(receipt_root.iterdir(), key=lambda item: item.name):
+    if not receipt.name.endswith(".json") or receipt.is_symlink() or not receipt.is_file():
+        continue
+    installed = json.loads(receipt.read_text(encoding="utf-8"))
+    if installed.get("target_sha") != target_sha or installed.get("status") != "installed":
+        continue
+    artifact_id = installed.get("artifact_id")
+    artifact_api_sha = installed.get("artifact_api_sha256")
+    if type(artifact_id) is not int or artifact_id < 1:
+        raise SystemExit("trusted release bundle receipt artifact ID is invalid")
+    if not isinstance(artifact_api_sha, str) or len(artifact_api_sha) != 64:
+        raise SystemExit("trusted release bundle receipt digest is invalid")
+    archive = bundle_root / f"{artifact_id}-{artifact_api_sha}" / "control-plane.tar"
+    if not archive.is_file() or archive.is_symlink():
+        raise SystemExit("trusted release bundle control-plane archive is missing")
+    with tarfile.open(archive, "r:") as handle:
+        try:
+            member = handle.getmember(member_name)
+        except KeyError as exc:
+            raise SystemExit("trusted release bundle lacks the worker template") from exc
+        if (
+            member.issym()
+            or member.islnk()
+            or not member.isfile()
+            or member.name != member_name
+            or member.name.startswith("/")
+            or ".." in Path(member.name).parts
+        ):
+            raise SystemExit("trusted release bundle worker template member is unsafe")
+        extracted = handle.extractfile(member)
+        if extracted is None:
+            raise SystemExit("trusted release bundle worker template member is unreadable")
+        matches.append(extracted.read())
+if not matches:
+    raise SystemExit("trusted worker template is not present in the installed release bundle")
+if any(item != matches[0] for item in matches):
+    raise SystemExit("installed release bundles disagree on the worker template bytes")
+if matches[0] != payload:
+    raise SystemExit("git worker template blob differs from the trusted release bundle")
 if payload.count(b"__APP_DIR__") < 1:
     raise SystemExit("trusted worker template lacks its exact app-root placeholder")
 payload = payload.replace(b"__APP_DIR__", b"/opt/linasbot")
@@ -7154,6 +7288,7 @@ if (
     raise SystemExit("installed trusted worker template is unsafe")
 PY
   fsync_path_and_parents /etc/systemd/system/linasbot-worker@.service /etc/systemd/system
+  install -d -o root -g root -m 0755 /etc/systemd/system/linasbot-worker@.service.d
   log "legacy workerless migration installed trusted worker template from $target_sha"
 }
 
@@ -8599,6 +8734,7 @@ node_clear_maintenance() {
     enable_admitted_target_autostart "$tx_dir"
     write_pre_admission_proof "$tx_dir" "$admission_sha"
     clear_maintenance_markers_durable
+    arm_worker_template_required_marker
   else
     test -z "$activation_state" || test "$activation_state" = "rolled-back" || \
       die "rollback admission requires a durable rolled-back activation phase"
@@ -8810,6 +8946,10 @@ node_dispatch() {
       esac
       ensure_transaction_dir_durable "$1"
       write_private_state "$1/legacy-workerless.decision" "$2"
+      ;;
+    install-trusted-worker-template)
+      validate_tx_dir "${1:-}"
+      ensure_worker_template_before_maintenance_guard "$1"
       ;;
     clear-maintenance)
       validate_tx_dir "${1:-}"
@@ -9371,6 +9511,68 @@ for key in (
 PY
 }
 
+assert_worker_template_cluster_agreement() {
+  local peer_host="$1"
+  local target_sha="$2"
+  local local_file peer_file decision rc=0
+  validate_sha "$target_sha"
+  local_file="$(mktemp -p /run linasbot-worker-probe.XXXXXXXX)"
+  peer_file="$(mktemp -p /run linasbot-worker-probe.XXXXXXXX)"
+  chmod 0600 "$local_file" "$peer_file"
+  if ! collect_worker_template_probe "$target_sha" >"$local_file"; then
+    unlink "$local_file"
+    unlink "$peer_file"
+    die "node01 worker template probe failed"
+  fi
+  if ! remote_node "$peer_host" worker-template-probe "$target_sha" >"$peer_file"; then
+    unlink "$local_file"
+    unlink "$peer_file"
+    die "node02 worker template probe failed"
+  fi
+  set +e
+  decision="$(legacy_workerless_eval decide "$local_file" "$peer_file")"
+  rc=$?
+  set -e
+  unlink "$local_file"
+  unlink "$peer_file"
+  test "$rc" = 0 && test -n "$decision" || \
+    die "node01 and node02 worker template states disagree or are invalid"
+  case "$decision" in
+    template-present | legacy-absent-migration) ;;
+    *) die "worker template cluster decision is invalid" ;;
+  esac
+  log "preflight worker-template cluster decision=$decision"
+}
+
+apply_legacy_workerless_template_cluster_install() {
+  local tx_dir="$1"
+  local peer_host="$2"
+  local decision
+  validate_tx_dir "$tx_dir"
+  test -f "$tx_dir/legacy-workerless.decision" && \
+    test ! -L "$tx_dir/legacy-workerless.decision" || \
+    die "cluster worker-template decision is missing before template install"
+  test "$(stat -c '%u:%g:%a' "$tx_dir/legacy-workerless.decision")" = "0:0:600" || \
+    die "cluster worker-template decision is unsafe"
+  decision="$(tr -d '\n' <"$tx_dir/legacy-workerless.decision")"
+  case "$decision" in
+    template-present)
+      worker_instances_are_positively_loaded || \
+        die "cluster said template-present but local worker template is not loaded"
+      ;;
+    legacy-absent-migration)
+      ensure_worker_template_before_maintenance_guard "$tx_dir"
+      remote_node "$peer_host" install-trusted-worker-template "$tx_dir"
+      worker_instances_are_positively_loaded || \
+        die "trusted worker template is not positively loaded on node01 after cluster install"
+      log "legacy workerless migration installed the trusted worker template on both nodes"
+      ;;
+    *)
+      die "cluster worker-template decision is invalid"
+      ;;
+  esac
+}
+
 publish_cluster_worker_template_decision() {
   local tx_dir="$1"
   local peer_host="$2"
@@ -9515,6 +9717,7 @@ recover_deployment() {
   update_recovery_journal "recovery-lb-attested"
   update_recovery_journal "recovery-started"
   publish_cluster_worker_template_decision "$tx_dir" "$peer_host" "$target_sha"
+  apply_legacy_workerless_template_cluster_install "$tx_dir" "$peer_host"
   node_ensure_maintenance "$tx_dir"
   remote_node "$peer_host" ensure-maintenance "$tx_dir"
   sleep "$drain_seconds"
@@ -10204,6 +10407,7 @@ orchestrate() {
   test -n "$local_baseline_artifacts" && test -n "$peer_baseline_artifacts" || \
     die "both-node baseline artifact preflight evidence is missing"
   assert_cluster_runtime_env_parity "$peer_host" "$target_sha" "$target_sha"
+  assert_worker_template_cluster_agreement "$peer_host" "$target_sha"
   if [ "$deploy_mode" = "steady-confirmed" ]; then
     test "$previous_sha" = "$peer_previous_sha" || die "nodes do not share one previous SHA"
     test "$previous_sha" = "$expected_local_previous" || \
@@ -10413,6 +10617,7 @@ orchestrate() {
     "$target_sha" "$lb_attestation_sha" "$lb_ready_projection_sha")" = "$lb_observed_at" || \
     die "node02 LB attestation changed at the first mutation boundary"
   publish_cluster_worker_template_decision "$tx_dir" "$peer_host" "$target_sha"
+  apply_legacy_workerless_template_cluster_install "$tx_dir" "$peer_host"
   log "withdrawing peer before peer-first staging"
   update_deploy_journal "peer-mark-started"
   remote_node "$peer_host" mark-maintenance "$tx_dir"
