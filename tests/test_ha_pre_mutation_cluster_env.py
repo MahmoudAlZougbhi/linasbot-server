@@ -46,6 +46,15 @@ def test_deploy_workflow_exposes_journal_identity_and_dispatch_helper_recover() 
     assert "print-deploy-journal-identity" in source
     assert "INSTALL_STATUS_LB_" in source
     assert "RECOVER_DISPATCH_HELPER=1" in source
-    assert "inputs.DEPLOY_OPERATION == 'recover_exact' && github.sha" in source
+    assert (
+        "(inputs.DEPLOY_OPERATION == 'recover_exact' || inputs.DEPLOY_OPERATION == 'recovery_status') && github.sha"
+        in source
+    )
+    assert '[ "$DEPLOY_OPERATION" = recover_exact ] || [ "$DEPLOY_OPERATION" = recovery_status ]' in source
+    assert "TRANSFER_FILES=(transfer/deploy_meta_release_ha.sh)" in source
+    assert "TRANSFER_FILES=()" not in source
     assert '[ "$ARTIFACT_NAME" = "linasbot-release-$DISPATCH_SHA" ]' in source
     assert '[ "$RUN_HEAD_SHA" = "$TARGET_SHA" ]' in source
+    assert "materialize_recovery_helper" in source
+    assert "I_UNDERSTAND_SKIPPING_GATES" not in source
+    assert "--skip" not in source

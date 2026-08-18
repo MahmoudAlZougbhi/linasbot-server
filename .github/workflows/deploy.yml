@@ -250,7 +250,7 @@ jobs:
           fi
 
           if [ "$DEPLOY_OPERATION" = steady ] || [ "$DEPLOY_OPERATION" = reconcile_exact ] || \
-             [ "$DEPLOY_OPERATION" = recover_exact ]; then
+             [ "$DEPLOY_OPERATION" = recover_exact ] || [ "$DEPLOY_OPERATION" = recovery_status ]; then
           RUN_JSON="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$QUALITY_GATES_RUN_ID")"
           RUN_HEAD_SHA="$(jq -r '.head_sha' <<<"$RUN_JSON")"
           RUN_HEAD_BRANCH="$(jq -r '.head_branch' <<<"$RUN_JSON")"
@@ -262,7 +262,7 @@ jobs:
             "repos/$GITHUB_REPOSITORY/actions/workflows/quality-gates.yml" --jq '.id')"
           RUN_WORKFLOW_PATH="$(gh api \
             "repos/$GITHUB_REPOSITORY/actions/workflows/$RUN_WORKFLOW_ID" --jq '.path')"
-          if [ "$DEPLOY_OPERATION" = recover_exact ]; then
+          if [ "$DEPLOY_OPERATION" = recover_exact ] || [ "$DEPLOY_OPERATION" = recovery_status ]; then
             [ "$RUN_HEAD_SHA" = "$DISPATCH_SHA" ]
           else
             [ "$RUN_HEAD_SHA" = "$TARGET_SHA" ]
@@ -281,7 +281,7 @@ jobs:
           ARTIFACT_RUN_ID="$(jq -r '.workflow_run.id' <<<"$ARTIFACT_JSON")"
           ARTIFACT_HEAD_SHA="$(jq -r '.workflow_run.head_sha' <<<"$ARTIFACT_JSON")"
           ARTIFACT_DIGEST="$(jq -r '.digest' <<<"$ARTIFACT_JSON")"
-          if [ "$DEPLOY_OPERATION" = recover_exact ]; then
+          if [ "$DEPLOY_OPERATION" = recover_exact ] || [ "$DEPLOY_OPERATION" = recovery_status ]; then
             [ "$ARTIFACT_NAME" = "linasbot-release-$DISPATCH_SHA" ]
             [ "$ARTIFACT_HEAD_SHA" = "$DISPATCH_SHA" ]
           else
@@ -296,7 +296,7 @@ jobs:
 
       - name: Download exact immutable release artifact ID
         id: download_release
-        if: inputs.DEPLOY_OPERATION == 'steady' || inputs.DEPLOY_OPERATION == 'reconcile_exact' || inputs.DEPLOY_OPERATION == 'recover_exact'
+        if: inputs.DEPLOY_OPERATION == 'steady' || inputs.DEPLOY_OPERATION == 'reconcile_exact' || inputs.DEPLOY_OPERATION == 'recover_exact' || inputs.DEPLOY_OPERATION == 'recovery_status'
         continue-on-error: true
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -308,7 +308,7 @@ jobs:
 
       - name: Retry exact immutable release artifact download
         if: >
-          (inputs.DEPLOY_OPERATION == 'steady' || inputs.DEPLOY_OPERATION == 'reconcile_exact' || inputs.DEPLOY_OPERATION == 'recover_exact') &&
+          (inputs.DEPLOY_OPERATION == 'steady' || inputs.DEPLOY_OPERATION == 'reconcile_exact' || inputs.DEPLOY_OPERATION == 'recover_exact' || inputs.DEPLOY_OPERATION == 'recovery_status') &&
           steps.download_release.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -356,9 +356,9 @@ jobs:
 
       - name: Validate release bundle and extract exact helper
         id: release_contract
-        if: inputs.DEPLOY_OPERATION == 'steady' || inputs.DEPLOY_OPERATION == 'reconcile_exact' || inputs.DEPLOY_OPERATION == 'recover_exact'
+        if: inputs.DEPLOY_OPERATION == 'steady' || inputs.DEPLOY_OPERATION == 'reconcile_exact' || inputs.DEPLOY_OPERATION == 'recover_exact' || inputs.DEPLOY_OPERATION == 'recovery_status'
         env:
-          TARGET_SHA: ${{ inputs.DEPLOY_OPERATION == 'recover_exact' && github.sha || inputs.TARGET_SHA }}
+          TARGET_SHA: ${{ (inputs.DEPLOY_OPERATION == 'recover_exact' || inputs.DEPLOY_OPERATION == 'recovery_status') && github.sha || inputs.TARGET_SHA }}
           QUALITY_GATES_RUN_ID: ${{ inputs.QUALITY_GATES_RUN_ID }}
           RELEASE_RUN_ATTEMPT: ${{ inputs.RELEASE_RUN_ATTEMPT }}
           RELEASE_ARTIFACT_ID: ${{ inputs.RELEASE_ARTIFACT_ID }}
@@ -1078,7 +1078,9 @@ jobs:
           elif [ "$DEPLOY_OPERATION" = recover_exact ]; then
             TRANSFER_FILES=(transfer/deploy_meta_release_ha.sh transfer/lb-attestation.json)
           elif [ "$DEPLOY_OPERATION" = recovery_status ]; then
-            TRANSFER_FILES=()
+            # Read-only journal identity. Helper comes from the dispatch SHA
+            # Quality Gates bundle because live HEAD may predate HA helpers.
+            TRANSFER_FILES=(transfer/deploy_meta_release_ha.sh)
           else
             TRANSFER_FILES=(transfer/lb-attestation.json)
           fi
@@ -1125,7 +1127,10 @@ jobs:
               NEW_DEPLOY=1
               [ -f "$HELPER_SOURCE" ] && [ ! -L "$HELPER_SOURCE" ]
               [ -d "$RELEASE_SOURCE" ] && [ ! -L "$RELEASE_SOURCE" ]
-            elif [ "$DEPLOY_OPERATION" = recover_exact ]; then
+            elif [ "$DEPLOY_OPERATION" = recover_exact ] || \
+                 [ "$DEPLOY_OPERATION" = recovery_status ]; then
+              # After cutover, recover/status dispatched from the journal target
+              # SHA copies the same helper bytes as the live stored bundle.
               RECOVER_DISPATCH_HELPER=1
               [ -f "$HELPER_SOURCE" ] && [ ! -L "$HELPER_SOURCE" ]
             fi

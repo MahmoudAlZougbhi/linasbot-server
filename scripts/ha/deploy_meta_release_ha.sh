@@ -8972,6 +8972,8 @@ recover_deployment() {
   test "$helper_hash" = "$journal_helper" || die "recovery helper differs from durable transaction"
   running_helper="$(sha256sum "$0" | awk '{print $1}')"
   if [ "$running_helper" != "$helper_hash" ]; then
+    # Pre-mutation journals may predate the helper that can recover them.
+    # Later phases still require the exact journal-authorized helper blob.
     case "$phase" in
       preflight-proven|peer-mark-started)
         log "running recovery helper is a later exact blob than the open pre-mutation journal"
