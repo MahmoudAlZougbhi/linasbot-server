@@ -14,11 +14,14 @@ def test_worker_need_daemon_reload_queries_instances_not_the_template() -> None:
     assert 'systemd_unit_need_daemon_reload_is_no "linasbot-worker@${queue}.service"' in source
     for queue in ("high_priority", "interactive", "background", "expensive"):
         assert f"linasbot-worker@{queue}.service" in source
-    assert "systemctl cat linasbot-worker@.service" in source
+    assert "systemctl cat linasbot-worker@.service" not in source
+    assert "worker_instances_maintenance_guard_readback() {" in source
+    assert 'systemctl cat -- "linasbot-worker@${queue}.service"' in source
     install = source[
         source.index("install_maintenance_boot_guard() {") : source.index("assert_maintenance_boot_guard_loaded() {")
     ]
     assert "worker_instances_need_daemon_reload_no" in install
+    assert "worker_instances_maintenance_guard_readback" in install
     assert "systemd_unit_need_daemon_reload_is_no linasbot.service" in install
     assert "I_UNDERSTAND_SKIPPING_GATES" not in source
     assert "--skip" not in source

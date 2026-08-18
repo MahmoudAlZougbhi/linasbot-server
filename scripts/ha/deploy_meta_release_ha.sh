@@ -150,6 +150,14 @@ worker_instances_need_daemon_reload_no() {
   done
 }
 
+worker_instances_maintenance_guard_readback() {
+  local worker_guard="$1"
+  local queue
+  for queue in "${WORKER_QUEUES[@]}"; do
+    systemctl cat -- "linasbot-worker@${queue}.service" | grep -Fq "$worker_guard" || return 1
+  done
+}
+
 require_internal_node_dispatch() {
   test "${1:-}" = "$INTERNAL_NODE_DISPATCH_CONFIRM" || \
     die "single-node release phases are internal-only; use a two-node coordinator operation"
@@ -6857,7 +6865,7 @@ install_maintenance_boot_guard() {
     die "systemd has not durably loaded the worker maintenance guard"
   systemctl cat linasbot.service | grep -Fq "$api_guard" || \
     die "systemd API maintenance guard readback failed"
-  systemctl cat linasbot-worker@.service | grep -Fq "$worker_guard" || \
+  worker_instances_maintenance_guard_readback "$worker_guard" || \
     die "systemd worker maintenance guard readback failed"
 }
 
@@ -6882,8 +6890,7 @@ maintenance_boot_guard_is_loaded() {
   worker_instances_need_daemon_reload_no || return 1
   systemctl cat linasbot.service | grep -Fq "$api_guard" || \
     return 1
-  systemctl cat linasbot-worker@.service | grep -Fq "$worker_guard" || \
-    return 1
+  worker_instances_maintenance_guard_readback "$worker_guard" || return 1
 }
 
 maintenance_boot_guard_files_match() {
