@@ -158,6 +158,11 @@ worker_instances_maintenance_guard_readback() {
   done
 }
 
+maintenance_boot_guard_load_failed() {
+  log "maintenance boot guard check failed: $*"
+  return 1
+}
+
 require_internal_node_dispatch() {
   test "${1:-}" = "$INTERNAL_NODE_DISPATCH_CONFIRM" || \
     die "single-node release phases are internal-only; use a two-node coordinator operation"
@@ -6867,6 +6872,9 @@ install_maintenance_boot_guard() {
     die "systemd API maintenance guard readback failed"
   worker_instances_maintenance_guard_readback "$worker_guard" || \
     die "systemd worker maintenance guard readback failed"
+  maintenance_boot_guard_files_match "$tx_dir" || \
+    die "maintenance boot guard files do not match the transaction candidate"
+  log "maintenance boot guard installed and systemd-loaded"
 }
 
 assert_maintenance_boot_guard_loaded() {
@@ -6879,18 +6887,42 @@ maintenance_boot_guard_is_loaded() {
   local candidate="$tx_dir/maintenance-boot-guard.conf"
   local api_guard=/etc/systemd/system/linasbot.service.d/90-meta-ha-maintenance.conf
   local worker_guard=/etc/systemd/system/linasbot-worker@.service.d/90-meta-ha-maintenance.conf
-  test -f "$candidate" && test ! -L "$candidate" || return 1
-  for guard in "$api_guard" "$worker_guard"; do
-    test -f "$guard" && test ! -L "$guard" || return 1
-    test "$(stat -c '%u:%g:%a' "$guard")" = "0:0:644" || \
-      return 1
-    cmp -s "$candidate" "$guard" || return 1
-  done
-  systemd_unit_need_daemon_reload_is_no linasbot.service || return 1
-  worker_instances_need_daemon_reload_no || return 1
-  systemctl cat linasbot.service | grep -Fq "$api_guard" || \
+  local guard mode
+  if [ ! -f "$candidate" ] || [ -L "$candidate" ]; then
+    maintenance_boot_guard_load_failed "transaction candidate is missing or unsafe"
     return 1
-  worker_instances_maintenance_guard_readback "$worker_guard" || return 1
+  fi
+  for guard in "$api_guard" "$worker_guard"; do
+    if [ ! -f "$guard" ] || [ -L "$guard" ]; then
+      maintenance_boot_guard_load_failed "drop-in is missing or unsafe: $guard"
+      return 1
+    fi
+    mode="$(stat -c '%u:%g:%a' "$guard")"
+    if [ "$mode" != "0:0:644" ]; then
+      maintenance_boot_guard_load_failed "drop-in security is invalid ($mode): $guard"
+      return 1
+    fi
+    if ! cmp -s "$candidate" "$guard"; then
+      maintenance_boot_guard_load_failed "drop-in differs from the transaction candidate: $guard"
+      return 1
+    fi
+  done
+  if ! systemd_unit_need_daemon_reload_is_no linasbot.service; then
+    maintenance_boot_guard_load_failed "API unit still needs daemon-reload"
+    return 1
+  fi
+  if ! worker_instances_need_daemon_reload_no; then
+    maintenance_boot_guard_load_failed "worker instances still need daemon-reload"
+    return 1
+  fi
+  if ! systemctl cat linasbot.service | grep -Fq "$api_guard"; then
+    maintenance_boot_guard_load_failed "API unit does not include the drop-in"
+    return 1
+  fi
+  if ! worker_instances_maintenance_guard_readback "$worker_guard"; then
+    maintenance_boot_guard_load_failed "worker instances do not include the drop-in"
+    return 1
+  fi
 }
 
 maintenance_boot_guard_files_match() {

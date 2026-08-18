@@ -23,6 +23,9 @@ def test_worker_need_daemon_reload_queries_instances_not_the_template() -> None:
     assert "worker_instances_need_daemon_reload_no" in install
     assert "worker_instances_maintenance_guard_readback" in install
     assert "systemd_unit_need_daemon_reload_is_no linasbot.service" in install
+    assert "maintenance_boot_guard_files_match" in install
+    assert "maintenance boot guard check failed:" in source
+    assert "maintenance boot guard installed and systemd-loaded" in install
     assert "I_UNDERSTAND_SKIPPING_GATES" not in source
     assert "--skip" not in source
     assert "ignore-divergence" not in source
