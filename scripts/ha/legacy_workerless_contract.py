@@ -45,8 +45,9 @@ def classify_probe(probe: Mapping[str, Any]) -> str:
     if not isinstance(probe, dict) or probe.get("schema") != SCHEMA:
         raise WorkerlessContractError("worker template probe schema is invalid")
     worker_template_required = _bool(probe.get("worker_template_required"), "worker_template_required")
-    if _bool(probe.get("durable_queues_required"), "durable_queues_required"):
-        raise WorkerlessContractError("old live config declares production workers required")
+    # Redis/durable flags mean workers should exist. Missing systemd units are
+    # still a fail-closed migration, not a skip of the maintenance guard.
+    _bool(probe.get("durable_queues_required"), "durable_queues_required")
     stray = probe.get("stray_worker_pids")
     if not isinstance(stray, list) or any(not isinstance(item, str) or not item for item in stray):
         raise WorkerlessContractError("worker template probe stray pid list is invalid")
@@ -87,12 +88,13 @@ def classify_probe(probe: Mapping[str, Any]) -> str:
     template_symlink = _bool(probe.get("template_is_symlink"), "template_is_symlink")
     if template_symlink:
         raise WorkerlessContractError("canonical worker template is a symlink")
-    if template_exists:
-        if loaded_count == len(QUEUES):
-            return LOADED
-        raise WorkerlessContractError("worker template file exists but instances are not fully loaded")
+    if loaded_count == len(QUEUES):
+        if not template_exists:
+            raise WorkerlessContractError("worker instances are loaded without a template file")
+        return LOADED
     if loaded_count:
-        raise WorkerlessContractError("worker instances are loaded without a template file")
+        raise WorkerlessContractError("worker template file exists but instances are not fully loaded")
+    # File may exist from a prior failed recover; not actually loaded.
     if worker_template_required:
         raise WorkerlessContractError(
             "legacy workerless migration is not allowed after the worker template became required"
