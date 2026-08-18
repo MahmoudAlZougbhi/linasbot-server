@@ -42,9 +42,7 @@ def test_pre_mutation_recovery_may_run_a_later_helper_blob() -> None:
             "install_lb_ready_attestation() {"
         )
     ]
-    later_helper_phases = (
-        "preflight-proven|peer-mark-started|recovery-lb-attested|recovery-started"
-    )
+    later_helper_phases = "preflight-proven|peer-mark-started|recovery-lb-attested|recovery-started"
     assert later_helper_phases in recover
     assert later_helper_phases in installer
     assert "later exact blob than the open pre-mutation journal" in recover
