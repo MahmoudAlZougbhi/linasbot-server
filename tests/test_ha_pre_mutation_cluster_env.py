@@ -34,10 +34,16 @@ def test_orchestrate_exit_trap_survives_destroyed_locals() -> None:
 def test_pre_mutation_recovery_may_run_a_later_helper_blob() -> None:
     source = HELPER.read_text(encoding="utf-8")
     recover = source[source.index("recover_deployment() {") : source.index("retry_distinct_reconciliation() {")]
+    installer = source[
+        source.index("install_lb_ready_attestation() {") : source.index("assert_lb_observation_strictly_newer() {")
+    ]
     assert "preflight-proven|peer-mark-started" in recover
     assert "later exact blob than the open pre-mutation journal" in recover
     assert "print-deploy-journal-identity)" in source
     assert "print_deploy_journal_identity() {" in source
+    assert '[ "$operation" = recover ]' in installer
+    assert "LB installer is a later exact blob than the open pre-mutation journal" in installer
+    assert "LB attestation installer is not the exact authorized target helper" in installer
 
 
 def test_deploy_workflow_exposes_journal_identity_and_dispatch_helper_recover() -> None:
