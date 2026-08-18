@@ -177,11 +177,23 @@ worker_instances_maintenance_guard_readback() {
     test "$fragment" = /etc/systemd/system/linasbot-worker@.service || return 1
     paths="$(systemctl show -p DropInPaths --value -- "linasbot-worker@${queue}.service")" || \
       return 1
-    case " $paths " in
-      *" $worker_guard "*) ;;
-      *) return 1 ;;
-    esac
-    systemctl cat -- "linasbot-worker@${queue}.service" | grep -Fq "$needle" || return 1
+    # Unique drop-in content on a real instance is the required positive proof.
+    # DropInPaths can be empty on loaded-but-inactive instances on this systemd;
+    # NeedDaemonReload=no is not proof; grepping the drop-in path from cat is not
+    # proof. If systemd reports DropInPaths, it must include the guard path.
+    if ! systemctl cat -- "linasbot-worker@${queue}.service" | grep -Fq "$needle"; then
+      log "worker@$queue maintenance-guard cat is missing unique needle DropInPaths='$paths'"
+      return 1
+    fi
+    if [ -n "$paths" ]; then
+      case " $paths " in
+        *" $worker_guard "*) ;;
+        *)
+          log "worker@$queue DropInPaths='$paths' omit the maintenance guard"
+          return 1
+          ;;
+      esac
+    fi
   done
 }
 

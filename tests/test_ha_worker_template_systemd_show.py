@@ -26,6 +26,9 @@ def test_worker_need_daemon_reload_queries_instances_not_the_template() -> None:
     ]
     assert "DropInPaths" in readback
     assert 'grep -Fq "$worker_guard"' not in readback
+    assert 'grep -Fq "$needle"' in readback
+    assert "DropInPaths='$paths' omit the maintenance guard" in readback
+    assert "maintenance-guard cat is missing unique needle" in readback
     assert "NeedDaemonReload=no is not proof" in source
     stray = source[source.index("collect_stray_worker_pids() {") : source.index("legacy_workerless_eval() {")]
     assert 'entry / "cgroup"' in stray
