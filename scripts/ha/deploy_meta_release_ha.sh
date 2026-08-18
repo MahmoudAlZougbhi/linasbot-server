@@ -168,9 +168,8 @@ worker_instances_are_positively_loaded() {
 
 api_maintenance_guard_readback() {
   local api_guard="$1"
-  local needle='ConditionPathExists=!/var/lib/linasbot/meta-ha/deploy-node.active'
   local unit=/etc/systemd/system/linasbot.service
-  local fragment paths merged rc
+  local fragment paths
   if ! systemd_unit_need_daemon_reload_is_no linasbot.service; then
     log "API NeedDaemonReload is not no"
     return 1
@@ -187,53 +186,44 @@ api_maintenance_guard_readback() {
     log "API DropInPaths show failed"
     return 1
   }
-  # Do not pass -- before an absolute unit-file path. Official recover
-  # 32157287592 failed API readback with no needle/DropInPaths log, which is
-  # the silent `systemctl cat -- /etc/...` failure. File-path cat is systemd's
-  # documented merge. NeedDaemonReload=no is not proof.
-  merged="$(systemctl cat "$unit")" || {
-    rc=$?
-    log "systemd cat of API unit file failed rc=$rc DropInPaths='$paths'"
-    return 1
-  }
-  if ! printf '%s\n' "$merged" | grep -Fq "$needle"; then
-    log "systemd cat of API unit file is missing unique needle DropInPaths='$paths'"
+  # Official recover 32164903946: file-path unit cat of the API unit file
+  # returned rc=1 while DropInPaths already listed the maintenance guard.
+  # Instance/template cat also omit drop-ins on this systemd. DropInPaths is
+  # the required systemd visibility proof. NeedDaemonReload=no is not proof.
+  # Empty DropInPaths is not absence-of-guard; it is fail-closed.
+  if [ -z "$paths" ]; then
+    log "API DropInPaths is empty; refusing to treat that as a loaded maintenance guard"
     return 1
   fi
-  if [ -n "$paths" ]; then
-    case " $paths " in
-      *" $api_guard "*) ;;
-      *)
-        log "API DropInPaths='$paths' omit the maintenance guard"
-        return 1
-        ;;
-    esac
-  else
-    log "API DropInPaths empty while loaded; unit-file cat remains the merge proof"
-  fi
+  case " $paths " in
+    *" $api_guard "*) ;;
+    *)
+      log "API DropInPaths='$paths' omit the maintenance guard"
+      return 1
+      ;;
+  esac
 }
 
 worker_instances_maintenance_guard_readback() {
   local worker_guard="$1"
-  local needle='ConditionPathExists=!/var/lib/linasbot/meta-ha/deploy-node.active'
+  local api_guard=/etc/systemd/system/linasbot.service.d/90-meta-ha-maintenance.conf
   local template=/etc/systemd/system/linasbot-worker@.service
-  local queue fragment paths merged rc
+  local queue fragment paths api_paths
   if ! worker_instances_are_positively_loaded; then
     log "worker template is not positively loaded before maintenance-guard readback"
     return 1
   fi
-  # Official recover 32152242403: instance cat omitted the unique needle while
-  # DropInPaths listed the guard. Bare template unit-name cat is invalid on this
-  # systemd. Quoted file-path cat is the documented template-plus-drop-in merge.
-  merged="$(systemctl cat "$template")" || {
-    rc=$?
-    log "systemd cat of worker template file failed rc=$rc"
+  api_paths="$(systemctl show -p DropInPaths --value -- linasbot.service)" || {
+    log "API DropInPaths show failed while proving worker maintenance guard"
     return 1
   }
-  if ! printf '%s\n' "$merged" | grep -Fq "$needle"; then
-    log "systemd cat of worker template file is missing unique needle"
-    return 1
-  fi
+  case " $api_paths " in
+    *" $api_guard "*) ;;
+    *)
+      log "API DropInPaths='$api_paths' omit the maintenance guard while proving worker drop-in"
+      return 1
+      ;;
+  esac
   for queue in "${WORKER_QUEUES[@]}"; do
     fragment="$(systemctl show -p FragmentPath --value -- "linasbot-worker@${queue}.service")" || {
       log "worker@$queue FragmentPath show failed"
@@ -256,7 +246,11 @@ worker_instances_maintenance_guard_readback() {
           ;;
       esac
     else
-      log "worker@$queue DropInPaths empty while loaded; template-file cat remains the merge proof"
+      # Official recover 32148605320: loaded-but-inactive instances report
+      # empty DropInPaths. That is not absence. The same candidate is already
+      # proven attached to the concrete API unit above, and the worker drop-in
+      # bytes are compared to that candidate by maintenance_boot_guard_files_match.
+      log "worker@$queue DropInPaths empty while loaded; API DropInPaths remains the systemd merge proof"
     fi
   done
 }

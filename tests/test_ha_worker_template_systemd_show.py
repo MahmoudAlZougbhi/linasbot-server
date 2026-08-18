@@ -21,10 +21,6 @@ def test_worker_need_daemon_reload_queries_instances_not_the_template() -> None:
     assert "api_maintenance_guard_readback() {" in source
     assert "systemctl show -p DropInPaths --value --" in source
     assert "ConditionPathExists=!/var/lib/linasbot/meta-ha/deploy-node.active" in source
-    assert 'systemctl cat "$template"' in source
-    assert 'systemctl cat "$unit"' in source
-    assert 'systemctl cat -- "$template"' not in source
-    assert 'systemctl cat -- "$unit"' not in source
     assert 'systemctl cat -- "linasbot-worker@${queue}.service"' not in source
     assert "systemctl cat linasbot.service |" not in source
     readback = source[
@@ -32,13 +28,11 @@ def test_worker_need_daemon_reload_queries_instances_not_the_template() -> None:
     ]
     assert "DropInPaths" in readback
     assert 'grep -Fq "$worker_guard"' not in readback
-    assert 'grep -Fq "$needle"' in readback
+    assert 'grep -Fq "$needle"' not in readback
+    assert "systemctl cat" not in readback
     assert "DropInPaths='$paths' omit the maintenance guard" in readback
-    assert "systemd cat of worker template file is missing unique needle" in readback
-    assert "systemd cat of API unit file is missing unique needle" in readback
-    assert "systemd cat of API unit file failed rc=" in readback
-    assert "API FragmentPath=" in readback
-    assert "template-file cat remains the merge proof" in readback
+    assert "API DropInPaths is empty; refusing to treat that as a loaded maintenance guard" in readback
+    assert "API DropInPaths remains the systemd merge proof" in readback
     assert "NeedDaemonReload=no is not proof" in source
     stray = source[source.index("collect_stray_worker_pids() {") : source.index("legacy_workerless_eval() {")]
     assert 'entry / "cgroup"' in stray
