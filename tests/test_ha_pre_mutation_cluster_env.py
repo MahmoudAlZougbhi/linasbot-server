@@ -33,14 +33,12 @@ def test_orchestrate_exit_trap_survives_destroyed_locals() -> None:
     assert "HA_ORCHESTRATE_TX_DIR=$tx_dir" in orchestrate
     assert "HA_ORCHESTRATE_PEER_HOST=$peer_host" in orchestrate
     assert "HA_ORCHESTRATE_DRAIN_SECONDS=$drain_seconds" in orchestrate
-    assert 'local rollback_ok=1' in rollback
-    assert rollback.index('local rollback_ok=1') < rollback.index('if [ "$rollback_ok" = "1" ]')
+    assert "local rollback_ok=1" in rollback
+    assert rollback.index("local rollback_ok=1") < rollback.index('if [ "$rollback_ok" = "1" ]')
     assert 'node_ensure_maintenance "$HA_ORCHESTRATE_TX_DIR"' in rollback
     assert 'remote_node "$HA_ORCHESTRATE_PEER_HOST" ensure-maintenance "$HA_ORCHESTRATE_TX_DIR"' in rollback
     unreadable = rollback[
-        rollback.index("DURABLE DEPLOYMENT DECISION IS UNREADABLE") : rollback.index(
-            'if [ "$commit_decided" = "1" ]'
-        )
+        rollback.index("DURABLE DEPLOYMENT DECISION IS UNREADABLE") : rollback.index('if [ "$commit_decided" = "1" ]')
     ]
     assert '"$tx_dir"' not in unreadable
     assert '"$peer_host"' not in unreadable
