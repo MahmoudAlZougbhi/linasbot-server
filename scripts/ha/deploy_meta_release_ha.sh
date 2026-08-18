@@ -5581,28 +5581,39 @@ assert_stage_artifact_parity() {
   peer_evidence="$(remote_node "$peer_host" stage-evidence \
     "$target_sha" "$peer_previous" "$tx_dir")"
   run_system_python_control - "$local_evidence" "$peer_evidence" \
-    "$local_previous" "$peer_previous" <<'PY' || \
+    "$local_previous" "$peer_previous" "${DIVERGENT_BASELINE_CONFIRM:-}" <<'PY' || \
     die "target artifacts or steady rollback baseline artifacts differ between HA nodes"
 import json
+import re
 import sys
 
 node01 = json.loads(sys.argv[1])
 node02 = json.loads(sys.argv[2])
-node01_previous, node02_previous = sys.argv[3:]
+node01_previous, node02_previous, divergent_confirm = sys.argv[3:6]
 keys = {
     "schema", "target_sha", "deploy_version", "wheelhouse_sha256",
     "dashboard_build_sha256", "control_plane_sha256", "toolchain",
     "baseline_artifacts", "release_bundle",
 }
 if not isinstance(node01, dict) or not isinstance(node02, dict):
-    raise SystemExit(1)
+    raise SystemExit("stage evidence is not an object")
 if set(node01) != keys or set(node02) != keys:
-    raise SystemExit(1)
-target_keys = keys - {"baseline_artifacts"}
-if any(node01[key] != node02[key] for key in target_keys):
-    raise SystemExit(1)
-if node01_previous == node02_previous and node01["baseline_artifacts"] != node02["baseline_artifacts"]:
-    raise SystemExit(1)
+    raise SystemExit("stage evidence schema is invalid")
+target_keys = sorted(keys - {"baseline_artifacts"})
+mismatched = [key for key in target_keys if node01[key] != node02[key]]
+if mismatched:
+    raise SystemExit("target stage artifacts differ between HA nodes: " + ",".join(mismatched))
+if node01_previous != node02_previous:
+    raise SystemExit(0)
+if node01["baseline_artifacts"] == node02["baseline_artifacts"]:
+    raise SystemExit(0)
+target = str(node01.get("target_sha") or "")
+confirm_re = r"REPLACE_DIVERGENT_BASELINE_[0-9a-f]{16}_[0-9a-f]{16}_WITH_RELEASE_[0-9a-f]{40}"
+if re.fullmatch(confirm_re, divergent_confirm) is None:
+    raise SystemExit("steady rollback baseline artifacts differ between HA nodes")
+if re.fullmatch(r"[0-9a-f]{40}", target) is None or \
+        not divergent_confirm.endswith("_WITH_RELEASE_" + target):
+    raise SystemExit("divergent-baseline confirm does not bind the staged target SHA")
 PY
 }
 
