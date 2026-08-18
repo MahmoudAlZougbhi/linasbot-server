@@ -15,6 +15,7 @@ from scripts.ha.legacy_workerless_contract import (
     PRESENT,
     SCHEMA,
     WorkerlessContractError,
+    cgroup_is_systemd_queue_worker,
     classify_probe,
     decide_cluster,
 )
@@ -84,6 +85,17 @@ def test_loaded_probes_keep_the_steady_contract() -> None:
     loaded = _probe(load="loaded", live=TARGET)
     assert classify_probe(loaded) == LOADED
     assert decide_cluster(loaded, loaded) == PRESENT
+    running = _probe(
+        load="loaded",
+        live=TARGET,
+        listed_worker_units=["linasbot-worker@high_priority.service"],
+        instances={
+            queue: _instance(load="loaded", enabled="enabled", active="active")
+            for queue in ("high_priority", "interactive", "background", "expensive")
+        },
+    )
+    assert classify_probe(running) == LOADED
+    assert decide_cluster(running, running) == PRESENT
 
 
 def test_need_daemon_reload_is_not_part_of_the_absence_decision() -> None:
@@ -189,3 +201,27 @@ def test_helper_embeds_the_fail_closed_workerless_contract() -> None:
     rollback = clear.index("rollback admission SHA differs")
     assert "arm_worker_template_required_marker" in clear[activated:rollback]
     assert "arm_worker_template_required_marker" not in clear[rollback:]
+    stray = source[source.index("collect_stray_worker_pids() {") : source.index("legacy_workerless_eval() {")]
+    assert 'entry / "cgroup"' in stray
+    assert "linasbot-worker@(?:high_priority|interactive|background|expensive)\\.service" in stray
+    assert "summarize_worker_template_probe() {" in source
+    recover = source[source.index("recover_deployment() {") : source.index("retry_distinct_reconciliation() {")]
+    assert "HA_RECOVERY_TX_SUCCEEDED" in recover
+    assert '"$transaction_succeeded" != "1"' not in recover
+    capture = source[source.index("capture_service_state() {") : source.index("archive_path() {")]
+    assert "legacy-absent-migration cannot rewrite worker state while the template exists" not in capture
+    assert "[ ! -e /etc/systemd/system/linasbot-worker@.service ]" in capture
+    assert "NeedDaemonReload=no is not proof" in source
+
+
+def test_systemd_queue_worker_cgroup_is_not_outside_systemd() -> None:
+    assert cgroup_is_systemd_queue_worker("0::/system.slice/linasbot-worker@high_priority.service")
+    assert cgroup_is_systemd_queue_worker("12:pids:/system.slice/linasbot-worker@interactive.service/payload")
+    assert not cgroup_is_systemd_queue_worker("")
+    assert not cgroup_is_systemd_queue_worker("0::/system.slice/linasbot.service")
+    assert not cgroup_is_systemd_queue_worker("0::/system.slice/other-linasbot-worker@high_priority.service")
+
+
+def test_cluster_decide_names_the_node_with_stray_workers() -> None:
+    with pytest.raises(WorkerlessContractError, match=r"node01: worker processes are running outside systemd: 4321"):
+        decide_cluster(_probe(load="not-found", stray_worker_pids=["4321"]), _probe(load="not-found"))
