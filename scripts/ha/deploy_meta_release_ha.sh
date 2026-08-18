@@ -170,15 +170,32 @@ api_maintenance_guard_readback() {
   local api_guard="$1"
   local needle='ConditionPathExists=!/var/lib/linasbot/meta-ha/deploy-node.active'
   local unit=/etc/systemd/system/linasbot.service
-  local fragment paths merged
-  systemd_unit_need_daemon_reload_is_no linasbot.service || return 1
-  fragment="$(systemctl show -p FragmentPath --value -- linasbot.service)" || return 1
-  test "$fragment" = "$unit" || return 1
-  paths="$(systemctl show -p DropInPaths --value -- linasbot.service)" || return 1
-  # Unit-name cat of the API service grepping the drop-in path failed after the
-  # API was already stopped (recover 32152242403). File-path cat is systemd's
-  # documented merge of the unit plus drop-ins.
-  merged="$(systemctl cat -- "$unit")" || return 1
+  local fragment paths merged rc
+  if ! systemd_unit_need_daemon_reload_is_no linasbot.service; then
+    log "API NeedDaemonReload is not no"
+    return 1
+  fi
+  fragment="$(systemctl show -p FragmentPath --value -- linasbot.service)" || {
+    log "API FragmentPath show failed"
+    return 1
+  }
+  if [ "$fragment" != "$unit" ]; then
+    log "API FragmentPath='$fragment' expected='$unit'"
+    return 1
+  fi
+  paths="$(systemctl show -p DropInPaths --value -- linasbot.service)" || {
+    log "API DropInPaths show failed"
+    return 1
+  }
+  # Do not pass -- before an absolute unit-file path. Official recover
+  # 32157287592 failed API readback with no needle/DropInPaths log, which is
+  # the silent `systemctl cat -- /etc/...` failure. File-path cat is systemd's
+  # documented merge. NeedDaemonReload=no is not proof.
+  merged="$(systemctl cat "$unit")" || {
+    rc=$?
+    log "systemd cat of API unit file failed rc=$rc DropInPaths='$paths'"
+    return 1
+  }
   if ! printf '%s\n' "$merged" | grep -Fq "$needle"; then
     log "systemd cat of API unit file is missing unique needle DropInPaths='$paths'"
     return 1
@@ -200,23 +217,36 @@ worker_instances_maintenance_guard_readback() {
   local worker_guard="$1"
   local needle='ConditionPathExists=!/var/lib/linasbot/meta-ha/deploy-node.active'
   local template=/etc/systemd/system/linasbot-worker@.service
-  local queue fragment paths merged
-  worker_instances_are_positively_loaded || return 1
+  local queue fragment paths merged rc
+  if ! worker_instances_are_positively_loaded; then
+    log "worker template is not positively loaded before maintenance-guard readback"
+    return 1
+  fi
   # Official recover 32152242403: instance cat omitted the unique needle while
   # DropInPaths listed the guard. Bare template unit-name cat is invalid on this
-  # systemd. File-path cat is the documented template-plus-drop-in merge and
-  # does not depend on instance active state. NeedDaemonReload=no is not proof.
-  merged="$(systemctl cat -- "$template")" || return 1
+  # systemd. Quoted file-path cat is the documented template-plus-drop-in merge.
+  merged="$(systemctl cat "$template")" || {
+    rc=$?
+    log "systemd cat of worker template file failed rc=$rc"
+    return 1
+  }
   if ! printf '%s\n' "$merged" | grep -Fq "$needle"; then
     log "systemd cat of worker template file is missing unique needle"
     return 1
   fi
   for queue in "${WORKER_QUEUES[@]}"; do
-    fragment="$(systemctl show -p FragmentPath --value -- "linasbot-worker@${queue}.service")" || \
+    fragment="$(systemctl show -p FragmentPath --value -- "linasbot-worker@${queue}.service")" || {
+      log "worker@$queue FragmentPath show failed"
       return 1
-    test "$fragment" = "$template" || return 1
-    paths="$(systemctl show -p DropInPaths --value -- "linasbot-worker@${queue}.service")" || \
+    }
+    if [ "$fragment" != "$template" ]; then
+      log "worker@$queue FragmentPath='$fragment' expected='$template'"
       return 1
+    fi
+    paths="$(systemctl show -p DropInPaths --value -- "linasbot-worker@${queue}.service")" || {
+      log "worker@$queue DropInPaths show failed"
+      return 1
+    }
     if [ -n "$paths" ]; then
       case " $paths " in
         *" $worker_guard "*) ;;
