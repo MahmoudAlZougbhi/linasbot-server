@@ -44,6 +44,7 @@ def _probe(*, load: str, live: str = OLD, target: str = TARGET, **overrides: obj
         "template_file_exists": load == "loaded",
         "template_is_symlink": False,
         "durable_queues_required": False,
+        "worker_template_required": False,
         "stray_worker_pids": [],
         "listed_worker_units": [],
         "instances": {
@@ -56,15 +57,12 @@ def _probe(*, load: str, live: str = OLD, target: str = TARGET, **overrides: obj
 
 def test_absent_probes_authorize_migration_only_before_cutover() -> None:
     assert classify_probe(_probe(load="not-found", **{"template_file_exists": False})) == LEGACY_ABSENT
-    assert classify_probe(_probe(load="not-found", **{"template_file_exists": True})) == LEGACY_ABSENT
     assert decide_cluster(_probe(load="not-found"), _probe(load="not-found")) == MIGRATE
-    assert (
-        decide_cluster(
-            _probe(load="not-found", **{"template_file_exists": True}),
-            _probe(load="not-found", **{"template_file_exists": True}),
-        )
-        == MIGRATE
-    )
+
+
+def test_template_file_without_loaded_instances_fails_closed() -> None:
+    with pytest.raises(WorkerlessContractError, match="not fully loaded"):
+        classify_probe(_probe(load="not-found", **{"template_file_exists": True}))
 
 
 def test_partially_loaded_instances_fail_closed() -> None:
@@ -98,6 +96,11 @@ def test_cutover_live_cannot_use_legacy_workerless_migration() -> None:
         decide_cluster(_probe(load="not-found", live=other), _probe(load="not-found", live=other))
 
 
+def test_required_marker_blocks_legacy_workerless_migration() -> None:
+    with pytest.raises(WorkerlessContractError, match="became required"):
+        classify_probe(_probe(load="not-found", **{"worker_template_required": True}))
+
+
 def test_enabled_or_active_or_stray_workers_fail_closed() -> None:
     enabled = _probe(load="not-found")
     enabled["instances"]["high_priority"] = _instance(load="not-found", enabled="enabled")
@@ -127,10 +130,21 @@ def test_helper_embeds_the_fail_closed_workerless_contract() -> None:
     assert "list-unit-files --state=enabled" in source
     assert "linasbot-worker@ units are enabled or active on this node" in source
     assert "publish_cluster_worker_template_decision() {" in source
+    assert "apply_legacy_workerless_template_cluster_install() {" in source
+    assert "assert_worker_template_cluster_agreement() {" in source
     assert "install_trusted_worker_template_from_target() {" in source
+    assert "canonical worker template already exists; refusing overwrite" in source
+    assert "git worker template blob differs from the trusted release bundle" in source
+    assert "control-plane.tar" in source[source.index("install_trusted_worker_template_from_target() {") :]
+    assert "arm_worker_template_required_marker() {" in source
     assert "from scripts.ha.legacy_workerless_contract" not in source
     assert "I_UNDERSTAND_SKIPPING_GATES" not in source
     assert "--skip" not in source
+    assert "REPLACE_DIVERGENT_BASELINE" in source
+    orchestrate = source[source.index("orchestrate() {") :]
+    assert orchestrate.index("assert_worker_template_cluster_agreement") < orchestrate.index(
+        "REPLACE_DIVERGENT_BASELINE"
+    )
     install = source[
         source.index("install_maintenance_boot_guard() {") : source.index("assert_maintenance_boot_guard_loaded() {")
     ]
@@ -140,9 +154,31 @@ def test_helper_embeds_the_fail_closed_workerless_contract() -> None:
     recover = source[source.index("recover_deployment() {") : source.index("retry_distinct_reconciliation() {")]
     started = recover.index('update_recovery_journal "recovery-started"')
     assert recover.index("publish_cluster_worker_template_decision", started) < recover.index(
+        "apply_legacy_workerless_template_cluster_install", started
+    )
+    assert recover.index("apply_legacy_workerless_template_cluster_install", started) < recover.index(
         'node_ensure_maintenance "$tx_dir"', started
     )
     orchestrate = source[source.index("orchestrate() {") :]
     assert orchestrate.index("publish_cluster_worker_template_decision") < orchestrate.index(
+        "apply_legacy_workerless_template_cluster_install"
+    )
+    assert orchestrate.index("apply_legacy_workerless_template_cluster_install") < orchestrate.index(
         "withdrawing peer before peer-first staging"
     )
+    backup = source[source.index("backup_live_node() {") : source.index("normalize_prequiesced_activation_prefix() {")]
+    assert "! -name 'legacy-workerless.*'" in backup
+    install_tmpl = source[
+        source.index("install_trusted_worker_template_from_target() {") : source.index(
+            "ensure_worker_template_before_maintenance_guard() {"
+        )
+    ]
+    assert "control-plane.tar" in install_tmpl
+    assert "/usr/bin/git" in install_tmpl
+    assert "install-trusted-worker-template" in source
+    assert '"type": "absent"' in source
+    clear = source[source.index("node_clear_maintenance() {") : source.index("node_assert_release_drained() {")]
+    activated = clear.index('if [ "$activation_state" = "activated" ]')
+    rollback = clear.index("rollback admission SHA differs")
+    assert "arm_worker_template_required_marker" in clear[activated:rollback]
+    assert "arm_worker_template_required_marker" not in clear[rollback:]
