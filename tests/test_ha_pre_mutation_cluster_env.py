@@ -24,11 +24,26 @@ def test_pre_mutation_process_env_uses_imported_target_helper() -> None:
 def test_orchestrate_exit_trap_survives_destroyed_locals() -> None:
     source = HELPER.read_text(encoding="utf-8")
     orchestrate = source[source.index("orchestrate() {") : source.index('case "${1:-}" in')]
+    rollback = orchestrate[orchestrate.index("rollback_transaction() {") : orchestrate.index("on_exit() {")]
     assert "HA_ORCHESTRATE_TX_STARTED=1" in orchestrate
     assert "HA_ORCHESTRATE_TX_SUCCEEDED=1" in orchestrate
     assert '"${HA_ORCHESTRATE_TX_STARTED:-0}"' in orchestrate
     assert "EXIT traps run outside orchestrate locals" in orchestrate
     assert 'if [ -z "${tx_dir:-}" ]' in orchestrate
+    assert "HA_ORCHESTRATE_TX_DIR=$tx_dir" in orchestrate
+    assert "HA_ORCHESTRATE_PEER_HOST=$peer_host" in orchestrate
+    assert "HA_ORCHESTRATE_DRAIN_SECONDS=$drain_seconds" in orchestrate
+    assert 'local rollback_ok=1' in rollback
+    assert rollback.index('local rollback_ok=1') < rollback.index('if [ "$rollback_ok" = "1" ]')
+    assert 'node_ensure_maintenance "$HA_ORCHESTRATE_TX_DIR"' in rollback
+    assert 'remote_node "$HA_ORCHESTRATE_PEER_HOST" ensure-maintenance "$HA_ORCHESTRATE_TX_DIR"' in rollback
+    unreadable = rollback[
+        rollback.index("DURABLE DEPLOYMENT DECISION IS UNREADABLE") : rollback.index(
+            'if [ "$commit_decided" = "1" ]'
+        )
+    ]
+    assert '"$tx_dir"' not in unreadable
+    assert '"$peer_host"' not in unreadable
 
 
 def test_pre_mutation_recovery_may_run_a_later_helper_blob() -> None:
