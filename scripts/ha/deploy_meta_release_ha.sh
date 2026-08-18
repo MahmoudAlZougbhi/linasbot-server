@@ -2879,7 +2879,7 @@ install_lb_ready_attestation() {
         test "${recover_journal[1]}" = "$target_sha" || \
           die "LB attestation target differs from the interrupted deployment"
         case "${recover_journal[9]}" in
-          preflight-proven|peer-mark-started)
+          preflight-proven|peer-mark-started|recovery-lb-attested|recovery-started)
             log "LB installer is a later exact blob than the open pre-mutation journal"
             ;;
           *)
@@ -9036,10 +9036,12 @@ recover_deployment() {
   test "$helper_hash" = "$journal_helper" || die "recovery helper differs from durable transaction"
   running_helper="$(sha256sum "$0" | awk '{print $1}')"
   if [ "$running_helper" != "$helper_hash" ]; then
-    # Pre-mutation journals may predate the helper that can recover them.
-    # Later phases still require the exact journal-authorized helper blob.
+    # Pre-mutation journals, and an interrupted later-helper recover that
+    # already wrote recovery-lb-attested/recovery-started, may predate the
+    # helper that can finish them. Terminal/later phases still require the
+    # exact journal-authorized helper blob.
     case "$phase" in
-      preflight-proven|peer-mark-started)
+      preflight-proven|peer-mark-started|recovery-lb-attested|recovery-started)
         log "running recovery helper is a later exact blob than the open pre-mutation journal"
         ;;
       *)
