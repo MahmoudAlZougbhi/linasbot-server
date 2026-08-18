@@ -2774,19 +2774,30 @@ assert_lb_attestation_install_collision_contract() {
         "per-node deployment recovery blocks a new deploy LB attestation"
       ;;
     recover | retry | commit)
-      mapfile -t journal < <(read_deploy_journal "$journal_digest")
-      test "${#journal[@]}" -eq 22 || die "deployment recovery journal is incomplete"
-      test "${journal[1]}" = "$target_sha" || \
-        die "LB attestation target differs from the interrupted deployment"
-      if [ "$operation" = commit ]; then
-        test "${journal[9]}" = "target-parity-awaiting-fresh-lb" || \
-          die "commit LB attestation requires exact drained target parity"
-        test "${journal[10]}" = rollback || \
-          die "commit LB attestation cannot replace a durable commit decision"
-        test "$ready_projection_sha" = "${journal[14]}" || \
-          die "commit LB projection differs from the reviewed deploy projection"
-        test "$attestation_sha" != "${journal[13]}" || \
-          die "commit LB attestation must be a distinct fresh provider observation"
+      # deploy.active is coordinator-only on node01. node02 may omit it or
+      # must match the owner-confirmed digest; a different journal is refused.
+      if [ "$(configured_node_id)" = node01 ]; then
+        mapfile -t journal < <(read_deploy_journal "$journal_digest")
+        test "${#journal[@]}" -eq 22 || die "deployment recovery journal is incomplete"
+        test "${journal[1]}" = "$target_sha" || \
+          die "LB attestation target differs from the interrupted deployment"
+        if [ "$operation" = commit ]; then
+          test "${journal[9]}" = "target-parity-awaiting-fresh-lb" || \
+            die "commit LB attestation requires exact drained target parity"
+          test "${journal[10]}" = rollback || \
+            die "commit LB attestation cannot replace a durable commit decision"
+          test "$ready_projection_sha" = "${journal[14]}" || \
+            die "commit LB projection differs from the reviewed deploy projection"
+          test "$attestation_sha" != "${journal[13]}" || \
+            die "commit LB attestation must be a distinct fresh provider observation"
+        fi
+      else
+        test "$(configured_node_id)" = node02 || \
+          die "LB attestation installer node identity is invalid"
+        if [ -e "$DEPLOY_ACTIVE_FILE" ] || [ -L "$DEPLOY_ACTIVE_FILE" ]; then
+          test "$(deploy_journal_digest)" = "$journal_digest" || \
+            die "node02 deploy journal differs from the owner-confirmed snapshot"
+        fi
       fi
       ;;
     *) die "LB attestation install operation is invalid" ;;
@@ -2803,6 +2814,7 @@ install_lb_ready_attestation() {
   local confirmation="$7"
   local owner_confirmation="$8"
   local expected_confirmation destination temporary observed_at runtime_cluster
+  local running_helper target_helper
   validate_sha "$target_sha"
   test "$expected_node_id" = node01 || test "$expected_node_id" = node02 || \
     die "LB attestation installer node identity is invalid"
@@ -2830,19 +2842,23 @@ install_lb_ready_attestation() {
     # Pre-mutation recover must install a fresh LB observation with the
     # checksummed dispatch helper; live/target SHA may predate that blob.
     if [ "$operation" = recover ]; then
-      local -a recover_journal=()
-      mapfile -t recover_journal < <(read_deploy_journal "$journal_digest")
-      test "${#recover_journal[@]}" -eq 22 || die "deployment recovery journal is incomplete"
-      test "${recover_journal[1]}" = "$target_sha" || \
-        die "LB attestation target differs from the interrupted deployment"
-      case "${recover_journal[9]}" in
-        preflight-proven|peer-mark-started)
-          log "LB installer is a later exact blob than the open pre-mutation journal"
-          ;;
-        *)
-          die "LB attestation installer is not the exact authorized target helper"
-          ;;
-      esac
+      if [ "$expected_node_id" = node01 ]; then
+        local -a recover_journal=()
+        mapfile -t recover_journal < <(read_deploy_journal "$journal_digest")
+        test "${#recover_journal[@]}" -eq 22 || die "deployment recovery journal is incomplete"
+        test "${recover_journal[1]}" = "$target_sha" || \
+          die "LB attestation target differs from the interrupted deployment"
+        case "${recover_journal[9]}" in
+          preflight-proven|peer-mark-started)
+            log "LB installer is a later exact blob than the open pre-mutation journal"
+            ;;
+          *)
+            die "LB attestation installer is not the exact authorized target helper"
+            ;;
+        esac
+      else
+        log "LB installer is a later exact blob than the open pre-mutation journal"
+      fi
     else
       die "LB attestation installer is not the exact authorized target helper"
     fi
