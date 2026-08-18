@@ -120,6 +120,36 @@ die() {
   exit 1
 }
 
+# systemd rejects uninstantiated template names for `systemctl show`
+# ("Unit name linasbot-worker@.service is neither a valid invocation ID nor
+# unit name"). Query concrete instance names. Empty or non-no answers fail closed.
+systemd_unit_need_daemon_reload_is_no() {
+  local unit="$1"
+  local value instance
+  case "$unit" in
+    *@.*)
+      instance="${unit##*@}"
+      instance="${instance%.service}"
+      if [ -z "$instance" ]; then
+        return 1
+      fi
+      ;;
+    *.service) ;;
+    *)
+      return 1
+      ;;
+  esac
+  value="$(systemctl show -p NeedDaemonReload --value -- "$unit")" || return 1
+  test "$value" = "no"
+}
+
+worker_instances_need_daemon_reload_no() {
+  local queue
+  for queue in "${WORKER_QUEUES[@]}"; do
+    systemd_unit_need_daemon_reload_is_no "linasbot-worker@${queue}.service" || return 1
+  done
+}
+
 require_internal_node_dispatch() {
   test "${1:-}" = "$INTERNAL_NODE_DISPATCH_CONFIRM" || \
     die "single-node release phases are internal-only; use a two-node coordinator operation"
@@ -6821,9 +6851,9 @@ install_maintenance_boot_guard() {
     /etc/systemd/system/linasbot-worker@.service.d \
     /etc/systemd/system
   systemctl daemon-reload
-  test "$(systemctl show -p NeedDaemonReload --value linasbot.service)" = "no" || \
+  systemd_unit_need_daemon_reload_is_no linasbot.service || \
     die "systemd has not durably loaded the API maintenance guard"
-  test "$(systemctl show -p NeedDaemonReload --value linasbot-worker@.service)" = "no" || \
+  worker_instances_need_daemon_reload_no || \
     die "systemd has not durably loaded the worker maintenance guard"
   systemctl cat linasbot.service | grep -Fq "$api_guard" || \
     die "systemd API maintenance guard readback failed"
@@ -6848,10 +6878,8 @@ maintenance_boot_guard_is_loaded() {
       return 1
     cmp -s "$candidate" "$guard" || return 1
   done
-  test "$(systemctl show -p NeedDaemonReload --value linasbot.service)" = "no" || \
-    return 1
-  test "$(systemctl show -p NeedDaemonReload --value linasbot-worker@.service)" = "no" || \
-    return 1
+  systemd_unit_need_daemon_reload_is_no linasbot.service || return 1
+  worker_instances_need_daemon_reload_no || return 1
   systemctl cat linasbot.service | grep -Fq "$api_guard" || \
     return 1
   systemctl cat linasbot-worker@.service | grep -Fq "$worker_guard" || \
@@ -6893,9 +6921,9 @@ remove_maintenance_boot_guard() {
     /etc/systemd/system/linasbot-worker@.service.d \
     /etc/systemd/system
   systemctl daemon-reload
-  test "$(systemctl show -p NeedDaemonReload --value linasbot.service)" = "no" || \
+  systemd_unit_need_daemon_reload_is_no linasbot.service || \
     die "systemd API guard removal was not loaded"
-  test "$(systemctl show -p NeedDaemonReload --value linasbot-worker@.service)" = "no" || \
+  worker_instances_need_daemon_reload_no || \
     die "systemd worker guard removal was not loaded"
 }
 
@@ -6984,9 +7012,9 @@ PY
     /etc/systemd/system/linasbot-worker@.service \
     /etc/systemd/system
   systemctl daemon-reload
-  test "$(systemctl show -p NeedDaemonReload --value linasbot.service)" = no || \
+  systemd_unit_need_daemon_reload_is_no linasbot.service || \
     die "canonical API unit was not durably loaded"
-  test "$(systemctl show -p NeedDaemonReload --value linasbot-worker@.service)" = no || \
+  worker_instances_need_daemon_reload_no || \
     die "canonical worker unit was not durably loaded"
 }
 
@@ -7935,9 +7963,9 @@ verify_drain_guard_authority() {
   validate_service_state_file "$tx_dir/predrain-service-state"
   assert_deploy_node_sentinel "$tx_dir"
   verify_runtime_autostart_disabled
-  test "$(systemctl show -p NeedDaemonReload --value linasbot.service)" = "no" || \
+  systemd_unit_need_daemon_reload_is_no linasbot.service || \
     die "API guard requires a systemd reload"
-  test "$(systemctl show -p NeedDaemonReload --value linasbot-worker@.service)" = "no" || \
+  worker_instances_need_daemon_reload_no || \
     die "worker guard requires a systemd reload"
   drain_guard_authority_tool verify "$tx_dir"
 }
