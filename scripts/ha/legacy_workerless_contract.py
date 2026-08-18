@@ -92,9 +92,7 @@ def classify_probe(probe: Mapping[str, Any]) -> str:
         return LOADED
     if loaded_count:
         if template_exists:
-            raise WorkerlessContractError(
-                "worker template file exists but instances are not fully loaded"
-            )
+            raise WorkerlessContractError("worker template file exists but instances are not fully loaded")
         raise WorkerlessContractError("worker instances are loaded without a template file")
     return LEGACY_ABSENT
 

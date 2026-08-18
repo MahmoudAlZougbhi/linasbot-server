@@ -58,10 +58,13 @@ def test_absent_probes_authorize_migration_only_before_cutover() -> None:
     assert classify_probe(_probe(load="not-found", **{"template_file_exists": False})) == LEGACY_ABSENT
     assert classify_probe(_probe(load="not-found", **{"template_file_exists": True})) == LEGACY_ABSENT
     assert decide_cluster(_probe(load="not-found"), _probe(load="not-found")) == MIGRATE
-    assert decide_cluster(
-        _probe(load="not-found", **{"template_file_exists": True}),
-        _probe(load="not-found", **{"template_file_exists": True}),
-    ) == MIGRATE
+    assert (
+        decide_cluster(
+            _probe(load="not-found", **{"template_file_exists": True}),
+            _probe(load="not-found", **{"template_file_exists": True}),
+        )
+        == MIGRATE
+    )
 
 
 def test_partially_loaded_instances_fail_closed() -> None:
@@ -109,9 +112,7 @@ def test_enabled_or_active_or_stray_workers_fail_closed() -> None:
     with pytest.raises(WorkerlessContractError, match="required"):
         classify_probe(_probe(load="not-found", durable_queues_required=True))
     with pytest.raises(WorkerlessContractError, match="enabled or active"):
-        classify_probe(
-            _probe(load="not-found", listed_worker_units=["linasbot-worker@high_priority.service"])
-        )
+        classify_probe(_probe(load="not-found", listed_worker_units=["linasbot-worker@high_priority.service"]))
 
 
 def test_helper_embeds_the_fail_closed_workerless_contract() -> None:
