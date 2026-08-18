@@ -4472,7 +4472,9 @@ PY
 }
 
 assert_service_state_capture_is_pre_mutation() {
-  local expected_sha node_id
+  local tx_dir="$1"
+  local helper_source_sha node_id
+  validate_tx_dir "$tx_dir"
   assert_path_absent "$DEPLOY_NODE_ACTIVE_FILE" \
     "cannot recapture service state after the per-node deploy boundary"
   assert_path_absent "$MAINTENANCE_FILE" \
@@ -4483,11 +4485,15 @@ assert_service_state_capture_is_pre_mutation() {
     "cannot recapture service state after API guard publication"
   assert_path_absent /etc/systemd/system/linasbot-worker@.service.d/90-meta-ha-maintenance.conf \
     "cannot recapture service state after worker guard publication"
-  expected_sha="$(current_head)"
-  validate_sha "$expected_sha"
+  # Live HEAD may predate the cluster-env helper. Measure with the imported
+  # target blob, matching node_preflight's process-env proof.
+  helper_source_sha="$(target_sha_from_tx "$tx_dir")"
+  validate_sha "$helper_source_sha"
+  git -C "$REPO_DIR" cat-file -e "$helper_source_sha:$CLUSTER_ENV_HELPER_REPO_PATH"
+  git -C "$REPO_DIR" cat-file -e "$helper_source_sha:$PRODUCTION_GUARD_REPO_PATH"
   node_id="$(configured_node_id)"
   assert_exact_runtime_process_contract enabled
-  assert_active_runtime_process_env_contract "$expected_sha" "$expected_sha" "$node_id"
+  assert_active_runtime_process_env_contract "$helper_source_sha" "$helper_source_sha" "$node_id"
 }
 
 disable_runtime_autostart() {
@@ -6391,7 +6397,7 @@ backup_live_node() {
   else
     # Read-only rollback inventory: local node01 may stage while it continues
     # serving the old release. Drain authority is published separately later.
-    assert_service_state_capture_is_pre_mutation
+    assert_service_state_capture_is_pre_mutation "$tx_dir"
     capture_service_state "$tx_dir/predrain-service-state"
   fi
   mkdir -p "$tx_dir/stage/repo"
@@ -7908,9 +7914,9 @@ node_mark_maintenance() {
   assert_path_absent "$VOLATILE_MAINTENANCE_FILE" "volatile maintenance marker already exists or is unsafe"
   if [ -e "$tx_dir/predrain-service-state" ] || [ -L "$tx_dir/predrain-service-state" ]; then
     validate_service_state_file "$tx_dir/predrain-service-state"
-    assert_service_state_capture_is_pre_mutation
+    assert_service_state_capture_is_pre_mutation "$tx_dir"
   else
-    assert_service_state_capture_is_pre_mutation
+    assert_service_state_capture_is_pre_mutation "$tx_dir"
     capture_service_state "$tx_dir/predrain-service-state"
   fi
   validate_service_state_file "$tx_dir/predrain-service-state"
@@ -7943,7 +7949,7 @@ node_ensure_maintenance() {
   if [ -e "$tx_dir/predrain-service-state" ] || [ -L "$tx_dir/predrain-service-state" ]; then
     validate_service_state_file "$tx_dir/predrain-service-state"
   else
-    assert_service_state_capture_is_pre_mutation
+    assert_service_state_capture_is_pre_mutation "$tx_dir"
     capture_service_state "$tx_dir/predrain-service-state"
   fi
   if [ -e "$DEPLOY_NODE_ACTIVE_FILE" ] || [ -L "$DEPLOY_NODE_ACTIVE_FILE" ]; then
@@ -8905,7 +8911,7 @@ recover_deployment() {
   local fresh_lb_attestation_sha="$6"
   local fresh_lb_projection_sha="$7"
   local lb_owner_confirmation="$8"
-  local journal helper_hash expected_confirmation current_digest
+  local journal helper_hash expected_confirmation current_digest running_helper
   local tx_id journal_target previous_sha peer_previous_sha peer_host tx_dir deploy_mode
   local bootstrap_plan drain_seconds phase decision journal_helper journal_runtime_cluster
   local release_artifact_id release_artifact_api_sha release_manifest_sha
@@ -8964,8 +8970,19 @@ recover_deployment() {
   validate_tx_dir "$tx_dir"
   helper_hash="$(git -C "$REPO_DIR" show "$target_sha:$HELPER_REPO_PATH" | sha256sum | awk '{print $1}')"
   test "$helper_hash" = "$journal_helper" || die "recovery helper differs from durable transaction"
-  test "$(sha256sum "$0" | awk '{print $1}')" = "$helper_hash" || \
-    die "running recovery helper is not the exact authorized target blob"
+  running_helper="$(sha256sum "$0" | awk '{print $1}')"
+  if [ "$running_helper" != "$helper_hash" ]; then
+    # Pre-mutation journals may predate the helper that can recover them.
+    # Later phases still require the exact journal-authorized helper blob.
+    case "$phase" in
+      preflight-proven|peer-mark-started)
+        log "running recovery helper is a later exact blob than the open pre-mutation journal"
+        ;;
+      *)
+        die "running recovery helper is not the exact authorized target blob"
+        ;;
+    esac
+  fi
   lb_observed_at="$(assert_fresh_lb_ready_attestation \
     "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha")"
   peer_lb_observed_at="$(remote_node "$peer_host" lb-attestation \
@@ -9261,6 +9278,22 @@ retry_distinct_reconciliation() {
   current_digest="$(deploy_journal_digest)"
   printf 'TARGET_PARITY_JOURNAL_SHA256=%s\n' "$current_digest"
   log "distinct baselines reached exact drained target parity; a new provider observation is required before commit"
+}
+
+print_deploy_journal_identity() {
+  local expected_target="$1"
+  local digest
+  local -a journal=()
+  validate_sha "$expected_target"
+  require_root
+  acquire_meta_live_lock
+  digest="$(deploy_journal_digest)"
+  mapfile -t journal < <(read_deploy_journal "$digest")
+  test "${#journal[@]}" -eq 22 || die "deployment journal output is incomplete"
+  test "${journal[1]}" = "$expected_target" || die "journal target differs from the requested SHA"
+  printf 'JOURNAL_SHA256=%s\nTARGET_SHA=%s\nNODE01_PREVIOUS_SHA=%s\nNODE02_PREVIOUS_SHA=%s\nPHASE=%s\nDECISION=%s\nHELPER_SHA256=%s\n' \
+    "$digest" "${journal[1]}" "${journal[2]}" "${journal[3]}" \
+    "${journal[9]}" "${journal[10]}" "${journal[11]}"
 }
 
 deployment_recovery_status() {
@@ -9766,6 +9799,38 @@ orchestrate() {
   rollback_transaction() {
     local reason_rc="$1"
     set +e
+    # EXIT traps run outside orchestrate locals. Restore identity from the journal.
+    if [ -z "${tx_dir:-}" ] || [ -z "${previous_sha:-}" ] || [ -z "${peer_host:-}" ]; then
+      local digest
+      local -a persisted=()
+      digest="$(deploy_journal_digest)" || {
+        log "DURABLE DEPLOYMENT DECISION IS UNREADABLE; no rollback or admission is authorized"
+        return 1
+      }
+      mapfile -t persisted < <(read_deploy_journal "$digest") || return 1
+      test "${#persisted[@]}" -eq 22 || return 1
+      tx_id="${persisted[0]}"
+      target_sha="${persisted[1]}"
+      previous_sha="${persisted[2]}"
+      peer_previous_sha="${persisted[3]}"
+      peer_host="${persisted[4]}"
+      tx_dir="${persisted[5]}"
+      deploy_mode="${persisted[6]}"
+      expected_bootstrap_plan="${persisted[7]}"
+      drain_seconds="${persisted[8]}"
+      durable_decision="${persisted[10]}"
+      helper_hash="${persisted[11]}"
+      python_runtime_cluster_sha="${persisted[12]}"
+      lb_attestation_sha="${persisted[13]}"
+      lb_ready_projection_sha="${persisted[14]}"
+      lb_observed_at="${persisted[15]}"
+      release_artifact_id="${persisted[16]}"
+      release_artifact_api_sha="${persisted[17]}"
+      release_manifest_sha="${persisted[18]}"
+      release_run_id="${persisted[19]}"
+      release_run_attempt="${persisted[20]}"
+      release_target_tree_sha="${persisted[21]}"
+    fi
     if ! refresh_durable_decision; then
       node_ensure_maintenance "$tx_dir" >/dev/null 2>&1 || true
       remote_node "$peer_host" ensure-maintenance "$tx_dir" >/dev/null 2>&1 || true
@@ -9831,7 +9896,7 @@ orchestrate() {
   on_exit() {
     local rc=$?
     trap - EXIT INT TERM
-    if [ "$transaction_started" = "1" ] && [ "$transaction_succeeded" != "1" ]; then
+    if [ "${HA_ORCHESTRATE_TX_STARTED:-0}" = "1" ] && [ "${HA_ORCHESTRATE_TX_SUCCEEDED:-0}" != "1" ]; then
       rollback_transaction "$rc" || exit 1
     fi
     exit "$rc"
@@ -9840,7 +9905,10 @@ orchestrate() {
   trap 'exit 130' INT
   trap 'exit 143' TERM
 
+  HA_ORCHESTRATE_TX_STARTED=0
+  HA_ORCHESTRATE_TX_SUCCEEDED=0
   transaction_started=1
+  HA_ORCHESTRATE_TX_STARTED=1
   log "both-node preflight passed at node01=$previous_sha node02=$peer_previous_sha"
   test "$(assert_fresh_lb_ready_attestation \
     "$target_sha" "$lb_attestation_sha" "$lb_ready_projection_sha")" = "$lb_observed_at" || \
@@ -9904,6 +9972,7 @@ orchestrate() {
 
   update_deploy_journal "target-parity-awaiting-fresh-lb"
   transaction_succeeded=1
+  HA_ORCHESTRATE_TX_SUCCEEDED=1
   trap - EXIT INT TERM
   current_journal_digest="$(deploy_journal_digest)"
   printf 'TARGET_PARITY_JOURNAL_SHA256=%s\n' "$current_journal_digest"
@@ -9961,6 +10030,9 @@ case "${1:-}" in
     ;;
   recovery-status)
     deployment_recovery_status "${2:-}" "${3:-}" "${4:-}" "${5:-}"
+    ;;
+  print-deploy-journal-identity)
+    print_deploy_journal_identity "${2:-}"
     ;;
   node)
     shift

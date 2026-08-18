@@ -18,6 +18,7 @@ on:
           - commit_exact
           - recover_exact
           - retry_reconcile_exact
+          - recovery_status
       TARGET_SHA:
         description: "Exact tested 40-character release SHA"
         required: true
@@ -238,12 +239,18 @@ jobs:
             [ -z "${DIVERGENT_BASELINE_CONFIRM:-}" ]
             [ "$RETRY_RECONCILE_CONFIRM" = "RETRY_DEPLOY_${TARGET_PREFIX^^}_${JOURNAL_PREFIX^^}_LB_${LB_PREFIX^^}_FROM_DISTINCT_DRAINED" ]
             [ "$LB_INSTALL_CONFIRM" = "INSTALL_RETRY_LB_${TARGET_PREFIX^^}_${JOURNAL_PREFIX^^}_${LB_PREFIX^^}_${PROJECTION_PREFIX^^}" ]
+          elif [ "$DEPLOY_OPERATION" = recovery_status ]; then
+            [ -z "$BOOTSTRAP_PLAN_SHA256$RECONCILE_CONFIRM$DEPLOY_CONFIRM$COMMIT_CONFIRM" ]
+            [ -z "$RECOVERY_CONFIRM$RETRY_RECONCILE_CONFIRM$RECOVERY_JOURNAL_SHA256" ]
+            [ -z "${DIVERGENT_BASELINE_CONFIRM:-}" ]
+            [ "$LB_INSTALL_CONFIRM" = "INSTALL_STATUS_LB_${TARGET_PREFIX^^}_${LB_PREFIX^^}_${PROJECTION_PREFIX^^}" ]
           else
             echo "unsupported deployment operation" >&2
             exit 1
           fi
 
-          if [ "$DEPLOY_OPERATION" = steady ] || [ "$DEPLOY_OPERATION" = reconcile_exact ]; then
+          if [ "$DEPLOY_OPERATION" = steady ] || [ "$DEPLOY_OPERATION" = reconcile_exact ] || \
+             [ "$DEPLOY_OPERATION" = recover_exact ] || [ "$DEPLOY_OPERATION" = recovery_status ]; then
           RUN_JSON="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$QUALITY_GATES_RUN_ID")"
           RUN_HEAD_SHA="$(jq -r '.head_sha' <<<"$RUN_JSON")"
           RUN_HEAD_BRANCH="$(jq -r '.head_branch' <<<"$RUN_JSON")"
@@ -255,7 +262,11 @@ jobs:
             "repos/$GITHUB_REPOSITORY/actions/workflows/quality-gates.yml" --jq '.id')"
           RUN_WORKFLOW_PATH="$(gh api \
             "repos/$GITHUB_REPOSITORY/actions/workflows/$RUN_WORKFLOW_ID" --jq '.path')"
-          [ "$RUN_HEAD_SHA" = "$TARGET_SHA" ]
+          if [ "$DEPLOY_OPERATION" = recover_exact ] || [ "$DEPLOY_OPERATION" = recovery_status ]; then
+            [ "$RUN_HEAD_SHA" = "$DISPATCH_SHA" ]
+          else
+            [ "$RUN_HEAD_SHA" = "$TARGET_SHA" ]
+          fi
           [ "$RUN_HEAD_BRANCH" = main ]
           [ "$RUN_CONCLUSION" = success ]
           [ "$RUN_WORKFLOW_ID" = "$EXPECTED_QG_WORKFLOW_ID" ]
@@ -270,17 +281,22 @@ jobs:
           ARTIFACT_RUN_ID="$(jq -r '.workflow_run.id' <<<"$ARTIFACT_JSON")"
           ARTIFACT_HEAD_SHA="$(jq -r '.workflow_run.head_sha' <<<"$ARTIFACT_JSON")"
           ARTIFACT_DIGEST="$(jq -r '.digest' <<<"$ARTIFACT_JSON")"
-          [ "$ARTIFACT_NAME" = "linasbot-release-$TARGET_SHA" ]
+          if [ "$DEPLOY_OPERATION" = recover_exact ] || [ "$DEPLOY_OPERATION" = recovery_status ]; then
+            [ "$ARTIFACT_NAME" = "linasbot-release-$DISPATCH_SHA" ]
+            [ "$ARTIFACT_HEAD_SHA" = "$DISPATCH_SHA" ]
+          else
+            [ "$ARTIFACT_NAME" = "linasbot-release-$TARGET_SHA" ]
+            [ "$ARTIFACT_HEAD_SHA" = "$TARGET_SHA" ]
+          fi
           [ "$ARTIFACT_EXPIRED" = false ]
           [ "$ARTIFACT_RUN_ID" = "$QUALITY_GATES_RUN_ID" ]
-          [ "$ARTIFACT_HEAD_SHA" = "$TARGET_SHA" ]
           [[ "$ARTIFACT_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
           [ "${ARTIFACT_DIGEST#sha256:}" = "$RELEASE_ARTIFACT_API_SHA256" ]
           fi
 
       - name: Download exact immutable release artifact ID
         id: download_release
-        if: inputs.DEPLOY_OPERATION == 'steady' || inputs.DEPLOY_OPERATION == 'reconcile_exact'
+        if: inputs.DEPLOY_OPERATION == 'steady' || inputs.DEPLOY_OPERATION == 'reconcile_exact' || inputs.DEPLOY_OPERATION == 'recover_exact' || inputs.DEPLOY_OPERATION == 'recovery_status'
         continue-on-error: true
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -292,7 +308,7 @@ jobs:
 
       - name: Retry exact immutable release artifact download
         if: >
-          (inputs.DEPLOY_OPERATION == 'steady' || inputs.DEPLOY_OPERATION == 'reconcile_exact') &&
+          (inputs.DEPLOY_OPERATION == 'steady' || inputs.DEPLOY_OPERATION == 'reconcile_exact' || inputs.DEPLOY_OPERATION == 'recover_exact' || inputs.DEPLOY_OPERATION == 'recovery_status') &&
           steps.download_release.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -340,9 +356,9 @@ jobs:
 
       - name: Validate release bundle and extract exact helper
         id: release_contract
-        if: inputs.DEPLOY_OPERATION == 'steady' || inputs.DEPLOY_OPERATION == 'reconcile_exact'
+        if: inputs.DEPLOY_OPERATION == 'steady' || inputs.DEPLOY_OPERATION == 'reconcile_exact' || inputs.DEPLOY_OPERATION == 'recover_exact' || inputs.DEPLOY_OPERATION == 'recovery_status'
         env:
-          TARGET_SHA: ${{ inputs.TARGET_SHA }}
+          TARGET_SHA: ${{ (inputs.DEPLOY_OPERATION == 'recover_exact' || inputs.DEPLOY_OPERATION == 'recovery_status') && github.sha || inputs.TARGET_SHA }}
           QUALITY_GATES_RUN_ID: ${{ inputs.QUALITY_GATES_RUN_ID }}
           RELEASE_RUN_ATTEMPT: ${{ inputs.RELEASE_RUN_ATTEMPT }}
           RELEASE_ARTIFACT_ID: ${{ inputs.RELEASE_ARTIFACT_ID }}
@@ -1059,13 +1075,21 @@ jobs:
           "${NODE01_SSH[@]}" "/usr/bin/install -d -o root -g root -m 0700 -- /var/lib/linasbot/meta-ha/workflow-uploads && /usr/bin/test ! -e '$UPLOAD_ROOT' && /usr/bin/install -d -o root -g root -m 0700 -- '$UPLOAD_ROOT'"
           if [ "$DEPLOY_OPERATION" = steady ] || [ "$DEPLOY_OPERATION" = reconcile_exact ]; then
             TRANSFER_FILES=(transfer/deploy_meta_release_ha.sh transfer/lb-attestation.json transfer/release)
+          elif [ "$DEPLOY_OPERATION" = recover_exact ]; then
+            TRANSFER_FILES=(transfer/deploy_meta_release_ha.sh transfer/lb-attestation.json)
+          elif [ "$DEPLOY_OPERATION" = recovery_status ]; then
+            # Read-only journal identity. Helper comes from the dispatch SHA
+            # Quality Gates bundle because live HEAD may predate HA helpers.
+            TRANSFER_FILES=(transfer/deploy_meta_release_ha.sh)
           else
             TRANSFER_FILES=(transfer/lb-attestation.json)
           fi
+          if [ "${#TRANSFER_FILES[@]}" -gt 0 ]; then
           /usr/bin/scp -r "${SSH_HARDENING[@]}" \
             -i "$SSH_ROOT/node01.key" \
             -o "UserKnownHostsFile=$SSH_ROOT/node01.known_hosts" \
             -- "${TRANSFER_FILES[@]}" "$SSH_USER@$NODE01_HOST:$UPLOAD_ROOT/"
+          fi
 
           REMOTE_COMMAND='/usr/bin/env -i HOME=/nonexistent LANG=C.UTF-8 LC_ALL=C.UTF-8 PATH=/usr/sbin:/usr/bin:/sbin:/bin'
           for variable in \
@@ -1093,13 +1117,22 @@ jobs:
             HELPER_SOURCE="$UPLOAD_ROOT/deploy_meta_release_ha.sh"
             LB_SOURCE="$UPLOAD_ROOT/lb-attestation.json"
             RELEASE_SOURCE="$UPLOAD_ROOT/release"
-            [ -f "$LB_SOURCE" ] && [ ! -L "$LB_SOURCE" ]
-            [ "$(sha256sum "$LB_SOURCE" | awk '{print $1}')" = "$LB_ATTESTATION_SHA256" ]
             NEW_DEPLOY=0
+            RECOVER_DISPATCH_HELPER=0
+            if [ "$DEPLOY_OPERATION" != recovery_status ]; then
+              [ -f "$LB_SOURCE" ] && [ ! -L "$LB_SOURCE" ]
+              [ "$(sha256sum "$LB_SOURCE" | awk '{print $1}')" = "$LB_ATTESTATION_SHA256" ]
+            fi
             if [ "$DEPLOY_OPERATION" = steady ] || [ "$DEPLOY_OPERATION" = reconcile_exact ]; then
               NEW_DEPLOY=1
               [ -f "$HELPER_SOURCE" ] && [ ! -L "$HELPER_SOURCE" ]
               [ -d "$RELEASE_SOURCE" ] && [ ! -L "$RELEASE_SOURCE" ]
+            elif [ "$DEPLOY_OPERATION" = recover_exact ] || \
+                 [ "$DEPLOY_OPERATION" = recovery_status ]; then
+              # After cutover, recover/status dispatched from the journal target
+              # SHA copies the same helper bytes as the live stored bundle.
+              RECOVER_DISPATCH_HELPER=1
+              [ -f "$HELPER_SOURCE" ] && [ ! -L "$HELPER_SOURCE" ]
             fi
 
             HELPER_ROOT=""
@@ -1121,7 +1154,7 @@ jobs:
               if [ -n "$HELPER_PATH" ]; then sudo unlink "$HELPER_PATH" 2>/dev/null || true; fi
               if [ -n "$HELPER_ROOT" ]; then sudo rmdir "$HELPER_ROOT" 2>/dev/null || true; fi
               unlink "$LB_SOURCE" 2>/dev/null || true
-              if [ "$NEW_DEPLOY" = 1 ]; then unlink "$HELPER_SOURCE" 2>/dev/null || true; fi
+              if [ "$NEW_DEPLOY" = 1 ] || [ "$RECOVER_DISPATCH_HELPER" = 1 ]; then unlink "$HELPER_SOURCE" 2>/dev/null || true; fi
               if [ -d "$RELEASE_SOURCE" ] && [ ! -L "$RELEASE_SOURCE" ]; then
                 for name in \
                   release-manifest.json wheelhouse.tar dashboard-build.tar control-plane.tar \
@@ -1404,18 +1437,20 @@ jobs:
             HELPER_ROOT="$(sudo mktemp -d -p /run linasbot-ha-deploy.XXXXXXXX)"
             case "$HELPER_ROOT" in /run/linasbot-ha-deploy.????????) ;; *) exit 1 ;; esac
             HELPER_PATH="$HELPER_ROOT/deploy_meta_release_ha.sh"
-            if [ "$NEW_DEPLOY" = 1 ]; then
+            if [ "$NEW_DEPLOY" = 1 ] || [ "$RECOVER_DISPATCH_HELPER" = 1 ]; then
               root_copy_exact "$HELPER_SOURCE" "$HELPER_PATH" \
                 "$EXPECTED_HELPER_SIZE" "$EXPECTED_HELPER_SHA" 0700
             else
               materialize_recovery_helper
             fi
 
+            if [ "$DEPLOY_OPERATION" != recovery_status ]; then
             LB_ROOT="$(sudo mktemp -p /run linasbot-lb-upload.XXXXXXXX)"
             case "$LB_ROOT" in /run/linasbot-lb-upload.????????) ;; *) exit 1 ;; esac
             sudo unlink "$LB_ROOT"
             root_copy_exact "$LB_SOURCE" "$LB_ROOT" \
               "$LB_ATTESTATION_SIZE" "$LB_ATTESTATION_SHA256" 0600
+            fi
 
             if [ "$NEW_DEPLOY" = 1 ]; then
               RELEASE_ROOT="$(sudo mktemp -d -p /run linasbot-release-import.XXXXXXXX)"
@@ -1449,7 +1484,9 @@ jobs:
                 </dev/null
             fi
 
-            if [ "$DEPLOY_OPERATION" = steady ] || [ "$DEPLOY_OPERATION" = reconcile_exact ]; then
+            if [ "$DEPLOY_OPERATION" = recovery_status ]; then
+              :
+            elif [ "$DEPLOY_OPERATION" = steady ] || [ "$DEPLOY_OPERATION" = reconcile_exact ]; then
               LB_OPERATION=deploy
               LB_JOURNAL=none
             elif [ "$DEPLOY_OPERATION" = commit_exact ]; then
@@ -1462,6 +1499,7 @@ jobs:
               LB_OPERATION=retry
               LB_JOURNAL="$RECOVERY_JOURNAL_SHA256"
             fi
+            if [ "$DEPLOY_OPERATION" != recovery_status ]; then
             sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
               PATH=/usr/sbin:/usr/bin:/sbin:/bin \
               /bin/bash --noprofile --norc "$HELPER_PATH" install-lb-attestation-cluster \
@@ -1469,6 +1507,7 @@ jobs:
               "$LB_READY_PROJECTION_SHA256" "$LB_JOURNAL" "$LB_INSTALL_CONFIRM" \
               "$LB_OWNER_CONFIRM" \
               </dev/null
+            fi
 
             if [ "$DEPLOY_OPERATION" = steady ] || [ "$DEPLOY_OPERATION" = reconcile_exact ]; then
               sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
@@ -1515,6 +1554,12 @@ jobs:
                 "$TARGET_SHA" "$NODE01_BASELINE_SHA" "$NODE02_BASELINE_SHA" \
                 "$RECOVERY_JOURNAL_SHA256" "$RECOVERY_CONFIRM" \
                 "$LB_ATTESTATION_SHA256" "$LB_READY_PROJECTION_SHA256" "$LB_OWNER_CONFIRM" \
+                </dev/null
+            elif [ "$DEPLOY_OPERATION" = recovery_status ]; then
+              sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+                PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+                /bin/bash --noprofile --norc "$HELPER_PATH" print-deploy-journal-identity \
+                "$TARGET_SHA" \
                 </dev/null
             else
               sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
