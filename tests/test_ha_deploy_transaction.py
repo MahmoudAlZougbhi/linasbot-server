@@ -826,7 +826,8 @@ def test_direct_port_8003_is_the_real_drain_boundary_for_marker_unaware_releases
     peer_sleep = orchestrate.index('sleep "$drain_seconds"', peer_mark)
     peer_stage = orchestrate.index('remote_node "$peer_host" stage', peer_sleep)
     assert orchestrate.index('node_assert_release_ready "$previous_sha"', peer_mark) < peer_sleep
-    assert orchestrate.index("assert_public_ready", peer_mark) < peer_sleep < peer_stage
+    assert "assert_public_ready" not in orchestrate[peer_mark:peer_sleep]
+    assert peer_sleep < orchestrate.index("assert_public_ready", peer_mark) < peer_stage
 
 
 def test_persistent_markers_and_systemd_boot_guards_survive_reboot_fail_closed() -> None:

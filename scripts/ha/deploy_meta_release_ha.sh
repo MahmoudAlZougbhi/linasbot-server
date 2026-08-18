@@ -10447,7 +10447,7 @@ orchestrate() {
   local local_baseline_projection peer_baseline_projection expected_divergent_confirm
   local local_preflight_rc peer_preflight_rc
   local tx_id current_journal_digest durable_decision=rollback
-  local transaction_started=0 transaction_succeeded=0 rollback_ok=1 commit_decided=0
+  local transaction_started=0 transaction_succeeded=0 commit_decided=0
   validate_sha "$target_sha"
   validate_digest "$lb_attestation_sha"
   validate_digest "$lb_ready_projection_sha"
@@ -10677,12 +10677,17 @@ orchestrate() {
   update_deploy_journal "preflight-proven"
   rollback_transaction() {
     local reason_rc="$1"
+    local rollback_ok=1
+    local commit_decided=0
     set +e
     # EXIT traps run outside orchestrate locals. Restore identity from the journal.
+    # rollback_ok must be local here: orchestrate locals are gone under set -u.
     if [ -z "${tx_dir:-}" ] || [ -z "${previous_sha:-}" ] || [ -z "${peer_host:-}" ]; then
       local digest
       local -a persisted=()
       digest="$(deploy_journal_digest)" || {
+        node_ensure_maintenance "$HA_ORCHESTRATE_TX_DIR" >/dev/null 2>&1 || true
+        remote_node "$HA_ORCHESTRATE_PEER_HOST" ensure-maintenance "$HA_ORCHESTRATE_TX_DIR" >/dev/null 2>&1 || true
         log "DURABLE DEPLOYMENT DECISION IS UNREADABLE; no rollback or admission is authorized"
         return 1
       }
@@ -10711,8 +10716,8 @@ orchestrate() {
       release_target_tree_sha="${persisted[21]}"
     fi
     if ! refresh_durable_decision; then
-      node_ensure_maintenance "$tx_dir" >/dev/null 2>&1 || true
-      remote_node "$peer_host" ensure-maintenance "$tx_dir" >/dev/null 2>&1 || true
+      node_ensure_maintenance "$HA_ORCHESTRATE_TX_DIR" >/dev/null 2>&1 || true
+      remote_node "$HA_ORCHESTRATE_PEER_HOST" ensure-maintenance "$HA_ORCHESTRATE_TX_DIR" >/dev/null 2>&1 || true
       log "DURABLE DEPLOYMENT DECISION IS UNREADABLE; no rollback or admission is authorized"
       return 1
     fi
@@ -10788,6 +10793,11 @@ orchestrate() {
   HA_ORCHESTRATE_TX_SUCCEEDED=0
   transaction_started=1
   HA_ORCHESTRATE_TX_STARTED=1
+  HA_ORCHESTRATE_TX_DIR=$tx_dir
+  HA_ORCHESTRATE_PEER_HOST=$peer_host
+  HA_ORCHESTRATE_PREVIOUS_SHA=$previous_sha
+  HA_ORCHESTRATE_PEER_PREVIOUS_SHA=$peer_previous_sha
+  HA_ORCHESTRATE_DRAIN_SECONDS=$drain_seconds
   log "both-node preflight passed at node01=$previous_sha node02=$peer_previous_sha"
   test "$(assert_fresh_lb_ready_attestation \
     "$target_sha" "$lb_attestation_sha" "$lb_ready_projection_sha")" = "$lb_observed_at" || \
@@ -10802,7 +10812,6 @@ orchestrate() {
   remote_node "$peer_host" mark-maintenance "$tx_dir"
   update_deploy_journal "peer-marked"
   node_assert_release_ready "$previous_sha"
-  assert_public_ready
   sleep "$drain_seconds"
   remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"
   node_assert_release_ready "$previous_sha"
