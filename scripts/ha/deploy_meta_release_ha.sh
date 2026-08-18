@@ -7131,8 +7131,12 @@ stop_queue_workers() {
   local queue
   for queue in "${WORKER_QUEUES[@]}"; do
     systemctl stop "linasbot-worker@${queue}.service" 2>/dev/null || true
-    systemctl is-active --quiet "linasbot-worker@${queue}.service" && \
+    # `systemctl is-active --quiet` returns 3 for not-found. Using it as the
+    # last command of this function with `&& die` leaked rc=3 under `set -e`
+    # after official recover 32171272622 had already passed DropInPaths.
+    if systemctl is-active --quiet "linasbot-worker@${queue}.service"; then
       die "queue worker remained active during HA maintenance: $queue"
+    fi
   done
 }
 
