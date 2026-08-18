@@ -1,13 +1,81 @@
 """Steady HA baseline artifacts must name drift and require an explicit replace confirm."""
 
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
 from pathlib import Path
+from typing import Any
 
 HELPER = Path(__file__).resolve().parents[1] / "scripts" / "ha" / "deploy_meta_release_ha.sh"
 WORKFLOW = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "deploy.yml"
 
+_TARGET = "a" * 40
+_PREVIOUS = "b" * 40
+_OTHER_PREVIOUS = "c" * 40
+_WHEELHOUSE = "e" * 64
+_BASELINE_01 = "1" * 64
+_BASELINE_02 = "2" * 64
+
 
 def _helper() -> str:
     return HELPER.read_text(encoding="utf-8")
+
+
+def _stage_parity_python() -> str:
+    source = _helper()
+    start = source.index("assert_stage_artifact_parity() {")
+    end = source.index("\nactivation_state_tool() {", start)
+    chunk = source[start:end]
+    python_start = chunk.index("import json\n")
+    python_end = chunk.index("\nPY\n")
+    return chunk[python_start:python_end]
+
+
+def _evidence(*, wheelhouse: str, baseline: str, target: str = _TARGET) -> str:
+    payload: dict[str, Any] = {
+        "baseline_artifacts": {
+            "artifact_projection_sha256": baseline,
+            "schema": 1,
+        },
+        "control_plane_sha256": "c" * 64,
+        "dashboard_build_sha256": "d" * 64,
+        "deploy_version": "1",
+        "release_bundle": {"artifact_id": "9339909286"},
+        "schema": 1,
+        "target_sha": target,
+        "toolchain": {"python": "3.13"},
+        "wheelhouse_sha256": wheelhouse,
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
+def _run_stage_parity(
+    node01: str,
+    node02: str,
+    previous01: str,
+    previous02: str,
+    confirm: str,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            "-I",
+            "-S",
+            "-c",
+            _stage_parity_python(),
+            node01,
+            node02,
+            previous01,
+            previous02,
+            confirm,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
 
 
 def test_baseline_evidence_skips_bytecode_and_logs_each_root() -> None:
@@ -39,3 +107,61 @@ def test_steady_baseline_mismatch_requires_hash_bound_replace_confirm() -> None:
     assert "DIVERGENT_BASELINE_CONFIRM=" in workflow
     assert "DIVERGENT_BASELINE_CONFIRM: ${{ inputs.DIVERGENT_BASELINE_CONFIRM }}" in workflow
     assert "baseline artifact evidence on $expected_node_id" in helper
+
+
+def test_stage_parity_reads_owner_divergent_confirm() -> None:
+    body = _helper()
+    start = body.index("assert_stage_artifact_parity() {")
+    end = body.index("\nactivation_state_tool() {", start)
+    chunk = body[start:end]
+    assert '"${DIVERGENT_BASELINE_CONFIRM:-}"' in chunk
+    assert "divergent_confirm" in chunk
+    assert "target stage artifacts differ between HA nodes" in chunk
+    assert "divergent-baseline confirm does not bind the staged target SHA" in chunk
+
+
+def test_stage_parity_equal_baselines_pass_without_confirm() -> None:
+    evidence = _evidence(wheelhouse=_WHEELHOUSE, baseline=_BASELINE_01)
+    result = _run_stage_parity(evidence, evidence, _PREVIOUS, _PREVIOUS, "")
+    assert result.returncode == 0, result.stderr
+
+
+def test_stage_parity_rejects_divergent_baselines_without_confirm() -> None:
+    node01 = _evidence(wheelhouse=_WHEELHOUSE, baseline=_BASELINE_01)
+    node02 = _evidence(wheelhouse=_WHEELHOUSE, baseline=_BASELINE_02)
+    result = _run_stage_parity(node01, node02, _PREVIOUS, _PREVIOUS, "")
+    assert result.returncode == 1
+    assert "steady rollback baseline artifacts differ between HA nodes" in result.stderr
+
+
+def test_stage_parity_allows_divergent_baselines_with_target_bound_confirm() -> None:
+    node01 = _evidence(wheelhouse=_WHEELHOUSE, baseline=_BASELINE_01)
+    node02 = _evidence(wheelhouse=_WHEELHOUSE, baseline=_BASELINE_02)
+    confirm = f"REPLACE_DIVERGENT_BASELINE_{_BASELINE_01[:16]}_{_BASELINE_02[:16]}_WITH_RELEASE_{_TARGET}"
+    result = _run_stage_parity(node01, node02, _PREVIOUS, _PREVIOUS, confirm)
+    assert result.returncode == 0, result.stderr
+
+
+def test_stage_parity_rejects_confirm_bound_to_a_different_target() -> None:
+    node01 = _evidence(wheelhouse=_WHEELHOUSE, baseline=_BASELINE_01)
+    node02 = _evidence(wheelhouse=_WHEELHOUSE, baseline=_BASELINE_02)
+    confirm = f"REPLACE_DIVERGENT_BASELINE_{_BASELINE_01[:16]}_{_BASELINE_02[:16]}_WITH_RELEASE_{_PREVIOUS}"
+    result = _run_stage_parity(node01, node02, _PREVIOUS, _PREVIOUS, confirm)
+    assert result.returncode == 1
+    assert "divergent-baseline confirm does not bind the staged target SHA" in result.stderr
+
+
+def test_stage_parity_still_rejects_mismatched_target_payload() -> None:
+    node01 = _evidence(wheelhouse=_WHEELHOUSE, baseline=_BASELINE_01)
+    node02 = _evidence(wheelhouse="f" * 64, baseline=_BASELINE_02)
+    confirm = f"REPLACE_DIVERGENT_BASELINE_{_BASELINE_01[:16]}_{_BASELINE_02[:16]}_WITH_RELEASE_{_TARGET}"
+    result = _run_stage_parity(node01, node02, _PREVIOUS, _PREVIOUS, confirm)
+    assert result.returncode == 1
+    assert "target stage artifacts differ between HA nodes: wheelhouse_sha256" in result.stderr
+
+
+def test_stage_parity_distinct_previous_shas_may_keep_distinct_baselines() -> None:
+    node01 = _evidence(wheelhouse=_WHEELHOUSE, baseline=_BASELINE_01)
+    node02 = _evidence(wheelhouse=_WHEELHOUSE, baseline=_BASELINE_02)
+    result = _run_stage_parity(node01, node02, _PREVIOUS, _OTHER_PREVIOUS, "")
+    assert result.returncode == 0, result.stderr
