@@ -228,8 +228,8 @@ def classify(probe):
     required = probe.get("worker_template_required")
     if required is not True and required is not False:
         raise SystemExit("worker template required flag is invalid")
-    if probe.get("durable_queues_required") is True:
-        raise SystemExit("old live config declares production workers required")
+    if probe.get("durable_queues_required") not in {True, False}:
+        raise SystemExit("worker template probe durable flag is invalid")
     if probe.get("stray_worker_pids"):
         raise SystemExit("worker processes are running outside systemd")
     if probe.get("listed_worker_units"):
@@ -264,10 +264,8 @@ def classify(probe):
         if not exists:
             raise SystemExit("worker instances are loaded without a template file")
         return "loaded"
-    if exists:
-        raise SystemExit("worker template file exists but instances are not fully loaded")
     if loaded:
-        raise SystemExit("worker instances are loaded without a template file")
+        raise SystemExit("worker template file exists but instances are not fully loaded")
     if required is True:
         raise SystemExit(
             "legacy workerless migration is not allowed after the worker template became required"
@@ -7163,9 +7161,14 @@ install_trusted_worker_template_from_target() {
   object="$(git -C "$REPO_DIR" rev-parse "$target_sha:deploy/systemd/linasbot-worker@.service")"
   test "$(git -C "$REPO_DIR" cat-file -t "$object")" = blob || \
     die "trusted target worker template is not a blob"
-  test ! -e /etc/systemd/system/linasbot-worker@.service && \
-    test ! -L /etc/systemd/system/linasbot-worker@.service || \
-    die "canonical worker template already exists; refusing overwrite"
+  if [ -e /etc/systemd/system/linasbot-worker@.service ] || \
+     [ -L /etc/systemd/system/linasbot-worker@.service ]; then
+    test -f /etc/systemd/system/linasbot-worker@.service && \
+      test ! -L /etc/systemd/system/linasbot-worker@.service || \
+      die "canonical worker template is unsafe to replace"
+    worker_instances_are_positively_loaded && \
+      die "refusing overwrite of a positively loaded worker template"
+  fi
   run_system_python_control - "$REPO_DIR" "$object" "$target_sha" \
     "$RELEASE_BUNDLE_RECEIPT_ROOT" "$RELEASE_BUNDLE_ROOT" <<'PY'
 import json
@@ -7188,8 +7191,8 @@ git = [
     "-C",
     repo,
 ]
-if destination.exists() or destination.is_symlink():
-    raise SystemExit("canonical worker template already exists; refusing overwrite")
+if destination.is_symlink() or (destination.exists() and not destination.is_file()):
+    raise SystemExit("canonical worker template is unsafe to replace")
 payload = subprocess.run(
     [*git, "cat-file", "blob", git_object],
     check=False,

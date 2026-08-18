@@ -57,12 +57,20 @@ def _probe(*, load: str, live: str = OLD, target: str = TARGET, **overrides: obj
 
 def test_absent_probes_authorize_migration_only_before_cutover() -> None:
     assert classify_probe(_probe(load="not-found", **{"template_file_exists": False})) == LEGACY_ABSENT
+    assert classify_probe(_probe(load="not-found", **{"template_file_exists": True})) == LEGACY_ABSENT
+    assert classify_probe(_probe(load="not-found", durable_queues_required=True)) == LEGACY_ABSENT
     assert decide_cluster(_probe(load="not-found"), _probe(load="not-found")) == MIGRATE
+    assert (
+        decide_cluster(
+            _probe(load="not-found", **{"template_file_exists": True}),
+            _probe(load="not-found", **{"template_file_exists": True}),
+        )
+        == MIGRATE
+    )
 
 
-def test_template_file_without_loaded_instances_fails_closed() -> None:
-    with pytest.raises(WorkerlessContractError, match="not fully loaded"):
-        classify_probe(_probe(load="not-found", **{"template_file_exists": True}))
+def test_template_file_without_loaded_instances_is_legacy_absent() -> None:
+    assert classify_probe(_probe(load="not-found", **{"template_file_exists": True})) == LEGACY_ABSENT
 
 
 def test_partially_loaded_instances_fail_closed() -> None:
@@ -112,8 +120,6 @@ def test_enabled_or_active_or_stray_workers_fail_closed() -> None:
         classify_probe(active)
     with pytest.raises(WorkerlessContractError, match="outside systemd"):
         classify_probe(_probe(load="not-found", stray_worker_pids=["4321"]))
-    with pytest.raises(WorkerlessContractError, match="required"):
-        classify_probe(_probe(load="not-found", durable_queues_required=True))
     with pytest.raises(WorkerlessContractError, match="enabled or active"):
         classify_probe(_probe(load="not-found", listed_worker_units=["linasbot-worker@high_priority.service"]))
 
@@ -133,7 +139,8 @@ def test_helper_embeds_the_fail_closed_workerless_contract() -> None:
     assert "apply_legacy_workerless_template_cluster_install() {" in source
     assert "assert_worker_template_cluster_agreement() {" in source
     assert "install_trusted_worker_template_from_target() {" in source
-    assert "canonical worker template already exists; refusing overwrite" in source
+    assert "refusing overwrite of a positively loaded worker template" in source
+    assert "canonical worker template is unsafe to replace" in source
     assert "git worker template blob differs from the trusted release bundle" in source
     assert "control-plane.tar" in source[source.index("install_trusted_worker_template_from_target() {") :]
     assert "arm_worker_template_required_marker() {" in source
