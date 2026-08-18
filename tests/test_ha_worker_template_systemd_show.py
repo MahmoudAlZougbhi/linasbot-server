@@ -34,11 +34,9 @@ def test_worker_need_daemon_reload_queries_instances_not_the_template() -> None:
     assert "API DropInPaths is empty; refusing to treat that as a loaded maintenance guard" in readback
     assert "API DropInPaths remains the systemd merge proof" in readback
     assert "NeedDaemonReload=no is not proof" in source
-    stop_workers = source[
-        source.index("stop_queue_workers() {") : source.index("write_boot_guard_candidate() {")
-    ]
+    stop_workers = source[source.index("stop_queue_workers() {") : source.index("write_boot_guard_candidate() {")]
     assert "if systemctl is-active --quiet" in stop_workers
-    assert "systemctl is-active --quiet \"linasbot-worker@${queue}.service\" && \\" not in stop_workers
+    assert 'systemctl is-active --quiet "linasbot-worker@${queue}.service" && \\' not in stop_workers
     assert "queue worker remained active during HA maintenance" in stop_workers
     stray = source[source.index("collect_stray_worker_pids() {") : source.index("legacy_workerless_eval() {")]
     assert 'entry / "cgroup"' in stray
