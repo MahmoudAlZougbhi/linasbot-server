@@ -166,25 +166,57 @@ worker_instances_are_positively_loaded() {
   done
 }
 
+api_maintenance_guard_readback() {
+  local api_guard="$1"
+  local needle='ConditionPathExists=!/var/lib/linasbot/meta-ha/deploy-node.active'
+  local unit=/etc/systemd/system/linasbot.service
+  local fragment paths merged
+  systemd_unit_need_daemon_reload_is_no linasbot.service || return 1
+  fragment="$(systemctl show -p FragmentPath --value -- linasbot.service)" || return 1
+  test "$fragment" = "$unit" || return 1
+  paths="$(systemctl show -p DropInPaths --value -- linasbot.service)" || return 1
+  # Unit-name cat of the API service grepping the drop-in path failed after the
+  # API was already stopped (recover 32152242403). File-path cat is systemd's
+  # documented merge of the unit plus drop-ins.
+  merged="$(systemctl cat -- "$unit")" || return 1
+  if ! printf '%s\n' "$merged" | grep -Fq "$needle"; then
+    log "systemd cat of API unit file is missing unique needle DropInPaths='$paths'"
+    return 1
+  fi
+  if [ -n "$paths" ]; then
+    case " $paths " in
+      *" $api_guard "*) ;;
+      *)
+        log "API DropInPaths='$paths' omit the maintenance guard"
+        return 1
+        ;;
+    esac
+  else
+    log "API DropInPaths empty while loaded; unit-file cat remains the merge proof"
+  fi
+}
+
 worker_instances_maintenance_guard_readback() {
   local worker_guard="$1"
   local needle='ConditionPathExists=!/var/lib/linasbot/meta-ha/deploy-node.active'
-  local queue fragment paths
+  local template=/etc/systemd/system/linasbot-worker@.service
+  local queue fragment paths merged
   worker_instances_are_positively_loaded || return 1
+  # Official recover 32152242403: instance cat omitted the unique needle while
+  # DropInPaths listed the guard. Bare template unit-name cat is invalid on this
+  # systemd. File-path cat is the documented template-plus-drop-in merge and
+  # does not depend on instance active state. NeedDaemonReload=no is not proof.
+  merged="$(systemctl cat -- "$template")" || return 1
+  if ! printf '%s\n' "$merged" | grep -Fq "$needle"; then
+    log "systemd cat of worker template file is missing unique needle"
+    return 1
+  fi
   for queue in "${WORKER_QUEUES[@]}"; do
     fragment="$(systemctl show -p FragmentPath --value -- "linasbot-worker@${queue}.service")" || \
       return 1
-    test "$fragment" = /etc/systemd/system/linasbot-worker@.service || return 1
+    test "$fragment" = "$template" || return 1
     paths="$(systemctl show -p DropInPaths --value -- "linasbot-worker@${queue}.service")" || \
       return 1
-    # Unique drop-in content on a real instance is the required positive proof.
-    # DropInPaths can be empty on loaded-but-inactive instances on this systemd;
-    # NeedDaemonReload=no is not proof; grepping the drop-in path from cat is not
-    # proof. If systemd reports DropInPaths, it must include the guard path.
-    if ! systemctl cat -- "linasbot-worker@${queue}.service" | grep -Fq "$needle"; then
-      log "worker@$queue maintenance-guard cat is missing unique needle DropInPaths='$paths'"
-      return 1
-    fi
     if [ -n "$paths" ]; then
       case " $paths " in
         *" $worker_guard "*) ;;
@@ -193,6 +225,8 @@ worker_instances_maintenance_guard_readback() {
           return 1
           ;;
       esac
+    else
+      log "worker@$queue DropInPaths empty while loaded; template-file cat remains the merge proof"
     fi
   done
 }
@@ -7390,7 +7424,7 @@ install_maintenance_boot_guard() {
     die "systemd has not durably loaded the worker template"
   worker_instances_need_daemon_reload_no || \
     die "systemd has not durably loaded the worker maintenance guard"
-  systemctl cat linasbot.service | grep -Fq "$api_guard" || \
+  api_maintenance_guard_readback "$api_guard" || \
     die "systemd API maintenance guard readback failed"
   worker_instances_maintenance_guard_readback "$worker_guard" || \
     die "systemd worker maintenance guard readback failed"
@@ -7441,7 +7475,7 @@ maintenance_boot_guard_is_loaded() {
     maintenance_boot_guard_load_failed "worker instances still need daemon-reload"
     return 1
   fi
-  if ! systemctl cat linasbot.service | grep -Fq "$api_guard"; then
+  if ! api_maintenance_guard_readback "$api_guard"; then
     maintenance_boot_guard_load_failed "API unit does not include the drop-in"
     return 1
   fi
