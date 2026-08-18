@@ -187,8 +187,14 @@ worker_instances_maintenance_guard_readback() {
 
 collect_stray_worker_pids() {
   run_system_python_control - <<'PY'
+import re
 from pathlib import Path
 
+cgroup_re = re.compile(
+    rb"(?:^|/)"
+    rb"linasbot-worker@(?:high_priority|interactive|background|expensive)\.service"
+    rb"(?:/|$)"
+)
 hits = []
 proc = Path("/proc")
 if proc.is_dir():
@@ -200,8 +206,15 @@ if proc.is_dir():
         except (OSError, PermissionError):
             continue
         joined = b" ".join(part for part in raw if part)
-        if b"run_queue_worker.py" in joined or b"LINAS_WORKER_QUEUE=" in joined:
-            hits.append(entry.name)
+        if b"run_queue_worker.py" not in joined and b"LINAS_WORKER_QUEUE=" not in joined:
+            continue
+        try:
+            cgroup = (entry / "cgroup").read_bytes()
+        except (OSError, PermissionError):
+            cgroup = b""
+        if cgroup_re.search(cgroup):
+            continue
+        hits.append(entry.name)
 print("\n".join(hits))
 PY
 }
@@ -231,25 +244,31 @@ def classify(probe):
     if probe.get("durable_queues_required") not in {True, False}:
         raise SystemExit("worker template probe durable flag is invalid")
     if probe.get("stray_worker_pids"):
-        raise SystemExit("worker processes are running outside systemd")
-    if probe.get("listed_worker_units"):
-        raise SystemExit("linasbot-worker@ units are enabled or active on this node")
+        raise SystemExit(
+            "worker processes are running outside systemd: "
+            + ",".join(str(item) for item in probe["stray_worker_pids"])
+        )
+    listed = probe.get("listed_worker_units")
+    if listed is None or not isinstance(listed, list):
+        raise SystemExit("worker template probe unit list is invalid")
     instances = probe.get("instances")
     if not isinstance(instances, dict) or set(instances) != set(QUEUES):
         raise SystemExit("worker template probe instances are incomplete")
     loaded = 0
+    enabled_hits = []
+    active_hits = []
     for queue in QUEUES:
         inst = instances[queue]
         enabled = str(inst.get("unit_file_state") or "").strip()
         active = str(inst.get("active_state") or "").strip()
         load_state = str(inst.get("load_state") or "").strip()
         if enabled in ENABLED_BLOCKERS:
-            raise SystemExit(f"linasbot-worker@{queue} is enabled")
-        if enabled not in ABSENT_ENABLED:
+            enabled_hits.append(queue)
+        elif enabled not in ABSENT_ENABLED:
             raise SystemExit(f"linasbot-worker@{queue} enablement is outside the closed schema")
         if active in ACTIVE_BLOCKERS:
-            raise SystemExit(f"linasbot-worker@{queue} is active")
-        if active not in ABSENT_ACTIVE:
+            active_hits.append(queue)
+        elif active not in ABSENT_ACTIVE:
             raise SystemExit(f"linasbot-worker@{queue} activity is outside the closed schema")
         if load_state == "loaded":
             if str(inst.get("fragment_path") or "").strip() != TEMPLATE:
@@ -264,6 +283,12 @@ def classify(probe):
         if not exists:
             raise SystemExit("worker instances are loaded without a template file")
         return "loaded"
+    if listed:
+        raise SystemExit("linasbot-worker@ units are enabled or active on this node")
+    if enabled_hits:
+        raise SystemExit(f"linasbot-worker@{enabled_hits[0]} is enabled")
+    if active_hits:
+        raise SystemExit(f"linasbot-worker@{active_hits[0]} is active")
     if loaded:
         raise SystemExit("worker template file exists but instances are not fully loaded")
     if required is True:
@@ -274,8 +299,14 @@ def classify(probe):
 
 
 def decide(first, second):
-    class_01 = classify(first)
-    class_02 = classify(second)
+    try:
+        class_01 = classify(first)
+    except SystemExit as exc:
+        raise SystemExit(f"node01: {exc}") from None
+    try:
+        class_02 = classify(second)
+    except SystemExit as exc:
+        raise SystemExit(f"node02: {exc}") from None
     if class_01 != class_02:
         raise SystemExit("node01 and node02 worker template states disagree")
     target_01 = str(first.get("target_sha") or "").strip()
@@ -4648,11 +4679,9 @@ capture_service_state() {
     if [[ "$unit" == linasbot-worker@* ]] && \
        [ -f "$(dirname "$output")/legacy-workerless.decision" ] && \
        [ "$(tr -d '\n' <"$(dirname "$output")/legacy-workerless.decision")" = \
-         "legacy-absent-migration" ]; then
-      if [ -e /etc/systemd/system/linasbot-worker@.service ] || \
-         [ -L /etc/systemd/system/linasbot-worker@.service ]; then
-        die "legacy-absent-migration cannot rewrite worker state while the template exists"
-      fi
+         "legacy-absent-migration" ] && \
+       [ ! -e /etc/systemd/system/linasbot-worker@.service ] && \
+       [ ! -L /etc/systemd/system/linasbot-worker@.service ]; then
       if [ "$enabled" = "not-found" ]; then
         enabled=disabled
       fi
@@ -9547,6 +9576,43 @@ assert_worker_template_cluster_agreement() {
   log "preflight worker-template cluster decision=$decision"
 }
 
+summarize_worker_template_probe() {
+  local probe_file="$1"
+  test -f "$probe_file" && test ! -L "$probe_file" || die "worker template probe file is unsafe"
+  run_system_python_control - "$probe_file" <<'PY'
+import json
+import sys
+
+payload = json.loads(open(sys.argv[1], encoding="utf-8").read())
+queues = ("high_priority", "interactive", "background", "expensive")
+instances = payload.get("instances")
+if not isinstance(instances, dict):
+    raise SystemExit("worker template probe instances are incomplete")
+loads = ",".join(
+    "%s=%s/%s/%s"
+    % (
+        queue,
+        instances[queue].get("load_state"),
+        instances[queue].get("unit_file_state"),
+        instances[queue].get("active_state"),
+    )
+    for queue in queues
+)
+stray = ",".join(payload.get("stray_worker_pids") or []) or "none"
+listed = ",".join(payload.get("listed_worker_units") or []) or "none"
+print(
+    "exists=%s required=%s stray=%s listed=%s %s"
+    % (
+        payload.get("template_file_exists"),
+        payload.get("worker_template_required"),
+        stray,
+        listed,
+        loads,
+    )
+)
+PY
+}
+
 apply_legacy_workerless_template_cluster_install() {
   local tx_dir="$1"
   local peer_host="$2"
@@ -9588,6 +9654,8 @@ publish_cluster_worker_template_decision() {
   write_private_state "$tx_dir/legacy-workerless.node01.json" "$local_probe"
   peer_probe="$(remote_node "$peer_host" worker-template-probe "$target_sha")"
   write_private_state "$tx_dir/legacy-workerless.node02.json" "$peer_probe"
+  log "node01 worker-template probe $(summarize_worker_template_probe "$tx_dir/legacy-workerless.node01.json")"
+  log "node02 worker-template probe $(summarize_worker_template_probe "$tx_dir/legacy-workerless.node02.json")"
   decision="$(legacy_workerless_eval decide \
     "$tx_dir/legacy-workerless.node01.json" \
     "$tx_dir/legacy-workerless.node02.json")"
@@ -9703,10 +9771,11 @@ recover_deployment() {
       "$release_artifact_id" "$release_artifact_api_sha" "$release_manifest_sha" \
       "$release_run_id" "$release_run_attempt" "$release_target_tree_sha"
   }
+  HA_RECOVERY_TX_SUCCEEDED=0
   fail_close_recovery() {
     local rc=$?
     trap - EXIT INT TERM
-    if [ "$transaction_succeeded" != "1" ]; then
+    if [ "${HA_RECOVERY_TX_SUCCEEDED:-0}" != "1" ]; then
       set +e
       node_ensure_maintenance "$tx_dir" >/dev/null 2>&1
       remote_node "$peer_host" ensure-maintenance "$tx_dir" >/dev/null 2>&1
@@ -9777,6 +9846,7 @@ recover_deployment() {
   # terminal phase or deleting its journal; any later persistence/cleanup error
   # leaves an admitted cluster plus a replayable durable commit/rollback record.
   transaction_succeeded=1
+  HA_RECOVERY_TX_SUCCEEDED=1
   trap - EXIT INT TERM
   update_recovery_journal "complete"
   current_digest="$(deploy_journal_digest)"
@@ -9901,11 +9971,12 @@ retry_distinct_reconciliation() {
     test "${persisted[21]}" = "$release_target_tree_sha" || return 1
     decision="${persisted[10]}"
   }
+  HA_RETRY_TX_SUCCEEDED=0
   fail_close_retry() {
     local rc=$?
     local recovery_ok=1
     trap - EXIT INT TERM
-    if [ "$transaction_succeeded" != "1" ]; then
+    if [ "${HA_RETRY_TX_SUCCEEDED:-0}" != "1" ]; then
       set +e
       node_ensure_maintenance "$tx_dir" >/dev/null 2>&1
       remote_node "$peer_host" ensure-maintenance "$tx_dir" >/dev/null 2>&1
@@ -9976,6 +10047,7 @@ retry_distinct_reconciliation() {
 
   update_retry_journal "target-parity-awaiting-fresh-lb"
   transaction_succeeded=1
+  HA_RETRY_TX_SUCCEEDED=1
   trap - EXIT INT TERM
   current_digest="$(deploy_journal_digest)"
   printf 'TARGET_PARITY_JOURNAL_SHA256=%s\n' "$current_digest"
@@ -10181,10 +10253,11 @@ commit_target_deployment() {
     test "${persisted[20]}" = "$release_run_attempt" || return 1
     test "${persisted[21]}" = "$release_target_tree_sha" || return 1
   }
+  HA_COMMIT_TX_SUCCEEDED=0
   fail_close_commit() {
     local rc=$?
     trap - EXIT INT TERM
-    if [ "$transaction_succeeded" != 1 ]; then
+    if [ "${HA_COMMIT_TX_SUCCEEDED:-0}" != 1 ]; then
       set +e
       node_ensure_maintenance "$tx_dir" >/dev/null 2>&1
       remote_node "$peer_host" ensure-maintenance "$tx_dir" >/dev/null 2>&1
@@ -10233,6 +10306,7 @@ commit_target_deployment() {
     "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$target_sha" cluster
   write_private_state "$tx_dir/transaction.state" succeeded
   transaction_succeeded=1
+  HA_COMMIT_TX_SUCCEEDED=1
   trap - EXIT INT TERM
   update_commit_journal complete commit
   assert_commit_journal complete commit || die "terminal deployment proof was not durable"

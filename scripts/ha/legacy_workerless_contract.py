@@ -6,12 +6,18 @@ unit-testable contract: absence is never inferred from NeedDaemonReload=no.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import Any
 
 SCHEMA = "linas-ha-legacy-workerless-v1"
 QUEUES = ("high_priority", "interactive", "background", "expensive")
 TEMPLATE_PATH = "/etc/systemd/system/linasbot-worker@.service"
+SYSTEMD_QUEUE_WORKER_CGROUP = re.compile(
+    r"(?:^|/)"
+    r"linasbot-worker@(?:high_priority|interactive|background|expensive)\.service"
+    r"(?:/|$)"
+)
 LOADED = "loaded"
 LEGACY_ABSENT = "legacy-absent"
 PRESENT = "template-present"
@@ -41,6 +47,13 @@ def _bool(value: Any, label: str) -> bool:
     return value
 
 
+def cgroup_is_systemd_queue_worker(cgroup_text: str) -> bool:
+    """True only when the process cgroup is a concrete linasbot-worker@ queue unit."""
+    if not isinstance(cgroup_text, str):
+        raise WorkerlessContractError("worker cgroup text is not a string")
+    return SYSTEMD_QUEUE_WORKER_CGROUP.search(cgroup_text) is not None
+
+
 def classify_probe(probe: Mapping[str, Any]) -> str:
     if not isinstance(probe, dict) or probe.get("schema") != SCHEMA:
         raise WorkerlessContractError("worker template probe schema is invalid")
@@ -52,16 +65,16 @@ def classify_probe(probe: Mapping[str, Any]) -> str:
     if not isinstance(stray, list) or any(not isinstance(item, str) or not item for item in stray):
         raise WorkerlessContractError("worker template probe stray pid list is invalid")
     if stray:
-        raise WorkerlessContractError("worker processes are running outside systemd")
+        raise WorkerlessContractError("worker processes are running outside systemd: " + ",".join(stray))
     listed = probe.get("listed_worker_units")
     if not isinstance(listed, list) or any(not isinstance(item, str) for item in listed):
         raise WorkerlessContractError("worker template probe unit list is invalid")
-    if listed:
-        raise WorkerlessContractError("linasbot-worker@ units are enabled or active on this node")
     instances = probe.get("instances")
     if not isinstance(instances, dict) or set(instances) != set(QUEUES):
         raise WorkerlessContractError("worker template probe instances are incomplete")
     loaded_count = 0
+    enabled_hits: list[str] = []
+    active_hits: list[str] = []
     for queue in QUEUES:
         inst = instances[queue]
         if not isinstance(inst, dict):
@@ -70,12 +83,12 @@ def classify_probe(probe: Mapping[str, Any]) -> str:
         enabled = _text(inst.get("unit_file_state"))
         active = _text(inst.get("active_state"))
         if enabled in ENABLED_BLOCKERS:
-            raise WorkerlessContractError(f"linasbot-worker@{queue} is enabled")
-        if enabled not in ABSENT_ENABLED:
+            enabled_hits.append(queue)
+        elif enabled not in ABSENT_ENABLED:
             raise WorkerlessContractError(f"linasbot-worker@{queue} enablement is outside the closed schema")
         if active in ACTIVE_BLOCKERS:
-            raise WorkerlessContractError(f"linasbot-worker@{queue} is active")
-        if active not in ABSENT_ACTIVE:
+            active_hits.append(queue)
+        elif active not in ABSENT_ACTIVE:
             raise WorkerlessContractError(f"linasbot-worker@{queue} activity is outside the closed schema")
         if load_state == LOADED:
             fragment = _text(inst.get("fragment_path"))
@@ -92,6 +105,12 @@ def classify_probe(probe: Mapping[str, Any]) -> str:
         if not template_exists:
             raise WorkerlessContractError("worker instances are loaded without a template file")
         return LOADED
+    if listed:
+        raise WorkerlessContractError("linasbot-worker@ units are enabled or active on this node")
+    if enabled_hits:
+        raise WorkerlessContractError(f"linasbot-worker@{enabled_hits[0]} is enabled")
+    if active_hits:
+        raise WorkerlessContractError(f"linasbot-worker@{active_hits[0]} is active")
     if loaded_count:
         raise WorkerlessContractError("worker template file exists but instances are not fully loaded")
     # File may exist from a prior failed recover; not actually loaded.
@@ -103,8 +122,14 @@ def classify_probe(probe: Mapping[str, Any]) -> str:
 
 
 def decide_cluster(node01: Mapping[str, Any], node02: Mapping[str, Any]) -> str:
-    class_01 = classify_probe(node01)
-    class_02 = classify_probe(node02)
+    try:
+        class_01 = classify_probe(node01)
+    except WorkerlessContractError as exc:
+        raise WorkerlessContractError(f"node01: {exc}") from None
+    try:
+        class_02 = classify_probe(node02)
+    except WorkerlessContractError as exc:
+        raise WorkerlessContractError(f"node02: {exc}") from None
     if class_01 != class_02:
         raise WorkerlessContractError("node01 and node02 worker template states disagree")
     target_01 = _text(node01.get("target_sha"))
