@@ -208,6 +208,17 @@ def test_helper_embeds_the_fail_closed_workerless_contract() -> None:
     recover = source[source.index("recover_deployment() {") : source.index("retry_distinct_reconciliation() {")]
     assert "HA_RECOVERY_TX_SUCCEEDED" in recover
     assert '"$transaction_succeeded" != "1"' not in recover
+    fail_close = recover[recover.index("fail_close_recovery() {") : recover.index("trap fail_close_recovery EXIT")]
+    assert "HA_RECOVERY_TX_DIR" in fail_close
+    assert "HA_RECOVERY_PEER_HOST" in fail_close
+    assert "HA_RECOVERY_DECISION" in fail_close
+    assert '"$tx_dir"' not in fail_close
+    assert '"$peer_host"' not in fail_close
+    assert "recovery fail-close rc=" in fail_close
+    ensure = source[source.index("node_ensure_maintenance() {") : source.index("node_assert_runtime_drained() {")]
+    assert 'log "runtime autostart disabled"' in ensure
+    assert 'log "maintenance markers armed"' in ensure
+    assert 'log "queue workers stopped"' in ensure
     capture = source[source.index("capture_service_state() {") : source.index("archive_path() {")]
     assert "legacy-absent-migration cannot rewrite worker state while the template exists" not in capture
     assert "[ ! -e /etc/systemd/system/linasbot-worker@.service ]" in capture
