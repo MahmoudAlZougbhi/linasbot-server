@@ -10,7 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from services.search_metadata.english import english_only_or_empty
+from services.search_metadata.english import english_only_or_empty, looks_like_english
 from services.search_metadata.limits import (
     AI_SEARCH_DESCRIPTION_MAX,
     AI_SEARCH_KEYWORD_MAX,
@@ -23,6 +23,7 @@ logger = logging.getLogger("search_metadata.generate")
 MetadataGenerator = Callable[[dict[str, Any]], "SearchMetadata | None"]
 
 _generator: MetadataGenerator | None = None
+_LAST_GENERATE: dict[str, Any] = {"llm_calls": 0, "retries": 0, "failed": False, "saved_empty": False}
 
 _WEAK_DESCRIPTIONS = frozenset(
     {
@@ -55,6 +56,11 @@ def set_metadata_generator(fn: MetadataGenerator | None) -> None:
 
 def reset_metadata_generator() -> None:
     set_metadata_generator(None)
+    _LAST_GENERATE.update({"llm_calls": 0, "retries": 0, "failed": False, "saved_empty": False})
+
+
+def last_generate_stats() -> dict[str, Any]:
+    return dict(_LAST_GENERATE)
 
 
 def is_weak_owner_description(text: str) -> bool:
@@ -71,13 +77,13 @@ def is_weak_owner_description(text: str) -> bool:
 
 
 def clamp_metadata(meta: SearchMetadata, *, include_keywords: bool) -> SearchMetadata:
-    title = english_only_or_empty(meta.title)[:AI_SEARCH_TITLE_MAX]
-    description = english_only_or_empty(meta.description)[:AI_SEARCH_DESCRIPTION_MAX]
+    title = english_only_or_empty(meta.title, require_english_language=True)[:AI_SEARCH_TITLE_MAX]
+    description = english_only_or_empty(meta.description, require_english_language=True)[:AI_SEARCH_DESCRIPTION_MAX]
     keywords: list[str] = []
     if include_keywords:
         seen: set[str] = set()
         for raw in list(meta.keywords or [])[:AI_SEARCH_KEYWORDS_MAX]:
-            word = english_only_or_empty(str(raw))[:AI_SEARCH_KEYWORD_MAX]
+            word = english_only_or_empty(str(raw), require_english_language=False)[:AI_SEARCH_KEYWORD_MAX]
             key = word.lower()
             if not word or key in seen:
                 continue
@@ -91,18 +97,48 @@ def generate_search_metadata(request: dict[str, Any]) -> SearchMetadata:
 
     ``request`` must include original_title + content. Does not read other tenant items.
     """
+    include_keywords = bool(request.get("include_keywords"))
+    _LAST_GENERATE.update({"llm_calls": 0, "retries": 0, "failed": False, "saved_empty": False})
     if _generator is not None:
         produced = _generator(request)
         meta = produced if produced is not None else SearchMetadata()
-        return clamp_metadata(meta, include_keywords=bool(request.get("include_keywords")))
+        clamped = clamp_metadata(meta, include_keywords=include_keywords)
+        _LAST_GENERATE["saved_empty"] = not clamped.title and not clamped.description
+        return clamped
     if not _llm_enabled():
+        _LAST_GENERATE["saved_empty"] = True
         return SearchMetadata()
     try:
         produced = _generate_with_luna(request)
+        _LAST_GENERATE["llm_calls"] = 1
     except Exception:
         logger.exception("search_metadata_luna_failed kind=%s", request.get("kind"))
+        _LAST_GENERATE.update({"failed": True, "saved_empty": True})
         return SearchMetadata()
-    return clamp_metadata(produced, include_keywords=bool(request.get("include_keywords")))
+    clamped = clamp_metadata(produced, include_keywords=include_keywords)
+    if _needs_english_retry(produced, clamped):
+        try:
+            retry_req = dict(request)
+            retry_req["english_retry"] = True
+            produced = _generate_with_luna(retry_req)
+            _LAST_GENERATE["llm_calls"] = 2
+            _LAST_GENERATE["retries"] = 1
+            clamped = clamp_metadata(produced, include_keywords=include_keywords)
+        except Exception:
+            logger.exception("search_metadata_luna_english_retry_failed kind=%s", request.get("kind"))
+            _LAST_GENERATE["failed"] = True
+    _LAST_GENERATE["saved_empty"] = not clamped.title and not clamped.description
+    return clamped
+
+
+def _needs_english_retry(raw: SearchMetadata, clamped: SearchMetadata) -> bool:
+    title_raw = (raw.title or "").strip()
+    desc_raw = (raw.description or "").strip()
+    if not title_raw and not desc_raw:
+        return False
+    title_ok = (not title_raw) or looks_like_english(title_raw)
+    desc_ok = (not desc_raw) or looks_like_english(desc_raw)
+    return not (title_ok and desc_ok)
 
 
 def _llm_enabled() -> bool:
@@ -133,8 +169,14 @@ def _generate_with_luna(request: dict[str, Any]) -> SearchMetadata:
         f"ai_search_description max {AI_SEARCH_DESCRIPTION_MAX} characters, one short sentence "
         "or two very short sentences explaining what the item contains and when it is useful. "
         "Never copy a non-English script into these fields. "
+        "English only — not French, Spanish, German, Italian, or any other language. "
         "These fields are search hints, not business facts."
     )
+    if request.get("english_retry"):
+        system += (
+            " Previous output was not English. Rewrite the same grounded facts in English only. "
+            "Do not invent new facts."
+        )
     if weak:
         system += (
             " The owner description is weak or uninformative. Do not infer product type, "

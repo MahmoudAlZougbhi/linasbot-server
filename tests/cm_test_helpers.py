@@ -70,3 +70,32 @@ async def publish_test_content(
     )
     write_published_pointer(tenant_id, pointer)
     return version_id, index_id
+
+
+def publish_pointer_content(
+    tenant_id: str,
+    overrides: dict[str, dict[str, Any]] | None = None,
+) -> str:
+    """Write published CM content without building the semantic index (faster routing tests)."""
+    sections = base_sections()
+    if overrides:
+        sections.update(overrides)
+    version_id = f"v_{tenant_id}"
+    checksums = write_version_content(tenant_id, version_id, sections)
+    pin = embedding_pin()
+    write_published_pointer(
+        tenant_id,
+        PublishedPointer(
+            content_version_id=version_id,
+            index_version_id=f"idx_{tenant_id}",
+            checksums=checksums,
+            embedding_provider=pin.provider,
+            embedding_model=pin.model,
+            embedding_version=pin.version,
+            embedding_dimensions=pin.dimensions,
+        ),
+    )
+    from services.customer_reply_v2.manifest import clear_manifest_cache
+
+    clear_manifest_cache()
+    return version_id

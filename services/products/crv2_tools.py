@@ -183,6 +183,7 @@ def crv2_search_product_by_title(
         "extra_luna_agent": extra_luna_agent,
         "full_catalog": False,
         "product_match_found": bool(slim),
+        "ambiguous": len(slim) > 1,
     }
     if titles_fallback is not None:
         out["titles_fallback"] = titles_fallback

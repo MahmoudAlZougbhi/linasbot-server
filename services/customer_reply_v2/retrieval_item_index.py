@@ -7,11 +7,18 @@ from typing import Any
 
 from services.cm.resource_attachment import resource_summary
 from services.customer_reply_v2.models import ItemIndexEntry
+from services.search_metadata.limits import LUNA_FULL_TITLE_SECTIONS
 from services.search_metadata.luna_titles import luna_title_fields
 
 MAX_ITEMS_PER_SECTION = 80
 MAX_ITEMS_PER_READ = 20
 MAX_EVIDENCE_CHARS = 12000
+
+
+def _rows_for_index(section_id: str, rows: list[Any]) -> list[Any]:
+    if section_id in LUNA_FULL_TITLE_SECTIONS:
+        return rows
+    return rows[:MAX_ITEMS_PER_SECTION]
 
 
 def label_of(labels: Any) -> str:
@@ -26,7 +33,7 @@ def _summary_of(raw: dict[str, Any]) -> dict[str, Any]:
 
 def _items_like_entries(section_id: str, rows: list[Any]) -> list[ItemIndexEntry]:
     entries: list[ItemIndexEntry] = []
-    for raw in rows[:MAX_ITEMS_PER_SECTION]:
+    for raw in _rows_for_index(section_id, rows):
         if not isinstance(raw, dict):
             continue
         item_id = str(raw.get("id") or raw.get("qa_group_id") or "").strip()
@@ -75,7 +82,7 @@ def iter_section_items(section_id: str, payload: dict[str, Any]) -> list[ItemInd
         return entries
     topics = payload.get("topics")
     if isinstance(topics, list):
-        for raw in topics[:MAX_ITEMS_PER_SECTION]:
+        for raw in _rows_for_index(section_id, topics):
             if not isinstance(raw, dict):
                 continue
             item_id = str(raw.get("id") or "").strip()
@@ -96,7 +103,7 @@ def iter_section_items(section_id: str, payload: dict[str, Any]) -> list[ItemInd
     if isinstance(rules, list):
         from services.customer_reply_v2.comment_rule_select import is_luna_selectable_comment_rule
 
-        for raw in rules[:MAX_ITEMS_PER_SECTION]:
+        for raw in _rows_for_index(section_id, rules):
             if not isinstance(raw, dict):
                 continue
             if section_id == "comments" and not is_luna_selectable_comment_rule(raw):
@@ -133,6 +140,20 @@ def record_content(section_id: str, raw: dict[str, Any]) -> str:
             if isinstance(v, dict):
                 bits.append(f"Q({v.get('language')}): {v.get('question')} | A: {v.get('answer')}")
         return "\n".join(bits)
+    if section_id == "off_days":
+        return json.dumps(
+            {
+                "id": raw.get("id"),
+                "kind": raw.get("kind"),
+                "weekday": raw.get("weekday"),
+                "date": raw.get("date"),
+                "start_date": raw.get("start_date"),
+                "end_date": raw.get("end_date"),
+                "reason": raw.get("reason") or "",
+                "notes": raw.get("notes") or "",
+            },
+            ensure_ascii=False,
+        )
     if section_id == "prices":
         return json.dumps(
             {
@@ -159,6 +180,7 @@ def record_content(section_id: str, raw: dict[str, Any]) -> str:
                 "weekly_schedule": raw.get("weekly_schedule"),
                 "notes": raw.get("notes") or "",
                 "available": raw.get("available", True),
+                "resource_summary": resource_summary(list(raw.get("attachments") or [])),
             },
             ensure_ascii=False,
         )

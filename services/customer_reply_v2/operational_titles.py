@@ -7,6 +7,7 @@ from typing import Any
 from services.cm.resource_attachment import resource_summary
 from services.customer_reply_v2.comment_rule_select import is_luna_selectable_comment_rule
 from services.customer_reply_v2.manifest import FIXED_ANSWER_SECTIONS
+from services.search_metadata.limits import LUNA_FULL_TITLE_SECTIONS
 
 TITLE_PAGE_SIZE = 80
 INLINE_TITLE_CHAR_BUDGET = 12000
@@ -140,21 +141,52 @@ def page_operational_titles(
 
 
 def inline_titles_for_luna(titles: list[dict[str, Any]]) -> dict[str, Any]:
-    """Send all titles when they fit; otherwise first page plus explicit pagination."""
-    blob = str(titles)
-    if len(titles) <= TITLE_PAGE_SIZE and len(blob) <= INLINE_TITLE_CHAR_BUDGET:
+    """Send all titles when they fit; always include every request/branch/hours/comment title.
+
+    Knowledge and services stay pageable. Request rules, branches, hours, greetings, and
+    comment AI-guidance must not be hidden behind the first 80 mixed titles.
+    """
+    priority = [row for row in titles if str(row.get("type") or "") in LUNA_FULL_TITLE_SECTIONS]
+    rest = [row for row in titles if str(row.get("type") or "") not in LUNA_FULL_TITLE_SECTIONS]
+    rest_has_more = False
+    next_offset = None
+    rest_page = rest
+    if len(rest) > TITLE_PAGE_SIZE or len(str(rest)) > INLINE_TITLE_CHAR_BUDGET:
+        page = page_operational_titles(rest, offset=0, limit=TITLE_PAGE_SIZE)
+        rest_page = list(page["titles"])
+        rest_has_more = bool(page["has_more"])
+        next_offset = page.get("next_offset")
+    combined = priority + rest_page
+    blob = str(combined)
+    if (
+        not rest_has_more
+        and len(combined) <= TITLE_PAGE_SIZE
+        and len(blob) <= INLINE_TITLE_CHAR_BUDGET
+    ):
         return {
-            "operational_titles": titles,
+            "operational_titles": combined,
             "operational_title_count": len(titles),
             "operational_titles_has_more": False,
             "operational_titles_truncated": False,
+            "operational_priority_title_count": len(priority),
         }
-    page = page_operational_titles(titles, offset=0, limit=TITLE_PAGE_SIZE)
-    return {
-        "operational_titles": page["titles"],
-        "operational_title_count": page["total"],
-        "operational_titles_has_more": True,
+    out: dict[str, Any] = {
+        "operational_titles": combined,
+        "operational_title_count": len(titles),
+        "operational_titles_has_more": rest_has_more,
         "operational_titles_truncated": False,
-        "operational_titles_next_offset": page["next_offset"],
-        "note": "More operational titles exist. Call list_operational_titles to page the rest. Do not assume missing titles are unimportant.",
+        "operational_priority_title_count": len(priority),
     }
+    if rest_has_more:
+        out["operational_titles_next_offset"] = next_offset
+        out["note"] = (
+            "All branch, hours, request, greeting, and comment-AI titles are included. "
+            "More knowledge/service titles exist. Call list_operational_titles to page the rest. "
+            "Do not assume missing titles are unimportant."
+        )
+    elif len(combined) > TITLE_PAGE_SIZE or len(blob) > INLINE_TITLE_CHAR_BUDGET:
+        out["note"] = (
+            "All selectable request, branch, hours, greeting, and comment-AI titles are included "
+            "in this first payload so Luna can choose among them."
+        )
+    return out

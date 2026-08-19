@@ -19,6 +19,20 @@ METADATA_SECTIONS = frozenset(
         "dynamic_messages",
         "requests_appointments",
         "comments",
+        "off_days",
+    }
+)
+
+# Luna must see every title in these sections (not the first 80 only).
+# Knowledge/services/faq stay pageable because they can be thousands of files.
+LUNA_FULL_TITLE_SECTIONS = frozenset(
+    {
+        "requests_appointments",
+        "comments",
+        "branches",
+        "opening_hours",
+        "off_days",
+        "dynamic_messages",
     }
 )
 

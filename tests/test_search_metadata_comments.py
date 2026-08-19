@@ -36,6 +36,91 @@ def test_automatic_keyword_does_not_need_luna() -> None:
     assert result.reply_text == "See our menu"
 
 
+def test_instagram_rule_does_not_leak_to_facebook() -> None:
+    section = _section(
+        [
+            {
+                "id": "ig",
+                "enabled": True,
+                "keywords": ["hello"],
+                "action": "reply_comment",
+                "reply_template": "ig only",
+                "rule_mode": "deterministic",
+                "channel": "instagram",
+                "platform": "instagram",
+                "post_id": "POST_IG",
+                "scope": "specific_post",
+            }
+        ]
+    )
+    ig = evaluate_comment_engine(
+        section, comment_text="hello", channel="instagram_comment", post_id="POST_IG"
+    )
+    fb = evaluate_comment_engine(
+        section, comment_text="hello", channel="facebook_comment", post_id="POST_IG"
+    )
+    assert ig.rule_id == "ig"
+    assert fb.matched is False
+
+
+def test_mohamad_is_third_party_not_ahmad_history() -> None:
+    records = comment_thread_records(
+        channel="instagram_comment",
+        comment_text="عندكم أزرق؟",
+        parent_comment="Do you have Nivea?",
+        comment_id="c-mohamad-1",
+        post_id="POST",
+        current_author_id="mohamad",
+        current_author_name="Mohamad",
+        parent_author_id="ahmad",
+        parent_author_name="Ahmad",
+        nearby_reply_records=[
+            {
+                "text": "Yes, Nivea Soft is in stock.",
+                "author_id": "page",
+                "author_name": "Linas",
+                "from_page": True,
+                "comment_id": "c-ai-1",
+            },
+            {
+                "text": "and the price?",
+                "author_id": "ahmad",
+                "author_name": "Ahmad",
+                "from_page": False,
+                "comment_id": "c-ahmad-2",
+            },
+        ],
+    )
+    blob = " ".join(str(r.get("text") or r.get("content") or "") for r in records)
+    assert "other_participant" in blob
+    assert "Ahmad" in blob
+    assert records[-1].get("message_id") == "c-mohamad-1"
+    assert "current_author" in blob or records[-1].get("author_id") == "mohamad"
+
+
+def test_ahmad_returns_after_third_party_keeps_his_identity() -> None:
+    records = comment_thread_records(
+        channel="instagram_comment",
+        comment_text="رجعت، بدي السعر",
+        comment_id="c-ahmad-3",
+        current_author_id="ahmad",
+        current_author_name="Ahmad",
+        nearby_reply_records=[
+            {
+                "text": "عندكم أزرق؟",
+                "author_id": "mohamad",
+                "author_name": "Mohamad",
+                "from_page": False,
+                "comment_id": "c-mohamad-1",
+            }
+        ],
+    )
+    blob = " ".join(str(r.get("text") or "") for r in records)
+    assert "other_participant" in blob
+    assert "Mohamad" in blob
+    assert records[-1].get("message_id") == "c-ahmad-3"
+
+
 def test_facebook_rule_does_not_leak_to_instagram() -> None:
     section = _section(
         [
@@ -182,3 +267,74 @@ def test_reply_to_ai_keeps_comment_id_target() -> None:
     )
     assert records[-1]["message_id"] == "c-reply"
     assert any("page_reply" in str(r.get("text") or "") for r in records)
+
+
+def test_precedence_matrix_specific_beats_global() -> None:
+    section = _section(
+        [
+            {
+                "id": "global-ai",
+                "enabled": True,
+                "keywords": ["hi"],
+                "rule_mode": "ai_guidance",
+                "ai_instructions": "global ai",
+                "channel": "any",
+                "scope": "all_posts",
+                "priority": 9,
+            },
+            {
+                "id": "global-auto",
+                "enabled": True,
+                "keywords": ["hi"],
+                "rule_mode": "deterministic",
+                "reply_template": "global auto",
+                "channel": "any",
+                "scope": "all_posts",
+                "priority": 8,
+            },
+            {
+                "id": "ig-post-ai",
+                "enabled": True,
+                "keywords": ["hi"],
+                "rule_mode": "ai_guidance",
+                "ai_instructions": "ig post ai",
+                "channel": "instagram",
+                "platform": "instagram",
+                "post_id": "POST_IG",
+                "scope": "specific_post",
+                "priority": 1,
+            },
+            {
+                "id": "ig-post-auto",
+                "enabled": True,
+                "keywords": ["hi"],
+                "rule_mode": "deterministic",
+                "reply_template": "ig post auto",
+                "channel": "instagram",
+                "platform": "instagram",
+                "post_id": "POST_IG",
+                "scope": "specific_post",
+                "priority": 1,
+            },
+        ]
+    )
+    specific_auto = evaluate_comment_engine(
+        section, comment_text="hi", channel="instagram_comment", post_id="POST_IG"
+    )
+    assert specific_auto.rule_mode == "deterministic"
+    assert specific_auto.rule_id == "ig-post-auto"
+
+    no_auto = _section([row for row in section["rules"] if row["id"] != "ig-post-auto"])
+    specific_ai = evaluate_comment_engine(
+        no_auto, comment_text="hi", channel="instagram_comment", post_id="POST_IG"
+    )
+    assert specific_ai.rule_mode == "ai_guidance"
+    assert specific_ai.rule_id == "ig-post-ai"
+
+    fb = evaluate_comment_engine(section, comment_text="hi", channel="facebook_comment", post_id="POST_IG")
+    assert fb.rule_id not in {"ig-post-auto", "ig-post-ai"}
+
+    other_post = evaluate_comment_engine(
+        section, comment_text="hi", channel="instagram_comment", post_id="POST_OTHER"
+    )
+    assert other_post.rule_id not in {"ig-post-auto", "ig-post-ai"}

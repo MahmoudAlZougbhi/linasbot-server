@@ -18,6 +18,9 @@ def original_title_of(raw: dict[str, Any]) -> str:
     labeled = _label_of(raw.get("labels"))
     if labeled:
         return labeled
+    reason = str(raw.get("reason") or "").strip()
+    if reason:
+        return reason
     return str(raw.get("id") or raw.get("qa_group_id") or "").strip()
 
 

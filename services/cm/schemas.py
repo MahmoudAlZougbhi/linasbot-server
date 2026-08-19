@@ -95,6 +95,8 @@ class OffDayRule(CmBaseModel):
     end_date: str = ""  # YYYY-MM-DD for kind=range
     reason: str = ""
     notes: str | None = None
+    ai_search_title: str = ""
+    ai_search_description: str = ""
 
 
 class OffDaysSection(CmBaseModel):
