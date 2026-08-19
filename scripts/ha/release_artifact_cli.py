@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.ha.release_artifact_contract import (
+    CONTROL_PLANE_EXECUTABLE_FILES,
     CONTROL_PLANE_FILES,
     MANIFEST_SCHEMA,
     MAX_PYTHON_RUNTIME_SIZE,
@@ -267,6 +268,10 @@ def _copy_control_plane(
 ) -> None:
     if set(authority) != set(CONTROL_PLANE_FILES):
         raise ContractError("control-plane target authority is incomplete")
+    required = set(CONTROL_PLANE_EXECUTABLE_FILES) & set(CONTROL_PLANE_FILES)
+    for relative in required:
+        if not authority[relative][1]:
+            raise ContractError("protected control-plane helper is not tracked executable")
     for relative in CONTROL_PLANE_FILES:
         source = repository / relative
         target = destination / relative

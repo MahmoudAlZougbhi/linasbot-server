@@ -112,6 +112,8 @@ def _control_tree(root: Path) -> None:
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(f"{relative}\n", encoding="utf-8")
+        if relative in contract.CONTROL_PLANE_EXECUTABLE_FILES:
+            path.chmod(0o755)
 
 
 def _normalized_tar(path: Path, members: list[tarfile.TarInfo]) -> None:
