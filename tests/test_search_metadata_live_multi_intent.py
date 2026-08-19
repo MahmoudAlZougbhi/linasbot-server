@@ -8,19 +8,10 @@ from pathlib import Path
 import pytest
 
 from _live_cert.bootstrap import load_openai_key, looks_real_openai_key
-
-pytest_plugins = ("tests.customer_reply_ai_v2_fixtures",)
-
-
-def _has_live_key() -> bool:
-    try:
-        return looks_real_openai_key(load_openai_key())
-    except Exception:
-        return False
-
-
 from tests.cm_test_helpers import publish_pointer_content
 from tests.customer_reply_ai_v2_helpers import _rich_sections
+
+pytest_plugins = ("tests.customer_reply_ai_v2_fixtures",)
 
 
 @pytest.mark.asyncio
@@ -153,8 +144,9 @@ async def test_live_multi_intent_beirut_hours_product_appointment(v2_env, monkey
     monkeypatch.setenv("LINAS_SEARCH_METADATA_LLM", "0")
     monkeypatch.setenv("CUSTOMER_AI_V10_RUNTIME", "true")
 
-    import config
     from openai import AsyncOpenAI
+
+    import config
     from services import llm_core_service
 
     config.OPENAI_API_KEY = key

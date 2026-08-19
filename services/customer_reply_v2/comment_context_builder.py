@@ -32,6 +32,8 @@ _logger = logging.getLogger("customer_reply_v2.comment_context")
 
 MAX_MEDIA_BYTES = 4 * 1024 * 1024
 FETCH_TIMEOUT_S = 12.0
+# Bounded Graph thread fetch for comment context (same cap as history_format nearby replies).
+MAX_THREAD_REPLIES = 8
 
 
 def _author_from_graph_row(row: dict[str, Any]) -> tuple[str, str, bool]:

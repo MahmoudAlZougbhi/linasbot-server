@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from services.customer_reply_v2.retrieval_item_index import record_content
 from services.search_metadata.cm_apply import enrich_section_payload, last_cm_apply_stats
 from services.search_metadata.english import contains_non_english_script, looks_like_english
 from services.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator
 from services.search_metadata.luna_titles import luna_title_fields
-from services.customer_reply_v2.retrieval_item_index import record_content
 
 
 def setup_function() -> None:
@@ -91,7 +91,6 @@ def test_each_section_save_reads_only_that_item() -> None:
         ),
     ]
     for section, payload in cases:
-        other = dict(payload)
         # second unchanged sibling when list exists
         key = "items" if "items" in payload else "rules"
         if len(payload[key]) == 1:
