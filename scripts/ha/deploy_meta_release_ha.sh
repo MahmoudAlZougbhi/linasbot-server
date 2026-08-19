@@ -3263,14 +3263,9 @@ install_lb_ready_attestation() {
         test "${#recover_journal[@]}" -eq 22 || die "deployment recovery journal is incomplete"
         test "${recover_journal[1]}" = "$target_sha" || \
           die "LB attestation target differs from the interrupted deployment"
-        case "${recover_journal[9]}" in
-          preflight-proven|peer-mark-started|recovery-lb-attested|recovery-started|recovery-both-nodes-drained|rollback-restoring|distinct-rollback-drained|rollback-peer-admit|rollback-node01-admit)
-            log "LB installer is a later exact blob than the open pre-mutation journal"
-            ;;
-          *)
-            die "LB attestation installer is not the exact authorized target helper"
-            ;;
-        esac
+        assert_later_dispatch_helper \
+          "${recover_journal[9]}" "${recover_journal[10]}" \
+          "${recover_journal[1]}" "$target_sha" installer
       else
         log "LB installer is a later exact blob than the open pre-mutation journal"
       fi
@@ -4414,6 +4409,51 @@ raise SystemExit("direct LB port 8003 still advertises readiness")
 PY
 }
 
+assert_later_dispatch_helper() {
+  local phase="$1"
+  local decision="$2"
+  local journal_target="$3"
+  local expected_target="$4"
+  local context="$5"
+  local running_blob historical_commits
+  test "$journal_target" = "$expected_target" || \
+    die "later helper target differs from the durable journal"
+  running_blob="$(git -C "$REPO_DIR" hash-object "$0")"
+  case "$phase" in
+    preflight-proven|peer-mark-started|recovery-lb-attested|recovery-started|recovery-both-nodes-drained|rollback-restoring|distinct-rollback-drained|rollback-peer-admit|rollback-node01-admit)
+      if [ "$context" = installer ]; then
+        log "LB installer is a later exact blob than the open pre-mutation journal"
+      else
+        log "running recovery helper is a later exact blob than the open pre-mutation journal"
+      fi
+      ;;
+    target-parity-proven|peer-admit-started|node01-admit-started|commit-recovery-parity|commit-peer-admit|commit-node01-admit)
+      test "$decision" = commit || \
+        die "forward-only later helper requires a durable commit decision"
+      if git -C "$REPO_DIR" cat-file -e "$running_blob" 2>/dev/null; then
+        historical_commits="$(git -C "$REPO_DIR" log --pretty=%H --find-object="$running_blob" \
+          "$expected_target" -- "$HELPER_REPO_PATH" || true)"
+        test -z "$historical_commits" || \
+          die "running helper is a historical blob, not a later dispatch helper"
+      fi
+      if [ "$context" = installer ]; then
+        log "LB installer is a later exact blob than the open forward-only commit journal"
+      else
+        log "running recovery helper is a later exact blob than the open forward-only commit journal"
+      fi
+      ;;
+    complete)
+      die "later helper cannot reopen a terminal journal"
+      ;;
+    *)
+      if [ "$context" = installer ]; then
+        die "LB attestation installer is not the exact authorized target helper"
+      fi
+      die "running recovery helper is not the exact authorized target blob"
+      ;;
+  esac
+}
+
 assert_public_ready() {
   run_system_python_control - <<'PY'
 import json
@@ -4428,6 +4468,74 @@ with urllib.request.urlopen(request, timeout=10) as response:
 if response.status != 200 or payload.get("ok") is not True:
     raise SystemExit("public load-balancer readiness is not healthy")
 PY
+}
+
+assert_public_ready_after_peer_admission() {
+  local source_sha="$1"
+  local helper_root rc=0 cleanup_rc=0
+  validate_sha "$source_sha"
+  helper_root="$(materialize_lb_manager "$source_sha")"
+  if run_system_python_control - "$helper_root/$LB_CONTRACT_REPO_PATH" <<'PY'
+import importlib.util
+import json
+import sys
+import time
+import urllib.error
+import urllib.request
+
+spec = importlib.util.spec_from_file_location("do_lb_ready_contract", sys.argv[1])
+if spec is None or spec.loader is None:
+    raise SystemExit("LB ready contract could not be loaded")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+health = module.LB_HEALTH_CONTRACT
+interval = health.get("check_interval_seconds")
+threshold = health.get("healthy_threshold")
+if type(interval) is not int or interval < 1 or type(threshold) is not int or threshold < 1:
+    raise SystemExit("LB health window is invalid")
+slack = 10
+timeout = interval * threshold + slack
+deadline = time.monotonic() + timeout
+consecutive = 0
+request = urllib.request.Request(
+    "https://linasaibot.com/api/ready",
+    headers={"User-Agent": "linasbot-ha-deploy-readiness-proof/1"},
+)
+
+def probe():
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            status = response.status
+            payload = json.load(response)
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError, OSError, ValueError):
+        return False
+    if status != 200:
+        return False
+    return payload.get("ok") is True
+
+while True:
+    if probe():
+        consecutive += 1
+        if consecutive >= threshold:
+            break
+    else:
+        consecutive = 0
+    remaining = deadline - time.monotonic()
+    if remaining < interval:
+        raise SystemExit(
+            "public load-balancer readiness did not become healthy within the LB health window"
+        )
+    time.sleep(interval)
+PY
+  then
+    rc=0
+  else
+    rc=$?
+  fi
+  cleanup_lb_manager "$helper_root" || cleanup_rc=$?
+  test "$cleanup_rc" = 0 || die "LB validator cleanup failed closed after public readiness wait"
+  test "$rc" = 0 || \
+    die "public load-balancer readiness did not become healthy within the LB health window"
 }
 
 assert_maintenance_readiness() {
@@ -9952,18 +10060,11 @@ recover_deployment() {
   test "$helper_hash" = "$journal_helper" || die "recovery helper differs from durable transaction"
   running_helper="$(sha256sum "$0" | awk '{print $1}')"
   if [ "$running_helper" != "$helper_hash" ]; then
-    # Pre-mutation journals, and an interrupted later-helper recover that
-    # already wrote recovery-lb-attested or an in-progress rollback phase,
-    # may predate the helper that can finish them. Commit/terminal phases
-    # still require the exact journal-authorized helper blob.
-    case "$phase" in
-      preflight-proven|peer-mark-started|recovery-lb-attested|recovery-started|recovery-both-nodes-drained|rollback-restoring|distinct-rollback-drained|rollback-peer-admit|rollback-node01-admit)
-        log "running recovery helper is a later exact blob than the open pre-mutation journal"
-        ;;
-      *)
-        die "running recovery helper is not the exact authorized target blob"
-        ;;
-    esac
+    # Pre-mutation journals, interrupted later-helper recover, and a durable
+    # forward-only commit may predate the Quality Gates helper that can
+    # finish them. Terminal journals and any non-commit decision stay refused.
+    assert_later_dispatch_helper \
+      "$phase" "$decision" "$journal_target" "$target_sha" recovery
   fi
   lb_observed_at="$(assert_fresh_lb_ready_attestation \
     "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha")"
@@ -10026,7 +10127,7 @@ recover_deployment() {
       "$lb_observed_at" || die "recovery LB attestation expired before commit admission"
     update_recovery_journal "commit-peer-admit"
     remote_node "$peer_host" recover-admit "$target_sha" "$tx_dir"
-    assert_public_ready
+    assert_public_ready_after_peer_admission "$target_sha"
     update_recovery_journal "commit-node01-admit"
     node_recover_admit "$target_sha" "$tx_dir"
     remote_node "$peer_host" assert-ready "$target_sha"
@@ -10521,7 +10622,7 @@ commit_target_deployment() {
     "$lb_observed_at" || die "commit LB attestation expired before peer admission"
   update_commit_journal "peer-admit-started" commit
   remote_node "$peer_host" recover-admit "$target_sha" "$tx_dir"
-  assert_public_ready
+  assert_public_ready_after_peer_admission "$target_sha"
   test "$(assert_fresh_lb_ready_attestation \
     "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha")" = \
     "$lb_observed_at" || die "commit LB attestation expired before node01 admission"

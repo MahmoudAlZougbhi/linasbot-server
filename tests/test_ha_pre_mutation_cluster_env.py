@@ -60,9 +60,11 @@ def test_pre_mutation_recovery_may_run_a_later_helper_blob() -> None:
         "recovery-both-nodes-drained|rollback-restoring|distinct-rollback-drained|"
         "rollback-peer-admit|rollback-node01-admit"
     )
-    assert later_helper_phases in recover
-    assert later_helper_phases in installer
-    assert "later exact blob than the open pre-mutation journal" in recover
+    later_helper = source[source.index("assert_later_dispatch_helper() {") : source.index("assert_public_ready() {")]
+    assert later_helper_phases in later_helper
+    assert "assert_later_dispatch_helper" in recover
+    assert "assert_later_dispatch_helper" in installer
+    assert "later exact blob than the open pre-mutation journal" in later_helper
     assert "print-deploy-journal-identity)" in source
     assert "print_deploy_journal_identity() {" in source
     assert '[ "$operation" = recover ]' in installer
