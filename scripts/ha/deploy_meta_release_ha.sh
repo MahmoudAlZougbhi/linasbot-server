@@ -9410,7 +9410,7 @@ node_dispatch() {
     return 0
   fi
   case "$phase" in
-    ensure-maintenance|mark-maintenance|apply-cpython-runtime-immutability|lb-attestation)
+    ensure-maintenance|mark-maintenance|apply-cpython-runtime-immutability|lb-attestation|release-bundle|worker-template-probe|install-worker-template-decision|install-trusted-worker-template)
       assert_python_runtime_contract "$runtime_expected_node" deferred-until-restore >/dev/null
       ;;
     *)
