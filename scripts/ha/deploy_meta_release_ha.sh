@@ -9639,6 +9639,12 @@ node_dispatch() {
       validate_tx_dir "${1:-}"
       apply_cpython_runtime_immutability "$1" "${2:-}" "${3:-}"
       ;;
+    verify-meta-release)
+      validate_sha "${1:-}"
+      validate_digest "${2:-}"
+      test "${3:-}" = node02 || die "peer Meta release verifier identity is invalid"
+      run_admitted_release_verifier "$1" local-only "$2" "$3"
+      ;;
     *)
       die "unknown node phase: $phase"
       ;;
@@ -9666,6 +9672,66 @@ remote_node() {
     PATH=/usr/sbin:/usr/bin:/sbin:/bin \
     /bin/bash --noprofile --norc -s -- node \
     "$INTERNAL_NODE_DISPATCH_CONFIRM" "$@" <"$0"
+}
+
+run_admitted_release_verifier() {
+  local target_sha="$1"
+  local verify_mode="$2"
+  shift 2
+  test -f "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" && \
+    test ! -L "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" || \
+    die "canonical release verifier is missing or unsafe"
+  /usr/bin/env PYTHONDONTWRITEBYTECODE=1 \
+    /bin/bash --noprofile --norc \
+    "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
+    "$target_sha" "$verify_mode" "$@"
+}
+
+cluster_meta_env_fingerprint() {
+  local repo_dir="$1"
+  local expected_sha="$2"
+  test -f "$repo_dir/.env" && test ! -L "$repo_dir/.env" || \
+    die "canonical environment is missing or unsafe"
+  test -x "$repo_dir/venv/bin/python" && test ! -L "$repo_dir/venv" || \
+    die "canonical live Python is missing or unsafe"
+  /usr/bin/env PYTHONDONTWRITEBYTECODE=1 \
+    "$repo_dir/venv/bin/python" -B - "$repo_dir/.env" "$expected_sha" <<'PY'
+import hashlib
+import hmac
+import json
+import re
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+key = sys.argv[2].encode("ascii")
+name_re = re.compile(r"^META_[A-Z0-9_]+$")
+excluded = {"META_DELETION_NODE_ID"}
+values = {}
+for raw_line in path.read_text(encoding="utf-8", errors="strict").splitlines():
+    if not raw_line or raw_line.lstrip().startswith("#") or "=" not in raw_line:
+        continue
+    raw_name, value = raw_line.split("=", 1)
+    name = raw_name.strip()
+    if name_re.fullmatch(name) and name not in excluded:
+        values[name] = value
+if not values:
+    raise SystemExit("canonical Meta environment is empty")
+payload = json.dumps(values, separators=(",", ":"), sort_keys=True).encode("utf-8")
+print(hmac.new(key, payload, hashlib.sha256).hexdigest())
+PY
+}
+
+verify_admitted_cluster_release() {
+  local target_sha="$1"
+  local peer_host="$2"
+  local fingerprint
+  validate_sha "$target_sha"
+  reject_self_peer "$peer_host"
+  run_admitted_release_verifier "$target_sha" local-only "" node01
+  fingerprint="$(cluster_meta_env_fingerprint "$REPO_DIR" "$target_sha")"
+  validate_digest "$fingerprint"
+  remote_node "$peer_host" verify-meta-release "$target_sha" "$fingerprint" node02
 }
 
 peer_root_bash_s() {
@@ -10442,8 +10508,7 @@ recover_deployment() {
     node_recover_admit "$target_sha" "$tx_dir"
     remote_node "$peer_host" assert-ready "$target_sha"
     node_assert_release_ready "$target_sha"
-    /bin/bash --noprofile --norc \
-      "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$target_sha" cluster
+    verify_admitted_cluster_release "$target_sha" "$peer_host"
   else
     update_recovery_journal "rollback-restoring"
     node_recover_rollback "$previous_sha" "$tx_dir"
@@ -10960,8 +11025,7 @@ commit_target_deployment() {
   remote_node "$peer_host" assert-ready "$target_sha"
   node_assert_release_ready "$target_sha"
   assert_cluster_runtime_env_parity "$peer_host" "$target_sha" "$target_sha"
-  /bin/bash --noprofile --norc \
-    "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$target_sha" cluster
+  verify_admitted_cluster_release "$target_sha" "$peer_host"
   write_private_state "$tx_dir/transaction.state" succeeded
   transaction_succeeded=1
   HA_COMMIT_TX_SUCCEEDED=1

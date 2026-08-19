@@ -807,7 +807,7 @@ def test_traffic_is_reenabled_only_after_same_target_parity_while_drained() -> N
     decision = commit.index('update_commit_journal "target-parity-proven" commit', reparity)
     peer_admit = commit.index('remote_node "$peer_host" recover-admit "$target_sha"', decision)
     local_admit = commit.index('node_recover_admit "$target_sha"', peer_admit)
-    cluster_verify = commit.index('verify_meta_release_ha.sh" "$target_sha" cluster', local_admit)
+    cluster_verify = commit.index('verify_admitted_cluster_release "$target_sha" "$peer_host"', local_admit)
     assert fresh < reparity < decision < peer_admit < local_admit < cluster_verify
 
 
