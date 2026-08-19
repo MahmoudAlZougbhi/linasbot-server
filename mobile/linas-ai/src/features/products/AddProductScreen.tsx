@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text } from 'react-native';
 import { LinasLoadingIndicator } from '../../components/LinasLoadingIndicator';
 import { LinasSparkleIcon } from '../../components/LinasSparkleIcon';
 import { pickImageAttachment } from '../chat/v2/pickAttachment';
+import { isMetadataPreparationFailure } from '../../api/client';
 import { useI18n } from '../../i18n/LanguageContext';
 import { fonts } from '../../theme';
 import { ScreenChrome } from '../shared/ScreenChrome';
@@ -154,8 +155,8 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
       if (editing && productId) await updateProduct(productId, payload);
       else await createProduct(payload);
       onSaved();
-    } catch {
-      setError(tr('productsSaveError'));
+    } catch (err) {
+      setError(tr(isMetadataPreparationFailure(err) ? 'productsMetadataSaveError' : 'productsSaveError'));
     } finally {
       setSaving(false);
     }

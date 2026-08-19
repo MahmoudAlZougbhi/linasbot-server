@@ -64,13 +64,25 @@ def enrich_product_row(row: Any, *, previous: dict[str, Any] | None = None) -> b
     )
     if weak:
         meta = _weaken_product_meta(meta, name=str(current.get("name") or ""))
+        from services.search_metadata.validate import require_ready_metadata
+
+        require_ready_metadata(
+            meta,
+            include_keywords=True,
+            content=product_grounded_content(row),
+            original_title=str(current.get("name") or ""),
+        )
     _apply_meta(row, meta)
     _LAST_PRODUCT_APPLY["generated"] = True
     return True
 
 
 def _weaken_product_meta(meta: SearchMetadata, *, name: str) -> SearchMetadata:
-    """Do not invent category/use when the owner description is unusable."""
+    """Do not invent category/use when the owner description is unusable.
+
+    Keywords may be empty after stripping invented terms. Title and description
+    stay required English strings (never empty).
+    """
     lowered = f"{meta.title} {meta.description} {' '.join(meta.keywords)}".lower()
     invented = any(
         token in lowered

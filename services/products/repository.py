@@ -64,6 +64,10 @@ class ProductsRepository:
             description=fields.get("description"),
             description_normalized=fields.get("description_normalized"),
             availability=fields.get("availability") or "in_stock",
+            ai_search_title=fields.get("ai_search_title"),
+            ai_search_description=fields.get("ai_search_description"),
+            ai_search_keywords=fields.get("ai_search_keywords"),
+            ai_search_title_normalized=fields.get("ai_search_title_normalized"),
             created_at=_now(),
             updated_at=_now(),
         )

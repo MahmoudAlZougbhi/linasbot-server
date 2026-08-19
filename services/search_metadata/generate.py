@@ -10,7 +10,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from services.search_metadata.english import english_only_or_empty, looks_like_english
+from services.search_metadata.english import english_only_or_empty
+from services.search_metadata.errors import MetadataPreparationError
 from services.search_metadata.limits import (
     AI_SEARCH_DESCRIPTION_MAX,
     AI_SEARCH_KEYWORD_MAX,
@@ -96,49 +97,61 @@ def generate_search_metadata(request: dict[str, Any]) -> SearchMetadata:
     """Create compact English metadata from one item's grounded content.
 
     ``request`` must include original_title + content. Does not read other tenant items.
+    Empty, non-English, language-clamped, or ungrounded results raise
+    ``MetadataPreparationError`` after the allowed retry. Callers must not Save/live.
     """
+    from services.search_metadata.validate import require_ready_metadata
+
     include_keywords = bool(request.get("include_keywords"))
+    content = str(request.get("content") or "")
+    original_title = str(request.get("original_title") or "")
     _LAST_GENERATE.update({"llm_calls": 0, "retries": 0, "failed": False, "saved_empty": False})
+
+    def _accept(raw: SearchMetadata) -> SearchMetadata:
+        clamped = clamp_metadata(raw, include_keywords=include_keywords)
+        try:
+            return require_ready_metadata(
+                clamped,
+                include_keywords=include_keywords,
+                content=content,
+                original_title=original_title,
+            )
+        except MetadataPreparationError:
+            _LAST_GENERATE["saved_empty"] = not clamped.title and not clamped.description
+            _LAST_GENERATE["failed"] = True
+            raise
+
     if _generator is not None:
         produced = _generator(request)
         meta = produced if produced is not None else SearchMetadata()
-        clamped = clamp_metadata(meta, include_keywords=include_keywords)
-        _LAST_GENERATE["saved_empty"] = not clamped.title and not clamped.description
-        return clamped
+        return _accept(meta)
     if not _llm_enabled():
-        _LAST_GENERATE["saved_empty"] = True
-        return SearchMetadata()
+        _LAST_GENERATE.update({"failed": True, "saved_empty": True})
+        raise MetadataPreparationError()
+    produced = SearchMetadata()
     try:
         produced = _generate_with_luna(request)
         _LAST_GENERATE["llm_calls"] = 1
     except Exception:
         logger.exception("search_metadata_luna_failed kind=%s", request.get("kind"))
-        _LAST_GENERATE.update({"failed": True, "saved_empty": True})
-        return SearchMetadata()
-    clamped = clamp_metadata(produced, include_keywords=include_keywords)
-    if _needs_english_retry(produced, clamped):
+        _LAST_GENERATE["failed"] = True
+    try:
+        return _accept(produced)
+    except MetadataPreparationError:
+        retry_req = dict(request)
+        retry_req["english_retry"] = True
         try:
-            retry_req = dict(request)
-            retry_req["english_retry"] = True
             produced = _generate_with_luna(retry_req)
-            _LAST_GENERATE["llm_calls"] = 2
+            _LAST_GENERATE["llm_calls"] = int(_LAST_GENERATE["llm_calls"] or 0) + 1
             _LAST_GENERATE["retries"] = 1
-            clamped = clamp_metadata(produced, include_keywords=include_keywords)
+            _LAST_GENERATE["failed"] = False
+            return _accept(produced)
+        except MetadataPreparationError:
+            raise
         except Exception:
             logger.exception("search_metadata_luna_english_retry_failed kind=%s", request.get("kind"))
-            _LAST_GENERATE["failed"] = True
-    _LAST_GENERATE["saved_empty"] = not clamped.title and not clamped.description
-    return clamped
-
-
-def _needs_english_retry(raw: SearchMetadata, clamped: SearchMetadata) -> bool:
-    title_raw = (raw.title or "").strip()
-    desc_raw = (raw.description or "").strip()
-    if not title_raw and not desc_raw:
-        return False
-    title_ok = (not title_raw) or looks_like_english(title_raw)
-    desc_ok = (not desc_raw) or looks_like_english(desc_raw)
-    return not (title_ok and desc_ok)
+            _LAST_GENERATE.update({"failed": True, "saved_empty": True})
+            raise MetadataPreparationError() from None
 
 
 def _llm_enabled() -> bool:

@@ -14,6 +14,8 @@ export const productsSetupAr = {
   productsLoadError: 'تعذّر تحميل المنتجات.',
   productsDeleteError: 'تعذّر حذف المنتج.',
   productsSaveError: 'تعذّر حفظ المنتج.',
+  productsMetadataSaveError:
+    'تعذر تجهيز هذا المنتج للذكاء الاصطناعي. لم يتم حفظ التغييرات. حاول مرة أخرى.',
   productsUploadError: 'فشل الرفع.',
   productsDelete: 'حذف',
   productsDeleteProduct: 'حذف المنتج',

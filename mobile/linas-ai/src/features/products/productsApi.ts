@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 
-import { ApiError, apiFetch, apiUpload } from '../../api/client';
+import { ApiError, apiFetch, apiUpload, isMetadataPreparationFailure } from '../../api/client';
 import { appendLocalFile } from '../../api/formDataFile';
 
 const ProductImageSchema = z.object({

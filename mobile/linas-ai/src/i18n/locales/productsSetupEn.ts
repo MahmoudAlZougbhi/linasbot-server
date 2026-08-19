@@ -14,6 +14,8 @@ export const productsSetupEn = {
   productsLoadError: 'Could not load products.',
   productsDeleteError: 'Could not delete product.',
   productsSaveError: 'Could not save product.',
+  productsMetadataSaveError:
+    'Could not prepare this product for AI. Your changes were not saved. Please try again.',
   productsUploadError: 'Upload failed.',
   productsDelete: 'Delete',
   productsDeleteProduct: 'Delete product',

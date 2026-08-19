@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from services.cm.storage import put_draft
 from services.search_metadata.cm_apply import enrich_section_payload, last_cm_apply_stats
 from services.search_metadata.english import contains_non_english_script, english_only_or_empty
@@ -58,15 +60,15 @@ def test_english_only_rejects_arabic_and_chinese() -> None:
 
 
 def test_generate_clamps_non_english_from_generator() -> None:
+    from services.search_metadata.errors import MetadataPreparationError
+
     set_metadata_generator(
         lambda _req: SearchMetadata(title="أسعار الليزر", description="价格说明", keywords=["creme"])
     )
-    meta = generate_search_metadata(
-        {"kind": "cm", "original_title": "12b", "content": "x", "include_keywords": True}
-    )
-    assert meta.title == ""
-    assert meta.description == ""
-    assert meta.keywords == ["creme"]
+    with pytest.raises(MetadataPreparationError):
+        generate_search_metadata(
+            {"kind": "cm", "original_title": "12b", "content": "x", "include_keywords": True}
+        )
 
 
 def test_knowledge_arabic_body_yields_english_metadata(tmp_path, monkeypatch) -> None:

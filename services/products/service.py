@@ -46,7 +46,11 @@ class ProductsService:
                 http_status=400,
             )
         self._validate_images(tenant_id=tenant_id, images=body.images)
-        row = self.repo.create_product(tenant_id=tenant_id, fields=self._product_fields(body))
+        fields = self._product_fields(body)
+        staging = self._staging_product(fields, product_id="new")
+        self._refresh_search_metadata(staging)
+        fields.update(self._search_meta_fields(staging))
+        row = self.repo.create_product(tenant_id=tenant_id, fields=fields)
         self.repo.replace_images(
             tenant_id=tenant_id,
             product_id=row.id,
@@ -58,7 +62,6 @@ class ProductsService:
             links=[link.model_dump() for link in body.links],
         )
         self._sync_image_index(tenant_id=tenant_id, product_id=row.id, images=body.images)
-        self._refresh_search_metadata(row)
         self.session.flush()
         self.session.expire(row, ["images", "links"])
         refreshed = self.repo.get_product(tenant_id=tenant_id, product_id=row.id)
@@ -73,8 +76,12 @@ class ProductsService:
 
         previous = product_content_payload(row)
         self._validate_images(tenant_id=tenant_id, images=body.images)
-        remove_product_from_index(self.session, tenant_id=tenant_id, product_id=product_id)
         fields = self._product_fields(body, existing=row)
+        staging = self._staging_product(fields, product_id=row.id)
+        generated = self._refresh_search_metadata(staging, previous=previous)
+        if generated:
+            fields.update(self._search_meta_fields(staging))
+        remove_product_from_index(self.session, tenant_id=tenant_id, product_id=product_id)
         self.repo.update_product(row, fields=fields)
         self.repo.replace_images(
             tenant_id=tenant_id,
@@ -87,10 +94,6 @@ class ProductsService:
             links=[link.model_dump() for link in body.links],
         )
         self._sync_image_index(tenant_id=tenant_id, product_id=row.id, images=body.images)
-        self.session.flush()
-        refreshed_meta = self.repo.get_product(tenant_id=tenant_id, product_id=row.id)
-        assert refreshed_meta is not None
-        self._refresh_search_metadata(refreshed_meta, previous=previous)
         self.session.flush()
         self.session.expire(row, ["images", "links"])
         refreshed = self.repo.get_product(tenant_id=tenant_id, product_id=row.id)
@@ -150,10 +153,44 @@ class ProductsService:
             "availability": body.availability,
         }
 
-    def _refresh_search_metadata(self, row: Any, *, previous: dict[str, Any] | None = None) -> None:
+    def _refresh_search_metadata(self, row: Any, *, previous: dict[str, Any] | None = None) -> bool:
+        from services.search_metadata.errors import MetadataPreparationError
         from services.search_metadata.product_apply import enrich_product_row
 
-        enrich_product_row(row, previous=previous)
+        try:
+            return enrich_product_row(row, previous=previous)
+        except MetadataPreparationError as exc:
+            raise ProductsError(
+                code=exc.code,
+                message=exc.user_message,
+                http_status=422,
+            ) from exc
+
+    def _staging_product(self, fields: dict[str, Any], *, product_id: str) -> Any:
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            id=product_id,
+            name=fields.get("name") or "",
+            description=fields.get("description") or "",
+            price=fields.get("price") or "",
+            sizes=list(fields.get("sizes") or []),
+            colors=list(fields.get("colors") or []),
+            note=fields.get("note") or "",
+            availability=fields.get("availability") or "",
+            ai_search_title=None,
+            ai_search_description=None,
+            ai_search_keywords=None,
+            ai_search_title_normalized=None,
+        )
+
+    def _search_meta_fields(self, row: Any) -> dict[str, Any]:
+        return {
+            "ai_search_title": getattr(row, "ai_search_title", None),
+            "ai_search_description": getattr(row, "ai_search_description", None),
+            "ai_search_keywords": getattr(row, "ai_search_keywords", None),
+            "ai_search_title_normalized": getattr(row, "ai_search_title_normalized", None),
+        }
 
     def _sync_image_index(self, *, tenant_id: str, product_id: str, images: list[Any]) -> None:
         refreshed = self.repo.get_product(tenant_id=tenant_id, product_id=product_id)

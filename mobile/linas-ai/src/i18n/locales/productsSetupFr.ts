@@ -14,6 +14,8 @@ export const productsSetupFr = {
   productsLoadError: 'Impossible de charger les produits.',
   productsDeleteError: 'Impossible de supprimer le produit.',
   productsSaveError: 'Impossible d’enregistrer le produit.',
+  productsMetadataSaveError:
+    "Impossible de préparer ce produit pour l'intelligence artificielle. Les modifications n'ont pas été enregistrées. Réessayez.",
   productsUploadError: 'Échec du téléversement.',
   productsDelete: 'Supprimer',
   productsDeleteProduct: 'Supprimer le produit',

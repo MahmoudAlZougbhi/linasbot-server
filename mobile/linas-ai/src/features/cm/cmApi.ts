@@ -45,6 +45,31 @@ async function parseJson(response: Response): Promise<unknown> {
   return JSON.parse(text) as unknown;
 }
 
+function _cmSaveErrorMessage(body: unknown): string {
+  if (body && typeof body === 'object') {
+    const rec = body as Record<string, unknown>;
+    if (rec.error === 'METADATA_PREPARATION_FAILED') {
+      return 'METADATA_PREPARATION_FAILED';
+    }
+    if (typeof rec.message === 'string' && rec.message.trim()) {
+      return rec.message;
+    }
+    if (typeof rec.detail === 'string' && rec.detail.trim()) {
+      return rec.detail;
+    }
+    if (rec.detail && typeof rec.detail === 'object') {
+      const nested = rec.detail as Record<string, unknown>;
+      if (nested.code === 'METADATA_PREPARATION_FAILED') {
+        return 'METADATA_PREPARATION_FAILED';
+      }
+      if (typeof nested.message === 'string' && nested.message.trim()) {
+        return nested.message;
+      }
+    }
+  }
+  return 'Failed to save CM draft';
+}
+
 async function authHeaders(extra?: HeadersInit): Promise<Headers> {
   const headers = new Headers(extra);
   headers.set('Content-Type', 'application/json');
@@ -145,11 +170,7 @@ export async function putCmDraft(
     throw new ApiError('Draft conflict — reload and retry', 409, body);
   }
   if (!response.ok) {
-    const detail =
-      body && typeof body === 'object' && 'detail' in body
-        ? String((body as { detail: unknown }).detail)
-        : 'Failed to save CM draft';
-    throw new ApiError(detail, response.status, body);
+    throw new ApiError(_cmSaveErrorMessage(body), response.status, body);
   }
   const parsed = EnvelopeSchema.parse(body);
   const etag = resolveCmEtag(

@@ -64,6 +64,25 @@ def _interrupt_safe_docker_cleanup() -> Iterator[None]:
     purge_stale_test_containers()
 
 
+@pytest.fixture(autouse=True)
+def _default_search_metadata_generator():
+    """Tests that Save CM/products without an explicit generator still get valid English metadata.
+
+    Production has no such stub: missing/invalid metadata raises MetadataPreparationError.
+    Tests that need failure call reset_metadata_generator() then inject a failing generator.
+    """
+    from services.search_metadata.generate import SearchMetadata, reset_metadata_generator, set_metadata_generator
+
+    set_metadata_generator(
+        lambda _req: SearchMetadata(
+            title="English Search Title",
+            description="Contains the grounded item content for routing.",
+        )
+    )
+    yield
+    reset_metadata_generator()
+
+
 @pytest.fixture
 def enable_faq_plan(tmp_path, monkeypatch: pytest.MonkeyPatch):
     """Active starter plan so CM FAQ write tests pass plan entitlements."""

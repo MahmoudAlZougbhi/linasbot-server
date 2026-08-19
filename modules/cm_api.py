@@ -29,6 +29,11 @@ from services.cm.publish_gate import PublishDisabledError, ensure_publish_enable
 from services.cm.storage import ConflictError, UnknownSectionError, get_draft, put_draft
 from services.cm.validation import validate_cm
 from services.dashboard_session_service import SessionRecord
+from services.search_metadata.errors import (
+    METADATA_PREPARATION_CODE,
+    METADATA_PREPARATION_MESSAGE,
+    MetadataPreparationError,
+)
 
 
 def _publish_disabled_response(message: str | None = None) -> JSONResponse:
@@ -144,6 +149,16 @@ async def cm_put_draft(
         )
     except UnknownSectionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except MetadataPreparationError as exc:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "success": False,
+                "error": METADATA_PREPARATION_CODE,
+                "message": exc.user_message or METADATA_PREPARATION_MESSAGE,
+                "live": False,
+            },
+        )
     except ConflictError as exc:
         current = _owner_sanitize_envelope(_envelope_dict(exc.current), name) if exc.current is not None else {}
         current_etag = str(current.get("etag") or "")

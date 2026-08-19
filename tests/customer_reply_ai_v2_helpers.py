@@ -102,7 +102,7 @@ def _rich_sections() -> dict[str, dict[str, Any]]:
                 }
             ]
         },
-        "off_days": {"days": [], "specific_days": []},
+        "off_days": {"timezone": "Asia/Beirut", "rules": []},
         "handoff": {
             "contacts": [
                 {"id": "c1", "label": "WA", "destination_type": "whatsapp", "destination_value": "+96170000000"}

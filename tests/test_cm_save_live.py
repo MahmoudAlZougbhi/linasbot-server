@@ -296,18 +296,34 @@ async def test_greeting_and_service_save_go_live(v2_env) -> None:
 
 
 @pytest.mark.asyncio
-async def test_empty_metadata_still_publishes_complete_item(v2_env) -> None:
-    reset_metadata_generator()
+async def test_empty_metadata_does_not_publish_or_flip_live(v2_env) -> None:
+    from services.search_metadata.errors import MetadataPreparationError
+
     tid = "t_save_live_meta_fail"
-    await _save(
+    env, first = await _save(
         "knowledge",
-        {"items": [{"id": "k9", "title": "12b", "body": "محتوى كامل", "status": "active"}]},
+        {"items": [{"id": "k9", "title": "12b", "body": "محتوى كامل قديم", "status": "active"}]},
         tid,
     )
-    row = _published(tid)["knowledge"]["items"][0]
-    assert row["body"] == "محتوى كامل"
-    assert row["title"] == "12b"
-    assert not row.get("ai_search_title")
+    old_id = first["content_version_id"]
+    reset_metadata_generator()
+    set_metadata_generator(lambda _req: SearchMetadata(title="", description=""))
+    with pytest.raises(MetadataPreparationError):
+        await put_draft_and_go_live(
+            section="knowledge",
+            payload={"items": [{"id": "k9", "title": "12b", "body": "محتوى كامل جديد", "status": "active"}]},
+            if_match=env.etag,
+            tenant_id=tid,
+            updated_by="tester",
+        )
+    pointer = read_published_pointer(tid)
+    assert pointer is not None
+    assert pointer.content_version_id == old_id
+    live = _published(tid)["knowledge"]["items"][0]
+    assert live["body"] == "محتوى كامل قديم"
+    assert live["ai_search_title"] == "English Search Title"
+    draft = get_draft("knowledge", tenant_id=tid, create_default=False)
+    assert draft.payload["items"][0]["body"] == "محتوى كامل قديم"
 
 
 @pytest.mark.asyncio
