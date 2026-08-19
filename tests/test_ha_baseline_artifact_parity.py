@@ -99,9 +99,7 @@ def test_assert_baseline_evidence_hashes_live_trees_like_capture() -> None:
     ]
     assert 'evidence="$(live_baseline_artifact_evidence)"' in capture
     assert_fn = helper[
-        helper.index("assert_baseline_artifact_evidence_restored() {") : helper.index(
-            "backup_live_node() {"
-        )
+        helper.index("assert_baseline_artifact_evidence_restored() {") : helper.index("backup_live_node() {")
     ]
     assert 'actual="$(live_baseline_artifact_evidence)"' in assert_fn
     assert 'live_baseline_artifact_evidence "$tx_dir"' not in assert_fn
@@ -110,11 +108,7 @@ def test_assert_baseline_evidence_hashes_live_trees_like_capture() -> None:
 def test_rollback_measures_tar_restored_nginx_before_maintenance_override() -> None:
     helper = _helper()
     body = helper[helper.index("rollback_impl() {") : helper.index("\nnode_activate() {")]
-    rolled = body[
-        body.index('if [ "$phase" = "rolled-back" ]; then') : body.index(
-            'test -f "$MAINTENANCE_FILE"'
-        )
-    ]
+    rolled = body[body.index('if [ "$phase" = "rolled-back" ]; then') : body.index('test -f "$MAINTENANCE_FILE"')]
     assert rolled.index('tar --numeric-owner -C / -xpf "$tx_dir/nginx.tar"') < rolled.index(
         "assert_baseline_artifact_evidence_restored"
     )
