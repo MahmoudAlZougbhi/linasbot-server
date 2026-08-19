@@ -3250,7 +3250,7 @@ install_lb_ready_attestation() {
         test "${recover_journal[1]}" = "$target_sha" || \
           die "LB attestation target differs from the interrupted deployment"
         case "${recover_journal[9]}" in
-          preflight-proven|peer-mark-started|recovery-lb-attested|recovery-started)
+          preflight-proven|peer-mark-started|recovery-lb-attested|recovery-started|recovery-both-nodes-drained|rollback-restoring|distinct-rollback-drained|rollback-peer-admit|rollback-node01-admit)
             log "LB installer is a later exact blob than the open pre-mutation journal"
             ;;
           *)
@@ -5478,12 +5478,14 @@ if operation in {"verify-recovery", "evidence"}:
     )
     for entry in entries:
         info = entry.lstat()
+        # The sibling parent is root:root 0700.  Children are atomic mv of
+        # live trees, so they keep baseline ownership (venv may be root;
+        # dashboard/build and data may not).  Requiring uid/gid 0 here
+        # deadlocks rollback of an interrupted activation.
         if (
             not allowed.fullmatch(entry.name)
             or not stat.S_ISDIR(info.st_mode)
             or stat.S_ISLNK(info.st_mode)
-            or info.st_uid != 0
-            or info.st_gid != 0
             or info.st_dev != sibling_info.st_dev
         ):
             raise SystemExit("stage sibling rollback generation is unsafe")
@@ -5695,12 +5697,9 @@ manifest_sha256 = hashlib.sha256(manifest_raw).hexdigest()
 
 def tree_digest(path: Path) -> str:
     root_info = path.lstat()
-    if (
-        not stat.S_ISDIR(root_info.st_mode)
-        or stat.S_ISLNK(root_info.st_mode)
-        or root_info.st_uid != 0
-        or root_info.st_gid != 0
-    ):
+    # Live sibling trees keep the ownership of the moved baseline directory.
+    # The sibling parent remains root:root 0700; names are allowlisted.
+    if not stat.S_ISDIR(root_info.st_mode) or stat.S_ISLNK(root_info.st_mode):
         raise SystemExit("activation sibling artifact is unsafe")
     digest = hashlib.sha256()
     for current, dirnames, filenames in os.walk(path, topdown=True, followlinks=False):
@@ -9827,11 +9826,11 @@ recover_deployment() {
   running_helper="$(sha256sum "$0" | awk '{print $1}')"
   if [ "$running_helper" != "$helper_hash" ]; then
     # Pre-mutation journals, and an interrupted later-helper recover that
-    # already wrote recovery-lb-attested/recovery-started, may predate the
-    # helper that can finish them. Terminal/later phases still require the
-    # exact journal-authorized helper blob.
+    # already wrote recovery-lb-attested or an in-progress rollback phase,
+    # may predate the helper that can finish them. Commit/terminal phases
+    # still require the exact journal-authorized helper blob.
     case "$phase" in
-      preflight-proven|peer-mark-started|recovery-lb-attested|recovery-started)
+      preflight-proven|peer-mark-started|recovery-lb-attested|recovery-started|recovery-both-nodes-drained|rollback-restoring|distinct-rollback-drained|rollback-peer-admit|rollback-node01-admit)
         log "running recovery helper is a later exact blob than the open pre-mutation journal"
         ;;
       *)
