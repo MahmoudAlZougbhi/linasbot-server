@@ -94,6 +94,9 @@ PYTHON_RUNTIME_ARTIFACT_SHA256=aaca2af2ab4d7b68a712660d1334c0cfd5ec13c0312ccd30c
 PYTHON_RUNTIME_SOURCE_SHA256=1e66a7945a48390ee4c2a4268a0e4185884059a13c4aab6d148aa208deea4a76
 PYTHON_EXECUTABLE_SHA256=ce20f82411f2b0ccdf3e2212ca62303519521d73d25178588f1a9c8d4935c866
 PYTHON_RUNTIME_TREE_SHA256=e4f022d45328996d72ed818a4cecca7588b71589b8804735535ecb88a9856afc
+PYTHON_PYCACHE_ROOT=$META_HA_STATE_ROOT/cpython-pycache
+PYTHON_CONTROL_PYCACHE_ROOT=/run/linasbot-ha-control-pycache
+PYTHON_PYCACHE_DROPIN=93-cpython-pycache-prefix.conf
 PYTHON_LIBPYTHON=$PYTHON_RUNTIME_ROOT/lib/libpython3.13.so.1.0
 PYTHON_LIBPYTHON_SHA256=965dcc1afd5934923b5a930e54afcaafc572485394ae33c35d27038bd943dcc5
 REQUIRED_PIP_VERSION=26.2.1
@@ -529,6 +532,7 @@ require_internal_node_dispatch() {
 }
 
 run_system_python_control() {
+  install -d -o root -g root -m 0700 "$PYTHON_CONTROL_PYCACHE_ROOT"
   /usr/bin/env -i \
     HOME=/nonexistent \
     LANG=C.UTF-8 \
@@ -539,7 +543,7 @@ run_system_python_control() {
     GIT_ATTR_NOSYSTEM=1 \
     GIT_CONFIG_NOSYSTEM=1 \
     GIT_CONFIG_GLOBAL=/dev/null \
-    "$SYSTEM_PYTHON" -B -I -S "$@"
+    "$SYSTEM_PYTHON" -X "pycache_prefix=$PYTHON_CONTROL_PYCACHE_ROOT" -B -I -S "$@"
 }
 
 assert_os_python_verifier_anchor() {
@@ -667,6 +671,95 @@ PY
   )"
   test "$digest" = "$PYTHON_RUNTIME_TREE_SHA256" || \
     die "canonical Python runtime tree differs from the reviewed pristine artifact"
+}
+
+restore_generated_python_bytecode() {
+  run_system_python_control - "$PYTHON_RUNTIME_ROOT" "$REPO_DIR/venv" "$REPO_DIR" <<'PY'
+import os
+import stat
+import sys
+from pathlib import Path
+
+suffixes = {".pyc", ".pyo"}
+removed = 0
+for raw in sys.argv[1:]:
+    root = Path(raw)
+    if not root.exists():
+        continue
+    info = root.lstat()
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+        raise SystemExit(f"bytecode restore root is unsafe: {root}")
+    for path in sorted(root.rglob("*"), key=lambda item: len(item.parts), reverse=True):
+        if path.is_symlink():
+            continue
+        if path.is_file() and path.suffix in suffixes:
+            path.unlink()
+            removed += 1
+            continue
+        if path.is_dir() and path.name == "__pycache__":
+            for child in path.iterdir():
+                if child.is_symlink() or child.is_file():
+                    child.unlink()
+                    removed += 1
+            path.rmdir()
+            removed += 1
+print(removed)
+PY
+}
+
+install_python_pycache_policy() {
+  local api_dropin=/etc/systemd/system/linasbot.service.d/$PYTHON_PYCACHE_DROPIN
+  local worker_dropin=/etc/systemd/system/linasbot-worker@.service.d/$PYTHON_PYCACHE_DROPIN
+  local unit queue
+  case "$PYTHON_PYCACHE_ROOT" in
+    "$PYTHON_RUNTIME_ROOT"|"$PYTHON_RUNTIME_ROOT"/*|"$REPO_DIR"|"$REPO_DIR"/*)
+      die "CPython pycache root overlaps an immutable hashed tree"
+      ;;
+  esac
+  install -d -o root -g root -m 0700 "$PYTHON_PYCACHE_ROOT"
+  test -d "$PYTHON_PYCACHE_ROOT" && test ! -L "$PYTHON_PYCACHE_ROOT" || \
+    die "CPython pycache root is missing or is a symlink"
+  test "$(stat -c '%u:%g:%a' "$PYTHON_PYCACHE_ROOT")" = "0:0:700" || \
+    die "CPython pycache root ownership or mode is unsafe"
+  install -d -o root -g root -m 0755 /etc/systemd/system/linasbot.service.d \
+    /etc/systemd/system/linasbot-worker@.service.d
+  umask 077
+  cat >"$api_dropin" <<EOF
+[Service]
+Environment=PYTHONPYCACHEPREFIX=$PYTHON_PYCACHE_ROOT
+EOF
+  cat >"$worker_dropin" <<EOF
+[Service]
+Environment=PYTHONPYCACHEPREFIX=$PYTHON_PYCACHE_ROOT
+EOF
+  chmod 0644 "$api_dropin" "$worker_dropin"
+  systemctl daemon-reload
+  for unit in linasbot.service; do
+    systemd_unit_need_daemon_reload_is_no "$unit" || die "$unit NeedDaemonReload is not no"
+    systemctl show -p DropInPaths --value -- "$unit" | grep -Fq "$api_dropin" || \
+      die "API DropInPaths does not include the CPython pycache prefix drop-in"
+    systemctl show -p Environment --value -- "$unit" | grep -Fq "PYTHONPYCACHEPREFIX=$PYTHON_PYCACHE_ROOT" || \
+      die "API unit does not inherit PYTHONPYCACHEPREFIX"
+  done
+  worker_instances_need_daemon_reload_no || die "worker NeedDaemonReload is not no"
+  for queue in "${WORKER_QUEUES[@]}"; do
+    unit="linasbot-worker@${queue}.service"
+    systemctl show -p DropInPaths --value -- "$unit" | grep -Fq "$worker_dropin" || \
+      die "$unit DropInPaths does not include the CPython pycache prefix drop-in"
+    systemctl show -p Environment --value -- "$unit" | grep -Fq "PYTHONPYCACHEPREFIX=$PYTHON_PYCACHE_ROOT" || \
+      die "$unit does not inherit PYTHONPYCACHEPREFIX"
+  done
+}
+
+apply_cpython_runtime_immutability() {
+  local tx_dir="$1"
+  validate_tx_dir "$tx_dir"
+  node_assert_runtime_drained "$tx_dir"
+  stop_runtime
+  node_assert_runtime_drained "$tx_dir"
+  restore_generated_python_bytecode >/dev/null
+  install_python_pycache_policy
+  assert_python_runtime_contract "$(configured_node_id)"
 }
 
 require_root() {
@@ -1153,13 +1246,20 @@ assert_python_runtime_binary_anchor() {
 
 assert_python_runtime_contract() {
   local expected_node_id="${1:-}"
+  local tree_proof="${2:-required}"
   local cluster_digest pip_version_output
   case "$expected_node_id" in
     "" | node01 | node02) ;;
     *) die "Python runtime validation received an invalid node identity" ;;
   esac
+  case "$tree_proof" in
+    required|deferred-until-restore) ;;
+    *) die "Python runtime tree proof mode is invalid" ;;
+  esac
   assert_python_runtime_binary_anchor
-  assert_python_runtime_tree_pristine_os
+  if [ "$tree_proof" = required ]; then
+    assert_python_runtime_tree_pristine_os
+  fi
   for receipt in "$PYTHON_RUNTIME_LOCAL_RECEIPT" "$PYTHON_RUNTIME_CLUSTER_RECEIPT"; do
     test -f "$receipt" && test ! -L "$receipt" || \
       die "committed Python runtime receipt is missing or unsafe: $receipt"
@@ -1190,7 +1290,8 @@ assert_python_runtime_contract() {
       "$PYTHON_RUNTIME_SOURCE_SHA256" \
       "$PYTHON_EXECUTABLE_SHA256" \
       "$PYTHON_RUNTIME_TREE_SHA256" \
-      "$META_HA_STATE_ROOT" <<'PY'
+      "$META_HA_STATE_ROOT" \
+      "$tree_proof" <<'PY'
 import hashlib
 import json
 import os
@@ -1218,7 +1319,10 @@ from pathlib import Path
     executable_sha256,
     expected_runtime_tree_sha256,
     state_root_raw,
+    tree_proof,
 ) = sys.argv[1:]
+if tree_proof not in {"required", "deferred-until-restore"}:
+    raise SystemExit("Python runtime tree proof mode is invalid")
 local_path = Path(local_raw)
 cluster_path = Path(cluster_raw)
 runtime = Path(runtime_raw)
@@ -1605,7 +1709,7 @@ def tree_digest(root: Path) -> str:
 
 if hashlib.sha256(executable.read_bytes()).hexdigest() != executable_sha256:
     raise SystemExit("live Python executable hash differs from its receipt")
-if tree_digest(runtime) != expected_runtime_tree_sha256:
+if tree_proof == "required" and tree_digest(runtime) != expected_runtime_tree_sha256:
     raise SystemExit("live Python runtime tree differs from its committed receipt")
 
 pip_metadata = list(runtime.glob(f"lib/python3.13/site-packages/pip-{required_pip}.dist-info/METADATA"))
@@ -1648,13 +1752,15 @@ PY
       PATH=/usr/sbin:/usr/bin:/sbin:/bin \
       PYTHONDONTWRITEBYTECODE=1 \
       PIP_CONFIG_FILE=/dev/null \
-      "$SYSTEM_PYTHON" -B -I -m pip --isolated --disable-pip-version-check --version
+      "$SYSTEM_PYTHON" -X "pycache_prefix=$PYTHON_CONTROL_PYCACHE_ROOT" -B -I -m pip --isolated --disable-pip-version-check --version
   )"
   case "$pip_version_output" in
     "pip $REQUIRED_PIP_VERSION from $PYTHON_RUNTIME_ROOT/lib/python3.13/site-packages/pip"*" (python 3.13)") ;;
     *) die "live portable runtime pip version or path is not exact" ;;
   esac
-  assert_python_runtime_tree_pristine_os
+  if [ "$tree_proof" = required ]; then
+    assert_python_runtime_tree_pristine_os
+  fi
   assert_git_repository_trust
   printf '%s\n' "$cluster_digest"
 }
@@ -1677,7 +1783,7 @@ run_portable_pip() {
     PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_CONFIG_FILE=/dev/null \
-    "$SYSTEM_PYTHON" -B -I -m pip --isolated --disable-pip-version-check \
+    "$SYSTEM_PYTHON" -X "pycache_prefix=$PYTHON_CONTROL_PYCACHE_ROOT" -B -I -m pip --isolated --disable-pip-version-check \
       --cache-dir "$state_root/cache" "$@"
 }
 
@@ -3337,6 +3443,7 @@ run_cluster_env_helper() {
   local source_sha="$1"
   shift
   local helper_root rc=0 cleanup_rc=0
+  install -d -o root -g root -m 0700 "$PYTHON_CONTROL_PYCACHE_ROOT"
   helper_root="$(materialize_cluster_env_helper "$source_sha")"
   if /usr/bin/env -i \
     HOME=/nonexistent \
@@ -3344,7 +3451,7 @@ run_cluster_env_helper() {
     LC_ALL=C.UTF-8 \
     PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     PYTHONNOUSERSITE=1 \
-    "$SYSTEM_PYTHON" -B -I -S "$helper_root/$CLUSTER_ENV_HELPER_REPO_PATH" "$@"; then
+    "$SYSTEM_PYTHON" -X "pycache_prefix=$PYTHON_CONTROL_PYCACHE_ROOT" -B -I -S "$helper_root/$CLUSTER_ENV_HELPER_REPO_PATH" "$@"; then
     rc=0
   else
     rc=$?
@@ -3367,19 +3474,63 @@ cluster_runtime_env_evidence() {
   if [ -n "$process_environ" ]; then
     [[ "$process_environ" =~ ^/proc/[1-9][0-9]*/environ$ ]] || \
       die "cluster environment process proof path is invalid"
+    local filtered rc=0
+    filtered="$(mktemp -p "$META_HA_STATE_ROOT" cluster-env-proc.XXXXXX)"
+    test -f "$filtered" && test ! -L "$filtered" || \
+      die "cluster environment process overlay tempfile is unsafe"
+    chmod 0600 "$filtered"
+    run_system_python_control - "$process_environ" "$filtered" "$PYTHON_PYCACHE_ROOT" <<'PY'
+import os
+import sys
+from pathlib import Path
+
+source, destination, expected_prefix = sys.argv[1:]
+proc = Path(source)
+if proc.is_symlink() or not proc.is_file():
+    raise SystemExit("process environ proof path is unsafe")
+kept = []
+for entry in proc.read_bytes().split(b"\0"):
+    if not entry:
+        continue
+    key, separator, value = entry.partition(b"=")
+    if not separator:
+        raise SystemExit("process environ is malformed")
+    name = key.decode("ascii")
+    if name == "PYTHONPYCACHEPREFIX":
+        if value.decode("utf-8") != expected_prefix:
+            raise SystemExit("live PYTHONPYCACHEPREFIX is not the pinned cache root")
+        continue
+    kept.append(entry)
+payload = b"\0".join(kept)
+if kept:
+    payload += b"\0"
+fd = os.open(destination, os.O_WRONLY | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0))
+try:
+    os.write(fd, payload)
+    os.fsync(fd)
+finally:
+    os.close(fd)
+PY
     local -a process_args=(
       fingerprint
       --env-file "$REPO_DIR/.env"
       --node-id "$node_id"
       --expected-release-sha "$expected_release_sha"
-      --process-environ "$process_environ"
+      --process-environ "$filtered"
     )
     if [ "$process_contract" = "transient" ]; then
       process_args+=(--transient-verifier)
     elif [ "$process_contract" != "canonical" ]; then
+      unlink "$filtered"
       die "cluster environment process contract is invalid"
     fi
-    run_cluster_env_helper "$helper_source_sha" "${process_args[@]}"
+    if run_cluster_env_helper "$helper_source_sha" "${process_args[@]}"; then
+      rc=0
+    else
+      rc=$?
+    fi
+    unlink "$filtered" || die "cluster environment process overlay cleanup failed closed"
+    return "$rc"
   else
     run_cluster_env_helper "$helper_source_sha" fingerprint \
       --env-file "$REPO_DIR/.env" \
@@ -3397,6 +3548,7 @@ compare_cluster_runtime_env_evidence() {
   validate_sha "$helper_source_sha"
   validate_sha "$expected_release_sha"
   helper_root="$(materialize_cluster_env_helper "$helper_source_sha")"
+  install -d -o root -g root -m 0700 "$PYTHON_CONTROL_PYCACHE_ROOT"
   node01_path="$helper_root/node01.json"
   node02_path="$helper_root/node02.json"
   run_system_python_control - "$node01_path" "$node02_path" "$node01_evidence" "$node02_evidence" <<'PY'
@@ -3426,7 +3578,7 @@ PY
     LC_ALL=C.UTF-8 \
     PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     PYTHONNOUSERSITE=1 \
-    "$SYSTEM_PYTHON" -B -I -S "$helper_root/$CLUSTER_ENV_HELPER_REPO_PATH" compare \
+    "$SYSTEM_PYTHON" -X "pycache_prefix=$PYTHON_CONTROL_PYCACHE_ROOT" -B -I -S "$helper_root/$CLUSTER_ENV_HELPER_REPO_PATH" compare \
       --node01-evidence "$node01_path" \
       --node02-evidence "$node02_path" \
       --expected-release-sha "$expected_release_sha"; then
@@ -3844,6 +3996,7 @@ else:
     )
     required = {
         f"{prefix}/92-meta-controlled-failover.conf",
+        f"{prefix}/93-cpython-pycache-prefix.conf",
         f"{prefix}/95-linasbot-credential-rekey-guard.conf",
     }
     allowed = required | {f"{prefix}/90-meta-ha-maintenance.conf"}
@@ -3852,6 +4005,7 @@ else:
     expected_environment = {
         "PYTHONUNBUFFERED=1",
         "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONPYCACHEPREFIX=/var/lib/linasbot/meta-ha/cpython-pycache",
         "PATH=/opt/linasbot/venv/bin:/usr/local/bin:/usr/bin:/bin",
     }
     if unit.startswith("linasbot-worker@"):
@@ -4027,10 +4181,18 @@ for unit, (expected_argv, queue, should_run) in specs.items():
         if decoded_key in live_environment:
             raise SystemExit("canonical runtime environment contains a duplicate key")
         live_environment[decoded_key] = value.decode("utf-8", "strict")
-    live_forbidden = forbidden - {"PATH"}
+    live_forbidden = forbidden - {"PATH", "PYTHONPYCACHEPREFIX"}
     if any(key in live_forbidden or key.startswith(prefixes) for key in live_environment):
         raise SystemExit("canonical runtime loaded a forbidden execution-control key")
     expected = dict(expected_environment)
+    prefix_key = "PYTHONPYCACHEPREFIX"
+    prefix_value = "/var/lib/linasbot/meta-ha/cpython-pycache"
+    unit_environment = run("systemctl", "show", unit, "--property=Environment", "--value").stdout
+    live_prefix = live_environment.get(prefix_key)
+    if live_prefix is not None and live_prefix != prefix_value:
+        raise SystemExit("canonical runtime PYTHONPYCACHEPREFIX is not the pinned cache root")
+    if f"{prefix_key}={prefix_value}" in unit_environment or live_prefix is not None:
+        expected[prefix_key] = prefix_value
     if queue is not None:
         expected["LINAS_WORKER_QUEUE"] = queue
     if any(live_environment.get(key) != value for key, value in expected.items()):
@@ -8862,6 +9024,7 @@ node_mark_maintenance() {
     capture_service_state "$tx_dir/predrain-service-state"
   fi
   validate_service_state_file "$tx_dir/predrain-service-state"
+  install_python_pycache_policy
   # The exact inventory and transaction authority are durable before the first
   # enablement change. A crash during/after disable is therefore recoverable.
   install_maintenance_boot_guard "$tx_dir"
@@ -8894,6 +9057,7 @@ node_ensure_maintenance() {
     assert_service_state_capture_is_pre_mutation "$tx_dir"
     capture_service_state "$tx_dir/predrain-service-state"
   fi
+  install_python_pycache_policy
   if [ -e "$DEPLOY_NODE_ACTIVE_FILE" ] || [ -L "$DEPLOY_NODE_ACTIVE_FILE" ]; then
     assert_deploy_node_sentinel "$tx_dir"
     # Admission removes the transaction guards only after durably disabling
@@ -8975,6 +9139,7 @@ start_admitted_target_runtime() {
   # Recheck the exact installed unit contract immediately before any canonical
   # process starts.  The earlier activation audit cannot authorize a unit file
   # that changed while both nodes were waiting for parity/admission.
+  install_python_pycache_policy
   assert_unit_file_contract linasbot
   for queue in "${WORKER_QUEUES[@]}"; do
     assert_unit_file_contract "linasbot-worker@${queue}.service"
@@ -9229,7 +9394,7 @@ node_dispatch() {
   require_root
   if [ "$phase" = "preflight" ]; then
     runtime_expected_node="${2:-}"
-  elif [ "$phase" = "runtime-contract" ]; then
+  elif [ "$phase" = "runtime-contract" ] || [ "$phase" = "runtime-identity" ]; then
     runtime_expected_node="${1:-}"
   fi
   acquire_meta_live_lock
@@ -9237,7 +9402,18 @@ node_dispatch() {
     assert_python_runtime_contract "$runtime_expected_node"
     return 0
   fi
-  assert_python_runtime_contract "$runtime_expected_node" >/dev/null
+  if [ "$phase" = "runtime-identity" ]; then
+    assert_python_runtime_contract "$runtime_expected_node" deferred-until-restore
+    return 0
+  fi
+  case "$phase" in
+    ensure-maintenance|mark-maintenance|apply-cpython-runtime-immutability)
+      assert_python_runtime_contract "$runtime_expected_node" deferred-until-restore >/dev/null
+      ;;
+    *)
+      assert_python_runtime_contract "$runtime_expected_node" >/dev/null
+      ;;
+  esac
   case "$phase" in
     preflight)
       validate_sha "${1:-}"
@@ -9343,6 +9519,10 @@ node_dispatch() {
       validate_sha "${1:-}"
       validate_tx_dir "${2:-}"
       node_recover_rollback "$1" "$2"
+      ;;
+    apply-cpython-runtime-immutability)
+      validate_tx_dir "${1:-}"
+      apply_cpython_runtime_immutability "$1"
       ;;
     *)
       die "unknown node phase: $phase"
@@ -10016,7 +10196,7 @@ recover_deployment() {
     die "exclusive DigitalOcean LB owner confirmation is missing"
   require_root
   acquire_meta_live_lock
-  local_runtime_cluster="$(assert_python_runtime_contract node01)"
+  local_runtime_cluster="$(assert_python_runtime_contract node01 deferred-until-restore)"
   mapfile -t journal < <(read_deploy_journal "$expected_journal_digest")
   test "${#journal[@]}" -eq 22 || die "deployment recovery journal output is incomplete"
   tx_id="${journal[0]}"
@@ -10045,7 +10225,7 @@ recover_deployment() {
   validate_digest "$journal_runtime_cluster"
   test "$local_runtime_cluster" = "$journal_runtime_cluster" || \
     die "node01 Python runtime cluster certificate differs from the durable deployment"
-  peer_runtime_cluster="$(remote_node "$peer_host" runtime-contract node02)"
+  peer_runtime_cluster="$(remote_node "$peer_host" runtime-identity node02)"
   test "$peer_runtime_cluster" = "$journal_runtime_cluster" || \
     die "node02 Python runtime cluster certificate differs from the durable deployment"
   test "$(assert_release_bundle \
@@ -10092,13 +10272,26 @@ recover_deployment() {
   HA_RECOVERY_DECISION=$decision
   fail_close_recovery() {
     local rc=$?
+    local local_rc=1 peer_rc=1
     trap - EXIT INT TERM
     if [ "${HA_RECOVERY_TX_SUCCEEDED:-0}" != "1" ]; then
       set +e
       log "recovery fail-close rc=$rc"
-      node_ensure_maintenance "$HA_RECOVERY_TX_DIR" >/dev/null 2>&1
-      remote_node "$HA_RECOVERY_PEER_HOST" ensure-maintenance "$HA_RECOVERY_TX_DIR" >/dev/null 2>&1
-      log "recovery interrupted at durable decision=$HA_RECOVERY_DECISION; both nodes were forced fail-closed"
+      node_ensure_maintenance "$HA_RECOVERY_TX_DIR"
+      local_rc=$?
+      if [ "$local_rc" -ne 0 ]; then
+        log "node01 ensure-maintenance failed during fail-close rc=$local_rc"
+      fi
+      remote_node "$HA_RECOVERY_PEER_HOST" ensure-maintenance "$HA_RECOVERY_TX_DIR"
+      peer_rc=$?
+      if [ "$peer_rc" -ne 0 ]; then
+        log "node02 ensure-maintenance failed during fail-close rc=$peer_rc"
+      fi
+      if [ "$local_rc" -eq 0 ] && [ "$peer_rc" -eq 0 ]; then
+        log "recovery interrupted at durable decision=$HA_RECOVERY_DECISION; both nodes were forced fail-closed"
+      else
+        log "recovery interrupted at durable decision=$HA_RECOVERY_DECISION; fail-close was incomplete local_rc=$local_rc peer_rc=$peer_rc"
+      fi
     fi
     exit "$rc"
   }
@@ -10113,6 +10306,8 @@ recover_deployment() {
   remote_node "$peer_host" ensure-maintenance "$tx_dir"
   sleep "$drain_seconds"
   update_recovery_journal "recovery-both-nodes-drained"
+  apply_cpython_runtime_immutability "$tx_dir"
+  remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir"
   if [ "$decision" = "commit" ]; then
     update_recovery_journal "commit-recovery-parity"
     node_assert_exact_head "$target_sha" "$tx_dir"
@@ -10138,6 +10333,8 @@ recover_deployment() {
     update_recovery_journal "rollback-restoring"
     node_recover_rollback "$previous_sha" "$tx_dir"
     remote_node "$peer_host" recover-rollback "$peer_previous_sha" "$tx_dir"
+    apply_cpython_runtime_immutability "$tx_dir"
+    remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir"
     node_assert_release_drained "$previous_sha" "$tx_dir"
     remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"
     if [ "$previous_sha" != "$peer_previous_sha" ]; then
@@ -10199,7 +10396,7 @@ retry_distinct_reconciliation() {
     die "exclusive DigitalOcean LB owner confirmation is missing"
   require_root
   acquire_meta_live_lock
-  local_runtime_cluster="$(assert_python_runtime_contract node01)"
+  local_runtime_cluster="$(assert_python_runtime_contract node01 deferred-until-restore)"
   mapfile -t journal < <(read_deploy_journal "$expected_journal_digest")
   test "${#journal[@]}" -eq 22 || die "deployment retry journal output is incomplete"
   tx_id="${journal[0]}"
@@ -10229,7 +10426,7 @@ retry_distinct_reconciliation() {
   validate_digest "$journal_runtime_cluster"
   test "$local_runtime_cluster" = "$journal_runtime_cluster" || \
     die "node01 Python runtime cluster certificate differs from the durable retry"
-  peer_runtime_cluster="$(remote_node "$peer_host" runtime-contract node02)"
+  peer_runtime_cluster="$(remote_node "$peer_host" runtime-identity node02)"
   test "$peer_runtime_cluster" = "$journal_runtime_cluster" || \
     die "node02 Python runtime cluster certificate differs from the durable retry"
   test "$(assert_release_bundle \
@@ -10343,6 +10540,8 @@ retry_distinct_reconciliation() {
   node_ensure_maintenance "$tx_dir"
   remote_node "$peer_host" ensure-maintenance "$tx_dir"
   sleep "$drain_seconds"
+  apply_cpython_runtime_immutability "$tx_dir"
+  remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir"
   node_assert_exact_head "$previous_sha" "$tx_dir"
   remote_node "$peer_host" assert-head "$peer_previous_sha" "$tx_dir"
   node_assert_release_drained "$previous_sha" "$tx_dir"
@@ -10410,7 +10609,7 @@ deployment_recovery_status() {
     die "exclusive DigitalOcean LB owner confirmation is missing"
   require_root
   acquire_meta_live_lock
-  local_runtime_cluster="$(assert_python_runtime_contract node01)"
+  local_runtime_cluster="$(assert_python_runtime_contract node01 deferred-until-restore)"
   digest="$(deploy_journal_digest)"
   mapfile -t journal < <(read_deploy_journal "$digest")
   test "${#journal[@]}" -eq 22 || die "deployment recovery journal output is incomplete"
@@ -10420,7 +10619,7 @@ deployment_recovery_status() {
   test "$helper_hash" = "${journal[11]}" || die "recovery status helper digest differs"
   test "$local_runtime_cluster" = "${journal[12]}" || \
     die "node01 Python runtime cluster certificate differs from the durable deployment"
-  peer_runtime_cluster="$(remote_node "${journal[4]}" runtime-contract node02)"
+  peer_runtime_cluster="$(remote_node "${journal[4]}" runtime-identity node02)"
   test "$peer_runtime_cluster" = "${journal[12]}" || \
     die "node02 Python runtime cluster certificate differs from the durable deployment"
   test "$(assert_release_bundle \
@@ -10479,7 +10678,7 @@ commit_target_deployment() {
     die "exclusive DigitalOcean LB owner confirmation is missing"
   require_root
   acquire_meta_live_lock
-  local_runtime_cluster="$(assert_python_runtime_contract node01)"
+  local_runtime_cluster="$(assert_python_runtime_contract node01 deferred-until-restore)"
   mapfile -t journal < <(read_deploy_journal "$expected_journal_digest")
   test "${#journal[@]}" -eq 22 || die "deployment commit journal output is incomplete"
   tx_id="${journal[0]}"
@@ -10515,7 +10714,7 @@ commit_target_deployment() {
     die "commit requires a distinct provider observation"
   test "$local_runtime_cluster" = "$journal_runtime_cluster" || \
     die "node01 Python runtime cluster certificate differs from the durable deployment"
-  peer_runtime_cluster="$(remote_node "$peer_host" runtime-contract node02)"
+  peer_runtime_cluster="$(remote_node "$peer_host" runtime-identity node02)"
   test "$peer_runtime_cluster" = "$journal_runtime_cluster" || \
     die "node02 Python runtime cluster certificate differs from the durable deployment"
   test "$(sha256sum "$0" | awk '{print $1}')" = "$helper_hash" || \
@@ -10584,13 +10783,26 @@ commit_target_deployment() {
   HA_COMMIT_PEER_HOST=$peer_host
   fail_close_commit() {
     local rc=$?
+    local local_rc=1 peer_rc=1
     trap - EXIT INT TERM
     if [ "${HA_COMMIT_TX_SUCCEEDED:-0}" != 1 ]; then
       set +e
       log "commit fail-close rc=$rc"
-      node_ensure_maintenance "$HA_COMMIT_TX_DIR" >/dev/null 2>&1
-      remote_node "$HA_COMMIT_PEER_HOST" ensure-maintenance "$HA_COMMIT_TX_DIR" >/dev/null 2>&1
-      log "commit interrupted; durable journal was retained and both nodes remain fail-closed"
+      node_ensure_maintenance "$HA_COMMIT_TX_DIR"
+      local_rc=$?
+      if [ "$local_rc" -ne 0 ]; then
+        log "node01 ensure-maintenance failed during commit fail-close rc=$local_rc"
+      fi
+      remote_node "$HA_COMMIT_PEER_HOST" ensure-maintenance "$HA_COMMIT_TX_DIR"
+      peer_rc=$?
+      if [ "$peer_rc" -ne 0 ]; then
+        log "node02 ensure-maintenance failed during commit fail-close rc=$peer_rc"
+      fi
+      if [ "$local_rc" -eq 0 ] && [ "$peer_rc" -eq 0 ]; then
+        log "commit interrupted; durable journal was retained and both nodes remain fail-closed"
+      else
+        log "commit interrupted; durable journal was retained and fail-close was incomplete local_rc=$local_rc peer_rc=$peer_rc"
+      fi
     fi
     exit "$rc"
   }
@@ -10603,6 +10815,8 @@ commit_target_deployment() {
     die "fresh commit LB authority was not durably read back"
   node_ensure_maintenance "$tx_dir"
   remote_node "$peer_host" ensure-maintenance "$tx_dir"
+  apply_cpython_runtime_immutability "$tx_dir"
+  remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir"
   node_assert_exact_head "$target_sha" "$tx_dir"
   remote_node "$peer_host" assert-head "$target_sha" "$tx_dir"
   node_assert_release_drained "$target_sha" "$tx_dir"
@@ -10715,7 +10929,7 @@ orchestrate() {
   esac
   require_root
   acquire_meta_live_lock
-  python_runtime_cluster_sha="$(assert_python_runtime_contract node01)"
+  python_runtime_cluster_sha="$(assert_python_runtime_contract node01 deferred-until-restore)"
   release_summary="$(assert_release_bundle \
     "$target_sha" "$release_artifact_id" "$release_artifact_api_sha" \
     "$release_manifest_sha" "$release_run_id" "$release_run_attempt")"
@@ -11067,6 +11281,8 @@ orchestrate() {
   node_mark_maintenance "$tx_dir"
   update_deploy_journal "node01-marked"
   sleep "$drain_seconds"
+  apply_cpython_runtime_immutability "$tx_dir"
+  remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir"
   remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"
   node_assert_release_drained "$previous_sha" "$tx_dir"
   update_deploy_journal "both-nodes-drained-before-activation"
