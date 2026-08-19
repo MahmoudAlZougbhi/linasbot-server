@@ -215,59 +215,22 @@ async def activate_cm_after_save(
     section: str,
     actor_id: str,
 ) -> dict[str, Any]:
-    """Publish the approved change Live so customer reply can read it.
-
-    - Existing published base → versioned section overlay via ``publish_draft_sections``.
-    - First Live (no published base) → full ``publish_draft`` (same path as ``publish_cm``).
-    Never prompts the owner with a separate Publish question — activation is internal.
-    """
+    """Publish the approved change Live so customer reply can read it."""
     from services.cm.constants import tenant_has_published_cm
-    from services.cm.publish import PublishBlockedError, publish_draft, publish_draft_sections
+    from services.cm.save_live import go_live_saved_section
 
     has_published = tenant_has_published_cm(tenant_id)
-    try:
-        if has_published:
-            result = await publish_draft_sections(
-                tenant_id=tenant_id,
-                published_by=actor_id or "owner_ai",
-                notes=f"owner_ai_auto_activate:{section}",
-                section_names=[section],
-            )
-            mode = "section_overlay"
-        else:
-            # First Live: section overlay requires a published base; full draft publish is
-            # the existing publish_cm path (validates all sections, builds index, flips pointer).
-            result = await publish_draft(
-                tenant_id=tenant_id,
-                published_by=actor_id or "owner_ai",
-                notes=f"owner_ai_auto_activate_first_live:{section}",
-            )
-            mode = "first_live_full_publish"
-        return {
-            "activated": True,
-            "live": True,
-            "mode": mode,
-            "section": section,
-            "content_version_id": getattr(result, "content_version_id", None),
-            "index_version_id": getattr(result, "index_version_id", None),
-        }
-    except PublishBlockedError as exc:
-        return {
-            "activated": False,
-            "live": False,
-            "reason": "publish_blocked",
-            "section": section,
-            "errors": list(getattr(exc, "errors", []) or [])[:20],
-            "message": str(exc),
-        }
-    except Exception as exc:
-        return {
-            "activated": False,
-            "live": False,
-            "reason": f"{type(exc).__name__}",
-            "section": section,
-            "message": str(exc)[:200],
-        }
+    notes = (
+        f"owner_ai_auto_activate:{section}"
+        if has_published
+        else f"owner_ai_auto_activate_first_live:{section}"
+    )
+    return await go_live_saved_section(
+        tenant_id=tenant_id,
+        section=section,
+        actor_id=actor_id,
+        notes=notes,
+    )
 
 
 def approve_cm_patch(

@@ -104,15 +104,25 @@ async def publish_draft_sections(
     currently published content (FAQ-only / pricing-only publishes without dirty other drafts).
     """
     tid = _normalize_tenant(tenant_id)
-
-    validation = validate_cm(tenant_id=tid)
-    if not validation["ok"]:
-        raise PublishBlockedError(
-            f"Publish blocked: {validation['error_count']} validation error(s).",
-            errors=validation["errors"],
-        )
-
     allowed = {str(s).strip() for s in (section_names or []) if str(s).strip()}
+    if allowed:
+        errors: list[dict[str, Any]] = []
+        for name in sorted(allowed):
+            result = validate_cm(tenant_id=tid, section=name)
+            errors.extend(list(result.get("errors") or []))
+        if errors:
+            raise PublishBlockedError(
+                f"Publish blocked: {len(errors)} validation error(s).",
+                errors=errors,
+            )
+    else:
+        validation = validate_cm(tenant_id=tid)
+        if not validation["ok"]:
+            raise PublishBlockedError(
+                f"Publish blocked: {validation['error_count']} validation error(s).",
+                errors=validation["errors"],
+            )
+
     if allowed:
         unknown = sorted(allowed - set(CM_SECTIONS))
         if unknown:
@@ -180,6 +190,10 @@ async def publish_draft_sections(
         previous_pointer = read_published_pointer(tid)
         write_published_pointer(tid, pointer_out)
 
+    from services.customer_reply_v2.manifest import clear_manifest_cache
+
+    clear_manifest_cache(tid)
+
     from services.ai_limits_source import sync_enforcement_from_payload
 
     sync_enforcement_from_payload(tid, sections.get("ai_limits") or {})
@@ -245,11 +259,14 @@ def rollback_to_version(
         )
         write_published_pointer(tid, pointer)
 
-        return PublishResult(
-            tenant_id=tid,
-            content_version_id=pointer.content_version_id,
-            index_version_id=pointer.index_version_id or "",
-            manifest=manifest_dict,
-            pointer=pointer.model_dump(mode="json"),
-            previous_pointer=previous_pointer.model_dump(mode="json") if previous_pointer else None,
-        )
+    from services.customer_reply_v2.manifest import clear_manifest_cache
+
+    clear_manifest_cache(tid)
+    return PublishResult(
+        tenant_id=tid,
+        content_version_id=pointer.content_version_id,
+        index_version_id=pointer.index_version_id or "",
+        manifest=manifest_dict,
+        pointer=pointer.model_dump(mode="json"),
+        previous_pointer=previous_pointer.model_dump(mode="json") if previous_pointer else None,
+    )

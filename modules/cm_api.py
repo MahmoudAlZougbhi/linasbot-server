@@ -164,8 +164,38 @@ async def cm_put_draft(
         from services.ai_limits_source import sync_enforcement_from_payload
 
         sync_enforcement_from_payload(tenant_id, envelope.payload if hasattr(envelope, "payload") else payload)
+
+    from services.cm.save_live import go_live_saved_section
+
+    activation = await go_live_saved_section(
+        tenant_id=tenant_id,
+        section=name,
+        actor_id=session.user_id or session.email or "save",
+    )
+    if not activation.get("live"):
+        status = 403 if activation.get("reason") == "emergency_disable" else 422
+        return JSONResponse(
+            status_code=status,
+            content={
+                "success": False,
+                "error": "SAVE_NOT_LIVE",
+                "message": activation.get("message") or "Save did not become live.",
+                "live": False,
+                "reason": activation.get("reason"),
+                "errors": activation.get("errors") or [],
+                "data": data,
+            },
+            headers={"ETag": str(data.get("etag") or "")},
+        )
     return JSONResponse(
-        content={"success": True, "message": "Draft saved", "data": data},
+        content={
+            "success": True,
+            "message": "Saved and live",
+            "live": True,
+            "data": data,
+            "content_version_id": activation.get("content_version_id"),
+            "index_version_id": activation.get("index_version_id"),
+        },
         headers={"ETag": str(data.get("etag") or "")},
     )
 
@@ -248,6 +278,9 @@ async def cm_unpublish(request: Request) -> Any:
 
     previous = read_published_pointer(tenant_id)
     cleared = clear_published_pointer(tenant_id)
+    from services.customer_reply_v2.manifest import clear_manifest_cache
+
+    clear_manifest_cache(tenant_id)
     return {
         "success": True,
         "cleared": cleared,
