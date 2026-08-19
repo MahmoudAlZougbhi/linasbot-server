@@ -394,6 +394,7 @@ def test_provisioner_v2_wheelhouse_receipts_are_consumed_exactly(tmp_path: Path)
         provision.release.PYTHON_EXECUTABLE_SHA256,
         provision.release.PYTHON_RUNTIME_TREE_SHA256,
         str(state_root),
+        "required",
     ]
 
     def validate_schema() -> subprocess.CompletedProcess[str]:
@@ -1116,6 +1117,7 @@ def test_unit_contract_rejects_shadow_hooks_dropins_and_extra_environment() -> N
     assert "canonical unit has a missing or unauthorized drop-in" in contract
     assert "canonical unit has an unauthorized direct environment assignment" in contract
     assert "92-meta-controlled-failover.conf" in contract
+    assert "93-cpython-pycache-prefix.conf" in contract
     assert "95-linasbot-credential-rekey-guard.conf" in contract
 
 

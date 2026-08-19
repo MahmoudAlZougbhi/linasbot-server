@@ -1,0 +1,87 @@
+"""Pinned mutable CPython bytecode cache outside hashed immutable trees.
+
+The later recovery helper inlines the same roots and restore rules because
+recover_exact runs against an older live checkout that does not contain this
+file.
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path, PurePosixPath
+
+PYTHON_RUNTIME_ROOT = "/opt/linasbot-runtime/cpython-3.13.15"
+PYTHON_VENV_ROOT = "/opt/linasbot/venv"
+PYTHON_REPO_ROOT = "/opt/linasbot"
+PYTHON_PYCACHE_ROOT = "/var/lib/linasbot/meta-ha/cpython-pycache"
+PYTHON_PYCACHE_MODE = 0o700
+PYTHON_PYCACHE_DROPIN = "93-cpython-pycache-prefix.conf"
+BYTECODE_SUFFIXES = {".pyc", ".pyo"}
+IMMUTABLE_ROOTS = (PYTHON_RUNTIME_ROOT, PYTHON_VENV_ROOT, PYTHON_REPO_ROOT)
+
+
+def pycache_overlaps_immutable_root(
+    *,
+    pycache_root: str = PYTHON_PYCACHE_ROOT,
+    immutable_roots: tuple[str, ...] = IMMUTABLE_ROOTS,
+) -> None:
+    cache = PurePosixPath(pycache_root)
+    if not cache.is_absolute():
+        raise RuntimeError("CPython pycache root must be absolute")
+    for raw_root in immutable_roots:
+        root = PurePosixPath(raw_root)
+        if cache == root or root in cache.parents or cache in root.parents:
+            raise RuntimeError("CPython pycache root overlaps an immutable hashed tree")
+
+
+def is_generated_bytecode(path: Path) -> bool:
+    return path.suffix in BYTECODE_SUFFIXES or path.name == "__pycache__"
+
+
+def restore_generated_bytecode(root: str | Path) -> int:
+    runtime = Path(root)
+    if not runtime.exists():
+        return 0
+    if runtime.is_symlink():
+        raise RuntimeError("bytecode restore root must not be a symlink")
+    removed = 0
+    for path in sorted(runtime.rglob("*"), key=lambda item: len(item.parts), reverse=True):
+        if path.is_symlink():
+            continue
+        if path.is_file() and path.suffix in BYTECODE_SUFFIXES:
+            path.unlink()
+            removed += 1
+            continue
+        if path.is_dir() and path.name == "__pycache__":
+            for child in path.iterdir():
+                if child.is_symlink() or child.is_file():
+                    child.unlink()
+                    removed += 1
+            path.rmdir()
+            removed += 1
+    return removed
+
+
+def bytecode_inside(root: str | Path) -> list[str]:
+    runtime = Path(root)
+    hits: list[str] = []
+    if not runtime.exists():
+        return hits
+    for path in runtime.rglob("*"):
+        if path.is_symlink():
+            continue
+        if is_generated_bytecode(path):
+            hits.append(path.as_posix())
+    return hits
+
+
+def assert_cache_dir_contract(path: str | Path = PYTHON_PYCACHE_ROOT) -> None:
+    cache = Path(path)
+    pycache_overlaps_immutable_root(pycache_root=cache.as_posix())
+    if cache.is_symlink() or not cache.is_dir():
+        raise RuntimeError("CPython pycache root is missing or is a symlink")
+    info = cache.stat()
+    if info.st_uid != 0 or info.st_gid != 0 or (info.st_mode & 0o777) != PYTHON_PYCACHE_MODE:
+        raise RuntimeError("CPython pycache root ownership or mode is unsafe")
+    if os.path.realpath(cache) != str(cache):
+        raise RuntimeError("CPython pycache root is aliased")
