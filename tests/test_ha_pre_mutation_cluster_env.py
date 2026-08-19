@@ -60,9 +60,7 @@ def test_pre_mutation_recovery_may_run_a_later_helper_blob() -> None:
         "recovery-both-nodes-drained|rollback-restoring|distinct-rollback-drained|"
         "rollback-peer-admit|rollback-node01-admit"
     )
-    later_helper = source[
-        source.index("assert_later_dispatch_helper() {") : source.index("assert_public_ready() {")
-    ]
+    later_helper = source[source.index("assert_later_dispatch_helper() {") : source.index("assert_public_ready() {")]
     assert later_helper_phases in later_helper
     assert "assert_later_dispatch_helper" in recover
     assert "assert_later_dispatch_helper" in installer

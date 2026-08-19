@@ -220,13 +220,9 @@ def test_public_readiness_gate_remains_mandatory() -> None:
 
 def test_helper_embeds_lb_window_and_forward_commit_later_helper() -> None:
     source = _helper()
-    later = source[
-        source.index("assert_later_dispatch_helper() {") : source.index("assert_public_ready() {")
-    ]
+    later = source[source.index("assert_later_dispatch_helper() {") : source.index("assert_public_ready() {")]
     wait = source[
-        source.index("assert_public_ready_after_peer_admission() {") : source.index(
-            "assert_maintenance_readiness() {"
-        )
+        source.index("assert_public_ready_after_peer_admission() {") : source.index("assert_maintenance_readiness() {")
     ]
     recover = source[source.index("recover_deployment() {") : source.index("retry_distinct_reconciliation() {")]
     installer = source[
@@ -263,7 +259,7 @@ def test_helper_embeds_lb_window_and_forward_commit_later_helper() -> None:
     assert "assert_later_dispatch_helper" in recover
     assert "assert_later_dispatch_helper" in installer
     assert "later exact blob than the open pre-mutation journal" in later
-    assert "payload.get(\"ok\") is True" in wait
+    assert 'payload.get("ok") is True' in wait
     assert "status != 200" in wait or "response.status != 200" in wait
     assert "materialize_lb_manager" in wait
     assert "check_interval_seconds" in wait

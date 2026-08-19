@@ -83,9 +83,7 @@ def wait_for_consecutive_public_ready(
             consecutive = 0
         remaining = timeout - (monotonic() - started)
         if remaining < interval:
-            raise SystemExit(
-                "public load-balancer readiness did not become healthy within the LB health window"
-            )
+            raise SystemExit("public load-balancer readiness did not become healthy within the LB health window")
         sleep(interval)
 
 
