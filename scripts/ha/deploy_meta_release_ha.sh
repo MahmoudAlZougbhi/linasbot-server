@@ -3335,7 +3335,7 @@ install_lb_ready_attestation() {
   local confirmation="$7"
   local owner_confirmation="$8"
   local expected_confirmation destination temporary observed_at runtime_cluster
-  local running_helper target_helper
+  local running_helper target_helper tree_proof=required
   validate_sha "$target_sha"
   test "$expected_node_id" = node01 || test "$expected_node_id" = node02 || \
     die "LB attestation installer node identity is invalid"
@@ -3353,7 +3353,10 @@ install_lb_ready_attestation() {
     die "exclusive DigitalOcean LB owner confirmation is missing"
   require_root
   acquire_meta_live_lock
-  runtime_cluster="$(assert_python_runtime_contract "$expected_node_id")"
+  if [ "$operation" = recover ]; then
+    tree_proof=deferred-until-restore
+  fi
+  runtime_cluster="$(assert_python_runtime_contract "$expected_node_id" "$tree_proof")"
   validate_digest "$runtime_cluster"
   test "$(configured_node_id)" = "$expected_node_id" || \
     die "canonical environment node identity differs from the LB installer authority"
@@ -9407,7 +9410,7 @@ node_dispatch() {
     return 0
   fi
   case "$phase" in
-    ensure-maintenance|mark-maintenance|apply-cpython-runtime-immutability)
+    ensure-maintenance|mark-maintenance|apply-cpython-runtime-immutability|lb-attestation)
       assert_python_runtime_contract "$runtime_expected_node" deferred-until-restore >/dev/null
       ;;
     *)
