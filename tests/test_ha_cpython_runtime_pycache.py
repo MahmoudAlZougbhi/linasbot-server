@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -25,6 +26,17 @@ VERIFY = ROOT / "scripts" / "ha" / "verify_meta_release_ha.sh"
 GUARD = ROOT / "scripts" / "ha" / "production_mutation_guard.py"
 CLUSTER_ENV = ROOT / "scripts" / "ha" / "cluster_runtime_env_contract.py"
 ALEMBIC = ROOT / "alembic" / "versions" / "20260824_product_search_metadata.py"
+DEFERRED_DISPATCH_PHASES = (
+    "ensure-maintenance|mark-maintenance|apply-cpython-runtime-immutability|"
+    "lb-attestation|release-bundle|worker-template-probe|"
+    "install-worker-template-decision|install-trusted-worker-template"
+)
+PRE_DRAIN_IDENTITY_PHASES = frozenset(
+    {
+        "runtime-identity",
+        *DEFERRED_DISPATCH_PHASES.split("|"),
+    }
+)
 
 
 def _helper() -> str:
@@ -38,7 +50,8 @@ def _recover() -> str:
 
 def _dispatch() -> str:
     source = _helper()
-    return source[source.index("node_dispatch() {") : source.index("reject_self_peer() {")]
+    start = source.index("\nnode_dispatch() {")
+    return source[start : source.index("\nreject_self_peer() {")]
 
 
 def test_pycache_root_stays_outside_hashed_trees() -> None:
@@ -96,8 +109,14 @@ def test_helper_defers_pre_drain_tree_hash_then_rehashes() -> None:
     head = recover.index("node_assert_exact_head", apply)
     assert "deferred-until-restore" in recover[start : start + 160]
     assert apply < head
-    assert "ensure-maintenance|mark-maintenance|apply-cpython-runtime-immutability|lb-attestation" in dispatch
+    assert DEFERRED_DISPATCH_PHASES in dispatch
     assert "deferred-until-restore" in dispatch
+    pre_drain = recover[:drained]
+    remote_phases = re.findall(r'remote_node "\$\w+" ([a-z0-9-]+)', pre_drain)
+    assert remote_phases, "recover must talk to node02 before drain"
+    unexpected = [phase for phase in remote_phases if phase not in PRE_DRAIN_IDENTITY_PHASES]
+    assert unexpected == [], unexpected
+    assert f"    {DEFERRED_DISPATCH_PHASES})" in dispatch
     installer = source[
         source.index("install_lb_ready_attestation() {") : source.index("assert_lb_observation_strictly_newer() {")
     ]
