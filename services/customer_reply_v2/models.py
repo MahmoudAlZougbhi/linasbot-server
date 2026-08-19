@@ -85,6 +85,9 @@ class ItemIndexEntry:
     section_id: str
     title: str
     short_description: str = ""
+    original_title: str = ""
+    ai_search_title: str = ""
+    ai_search_description: str = ""
     language: str = ""
     status: str = "active"
     relations: dict[str, Any] = field(default_factory=dict)
@@ -133,6 +136,7 @@ class RetrievalResult:
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     recommended_tera_effort: str | None = None
+    product_match_found: bool | None = None
 
 
 @dataclass
@@ -166,6 +170,11 @@ class CommentMediaContext:
     caption: str = ""
     parent_comment: str = ""
     nearby_replies: list[str] = field(default_factory=list)
+    nearby_reply_records: list[dict[str, Any]] = field(default_factory=list)
+    parent_author_id: str = ""
+    parent_author_name: str = ""
+    current_author_id: str = ""
+    current_author_name: str = ""
     image_urls: list[str] = field(default_factory=list)  # bounded remote URLs
     image_inputs: list[dict[str, str]] = field(default_factory=list)  # multimodal {url, kind}
     cached_visual_summary: str = ""

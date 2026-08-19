@@ -66,7 +66,7 @@ def test_alembic_head_is_product_images_max5() -> None:
     referenced = {parent for parents in revisions.values() for parent in parents}
     heads = [revision for revision in revisions if revision not in referenced]
     assert heads == [HEAD_ID]
-    assert HEAD_ID == "20260823_tiktok_biz"
+    assert HEAD_ID == "20260824_prod_search_meta"
 
 
 @pytest.mark.asyncio

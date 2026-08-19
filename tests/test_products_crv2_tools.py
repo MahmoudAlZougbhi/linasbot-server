@@ -91,6 +91,7 @@ def test_crv2_search_product_by_title_tool(products_env: Path) -> None:
         svc.create_product(
             tenant_id="tenant-crv2",
             body=ProductWriteBody(
+                description="test product",
                 name="Rose Gold Lipstick",
                 price="45 AED",
                 sizes=[],
@@ -117,6 +118,7 @@ def test_crv2_find_product_by_url_zero_credit(products_env: Path) -> None:
         svc.create_product(
             tenant_id="tenant-url",
             body=ProductWriteBody(
+                description="test product",
                 name="Shop Item",
                 sizes=[],
                 colors=[],
@@ -150,6 +152,7 @@ def test_crv2_find_product_by_image_checksum_stub(products_env: Path) -> None:
         svc.create_product(
             tenant_id="tenant-img",
             body=ProductWriteBody(
+                description="test product",
                 name="Indexed Product",
                 sizes=[],
                 colors=[],
@@ -167,3 +170,37 @@ def test_crv2_find_product_by_image_checksum_stub(products_env: Path) -> None:
     assert out["ok"] is True
     assert out["data"]["candidate_count"] >= 1
     assert out["data"]["matches"][0]["name"] == "Indexed Product"
+
+
+def test_search_keeps_original_and_alternate_queries(products_env: Path) -> None:
+    with whatsapp_session(require=True) as session:
+        svc = ProductsService(session)
+        svc.create_product(
+            tenant_id="tenant-q",
+            body=ProductWriteBody(
+                description="Face moisturizing cream.",
+                name="Nivea Face Cream",
+                sizes=[],
+                colors=[],
+                links=[],
+            ),
+        )
+
+    ctx = ToolContext(tenant_id="tenant-q", published_revision="rev-test", channel="instagram_dm")
+    out = dispatch_retrieval_tool(
+        "search_product_by_title",
+        {
+            "title": "nevia creem lal wej",
+            "original_query": "nevia creem lal wej",
+            "alternate_queries": ["Nivea face cream"],
+            "limit": 3,
+        },
+        ctx,
+    )
+    assert out["ok"] is True
+    data = out["data"]
+    assert data["original_query"] == "nevia creem lal wej"
+    assert "Nivea face cream" in data["alternate_queries"]
+    assert data["queries_used"][0] == "nevia creem lal wej"
+    assert data["match_count"] >= 1
+    assert data["matches"][0]["name"] == "Nivea Face Cream"

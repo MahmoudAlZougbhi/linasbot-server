@@ -7,7 +7,6 @@ from typing import Any
 from services.cm.resource_attachment import resource_summary
 from services.customer_reply_v2.comment_rule_select import is_luna_selectable_comment_rule
 from services.customer_reply_v2.manifest import FIXED_ANSWER_SECTIONS
-from services.customer_reply_v2.retrieval_item_index import label_of
 
 TITLE_PAGE_SIZE = 80
 INLINE_TITLE_CHAR_BUDGET = 12000
@@ -42,7 +41,9 @@ def _walk_nodes(
         status = _status_of(raw)
         if status in {"draft", "deleted", "archived"}:
             continue
-        title = str(raw.get("title") or raw.get("name") or label_of(raw.get("labels")) or item_id)
+        from services.search_metadata.luna_titles import luna_title_fields
+
+        fields = luna_title_fields(raw)
         source_id = f"{section_id}:{item_id}"
         path = f"{path_prefix}/{item_id}" if path_prefix else f"{section_id}/{item_id}"
         children_rows = raw.get("children")
@@ -53,14 +54,17 @@ def _walk_nodes(
         out.append(
             {
                 "id": source_id,
-                "title": title,
+                "title": fields["title"],
+                "original_title": fields["original_title"],
+                "ai_search_title": fields["ai_search_title"],
+                "ai_search_description": fields["ai_search_description"],
                 "type": section_id,
                 "parent_id": parent_id,
                 "path": path,
                 "depth": depth,
                 "status": "active" if status in {"", "active"} else status,
                 "child_count": child_count,
-                "description": str(raw.get("notes") or raw.get("short_introduction") or "")[:240],
+                "description": fields["description"],
                 "linked_entity_type": raw.get("linked_entity_type") or raw.get("entity_type"),
                 "scope": raw.get("post_id") or raw.get("scope"),
                 "sort_order": sort_base + index,

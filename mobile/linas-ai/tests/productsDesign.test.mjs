@@ -38,6 +38,8 @@ describe('AI Products design screens', () => {
     assert.match(add, /ProductDetailsStep/);
     assert.match(add, /ProductMediaLinksStep/);
     assert.match(details, /productsContinue/);
+    assert.match(details, /productsDescription/);
+    assert.match(add, /productsDescriptionRequired/);
     assert.match(media, /productsSave/);
     assert.match(media, /productsAddVideo/);
     assert.match(media, /productsAddFile/);

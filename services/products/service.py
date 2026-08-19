@@ -38,7 +38,13 @@ class ProductsService:
             raise ProductsError(code="NOT_FOUND", message="product_not_found", http_status=404)
         return product_to_dict(row)
 
-    def create_product(self, *, tenant_id: str, body: ProductWriteBody) -> dict[str, Any]:
+    def create_product(self, *, tenant_id: str, body: ProductWriteBody, require_description: bool = True) -> dict[str, Any]:
+        if require_description and not (body.description or "").strip():
+            raise ProductsError(
+                code="DESCRIPTION_REQUIRED",
+                message="Product description is required.",
+                http_status=400,
+            )
         self._validate_images(tenant_id=tenant_id, images=body.images)
         row = self.repo.create_product(tenant_id=tenant_id, fields=self._product_fields(body))
         self.repo.replace_images(
@@ -52,6 +58,7 @@ class ProductsService:
             links=[link.model_dump() for link in body.links],
         )
         self._sync_image_index(tenant_id=tenant_id, product_id=row.id, images=body.images)
+        self._refresh_search_metadata(row)
         self.session.flush()
         self.session.expire(row, ["images", "links"])
         refreshed = self.repo.get_product(tenant_id=tenant_id, product_id=row.id)
@@ -62,9 +69,13 @@ class ProductsService:
         row = self.repo.get_product(tenant_id=tenant_id, product_id=product_id)
         if row is None:
             raise ProductsError(code="NOT_FOUND", message="product_not_found", http_status=404)
+        from services.search_metadata.product_apply import product_content_payload
+
+        previous = product_content_payload(row)
         self._validate_images(tenant_id=tenant_id, images=body.images)
         remove_product_from_index(self.session, tenant_id=tenant_id, product_id=product_id)
-        self.repo.update_product(row, fields=self._product_fields(body))
+        fields = self._product_fields(body, existing=row)
+        self.repo.update_product(row, fields=fields)
         self.repo.replace_images(
             tenant_id=tenant_id,
             product_id=row.id,
@@ -76,6 +87,10 @@ class ProductsService:
             links=[link.model_dump() for link in body.links],
         )
         self._sync_image_index(tenant_id=tenant_id, product_id=row.id, images=body.images)
+        self.session.flush()
+        refreshed_meta = self.repo.get_product(tenant_id=tenant_id, product_id=row.id)
+        assert refreshed_meta is not None
+        self._refresh_search_metadata(refreshed_meta, previous=previous)
         self.session.flush()
         self.session.expire(row, ["images", "links"])
         refreshed = self.repo.get_product(tenant_id=tenant_id, product_id=row.id)
@@ -118,15 +133,27 @@ class ProductsService:
 
         return import_xlsx_rows(self, tenant_id=tenant_id, content=content)
 
-    def _product_fields(self, body: ProductWriteBody) -> dict[str, Any]:
+    def _product_fields(self, body: ProductWriteBody, *, existing: Any | None = None) -> dict[str, Any]:
+        from services.products.schemas import normalize_product_name
+
+        description = (body.description or "").strip() or None
+        if description is None and existing is not None:
+            description = getattr(existing, "description", None)
         return {
             "name": body.name.strip(),
             "price": (body.price or "").strip() or None,
             "sizes": body.sizes,
             "colors": body.colors,
             "note": (body.note or "").strip() or None,
+            "description": description,
+            "description_normalized": normalize_product_name(description or "") or None,
             "availability": body.availability,
         }
+
+    def _refresh_search_metadata(self, row: Any, *, previous: dict[str, Any] | None = None) -> None:
+        from services.search_metadata.product_apply import enrich_product_row
+
+        enrich_product_row(row, previous=previous)
 
     def _sync_image_index(self, *, tenant_id: str, product_id: str, images: list[Any]) -> None:
         refreshed = self.repo.get_product(tenant_id=tenant_id, product_id=product_id)

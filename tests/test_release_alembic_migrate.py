@@ -31,7 +31,7 @@ from tests.web_chat_acceptance_support import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD_ID = "20260823_tiktok_biz"
+HEAD_ID = "20260824_prod_search_meta"
 
 
 @pytest.fixture()

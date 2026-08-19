@@ -86,8 +86,16 @@ def _scope_ok(rule: dict[str, Any], *, post_id: str, account_id: str) -> bool:
     return True
 
 
-def _channel_ok(rule: dict[str, Any], channel: str) -> bool:
+def _effective_channel(rule: dict[str, Any]) -> str:
     want = str(rule.get("channel") or "any").strip().lower()
+    plat = str(rule.get("platform") or "").strip().lower()
+    if want in {"", "any"} and plat in {"facebook", "instagram", "tiktok"}:
+        return plat
+    return want or "any"
+
+
+def _channel_ok(rule: dict[str, Any], channel: str) -> bool:
+    want = _effective_channel(rule)
     if want in {"", "any"}:
         return True
     ch = (channel or "").strip().lower()
@@ -100,13 +108,20 @@ def _channel_ok(rule: dict[str, Any], channel: str) -> bool:
     return want == ch
 
 
-def _sort_key(rule: dict[str, Any]) -> tuple[int, int, str]:
-    scope_rank = 0 if str(rule.get("scope") or "") == "specific_post" else 1
+def _sort_key(rule: dict[str, Any]) -> tuple[int, int, int, int, str]:
+    wanted = _wanted_post_ids(rule)
+    scope = str(rule.get("scope") or "all_posts")
+    if wanted:
+        scope = "specific_post"
+    scope_rank = 0 if scope == "specific_post" else 1
+    ch = _effective_channel(rule)
+    channel_rank = 0 if ch not in {"", "any"} else 1
+    mode_rank = 0 if str(rule.get("rule_mode") or "") == "deterministic" else 1
     try:
         priority = int(rule.get("priority") or 0)
     except (TypeError, ValueError):
         priority = 0
-    return (scope_rank, -priority, str(rule.get("id") or ""))
+    return (scope_rank, channel_rank, mode_rank, -priority, str(rule.get("id") or ""))
 
 
 def _active(rule: dict[str, Any]) -> bool:
@@ -131,32 +146,47 @@ def evaluate_comment_engine(
     ordered = sorted([r for r in rules if _active(r)], key=_sort_key)
     result = CommentEngineResult(policy_text=policy_text, mapping=mapping, reason="default_action")
 
+    first: dict[str, Any] | None = None
+    first_trigger = ""
     for rule in ordered:
         if not _channel_ok(rule, channel) or not _scope_ok(rule, post_id=post_id, account_id=account_id):
             continue
         trigger = trigger_matches(rule, comment_text)
         if not trigger:
             continue
-        if str(rule.get("rule_mode") or "") == "deterministic":
-            action = str(rule.get("static_action") or rule.get("action") or "ignore")
-            result.matched = True
-            result.rule_mode = "deterministic"
-            result.rule_id = str(rule.get("id") or "")
-            result.rule_revision = int(rule.get("revision") or 1)
-            result.scope = str(rule.get("scope") or "")
-            result.trigger_matched = trigger
-            result.action = action
-            result.reply_text = str(rule.get("reply_template") or "").strip()
-            result.dm_text = str(rule.get("dm_template") or "").strip() or (
-                result.reply_text if action in {"send_dm_static", "reply_dm"} else ""
-            )
-            result.attachments = list(rule.get("attachments") or [])
-            result.reason = f"rule_match:{result.rule_id}"
-            return result
+        first = rule
+        first_trigger = trigger
+        break
 
+    if first is None:
+        result.action = default_action if default_action in {"reply_comment", "ignore"} else "reply_comment"
+        result.matched = False
+        return result
+
+    if str(first.get("rule_mode") or "") == "deterministic":
+        action = str(first.get("static_action") or first.get("action") or "ignore")
+        result.matched = True
+        result.rule_mode = "deterministic"
+        result.rule_id = str(first.get("id") or "")
+        result.rule_revision = int(first.get("revision") or 1)
+        result.scope = str(first.get("scope") or "")
+        result.trigger_matched = first_trigger
+        result.action = action
+        result.reply_text = str(first.get("reply_template") or "").strip()
+        result.dm_text = str(first.get("dm_template") or "").strip() or (
+            result.reply_text if action in {"send_dm_static", "reply_dm"} else ""
+        )
+        result.attachments = list(first.get("attachments") or [])
+        result.reason = f"rule_match:{result.rule_id}"
+        return result
+
+    first_key = _sort_key(first)
     guidance: list[dict[str, Any]] = []
     for rule in ordered:
         if str(rule.get("rule_mode") or "") != "ai_guidance":
+            continue
+        key = _sort_key(rule)
+        if key[0] != first_key[0] or key[1] > first_key[1]:
             continue
         if not _channel_ok(rule, channel) or not _scope_ok(rule, post_id=post_id, account_id=account_id):
             continue

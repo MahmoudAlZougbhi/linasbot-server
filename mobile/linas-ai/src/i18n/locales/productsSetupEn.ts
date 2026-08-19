@@ -26,6 +26,11 @@ export const productsSetupEn = {
   productsImagesLabel: 'images',
   productsName: 'Product name',
   productsNamePlaceholder: 'e.g. Hydrating Serum',
+  productsDescription: 'Description',
+  productsDescriptionPlaceholder: 'e.g. Face moisturizing cream',
+  productsDescriptionHint:
+    'Describe what this product is or what it is used for. This helps AI find the correct product when customers ask about it.',
+  productsDescriptionRequired: 'Product description is required.',
   productsPrice: 'Price',
   productsSizes: 'Sizes',
   productsSizesPlaceholder: 'e.g. Small, Medium, Large or 200 ml, 300 ml',

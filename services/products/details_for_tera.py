@@ -29,6 +29,7 @@ def product_details_for_tera(row: Any) -> dict[str, Any]:
         "id": raw.get("id"),
         "name": raw.get("name"),
         "title": raw.get("name"),
+        "description": raw.get("description") or "",
         "price": raw.get("price"),
         "currency": raw.get("currency"),
         "colors": raw.get("colors") or [],

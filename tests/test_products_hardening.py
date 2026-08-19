@@ -89,6 +89,7 @@ def test_two_node_image_index_shared_db(products_env: Path) -> None:
         svc.create_product(
             tenant_id="tenant-ha",
             body=ProductWriteBody(
+                description="test product",
                 name="HA Bag",
                 sizes=[],
                 colors=[],
@@ -109,11 +110,11 @@ def test_inactive_excluded_from_luna_candidates(products_env: Path) -> None:
         svc = ProductsService(session)
         svc.create_product(
             tenant_id="tenant-luna-inactive",
-            body=ProductWriteBody(name="Hidden Item", availability="inactive", sizes=[], colors=[], links=[]),
+            body=ProductWriteBody(description="test product", name="Hidden Item", availability="inactive", sizes=[], colors=[], links=[]),
         )
         svc.create_product(
             tenant_id="tenant-luna-inactive",
-            body=ProductWriteBody(name="Visible Item", availability="in_stock", sizes=[], colors=[], links=[]),
+            body=ProductWriteBody(description="test product", name="Visible Item", availability="in_stock", sizes=[], colors=[], links=[]),
         )
         from services.products.repository import ProductsRepository
 
@@ -130,7 +131,7 @@ async def test_luna_chunks_all_titles(products_env: Path) -> None:
         for i in range(TITLES_PER_CHUNK + 5):
             svc.create_product(
                 tenant_id="tenant-luna-chunk",
-                body=ProductWriteBody(name=f"Catalog Item {i:03d}", sizes=[], colors=[], links=[]),
+                body=ProductWriteBody(description="test product", name=f"Catalog Item {i:03d}", sizes=[], colors=[], links=[]),
             )
 
     call_count = 0
@@ -170,6 +171,7 @@ def test_name_before_image_priority(products_env: Path) -> None:
         svc.create_product(
             tenant_id="tenant-priority",
             body=ProductWriteBody(
+                description="test product",
                 name="Rose Lipstick",
                 sizes=[],
                 colors=[],
@@ -179,7 +181,7 @@ def test_name_before_image_priority(products_env: Path) -> None:
         )
         svc.create_product(
             tenant_id="tenant-priority",
-            body=ProductWriteBody(name="Blue Serum", sizes=[], colors=[], links=[]),
+            body=ProductWriteBody(description="test product", name="Blue Serum", sizes=[], colors=[], links=[]),
         )
         hit = resolve_product_priority(
             session,
@@ -197,7 +199,7 @@ def test_reply_to_outbound_end_to_end(products_env: Path) -> None:
         svc = ProductsService(session)
         product = svc.create_product(
             tenant_id="tenant-outbound",
-            body=ProductWriteBody(name="Outbound Dress", sizes=[], colors=[], links=[]),
+            body=ProductWriteBody(description="test product", name="Outbound Dress", sizes=[], colors=[], links=[]),
         )
         session.commit()
         product_id = product["id"]
@@ -242,7 +244,7 @@ def test_out_of_stock_searchable_not_purchasable_hint(products_env: Path) -> Non
         svc = ProductsService(session)
         svc.create_product(
             tenant_id="tenant-oos2",
-            body=ProductWriteBody(name="Sold Out Hat", availability="out_of_stock", sizes=[], colors=[], links=[]),
+            body=ProductWriteBody(description="test product", name="Sold Out Hat", availability="out_of_stock", sizes=[], colors=[], links=[]),
         )
         matches = search_product_by_title(session, tenant_id="tenant-oos2", title="hat", limit=3)
     assert matches[0]["availability"] == "out_of_stock"
@@ -254,6 +256,7 @@ def test_url_name_conflict_ambiguous(products_env: Path) -> None:
         svc.create_product(
             tenant_id="tenant-conflict",
             body=ProductWriteBody(
+                description="test product",
                 name="Alpha Shoe",
                 sizes=[],
                 colors=[],
@@ -263,6 +266,7 @@ def test_url_name_conflict_ambiguous(products_env: Path) -> None:
         svc.create_product(
             tenant_id="tenant-conflict",
             body=ProductWriteBody(
+                description="test product",
                 name="Beta Bag",
                 sizes=[],
                 colors=[],

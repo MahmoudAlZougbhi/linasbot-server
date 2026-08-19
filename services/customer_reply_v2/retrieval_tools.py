@@ -64,6 +64,8 @@ class ToolContext:
     audit: list[dict[str, Any]] = field(default_factory=list)
     customer_id: str = ""
     inbound_image_media_id: str = ""
+    product_search_attempted: bool = False
+    product_match_found: bool | None = None
 
 
 def _load_sections(ctx: ToolContext) -> dict[str, dict[str, Any]]:
@@ -200,6 +202,9 @@ def dispatch_retrieval_tool(name: str, args: dict[str, Any], ctx: ToolContext) -
                         "item_id": entry.item_id,
                         "section_id": entry.section_id,
                         "title": entry.title,
+                        "original_title": entry.original_title or entry.title,
+                        "ai_search_title": entry.ai_search_title,
+                        "ai_search_description": entry.ai_search_description,
                         "short_description": entry.short_description,
                         "language": entry.language,
                         "status": entry.status,

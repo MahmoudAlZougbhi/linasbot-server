@@ -170,6 +170,13 @@ export function ProductDetailsScreen({ productId, onBack, onEdit, onDeleted }: P
           <Row label={tr('productsColors')} value={colors || '—'} last />
         </View>
 
+        {product.description ? (
+          <View style={styles.noteBlock}>
+            <Text style={styles.noteLabel}>{tr('productsDescription')}</Text>
+            <Text style={styles.noteBody}>{product.description}</Text>
+          </View>
+        ) : null}
+
         {product.note ? (
           <View style={styles.noteBlock}>
             <Text style={styles.noteLabel}>{tr('productsNote')}</Text>

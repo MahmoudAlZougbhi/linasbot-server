@@ -124,12 +124,17 @@ def comment_thread_records(
     channel: str,
     comment_text: str,
     parent_comment: str = "",
-    nearby_replies: list[str] | None = None,
+    nearby_replies: list[Any] | None = None,
     comment_id: str = "",
     post_id: str = "",
     now_ts: float | None = None,
+    current_author_id: str = "",
+    current_author_name: str = "",
+    nearby_reply_records: list[dict[str, Any]] | None = None,
+    parent_author_id: str = "",
+    parent_author_name: str = "",
 ) -> list[dict[str, Any]]:
-    """Minimal same-post thread context for comments (no cross-post mix)."""
+    """Same-post thread context with author labels. Does not mix the whole post into one identity."""
     _ = post_id
     records: list[dict[str, Any]] = []
     ts = now_ts
@@ -137,34 +142,111 @@ def comment_thread_records(
         records.append(
             history_record(
                 role="user",
-                text=str(parent_comment),
+                text=_label_thread_text(
+                    str(parent_comment),
+                    author_id=parent_author_id,
+                    author_name=parent_author_name,
+                    current_author_id=current_author_id,
+                    from_page=False,
+                ),
                 timestamp=ts,
                 channel=channel,
                 message_id="",
             )
         )
-    for reply in list(nearby_replies or [])[:8]:
-        if not str(reply).strip():
-            continue
-        records.append(
-            history_record(
-                role="assistant",
-                text=str(reply),
-                timestamp=ts,
-                channel=channel,
+    structured = list(nearby_reply_records or [])
+    if structured:
+        for row in structured[:8]:
+            text = str(row.get("text") or "").strip()
+            if not text:
+                continue
+            from_page = bool(row.get("from_page"))
+            records.append(
+                history_record(
+                    role="assistant" if from_page else "user",
+                    text=_label_thread_text(
+                        text,
+                        author_id=str(row.get("author_id") or ""),
+                        author_name=str(row.get("author_name") or ""),
+                        current_author_id=current_author_id,
+                        from_page=from_page,
+                    ),
+                    timestamp=ts,
+                    channel=channel,
+                    message_id=str(row.get("comment_id") or ""),
+                )
             )
-        )
+    else:
+        for reply in list(nearby_replies or [])[:8]:
+            if isinstance(reply, dict):
+                text = str(reply.get("text") or "").strip()
+                if not text:
+                    continue
+                from_page = bool(reply.get("from_page"))
+                records.append(
+                    history_record(
+                        role="assistant" if from_page else "user",
+                        text=_label_thread_text(
+                            text,
+                            author_id=str(reply.get("author_id") or ""),
+                            author_name=str(reply.get("author_name") or ""),
+                            current_author_id=current_author_id,
+                            from_page=from_page,
+                        ),
+                        timestamp=ts,
+                        channel=channel,
+                    )
+                )
+                continue
+            if not str(reply).strip():
+                continue
+            records.append(
+                history_record(
+                    role="assistant",
+                    text=str(reply),
+                    timestamp=ts,
+                    channel=channel,
+                )
+            )
     if comment_text:
         records.append(
             history_record(
                 role="user",
-                text=comment_text,
+                text=_label_thread_text(
+                    comment_text,
+                    author_id=current_author_id,
+                    author_name=current_author_name,
+                    current_author_id=current_author_id,
+                    from_page=False,
+                    is_current=True,
+                ),
                 timestamp=ts,
                 channel=channel,
                 message_id=comment_id,
             )
         )
     return records
+
+
+def _label_thread_text(
+    text: str,
+    *,
+    author_id: str,
+    author_name: str,
+    current_author_id: str,
+    from_page: bool,
+    is_current: bool = False,
+) -> str:
+    name = (author_name or author_id or "participant").strip()
+    if is_current:
+        return f"[current_author {name}] {text}" if name else text
+    if from_page:
+        return f"[page_reply] {text}"
+    if current_author_id and author_id and author_id != current_author_id:
+        return f"[other_participant {name}] {text}"
+    if current_author_id and author_id and author_id == current_author_id:
+        return f"[same_author {name}] {text}"
+    return text
 
 
 def same_history_for_agents(records: list[dict[str, Any]]) -> list[dict[str, Any]]:

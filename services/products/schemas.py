@@ -24,6 +24,7 @@ class ProductLinkInput(BaseModel):
 
 class ProductWriteBody(BaseModel):
     name: str = Field(min_length=1, max_length=512)
+    description: str | None = Field(default=None, max_length=2000)
     price: str | None = Field(default=None, max_length=128)
     sizes: list[str] = Field(default_factory=list)
     colors: list[str] = Field(default_factory=list)
@@ -75,14 +76,19 @@ def normalize_product_name(name: str) -> str:
 
 def product_to_dict(row: Any) -> dict[str, Any]:
     availability = normalize_availability(getattr(row, "availability", None))
+    keywords = getattr(row, "ai_search_keywords", None)
     return {
         "id": row.id,
         "name": row.name,
+        "description": getattr(row, "description", None),
         "price": row.price,
         "sizes": list(row.sizes or []),
         "colors": list(row.colors or []),
         "note": row.note,
         "availability": availability,
+        "ai_search_title": getattr(row, "ai_search_title", None),
+        "ai_search_description": getattr(row, "ai_search_description", None),
+        "ai_search_keywords": list(keywords) if isinstance(keywords, list) else [],
         "images": [
             {"id": img.id, "media_id": img.media_id, "sort_order": img.sort_order}
             for img in sorted(row.images or [], key=lambda i: i.sort_order)

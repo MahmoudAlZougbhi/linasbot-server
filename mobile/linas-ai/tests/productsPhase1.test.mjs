@@ -77,6 +77,8 @@ describe('AI Products Phase 1 mobile', () => {
       assert.match(src, /productsAddImage/);
       assert.match(src, /productsMaxImages/);
       assert.match(src, /productsImport/);
+      assert.match(src, /productsDescription/);
+      assert.match(src, /productsDescriptionRequired/);
     }
   });
 });

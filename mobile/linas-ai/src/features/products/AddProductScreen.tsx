@@ -48,6 +48,7 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [sizesText, setSizesText] = useState('');
   const [colorsText, setColorsText] = useState('');
@@ -66,6 +67,7 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
       try {
         const product = await fetchProduct(productId);
         setName(product.name);
+        setDescription(product.description ?? '');
         setPrice(String(product.price || '').replace(/^\$/, ''));
         setSizesText(joinCommaList(product.sizes ?? []));
         setColorsText(joinCommaList(product.colors ?? []));
@@ -124,6 +126,7 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
 
   const buildPayload = (): ProductWriteInput => ({
     name: name.trim(),
+    description: description.trim(),
     price: price.trim() ? (price.trim().startsWith('$') ? price.trim() : `$${price.trim()}`) : null,
     sizes: parseCommaList(sizesText),
     colors: parseCommaList(colorsText),
@@ -136,6 +139,11 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
   const save = async () => {
     if (!name.trim()) {
       setError(tr('productsNameRequired'));
+      setStep(1);
+      return;
+    }
+    if (!description.trim()) {
+      setError(tr('productsDescriptionRequired'));
       setStep(1);
       return;
     }
@@ -183,12 +191,14 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
         {step === 1 ? (
           <ProductDetailsStep
             name={name}
+            description={description}
             price={price}
             sizesText={sizesText}
             colorsText={colorsText}
             note={note}
             availability={availability}
             onChangeName={setName}
+            onChangeDescription={setDescription}
             onChangePrice={setPrice}
             onChangeSizes={setSizesText}
             onChangeColors={setColorsText}
@@ -197,6 +207,10 @@ export function AddProductScreen({ productId, onBack, onSaved }: Props) {
             onContinue={() => {
               if (!name.trim()) {
                 setError(tr('productsNameRequired'));
+                return;
+              }
+              if (!description.trim()) {
+                setError(tr('productsDescriptionRequired'));
                 return;
               }
               setError(null);

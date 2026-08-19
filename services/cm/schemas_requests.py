@@ -70,6 +70,8 @@ class RequestRule(CmBaseModel):
     notes: str | None = None
     enabled: bool = True
     attachments: list[ArticleAttachment] = Field(default_factory=list)
+    ai_search_title: str = ""
+    ai_search_description: str = ""
 
 
 class RequestsAppointmentsSection(CmBaseModel):

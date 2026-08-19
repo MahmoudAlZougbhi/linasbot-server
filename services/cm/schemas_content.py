@@ -95,6 +95,8 @@ class ServiceRecord(CmBaseModel):
     audience: Audience = "general"
     notes: str | None = None
     attachments: list[ResourceAttachment] = Field(default_factory=list)
+    ai_search_title: str = ""
+    ai_search_description: str = ""
 
 
 class BranchHours(CmBaseModel):
@@ -174,6 +176,8 @@ class BranchRecord(CmBaseModel):
     available: bool = True
     notes: str | None = None
     attachments: list[BranchAttachment] = Field(default_factory=list)
+    ai_search_title: str = ""
+    ai_search_description: str = ""
 
     def composed_address(self) -> str:
         parts = [p.strip() for p in (self.street, self.building, self.floor, self.country) if p and p.strip()]
@@ -232,6 +236,8 @@ class ArticleRecord(CmBaseModel):
     notes: str | None = None
     attachments: list[ArticleAttachment] = Field(default_factory=list)
     updated_at: str | None = None
+    ai_search_title: str = ""
+    ai_search_description: str = ""
 
 
 class HandoffContact(CmBaseModel):
@@ -357,6 +363,8 @@ class CommentRule(CmBaseModel):
     post_ids: list[str] = Field(default_factory=list)
     attachments: list[ArticleAttachment] = Field(default_factory=list)
     notes: str | None = None
+    ai_search_title: str = ""
+    ai_search_description: str = ""
 
 
 class CommentsSection(CmBaseModel):

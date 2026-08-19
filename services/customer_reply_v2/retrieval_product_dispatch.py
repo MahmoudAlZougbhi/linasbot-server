@@ -53,15 +53,30 @@ def dispatch_product_tool(name: str, args: dict[str, Any], ctx: Any) -> dict[str
                 if data.get("active_product_id"):
                     ctx.active_product_id = str(data.get("active_product_id") or "") or None
             elif name == "search_product_by_title":
+                alt_raw = args.get("alternate_queries") or args.get("queries") or []
+                if isinstance(alt_raw, str):
+                    alternate = [alt_raw]
+                elif isinstance(alt_raw, list):
+                    alternate = [str(q) for q in alt_raw if str(q).strip()]
+                else:
+                    alternate = []
+                original_query = str(args.get("original_query") or args.get("title") or "").strip()
                 data = crv2_search_product_by_title(
                     db,
                     tenant_id=ctx.tenant_id,
-                    title=str(args.get("title") or "").strip(),
+                    title=str(args.get("title") or original_query).strip(),
                     limit=int(args.get("limit") or 5),
                     use_luna_fallback=not customer_ai_v10_runtime_enabled(),
                     conversation_id=conversation_id,
                     title_offset=int(args.get("offset") or 0),
+                    alternate_queries=alternate,
+                    original_query=original_query,
                 )
+                ctx.product_search_attempted = True
+                if int(data.get("match_count") or 0) > 0:
+                    ctx.product_match_found = True
+                elif not (data.get("titles_fallback") or {}).get("has_more"):
+                    ctx.product_match_found = False
             elif name == "list_product_titles":
                 data = crv2_list_product_titles(
                     db,
@@ -79,6 +94,8 @@ def dispatch_product_tool(name: str, args: dict[str, Any], ctx: Any) -> dict[str
                     context_source="active_context",
                 )
                 _remember_product_evidence(ctx, data)
+                if data.get("ok"):
+                    ctx.product_match_found = True
             elif name == "get_product_images":
                 product_id = str(args.get("product_id") or ctx.active_product_id or "")
                 data = crv2_get_product_images(db, tenant_id=ctx.tenant_id, product_id=product_id)

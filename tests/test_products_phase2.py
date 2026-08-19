@@ -78,11 +78,11 @@ def test_inactive_excluded_from_customer_search(products_env: Path) -> None:
         svc = ProductsService(session)
         svc.create_product(
             tenant_id="tenant-avail",
-            body=ProductWriteBody(name="Hidden Serum", availability="inactive", sizes=[], colors=[], links=[]),
+            body=ProductWriteBody(description="test product", name="Hidden Serum", availability="inactive", sizes=[], colors=[], links=[]),
         )
         svc.create_product(
             tenant_id="tenant-avail",
-            body=ProductWriteBody(name="Visible Cream", availability="in_stock", sizes=[], colors=[], links=[]),
+            body=ProductWriteBody(description="test product", name="Visible Cream", availability="in_stock", sizes=[], colors=[], links=[]),
         )
         matches = search_product_by_title(session, tenant_id="tenant-avail", title="cream", limit=5)
     assert all(m["name"] != "Hidden Serum" for m in matches)
@@ -95,6 +95,7 @@ def test_out_of_stock_in_search_and_details(products_env: Path) -> None:
         created = svc.create_product(
             tenant_id="tenant-oos",
             body=ProductWriteBody(
+                description="test product",
                 name="Limited Lipstick",
                 availability="out_of_stock",
                 price="40 AED",
@@ -124,6 +125,7 @@ def test_image_index_checksum_match(products_env: Path) -> None:
         svc.create_product(
             tenant_id="tenant-img2",
             body=ProductWriteBody(
+                description="test product",
                 name="Indexed Bag",
                 sizes=[],
                 colors=[],
@@ -140,7 +142,7 @@ def test_active_product_context(products_env: Path) -> None:
         svc = ProductsService(session)
         product = svc.create_product(
             tenant_id="tenant-ctx",
-            body=ProductWriteBody(name="Context Shoe", sizes=[], colors=[], links=[]),
+            body=ProductWriteBody(description="test product", name="Context Shoe", sizes=[], colors=[], links=[]),
         )
         set_active_product(
             session,
@@ -159,7 +161,7 @@ def test_reply_to_product_resolution(products_env: Path) -> None:
         svc = ProductsService(session)
         product = svc.create_product(
             tenant_id="tenant-reply",
-            body=ProductWriteBody(name="Reply Dress", sizes=[], colors=[], links=[]),
+            body=ProductWriteBody(description="test product", name="Reply Dress", sizes=[], colors=[], links=[]),
         )
         record_sent_product_message(
             session,
@@ -202,7 +204,7 @@ def test_hard_delete_clears_context_and_reply(products_env: Path) -> None:
         svc = ProductsService(session)
         product = svc.create_product(
             tenant_id="tenant-del",
-            body=ProductWriteBody(name="Delete Me", sizes=[], colors=[], links=[]),
+            body=ProductWriteBody(description="test product", name="Delete Me", sizes=[], colors=[], links=[]),
         )
         set_active_product(
             session,
@@ -237,7 +239,7 @@ def test_crv2_active_context_tool(products_env: Path) -> None:
         svc = ProductsService(session)
         product = svc.create_product(
             tenant_id="tenant-tool-ctx",
-            body=ProductWriteBody(name="Tool Context Hat", sizes=[], colors=[], links=[]),
+            body=ProductWriteBody(description="test product", name="Tool Context Hat", sizes=[], colors=[], links=[]),
         )
         set_active_product(
             session,
