@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import os
 import re
-import stat
 import subprocess
 import sys
 import textwrap
@@ -78,7 +76,7 @@ def test_activation_tree_digest_hashes_non_root_live_trees(tmp_path: Path) -> No
     live = tmp_path / "live-dashboard-build"
     live.mkdir()
     (live / "index.html").write_text("ok\n", encoding="utf-8")
-    os.chmod(live, 0o755)
+    live.chmod(0o755)
     result = subprocess.run(
         [sys.executable, "-B", "-I", "-S", "-c", script, str(live)],
         check=False,
