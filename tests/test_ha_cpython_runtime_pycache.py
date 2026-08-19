@@ -316,3 +316,28 @@ def test_lb_later_helper_and_venv_repo_gates_stay_fail_closed() -> None:
     assert PYTHON_VENV_ROOT == "/opt/linasbot/venv"
     assert PYTHON_RUNTIME_ROOT == "/opt/linasbot-runtime/cpython-3.13.15"
     assert PYTHON_PYCACHE_ROOT == "/var/lib/linasbot/meta-ha/cpython-pycache"
+
+
+def test_release_verifier_and_recover_cannot_write_hashed_cpython_bytecode() -> None:
+    source = _helper()
+    recover = _recover()
+    commit = source[source.index("commit_target_deployment() {") : source.index("orchestrate() {")]
+    dispatch = _dispatch()
+    verify = VERIFY.read_text(encoding="utf-8")
+    assert "export PYTHONDONTWRITEBYTECODE=1" in verify
+    assert verify.count('venv/bin/python" -B -') >= 6
+    assert "PYTHONDONTWRITEBYTECODE=1 \\" in verify
+    assert '"$EXPECTED_RELEASE_SHA" cluster' not in recover
+    assert '"$target_sha" cluster' not in recover
+    assert '"$target_sha" cluster' not in commit
+    assert 'verify_admitted_cluster_release "$target_sha" "$peer_host"' in recover
+    assert 'verify_admitted_cluster_release "$target_sha" "$peer_host"' in commit
+    assert "verify-meta-release" in dispatch
+    assert "verify-meta-release" not in DEFERRED_DISPATCH_PHASES
+    fingerprint = source[
+        source.index("cluster_meta_env_fingerprint() {") : source.index("verify_admitted_cluster_release() {")
+    ]
+    assert '{"META_DELETION_NODE_ID"}' in fingerprint
+    assert '{"META_DELETION_NODE_ID"}' in verify
+    assert '"$repo_dir/venv/bin/python" -B -' in fingerprint or '"$repo_dir/venv/bin/python" -B -' in source
+    assert "-X pycache_prefix" not in verify

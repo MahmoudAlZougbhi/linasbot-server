@@ -27,6 +27,7 @@ if [ "$VERIFY_MODE" != "cluster" ] && \
   echo "[meta-ha-release] verification mode is invalid" >&2
   exit 1
 fi
+export PYTHONDONTWRITEBYTECODE=1
 
 verify_unit_runtime() {
   local unit="$1"
@@ -46,7 +47,7 @@ verify_unit_runtime() {
     echo "[meta-ha-release] unit runtime contract mismatch: $unit" >&2
     return 1
   fi
-  "$repo_dir/venv/bin/python" - \
+  "$repo_dir/venv/bin/python" -B - \
     "$repo_dir" "$runtime_kind" "$queue_name" "$main_pid" \
     "$exec_start" "$environment_files" <<'PY'
 import os
@@ -99,7 +100,7 @@ PY
   if [ "$verify_meta_environment" != "1" ]; then
     return 0
   fi
-  "$repo_dir/venv/bin/python" - "$repo_dir/.env" "/proc/$main_pid/environ" <<'PY'
+  "$repo_dir/venv/bin/python" -B - "$repo_dir/.env" "/proc/$main_pid/environ" <<'PY'
 import sys
 from pathlib import Path
 
@@ -129,7 +130,7 @@ verify_local_readiness() {
   local repo_dir="$1"
   local durable_queues_on="$2"
 
-  "$repo_dir/venv/bin/python" - "$durable_queues_on" <<'PY'
+  "$repo_dir/venv/bin/python" -B - "$durable_queues_on" <<'PY'
 import json
 import sys
 import urllib.request
@@ -187,7 +188,7 @@ meta_env_fingerprint() {
   local repo_dir="$1"
   local expected_sha="$2"
 
-  "$repo_dir/venv/bin/python" - "$repo_dir/.env" "$expected_sha" <<'PY'
+  "$repo_dir/venv/bin/python" -B - "$repo_dir/.env" "$expected_sha" <<'PY'
 import hashlib
 import hmac
 import json
@@ -218,7 +219,7 @@ verify_deletion_membership() {
   local repo_dir="$1"
   local expected_node_id="$2"
 
-  "$repo_dir/venv/bin/python" - "$repo_dir/.env" "$expected_node_id" <<'PY'
+  "$repo_dir/venv/bin/python" -B - "$repo_dir/.env" "$expected_node_id" <<'PY'
 import sys
 from pathlib import Path
 
@@ -239,7 +240,7 @@ PY
 verify_operator_gates() {
   local repo_dir="$1"
 
-  "$repo_dir/venv/bin/python" - "$repo_dir" "$repo_dir/.env" "$VERIFY_MODE" <<'PY'
+  "$repo_dir/venv/bin/python" -B - "$repo_dir" "$repo_dir/.env" "$VERIFY_MODE" <<'PY'
 import sys
 from pathlib import Path
 
@@ -376,6 +377,7 @@ if [ "$VERIFY_MODE" = "cluster-release-only" ]; then
     -o ConnectTimeout=8 \
     -o StrictHostKeyChecking=yes \
     "root@${PEER_HOST}" \
+    PYTHONDONTWRITEBYTECODE=1 \
     bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
       "$EXPECTED_RELEASE_SHA" local-release-only
 else
@@ -384,6 +386,7 @@ else
     -o ConnectTimeout=8 \
     -o StrictHostKeyChecking=yes \
     "root@${PEER_HOST}" \
+    PYTHONDONTWRITEBYTECODE=1 \
     bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
       "$EXPECTED_RELEASE_SHA" local-only "$LOCAL_META_ENV_FINGERPRINT" node02
 fi
