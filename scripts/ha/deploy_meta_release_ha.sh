@@ -6839,7 +6839,10 @@ assert_baseline_artifact_evidence_restored() {
   test "$(stat -c '%u:%g:%a' "$tx_dir/baseline-artifacts.json")" = "0:0:600" || \
     die "baseline artifact rollback authority is unsafe"
   expected="$(<"$tx_dir/baseline-artifacts.json")"
-  actual="$(live_baseline_artifact_evidence "$tx_dir")"
+  # Capture hashes live trees without substituting maintenance-nginx.conf.
+  # Peer-first drain can capture nginx after the override is live, so assert
+  # must hash the same restored live bytes.
+  actual="$(live_baseline_artifact_evidence)"
   test "$actual" = "$expected" || \
     die "restored baseline venv, dashboard, nginx, or systemd artifacts differ"
 }
@@ -8019,6 +8022,10 @@ rollback_impl() {
       die "rolled-back tracked tree changed"
     git -C "$REPO_DIR" diff --cached --quiet "$previous_sha" -- || \
       die "rolled-back index changed"
+    verify_archive "$tx_dir/systemd.tar"
+    verify_archive "$tx_dir/nginx.tar"
+    tar --numeric-owner -C / -xpf "$tx_dir/systemd.tar"
+    tar --numeric-owner -C / -xpf "$tx_dir/nginx.tar"
     assert_baseline_artifact_evidence_restored "$tx_dir"
     verify_activation_sibling_authority "$tx_dir" "$target_sha" "$previous_sha"
     node_ensure_maintenance "$tx_dir"
@@ -8111,6 +8118,12 @@ rollback_impl() {
     write_activation_phase "$tx_dir" "$target_sha" "$previous_sha" restored "$generation"
     phase=restored
   fi
+  # Hash capture-time live trees before reinstalling the nginx override.
+  verify_archive "$tx_dir/systemd.tar"
+  verify_archive "$tx_dir/nginx.tar"
+  tar --numeric-owner -C / -xpf "$tx_dir/systemd.tar"
+  tar --numeric-owner -C / -xpf "$tx_dir/nginx.tar"
+  assert_baseline_artifact_evidence_restored "$tx_dir"
   # Re-establish persistent markers and a boot guard.  A marker-unaware
   # baseline remains stopped until both-node rollback parity is proved.
   node_ensure_maintenance "$tx_dir"
@@ -8121,7 +8134,6 @@ rollback_impl() {
   test "$(current_head)" = "$previous_sha" || die "rollback SHA mismatch"
   git -C "$REPO_DIR" diff --quiet "$previous_sha" -- || die "rolled-back tracked tree is dirty"
   git -C "$REPO_DIR" diff --cached --quiet "$previous_sha" -- || die "rolled-back index is dirty"
-  assert_baseline_artifact_evidence_restored "$tx_dir"
   fsync_tree "$REPO_DIR"
   write_activation_phase "$tx_dir" "$target_sha" "$previous_sha" rolled-back "$generation"
 }
