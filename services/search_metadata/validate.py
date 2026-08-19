@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import re
-from typing import Any
 
 from services.search_metadata.english import looks_like_english
 from services.search_metadata.errors import MetadataPreparationError
+from services.search_metadata.generate import SearchMetadata
 from services.search_metadata.limits import (
     AI_SEARCH_DESCRIPTION_MAX,
     AI_SEARCH_KEYWORD_MAX,
@@ -21,7 +21,7 @@ _DIGIT_RUN = re.compile(r"\d{2,}")
 
 
 def metadata_is_ready(
-    meta: Any,
+    meta: SearchMetadata,
     *,
     include_keywords: bool,
     content: str,
@@ -46,12 +46,12 @@ def metadata_is_ready(
 
 
 def require_ready_metadata(
-    meta: Any,
+    meta: SearchMetadata,
     *,
     include_keywords: bool,
     content: str,
     original_title: str,
-) -> Any:
+) -> SearchMetadata:
     if metadata_is_ready(
         meta,
         include_keywords=include_keywords,

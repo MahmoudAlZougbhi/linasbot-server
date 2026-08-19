@@ -37,7 +37,8 @@ MAX_THREAD_REPLIES = 8
 
 
 def _author_from_graph_row(row: dict[str, Any]) -> tuple[str, str, bool]:
-    from_obj = row.get("from") if isinstance(row.get("from"), dict) else {}
+    from_raw = row.get("from")
+    from_obj: dict[str, Any] = from_raw if isinstance(from_raw, dict) else {}
     author_id = str(from_obj.get("id") or row.get("from_id") or "").strip()
     author_name = str(
         from_obj.get("name") or from_obj.get("username") or row.get("username") or row.get("from_name") or ""
