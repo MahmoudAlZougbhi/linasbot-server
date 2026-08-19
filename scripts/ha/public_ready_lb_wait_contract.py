@@ -7,7 +7,8 @@ that does not yet contain this file.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 PUBLIC_READY_URL = "https://linasaibot.com/api/ready"
 PUBLIC_READY_USER_AGENT = "linasbot-ha-deploy-readiness-proof/1"
