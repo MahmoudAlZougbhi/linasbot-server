@@ -106,9 +106,10 @@ def test_helper_defers_pre_drain_tree_hash_then_rehashes() -> None:
     assert "tree_proof=deferred-until-restore" in installer
     assert 'assert_python_runtime_contract "$expected_node_id" "$tree_proof"' in installer
     assert 'assert_python_runtime_contract "$expected_node_id")' not in installer
-    assert "deferred-until-restore" not in source[
-        source.index("apply_cpython_runtime_immutability() {") : source.index("require_root() {")
-    ]
+    assert (
+        "deferred-until-restore"
+        not in source[source.index("apply_cpython_runtime_immutability() {") : source.index("require_root() {")]
+    )
     assert "assert_python_runtime_tree_pristine_os" in source
     assert "PYTHON_RUNTIME_TREE_SHA256" in source
     assert source.count("canonical Python runtime tree differs from the reviewed pristine artifact") >= 1
