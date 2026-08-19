@@ -39,6 +39,8 @@ git() {
 
 REPO_DIR=/opt/linasbot
 META_HA_STATE_ROOT=/var/lib/linasbot/meta-ha
+PRIVATE_DEPLOY_DIR=$META_HA_STATE_ROOT/private-deploy
+DEPLOY_VERSION_FILE=$PRIVATE_DEPLOY_DIR/deploy-version
 MAINTENANCE_FILE=$META_HA_STATE_ROOT/maintenance
 VOLATILE_MAINTENANCE_FILE=/run/linasbot-maintenance
 BOOTSTRAP_ACTIVE_FILE=$META_HA_STATE_ROOT/bootstrap.active
@@ -682,6 +684,18 @@ ensure_meta_ha_state_root() {
   fi
   test "$(stat -c '%u:%g:%a' "$META_HA_STATE_ROOT")" = "0:0:700" || \
     die "Meta HA state root ownership or mode is unsafe"
+}
+
+ensure_private_deploy_dir() {
+  ensure_meta_ha_state_root
+  if [ -e "$PRIVATE_DEPLOY_DIR" ] || [ -L "$PRIVATE_DEPLOY_DIR" ]; then
+    test -d "$PRIVATE_DEPLOY_DIR" && test ! -L "$PRIVATE_DEPLOY_DIR" || \
+      die "HA private deploy directory is not a safe directory"
+  else
+    install -d -o root -g root -m 0700 "$PRIVATE_DEPLOY_DIR"
+  fi
+  test "$(stat -c '%u:%g:%a' "$PRIVATE_DEPLOY_DIR")" = "0:0:700" || \
+    die "HA private deploy directory ownership or mode is unsafe"
 }
 
 assert_path_absent() {
@@ -5141,6 +5155,94 @@ finally:
 PY
 }
 
+unlink_live_deploy_version() {
+  ensure_private_deploy_dir
+  run_system_python_control - "$DEPLOY_VERSION_FILE" "$PRIVATE_DEPLOY_DIR" <<'PY'
+import os
+import stat
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+parent = Path(sys.argv[2])
+if path.name != "deploy-version" or path.parent != parent:
+    raise SystemExit("refusing to unlink unexpected private deploy state")
+parent_info = parent.lstat()
+if (
+    not stat.S_ISDIR(parent_info.st_mode)
+    or stat.S_ISLNK(parent_info.st_mode)
+    or parent_info.st_uid != 0
+    or parent_info.st_gid != 0
+    or stat.S_IMODE(parent_info.st_mode) & 0o022
+    or stat.S_IMODE(parent_info.st_mode) != 0o700
+):
+    raise SystemExit("private state parent is unsafe")
+if not path.exists() and not path.is_symlink():
+    raise SystemExit(0)
+info = path.lstat()
+if (
+    not stat.S_ISREG(info.st_mode)
+    or stat.S_ISLNK(info.st_mode)
+    or info.st_uid != 0
+    or info.st_gid != 0
+    or stat.S_IMODE(info.st_mode) != 0o600
+    or info.st_nlink != 1
+):
+    raise SystemExit("existing private state is unsafe")
+os.unlink(path)
+directory = os.open(parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+try:
+    os.fsync(directory)
+finally:
+    os.close(directory)
+PY
+}
+
+snapshot_live_deploy_version() {
+  local generation_root="$1"
+  local previous="$generation_root/deploy-version.previous"
+  local absent="$generation_root/deploy-version.absent"
+  ensure_private_deploy_dir
+  test -d "$generation_root" && test ! -L "$generation_root" || \
+    die "activation generation for deploy-version snapshot is unsafe"
+  test "$(stat -c '%u:%g:%a' "$generation_root")" = "0:0:700" || \
+    die "activation generation ownership or mode is unsafe"
+  assert_path_absent "$previous" "deploy-version snapshot already exists"
+  assert_path_absent "$absent" "deploy-version absence marker already exists"
+  if [ -e "$DEPLOY_VERSION_FILE" ] || [ -L "$DEPLOY_VERSION_FILE" ]; then
+    copy_private_file_durable "$DEPLOY_VERSION_FILE" "$previous"
+  else
+    write_private_state "$absent" "absent"
+  fi
+}
+
+restore_live_deploy_version() {
+  local generation_root="$1"
+  local previous="$generation_root/deploy-version.previous"
+  local absent="$generation_root/deploy-version.absent"
+  ensure_private_deploy_dir
+  if [ -f "$previous" ] && [ ! -L "$previous" ]; then
+    test ! -e "$absent" && test ! -L "$absent" || \
+      die "deploy-version snapshot authority is contradictory"
+    copy_private_file_durable "$previous" "$DEPLOY_VERSION_FILE"
+  elif [ -f "$absent" ] && [ ! -L "$absent" ]; then
+    test ! -e "$previous" && test ! -L "$previous" || \
+      die "deploy-version snapshot authority is contradictory"
+    unlink_live_deploy_version
+  elif [ ! -e "$DEPLOY_VERSION_FILE" ] && [ ! -L "$DEPLOY_VERSION_FILE" ]; then
+    log "no HA deploy-version snapshot; live HA deploy-version is already absent"
+  else
+    die "rollback deploy-version authority is missing"
+  fi
+}
+
+write_live_deploy_version() {
+  local deploy_version="$1"
+  [[ "$deploy_version" =~ ^[1-9][0-9]*$ ]] || die "target commit epoch is invalid"
+  ensure_private_deploy_dir
+  write_private_state "$DEPLOY_VERSION_FILE" "$deploy_version"
+}
+
 copy_private_file_durable() {
   local source="$1"
   local destination="$2"
@@ -5155,6 +5257,16 @@ source, destination = map(Path, sys.argv[1:])
 before = source.lstat()
 if not stat.S_ISREG(before.st_mode) or stat.S_ISLNK(before.st_mode):
     raise SystemExit("private copy source is unsafe")
+parent = destination.parent
+info = parent.lstat()
+if (
+    not stat.S_ISDIR(info.st_mode)
+    or stat.S_ISLNK(info.st_mode)
+    or info.st_uid != 0
+    or info.st_gid != 0
+    or stat.S_IMODE(info.st_mode) & 0o022
+):
+    raise SystemExit("private state parent is unsafe")
 descriptor = os.open(source, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
 try:
     opened = os.fstat(descriptor)
@@ -7760,6 +7872,7 @@ activate_impl() {
   node_assert_runtime_drained "$tx_dir"
   sibling_dir="$(sibling_dir_for_tx "$tx_dir")"
   generation_root="$(prepare_activation_generation "$tx_dir" "$generation")"
+  snapshot_live_deploy_version "$generation_root"
   runtime_list="$generation_root/runtime-quiesced.list"
 
   stop_runtime
@@ -7821,7 +7934,7 @@ activate_impl() {
   write_installed_distribution_manifest "$generation_root/installed-distributions.json"
   cp -a "$tx_dir/stage/repo/dashboard/build" "$REPO_DIR/dashboard/build"
   deploy_version="$(<"$tx_dir/deploy-version")"
-  write_private_state "$REPO_DIR/data/.deploy_version" "$deploy_version"
+  write_live_deploy_version "$deploy_version"
 
   # Environment changes are a separate two-node transaction. A release deploy
   # never derives node-local CM/model values or mutates canonical .env.
@@ -8028,6 +8141,7 @@ rollback_impl() {
     tar --numeric-owner -C / -xpf "$tx_dir/nginx.tar"
     assert_baseline_artifact_evidence_restored "$tx_dir"
     verify_activation_sibling_authority "$tx_dir" "$target_sha" "$previous_sha"
+    restore_live_deploy_version "$generation_root"
     node_ensure_maintenance "$tx_dir"
     node_assert_runtime_drained "$tx_dir"
     return 0
@@ -8075,6 +8189,7 @@ rollback_impl() {
     git -C "$REPO_DIR" reset --hard "$previous_sha"
     verify_archive "$generation_root/data-quiesced.tar"
     tar --numeric-owner -C / -xpf "$generation_root/data-quiesced.tar"
+    restore_live_deploy_version "$generation_root"
     copy_private_file_durable "$generation_root/root-quiesced.env" "$REPO_DIR/.env"
     if [ -d "$sibling_dir/live-venv" ]; then
       atomic_sibling_move "$sibling_dir/live-venv" "$REPO_DIR/venv"
