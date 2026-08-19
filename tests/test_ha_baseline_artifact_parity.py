@@ -90,6 +90,40 @@ def test_baseline_evidence_skips_bytecode_and_logs_each_root() -> None:
     assert "file=sys.stderr" in body
 
 
+def test_assert_baseline_evidence_hashes_live_trees_like_capture() -> None:
+    helper = _helper()
+    capture = helper[
+        helper.index("capture_baseline_artifact_evidence() {") : helper.index(
+            "assert_baseline_artifact_evidence_restored() {"
+        )
+    ]
+    assert 'evidence="$(live_baseline_artifact_evidence)"' in capture
+    assert_fn = helper[
+        helper.index("assert_baseline_artifact_evidence_restored() {") : helper.index(
+            "backup_live_node() {"
+        )
+    ]
+    assert 'actual="$(live_baseline_artifact_evidence)"' in assert_fn
+    assert 'live_baseline_artifact_evidence "$tx_dir"' not in assert_fn
+
+
+def test_rollback_measures_tar_restored_nginx_before_maintenance_override() -> None:
+    helper = _helper()
+    body = helper[helper.index("rollback_impl() {") : helper.index("\nnode_activate() {")]
+    rolled = body[
+        body.index('if [ "$phase" = "rolled-back" ]; then') : body.index(
+            'test -f "$MAINTENANCE_FILE"'
+        )
+    ]
+    assert rolled.index('tar --numeric-owner -C / -xpf "$tx_dir/nginx.tar"') < rolled.index(
+        "assert_baseline_artifact_evidence_restored"
+    )
+    restored_tail = body[body.index("phase=restored") :]
+    assert restored_tail.index("assert_baseline_artifact_evidence_restored") < restored_tail.index(
+        "node_ensure_maintenance"
+    )
+
+
 def test_steady_baseline_mismatch_requires_hash_bound_replace_confirm() -> None:
     helper = _helper()
     workflow = WORKFLOW.read_text(encoding="utf-8")
