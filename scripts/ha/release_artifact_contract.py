@@ -11,6 +11,7 @@ import re
 import stat
 import sys
 import sysconfig
+import tarfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -85,6 +86,7 @@ CONTROL_PLANE_FILES = (
     "scripts/ha/release_verify_server.py",
     "scripts/ha/verify_meta_release_ha.sh",
 )
+CONTROL_PLANE_EXECUTABLE_FILES = frozenset(path for path in CONTROL_PLANE_FILES if path.endswith(".sh"))
 CONTROL_PLANE_MEMBERS = frozenset({"deploy", "deploy/systemd", "scripts", "scripts/ha", *CONTROL_PLANE_FILES})
 FINAL_FILES = frozenset(
     {
@@ -110,6 +112,7 @@ __all__ = [
     "sha256_file",
     "tree_evidence",
     "verify_archive",
+    "assert_control_plane_protected_helpers",
 ]
 
 
@@ -328,6 +331,27 @@ def load_manifest(path: Path, **expected: Any) -> dict[str, Any]:
     return validate_manifest(payload, **expected)
 
 
+def assert_control_plane_protected_helpers(archive: Path) -> None:
+    """Fail closed unless protected HA helpers are regular 0755 tar members."""
+    if not CONTROL_PLANE_EXECUTABLE_FILES or not CONTROL_PLANE_EXECUTABLE_FILES <= set(CONTROL_PLANE_FILES):
+        raise ContractError("protected control-plane helper set is not closed")
+    try:
+        with tarfile.open(archive, mode="r:") as bundle:
+            members = {member.name: member for member in bundle.getmembers()}
+    except (OSError, tarfile.TarError) as exc:
+        raise ContractError("control-plane archive could not be read") from exc
+    for relative in sorted(CONTROL_PLANE_EXECUTABLE_FILES):
+        member = members.get(relative)
+        if (
+            member is None
+            or member.issym()
+            or member.islnk()
+            or not member.isreg()
+            or stat.S_IMODE(member.mode) != 0o755
+        ):
+            raise ContractError("protected control-plane helper is not a 0755 regular file")
+
+
 def verify_release_bundle(directory: Path, **expected: Any) -> dict[str, Any]:
     try:
         entries = list(os.scandir(directory))
@@ -348,6 +372,8 @@ def verify_release_bundle(directory: Path, **expected: Any) -> dict[str, Any]:
         )
         if evidence.file_count != item["file_count"] or evidence.total_size != item["total_size"]:
             raise ContractError("release payload size evidence does not match the manifest")
+        if key == "control_plane":
+            assert_control_plane_protected_helpers(directory / item["archive"])
     source_bundle = manifest["payloads"]["source_bundle"]
     source_path = directory / source_bundle["file"]
     source_sha256, source_size = file_evidence(source_path, max_bytes=MAX_SOURCE_BUNDLE_SIZE)
