@@ -130,8 +130,13 @@ async def run_customer_reply_v2_comment(
             comment_text=comment_text,
             parent_comment=str(comment_ctx.get("parent_comment") or parent_comment or ""),
             nearby_replies=list(comment_ctx.get("nearby_replies") or []),
+            nearby_reply_records=list(comment_ctx.get("nearby_reply_records") or []),
             comment_id=str(channel_meta.get("comment_id") or ""),
             post_id=str(channel_meta.get("post_id") or ""),
+            current_author_id=str(comment_ctx.get("current_author_id") or provider_sender_id or ""),
+            current_author_name=str(comment_ctx.get("current_author_name") or provider_display_name or ""),
+            parent_author_id=str(comment_ctx.get("parent_author_id") or ""),
+            parent_author_name=str(comment_ctx.get("parent_author_name") or ""),
         )
     )
     if v10:
@@ -190,6 +195,10 @@ async def run_customer_reply_v2_comment(
         comment_ctx["applicable_ai_comment_rule_titles"] = [
             {"id": row["id"], "title": row["title"], "scope": row.get("scope")} for row in engine.ai_guidance_rules
         ]
+        comment_ctx["surface"] = "comment"
+        comment_ctx["platform"] = comment_ctx.get("platform") or channel
+        channel_meta["matched_ai_comment_rule_ids"] = [str(row.get("id") or "") for row in engine.ai_guidance_rules]
+        channel_meta["surface"] = "comment"
 
     policy = enforce_restricted_and_handoff(
         tenant_id=tenant_id,

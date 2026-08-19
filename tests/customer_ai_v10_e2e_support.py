@@ -226,6 +226,7 @@ def create_product(tenant: str, **kwargs: Any) -> dict[str, Any]:
     from services.products.schemas import ProductWriteBody
     from services.products.service import ProductsService
 
+    kwargs.setdefault("description", kwargs.get("name") or "test product")
     with whatsapp_session(require=True) as session:
         return ProductsService(session).create_product(tenant_id=tenant, body=ProductWriteBody(**kwargs))
 

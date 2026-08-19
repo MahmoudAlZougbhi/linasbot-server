@@ -28,6 +28,23 @@ export class ApiError extends Error {
   }
 }
 
+export function isMetadataPreparationFailure(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return false;
+  if (err.message === 'METADATA_PREPARATION_FAILED') return true;
+  const body = err.body;
+  if (!body || typeof body !== 'object') return false;
+  const rec = body as Record<string, unknown>;
+  if (rec.error === 'METADATA_PREPARATION_FAILED') return true;
+  const detail = rec.detail;
+  if (detail && typeof detail === 'object') {
+    const nested = detail as Record<string, unknown>;
+    if (nested.code === 'METADATA_PREPARATION_FAILED' || nested.error === 'METADATA_PREPARATION_FAILED') {
+      return true;
+    }
+  }
+  return false;
+}
+
 async function authorizeHeaders(headers: Headers): Promise<void> {
   const access = await ensureAccessToken();
   if (!access) {

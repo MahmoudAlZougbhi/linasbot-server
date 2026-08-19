@@ -13,12 +13,14 @@ import {
 
 type Props = {
   name: string;
+  description: string;
   price: string;
   sizesText: string;
   colorsText: string;
   note: string;
   availability: 'in_stock' | 'out_of_stock';
   onChangeName: (v: string) => void;
+  onChangeDescription: (v: string) => void;
   onChangePrice: (v: string) => void;
   onChangeSizes: (v: string) => void;
   onChangeColors: (v: string) => void;
@@ -30,12 +32,14 @@ type Props = {
 
 export function ProductDetailsStep({
   name,
+  description,
   price,
   sizesText,
   colorsText,
   note,
   availability,
   onChangeName,
+  onChangeDescription,
   onChangePrice,
   onChangeSizes,
   onChangeColors,
@@ -51,6 +55,14 @@ export function ProductDetailsStep({
         value={name}
         onChange={onChangeName}
         placeholder={tr('productsNamePlaceholder')}
+      />
+      <Field
+        label={tr('productsDescription')}
+        value={description}
+        onChange={onChangeDescription}
+        multiline
+        placeholder={tr('productsDescriptionPlaceholder')}
+        hint={tr('productsDescriptionHint')}
       />
       <Text style={styles.label}>{tr('productsPrice')}</Text>
       <View style={styles.priceRow}>

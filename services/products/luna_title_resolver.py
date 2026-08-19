@@ -29,11 +29,15 @@ async def resolve_product_titles_with_luna(
     tenant_id: str,
     query: str,
     limit: int = MAX_MATCHES,
+    alternate_queries: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Pick best product title matches using Luna when deterministic search found nothing."""
     from services.token_metering import assert_tenant_can_use_ai, debit_ai_usage
 
     query_text = str(query or "").strip()
+    extras = [str(q).strip() for q in (alternate_queries or []) if str(q).strip()]
+    if extras:
+        query_text = json.dumps({"original_query": query_text, "alternate_queries": extras}, ensure_ascii=False)
     if not query_text:
         return []
 
@@ -92,12 +96,25 @@ async def _luna_match_chunk(
     rows: list[Any],
     limit: int,
 ) -> tuple[list[str], int, int]:
-    titles = [{"product_id": row.id, "title": row.name} for row in rows]
+    titles = [
+        {
+            "product_id": row.id,
+            "title": row.name,
+            "original_title": row.name,
+            "description": str(getattr(row, "description", "") or "")[:180],
+            "ai_search_title": str(getattr(row, "ai_search_title", "") or ""),
+            "ai_search_description": str(getattr(row, "ai_search_description", "") or ""),
+            "ai_search_keywords": list(getattr(row, "ai_search_keywords", None) or [])[:8],
+        }
+        for row in rows
+    ]
     system = (
-        "You resolve a customer product title query against a catalog title list. "
+        "You resolve a customer product query against a catalog page. "
+        "Each row has original_title, owner description, and English search hints. "
+        "Search hints are not business facts. Never invent products. "
         'Return JSON only: {"product_ids": ["id", ...]} with at most '
-        f"{min(limit, MAX_MATCHES)} best matches. Titles only — never invent products. "
-        "Exclude products not in the list."
+        f"{min(limit, MAX_MATCHES)} best matches. Exclude products not in the list. "
+        "Use original_query and any alternate_queries together; never drop the original wording."
     )
     user = json.dumps({"query": query_text, "titles": titles}, ensure_ascii=False)
 

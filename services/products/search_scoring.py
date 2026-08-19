@@ -62,6 +62,23 @@ def is_confident_match(score: float) -> bool:
     return score >= MIN_SCORE
 
 
+def product_search_blob(row: Any) -> str:
+    keywords = getattr(row, "ai_search_keywords", None) or []
+    if not isinstance(keywords, list):
+        keywords = []
+    parts = [
+        str(getattr(row, "name", "") or ""),
+        str(getattr(row, "name_normalized", "") or ""),
+        str(getattr(row, "description", "") or ""),
+        str(getattr(row, "description_normalized", "") or ""),
+        str(getattr(row, "ai_search_title", "") or ""),
+        str(getattr(row, "ai_search_description", "") or ""),
+        " ".join(str(k) for k in keywords if str(k).strip()),
+        str(getattr(row, "note", "") or ""),
+    ]
+    return " ".join(p for p in parts if p)
+
+
 def rank_products(
     query: str,
     rows: list[Any],
@@ -70,7 +87,11 @@ def rank_products(
 ) -> list[tuple[float, Any]]:
     scored: list[tuple[float, Any]] = []
     for row in rows:
-        score = score_product_name(query, str(row.name_normalized or ""), str(row.name or ""))
+        name_score = score_product_name(query, str(row.name_normalized or ""), str(row.name or ""))
+        blob = product_search_blob(row)
+        blob_norm = " ".join(blob.lower().split())
+        blob_score = score_product_name(query, blob_norm, blob) if blob_norm else 0.0
+        score = max(name_score, blob_score)
         if score >= TOKEN_MIN_SCORE:
             scored.append((score, row))
     scored.sort(key=lambda item: item[0], reverse=True)

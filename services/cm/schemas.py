@@ -95,6 +95,8 @@ class OffDayRule(CmBaseModel):
     end_date: str = ""  # YYYY-MM-DD for kind=range
     reason: str = ""
     notes: str | None = None
+    ai_search_title: str = ""
+    ai_search_description: str = ""
 
 
 class OffDaysSection(CmBaseModel):
@@ -125,6 +127,8 @@ class OpeningHoursSchedule(CmBaseModel):
     sunday: OpeningHoursDay = Field(default_factory=OpeningHoursDay)
     notes: str | None = None
     attachments: list[ArticleAttachment] = Field(default_factory=list)
+    ai_search_title: str = ""
+    ai_search_description: str = ""
 
     def summary_line(self) -> str:
         days = (
@@ -209,6 +213,8 @@ class DynamicMessageRecord(CmBaseModel):
     fr: str = ""
     notes: str | None = None
     attachments: list[ResourceAttachment] = Field(default_factory=list)
+    ai_search_title: str = ""
+    ai_search_description: str = ""
 
 
 class DynamicMessagesSection(CmBaseModel):
@@ -235,6 +241,8 @@ class FaqRecord(CmBaseModel):
     provenance: str | None = None
     revision: int = 1
     attachments: list[ArticleAttachment] = Field(default_factory=list)
+    ai_search_title: str = ""
+    ai_search_description: str = ""
 
     def is_complete_for_languages(self, required: list[str] | tuple[str, ...]) -> bool:
         required_set = {str(lang).strip().lower() for lang in required if str(lang).strip()}

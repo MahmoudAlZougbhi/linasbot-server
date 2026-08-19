@@ -46,6 +46,7 @@ def _create(tenant: str, **kwargs):
     from services.products.service import ProductsService
 
     with whatsapp_session(require=True) as session:
+        kwargs.setdefault("description", kwargs.get("name") or "test product")
         return ProductsService(session).create_product(tenant_id=tenant, body=ProductWriteBody(**kwargs))
 
 

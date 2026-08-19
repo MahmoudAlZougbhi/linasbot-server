@@ -119,8 +119,27 @@ def crv2_search_product_by_title(
     use_luna_fallback: bool = False,
     conversation_id: str | None = None,
     title_offset: int = 0,
+    alternate_queries: list[str] | None = None,
+    original_query: str | None = None,
 ) -> dict[str, Any]:
-    matches = search_product_by_title(session, tenant_id=tenant_id, title=title, limit=limit)
+    original = str(original_query if original_query is not None else title or "").strip()
+    improved = [str(q).strip() for q in (alternate_queries or []) if str(q).strip()]
+    queries = []
+    if original:
+        queries.append(original)
+    for q in improved:
+        if q.lower() != original.lower():
+            queries.append(q)
+    if title and title.strip() and title.strip() not in queries:
+        queries.insert(0, title.strip())
+    search_title = queries[0] if queries else title
+    matches = search_product_by_title(
+        session,
+        tenant_id=tenant_id,
+        title=search_title,
+        limit=limit,
+        alternate_queries=queries[1:],
+    )
     resolver = "deterministic"
     extra_luna_agent = False
     titles_fallback: dict[str, Any] | None = None
@@ -128,7 +147,13 @@ def crv2_search_product_by_title(
         from services.products.luna_title_resolver import resolve_product_titles_with_luna
 
         luna_matches = _run_async(
-            resolve_product_titles_with_luna(session, tenant_id=tenant_id, query=title, limit=limit)
+            resolve_product_titles_with_luna(
+                session,
+                tenant_id=tenant_id,
+                query=search_title,
+                limit=limit,
+                alternate_queries=queries,
+            )
         )
         extra_luna_agent = True
         if luna_matches:
@@ -148,12 +173,17 @@ def crv2_search_product_by_title(
         )
     out: dict[str, Any] = {
         "tool": "search_product_by_title",
-        "query": title,
+        "query": original or title,
+        "original_query": original or title,
+        "alternate_queries": improved,
+        "queries_used": queries or [title],
         "resolver": resolver,
         "match_count": len(slim),
         "matches": slim,
         "extra_luna_agent": extra_luna_agent,
         "full_catalog": False,
+        "product_match_found": bool(slim),
+        "ambiguous": len(slim) > 1,
     }
     if titles_fallback is not None:
         out["titles_fallback"] = titles_fallback

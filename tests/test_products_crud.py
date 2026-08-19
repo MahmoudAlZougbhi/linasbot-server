@@ -82,6 +82,7 @@ def test_product_crud_and_max_five_images(products_env: Path) -> None:
         headers=headers,
         json={
             "name": "Laser Hair Removal Package",
+            "description": "Laser hair removal package for the body.",
             "price": "299 AED",
             "sizes": ["S", "M"],
             "colors": ["Nude"],
@@ -159,7 +160,14 @@ def test_tenant_isolation(products_env: Path) -> None:
     created = client.post(
         "/api/mobile/products",
         headers=headers_a,
-        json={"name": "Tenant A Serum", "price": "50", "sizes": [], "colors": [], "links": []},
+        json={
+            "name": "Tenant A Serum",
+            "description": "Serum for tenant A",
+            "price": "50",
+            "sizes": [],
+            "colors": [],
+            "links": [],
+        },
     )
     assert created.status_code == 200
     product_id = created.json()["product"]["id"]
@@ -172,6 +180,36 @@ def test_tenant_isolation(products_env: Path) -> None:
 
     still_there = client.get(f"/api/mobile/products/{product_id}", headers=headers_a)
     assert still_there.status_code == 200
+
+
+def test_create_product_requires_description(products_env: Path) -> None:
+    from modules.core import app
+
+    client = TestClient(app)
+    headers = _auth_headers("tenant-desc")
+    missing = client.post(
+        "/api/mobile/products",
+        headers=headers,
+        json={"name": "Nivea", "sizes": [], "colors": [], "links": []},
+    )
+    assert missing.status_code == 400
+    assert missing.json()["detail"]["code"] == "DESCRIPTION_REQUIRED"
+
+    ok = client.post(
+        "/api/mobile/products",
+        headers=headers,
+        json={
+            "name": "Nivea Soft",
+            "description": "Face moisturizing cream.",
+            "sizes": [],
+            "colors": [],
+            "links": [],
+        },
+    )
+    assert ok.status_code == 200, ok.text
+    product = ok.json()["product"]
+    assert product["description"] == "Face moisturizing cream."
+    assert product["name"] == "Nivea Soft"
 
 
 def test_csv_import_stub(products_env: Path) -> None:
@@ -196,11 +234,13 @@ def test_search_product_by_title_fuzzy(products_env: Path) -> None:
         svc = ProductsService(session)
         svc.create_product(
             tenant_id="tenant-search",
-            body=ProductWriteBody(name="Hydrating Face Cream", sizes=[], colors=[], links=[]),
+            body=ProductWriteBody(
+                description="test product", name="Hydrating Face Cream", sizes=[], colors=[], links=[]
+            ),
         )
         svc.create_product(
             tenant_id="tenant-search",
-            body=ProductWriteBody(name="SPF 50 Sunscreen", sizes=[], colors=[], links=[]),
+            body=ProductWriteBody(description="test product", name="SPF 50 Sunscreen", sizes=[], colors=[], links=[]),
         )
         matches = search_product_by_title(
             session,
@@ -218,6 +258,7 @@ def test_service_rejects_unknown_media(products_env: Path) -> None:
             svc.create_product(
                 tenant_id="tenant-media",
                 body=ProductWriteBody(
+                    description="test product",
                     name="Bad Image Product",
                     images=[ProductImageInput(media_id="prdim_missing", sort_order=0)],
                     sizes=[],

@@ -56,7 +56,7 @@ def import_csv_rows(svc: Any, *, tenant_id: str, csv_text: str) -> dict[str, Any
             continue
         try:
             body = _body_from_preview(row)
-            svc.create_product(tenant_id=tenant_id, body=body)
+            svc.create_product(tenant_id=tenant_id, body=body, require_description=False)
             created += 1
         except Exception as exc:
             code = getattr(exc, "code", None) or str(exc)
@@ -94,7 +94,7 @@ def import_xlsx_rows(svc: Any, *, tenant_id: str, content: bytes) -> dict[str, A
             continue
         try:
             body = _body_from_preview(row)
-            svc.create_product(tenant_id=tenant_id, body=body)
+            svc.create_product(tenant_id=tenant_id, body=body, require_description=False)
             created += 1
         except Exception as exc:
             code = getattr(exc, "code", None) or str(exc)
@@ -105,6 +105,7 @@ def import_xlsx_rows(svc: Any, *, tenant_id: str, content: bytes) -> dict[str, A
 def _body_from_preview(row: dict[str, Any]) -> ProductWriteBody:
     return ProductWriteBody(
         name=str(row.get("name") or ""),
+        description=(str(row.get("description") or "").strip() or None),
         price=row.get("price"),
         sizes=list(row.get("sizes") or []),
         colors=list(row.get("colors") or []),

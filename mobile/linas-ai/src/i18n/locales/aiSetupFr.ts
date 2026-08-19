@@ -206,6 +206,8 @@ export const aiSetupFr = {
   aiSetupSaved: 'Enregistré',
   aiSetupReload: 'Recharger',
   aiSetupDraftSaved: 'Brouillon enregistré.',
+  aiSetupMetadataSaveError:
+    "Impossible de préparer ce contenu pour l'intelligence artificielle. Les modifications n'ont pas été enregistrées. Réessayez.",
   aiSetupLanguagesRemovedBody:
     'Les langues sont automatiques — l’IA répond dans la langue du client. Aucune configuration par compte n’est nécessaire.',
   servicesTitle: 'Services',

@@ -64,6 +64,8 @@ class ToolContext:
     audit: list[dict[str, Any]] = field(default_factory=list)
     customer_id: str = ""
     inbound_image_media_id: str = ""
+    product_search_attempted: bool = False
+    product_match_found: bool | None = None
 
 
 def _load_sections(ctx: ToolContext) -> dict[str, dict[str, Any]]:
@@ -74,20 +76,24 @@ def _load_sections(ctx: ToolContext) -> dict[str, dict[str, Any]]:
 
 
 def _item_lookup(sections: dict[str, Any]) -> dict[str, tuple[str, dict[str, Any]]]:
+    """Index every published selectable row so Luna can read an id beyond the first 80 titles."""
+    from services.customer_reply_v2.comment_rule_select import is_luna_selectable_comment_rule
+
     by_id: dict[str, tuple[str, dict[str, Any]]] = {}
     for sid, payload in sections.items():
         if sid in FIXED_ANSWER_SECTIONS:
             continue
-        for entry in iter_section_items(sid, payload or {}):
-            raw_match = None
-            bare = entry.item_id.split(":", 1)[-1]
-            for raw in raw_rows_for_section(payload or {}):
-                if str(raw.get("id") or raw.get("qa_group_id") or "") == bare:
-                    raw_match = raw
-                    break
-            if raw_match is not None:
-                by_id[entry.item_id] = (sid, raw_match)
-                by_id[bare] = (sid, raw_match)
+        for raw in raw_rows_for_section(payload or {}):
+            if sid == "comments" and not is_luna_selectable_comment_rule(raw):
+                continue
+            status = str(raw.get("status") or "").strip().lower()
+            if status == "draft":
+                continue
+            bare = str(raw.get("id") or raw.get("qa_group_id") or "").strip()
+            if not bare:
+                continue
+            by_id[f"{sid}:{bare}"] = (sid, raw)
+            by_id[bare] = (sid, raw)
     return by_id
 
 
@@ -108,6 +114,13 @@ def _read_items(ctx: ToolContext, args: dict[str, Any], listed: dict[str, Any] |
             continue
         sid, raw = hit
         content = record_content(sid, raw)
+        if sid in {"branches", "opening_hours"}:
+            from services.customer_reply_v2.hours_exceptions import (
+                closed_days_snapshot,
+                merge_closed_days_into_content,
+            )
+
+            content = merge_closed_days_into_content(content, closed_days_snapshot(sections))
         if sid == "requests_appointments":
             content = compiled_graph_content(
                 tenant_id=ctx.tenant_id,
@@ -200,6 +213,9 @@ def dispatch_retrieval_tool(name: str, args: dict[str, Any], ctx: ToolContext) -
                         "item_id": entry.item_id,
                         "section_id": entry.section_id,
                         "title": entry.title,
+                        "original_title": entry.original_title or entry.title,
+                        "ai_search_title": entry.ai_search_title,
+                        "ai_search_description": entry.ai_search_description,
                         "short_description": entry.short_description,
                         "language": entry.language,
                         "status": entry.status,

@@ -162,14 +162,29 @@ def request_rule_has_content(rule: dict[str, Any]) -> bool:
     return bool(_text(rule.get("name")) or _text(rule.get("notes")))
 
 
-def format_request_rules_for_ai(payload: dict[str, Any]) -> str:
-    """Compact guidance block for Answer Tera when capture is active."""
+def format_request_rules_for_ai(
+    payload: dict[str, Any],
+    *,
+    selected_ids: list[str] | None = None,
+) -> str:
+    """Compact guidance block for Answer Tera when capture is active.
+
+    When Luna selected specific request definitions, only those rules are included.
+    Never dump the tenant's full rule list into Tera.
+    """
     rules_raw = payload.get("rules")
     if not isinstance(rules_raw, list) or not rules_raw:
         return ""
+    wanted: set[str] | None = None
+    if selected_ids is not None:
+        wanted = {str(x).strip() for x in selected_ids if str(x).strip()}
+        wanted = {item.split(":", 1)[-1] for item in wanted}
     lines: list[str] = []
     for raw in rules_raw:
         if not isinstance(raw, dict) or not raw.get("enabled", True):
+            continue
+        rule_id = _text(raw.get("id"))
+        if wanted is not None and rule_id not in wanted:
             continue
         title = _text(raw.get("name")) or _TYPE_DEFAULT_TITLES.get(_text(raw.get("type")).upper(), "Request")
         note = _text(raw.get("notes"))
@@ -178,6 +193,11 @@ def format_request_rules_for_ai(payload: dict[str, Any]) -> str:
         if note:
             line += f": {note}"
         lines.append(line)
+    if wanted is not None and not lines:
+        return (
+            "Request capture is active. Use only request definitions already in evidence. "
+            "Do not assume other unpublished-to-this-turn request rules apply."
+        )
     if not lines:
         return ""
     return "Published customer request rules (use for capture guidance only):\n" + "\n".join(lines)

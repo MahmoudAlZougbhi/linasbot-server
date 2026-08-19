@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from db.models.products import Product, ProductImage, ProductLink
@@ -61,7 +61,13 @@ class ProductsRepository:
             sizes=fields.get("sizes"),
             colors=fields.get("colors"),
             note=fields.get("note"),
+            description=fields.get("description"),
+            description_normalized=fields.get("description_normalized"),
             availability=fields.get("availability") or "in_stock",
+            ai_search_title=fields.get("ai_search_title"),
+            ai_search_description=fields.get("ai_search_description"),
+            ai_search_keywords=fields.get("ai_search_keywords"),
+            ai_search_title_normalized=fields.get("ai_search_title_normalized"),
             created_at=_now(),
             updated_at=_now(),
         )
@@ -81,8 +87,21 @@ class ProductsRepository:
             row.colors = fields["colors"]
         if "note" in fields:
             row.note = fields["note"]
+        if "description" in fields:
+            row.description = fields["description"]
+            row.description_normalized = fields.get("description_normalized") or (
+                normalize_product_name(fields["description"] or "") if fields["description"] else None
+            )
         if "availability" in fields:
             row.availability = fields["availability"]
+        if "ai_search_title" in fields:
+            row.ai_search_title = fields["ai_search_title"]
+        if "ai_search_description" in fields:
+            row.ai_search_description = fields["ai_search_description"]
+        if "ai_search_keywords" in fields:
+            row.ai_search_keywords = fields["ai_search_keywords"]
+        if "ai_search_title_normalized" in fields:
+            row.ai_search_title_normalized = fields["ai_search_title_normalized"]
         row.updated_at = _now()
         self.session.flush()
         return row
@@ -159,7 +178,13 @@ class ProductsRepository:
         normalized = normalize_product_name(query)
         if not normalized:
             return []
-        filters = [Product.tenant_id == tenant_id, Product.name_normalized.contains(normalized)]
+        filters = [Product.tenant_id == tenant_id]
+        like_clauses = [Product.name_normalized.contains(normalized)]
+        if hasattr(Product, "description_normalized"):
+            like_clauses.append(Product.description_normalized.contains(normalized))
+        if hasattr(Product, "ai_search_title_normalized"):
+            like_clauses.append(Product.ai_search_title_normalized.contains(normalized))
+        filters.append(or_(*like_clauses))
         if customer_facing:
             filters.append(Product.availability.in_(list(CUSTOMER_SEARCH_AVAILABILITY)))
         stmt = (

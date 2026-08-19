@@ -32,6 +32,9 @@ def dispatch_request_graph_tool(name: str, args: dict[str, Any], ctx: Any) -> di
                     {
                         "definition_id": row.get("definition_id"),
                         "title": row.get("title"),
+                        "original_title": row.get("title"),
+                        "ai_search_title": "",
+                        "ai_search_description": "",
                         "destination": row.get("destination"),
                         "revision": row.get("revision"),
                         "source_item_id": row.get("source_item_id"),
@@ -39,6 +42,28 @@ def dispatch_request_graph_tool(name: str, args: dict[str, Any], ctx: Any) -> di
                     }
                     for row in graphs
                 ]
+                try:
+                    from services.cm.version_store import load_published_content
+                    from services.search_metadata.luna_titles import luna_title_fields
+
+                    _pointer, sections = load_published_content(ctx.tenant_id)
+                    rules = (sections.get("requests_appointments") or {}).get("rules") or []
+                    by_id = {
+                        str(raw.get("id") or ""): raw
+                        for raw in rules
+                        if isinstance(raw, dict) and str(raw.get("id") or "").strip()
+                    }
+                    for title_row in titles:
+                        src = by_id.get(str(title_row.get("source_item_id") or "")) or by_id.get(
+                            str(title_row.get("definition_id") or "")
+                        )
+                        if isinstance(src, dict):
+                            fields = luna_title_fields(src)
+                            title_row["original_title"] = fields["original_title"]
+                            title_row["ai_search_title"] = fields["ai_search_title"]
+                            title_row["ai_search_description"] = fields["ai_search_description"]
+                except Exception:
+                    pass
                 ctx.audit.append({"tool": name, "ok": True, "class": "request_definitions", "count": len(titles)})
                 return {"ok": True, "data": {"definitions": titles}}
             definition_id = str(args.get("definition_id") or "").strip()

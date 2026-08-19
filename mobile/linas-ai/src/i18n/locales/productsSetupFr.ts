@@ -14,6 +14,8 @@ export const productsSetupFr = {
   productsLoadError: 'Impossible de charger les produits.',
   productsDeleteError: 'Impossible de supprimer le produit.',
   productsSaveError: 'Impossible d’enregistrer le produit.',
+  productsMetadataSaveError:
+    "Impossible de préparer ce produit pour l'intelligence artificielle. Les modifications n'ont pas été enregistrées. Réessayez.",
   productsUploadError: 'Échec du téléversement.',
   productsDelete: 'Supprimer',
   productsDeleteProduct: 'Supprimer le produit',
@@ -26,6 +28,11 @@ export const productsSetupFr = {
   productsImagesLabel: 'images',
   productsName: 'Nom du produit',
   productsNamePlaceholder: 'ex. Hydrating Serum',
+  productsDescription: 'Description',
+  productsDescriptionPlaceholder: 'ex. Crème hydratante pour le visage',
+  productsDescriptionHint:
+    'Décrivez ce qu’est ce produit ou à quoi il sert. Cela aide l’IA à trouver le bon produit lorsque les clients demandent.',
+  productsDescriptionRequired: 'La description du produit est obligatoire.',
   productsPrice: 'Prix',
   productsSizes: 'Tailles',
   productsSizesPlaceholder: 'ex. Small, Medium, Large ou 200 ml, 300 ml',

@@ -14,6 +14,8 @@ export const productsSetupAr = {
   productsLoadError: 'تعذّر تحميل المنتجات.',
   productsDeleteError: 'تعذّر حذف المنتج.',
   productsSaveError: 'تعذّر حفظ المنتج.',
+  productsMetadataSaveError:
+    'تعذر تجهيز هذا المنتج للذكاء الاصطناعي. لم يتم حفظ التغييرات. حاول مرة أخرى.',
   productsUploadError: 'فشل الرفع.',
   productsDelete: 'حذف',
   productsDeleteProduct: 'حذف المنتج',
@@ -26,6 +28,11 @@ export const productsSetupAr = {
   productsImagesLabel: 'صور',
   productsName: 'اسم المنتج',
   productsNamePlaceholder: 'مثلاً Hydrating Serum',
+  productsDescription: 'الوصف',
+  productsDescriptionPlaceholder: 'مثلاً كريم مرطب للوجه',
+  productsDescriptionHint:
+    'صف ما هو هذا المنتج أو لماذا/لأي شيء يُستخدم. هذا يساعد الذكاء الاصطناعي في إيجاد المنتج الصحيح عندما يسأل الزبائن عنه.',
+  productsDescriptionRequired: 'وصف المنتج مطلوب.',
   productsPrice: 'السعر',
   productsSizes: 'المقاسات',
   productsSizesPlaceholder: 'مثلاً Small, Medium, Large أو 200 ml, 300 ml',

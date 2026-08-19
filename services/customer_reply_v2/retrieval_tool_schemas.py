@@ -98,11 +98,13 @@ RETRIEVAL_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "search_product_by_title",
-            "description": "Search tenant products by title (exact/normalized first). On miss, returns a titles-only page in this same retrieval loop. Never dumps price, images, or the full catalog.",
+            "description": "Search tenant products using the original customer wording plus optional improved queries. Exact/normalized name, owner description, and English search hints are all compared. Never drop original_query. On miss, returns a titles page in this same retrieval loop. Never dumps the full catalog.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "title": {"type": "string"},
+                    "original_query": {"type": "string"},
+                    "alternate_queries": {"type": "array", "items": {"type": "string"}},
                     "limit": {"type": "integer"},
                     "offset": {"type": "integer"},
                 },

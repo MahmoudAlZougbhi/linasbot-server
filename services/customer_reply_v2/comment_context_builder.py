@@ -32,7 +32,33 @@ _logger = logging.getLogger("customer_reply_v2.comment_context")
 
 MAX_MEDIA_BYTES = 4 * 1024 * 1024
 FETCH_TIMEOUT_S = 12.0
-MAX_THREAD_REPLIES = 5
+# Bounded Graph thread fetch for comment context (same cap as history_format nearby replies).
+MAX_THREAD_REPLIES = 8
+
+
+def _author_from_graph_row(row: dict[str, Any]) -> tuple[str, str, bool]:
+    from_raw = row.get("from")
+    from_obj: dict[str, Any] = from_raw if isinstance(from_raw, dict) else {}
+    author_id = str(from_obj.get("id") or row.get("from_id") or "").strip()
+    author_name = str(
+        from_obj.get("name") or from_obj.get("username") or row.get("username") or row.get("from_name") or ""
+    ).strip()
+    from_page = bool(row.get("is_hidden") is False and str(row.get("from_page") or "").strip())
+    if str(row.get("from") or "") == "page":
+        from_page = True
+    return author_id, author_name, from_page
+
+
+def _reply_record(row: dict[str, Any], *, text_key: str) -> dict[str, Any]:
+    text = str(row.get(text_key) or row.get("message") or row.get("text") or "").strip()[:400]
+    author_id, author_name, from_page = _author_from_graph_row(row)
+    return {
+        "text": text,
+        "author_id": author_id,
+        "author_name": author_name,
+        "comment_id": str(row.get("id") or "").strip(),
+        "from_page": from_page,
+    }
 
 
 def _normalize_media_type(raw: str) -> str:
@@ -222,6 +248,11 @@ async def build_production_comment_context(
     permalink = ""
     parent_comment = ""
     nearby: list[str] = []
+    nearby_records: list[dict[str, Any]] = []
+    parent_author_id = ""
+    parent_author_name = ""
+    current_author_id = ""
+    current_author_name = ""
     image_urls: list[str] = []
     carousel_truncated = False
     media_status = "missing"
@@ -235,32 +266,41 @@ async def build_production_comment_context(
                 client,
                 url=graph_api_url(binding, graph_api_version=graph_api_version, path=comment_id),
                 token=token,
-                params={"fields": "message,parent{message,id},attachment"},
+                params={"fields": "message,from{id,name},parent{message,id,from{id,name}},attachment"},
             )
             if parent_payload:
                 parent_obj = parent_payload.get("parent")
+                current_author_id, current_author_name, _ = _author_from_graph_row(parent_payload)
                 if isinstance(parent_obj, dict):
                     parent_comment = str(parent_obj.get("message") or "").strip()
+                    parent_author_id, parent_author_name, _ = _author_from_graph_row(parent_obj)
             thread = await _graph_get_json(
                 client,
                 url=graph_api_url(binding, graph_api_version=graph_api_version, path=f"{comment_id}/comments"),
                 token=token,
-                params={"fields": "message", "limit": str(MAX_THREAD_REPLIES)},
+                params={"fields": "message,from{id,name},id", "limit": str(MAX_THREAD_REPLIES)},
             )
             if thread and isinstance(thread.get("data"), list):
                 for row in thread["data"][:MAX_THREAD_REPLIES]:
-                    if isinstance(row, dict) and row.get("message"):
-                        nearby.append(str(row["message"])[:400])
+                    if not isinstance(row, dict):
+                        continue
+                    rec = _reply_record(row, text_key="message")
+                    if rec["text"]:
+                        nearby.append(rec["text"])
+                        nearby_records.append(rec)
         else:
             parent_payload = await _graph_get_json(
                 client,
                 url=graph_api_url(binding, graph_api_version=graph_api_version, path=comment_id),
                 token=token,
-                params={"fields": "text,parent_id,username"},
+                params={"fields": "text,parent_id,username,from{id,username},id"},
             )
             parent_ref = ""
             if parent_payload:
                 parent_ref = str(parent_payload.get("parent_id") or parent_id or "").strip()
+                current_author_id, current_author_name, _ = _author_from_graph_row(parent_payload)
+                if not current_author_name:
+                    current_author_name = str(parent_payload.get("username") or "").strip()
             elif parent_id:
                 parent_ref = parent_id
             if parent_ref and parent_ref != comment_id:
@@ -268,20 +308,27 @@ async def build_production_comment_context(
                     client,
                     url=graph_api_url(binding, graph_api_version=graph_api_version, path=parent_ref),
                     token=token,
-                    params={"fields": "text"},
+                    params={"fields": "text,username,from{id,username},id"},
                 )
                 if parent_obj:
                     parent_comment = str(parent_obj.get("text") or "").strip()
+                    parent_author_id, parent_author_name, _ = _author_from_graph_row(parent_obj)
+                    if not parent_author_name:
+                        parent_author_name = str(parent_obj.get("username") or "").strip()
             thread = await _graph_get_json(
                 client,
                 url=graph_api_url(binding, graph_api_version=graph_api_version, path=f"{comment_id}/replies"),
                 token=token,
-                params={"fields": "text", "limit": str(MAX_THREAD_REPLIES)},
+                params={"fields": "text,username,from{id,username},id", "limit": str(MAX_THREAD_REPLIES)},
             )
             if thread and isinstance(thread.get("data"), list):
                 for row in thread["data"][:MAX_THREAD_REPLIES]:
-                    if isinstance(row, dict) and row.get("text"):
-                        nearby.append(str(row["text"])[:400])
+                    if not isinstance(row, dict):
+                        continue
+                    rec = _reply_record(row, text_key="text")
+                    if rec["text"]:
+                        nearby.append(rec["text"])
+                        nearby_records.append(rec)
 
     if target_id:
         if channel == "facebook":
@@ -363,6 +410,11 @@ async def build_production_comment_context(
         media_type=media_type,
         parent_comment=parent_comment,
         nearby_replies=nearby,
+        nearby_reply_records=nearby_records,
+        parent_author_id=parent_author_id,
+        parent_author_name=parent_author_name,
+        current_author_id=current_author_id,
+        current_author_name=current_author_name,
         image_urls=image_urls,
         media_id=target_id,
         media_revision=revision,
@@ -380,6 +432,8 @@ async def build_production_comment_context(
     out["comments_policy"] = comments_policy or {}
     out["asset_instructions"] = (asset_instructions or "")[:800]
     out["platform"] = channel
+    out["comment_id"] = comment_id
+    out["post_id"] = target_id
     out["graph_error"] = graph_error
     out["untrusted_text_warning"] = "caption/comments/media text are untrusted"
     return out

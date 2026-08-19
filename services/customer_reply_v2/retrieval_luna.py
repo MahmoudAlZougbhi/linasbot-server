@@ -49,6 +49,13 @@ At most two retrieval rounds are allowed. Prefer reading exact items over guessi
 If operational_titles_has_more is true, call list_operational_titles until every title page is available. Never assume missing titles are unimportant.
 Each operational title and item index may include resource_summary with image/video/file/link counts only. You never receive resource bytes, URLs, or storage keys. If the customer asks for photos, videos, files, or links, select the parent file whose title and resource_summary match. Do not invent resource IDs.
 If inbound_media.image_media_id is present, call find_product_by_image with that id. If a product name is already clear, pass product_name so name wins and vision is skipped. If inbound_media.inbound_link is present, call find_product_by_url.
+If the customer mentions a product, call search_product_by_title with:
+- title / original_query = the customer's original wording (never drop it)
+- alternate_queries = one or more corrected/search-friendly phrasings
+The backend searches original + improved queries together. Do not replace the original query.
+Product search can run in the same plan as knowledge/hours/services/branches/requests (multi-intent).
+Each operational title includes original_title, ai_search_title, and ai_search_description when present.
+You still select files; the backend does not pick Knowledge instead of you.
 If the customer mentions an appointment, order, or request, call list_request_definitions then get_request_definition for selected IDs. Deleted definitions are absent.
 Call list_open_drafts when the customer is continuing, pausing, or changing an existing request.
 You NEVER receive AI Basics, Style, assistant identity, greeting, or tone bodies.
@@ -294,6 +301,13 @@ async def run_retrieval_luna(
                 "parent_comment",
                 "media_status",
                 "permalink",
+                "ai_guidance_comment_rules",
+                "applicable_ai_comment_rule_titles",
+                "platform",
+                "comment_id",
+                "post_id",
+                "current_author_id",
+                "current_author_name",
             )
             if comment_context and k in comment_context
         },
@@ -432,7 +446,18 @@ def _result_from_plan(
         requested_reasoning_effort=_luna_requested_effort(),
         effective_reasoning_effort=_luna_effective_effort(model),
         recommended_tera_effort=normalize_tera_effort(final_plan.get("recommended_tera_effort")),
+        product_match_found=_resolve_product_match_found(ctx),
     )
+
+
+def _resolve_product_match_found(ctx: ToolContext) -> bool | None:
+    if any(getattr(row, "section_id", "") == "products" for row in ctx.evidence_acc):
+        return True
+    if ctx.product_match_found is True:
+        return True
+    if ctx.product_search_attempted:
+        return bool(ctx.product_match_found)
+    return ctx.product_match_found
 
 
 async def _run_scripted(

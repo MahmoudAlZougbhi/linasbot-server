@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { ApiError } from '../../api/client';
+import { ApiError, isMetadataPreparationFailure } from '../../api/client';
+import { useI18n } from '../../i18n/LanguageContext';
 import {
   applyProposedItem,
   mergeProposalPatch,
@@ -11,6 +12,7 @@ import { isDraftDirty, stableSerialize } from './cmDraftDirty';
 import { prepareCmDraftPayload } from './prepareCmDraftPayload';
 
 export function useCmDraft(section: string, proposalReview?: CmProposalReview | null) {
+  const { tr } = useI18n();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -134,13 +136,17 @@ export function useCmDraft(section: string, proposalReview?: CmProposalReview | 
         setConflict('Someone else saved this section. Reload and retry.');
         return false;
       }
+      if (isMetadataPreparationFailure(err)) {
+        setError(tr('aiSetupMetadataSaveError'));
+        return false;
+      }
       setError(err instanceof Error ? err.message : 'Save failed.');
       return false;
     } finally {
       saveLock.current = false;
       setSaving(false);
     }
-  }, [etag, payload, section]);
+  }, [etag, payload, section, tr]);
 
   return {
     loading,

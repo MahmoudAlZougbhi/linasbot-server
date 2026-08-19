@@ -46,6 +46,7 @@ def _create(tenant: str, **kwargs):
     from services.products.service import ProductsService
 
     with whatsapp_session(require=True) as session:
+        kwargs.setdefault("description", kwargs.get("name") or "test product")
         return ProductsService(session).create_product(tenant_id=tenant, body=ProductWriteBody(**kwargs))
 
 
@@ -82,7 +83,9 @@ def test_titles_fallback_same_loop_no_extra_agent(products_env: Path) -> None:
     assert miss["data"]["extra_luna_agent"] is False
     titles = miss["data"]["titles_fallback"]["titles"]
     assert titles
-    assert set(titles[0].keys()) <= {"id", "title", "status"}
+    assert {"id", "title", "status"} <= set(titles[0].keys())
+    assert "price" not in titles[0]
+    assert "images" not in titles[0]
     page = dispatch_retrieval_tool("list_product_titles", {"offset": 0, "limit": 80}, ctx)
     assert page["ok"] is True
     assert page["data"]["full_catalog"] is False

@@ -204,6 +204,8 @@ export const aiSetupAr = {
   aiSetupSaved: 'تم الحفظ',
   aiSetupReload: 'إعادة تحميل',
   aiSetupDraftSaved: 'تم حفظ المسودة.',
+  aiSetupMetadataSaveError:
+    'تعذر تجهيز هذا المحتوى للذكاء الاصطناعي. لم يتم حفظ التغييرات. حاول مرة أخرى.',
   aiSetupLanguagesRemovedBody:
     'اللغات تلقائية — يرد الذكاء الاصطناعي بنفس لغة الزبون. لا حاجة لإعداد لغات لكل حساب.',
   servicesTitle: 'الخدمات',

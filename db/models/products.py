@@ -26,6 +26,8 @@ class Product(Base):
         Index("ix_products_tenant_updated", "tenant_id", "updated_at"),
         Index("ix_products_tenant_name_normalized", "tenant_id", "name_normalized"),
         Index("ix_products_tenant_availability", "tenant_id", "availability"),
+        Index("ix_products_tenant_desc_normalized", "tenant_id", "description_normalized"),
+        Index("ix_products_tenant_ai_title_normalized", "tenant_id", "ai_search_title_normalized"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
@@ -36,6 +38,12 @@ class Product(Base):
     sizes: Mapped[list[Any] | None] = mapped_column(JsonType, nullable=True)
     colors: Mapped[list[Any] | None] = mapped_column(JsonType, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description_normalized: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    ai_search_title: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    ai_search_description: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    ai_search_title_normalized: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    ai_search_keywords: Mapped[list[Any] | None] = mapped_column(JsonType, nullable=True)
     availability: Mapped[str] = mapped_column(String(32), nullable=False, server_default="in_stock")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

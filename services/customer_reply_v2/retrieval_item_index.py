@@ -7,10 +7,18 @@ from typing import Any
 
 from services.cm.resource_attachment import resource_summary
 from services.customer_reply_v2.models import ItemIndexEntry
+from services.search_metadata.limits import LUNA_FULL_TITLE_SECTIONS
+from services.search_metadata.luna_titles import luna_title_fields
 
 MAX_ITEMS_PER_SECTION = 80
 MAX_ITEMS_PER_READ = 20
 MAX_EVIDENCE_CHARS = 12000
+
+
+def _rows_for_index(section_id: str, rows: list[Any]) -> list[Any]:
+    if section_id in LUNA_FULL_TITLE_SECTIONS:
+        return rows
+    return rows[:MAX_ITEMS_PER_SECTION]
 
 
 def label_of(labels: Any) -> str:
@@ -25,14 +33,17 @@ def _summary_of(raw: dict[str, Any]) -> dict[str, Any]:
 
 def _items_like_entries(section_id: str, rows: list[Any]) -> list[ItemIndexEntry]:
     entries: list[ItemIndexEntry] = []
-    for raw in rows[:MAX_ITEMS_PER_SECTION]:
+    for raw in _rows_for_index(section_id, rows):
         if not isinstance(raw, dict):
             continue
         item_id = str(raw.get("id") or raw.get("qa_group_id") or "").strip()
         if not item_id:
             continue
-        title = str(raw.get("title") or label_of(raw.get("labels")) or item_id)
-        desc = str(raw.get("notes") or raw.get("body") or raw.get("short_introduction") or "")[:240]
+        fields = luna_title_fields(raw)
+        desc = (
+            fields["ai_search_description"]
+            or str(raw.get("notes") or raw.get("body") or raw.get("short_introduction") or "")[:240]
+        )
         status = str(raw.get("status") or ("active" if raw.get("available", True) else "inactive"))
         if status == "draft":
             continue
@@ -40,8 +51,11 @@ def _items_like_entries(section_id: str, rows: list[Any]) -> list[ItemIndexEntry
             ItemIndexEntry(
                 item_id=f"{section_id}:{item_id}",
                 section_id=section_id,
-                title=title,
+                title=fields["original_title"] or item_id,
                 short_description=desc,
+                original_title=fields["original_title"],
+                ai_search_title=fields["ai_search_title"],
+                ai_search_description=fields["ai_search_description"],
                 language=str(raw.get("language") or ""),
                 status=status,
                 relations={
@@ -71,7 +85,7 @@ def iter_section_items(section_id: str, payload: dict[str, Any]) -> list[ItemInd
         return entries
     topics = payload.get("topics")
     if isinstance(topics, list):
-        for raw in topics[:MAX_ITEMS_PER_SECTION]:
+        for raw in _rows_for_index(section_id, topics):
             if not isinstance(raw, dict):
                 continue
             item_id = str(raw.get("id") or "").strip()
@@ -92,7 +106,7 @@ def iter_section_items(section_id: str, payload: dict[str, Any]) -> list[ItemInd
     if isinstance(rules, list):
         from services.customer_reply_v2.comment_rule_select import is_luna_selectable_comment_rule
 
-        for raw in rules[:MAX_ITEMS_PER_SECTION]:
+        for raw in _rows_for_index(section_id, rules):
             if not isinstance(raw, dict):
                 continue
             if section_id == "comments" and not is_luna_selectable_comment_rule(raw):
@@ -101,13 +115,18 @@ def iter_section_items(section_id: str, payload: dict[str, Any]) -> list[ItemInd
             if not item_id:
                 continue
             title = str(raw.get("name") or raw.get("title") or item_id)
+            fields = luna_title_fields(raw)
             status = "active" if raw.get("enabled", True) else "inactive"
             entries.append(
                 ItemIndexEntry(
                     item_id=f"{section_id}:{item_id}",
                     section_id=section_id,
-                    title=title,
-                    short_description=str(raw.get("notes") or raw.get("action") or "")[:240],
+                    title=fields["original_title"] or title,
+                    short_description=fields["ai_search_description"]
+                    or str(raw.get("notes") or raw.get("action") or "")[:240],
+                    original_title=fields["original_title"],
+                    ai_search_title=fields["ai_search_title"],
+                    ai_search_description=fields["ai_search_description"],
                     status=status,
                     relations={"post_id": raw.get("post_id"), "action": raw.get("action")},
                     resource_summary=_summary_of(raw),
@@ -125,6 +144,20 @@ def record_content(section_id: str, raw: dict[str, Any]) -> str:
             if isinstance(v, dict):
                 bits.append(f"Q({v.get('language')}): {v.get('question')} | A: {v.get('answer')}")
         return "\n".join(bits)
+    if section_id == "off_days":
+        return json.dumps(
+            {
+                "id": raw.get("id"),
+                "kind": raw.get("kind"),
+                "weekday": raw.get("weekday"),
+                "date": raw.get("date"),
+                "start_date": raw.get("start_date"),
+                "end_date": raw.get("end_date"),
+                "reason": raw.get("reason") or "",
+                "notes": raw.get("notes") or "",
+            },
+            ensure_ascii=False,
+        )
     if section_id == "prices":
         return json.dumps(
             {
@@ -142,7 +175,32 @@ def record_content(section_id: str, raw: dict[str, Any]) -> str:
                 "id": raw.get("id"),
                 "labels": raw.get("labels"),
                 "address": raw.get("address"),
+                "street": raw.get("street"),
+                "building": raw.get("building"),
+                "floor": raw.get("floor"),
+                "country": raw.get("country"),
+                "maps_url": raw.get("maps_url"),
                 "hours": raw.get("hours"),
+                "weekly_schedule": raw.get("weekly_schedule"),
+                "notes": raw.get("notes") or "",
+                "available": raw.get("available", True),
+                "resource_summary": resource_summary(list(raw.get("attachments") or [])),
+            },
+            ensure_ascii=False,
+        )
+    if section_id == "opening_hours":
+        return json.dumps(
+            {
+                "id": raw.get("id"),
+                "title": raw.get("title"),
+                "monday": raw.get("monday"),
+                "tuesday": raw.get("tuesday"),
+                "wednesday": raw.get("wednesday"),
+                "thursday": raw.get("thursday"),
+                "friday": raw.get("friday"),
+                "saturday": raw.get("saturday"),
+                "sunday": raw.get("sunday"),
+                "notes": raw.get("notes") or "",
             },
             ensure_ascii=False,
         )
@@ -156,6 +214,9 @@ def record_content(section_id: str, raw: dict[str, Any]) -> str:
                 "keywords": raw.get("keywords") or [],
                 "post_id": raw.get("post_id"),
                 "post_ids": raw.get("post_ids") or [],
+                "channel": raw.get("channel") or "any",
+                "platform": raw.get("platform") or "",
+                "connected_account_id": raw.get("connected_account_id") or "",
                 "notes": raw.get("notes") or "",
                 "ai_instructions": raw.get("ai_instructions") or "",
                 "ai_action_mode": raw.get("ai_action_mode") or raw.get("action"),

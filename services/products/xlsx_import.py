@@ -50,6 +50,7 @@ def build_xlsx_template_bytes() -> bytes:
             "S,M",
             "Rose,Nude",
             "Matte finish",
+            "Lip color",
             "in_stock",
             "https://example.com/img1.jpg",
             "",

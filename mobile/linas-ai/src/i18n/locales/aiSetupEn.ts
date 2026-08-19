@@ -205,6 +205,8 @@ export const aiSetupEn = {
   aiSetupSaved: 'Saved',
   aiSetupReload: 'Reload',
   aiSetupDraftSaved: 'Draft saved.',
+  aiSetupMetadataSaveError:
+    'Could not prepare this content for AI. Your changes were not saved. Please try again.',
   aiSetupLanguagesRemovedBody:
     'Languages are automatic — the AI replies in the same language as the customer. No per-setup language configuration is needed.',
   servicesTitle: 'Services',

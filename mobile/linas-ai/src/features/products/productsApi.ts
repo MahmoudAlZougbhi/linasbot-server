@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 
-import { ApiError, apiFetch, apiUpload } from '../../api/client';
+import { ApiError, apiFetch, apiUpload, isMetadataPreparationFailure } from '../../api/client';
 import { appendLocalFile } from '../../api/formDataFile';
 
 const ProductImageSchema = z.object({
@@ -22,6 +22,7 @@ export const ProductSchema = z
   .object({
     id: z.string(),
     name: z.string(),
+    description: z.string().nullable().optional(),
     price: z.string().nullable().optional(),
     sizes: z.array(z.string()).optional(),
     colors: z.array(z.string()).optional(),
@@ -38,6 +39,7 @@ export type Product = z.infer<typeof ProductSchema>;
 
 export type ProductWriteInput = {
   name: string;
+  description?: string | null;
   price?: string | null;
   sizes: string[];
   colors: string[];
@@ -110,6 +112,7 @@ export async function updateProductAvailability(
 ): Promise<Product> {
   return updateProduct(product.id, {
     name: product.name,
+    description: product.description ?? null,
     price: product.price ?? null,
     sizes: product.sizes ?? [],
     colors: product.colors ?? [],
