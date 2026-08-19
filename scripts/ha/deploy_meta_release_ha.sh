@@ -707,6 +707,111 @@ print(removed)
 PY
 }
 
+rematerialize_python_runtime_from_durable_bundle() {
+  local digest journal bundle archive control displaced
+  digest="$(deploy_journal_digest)"
+  mapfile -t journal < <(read_deploy_journal "$digest")
+  test "${#journal[@]}" -eq 22 || die "deployment journal output is incomplete"
+  bundle="$(release_bundle_path "${journal[16]}" "${journal[17]}")"
+  archive="$bundle/$PYTHON_RUNTIME_ARTIFACT"
+  control="$bundle/control-plane.tar"
+  test -f "$archive" && test ! -L "$archive" || \
+    die "durable CPython archive is missing or unsafe"
+  test -f "$control" && test ! -L "$control" || \
+    die "durable control plane is missing or unsafe"
+  test "$(stat -c '%F:%u:%g:%a:%h' "$archive")" = "regular file:0:0:600:1" || \
+    die "durable CPython archive security is invalid"
+  test "$(sha256sum "$archive" | awk '{print $1}')" = "$PYTHON_RUNTIME_ARTIFACT_SHA256" || \
+    die "durable CPython archive differs from the reviewed artifact"
+  displaced="${PYTHON_RUNTIME_ROOT}.displaced"
+  test ! -e "$displaced" && test ! -L "$displaced" || \
+    die "interrupted CPython rematerialize requires recovery"
+  test -d "$PYTHON_RUNTIME_ROOT" && test ! -L "$PYTHON_RUNTIME_ROOT" || \
+    die "canonical CPython root is missing or unsafe"
+  mv "$PYTHON_RUNTIME_ROOT" "$displaced"
+  if ! run_os_python_receipt_verifier - \
+      "$control" "$archive" "$PYTHON_RUNTIME_ROOT" \
+      "$PYTHON_RUNTIME_ARTIFACT_SHA256" "$PYTHON_RUNTIME_TREE_SHA256" <<'PY'
+import os
+import shutil
+import stat
+import sys
+import tarfile
+import tempfile
+from pathlib import Path
+
+control, archive, destination, expected_archive_sha, expected_tree_sha = sys.argv[1:]
+dest = Path(destination)
+if dest.exists() or dest.is_symlink():
+    raise SystemExit("CPython rematerialize destination already exists")
+want = "scripts/ha/python_runtime_archive_contract.py"
+tmpdir = Path(tempfile.mkdtemp(prefix="linasbot-cpython-contract.", dir="/run"))
+try:
+    info = tmpdir.lstat()
+    if (
+        not stat.S_ISDIR(info.st_mode)
+        or stat.S_ISLNK(info.st_mode)
+        or info.st_uid != 0
+        or not tmpdir.name.startswith("linasbot-cpython-contract.")
+        or tmpdir.parent != Path("/run")
+    ):
+        raise SystemExit("CPython contract scratch directory is unsafe")
+    os.chmod(tmpdir, 0o700)
+    with tarfile.open(control, "r:") as bundle:
+        member = bundle.getmember(want)
+        if not member.isfile() or member.size < 1 or member.size > 1024 * 1024:
+            raise SystemExit("CPython archive contract member is unsafe")
+        source = bundle.extractfile(member)
+        if source is None:
+            raise SystemExit("CPython archive contract member cannot be read")
+        payload = source.read()
+        if len(payload) != member.size:
+            raise SystemExit("CPython archive contract member changed while reading")
+    contract = tmpdir / "python_runtime_archive_contract.py"
+    contract.write_bytes(payload)
+    os.chmod(contract, 0o600)
+    sys.path.insert(0, str(tmpdir))
+    import python_runtime_archive_contract as runtime
+
+    if runtime.RUNTIME_SHA256 != expected_archive_sha:
+        raise SystemExit("durable CPython archive pin differs from the helper")
+    if runtime.RUNTIME_TREE_SHA256 != expected_tree_sha:
+        raise SystemExit("durable CPython tree pin differs from the helper")
+    runtime.extract_runtime_archive(Path(archive), dest)
+    digest, _count = runtime.runtime_tree_evidence(dest)
+    if digest != expected_tree_sha:
+        raise SystemExit("rematerialized CPython tree differs from the reviewed artifact")
+finally:
+    shutil.rmtree(tmpdir)
+PY
+  then
+    if [ ! -e "$PYTHON_RUNTIME_ROOT" ] && [ -d "$displaced" ] && [ ! -L "$displaced" ]; then
+      mv "$displaced" "$PYTHON_RUNTIME_ROOT"
+    fi
+    die "durable CPython rematerialize failed closed"
+  fi
+  run_os_python_receipt_verifier - "$displaced" "$PYTHON_RUNTIME_ROOT" <<'PY'
+import shutil
+import stat
+import sys
+from pathlib import Path
+
+displaced = Path(sys.argv[1])
+root = Path(sys.argv[2])
+info = displaced.lstat()
+if (
+    displaced.parent != root.parent
+    or displaced.name != f"{root.name}.displaced"
+    or not stat.S_ISDIR(info.st_mode)
+    or stat.S_ISLNK(info.st_mode)
+    or info.st_uid != 0
+):
+    raise SystemExit("CPython displaced tree is unsafe")
+shutil.rmtree(displaced)
+PY
+  log "CPython runtime rematerialized from the durable Quality Gates archive"
+}
+
 install_python_pycache_policy() {
   local api_dropin=/etc/systemd/system/linasbot.service.d/$PYTHON_PYCACHE_DROPIN
   local worker_dropin=/etc/systemd/system/linasbot-worker@.service.d/$PYTHON_PYCACHE_DROPIN
@@ -757,6 +862,7 @@ apply_cpython_runtime_immutability() {
   node_assert_runtime_drained "$tx_dir"
   stop_runtime
   node_assert_runtime_drained "$tx_dir"
+  rematerialize_python_runtime_from_durable_bundle
   restore_generated_python_bytecode >/dev/null
   install_python_pycache_policy
   assert_python_runtime_contract "$(configured_node_id)"

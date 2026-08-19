@@ -137,18 +137,34 @@ def test_helper_defers_pre_drain_tree_hash_then_rehashes() -> None:
 def test_helper_cleans_runtime_venv_and_repo_bytecode_after_drain() -> None:
     source = _helper()
     restore = source[
-        source.index("restore_generated_python_bytecode() {") : source.index("install_python_pycache_policy() {")
+        source.index("restore_generated_python_bytecode() {") : source.index(
+            "rematerialize_python_runtime_from_durable_bundle() {"
+        )
+    ]
+    apply = source[source.index("apply_cpython_runtime_immutability() {") : source.index("require_root() {")]
+    rematerialize = source[
+        source.index("rematerialize_python_runtime_from_durable_bundle() {") : source.index(
+            "install_python_pycache_policy() {"
+        )
     ]
     assert '"$PYTHON_RUNTIME_ROOT"' in restore
     assert '"$REPO_DIR/venv"' in restore
     assert '"$REPO_DIR"' in restore or PYTHON_REPO_ROOT in restore
     assert "__pycache__" in restore
     assert ".pyc" in restore and ".pyo" in restore
+    assert "extract_runtime_archive" in rematerialize
+    assert "PYTHON_RUNTIME_ARTIFACT" in rematerialize
+    assert "run_os_python_receipt_verifier" in rematerialize
+    assert "runtime_tree_evidence" in rematerialize
+    assert apply.index("rematerialize_python_runtime_from_durable_bundle") < apply.index(
+        "restore_generated_python_bytecode"
+    )
+    assert apply.index("restore_generated_python_bytecode") < apply.index("assert_python_runtime_contract")
     recover = _recover()
     drain = recover.index('node_ensure_maintenance "$tx_dir"')
-    apply = recover.index('apply_cpython_runtime_immutability "$tx_dir"', drain)
-    assert apply > drain
-    assert 'remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir"' in recover[apply:]
+    apply_call = recover.index('apply_cpython_runtime_immutability "$tx_dir"', drain)
+    assert apply_call > drain
+    assert 'remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir"' in recover[apply_call:]
 
 
 def test_helper_installs_prefix_dropin_without_changing_execstart() -> None:
