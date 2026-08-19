@@ -711,11 +711,12 @@ PY
 }
 
 rematerialize_python_runtime_from_durable_bundle() {
-  local digest journal bundle archive control displaced
-  digest="$(deploy_journal_digest)"
-  mapfile -t journal < <(read_deploy_journal "$digest")
-  test "${#journal[@]}" -eq 22 || die "deployment journal output is incomplete"
-  bundle="$(release_bundle_path "${journal[16]}" "${journal[17]}")"
+  local artifact_id="$1"
+  local artifact_api_sha="$2"
+  local bundle archive control displaced
+  [[ "$artifact_id" =~ ^[1-9][0-9]*$ ]] || die "durable CPython bundle artifact ID is invalid"
+  validate_digest "$artifact_api_sha"
+  bundle="$(release_bundle_path "$artifact_id" "$artifact_api_sha")"
   archive="$bundle/$PYTHON_RUNTIME_ARTIFACT"
   control="$bundle/control-plane.tar"
   test -f "$archive" && test ! -L "$archive" || \
@@ -861,11 +862,13 @@ EOF
 
 apply_cpython_runtime_immutability() {
   local tx_dir="$1"
+  local artifact_id="$2"
+  local artifact_api_sha="$3"
   validate_tx_dir "$tx_dir"
   node_assert_runtime_drained "$tx_dir"
   stop_runtime
   node_assert_runtime_drained "$tx_dir"
-  rematerialize_python_runtime_from_durable_bundle
+  rematerialize_python_runtime_from_durable_bundle "$artifact_id" "$artifact_api_sha"
   restore_generated_python_bytecode >/dev/null
   install_python_pycache_policy
   assert_python_runtime_contract "$(configured_node_id)"
@@ -9634,7 +9637,7 @@ node_dispatch() {
       ;;
     apply-cpython-runtime-immutability)
       validate_tx_dir "${1:-}"
-      apply_cpython_runtime_immutability "$1"
+      apply_cpython_runtime_immutability "$1" "${2:-}" "${3:-}"
       ;;
     *)
       die "unknown node phase: $phase"
@@ -10418,8 +10421,8 @@ recover_deployment() {
   remote_node "$peer_host" ensure-maintenance "$tx_dir"
   sleep "$drain_seconds"
   update_recovery_journal "recovery-both-nodes-drained"
-  apply_cpython_runtime_immutability "$tx_dir"
-  remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir"
+  apply_cpython_runtime_immutability "$tx_dir" "$release_artifact_id" "$release_artifact_api_sha"
+  remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir" "$release_artifact_id" "$release_artifact_api_sha"
   if [ "$decision" = "commit" ]; then
     update_recovery_journal "commit-recovery-parity"
     node_assert_exact_head "$target_sha" "$tx_dir"
@@ -10445,8 +10448,8 @@ recover_deployment() {
     update_recovery_journal "rollback-restoring"
     node_recover_rollback "$previous_sha" "$tx_dir"
     remote_node "$peer_host" recover-rollback "$peer_previous_sha" "$tx_dir"
-    apply_cpython_runtime_immutability "$tx_dir"
-    remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir"
+    apply_cpython_runtime_immutability "$tx_dir" "$release_artifact_id" "$release_artifact_api_sha"
+    remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir" "$release_artifact_id" "$release_artifact_api_sha"
     node_assert_release_drained "$previous_sha" "$tx_dir"
     remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"
     if [ "$previous_sha" != "$peer_previous_sha" ]; then
@@ -10652,8 +10655,8 @@ retry_distinct_reconciliation() {
   node_ensure_maintenance "$tx_dir"
   remote_node "$peer_host" ensure-maintenance "$tx_dir"
   sleep "$drain_seconds"
-  apply_cpython_runtime_immutability "$tx_dir"
-  remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir"
+  apply_cpython_runtime_immutability "$tx_dir" "$release_artifact_id" "$release_artifact_api_sha"
+  remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir" "$release_artifact_id" "$release_artifact_api_sha"
   node_assert_exact_head "$previous_sha" "$tx_dir"
   remote_node "$peer_host" assert-head "$peer_previous_sha" "$tx_dir"
   node_assert_release_drained "$previous_sha" "$tx_dir"
@@ -10927,8 +10930,8 @@ commit_target_deployment() {
     die "fresh commit LB authority was not durably read back"
   node_ensure_maintenance "$tx_dir"
   remote_node "$peer_host" ensure-maintenance "$tx_dir"
-  apply_cpython_runtime_immutability "$tx_dir"
-  remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir"
+  apply_cpython_runtime_immutability "$tx_dir" "$release_artifact_id" "$release_artifact_api_sha"
+  remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir" "$release_artifact_id" "$release_artifact_api_sha"
   node_assert_exact_head "$target_sha" "$tx_dir"
   remote_node "$peer_host" assert-head "$target_sha" "$tx_dir"
   node_assert_release_drained "$target_sha" "$tx_dir"
@@ -11393,8 +11396,8 @@ orchestrate() {
   node_mark_maintenance "$tx_dir"
   update_deploy_journal "node01-marked"
   sleep "$drain_seconds"
-  apply_cpython_runtime_immutability "$tx_dir"
-  remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir"
+  apply_cpython_runtime_immutability "$tx_dir" "$release_artifact_id" "$release_artifact_api_sha"
+  remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir" "$release_artifact_id" "$release_artifact_api_sha"
   remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"
   node_assert_release_drained "$previous_sha" "$tx_dir"
   update_deploy_journal "both-nodes-drained-before-activation"

@@ -156,15 +156,24 @@ def test_helper_cleans_runtime_venv_and_repo_bytecode_after_drain() -> None:
     assert "PYTHON_RUNTIME_ARTIFACT" in rematerialize
     assert "run_os_python_receipt_verifier" in rematerialize
     assert "runtime_tree_evidence" in rematerialize
+    assert "release_bundle_path" in rematerialize
+    assert "deploy_journal_digest" not in rematerialize
+    assert "read_deploy_journal" not in rematerialize
     assert apply.index("rematerialize_python_runtime_from_durable_bundle") < apply.index(
         "restore_generated_python_bytecode"
     )
     assert apply.index("restore_generated_python_bytecode") < apply.index("assert_python_runtime_contract")
     recover = _recover()
     drain = recover.index('node_ensure_maintenance "$tx_dir"')
-    apply_call = recover.index('apply_cpython_runtime_immutability "$tx_dir"', drain)
+    apply_call = recover.index(
+        'apply_cpython_runtime_immutability "$tx_dir" "$release_artifact_id" "$release_artifact_api_sha"',
+        drain,
+    )
     assert apply_call > drain
-    assert 'remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir"' in recover[apply_call:]
+    assert (
+        'remote_node "$peer_host" apply-cpython-runtime-immutability '
+        '"$tx_dir" "$release_artifact_id" "$release_artifact_api_sha"'
+    ) in recover[apply_call:]
 
 
 def test_helper_installs_prefix_dropin_without_changing_execstart() -> None:
@@ -255,10 +264,16 @@ def test_commit_and_admit_paths_install_policy_before_start() -> None:
     source = _helper()
     commit = source[source.index("commit_target_deployment() {") : source.index("orchestrate() {")]
     drain = commit.index('node_ensure_maintenance "$tx_dir"')
-    apply = commit.index('apply_cpython_runtime_immutability "$tx_dir"', drain)
+    apply = commit.index(
+        'apply_cpython_runtime_immutability "$tx_dir" "$release_artifact_id" "$release_artifact_api_sha"',
+        drain,
+    )
     head = commit.index('node_assert_exact_head "$target_sha" "$tx_dir"', apply)
     assert apply < head
-    assert 'remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir"' in commit[apply:]
+    assert (
+        'remote_node "$peer_host" apply-cpython-runtime-immutability '
+        '"$tx_dir" "$release_artifact_id" "$release_artifact_api_sha"'
+    ) in commit[apply:]
     start = source[
         source.index("start_admitted_target_runtime() {") : source.index("enable_admitted_target_autostart() {")
     ]
