@@ -147,7 +147,7 @@ def test_helper_cleans_runtime_venv_and_repo_bytecode_after_drain() -> None:
             "install_python_pycache_policy() {"
         )
     ]
-    assert '"$PYTHON_RUNTIME_ROOT"' in restore
+    assert '"$PYTHON_RUNTIME_ROOT"' not in restore
     assert '"$REPO_DIR/venv"' in restore
     assert '"$REPO_DIR"' in restore or PYTHON_REPO_ROOT in restore
     assert "__pycache__" in restore
