@@ -51,8 +51,14 @@ def public_ready_wait_timeout_seconds(interval: int, threshold: int) -> int:
 def load_lb_health_window(health: Any) -> tuple[int, int, int]:
     if not isinstance(health, dict):
         raise SystemExit("LB health contract is invalid")
-    interval = health.get("check_interval_seconds")
-    threshold = health.get("healthy_threshold")
+    raw_interval = health.get("check_interval_seconds")
+    raw_threshold = health.get("healthy_threshold")
+    if not isinstance(raw_interval, int) or isinstance(raw_interval, bool):
+        raise SystemExit("LB health check interval is invalid")
+    if not isinstance(raw_threshold, int) or isinstance(raw_threshold, bool):
+        raise SystemExit("LB healthy threshold is invalid")
+    interval = raw_interval
+    threshold = raw_threshold
     timeout = public_ready_wait_timeout_seconds(interval, threshold)
     return interval, threshold, timeout
 
