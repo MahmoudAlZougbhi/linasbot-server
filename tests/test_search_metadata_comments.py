@@ -53,12 +53,8 @@ def test_instagram_rule_does_not_leak_to_facebook() -> None:
             }
         ]
     )
-    ig = evaluate_comment_engine(
-        section, comment_text="hello", channel="instagram_comment", post_id="POST_IG"
-    )
-    fb = evaluate_comment_engine(
-        section, comment_text="hello", channel="facebook_comment", post_id="POST_IG"
-    )
+    ig = evaluate_comment_engine(section, comment_text="hello", channel="instagram_comment", post_id="POST_IG")
+    fb = evaluate_comment_engine(section, comment_text="hello", channel="facebook_comment", post_id="POST_IG")
     assert ig.rule_id == "ig"
     assert fb.matched is False
 
@@ -138,12 +134,8 @@ def test_facebook_rule_does_not_leak_to_instagram() -> None:
             }
         ]
     )
-    fb = evaluate_comment_engine(
-        section, comment_text="hello", channel="facebook_comment", post_id="POST_FB"
-    )
-    ig = evaluate_comment_engine(
-        section, comment_text="hello", channel="instagram_comment", post_id="POST_FB"
-    )
+    fb = evaluate_comment_engine(section, comment_text="hello", channel="facebook_comment", post_id="POST_FB")
+    ig = evaluate_comment_engine(section, comment_text="hello", channel="instagram_comment", post_id="POST_FB")
     assert fb.rule_id == "fb"
     assert ig.matched is False
 
@@ -261,9 +253,7 @@ def test_reply_to_ai_keeps_comment_id_target() -> None:
         comment_id="c-reply",
         current_author_id="u1",
         current_author_name="Ahmad",
-        nearby_reply_records=[
-            {"text": "hello", "author_id": "page", "from_page": True, "comment_id": "c-ai"}
-        ],
+        nearby_reply_records=[{"text": "hello", "author_id": "page", "from_page": True, "comment_id": "c-ai"}],
     )
     assert records[-1]["message_id"] == "c-reply"
     assert any("page_reply" in str(r.get("text") or "") for r in records)
@@ -318,23 +308,17 @@ def test_precedence_matrix_specific_beats_global() -> None:
             },
         ]
     )
-    specific_auto = evaluate_comment_engine(
-        section, comment_text="hi", channel="instagram_comment", post_id="POST_IG"
-    )
+    specific_auto = evaluate_comment_engine(section, comment_text="hi", channel="instagram_comment", post_id="POST_IG")
     assert specific_auto.rule_mode == "deterministic"
     assert specific_auto.rule_id == "ig-post-auto"
 
     no_auto = _section([row for row in section["rules"] if row["id"] != "ig-post-auto"])
-    specific_ai = evaluate_comment_engine(
-        no_auto, comment_text="hi", channel="instagram_comment", post_id="POST_IG"
-    )
+    specific_ai = evaluate_comment_engine(no_auto, comment_text="hi", channel="instagram_comment", post_id="POST_IG")
     assert specific_ai.rule_mode == "ai_guidance"
     assert specific_ai.rule_id == "ig-post-ai"
 
     fb = evaluate_comment_engine(section, comment_text="hi", channel="facebook_comment", post_id="POST_IG")
     assert fb.rule_id not in {"ig-post-auto", "ig-post-ai"}
 
-    other_post = evaluate_comment_engine(
-        section, comment_text="hi", channel="instagram_comment", post_id="POST_OTHER"
-    )
+    other_post = evaluate_comment_engine(section, comment_text="hi", channel="instagram_comment", post_id="POST_OTHER")
     assert other_post.rule_id not in {"ig-post-auto", "ig-post-ai"}

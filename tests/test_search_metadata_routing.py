@@ -91,9 +91,7 @@ def test_branch_weekly_schedule_reaches_terra() -> None:
             "id": "b1",
             "labels": {"en": "Beirut"},
             "address": "Hamra",
-            "weekly_schedule": {
-                "monday": {"enabled": True, "open": "10:00", "close": "19:00", "off_day": False}
-            },
+            "weekly_schedule": {"monday": {"enabled": True, "open": "10:00", "close": "19:00", "off_day": False}},
             "ai_search_description": "not a fact",
         },
     )

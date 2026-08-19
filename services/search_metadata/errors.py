@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 METADATA_PREPARATION_CODE = "METADATA_PREPARATION_FAILED"
-METADATA_PREPARATION_MESSAGE = (
-    "Could not prepare this content for AI. Your changes were not saved. Please try again."
-)
+METADATA_PREPARATION_MESSAGE = "Could not prepare this content for AI. Your changes were not saved. Please try again."
 
 
 class MetadataPreparationError(Exception):

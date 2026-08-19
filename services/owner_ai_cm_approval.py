@@ -220,11 +220,7 @@ async def activate_cm_after_save(
     from services.cm.save_live import go_live_saved_section
 
     has_published = tenant_has_published_cm(tenant_id)
-    notes = (
-        f"owner_ai_auto_activate:{section}"
-        if has_published
-        else f"owner_ai_auto_activate_first_live:{section}"
-    )
+    notes = f"owner_ai_auto_activate:{section}" if has_published else f"owner_ai_auto_activate_first_live:{section}"
     return await go_live_saved_section(
         tenant_id=tenant_id,
         section=section,

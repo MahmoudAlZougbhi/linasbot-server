@@ -160,7 +160,14 @@ def test_tenant_isolation(products_env: Path) -> None:
     created = client.post(
         "/api/mobile/products",
         headers=headers_a,
-        json={"name": "Tenant A Serum", "description": "Serum for tenant A", "price": "50", "sizes": [], "colors": [], "links": []},
+        json={
+            "name": "Tenant A Serum",
+            "description": "Serum for tenant A",
+            "price": "50",
+            "sizes": [],
+            "colors": [],
+            "links": [],
+        },
     )
     assert created.status_code == 200
     product_id = created.json()["product"]["id"]
@@ -227,7 +234,9 @@ def test_search_product_by_title_fuzzy(products_env: Path) -> None:
         svc = ProductsService(session)
         svc.create_product(
             tenant_id="tenant-search",
-            body=ProductWriteBody(description="test product", name="Hydrating Face Cream", sizes=[], colors=[], links=[]),
+            body=ProductWriteBody(
+                description="test product", name="Hydrating Face Cream", sizes=[], colors=[], links=[]
+            ),
         )
         svc.create_product(
             tenant_id="tenant-search",

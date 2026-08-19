@@ -158,11 +158,7 @@ def inline_titles_for_luna(titles: list[dict[str, Any]]) -> dict[str, Any]:
         next_offset = page.get("next_offset")
     combined = priority + rest_page
     blob = str(combined)
-    if (
-        not rest_has_more
-        and len(combined) <= TITLE_PAGE_SIZE
-        and len(blob) <= INLINE_TITLE_CHAR_BUDGET
-    ):
+    if not rest_has_more and len(combined) <= TITLE_PAGE_SIZE and len(blob) <= INLINE_TITLE_CHAR_BUDGET:
         return {
             "operational_titles": combined,
             "operational_title_count": len(titles),

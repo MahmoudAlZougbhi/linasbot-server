@@ -66,9 +66,7 @@ def test_generate_clamps_non_english_from_generator() -> None:
         lambda _req: SearchMetadata(title="أسعار الليزر", description="价格说明", keywords=["creme"])
     )
     with pytest.raises(MetadataPreparationError):
-        generate_search_metadata(
-            {"kind": "cm", "original_title": "12b", "content": "x", "include_keywords": True}
-        )
+        generate_search_metadata({"kind": "cm", "original_title": "12b", "content": "x", "include_keywords": True})
 
 
 def test_knowledge_arabic_body_yields_english_metadata(tmp_path, monkeypatch) -> None:

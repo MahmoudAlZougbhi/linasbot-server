@@ -22,8 +22,10 @@ def teardown_function() -> None:
 def test_save_one_knowledge_among_5000() -> None:
     calls: list[str] = []
     set_metadata_generator(
-        lambda req: calls.append(str(req.get("item_id")))
-        or SearchMetadata(title="Updated File", description="Changed item only.")
+        lambda req: (
+            calls.append(str(req.get("item_id")))
+            or SearchMetadata(title="Updated File", description="Changed item only.")
+        )
     )
     previous = {
         "items": [
@@ -53,8 +55,10 @@ def test_save_one_knowledge_among_5000() -> None:
 def test_save_one_product_among_20000() -> None:
     calls: list[str] = []
     set_metadata_generator(
-        lambda req: calls.append(str(req.get("item_id")))
-        or SearchMetadata(title="One Product", description="Changed product only.", keywords=["one"])
+        lambda req: (
+            calls.append(str(req.get("item_id")))
+            or SearchMetadata(title="One Product", description="Changed product only.", keywords=["one"])
+        )
     )
     row = SimpleNamespace(
         id="p19999",
@@ -106,8 +110,10 @@ def test_rank_20000_products_original_query() -> None:
 def test_save_one_comment_rule_among_300() -> None:
     calls: list[str] = []
     set_metadata_generator(
-        lambda req: calls.append(str(req.get("item_id")))
-        or SearchMetadata(title="Comment AI Rule", description="One comment rule.")
+        lambda req: (
+            calls.append(str(req.get("item_id")))
+            or SearchMetadata(title="Comment AI Rule", description="One comment rule.")
+        )
     )
     previous = {
         "rules": [
@@ -133,8 +139,7 @@ def test_save_one_comment_rule_among_300() -> None:
 def test_request_and_comment_counts_do_not_expand_save() -> None:
     calls: list[str] = []
     set_metadata_generator(
-        lambda req: calls.append(str(req.get("item_id")))
-        or SearchMetadata(title="Rule", description="One rule.")
+        lambda req: calls.append(str(req.get("item_id"))) or SearchMetadata(title="Rule", description="One rule.")
     )
     previous = {
         "rules": [

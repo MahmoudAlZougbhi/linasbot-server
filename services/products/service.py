@@ -38,7 +38,9 @@ class ProductsService:
             raise ProductsError(code="NOT_FOUND", message="product_not_found", http_status=404)
         return product_to_dict(row)
 
-    def create_product(self, *, tenant_id: str, body: ProductWriteBody, require_description: bool = True) -> dict[str, Any]:
+    def create_product(
+        self, *, tenant_id: str, body: ProductWriteBody, require_description: bool = True
+    ) -> dict[str, Any]:
         if require_description and not (body.description or "").strip():
             raise ProductsError(
                 code="DESCRIPTION_REQUIRED",

@@ -133,12 +133,8 @@ async def run_customer_reply_v2_comment(
             nearby_reply_records=list(comment_ctx.get("nearby_reply_records") or []),
             comment_id=str(channel_meta.get("comment_id") or ""),
             post_id=str(channel_meta.get("post_id") or ""),
-            current_author_id=str(
-                comment_ctx.get("current_author_id") or provider_sender_id or ""
-            ),
-            current_author_name=str(
-                comment_ctx.get("current_author_name") or provider_display_name or ""
-            ),
+            current_author_id=str(comment_ctx.get("current_author_id") or provider_sender_id or ""),
+            current_author_name=str(comment_ctx.get("current_author_name") or provider_display_name or ""),
             parent_author_id=str(comment_ctx.get("parent_author_id") or ""),
             parent_author_name=str(comment_ctx.get("parent_author_name") or ""),
         )

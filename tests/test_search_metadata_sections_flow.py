@@ -69,7 +69,17 @@ def test_each_section_save_reads_only_that_item() -> None:
         ),
         (
             "requests_appointments",
-            {"rules": [{"id": "ord1", "type": "ORDER", "name": "طلب شراء", "notes": "يجمع المنتج والعنوان", "enabled": True}]},
+            {
+                "rules": [
+                    {
+                        "id": "ord1",
+                        "type": "ORDER",
+                        "name": "طلب شراء",
+                        "notes": "يجمع المنتج والعنوان",
+                        "enabled": True,
+                    }
+                ]
+            },
         ),
         (
             "comments",

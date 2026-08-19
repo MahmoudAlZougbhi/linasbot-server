@@ -15,7 +15,9 @@ pytest_plugins = ("tests.customer_reply_ai_v2_fixtures",)
 
 
 @pytest.mark.asyncio
-async def test_scripted_multi_intent_selects_beirut_hours_product_and_one_rule(v2_env, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_scripted_multi_intent_selects_beirut_hours_product_and_one_rule(
+    v2_env, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from sqlalchemy import create_engine, event
 
     from db.models import Base

@@ -40,7 +40,10 @@ def _items_like_entries(section_id: str, rows: list[Any]) -> list[ItemIndexEntry
         if not item_id:
             continue
         fields = luna_title_fields(raw)
-        desc = fields["ai_search_description"] or str(raw.get("notes") or raw.get("body") or raw.get("short_introduction") or "")[:240]
+        desc = (
+            fields["ai_search_description"]
+            or str(raw.get("notes") or raw.get("body") or raw.get("short_introduction") or "")[:240]
+        )
         status = str(raw.get("status") or ("active" if raw.get("available", True) else "inactive"))
         if status == "draft":
             continue
@@ -119,7 +122,8 @@ def iter_section_items(section_id: str, payload: dict[str, Any]) -> list[ItemInd
                     item_id=f"{section_id}:{item_id}",
                     section_id=section_id,
                     title=fields["original_title"] or title,
-                    short_description=fields["ai_search_description"] or str(raw.get("notes") or raw.get("action") or "")[:240],
+                    short_description=fields["ai_search_description"]
+                    or str(raw.get("notes") or raw.get("action") or "")[:240],
                     original_title=fields["original_title"],
                     ai_search_title=fields["ai_search_title"],
                     ai_search_description=fields["ai_search_description"],

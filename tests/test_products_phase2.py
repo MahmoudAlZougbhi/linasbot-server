@@ -78,11 +78,15 @@ def test_inactive_excluded_from_customer_search(products_env: Path) -> None:
         svc = ProductsService(session)
         svc.create_product(
             tenant_id="tenant-avail",
-            body=ProductWriteBody(description="test product", name="Hidden Serum", availability="inactive", sizes=[], colors=[], links=[]),
+            body=ProductWriteBody(
+                description="test product", name="Hidden Serum", availability="inactive", sizes=[], colors=[], links=[]
+            ),
         )
         svc.create_product(
             tenant_id="tenant-avail",
-            body=ProductWriteBody(description="test product", name="Visible Cream", availability="in_stock", sizes=[], colors=[], links=[]),
+            body=ProductWriteBody(
+                description="test product", name="Visible Cream", availability="in_stock", sizes=[], colors=[], links=[]
+            ),
         )
         matches = search_product_by_title(session, tenant_id="tenant-avail", title="cream", limit=5)
     assert all(m["name"] != "Hidden Serum" for m in matches)
