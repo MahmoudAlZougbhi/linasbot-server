@@ -423,6 +423,9 @@ def extract_archive(
         directories = [path for path in temporary.rglob("*") if path.is_dir()]
         for directory in sorted(directories, key=lambda path: len(path.parts), reverse=True):
             _fsync_directory(directory)
+        # mkdtemp creates a private 0700 root even when archived children are 0755.
+        # Nginx must traverse the extracted tree root to serve the dashboard SPA.
+        os.chmod(temporary, 0o755)
         _fsync_directory(temporary)
         _fsync_directory(destination.parent)
         os.replace(temporary, destination)

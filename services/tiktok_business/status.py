@@ -36,7 +36,6 @@ def tiktok_integration_row(tenant_id: str) -> dict[str, Any]:
         "granted_scopes": [],
         "comments_state": _empty_state("disconnected", "connect_channel_first"),
         "dm_state": _empty_state("permission_pending", "tiktok_messaging_pending"),
-        "account": None,
         "accounts": [],
         "capabilities": {
             "dm_read": _cap(

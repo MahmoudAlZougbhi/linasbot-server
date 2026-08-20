@@ -136,3 +136,18 @@ def test_enrich_instagram_username_display(monkeypatch: pytest.MonkeyPatch) -> N
     enriched = enrich_mobile_integration_row(row, tenant_id="linas")
     assert enriched["account"]["display_name"] == "@clinic_ig"
     assert enriched["account"]["username"] == "clinic_ig"
+
+
+def test_enrich_tiktok_omits_null_account() -> None:
+    enriched = enrich_mobile_integration_row(
+        {
+            "platform": "tiktok",
+            "label": "TikTok",
+            "connected": False,
+            "account": None,
+            "accounts": [],
+            "capabilities": {"comment_read": {"level": "available"}},
+        },
+        tenant_id="linas",
+    )
+    assert "account" not in enriched

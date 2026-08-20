@@ -104,6 +104,8 @@ def enrich_mobile_integration_row(row: dict[str, Any], *, tenant_id: str) -> dic
     platform = str(row.get("platform") or "").strip().lower()
     if platform not in {"instagram", "facebook"}:
         cleaned = {k: v for k, v in row.items() if k not in _MOBILE_STRIP_KEYS}
+        if cleaned.get("account") is None:
+            cleaned.pop("account", None)
         return cleaned
 
     canonical = canonical_channel_bindings(tenant_id, platform)
