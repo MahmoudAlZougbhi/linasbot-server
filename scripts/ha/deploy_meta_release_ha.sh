@@ -66,6 +66,7 @@ PRODUCTION_GUARD_REPO_PATH=scripts/ha/production_mutation_guard.py
 RELEASE_VERIFY_REPO_PATH=scripts/ha/release_verify_server.py
 RELEASE_READINESS_REPO_PATH=scripts/ha/release_readiness_probe.py
 DEPLOY_PREFLIGHT_REPO_PATH=scripts/ha/integration_capability_preflight.py
+TARGET_PLATFORM_READY_REPO_PATH=scripts/ha/target_platform_readiness_preflight.py
 RELEASE_ALEMBIC_MIGRATE_REPO_PATH=scripts/ha/release_alembic_migrate.py
 META_IG_SINGLE_MIGRATION_REPO_PATH=alembic/versions/20260820_meta_ig_single.py
 META_IG_SINGLE_COMPAT_MARKER_REPO_PATH=scripts/ha/compat/20260820_meta_ig_single_baseline_v1
@@ -4671,6 +4672,37 @@ assert_integration_capability_preflight() {
     die "integration capability preflight failed; new-user connect paths are not intact"
 }
 
+assert_target_platform_readiness_preflight() {
+  local target_sha="$1"
+  local script="/run/linasbot-target-platform-ready.py"
+  local source_root expected_blob actual_blob
+  validate_sha "$target_sha"
+  git -C "$REPO_DIR" cat-file -e "$target_sha:$TARGET_PLATFORM_READY_REPO_PATH" || \
+    die "target platform-readiness preflight helper is missing"
+  expected_blob="$(git -C "$REPO_DIR" rev-parse "$target_sha:$TARGET_PLATFORM_READY_REPO_PATH")"
+  git -C "$REPO_DIR" show "$target_sha:$TARGET_PLATFORM_READY_REPO_PATH" > "$script"
+  chmod 0700 "$script"
+  actual_blob="$(git -C "$REPO_DIR" hash-object "$script")"
+  test "$actual_blob" = "$expected_blob" || \
+    die "target platform-readiness preflight helper differs from the authorized blob"
+  source_root="$(mktemp -d -p /run linasbot-target-ready.XXXXXXXX)"
+  test "$(stat -c '%u:%g:%a' "$source_root")" = "0:0:700" || \
+    die "target platform-readiness source root is unsafe"
+  git -C "$REPO_DIR" archive --format=tar "$target_sha" -- \
+    modules services utils handlers storage db config.py | tar -x -C "$source_root"
+  test -f "$source_root/modules/dashboard_api_health.py" || \
+    die "target platform-readiness archive is missing dashboard health"
+  test -f "$source_root/services/meta_app_registry.py" || \
+    die "target platform-readiness archive is missing Meta registry"
+  PYTHONPATH="$source_root" PYTHONDONTWRITEBYTECODE=1 \
+    "$REPO_DIR/venv/bin/python" -B -I "$script" \
+      --source-root "$source_root" \
+      --git-sha "$target_sha" \
+      --env-file "$REPO_DIR/.env" \
+      --chdir "$REPO_DIR" || \
+    die "target artifact platform readiness failed; live tenant bindings were not used as a gate"
+}
+
 assert_health_while_drained() {
   run_system_python_control - <<'PY'
 import json
@@ -4925,6 +4957,7 @@ assert_target_object() {
   git -C "$REPO_DIR" cat-file -e "$target_sha:$RELEASE_VERIFY_REPO_PATH"
   git -C "$REPO_DIR" cat-file -e "$target_sha:$RELEASE_READINESS_REPO_PATH"
   git -C "$REPO_DIR" cat-file -e "$target_sha:$DEPLOY_PREFLIGHT_REPO_PATH"
+  git -C "$REPO_DIR" cat-file -e "$target_sha:$TARGET_PLATFORM_READY_REPO_PATH"
   git -C "$REPO_DIR" cat-file -e "$target_sha:$RELEASE_ALEMBIC_MIGRATE_REPO_PATH"
   git -C "$REPO_DIR" cat-file -e "$target_sha:$REQUIREMENTS_LOCK_REPO_PATH"
   git -C "$REPO_DIR" cat-file -e "$target_sha:scripts/ha/verify_meta_release_ha.sh"
@@ -5147,8 +5180,14 @@ node_preflight() {
     "pre-existing HA API boot guard requires owner recovery"
   assert_path_absent /etc/systemd/system/linasbot-worker@.service.d/90-meta-ha-maintenance.conf \
     "pre-existing HA worker boot guard requires owner recovery"
-  assert_ready
-  assert_lb_ready
+  if git -C "$REPO_DIR" cat-file -e "$target_sha:$TARGET_PLATFORM_READY_REPO_PATH" 2>/dev/null; then
+    # Target contains the platform-only evaluator. Live /api/ready may still be
+    # the old tenant-binding gate; do not treat that 503 as a deploy blocker.
+    assert_target_platform_readiness_preflight "$target_sha"
+  else
+    assert_ready
+    assert_lb_ready
+  fi
   log "baseline artifact evidence on $expected_node_id"
   baseline_artifacts="$(live_baseline_artifact_evidence)"
   printf 'NODE_ID=%s\nPREVIOUS_SHA=%s\nDRAIN_SECONDS=%s\nCONFIGURED_PEER=%s\nBOOTSTRAP_PLAN_SHA=%s\nPYTHON_RUNTIME_CLUSTER_SHA=%s\nSCHEMA_COMPATIBILITY_EVIDENCE=%s\nLB_ATTESTATION_OBSERVED_AT=%s\nBASELINE_ARTIFACT_EVIDENCE=%s\n' \
