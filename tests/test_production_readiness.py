@@ -11,7 +11,7 @@ import pytest
 from fastapi.responses import JSONResponse
 
 from modules import dashboard_api_health
-from scripts.ha.production_deploy_preflight import evaluate_deploy_preflight
+from scripts.ha.integration_capability_preflight import evaluate_deploy_preflight
 from services.channel_health import evaluate_channel_health
 from services.meta_app_registry import (
     APP_A_KEY,
@@ -222,7 +222,7 @@ def test_deploy_preflight_fails_when_connect_route_missing(tmp_path: Path) -> No
 
 
 def test_deploy_preflight_source_never_reads_tenant_bindings() -> None:
-    source = (ROOT / "scripts" / "ha" / "production_deploy_preflight.py").read_text(encoding="utf-8")
+    source = (ROOT / "scripts" / "ha" / "integration_capability_preflight.py").read_text(encoding="utf-8")
     assert "list_bindings" not in source
     assert "linas_facebook_app_a_active" not in source
     assert "linas_instagram_app_a_active" not in source
@@ -231,7 +231,7 @@ def test_deploy_preflight_source_never_reads_tenant_bindings() -> None:
 def test_ready_and_preflight_never_inspect_tenant_bindings() -> None:
     ready_source = inspect.getsource(get_meta_registry_readiness)
     health_source = (ROOT / "modules" / "dashboard_api_health.py").read_text(encoding="utf-8")
-    preflight_source = (ROOT / "scripts" / "ha" / "production_deploy_preflight.py").read_text(encoding="utf-8")
+    preflight_source = (ROOT / "scripts" / "ha" / "integration_capability_preflight.py").read_text(encoding="utf-8")
     for source in (ready_source, health_source, preflight_source):
         assert "list_bindings" not in source
         assert "linas_facebook_app_a_active" not in source
@@ -260,7 +260,7 @@ def test_new_readiness_modules_stay_under_500_lines() -> None:
         "services/channel_health.py",
         "services/meta_app_registry.py",
         "modules/dashboard_api_health.py",
-        "scripts/ha/production_deploy_preflight.py",
+        "scripts/ha/integration_capability_preflight.py",
         "modules/channel_health_api.py",
         "tests/test_production_readiness.py",
     ):
