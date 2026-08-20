@@ -231,9 +231,7 @@ def test_deploy_preflight_source_never_reads_tenant_bindings() -> None:
 def test_ready_and_preflight_never_inspect_tenant_bindings() -> None:
     ready_source = inspect.getsource(get_meta_registry_readiness)
     health_source = (ROOT / "modules" / "dashboard_api_health.py").read_text(encoding="utf-8")
-    preflight_source = (ROOT / "scripts" / "ha" / "production_deploy_preflight.py").read_text(
-        encoding="utf-8"
-    )
+    preflight_source = (ROOT / "scripts" / "ha" / "production_deploy_preflight.py").read_text(encoding="utf-8")
     for source in (ready_source, health_source, preflight_source):
         assert "list_bindings" not in source
         assert "linas_facebook_app_a_active" not in source

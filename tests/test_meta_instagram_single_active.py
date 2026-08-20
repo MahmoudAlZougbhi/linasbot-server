@@ -211,9 +211,7 @@ def test_file_registry_repairs_same_tenant_cross_flow_duplicate(registry: MetaAp
     assert ready_before is True
     assert checks_before["registry_backend_ready"] is True
     assert "active_indexes_exclusive" not in checks_before
-    duplicate_active = [
-        item for item in registry.list_bindings(include_inactive=False) if item.channel == "instagram"
-    ]
+    duplicate_active = [item for item in registry.list_bindings(include_inactive=False) if item.channel == "instagram"]
     assert len(duplicate_active) == 2
 
     assert registry.archive_superseded_duplicate_bindings(actor_id="repair") == 1
