@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 T = TypeVar("T")
 
@@ -25,7 +25,7 @@ def run_firestore_transaction(db: Any, fn: Callable[[Any], T]) -> T:
         def _run(transaction: Any) -> T:
             return fn(transaction)
 
-        return _run(transaction)
+        return cast(T, _run(transaction))
     result = fn(transaction)
     transaction.commit()
-    return result
+    return cast(T, result)
