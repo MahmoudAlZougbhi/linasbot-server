@@ -261,6 +261,7 @@ def test_new_readiness_modules_stay_under_500_lines() -> None:
         "services/meta_app_registry.py",
         "modules/dashboard_api_health.py",
         "scripts/ha/integration_capability_preflight.py",
+        "scripts/ha/target_platform_readiness_preflight.py",
         "modules/channel_health_api.py",
         "tests/test_production_readiness.py",
     ):
