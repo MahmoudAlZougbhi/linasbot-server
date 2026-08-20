@@ -79,6 +79,30 @@ class MetaReadinessTests(unittest.TestCase):
         self.assertFalse(checks["app_id_allowed_for_mode"])
         self.assertFalse(checks["page_id_allowlisted"])
 
+    def test_wrong_identity_does_not_fail_platform_readiness(self):
+        settings = MetaMessagingSettings(
+            enabled=True,
+            app_secret="secret",
+            page_id="WRONG",
+            page_access_token="page-token",
+            instagram_account_id="",
+            verify_token="verify-token",
+            graph_api_version="v24.0",
+        )
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "META_APP_ID": "999000111",
+                "META_SOCIAL_ROLLBACK_ACTIVE": "false",
+                "META_SOCIAL_NEW_APP_REQUIRED": "true",
+            },
+            clear=False,
+        ):
+            ready, checks = get_meta_messaging_readiness(settings)
+        self.assertTrue(ready)
+        self.assertFalse(checks["page_id_allowlisted"])
+        self.assertFalse(checks["instagram_id_allowlisted"])
+
     def test_retired_app_after_cutover_is_ready_only_in_explicit_single_secret_rollback_mode(self):
         settings = MetaMessagingSettings(
             enabled=True,

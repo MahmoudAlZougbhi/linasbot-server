@@ -12,5 +12,6 @@ def test_main_registers_critical_public_routes() -> None:
     paths = {route.path for route in app.routes if isinstance(route, Route) and isinstance(route.path, str)}
     assert "/api/health" in paths
     assert "/api/ready" in paths
+    assert "/api/channel-health" in paths
     assert "/webhook" in paths
     assert "/api/auth/login" in paths

@@ -8,6 +8,7 @@ Health: dashboard_api_health; lab leftovers: lab_message/lab_voice/lab_upload; h
 from __future__ import annotations
 
 # Register routes (import side effects).
+from modules import channel_health_api as channel_health_api  # noqa: F401
 from modules import dashboard_api_health as dashboard_api_health  # noqa: F401
 from modules import dashboard_api_lab_message as dashboard_api_lab_message  # noqa: F401
 from modules import dashboard_api_lab_upload as dashboard_api_lab_upload  # noqa: F401

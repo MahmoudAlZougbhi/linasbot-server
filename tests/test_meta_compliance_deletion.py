@@ -535,6 +535,7 @@ def test_production_main_route_inventory_is_explicit() -> None:
     assert {
         "/api/health",
         "/api/ready",
+        "/api/channel-health",
         "/api/auth/login",
         "/webhook",
         "/webhook/meta-messaging",

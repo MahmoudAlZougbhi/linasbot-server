@@ -149,6 +149,7 @@ def user_has_permission(session: SessionRecord, permission: str) -> bool:
 _PUBLIC_EXACT: set[tuple[str, str]] = {
     ("GET", "/api/health"),
     ("GET", "/api/ready"),
+    ("GET", "/api/channel-health"),
     ("POST", "/api/auth/login"),
     ("POST", "/api/auth/register"),
     ("POST", "/api/auth/forgot-password"),

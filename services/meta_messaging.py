@@ -14,6 +14,14 @@ import httpx
 
 from services.meta_app_registry import get_meta_graph_api_version
 
+META_MESSAGING_PLATFORM_KEYS: tuple[str, ...] = (
+    "app_id_configured",
+    "app_id_allowed_for_mode",
+    "app_secret_configured",
+    "verify_token_configured",
+    "graph_api_version_allowlisted",
+)
+
 
 @dataclass(frozen=True)
 class MetaMessagingSettings:
@@ -47,7 +55,11 @@ def get_meta_messaging_settings() -> MetaMessagingSettings:
 
 
 def get_meta_messaging_readiness(settings: MetaMessagingSettings | None = None) -> tuple[bool, dict[str, bool]]:
-    """Return boolean-only readiness for the strictly allowlisted social integration."""
+    """Boolean-only platform readiness for the legacy single-app Meta path.
+
+    Page/Instagram allowlist identity is diagnostic only and must not fail
+    platform readiness. Facebook-only or Instagram-only remains platform-ready.
+    """
 
     current = settings or get_meta_messaging_settings()
     app_id = (os.getenv("META_APP_ID") or "").strip()
@@ -72,7 +84,8 @@ def get_meta_messaging_readiness(settings: MetaMessagingSettings | None = None) 
         "instagram_id_allowlisted": current.instagram_account_id == "17841413184256533",
         "graph_api_version_allowlisted": current.graph_api_version == "v24.0",
     }
-    return all(checks.values()), checks
+    platform_ok = all(bool(checks[key]) for key in META_MESSAGING_PLATFORM_KEYS)
+    return platform_ok, checks
 
 
 def resolve_meta_send_account_id(
