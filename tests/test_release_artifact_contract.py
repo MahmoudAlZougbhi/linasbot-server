@@ -159,6 +159,7 @@ def test_archive_is_byte_deterministic_and_extracts_exact_modes_under_umask(tmp_
         )
     finally:
         os.umask(previous_umask)
+    assert stat.S_IMODE((tmp_path / "extracted").stat().st_mode) == 0o755
     assert stat.S_IMODE((tmp_path / "extracted" / "assets").stat().st_mode) == 0o755
     assert stat.S_IMODE((tmp_path / "extracted" / "index.html").stat().st_mode) == 0o644
     assert stat.S_IMODE((tmp_path / "extracted" / "assets" / "app.js").stat().st_mode) == 0o755
