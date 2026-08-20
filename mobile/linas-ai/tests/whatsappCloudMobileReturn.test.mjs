@@ -12,16 +12,16 @@ function read(rel) {
 
 describe('whatsapp cloud mobile return + card', () => {
   it('parses wa_connection deep link without tokens', () => {
-    const nav = read('app/navigation.ts');
-    assert.match(nav, /wa_connection/);
-    assert.match(nav, /waConnection/);
-    assert.doesNotMatch(nav, /access_token/);
+    const link = read('app/integrationsDeepLink.ts');
+    assert.match(link, /wa_connection/);
+    assert.match(link, /waConnection/);
+    assert.doesNotMatch(link, /access_token/);
   });
 
   it('Integrations deep link ignores bridge subpaths', () => {
-    const nav = read('app/navigation.ts');
-    assert.match(nav, /path !== 'integrations'/);
-    assert.match(nav, /never bridge URLs/);
+    const link = read('app/integrationsDeepLink.ts');
+    assert.match(link, /path !== 'integrations'/);
+    assert.match(link, /never bridge URLs/);
   });
 
   it('IntegrationsScreen wires WhatsApp card and deep-link refetch', () => {

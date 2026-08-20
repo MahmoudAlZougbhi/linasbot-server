@@ -51,7 +51,7 @@ export function confirmDisconnectTikTok(args: {
   onBusy: (platform: string | null) => void;
   onError: (message: string | null) => void;
   onAuthGate: () => void;
-  onReload: () => Promise<void>;
+  onReload: () => Promise<unknown>;
 }): void {
   Alert.alert(args.tr('disconnectAccount'), `${args.accountName}\n${args.tr('disconnectAccountConfirm')}`, [
     { text: args.tr('usersCancel'), style: 'cancel' },

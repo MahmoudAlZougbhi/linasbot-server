@@ -3,6 +3,10 @@ import { Linking } from 'react-native';
 import { z } from 'zod';
 
 import { ApiError, apiFetch } from '../../api/client';
+import {
+  metaAuthSessionOutcome,
+  type MetaAuthSessionOutcome,
+} from '../../app/integrationsDeepLink';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -74,7 +78,11 @@ export function apiErrorDetail(err: ApiError): string | null {
   return null;
 }
 
-export async function startMetaOAuth(platform: 'instagram' | 'facebook'): Promise<void> {
+export type MetaOAuthSessionResult = { outcome: MetaAuthSessionOutcome };
+
+export async function startMetaOAuth(
+  platform: 'instagram' | 'facebook',
+): Promise<MetaOAuthSessionResult> {
   const path =
     platform === 'instagram'
       ? '/api/meta/connections/instagram-login/start'
@@ -104,23 +112,7 @@ export async function startMetaOAuth(platform: 'instagram' | 'facebook'): Promis
     );
   }
 
-  if (result.type === 'cancel' || result.type === 'dismiss') {
-    throw new MetaOAuthConnectError('cancelled', 'Meta authorization was cancelled');
-  }
-  if (result.type === 'success') {
-    const returned = result.url || '';
-    if (/meta_connection=(cancelled|canceled)/i.test(returned)) {
-      throw new MetaOAuthConnectError('cancelled', 'Meta authorization was cancelled');
-    }
-    if (/meta_connection=failed/i.test(returned)) {
-      throw new MetaOAuthConnectError('failed', 'Meta authorization did not complete');
-    }
-    return;
-  }
-  throw new MetaOAuthConnectError(
-    'browser_unavailable',
-    'Meta authorization did not complete',
-  );
+  return { outcome: metaAuthSessionOutcome(result) };
 }
 
 export async function disconnectMetaPlatform(platform: 'instagram' | 'facebook'): Promise<void> {

@@ -60,7 +60,7 @@ export function useWhatsAppIntegrations({ onAuthGate, onError }: Opts) {
     }
   }
 
-  async function disconnectWhatsApp(after?: () => Promise<void>) {
+  async function disconnectWhatsApp(after?: () => Promise<unknown>) {
     const connectionId = waStatus?.connection?.connection_id;
     if (!connectionId || waBusy) return;
     setWaBusy(true);
@@ -75,7 +75,7 @@ export function useWhatsAppIntegrations({ onAuthGate, onError }: Opts) {
     }
   }
 
-  async function setWhatsAppAi(connectionId: string, enabled: boolean, after?: () => Promise<void>) {
+  async function setWhatsAppAi(connectionId: string, enabled: boolean, after?: () => Promise<unknown>) {
     if (waBusy) return;
     setWaBusy(true);
     try {
