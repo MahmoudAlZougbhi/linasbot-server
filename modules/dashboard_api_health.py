@@ -109,18 +109,28 @@ async def ready() -> Any:
     if not separation.ok:
         overall_ok = False
 
-    from services.meta_app_registry import get_meta_registry_readiness, meta_multi_app_registry_enabled
-    from services.meta_messaging import get_meta_messaging_readiness, get_meta_messaging_settings
+    from services.meta_app_registry import (
+        META_PLATFORM_READINESS_KEYS,
+        get_meta_registry_readiness,
+        meta_multi_app_registry_enabled,
+    )
+    from services.meta_messaging import (
+        META_MESSAGING_PLATFORM_KEYS,
+        get_meta_messaging_readiness,
+        get_meta_messaging_settings,
+    )
 
     meta_settings = get_meta_messaging_settings()
     if meta_multi_app_registry_enabled():
         meta_ok, meta_checks = get_meta_registry_readiness()
+        platform_meta = {key: meta_checks.get(key) for key in META_PLATFORM_READINESS_KEYS}
     else:
         meta_ok, meta_checks = get_meta_messaging_readiness(meta_settings)
+        platform_meta = {key: meta_checks.get(key) for key in META_MESSAGING_PLATFORM_KEYS}
     checks["meta_social_messaging"] = {
         "ok": meta_ok if meta_settings.enabled else True,
         "enabled": meta_settings.enabled,
-        **meta_checks,
+        **platform_meta,
     }
     if meta_settings.enabled and not meta_ok:
         overall_ok = False
@@ -137,7 +147,9 @@ async def ready() -> Any:
     if not boc_check.get("ok"):
         overall_ok = False
 
-    # Meta Cloud credentials required when WhatsApp is enabled in production (Cloud-only).
+    # Platform WhatsApp Cloud credentials: blocking in production when the
+    # WhatsApp service is enabled. Tenant WhatsApp disconnect is diagnostic
+    # only via /api/channel-health and must never flip overall_ok.
     provider = (os.getenv("WHATSAPP_PROVIDER") or "meta").strip().lower() or "meta"
     if provider in ("cloud",):
         provider = "meta"

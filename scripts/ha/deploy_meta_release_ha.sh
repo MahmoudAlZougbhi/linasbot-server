@@ -65,6 +65,7 @@ CLUSTER_ENV_HELPER_REPO_PATH=scripts/ha/cluster_runtime_env_contract.py
 PRODUCTION_GUARD_REPO_PATH=scripts/ha/production_mutation_guard.py
 RELEASE_VERIFY_REPO_PATH=scripts/ha/release_verify_server.py
 RELEASE_READINESS_REPO_PATH=scripts/ha/release_readiness_probe.py
+DEPLOY_PREFLIGHT_REPO_PATH=scripts/ha/integration_capability_preflight.py
 RELEASE_ALEMBIC_MIGRATE_REPO_PATH=scripts/ha/release_alembic_migrate.py
 META_IG_SINGLE_MIGRATION_REPO_PATH=alembic/versions/20260820_meta_ig_single.py
 META_IG_SINGLE_COMPAT_MARKER_REPO_PATH=scripts/ha/compat/20260820_meta_ig_single_baseline_v1
@@ -4655,6 +4656,21 @@ if response.status != 200 or payload.get("ok") is not True:
 PY
 }
 
+assert_integration_capability_preflight() {
+  local target_sha="$1"
+  local script="/run/linasbot-capability-preflight.py"
+  validate_sha "$target_sha"
+  git -C "$REPO_DIR" cat-file -e "$target_sha:$DEPLOY_PREFLIGHT_REPO_PATH" || \
+    die "target integration-capability preflight helper is missing"
+  git -C "$REPO_DIR" show "$target_sha:$DEPLOY_PREFLIGHT_REPO_PATH" > "$script"
+  chmod 0700 "$script"
+  run_system_python_control "$script" \
+    --git-dir "$REPO_DIR" \
+    --git-sha "$target_sha" \
+    --env-file "$REPO_DIR/.env" || \
+    die "integration capability preflight failed; new-user connect paths are not intact"
+}
+
 assert_health_while_drained() {
   run_system_python_control - <<'PY'
 import json
@@ -4908,6 +4924,7 @@ assert_target_object() {
   git -C "$REPO_DIR" cat-file -e "$target_sha:$PRODUCTION_GUARD_REPO_PATH"
   git -C "$REPO_DIR" cat-file -e "$target_sha:$RELEASE_VERIFY_REPO_PATH"
   git -C "$REPO_DIR" cat-file -e "$target_sha:$RELEASE_READINESS_REPO_PATH"
+  git -C "$REPO_DIR" cat-file -e "$target_sha:$DEPLOY_PREFLIGHT_REPO_PATH"
   git -C "$REPO_DIR" cat-file -e "$target_sha:$RELEASE_ALEMBIC_MIGRATE_REPO_PATH"
   git -C "$REPO_DIR" cat-file -e "$target_sha:$REQUIREMENTS_LOCK_REPO_PATH"
   git -C "$REPO_DIR" cat-file -e "$target_sha:scripts/ha/verify_meta_release_ha.sh"
@@ -5056,11 +5073,16 @@ node_preflight() {
   local expected_bootstrap_plan="${4:-}"
   local expected_lb_attestation_sha="${5:-}"
   local expected_lb_projection_sha="${6:-}"
+  local tree_proof="${7:-required}"
   local head node drain peer queue python_runtime_cluster_sha baseline_artifacts
   local schema_compatibility_evidence
   local lb_observed_at
   local blocker=0
-  python_runtime_cluster_sha="$(assert_python_runtime_contract "$expected_node_id")"
+  case "$tree_proof" in
+    required|deferred-until-restore) ;;
+    *) die "Python runtime tree proof mode is invalid" ;;
+  esac
+  python_runtime_cluster_sha="$(assert_python_runtime_contract "$expected_node_id" "$tree_proof")"
   assert_canonical_repo "$target_sha"
   assert_no_other_meta_transaction
   if [ -n "$expected_bootstrap_plan" ]; then
@@ -5071,6 +5093,7 @@ node_preflight() {
   head="$(current_head)"
   validate_sha "$head"
   assert_target_object "$target_sha" "$expected_helper_hash"
+  assert_integration_capability_preflight "$target_sha"
   git -C "$REPO_DIR" diff --quiet "$head" -- || die "live tracked tree is dirty"
   git -C "$REPO_DIR" diff --cached --quiet "$head" -- || die "live index is dirty"
   schema_compatibility_evidence="$(release_schema_compatibility_evidence "$target_sha" "$head")"
@@ -9560,7 +9583,7 @@ node_dispatch() {
   case "$phase" in
     preflight)
       validate_sha "${1:-}"
-      node_preflight "$1" "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}"
+      node_preflight "$1" "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" "${7:-}"
       ;;
     lb-attestation)
       validate_sha "${1:-}"
@@ -11166,11 +11189,13 @@ orchestrate() {
   # produces one complete owner remediation set without crossing the mutation boundary.
   set +e
   local_preflight="$(node_preflight "$target_sha" node01 "$helper_hash" \
-    "$expected_bootstrap_plan" "$lb_attestation_sha" "$lb_ready_projection_sha")"
+    "$expected_bootstrap_plan" "$lb_attestation_sha" "$lb_ready_projection_sha" \
+    deferred-until-restore)"
   local_preflight_rc=$?
   peer_preflight="$(
     remote_node "$peer_host" preflight "$target_sha" node02 "$helper_hash" \
-      "$expected_bootstrap_plan" "$lb_attestation_sha" "$lb_ready_projection_sha"
+      "$expected_bootstrap_plan" "$lb_attestation_sha" "$lb_ready_projection_sha" \
+      deferred-until-restore
   )"
   peer_preflight_rc=$?
   set -e

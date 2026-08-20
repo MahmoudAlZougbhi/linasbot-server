@@ -200,6 +200,7 @@ class TestRouteInventory:
         expected_public = {
             ("GET", "/api/health"),
             ("GET", "/api/ready"),
+            ("GET", "/api/channel-health"),
             ("GET", "/api/queue/ready"),
             ("POST", "/api/auth/login"),
             ("POST", "/api/auth/register"),

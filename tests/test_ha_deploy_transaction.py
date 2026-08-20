@@ -677,6 +677,7 @@ def test_initial_release_drain_does_not_require_target_code_to_be_live() -> None
     assert "assert_unit_contract linasbot" in preflight
     assert "assert_ready" in preflight
     assert "assert_lb_ready" in preflight
+    assert "assert_integration_capability_preflight" in preflight
     assert 'assert_target_object "$target_sha"' in preflight
     assert "verify_meta_release_ha.sh" not in preflight
 

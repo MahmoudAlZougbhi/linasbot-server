@@ -367,6 +367,8 @@ def test_deploy_readiness_checks_protected_ha_helper_not_retired_entrypoint() ->
     assert 'cat-file -e "$target_sha:scripts/prod_cm_preserve_durable_flags.sh"' in readiness
     assert "linasbot-worker@' scripts/ha/deploy_meta_release_ha.sh" in readiness
     assert "api/queue/ready' scripts/ha/deploy_meta_release_ha.sh" in readiness
+    assert "assert_integration_capability_preflight" in readiness
+    assert "scripts/ha/integration_capability_preflight.py" in readiness
     assert "prod_cm_preserve_durable_flags.sh' deploy.sh" not in readiness
     assert "linasbot-worker@' deploy.sh" not in readiness
     assert "api/queue/ready' deploy.sh" not in readiness

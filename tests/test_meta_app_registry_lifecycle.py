@@ -291,7 +291,7 @@ async def test_app_b_signature_cannot_route_app_a_active_binding(registry: MetaA
     assert "sensitive-token" not in json.dumps(routed[0].event)
 
 
-def test_registry_readiness_requires_both_lina_channels_on_app_a(registry: MetaAppRegistry) -> None:
+def test_registry_platform_readiness_allows_single_lina_channel_on_app_a(registry: MetaAppRegistry) -> None:
     app_a_id = get_meta_app_configs()[APP_A_KEY].app_id
     registry.activate_binding(
         tenant_id="linas",
@@ -304,9 +304,12 @@ def test_registry_readiness_requires_both_lina_channels_on_app_a(registry: MetaA
         actor_id="owner",
     )
     ready, checks = get_meta_registry_readiness(registry)
-    assert ready is False
-    assert checks["linas_facebook_app_a_active"] is True
-    assert checks["linas_instagram_app_a_active"] is False
+    assert ready is True
+    assert checks["encryption_key_configured"] is True
+    assert checks["app_a_configured"] is True
+    assert checks["registry_backend_ready"] is True
+    assert "linas_facebook_app_a_active" not in checks
+    assert "linas_instagram_app_a_active" not in checks
 
     registry.activate_binding(
         tenant_id="linas",
@@ -320,7 +323,10 @@ def test_registry_readiness_requires_both_lina_channels_on_app_a(registry: MetaA
     )
     ready, checks = get_meta_registry_readiness(registry)
     assert ready is True
-    assert all(checks.values())
+    assert "linas_instagram_app_a_active" not in checks
+    assert checks["encryption_key_configured"] is True
+    assert checks["app_a_configured"] is True
+    assert checks["registry_backend_ready"] is True
 
 
 def test_authorize_oauth_asset_preserves_comment_webhook_fields_on_reauth(

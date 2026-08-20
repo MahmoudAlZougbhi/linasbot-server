@@ -10,6 +10,7 @@ from services.meta_app_registry import (
     MetaAssetBinding,
     MetaBindingCredential,
     MetaCredentialCipher,
+    diagnose_active_meta_binding,
     get_meta_app_configs,
     get_meta_app_registry,
     get_meta_registry_readiness,
@@ -42,6 +43,7 @@ def test_meta_app_registry_preserves_public_api_via_mixins() -> None:
     assert callable(get_meta_app_configs)
     assert callable(get_meta_app_registry)
     assert callable(get_meta_registry_readiness)
+    assert callable(diagnose_active_meta_binding)
     assert callable(meta_multi_app_registry_enabled)
     for name in (
         "authorize_oauth_asset",

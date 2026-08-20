@@ -107,6 +107,8 @@ __all__ = [
     "get_meta_app_registry",
     "get_meta_graph_api_version",
     "get_meta_registry_readiness",
+    "diagnose_active_meta_binding",
+    "META_PLATFORM_READINESS_KEYS",
     "identify_signed_meta_app",
     "mask_asset_id",
     "meta_multi_app_registry_enabled",
@@ -141,21 +143,74 @@ def reset_meta_app_registry_for_tests() -> None:
     _registry_instance = None
 
 
+META_PLATFORM_READINESS_KEYS: tuple[str, ...] = (
+    "encryption_key_configured",
+    "app_a_configured",
+    "registry_backend_ready",
+)
+
+
+def diagnose_active_meta_binding(
+    registry: MetaAppRegistry,
+    binding: MetaAssetBinding,
+    *,
+    now: int | None = None,
+) -> str | None:
+    """Return a tenant-binding failure reason, or None when the credential is healthy.
+
+    This is diagnostic only. It must never be used as a platform / LB gate.
+    """
+
+    checked_at = int(time.time()) if now is None else now
+    try:
+        credential = registry.get_credential(binding)
+        app = get_meta_app_configs().get(binding.app_key)
+        from services.meta_instagram_login_config import required_scopes_for_binding
+
+        required_scopes = required_scopes_for_binding(
+            channel=binding.channel,
+            auth_flow=binding.auth_flow,
+        )
+        instagram_login_app_id = (os.getenv("META_INSTAGRAM_LOGIN_APP_ID") or "1035856539045307").strip()
+        if app is None or not app.enabled:
+            return "app_disabled"
+        if credential.token_app_id != app.app_id and not (
+            binding.auth_flow == "instagram_login" and credential.token_app_id == instagram_login_app_id
+        ):
+            return "token_app_mismatch"
+        if binding.auth_flow == "facebook_login" and credential.token_profile_id != binding.page_id:
+            return "token_profile_mismatch"
+        if binding.auth_flow == "instagram_login" and credential.token_profile_id != binding.asset_id:
+            return "token_profile_mismatch"
+        if not required_scopes.issubset(credential.scopes):
+            return "missing_scopes"
+        if set(credential.scopes) & META_FORBIDDEN_SCOPES:
+            return "forbidden_scopes"
+        if credential.expires_at is not None and credential.expires_at <= checked_at:
+            return "expired_token"
+        if binding.auth_flow == "instagram_login" and binding.active and binding.webhook_subscription_status != "ready":
+            return "webhook_not_ready"
+    except MetaRegistryError:
+        return "credential_unavailable"
+    return None
+
+
 def get_meta_registry_readiness(
     registry: MetaAppRegistry | None = None,
 ) -> tuple[bool, dict[str, bool]]:
-    """Fail-closed readiness for enabling the encrypted multi-app router."""
+    """Platform-only Meta registry readiness for /api/ready and HA assert_ready.
+
+    Binding, token, webhook, and tenant connection state belong in
+    /api/channel-health. The unused registry argument is kept so callers that
+    still pass a test registry do not inspect tenant rows on this path.
+    """
 
     from services.meta_app_registry_bindings import resolve_meta_registry_backend
 
+    _ = registry
     checks: dict[str, bool] = {
         "encryption_key_configured": len((os.getenv("META_CREDENTIAL_ENCRYPTION_KEY") or "").strip()) >= 32,
         "app_a_configured": get_meta_app_configs()[APP_A_KEY].enabled,
-        "linas_facebook_app_a_active": False,
-        "linas_instagram_app_a_active": False,
-        "active_indexes_exclusive": True,
-        "active_credentials_valid": True,
-        "app_b_not_active_on_linas": True,
         "registry_backend_ready": True,
     }
     try:
@@ -173,68 +228,5 @@ def get_meta_registry_readiness(
                 get_engine(require=True)
             except Exception:  # noqa: BLE001 — readiness must fail closed
                 checks["registry_backend_ready"] = False
-    try:
-        current_registry = registry or get_meta_app_registry()
-        bindings = current_registry.list_bindings(include_inactive=False)
-        active_asset_keys: set[str] = set()
-        now = int(time.time())
-        for binding in bindings:
-            if binding.exclusive_asset_key in active_asset_keys:
-                checks["active_indexes_exclusive"] = False
-            active_asset_keys.add(binding.exclusive_asset_key)
-            if binding.app_key == APP_B_KEY and binding.asset_id in {
-                LINAS_PAGE_ID,
-                LINAS_INSTAGRAM_ACCOUNT_ID,
-            }:
-                checks["app_b_not_active_on_linas"] = False
-            try:
-                credential = current_registry.get_credential(binding)
-                app = get_meta_app_configs().get(binding.app_key)
-                from services.meta_instagram_login_config import required_scopes_for_binding
-
-                required_scopes = required_scopes_for_binding(
-                    channel=binding.channel,
-                    auth_flow=binding.auth_flow,
-                )
-                instagram_login_app_id = (os.getenv("META_INSTAGRAM_LOGIN_APP_ID") or "1035856539045307").strip()
-                if (
-                    app is None
-                    or not app.enabled
-                    or (
-                        credential.token_app_id != app.app_id
-                        and not (
-                            binding.auth_flow == "instagram_login" and credential.token_app_id == instagram_login_app_id
-                        )
-                    )
-                    or (binding.auth_flow == "facebook_login" and credential.token_profile_id != binding.page_id)
-                    or (binding.auth_flow == "instagram_login" and credential.token_profile_id != binding.asset_id)
-                    or not required_scopes.issubset(credential.scopes)
-                    or set(credential.scopes) & META_FORBIDDEN_SCOPES
-                    or (credential.expires_at is not None and credential.expires_at <= now)
-                    or (
-                        binding.auth_flow == "instagram_login"
-                        and binding.active
-                        and binding.webhook_subscription_status != "ready"
-                    )
-                ):
-                    checks["active_credentials_valid"] = False
-            except MetaRegistryError:
-                checks["active_credentials_valid"] = False
-            if (
-                binding.app_key == APP_A_KEY
-                and binding.tenant_id == "linas"
-                and binding.channel == "facebook"
-                and binding.asset_id == LINAS_PAGE_ID
-            ):
-                checks["linas_facebook_app_a_active"] = True
-            if (
-                binding.app_key == APP_A_KEY
-                and binding.tenant_id == "linas"
-                and binding.channel == "instagram"
-                and binding.asset_id == LINAS_INSTAGRAM_ACCOUNT_ID
-            ):
-                checks["linas_instagram_app_a_active"] = True
-    except MetaRegistryError:
-        checks["active_indexes_exclusive"] = False
-        checks["active_credentials_valid"] = False
-    return all(checks.values()), checks
+    platform_ok = all(bool(checks[key]) for key in META_PLATFORM_READINESS_KEYS)
+    return platform_ok, checks

@@ -21,6 +21,7 @@ def test_dashboard_api_modules_under_500_lines() -> None:
     assert _line_count("modules/dashboard_api.py") < 500
     assert _line_count("modules/dashboard_api_helpers.py") < 500
     assert _line_count("modules/dashboard_api_health.py") < 500
+    assert _line_count("modules/channel_health_api.py") < 500
     assert _line_count("modules/dashboard_api_lab_message.py") < 500
     assert _line_count("modules/dashboard_api_lab_voice.py") < 500
     assert _line_count("modules/dashboard_api_lab_upload.py") < 500
@@ -28,6 +29,7 @@ def test_dashboard_api_modules_under_500_lines() -> None:
 
 def test_dashboard_api_preserves_helper_exports_and_route_modules() -> None:
     from modules import (
+        channel_health_api,
         dashboard_api,
         dashboard_api_health,
         dashboard_api_lab_message,
@@ -43,6 +45,7 @@ def test_dashboard_api_preserves_helper_exports_and_route_modules() -> None:
     assert callable(restore_user_state_from_firestore)
     assert callable(dashboard_api_health.health)
     assert callable(dashboard_api_health.ready)
+    assert callable(channel_health_api.channel_health)
     assert "whatsapp_cloud_credentials" in Path("modules/dashboard_api_health.py").read_text(encoding="utf-8")
     assert "montymobile_api_key" not in Path("modules/dashboard_api_health.py").read_text(encoding="utf-8")
     assert callable(dashboard_api_lab_message.test_message)
