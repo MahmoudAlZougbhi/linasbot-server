@@ -4688,7 +4688,8 @@ assert_target_platform_readiness_preflight() {
   source_root="$(mktemp -d -p /run linasbot-target-ready.XXXXXXXX)"
   test "$(stat -c '%u:%g:%a' "$source_root")" = "0:0:700" || \
     die "target platform-readiness source root is unsafe"
-  git -C "$REPO_DIR" archive --format=tar "$target_sha" | tar -x -C "$source_root"
+  git -C "$REPO_DIR" archive --format=tar "$target_sha" -- \
+    modules services utils handlers storage db config.py | tar -x -C "$source_root"
   test -f "$source_root/modules/dashboard_api_health.py" || \
     die "target platform-readiness archive is missing dashboard health"
   test -f "$source_root/services/meta_app_registry.py" || \
