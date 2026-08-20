@@ -4674,30 +4674,22 @@ assert_integration_capability_preflight() {
 
 assert_target_platform_readiness_preflight() {
   local target_sha="$1"
-  local script="/run/linasbot-target-platform-ready.py"
-  local source_root expected_blob actual_blob
+  local script expected_blob actual_blob
   validate_sha "$target_sha"
   git -C "$REPO_DIR" cat-file -e "$target_sha:$TARGET_PLATFORM_READY_REPO_PATH" || \
     die "target platform-readiness preflight helper is missing"
   expected_blob="$(git -C "$REPO_DIR" rev-parse "$target_sha:$TARGET_PLATFORM_READY_REPO_PATH")"
+  script="$(mktemp -p "$META_HA_STATE_ROOT" linasbot-target-platform-ready.XXXXXXXX)"
   git -C "$REPO_DIR" show "$target_sha:$TARGET_PLATFORM_READY_REPO_PATH" > "$script"
   chmod 0700 "$script"
   actual_blob="$(git -C "$REPO_DIR" hash-object "$script")"
   test "$actual_blob" = "$expected_blob" || \
     die "target platform-readiness preflight helper differs from the authorized blob"
-  source_root="$(mktemp -d -p /run linasbot-target-ready.XXXXXXXX)"
-  test "$(stat -c '%u:%g:%a' "$source_root")" = "0:0:700" || \
-    die "target platform-readiness source root is unsafe"
-  git -C "$REPO_DIR" archive --format=tar "$target_sha" -- \
-    modules services utils handlers storage db config.py | tar -x -C "$source_root"
-  test -f "$source_root/modules/dashboard_api_health.py" || \
-    die "target platform-readiness archive is missing dashboard health"
-  test -f "$source_root/services/meta_app_registry.py" || \
-    die "target platform-readiness archive is missing Meta registry"
-  PYTHONPATH="$source_root" PYTHONDONTWRITEBYTECODE=1 \
+  PYTHONDONTWRITEBYTECODE=1 \
     "$REPO_DIR/venv/bin/python" -B -I "$script" \
-      --source-root "$source_root" \
+      --repo-dir "$REPO_DIR" \
       --git-sha "$target_sha" \
+      --state-root "$META_HA_STATE_ROOT" \
       --env-file "$REPO_DIR/.env" \
       --chdir "$REPO_DIR" || \
     die "target artifact platform readiness failed; live tenant bindings were not used as a gate"
