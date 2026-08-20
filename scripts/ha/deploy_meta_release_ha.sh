@@ -5056,11 +5056,16 @@ node_preflight() {
   local expected_bootstrap_plan="${4:-}"
   local expected_lb_attestation_sha="${5:-}"
   local expected_lb_projection_sha="${6:-}"
+  local tree_proof="${7:-required}"
   local head node drain peer queue python_runtime_cluster_sha baseline_artifacts
   local schema_compatibility_evidence
   local lb_observed_at
   local blocker=0
-  python_runtime_cluster_sha="$(assert_python_runtime_contract "$expected_node_id")"
+  case "$tree_proof" in
+    required|deferred-until-restore) ;;
+    *) die "Python runtime tree proof mode is invalid" ;;
+  esac
+  python_runtime_cluster_sha="$(assert_python_runtime_contract "$expected_node_id" "$tree_proof")"
   assert_canonical_repo "$target_sha"
   assert_no_other_meta_transaction
   if [ -n "$expected_bootstrap_plan" ]; then
@@ -9560,7 +9565,7 @@ node_dispatch() {
   case "$phase" in
     preflight)
       validate_sha "${1:-}"
-      node_preflight "$1" "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}"
+      node_preflight "$1" "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" "${7:-}"
       ;;
     lb-attestation)
       validate_sha "${1:-}"
@@ -11166,11 +11171,13 @@ orchestrate() {
   # produces one complete owner remediation set without crossing the mutation boundary.
   set +e
   local_preflight="$(node_preflight "$target_sha" node01 "$helper_hash" \
-    "$expected_bootstrap_plan" "$lb_attestation_sha" "$lb_ready_projection_sha")"
+    "$expected_bootstrap_plan" "$lb_attestation_sha" "$lb_ready_projection_sha" \
+    deferred-until-restore)"
   local_preflight_rc=$?
   peer_preflight="$(
     remote_node "$peer_host" preflight "$target_sha" node02 "$helper_hash" \
-      "$expected_bootstrap_plan" "$lb_attestation_sha" "$lb_ready_projection_sha"
+      "$expected_bootstrap_plan" "$lb_attestation_sha" "$lb_ready_projection_sha" \
+      deferred-until-restore
   )"
   peer_preflight_rc=$?
   set -e
