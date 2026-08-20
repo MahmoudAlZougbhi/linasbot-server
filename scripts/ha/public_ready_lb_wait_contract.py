@@ -18,6 +18,8 @@ PRE_MUTATION_LATER_HELPER_PHASES = frozenset(
     {
         "preflight-proven",
         "peer-mark-started",
+        "automatic-rollback",
+        "automatic-rollback-both-nodes-drained",
         "recovery-lb-attested",
         "recovery-started",
         "recovery-both-nodes-drained",
