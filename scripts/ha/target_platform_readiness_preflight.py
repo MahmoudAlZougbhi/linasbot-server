@@ -63,13 +63,28 @@ def evaluate_target_platform_ready(source_root: Path) -> dict[str, Any]:
     for key in TENANT_READY_KEYS:
         if key in meta:
             raise RuntimeError(f"target ready payload still exposes tenant gate {key}")
+    checks = payload.get("checks") if isinstance(payload.get("checks"), dict) else {}
     return {
         "ok": response.status_code == 200 and payload.get("ok") is True,
         "status_code": response.status_code,
         "role": payload.get("role"),
         "lb_gate": False,
         "meta_social_messaging": meta,
+        "checks": checks,
+        "failing": failing_platform_checks(checks),
     }
+
+
+def failing_platform_checks(checks: dict[str, Any]) -> dict[str, Any]:
+    failing: dict[str, Any] = {}
+    for name, check in checks.items():
+        if isinstance(check, dict):
+            if check.get("ok") is True:
+                continue
+            failing[name] = check
+            continue
+        failing[name] = check
+    return failing
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -104,6 +119,14 @@ def main(argv: list[str] | None = None) -> int:
     sys.stdout.write("\n")
     if not report["ok"]:
         sys.stderr.write("target artifact platform readiness is not healthy\n")
+        json.dump(
+            {
+                "status_code": report["status_code"],
+                "failing": report["failing"],
+            },
+            sys.stderr,
+        )
+        sys.stderr.write("\n")
         return 1
     return 0
 

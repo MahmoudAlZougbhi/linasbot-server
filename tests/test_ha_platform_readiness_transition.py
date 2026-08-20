@@ -11,6 +11,7 @@ from modules import dashboard_api_health
 from scripts.ha.target_platform_readiness_preflight import (
     assert_platform_readiness_contract,
     evaluate_target_platform_ready,
+    failing_platform_checks,
 )
 from services.meta_app_registry import MetaAppRegistry
 from tests.test_production_readiness import _activate, _stub_platform_dependencies
@@ -58,6 +59,7 @@ def test_facebook_only_old_ready_is_503_target_artifact_is_200(
     assert report["ok"] is True
     assert report["status_code"] == 200
     assert report["lb_gate"] is False
+    assert report["failing"] == {}
     assert "linas_instagram_app_a_active" not in report["meta_social_messaging"]
 
 
@@ -96,6 +98,16 @@ def test_platform_contract_rejects_registry_that_lists_bindings(tmp_path: Path) 
         assert_platform_readiness_contract(tmp_path)
 
 
+def test_failing_platform_checks_omits_healthy_entries() -> None:
+    assert failing_platform_checks(
+        {
+            "firestore": {"ok": True},
+            "job_queue": {"ok": False, "error": "ConnectionError"},
+            "meta_social_messaging": {"ok": True, "app_a_configured": True},
+        }
+    ) == {"job_queue": {"ok": False, "error": "ConnectionError"}}
+
+
 def test_current_tree_matches_platform_readiness_contract() -> None:
     assert_platform_readiness_contract(ROOT)
 
@@ -109,6 +121,13 @@ def test_preflight_uses_target_evaluator_after_artifact_verification() -> None:
     capability = preflight.index('assert_integration_capability_preflight "$target_sha"')
     gate = preflight.index('assert_target_platform_readiness_preflight "$target_sha"')
     assert target < capability < gate
+    preflight_helper = source[
+        source.index("assert_target_platform_readiness_preflight() {") : source.index(
+            "assert_health_while_drained() {"
+        )
+    ]
+    assert 'git -C "$REPO_DIR" archive --format=tar "$target_sha"' in preflight_helper
+    assert "modules services utils handlers storage db config.py" not in preflight_helper
     assert (
         'git -C "$REPO_DIR" archive --format=tar'
         in source[source.index("assert_target_platform_readiness_preflight() {") :]
