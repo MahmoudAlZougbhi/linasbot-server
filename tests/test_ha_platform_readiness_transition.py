@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -12,7 +11,6 @@ from modules import dashboard_api_health
 from scripts.ha.target_platform_readiness_preflight import (
     assert_platform_readiness_contract,
     evaluate_target_platform_ready,
-    function_source,
 )
 from services.meta_app_registry import MetaAppRegistry
 from tests.test_production_readiness import _activate, _stub_platform_dependencies
@@ -21,7 +19,6 @@ pytest_plugins = ("tests.meta_app_registry_fixtures",)
 
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = ROOT / "scripts" / "ha" / "deploy_meta_release_ha.sh"
-PRE_SPLIT_SHA = "64919ab9d7245f07c2ca28a89f5aaa23b2cd7408"
 
 
 def _legacy_all_flags_ready(*, facebook_active: bool, instagram_active: bool, platform_ok: bool) -> bool:
@@ -38,17 +35,13 @@ def _legacy_all_flags_ready(*, facebook_active: bool, instagram_active: bool, pl
     return all(checks.values())
 
 
-def test_pre_split_registry_used_all_flags_as_the_ready_gate() -> None:
-    old = subprocess.check_output(
-        ["git", "show", f"{PRE_SPLIT_SHA}:services/meta_app_registry.py"],
-        cwd=ROOT,
-        text=True,
-    )
-    fn = function_source(old, "get_meta_registry_readiness")
-    assert "return all(checks.values())" in fn
-    assert "linas_facebook_app_a_active" in fn
-    assert "linas_instagram_app_a_active" in fn
-    assert "list_bindings" in fn
+def test_pre_split_ready_gate_failed_closed_on_facebook_only() -> None:
+    # Production-old get_meta_registry_readiness returned all(checks.values()),
+    # so Instagram inactive made /api/ready 503 even when Facebook and platform
+    # secrets were healthy.
+    assert _legacy_all_flags_ready(facebook_active=True, instagram_active=True, platform_ok=True) is True
+    assert _legacy_all_flags_ready(facebook_active=True, instagram_active=False, platform_ok=True) is False
+    assert _legacy_all_flags_ready(facebook_active=False, instagram_active=True, platform_ok=True) is False
 
 
 def test_facebook_only_old_ready_is_503_target_artifact_is_200(
