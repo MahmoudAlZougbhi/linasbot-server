@@ -112,7 +112,8 @@ def live_ready_is_platform_admissible(
 ) -> tuple[bool, dict[str, Any]]:
     if not isinstance(payload, dict) or payload.get("role") not in {None, "readiness"}:
         return False, {"error": "live_ready_role_invalid"}
-    checks = payload.get("checks") if isinstance(payload.get("checks"), dict) else {}
+    raw_checks = payload.get("checks")
+    checks: dict[str, Any] = raw_checks if isinstance(raw_checks, dict) else {}
     failing = failing_platform_checks(checks)
     if status_code == 200 and payload.get("ok") is True and not failing:
         return True, {}
