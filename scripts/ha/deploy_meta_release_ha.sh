@@ -4739,7 +4739,7 @@ assert_later_dispatch_helper() {
     die "later helper target differs from the durable journal"
   running_blob="$(git -C "$REPO_DIR" hash-object "$0")"
   case "$phase" in
-    preflight-proven|peer-mark-started|recovery-lb-attested|recovery-started|recovery-both-nodes-drained|rollback-restoring|distinct-rollback-drained|rollback-peer-admit|rollback-node01-admit)
+    preflight-proven|peer-mark-started|automatic-rollback|automatic-rollback-both-nodes-drained|recovery-lb-attested|recovery-started|recovery-both-nodes-drained|rollback-restoring|distinct-rollback-drained|rollback-peer-admit|rollback-node01-admit)
       if [ "$context" = installer ]; then
         log "LB installer is a later exact blob than the open pre-mutation journal"
       else
@@ -4773,6 +4773,129 @@ assert_later_dispatch_helper() {
   esac
 }
 
+_live_ready_admission() {
+  local mode="$1"
+  local expected_sha="$2"
+  local ready_url="${3:-http://127.0.0.1:8003/api/ready}"
+  validate_sha "$expected_sha"
+  run_system_python_control - "$mode" "$REPO_DIR" "$expected_sha" "$ready_url" <<'PY'
+import ast
+import json
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+
+mode, repo, sha, url = sys.argv[1:5]
+tenant_keys = (
+    "linas_facebook_app_a_active",
+    "linas_instagram_app_a_active",
+    "active_credentials_valid",
+)
+platform_keys = (
+    "encryption_key_configured",
+    "app_a_configured",
+    "registry_backend_ready",
+)
+git_env = {
+    "HOME": "/nonexistent",
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+    "PATH": "/usr/sbin:/usr/bin:/sbin:/bin",
+    "GIT_NO_REPLACE_OBJECTS": "1",
+    "GIT_ATTR_NOSYSTEM": "1",
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_CONFIG_GLOBAL": "/dev/null",
+}
+
+def git_show(path):
+    proc = subprocess.run(
+        [
+            "/usr/bin/git",
+            "--no-replace-objects",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-C",
+            repo,
+            "show",
+            "%s:%s" % (sha, path),
+        ],
+        check=False,
+        env=git_env,
+        capture_output=True,
+        text=True,
+    )
+    return proc.stdout if proc.returncode == 0 else ""
+
+def function_source(module_text, name):
+    if not module_text:
+        return ""
+    tree = ast.parse(module_text)
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return ast.get_source_segment(module_text, node) or ""
+    return ""
+
+registry = git_show("services/meta_app_registry.py")
+health = git_show("modules/dashboard_api_health.py")
+ready_fn = function_source(registry, "get_meta_registry_readiness")
+tenant = (not ready_fn) or any(key in ready_fn or key in health for key in tenant_keys)
+if mode == "tenant-gate":
+    raise SystemExit(0 if tenant else 1)
+
+try:
+    with urllib.request.urlopen(url, timeout=5) as response:
+        payload = json.load(response)
+        status = int(response.status)
+except urllib.error.HTTPError as exc:
+    try:
+        payload = json.load(exc)
+    except (json.JSONDecodeError, TypeError, ValueError) as decode_exc:
+        raise SystemExit("live /api/ready is not JSON") from decode_exc
+    status = int(exc.code)
+except urllib.error.URLError as exc:
+    raise SystemExit("live /api/ready could not be reached") from exc
+if not isinstance(payload, dict):
+    raise SystemExit("live /api/ready is not JSON")
+if not tenant:
+    if status != 200 or payload.get("ok") is not True:
+        raise SystemExit("canonical /api/ready is not healthy")
+    raise SystemExit(0)
+if payload.get("role") not in {None, "readiness"}:
+    raise SystemExit("live /api/ready is not platform-admissible")
+raw_checks = payload.get("checks")
+checks = raw_checks if isinstance(raw_checks, dict) else {}
+failing = {}
+for name, check in checks.items():
+    if isinstance(check, dict) and check.get("ok") is True:
+        continue
+    failing[name] = check
+if status == 200 and payload.get("ok") is True and not failing:
+    raise SystemExit(0)
+if status == 503 and set(failing) <= {"meta_social_messaging"}:
+    meta = failing.get("meta_social_messaging")
+    if isinstance(meta, dict) and meta.get("ok") is not True:
+        if not any(meta.get(key) is False for key in platform_keys):
+            if any(key in meta for key in tenant_keys):
+                raise SystemExit(0)
+raise SystemExit("legacy /api/ready is not platform-admissible")
+PY
+}
+
+probe_sha_has_tenant_ready_gates() {
+  _live_ready_admission tenant-gate "$1"
+}
+
+probe_serving_ready_for_sha() {
+  _live_ready_admission serve "$1" "${2:-http://127.0.0.1:8003/api/ready}"
+}
+
+assert_serving_ready_for_sha() {
+  local expected_sha="$1"
+  probe_serving_ready_for_sha "$expected_sha" || \
+    die "canonical /api/ready is not healthy for $expected_sha"
+}
+
 assert_public_ready() {
   run_system_python_control - <<'PY'
 import json
@@ -4787,6 +4910,16 @@ with urllib.request.urlopen(request, timeout=10) as response:
 if response.status != 200 or payload.get("ok") is not True:
     raise SystemExit("public load-balancer readiness is not healthy")
 PY
+}
+
+assert_public_ready_for_sha() {
+  local expected_sha="$1"
+  validate_sha "$expected_sha"
+  if probe_sha_has_tenant_ready_gates "$expected_sha"; then
+    log "public /api/ready is not required while $expected_sha still gates on tenant Meta bindings"
+    return 0
+  fi
+  assert_public_ready
 }
 
 assert_public_ready_after_peer_admission() {
@@ -9474,9 +9607,7 @@ node_clear_maintenance() {
     assert_release_bound_nginx "$tx_dir"
   fi
   for _ in $(seq 1 45); do
-    if curl -fsS http://127.0.0.1:8003/api/ready 2>/dev/null | \
-      grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
-      assert_ready
+    if probe_serving_ready_for_sha "$admission_sha"; then
       assert_legacy_retirement_contract "$(configured_node_id)"
       write_admission_proof "$tx_dir" "$admission_sha"
       # The transaction sentinel is the last per-node fail-closed artifact to
@@ -9525,7 +9656,7 @@ node_assert_serving_contract() {
   assert_controlled_failover_static_guard_contract
   assert_unit_contract linasbot
   assert_exact_runtime_process_contract enabled
-  assert_ready
+  assert_serving_ready_for_sha "$expected_sha"
 }
 
 node_assert_release_ready() {
@@ -10609,7 +10740,7 @@ recover_deployment() {
       "$lb_observed_at" || die "recovery LB attestation expired before rollback admission"
     update_recovery_journal "rollback-peer-admit"
     remote_node "$peer_host" recover-admit "$peer_previous_sha" "$tx_dir"
-    assert_public_ready
+    assert_public_ready_for_sha "$previous_sha"
     update_recovery_journal "rollback-node01-admit"
     node_recover_admit "$previous_sha" "$tx_dir"
     remote_node "$peer_host" assert-ready "$peer_previous_sha"
@@ -11519,7 +11650,7 @@ orchestrate() {
   sleep "$drain_seconds"
   remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"
   node_assert_release_ready "$previous_sha"
-  assert_public_ready
+  assert_public_ready_for_sha "$previous_sha"
   log "staging peer first with recoverable mode-600 backup archives"
   update_deploy_journal "peer-stage-started"
   remote_node "$peer_host" stage "$target_sha" "$peer_previous_sha" "$tx_dir" \

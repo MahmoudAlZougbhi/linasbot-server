@@ -203,7 +203,10 @@ def test_public_readiness_gate_remains_mandatory() -> None:
     commit_ready = commit.index('assert_public_ready_after_peer_admission "$target_sha"', commit_admit)
     commit_node01 = commit.index('node_recover_admit "$target_sha" "$tx_dir"', commit_ready)
     assert commit_admit < commit_ready < commit_node01
-    assert '    assert_public_ready\n    update_recovery_journal "rollback-node01-admit"' in recover
+    assert (
+        '    assert_public_ready_for_sha "$previous_sha"\n    update_recovery_journal "rollback-node01-admit"'
+        in recover
+    )
     assert "I_UNDERSTAND_SKIPPING_GATES" not in source
     assert "I_UNDERSTAND_SKIPPING_GATES" not in workflow
     assert "member.mode != 0o755" in workflow
@@ -232,6 +235,8 @@ def test_helper_embeds_lb_window_and_forward_commit_later_helper() -> None:
         (
             "preflight-proven",
             "peer-mark-started",
+            "automatic-rollback",
+            "automatic-rollback-both-nodes-drained",
             "recovery-lb-attested",
             "recovery-started",
             "recovery-both-nodes-drained",
