@@ -99,9 +99,7 @@ def test_assert_baseline_evidence_hashes_live_trees_after_production_restore() -
     ]
     assert 'evidence="$(live_baseline_artifact_evidence "$tx_dir")"' in capture
     assert_fn = helper[
-        helper.index("assert_baseline_artifact_evidence_restored() {") : helper.index(
-            "backup_live_node() {"
-        )
+        helper.index("assert_baseline_artifact_evidence_restored() {") : helper.index("backup_live_node() {")
     ]
     assert 'actual="$(live_baseline_artifact_evidence)"' in assert_fn
     assert 'live_baseline_artifact_evidence "$tx_dir"' not in assert_fn
@@ -110,9 +108,7 @@ def test_assert_baseline_evidence_hashes_live_trees_after_production_restore() -
 def test_capture_uses_saved_production_nginx_after_peer_drain() -> None:
     helper = _helper()
     live = helper[
-        helper.index("live_baseline_artifact_evidence() {") : helper.index(
-            "capture_baseline_artifact_evidence() {"
-        )
+        helper.index("live_baseline_artifact_evidence() {") : helper.index("capture_baseline_artifact_evidence() {")
     ]
     capture = helper[
         helper.index("capture_baseline_artifact_evidence() {") : helper.index(
@@ -120,15 +116,13 @@ def test_capture_uses_saved_production_nginx_after_peer_drain() -> None:
         )
     ]
     backup = helper[helper.index("backup_live_node() {") : helper.index("prepare_retry_stage() {")]
-    archive = helper[
-        helper.index("archive_nginx_rollback_authority() {") : helper.index("verify_archive() {")
-    ]
+    archive = helper[helper.index("archive_nginx_rollback_authority() {") : helper.index("verify_archive() {")]
     assert 'nginx_source="$tx_dir/maintenance-nginx.conf"' in live
     assert 'evidence="$(live_baseline_artifact_evidence "$tx_dir")"' in capture
     assert 'archive_nginx_rollback_authority "$tx_dir"' in backup
-    assert "archive_path \"$tx_dir/nginx.tar\"" not in backup
+    assert 'archive_path "$tx_dir/nginx.tar"' not in backup
     assert "--transform 's,^maintenance-nginx.conf$,etc/nginx/sites-available/linasaibot,'" in archive
-    assert 'linasbot-ha-maintenance-override' not in archive
+    assert "linasbot-ha-maintenance-override" not in archive
 
 
 def test_rollback_measures_tar_restored_nginx_before_maintenance_override() -> None:
