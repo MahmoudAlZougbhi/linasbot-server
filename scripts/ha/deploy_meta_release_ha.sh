@@ -3222,10 +3222,14 @@ assert_fresh_lb_ready_attestation() {
   local attestation_sha="$2"
   local ready_projection_sha="$3"
   local explicit_path="${4:-}"
+  local max_age="${5:-300}"
   local path helper_root rc=0 cleanup_rc=0 observed_at
   validate_sha "$source_sha"
   validate_digest "$attestation_sha"
   validate_digest "$ready_projection_sha"
+  [[ "$max_age" =~ ^[1-9][0-9]{2,3}$ ]] || die "LB attestation mutation window is invalid"
+  test "$max_age" -ge 300 && test "$max_age" -le 600 || \
+    die "LB attestation mutation window is invalid"
   test "$attestation_sha" != "$(printf '%064d' 0)" || \
     die "all-zero LB attestation digest is never authority"
   test "$ready_projection_sha" != "$(printf '%064d' 0)" || \
@@ -3251,7 +3255,7 @@ assert_fresh_lb_ready_attestation() {
   if observed_at="$(
     run_system_python_control - \
       "$helper_root/scripts/ha/manage_do_lb_ready_healthcheck.py" "$path" \
-      "$attestation_sha" "$ready_projection_sha" <<'PY'
+      "$attestation_sha" "$ready_projection_sha" "$max_age" <<'PY'
 import hashlib
 import importlib.util
 import json
@@ -3261,7 +3265,12 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-module_path, artifact_raw, artifact_sha, ready_sha = sys.argv[1:]
+module_path, artifact_raw, artifact_sha, ready_sha, max_age_raw = sys.argv[1:6]
+if not max_age_raw.isdigit():
+    raise SystemExit("LB attestation mutation window is invalid")
+max_age = int(max_age_raw)
+if max_age < 300 or max_age > 600:
+    raise SystemExit("LB attestation mutation window is invalid")
 spec = importlib.util.spec_from_file_location("linas_lb_validator", module_path)
 if spec is None or spec.loader is None:
     raise SystemExit("authorized LB validator could not be loaded")
@@ -3350,7 +3359,7 @@ if not isinstance(observed_at, str) or module._UTC_RE.fullmatch(observed_at) is 
     raise SystemExit("LB attestation observation time is invalid")
 observed = datetime.fromisoformat(observed_at[:-1] + "+00:00")
 now = datetime.now(UTC)
-if observed > now + timedelta(seconds=30) or now - observed > timedelta(seconds=300):
+if observed > now + timedelta(seconds=30) or now - observed > timedelta(seconds=max_age):
     raise SystemExit("LB attestation is older than the five-minute mutation window")
 print(observed_at)
 PY
@@ -10698,7 +10707,14 @@ recover_deployment() {
   apply_legacy_workerless_template_cluster_install "$tx_dir" "$peer_host"
   node_ensure_maintenance "$tx_dir"
   remote_node "$peer_host" ensure-maintenance "$tx_dir"
-  sleep "$drain_seconds"
+  case "$phase" in
+    automatic-rollback-both-nodes-drained|recovery-both-nodes-drained|rollback-restoring|distinct-rollback-drained|rollback-peer-admit|rollback-node01-admit|commit-recovery-parity|commit-peer-admit|commit-node01-admit)
+      log "durable phase $phase already drained both nodes; skipping extra LB drain wait"
+      ;;
+    *)
+      sleep "$drain_seconds"
+      ;;
+  esac
   update_recovery_journal "recovery-both-nodes-drained"
   apply_cpython_runtime_immutability "$tx_dir" "$release_artifact_id" "$release_artifact_api_sha"
   remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir" "$release_artifact_id" "$release_artifact_api_sha"
@@ -10712,7 +10728,8 @@ recover_deployment() {
     assert_release_artifact_parity \
       "$peer_host" "$tx_dir" "$target_sha" "$previous_sha" "$peer_previous_sha"
     test "$(assert_fresh_lb_ready_attestation \
-      "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha")" = \
+      "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha" \
+      "" "$((300 + drain_seconds))")" = \
       "$lb_observed_at" || die "recovery LB attestation expired before commit admission"
     update_recovery_journal "commit-peer-admit"
     remote_node "$peer_host" recover-admit "$target_sha" "$tx_dir"
@@ -10736,7 +10753,8 @@ recover_deployment() {
     fi
     assert_cluster_runtime_env_parity "$peer_host" "$previous_sha" "$target_sha"
     test "$(assert_fresh_lb_ready_attestation \
-      "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha")" = \
+      "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha" \
+      "" "$((300 + drain_seconds))")" = \
       "$lb_observed_at" || die "recovery LB attestation expired before rollback admission"
     update_recovery_journal "rollback-peer-admit"
     remote_node "$peer_host" recover-admit "$peer_previous_sha" "$tx_dir"
