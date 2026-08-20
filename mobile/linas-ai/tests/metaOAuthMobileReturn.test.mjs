@@ -16,6 +16,18 @@ describe('meta oauth mobile return surface', () => {
     assert.match(oauth, /return_surface:\s*MOBILE_RETURN_SURFACE|return_surface:\s*'mobile'/);
   });
 
+  it('opens Meta OAuth in an in-app auth session, not the Instagram app', () => {
+    const oauth = read('features/integrations/integrationsOAuth.ts');
+    const screen = read('features/integrations/IntegrationsScreen.tsx');
+    assert.match(oauth, /openAuthSessionAsync/);
+    assert.match(oauth, /withInstagramMobileReauth/);
+    assert.match(oauth, /force_reauth/);
+    assert.match(oauth, /MetaOAuthConnectError/);
+    assert.match(screen, /MetaOAuthConnectError/);
+    assert.match(screen, /metaOAuthCancelled/);
+    assert.match(screen, /apiErrorDetail/);
+  });
+
   it('parses integrations deep link without tokens', () => {
     const nav = read('app/navigation.ts');
     assert.match(nav, /parseIntegrationsDeepLink/);

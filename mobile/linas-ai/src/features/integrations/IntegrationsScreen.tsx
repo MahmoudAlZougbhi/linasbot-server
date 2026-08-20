@@ -20,7 +20,7 @@ import {
   type IntegrationRow,
 } from './IntegrationChannelCard';
 import { IntegrationRefreshButton } from './IntegrationRefreshButton';
-import { disconnectMetaPlatform, startMetaOAuth } from './integrationsOAuth';
+import { disconnectMetaPlatform, MetaOAuthConnectError, apiErrorDetail, startMetaOAuth } from './integrationsOAuth';
 import { applyIntegrationToggle, mergeToggleResponse } from './integrationsToggleApply';
 import { ToggleResponseSchema, type IntegrationListRow } from './integrationsSchemas';
 import {
@@ -85,9 +85,16 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     setError(null);
     try {
       await startMetaOAuth(platform);
+      await load();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) setAuthGate(true);
-      else setError(tr('integrationsActionError'));
+      else if (err instanceof MetaOAuthConnectError) {
+        if (err.code === 'cancelled') setError(tr('metaOAuthCancelled'));
+        else if (err.code === 'failed') setError(tr('metaOAuthFailed'));
+        else setError(tr('integrationsActionError'));
+      } else if (err instanceof ApiError) {
+        setError(apiErrorDetail(err) || tr('integrationsActionError'));
+      } else setError(tr('integrationsActionError'));
     } finally {
       setBusyPlatform(null);
     }

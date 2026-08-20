@@ -72,9 +72,10 @@ describe('whatsapp cloud mobile return + card', () => {
     assert.doesNotMatch(portal, /tenant_id:\s*['"]linas['"]|@gmail\.com|mahmoud@/i);
   });
 
-  it('Meta OAuth path unchanged (Linking) and separate from WA connect', () => {
+  it('Meta Connect uses an in-app auth session; TikTok keeps Linking; WA stays separate', () => {
     const oauth = read('features/integrations/integrationsOAuth.ts');
-    assert.match(oauth, /Linking\.openURL/);
-    assert.doesNotMatch(oauth, /whatsappCloudConnect|openAuthSessionAsync/);
+    assert.match(oauth, /openAuthSessionAsync/);
+    assert.match(oauth, /startTikTokOAuth[\s\S]*Linking\.openURL/);
+    assert.doesNotMatch(oauth, /whatsappCloudConnect/);
   });
 });

@@ -113,6 +113,9 @@ def begin_instagram_login(
             "response_type": "code",
             "scope": ",".join(sorted(META_INSTAGRAM_LOGIN_REQUEST_SCOPES)),
             "state": nonce,
+            # Meta: force_reauth fixes broken Instagram Login on mobile when the
+            # user is already signed into Instagram (not a second OAuth path).
+            "force_reauth": "true",
         }
     )
     return f"{META_INSTAGRAM_OAUTH_AUTHORIZE_URL}?{query}"
