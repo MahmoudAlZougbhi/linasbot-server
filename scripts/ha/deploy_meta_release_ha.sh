@@ -3465,9 +3465,11 @@ install_lb_ready_attestation() {
     die "exclusive DigitalOcean LB owner confirmation is missing"
   require_root
   acquire_meta_live_lock
-  if [ "$operation" = recover ]; then
-    tree_proof=deferred-until-restore
-  fi
+  case "$operation" in
+    recover|deploy)
+      tree_proof=deferred-until-restore
+      ;;
+  esac
   runtime_cluster="$(assert_python_runtime_contract "$expected_node_id" "$tree_proof")"
   validate_digest "$runtime_cluster"
   test "$(configured_node_id)" = "$expected_node_id" || \
