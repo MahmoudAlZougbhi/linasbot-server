@@ -32,6 +32,11 @@ def _recover() -> str:
     return source[source.index("recover_deployment() {") : source.index("retry_distinct_reconciliation() {")]
 
 
+def _commit() -> str:
+    source = _helper()
+    return source[source.index("commit_target_deployment() {") : source.index("orchestrate() {")]
+
+
 def test_mutation_window_is_operator_freshness_plus_drain() -> None:
     assert mutation_window_seconds(30) == 330
     assert mutation_window_seconds(240) == 540
@@ -101,3 +106,14 @@ def test_helper_extends_post_drain_window_and_skips_repeat_drain() -> None:
     rollback = recover.index("expired before rollback admission")
     window = recover.index("$((300 + drain_seconds))", recover.index("rollback-restoring"))
     assert window < rollback
+
+
+def test_commit_keeps_dispatch_observation_through_admission() -> None:
+    commit = _commit()
+    start = commit.index('lb_observed_at="$(assert_fresh_lb_ready_attestation')
+    attested = commit.index('update_commit_journal "commit-lb-attested"')
+    assert "$((300 + drain_seconds))" not in commit[start:attested]
+    assert commit.count("$((300 + drain_seconds))") == 3
+    assert "expired before durable decision" in commit
+    assert "expired before peer admission" in commit
+    assert "expired before node01 admission" in commit

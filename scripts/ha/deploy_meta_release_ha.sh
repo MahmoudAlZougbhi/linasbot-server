@@ -11236,20 +11236,23 @@ commit_target_deployment() {
   assert_release_artifact_parity \
     "$peer_host" "$tx_dir" "$target_sha" "$previous_sha" "$peer_previous_sha"
   test "$(assert_fresh_lb_ready_attestation \
-    "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha")" = \
+    "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha" \
+    "" "$((300 + drain_seconds))")" = \
     "$lb_observed_at" || die "commit LB attestation expired before durable decision"
 
   update_commit_journal "target-parity-proven" commit
   assert_commit_journal "target-parity-proven" commit || \
     die "durable deployment commit was not read back"
   test "$(assert_fresh_lb_ready_attestation \
-    "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha")" = \
+    "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha" \
+    "" "$((300 + drain_seconds))")" = \
     "$lb_observed_at" || die "commit LB attestation expired before peer admission"
   update_commit_journal "peer-admit-started" commit
   remote_node "$peer_host" recover-admit "$target_sha" "$tx_dir"
   assert_public_ready_after_peer_admission "$target_sha"
   test "$(assert_fresh_lb_ready_attestation \
-    "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha")" = \
+    "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha" \
+    "" "$((300 + drain_seconds))")" = \
     "$lb_observed_at" || die "commit LB attestation expired before node01 admission"
   update_commit_journal "node01-admit-started" commit
   node_recover_admit "$target_sha" "$tx_dir"
