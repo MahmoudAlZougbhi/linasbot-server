@@ -105,24 +105,28 @@ def create_firestore_event_unless_fenced(
         raise InboundDeletionFenceStoreError("Firestore inbound fence store is unavailable")
     fence_ref = _firestore_fence_ref(db, target_binding)
     event_ref = _firestore_event_ref(db, str(event_id))
+    from services.firestore_transaction_compat import run_firestore_transaction
+
     last_error: Exception | None = None
     for _attempt in range(5):
         try:
-            transaction = db.transaction()
-            fence_snapshot = fence_ref.get(transaction=transaction)
-            if fence_snapshot.exists:
-                raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
-            current_snapshot = event_ref.get(transaction=transaction)
-            if current_snapshot.exists:
-                current = current_snapshot.to_dict()
-                if not isinstance(current, dict):
-                    raise InboundDeletionFenceStoreError("Firestore inbound event is invalid")
-                return current, False
-            persisted = dict(document)
-            persisted["revision"] = max(1, int(persisted.get("revision") or 0))
-            transaction.set(event_ref, persisted)
-            transaction.commit()
-            return persisted, True
+
+            def _create(transaction: Any) -> tuple[dict[str, Any], bool]:
+                fence_snapshot = fence_ref.get(transaction=transaction)
+                if fence_snapshot.exists:
+                    raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
+                current_snapshot = event_ref.get(transaction=transaction)
+                if current_snapshot.exists:
+                    current = current_snapshot.to_dict()
+                    if not isinstance(current, dict):
+                        raise InboundDeletionFenceStoreError("Firestore inbound event is invalid")
+                    return current, False
+                persisted = dict(document)
+                persisted["revision"] = max(1, int(persisted.get("revision") or 0))
+                transaction.set(event_ref, persisted)
+                return persisted, True
+
+            return run_firestore_transaction(db, _create)
         except (InboundBindingDeletionFencedError, InboundDeletionFenceStoreError):
             raise
         except Exception as exc:
@@ -166,40 +170,45 @@ def persist_firestore_event_respecting_fence(
         raise InboundDeletionFenceStoreError("Firestore inbound fence store is unavailable")
     fence_ref = _firestore_fence_ref(db, target_binding)
     event_ref = _firestore_event_ref(db, str(event_id))
+    from services.firestore_transaction_compat import run_firestore_transaction
+
     last_error: Exception | None = None
     for _attempt in range(5):
         persisted = document
         try:
-            transaction = db.transaction()
-            fence_snapshot = fence_ref.get(transaction=transaction)
-            current_snapshot = event_ref.get(transaction=transaction)
-            current = current_snapshot.to_dict() if current_snapshot.exists else None
-            current = current if isinstance(current, dict) else None
-            if current is None and require_existing:
-                raise InboundDeletionFenceStoreError("Firestore inbound event is unavailable for transition")
-            if fence_snapshot.exists:
-                if reject_if_fenced:
-                    raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
-                source = current if current is not None else document
-                persisted = redacted_inbound_event_tombstone(
-                    source,
-                    reason="authorization_data_deletion",
-                    now=time.time(),
-                )
-            elif current is not None:
-                current_state = str(current.get("state") or "")
-                incoming_revision = int(document.get("revision") or 0)
-                current_revision = int(current.get("revision") or 0)
-                if current_state in {"completed", "dead_letter"} or incoming_revision != current_revision:
-                    return current
-                persisted = dict(document)
-                persisted["revision"] = current_revision + 1
-            else:
-                persisted = dict(document)
-                persisted["revision"] = max(1, int(persisted.get("revision") or 0))
-            transaction.set(event_ref, persisted)
-            transaction.commit()
-            return persisted
+
+            def _persist(transaction: Any) -> dict[str, Any]:
+                nonlocal persisted
+                fence_snapshot = fence_ref.get(transaction=transaction)
+                current_snapshot = event_ref.get(transaction=transaction)
+                current = current_snapshot.to_dict() if current_snapshot.exists else None
+                current = current if isinstance(current, dict) else None
+                if current is None and require_existing:
+                    raise InboundDeletionFenceStoreError("Firestore inbound event is unavailable for transition")
+                if fence_snapshot.exists:
+                    if reject_if_fenced:
+                        raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
+                    source = current if current is not None else document
+                    persisted = redacted_inbound_event_tombstone(
+                        source,
+                        reason="authorization_data_deletion",
+                        now=time.time(),
+                    )
+                elif current is not None:
+                    current_state = str(current.get("state") or "")
+                    incoming_revision = int(document.get("revision") or 0)
+                    current_revision = int(current.get("revision") or 0)
+                    if current_state in {"completed", "dead_letter"} or incoming_revision != current_revision:
+                        return current
+                    persisted = dict(document)
+                    persisted["revision"] = current_revision + 1
+                else:
+                    persisted = dict(document)
+                    persisted["revision"] = max(1, int(persisted.get("revision") or 0))
+                transaction.set(event_ref, persisted)
+                return persisted
+
+            return run_firestore_transaction(db, _persist)
         except (InboundBindingDeletionFencedError, InboundDeletionFenceStoreError):
             raise
         except Exception as exc:

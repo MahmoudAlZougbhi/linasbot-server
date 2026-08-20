@@ -343,29 +343,34 @@ def _firestore_try_claim(
         ref.create(claim_document)
         return 1
 
+    from services.firestore_transaction_compat import run_firestore_transaction
+
     last_error: Exception | None = None
     for _attempt in range(5):
-        transaction = db.transaction()
         try:
-            snapshot = ref.get(transaction=transaction)
-            if fence_ref is not None and fence_ref.get(transaction=transaction).exists:
-                return 0
-            if snapshot.exists:
-                current = snapshot.to_dict()
-                current = current if isinstance(current, dict) else {}
-                status = str(current.get("status") or "claimed")
-                expires_at = float(current.get("expires_at_epoch") or 0.0)
-                if status == "completed":
+
+            def _claim(transaction: Any) -> int:
+                snapshot = ref.get(transaction=transaction)
+                if fence_ref is not None and fence_ref.get(transaction=transaction).exists:
                     return 0
-                if status == "claimed" and expires_at > now:
-                    return 0
-                if status not in {"claimed", "released"}:
-                    raise RuntimeError("Firestore claim state is invalid")
-            generation = int(current.get("generation") or 0) + 1 if snapshot.exists else 1
-            claim_document["generation"] = generation
-            transaction.set(ref, claim_document)
-            transaction.commit()
-            return generation
+                current: dict[str, Any] = {}
+                if snapshot.exists:
+                    loaded = snapshot.to_dict()
+                    current = loaded if isinstance(loaded, dict) else {}
+                    status = str(current.get("status") or "claimed")
+                    expires_at = float(current.get("expires_at_epoch") or 0.0)
+                    if status == "completed":
+                        return 0
+                    if status == "claimed" and expires_at > now:
+                        return 0
+                    if status not in {"claimed", "released"}:
+                        raise RuntimeError("Firestore claim state is invalid")
+                generation = int(current.get("generation") or 0) + 1 if snapshot.exists else 1
+                claim_document["generation"] = generation
+                transaction.set(ref, claim_document)
+                return generation
+
+            return run_firestore_transaction(db, _claim)
         except Exception as exc:
             last_error = exc
     raise RuntimeError("Firestore claim transaction failed") from last_error
@@ -570,45 +575,49 @@ def _firestore_owner_transition(
         elif action == "release":
             ref.delete()
         return True
+    from services.firestore_transaction_compat import run_firestore_transaction
+
     last_error: Exception | None = None
     for _attempt in range(5):
-        transaction = db.transaction()
         try:
-            snapshot = ref.get(transaction=transaction)
-            current = snapshot.to_dict() if snapshot.exists else {}
-            current = current if isinstance(current, dict) else {}
-            if (
-                str(current.get("status") or "") != "claimed"
-                or str(current.get("owner_hash") or "") != handle.owner_hash
-                or int(current.get("generation") or 0) != handle.generation
-            ):
-                return False
-            now = time.time()
-            if action == "renew":
-                current.update({"updated_at_epoch": now, "expires_at_epoch": now + max(1.0, ttl_seconds)})
-            elif action == "complete":
-                current.update(
-                    {
-                        "status": "completed",
-                        "owner_hash": "",
-                        "completed_at": server_timestamp,
-                        "expires_at_epoch": 0.0,
-                    }
-                )
-            elif action == "release":
-                current.update(
-                    {
-                        "status": "released",
-                        "owner_hash": "",
-                        "released_at": server_timestamp,
-                        "expires_at_epoch": 0.0,
-                    }
-                )
-            else:  # pragma: no cover - internal fixed call sites
-                raise ValueError("invalid claim transition")
-            transaction.set(ref, current)
-            transaction.commit()
-            return True
+
+            def _transition(transaction: Any) -> bool:
+                snapshot = ref.get(transaction=transaction)
+                current = snapshot.to_dict() if snapshot.exists else {}
+                current = current if isinstance(current, dict) else {}
+                if (
+                    str(current.get("status") or "") != "claimed"
+                    or str(current.get("owner_hash") or "") != handle.owner_hash
+                    or int(current.get("generation") or 0) != handle.generation
+                ):
+                    return False
+                now = time.time()
+                if action == "renew":
+                    current.update({"updated_at_epoch": now, "expires_at_epoch": now + max(1.0, ttl_seconds)})
+                elif action == "complete":
+                    current.update(
+                        {
+                            "status": "completed",
+                            "owner_hash": "",
+                            "completed_at": server_timestamp,
+                            "expires_at_epoch": 0.0,
+                        }
+                    )
+                elif action == "release":
+                    current.update(
+                        {
+                            "status": "released",
+                            "owner_hash": "",
+                            "released_at": server_timestamp,
+                            "expires_at_epoch": 0.0,
+                        }
+                    )
+                else:  # pragma: no cover - internal fixed call sites
+                    raise ValueError("invalid claim transition")
+                transaction.set(ref, current)
+                return True
+
+            return run_firestore_transaction(db, _transition)
         except Exception as exc:
             last_error = exc
     raise RuntimeError("Firestore claim owner transition failed") from last_error
