@@ -159,7 +159,8 @@ def test_preflight_uses_target_evaluator_after_artifact_verification() -> None:
     )
     assert "assert_ready" in preflight
     assert "assert_lb_ready" in preflight
-    assert "assert_ready" in serving
+    assert "assert_serving_ready_for_sha" in serving
+    assert "assert_ready" not in serving
     assert "assert_target_platform_readiness_preflight" not in serving
     assert "assert_target_platform_readiness_preflight" not in rollback
     assert 'update_deploy_journal "preflight-proven"' in source
@@ -252,8 +253,152 @@ def test_workflow_reclaims_target_ready_tmpfs_before_helper_copy() -> None:
     assert "shutil.rmtree" in workflow[workflow.index("volatile target-ready reclaim root is unsafe") : helper_root]
 
 
+def _commit_ready_tree(tmp_path: Path, registry: str, health: str = "# health\n") -> tuple[Path, str]:
+    repo = tmp_path / "repo"
+    (repo / "services").mkdir(parents=True)
+    (repo / "modules").mkdir()
+    (repo / "services" / "meta_app_registry.py").write_text(registry, encoding="utf-8")
+    (repo / "modules" / "dashboard_api_health.py").write_text(health, encoding="utf-8")
+    git = [
+        "/usr/bin/git",
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "user.email=ha@linasbot.test",
+        "-c",
+        "user.name=HA",
+        "-c",
+        "commit.gpgsign=false",
+    ]
+    env = {
+        "HOME": str(tmp_path / "home"),
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "PATH": "/usr/bin:/bin",
+    }
+    subprocess.run([*git, "init"], cwd=repo, check=True, capture_output=True, env=env)
+    subprocess.run([*git, "add", "services", "modules"], cwd=repo, check=True, capture_output=True, env=env)
+    subprocess.run([*git, "commit", "-m", "ready"], cwd=repo, check=True, capture_output=True, env=env)
+    sha = subprocess.check_output(
+        [*git, "rev-parse", "HEAD"],
+        cwd=repo,
+        text=True,
+        env=env,
+    ).strip()
+    return repo, sha
+
+
+def test_legacy_sha_has_tenant_ready_gates_platform_sha_does_not(tmp_path: Path) -> None:
+    from scripts.ha.live_ready_admission import sha_has_tenant_ready_gates
+
+    legacy_repo, legacy_sha = _commit_ready_tree(
+        tmp_path / "legacy",
+        "def get_meta_registry_readiness():\n    return False, {'linas_instagram_app_a_active': False}\n",
+    )
+    platform_repo, platform_sha = _commit_ready_tree(
+        tmp_path / "platform",
+        "META_PLATFORM_READINESS_KEYS = ('encryption_key_configured',)\n"
+        "def get_meta_registry_readiness():\n"
+        "    return True, {'encryption_key_configured': True}\n",
+    )
+    assert sha_has_tenant_ready_gates(legacy_repo, legacy_sha) is True
+    assert sha_has_tenant_ready_gates(platform_repo, platform_sha) is False
+
+
+def test_admit_live_ready_accepts_facebook_only_503_on_legacy_sha(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts.ha import live_ready_admission
+
+    repo, sha = _commit_ready_tree(
+        tmp_path,
+        "def get_meta_registry_readiness():\n"
+        "    return False, {'linas_facebook_app_a_active': True, "
+        "'linas_instagram_app_a_active': False}\n",
+    )
+    payload = {
+        "ok": False,
+        "role": "readiness",
+        "checks": {
+            "firestore": {"ok": True},
+            "meta_social_messaging": {
+                "ok": False,
+                "encryption_key_configured": True,
+                "app_a_configured": True,
+                "registry_backend_ready": True,
+                "linas_facebook_app_a_active": True,
+                "linas_instagram_app_a_active": False,
+            },
+        },
+    }
+    monkeypatch.setattr(live_ready_admission, "fetch_live_ready", lambda url="": (503, payload))
+    status, admitted = live_ready_admission.admit_live_ready_for_sha(repo, sha)
+    assert status == 503
+    assert admitted["ok"] is False
+
+
+def test_admit_live_ready_refuses_firestore_503_on_legacy_sha(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts.ha import live_ready_admission
+
+    repo, sha = _commit_ready_tree(
+        tmp_path,
+        "def get_meta_registry_readiness():\n    return False, {'linas_instagram_app_a_active': False}\n",
+    )
+    payload = {
+        "ok": False,
+        "role": "readiness",
+        "checks": {
+            "firestore": {"ok": False, "error": "ModuleNotFoundError"},
+            "meta_social_messaging": {"ok": True},
+        },
+    }
+    monkeypatch.setattr(live_ready_admission, "fetch_live_ready", lambda url="": (503, payload))
+    with pytest.raises(RuntimeError, match="platform-admissible"):
+        live_ready_admission.admit_live_ready_for_sha(repo, sha)
+
+
+def test_admit_live_ready_requires_200_on_platform_sha(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts.ha import live_ready_admission
+
+    repo, sha = _commit_ready_tree(
+        tmp_path,
+        "def get_meta_registry_readiness():\n    return True, {}\n",
+    )
+    monkeypatch.setattr(
+        live_ready_admission,
+        "fetch_live_ready",
+        lambda url="": (503, {"ok": False, "role": "readiness", "checks": {}}),
+    )
+    with pytest.raises(RuntimeError, match="not healthy"):
+        live_ready_admission.admit_live_ready_for_sha(repo, sha)
+
+
+def test_helper_uses_sha_aware_serving_and_later_helper_rollback_phase() -> None:
+    source = HELPER.read_text(encoding="utf-8")
+    serving = source[source.index("node_assert_serving_contract() {") : source.index("node_assert_release_ready() {")]
+    clear = source[source.index("node_clear_maintenance() {") : source.index("node_assert_release_drained() {")]
+    later = source[source.index("assert_later_dispatch_helper() {") : source.index("assert_public_ready() {")]
+    recover = source[source.index("recover_deployment() {") : source.index("retry_distinct_reconciliation() {")]
+    orchestrate = source[source.index("orchestrate() {") :]
+    assert "assert_serving_ready_for_sha" in serving
+    assert "probe_serving_ready_for_sha" in clear
+    assert "grep -q '\"ok\"[[:space:]]*:[[:space:]]*true'" not in clear
+    assert "automatic-rollback-both-nodes-drained" in later
+    assert "linas_instagram_app_a_active" in later
+    assert 'assert_public_ready_for_sha "$previous_sha"' in orchestrate
+    assert 'assert_public_ready_for_sha "$previous_sha"' in recover
+
+
 def test_transition_helper_stays_under_500_lines() -> None:
     assert (
         len((ROOT / "scripts/ha/target_platform_readiness_preflight.py").read_text(encoding="utf-8").splitlines()) < 500
     )
+    assert len((ROOT / "scripts/ha/live_ready_admission.py").read_text(encoding="utf-8").splitlines()) < 500
     assert len((ROOT / "tests/test_ha_platform_readiness_transition.py").read_text(encoding="utf-8").splitlines()) < 500

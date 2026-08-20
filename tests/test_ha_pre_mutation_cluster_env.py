@@ -56,7 +56,8 @@ def test_pre_mutation_recovery_may_run_a_later_helper_blob() -> None:
         )
     ]
     later_helper_phases = (
-        "preflight-proven|peer-mark-started|recovery-lb-attested|recovery-started|"
+        "preflight-proven|peer-mark-started|automatic-rollback|automatic-rollback-both-nodes-drained|"
+        "recovery-lb-attested|recovery-started|"
         "recovery-both-nodes-drained|rollback-restoring|distinct-rollback-drained|"
         "rollback-peer-admit|rollback-node01-admit"
     )
