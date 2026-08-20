@@ -1434,6 +1434,48 @@ jobs:
             PY
             }
 
+            # Leftover target-ready git trees on /run tmpfs from a previous
+            # fail-closed preflight must be reclaimed before any new /run mktemp.
+            sudo /usr/bin/env -i HOME=/root LANG=C.UTF-8 LC_ALL=C.UTF-8 \
+              PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+              /usr/bin/python3 -B -I -S - <<'PY'
+            import os
+            import re
+            import shutil
+            import stat
+            import sys
+            from pathlib import Path
+
+            run_dir = Path("/run")
+            dir_re = re.compile(r"^linasbot-target-ready\.[A-Za-z0-9]{6,10}$")
+            file_re = re.compile(r"^linasbot-target-platform-ready(\.py|\.[A-Za-z0-9]{6,10})$")
+            if os.geteuid() != 0 or run_dir.is_symlink() or not run_dir.is_dir():
+                raise SystemExit("volatile target-ready reclaim root is unsafe")
+            reclaimed = []
+            for entry in run_dir.iterdir():
+                try:
+                    info = entry.lstat()
+                except FileNotFoundError:
+                    continue
+                if entry.parent != run_dir:
+                    raise SystemExit("volatile target-ready path escaped /run")
+                if file_re.fullmatch(entry.name):
+                    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode) or info.st_uid != 0:
+                        raise SystemExit("volatile target-ready leftover is unsafe")
+                    entry.unlink()
+                    reclaimed.append(str(entry))
+                    continue
+                if dir_re.fullmatch(entry.name):
+                    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode) or info.st_uid != 0:
+                        raise SystemExit("volatile target-ready leftover is unsafe")
+                    shutil.rmtree(entry)
+                    reclaimed.append(str(entry))
+            if reclaimed:
+                sys.stderr.write(
+                    "reclaimed volatile target-ready tmpfs: " + ",".join(reclaimed) + "\n"
+                )
+            PY
+
             HELPER_ROOT="$(sudo mktemp -d -p /run linasbot-ha-deploy.XXXXXXXX)"
             case "$HELPER_ROOT" in /run/linasbot-ha-deploy.????????) ;; *) exit 1 ;; esac
             HELPER_PATH="$HELPER_ROOT/deploy_meta_release_ha.sh"

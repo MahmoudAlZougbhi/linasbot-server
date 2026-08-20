@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -9,9 +10,13 @@ from fastapi.responses import JSONResponse
 
 from modules import dashboard_api_health
 from scripts.ha.target_platform_readiness_preflight import (
+    COMPACT_ARCHIVE_PATHS,
     assert_platform_readiness_contract,
     evaluate_target_platform_ready,
     failing_platform_checks,
+    live_ready_is_platform_admissible,
+    materialize_target_archive,
+    reclaim_volatile_target_ready,
 )
 from services.meta_app_registry import MetaAppRegistry
 from tests.test_production_readiness import _activate, _stub_platform_dependencies
@@ -124,12 +129,26 @@ def test_preflight_uses_target_evaluator_after_artifact_verification() -> None:
     preflight_helper = source[
         source.index("assert_target_platform_readiness_preflight() {") : source.index("assert_health_while_drained() {")
     ]
-    assert 'git -C "$REPO_DIR" archive --format=tar "$target_sha"' in preflight_helper
-    assert "modules services utils handlers storage db config.py" in preflight_helper
-    assert (
-        'git -C "$REPO_DIR" archive --format=tar'
-        in source[source.index("assert_target_platform_readiness_preflight() {") :]
+    assert 'mktemp -p "$META_HA_STATE_ROOT" linasbot-target-platform-ready.XXXXXXXX' in preflight_helper
+    assert "--repo-dir" in preflight_helper
+    assert '--state-root "$META_HA_STATE_ROOT"' in preflight_helper
+    assert "mktemp -d -p /run linasbot-target-ready" not in preflight_helper
+    assert "git archive --format=tar" not in preflight_helper
+    evaluator = (ROOT / "scripts/ha/target_platform_readiness_preflight.py").read_text(encoding="utf-8")
+    assert "COMPACT_ARCHIVE_PATHS" in evaluator
+    assert COMPACT_ARCHIVE_PATHS == (
+        "modules",
+        "services",
+        "utils",
+        "handlers",
+        "storage",
+        "db",
+        "config.py",
     )
+    assert "reclaim_volatile_target_ready" in evaluator
+    assert "shutil.rmtree" in evaluator
+    assert 'Path("/var/lib/linasbot/meta-ha")' in evaluator
+    assert 'Path("/run")' in evaluator
     assert (
         "list_bindings"
         not in source[
@@ -145,6 +164,92 @@ def test_preflight_uses_target_evaluator_after_artifact_verification() -> None:
     assert "assert_target_platform_readiness_preflight" not in rollback
     assert 'update_deploy_journal "preflight-proven"' in source
     assert "assert_fresh_lb_ready_attestation" in preflight
+
+
+def test_live_facebook_only_503_is_admissible_for_target_preflight() -> None:
+    ok, failing = live_ready_is_platform_admissible(
+        503,
+        {
+            "ok": False,
+            "role": "readiness",
+            "checks": {
+                "firestore": {"ok": True},
+                "meta_social_messaging": {
+                    "ok": False,
+                    "encryption_key_configured": True,
+                    "app_a_configured": True,
+                    "registry_backend_ready": True,
+                    "linas_facebook_app_a_active": True,
+                    "linas_instagram_app_a_active": False,
+                },
+            },
+        },
+    )
+    assert ok is True
+    assert set(failing) == {"meta_social_messaging"}
+
+
+def test_live_firestore_503_is_not_admissible_for_target_preflight() -> None:
+    ok, failing = live_ready_is_platform_admissible(
+        503,
+        {
+            "ok": False,
+            "role": "readiness",
+            "checks": {
+                "firestore": {"ok": False, "error": "ModuleNotFoundError"},
+                "meta_social_messaging": {"ok": True},
+            },
+        },
+    )
+    assert ok is False
+    assert "firestore" in failing
+
+
+def test_reclaim_removes_leftover_target_ready_trees(tmp_path: Path) -> None:
+    leftover = tmp_path / "linasbot-target-ready.abcdefgh"
+    leftover.mkdir()
+    (leftover / "modules").mkdir()
+    (leftover / "modules" / "stale.py").write_text("stale\n", encoding="utf-8")
+    script = tmp_path / "linasbot-target-platform-ready.py"
+    script.write_text("# leftover\n", encoding="utf-8")
+    other = tmp_path / "keep-me"
+    other.mkdir()
+    reclaimed = reclaim_volatile_target_ready(run_dir=tmp_path, require_root=False)
+    assert leftover.exists() is False
+    assert script.exists() is False
+    assert other.exists() is True
+    assert str(leftover) in reclaimed
+    assert str(script) in reclaimed
+
+
+def test_reclaim_refuses_symlink_leftovers(tmp_path: Path) -> None:
+    target = tmp_path / "outside"
+    target.mkdir()
+    link = tmp_path / "linasbot-target-ready.symlink1"
+    link.symlink_to(target)
+    with pytest.raises(RuntimeError, match="symlink"):
+        reclaim_volatile_target_ready(run_dir=tmp_path, require_root=False)
+
+
+def test_compact_archive_stays_off_tmpfs_and_contains_platform_modules(tmp_path: Path) -> None:
+    sha = subprocess.check_output(
+        ["/usr/bin/git", "-C", str(ROOT), "rev-parse", "HEAD"],
+        text=True,
+    ).strip()
+    destination = tmp_path / "archive"
+    destination.mkdir()
+    materialize_target_archive(ROOT, sha, destination)
+    assert (destination / "modules" / "dashboard_api_health.py").is_file()
+    assert (destination / "services" / "meta_app_registry.py").is_file()
+    assert (destination / "tests").exists() is False
+
+
+def test_workflow_reclaims_target_ready_tmpfs_before_helper_copy() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "deploy.yml").read_text(encoding="utf-8")
+    reclaim = workflow.index("reclaimed volatile target-ready tmpfs")
+    helper_root = workflow.index('HELPER_ROOT="$(sudo mktemp -d -p /run linasbot-ha-deploy.XXXXXXXX)"')
+    assert reclaim < helper_root
+    assert "shutil.rmtree" in workflow[workflow.index("volatile target-ready reclaim root is unsafe") : helper_root]
 
 
 def test_transition_helper_stays_under_500_lines() -> None:
