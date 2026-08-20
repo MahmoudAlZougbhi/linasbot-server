@@ -13,7 +13,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TypedDict
 
 CONNECT_ROUTE_MARKERS: tuple[tuple[str, str], ...] = (
     ("modules/meta_connections_api.py", '@app.post("/api/meta/connections/start")'),
@@ -36,6 +36,19 @@ CONNECT_ROUTE_MARKERS: tuple[tuple[str, str], ...] = (
 )
 
 
+class DeployPreflightItem(TypedDict):
+    check: str
+    reason: str
+
+
+class DeployPreflightReport(TypedDict):
+    ok: bool
+    role: str
+    lb_gate: bool
+    blocking: list[DeployPreflightItem]
+    warnings: list[DeployPreflightItem]
+
+
 def evaluate_deploy_preflight(
     *,
     source_root: Path | None = None,
@@ -43,9 +56,9 @@ def evaluate_deploy_preflight(
     git_sha: str | None = None,
     env_values: dict[str, str] | None = None,
     check_env: bool = True,
-) -> dict[str, Any]:
-    blocking: list[dict[str, str]] = []
-    warnings: list[dict[str, str]] = []
+) -> DeployPreflightReport:
+    blocking: list[DeployPreflightItem] = []
+    warnings: list[DeployPreflightItem] = []
     blobs: dict[str, str] = {}
     for relative, marker in CONNECT_ROUTE_MARKERS:
         if relative not in blobs:
@@ -123,8 +136,8 @@ def _present(values: dict[str, str], names: tuple[str, ...]) -> bool:
     return any((values.get(name) or "").strip() for name in names)
 
 
-def _env_blocking(values: dict[str, str]) -> list[dict[str, str]]:
-    blocking: list[dict[str, str]] = []
+def _env_blocking(values: dict[str, str]) -> list[DeployPreflightItem]:
+    blocking: list[DeployPreflightItem] = []
     encryption = (values.get("META_CREDENTIAL_ENCRYPTION_KEY") or "").strip()
     if len(encryption) < 32:
         blocking.append({"check": "token_storage", "reason": "encryption_key_missing"})
@@ -153,9 +166,10 @@ def main(argv: list[str] | None = None) -> int:
     if check_env and args.env_file:
         env_path = Path(args.env_file)
         if not env_path.is_file():
-            report = {
+            report: DeployPreflightReport = {
                 "ok": False,
                 "role": "deploy_preflight",
+                "lb_gate": False,
                 "blocking": [{"check": "platform_secrets", "reason": "env_file_missing"}],
                 "warnings": [],
             }
