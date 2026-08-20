@@ -124,13 +124,12 @@ def test_helper_defers_pre_drain_tree_hash_then_rehashes() -> None:
     assert "tree_proof=required" in installer
     assert "tree_proof=deferred-until-restore" in installer
     assert 'assert_python_runtime_contract "$expected_node_id" "$tree_proof"' in installer
-    orchestrate = source[source.index("orchestrate() {") : source.index('case "$command" in')]
-    assert (
-        "deferred-until-restore"
-        in orchestrate[
-            orchestrate.index('local_preflight="$(node_preflight') : orchestrate.index("local_preflight_rc=$?")
-        ]
-    )
+    preflight_block = source[
+        source.index('local_preflight="$(node_preflight "$target_sha" node01') : source.index(
+            'peer_preflight="$('
+        )
+    ]
+    assert "deferred-until-restore" in preflight_block
     assert 'assert_python_runtime_contract "$expected_node_id")' not in installer
     assert (
         "deferred-until-restore"
