@@ -5707,6 +5707,32 @@ archive_path() {
   verify_archive "$archive"
 }
 
+archive_nginx_rollback_authority() {
+  local tx_dir="$1"
+  local archive="$tx_dir/nginx.tar"
+  # Peer-first drain publishes a maintenance override before staging. Rollback
+  # must restore the saved production site, not the drained 503 overlay.
+  if [ -f "$tx_dir/maintenance-nginx.conf" ] && [ ! -L "$tx_dir/maintenance-nginx.conf" ]; then
+    test "$(stat -c '%u:%g:%a' "$tx_dir/maintenance-nginx.conf")" = "0:0:600" || \
+      die "baseline nginx rollback authority is unsafe"
+    tar --numeric-owner -C / -cpf "$archive" \
+      etc/nginx/sites-enabled/linasaibot \
+      etc/nginx/conf.d/linasbot-privacy-log.conf
+    tar --numeric-owner --append \
+      --transform 's,^maintenance-nginx.conf$,etc/nginx/sites-available/linasaibot,' \
+      -C "$tx_dir" -f "$archive" maintenance-nginx.conf
+    chmod 0600 "$archive"
+    fsync_path_and_parents "$archive"
+    write_private_state "$archive.sha256" "$(sha256sum "$archive" | awk '{print $1}')"
+    verify_archive "$archive"
+    return
+  fi
+  archive_path "$archive" \
+    etc/nginx/sites-available/linasaibot \
+    etc/nginx/sites-enabled/linasaibot \
+    etc/nginx/conf.d/linasbot-privacy-log.conf
+}
+
 verify_archive() {
   local archive="$1"
   local expected actual
@@ -7322,8 +7348,11 @@ PY
 
 capture_baseline_artifact_evidence() {
   local destination="$1"
-  local evidence
-  evidence="$(live_baseline_artifact_evidence)"
+  local tx_dir evidence
+  tx_dir="$(dirname -- "$destination")"
+  # Hash production nginx: live while still serving, or the saved copy after
+  # peer-first drain published the maintenance overlay.
+  evidence="$(live_baseline_artifact_evidence "$tx_dir")"
   write_private_state "$destination" "$evidence"
 }
 
@@ -7336,9 +7365,9 @@ assert_baseline_artifact_evidence_restored() {
   test "$(stat -c '%u:%g:%a' "$tx_dir/baseline-artifacts.json")" = "0:0:600" || \
     die "baseline artifact rollback authority is unsafe"
   expected="$(<"$tx_dir/baseline-artifacts.json")"
-  # Capture hashes live trees without substituting maintenance-nginx.conf.
-  # Peer-first drain can capture nginx after the override is live, so assert
-  # must hash the same restored live bytes.
+  # Capture already bound production nginx (saved copy when drained). Rollback
+  # restores nginx.tar first; this assert hashes live bytes without substitution
+  # so a drained overlay left in the archive cannot silently match.
   actual="$(live_baseline_artifact_evidence)"
   test "$actual" = "$expected" || \
     die "restored baseline venv, dashboard, nginx, or systemd artifacts differ"
@@ -7409,10 +7438,7 @@ backup_live_node() {
   archive_path "$tx_dir/venv.tar" opt/linasbot/venv
   archive_path "$tx_dir/data-pre-drain.tar" opt/linasbot/data
   archive_path "$tx_dir/dashboard-build.tar" opt/linasbot/dashboard/build
-  archive_path "$tx_dir/nginx.tar" \
-    etc/nginx/sites-available/linasaibot \
-    etc/nginx/sites-enabled/linasaibot \
-    etc/nginx/conf.d/linasbot-privacy-log.conf
+  archive_nginx_rollback_authority "$tx_dir"
   archive_path "$tx_dir/systemd.tar" \
     etc/systemd/system/linasbot.service etc/systemd/system/linasbot-worker@.service
   validate_service_state_file "$tx_dir/predrain-service-state"
