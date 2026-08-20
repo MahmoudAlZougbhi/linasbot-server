@@ -2974,7 +2974,7 @@ install_release_bundle() {
 
   require_root
   acquire_meta_live_lock
-  runtime_cluster="$(assert_python_runtime_contract "$expected_node_id")"
+  runtime_cluster="$(assert_python_runtime_contract "$expected_node_id" deferred-until-restore)"
   validate_digest "$runtime_cluster"
   test "$(configured_node_id)" = "$expected_node_id" || \
     die "canonical environment node identity differs from release installer authority"
