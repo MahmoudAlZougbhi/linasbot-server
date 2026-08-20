@@ -122,9 +122,7 @@ def test_preflight_uses_target_evaluator_after_artifact_verification() -> None:
     gate = preflight.index('assert_target_platform_readiness_preflight "$target_sha"')
     assert target < capability < gate
     preflight_helper = source[
-        source.index("assert_target_platform_readiness_preflight() {") : source.index(
-            "assert_health_while_drained() {"
-        )
+        source.index("assert_target_platform_readiness_preflight() {") : source.index("assert_health_while_drained() {")
     ]
     assert 'git -C "$REPO_DIR" archive --format=tar "$target_sha"' in preflight_helper
     assert "modules services utils handlers storage db config.py" not in preflight_helper
