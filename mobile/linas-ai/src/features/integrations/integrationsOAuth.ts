@@ -112,7 +112,7 @@ export async function startMetaOAuth(
     );
   }
 
-  return { outcome: metaAuthSessionOutcome(result) };
+  return metaAuthSessionOutcome(result);
 }
 
 export async function disconnectMetaPlatform(platform: 'instagram' | 'facebook'): Promise<void> {
