@@ -101,3 +101,19 @@ def test_helper_extends_post_drain_window_and_skips_repeat_drain() -> None:
     rollback = recover.index("expired before rollback admission")
     window = recover.index("$((300 + drain_seconds))", recover.index("rollback-restoring"))
     assert window < rollback
+
+
+def test_recover_commit_rechecks_fresh_lb_after_qg_verify_before_peer_admit() -> None:
+    recover = _recover()
+    commit = recover[
+        recover.index('update_recovery_journal "commit-recovery-parity"') : recover.index(
+            'update_recovery_journal "rollback-restoring"'
+        )
+    ]
+    local_qg = commit.index("verify_staged_qg_payloads_after_restore")
+    peer_qg = commit.index('remote_node "$peer_host" verify-staged-qg-payloads', local_qg)
+    fresh_lb = commit.index("expired before commit admission", peer_qg)
+    admit = commit.index('update_recovery_journal "commit-peer-admit"', fresh_lb)
+    assert local_qg < peer_qg < fresh_lb < admit
+    assert admit < commit.index('remote_node "$peer_host" recover-admit', admit)
+    assert "expired before commit admission" not in commit[:local_qg]

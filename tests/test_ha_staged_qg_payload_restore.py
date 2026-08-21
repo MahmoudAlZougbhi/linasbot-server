@@ -132,7 +132,12 @@ def test_both_nodes_reverify_qg_staged_bytes_before_activate_or_admit() -> None:
     ]
     assert local_call in recover_commit
     assert peer_call in recover_commit
-    assert recover_commit.index(local_call) < recover_commit.index('update_recovery_journal "commit-peer-admit"')
+    assert recover_commit.index(local_call) < recover_commit.index(peer_call)
+    assert recover_commit.index(peer_call) < recover_commit.index("expired before commit admission")
+    assert recover_commit.index("expired before commit admission") < recover_commit.index(
+        'update_recovery_journal "commit-peer-admit"'
+    )
+    assert recover_commit.index(peer_call) < recover_commit.index('remote_node "$peer_host" recover-admit')
     rollback = recover[
         recover.index('update_recovery_journal "rollback-restoring"') : recover.index(
             'update_recovery_journal "rollback-peer-admit"'

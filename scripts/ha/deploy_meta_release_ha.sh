@@ -10834,13 +10834,13 @@ recover_deployment() {
     assert_cluster_runtime_env_parity "$peer_host" "$target_sha" "$target_sha"
     assert_release_artifact_parity \
       "$peer_host" "$tx_dir" "$target_sha" "$previous_sha" "$peer_previous_sha"
+    verify_staged_qg_payloads_after_restore "$tx_dir" "$target_sha" "$previous_sha"
+    remote_node "$peer_host" verify-staged-qg-payloads \
+      "$target_sha" "$peer_previous_sha" "$tx_dir"
     test "$(assert_fresh_lb_ready_attestation \
       "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha" \
       "" "$((300 + drain_seconds))")" = \
       "$lb_observed_at" || die "recovery LB attestation expired before commit admission"
-    verify_staged_qg_payloads_after_restore "$tx_dir" "$target_sha" "$previous_sha"
-    remote_node "$peer_host" verify-staged-qg-payloads \
-      "$target_sha" "$peer_previous_sha" "$tx_dir"
     update_recovery_journal "commit-peer-admit"
     remote_node "$peer_host" recover-admit "$target_sha" "$tx_dir"
     assert_public_ready_after_peer_admission "$target_sha"
