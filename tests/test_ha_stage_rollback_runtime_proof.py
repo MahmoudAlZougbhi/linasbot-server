@@ -49,21 +49,38 @@ def test_stage_and_stage_evidence_are_deferred_until_trusted_remat() -> None:
     assert "retry-stage)" in required_arm
 
 
-def test_drained_peer_is_rematerialized_before_stage_hashes() -> None:
+def test_peer_backup_precedes_any_remat_mutation() -> None:
     source = _helper()
     orchestrate = source[source.index("orchestrate() {") : source.index('case "${1:-}" in')]
-    peer_mark = orchestrate.index('remote_node "$peer_host" mark-maintenance')
-    peer_remat = orchestrate.index('remote_node "$peer_host" apply-cpython-runtime-immutability', peer_mark)
-    peer_stage = orchestrate.index('remote_node "$peer_host" stage ', peer_remat)
-    local_stage = orchestrate.index('backup_live_node "$target_sha" "$previous_sha" "$tx_dir"', peer_stage)
-    local_mark = orchestrate.index('node_mark_maintenance "$tx_dir"', local_stage)
-    local_remat = orchestrate.index(
+    flow = orchestrate[orchestrate.index('log "withdrawing peer before peer-first staging"') :]
+    peer_mark = flow.index('remote_node "$peer_host" mark-maintenance')
+    peer_stage = flow.index('remote_node "$peer_host" stage ')
+    local_stage = flow.index('backup_live_node "$target_sha" "$previous_sha" "$tx_dir"', peer_stage)
+    local_mark = flow.index('node_mark_maintenance "$tx_dir"', local_stage)
+    local_remat = flow.index(
         'apply_cpython_runtime_immutability "$tx_dir" "$release_artifact_id"',
         local_mark,
     )
-    qg = orchestrate.index("verify_staged_qg_payloads_after_restore", local_remat)
-    activate = orchestrate.index('update_deploy_journal "peer-activate-started"', qg)
-    assert peer_mark < peer_remat < peer_stage < local_stage < local_mark < local_remat < qg < activate
+    peer_remat = flow.index(
+        'remote_node "$peer_host" apply-cpython-runtime-immutability',
+        local_remat,
+    )
+    drained = flow.index(
+        'update_deploy_journal "both-nodes-drained-before-activation"',
+        local_mark,
+    )
+    qg = flow.index("verify_staged_qg_payloads_after_restore", peer_remat)
+    activate = flow.index('update_deploy_journal "peer-activate-started"', qg)
+    assert "apply_cpython_runtime_immutability" not in flow[:peer_stage]
+    assert "apply-cpython-runtime-immutability" not in flow[:peer_stage]
+    assert peer_mark < peer_stage < local_stage < local_mark
+    assert local_mark < local_remat < peer_remat < drained < qg < activate
+    baseline = source[
+        source.index("live_baseline_artifact_evidence() {") : source.index("capture_baseline_artifact_evidence() {")
+    ]
+    remat = source[source.index("apply_cpython_runtime_immutability() {") : source.index("require_root() {")]
+    assert "/etc/systemd/system/linasbot.service.d" in baseline
+    assert "install_python_pycache_policy" in remat
 
 
 def test_verify_recovery_requires_tree_proof_and_publish_stays_deferred() -> None:

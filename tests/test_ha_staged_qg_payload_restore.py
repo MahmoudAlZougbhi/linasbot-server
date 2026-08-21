@@ -33,6 +33,13 @@ def _tree_python() -> str:
     return body[start : body.index("\nPY\n", start)]
 
 
+def _identity_python() -> str:
+    body = _verify_fn()
+    marker = "staged Quality Gates identity differs from the authorized journal pins"
+    start = body.rindex("import json", 0, body.index(marker))
+    return body[start : body.index("\nPY\n", start)]
+
+
 def _payload(tree: Path) -> dict[str, object]:
     evidence = tree_evidence(tree)
     return {
@@ -98,6 +105,10 @@ def test_restore_verifier_rebinds_qg_bundle_and_actual_staged_trees() -> None:
     assert "peer-activate-started" not in body
     assert "recover-admit" not in body
     assert "staged Quality Gates payload trees differ from the reviewed release after restore" in body
+    assert 'local artifact_id="$4"' in body
+    assert "authorized journal pins" in body
+    assert "mapfile -t qg_fields" not in body
+    assert 'print(payload["artifact_id"])' not in body
 
 
 def test_both_nodes_reverify_qg_staged_bytes_before_activate_or_admit() -> None:
@@ -147,6 +158,22 @@ def test_both_nodes_reverify_qg_staged_bytes_before_activate_or_admit() -> None:
     assert activate.index(local_call) < activate.index("verify_stage_manifest")
     assert activate.index(local_call) < activate.index("write_activation_phase")
     assert "verify-staged-qg-payloads)" in dispatch
+    assert 'verify_staged_qg_payloads_after_restore "$3" "$1" "$2"' in dispatch
+    assert (
+        '"${4:-}" "${5:-}" "${6:-}" "${7:-}" "${8:-}"'
+        in dispatch[dispatch.index("verify-staged-qg-payloads)") : dispatch.index("release-evidence)")]
+    )
+    pin_head = '"$release_artifact_id" "$release_artifact_api_sha" "$release_manifest_sha"'
+    pin_tail = '"$release_run_id" "$release_run_attempt"'
+    for window in (
+        orchestrate[local_verify:activate_start],
+        retry[retry_verify : retry.index('update_retry_journal "retry-peer-activate"', retry_peer)],
+        commit[commit_verify : commit.index('update_commit_journal "peer-admit-started" commit')],
+        recover_commit,
+    ):
+        assert pin_head in window
+        assert pin_tail in window
+    assert '"$artifact_id" "$artifact_api_sha" "$manifest_sha" "$run_id" "$run_attempt"' in activate
     deferred = dispatch[dispatch.index('case "$phase" in') : dispatch.index("deferred-until-restore >/dev/null")]
     assert "verify-staged-qg-payloads" not in deferred
     assert "deferred-until-restore" not in verify
@@ -175,3 +202,64 @@ def test_tampered_staged_bytes_fail_qg_tree_and_cannot_self_admit(tmp_path: Path
     assert "staged wheelhouse tree differs from Quality Gates authority" in blocked.stderr
     assert "write_activation_phase" not in _verify_fn()
     assert "recover-admit" not in _verify_fn()
+
+
+def _authorized_pins() -> dict[str, object]:
+    return {
+        "target_sha": "a" * 40,
+        "artifact_id": 12,
+        "artifact_api_sha256": "b" * 64,
+        "manifest_sha256": "c" * 64,
+        "run_id": 32508737717,
+        "run_attempt": 1,
+    }
+
+
+def _run_identity_python(path: Path, pins: dict[str, object]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            "-I",
+            "-S",
+            "-",
+            str(path),
+            str(pins["target_sha"]),
+            str(pins["artifact_id"]),
+            str(pins["artifact_api_sha256"]),
+            str(pins["manifest_sha256"]),
+            str(pins["run_id"]),
+            str(pins["run_attempt"]),
+        ],
+        input=_identity_python(),
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_forged_alternate_qg_identity_is_rejected(tmp_path: Path) -> None:
+    authorized = _authorized_pins()
+    path = tmp_path / "release-bundle.json"
+    authentic = dict(authorized)
+    authentic["payloads"] = {"wheelhouse": {"tree_sha256": "d" * 64}}
+    path.write_text(json.dumps(authentic, separators=(",", ":")), encoding="ascii")
+    matched = _run_identity_python(path, authorized)
+    assert matched.returncode == 0, matched.stderr
+
+    forged = dict(authentic)
+    forged["artifact_id"] = 99
+    forged["artifact_api_sha256"] = "e" * 64
+    forged["manifest_sha256"] = "f" * 64
+    forged["run_id"] = 111
+    forged["run_attempt"] = 2
+    path.write_text(json.dumps(forged, separators=(",", ":")), encoding="ascii")
+    blocked = _run_identity_python(path, authorized)
+    assert blocked.returncode != 0
+    assert "authorized journal pins" in blocked.stderr
+    assert forged["target_sha"] == authorized["target_sha"]
+    body = _verify_fn()
+    assert body.index("authorized journal pins") < body.index("assert_release_bundle")
+    assert "write_activation_phase" not in body
+    assert "recover-admit" not in body

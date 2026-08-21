@@ -6314,15 +6314,24 @@ verify_staged_qg_payloads_after_restore() {
   local tx_dir="$1"
   local target_sha="$2"
   local previous_sha="$3"
+  local artifact_id="$4"
+  local artifact_api_sha="$5"
+  local manifest_sha="$6"
+  local run_id="$7"
+  local run_attempt="$8"
   local bundle_dir helper_root release_summary
-  local artifact_id artifact_api_sha manifest_sha run_id run_attempt
-  local -a qg_fields
   validate_sha "$target_sha"
   validate_sha "$previous_sha"
   validate_tx_dir "$tx_dir"
+  [[ "$artifact_id" =~ ^[1-9][0-9]*$ ]] || die "release artifact ID is invalid"
+  validate_digest "$artifact_api_sha"
+  validate_digest "$manifest_sha"
+  [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || die "release Quality Gates run ID is invalid"
+  [[ "$run_attempt" =~ ^[1-9][0-9]*$ ]] || die "release Quality Gates attempt is invalid"
   node_assert_runtime_drained "$tx_dir"
   # Staging may have hashed trees with an unproven CPython. Re-run QG
   # provenance against the durable bundle and the actual staged bytes.
+  # Identity pins come from the journal/caller, never from stage JSON.
   assert_python_runtime_contract "$(configured_node_id)"
   test "$(<"$tx_dir/target.sha")" = "$target_sha" || \
     die "staged target SHA authority changed"
@@ -6330,27 +6339,30 @@ verify_staged_qg_payloads_after_restore() {
     die "staged previous SHA authority changed"
   test -f "$tx_dir/release-bundle.json" && test ! -L "$tx_dir/release-bundle.json" || \
     die "staged Quality Gates release bundle authority is missing"
-  mapfile -t qg_fields < <(run_system_python_control - "$tx_dir/release-bundle.json" "$target_sha" <<'PY'
+  if ! run_system_python_control - \
+      "$tx_dir/release-bundle.json" "$target_sha" \
+      "$artifact_id" "$artifact_api_sha" "$manifest_sha" "$run_id" "$run_attempt" <<'PY'
 import json
 import sys
 from pathlib import Path
 
-payload = json.loads(Path(sys.argv[1]).read_text(encoding="ascii"))
-if payload.get("target_sha") != sys.argv[2]:
-    raise SystemExit("staged release bundle target SHA changed")
-print(payload["artifact_id"])
-print(payload["artifact_api_sha256"])
-print(payload["manifest_sha256"])
-print(payload["run_id"])
-print(payload["run_attempt"])
+path, target_sha, artifact_id, artifact_api_sha, manifest_sha, run_id, run_attempt = sys.argv[1:]
+payload = json.loads(Path(path).read_text(encoding="ascii"))
+if not isinstance(payload, dict):
+    raise SystemExit("staged release bundle is not an object")
+if (
+    payload.get("target_sha") != target_sha
+    or payload.get("artifact_id") != int(artifact_id)
+    or payload.get("artifact_api_sha256") != artifact_api_sha
+    or payload.get("manifest_sha256") != manifest_sha
+    or payload.get("run_id") != int(run_id)
+    or payload.get("run_attempt") != int(run_attempt)
+):
+    raise SystemExit("staged Quality Gates identity differs from the authorized journal pins")
 PY
-  )
-  test "${#qg_fields[@]}" -eq 5 || die "staged Quality Gates identity is incomplete"
-  artifact_id="${qg_fields[0]}"
-  artifact_api_sha="${qg_fields[1]}"
-  manifest_sha="${qg_fields[2]}"
-  run_id="${qg_fields[3]}"
-  run_attempt="${qg_fields[4]}"
+  then
+    die "staged Quality Gates identity differs from the authorized journal pins"
+  fi
   bundle_dir="$(release_bundle_path "$artifact_id" "$artifact_api_sha")"
   release_summary="$(assert_release_bundle \
     "$target_sha" "$artifact_id" "$artifact_api_sha" "$manifest_sha" \
@@ -8562,10 +8574,16 @@ activate_impl() {
   local target_sha="$1"
   local previous_sha="$2"
   local tx_dir="$3"
+  local artifact_id="$4"
+  local artifact_api_sha="$5"
+  local manifest_sha="$6"
+  local run_id="$7"
+  local run_attempt="$8"
   local deploy_version sibling_dir existing_phase generation generation_root runtime_list
   test "$(current_head)" = "$previous_sha" || die "node changed after preflight"
   existing_phase="$(read_activation_phase "$tx_dir" "$target_sha" "$previous_sha")"
-  verify_staged_qg_payloads_after_restore "$tx_dir" "$target_sha" "$previous_sha"
+  verify_staged_qg_payloads_after_restore "$tx_dir" "$target_sha" "$previous_sha" \
+    "$artifact_id" "$artifact_api_sha" "$manifest_sha" "$run_id" "$run_attempt"
   if [ -z "$existing_phase" ]; then
     verify_stage_manifest "$tx_dir" "$target_sha" "$previous_sha"
     generation=1
@@ -8969,7 +8987,8 @@ node_activate() {
   local tx_dir="$3"
   local rc
   set +e
-  (set -euo pipefail; activate_impl "$target_sha" "$previous_sha" "$tx_dir")
+  (set -euo pipefail; activate_impl "$target_sha" "$previous_sha" "$tx_dir" \
+    "${4:-}" "${5:-}" "${6:-}" "${7:-}" "${8:-}")
   rc=$?
   set -e
   if [ "$rc" -ne 0 ]; then
@@ -9892,7 +9911,8 @@ node_dispatch() {
       validate_sha "${1:-}"
       validate_sha "${2:-}"
       validate_tx_dir "${3:-}"
-      verify_staged_qg_payloads_after_restore "$3" "$1" "$2"
+      verify_staged_qg_payloads_after_restore "$3" "$1" "$2" \
+        "${4:-}" "${5:-}" "${6:-}" "${7:-}" "${8:-}"
       ;;
     release-evidence)
       validate_sha "${1:-}"
@@ -9933,7 +9953,7 @@ node_dispatch() {
       validate_sha "${1:-}"
       validate_sha "${2:-}"
       validate_tx_dir "${3:-}"
-      node_activate "$1" "$2" "$3"
+      node_activate "$1" "$2" "$3" "${4:-}" "${5:-}" "${6:-}" "${7:-}" "${8:-}"
       ;;
     rollback)
       validate_sha "${1:-}"
@@ -10834,9 +10854,13 @@ recover_deployment() {
     assert_cluster_runtime_env_parity "$peer_host" "$target_sha" "$target_sha"
     assert_release_artifact_parity \
       "$peer_host" "$tx_dir" "$target_sha" "$previous_sha" "$peer_previous_sha"
-    verify_staged_qg_payloads_after_restore "$tx_dir" "$target_sha" "$previous_sha"
+    verify_staged_qg_payloads_after_restore "$tx_dir" "$target_sha" "$previous_sha" \
+      "$release_artifact_id" "$release_artifact_api_sha" "$release_manifest_sha" \
+      "$release_run_id" "$release_run_attempt"
     remote_node "$peer_host" verify-staged-qg-payloads \
-      "$target_sha" "$peer_previous_sha" "$tx_dir"
+      "$target_sha" "$peer_previous_sha" "$tx_dir" \
+      "$release_artifact_id" "$release_artifact_api_sha" "$release_manifest_sha" \
+      "$release_run_id" "$release_run_attempt"
     test "$(assert_fresh_lb_ready_attestation \
       "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha" \
       "" "$((300 + drain_seconds))")" = \
@@ -11080,14 +11104,22 @@ retry_distinct_reconciliation() {
   node_assert_release_drained "$previous_sha" "$tx_dir"
   remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"
   update_retry_journal "retry-both-nodes-drained-before-activation"
-  verify_staged_qg_payloads_after_restore "$tx_dir" "$target_sha" "$previous_sha"
+  verify_staged_qg_payloads_after_restore "$tx_dir" "$target_sha" "$previous_sha" \
+    "$release_artifact_id" "$release_artifact_api_sha" "$release_manifest_sha" \
+    "$release_run_id" "$release_run_attempt"
   remote_node "$peer_host" verify-staged-qg-payloads \
-    "$target_sha" "$peer_previous_sha" "$tx_dir"
+    "$target_sha" "$peer_previous_sha" "$tx_dir" \
+    "$release_artifact_id" "$release_artifact_api_sha" "$release_manifest_sha" \
+    "$release_run_id" "$release_run_attempt"
   update_retry_journal "retry-peer-activate"
-  remote_node "$peer_host" activate "$target_sha" "$peer_previous_sha" "$tx_dir"
+  remote_node "$peer_host" activate "$target_sha" "$peer_previous_sha" "$tx_dir" \
+    "$release_artifact_id" "$release_artifact_api_sha" "$release_manifest_sha" \
+    "$release_run_id" "$release_run_attempt"
   remote_node "$peer_host" assert-drained "$target_sha" "$tx_dir"
   update_retry_journal "retry-node01-activate"
-  node_activate "$target_sha" "$previous_sha" "$tx_dir"
+  node_activate "$target_sha" "$previous_sha" "$tx_dir" \
+    "$release_artifact_id" "$release_artifact_api_sha" "$release_manifest_sha" \
+    "$release_run_id" "$release_run_attempt"
   node_assert_release_drained "$target_sha" "$tx_dir"
   remote_node "$peer_host" assert-drained "$target_sha" "$tx_dir"
   assert_cluster_runtime_env_parity "$peer_host" "$target_sha" "$target_sha"
@@ -11348,9 +11380,13 @@ commit_target_deployment() {
   assert_cluster_runtime_env_parity "$peer_host" "$target_sha" "$target_sha"
   assert_release_artifact_parity \
     "$peer_host" "$tx_dir" "$target_sha" "$previous_sha" "$peer_previous_sha"
-  verify_staged_qg_payloads_after_restore "$tx_dir" "$target_sha" "$previous_sha"
+  verify_staged_qg_payloads_after_restore "$tx_dir" "$target_sha" "$previous_sha" \
+    "$release_artifact_id" "$release_artifact_api_sha" "$release_manifest_sha" \
+    "$release_run_id" "$release_run_attempt"
   remote_node "$peer_host" verify-staged-qg-payloads \
-    "$target_sha" "$peer_previous_sha" "$tx_dir"
+    "$target_sha" "$peer_previous_sha" "$tx_dir" \
+    "$release_artifact_id" "$release_artifact_api_sha" "$release_manifest_sha" \
+    "$release_run_id" "$release_run_attempt"
   test "$(assert_fresh_lb_ready_attestation \
     "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha" "" 600)" = \
     "$lb_observed_at" || die "commit LB attestation expired before durable decision"
@@ -11792,8 +11828,6 @@ orchestrate() {
   remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"
   node_assert_release_ready "$previous_sha"
   assert_public_ready_for_sha "$previous_sha"
-  remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir" \
-    "$release_artifact_id" "$release_artifact_api_sha"
   log "staging peer first with recoverable mode-600 backup archives"
   update_deploy_journal "peer-stage-started"
   remote_node "$peer_host" stage "$target_sha" "$peer_previous_sha" "$tx_dir" \
@@ -11823,19 +11857,27 @@ orchestrate() {
   remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"
   node_assert_release_drained "$previous_sha" "$tx_dir"
   update_deploy_journal "both-nodes-drained-before-activation"
-  verify_staged_qg_payloads_after_restore "$tx_dir" "$target_sha" "$previous_sha"
+  verify_staged_qg_payloads_after_restore "$tx_dir" "$target_sha" "$previous_sha" \
+    "$release_artifact_id" "$release_artifact_api_sha" "$release_manifest_sha" \
+    "$release_run_id" "$release_run_attempt"
   remote_node "$peer_host" verify-staged-qg-payloads \
-    "$target_sha" "$peer_previous_sha" "$tx_dir"
+    "$target_sha" "$peer_previous_sha" "$tx_dir" \
+    "$release_artifact_id" "$release_artifact_api_sha" "$release_manifest_sha" \
+    "$release_run_id" "$release_run_attempt"
 
   log "activating exact target on drained peer"
   update_deploy_journal "peer-activate-started"
-  remote_node "$peer_host" activate "$target_sha" "$peer_previous_sha" "$tx_dir"
+  remote_node "$peer_host" activate "$target_sha" "$peer_previous_sha" "$tx_dir" \
+    "$release_artifact_id" "$release_artifact_api_sha" "$release_manifest_sha" \
+    "$release_run_id" "$release_run_attempt"
   update_deploy_journal "peer-activated"
   remote_node "$peer_host" assert-drained "$target_sha" "$tx_dir"
   node_assert_release_drained "$previous_sha" "$tx_dir"
   log "activating exact target on drained node01"
   update_deploy_journal "node01-activate-started"
-  node_activate "$target_sha" "$previous_sha" "$tx_dir"
+  node_activate "$target_sha" "$previous_sha" "$tx_dir" \
+    "$release_artifact_id" "$release_artifact_api_sha" "$release_manifest_sha" \
+    "$release_run_id" "$release_run_attempt"
   update_deploy_journal "node01-activated"
   remote_node "$peer_host" assert-drained "$target_sha" "$tx_dir"
   node_assert_release_drained "$target_sha" "$tx_dir"
