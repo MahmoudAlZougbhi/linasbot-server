@@ -129,6 +129,8 @@ def test_helper_defers_pre_drain_tree_hash_then_rehashes() -> None:
     ]
     assert "deferred-until-restore" in preflight_block
     assert 'assert_python_runtime_contract "$expected_node_id")' not in installer
+    manifest = source[source.index("stage_manifest_tool() {") : source.index("publish_stage_manifest() {")]
+    assert "deferred-until-restore" in manifest
     assert (
         "deferred-until-restore"
         not in source[source.index("apply_cpython_runtime_immutability() {") : source.index("require_root() {")]

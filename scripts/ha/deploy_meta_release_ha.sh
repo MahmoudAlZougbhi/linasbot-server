@@ -5963,7 +5963,9 @@ stage_manifest_tool() {
   local target_sha="$3"
   local previous_sha="$4"
   local python_runtime_cluster_sha
-  python_runtime_cluster_sha="$(assert_python_runtime_contract "$(configured_node_id)")"
+  # Pre-drain staging can still serve live traffic. Full runtime-tree proof
+  # stays mandatory after drain in apply_cpython_runtime_immutability.
+  python_runtime_cluster_sha="$(assert_python_runtime_contract "$(configured_node_id)" deferred-until-restore)"
   run_system_python_control - "$operation" "$tx_dir" "$target_sha" "$previous_sha" \
     "$python_runtime_cluster_sha" <<'PY'
 import hashlib
