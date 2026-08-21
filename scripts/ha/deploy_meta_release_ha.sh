@@ -6305,6 +6305,89 @@ stage_artifact_evidence() {
   stage_manifest_tool evidence "$@"
 }
 
+verify_staged_qg_payloads_after_restore() {
+  local tx_dir="$1"
+  local target_sha="$2"
+  local previous_sha="$3"
+  local bundle_dir helper_root release_summary
+  local artifact_id artifact_api_sha manifest_sha run_id run_attempt
+  local -a qg_fields
+  validate_sha "$target_sha"
+  validate_sha "$previous_sha"
+  validate_tx_dir "$tx_dir"
+  node_assert_runtime_drained "$tx_dir"
+  # Staging may have hashed trees with an unproven CPython. Re-run QG
+  # provenance against the durable bundle and the actual staged bytes.
+  assert_python_runtime_contract "$(configured_node_id)"
+  test "$(<"$tx_dir/target.sha")" = "$target_sha" || \
+    die "staged target SHA authority changed"
+  test "$(<"$tx_dir/previous.sha")" = "$previous_sha" || \
+    die "staged previous SHA authority changed"
+  test -f "$tx_dir/release-bundle.json" && test ! -L "$tx_dir/release-bundle.json" || \
+    die "staged Quality Gates release bundle authority is missing"
+  mapfile -t qg_fields < <(run_system_python_control - "$tx_dir/release-bundle.json" "$target_sha" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="ascii"))
+if payload.get("target_sha") != sys.argv[2]:
+    raise SystemExit("staged release bundle target SHA changed")
+print(payload["artifact_id"])
+print(payload["artifact_api_sha256"])
+print(payload["manifest_sha256"])
+print(payload["run_id"])
+print(payload["run_attempt"])
+PY
+  )
+  test "${#qg_fields[@]}" -eq 5 || die "staged Quality Gates identity is incomplete"
+  artifact_id="${qg_fields[0]}"
+  artifact_api_sha="${qg_fields[1]}"
+  manifest_sha="${qg_fields[2]}"
+  run_id="${qg_fields[3]}"
+  run_attempt="${qg_fields[4]}"
+  bundle_dir="$(release_bundle_path "$artifact_id" "$artifact_api_sha")"
+  release_summary="$(assert_release_bundle \
+    "$target_sha" "$artifact_id" "$artifact_api_sha" "$manifest_sha" \
+    "$run_id" "$run_attempt" "$bundle_dir")"
+  test "$(<"$tx_dir/release-bundle.json")" = "$release_summary" || \
+    die "staged release bundle authority differs from Quality Gates after restore"
+  helper_root="$(materialize_release_artifact_contract "$target_sha")"
+  if ! run_system_python_control - \
+      "$helper_root" "$tx_dir/stage" "$release_summary" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+helper, stage_raw, summary_raw = sys.argv[1:]
+sys.path.insert(0, helper)
+from scripts.ha.release_artifact_contract import tree_evidence
+
+stage = Path(stage_raw)
+summary = json.loads(summary_raw)
+payloads = summary["payloads"]
+checks = (
+    ("wheelhouse", stage / "wheels"),
+    ("dashboard", stage / "repo/dashboard/build"),
+    ("control_plane", stage / "control-plane"),
+)
+for key, tree in checks:
+    expected = payloads[key]
+    evidence = tree_evidence(tree)
+    if (
+        evidence.tree_sha256 != expected["tree_sha256"]
+        or evidence.file_count != expected["file_count"]
+        or evidence.total_size != expected["total_size"]
+    ):
+        raise SystemExit(f"staged {key} tree differs from Quality Gates authority")
+PY
+  then
+    cleanup_release_artifact_contract "$helper_root" || true
+    die "staged Quality Gates payload trees differ from the reviewed release after restore"
+  fi
+  cleanup_release_artifact_contract "$helper_root"
+}
+
 assert_stage_artifact_parity() {
   local peer_host="$1"
   local tx_dir="$2"
@@ -8477,6 +8560,7 @@ activate_impl() {
   local deploy_version sibling_dir existing_phase generation generation_root runtime_list
   test "$(current_head)" = "$previous_sha" || die "node changed after preflight"
   existing_phase="$(read_activation_phase "$tx_dir" "$target_sha" "$previous_sha")"
+  verify_staged_qg_payloads_after_restore "$tx_dir" "$target_sha" "$previous_sha"
   if [ -z "$existing_phase" ]; then
     verify_stage_manifest "$tx_dir" "$target_sha" "$previous_sha"
     generation=1
@@ -9799,6 +9883,12 @@ node_dispatch() {
       validate_tx_dir "${3:-}"
       stage_artifact_evidence "$3" "$1" "$2"
       ;;
+    verify-staged-qg-payloads)
+      validate_sha "${1:-}"
+      validate_sha "${2:-}"
+      validate_tx_dir "${3:-}"
+      verify_staged_qg_payloads_after_restore "$3" "$1" "$2"
+      ;;
     release-evidence)
       validate_sha "${1:-}"
       validate_sha "${2:-}"
@@ -10743,6 +10833,9 @@ recover_deployment() {
       "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha" \
       "" "$((300 + drain_seconds))")" = \
       "$lb_observed_at" || die "recovery LB attestation expired before commit admission"
+    verify_staged_qg_payloads_after_restore "$tx_dir" "$target_sha" "$previous_sha"
+    remote_node "$peer_host" verify-staged-qg-payloads \
+      "$target_sha" "$peer_previous_sha" "$tx_dir"
     update_recovery_journal "commit-peer-admit"
     remote_node "$peer_host" recover-admit "$target_sha" "$tx_dir"
     assert_public_ready_after_peer_admission "$target_sha"
@@ -10982,6 +11075,9 @@ retry_distinct_reconciliation() {
   node_assert_release_drained "$previous_sha" "$tx_dir"
   remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"
   update_retry_journal "retry-both-nodes-drained-before-activation"
+  verify_staged_qg_payloads_after_restore "$tx_dir" "$target_sha" "$previous_sha"
+  remote_node "$peer_host" verify-staged-qg-payloads \
+    "$target_sha" "$peer_previous_sha" "$tx_dir"
   update_retry_journal "retry-peer-activate"
   remote_node "$peer_host" activate "$target_sha" "$peer_previous_sha" "$tx_dir"
   remote_node "$peer_host" assert-drained "$target_sha" "$tx_dir"
@@ -11247,6 +11343,9 @@ commit_target_deployment() {
   assert_cluster_runtime_env_parity "$peer_host" "$target_sha" "$target_sha"
   assert_release_artifact_parity \
     "$peer_host" "$tx_dir" "$target_sha" "$previous_sha" "$peer_previous_sha"
+  verify_staged_qg_payloads_after_restore "$tx_dir" "$target_sha" "$previous_sha"
+  remote_node "$peer_host" verify-staged-qg-payloads \
+    "$target_sha" "$peer_previous_sha" "$tx_dir"
   test "$(assert_fresh_lb_ready_attestation \
     "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha" "" 600)" = \
     "$lb_observed_at" || die "commit LB attestation expired before durable decision"
@@ -11711,6 +11810,9 @@ orchestrate() {
   remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"
   node_assert_release_drained "$previous_sha" "$tx_dir"
   update_deploy_journal "both-nodes-drained-before-activation"
+  verify_staged_qg_payloads_after_restore "$tx_dir" "$target_sha" "$previous_sha"
+  remote_node "$peer_host" verify-staged-qg-payloads \
+    "$target_sha" "$peer_previous_sha" "$tx_dir"
 
   log "activating exact target on drained peer"
   update_deploy_journal "peer-activate-started"

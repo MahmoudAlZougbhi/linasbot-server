@@ -162,4 +162,6 @@ def test_steady_deploy_requires_tree_proof_after_drain_before_activation() -> No
     activate = source.index('log "activating exact target on drained peer"')
     window = source[start:activate]
     assert window.index("sleep") < window.index("apply_cpython_runtime_immutability")
+    assert window.index("apply_cpython_runtime_immutability") < window.index("verify_staged_qg_payloads_after_restore")
+    assert 'remote_node "$peer_host" verify-staged-qg-payloads' in window
     assert "peer-activate-started" not in window
