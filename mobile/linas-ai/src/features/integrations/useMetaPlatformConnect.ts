@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { ApiError } from '../../api/client';
 import type { StringKey } from '../../i18n/locales/en';
 import { apiErrorDetail, MetaOAuthConnectError, startMetaOAuth } from './integrationsOAuth';
+import { metaOAuthFailureMessage } from '../../app/integrationsDeepLink';
 import type { IntegrationsLoadResult } from './useIntegrationsLoad';
 import type { IntegrationListRow } from './integrationsSchemas';
 
@@ -45,8 +46,9 @@ export function useMetaPlatformConnect({
           return;
         }
         if (session.outcome === 'cancelled') setError(tr('metaOAuthCancelled'));
-        else if (session.outcome === 'failed') setError(tr('metaOAuthFailed'));
-        else setError(tr('metaOAuthIncomplete'));
+        else if (session.outcome === 'failed') {
+          setError(metaOAuthFailureMessage(tr, session.reason));
+        } else setError(tr('metaOAuthIncomplete'));
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) setAuthGate(true);
         else if (err instanceof MetaOAuthConnectError) {

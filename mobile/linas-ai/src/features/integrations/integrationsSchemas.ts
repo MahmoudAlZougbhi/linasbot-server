@@ -49,6 +49,7 @@ export const RowSchema = z.object({
   comments_state: CapabilityStateSchema,
   dm_state: CapabilityStateSchema,
   connection_status: z.enum(['connected', 'needs_reconnect', 'error', 'disconnected']).optional(),
+  service_diagnostic: z.string().optional(),
   last_synced_at: z.number().nullable().optional(),
   account: AccountDisplaySchema.nullable().optional(),
   accounts: z.array(AccountDisplaySchema).optional(),

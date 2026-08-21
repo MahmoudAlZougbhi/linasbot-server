@@ -123,8 +123,28 @@ export const ar = {
   integrationsToggleError: 'تعذر تحديث إعداد القناة. حاول مجدداً.',
   metaOAuthSuccess: 'تم تحديث وصول Meta. جاري تحديث حالة الاتصال…',
   metaOAuthCancelled: 'تم إلغاء تفويض Meta.',
-  
+
+  integrationDmActionOff: 'فعّل الرسائل المباشرة حتى يرد الذكاء الاصطناعي على الـ DM.',
+  serviceDiagnosticWebhookNotReady: 'Webhooks غير جاهزة بعد. اضغط Connect مجدداً أو انتظر دقيقة.',
+  serviceDiagnosticMissingScopes: 'الربط ناقص صلاحيات Meta. Disconnect ثم Connect.',
+  serviceDiagnosticExpiredToken: 'انتهت صلاحية التوكن. Disconnect ثم Connect.',
+  serviceDiagnosticCredentialUnavailable: 'بيانات الاعتماد غير متاحة. Disconnect ثم Connect.',
+  serviceDiagnosticTokenMismatch: 'الربط لم يعد يطابق Meta. Disconnect ثم Connect.',
   metaOAuthFailed: 'فشل تفويض Meta. حاول إدارة وصول Meta مجدداً.',
+  metaOAuthFailedScopes:
+    'Instagram لم يمنح كل الصلاحيات المطلوبة. اضغط Connect مجدداً واسمح بكل الصلاحيات.',
+  metaOAuthFailedToken:
+    'Meta رفض رمز تفويض Instagram. اضغط Connect مجدداً. إذا استمر الفشل، تأكد أن الحساب مضاف كـ tester في Meta Developer Console.',
+  metaOAuthFailedProfile:
+    'يجب أن يكون حساب Instagram Business أو Creator قبل الربط.',
+  metaOAuthFailedWebhook:
+    'تم التفويض، لكن إعداد webhook لم يكتمل. اضغط Connect مجدداً بعد دقيقة.',
+  metaOAuthFailedDeletion:
+    'Instagram محظور بسبب طلب حذف بيانات Meta.',
+  metaOAuthFailedConfig:
+    'Instagram Login غير جاهز على السيرفر بعد. جرّب بعد آخر تحديث.',
+  metaOAuthFailedConflict:
+    'حساب Instagram هذا مربوط بمساحة عمل أخرى.',
   metaOAuthIncomplete:
     'انتهى تفويض Meta في المتصفح دون العودة للتطبيق. إذا كانت القناة لا تزال غير مربوطة، اضغط ربط مجدداً.',
   toggleDms: 'الرسائل المباشرة',

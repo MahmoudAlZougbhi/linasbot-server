@@ -126,7 +126,27 @@ export const fr = {
   integrationsToggleError: 'Impossible de mettre à jour le réglage du canal. Réessayez.',
   metaOAuthSuccess: 'Accès Meta mis à jour. Actualisation du statut…',
   metaOAuthCancelled: 'Autorisation Meta annulée.',
+  integrationDmActionOff: 'Activez les messages directs pour que l’IA réponde aux DM.',
+  serviceDiagnosticWebhookNotReady: 'Les webhooks ne sont pas prêts. Réessayez Connecter ou attendez une minute.',
+  serviceDiagnosticMissingScopes: 'Il manque des autorisations Meta. Déconnectez, puis Connecter.',
+  serviceDiagnosticExpiredToken: 'Le jeton a expiré. Déconnectez, puis Connecter.',
+  serviceDiagnosticCredentialUnavailable: 'Identifiants indisponibles. Déconnectez, puis Connecter.',
+  serviceDiagnosticTokenMismatch: 'La connexion ne correspond plus à Meta. Déconnectez, puis Connecter.',
   metaOAuthFailed: 'Échec de l’autorisation Meta. Réessayez via Gérer l’accès Meta.',
+  metaOAuthFailedScopes:
+    'Instagram n’a pas accordé toutes les autorisations requises. Appuyez sur Connecter et acceptez chaque permission.',
+  metaOAuthFailedToken:
+    'Meta a rejeté le code Instagram. Réessayez Connecter. Si cela échoue encore, ajoutez le compte comme testeur dans Meta Developer Console.',
+  metaOAuthFailedProfile:
+    'Ce compte Instagram doit être un profil Business ou Creator avant la connexion.',
+  metaOAuthFailedWebhook:
+    'Instagram autorisé, mais la configuration webhook n’a pas abouti. Réessayez Connecter dans une minute.',
+  metaOAuthFailedDeletion:
+    'L’autorisation Instagram est bloquée par une demande de suppression Meta.',
+  metaOAuthFailedConfig:
+    'Instagram Login n’est pas encore prêt sur le serveur. Réessayez après la dernière mise à jour.',
+  metaOAuthFailedConflict:
+    'Ce compte Instagram est déjà connecté à un autre espace de travail.',
   metaOAuthIncomplete:
     'Meta a terminé dans le navigateur, mais l’app n’a pas reçu le lien de retour. Si le canal est encore déconnecté, appuyez à nouveau sur Connecter.',
   toggleDms: 'Messages privés',

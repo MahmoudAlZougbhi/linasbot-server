@@ -64,4 +64,4 @@ export function parseLiveChatDeepLink(url: string | null): LiveChatOpen | null {
 }
 
 export type { IntegrationsDeepLink } from './integrationsDeepLink';
-export { parseIntegrationsDeepLink } from './integrationsDeepLink';
+export { metaOAuthFailureMessage, parseIntegrationsDeepLink } from './integrationsDeepLink';

@@ -26,6 +26,41 @@ MOBILE_INTEGRATIONS_DEEP_LINK = "linasai://integrations"
 WEB_OAUTH_COMPLETION_PATH = "/"
 ALLOWED_RETURN_SURFACES = frozenset({"web", "mobile"})
 _MOBILE_META_CONNECTION_VALUES = frozenset({"success", "cancelled", "failed"})
+_MOBILE_OAUTH_FAILURE_REASONS = frozenset(
+    {"generic", "state", "scopes", "token", "profile", "webhook", "deletion", "conflict", "config"}
+)
+
+
+def mobile_oauth_failure_reason(exc: BaseException) -> str:
+    """Map an OAuth exception to a short allowlisted mobile reason code."""
+
+    from services.meta_app_registry_common import MetaBindingConflictError, MetaRegistryError
+
+    message = str(exc or "").lower()
+    if isinstance(exc, MetaOAuthStateError):
+        return "state"
+    if isinstance(exc, MetaBindingConflictError):
+        return "conflict"
+    if isinstance(exc, MetaRegistryError):
+        return "config"
+    if "did not grant required" in message or "permissions" in message or "prohibited permission" in message:
+        return "scopes"
+    if (
+        "code exchange" in message
+        or "token exchange" in message
+        or "authorization-code" in message
+        or "long-lived token" in message
+    ):
+        return "token"
+    if "professional account" in message or "profile discovery" in message:
+        return "profile"
+    if "webhook subscription" in message:
+        return "webhook"
+    if "deletion" in message:
+        return "deletion"
+    if "not configured" in message:
+        return "config"
+    return "generic"
 
 
 def normalize_return_surface(value: Any) -> ReturnSurface:
@@ -65,8 +100,13 @@ def oauth_completion_redirect_url(
         status = mobile_meta_connection_status(meta_connection)
         if status not in _MOBILE_META_CONNECTION_VALUES:
             status = "failed"
+        query: dict[str, str] = {"meta_connection": status}
+        if status == "failed":
+            reason = str((extra_query or {}).get("meta_reason") or "").strip().lower()
+            if reason in _MOBILE_OAUTH_FAILURE_REASONS:
+                query["meta_reason"] = reason
         # Deep link carries only a coarse status — no tokens, tenant IDs, or Meta secrets.
-        return f"{MOBILE_INTEGRATIONS_DEEP_LINK}?{urlencode({'meta_connection': status})}"
+        return f"{MOBILE_INTEGRATIONS_DEEP_LINK}?{urlencode(query)}"
 
     query: dict[str, str] = {"meta_connection": str(meta_connection or "failed")}
     for key, value in (extra_query or {}).items():

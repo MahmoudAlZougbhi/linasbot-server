@@ -143,6 +143,16 @@ def enrich_mobile_integration_row(row: dict[str, Any], *, tenant_id: str) -> dic
         "dm_replies": bool(toggles.get("dm")),
         "comment_replies": bool(toggles.get("comments")),
     }
+    if canonical:
+        diagnostics = []
+        for binding in canonical:
+            from services.meta_app_registry import diagnose_active_meta_binding
+
+            reason = diagnose_active_meta_binding(registry, binding)
+            if reason:
+                diagnostics.append(reason)
+        if diagnostics:
+            cleaned["service_diagnostic"] = diagnostics[0]
     return cleaned
 
 
