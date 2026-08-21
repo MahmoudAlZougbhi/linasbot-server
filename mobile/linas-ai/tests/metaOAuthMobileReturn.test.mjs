@@ -33,35 +33,41 @@ describe('meta oauth mobile return surface', () => {
   });
 
   it('does not treat Facebook HTTPS session success as connected', () => {
-    assert.equal(
+    assert.deepEqual(
       metaAuthSessionOutcome({
         type: 'success',
         url: 'https://www.facebook.com/v22.0/dialog/oauth?redirect_uri=https://www.linasaibot.com/oauth/meta/callback',
       }),
-      'incomplete',
+      { outcome: 'incomplete', reason: null },
     );
-    assert.equal(
+    assert.deepEqual(
       metaAuthSessionOutcome({
         type: 'success',
         url: 'https://www.linasaibot.com/oauth/meta/callback?code=abc',
       }),
-      'incomplete',
+      { outcome: 'incomplete', reason: null },
     );
-    assert.equal(
+    assert.deepEqual(
       metaAuthSessionOutcome({
         type: 'success',
         url: 'linasai://integrations?meta_connection=success',
       }),
-      'ok',
+      { outcome: 'ok', reason: null },
     );
-    assert.equal(metaAuthSessionOutcome({ type: 'dismiss' }), 'cancelled');
-    assert.equal(metaAuthSessionOutcome({ type: 'cancel' }), 'cancelled');
-    assert.equal(
+    assert.deepEqual(metaAuthSessionOutcome({ type: 'dismiss' }), {
+      outcome: 'cancelled',
+      reason: null,
+    });
+    assert.deepEqual(metaAuthSessionOutcome({ type: 'cancel' }), {
+      outcome: 'cancelled',
+      reason: null,
+    });
+    assert.deepEqual(
       metaAuthSessionOutcome({
         type: 'success',
-        url: 'linasai://integrations?meta_connection=failed',
+        url: 'linasai://integrations?meta_connection=failed&meta_reason=token',
       }),
-      'failed',
+      { outcome: 'failed', reason: 'token' },
     );
   });
 
