@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -114,7 +115,11 @@ def test_script_stop_rewrite_executes_drain_assignment(tmp_path: Path) -> None:
     python = repo / "venv" / "bin" / "python"
     python.parent.mkdir(parents=True)
     (repo / ".env").write_text("META_HA_LB_DRAIN_SECONDS=45\n", encoding="utf-8")
-    python.symlink_to(sys.executable)
+    python.write_text(
+        "#!/bin/sh\n" + f'exec {shlex.quote(sys.executable)} "$@"\n',
+        encoding="utf-8",
+    )
+    python.chmod(0o755)
 
     completed = subprocess.run(
         ["/bin/bash", "-c", fragment + 'printf "%s\\n" "$DRAIN_SECONDS"\n'],
