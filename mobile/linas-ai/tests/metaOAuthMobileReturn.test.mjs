@@ -9,6 +9,9 @@ import {
   metaOAuthFailureMessage,
   parseIntegrationsDeepLink,
 } from '../src/app/integrationsDeepLink.ts';
+import { integrationsDisplayAr } from '../src/i18n/locales/integrationsDisplayAr.ts';
+import { integrationsDisplayEn } from '../src/i18n/locales/integrationsDisplayEn.ts';
+import { integrationsDisplayFr } from '../src/i18n/locales/integrationsDisplayFr.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -145,16 +148,23 @@ describe('meta oauth mobile return surface', () => {
     assert.equal(metaOAuthFailureMessage(tr, 'scopes', null), 'metaOAuthFailed');
   });
 
-  it('Facebook scopes copy covers Page grants, not only business_management', () => {
-    const en = read('i18n/locales/integrationsDisplayEn.ts');
-    const ar = read('i18n/locales/integrationsDisplayAr.ts');
-    const fr = read('i18n/locales/integrationsDisplayFr.ts');
-    assert.match(en, /Facebook did not grant all required permissions, including business_management/);
-    assert.match(ar, /كل الصلاحيات المطلوبة، بما فيها business_management/);
-    assert.match(fr, /toutes les autorisations requises, y compris business_management/);
-    assert.doesNotMatch(en, /the required business_management permission/);
-    assert.doesNotMatch(ar, /صلاحية business_management المطلوبة/);
-    assert.doesNotMatch(fr, /l’autorisation business_management requise/);
+  it('Facebook scopes message covers all required permissions, including business_management', () => {
+    for (const locale of [integrationsDisplayEn, integrationsDisplayAr, integrationsDisplayFr]) {
+      const tr = (key) => {
+        const value = locale[key];
+        assert.equal(typeof value, 'string', `missing Facebook scopes copy for ${key}`);
+        return value;
+      };
+      const message = metaOAuthFailureMessage(tr, 'scopes', 'facebook');
+      assert.match(message, /business_management/);
+      assert.match(
+        message,
+        /all required permissions|كل الصلاحيات المطلوبة|toutes les autorisations requises/,
+      );
+      assert.doesNotMatch(message, /the required business_management permission/);
+      assert.doesNotMatch(message, /صلاحية business_management المطلوبة/);
+      assert.doesNotMatch(message, /l’autorisation business_management requise/);
+    }
   });
 
   it('AppShell routes integrations deep link and IntegrationsScreen refetches', () => {
