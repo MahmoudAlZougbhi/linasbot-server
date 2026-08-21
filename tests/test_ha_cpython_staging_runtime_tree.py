@@ -72,8 +72,36 @@ def _hashed_runtime(tmp_path: Path) -> Path:
 
 def _pip_reexec(runtime: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
     runner = runtime / "lib" / "python3.13" / "site-packages" / "pip" / "__pip-runner__.py"
-    merged = {"PATH": os.environ.get("PATH", ""), **env}
-    return subprocess.run([sys.executable, str(runner)], env=merged, text=True, capture_output=True)
+    merged = {"PATH": os.environ.get("PATH", ""), **env, "PYTHONDONTWRITEBYTECODE": "1"}
+    return subprocess.run(
+        [sys.executable, "-B", str(runner)],
+        env=merged,
+        text=True,
+        capture_output=True,
+    )
+
+
+def _host_runtime_root() -> Path:
+    return Path(sys.base_prefix).resolve()
+
+
+def _host_runtime_fingerprint(root: Path) -> tuple[int, tuple[str, ...]]:
+    files = 0
+    for path in root.rglob("*"):
+        if path.is_symlink() or not path.is_file():
+            continue
+        files += 1
+    return files, tuple(sorted(bytecode_inside(root)))
+
+
+def _plant_serving_bytecode(runtime: Path) -> Path:
+    cache = runtime / "lib" / "python3.13" / "site-packages" / "pip" / "__pycache__"
+    cache.mkdir(parents=True)
+    os.chmod(cache, 0o755)
+    planted = cache / "marker.cpython-313.pyc"
+    planted.write_bytes(b"synthetic-serving-live-drift\n")
+    os.chmod(planted, 0o644)
+    return planted
 
 
 def _ha_pip_env(cache: Path) -> dict[str, str]:
@@ -116,6 +144,8 @@ def test_ha_pip_reexec_does_not_mutate_hashed_tree_when_child_inherits_dontwrite
 
 
 def test_serving_live_drift_mutates_hashed_tree_after_identical_pip_reexec(tmp_path: Path) -> None:
+    host = _host_runtime_root()
+    host_before = _host_runtime_fingerprint(host)
     baseline = _hashed_runtime(tmp_path / "src")
     cache = tmp_path / "control-pycache"
     cache.mkdir()
@@ -132,14 +162,17 @@ def test_serving_live_drift_mutates_hashed_tree_after_identical_pip_reexec(tmp_p
     assert python_runtime_tree_sha256(peer) == before
     assert python_runtime_tree_sha256(node01) == before
 
-    live = _pip_reexec(node01, {"HOME": str(tmp_path / "live-home")})
-    assert live.returncode == 0, live.stderr
+    planted = _plant_serving_bytecode(node01)
+    assert planted.is_file()
     assert python_runtime_tree_sha256(peer) == before
     drifted = python_runtime_tree_sha256(node01)
     assert drifted != before
     assert drifted != PIN
     assert any(path.endswith(".pyc") for path in bytecode_inside(node01))
     assert bytecode_inside(peer) == []
+    assert _host_runtime_fingerprint(host) == host_before
+    assert planted.resolve().is_relative_to(node01.resolve())
+    assert not planted.resolve().is_relative_to(host)
 
 
 def test_steady_deploy_requires_tree_proof_after_drain_before_activation() -> None:
