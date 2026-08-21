@@ -308,6 +308,7 @@ jobs:
               local dropin queue
               for dropin in $DROPINS; do
                 prove_absent "/etc/systemd/system/linasbot.service.d/$dropin"
+                prove_absent "/etc/systemd/system/linasbot-worker@.service.d/$dropin"
                 for queue in $QUEUES; do
                   prove_absent "/etc/systemd/system/linasbot-worker@${queue}.service.d/$dropin"
                 done
@@ -374,17 +375,12 @@ jobs:
                 exit 1
               fi
             done
+            prove_absent() { if [ -e "$1" ] || [ -L "$1" ]; then echo "[orphan-maint-recover] unexpected path present: $1" >&2; exit 1; fi; }
             for dropin in $DROPINS; do
-              if [ -e "/etc/systemd/system/linasbot.service.d/$dropin" ] || [ -L "/etc/systemd/system/linasbot.service.d/$dropin" ]; then
-                echo "[orphan-maint-recover] unexpected systemd drop-in present: $dropin" >&2
-                exit 1
-              fi
+              prove_absent "/etc/systemd/system/linasbot.service.d/$dropin"
+              prove_absent "/etc/systemd/system/linasbot-worker@.service.d/$dropin"
               for queue in $QUEUES; do
-                path="/etc/systemd/system/linasbot-worker@${queue}.service.d/$dropin"
-                if [ -e "$path" ] || [ -L "$path" ]; then
-                  echo "[orphan-maint-recover] unexpected systemd drop-in present: $path" >&2
-                  exit 1
-                fi
+                prove_absent "/etc/systemd/system/linasbot-worker@${queue}.service.d/$dropin"
               done
             done
             EOS

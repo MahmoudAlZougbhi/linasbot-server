@@ -224,6 +224,18 @@ def test_precheck_invariants_bind_old_config_and_exact_lists() -> None:
     assert "cluster-release-only" not in source
 
 
+def test_worker_template_dropin_absent_locally_and_on_peer() -> None:
+    script = _script()
+    template = 'prove_absent "/etc/systemd/system/linasbot-worker@.service.d/$dropin"'
+    instance = 'prove_absent "/etc/systemd/system/linasbot-worker@${queue}.service.d/$dropin"'
+    local_fn = script[script.index("prove_dropins() {") : script.index("restore_s0() {")]
+    peer = script[script.index('hp node "$REPO_DIR/.env" node02') : script.index("\nEOS")]
+    assert template in local_fn
+    assert instance in local_fn
+    assert template in peer
+    assert instance in peer
+
+
 def test_fail_closed_trap_rearms_before_first_unlink_and_proves_maintenance() -> None:
     script = _script()
     helper = _helper_python()
