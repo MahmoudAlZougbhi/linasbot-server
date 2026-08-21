@@ -100,22 +100,22 @@ def oauth_completion_redirect_url(
         status = mobile_meta_connection_status(meta_connection)
         if status not in _MOBILE_META_CONNECTION_VALUES:
             status = "failed"
-        query: dict[str, str] = {"meta_connection": status}
+        mobile_query: dict[str, str] = {"meta_connection": status}
         if status == "failed":
             reason = str((extra_query or {}).get("meta_reason") or "").strip().lower()
             if reason in _MOBILE_OAUTH_FAILURE_REASONS:
-                query["meta_reason"] = reason
+                mobile_query["meta_reason"] = reason
         # Deep link carries only a coarse status — no tokens, tenant IDs, or Meta secrets.
-        return f"{MOBILE_INTEGRATIONS_DEEP_LINK}?{urlencode(query)}"
+        return f"{MOBILE_INTEGRATIONS_DEEP_LINK}?{urlencode(mobile_query)}"
 
-    query: dict[str, str] = {"meta_connection": str(meta_connection or "failed")}
+    web_query: dict[str, str] = {"meta_connection": str(meta_connection or "failed")}
     for key, value in (extra_query or {}).items():
         if key in {"meta_connection", "access_token", "token", "tenant_id", "code", "state"}:
             continue
         text = str(value or "").strip()
         if text:
-            query[key] = text
-    return f"{WEB_OAUTH_COMPLETION_PATH}?{urlencode(query)}"
+            web_query[key] = text
+    return f"{WEB_OAUTH_COMPLETION_PATH}?{urlencode(web_query)}"
 
 
 def oauth_completion_response(
