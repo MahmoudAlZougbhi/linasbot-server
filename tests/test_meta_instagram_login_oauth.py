@@ -211,9 +211,7 @@ def test_instagram_login_config_accepts_apex_public_url(monkeypatch: pytest.Monk
     status = instagram_login_config_status()
 
     assert status.configured is True
-    assert instagram_login_webhook_callback_url() == (
-        "https://www.linasaibot.com/webhook/instagram-login"
-    )
+    assert instagram_login_webhook_callback_url() == ("https://www.linasaibot.com/webhook/instagram-login")
 
     monkeypatch.setenv("META_APP_A_ID", "2963733803971681")
     monkeypatch.setenv("META_APP_A_SECRET", "app-a-secret-tests")
