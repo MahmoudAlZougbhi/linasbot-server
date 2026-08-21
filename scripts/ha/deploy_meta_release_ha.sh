@@ -3458,7 +3458,7 @@ install_lb_ready_attestation() {
   local confirmation="$7"
   local owner_confirmation="$8"
   local expected_confirmation destination temporary observed_at runtime_cluster
-  local running_helper target_helper tree_proof=required
+  local running_helper target_helper tree_proof=required deploy_lb_max_age=300
   validate_sha "$target_sha"
   test "$expected_node_id" = node01 || test "$expected_node_id" = node02 || \
     die "LB attestation installer node identity is invalid"
@@ -3481,6 +3481,9 @@ install_lb_ready_attestation() {
       tree_proof=deferred-until-restore
       ;;
   esac
+  if [ "$operation" = deploy ]; then
+    deploy_lb_max_age=600
+  fi
   runtime_cluster="$(assert_python_runtime_contract "$expected_node_id" "$tree_proof")"
   validate_digest "$runtime_cluster"
   test "$(configured_node_id)" = "$expected_node_id" || \
@@ -3523,14 +3526,16 @@ install_lb_ready_attestation() {
     die "LB attestation input size is invalid"
   fi
   if ! observed_at="$(assert_fresh_lb_ready_attestation \
-      "$target_sha" "$attestation_sha" "$ready_projection_sha" "$temporary")"; then
+      "$target_sha" "$attestation_sha" "$ready_projection_sha" "$temporary" \
+      "$deploy_lb_max_age")"; then
     unlink "$temporary"
     die "LB attestation input did not pass the exact target validator"
   fi
   destination="${LB_ATTESTATION_PREFIX}${attestation_sha}.json"
   if [ -e "$destination" ] || [ -L "$destination" ]; then
     if ! assert_fresh_lb_ready_attestation \
-        "$target_sha" "$attestation_sha" "$ready_projection_sha" >/dev/null || \
+        "$target_sha" "$attestation_sha" "$ready_projection_sha" "" \
+        "$deploy_lb_max_age" >/dev/null || \
        ! cmp -s "$temporary" "$destination"; then
       unlink "$temporary"
       die "canonical LB attestation destination contains different or unsafe bytes"
@@ -3541,7 +3546,8 @@ install_lb_ready_attestation() {
     fsync_path_and_parents "$destination" "$META_HA_STATE_ROOT"
   fi
   test "$(assert_fresh_lb_ready_attestation \
-    "$target_sha" "$attestation_sha" "$ready_projection_sha")" = "$observed_at" || \
+    "$target_sha" "$attestation_sha" "$ready_projection_sha" "" \
+    "$deploy_lb_max_age")" = "$observed_at" || \
     die "installed LB attestation failed exact readback"
   printf 'LB_ATTESTATION_SHA256=%s\nLB_READY_PROJECTION_SHA256=%s\nLB_OBSERVED_AT=%s\n' \
     "$attestation_sha" "$ready_projection_sha" "$observed_at"
@@ -5243,7 +5249,7 @@ node_preflight() {
   local tree_proof="${7:-required}"
   local head node drain peer queue python_runtime_cluster_sha baseline_artifacts
   local schema_compatibility_evidence
-  local lb_observed_at
+  local lb_observed_at lb_mutation_max_age=300
   local blocker=0
   case "$tree_proof" in
     required|deferred-until-restore) ;;
@@ -5264,8 +5270,12 @@ node_preflight() {
   git -C "$REPO_DIR" diff --quiet "$head" -- || die "live tracked tree is dirty"
   git -C "$REPO_DIR" diff --cached --quiet "$head" -- || die "live index is dirty"
   schema_compatibility_evidence="$(release_schema_compatibility_evidence "$target_sha" "$head")"
+  if [ -n "$expected_lb_attestation_sha" ]; then
+    lb_mutation_max_age=600
+  fi
   lb_observed_at="$(assert_fresh_lb_ready_attestation \
-    "$target_sha" "$expected_lb_attestation_sha" "$expected_lb_projection_sha")"
+    "$target_sha" "$expected_lb_attestation_sha" "$expected_lb_projection_sha" "" \
+    "$lb_mutation_max_age")"
   audit_untracked_runtime "$BACKUP_ROOT/untracked-audit" "preflight-${expected_node_id}" "$target_sha" || \
     blocker=1
   assert_no_shadow_runtime "$expected_node_id" || blocker=1
@@ -9758,7 +9768,7 @@ node_dispatch() {
       ;;
     lb-attestation)
       validate_sha "${1:-}"
-      assert_fresh_lb_ready_attestation "$1" "${2:-}" "${3:-}"
+      assert_fresh_lb_ready_attestation "$1" "${2:-}" "${3:-}" "" 600
       ;;
     release-bundle)
       validate_sha "${1:-}"
@@ -11653,7 +11663,8 @@ orchestrate() {
   HA_ORCHESTRATE_DRAIN_SECONDS=$drain_seconds
   log "both-node preflight passed at node01=$previous_sha node02=$peer_previous_sha"
   test "$(assert_fresh_lb_ready_attestation \
-    "$target_sha" "$lb_attestation_sha" "$lb_ready_projection_sha")" = "$lb_observed_at" || \
+    "$target_sha" "$lb_attestation_sha" "$lb_ready_projection_sha" "" 600)" = \
+    "$lb_observed_at" || \
     die "node01 LB attestation changed at the first mutation boundary"
   test "$(remote_node "$peer_host" lb-attestation \
     "$target_sha" "$lb_attestation_sha" "$lb_ready_projection_sha")" = "$lb_observed_at" || \
