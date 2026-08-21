@@ -148,9 +148,7 @@ def enrich_mobile_integration_row(row: dict[str, Any], *, tenant_id: str) -> dic
             from services.meta_app_registry import diagnose_active_meta_binding
 
             diagnostics = [
-                reason
-                for binding in canonical
-                if (reason := diagnose_active_meta_binding(registry, binding))
+                reason for binding in canonical if (reason := diagnose_active_meta_binding(registry, binding))
             ]
             if diagnostics:
                 cleaned["service_diagnostic"] = diagnostics[0]
