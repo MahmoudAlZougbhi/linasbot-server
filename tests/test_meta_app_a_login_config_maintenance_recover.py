@@ -49,6 +49,9 @@ DROPINS = (
     "92-meta-controlled-failover.conf",
     "95-linasbot-credential-rekey-guard.conf",
 )
+HASH92 = "ccd1d423d6624d28fc7f8984f8fb13824ece04af5a140e770d2c2ffd67b537e9"
+HASH93 = "25c89c8dc130caacd7b8e1861b07c6c829444a860bca8d298e560133380aff07"
+HASH95 = "b47ed84bb59ce2569c5fd4b936faa2d3fddf0fb408492b1d60ba820a463f3278"
 FORBIDDEN = (
     "--recover-only",
     "--register-prestage-backup",
@@ -224,16 +227,40 @@ def test_precheck_invariants_bind_old_config_and_exact_lists() -> None:
     assert "cluster-release-only" not in source
 
 
-def test_worker_template_dropin_absent_locally_and_on_peer() -> None:
+def test_canonical_90_absent_and_92_93_95_static_hashed_on_api_and_template() -> None:
+    helper = _helper_python()
     script = _script()
-    template = 'prove_absent "/etc/systemd/system/linasbot-worker@.service.d/$dropin"'
-    instance = 'prove_absent "/etc/systemd/system/linasbot-worker@${queue}.service.d/$dropin"'
-    local_fn = script[script.index("prove_dropins() {") : script.index("restore_s0() {")]
-    peer = script[script.index('hp node "$REPO_DIR/.env" node02') : script.index("\nEOS")]
-    assert template in local_fn
-    assert instance in local_fn
-    assert template in peer
-    assert instance in peer
+    body = helper[helper.index('elif cmd == "dropins":') : helper.index('elif cmd == "write-phase":')]
+    assert HASH92 in body and HASH93 in body and HASH95 in body
+    assert "0o644" in body
+    assert "st_nlink != 1" in body
+    assert 'absent(p + "/90-meta-ha-maintenance.conf")' in body
+    assert 'absent(p + "/93-cpython-pycache-prefix.conf")' not in body
+    assert 'hashed(p + "/92-meta-controlled-failover.conf", h92)' in body
+    assert 'hashed(p + "/93-cpython-pycache-prefix.conf", h93)' in body
+    assert 'hashed(p + "/95-linasbot-credential-rekey-guard.conf", h95)' in body
+    assert "/etc/systemd/system/linasbot.service.d" in body
+    assert "/etc/systemd/system/linasbot-worker@.service.d" in body
+    assert script.count("hp dropins") == 2
+    local = script.index("hp dropins")
+    peer = script.index("hp dropins", local + 1)
+    assert local < script.index('hp node "$REPO_DIR/.env" node02') < peer
+
+
+def test_instance_unauthorized_90_92_93_95_dropins_remain_absent() -> None:
+    helper = _helper_python()
+    body = helper[helper.index('elif cmd == "dropins":') : helper.index('elif cmd == "write-phase":')]
+    assert 'f"/etc/systemd/system/linasbot-worker@{q}.service.d/{n}"' in body
+    for name in (
+        "90-meta-ha-maintenance.conf",
+        "92-meta-controlled-failover.conf",
+        "93-cpython-pycache-prefix.conf",
+        "95-linasbot-credential-rekey-guard.conf",
+    ):
+        assert name in body
+    instance = body[body.index("high_priority") :]
+    assert "hashed(" not in instance
+    assert "absent(" in instance
 
 
 def test_fail_closed_trap_rearms_before_first_unlink_and_proves_maintenance() -> None:

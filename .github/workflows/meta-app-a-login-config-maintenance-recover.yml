@@ -239,6 +239,27 @@ jobs:
                 if not 30 <= value <= 300:
                     raise SystemExit("invalid HA drain interval")
                 print(value)
+            elif cmd == "dropins":
+                h92, h93, h95 = "ccd1d423d6624d28fc7f8984f8fb13824ece04af5a140e770d2c2ffd67b537e9", "25c89c8dc130caacd7b8e1861b07c6c829444a860bca8d298e560133380aff07", "b47ed84bb59ce2569c5fd4b936faa2d3fddf0fb408492b1d60ba820a463f3278"
+                def absent(p):
+                    if os.path.lexists(p): raise SystemExit("unexpected path present: " + p)
+                def hashed(p, digest):
+                    st = os.lstat(p)
+                    if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode) or st.st_uid != 0 or st.st_gid != 0 or stat.S_IMODE(st.st_mode) != 0o644 or st.st_nlink != 1:
+                        raise SystemExit("drop-in security contract is invalid")
+                    fd = os.open(p, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+                    try:
+                        op = os.fstat(fd)
+                        if (st.st_dev, st.st_ino) != (op.st_dev, op.st_ino) or st.st_size != op.st_size or hashlib.sha256(os.read(fd, op.st_size)).hexdigest() != digest:
+                            raise SystemExit("drop-in digest or identity is invalid")
+                    finally:
+                        os.close(fd)
+                for p in ("/etc/systemd/system/linasbot.service.d", "/etc/systemd/system/linasbot-worker@.service.d"):
+                    absent(p + "/90-meta-ha-maintenance.conf")
+                    hashed(p + "/92-meta-controlled-failover.conf", h92); hashed(p + "/93-cpython-pycache-prefix.conf", h93); hashed(p + "/95-linasbot-credential-rekey-guard.conf", h95)
+                for q in ("high_priority", "interactive", "background", "expensive"):
+                    for n in ("90-meta-ha-maintenance.conf", "92-meta-controlled-failover.conf", "93-cpython-pycache-prefix.conf", "95-linasbot-credential-rekey-guard.conf"):
+                        absent(f"/etc/systemd/system/linasbot-worker@{q}.service.d/{n}")
             elif cmd == "write-phase":
                 path, schema, baseline, run_id, control, phase = args
                 payload = f"schema={schema}\nbaseline={baseline}\nfailed_run={run_id}\ncontrol_sha={control}\nphase={phase}\n".encode()
@@ -304,16 +325,6 @@ jobs:
                 fi
               done
             }
-            prove_dropins() {
-              local dropin queue
-              for dropin in $DROPINS; do
-                prove_absent "/etc/systemd/system/linasbot.service.d/$dropin"
-                prove_absent "/etc/systemd/system/linasbot-worker@.service.d/$dropin"
-                for queue in $QUEUES; do
-                  prove_absent "/etc/systemd/system/linasbot-worker@${queue}.service.d/$dropin"
-                done
-              done
-            }
             restore_s0() {
               rc=0
               hp empty "$PER" || rc=1
@@ -356,7 +367,7 @@ jobs:
             LOCAL_HMAC="$(hp hmac "$REPO_DIR/.env" "$REQUIRED_OLD_ID" "$REQUIRED_REDIRECT" "$REQUIRED_SHA")"
             hp process "$REPO_DIR/.env"
             prove_artifacts "$STATE"
-            prove_dropins
+            hp dropins
             peer "REPO_DIR='$REPO_DIR' REQUIRED_SHA='$REQUIRED_SHA' REQUIRED_OLD_ID='$REQUIRED_OLD_ID' REQUIRED_REDIRECT='$REQUIRED_REDIRECT' PY='$PY' STATE='$STATE' CONFLICTS='$CONFLICTS' SYNCS='$SYNCS' DROPINS='$DROPINS' QUEUES='$QUEUES' HELPER=$(printf %q "$HELPER") bash -s" <<'EOS'
             set -euo pipefail
             hp() { "$PY" -I -c "$HELPER" "$@"; }
@@ -375,14 +386,7 @@ jobs:
                 exit 1
               fi
             done
-            prove_absent() { if [ -e "$1" ] || [ -L "$1" ]; then echo "[orphan-maint-recover] unexpected path present: $1" >&2; exit 1; fi; }
-            for dropin in $DROPINS; do
-              prove_absent "/etc/systemd/system/linasbot.service.d/$dropin"
-              prove_absent "/etc/systemd/system/linasbot-worker@.service.d/$dropin"
-              for queue in $QUEUES; do
-                prove_absent "/etc/systemd/system/linasbot-worker@${queue}.service.d/$dropin"
-              done
-            done
+            hp dropins
             EOS
             PEER_HMAC="$(peer_hp hmac "$REPO_DIR/.env" "$REQUIRED_OLD_ID" "$REQUIRED_REDIRECT" "$REQUIRED_SHA")"
             test "$LOCAL_HMAC" = "$PEER_HMAC"
