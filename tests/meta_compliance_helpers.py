@@ -171,6 +171,51 @@ class _FakeFirestore:
         return _FakeTransaction(self._lock)
 
 
+class _GoogleLikeTransaction(_FakeTransaction):
+    """Fake the SDK rule that reads require an active transactional callback."""
+
+    __module__ = "google.cloud.firestore_v1.transaction"
+
+    def __init__(self, lock: threading.RLock) -> None:
+        super().__init__(lock)
+        self.in_progress = False
+
+    def record_read(self, document: _FakeDocument, version: int) -> None:
+        if not self.in_progress:
+            raise ValueError("Transaction not in progress, cannot be used in API requests")
+        super().record_read(document, version)
+
+    def commit(self) -> None:
+        if not self.in_progress:
+            raise ValueError("Transaction not in progress, cannot be used in API requests")
+        super().commit()
+
+
+class _GoogleLikeFirestore(_FakeFirestore):
+    def transaction(self) -> _GoogleLikeTransaction:
+        return _GoogleLikeTransaction(self._lock)
+
+
+def _install_google_transactional_fake(monkeypatch: Any) -> None:
+    """Make google.cloud.firestore.transactional execute the SDK-like fake."""
+
+    from google.cloud import firestore as gcf
+
+    def _transactional(fn: Any) -> Any:
+        def _run(transaction: _GoogleLikeTransaction, *args: Any, **kwargs: Any) -> Any:
+            transaction.in_progress = True
+            try:
+                result = fn(transaction, *args, **kwargs)
+                transaction.commit()
+                return result
+            finally:
+                transaction.in_progress = False
+
+        return _run
+
+    monkeypatch.setattr(gcf, "transactional", _transactional)
+
+
 def _set_fake_meta_deletion_request(
     db: _FakeFirestore,
     *,

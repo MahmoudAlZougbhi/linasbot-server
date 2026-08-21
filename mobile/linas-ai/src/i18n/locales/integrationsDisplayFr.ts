@@ -1,5 +1,31 @@
 /** Integrations account display + app version gate copy (fr). */
 export const integrationsDisplayFr = {
+  metaOAuthFailedFacebook:
+    'Échec de l’autorisation Facebook. Déconnectez Facebook, puis reconnectez-le.',
+  metaOAuthFailedFacebookScopes:
+    'Facebook n’a pas accordé l’autorisation business_management requise. Reconnectez-vous, sélectionnez l’entreprise et la Page, puis acceptez chaque autorisation.',
+  metaOAuthFailedFacebookToken:
+    'Meta a rejeté le code d’autorisation Facebook. Reconnectez Facebook.',
+  metaOAuthFailedFacebookWebhook:
+    'Facebook est connecté, mais la configuration webhook n’a pas abouti. Reconnectez Facebook dans une minute.',
+  metaOAuthFailedFacebookDeletion:
+    'L’autorisation Facebook est bloquée par une demande de suppression Meta en attente.',
+  metaOAuthFailedFacebookDeletionFailed:
+    'L’autorisation Facebook est bloquée car une demande de suppression Meta a échoué. Demandez à un administrateur de la résoudre, puis reconnectez Facebook.',
+  metaOAuthFailedFacebookBusy:
+    'Une autre connexion Facebook est en cours. Patientez un instant, puis appuyez une fois sur Connecter.',
+  metaOAuthFailedFacebookGuard:
+    'La connexion Facebook n’a pas pu vérifier son état de sécurité. Patientez, puis réessayez.',
+  metaOAuthFailedFacebookConfig:
+    'Facebook Login n’est pas encore prêt sur le serveur. Réessayez après la dernière mise à jour.',
+  metaOAuthFailedFacebookConflict:
+    'Cette Page Facebook est déjà connectée à un autre espace de travail.',
+  metaOAuthFailedBusy:
+    'Une autre connexion Instagram est en cours. Patientez un instant, puis appuyez une fois sur Connecter.',
+  metaOAuthFailedGuard:
+    'La connexion Instagram n’a pas pu vérifier son état de sécurité. Patientez, puis réessayez.',
+  metaOAuthFailedDeletionFailed:
+    'L’autorisation Instagram est bloquée car une demande de suppression Meta a échoué. Demandez à un administrateur de la résoudre, puis reconnectez Instagram.',
   integrationStatusConnected: 'Connexion saine',
   integrationStatusNeedsReconnect: 'Reconnexion requise',
   integrationStatusError: 'Problème de connexion',

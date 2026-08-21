@@ -45,9 +45,12 @@ from services.meta_instagram_login_subscription_recovery import (
 )
 from services.meta_multi_app_router import resolve_registry_events
 from services.meta_oauth import MetaOAuthError
+from services.meta_oauth_return import mobile_oauth_failure_reason
 from services.meta_subject_deletion_guard import (
     MetaSubjectDeletionChangedError,
     MetaSubjectDeletionLease,
+    MetaSubjectDeletionLeaseBusyError,
+    MetaSubjectDeletionStoreUnavailableError,
     meta_deletion_subject_hmac,
 )
 from tests.meta_compliance_helpers import _FakeFirestore, _set_fake_meta_deletion_request
@@ -295,8 +298,14 @@ async def test_complete_instagram_login_subscribes_and_marks_ready(registry: Met
 
 
 @pytest.mark.asyncio
-async def test_pending_deletion_blocks_instagram_before_subscription_or_staging(
+@pytest.mark.parametrize(
+    ("deletion_state", "expected_reason"),
+    [("pending", "deletion"), ("failed", "deletion_failed")],
+)
+async def test_deletion_blocks_instagram_before_subscription_or_staging(
     registry: MetaAppRegistry,
+    deletion_state: str,
+    expected_reason: str,
 ) -> None:
     import utils.utils
 
@@ -315,7 +324,7 @@ async def test_pending_deletion_blocks_instagram_before_subscription_or_staging(
         app_key=APP_A_KEY,
         app_id="1035856539045307",
         auth_flow="instagram_login",
-        state="pending",
+        state=deletion_state,
     )
     observed_requests: list[httpx.Request] = []
     transport = _transport()
@@ -324,10 +333,63 @@ async def test_pending_deletion_blocks_instagram_before_subscription_or_staging(
         observed_requests.append(request)
         return await transport.handle_async_request(request)
 
+    oauth_state = _start_state(registry)
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(recording_handler),
+        base_url="https://graph.instagram.com",
+    ) as client:
+        with pytest.raises(
+            MetaOAuthError,
+            match=rf"blocked by a {deletion_state} data deletion request",
+        ) as captured:
+            await complete_instagram_login(
+                code=f"{deletion_state}-deletion-code",
+                state=oauth_state,
+                registry=registry,
+                client=client,
+            )
+
+    assert mobile_oauth_failure_reason(captured.value) == expected_reason
+    assert registry.list_bindings() == []
+    assert not any(
+        request.method == "POST" and request.url.path.endswith("/subscribed_apps") for request in observed_requests
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("failure", "expected_reason"),
+    [
+        (MetaSubjectDeletionStoreUnavailableError("Meta subject lease transaction failed"), "guard"),
+        (MetaSubjectDeletionLeaseBusyError("Meta subject lease is busy"), "busy"),
+    ],
+)
+async def test_subject_guard_failures_are_not_reported_as_data_deletion(
+    registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: Exception,
+    expected_reason: str,
+) -> None:
+    observed_requests: list[httpx.Request] = []
+    transport = _transport()
+
+    async def recording_handler(request: httpx.Request) -> httpx.Response:
+        observed_requests.append(request)
+        return await transport.handle_async_request(request)
+
+    def fail_guard(*_args: object, **_kwargs: object) -> MetaSubjectDeletionLease:
+        if isinstance(failure, MetaSubjectDeletionStoreUnavailableError):
+            try:
+                raise ValueError("Transaction not in progress, cannot be used in API requests")
+            except ValueError as cause:
+                raise failure from cause
+        raise failure
+
+    monkeypatch.setattr("services.meta_instagram_login_oauth.acquire_meta_oauth_subject_guard", fail_guard)
     state = _start_state(registry)
-    with pytest.raises(MetaOAuthError, match="blocked by a data deletion request"):
+    with pytest.raises(MetaOAuthError) as captured:
         await complete_instagram_login(
-            code="pending-deletion-code",
+            code="guard-failure-code",
             state=state,
             registry=registry,
             client=httpx.AsyncClient(
@@ -336,6 +398,8 @@ async def test_pending_deletion_blocks_instagram_before_subscription_or_staging(
             ),
         )
 
+    assert "data deletion" not in str(captured.value).lower()
+    assert mobile_oauth_failure_reason(captured.value) == expected_reason
     assert registry.list_bindings() == []
     assert not any(
         request.method == "POST" and request.url.path.endswith("/subscribed_apps") for request in observed_requests
@@ -476,7 +540,7 @@ async def test_subject_change_after_instagram_subscription_discards_staged_crede
         return await transport.handle_async_request(request)
 
     state = _start_state(registry)
-    with pytest.raises(MetaOAuthError, match="deletion state changed"):
+    with pytest.raises(MetaOAuthError, match="safety guard changed") as captured:
         await complete_instagram_login(
             code="auth-code",
             state=state,
@@ -487,6 +551,7 @@ async def test_subject_change_after_instagram_subscription_discards_staged_crede
             ),
         )
 
+    assert mobile_oauth_failure_reason(captured.value) == "guard"
     assert subscription_posts
     binding = next(item for item in registry.list_bindings() if item.auth_flow == "instagram_login")
     assert binding.status == "disconnected"

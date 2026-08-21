@@ -1,5 +1,31 @@
 /** Integrations account display + app version gate copy (en). */
 export const integrationsDisplayEn = {
+  metaOAuthFailedFacebook:
+    'Facebook authorization failed. Disconnect Facebook, then Connect again.',
+  metaOAuthFailedFacebookScopes:
+    'Facebook did not grant the required business_management permission. Connect again, select the Business and Page, and allow every permission.',
+  metaOAuthFailedFacebookToken:
+    'Meta rejected the Facebook authorization code. Connect Facebook again.',
+  metaOAuthFailedFacebookWebhook:
+    'Facebook connected, but webhook setup did not finish. Connect Facebook again in one minute.',
+  metaOAuthFailedFacebookDeletion:
+    'Facebook authorization is blocked by a pending Meta data-deletion request.',
+  metaOAuthFailedFacebookDeletionFailed:
+    'Facebook authorization is blocked because a Meta data-deletion request failed. Ask an administrator to resolve it, then Connect again.',
+  metaOAuthFailedFacebookBusy:
+    'Another Facebook connection is still finishing. Wait a moment, then tap Connect once.',
+  metaOAuthFailedFacebookGuard:
+    'Facebook connection could not verify its safety state. Wait a moment, then try again.',
+  metaOAuthFailedFacebookConfig:
+    'Facebook Login is not ready on the server yet. Try again after the latest server update.',
+  metaOAuthFailedFacebookConflict:
+    'This Facebook Page is already connected to another workspace.',
+  metaOAuthFailedBusy:
+    'Another Instagram connection is still finishing. Wait a moment, then tap Connect once.',
+  metaOAuthFailedGuard:
+    'Instagram connection could not verify its safety state. Wait a moment, then try again.',
+  metaOAuthFailedDeletionFailed:
+    'Instagram authorization is blocked because a Meta data-deletion request failed. Ask an administrator to resolve it, then Connect again.',
   integrationStatusConnected: 'Connection healthy',
   integrationStatusNeedsReconnect: 'Needs reconnect',
   integrationStatusError: 'Connection issue',

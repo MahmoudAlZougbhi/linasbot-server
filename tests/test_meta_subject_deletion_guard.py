@@ -21,7 +21,11 @@ from services.meta_subject_deletion_guard import (
     acquire_meta_subject_deletion_lease,
     meta_deletion_subject_hmac,
 )
-from tests.meta_compliance_helpers import _FakeFirestore
+from tests.meta_compliance_helpers import (
+    _FakeFirestore,
+    _GoogleLikeFirestore,
+    _install_google_transactional_fake,
+)
 
 APP_KEY = "linas_first_party"
 APP_ID = "2963733803971681"
@@ -108,6 +112,23 @@ def test_oauth_none_snapshot_is_owner_verified_and_pii_free(
     assert lease.data["expires_at"] == 0.0
 
 
+def test_google_transactional_guard_allows_none_and_blocks_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = _GoogleLikeFirestore()
+    _install_google_transactional_fake(monkeypatch)
+    _patch_db(monkeypatch, db)
+    subject_key = _subject_key()
+
+    with acquire_meta_oauth_subject_guard(subject_key, oauth_started_at=1_000.0) as guard:
+        assert guard.snapshot is not None and guard.snapshot.state == "none"
+        guard.assert_oauth_snapshot_unchanged()
+
+    _set_request(db, subject_key=subject_key, state="pending")
+    with pytest.raises(MetaSubjectDeletionBlockedError):
+        acquire_meta_oauth_subject_guard(subject_key, oauth_started_at=1_000.0)
+
+
 @pytest.mark.parametrize("state", ["pending", "failed"])
 def test_oauth_blocks_pending_and_failed_deletion(
     monkeypatch: pytest.MonkeyPatch,
@@ -118,8 +139,9 @@ def test_oauth_blocks_pending_and_failed_deletion(
     subject_key = _subject_key()
     _set_request(db, subject_key=subject_key, state=state)
 
-    with pytest.raises(MetaSubjectDeletionBlockedError):
+    with pytest.raises(MetaSubjectDeletionBlockedError) as captured:
         acquire_meta_oauth_subject_guard(subject_key)
+    assert captured.value.state == state
 
 
 @pytest.mark.parametrize("state", ["completed", "no_data"])

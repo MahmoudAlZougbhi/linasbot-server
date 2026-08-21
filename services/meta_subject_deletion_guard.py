@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from services.firestore_transaction_compat import run_firestore_transaction
 from services.meta_app_registry_common import AuthFlow
 
 _FIRESTORE_APP_ID = "linas-ai-bot-backend"
@@ -66,6 +67,10 @@ class MetaSubjectDeletionLeaseBusyError(MetaSubjectDeletionGuardError):
 
 class MetaSubjectDeletionBlockedError(MetaSubjectDeletionGuardError):
     """Raised when OAuth is blocked by pending or failed deletion."""
+
+    def __init__(self, state: str) -> None:
+        self.state = str(state or "unavailable").strip().lower()
+        super().__init__(f"Meta OAuth is blocked by deletion state: {self.state}")
 
 
 class MetaSubjectDeletionChangedError(MetaSubjectDeletionGuardError):
@@ -317,37 +322,39 @@ class MetaSubjectDeletionLease:
         for _attempt in range(5):
             try:
                 now = time.time()
-                transaction = self.db.transaction()
-                lease_snapshot = reference.get(transaction=transaction)
-                if not lease_snapshot.exists:
-                    raise MetaSubjectDeletionChangedError("Meta subject lease was lost")
-                current_owner, current_purpose, expires_at = _parse_lease(_snapshot_dict(lease_snapshot))
-                if (
-                    not hmac.compare_digest(current_owner, self.owner_hash)
-                    or current_purpose != self.purpose
-                    or expires_at <= now
-                ):
-                    raise MetaSubjectDeletionChangedError("Meta subject lease was lost")
-                current_snapshot = None
-                if expected_snapshot is not None:
-                    current_snapshot = _capture_snapshot(self.db, self.subject_key, transaction)
+
+                def _verify(transaction: Any, now: float = now) -> MetaSubjectDeletionSnapshot | None:
+                    lease_snapshot = reference.get(transaction=transaction)
+                    if not lease_snapshot.exists:
+                        raise MetaSubjectDeletionChangedError("Meta subject lease was lost")
+                    current_owner, current_purpose, expires_at = _parse_lease(_snapshot_dict(lease_snapshot))
                     if (
-                        current_snapshot.fingerprint != expected_snapshot.fingerprint
-                        or not current_snapshot.oauth_allowed_for(self.oauth_started_at)
+                        not hmac.compare_digest(current_owner, self.owner_hash)
+                        or current_purpose != self.purpose
+                        or expires_at <= now
                     ):
-                        raise MetaSubjectDeletionChangedError("Meta deletion state changed during OAuth")
-                transaction.set(
-                    reference,
-                    _lease_document(
-                        owner_hash=self.owner_hash,
-                        purpose=self.purpose,
-                        acquired_at=self.acquired_at,
-                        updated_at=now,
-                        expires_at=now + self.lease_seconds,
-                    ),
-                )
-                transaction.commit()
-                return current_snapshot
+                        raise MetaSubjectDeletionChangedError("Meta subject lease was lost")
+                    current_snapshot = None
+                    if expected_snapshot is not None:
+                        current_snapshot = _capture_snapshot(self.db, self.subject_key, transaction)
+                        if (
+                            current_snapshot.fingerprint != expected_snapshot.fingerprint
+                            or not current_snapshot.oauth_allowed_for(self.oauth_started_at)
+                        ):
+                            raise MetaSubjectDeletionChangedError("Meta deletion state changed during OAuth")
+                    transaction.set(
+                        reference,
+                        _lease_document(
+                            owner_hash=self.owner_hash,
+                            purpose=self.purpose,
+                            acquired_at=self.acquired_at,
+                            updated_at=now,
+                            expires_at=now + self.lease_seconds,
+                        ),
+                    )
+                    return current_snapshot
+
+                return run_firestore_transaction(self.db, _verify)
             except MetaSubjectDeletionGuardError:
                 raise
             except Exception as exc:
@@ -376,49 +383,51 @@ class MetaSubjectDeletionLease:
                 event_time = now if deauthorized_at is None else float(deauthorized_at)
                 if not math.isfinite(event_time) or event_time <= 0.0 or event_time > now + 300.0:
                     raise MetaSubjectDeletionGuardError("Meta deauthorization timestamp is invalid")
-                transaction = self.db.transaction()
-                lease_snapshot = lease_reference.get(transaction=transaction)
-                if not lease_snapshot.exists:
-                    raise MetaSubjectDeletionChangedError("Meta subject lease was lost")
-                current_owner, current_purpose, expires_at = _parse_lease(_snapshot_dict(lease_snapshot))
-                if (
-                    not hmac.compare_digest(current_owner, self.owner_hash)
-                    or current_purpose != self.purpose
-                    or expires_at <= now
-                ):
-                    raise MetaSubjectDeletionChangedError("Meta subject lease was lost")
-                state_snapshot = deauthorization_reference.get(transaction=transaction)
-                current: dict[str, Any] = {}
-                if state_snapshot.exists:
-                    current = _snapshot_dict(state_snapshot)
+
+                def _record(transaction: Any, now: float = now, event_time: float = event_time) -> int:
+                    lease_snapshot = lease_reference.get(transaction=transaction)
+                    if not lease_snapshot.exists:
+                        raise MetaSubjectDeletionChangedError("Meta subject lease was lost")
+                    current_owner, current_purpose, expires_at = _parse_lease(_snapshot_dict(lease_snapshot))
                     if (
-                        not set(current).issubset(_DEAUTHORIZATION_SAFE_FIELDS)
-                        or current.get("schema_version") != _SCHEMA_VERSION
+                        not hmac.compare_digest(current_owner, self.owner_hash)
+                        or current_purpose != self.purpose
+                        or expires_at <= now
                     ):
-                        raise MetaSubjectDeletionGuardError("Meta deauthorization state is invalid")
-                current_generation = int(current.get("generation") or 0)
-                current_event_time = float(current.get("deauthorized_at") or 0.0)
-                generation = current_generation + 1 if event_time > current_event_time else current_generation
-                transaction.set(
-                    deauthorization_reference,
-                    {
-                        "schema_version": _SCHEMA_VERSION,
-                        "generation": generation,
-                        "deauthorized_at": max(event_time, current_event_time),
-                    },
-                )
-                transaction.set(
-                    lease_reference,
-                    _lease_document(
-                        owner_hash=self.owner_hash,
-                        purpose=self.purpose,
-                        acquired_at=self.acquired_at,
-                        updated_at=now,
-                        expires_at=now + self.lease_seconds,
-                    ),
-                )
-                transaction.commit()
-                return generation
+                        raise MetaSubjectDeletionChangedError("Meta subject lease was lost")
+                    state_snapshot = deauthorization_reference.get(transaction=transaction)
+                    current: dict[str, Any] = {}
+                    if state_snapshot.exists:
+                        current = _snapshot_dict(state_snapshot)
+                        if (
+                            not set(current).issubset(_DEAUTHORIZATION_SAFE_FIELDS)
+                            or current.get("schema_version") != _SCHEMA_VERSION
+                        ):
+                            raise MetaSubjectDeletionGuardError("Meta deauthorization state is invalid")
+                    current_generation = int(current.get("generation") or 0)
+                    current_event_time = float(current.get("deauthorized_at") or 0.0)
+                    generation = current_generation + 1 if event_time > current_event_time else current_generation
+                    transaction.set(
+                        deauthorization_reference,
+                        {
+                            "schema_version": _SCHEMA_VERSION,
+                            "generation": generation,
+                            "deauthorized_at": max(event_time, current_event_time),
+                        },
+                    )
+                    transaction.set(
+                        lease_reference,
+                        _lease_document(
+                            owner_hash=self.owner_hash,
+                            purpose=self.purpose,
+                            acquired_at=self.acquired_at,
+                            updated_at=now,
+                            expires_at=now + self.lease_seconds,
+                        ),
+                    )
+                    return generation
+
+                return run_firestore_transaction(self.db, _record)
             except MetaSubjectDeletionGuardError:
                 raise
             except Exception as exc:
@@ -431,25 +440,27 @@ class MetaSubjectDeletionLease:
         for _attempt in range(5):
             try:
                 now = time.time()
-                transaction = self.db.transaction()
-                lease_snapshot = reference.get(transaction=transaction)
-                if not lease_snapshot.exists:
-                    return False
-                current_owner, current_purpose, _expires_at = _parse_lease(_snapshot_dict(lease_snapshot))
-                if not hmac.compare_digest(current_owner, self.owner_hash) or current_purpose != self.purpose:
-                    return False
-                transaction.set(
-                    reference,
-                    _lease_document(
-                        owner_hash="",
-                        purpose="released",
-                        acquired_at=self.acquired_at,
-                        updated_at=now,
-                        expires_at=0.0,
-                    ),
-                )
-                transaction.commit()
-                return True
+
+                def _release(transaction: Any, now: float = now) -> bool:
+                    lease_snapshot = reference.get(transaction=transaction)
+                    if not lease_snapshot.exists:
+                        return False
+                    current_owner, current_purpose, _expires_at = _parse_lease(_snapshot_dict(lease_snapshot))
+                    if not hmac.compare_digest(current_owner, self.owner_hash) or current_purpose != self.purpose:
+                        return False
+                    transaction.set(
+                        reference,
+                        _lease_document(
+                            owner_hash="",
+                            purpose="released",
+                            acquired_at=self.acquired_at,
+                            updated_at=now,
+                            expires_at=0.0,
+                        ),
+                    )
+                    return True
+
+                return run_firestore_transaction(self.db, _release)
             except MetaSubjectDeletionGuardError:
                 raise
             except Exception as exc:
@@ -485,24 +496,27 @@ def _acquire_once(
     for _attempt in range(5):
         try:
             now = time.time()
-            transaction = db.transaction()
-            lease_snapshot = reference.get(transaction=transaction)
-            if lease_snapshot.exists:
-                current_owner, _current_purpose, expires_at = _parse_lease(_snapshot_dict(lease_snapshot))
-                if current_owner and expires_at > now:
-                    raise MetaSubjectDeletionLeaseBusyError("Meta subject lease is busy")
-            snapshot = _capture_snapshot(db, subject_key, transaction) if capture_snapshot else None
-            transaction.set(
-                reference,
-                _lease_document(
-                    owner_hash=owner_hash,
-                    purpose=purpose,
-                    acquired_at=now,
-                    updated_at=now,
-                    expires_at=now + lease_seconds,
-                ),
-            )
-            transaction.commit()
+
+            def _acquire(transaction: Any, now: float = now) -> MetaSubjectDeletionSnapshot | None:
+                lease_snapshot = reference.get(transaction=transaction)
+                if lease_snapshot.exists:
+                    current_owner, _current_purpose, expires_at = _parse_lease(_snapshot_dict(lease_snapshot))
+                    if current_owner and expires_at > now:
+                        raise MetaSubjectDeletionLeaseBusyError("Meta subject lease is busy")
+                snapshot = _capture_snapshot(db, subject_key, transaction) if capture_snapshot else None
+                transaction.set(
+                    reference,
+                    _lease_document(
+                        owner_hash=owner_hash,
+                        purpose=purpose,
+                        acquired_at=now,
+                        updated_at=now,
+                        expires_at=now + lease_seconds,
+                    ),
+                )
+                return snapshot
+
+            snapshot = run_firestore_transaction(db, _acquire)
             return MetaSubjectDeletionLease(
                 db=db,
                 subject_key=subject_key,
@@ -573,7 +587,7 @@ def acquire_meta_oauth_subject_guard(
     if lease.snapshot is None or not lease.snapshot.oauth_allowed_for(oauth_started_at):
         lease.release()
         state = lease.snapshot.state if lease.snapshot is not None else "unavailable"
-        raise MetaSubjectDeletionBlockedError(f"Meta OAuth is blocked by deletion state: {state}")
+        raise MetaSubjectDeletionBlockedError(state)
     return lease
 
 

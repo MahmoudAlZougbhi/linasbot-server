@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from services.firestore_transaction_compat import run_firestore_transaction
 from services.meta_app_registry_common import AuthFlow
 from storage.persistent_storage import _DATA_ROOT
 
@@ -513,54 +514,55 @@ def _get_or_create_shared_request(
     for _attempt in range(5):
         try:
             now = int(time.time())
-            transaction = db.transaction()
-            index_snapshot = index_ref.get(transaction=transaction)
-            if index_snapshot.exists:
-                index_data = _snapshot_payload(index_snapshot, label="subject index")
-                if not set(index_data).issubset(_INDEX_SAFE_FIELDS):
-                    raise MetaDeletionStateError("Meta deletion subject index contains unsafe fields")
-                code = str(index_data.get("confirmation_code") or "").strip().lower()
-                if _safe_int(
-                    index_data.get("schema_version"), field="index schema", minimum=1
-                ) != _SCHEMA_VERSION or not _CONFIRMATION_CODE_RE.fullmatch(code):
-                    raise MetaDeletionStateError("Meta deletion subject index is invalid")
-                request_ref = _request_ref(db, code)
-                request = _parse_shared_request(
-                    _snapshot_payload(request_ref.get(transaction=transaction), label="request"),
-                    code,
-                )
-                if request.app_key != app_key or request.app_id != app_id or request.auth_flow != auth_flow:
-                    raise MetaDeletionStateError("Meta deletion signing domain does not match")
-                merged = _merge_request_scope(request, bindings, required_nodes=required_nodes, now=now)
-                if merged != request:
-                    transaction.set(request_ref, _request_payload(merged))
-                transaction.commit()
-                return merged
 
-            code = generate_opaque_confirmation_code()
-            request_ref = _request_ref(db, code)
-            if request_ref.get(transaction=transaction).exists:
-                raise MetaDeletionStateError("Meta deletion confirmation collision")
-            request = _new_request(
-                confirmation_code=code,
-                app_key=app_key,
-                app_id=app_id,
-                auth_flow=auth_flow,
-                bindings=bindings,
-                required_nodes=required_nodes,
-                now=now,
-            )
-            transaction.set(
-                index_ref,
-                {
-                    "schema_version": _SCHEMA_VERSION,
-                    "confirmation_code": code,
-                    "created_at": now,
-                },
-            )
-            transaction.set(request_ref, _request_payload(request))
-            transaction.commit()
-            return request
+            def _get_or_create(transaction: Any, now: int = now) -> _SharedDeletionRequest:
+                index_snapshot = index_ref.get(transaction=transaction)
+                if index_snapshot.exists:
+                    index_data = _snapshot_payload(index_snapshot, label="subject index")
+                    if not set(index_data).issubset(_INDEX_SAFE_FIELDS):
+                        raise MetaDeletionStateError("Meta deletion subject index contains unsafe fields")
+                    code = str(index_data.get("confirmation_code") or "").strip().lower()
+                    if _safe_int(
+                        index_data.get("schema_version"), field="index schema", minimum=1
+                    ) != _SCHEMA_VERSION or not _CONFIRMATION_CODE_RE.fullmatch(code):
+                        raise MetaDeletionStateError("Meta deletion subject index is invalid")
+                    request_ref = _request_ref(db, code)
+                    request = _parse_shared_request(
+                        _snapshot_payload(request_ref.get(transaction=transaction), label="request"),
+                        code,
+                    )
+                    if request.app_key != app_key or request.app_id != app_id or request.auth_flow != auth_flow:
+                        raise MetaDeletionStateError("Meta deletion signing domain does not match")
+                    merged = _merge_request_scope(request, bindings, required_nodes=required_nodes, now=now)
+                    if merged != request:
+                        transaction.set(request_ref, _request_payload(merged))
+                    return merged
+
+                code = generate_opaque_confirmation_code()
+                request_ref = _request_ref(db, code)
+                if request_ref.get(transaction=transaction).exists:
+                    raise MetaDeletionStateError("Meta deletion confirmation collision")
+                request = _new_request(
+                    confirmation_code=code,
+                    app_key=app_key,
+                    app_id=app_id,
+                    auth_flow=auth_flow,
+                    bindings=bindings,
+                    required_nodes=required_nodes,
+                    now=now,
+                )
+                transaction.set(
+                    index_ref,
+                    {
+                        "schema_version": _SCHEMA_VERSION,
+                        "confirmation_code": code,
+                        "created_at": now,
+                    },
+                )
+                transaction.set(request_ref, _request_payload(request))
+                return request
+
+            return run_firestore_transaction(db, _get_or_create)
         except MetaDeletionStateError:
             raise
         except Exception as exc:
@@ -588,18 +590,20 @@ def _replace_request_if_generation(
     last_error: Exception | None = None
     for _attempt in range(5):
         try:
-            transaction = db.transaction()
-            current = _parse_shared_request(
-                _snapshot_payload(reference.get(transaction=transaction), label="request"),
-                request.confirmation_code,
-            )
-            if current.generation != request.generation or current != request:
-                # A generation/same-generation winner owns the newer state. Never
-                # regress coordinator completion or a reopened request.
-                return current
-            transaction.set(reference, _request_payload(updated))
-            transaction.commit()
-            return updated
+
+            def _replace(transaction: Any) -> _SharedDeletionRequest:
+                current = _parse_shared_request(
+                    _snapshot_payload(reference.get(transaction=transaction), label="request"),
+                    request.confirmation_code,
+                )
+                if current.generation != request.generation or current != request:
+                    # A generation/same-generation winner owns the newer state. Never
+                    # regress coordinator completion or a reopened request.
+                    return current
+                transaction.set(reference, _request_payload(updated))
+                return updated
+
+            return run_firestore_transaction(db, _replace)
         except MetaDeletionStateError:
             raise
         except Exception as exc:
@@ -686,44 +690,46 @@ def _finalize_shared_request(db: Any, confirmation_code: str) -> _SharedDeletion
     last_error: Exception | None = None
     for _attempt in range(5):
         try:
-            transaction = db.transaction()
-            request = _parse_shared_request(
-                _snapshot_payload(request_ref.get(transaction=transaction), label="request"),
-                confirmation_code,
-            )
-            if request.state in {"completed", "no_data"}:
-                return request
-            if request.state != "pending" or request.coordinator_state != "completed":
-                return request
-            local_redacted = 0
-            for required_node in request.required_nodes:
-                ack_ref = request_ref.collection("node_acks").document(required_node)
-                ack_snapshot = ack_ref.get(transaction=transaction)
-                if not ack_snapshot.exists:
-                    return request
-                count = _parse_ack(
-                    _snapshot_payload(ack_snapshot, label="node acknowledgement"),
-                    node_id=required_node,
-                    request_generation=request.generation,
+
+            def _finalize(transaction: Any) -> _SharedDeletionRequest:
+                request = _parse_shared_request(
+                    _snapshot_payload(request_ref.get(transaction=transaction), label="request"),
+                    confirmation_code,
                 )
-                if count is None:
+                if request.state in {"completed", "no_data"}:
                     return request
-                local_redacted += count
-            now = int(time.time())
-            final_state: Literal["completed", "no_data"] = "completed" if request.bindings else "no_data"
-            completed = _SharedDeletionRequest(
-                **{
-                    **request.__dict__,
-                    "state": final_state,
-                    "updated_at": now,
-                    "completed_at": now,
-                    "redacted_ledger_documents": request.shared_redacted_documents + local_redacted,
-                    "safe_error": "none",
-                }
-            )
-            transaction.set(request_ref, _request_payload(completed))
-            transaction.commit()
-            return completed
+                if request.state != "pending" or request.coordinator_state != "completed":
+                    return request
+                local_redacted = 0
+                for required_node in request.required_nodes:
+                    ack_ref = request_ref.collection("node_acks").document(required_node)
+                    ack_snapshot = ack_ref.get(transaction=transaction)
+                    if not ack_snapshot.exists:
+                        return request
+                    count = _parse_ack(
+                        _snapshot_payload(ack_snapshot, label="node acknowledgement"),
+                        node_id=required_node,
+                        request_generation=request.generation,
+                    )
+                    if count is None:
+                        return request
+                    local_redacted += count
+                now = int(time.time())
+                final_state: Literal["completed", "no_data"] = "completed" if request.bindings else "no_data"
+                completed = _SharedDeletionRequest(
+                    **{
+                        **request.__dict__,
+                        "state": final_state,
+                        "updated_at": now,
+                        "completed_at": now,
+                        "redacted_ledger_documents": request.shared_redacted_documents + local_redacted,
+                        "safe_error": "none",
+                    }
+                )
+                transaction.set(request_ref, _request_payload(completed))
+                return completed
+
+            return run_firestore_transaction(db, _finalize)
         except MetaDeletionStateError:
             raise
         except Exception as exc:
@@ -774,32 +780,34 @@ def _sanitize_local_and_ack(db: Any, request: _SharedDeletionRequest) -> tuple[_
     request_ref = _request_ref(db, request.confirmation_code)
     ack_ref = request_ref.collection("node_acks").document(node_id)
     try:
-        transaction = db.transaction()
-        current = _parse_shared_request(
-            _snapshot_payload(request_ref.get(transaction=transaction), label="request"),
-            request.confirmation_code,
-        )
-        if (
-            current.generation != request.generation
-            or current.state != "pending"
-            or current.coordinator_state != "completed"
-            or node_id not in current.required_nodes
-        ):
-            raise MetaDeletionStateError("Meta deletion request changed before node acknowledgement")
-        transaction.set(
-            ack_ref,
-            {
-                "schema_version": _SCHEMA_VERSION,
-                "node_id": node_id,
-                "status": "completed",
-                "request_generation": current.generation,
-                "acknowledged_at": int(time.time()),
-                "local_redacted_documents": local_redacted,
-                "local_blockers": 0,
-                "local_remaining_changes": 0,
-            },
-        )
-        transaction.commit()
+
+        def _acknowledge(transaction: Any) -> None:
+            current = _parse_shared_request(
+                _snapshot_payload(request_ref.get(transaction=transaction), label="request"),
+                request.confirmation_code,
+            )
+            if (
+                current.generation != request.generation
+                or current.state != "pending"
+                or current.coordinator_state != "completed"
+                or node_id not in current.required_nodes
+            ):
+                raise MetaDeletionStateError("Meta deletion request changed before node acknowledgement")
+            transaction.set(
+                ack_ref,
+                {
+                    "schema_version": _SCHEMA_VERSION,
+                    "node_id": node_id,
+                    "status": "completed",
+                    "request_generation": current.generation,
+                    "acknowledged_at": int(time.time()),
+                    "local_redacted_documents": local_redacted,
+                    "local_blockers": 0,
+                    "local_remaining_changes": 0,
+                },
+            )
+
+        run_firestore_transaction(db, _acknowledge)
     except MetaDeletionStateError:
         raise
     except Exception as exc:

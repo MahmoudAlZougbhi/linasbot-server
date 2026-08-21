@@ -47,7 +47,7 @@ export function useMetaPlatformConnect({
         }
         if (session.outcome === 'cancelled') setError(tr('metaOAuthCancelled'));
         else if (session.outcome === 'failed') {
-          setError(metaOAuthFailureMessage(tr, session.reason));
+          setError(metaOAuthFailureMessage(tr, session.reason, platform));
         } else setError(tr('metaOAuthIncomplete'));
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) setAuthGate(true);

@@ -15,6 +15,7 @@ from services.meta_app_registry import APP_A_KEY
 from services.meta_instagram_login_subscription import InstagramLoginSubscriptionState
 from services.meta_oauth import MetaOAuthError
 from services.meta_oauth_return import (
+    mobile_oauth_failure_reason,
     normalize_return_surface,
     oauth_completion_redirect_url,
 )
@@ -31,11 +32,60 @@ def test_mobile_oauth_success_redirects_to_deep_link_not_login() -> None:
     )
     assert url.startswith("linasai://integrations?")
     assert "meta_connection=success" in url
+    assert "channel=instagram" in url
     assert "/settings" not in url
     assert "/login" not in url
     assert "tenant_id" not in url
     assert "access_token" not in url
     assert "secret" not in url
+
+
+def test_mobile_oauth_deep_link_allows_only_known_meta_channel() -> None:
+    facebook = oauth_completion_redirect_url(
+        return_surface="mobile",
+        meta_connection="failed",
+        extra_query={"meta_reason": "scopes", "channel": "facebook"},
+    )
+    assert "meta_reason=scopes" in facebook
+    assert "channel=facebook" in facebook
+
+    unknown = oauth_completion_redirect_url(
+        return_surface="mobile",
+        meta_connection="failed",
+        extra_query={"meta_reason": "scopes", "channel": "whatsapp", "token": "secret"},
+    )
+    assert "channel=" not in unknown
+    assert "secret" not in unknown
+
+    failed_deletion = oauth_completion_redirect_url(
+        return_surface="mobile",
+        meta_connection="failed",
+        extra_query={"meta_reason": "deletion_failed", "channel": "instagram"},
+    )
+    assert "meta_reason=deletion_failed" in failed_deletion
+    assert "channel=instagram" in failed_deletion
+
+
+def test_mobile_oauth_failure_reason_distinguishes_deletion_lease_and_guard() -> None:
+    assert (
+        mobile_oauth_failure_reason(MetaOAuthError("Meta authorization is blocked by a pending data deletion request"))
+        == "deletion"
+    )
+    assert (
+        mobile_oauth_failure_reason(
+            MetaOAuthError("Instagram authorization is blocked by a failed data deletion request")
+        )
+        == "deletion_failed"
+    )
+    assert (
+        mobile_oauth_failure_reason(MetaOAuthError("Meta authorization is already in progress. Try again shortly."))
+        == "busy"
+    )
+    assert (
+        mobile_oauth_failure_reason(MetaOAuthError("Instagram authorization safety guard is temporarily unavailable"))
+        == "guard"
+    )
+    assert mobile_oauth_failure_reason(MetaOAuthError("Meta authorization safety guard failed")) == "guard"
 
 
 def test_invalid_tampered_return_surface_rejected_to_web() -> None:
@@ -115,6 +165,7 @@ async def test_instagram_callback_reports_failed_when_subscription_is_unconfirme
     body = response.body.decode("utf-8")
     assert "linasai://integrations?meta_connection=failed" in body
     assert "meta_reason=webhook" in body
+    assert "channel=instagram" in body
     assert "meta_connection=success" not in body
 
 
@@ -209,6 +260,7 @@ async def test_facebook_callback_preserves_mobile_surface_after_failure(monkeypa
     assert response.status_code == 200
     body = response.body.decode("utf-8")
     assert "linasai://integrations?meta_connection=failed" in body
+    assert "channel=facebook" in body
     assert "/login" not in body
     assert "/settings" not in body
 

@@ -24,6 +24,7 @@ from services.meta_oauth import (
     normalize_oauth_flow_channel,
 )
 from services.meta_oauth_graph import restore_binding_webhook_subscription
+from services.meta_oauth_return import mobile_oauth_failure_reason
 from services.meta_subject_deletion_guard import meta_deletion_subject_hmac
 from tests.meta_compliance_helpers import _FakeFirestore, _set_fake_meta_deletion_request
 
@@ -377,8 +378,14 @@ async def test_external_page_login_inspects_encrypts_and_activates_with_subscrip
 
 
 @pytest.mark.asyncio
-async def test_pending_deletion_blocks_facebook_before_subscription_or_staging(
+@pytest.mark.parametrize(
+    ("deletion_state", "expected_reason"),
+    [("pending", "deletion"), ("failed", "deletion_failed")],
+)
+async def test_deletion_blocks_facebook_before_subscription_or_staging(
     registry: MetaAppRegistry,
+    deletion_state: str,
+    expected_reason: str,
 ) -> None:
     import utils.utils
 
@@ -397,22 +404,26 @@ async def test_pending_deletion_blocks_facebook_before_subscription_or_staging(
         app_key=APP_A_KEY,
         app_id="2963733803971681",
         auth_flow="facebook_login",
-        state="pending",
+        state=deletion_state,
     )
-    state = _start_state(registry)
+    oauth_state = _start_state(registry)
     observed_requests: list[httpx.Request] = []
     async with httpx.AsyncClient(
         base_url="https://graph.facebook.com/v24.0/",
         transport=_transport(observed_requests=observed_requests),
     ) as client:
-        with pytest.raises(MetaOAuthError, match="blocked by a data deletion request"):
+        with pytest.raises(
+            MetaOAuthError,
+            match=rf"blocked by a {deletion_state} data deletion request",
+        ) as captured:
             await complete_meta_business_login(
-                code="pending-deletion-code",
-                state=state,
+                code=f"{deletion_state}-deletion-code",
+                state=oauth_state,
                 registry=registry,
                 client=client,
             )
 
+    assert mobile_oauth_failure_reason(captured.value) == expected_reason
     assert registry.list_bindings() == []
     assert not any(
         request.method == "POST" and request.url.path.endswith("/subscribed_apps") for request in observed_requests
