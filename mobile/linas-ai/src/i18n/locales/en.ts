@@ -157,6 +157,8 @@ export const en = {
   metaOAuthCancelled: 'Meta authorization was cancelled.',
 
   metaOAuthFailed: 'Meta authorization failed. Disconnect the channel, then Connect again.',
+  metaOAuthIncomplete:
+    'Meta finished in the browser, but the app did not get the return link. If the channel is still disconnected, tap Connect again.',
   toggleDms: 'Direct messages',
   toggleComments: 'Comments',
   commentsBlockerMissingPermissions:

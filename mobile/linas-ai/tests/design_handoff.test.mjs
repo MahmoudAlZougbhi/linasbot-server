@@ -274,8 +274,8 @@ test('cold open is branded star splash then chat (no character mash / progress b
   assert.match(appJson, /"bundleIdentifier":\s*"com\.linasai\.app"/);
   assert.match(appJson, /"package":\s*"com\.linasai\.app"/);
   assert.match(appJson, /expo-audio/);
-  assert.match(appJson, /"buildNumber":\s*"23"/);
-  assert.match(appJson, /"versionCode":\s*23/);
+  assert.doesNotMatch(appJson, /"buildNumber"/);
+  assert.doesNotMatch(appJson, /"versionCode"/);
   assert.ok(existsSync(join(root, 'assets/splash-native.png')));
   assert.doesNotMatch(
     chat,
@@ -527,7 +527,7 @@ test('drawer search chrome is header icon; Settings beside search; New chat on R
   assert.match(nav, /noChatsMatch/);
   assert.match(nav, /emptyLabel/);
   const configSrc = read('config.ts');
-  assert.match(configSrc, /Constants\.expoConfig\?\.version/);
+  assert.match(configSrc, /nativeApplicationVersion/);
   assert.match(configSrc, /APP_VERSION_LABEL/);
   assert.match(configSrc, /APP_BUILD_LABEL/);
   const settings = read('features/settings/SettingsScreen.tsx');
@@ -537,7 +537,7 @@ test('drawer search chrome is header icon; Settings beside search; New chat on R
   assert.match(settings, /APP_BUILD_LABEL/);
   assert.match(settings, /SettingsFooter version=\{APP_VERSION\} build=\{APP_BUILD_LABEL\}/);
   assert.match(settingsChrome, /settingsVersionFooter/);
-  assert.match(settingsEn, /Linas AI • Version \{version\} \(\{build\}\)/);
+  assert.match(settingsEn, /Linas AI • Version \{build\}/);
   // EAS: remote version source + autoIncrement so each TF/store ship bumps build without a commit.
   const easJson = readFileSync(join(root, 'eas.json'), 'utf8');
   assert.match(easJson, /"appVersionSource":\s*"remote"/);

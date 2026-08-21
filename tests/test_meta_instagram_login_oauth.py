@@ -26,6 +26,7 @@ from services.meta_instagram_login_config import (
     META_INSTAGRAM_LOGIN_REQUEST_SCOPES,
     META_INSTAGRAM_LOGIN_REQUIRED_SCOPES,
     instagram_login_config_status,
+    instagram_login_webhook_callback_url,
     verify_instagram_login_webhook_signature,
 )
 from services.meta_instagram_login_oauth import (
@@ -196,7 +197,22 @@ def _transport(*, subscription_ok: bool = True, comments_verified: bool = True) 
     return httpx.MockTransport(handler)
 
 
-def test_instagram_login_config_requires_dedicated_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_instagram_login_config_accepts_apex_public_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("META_APP_A_ID", "2963733803971681")
+    monkeypatch.setenv("META_APP_A_SECRET", "app-a-secret-tests")
+    monkeypatch.setenv("META_APP_A_WEBHOOK_VERIFY_TOKEN", "verify-a-tests")
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_APP_ID", "1035856539045307")
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_APP_SECRET", "dedicated-instagram-secret")
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_WEBHOOK_VERIFY_TOKEN", "verify-ig-login-tests")
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_REDIRECT_URI", "https://www.linasaibot.com/oauth/instagram/callback")
+    monkeypatch.setenv("META_INSTAGRAM_LOGIN_WEBHOOK_PATH", "/webhook/instagram-login")
+    monkeypatch.setenv("PUBLIC_URL", "https://linasaibot.com")
+
+    status = instagram_login_config_status()
+
+    assert status.configured is True
+    assert instagram_login_webhook_callback_url() == ("https://www.linasaibot.com/webhook/instagram-login")
+
     monkeypatch.setenv("META_APP_A_ID", "2963733803971681")
     monkeypatch.setenv("META_APP_A_SECRET", "app-a-secret-tests")
     monkeypatch.setenv("META_APP_A_WEBHOOK_VERIFY_TOKEN", "verify-a-tests")

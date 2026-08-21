@@ -17,5 +17,5 @@ export const settingsUiFr = {
   settingsLangEn: 'Anglais',
   settingsLangAr: 'Arabe',
   settingsLangFr: 'Français',
-  settingsVersionFooter: 'Linas AI • Version {version} ({build})',
+  settingsVersionFooter: 'Linas AI • Version {build}',
 };

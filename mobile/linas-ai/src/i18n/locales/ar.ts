@@ -125,6 +125,8 @@ export const ar = {
   metaOAuthCancelled: 'تم إلغاء تفويض Meta.',
   
   metaOAuthFailed: 'فشل تفويض Meta. حاول إدارة وصول Meta مجدداً.',
+  metaOAuthIncomplete:
+    'انتهى تفويض Meta في المتصفح دون العودة للتطبيق. إذا كانت القناة لا تزال غير مربوطة، اضغط ربط مجدداً.',
   toggleDms: 'الرسائل المباشرة',
   toggleComments: 'التعليقات',
   commentsBlockerMissingPermissions:

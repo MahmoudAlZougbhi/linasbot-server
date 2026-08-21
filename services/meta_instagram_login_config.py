@@ -16,6 +16,8 @@ from services.meta_surface_secret_separation import (
 )
 
 DEFAULT_INSTAGRAM_LOGIN_APP_ID = "1035856539045307"
+CANONICAL_PUBLIC_BASE_URL = "https://www.linasaibot.com"
+LINASA_PUBLIC_HOST_ALIASES = frozenset({"linasaibot.com", "www.linasaibot.com"})
 EXPECTED_INSTAGRAM_LOGIN_REDIRECT_URI = "https://www.linasaibot.com/oauth/instagram/callback"
 EXPECTED_INSTAGRAM_LOGIN_WEBHOOK_PATH = "/webhook/instagram-login"
 EXPECTED_INSTAGRAM_LOGIN_WEBHOOK_URL = "https://www.linasaibot.com/webhook/instagram-login"
@@ -64,8 +66,26 @@ def instagram_login_webhook_callback_path() -> str:
     return (os.getenv("META_INSTAGRAM_LOGIN_WEBHOOK_PATH") or EXPECTED_INSTAGRAM_LOGIN_WEBHOOK_PATH).strip()
 
 
+def resolve_public_base_url() -> str:
+    """Canonical HTTPS origin for Instagram Login webhooks (apex and www are equivalent)."""
+
+    raw = (os.getenv("PUBLIC_URL") or os.getenv("LINAS_PUBLIC_URL") or CANONICAL_PUBLIC_BASE_URL).strip().rstrip("/")
+    if not raw:
+        return CANONICAL_PUBLIC_BASE_URL
+    try:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+    except ValueError:
+        return raw
+    host = (parsed.hostname or "").lower()
+    if host in LINASA_PUBLIC_HOST_ALIASES:
+        return CANONICAL_PUBLIC_BASE_URL
+    return raw
+
+
 def instagram_login_webhook_callback_url(public_base: str | None = None) -> str:
-    base = (public_base or os.getenv("PUBLIC_URL") or "https://www.linasaibot.com").strip().rstrip("/")
+    base = (public_base or resolve_public_base_url()).strip().rstrip("/")
     path = instagram_login_webhook_callback_path()
     if not path.startswith("/"):
         path = f"/{path}"

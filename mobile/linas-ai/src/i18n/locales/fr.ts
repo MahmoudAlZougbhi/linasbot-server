@@ -127,6 +127,8 @@ export const fr = {
   metaOAuthSuccess: 'Accès Meta mis à jour. Actualisation du statut…',
   metaOAuthCancelled: 'Autorisation Meta annulée.',
   metaOAuthFailed: 'Échec de l’autorisation Meta. Réessayez via Gérer l’accès Meta.',
+  metaOAuthIncomplete:
+    'Meta a terminé dans le navigateur, mais l’app n’a pas reçu le lien de retour. Si le canal est encore déconnecté, appuyez à nouveau sur Connecter.',
   toggleDms: 'Messages privés',
   toggleComments: 'Commentaires',
   commentsBlockerMissingPermissions:

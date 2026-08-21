@@ -17,13 +17,13 @@ Store / TestFlight identity that must be unique each ship is the **build number*
 
 | Field | Source of truth | Who bumps it |
 | --- | --- | --- |
-| `expo.version` (`1.0.0`) | `app.json` | Manual, only for product releases |
-| iOS `buildNumber` | EAS **remote** | `autoIncrement` on `production` / `testflight` |
-| Android `versionCode` | EAS **remote** | same |
+| `expo.version` (`1.0.0`) | `app.json` | Manual, only for App Store product releases |
+| iOS `buildNumber` | EAS **remote** (native IPA) | `autoIncrement` on `production` / `testflight` |
+| Android `versionCode` | EAS **remote** (native AAB) | same |
 
-`eas.json` sets `cli.appVersionSource` to `remote` and `autoIncrement: true` on `production` and `testflight`. That way each EAS ship gets a new build without committing `app.json`. Local `app.json` values are a seed / fallback for non-store profiles; remote wins for TF/store builds.
+`eas.json` sets `cli.appVersionSource` to `remote` and `autoIncrement: true` on `production` and `testflight`. EAS does **not** auto-bump `1.0.0`. Do not put `ios.buildNumber` / `android.versionCode` in `app.json` — those stale values leak into `expo-constants`.
 
-In-app label (NavDrawer + Settings) reads live from `expo-constants` via `APP_VERSION_LABEL` / `APP_BUILD_LABEL` in `src/config.ts`, e.g. `Linas 1.0.0 · 20`. After install, open the side menu or Settings — the build segment must match the new native build.
+In-app Version (drawer + Settings) is `Application.nativeBuildVersion` via `APP_BUILD_LABEL` / `APP_VERSION_LABEL` in `src/config.ts`, e.g. `Linas 65`. After install, that number must match TestFlight / Play (65, 66, …). The store update API still sends marketing `1.0.0` (`APP_VERSION` / `nativeApplicationVersion`).
 
 If App Store Connect / Play already has a higher build than EAS remote remembers, sync once before the next ship:
 
@@ -49,7 +49,7 @@ Public API:
 - `GET /api/public/app-version` — config
 - `POST /api/public/app-version/check` — body `{ "installed_version": "1.0.0" }` → `up_to_date` \| `update_available` \| `force_update`
 
-On cold start the app calls check with `expo.version` only. iOS `buildNumber` / Android `versionCode` stay separate (EAS remote `autoIncrement`).
+On cold start the app calls check with marketing `nativeApplicationVersion` only. The in-app Version label uses the native build number (EAS remote `autoIncrement`).
 
 ## Config
 

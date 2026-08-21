@@ -20,9 +20,10 @@ import {
   type IntegrationRow,
 } from './IntegrationChannelCard';
 import { IntegrationRefreshButton } from './IntegrationRefreshButton';
-import { disconnectMetaPlatform, startMetaOAuth } from './integrationsOAuth';
+import { disconnectMetaPlatform } from './integrationsOAuth';
 import { applyIntegrationToggle, mergeToggleResponse } from './integrationsToggleApply';
 import { ToggleResponseSchema, type IntegrationListRow } from './integrationsSchemas';
+import { useMetaPlatformConnect } from './useMetaPlatformConnect';
 import {
   IntegrationsTikTokSection,
   confirmDisconnectTikTok,
@@ -77,21 +78,16 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     setError,
     setAuthGate,
     });
+  const { connectPlatform } = useMetaPlatformConnect({
+    tr,
+    load,
+    setBusyPlatform,
+    setError,
+    setNotice,
+    setAuthGate,
+  });
   const headerRefreshing = loading && hasLoadedOnce;
   const showInitialLoader = !hasLoadedOnce || !webChatReady;
-
-  async function connectPlatform(platform: 'instagram' | 'facebook') {
-    setBusyPlatform(platform);
-    setError(null);
-    try {
-      await startMetaOAuth(platform);
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) setAuthGate(true);
-      else setError(tr('integrationsActionError'));
-    } finally {
-      setBusyPlatform(null);
-    }
-  }
 
   async function connectTikTok() {
     await connectTikTokChannel({
