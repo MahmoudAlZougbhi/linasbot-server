@@ -17,6 +17,7 @@ from services.meta_app_registry import (
     get_meta_app_registry,
 )
 from services.meta_instagram_login_config import META_INSTAGRAM_GRAPH_BASE_URL, instagram_login_app_id
+from services.meta_instagram_login_subscription_telemetry import log_instagram_subscribed_apps_telemetry
 from services.meta_oauth_graph_http import MetaOAuthError, _safe_json
 from services.meta_oauth_page_lock import lock_facebook_page_oauth_operation
 
@@ -164,11 +165,14 @@ async def _read_instagram_login_subscription(
     expected_app_id: str,
     client: httpx.AsyncClient,
     step: str,
+    telemetry_stage: str | None = None,
 ) -> InstagramLoginWebhookSubscriptionSnapshot:
     response = await client.get(
         f"{META_INSTAGRAM_GRAPH_BASE_URL}/{graph_api_version}/{ig_user_id}/subscribed_apps",
         headers={"Authorization": f"Bearer {access_token}"},
     )
+    if telemetry_stage is not None:
+        log_instagram_subscribed_apps_telemetry(response, stage=telemetry_stage)
     payload = _safe_json(response, step=step)
     return _parse_subscription_snapshot(payload, expected_app_id=expected_app_id)
 
@@ -291,9 +295,10 @@ async def _subscribe_once(
 ) -> None:
     response = await client.post(
         f"{META_INSTAGRAM_GRAPH_BASE_URL}/{graph_api_version}/{ig_user_id}/subscribed_apps",
-        data={"subscribed_fields": ",".join(subscribed_fields)},
+        json={"subscribed_fields": list(subscribed_fields)},
         headers={"Authorization": f"Bearer {access_token}"},
     )
+    log_instagram_subscribed_apps_telemetry(response, stage="subscribe", require_success_flag=True)
     payload = _safe_json(response, step="instagram subscribed_apps subscribe")
     if payload.get("success") is not True:
         raise MetaOAuthError("Instagram webhook subscription did not return success")
@@ -314,6 +319,7 @@ async def _fetch_subscription_state(
         expected_app_id=expected_app_id,
         client=client,
         step="instagram subscribed_apps verify",
+        telemetry_stage="verify",
     )
     return frozenset(snapshot or ())
 
