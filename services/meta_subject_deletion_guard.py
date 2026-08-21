@@ -489,6 +489,16 @@ def _acquire_once(
     capture_snapshot: bool,
     oauth_started_at: float,
 ) -> MetaSubjectDeletionLease:
+    """Acquire one live lease, recovering only this attempt's owner after ACK loss.
+
+    Inner retries reuse ``owner_token``. If Firestore committed and the ACK was
+    lost, the same owner and purpose may overwrite that row. A later acquire
+    mints a new owner, so a zombie lease still returns busy until expiry
+    (~300s). Do not steal another live owner of the same purpose: concurrent
+    OAuth and deletion must stay serialized. Busy is therefore not fully fixed
+    for a second Connect after ACK-loss.
+    """
+
     owner_token = secrets.token_urlsafe(32)
     owner_hash = hashlib.sha256(owner_token.encode()).hexdigest()
     reference = _lease_ref(db, subject_key)
@@ -500,9 +510,12 @@ def _acquire_once(
             def _acquire(transaction: Any, now: float = now) -> MetaSubjectDeletionSnapshot | None:
                 lease_snapshot = reference.get(transaction=transaction)
                 if lease_snapshot.exists:
-                    current_owner, _current_purpose, expires_at = _parse_lease(_snapshot_dict(lease_snapshot))
+                    current_owner, current_purpose, expires_at = _parse_lease(_snapshot_dict(lease_snapshot))
                     if current_owner and expires_at > now:
-                        raise MetaSubjectDeletionLeaseBusyError("Meta subject lease is busy")
+                        # Inner commit/ACK retries reuse this token. Recover that owner and
+                        # purpose only. A different live owner still waits until expiry.
+                        if not hmac.compare_digest(current_owner, owner_hash) or current_purpose != purpose:
+                            raise MetaSubjectDeletionLeaseBusyError("Meta subject lease is busy")
                 snapshot = _capture_snapshot(db, subject_key, transaction) if capture_snapshot else None
                 transaction.set(
                     reference,

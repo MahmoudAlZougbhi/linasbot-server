@@ -14,6 +14,7 @@ import pytest
 from services.meta_subject_deletion_guard import (
     MetaSubjectDeletionBlockedError,
     MetaSubjectDeletionChangedError,
+    MetaSubjectDeletionLeaseBusyError,
     MetaSubjectDeletionStoreUnavailableError,
     acquire_meta_deauthorization_subject_guard,
     acquire_meta_deletion_subject_guard,
@@ -359,3 +360,67 @@ def test_guard_fails_closed_without_firestore(monkeypatch: pytest.MonkeyPatch) -
     _patch_db(monkeypatch, None)
     with pytest.raises(MetaSubjectDeletionStoreUnavailableError, match="unavailable"):
         acquire_meta_oauth_subject_guard(_subject_key())
+
+
+def test_acquire_recovers_same_owner_after_commit_ack_loss(monkeypatch: pytest.MonkeyPatch) -> None:
+    import services.meta_subject_deletion_guard as guard
+
+    db = _FakeFirestore()
+    _patch_db(monkeypatch, db)
+    subject_key = _subject_key()
+    real = guard.run_firestore_transaction
+    attempts = {"n": 0}
+
+    def once_ack_loss(db: Any, fn: Any) -> Any:
+        attempts["n"] += 1
+        result = real(db, fn)
+        if attempts["n"] == 1:
+            raise RuntimeError("simulated Firestore commit ACK loss")
+        return result
+
+    monkeypatch.setattr(guard, "run_firestore_transaction", once_ack_loss)
+    lease = acquire_meta_oauth_subject_guard(subject_key, oauth_started_at=1_000.0)
+    assert attempts["n"] == 2
+    assert lease.snapshot is not None and lease.snapshot.state == "none"
+    stored = (
+        db.collection("artifacts")
+        .document("linas-ai-bot-backend")
+        .collection("meta_deletion_subject_leases")
+        .document(subject_key)
+    )
+    assert stored.data["owner_hash"] == lease.owner_hash
+    assert stored.data["purpose"] == "oauth"
+    assert lease.release() is True
+
+
+def test_exhausted_commit_ack_loss_keeps_new_owner_busy_until_expiry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Follow-up blocker: a later Connect still waits ~300s. Busy is not fully fixed."""
+
+    import services.meta_subject_deletion_guard as guard
+
+    db = _FakeFirestore()
+    _patch_db(monkeypatch, db)
+    subject_key = _subject_key()
+    real = guard.run_firestore_transaction
+
+    def always_ack_loss(db: Any, fn: Any) -> Any:
+        real(db, fn)
+        raise RuntimeError("simulated Firestore commit ACK loss")
+
+    monkeypatch.setattr(guard, "run_firestore_transaction", always_ack_loss)
+    with pytest.raises(MetaSubjectDeletionStoreUnavailableError):
+        acquire_meta_oauth_subject_guard(subject_key, oauth_started_at=1_000.0)
+
+    monkeypatch.setattr(guard, "run_firestore_transaction", real)
+    with pytest.raises(MetaSubjectDeletionLeaseBusyError):
+        acquire_meta_oauth_subject_guard(subject_key, oauth_started_at=1_000.0)
+    stored = (
+        db.collection("artifacts")
+        .document("linas-ai-bot-backend")
+        .collection("meta_deletion_subject_leases")
+        .document(subject_key)
+    )
+    assert stored.data["purpose"] == "oauth"
+    assert stored.data["expires_at"] > time.time()
