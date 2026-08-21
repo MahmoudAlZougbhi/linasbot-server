@@ -28,6 +28,7 @@ CLUSTER_ENV = ROOT / "scripts" / "ha" / "cluster_runtime_env_contract.py"
 ALEMBIC = ROOT / "alembic" / "versions" / "20260824_product_search_metadata.py"
 DEFERRED_DISPATCH_PHASES = (
     "ensure-maintenance|mark-maintenance|apply-cpython-runtime-immutability|"
+    "stage|stage-evidence|"
     "lb-attestation|release-bundle|worker-template-probe|"
     "install-worker-template-decision|install-trusted-worker-template"
 )
@@ -129,6 +130,8 @@ def test_helper_defers_pre_drain_tree_hash_then_rehashes() -> None:
     ]
     assert "deferred-until-restore" in preflight_block
     assert 'assert_python_runtime_contract "$expected_node_id")' not in installer
+    manifest = source[source.index("stage_manifest_tool() {") : source.index("publish_stage_manifest() {")]
+    assert "deferred-until-restore" in manifest
     assert (
         "deferred-until-restore"
         not in source[source.index("apply_cpython_runtime_immutability() {") : source.index("require_root() {")]
