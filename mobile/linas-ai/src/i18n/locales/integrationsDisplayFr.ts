@@ -3,7 +3,7 @@ export const integrationsDisplayFr = {
   metaOAuthFailedFacebook:
     'Échec de l’autorisation Facebook. Déconnectez Facebook, puis reconnectez-le.',
   metaOAuthFailedFacebookScopes:
-    'Facebook n’a pas accordé l’autorisation business_management requise. Reconnectez-vous, sélectionnez l’entreprise et la Page, puis acceptez chaque autorisation.',
+    'Facebook n’a pas accordé toutes les autorisations requises, y compris business_management. Reconnectez-vous, sélectionnez l’entreprise et la Page, puis acceptez chaque autorisation.',
   metaOAuthFailedFacebookToken:
     'Meta a rejeté le code d’autorisation Facebook. Reconnectez Facebook.',
   metaOAuthFailedFacebookWebhook:

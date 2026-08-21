@@ -88,6 +88,17 @@ def test_mobile_oauth_failure_reason_distinguishes_deletion_lease_and_guard() ->
     assert mobile_oauth_failure_reason(MetaOAuthError("Meta authorization safety guard failed")) == "guard"
 
 
+def test_facebook_page_and_integration_scope_failures_share_scopes_reason() -> None:
+    """Missing Page grants must not be diagnosed as business_management-only."""
+
+    integration = MetaOAuthError("Meta integration token is missing required review permissions (business_management)")
+    page = MetaOAuthError("Meta Page token is missing required review permissions (pages_manage_engagement)")
+    messaging = MetaOAuthError("Meta Page token is missing required review permissions (pages_messaging)")
+    assert mobile_oauth_failure_reason(integration) == "scopes"
+    assert mobile_oauth_failure_reason(page) == "scopes"
+    assert mobile_oauth_failure_reason(messaging) == "scopes"
+
+
 def test_invalid_tampered_return_surface_rejected_to_web() -> None:
     """Case 8: invalid/tampered OAuth return surface is rejected to public landing."""
 

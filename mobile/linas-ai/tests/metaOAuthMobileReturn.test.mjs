@@ -145,6 +145,18 @@ describe('meta oauth mobile return surface', () => {
     assert.equal(metaOAuthFailureMessage(tr, 'scopes', null), 'metaOAuthFailed');
   });
 
+  it('Facebook scopes copy covers Page grants, not only business_management', () => {
+    const en = read('i18n/locales/integrationsDisplayEn.ts');
+    const ar = read('i18n/locales/integrationsDisplayAr.ts');
+    const fr = read('i18n/locales/integrationsDisplayFr.ts');
+    assert.match(en, /Facebook did not grant all required permissions, including business_management/);
+    assert.match(ar, /كل الصلاحيات المطلوبة، بما فيها business_management/);
+    assert.match(fr, /toutes les autorisations requises, y compris business_management/);
+    assert.doesNotMatch(en, /the required business_management permission/);
+    assert.doesNotMatch(ar, /صلاحية business_management المطلوبة/);
+    assert.doesNotMatch(fr, /l’autorisation business_management requise/);
+  });
+
   it('AppShell routes integrations deep link and IntegrationsScreen refetches', () => {
     const shell = read('app/AppShell.tsx');
     const screen = read('features/integrations/IntegrationsScreen.tsx');

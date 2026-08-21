@@ -3,7 +3,7 @@ export const integrationsDisplayEn = {
   metaOAuthFailedFacebook:
     'Facebook authorization failed. Disconnect Facebook, then Connect again.',
   metaOAuthFailedFacebookScopes:
-    'Facebook did not grant the required business_management permission. Connect again, select the Business and Page, and allow every permission.',
+    'Facebook did not grant all required permissions, including business_management. Connect again, select the Business and Page, and allow every permission.',
   metaOAuthFailedFacebookToken:
     'Meta rejected the Facebook authorization code. Connect Facebook again.',
   metaOAuthFailedFacebookWebhook:

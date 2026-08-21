@@ -2,7 +2,7 @@
 export const integrationsDisplayAr = {
   metaOAuthFailedFacebook: 'فشل تفويض Facebook. افصل Facebook ثم اربطه من جديد.',
   metaOAuthFailedFacebookScopes:
-    'Facebook لم يمنح صلاحية business_management المطلوبة. اربطه مجدداً، واختر الـ Business والـ Page، واسمح بكل الصلاحيات.',
+    'Facebook لم يمنح كل الصلاحيات المطلوبة، بما فيها business_management. اربطه مجدداً، واختر الـ Business والـ Page، واسمح بكل الصلاحيات.',
   metaOAuthFailedFacebookToken:
     'Meta رفض رمز تفويض Facebook. اربط Facebook من جديد.',
   metaOAuthFailedFacebookWebhook:

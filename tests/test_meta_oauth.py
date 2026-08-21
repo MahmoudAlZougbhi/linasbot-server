@@ -462,13 +462,15 @@ async def test_page_grants_never_fall_back_to_integration_token(
             page_scopes=missing_page_scope,
         ),
     ) as client:
-        with pytest.raises(MetaOAuthError, match="Page token.*pages_manage_engagement"):
+        with pytest.raises(MetaOAuthError, match="Page token.*pages_manage_engagement") as captured:
             await complete_meta_business_login(
                 code="integration-cannot-fill-page-grant-code",
                 state=state,
                 registry=registry,
                 client=client,
             )
+    assert mobile_oauth_failure_reason(captured.value) == "scopes"
+    assert "business_management" not in str(captured.value)
     assert registry.list_bindings() == []
 
 
