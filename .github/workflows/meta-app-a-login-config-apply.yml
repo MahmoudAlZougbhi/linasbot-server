@@ -98,16 +98,7 @@ jobs:
             ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
               "root@${PEER_HOST}" \
               "test \"\$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8003/api/ready || true)\" = 503"
-            DRAIN_SECONDS="$("$REPO_DIR/venv/bin/python" - "$REPO_DIR/.env" <<'PY'
-            import sys
-            from dotenv import dotenv_values
-
-            value = int(str(dotenv_values(sys.argv[1], interpolate=False).get("META_HA_LB_DRAIN_SECONDS") or ""))
-            if not 30 <= value <= 300:
-                raise SystemExit("invalid HA drain interval")
-            print(value)
-            PY
-            )"
+            DRAIN_SECONDS="$("$REPO_DIR/venv/bin/python" -c 'import sys; from dotenv import dotenv_values; value = int(str(dotenv_values(sys.argv[1], interpolate=False).get("META_HA_LB_DRAIN_SECONDS") or "")); sys.exit("invalid HA drain interval") if not 30 <= value <= 300 else print(value)' "$REPO_DIR/.env")"
             sleep "$DRAIN_SECONDS"
             "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
               --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --recover-only
