@@ -156,7 +156,27 @@ export const en = {
   metaOAuthSuccess: 'Meta access updated. Refreshing connection status…',
   metaOAuthCancelled: 'Meta authorization was cancelled.',
 
+  integrationDmActionOff: 'Turn on Direct messages to let AI reply to DMs.',
+  serviceDiagnosticWebhookNotReady: 'Webhooks are not ready yet. Tap Connect again or wait one minute.',
+  serviceDiagnosticMissingScopes: 'This connection is missing Meta permissions. Disconnect, then Connect again.',
+  serviceDiagnosticExpiredToken: 'This connection token expired. Disconnect, then Connect again.',
+  serviceDiagnosticCredentialUnavailable: 'Connection credentials are unavailable. Disconnect, then Connect again.',
+  serviceDiagnosticTokenMismatch: 'This connection no longer matches Meta. Disconnect, then Connect again.',
   metaOAuthFailed: 'Meta authorization failed. Disconnect the channel, then Connect again.',
+  metaOAuthFailedScopes:
+    'Instagram did not grant all required permissions. Tap Connect again and allow every permission.',
+  metaOAuthFailedToken:
+    'Meta rejected the Instagram authorization code. Tap Connect again. If it keeps failing, confirm the Instagram account is added as a tester in Meta Developer Console.',
+  metaOAuthFailedProfile:
+    'This Instagram account must be a Business or Creator profile before it can connect.',
+  metaOAuthFailedWebhook:
+    'Instagram connected, but webhook setup did not finish. Tap Connect again in one minute.',
+  metaOAuthFailedDeletion:
+    'Instagram authorization is blocked by a pending Meta data-deletion request.',
+  metaOAuthFailedConfig:
+    'Instagram Login is not ready on the server yet. Try again after the latest server update.',
+  metaOAuthFailedConflict:
+    'This Instagram account is already connected to another workspace.',
   metaOAuthIncomplete:
     'Meta finished in the browser, but the app did not get the return link. If the channel is still disconnected, tap Connect again.',
   toggleDms: 'Direct messages',

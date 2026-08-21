@@ -52,6 +52,7 @@ export type IntegrationRow = {
   comments_state?: CommentsState;
   dm_state?: CommentsState;
   connection_status?: ConnectionDisplayStatus;
+  service_diagnostic?: string;
   last_synced_at?: number | null;
   account?: IntegrationAccountDisplay;
   accounts?: IntegrationAccountDisplay[];
@@ -102,9 +103,29 @@ function blockerCopy(blocker: string, tr: (key: StringKey) => string): string {
       return tr('tiktokMessagingPending');
     case 'token_expired':
       return tr('integrationStatusTokenExpired');
+    case 'missing_dm_permissions':
+      return tr('commentsBlockerMissingPermissions');
+    case 'asset_action_off':
+      return tr('integrationDmActionOff');
+    case 'webhook_not_ready':
+      return tr('serviceDiagnosticWebhookNotReady');
+    case 'missing_scopes':
+      return tr('serviceDiagnosticMissingScopes');
+    case 'expired_token':
+      return tr('serviceDiagnosticExpiredToken');
+    case 'credential_unavailable':
+      return tr('serviceDiagnosticCredentialUnavailable');
+    case 'token_app_mismatch':
+    case 'token_profile_mismatch':
+      return tr('serviceDiagnosticTokenMismatch');
     default:
       return tr('commentsBlockerGeneric');
   }
+}
+
+function serviceDiagnosticCopy(code: string | undefined, tr: (key: StringKey) => string): string | null {
+  if (!code) return null;
+  return blockerCopy(code, tr);
 }
 
 function accountList(row: IntegrationRow): IntegrationAccountDisplay[] {
@@ -167,6 +188,8 @@ export function IntegrationChannelCard({
     !soon && (platform === 'instagram' || platform === 'facebook' || tiktok) && row.connected;
   const blocker = commentsBlocker(row);
   const dmBlocker = row.dm_state?.blocker_code || row.dm_state?.blocker || null;
+  const dmBlockerMessage = row.dm_state?.blocker_message?.trim() || null;
+  const serviceDiagnostic = serviceDiagnosticCopy(row.service_diagnostic, tr);
   const needsWebhook = blocker === 'missing_comment_webhook';
   const subtitle = channelSubtitle(row);
   const lastSync =
@@ -210,7 +233,14 @@ export function IntegrationChannelCard({
             onToggle={onToggle}
           />
           {blocker ? <Text style={styles.blocker}>{blockerCopy(blocker, tr)}</Text> : null}
-          {tiktok && dmBlocker ? <Text style={styles.blocker}>{blockerCopy(String(dmBlocker), tr)}</Text> : null}
+          {dmBlocker && !blocker ? (
+            <Text style={styles.blocker}>{blockerCopy(String(dmBlocker), tr)}</Text>
+          ) : null}
+          {dmBlockerMessage ? <Text style={styles.blocker}>{dmBlockerMessage}</Text> : null}
+          {serviceDiagnostic ? <Text style={styles.blocker}>{serviceDiagnostic}</Text> : null}
+          {row.comments_state?.blocker_message?.trim() ? (
+            <Text style={styles.blocker}>{row.comments_state.blocker_message.trim()}</Text>
+          ) : null}
           {needsWebhook ? (
             <PrimaryButton
               label={tr('reconcileCommentWebhooks')}

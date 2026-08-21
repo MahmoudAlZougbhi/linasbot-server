@@ -180,7 +180,10 @@ async def exchange_instagram_short_lived_token(
     access_token = str(payload.get("access_token") or "").strip()
     user_id = str(payload.get("user_id") or "").strip()
     if not access_token or not user_id.isdigit():
-        raise MetaOAuthError("Instagram code exchange did not return a user access token")
+        error_type = str(payload.get("error_type") or payload.get("error") or "").strip()
+        error_message = str(payload.get("error_message") or payload.get("error_description") or "").strip()
+        detail = error_type or error_message or "missing access_token"
+        raise MetaOAuthError(f"Instagram authorization-code exchange failed ({detail})")
     return access_token, user_id, payload
 
 

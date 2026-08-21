@@ -206,20 +206,37 @@ async def instagram_login_oauth_callback(
     state: str = Query(default=""),
     error: str = Query(default=""),
 ) -> Any:
-    from services.meta_app_registry import MetaOAuthStateError
-    from services.meta_oauth_return import resolve_error_return_surface
+    import logging
 
+    from services.meta_app_registry import MetaOAuthStateError
+    from services.meta_oauth_return import mobile_oauth_failure_reason, resolve_error_return_surface
+
+    logger = logging.getLogger("meta_oauth.callback")
     state_text = _query_text(state)
+    code_text = _query_text(code)
+    error_text = _query_text(error)
     peeked = peek_return_surface_from_state(state_text)
-    if _query_text(error):
+    if error_text:
         surface = consume_return_surface_from_state(state_text) if state_text else peeked
+        logger.warning(
+            "instagram_login_callback cancelled error=%s surface=%s has_state=%s",
+            error_text[:80],
+            surface,
+            bool(state_text),
+        )
         return oauth_completion_response(
             return_surface=surface,
             meta_connection="cancelled",
             extra_query={"meta_flow": "instagram_login"},
         )
     try:
-        result = await complete_instagram_login(code=_query_text(code), state=state_text)
+        result = await complete_instagram_login(code=code_text, state=state_text)
+        logger.info(
+            "instagram_login_callback connected surface=%s channel=%s status=%s",
+            result.return_surface,
+            result.binding.channel,
+            result.binding.status,
+        )
         return oauth_completion_response(
             return_surface=result.return_surface,
             meta_connection="connected",
@@ -231,10 +248,20 @@ async def instagram_login_oauth_callback(
         )
     except (MetaOAuthError, MetaOAuthStateError, MetaRegistryError) as exc:
         surface = resolve_error_return_surface(exc, state_text, peeked=peeked)
+        reason = mobile_oauth_failure_reason(exc)
+        logger.warning(
+            "instagram_login_callback failed type=%s reason=%s msg=%s surface=%s has_code=%s has_state=%s",
+            type(exc).__name__,
+            reason,
+            str(exc)[:200],
+            surface,
+            bool(code_text),
+            bool(state_text),
+        )
         return oauth_completion_response(
             return_surface=surface,
             meta_connection="failed",
-            extra_query={"meta_flow": "instagram_login"},
+            extra_query={"meta_flow": "instagram_login", "meta_reason": reason},
         )
 
 
@@ -248,7 +275,8 @@ async def meta_oauth_callback(
 
     import logging
 
-    from services.meta_oauth_return import resolve_error_return_surface
+    from services.meta_app_registry import MetaOAuthStateError
+    from services.meta_oauth_return import mobile_oauth_failure_reason, resolve_error_return_surface
 
     logger = logging.getLogger("meta_oauth.callback")
     state_text = _query_text(state)
@@ -278,12 +306,14 @@ async def meta_oauth_callback(
                 "connected_count": str(len(result.bindings)),
             },
         )
-    except (MetaOAuthError, MetaRegistryError) as exc:
+    except (MetaOAuthError, MetaOAuthStateError, MetaRegistryError) as exc:
         surface = resolve_error_return_surface(exc, state_text, peeked=peeked)
+        reason = mobile_oauth_failure_reason(exc)
         # Safe diagnostics only: never log code/state/tokens.
         logger.warning(
-            "meta_oauth_callback failed type=%s msg=%s surface=%s has_code=%s has_state=%s peeked=%s",
+            "meta_oauth_callback failed type=%s reason=%s msg=%s surface=%s has_code=%s has_state=%s peeked=%s",
             type(exc).__name__,
+            reason,
             str(exc)[:200],
             surface,
             bool(code_text),
@@ -293,6 +323,7 @@ async def meta_oauth_callback(
         return oauth_completion_response(
             return_surface=surface,
             meta_connection="failed",
+            extra_query={"meta_reason": reason},
         )
 
 

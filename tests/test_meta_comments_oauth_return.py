@@ -114,6 +114,7 @@ async def test_instagram_callback_reports_failed_when_subscription_is_unconfirme
     )
     body = response.body.decode("utf-8")
     assert "linasai://integrations?meta_connection=failed" in body
+    assert "meta_reason=webhook" in body
     assert "meta_connection=success" not in body
 
 

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { ApiError, apiFetch } from '../../api/client';
 import {
   metaAuthSessionOutcome,
-  type MetaAuthSessionOutcome,
+  type MetaAuthSessionResult,
 } from '../../app/integrationsDeepLink';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -78,7 +78,7 @@ export function apiErrorDetail(err: ApiError): string | null {
   return null;
 }
 
-export type MetaOAuthSessionResult = { outcome: MetaAuthSessionOutcome };
+export type MetaOAuthSessionResult = MetaAuthSessionResult;
 
 export async function startMetaOAuth(
   platform: 'instagram' | 'facebook',
@@ -112,7 +112,7 @@ export async function startMetaOAuth(
     );
   }
 
-  return { outcome: metaAuthSessionOutcome(result) };
+  return metaAuthSessionOutcome(result);
 }
 
 export async function disconnectMetaPlatform(platform: 'instagram' | 'facebook'): Promise<void> {

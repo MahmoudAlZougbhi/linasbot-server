@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
 import { AppState, Linking } from 'react-native';
 
 import { ApiError, apiFetch } from '../../api/client';
-import { parseIntegrationsDeepLink } from '../../app/navigation';
+import { parseIntegrationsDeepLink, metaOAuthFailureMessage } from '../../app/navigation';
 import { tokenStore } from '../../auth/tokenStore';
 import type { StringKey } from '../../i18n/locales/en';
 import { ListSchema, type IntegrationListRow } from './integrationsSchemas';
@@ -101,7 +101,8 @@ export function useIntegrationsLoad({
         setError(parsed.waConnection === 'cancelled' ? tr('waOAuthCancelled') : tr('metaOAuthCancelled'));
       } else if (parsed.waConnection === 'failed' || parsed.metaConnection === 'failed') {
         setNotice(null);
-        setError(parsed.waConnection === 'failed' ? tr('waOAuthFailed') : tr('metaOAuthFailed'));
+        if (parsed.waConnection === 'failed') setError(tr('waOAuthFailed'));
+        else setError(metaOAuthFailureMessage(tr, parsed.metaReason));
       }
       void load();
     };
