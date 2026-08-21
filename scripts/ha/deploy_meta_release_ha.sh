@@ -3481,7 +3481,7 @@ install_lb_ready_attestation() {
       tree_proof=deferred-until-restore
       ;;
   esac
-  if [ "$operation" = deploy ]; then
+  if [ "$operation" = deploy ] || [ "$operation" = commit ]; then
     deploy_lb_max_age=600
   fi
   runtime_cluster="$(assert_python_runtime_contract "$expected_node_id" "$tree_proof")"
@@ -10660,7 +10660,7 @@ recover_deployment() {
       "$phase" "$decision" "$journal_target" "$target_sha" recovery
   fi
   lb_observed_at="$(assert_fresh_lb_ready_attestation \
-    "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha")"
+    "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha" "" 600)"
   peer_lb_observed_at="$(remote_node "$peer_host" lb-attestation \
     "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha")"
   test "$lb_observed_at" = "$peer_lb_observed_at" || \
@@ -10866,7 +10866,7 @@ retry_distinct_reconciliation() {
   test "$(sha256sum "$0" | awk '{print $1}')" = "$helper_hash" || \
     die "running retry helper is not the exact authorized target blob"
   lb_observed_at="$(assert_fresh_lb_ready_attestation \
-    "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha")"
+    "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha" "" 600)"
   peer_lb_observed_at="$(remote_node "$peer_host" lb-attestation \
     "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha")"
   test "$lb_observed_at" = "$peer_lb_observed_at" || \
@@ -11155,7 +11155,7 @@ commit_target_deployment() {
     "$release_summary")" = "$release_target_tree_sha" || \
     die "commit release tree differs from the durable workflow authority"
   lb_observed_at="$(assert_fresh_lb_ready_attestation \
-    "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha")"
+    "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha" "" 600)"
   peer_lb_observed_at="$(remote_node "$peer_host" lb-attestation \
     "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha")"
   test "$lb_observed_at" = "$peer_lb_observed_at" || \
@@ -11246,20 +11246,20 @@ commit_target_deployment() {
   assert_release_artifact_parity \
     "$peer_host" "$tx_dir" "$target_sha" "$previous_sha" "$peer_previous_sha"
   test "$(assert_fresh_lb_ready_attestation \
-    "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha")" = \
+    "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha" "" 600)" = \
     "$lb_observed_at" || die "commit LB attestation expired before durable decision"
 
   update_commit_journal "target-parity-proven" commit
   assert_commit_journal "target-parity-proven" commit || \
     die "durable deployment commit was not read back"
   test "$(assert_fresh_lb_ready_attestation \
-    "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha")" = \
+    "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha" "" 600)" = \
     "$lb_observed_at" || die "commit LB attestation expired before peer admission"
   update_commit_journal "peer-admit-started" commit
   remote_node "$peer_host" recover-admit "$target_sha" "$tx_dir"
   assert_public_ready_after_peer_admission "$target_sha"
   test "$(assert_fresh_lb_ready_attestation \
-    "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha")" = \
+    "$target_sha" "$fresh_lb_attestation_sha" "$fresh_lb_projection_sha" "" 600)" = \
     "$lb_observed_at" || die "commit LB attestation expired before node01 admission"
   update_commit_journal "node01-admit-started" commit
   node_recover_admit "$target_sha" "$tx_dir"
