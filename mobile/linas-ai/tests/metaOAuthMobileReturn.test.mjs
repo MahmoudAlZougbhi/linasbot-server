@@ -4,7 +4,14 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 
-import { metaAuthSessionOutcome } from '../src/app/integrationsDeepLink.ts';
+import {
+  metaAuthSessionOutcome,
+  metaOAuthFailureMessage,
+  parseIntegrationsDeepLink,
+} from '../src/app/integrationsDeepLink.ts';
+import { integrationsDisplayAr } from '../src/i18n/locales/integrationsDisplayAr.ts';
+import { integrationsDisplayEn } from '../src/i18n/locales/integrationsDisplayEn.ts';
+import { integrationsDisplayFr } from '../src/i18n/locales/integrationsDisplayFr.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -89,6 +96,75 @@ describe('meta oauth mobile return surface', () => {
     assert.match(nav, /parseIntegrationsDeepLink/);
     assert.match(link, /meta_connection/);
     assert.doesNotMatch(link, /access_token|tenant_id/);
+  });
+
+  it('keeps Facebook and Instagram OAuth failures channel-specific', () => {
+    const facebook = parseIntegrationsDeepLink(
+      'linasai://integrations?meta_connection=failed&meta_reason=scopes&channel=facebook',
+    );
+    const instagram = parseIntegrationsDeepLink(
+      'linasai://integrations?meta_connection=failed&meta_reason=scopes&channel=instagram',
+    );
+    const tr = (key) => key;
+
+    assert.equal(facebook?.metaChannel, 'facebook');
+    assert.equal(instagram?.metaChannel, 'instagram');
+    assert.equal(
+      metaOAuthFailureMessage(tr, facebook?.metaReason ?? null, facebook?.metaChannel ?? null),
+      'metaOAuthFailedFacebookScopes',
+    );
+    assert.equal(
+      metaOAuthFailureMessage(tr, instagram?.metaReason ?? null, instagram?.metaChannel ?? null),
+      'metaOAuthFailedScopes',
+    );
+    assert.equal(
+      metaOAuthFailureMessage(tr, 'busy', 'facebook'),
+      'metaOAuthFailedFacebookBusy',
+    );
+    assert.equal(
+      metaOAuthFailureMessage(tr, 'guard', 'instagram'),
+      'metaOAuthFailedGuard',
+    );
+    assert.equal(
+      metaOAuthFailureMessage(tr, 'deletion_failed', 'facebook'),
+      'metaOAuthFailedFacebookDeletionFailed',
+    );
+    assert.equal(
+      metaOAuthFailureMessage(tr, 'deletion_failed', 'instagram'),
+      'metaOAuthFailedDeletionFailed',
+    );
+    const invalidChannel = parseIntegrationsDeepLink(
+      'linasai://integrations?meta_connection=failed&meta_reason=scopes&channel=whatsapp',
+    );
+    assert.equal(invalidChannel?.metaChannel, null);
+    assert.equal(
+      metaOAuthFailureMessage(
+        tr,
+        invalidChannel?.metaReason ?? null,
+        invalidChannel?.metaChannel ?? null,
+      ),
+      'metaOAuthFailed',
+    );
+    assert.equal(metaOAuthFailureMessage(tr, 'scopes', null), 'metaOAuthFailed');
+  });
+
+  it('Facebook scopes message covers all required permissions, including business_management', () => {
+    for (const locale of [integrationsDisplayEn, integrationsDisplayAr, integrationsDisplayFr]) {
+      const tr = (key) => {
+        const value = locale[key];
+        assert.equal(typeof value, 'string', `missing Facebook scopes copy for ${key}`);
+        return value;
+      };
+      const message = metaOAuthFailureMessage(tr, 'scopes', 'facebook');
+      assert.match(message, /business_management/);
+      assert.match(
+        message,
+        /all required permissions|كل الصلاحيات المطلوبة|toutes les autorisations requises/,
+      );
+      assert.doesNotMatch(message, /the required business_management permission/);
+      assert.doesNotMatch(message, /صلاحية business_management المطلوبة/);
+      assert.doesNotMatch(message, /l’autorisation business_management requise/);
+    }
   });
 
   it('AppShell routes integrations deep link and IntegrationsScreen refetches', () => {

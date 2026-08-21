@@ -29,6 +29,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from services.firestore_transaction_compat import run_firestore_transaction
 from services.meta_controlled_evidence import MetaEvidenceSurface
 from services.meta_outbound_purposes import ALLOWED_PURPOSES as _ALLOWED_PURPOSES
 from services.meta_outbound_purposes import PURPOSE_PREDECESSORS as _PURPOSE_PREDECESSORS
@@ -427,46 +428,48 @@ def _reconcile_image_quota_receipt_sync(
     fence_reference, binding_digest = _binding_authority(db, binding_id)
     last_error: Exception | None = None
     for _attempt in range(_MAX_TRANSACTION_ATTEMPTS):
-        transaction = db.transaction()
         try:
-            fenced = bool(fence_reference is not None and fence_reference.get(transaction=transaction).exists)
-            snapshot = reference.get(transaction=transaction)
-            if not snapshot.exists:
-                return None
-            current = snapshot.to_dict()
-            if not isinstance(current, dict):
-                raise MetaOutboundAttemptStoreError("Meta outbound-attempt document is invalid")
-            status, context, sequence = _validate_stored_authority(
-                current,
-                event_id=event_id,
-                surface=surface,
-                purpose=purpose,
-                binding_digest=binding_digest,
-            )
-            if fenced and status == "sending" and context[2] in {"reserved", "consumed"}:
-                current.update(
-                    {
-                        "status": "needs_owner_action",
-                        "owner_hash": "",
-                        "updated_at": time.time(),
-                        "safe_reason": "authorization_deletion_fenced",
-                    }
+
+            def _reconcile(transaction: Any) -> MetaOutboundAttemptReceipt | None:
+                fenced = bool(fence_reference is not None and fence_reference.get(transaction=transaction).exists)
+                snapshot = reference.get(transaction=transaction)
+                if not snapshot.exists:
+                    return None
+                current = snapshot.to_dict()
+                if not isinstance(current, dict):
+                    raise MetaOutboundAttemptStoreError("Meta outbound-attempt document is invalid")
+                status, context, sequence = _validate_stored_authority(
+                    current,
+                    event_id=event_id,
+                    surface=surface,
+                    purpose=purpose,
+                    binding_digest=binding_digest,
                 )
-                transaction.set(reference, current)
-                transaction.commit()
-                status = "needs_owner_action"
-            return MetaOutboundAttemptReceipt(
-                event_id=event_id,
-                surface=surface,
-                purpose=purpose,
-                status=status,
-                image_quota_disposition=context[0],
-                image_quota_allowed_amount=context[1],
-                image_quota_phase=context[2],
-                image_quota_notice_text=context[3],
-                image_quota_notice_sha256=context[4],
-                attempt_sequence=sequence,
-            )
+                if fenced and status == "sending" and context[2] in {"reserved", "consumed"}:
+                    current.update(
+                        {
+                            "status": "needs_owner_action",
+                            "owner_hash": "",
+                            "updated_at": time.time(),
+                            "safe_reason": "authorization_deletion_fenced",
+                        }
+                    )
+                    transaction.set(reference, current)
+                    status = "needs_owner_action"
+                return MetaOutboundAttemptReceipt(
+                    event_id=event_id,
+                    surface=surface,
+                    purpose=purpose,
+                    status=status,
+                    image_quota_disposition=context[0],
+                    image_quota_allowed_amount=context[1],
+                    image_quota_phase=context[2],
+                    image_quota_notice_text=context[3],
+                    image_quota_notice_sha256=context[4],
+                    attempt_sequence=sequence,
+                )
+
+            return run_firestore_transaction(db, _reconcile)
         except MetaOutboundAttemptStoreError:
             raise
         except Exception as exc:
@@ -529,48 +532,56 @@ def reconcile_fenced_image_quota_attempts_for_bindings(
             raise MetaOutboundAttemptStoreError("Meta outbound-attempt reference is invalid")
         last_error: Exception | None = None
         for _attempt in range(_MAX_TRANSACTION_ATTEMPTS):
-            transaction = db.transaction()
             try:
-                fence = firestore_binding_deletion_fence_ref(db, binding_id).get(transaction=transaction)
-                current_snapshot = reference.get(transaction=transaction)
-                if not current_snapshot.exists:
-                    break
-                current = current_snapshot.to_dict()
-                if not isinstance(current, dict):
-                    raise MetaOutboundAttemptStoreError("Meta outbound-attempt document is invalid")
-                event_id = _validate_event_id(str(current.get("event_id") or ""))
-                surface = _validate_surface(current.get("surface"))
-                expected_reference = _ref(db, event_id, "image_quota_notice")
-                if str(getattr(reference, "path", "")) != str(getattr(expected_reference, "path", "")):
-                    raise MetaOutboundAttemptStoreError("Meta outbound-attempt document identity changed")
-                status, context, _ = _validate_stored_authority(
-                    current,
-                    event_id=event_id,
-                    surface=surface,
-                    purpose="image_quota_notice",
-                    binding_digest=binding_digest,
-                )
-                if (
-                    not fence.exists
-                    or status != "sending"
-                    or context[2]
-                    not in {
-                        "reserved",
-                        "consumed",
-                    }
-                ):
-                    break
-                current.update(
-                    {
-                        "status": "needs_owner_action",
-                        "owner_hash": "",
-                        "updated_at": time.time(),
-                        "safe_reason": "authorization_deletion_fenced",
-                    }
-                )
-                transaction.set(reference, current)
-                transaction.commit()
-                changed += 1
+
+                def _reconcile_one(
+                    transaction: Any,
+                    binding_id: str = binding_id,
+                    reference: Any = reference,
+                    binding_digest: str = binding_digest,
+                ) -> bool:
+                    fence = firestore_binding_deletion_fence_ref(db, binding_id).get(transaction=transaction)
+                    current_snapshot = reference.get(transaction=transaction)
+                    if not current_snapshot.exists:
+                        return False
+                    current = current_snapshot.to_dict()
+                    if not isinstance(current, dict):
+                        raise MetaOutboundAttemptStoreError("Meta outbound-attempt document is invalid")
+                    event_id = _validate_event_id(str(current.get("event_id") or ""))
+                    surface = _validate_surface(current.get("surface"))
+                    expected_reference = _ref(db, event_id, "image_quota_notice")
+                    if str(getattr(reference, "path", "")) != str(getattr(expected_reference, "path", "")):
+                        raise MetaOutboundAttemptStoreError("Meta outbound-attempt document identity changed")
+                    status, context, _ = _validate_stored_authority(
+                        current,
+                        event_id=event_id,
+                        surface=surface,
+                        purpose="image_quota_notice",
+                        binding_digest=binding_digest,
+                    )
+                    if (
+                        not fence.exists
+                        or status != "sending"
+                        or context[2]
+                        not in {
+                            "reserved",
+                            "consumed",
+                        }
+                    ):
+                        return False
+                    current.update(
+                        {
+                            "status": "needs_owner_action",
+                            "owner_hash": "",
+                            "updated_at": time.time(),
+                            "safe_reason": "authorization_deletion_fenced",
+                        }
+                    )
+                    transaction.set(reference, current)
+                    return True
+
+                if run_firestore_transaction(db, _reconcile_one):
+                    changed += 1
                 break
             except MetaOutboundAttemptStoreError:
                 raise
@@ -598,89 +609,91 @@ def _reserve_image_quota_sync(
     fence_reference, binding_digest = _binding_authority(db, binding_id)
     last_error: Exception | None = None
     for _attempt in range(_MAX_TRANSACTION_ATTEMPTS):
-        transaction = db.transaction()
         try:
-            if fence_reference is not None and fence_reference.get(transaction=transaction).exists:
+
+            def _reserve(transaction: Any) -> MetaOutboundAttemptDecision:
+                if fence_reference is not None and fence_reference.get(transaction=transaction).exists:
+                    return MetaOutboundAttemptDecision(
+                        kind="needs_owner_action",
+                        event_id=event_id,
+                        surface=surface,
+                        purpose=purpose,
+                        image_quota_disposition=disposition,
+                        image_quota_allowed_amount=allowed_amount,
+                        image_quota_notice_text=notice_text,
+                        image_quota_notice_sha256=notice_sha256,
+                        binding_id=binding_id,
+                    )
+                snapshot = reference.get(transaction=transaction)
+                if snapshot.exists:
+                    current = snapshot.to_dict()
+                    if not isinstance(current, dict):
+                        raise MetaOutboundAttemptStoreError("Meta outbound-attempt document is invalid")
+                    status, context, sequence = _validate_stored_authority(
+                        current,
+                        event_id=event_id,
+                        surface=surface,
+                        purpose=purpose,
+                        binding_digest=binding_digest,
+                    )
+                    if (context[0], context[1], context[3], context[4]) != (
+                        disposition,
+                        allowed_amount,
+                        notice_text,
+                        notice_sha256,
+                    ):
+                        raise MetaOutboundAttemptStoreError("Meta outbound-attempt quota context changed")
+                    return MetaOutboundAttemptDecision(
+                        kind="duplicate_suppressed" if status == "accepted" else "needs_owner_action",
+                        event_id=event_id,
+                        surface=surface,
+                        purpose=purpose,
+                        image_quota_disposition=disposition,
+                        image_quota_allowed_amount=allowed_amount,
+                        image_quota_phase=context[2],
+                        image_quota_notice_text=context[3],
+                        image_quota_notice_sha256=context[4],
+                        attempt_sequence=sequence,
+                        binding_id=binding_id,
+                    )
+                now = time.time()
+                transaction.set(
+                    reference,
+                    {
+                        "schema_version": 2,
+                        "event_id": event_id,
+                        "purpose": purpose,
+                        "image_quota_disposition": disposition,
+                        "image_quota_allowed_amount": allowed_amount,
+                        "image_quota_phase": "reserved",
+                        "image_quota_notice_text": notice_text,
+                        "image_quota_notice_sha256": notice_sha256,
+                        "surface": surface,
+                        "status": "sending",
+                        "attempt_sequence": 0,
+                        "owner_hash": _owner_hash(token),
+                        "created_at": now,
+                        "updated_at": now,
+                        "safe_reason": "quota_reserved",
+                        "provider_message_id_sha256": "",
+                        "binding_id_sha256": binding_digest,
+                    },
+                )
                 return MetaOutboundAttemptDecision(
-                    kind="needs_owner_action",
+                    kind="quota_reserved",
                     event_id=event_id,
                     surface=surface,
                     purpose=purpose,
                     image_quota_disposition=disposition,
                     image_quota_allowed_amount=allowed_amount,
+                    image_quota_phase="reserved",
                     image_quota_notice_text=notice_text,
                     image_quota_notice_sha256=notice_sha256,
+                    attempt_token=token,
                     binding_id=binding_id,
                 )
-            snapshot = reference.get(transaction=transaction)
-            if snapshot.exists:
-                current = snapshot.to_dict()
-                if not isinstance(current, dict):
-                    raise MetaOutboundAttemptStoreError("Meta outbound-attempt document is invalid")
-                status, context, sequence = _validate_stored_authority(
-                    current,
-                    event_id=event_id,
-                    surface=surface,
-                    purpose=purpose,
-                    binding_digest=binding_digest,
-                )
-                if (context[0], context[1], context[3], context[4]) != (
-                    disposition,
-                    allowed_amount,
-                    notice_text,
-                    notice_sha256,
-                ):
-                    raise MetaOutboundAttemptStoreError("Meta outbound-attempt quota context changed")
-                return MetaOutboundAttemptDecision(
-                    kind="duplicate_suppressed" if status == "accepted" else "needs_owner_action",
-                    event_id=event_id,
-                    surface=surface,
-                    purpose=purpose,
-                    image_quota_disposition=disposition,
-                    image_quota_allowed_amount=allowed_amount,
-                    image_quota_phase=context[2],
-                    image_quota_notice_text=context[3],
-                    image_quota_notice_sha256=context[4],
-                    attempt_sequence=sequence,
-                    binding_id=binding_id,
-                )
-            now = time.time()
-            transaction.set(
-                reference,
-                {
-                    "schema_version": 2,
-                    "event_id": event_id,
-                    "purpose": purpose,
-                    "image_quota_disposition": disposition,
-                    "image_quota_allowed_amount": allowed_amount,
-                    "image_quota_phase": "reserved",
-                    "image_quota_notice_text": notice_text,
-                    "image_quota_notice_sha256": notice_sha256,
-                    "surface": surface,
-                    "status": "sending",
-                    "attempt_sequence": 0,
-                    "owner_hash": _owner_hash(token),
-                    "created_at": now,
-                    "updated_at": now,
-                    "safe_reason": "quota_reserved",
-                    "provider_message_id_sha256": "",
-                    "binding_id_sha256": binding_digest,
-                },
-            )
-            transaction.commit()
-            return MetaOutboundAttemptDecision(
-                kind="quota_reserved",
-                event_id=event_id,
-                surface=surface,
-                purpose=purpose,
-                image_quota_disposition=disposition,
-                image_quota_allowed_amount=allowed_amount,
-                image_quota_phase="reserved",
-                image_quota_notice_text=notice_text,
-                image_quota_notice_sha256=notice_sha256,
-                attempt_token=token,
-                binding_id=binding_id,
-            )
+
+            return run_firestore_transaction(db, _reserve)
         except MetaOutboundAttemptStoreError:
             raise
         except Exception as exc:
@@ -745,45 +758,47 @@ def _confirm_quota_consumed_sync(db: Any, decision: MetaOutboundAttemptDecision)
     fence_reference, binding_digest = _binding_authority(db, decision.binding_id)
     last_error: Exception | None = None
     for _attempt in range(_MAX_TRANSACTION_ATTEMPTS):
-        transaction = db.transaction()
         try:
-            snapshot = reference.get(transaction=transaction)
-            current = snapshot.to_dict() if snapshot.exists else None
-            if not isinstance(current, dict):
-                raise MetaOutboundAttemptStoreError("Meta image-quota reservation disappeared")
-            status, context, _ = _validate_stored_authority(
-                current,
-                event_id=decision.event_id,
-                surface=decision.surface,
-                purpose=decision.purpose,
-                binding_digest=binding_digest,
-            )
-            if (
-                status != "sending"
-                or context
-                != (
-                    decision.image_quota_disposition,
-                    decision.image_quota_allowed_amount,
-                    "reserved",
-                    decision.image_quota_notice_text,
-                    decision.image_quota_notice_sha256,
+
+            def _confirm(transaction: Any) -> bool:
+                snapshot = reference.get(transaction=transaction)
+                current = snapshot.to_dict() if snapshot.exists else None
+                if not isinstance(current, dict):
+                    raise MetaOutboundAttemptStoreError("Meta image-quota reservation disappeared")
+                status, context, _ = _validate_stored_authority(
+                    current,
+                    event_id=decision.event_id,
+                    surface=decision.surface,
+                    purpose=decision.purpose,
+                    binding_digest=binding_digest,
                 )
-                or str(current.get("owner_hash") or "") != _owner_hash(decision.attempt_token)
-            ):
-                raise MetaOutboundAttemptStoreError("Meta image-quota reservation ownership changed")
-            fenced = bool(fence_reference is not None and fence_reference.get(transaction=transaction).exists)
-            current.update(
-                {
-                    "status": "needs_owner_action" if fenced else "sending",
-                    "image_quota_phase": "consumed",
-                    "owner_hash": "",
-                    "updated_at": time.time(),
-                    "safe_reason": ("authorization_deletion_fenced_after_quota" if fenced else "quota_consumed"),
-                }
-            )
-            transaction.set(reference, current)
-            transaction.commit()
-            return not fenced
+                if (
+                    status != "sending"
+                    or context
+                    != (
+                        decision.image_quota_disposition,
+                        decision.image_quota_allowed_amount,
+                        "reserved",
+                        decision.image_quota_notice_text,
+                        decision.image_quota_notice_sha256,
+                    )
+                    or str(current.get("owner_hash") or "") != _owner_hash(decision.attempt_token)
+                ):
+                    raise MetaOutboundAttemptStoreError("Meta image-quota reservation ownership changed")
+                fenced = bool(fence_reference is not None and fence_reference.get(transaction=transaction).exists)
+                current.update(
+                    {
+                        "status": "needs_owner_action" if fenced else "sending",
+                        "image_quota_phase": "consumed",
+                        "owner_hash": "",
+                        "updated_at": time.time(),
+                        "safe_reason": ("authorization_deletion_fenced_after_quota" if fenced else "quota_consumed"),
+                    }
+                )
+                transaction.set(reference, current)
+                return not fenced
+
+            return run_firestore_transaction(db, _confirm)
         except MetaOutboundAttemptStoreError:
             raise
         except Exception as exc:
@@ -822,40 +837,42 @@ def _finalize_allowed_quota_sync(
     fence_reference, binding_digest = _binding_authority(db, binding_id)
     last_error: Exception | None = None
     for _attempt in range(_MAX_TRANSACTION_ATTEMPTS):
-        transaction = db.transaction()
         try:
-            fenced = bool(fence_reference is not None and fence_reference.get(transaction=transaction).exists)
-            snapshot = reference.get(transaction=transaction)
-            current = snapshot.to_dict() if snapshot.exists else None
-            if not isinstance(current, dict):
-                raise MetaOutboundAttemptStoreError("Meta allowed-quota authority disappeared")
-            status, context, _ = _validate_stored_authority(
-                current,
-                event_id=event_id,
-                surface=surface,
-                purpose=purpose,
-                binding_digest=binding_digest,
-            )
-            if context != ("allowed", allowed_amount, "consumed", "", ""):
-                raise MetaOutboundAttemptStoreError("Meta allowed-quota context changed")
-            if status == "accepted":
-                return True
-            if status == "needs_owner_action":
-                return False
-            if status != "sending":
-                raise MetaOutboundAttemptStoreError("Meta allowed-quota state changed")
-            current.update(
-                {
-                    "status": "needs_owner_action" if fenced else "accepted",
-                    "owner_hash": "",
-                    "updated_at": time.time(),
-                    "safe_reason": ("authorization_deletion_fenced" if fenced else "quota_allowed_without_notice"),
-                    "provider_message_id_sha256": "",
-                }
-            )
-            transaction.set(reference, current)
-            transaction.commit()
-            return not fenced
+
+            def _finalize(transaction: Any) -> bool:
+                fenced = bool(fence_reference is not None and fence_reference.get(transaction=transaction).exists)
+                snapshot = reference.get(transaction=transaction)
+                current = snapshot.to_dict() if snapshot.exists else None
+                if not isinstance(current, dict):
+                    raise MetaOutboundAttemptStoreError("Meta allowed-quota authority disappeared")
+                status, context, _ = _validate_stored_authority(
+                    current,
+                    event_id=event_id,
+                    surface=surface,
+                    purpose=purpose,
+                    binding_digest=binding_digest,
+                )
+                if context != ("allowed", allowed_amount, "consumed", "", ""):
+                    raise MetaOutboundAttemptStoreError("Meta allowed-quota context changed")
+                if status == "accepted":
+                    return True
+                if status == "needs_owner_action":
+                    return False
+                if status != "sending":
+                    raise MetaOutboundAttemptStoreError("Meta allowed-quota state changed")
+                current.update(
+                    {
+                        "status": "needs_owner_action" if fenced else "accepted",
+                        "owner_hash": "",
+                        "updated_at": time.time(),
+                        "safe_reason": ("authorization_deletion_fenced" if fenced else "quota_allowed_without_notice"),
+                        "provider_message_id_sha256": "",
+                    }
+                )
+                transaction.set(reference, current)
+                return not fenced
+
+            return run_firestore_transaction(db, _finalize)
         except MetaOutboundAttemptStoreError:
             raise
         except Exception as exc:
@@ -909,170 +926,171 @@ def _begin_sync(
 ) -> MetaOutboundAttemptDecision:
     reference = _ref(db, event_id, purpose)
     fence_reference, binding_digest = _binding_authority(db, binding_id)
-    last_error: Exception | None = None
-    for _attempt in range(_MAX_TRANSACTION_ATTEMPTS):
-        transaction = db.transaction()
-        try:
-            fenced = bool(fence_reference is not None and fence_reference.get(transaction=transaction).exists)
-            snapshot = reference.get(transaction=transaction)
-            current = snapshot.to_dict() if snapshot.exists else {}
-            current = current if isinstance(current, dict) else {}
-            status: str = ""
-            stored_context = ("", 0, "", "", "")
-            if snapshot.exists:
-                stored_status, stored_context, _ = _validate_stored_authority(
-                    current,
+
+    def _begin(transaction: Any) -> MetaOutboundAttemptDecision:
+        fenced = bool(fence_reference is not None and fence_reference.get(transaction=transaction).exists)
+        snapshot = reference.get(transaction=transaction)
+        current = snapshot.to_dict() if snapshot.exists else {}
+        current = current if isinstance(current, dict) else {}
+        status: str = ""
+        stored_context = ("", 0, "", "", "")
+        if snapshot.exists:
+            stored_status, stored_context, _ = _validate_stored_authority(
+                current,
+                event_id=event_id,
+                surface=surface,
+                purpose=purpose,
+                binding_digest=binding_digest,
+            )
+            status = stored_status
+            if (stored_context[0], stored_context[1], stored_context[3], stored_context[4]) != (
+                image_quota_disposition,
+                image_quota_allowed_amount,
+                image_quota_notice_text,
+                image_quota_notice_sha256,
+            ):
+                raise MetaOutboundAttemptStoreError("Meta outbound-attempt quota context changed")
+        if status != "accepted":
+            for predecessor in _PURPOSE_PREDECESSORS[purpose]:
+                predecessor_snapshot = _ref(db, event_id, predecessor).get(transaction=transaction)
+                if not predecessor_snapshot.exists:
+                    continue
+                predecessor_current = predecessor_snapshot.to_dict()
+                if not isinstance(predecessor_current, dict):
+                    raise MetaOutboundAttemptStoreError("Meta outbound-attempt predecessor is invalid")
+                predecessor_status, _, _ = _validate_stored_authority(
+                    predecessor_current,
                     event_id=event_id,
                     surface=surface,
-                    purpose=purpose,
+                    purpose=predecessor,
                     binding_digest=binding_digest,
                 )
-                status = stored_status
-                if (stored_context[0], stored_context[1], stored_context[3], stored_context[4]) != (
-                    image_quota_disposition,
-                    image_quota_allowed_amount,
-                    image_quota_notice_text,
-                    image_quota_notice_sha256,
-                ):
-                    raise MetaOutboundAttemptStoreError("Meta outbound-attempt quota context changed")
-            if status != "accepted":
-                for predecessor in _PURPOSE_PREDECESSORS[purpose]:
-                    predecessor_snapshot = _ref(db, event_id, predecessor).get(transaction=transaction)
-                    if not predecessor_snapshot.exists:
-                        continue
-                    predecessor_current = predecessor_snapshot.to_dict()
-                    if not isinstance(predecessor_current, dict):
-                        raise MetaOutboundAttemptStoreError("Meta outbound-attempt predecessor is invalid")
-                    predecessor_status, _, _ = _validate_stored_authority(
-                        predecessor_current,
+                rollout_primary_barrier = (
+                    predecessor == "primary_reply"
+                    and purpose in {"session_greeting", "gender_ack"}
+                    and predecessor_status == "accepted"
+                )
+                if predecessor_status in {"sending", "needs_owner_action"} or rollout_primary_barrier:
+                    return MetaOutboundAttemptDecision(
+                        kind="needs_owner_action",
                         event_id=event_id,
                         surface=surface,
-                        purpose=predecessor,
-                        binding_digest=binding_digest,
+                        purpose=purpose,
+                        image_quota_disposition=image_quota_disposition,
+                        image_quota_allowed_amount=image_quota_allowed_amount,
+                        image_quota_phase=stored_context[2],
+                        image_quota_notice_text=image_quota_notice_text,
+                        image_quota_notice_sha256=image_quota_notice_sha256,
+                        attempt_sequence=int(current.get("attempt_sequence") or 0),
+                        binding_id=binding_id,
                     )
-                    rollout_primary_barrier = (
-                        predecessor == "primary_reply"
-                        and purpose in {"session_greeting", "gender_ack"}
-                        and predecessor_status == "accepted"
-                    )
-                    if predecessor_status in {"sending", "needs_owner_action"} or rollout_primary_barrier:
-                        return MetaOutboundAttemptDecision(
-                            kind="needs_owner_action",
-                            event_id=event_id,
-                            surface=surface,
-                            purpose=purpose,
-                            image_quota_disposition=image_quota_disposition,
-                            image_quota_allowed_amount=image_quota_allowed_amount,
-                            image_quota_phase=stored_context[2],
-                            image_quota_notice_text=image_quota_notice_text,
-                            image_quota_notice_sha256=image_quota_notice_sha256,
-                            attempt_sequence=int(current.get("attempt_sequence") or 0),
-                            binding_id=binding_id,
-                        )
-            quota_phase = stored_context[2]
-            if fenced:
-                if (
-                    snapshot.exists
-                    and purpose == "image_quota_notice"
-                    and status == "sending"
-                    and quota_phase in {"reserved", "consumed"}
-                ):
-                    current.update(
-                        {
-                            "status": "needs_owner_action",
-                            "owner_hash": "",
-                            "updated_at": time.time(),
-                            "safe_reason": "authorization_deletion_fenced",
-                        }
-                    )
-                    transaction.set(reference, current)
-                    transaction.commit()
-                return MetaOutboundAttemptDecision(
-                    kind="needs_owner_action",
-                    event_id=event_id,
-                    surface=surface,
-                    purpose=purpose,
-                    image_quota_disposition=image_quota_disposition,
-                    image_quota_allowed_amount=image_quota_allowed_amount,
-                    image_quota_phase=quota_phase,
-                    image_quota_notice_text=image_quota_notice_text,
-                    image_quota_notice_sha256=image_quota_notice_sha256,
-                    attempt_sequence=int(current.get("attempt_sequence") or 0),
-                    binding_id=binding_id,
-                )
-            if status == "accepted":
-                return MetaOutboundAttemptDecision(
-                    kind="duplicate_suppressed",
-                    event_id=event_id,
-                    surface=surface,
-                    purpose=purpose,
-                    image_quota_disposition=image_quota_disposition,
-                    image_quota_allowed_amount=image_quota_allowed_amount,
-                    image_quota_phase=quota_phase,
-                    image_quota_notice_text=image_quota_notice_text,
-                    image_quota_notice_sha256=image_quota_notice_sha256,
-                    attempt_sequence=int(current.get("attempt_sequence") or 0),
-                    binding_id=binding_id,
-                )
-            if status == "needs_owner_action" or (
-                status == "sending" and not (purpose == "image_quota_notice" and quota_phase == "consumed")
+        quota_phase = stored_context[2]
+        if fenced:
+            if (
+                snapshot.exists
+                and purpose == "image_quota_notice"
+                and status == "sending"
+                and quota_phase in {"reserved", "consumed"}
             ):
-                return MetaOutboundAttemptDecision(
-                    kind="needs_owner_action",
-                    event_id=event_id,
-                    surface=surface,
-                    purpose=purpose,
-                    image_quota_disposition=image_quota_disposition,
-                    image_quota_allowed_amount=image_quota_allowed_amount,
-                    image_quota_phase=quota_phase,
-                    image_quota_notice_text=image_quota_notice_text,
-                    image_quota_notice_sha256=image_quota_notice_sha256,
-                    attempt_sequence=int(current.get("attempt_sequence") or 0),
-                    binding_id=binding_id,
+                current.update(
+                    {
+                        "status": "needs_owner_action",
+                        "owner_hash": "",
+                        "updated_at": time.time(),
+                        "safe_reason": "authorization_deletion_fenced",
+                    }
                 )
-            if status == "" and purpose == "image_quota_notice":
-                raise MetaOutboundAttemptStoreError("Image-quota notice must be durably reserved before send")
-            if status not in {"", "sending", "definitive_failure"}:
-                raise MetaOutboundAttemptStoreError("Meta outbound-attempt state is invalid")
-            sequence = int(current.get("attempt_sequence") or 0) + 1
-            now = time.time()
-            transaction.set(
-                reference,
-                {
-                    "schema_version": 2,
-                    "event_id": event_id,
-                    "purpose": purpose,
-                    "image_quota_disposition": image_quota_disposition,
-                    "image_quota_allowed_amount": image_quota_allowed_amount,
-                    "image_quota_phase": "provider" if purpose == "image_quota_notice" else "",
-                    "image_quota_notice_text": image_quota_notice_text,
-                    "image_quota_notice_sha256": image_quota_notice_sha256,
-                    "surface": surface,
-                    "status": "sending",
-                    "attempt_sequence": sequence,
-                    "owner_hash": _owner_hash(token),
-                    "created_at": float(current.get("created_at") or now),
-                    "updated_at": now,
-                    "safe_reason": "none",
-                    "provider_message_id_sha256": "",
-                    "binding_id_sha256": binding_digest,
-                },
-            )
-            transaction.commit()
+                transaction.set(reference, current)
             return MetaOutboundAttemptDecision(
-                kind="send",
+                kind="needs_owner_action",
                 event_id=event_id,
                 surface=surface,
                 purpose=purpose,
                 image_quota_disposition=image_quota_disposition,
                 image_quota_allowed_amount=image_quota_allowed_amount,
-                image_quota_phase="provider" if purpose == "image_quota_notice" else "",
+                image_quota_phase=quota_phase,
                 image_quota_notice_text=image_quota_notice_text,
                 image_quota_notice_sha256=image_quota_notice_sha256,
-                attempt_token=token,
-                attempt_sequence=sequence,
+                attempt_sequence=int(current.get("attempt_sequence") or 0),
                 binding_id=binding_id,
             )
+        if status == "accepted":
+            return MetaOutboundAttemptDecision(
+                kind="duplicate_suppressed",
+                event_id=event_id,
+                surface=surface,
+                purpose=purpose,
+                image_quota_disposition=image_quota_disposition,
+                image_quota_allowed_amount=image_quota_allowed_amount,
+                image_quota_phase=quota_phase,
+                image_quota_notice_text=image_quota_notice_text,
+                image_quota_notice_sha256=image_quota_notice_sha256,
+                attempt_sequence=int(current.get("attempt_sequence") or 0),
+                binding_id=binding_id,
+            )
+        if status == "needs_owner_action" or (
+            status == "sending" and not (purpose == "image_quota_notice" and quota_phase == "consumed")
+        ):
+            return MetaOutboundAttemptDecision(
+                kind="needs_owner_action",
+                event_id=event_id,
+                surface=surface,
+                purpose=purpose,
+                image_quota_disposition=image_quota_disposition,
+                image_quota_allowed_amount=image_quota_allowed_amount,
+                image_quota_phase=quota_phase,
+                image_quota_notice_text=image_quota_notice_text,
+                image_quota_notice_sha256=image_quota_notice_sha256,
+                attempt_sequence=int(current.get("attempt_sequence") or 0),
+                binding_id=binding_id,
+            )
+        if status == "" and purpose == "image_quota_notice":
+            raise MetaOutboundAttemptStoreError("Image-quota notice must be durably reserved before send")
+        if status not in {"", "sending", "definitive_failure"}:
+            raise MetaOutboundAttemptStoreError("Meta outbound-attempt state is invalid")
+        sequence = int(current.get("attempt_sequence") or 0) + 1
+        now = time.time()
+        transaction.set(
+            reference,
+            {
+                "schema_version": 2,
+                "event_id": event_id,
+                "purpose": purpose,
+                "image_quota_disposition": image_quota_disposition,
+                "image_quota_allowed_amount": image_quota_allowed_amount,
+                "image_quota_phase": "provider" if purpose == "image_quota_notice" else "",
+                "image_quota_notice_text": image_quota_notice_text,
+                "image_quota_notice_sha256": image_quota_notice_sha256,
+                "surface": surface,
+                "status": "sending",
+                "attempt_sequence": sequence,
+                "owner_hash": _owner_hash(token),
+                "created_at": float(current.get("created_at") or now),
+                "updated_at": now,
+                "safe_reason": "none",
+                "provider_message_id_sha256": "",
+                "binding_id_sha256": binding_digest,
+            },
+        )
+        return MetaOutboundAttemptDecision(
+            kind="send",
+            event_id=event_id,
+            surface=surface,
+            purpose=purpose,
+            image_quota_disposition=image_quota_disposition,
+            image_quota_allowed_amount=image_quota_allowed_amount,
+            image_quota_phase="provider" if purpose == "image_quota_notice" else "",
+            image_quota_notice_text=image_quota_notice_text,
+            image_quota_notice_sha256=image_quota_notice_sha256,
+            attempt_token=token,
+            attempt_sequence=sequence,
+            binding_id=binding_id,
+        )
+
+    last_error: Exception | None = None
+    for _attempt in range(_MAX_TRANSACTION_ATTEMPTS):
+        try:
+            return run_firestore_transaction(db, _begin)
         except MetaOutboundAttemptStoreError:
             raise
         except Exception as exc:
@@ -1165,46 +1183,48 @@ def _finish_sync(
     _, binding_digest = _binding_authority(db, decision.binding_id)
     last_error: Exception | None = None
     for _attempt in range(_MAX_TRANSACTION_ATTEMPTS):
-        transaction = db.transaction()
         try:
-            snapshot = reference.get(transaction=transaction)
-            current = snapshot.to_dict() if snapshot.exists else {}
-            current = current if isinstance(current, dict) else {}
-            if snapshot.exists:
-                _, stored_context, _ = _validate_stored_authority(
-                    current,
-                    event_id=decision.event_id,
-                    surface=decision.surface,
-                    purpose=decision.purpose,
-                    binding_digest=binding_digest,
-                )
-                if stored_context != (
-                    decision.image_quota_disposition,
-                    decision.image_quota_allowed_amount,
-                    decision.image_quota_phase,
-                    decision.image_quota_notice_text,
-                    decision.image_quota_notice_sha256,
+
+            def _finish(transaction: Any) -> None:
+                snapshot = reference.get(transaction=transaction)
+                current = snapshot.to_dict() if snapshot.exists else {}
+                current = current if isinstance(current, dict) else {}
+                if snapshot.exists:
+                    _, stored_context, _ = _validate_stored_authority(
+                        current,
+                        event_id=decision.event_id,
+                        surface=decision.surface,
+                        purpose=decision.purpose,
+                        binding_digest=binding_digest,
+                    )
+                    if stored_context != (
+                        decision.image_quota_disposition,
+                        decision.image_quota_allowed_amount,
+                        decision.image_quota_phase,
+                        decision.image_quota_notice_text,
+                        decision.image_quota_notice_sha256,
+                    ):
+                        raise MetaOutboundAttemptStoreError("Meta outbound-attempt quota context changed")
+                if (
+                    str(current.get("status") or "") != "sending"
+                    or int(current.get("attempt_sequence") or 0) != decision.attempt_sequence
+                    or str(current.get("owner_hash") or "") != _owner_hash(decision.attempt_token)
                 ):
-                    raise MetaOutboundAttemptStoreError("Meta outbound-attempt quota context changed")
-            if (
-                str(current.get("status") or "") != "sending"
-                or int(current.get("attempt_sequence") or 0) != decision.attempt_sequence
-                or str(current.get("owner_hash") or "") != _owner_hash(decision.attempt_token)
-            ):
-                raise MetaOutboundAttemptStoreError("Meta outbound-attempt ownership changed")
-            current.update(
-                {
-                    "status": status,
-                    "updated_at": time.time(),
-                    "safe_reason": safe_reason,
-                    "owner_hash": "",
-                    "provider_message_id_sha256": (
-                        _provider_id_hash(provider_message_id) if provider_message_id else ""
-                    ),
-                }
-            )
-            transaction.set(reference, current)
-            transaction.commit()
+                    raise MetaOutboundAttemptStoreError("Meta outbound-attempt ownership changed")
+                current.update(
+                    {
+                        "status": status,
+                        "updated_at": time.time(),
+                        "safe_reason": safe_reason,
+                        "owner_hash": "",
+                        "provider_message_id_sha256": (
+                            _provider_id_hash(provider_message_id) if provider_message_id else ""
+                        ),
+                    }
+                )
+                transaction.set(reference, current)
+
+            run_firestore_transaction(db, _finish)
             return
         except MetaOutboundAttemptStoreError:
             raise

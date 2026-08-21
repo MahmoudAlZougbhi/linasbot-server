@@ -227,7 +227,7 @@ async def instagram_login_oauth_callback(
         return oauth_completion_response(
             return_surface=surface,
             meta_connection="cancelled",
-            extra_query={"meta_flow": "instagram_login"},
+            extra_query={"meta_flow": "instagram_login", "channel": "instagram"},
         )
     try:
         result = await complete_instagram_login(code=code_text, state=state_text)
@@ -261,7 +261,7 @@ async def instagram_login_oauth_callback(
         return oauth_completion_response(
             return_surface=surface,
             meta_connection="failed",
-            extra_query={"meta_flow": "instagram_login", "meta_reason": reason},
+            extra_query={"meta_flow": "instagram_login", "meta_reason": reason, "channel": "instagram"},
         )
 
 
@@ -294,6 +294,7 @@ async def meta_oauth_callback(
         return oauth_completion_response(
             return_surface=surface,
             meta_connection="cancelled",
+            extra_query={"channel": "facebook"},
         )
     try:
         result = await complete_meta_business_login(code=code_text, state=state_text)
@@ -323,7 +324,7 @@ async def meta_oauth_callback(
         return oauth_completion_response(
             return_surface=surface,
             meta_connection="failed",
-            extra_query={"meta_reason": reason},
+            extra_query={"meta_reason": reason, "channel": "facebook"},
         )
 
 

@@ -102,7 +102,7 @@ export function useIntegrationsLoad({
       } else if (parsed.waConnection === 'failed' || parsed.metaConnection === 'failed') {
         setNotice(null);
         if (parsed.waConnection === 'failed') setError(tr('waOAuthFailed'));
-        else setError(metaOAuthFailureMessage(tr, parsed.metaReason));
+        else setError(metaOAuthFailureMessage(tr, parsed.metaReason, parsed.metaChannel));
       }
       void load();
     };

@@ -26,7 +26,10 @@ from services.meta_oauth_graph import (
 from services.meta_oauth_page_lock import lock_facebook_page_oauth_operation
 from services.meta_page_subscription_transaction import reconcile_page_activation_after_exception
 from services.meta_subject_deletion_guard import (
+    MetaSubjectDeletionBlockedError,
     MetaSubjectDeletionGuardError,
+    MetaSubjectDeletionLeaseBusyError,
+    MetaSubjectDeletionStoreUnavailableError,
     acquire_meta_oauth_subject_guard,
     meta_deletion_subject_hmac,
 )
@@ -156,8 +159,18 @@ async def _activate_validated_facebook_pages_locked(
             subject_key,
             oauth_started_at=oauth_started_at,
         )
+    except MetaSubjectDeletionBlockedError as exc:
+        if exc.state == "failed":
+            raise MetaOAuthError("Meta authorization is blocked by a failed data deletion request") from exc
+        if exc.state == "pending":
+            raise MetaOAuthError("Meta authorization is blocked by a pending data deletion request") from exc
+        raise MetaOAuthError("Meta authorization safety guard changed during authorization") from exc
+    except MetaSubjectDeletionLeaseBusyError as exc:
+        raise MetaOAuthError("Meta authorization is already in progress. Try again shortly.") from exc
+    except MetaSubjectDeletionStoreUnavailableError as exc:
+        raise MetaOAuthError("Meta authorization safety guard is temporarily unavailable") from exc
     except MetaSubjectDeletionGuardError as exc:
-        raise MetaOAuthError("Meta authorization is blocked by a data deletion request") from exc
+        raise MetaOAuthError("Meta authorization safety guard failed") from exc
 
     staged: list[MetaAssetBinding] = []
     attempted: list[MetaAssetBinding] = []
@@ -208,8 +221,12 @@ async def _activate_validated_facebook_pages_locked(
                 )
             try:
                 subject_guard.assert_oauth_snapshot_unchanged()
+            except MetaSubjectDeletionStoreUnavailableError as exc:
+                raise MetaOAuthError("Meta authorization safety guard is temporarily unavailable") from exc
             except MetaSubjectDeletionGuardError as exc:
-                raise MetaOAuthError("Meta deletion state changed during authorization") from exc
+                raise MetaOAuthError(
+                    "Meta authorization safety guard changed because deletion state changed during authorization"
+                ) from exc
             return registry.activate_staged_bindings(
                 tuple(binding.binding_id for binding in staged),
                 actor_id=actor_id,

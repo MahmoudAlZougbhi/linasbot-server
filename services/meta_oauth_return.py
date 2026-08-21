@@ -26,8 +26,22 @@ MOBILE_INTEGRATIONS_DEEP_LINK = "linasai://integrations"
 WEB_OAUTH_COMPLETION_PATH = "/"
 ALLOWED_RETURN_SURFACES = frozenset({"web", "mobile"})
 _MOBILE_META_CONNECTION_VALUES = frozenset({"success", "cancelled", "failed"})
+_MOBILE_META_CHANNELS = frozenset({"facebook", "instagram"})
 _MOBILE_OAUTH_FAILURE_REASONS = frozenset(
-    {"generic", "state", "scopes", "token", "profile", "webhook", "deletion", "conflict", "config"}
+    {
+        "generic",
+        "state",
+        "scopes",
+        "token",
+        "profile",
+        "webhook",
+        "deletion",
+        "deletion_failed",
+        "busy",
+        "guard",
+        "conflict",
+        "config",
+    }
 )
 
 
@@ -56,6 +70,12 @@ def mobile_oauth_failure_reason(exc: BaseException) -> str:
         return "profile"
     if "webhook subscription" in message:
         return "webhook"
+    if "failed data deletion request" in message:
+        return "deletion_failed"
+    if "already in progress" in message or "lease is busy" in message:
+        return "busy"
+    if "authorization safety guard" in message:
+        return "guard"
     if "deletion" in message:
         return "deletion"
     if "not configured" in message:
@@ -105,7 +125,10 @@ def oauth_completion_redirect_url(
             reason = str((extra_query or {}).get("meta_reason") or "").strip().lower()
             if reason in _MOBILE_OAUTH_FAILURE_REASONS:
                 mobile_query["meta_reason"] = reason
-        # Deep link carries only a coarse status — no tokens, tenant IDs, or Meta secrets.
+        channel = str((extra_query or {}).get("channel") or "").strip().lower()
+        if channel in _MOBILE_META_CHANNELS:
+            mobile_query["channel"] = channel
+        # Deep link carries only a coarse status/channel — no tokens, tenant IDs, or Meta secrets.
         return f"{MOBILE_INTEGRATIONS_DEEP_LINK}?{urlencode(mobile_query)}"
 
     web_query: dict[str, str] = {"meta_connection": str(meta_connection or "failed")}
@@ -157,7 +180,7 @@ def oauth_completion_response(
 </head>
 <body>
   <h1>Opening Linas AI…</h1>
-  <p>Facebook connection status: <strong>{html.escape(status)}</strong>.</p>
+  <p>Meta connection status: <strong>{html.escape(status)}</strong>.</p>
   <p>If the app does not open automatically, tap below.</p>
   <p><a href="{safe_href}">Open Linas AI</a></p>
   <p>You can close this browser tab after the app opens.</p>

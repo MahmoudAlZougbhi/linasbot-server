@@ -7,7 +7,11 @@ from typing import Any
 import pytest
 
 import services.meta_outbound_attempts as attempts
-from tests.meta_compliance_helpers import _FakeFirestore
+from tests.meta_compliance_helpers import (
+    _FakeFirestore,
+    _GoogleLikeFirestore,
+    _install_google_transactional_fake,
+)
 
 
 @pytest.fixture()
@@ -103,6 +107,41 @@ async def test_provider_acceptance_is_shared_and_second_node_never_resends(
     assert "provider-private-id" not in repr(stored)
 
 
+@pytest.mark.asyncio
+async def test_google_transactional_primary_send_is_accepted_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import utils.utils
+
+    db = _GoogleLikeFirestore()
+    _install_google_transactional_fake(monkeypatch)
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    calls = 0
+
+    async def send() -> dict[str, Any]:
+        nonlocal calls
+        calls += 1
+        return {"success": True, "provider": "meta", "message_id": "google-transaction-provider-id"}
+
+    event_id = "ibe_" + "9" * 40
+    first = await attempts.execute_guarded_meta_send(
+        event_id=event_id,
+        surface="facebook_comment",
+        send=send,
+    )
+    second = await attempts.execute_guarded_meta_send(
+        event_id=event_id,
+        surface="facebook_comment",
+        send=send,
+    )
+
+    assert first["success"] is True
+    assert second["duplicate_suppressed"] is True
+    assert calls == 1
+    assert _document(db, event_id)["status"] == "accepted"
+
+
 @pytest.mark.parametrize("purpose", ("primary_reply", "image_quota_notice"))
 @pytest.mark.asyncio
 async def test_binding_deletion_fence_prevents_provider_call(
@@ -112,7 +151,8 @@ async def test_binding_deletion_fence_prevents_provider_call(
     binding_id = "binding-being-deleted"
     from services.meta_inbound_deletion_fence import firestore_binding_deletion_fence_ref
 
-    firestore_binding_deletion_fence_ref(outbound_store, binding_id).set({"status": "fenced"})
+    fence_ref = firestore_binding_deletion_fence_ref(outbound_store, binding_id)
+    fence_ref.set({"status": "fenced"})
     calls = 0
 
     async def send() -> dict[str, Any]:
@@ -133,6 +173,7 @@ async def test_binding_deletion_fence_prevents_provider_call(
 
     assert result["needs_owner_action"] is True
     assert calls == 0
+    assert fence_ref.get().exists is True
 
 
 @pytest.mark.asyncio

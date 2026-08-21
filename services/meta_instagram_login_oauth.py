@@ -51,7 +51,10 @@ from services.meta_instagram_login_subscription_recovery import retry_instagram_
 from services.meta_oauth import META_OAUTH_STATE_TTL_SECONDS, MetaOAuthError, _safe_json
 from services.meta_oauth_page_lock import lock_facebook_page_oauth_operation
 from services.meta_subject_deletion_guard import (
+    MetaSubjectDeletionBlockedError,
     MetaSubjectDeletionGuardError,
+    MetaSubjectDeletionLeaseBusyError,
+    MetaSubjectDeletionStoreUnavailableError,
     acquire_meta_oauth_subject_guard,
     meta_deletion_subject_hmac,
 )
@@ -556,8 +559,18 @@ async def complete_instagram_login(
                 subject_key,
                 oauth_started_at=oauth_started_at,
             )
+        except MetaSubjectDeletionBlockedError as exc:
+            if exc.state == "failed":
+                raise MetaOAuthError("Instagram authorization is blocked by a failed data deletion request") from exc
+            if exc.state == "pending":
+                raise MetaOAuthError("Instagram authorization is blocked by a pending data deletion request") from exc
+            raise MetaOAuthError("Instagram authorization safety guard changed during authorization") from exc
+        except MetaSubjectDeletionLeaseBusyError as exc:
+            raise MetaOAuthError("Instagram authorization is already in progress. Try again shortly.") from exc
+        except MetaSubjectDeletionStoreUnavailableError as exc:
+            raise MetaOAuthError("Instagram authorization safety guard is temporarily unavailable") from exc
         except MetaSubjectDeletionGuardError as exc:
-            raise MetaOAuthError("Instagram authorization is blocked by a data deletion request") from exc
+            raise MetaOAuthError("Instagram authorization safety guard failed") from exc
 
         with subject_guard:
             async with lock_facebook_page_oauth_operation(
@@ -620,8 +633,12 @@ async def complete_instagram_login(
                         )
                     try:
                         subject_guard.assert_oauth_snapshot_unchanged()
+                    except MetaSubjectDeletionStoreUnavailableError as exc:
+                        raise MetaOAuthError("Instagram authorization safety guard is temporarily unavailable") from exc
                     except MetaSubjectDeletionGuardError as exc:
-                        raise MetaOAuthError("Meta deletion state changed during Instagram authorization") from exc
+                        raise MetaOAuthError(
+                            "Instagram authorization safety guard changed because deletion state changed during authorization"
+                        ) from exc
                     binding = current_registry.activate_staged_binding(
                         staged.binding_id,
                         actor_id=actor_id,

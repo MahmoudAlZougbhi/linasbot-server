@@ -12,6 +12,7 @@ import services.scale.inbound_event_store as event_store
 from services.meta_inbound_deletion_fence import (
     InboundBindingDeletionFencedError,
     InboundDeletionFenceStoreError,
+    firestore_binding_deletion_fence_ref,
     install_inbound_binding_deletion_fences,
     local_binding_deletion_is_fenced,
 )
@@ -103,6 +104,35 @@ def test_fence_committed_before_event_rejects_without_local_or_firestore_payload
     inbound = db.collection("artifacts").document("linas-ai-bot-backend").collection("inbound_events")
     assert (root / "ibe_after_fence.json").exists() is False
     assert inbound.document("ibe_after_fence").exists is False
+
+
+def test_redaction_completion_keeps_permanent_binding_fence(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    db = _FakeFirestore()
+    root = _patch_stores(monkeypatch, tmp_path, db)
+    stored = _record("ibe_to_redact")
+    stored.state = "completed"
+    put_inbound_event(stored, enforce_binding_deletion_fence=True)
+    fence_ref = firestore_binding_deletion_fence_ref(db, "binding-target")
+
+    install_inbound_binding_deletion_fences({"binding-target"}, now=100.0)
+    applied = redact_inbound_events_for_bindings(
+        {"binding-target"},
+        apply=True,
+        include_firestore=True,
+        now=101.0,
+    )
+
+    assert inbound_redaction_has_blockers(applied, require_firestore=True) is False
+    assert local_binding_deletion_is_fenced("binding-target") is True
+    assert fence_ref.get().exists is True
+    with pytest.raises(InboundBindingDeletionFencedError):
+        put_inbound_event(_record("ibe_after_redaction"), enforce_binding_deletion_fence=True)
+    assert (root / "ibe_after_redaction.json").exists() is False
+    inbound = db.collection("artifacts").document("linas-ai-bot-backend").collection("inbound_events")
+    assert inbound.document("ibe_after_redaction").exists is False
 
 
 def test_fenced_ingress_requires_firestore_before_writing_local_payload(
