@@ -97,6 +97,7 @@ def test_helper_keeps_required_proof_and_does_not_rewrite_pip() -> None:
     assert 'log "node stage and recoverable backups complete"' in stage
     assert stage.index("run_portable_pip") < stage.index("publish_stage_manifest")
     assert "deferred-until-restore" in manifest
+    assert "tree_proof=required" in manifest
     assert "deferred-until-restore" not in apply
     assert 'assert_python_runtime_contract "$(configured_node_id)"' in apply
 

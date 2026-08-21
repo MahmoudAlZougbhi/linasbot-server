@@ -5962,10 +5962,15 @@ stage_manifest_tool() {
   local tx_dir="$2"
   local target_sha="$3"
   local previous_sha="$4"
-  local python_runtime_cluster_sha
-  # Pre-drain staging can still serve live traffic. Full runtime-tree proof
-  # stays mandatory after drain in apply_cpython_runtime_immutability.
-  python_runtime_cluster_sha="$(assert_python_runtime_contract "$(configured_node_id)" deferred-until-restore)"
+  local python_runtime_cluster_sha tree_proof=deferred-until-restore
+  # Pre-drain publish/verify/evidence may still run on a serving node or a
+  # drained node with pre-existing CPython drift. Recovery must not.
+  case "$operation" in
+    verify-recovery)
+      tree_proof=required
+      ;;
+  esac
+  python_runtime_cluster_sha="$(assert_python_runtime_contract "$(configured_node_id)" "$tree_proof")"
   run_system_python_control - "$operation" "$tx_dir" "$target_sha" "$previous_sha" \
     "$python_runtime_cluster_sha" <<'PY'
 import hashlib
@@ -9840,7 +9845,7 @@ node_dispatch() {
     return 0
   fi
   case "$phase" in
-    ensure-maintenance|mark-maintenance|apply-cpython-runtime-immutability|lb-attestation|release-bundle|worker-template-probe|install-worker-template-decision|install-trusted-worker-template)
+    ensure-maintenance|mark-maintenance|apply-cpython-runtime-immutability|stage|stage-evidence|lb-attestation|release-bundle|worker-template-probe|install-worker-template-decision|install-trusted-worker-template)
       assert_python_runtime_contract "$runtime_expected_node" deferred-until-restore >/dev/null
       ;;
     *)
@@ -11703,6 +11708,12 @@ orchestrate() {
       update_deploy_journal "automatic-rollback-both-nodes-drained" || rollback_ok=0
     fi
     if [ "$rollback_ok" = "1" ]; then
+      apply_cpython_runtime_immutability "$tx_dir" "$release_artifact_id" \
+        "$release_artifact_api_sha" || rollback_ok=0
+      remote_node "$peer_host" apply-cpython-runtime-immutability \
+        "$tx_dir" "$release_artifact_id" "$release_artifact_api_sha" || rollback_ok=0
+    fi
+    if [ "$rollback_ok" = "1" ]; then
       rollback_impl "$previous_sha" "$tx_dir" || rollback_ok=0
       remote_node "$peer_host" rollback "$peer_previous_sha" "$tx_dir" || rollback_ok=0
     fi
@@ -11781,6 +11792,8 @@ orchestrate() {
   remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"
   node_assert_release_ready "$previous_sha"
   assert_public_ready_for_sha "$previous_sha"
+  remote_node "$peer_host" apply-cpython-runtime-immutability "$tx_dir" \
+    "$release_artifact_id" "$release_artifact_api_sha"
   log "staging peer first with recoverable mode-600 backup archives"
   update_deploy_journal "peer-stage-started"
   remote_node "$peer_host" stage "$target_sha" "$peer_previous_sha" "$tx_dir" \
