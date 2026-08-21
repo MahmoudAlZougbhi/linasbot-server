@@ -20,16 +20,16 @@ describe('meta oauth mobile return surface', () => {
 
   it('opens Meta OAuth in an in-app auth session, not the Instagram app', () => {
     const oauth = read('features/integrations/integrationsOAuth.ts');
-    const screen = read('features/integrations/IntegrationsScreen.tsx');
+    const connect = read('features/integrations/useMetaPlatformConnect.ts');
     assert.match(oauth, /openAuthSessionAsync/);
     assert.match(oauth, /withInstagramMobileReauth/);
     assert.match(oauth, /force_reauth/);
     assert.match(oauth, /MetaOAuthConnectError/);
     assert.match(oauth, /metaAuthSessionOutcome/);
-    assert.match(screen, /MetaOAuthConnectError/);
-    assert.match(screen, /metaOAuthCancelled/);
-    assert.match(screen, /metaOAuthIncomplete/);
-    assert.match(screen, /apiErrorDetail/);
+    assert.match(connect, /MetaOAuthConnectError/);
+    assert.match(connect, /metaOAuthCancelled/);
+    assert.match(connect, /metaOAuthIncomplete/);
+    assert.match(connect, /apiErrorDetail/);
   });
 
   it('does not treat Facebook HTTPS session success as connected', () => {
@@ -67,11 +67,13 @@ describe('meta oauth mobile return surface', () => {
 
   it('refetches integrations after Meta OAuth and trusts the connected row', () => {
     const screen = read('features/integrations/IntegrationsScreen.tsx');
+    const connect = read('features/integrations/useMetaPlatformConnect.ts');
     const load = read('features/integrations/useIntegrationsLoad.ts');
-    assert.match(screen, /const session = await startMetaOAuth\(platform\)/);
-    assert.match(screen, /await load\(\)/);
-    assert.match(screen, /row\?\.connected/);
-    assert.match(screen, /metaOAuthSuccess/);
+    assert.match(screen, /useMetaPlatformConnect/);
+    assert.match(connect, /const session = await startMetaOAuth\(platform\)/);
+    assert.match(connect, /await load\(\)/);
+    assert.match(connect, /row\?\.connected/);
+    assert.match(connect, /metaOAuthSuccess/);
     assert.match(load, /return \{ ok: true, rows: data\.integrations \}/);
   });
 

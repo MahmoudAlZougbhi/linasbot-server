@@ -20,9 +20,10 @@ import {
   type IntegrationRow,
 } from './IntegrationChannelCard';
 import { IntegrationRefreshButton } from './IntegrationRefreshButton';
-import { disconnectMetaPlatform, MetaOAuthConnectError, apiErrorDetail, startMetaOAuth } from './integrationsOAuth';
+import { disconnectMetaPlatform } from './integrationsOAuth';
 import { applyIntegrationToggle, mergeToggleResponse } from './integrationsToggleApply';
 import { ToggleResponseSchema, type IntegrationListRow } from './integrationsSchemas';
+import { useMetaPlatformConnect } from './useMetaPlatformConnect';
 import {
   IntegrationsTikTokSection,
   confirmDisconnectTikTok,
@@ -77,43 +78,16 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     setError,
     setAuthGate,
     });
+  const { connectPlatform } = useMetaPlatformConnect({
+    tr,
+    load,
+    setBusyPlatform,
+    setError,
+    setNotice,
+    setAuthGate,
+  });
   const headerRefreshing = loading && hasLoadedOnce;
   const showInitialLoader = !hasLoadedOnce || !webChatReady;
-
-  async function connectPlatform(platform: 'instagram' | 'facebook') {
-    setBusyPlatform(platform);
-    setError(null);
-    setNotice(null);
-    try {
-      const session = await startMetaOAuth(platform);
-      let loaded = await load();
-      if (!loaded.ok) return;
-      let row = loaded.rows.find((item) => item.platform === platform);
-      if (!row?.connected) {
-        await new Promise((resolve) => setTimeout(resolve, 600));
-        loaded = await load();
-        if (!loaded.ok) return;
-        row = loaded.rows.find((item) => item.platform === platform);
-      }
-      if (row?.connected) {
-        setNotice(tr('metaOAuthSuccess'));
-        setError(null);
-        return;
-      }
-      if (session.outcome === 'cancelled') setError(tr('metaOAuthCancelled'));
-      else if (session.outcome === 'failed') setError(tr('metaOAuthFailed'));
-      else setError(tr('metaOAuthIncomplete'));
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) setAuthGate(true);
-      else if (err instanceof MetaOAuthConnectError) {
-        setError(tr('integrationsActionError'));
-      } else if (err instanceof ApiError) {
-        setError(apiErrorDetail(err) || tr('integrationsActionError'));
-      } else setError(tr('integrationsActionError'));
-    } finally {
-      setBusyPlatform(null);
-    }
-  }
 
   async function connectTikTok() {
     await connectTikTokChannel({
