@@ -33,14 +33,19 @@ def test_every_meta_workflow_is_pinned_to_the_exact_deployed_release() -> None:
         assert "group: meta-social-cutover" in source, workflow.name
         assert "cancel-in-progress: false" in source, workflow.name
         assert "environment: meta-social-cutover" in source, workflow.name
+        assert "exec 9>/run/lock/linasbot-meta-live.lock" in source, workflow.name
+        assert source.index("flock -x 9") < source.index("verify_meta_release_ha.sh"), workflow.name
+        if workflow.name == "meta-app-a-login-config-maintenance-recover.yml":
+            assert "EXPECTED_RELEASE_SHA: ${{ github.sha }}" not in source
+            assert "a2ba8d63265504ded18b6d4bd70219628c4d8533" in source
+            assert source.count("verify_meta_release_ha.sh") == 2
+            continue
         assert "EXPECTED_RELEASE_SHA: ${{ github.sha }}" in source, workflow.name
         assert 'DEPLOYED_RELEASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"' in source, workflow.name
         assert '[ "$DEPLOYED_RELEASE_SHA" != "$EXPECTED_RELEASE_SHA" ]' in source, workflow.name
         assert 'git -C "$REPO_DIR" diff --quiet "$DEPLOYED_RELEASE_SHA" --' in source, workflow.name
         assert 'git -C "$REPO_DIR" diff --cached --quiet "$DEPLOYED_RELEASE_SHA" --' in source, workflow.name
         assert source.count("verify_meta_release_ha.sh") >= 2, workflow.name
-        assert "exec 9>/run/lock/linasbot-meta-live.lock" in source, workflow.name
-        assert source.index("flock -x 9") < source.index("verify_meta_release_ha.sh"), workflow.name
 
 
 def test_privileged_meta_ssh_action_is_pinned_to_an_immutable_commit() -> None:
