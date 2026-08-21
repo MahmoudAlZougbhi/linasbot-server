@@ -38,7 +38,7 @@ def test_every_meta_workflow_is_pinned_to_the_exact_deployed_release() -> None:
         if workflow.name == "meta-app-a-login-config-maintenance-recover.yml":
             assert "EXPECTED_RELEASE_SHA: ${{ github.sha }}" not in source
             assert "a2ba8d63265504ded18b6d4bd70219628c4d8533" in source
-            assert source.count("verify_meta_release_ha.sh") == 1
+            assert source.count("verify_meta_release_ha.sh") == 2
             continue
         assert "EXPECTED_RELEASE_SHA: ${{ github.sha }}" in source, workflow.name
         assert 'DEPLOYED_RELEASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"' in source, workflow.name

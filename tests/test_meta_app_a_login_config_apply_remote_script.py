@@ -26,18 +26,14 @@ def _apply_script() -> str:
 
 
 def _drain_assignment() -> str:
-    return next(
-        line.strip()
-        for line in _apply_script().splitlines()
-        if line.strip().startswith("DRAIN_SECONDS=")
-    )
+    return next(line.strip() for line in _apply_script().splitlines() if line.strip().startswith("DRAIN_SECONDS="))
 
 
 def _drain_python_c() -> str:
     drain = _drain_assignment()
     marker = " -c '"
     start = drain.index(marker) + len(marker)
-    end = drain.index("' \"$REPO_DIR/.env\"", start)
+    end = drain.index('\' "$REPO_DIR/.env"', start)
     code = drain[start:end]
     assert "import sys" in code
     assert "dotenv_values" in code

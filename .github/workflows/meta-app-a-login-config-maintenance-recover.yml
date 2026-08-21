@@ -1,6 +1,5 @@
-# Bound recovery for run 32527312818: both nodes left in empty-marker
-# maintenance after a script_stop/heredoc parse failure, old env unchanged.
-# Cannot be reused for any other SHA or config ID.
+# Resume the approved App A login-config apply for failed run 32527312818.
+# Uses the deployed HA transaction path; does not custom-unlink markers.
 name: Meta App A Login Config Maintenance Recover
 
 on:
@@ -12,6 +11,14 @@ on:
         type: string
       EXPECTED_OLD_CONFIG_ID:
         description: "Must equal 1369663304545819"
+        required: true
+        type: string
+      FAILED_RUN_ID:
+        description: "Must equal 32527312818"
+        required: true
+        type: string
+      CONTROL_SHA:
+        description: "Must equal this workflow run github.sha"
         required: true
         type: string
       CONFIRM:
@@ -28,23 +35,43 @@ permissions:
 
 jobs:
   recover:
-    name: Recover App A login-config maintenance
-    if: >
-      github.ref == 'refs/heads/main' &&
-      github.event.inputs.BASELINE_SHA == 'a2ba8d63265504ded18b6d4bd70219628c4d8533' &&
-      github.event.inputs.EXPECTED_OLD_CONFIG_ID == '1369663304545819' &&
-      github.event.inputs.CONFIRM == 'RECOVER_APP_A_LOGIN_CONFIG_MAINTENANCE_a2ba8d63265504ded18b6d4bd70219628c4d8533'
+    name: Resume App A login-config apply
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: meta-social-cutover
     steps:
-      - name: Prove unchanged baseline then lift empty maintenance markers
+      - name: Reject mismatched recovery inputs
+        env:
+          BASELINE_SHA: ${{ github.event.inputs.BASELINE_SHA }}
+          EXPECTED_OLD_CONFIG_ID: ${{ github.event.inputs.EXPECTED_OLD_CONFIG_ID }}
+          FAILED_RUN_ID: ${{ github.event.inputs.FAILED_RUN_ID }}
+          CONTROL_SHA: ${{ github.event.inputs.CONTROL_SHA }}
+          CONFIRM: ${{ github.event.inputs.CONFIRM }}
+          REQUIRED_CONTROL_SHA: ${{ github.sha }}
+          META_APP_A_FACEBOOK_LOGIN_CONFIG_ID: ${{ secrets.META_APP_A_FACEBOOK_LOGIN_CONFIG_ID }}
+        run: |
+          set -euo pipefail
+          test "$BASELINE_SHA" = "a2ba8d63265504ded18b6d4bd70219628c4d8533"
+          test "$EXPECTED_OLD_CONFIG_ID" = "1369663304545819"
+          test "$FAILED_RUN_ID" = "32527312818"
+          test "$CONTROL_SHA" = "$REQUIRED_CONTROL_SHA"
+          test "$CONFIRM" = "RECOVER_APP_A_LOGIN_CONFIG_MAINTENANCE_a2ba8d63265504ded18b6d4bd70219628c4d8533"
+          test "$META_APP_A_FACEBOOK_LOGIN_CONFIG_ID" = "1021840664011530"
+
+      - name: Resume the approved App A login-config transaction
         uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
         env:
           EXPECTED_RELEASE_SHA: ${{ github.event.inputs.BASELINE_SHA }}
           BASELINE_SHA: ${{ github.event.inputs.BASELINE_SHA }}
           EXPECTED_OLD_CONFIG_ID: ${{ github.event.inputs.EXPECTED_OLD_CONFIG_ID }}
+          FAILED_RUN_ID: ${{ github.event.inputs.FAILED_RUN_ID }}
+          CONTROL_SHA: ${{ github.event.inputs.CONTROL_SHA }}
+          REQUIRED_CONTROL_SHA: ${{ github.sha }}
           CONFIRM: ${{ github.event.inputs.CONFIRM }}
+          META_APP_A_FACEBOOK_LOGIN_CONFIG_ID: ${{ secrets.META_APP_A_FACEBOOK_LOGIN_CONFIG_ID }}
+          META_OAUTH_REDIRECT_URI: https://www.linasaibot.com/oauth/meta/callback
+          META_HA_STAGE_ONLY: "true"
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -52,17 +79,24 @@ jobs:
           port: 22
           script_stop: false
           command_timeout: 14m
-          envs: EXPECTED_RELEASE_SHA,BASELINE_SHA,EXPECTED_OLD_CONFIG_ID,CONFIRM
+          envs: EXPECTED_RELEASE_SHA,BASELINE_SHA,EXPECTED_OLD_CONFIG_ID,FAILED_RUN_ID,CONTROL_SHA,REQUIRED_CONTROL_SHA,CONFIRM,META_APP_A_FACEBOOK_LOGIN_CONFIG_ID,META_OAUTH_REDIRECT_URI,META_HA_STAGE_ONLY
           script: |
             set -euo pipefail
             REQUIRED_SHA=a2ba8d63265504ded18b6d4bd70219628c4d8533
-            REQUIRED_CONFIG_ID=1369663304545819
+            REQUIRED_OLD_ID=1369663304545819
+            REQUIRED_NEW_ID=1021840664011530
+            REQUIRED_RUN_ID=32527312818
             REQUIRED_CONFIRM=RECOVER_APP_A_LOGIN_CONFIG_MAINTENANCE_a2ba8d63265504ded18b6d4bd70219628c4d8533
             REQUIRED_REDIRECT=https://www.linasaibot.com/oauth/meta/callback
             test "$BASELINE_SHA" = "$REQUIRED_SHA"
             test "$EXPECTED_RELEASE_SHA" = "$REQUIRED_SHA"
-            test "$EXPECTED_OLD_CONFIG_ID" = "$REQUIRED_CONFIG_ID"
+            test "$EXPECTED_OLD_CONFIG_ID" = "$REQUIRED_OLD_ID"
+            test "$FAILED_RUN_ID" = "$REQUIRED_RUN_ID"
+            test "$CONTROL_SHA" = "$REQUIRED_CONTROL_SHA"
             test "$CONFIRM" = "$REQUIRED_CONFIRM"
+            test "$META_APP_A_FACEBOOK_LOGIN_CONFIG_ID" = "$REQUIRED_NEW_ID"
+            test "$META_OAUTH_REDIRECT_URI" = "$REQUIRED_REDIRECT"
+            test "$META_HA_STAGE_ONLY" = "true"
             test "$(id -u)" -eq 0 && test "$(id -g)" -eq 0
             exec 9>/run/lock/linasbot-meta-live.lock
             flock -x 9
@@ -72,75 +106,127 @@ jobs:
             MAINTENANCE_FILE=/run/linasbot-maintenance
             META_HA_STATE_ROOT=/var/lib/linasbot/meta-ha
             PERSISTENT_MAINTENANCE_FILE="$META_HA_STATE_ROOT/maintenance"
-            prove_clean_sha() {
-              local repo="$1"
-              local deployed
-              deployed="$(git -C "$repo" rev-parse HEAD)"
-              if [ "$deployed" != "$REQUIRED_SHA" ]; then
-                echo "[meta-login-recover] node SHA is not the failed-run baseline" >&2
-                exit 1
+            CONFLICT_ARTIFACTS="transaction.json env.before workers.before.json prestage.authority.json bootstrap.active bootstrap.coordinator.json deploy.active deploy-node.active controlled-failover.active registry-nfs-retire.active python-runtime-provision.active python-runtime-provision.coordinator.json rekey/runtime.guard"
+            ENV_BACKUP=""
+            MAINTENANCE_ARMED=false
+            TRANSACTION_COMPLETE=false
+            fail_closed_cleanup() {
+              status=$?
+              trap - EXIT
+              if [ "$TRANSACTION_COMPLETE" != "true" ]; then
+                status=1
+                if [ "$MAINTENANCE_ARMED" = "true" ]; then
+                  sudo install -d -m 0700 -o root -g root "$META_HA_STATE_ROOT" || true
+                  sudo install -m 0600 -o root -g root /dev/null "$PERSISTENT_MAINTENANCE_FILE" || true
+                  install -m 0600 /dev/null "$MAINTENANCE_FILE" || true
+                  ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                    "root@${PEER_HOST}" \
+                    "install -d -m 0700 -o root -g root '$META_HA_STATE_ROOT' && install -m 0600 -o root -g root /dev/null '$PERSISTENT_MAINTENANCE_FILE' && install -m 0600 -o root -g root /dev/null '$MAINTENANCE_FILE'" || true
+                  echo "[meta-login-recover] HA maintenance retained after uncertain transaction" >&2
+                fi
+                if [ -n "$ENV_BACKUP" ]; then
+                  echo "[meta-login-recover] exact pre-stage backup retained at $ENV_BACKUP" >&2
+                fi
+              else
+                sudo rm -f "$ENV_BACKUP"
               fi
-              if ! git -C "$repo" diff --quiet "$REQUIRED_SHA" -- || \
-                 ! git -C "$repo" diff --cached --quiet "$REQUIRED_SHA" --; then
-                echo "[meta-login-recover] tracked files differ from baseline SHA" >&2
-                exit 1
-              fi
+              exit "$status"
             }
-            prove_empty_marker() {
-              local marker="$1"
-              test -f "$marker" && test ! -L "$marker"
-              test "$(stat -c '%u:%g:%a' "$marker")" = "0:0:600"
-              test ! -s "$marker"
-            }
-            prove_absent() {
-              local path="$1"
-              if [ -e "$path" ] || [ -L "$path" ]; then
-                echo "[meta-login-recover] unexpected HA artifact present: $path" >&2
-                exit 1
-              fi
-            }
-            fsync_unlink() {
-              local path="$1"
-              "$REPO_DIR/venv/bin/python" -I -c 'import os, sys; path = sys.argv[1]; os.unlink(path); fd = os.open(os.path.dirname(path), os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)); os.fsync(fd); os.close(fd)' "$path"
-            }
-            prove_clean_sha "$REPO_DIR"
+            DEPLOYED_RELEASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
+            if [ "$DEPLOYED_RELEASE_SHA" != "$REQUIRED_SHA" ]; then
+              echo "[meta-login-recover] deployed SHA is not the failed-run baseline" >&2
+              exit 1
+            fi
+            if ! git -C "$REPO_DIR" diff --quiet "$REQUIRED_SHA" -- || \
+               ! git -C "$REPO_DIR" diff --cached --quiet "$REQUIRED_SHA" --; then
+              echo "[meta-login-recover] deployed tracked files differ from baseline SHA" >&2
+              exit 1
+            fi
             ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
               "root@${PEER_HOST}" \
               "test \"\$(git -C '$REPO_DIR' rev-parse HEAD)\" = '$REQUIRED_SHA' && git -C '$REPO_DIR' diff --quiet '$REQUIRED_SHA' -- && git -C '$REPO_DIR' diff --cached --quiet '$REQUIRED_SHA' --"
-            prove_empty_marker "$MAINTENANCE_FILE"
-            prove_empty_marker "$PERSISTENT_MAINTENANCE_FILE"
+            for marker in "$MAINTENANCE_FILE" "$PERSISTENT_MAINTENANCE_FILE"; do
+              test -f "$marker" && test ! -L "$marker"
+              test "$(stat -c '%u:%g:%a' "$marker")" = "0:0:600"
+              test ! -s "$marker"
+            done
             ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
               "root@${PEER_HOST}" \
               "test -f '$MAINTENANCE_FILE' && test ! -L '$MAINTENANCE_FILE' && test \"\$(stat -c '%u:%g:%a' '$MAINTENANCE_FILE')\" = '0:0:600' && test ! -s '$MAINTENANCE_FILE' && test -f '$PERSISTENT_MAINTENANCE_FILE' && test ! -L '$PERSISTENT_MAINTENANCE_FILE' && test \"\$(stat -c '%u:%g:%a' '$PERSISTENT_MAINTENANCE_FILE')\" = '0:0:600' && test ! -s '$PERSISTENT_MAINTENANCE_FILE'"
-            for artifact in transaction.json env.before workers.before.json prestage.authority.json; do
-              prove_absent "$META_HA_STATE_ROOT/$artifact"
+            for artifact in $CONFLICT_ARTIFACTS; do
+              if [ -e "$META_HA_STATE_ROOT/$artifact" ] || [ -L "$META_HA_STATE_ROOT/$artifact" ]; then
+                echo "[meta-login-recover] unexpected HA artifact present: $artifact" >&2
+                exit 1
+              fi
               ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
                 "root@${PEER_HOST}" \
                 "test ! -e '$META_HA_STATE_ROOT/$artifact' && test ! -L '$META_HA_STATE_ROOT/$artifact'"
             done
+            test "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 \
+              http://127.0.0.1:8003/api/ready || true)" = "503"
+            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+              "root@${PEER_HOST}" \
+              "test \"\$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8003/api/ready || true)\" = 503"
+            CONFIG_PROOF="$("$REPO_DIR/venv/bin/python" -I - "$REPO_DIR/.env" "$REQUIRED_OLD_ID" "$REQUIRED_REDIRECT" "$REQUIRED_SHA" <<'PY'
+            import hashlib
+            import hmac
+            import json
+            import sys
+            from dotenv import dotenv_values
+            values = dotenv_values(sys.argv[1], interpolate=False)
+            config = str(values.get("META_APP_A_FACEBOOK_LOGIN_CONFIG_ID") or "")
+            redirect = str(values.get("META_OAUTH_REDIRECT_URI") or "")
+            if config != sys.argv[2] or redirect != sys.argv[3]:
+                raise SystemExit("old login config or redirect changed")
+            meta = {
+                key: value
+                for key, value in values.items()
+                if key and key.startswith("META_") and key != "META_DELETION_NODE_ID" and value is not None
+            }
+            print(hmac.new(sys.argv[4].encode("ascii"), json.dumps(meta, separators=(",", ":"), sort_keys=True).encode("utf-8"), hashlib.sha256).hexdigest())
+            PY
+            )"
+            PEER_PROOF="$(ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+              "root@${PEER_HOST}" \
+              "ENV_PATH='$REPO_DIR/.env' REQUIRED_OLD_ID='$REQUIRED_OLD_ID' REQUIRED_REDIRECT='$REQUIRED_REDIRECT' REQUIRED_SHA='$REQUIRED_SHA' '$REPO_DIR/venv/bin/python' -I -" <<'PY'
+            import hashlib
+            import hmac
+            import json
+            import os
+            from dotenv import dotenv_values
+            values = dotenv_values(os.environ["ENV_PATH"], interpolate=False)
+            config = str(values.get("META_APP_A_FACEBOOK_LOGIN_CONFIG_ID") or "")
+            redirect = str(values.get("META_OAUTH_REDIRECT_URI") or "")
+            if config != os.environ["REQUIRED_OLD_ID"] or redirect != os.environ["REQUIRED_REDIRECT"]:
+                raise SystemExit("peer login config or redirect changed")
+            meta = {
+                key: value
+                for key, value in values.items()
+                if key and key.startswith("META_") and key != "META_DELETION_NODE_ID" and value is not None
+            }
+            print(hmac.new(os.environ["REQUIRED_SHA"].encode("ascii"), json.dumps(meta, separators=(",", ":"), sort_keys=True).encode("utf-8"), hashlib.sha256).hexdigest())
+            PY
+            )"
+            test "$CONFIG_PROOF" = "$PEER_PROOF"
+            MAINTENANCE_ARMED=true
+            trap fail_closed_cleanup EXIT
             RECOVERY_OUTPUT="$("$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
               --expected-sha "$REQUIRED_SHA" --maintenance-active --recover-only)"
             printf '%s\n' "$RECOVERY_OUTPUT"
             printf '%s\n' "$RECOVERY_OUTPUT" | grep -Fqx "[meta-ha-env] recovery_required=false"
-            CONFIG_PROOF="$("$REPO_DIR/venv/bin/python" -I -c 'import hashlib, hmac, json, sys; from dotenv import dotenv_values; values = dotenv_values(sys.argv[1], interpolate=False); config = str(values.get("META_APP_A_FACEBOOK_LOGIN_CONFIG_ID") or ""); redirect = str(values.get("META_OAUTH_REDIRECT_URI") or ""); sys.exit("old login config or redirect changed") if config != sys.argv[2] or redirect != sys.argv[3] else None; meta = {k: v for k, v in values.items() if k and k.startswith("META_") and k != "META_DELETION_NODE_ID" and v is not None}; print(hmac.new(sys.argv[4].encode("ascii"), json.dumps(meta, separators=(",", ":"), sort_keys=True).encode("utf-8"), hashlib.sha256).hexdigest())' "$REPO_DIR/.env" "$REQUIRED_CONFIG_ID" "$REQUIRED_REDIRECT" "$REQUIRED_SHA")"
-            PEER_UNLINK='import os, sys; path = sys.argv[1]; os.unlink(path); fd = os.open(os.path.dirname(path), os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)); os.fsync(fd); os.close(fd)'
-            PEER_PROOF="$(ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
-              "root@${PEER_HOST}" \
-              "REQUIRED_SHA='$REQUIRED_SHA' REQUIRED_CONFIG_ID='$REQUIRED_CONFIG_ID' REQUIRED_REDIRECT='$REQUIRED_REDIRECT' ENV_PATH='$REPO_DIR/.env' '$REPO_DIR/venv/bin/python' -I -c 'import hashlib, hmac, json, os, sys; from dotenv import dotenv_values; values = dotenv_values(os.environ[\"ENV_PATH\"], interpolate=False); config = str(values.get(\"META_APP_A_FACEBOOK_LOGIN_CONFIG_ID\") or \"\"); redirect = str(values.get(\"META_OAUTH_REDIRECT_URI\") or \"\"); sys.exit(\"peer login config or redirect changed\") if config != os.environ[\"REQUIRED_CONFIG_ID\"] or redirect != os.environ[\"REQUIRED_REDIRECT\"] else None; meta = {k: v for k, v in values.items() if k and k.startswith(\"META_\") and k != \"META_DELETION_NODE_ID\" and v is not None}; print(hmac.new(os.environ[\"REQUIRED_SHA\"].encode(\"ascii\"), json.dumps(meta, separators=(\",\", \":\"), sort_keys=True).encode(\"utf-8\"), hashlib.sha256).hexdigest())'")"
-            test "$CONFIG_PROOF" = "$PEER_PROOF"
-            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
-              "root@${PEER_HOST}" \
-              "'$REPO_DIR/venv/bin/python' -I -c '$PEER_UNLINK' '$MAINTENANCE_FILE'"
-            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
-              "root@${PEER_HOST}" \
-              "'$REPO_DIR/venv/bin/python' -I -c '$PEER_UNLINK' '$PERSISTENT_MAINTENANCE_FILE'"
-            fsync_unlink "$MAINTENANCE_FILE"
-            fsync_unlink "$PERSISTENT_MAINTENANCE_FILE"
-            test "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 \
-              http://127.0.0.1:8003/api/ready)" = "200"
-            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
-              "root@${PEER_HOST}" \
-              "test \"\$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8003/api/ready)\" = 200"
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
+              "$REQUIRED_SHA" cluster-release-only
+            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+              --expected-sha "$REQUIRED_SHA" --maintenance-active --register-prestage-backup
+            ENV_BACKUP="$META_HA_STATE_ROOT/env.before"
+            APPLY_SCRIPT="$REPO_DIR/scripts/prod_apply_meta_app_a_login_config.sh"
+            test -f "$APPLY_SCRIPT"
+            bash "$APPLY_SCRIPT"
+            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+              --expected-sha "$REQUIRED_SHA" --maintenance-active \
+              --local-prestage-backup "$ENV_BACKUP"
+            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+              --expected-sha "$REQUIRED_SHA" --finalize
             bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$REQUIRED_SHA"
-            test "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 \
-              https://www.linasaibot.com/api/ready)" = "200"
+            TRANSACTION_COMPLETE=true
+            MAINTENANCE_ARMED=false
