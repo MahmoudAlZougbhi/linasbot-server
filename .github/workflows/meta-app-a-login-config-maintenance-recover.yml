@@ -88,6 +88,7 @@ jobs:
             REQUIRED_RUN_ID=32527312818
             REQUIRED_CONFIRM=RECOVER_APP_A_LOGIN_CONFIG_MAINTENANCE_a2ba8d63265504ded18b6d4bd70219628c4d8533
             REQUIRED_REDIRECT=https://www.linasaibot.com/oauth/meta/callback
+            FAILED_RUN_START=1787346694
             test "$BASELINE_SHA" = "$REQUIRED_SHA"
             test "$EXPECTED_RELEASE_SHA" = "$REQUIRED_SHA"
             test "$EXPECTED_OLD_CONFIG_ID" = "$REQUIRED_OLD_ID"
@@ -106,7 +107,8 @@ jobs:
             MAINTENANCE_FILE=/run/linasbot-maintenance
             META_HA_STATE_ROOT=/var/lib/linasbot/meta-ha
             PERSISTENT_MAINTENANCE_FILE="$META_HA_STATE_ROOT/maintenance"
-            CONFLICT_ARTIFACTS="transaction.json env.before workers.before.json prestage.authority.json bootstrap.active bootstrap.coordinator.json deploy.active deploy-node.active controlled-failover.active registry-nfs-retire.active python-runtime-provision.active python-runtime-provision.coordinator.json rekey/runtime.guard"
+            CONFLICT_ARTIFACTS="bootstrap.active bootstrap.coordinator.json deploy.active deploy-node.active controlled-failover.active registry-nfs-retire.active python-runtime-provision.active python-runtime-provision.coordinator.json rekey/runtime.guard"
+            SYNC_ARTIFACTS="transaction.json env.before workers.before.json prestage.authority.json"
             ENV_BACKUP=""
             MAINTENANCE_ARMED=false
             TRANSACTION_COMPLETE=false
@@ -145,14 +147,19 @@ jobs:
             ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
               "root@${PEER_HOST}" \
               "test \"\$(git -C '$REPO_DIR' rev-parse HEAD)\" = '$REQUIRED_SHA' && git -C '$REPO_DIR' diff --quiet '$REQUIRED_SHA' -- && git -C '$REPO_DIR' diff --cached --quiet '$REQUIRED_SHA' --"
+            DRAIN_SECONDS="$("$REPO_DIR/venv/bin/python" -c 'import sys; from dotenv import dotenv_values; value = int(str(dotenv_values(sys.argv[1], interpolate=False).get("META_HA_LB_DRAIN_SECONDS") or "")); sys.exit("invalid HA drain interval") if not 30 <= value <= 300 else print(value)' "$REPO_DIR/.env")"
+            NOW_EPOCH="$(date +%s)"
             for marker in "$MAINTENANCE_FILE" "$PERSISTENT_MAINTENANCE_FILE"; do
               test -f "$marker" && test ! -L "$marker"
               test "$(stat -c '%u:%g:%a' "$marker")" = "0:0:600"
               test ! -s "$marker"
+              MARKER_MTIME="$(stat -c '%Y' "$marker")"
+              test "$MARKER_MTIME" -ge "$FAILED_RUN_START"
+              test "$((NOW_EPOCH - MARKER_MTIME))" -ge "$DRAIN_SECONDS"
             done
             ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
               "root@${PEER_HOST}" \
-              "test -f '$MAINTENANCE_FILE' && test ! -L '$MAINTENANCE_FILE' && test \"\$(stat -c '%u:%g:%a' '$MAINTENANCE_FILE')\" = '0:0:600' && test ! -s '$MAINTENANCE_FILE' && test -f '$PERSISTENT_MAINTENANCE_FILE' && test ! -L '$PERSISTENT_MAINTENANCE_FILE' && test \"\$(stat -c '%u:%g:%a' '$PERSISTENT_MAINTENANCE_FILE')\" = '0:0:600' && test ! -s '$PERSISTENT_MAINTENANCE_FILE'"
+              "test -f '$MAINTENANCE_FILE' && test ! -L '$MAINTENANCE_FILE' && test \"\$(stat -c '%u:%g:%a' '$MAINTENANCE_FILE')\" = '0:0:600' && test ! -s '$MAINTENANCE_FILE' && test -f '$PERSISTENT_MAINTENANCE_FILE' && test ! -L '$PERSISTENT_MAINTENANCE_FILE' && test \"\$(stat -c '%u:%g:%a' '$PERSISTENT_MAINTENANCE_FILE')\" = '0:0:600' && test ! -s '$PERSISTENT_MAINTENANCE_FILE' && now=\$(date +%s) && for marker in '$MAINTENANCE_FILE' '$PERSISTENT_MAINTENANCE_FILE'; do mtime=\$(stat -c '%Y' \"\$marker\"); test \"\$mtime\" -ge $FAILED_RUN_START; test \$((now - mtime)) -ge $DRAIN_SECONDS; done"
             for artifact in $CONFLICT_ARTIFACTS; do
               if [ -e "$META_HA_STATE_ROOT/$artifact" ] || [ -L "$META_HA_STATE_ROOT/$artifact" ]; then
                 echo "[meta-login-recover] unexpected HA artifact present: $artifact" >&2
@@ -167,7 +174,30 @@ jobs:
             ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
               "root@${PEER_HOST}" \
               "test \"\$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8003/api/ready || true)\" = 503"
-            CONFIG_PROOF="$("$REPO_DIR/venv/bin/python" -I - "$REPO_DIR/.env" "$REQUIRED_OLD_ID" "$REQUIRED_REDIRECT" "$REQUIRED_SHA" <<'PY'
+            MAINTENANCE_ARMED=true
+            trap fail_closed_cleanup EXIT
+            RECOVERY_OUTPUT="$("$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+              --expected-sha "$REQUIRED_SHA" --maintenance-active --recover-only)"
+            printf '%s\n' "$RECOVERY_OUTPUT"
+            RECOVERY_TERMINAL="$(printf '%s\n' "$RECOVERY_OUTPUT" | awk 'NF{line=$0} END{print line}')"
+            case "$RECOVERY_TERMINAL" in
+              "[meta-ha-env] recovery_required=false"|"[meta-ha-env] recovered_worker_finalization=true"|"[meta-ha-env] recovered_prestage_workers=true"|"[meta-ha-env] recovered_pre_quiescence_backup=true"|"[meta-ha-env] recovered_outcome=committed"|"[meta-ha-env] recovered_outcome=rolled_back")
+                ;;
+              *)
+                echo "[meta-login-recover] recover-only produced an undocumented terminal" >&2
+                exit 1
+                ;;
+            esac
+            for artifact in $SYNC_ARTIFACTS; do
+              if [ -e "$META_HA_STATE_ROOT/$artifact" ] || [ -L "$META_HA_STATE_ROOT/$artifact" ]; then
+                echo "[meta-login-recover] recover-only left a sync artifact: $artifact" >&2
+                exit 1
+              fi
+              ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                "root@${PEER_HOST}" \
+                "test ! -e '$META_HA_STATE_ROOT/$artifact' && test ! -L '$META_HA_STATE_ROOT/$artifact'"
+            done
+            CONFIG_PROOF="$("$REPO_DIR/venv/bin/python" -I - "$REPO_DIR/.env" "$REQUIRED_OLD_ID" "$REQUIRED_NEW_ID" "$REQUIRED_REDIRECT" "$REQUIRED_SHA" <<'PY'
             import hashlib
             import hmac
             import json
@@ -176,19 +206,19 @@ jobs:
             values = dotenv_values(sys.argv[1], interpolate=False)
             config = str(values.get("META_APP_A_FACEBOOK_LOGIN_CONFIG_ID") or "")
             redirect = str(values.get("META_OAUTH_REDIRECT_URI") or "")
-            if config != sys.argv[2] or redirect != sys.argv[3]:
-                raise SystemExit("old login config or redirect changed")
+            if config not in {sys.argv[2], sys.argv[3]} or redirect != sys.argv[4]:
+                raise SystemExit("login config or redirect is not an admitted recover state")
             meta = {
                 key: value
                 for key, value in values.items()
                 if key and key.startswith("META_") and key != "META_DELETION_NODE_ID" and value is not None
             }
-            print(hmac.new(sys.argv[4].encode("ascii"), json.dumps(meta, separators=(",", ":"), sort_keys=True).encode("utf-8"), hashlib.sha256).hexdigest())
+            print(hmac.new(sys.argv[5].encode("ascii"), json.dumps(meta, separators=(",", ":"), sort_keys=True).encode("utf-8"), hashlib.sha256).hexdigest())
             PY
             )"
             PEER_PROOF="$(ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
               "root@${PEER_HOST}" \
-              "ENV_PATH='$REPO_DIR/.env' REQUIRED_OLD_ID='$REQUIRED_OLD_ID' REQUIRED_REDIRECT='$REQUIRED_REDIRECT' REQUIRED_SHA='$REQUIRED_SHA' '$REPO_DIR/venv/bin/python' -I -" <<'PY'
+              "ENV_PATH='$REPO_DIR/.env' REQUIRED_OLD_ID='$REQUIRED_OLD_ID' REQUIRED_NEW_ID='$REQUIRED_NEW_ID' REQUIRED_REDIRECT='$REQUIRED_REDIRECT' REQUIRED_SHA='$REQUIRED_SHA' '$REPO_DIR/venv/bin/python' -I -" <<'PY'
             import hashlib
             import hmac
             import json
@@ -197,8 +227,8 @@ jobs:
             values = dotenv_values(os.environ["ENV_PATH"], interpolate=False)
             config = str(values.get("META_APP_A_FACEBOOK_LOGIN_CONFIG_ID") or "")
             redirect = str(values.get("META_OAUTH_REDIRECT_URI") or "")
-            if config != os.environ["REQUIRED_OLD_ID"] or redirect != os.environ["REQUIRED_REDIRECT"]:
-                raise SystemExit("peer login config or redirect changed")
+            if config not in {os.environ["REQUIRED_OLD_ID"], os.environ["REQUIRED_NEW_ID"]} or redirect != os.environ["REQUIRED_REDIRECT"]:
+                raise SystemExit("peer login config or redirect is not an admitted recover state")
             meta = {
                 key: value
                 for key, value in values.items()
@@ -208,12 +238,6 @@ jobs:
             PY
             )"
             test "$CONFIG_PROOF" = "$PEER_PROOF"
-            MAINTENANCE_ARMED=true
-            trap fail_closed_cleanup EXIT
-            RECOVERY_OUTPUT="$("$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
-              --expected-sha "$REQUIRED_SHA" --maintenance-active --recover-only)"
-            printf '%s\n' "$RECOVERY_OUTPUT"
-            printf '%s\n' "$RECOVERY_OUTPUT" | grep -Fqx "[meta-ha-env] recovery_required=false"
             bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
               "$REQUIRED_SHA" cluster-release-only
             "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
