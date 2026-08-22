@@ -103,9 +103,7 @@ def parse_subscription_snapshot(
     if not isinstance(rows, list):
         raise MetaOAuthError("Instagram webhook subscription rows could not be verified")
     expected_ids = expected_instagram_login_subscription_app_ids()
-    matching = [
-        row for row in rows if isinstance(row, dict) and (_row_app_ids(row) & expected_ids)
-    ]
+    matching = [row for row in rows if isinstance(row, dict) and (_row_app_ids(row) & expected_ids)]
     if len(matching) > 1:
         raise MetaOAuthError("Instagram webhook subscription rows are ambiguous")
     if not matching:
@@ -169,9 +167,7 @@ async def inspect_instagram_login_webhook_subscription(
 ) -> InstagramLoginWebhookSubscriptionSnapshot:
     """Read this direct Instagram app/account subscription without exposing its token."""
 
-    credential, graph_api_version, _expected_app_id = instagram_login_subscription_context(
-        binding, registry
-    )
+    credential, graph_api_version, _expected_app_id = instagram_login_subscription_context(binding, registry)
     owns_client = client is None
     http_client = client or httpx.AsyncClient(timeout=20.0)
     try:
@@ -197,9 +193,7 @@ async def unsubscribe_instagram_login_webhook_raw(
 ) -> None:
     """Delete one direct Instagram subscription after the caller serializes writers."""
 
-    credential, graph_api_version, _expected_app_id = instagram_login_subscription_context(
-        binding, registry
-    )
+    credential, graph_api_version, _expected_app_id = instagram_login_subscription_context(binding, registry)
     owns_client = client is None
     http_client = client or httpx.AsyncClient(timeout=20.0)
     try:
@@ -264,9 +258,7 @@ async def restore_instagram_login_webhook_subscription(
 ) -> None:
     """Restore direct Instagram provider state only when our delete still owns it."""
 
-    credential, graph_api_version, _expected_app_id = instagram_login_subscription_context(
-        binding, registry
-    )
+    credential, graph_api_version, _expected_app_id = instagram_login_subscription_context(binding, registry)
     current = await read_instagram_login_subscription(
         ig_user_id=binding.asset_id,
         access_token=credential.access_token,

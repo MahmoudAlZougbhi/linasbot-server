@@ -155,9 +155,7 @@ async def test_ensure_get_first_skips_write_when_provider_already_ready(
             client=client,
         )
 
-    assert observed == [
-        f"GET /{INSTAGRAM_LOGIN_GRAPH_API_VERSION}/{INSTAGRAM_ID}/subscribed_apps"
-    ]
+    assert observed == [f"GET /{INSTAGRAM_LOGIN_GRAPH_API_VERSION}/{INSTAGRAM_ID}/subscribed_apps"]
     assert state.status == "ready"
     assert state.ready_for_dm is True
     assert state.ready_for_comments is True
