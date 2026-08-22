@@ -225,9 +225,7 @@ def get_comment_asset_row(session: Session, *, tenant_id: str, asset_key: str) -
 
 def list_comment_asset_rows(session: Session, *, tenant_id: str) -> list[CommentAssetRow]:
     rows = session.scalars(
-        select(TenantMetaCommentAssetSettingRow).where(
-            TenantMetaCommentAssetSettingRow.tenant_id == tenant_id
-        )
+        select(TenantMetaCommentAssetSettingRow).where(TenantMetaCommentAssetSettingRow.tenant_id == tenant_id)
     ).all()
     return [
         CommentAssetRow(

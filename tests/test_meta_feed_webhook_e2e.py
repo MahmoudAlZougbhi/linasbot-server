@@ -71,8 +71,12 @@ def _feed_comment_body(*, comment_id: str = "comment_1") -> bytes:
     return json.dumps(payload, separators=(",", ":")).encode()
 
 
-def _install_feed_mocks(monkeypatch: pytest.MonkeyPatch, *, binding: Any, settings: Any, resolved: ResolvedMetaCommentEvent) -> None:
-    monkeypatch.setattr(meta_messaging_webhook, "_comment_deduper", meta_messaging_webhook.InMemoryMessageDeduper(ttl_seconds=60))
+def _install_feed_mocks(
+    monkeypatch: pytest.MonkeyPatch, *, binding: Any, settings: Any, resolved: ResolvedMetaCommentEvent
+) -> None:
+    monkeypatch.setattr(
+        meta_messaging_webhook, "_comment_deduper", meta_messaging_webhook.InMemoryMessageDeduper(ttl_seconds=60)
+    )
     monkeypatch.setattr(meta_messaging_webhook, "_background_tasks", set())
     monkeypatch.setattr(meta_messaging_webhook, "meta_multi_app_registry_enabled", lambda: True)
     monkeypatch.setattr(
@@ -89,7 +93,9 @@ def _install_feed_mocks(monkeypatch: pytest.MonkeyPatch, *, binding: Any, settin
     monkeypatch.setattr(meta_messaging_webhook, "count_raw_comment_changes", lambda _p: 1)
     monkeypatch.setattr(meta_messaging_webhook, "registry_auth_flow_for_webhook_object", lambda _obj: "facebook_login")
     monkeypatch.setattr(meta_messaging_webhook, "resolve_registry_events", AsyncMock(return_value=[]))
-    monkeypatch.setattr("services.scale.meta_ingress.persist_meta_comment_accepted", lambda *a, **k: ("evt_feed_1", True))
+    monkeypatch.setattr(
+        "services.scale.meta_ingress.persist_meta_comment_accepted", lambda *a, **k: ("evt_feed_1", True)
+    )
     monkeypatch.setattr("services.scale.meta_ingress.enqueue_meta_inbound_event", lambda *a, **k: "queued")
     monkeypatch.setattr("services.durable_event_claim.meta_claim_binding_digest", lambda _v: "digest")
 

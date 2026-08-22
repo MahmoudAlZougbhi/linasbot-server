@@ -50,8 +50,7 @@ def shared_revision_for_tenant(tenant_id: str) -> dict[str, Any]:
         drafts = {
             row.section: row.revision
             for row in [
-                get_draft_row(session, tenant_id=tenant_id, section=section)
-                for section in ("actions", "comments")
+                get_draft_row(session, tenant_id=tenant_id, section=section) for section in ("actions", "comments")
             ]
             if row is not None
         }
@@ -93,14 +92,24 @@ def save_actions_payload(
             tenant_id=tenant_id,
             expected_revision=expected_published_revision if current else -1,
             revision=next_revision,
-            content_version_id=str(published_meta.get("content_version_id") or (current.content_version_id if current else "")),
-            index_version_id=str(published_meta.get("index_version_id") or (current.index_version_id if current else "")),
+            content_version_id=str(
+                published_meta.get("content_version_id") or (current.content_version_id if current else "")
+            ),
+            index_version_id=str(
+                published_meta.get("index_version_id") or (current.index_version_id if current else "")
+            ),
             checksums=dict(published_meta.get("checksums") or (current.checksums if current else {})),
             actions_payload=actions_payload,
-            embedding_provider=str(published_meta.get("embedding_provider") or (current.embedding_provider if current else "")),
+            embedding_provider=str(
+                published_meta.get("embedding_provider") or (current.embedding_provider if current else "")
+            ),
             embedding_model=str(published_meta.get("embedding_model") or (current.embedding_model if current else "")),
-            embedding_dimensions=int(published_meta.get("embedding_dimensions") or (current.embedding_dimensions if current else 0)),
-            embedding_version=str(published_meta.get("embedding_version") or (current.embedding_version if current else "")),
+            embedding_dimensions=int(
+                published_meta.get("embedding_dimensions") or (current.embedding_dimensions if current else 0)
+            ),
+            embedding_version=str(
+                published_meta.get("embedding_version") or (current.embedding_version if current else "")
+            ),
             schema_version=int(published_meta.get("schema_version") or (current.schema_version if current else 1)),
             published_at=float(published_meta.get("published_at") or (current.published_at if current else 0)),
         )

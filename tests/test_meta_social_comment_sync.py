@@ -80,7 +80,10 @@ async def test_sync_facebook_binding_comments_enqueues_new_comment(monkeypatch: 
     monkeypatch.setattr("services.meta_social_comment_sync._binding_by_id", lambda _r, _id: binding)
     monkeypatch.setattr("services.meta_social_comment_sync.get_meta_app_registry", lambda: registry)
     monkeypatch.setattr("services.meta_social_comment_sync._comment_reply_enabled", lambda _b: True)
-    monkeypatch.setattr("services.meta_social_comment_sync.get_meta_app_configs", lambda: {"linas_first_party": type("A", (), {"graph_api_version": "v24.0"})()})
+    monkeypatch.setattr(
+        "services.meta_social_comment_sync.get_meta_app_configs",
+        lambda: {"linas_first_party": type("A", (), {"graph_api_version": "v24.0"})()},
+    )
     monkeypatch.setattr(
         "services.meta_social_comment_sync.get_meta_app_registry",
         lambda: type(
