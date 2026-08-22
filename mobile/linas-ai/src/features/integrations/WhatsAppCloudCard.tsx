@@ -60,7 +60,7 @@ export function WhatsAppCloudCard({
   const conn = status?.connection;
   const subtitle = whatsappCardSubtitle(status, tr('integrationWhatsAppHandle'));
   const healthy = connected;
-  const aiOn = Boolean(conn?.ai_eligible && conn?.ai_default_enabled);
+  const aiOn = Boolean(conn?.ai_default_enabled);
 
   return (
     <View accessibilityRole="summary" style={styles.wrap}>

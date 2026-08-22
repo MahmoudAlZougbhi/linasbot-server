@@ -4,9 +4,10 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ApiError } from '../../api/client';
 import { useI18n } from '../../i18n/LanguageContext';
 import { colors, fonts, spacing } from '../../theme';
+import { ChannelCapabilityToggles } from './ChannelCapabilityToggles';
 import { IntegrationCardShell } from './IntegrationCardShell';
 import { WebsiteIntegrationScreen } from './WebsiteIntegrationScreen';
-import { fetchWebChatSettings, type WebChatSettings } from './webChatApi';
+import { fetchWebChatSettings, saveWebChatSettings, type WebChatSettings } from './webChatApi';
 import {
   clearWebChatCardSnapshot,
   readWebChatCardSnapshot,
@@ -37,6 +38,7 @@ export function WebChatCard({ onError, onNotice }: Props) {
   const [ready, setReady] = useState(cached !== null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [busyToggle, setBusyToggle] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -61,6 +63,20 @@ export function WebChatCard({ onError, onNotice }: Props) {
     void load();
     return () => clearWebChatCardSnapshot();
   }, [load]);
+
+  async function onMessagesToggle(value: boolean) {
+    setBusyToggle(true);
+    try {
+      const data = await saveWebChatSettings({ enabled: value });
+      writeWebChatCardSnapshot({ settings: data, entitlementWeb });
+      setSettings(data);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) return;
+      onError?.(tr('integrationsToggleError'));
+    } finally {
+      setBusyToggle(false);
+    }
+  }
 
   if (detailOpen) {
     return (
@@ -108,6 +124,16 @@ export function WebChatCard({ onError, onNotice }: Props) {
       >
         {planBlocked ? <Text style={styles.warn}>{tr('webChatPlanRequired')}</Text> : null}
         {loadFailed ? <Text style={styles.warn}>{tr('integrationsActionError')}</Text> : null}
+        {!planBlocked && !loadFailed && settings && connected ? (
+          <ChannelCapabilityToggles
+            toggles={{ dm: Boolean(settings.enabled), comments: false }}
+            busyKey={busyToggle ? 'dm' : null}
+            showComments={false}
+            messagesLabel={tr('integrationToggleMessages')}
+            commentsLabel={tr('toggleComments')}
+            onToggle={(_key, value) => void onMessagesToggle(value)}
+          />
+        ) : null}
         {!planBlocked && !loadFailed ? (
           <Pressable onPress={() => setDetailOpen(true)} style={styles.openBtn}>
             <Text style={styles.openText}>{tr('webChatOpenSettings')}</Text>

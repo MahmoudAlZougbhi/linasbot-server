@@ -110,3 +110,61 @@ async def test_clear_invalid_dm_keeps_on_when_unhealthy_but_connected(monkeypatc
     ok = await clear_invalid_dm_enabled_state_async(tenant_id="linas", platform="instagram", actor="test")
     assert ok is False
     assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_clear_invalid_comments_when_disconnected(monkeypatch) -> None:
+    calls: list[tuple[str, bool]] = []
+
+    async def _set(**kwargs):
+        calls.append((kwargs["toggle"], kwargs["enabled"]))
+        return {
+            "toggles": {"dm": False, "comments": False},
+            "comments_state": {"requested_enabled": False},
+            "dm_state": {},
+        }
+
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.comment_capability_state",
+        lambda *_a, **_k: {"requested_enabled": True, "permission_present": False, "connection_healthy": False},
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.canonical_channel_bindings",
+        lambda *_a, **_k: [],
+    )
+    monkeypatch.setattr("services.channel_capability_toggles.set_channel_toggle", _set)
+
+    from services.channel_capability_toggles import clear_invalid_comments_enabled_state_async
+
+    ok = await clear_invalid_comments_enabled_state_async(tenant_id="linas", platform="facebook", actor="test")
+    assert ok is True
+    assert calls == [("comments", False)]
+
+
+@pytest.mark.asyncio
+async def test_clear_invalid_comments_keeps_on_when_connected(monkeypatch) -> None:
+    calls: list[tuple[str, bool]] = []
+
+    async def _set(**kwargs):
+        calls.append((kwargs["toggle"], kwargs["enabled"]))
+        return {}
+
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.comment_capability_state",
+        lambda *_a, **_k: {
+            "requested_enabled": True,
+            "permission_present": False,
+            "connection_healthy": False,
+        },
+    )
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.canonical_channel_bindings",
+        lambda *_a, **_k: [{"binding_id": "fb-1"}],
+    )
+    monkeypatch.setattr("services.channel_capability_toggles.set_channel_toggle", _set)
+
+    from services.channel_capability_toggles import clear_invalid_comments_enabled_state_async
+
+    ok = await clear_invalid_comments_enabled_state_async(tenant_id="linas", platform="facebook", actor="test")
+    assert ok is False
+    assert calls == []

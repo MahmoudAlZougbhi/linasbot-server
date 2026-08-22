@@ -452,7 +452,7 @@ async def test_meta_worker_unaffected_when_web_contained(monkeypatch, sfu_db, tm
         ),
         patch(
             "services.channel_capability_state.dm_capability_state",
-            return_value={"effective_enabled": True},
+            return_value={"requested_enabled": True},
         ),
         patch(
             "services.smart_followup.adapters.meta_dm._load_firestore_conversation",

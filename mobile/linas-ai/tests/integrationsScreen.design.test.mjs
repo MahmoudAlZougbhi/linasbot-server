@@ -44,6 +44,21 @@ test('connected cards use 3-dot menu, Messages/Comments toggles, and healthy foo
   assert.match(display, /Connection healthy/);
 });
 
+test('channel Messages/Comments toggles are app-owned and do not intercept provider blockers', () => {
+  const screen = read('features/integrations/IntegrationsScreen.tsx');
+  const card = read('features/integrations/IntegrationChannelCard.tsx');
+  const wa = read('features/integrations/WhatsAppCloudCard.tsx');
+  const web = read('features/integrations/WebChatCard.tsx');
+  assert.doesNotMatch(screen, /missing_comment_permissions/);
+  assert.doesNotMatch(screen, /missing_comment_webhook/);
+  assert.doesNotMatch(screen, /tiktok_messaging_pending/);
+  assert.match(card, /showMetaCapabilityHints = false/);
+  assert.match(wa, /ai_default_enabled/);
+  assert.doesNotMatch(wa, /ai_eligible &&/);
+  assert.match(web, /saveWebChatSettings/);
+  assert.match(web, /showComments=\{false\}/);
+});
+
 test('disconnected WhatsApp shows outlined Connect and no toggles', () => {
   const wa = read('features/integrations/WhatsAppCloudCard.tsx');
   const shell = read('features/integrations/IntegrationCardShell.tsx');

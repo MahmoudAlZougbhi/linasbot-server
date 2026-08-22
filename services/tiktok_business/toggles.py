@@ -1,4 +1,4 @@
-"""TikTok CM action toggles. Does not touch Meta disconnect or Meta webhooks."""
+"""TikTok CM action toggles. App switches control AI replies, not TikTok OAuth."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from services.cm.publish_gate import PublishDisabledError, ensure_publish_enable
 from services.cm.schemas import ActionCapability, ActionsSection, SectionDraftEnvelope
 from services.cm.storage import ConflictError, draft_section_path, get_draft, put_draft
 from services.cm.version_store import read_published_pointer
-from services.tiktok_business.scopes import comments_read_ready, messaging_send_ready
 from services.tiktok_business.status import tiktok_integration_row
 
 ToggleKey = Literal["dm", "comments"]
@@ -117,19 +116,6 @@ async def set_tiktok_toggle(
         raise TikTokToggleError(
             "Connect TikTok before enabling this capability.", status_code=409, code="CONNECT_REQUIRED"
         )
-    scopes = row.get("granted_scopes") or []
-    if toggle == "dm" and enabled and not messaging_send_ready(scopes):
-        raise TikTokToggleError(
-            "TikTok Business Messaging is pending TikTok approval.",
-            status_code=409,
-            code="TIKTOK_CAPABILITY_GATED",
-        )
-    if toggle == "comments" and enabled and not comments_read_ready(scopes):
-        raise TikTokToggleError(
-            "TikTok did not grant Get Account Comment. Reconnect and approve those scopes.",
-            status_code=409,
-            code="COMMENT_SCOPES_MISSING",
-        )
     if toggle == "comments" and enabled:
         from services.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
 
@@ -155,7 +141,10 @@ async def set_tiktok_toggle(
 
 
 async def enable_tiktok_comments_after_connect(*, tenant_id: str, actor: str) -> None:
-    try:
-        await set_tiktok_toggle(tenant_id=tenant_id, toggle="comments", enabled=True, actor=actor)
-    except TikTokToggleError:
-        return
+    """After Connect, turn app DM + Comments ON. TikTok subscriptions stay as Connect left them."""
+
+    for toggle in ("dm", "comments"):
+        try:
+            await set_tiktok_toggle(tenant_id=tenant_id, toggle=toggle, enabled=True, actor=actor)
+        except TikTokToggleError:
+            continue

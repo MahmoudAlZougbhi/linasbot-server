@@ -29,7 +29,9 @@ export const integrationsDisplayFr = {
   metaOAuthFailedDeletionFailed:
     'L’autorisation Instagram est bloquée car une demande de suppression Meta a échoué. Demandez à un administrateur de la résoudre, puis reconnectez Instagram.',
   metaOAuthFailedProvider:
-    'Meta ne peut pas terminer la configuration Instagram pour le moment. Attendez cinq minutes, puis appuyez une fois sur Connecter.',
+    'Instagram n’a pas confirmé le webhook après deux vérifications. N’appuyez plus sur Connecter. Envoyez ce message.',
+  metaOAuthFailedRateLimit:
+    'Instagram a limité la configuration webhook (erreur Graph 613). N’appuyez plus sur Connecter. Envoyez ce message.',
   integrationStatusConnected: 'Connexion saine',
   integrationStatusNeedsReconnect: 'Reconnexion requise',
   integrationStatusError: 'Problème de connexion',

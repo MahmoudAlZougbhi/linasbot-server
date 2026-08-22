@@ -80,7 +80,7 @@ def tiktok_integration_row(tenant_id: str) -> dict[str, Any]:
             dm_requested = published_action_enabled(tenant_id, ACTION_TIKTOK_DM)
             row.update(
                 {
-                    "connected": connection.lifecycle_status == "connected" and comments_read,
+                    "connected": connection.lifecycle_status == "connected",
                     "connectable": True,
                     "binding_ids": [connection.id],
                     "connection_status": connection.lifecycle_status,
@@ -118,11 +118,7 @@ def tiktok_integration_row(tenant_id: str) -> dict[str, Any]:
             row["capabilities"]["comment_reply"]["level"] = "connected" if comments_ok else "needs_permission"
             row["capabilities"]["dm_read"]["level"] = "connected" if dm_ok else "needs_permission"
             row["capabilities"]["dm_reply"]["level"] = "connected" if dm_ok else "needs_permission"
-            row["never_active_without_scopes"] = not row["connected"] or comments_read
-            # Honest: connected flag requires real comment read scopes, never messaging pretending.
-            if row["connected"] and not comments_read and not dm_ok:
-                row["connected"] = False
-                row["connection_status"] = "permission_required"
+            row["never_active_without_scopes"] = comments_read or dm_ok
     except WhatsAppDatabaseUnavailable:
         row["connectable"] = False
         row["blocker_code"] = "TIKTOK_DB_UNAVAILABLE"

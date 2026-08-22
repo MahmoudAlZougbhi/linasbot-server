@@ -150,6 +150,10 @@ describe('meta oauth mobile return surface', () => {
       metaOAuthFailureMessage(tr, 'provider', 'instagram'),
       'metaOAuthFailedProvider',
     );
+    assert.equal(
+      metaOAuthFailureMessage(tr, 'rate_limit', 'instagram'),
+      'metaOAuthFailedRateLimit',
+    );
     const invalidChannel = parseIntegrationsDeepLink(
       'linasai://integrations?meta_connection=failed&meta_reason=scopes&channel=whatsapp',
     );
@@ -177,6 +181,12 @@ describe('meta oauth mobile return surface', () => {
         'linasai://integrations?meta_connection=failed&meta_reason=provider&channel=instagram',
       )?.metaReason,
       'provider',
+    );
+    assert.equal(
+      parseIntegrationsDeepLink(
+        'linasai://integrations?meta_connection=failed&meta_reason=rate_limit&channel=instagram',
+      )?.metaReason,
+      'rate_limit',
     );
     assert.equal(
       parseIntegrationsDeepLink(
@@ -211,22 +221,28 @@ describe('meta oauth mobile return surface', () => {
       {
         locale: integrationsDisplayEn,
         noPage: /full control/i,
-        provider: /wait five minutes/i,
+        provider: /after two checks/i,
+        rateLimit: /graph error 613/i,
       },
       {
         locale: integrationsDisplayAr,
         noPage: /تحكماً كاملاً/,
-        provider: /انتظر خمس دقائق/,
+        provider: /بعد محاولتين/,
+        rateLimit: /Graph 613/,
       },
       {
         locale: integrationsDisplayFr,
         noPage: /contrôle total/i,
-        provider: /attendez cinq minutes/i,
+        provider: /après deux vérifications/i,
+        rateLimit: /erreur Graph 613/i,
       },
     ];
-    for (const { locale, noPage, provider } of localeCases) {
+    for (const { locale, noPage, provider, rateLimit } of localeCases) {
       assert.match(locale.metaOAuthFailedFacebookNoPage, noPage);
       assert.match(locale.metaOAuthFailedProvider, provider);
+      assert.match(locale.metaOAuthFailedRateLimit, rateLimit);
+      assert.doesNotMatch(locale.metaOAuthFailedProvider, /five minutes|cinq minutes|خمس دقائق/i);
+      assert.doesNotMatch(locale.metaOAuthFailedRateLimit, /five minutes|cinq minutes|خمس دقائق/i);
     }
   });
 

@@ -74,6 +74,44 @@ def test_enrich_strips_technical_fields(monkeypatch: pytest.MonkeyPatch) -> None
     assert enriched["last_synced_at"] == 1_700_000_100.0
 
 
+def test_enrich_stays_connected_when_comment_scopes_are_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Binding:
+        status = "active"
+        updated_at = 1_700_000_000.0
+        webhook_subscription_checked_at = 1_700_000_100.0
+        page_name = "Clinic Page"
+        instagram_username = ""
+
+    monkeypatch.setattr(
+        "services.mobile_integrations_display.canonical_channel_bindings",
+        lambda tenant_id, platform: [_Binding()],
+    )
+    monkeypatch.setattr(
+        "services.mobile_integrations_display.get_meta_app_registry",
+        lambda: object(),
+    )
+    monkeypatch.setattr(
+        "services.mobile_integrations_display._binding_connection_healthy",
+        lambda binding, registry=None: True,
+    )
+
+    row = _base_row(
+        toggles={"dm": True, "comments": True},
+        comments_state={
+            "connection_healthy": True,
+            "blocker_code": "missing_comment_permissions",
+            "requested_enabled": True,
+            "permission_present": False,
+            "webhook_subscribed": False,
+            "effective_enabled": False,
+            "live_verified": False,
+        },
+    )
+    enriched = enrich_mobile_integration_row(row, tenant_id="linas")
+    assert enriched["connection_status"] == "connected"
+    assert enriched["toggles"]["comments"] is True
+
+
 def test_enrich_marks_needs_reconnect_when_unhealthy(monkeypatch: pytest.MonkeyPatch) -> None:
     class _Binding:
         status = "active"

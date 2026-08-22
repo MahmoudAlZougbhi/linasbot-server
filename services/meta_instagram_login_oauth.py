@@ -669,13 +669,11 @@ async def complete_instagram_login(
                         INSTAGRAM_LOGIN_SUBSCRIPTION_DEFERRED_ERROR,
                     }:
                         detail = (
-                            "Instagram provider is temporarily limiting webhook subscription verification. "
+                            "Instagram rate-limited webhook setup (Graph error 613). "
                             if subscription.error == INSTAGRAM_LOGIN_SUBSCRIPTION_RATE_LIMITED_ERROR
-                            else "Instagram provider webhook subscription verification is still pending. "
+                            else "Instagram did not confirm webhook fields after two checks. "
                         )
-                        raise _InstagramProviderVerificationDeferred(
-                            f"{detail}Wait a few minutes, then tap Connect once."
-                        )
+                        raise _InstagramProviderVerificationDeferred(f"{detail}Do not tap Connect again.")
                     if not subscription.ready_for_dm or not subscription.ready_for_comments:
                         raise MetaOAuthError(
                             "Instagram webhook subscription could not be confirmed. Reconnect Instagram and try again."

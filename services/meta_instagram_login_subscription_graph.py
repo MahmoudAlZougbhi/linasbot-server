@@ -45,10 +45,7 @@ def raise_classified_provider_error(response: httpx.Response, *, step: str) -> N
     if 200 <= response.status_code < 300 and not provider_error:
         return
     if rate_limited:
-        message = (
-            "Instagram provider is temporarily limiting webhook subscription verification. "
-            "Wait a few minutes, then tap Connect once."
-        )
+        message = "Instagram rate-limited webhook setup (Graph error 613). Do not tap Connect again."
     else:
         message = (
             f"Meta {step} returned an OAuth error"

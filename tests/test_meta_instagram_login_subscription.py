@@ -355,7 +355,7 @@ async def test_verify_eventual_consistency_retries_reads_without_second_post(
         )
 
     assert methods == ["GET", "POST", "GET", "GET"]
-    assert sleeps == [2.0]
+    assert sleeps == [10.0]
     assert state.status == "ready"
 
 
@@ -533,7 +533,7 @@ async def test_unresolved_accepted_write_is_deferred_without_repost(
             client=client,
         )
 
-    assert methods == ["GET", "POST", "GET", "GET", "GET"]
+    assert methods == ["GET", "POST", "GET", "GET"]
     assert state.error == INSTAGRAM_LOGIN_SUBSCRIPTION_DEFERRED_ERROR
     refreshed = next(item for item in registry.list_bindings() if item.binding_id == binding.binding_id)
     assert refreshed.webhook_subscribed_fields == ()
@@ -579,7 +579,7 @@ async def test_deferred_comments_verification_preserves_verified_dm_fields(
             client=client,
         )
 
-    assert methods == ["GET", "POST", "GET", "GET", "GET"]
+    assert methods == ["GET", "POST", "GET", "GET"]
     assert state.status == "partial"
     assert state.ready_for_dm is True
     assert state.ready_for_comments is False

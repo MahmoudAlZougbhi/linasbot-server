@@ -187,10 +187,11 @@ export function IntegrationChannelCard({
   const showToggles =
     !soon && (platform === 'instagram' || platform === 'facebook' || tiktok) && row.connected;
   const blocker = commentsBlocker(row);
+  const showMetaCapabilityHints = false;
   const dmBlocker = row.dm_state?.blocker_code || row.dm_state?.blocker || null;
   const dmBlockerMessage = row.dm_state?.blocker_message?.trim() || null;
-  const serviceDiagnostic = serviceDiagnosticCopy(row.service_diagnostic, tr);
-  const needsWebhook = blocker === 'missing_comment_webhook';
+  const serviceDiagnostic = showMetaCapabilityHints ? serviceDiagnosticCopy(row.service_diagnostic, tr) : null;
+  const needsWebhook = showMetaCapabilityHints && blocker === 'missing_comment_webhook';
   const subtitle = channelSubtitle(row);
   const lastSync =
     typeof row.last_synced_at === 'number' && row.last_synced_at > 0
@@ -232,13 +233,13 @@ export function IntegrationChannelCard({
             commentsLabel={tr('toggleComments')}
             onToggle={onToggle}
           />
-          {blocker ? <Text style={styles.blocker}>{blockerCopy(blocker, tr)}</Text> : null}
-          {dmBlocker && !blocker ? (
+          {showMetaCapabilityHints && blocker ? <Text style={styles.blocker}>{blockerCopy(blocker, tr)}</Text> : null}
+          {showMetaCapabilityHints && dmBlocker && !blocker ? (
             <Text style={styles.blocker}>{blockerCopy(String(dmBlocker), tr)}</Text>
           ) : null}
-          {dmBlockerMessage ? <Text style={styles.blocker}>{dmBlockerMessage}</Text> : null}
+          {showMetaCapabilityHints && dmBlockerMessage ? <Text style={styles.blocker}>{dmBlockerMessage}</Text> : null}
           {serviceDiagnostic ? <Text style={styles.blocker}>{serviceDiagnostic}</Text> : null}
-          {row.comments_state?.blocker_message?.trim() ? (
+          {showMetaCapabilityHints && row.comments_state?.blocker_message?.trim() ? (
             <Text style={styles.blocker}>{row.comments_state.blocker_message.trim()}</Text>
           ) : null}
           {needsWebhook ? (

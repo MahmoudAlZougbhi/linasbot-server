@@ -244,8 +244,8 @@ async def complete_embedded_signup(
                 "phone_number_quality_update",
             ]
             repo.mark_connection_connected(conn, webhook_fields=fields)
-            # AI stays OFF until operator enables + eligibility gates pass.
-            conn.ai_default_enabled = False
+            # Same as Facebook/Instagram: Connect turns Messages ON. The switch only controls AI.
+            conn.ai_default_enabled = True
             conn.history_sync_status = "skipped" if not flags.history_sync_enabled else "pending"
             attempt.status = "completed"
             attempt.outcome_code = "connected"
@@ -262,7 +262,7 @@ async def complete_embedded_signup(
                 },
             )
             emit_wa_event("connection_completed", tenant_id=tenant_id, connection_id=conn.id)
-            view = connection_public_view(conn, ai_eligible=False, rollout_blocked_reason="ai_default_off")
+            view = connection_public_view(conn, ai_eligible=True, rollout_blocked_reason=None)
             if return_surface == "mobile":
                 from urllib.parse import urlencode as _ue
 

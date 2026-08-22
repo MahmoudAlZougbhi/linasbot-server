@@ -43,6 +43,7 @@ _MOBILE_OAUTH_FAILURE_REASONS = frozenset(
         "guard",
         "conflict",
         "config",
+        "rate_limit",
     }
 )
 
@@ -77,7 +78,13 @@ def mobile_oauth_failure_reason(exc: BaseException) -> str:
     ):
         return "no_page"
     if (
-        "provider is temporarily limiting" in message
+        "rate-limited webhook setup" in message
+        or "graph error 613" in message
+        or "provider is temporarily limiting" in message
+    ):
+        return "rate_limit"
+    if (
+        "did not confirm webhook fields after two checks" in message
         or "provider webhook subscription verification is still pending" in message
         or "provider subscription cleanup failed" in message
         or "webhook subscription cleanup is in progress" in message
