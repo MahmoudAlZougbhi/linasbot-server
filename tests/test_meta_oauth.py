@@ -45,7 +45,8 @@ SCOPES = INTEGRATION_SCOPES
 def oauth_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("META_APP_A_ID", "2963733803971681")
     monkeypatch.setenv("META_APP_A_SECRET", "app-a-secret-tests")
-    monkeypatch.setenv("META_APP_A_WEBHOOK_VERIFY_TOKEN", "verify-a-tests")
+    monkeypatch.setenv("META_APP_A_WEBHOOK_VERIFY_TOKEN", "verify-a-tests-thirty-two-characters-long")
+    monkeypatch.setenv("META_WEBHOOK_VERIFY_TOKEN", "verify-a-tests-thirty-two-characters-long")
     monkeypatch.setenv("META_APP_B_ID", "998877665544")
     monkeypatch.setenv("META_APP_B_SECRET", "app-b-secret-tests")
     monkeypatch.setenv("META_APP_B_WEBHOOK_VERIFY_TOKEN", "verify-b-tests")
@@ -214,6 +215,8 @@ def _transport(
             subscribed_fields.pop(request_page_id, None)
             if subscription_hook is not None:
                 await subscription_hook(request, request_page_id)
+            return httpx.Response(200, json={"success": True})
+        if path.endswith("/subscriptions") and request.method == "POST":
             return httpx.Response(200, json={"success": True})
         return httpx.Response(404, json={"error": {"message": "not found"}})
 

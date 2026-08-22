@@ -24,7 +24,8 @@ def _registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MetaAppRegistr
     monkeypatch.setenv("META_REGISTRY_BACKEND", "file")
     monkeypatch.setenv("META_APP_A_ID", "2963733803971681")
     monkeypatch.setenv("META_APP_A_SECRET", "app-a-secret-tests")
-    monkeypatch.setenv("META_APP_A_WEBHOOK_VERIFY_TOKEN", "verify-a-tests")
+    monkeypatch.setenv("META_APP_A_WEBHOOK_VERIFY_TOKEN", "verify-a-tests-thirty-two-characters-long")
+    monkeypatch.setenv("META_WEBHOOK_VERIFY_TOKEN", "verify-a-tests-thirty-two-characters-long")
     monkeypatch.setenv("META_GRAPH_API_VERSION", "v24.0")
     db = _FakeFirestore()
     monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
@@ -119,12 +120,19 @@ async def test_facebook_activation_enables_dm_before_subscribe(
     async def subscribe(*_args: Any, **_kwargs: Any) -> None:
         order.append("subscribe")
 
+    async def app_subscribe(*_args: Any, **_kwargs: Any) -> None:
+        order.append("app_subscribe")
+
     monkeypatch.setattr(meta_oauth_activation, "inspect_binding_webhook_subscription", inspect)
     monkeypatch.setattr(
         "services.channel_capability_toggles.enable_channel_defaults_after_connect",
         enable,
     )
     monkeypatch.setattr(meta_oauth_activation, "subscribe_binding_webhook", subscribe)
+    monkeypatch.setattr(
+        "services.meta_app_webhook_subscription.ensure_app_page_webhook_subscription",
+        app_subscribe,
+    )
 
     await activate_validated_facebook_pages(
         [_validated_page("378696005334409")],
@@ -134,7 +142,7 @@ async def test_facebook_activation_enables_dm_before_subscribe(
         registry=registry,
         client=SimpleNamespace(),
     )
-    assert order == ["inspect", "enable", "subscribe"]
+    assert order == ["inspect", "enable", "subscribe", "app_subscribe"]
 
 
 @pytest.mark.asyncio

@@ -234,6 +234,10 @@ async def _activate_validated_facebook_pages_locked(
                     registry=registry,
                     client=client,
                 )
+            if any(binding.channel == "facebook" for binding in staged):
+                from services.meta_app_webhook_subscription import ensure_app_page_webhook_subscription
+
+                await ensure_app_page_webhook_subscription(client=client)
             try:
                 subject_guard.assert_oauth_snapshot_unchanged()
             except MetaSubjectDeletionStoreUnavailableError as exc:

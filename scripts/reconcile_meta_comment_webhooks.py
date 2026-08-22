@@ -153,6 +153,7 @@ def reconcile_app_subscriptions(
             "callback_url": EXPECTED_PAGE_CALLBACK_URL,
             "verify_token": verify_token,
             "fields": ",".join(sorted(page_target)),
+            "include_values": "true",
         },
         stage="reconcile_page",
     )

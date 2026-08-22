@@ -25,6 +25,7 @@ from services.cm.schemas import ActionCapability, ActionsSection, SectionDraftEn
 from services.cm.storage import ConflictError, draft_section_path, get_draft, put_draft
 from services.cm.version_store import read_published_pointer
 from services.meta_app_registry import APP_A_KEY, get_meta_app_configs, get_meta_app_registry
+from services.meta_app_webhook_subscription import ensure_app_page_webhook_subscription
 from services.meta_comment_reply_settings import get_comment_reply_setting, set_comment_reply_setting
 from services.meta_comment_webhooks import (
     ensure_instagram_comment_app_webhook,
@@ -258,6 +259,11 @@ async def reconcile_comment_webhooks_for_platform(*, tenant_id: str, platform: s
                 await ensure_comment_webhook_for_binding(binding, registry=registry)
             except MetaOAuthError as exc:
                 raise ChannelToggleError(str(exc), status_code=409, code="COMMENT_WEBHOOK_FAILED") from exc
+    if platform_key == "facebook":
+        try:
+            await ensure_app_page_webhook_subscription()
+        except MetaOAuthError as exc:
+            raise ChannelToggleError(str(exc), status_code=409, code="APP_WEBHOOK_FAILED") from exc
     return {
         "toggles": channel_toggle_states(tenant_id, platform_key),
         "comments_state": comment_capability_state(tenant_id, platform_key),
