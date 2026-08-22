@@ -15,8 +15,8 @@ from services.meta_graph_routing import credential_has_comment_scopes, required_
 from services.meta_oauth import MetaOAuthError, _safe_json
 from services.meta_oauth_page_lock import lock_facebook_page_oauth_operation
 
-PAGE_DM_FIELDS = ("messages", "messaging_postbacks")
-PAGE_COMMENT_FIELDS = ("messages", "messaging_postbacks", "feed")
+PAGE_DM_FIELDS = ("messages", "messaging_postbacks", "standby")
+PAGE_COMMENT_FIELDS = ("messages", "messaging_postbacks", "feed", "standby")
 INSTAGRAM_APP_DM_FIELDS = ("messages", "messaging_postbacks")
 INSTAGRAM_APP_COMMENT_FIELDS = ("comments", "messages", "messaging_postbacks")
 APP_A_COMMENT_CALLBACK_URL = "https://www.linasaibot.com/webhook/meta-messaging"

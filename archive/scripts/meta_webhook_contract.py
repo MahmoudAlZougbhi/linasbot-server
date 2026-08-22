@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from typing import cast
 
 DM_WEBHOOK_FIELDS = frozenset({"messages", "messaging_postbacks"})
-PAGE_SUBSCRIPTION_DM_ONLY = DM_WEBHOOK_FIELDS
-PAGE_SUBSCRIPTION_COMMENT_DELIVERY = frozenset({"feed", "messages", "messaging_postbacks"})
+PAGE_SUBSCRIPTION_DM_ONLY = frozenset({"messages", "messaging_postbacks", "standby"})
+PAGE_SUBSCRIPTION_COMMENT_DELIVERY = frozenset({"feed", "messages", "messaging_postbacks", "standby"})
 ALLOWED_PAGE_SUBSCRIPTION_FIELDS = PAGE_SUBSCRIPTION_COMMENT_DELIVERY
 APP_PAGE_WEBHOOK_FIELDS = PAGE_SUBSCRIPTION_COMMENT_DELIVERY
 APP_INSTAGRAM_WEBHOOK_FIELDS = frozenset({"comments", "messages", "messaging_postbacks"})
@@ -141,16 +141,22 @@ def validate_page_subscription_configuration(
     fields = extract_page_subscribed_fields(payload)
     forbidden_extra = tuple(sorted(fields - ALLOWED_PAGE_SUBSCRIPTION_FIELDS))
     dm_check = check_exact_fields(fields, DM_WEBHOOK_FIELDS)
-    delivery_check = check_exact_fields(fields, PAGE_SUBSCRIPTION_COMMENT_DELIVERY)
-    allowed_profiles = {PAGE_SUBSCRIPTION_DM_ONLY, PAGE_SUBSCRIPTION_COMMENT_DELIVERY}
+    comment_core = frozenset({"feed"}) | DM_WEBHOOK_FIELDS
+    delivery_ready = comment_core.issubset(fields) and fields.issubset(ALLOWED_PAGE_SUBSCRIPTION_FIELDS)
+    allowed_profiles = {
+        DM_WEBHOOK_FIELDS,
+        PAGE_SUBSCRIPTION_DM_ONLY,
+        comment_core,
+        PAGE_SUBSCRIPTION_COMMENT_DELIVERY,
+    }
     checks = {
         "page_has_single_subscribed_app": page_subscribed_app_count(payload) == 1,
         "page_subscribed_app_id_match": extract_page_subscribed_app_id(payload) == expected_app_id,
         "page_subscribed_dm_fields_present": dm_check.dm_fields_present,
         "page_subscribed_forbidden_fields_absent": not forbidden_extra,
-        "facebook_comment_delivery_infrastructure_ready": delivery_check.exact,
+        "facebook_comment_delivery_infrastructure_ready": delivery_ready,
         "facebook_comment_delivery_profile_matches_expectation": (
-            delivery_check.exact if expect_facebook_comment_delivery else fields in allowed_profiles
+            delivery_ready if expect_facebook_comment_delivery else fields in allowed_profiles
         ),
     }
     return checks
@@ -181,15 +187,20 @@ def assert_page_subscription_configuration(
             f"subscribed_fields_missing={sorted(DM_WEBHOOK_FIELDS - fields)}"
         )
     if expect_facebook_comment_delivery:
-        delivery_check = check_exact_fields(fields, PAGE_SUBSCRIPTION_COMMENT_DELIVERY)
-        if not delivery_check.exact:
+        comment_core = frozenset({"feed"}) | DM_WEBHOOK_FIELDS
+        if not comment_core.issubset(fields):
             raise error_type(
                 "Meta Page subscription configuration failed "
                 f"expect_facebook_comment_delivery=true "
-                f"subscribed_fields_missing={list(delivery_check.missing_fields)} "
-                f"subscribed_fields_extra={list(delivery_check.extra_fields)}"
+                f"subscribed_fields_missing={sorted(comment_core - fields)} "
+                f"subscribed_fields_extra={sorted(fields - ALLOWED_PAGE_SUBSCRIPTION_FIELDS)}"
             )
-    elif fields not in {PAGE_SUBSCRIPTION_DM_ONLY, PAGE_SUBSCRIPTION_COMMENT_DELIVERY}:
+    elif fields not in {
+        DM_WEBHOOK_FIELDS,
+        PAGE_SUBSCRIPTION_DM_ONLY,
+        frozenset({"feed"}) | DM_WEBHOOK_FIELDS,
+        PAGE_SUBSCRIPTION_COMMENT_DELIVERY,
+    }:
         raise error_type(
             "Meta Page subscription configuration failed "
             f"expect_facebook_comment_delivery=false invalid_profile={sorted(fields)}"
@@ -216,21 +227,20 @@ def evaluate_feature_readiness(
 ) -> dict[str, bool]:
     """Informational readiness only; never fails validation when features are disabled."""
 
-    app_page_check = check_exact_fields(app_page_fields, APP_PAGE_WEBHOOK_FIELDS)
+    app_page_ready = (frozenset({"feed"}) | DM_WEBHOOK_FIELDS).issubset(app_page_fields) and app_page_fields.issubset(
+        APP_PAGE_WEBHOOK_FIELDS
+    )
     app_instagram_check = check_exact_fields(app_instagram_fields, APP_INSTAGRAM_WEBHOOK_FIELDS)
-    page_delivery_check = check_exact_fields(page_subscribed_fields, PAGE_SUBSCRIPTION_COMMENT_DELIVERY)
+    page_delivery_ready = (frozenset({"feed"}) | DM_WEBHOOK_FIELDS).issubset(
+        page_subscribed_fields
+    ) and page_subscribed_fields.issubset(ALLOWED_PAGE_SUBSCRIPTION_FIELDS)
 
     facebook_scopes_ready = FACEBOOK_COMMENT_SCOPES.issubset(scopes)
     instagram_scopes_ready = INSTAGRAM_COMMENT_SCOPES.issubset(scopes)
     publish_scopes_ready = PUBLISH_FEATURE_SCOPES.issubset(scopes)
 
     facebook_comments_ready = (
-        facebook_scopes_ready
-        and app_page_check.exact
-        and page_delivery_check.exact
-        and app_page_check.dm_fields_present
-        and page_delivery_check.dm_fields_present
-        and facebook_comment_switch_enabled
+        facebook_scopes_ready and app_page_ready and page_delivery_ready and facebook_comment_switch_enabled
     )
     instagram_comments_ready = (
         instagram_scopes_ready
@@ -240,7 +250,7 @@ def evaluate_feature_readiness(
     )
 
     readiness: dict[str, bool] = {
-        "facebook_comment_delivery_infrastructure_ready": page_delivery_check.exact and app_page_check.exact,
+        "facebook_comment_delivery_infrastructure_ready": page_delivery_ready and app_page_ready,
         "facebook_comments_ready": facebook_comments_ready,
         "instagram_comments_ready": instagram_comments_ready,
         "publish_features_ready": publish_scopes_ready,

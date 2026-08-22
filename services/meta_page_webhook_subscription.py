@@ -17,7 +17,7 @@ from services.meta_app_registry import (
 from services.meta_oauth_graph_http import META_GRAPH_BASE_URL, MetaOAuthError, _graph_get, _safe_json
 from services.meta_oauth_page_lock import lock_facebook_page_oauth_operation
 
-_PAGE_DM_FIELDS = frozenset({"messages", "messaging_postbacks"})
+_PAGE_DM_FIELDS = frozenset({"messages", "messaging_postbacks", "standby"})
 _PAGE_COMMENT_FIELD = "feed"
 PageWebhookSubscriptionSnapshot = tuple[str, ...] | None
 

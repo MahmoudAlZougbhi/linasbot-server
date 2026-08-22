@@ -33,13 +33,13 @@ def test_dm_only_current_app_is_incomplete() -> None:
 
 def test_feed_plus_dm_fields_are_accepted() -> None:
     app_ids, fields = validate_state(
-        _payload(fields=["feed", "messages", "messaging_postbacks"]),
+        _payload(fields=["feed", "messages", "messaging_postbacks", "standby"]),
         current_app_id="2963733803971681",
         expectation="current-only",
     )
 
     assert app_ids == {"2963733803971681"}
-    assert fields == ("feed", "messages", "messaging_postbacks")
+    assert fields == ("feed", "messages", "messaging_postbacks", "standby")
 
 
 def test_subscription_reconcile_preserves_feed_when_repairing_dm_fields() -> None:
@@ -47,6 +47,7 @@ def test_subscription_reconcile_preserves_feed_when_repairing_dm_fields() -> Non
         "feed",
         "messages",
         "messaging_postbacks",
+        "standby",
     )
 
 
@@ -55,6 +56,7 @@ def test_subscription_reconcile_adds_feed_to_dm_only_state() -> None:
         "feed",
         "messages",
         "messaging_postbacks",
+        "standby",
     )
 
 
@@ -67,7 +69,7 @@ def test_subscribe_posts_merged_fields_when_feed_is_already_present() -> None:
         page_token="page-token",
     )
     before = _payload(fields=["feed"])
-    after = _payload(fields=["feed", "messages", "messaging_postbacks"])
+    after = _payload(fields=["feed", "messages", "messaging_postbacks", "standby"])
 
     with (
         patch("scripts.manage_meta_page_subscription._status", side_effect=[before, after]),
@@ -78,7 +80,7 @@ def test_subscribe_posts_merged_fields_when_feed_is_already_present() -> None:
     ):
         subscribe(config, allow_present=False)
 
-    assert request_json.call_args.kwargs["form"] == {"subscribed_fields": "feed,messages,messaging_postbacks"}
+    assert request_json.call_args.kwargs["form"] == {"subscribed_fields": "feed,messages,messaging_postbacks,standby"}
 
 
 @pytest.mark.parametrize(

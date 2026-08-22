@@ -94,7 +94,7 @@ async def test_page_comment_subscription_get_verifies_feed(
                 "data": [
                     {
                         "id": app.app_id,
-                        "subscribed_fields": ["feed", "messages", "messaging_postbacks"],
+                        "subscribed_fields": ["feed", "messages", "messaging_postbacks", "standby"],
                     }
                 ]
             },

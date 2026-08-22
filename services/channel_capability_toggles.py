@@ -214,7 +214,7 @@ async def ensure_comment_webhook_for_binding(binding: Any, *, registry: Any) -> 
     if binding.channel == "facebook":
         await ensure_page_comment_webhook_subscription(binding, registry=registry)
         _record_comment_webhook_fields(
-            binding, registry=registry, extra_fields=("feed", "messages", "messaging_postbacks")
+            binding, registry=registry, extra_fields=("feed", "messages", "messaging_postbacks", "standby")
         )
         return
     if auth_flow == "instagram_login":

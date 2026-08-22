@@ -409,7 +409,10 @@ async def complete_meta_business_login(
 
         if not authorized_bindings:
             raise MetaOAuthError("No Facebook Page binding was authorized")
-        from services.channel_capability_toggles import enable_channel_defaults_after_connect
+        from services.channel_capability_toggles import (
+            enable_channel_defaults_after_connect,
+            sync_published_comment_assets_if_enabled,
+        )
 
         for channel in sorted({binding.channel for binding in authorized_bindings}):
             try:
@@ -417,6 +420,13 @@ async def complete_meta_business_login(
                     tenant_id=tenant_id,
                     platform=channel,
                     actor=actor_id,
+                )
+            except Exception:
+                pass
+            try:
+                await sync_published_comment_assets_if_enabled(
+                    tenant_id=tenant_id,
+                    platform=channel,
                 )
             except Exception:
                 pass

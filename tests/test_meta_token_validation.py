@@ -10,6 +10,7 @@ from scripts.meta_webhook_contract import (
     COMMENT_FEATURE_SCOPES,
     DM_WEBHOOK_FIELDS,
     PAGE_SUBSCRIPTION_COMMENT_DELIVERY,
+    PAGE_SUBSCRIPTION_DM_ONLY,
     PUBLISH_FEATURE_SCOPES,
     evaluate_feature_readiness,
 )
@@ -176,10 +177,12 @@ def test_malformed_conversation_query_payload_fails_closed(channel: str) -> None
 
 
 def test_exact_dm_only_page_subscription_baseline_passes() -> None:
-    payload = _page_subscription_payload(fields=DM_WEBHOOK_FIELDS)
-    checks = validate_page_subscription_baseline(payload, expected_app_id="999000111222333")
+    checks = validate_page_subscription_baseline(
+        _page_subscription_payload(fields=DM_WEBHOOK_FIELDS),
+        expected_app_id="999000111222333",
+    )
     config = validate_page_subscription_configuration(
-        payload,
+        _page_subscription_payload(fields=PAGE_SUBSCRIPTION_DM_ONLY),
         expected_app_id="999000111222333",
         expect_facebook_comment_delivery=False,
     )
@@ -289,7 +292,7 @@ def test_legacy_dm_only_app_webhook_configuration_fails() -> None:
             )
         )
     message = str(exc.value)
-    assert "page_fields_missing=['feed']" in message
+    assert "page_fields_missing=['feed', 'standby']" in message
     assert "instagram_fields_missing=['comments']" in message
 
 

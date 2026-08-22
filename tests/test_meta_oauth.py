@@ -368,7 +368,12 @@ async def test_external_page_login_inspects_encrypts_and_activates_with_subscrip
     assert "business_management" not in credential.scopes
     assert credential.authorized_meta_user_id == "112233445566"
     assert result.binding.webhook_subscription_status == "ready"
-    assert set(result.binding.webhook_subscribed_fields) == {"messages", "messaging_postbacks", "feed"}
+    assert set(result.binding.webhook_subscribed_fields) == {
+        "messages",
+        "messaging_postbacks",
+        "feed",
+        "standby",
+    }
     assert "112233445566" not in stored
     assert any(request.url.path.endswith("/subscribed_apps") for request in observed_requests)
     token_exchange = next(request for request in observed_requests if request.url.path.endswith("/oauth/access_token"))
@@ -835,7 +840,7 @@ async def test_concurrent_failing_callback_cannot_undo_successful_page_subscript
     page_id = "445566778899"
     second_page_id = "556677889900"
     prior_fields = ("mention", "messages", "messaging_postbacks")
-    desired_fields = ("feed", "messages", "messaging_postbacks")
+    desired_fields = ("feed", "messages", "messaging_postbacks", "standby")
     external_subscriptions = {page_id: prior_fields}
     first_reached_failure = asyncio.Event()
     allow_first_to_fail = asyncio.Event()

@@ -247,7 +247,7 @@ async def test_oauth_and_comment_writers_cannot_overlap(
     first_posted = asyncio.Event()
     release_first = asyncio.Event()
     second_posted = asyncio.Event()
-    fields = ["feed", "messages", "messaging_postbacks"]
+    fields = ["feed", "messages", "messaging_postbacks", "standby"]
 
     async def first_handler(request: httpx.Request) -> httpx.Response:
         if request.method == "POST":

@@ -71,7 +71,7 @@ def test_reconcile_page_subscription_adds_feed_without_removing_dm_fields() -> N
             "data": [
                 {
                     "id": "2963733803971681",
-                    "subscribed_fields": ["feed", "messages", "messaging_postbacks"],
+                    "subscribed_fields": ["feed", "messages", "messaging_postbacks", "standby"],
                 }
             ]
         }
@@ -94,8 +94,8 @@ def test_reconcile_page_subscription_adds_feed_without_removing_dm_fields() -> N
     )
 
     assert first == second == set(PAGE_SUBSCRIPTION_COMMENT_DELIVERY)
-    assert calls[0]["subscribed_fields"] == "feed,messages,messaging_postbacks"
-    assert calls[1]["subscribed_fields"] == "feed,messages,messaging_postbacks"
+    assert calls[0]["subscribed_fields"] == "feed,messages,messaging_postbacks,standby"
+    assert calls[1]["subscribed_fields"] == "feed,messages,messaging_postbacks,standby"
 
 
 def test_comment_reconciler_repairs_missing_inactive_or_wrong_callback() -> None:
@@ -137,7 +137,7 @@ def test_comment_reconciler_repairs_missing_inactive_or_wrong_callback() -> None
                     "object": "page",
                     "callback_url": "https://www.linasaibot.com/webhook/meta-messaging",
                     "active": True,
-                    "fields": ["feed", "messages", "messaging_postbacks"],
+                    "fields": ["feed", "messages", "messaging_postbacks", "standby"],
                 },
                 {
                     "object": "instagram",
@@ -156,7 +156,7 @@ def test_comment_reconciler_repairs_missing_inactive_or_wrong_callback() -> None
         request_json=fake_request,
     )
 
-    assert page == {"feed", "messages", "messaging_postbacks"}
+    assert page == {"feed", "messages", "messaging_postbacks", "standby"}
     assert instagram == {"comments", "messages", "messaging_postbacks"}
     assert calls == [
         ("GET", "read_before"),
@@ -184,7 +184,7 @@ def test_comment_reconciler_rejects_main_instagram_callback_without_post() -> No
                     "object": "page",
                     "callback_url": "https://www.linasaibot.com/webhook/meta-messaging",
                     "active": True,
-                    "fields": ["feed", "messages", "messaging_postbacks"],
+                    "fields": ["feed", "messages", "messaging_postbacks", "standby"],
                 },
                 {
                     "object": "instagram",

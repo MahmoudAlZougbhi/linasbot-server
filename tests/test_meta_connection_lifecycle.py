@@ -213,7 +213,7 @@ async def test_disconnect_then_oauth_connect_uses_new_credential(
                     "data": [
                         {
                             "id": "2963733803971681",
-                            "subscribed_fields": ["feed", "messages", "messaging_postbacks"],
+                            "subscribed_fields": ["feed", "messages", "messaging_postbacks", "standby"],
                         }
                     ]
                 },
