@@ -1,8 +1,7 @@
-"""Direct Instagram Login subscribed_apps JSON contract and secret-safe telemetry."""
+"""Direct Instagram Login subscribed_apps contract and secret-safe telemetry."""
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -12,6 +11,7 @@ import pytest
 
 from services.meta_app_registry import MetaAppRegistry
 from services.meta_instagram_login_capabilities import binding_ready_for_comments, binding_ready_for_dm
+from services.meta_instagram_login_config import INSTAGRAM_LOGIN_GRAPH_API_VERSION
 from services.meta_instagram_login_subscription import (
     INSTAGRAM_LOGIN_SUBSCRIPTION_DEFERRED_ERROR,
     INSTAGRAM_LOGIN_SUBSCRIPTION_RATE_LIMITED_ERROR,
@@ -85,7 +85,7 @@ def test_failed_status_never_treats_stale_fields_as_verified_authority(
 
 
 @pytest.mark.asyncio
-async def test_subscribe_once_posts_json_array_not_form() -> None:
+async def test_subscribe_once_posts_query_fields_not_json_body() -> None:
     captured: dict[str, Any] = {}
 
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -93,7 +93,8 @@ async def test_subscribe_once_posts_json_array_not_form() -> None:
         captured["url"] = str(request.url)
         captured["content_type"] = request.headers.get("content-type")
         captured["authorization"] = request.headers.get("authorization")
-        captured["body"] = json.loads(request.content)
+        captured["body"] = request.content
+        captured["subscribed_fields"] = request.url.params.get("subscribed_fields")
         return httpx.Response(200, json={"success": True})
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
@@ -101,21 +102,22 @@ async def test_subscribe_once_posts_json_array_not_form() -> None:
             ig_user_id=INSTAGRAM_ID,
             access_token=SECRET_TOKEN,
             subscribed_fields=tuple(EXPECTED_FIELDS),
-            graph_api_version="v24.0",
+            graph_api_version=INSTAGRAM_LOGIN_GRAPH_API_VERSION,
             client=client,
         )
 
     assert captured["method"] == "POST"
-    assert captured["url"] == (f"https://graph.instagram.com/v24.0/{INSTAGRAM_ID}/subscribed_apps")
-    assert str(captured["content_type"]).startswith("application/json")
-    assert captured["body"] == {"subscribed_fields": EXPECTED_FIELDS}
+    assert captured["url"].startswith(
+        f"https://graph.instagram.com/{INSTAGRAM_LOGIN_GRAPH_API_VERSION}/{INSTAGRAM_ID}/subscribed_apps?"
+    )
+    assert captured["subscribed_fields"] == ",".join(EXPECTED_FIELDS)
+    assert captured["body"] in {b"", None}
+    assert not str(captured["content_type"] or "").startswith("application/json")
     assert captured["authorization"] == f"Bearer {SECRET_TOKEN}"
-    assert isinstance(captured["body"]["subscribed_fields"], list)
-    assert captured["body"]["subscribed_fields"] != ",".join(EXPECTED_FIELDS)
 
 
 @pytest.mark.asyncio
-async def test_ensure_posts_json_then_get_verifies_instagram_product_row(
+async def test_ensure_get_first_skips_write_when_provider_already_ready(
     registry: MetaAppRegistry,
 ) -> None:
     binding = _binding(
@@ -126,16 +128,12 @@ async def test_ensure_posts_json_then_get_verifies_instagram_product_row(
         webhook_fields=(),
     )
     credential = registry.get_credential(binding)
-    observed: list[tuple[str, str, dict[str, Any] | None]] = []
+    observed: list[str] = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        body: dict[str, Any] | None = None
+        observed.append(f"{request.method} {request.url.path}")
         if request.method == "POST":
-            assert request.headers.get("content-type", "").startswith("application/json")
-            body = json.loads(request.content)
-        observed.append((request.method, str(request.url), body))
-        if request.method == "POST":
-            return httpx.Response(200, json={"success": True})
+            raise AssertionError("subscribed_apps write must not run when GET already proves fields")
         return httpx.Response(
             200,
             json={
@@ -157,15 +155,9 @@ async def test_ensure_posts_json_then_get_verifies_instagram_product_row(
             client=client,
         )
 
-    assert [method for method, _url, _body in observed] == ["POST", "GET"]
-    post_method, post_url, post_body = observed[0]
-    get_method, get_url, get_body = observed[1]
-    assert post_method == "POST"
-    assert get_method == "GET"
-    assert post_url == f"https://graph.instagram.com/v24.0/{INSTAGRAM_ID}/subscribed_apps"
-    assert get_url == f"https://graph.instagram.com/v24.0/{INSTAGRAM_ID}/subscribed_apps"
-    assert post_body == {"subscribed_fields": EXPECTED_FIELDS}
-    assert get_body is None
+    assert observed == [
+        f"GET /{INSTAGRAM_LOGIN_GRAPH_API_VERSION}/{INSTAGRAM_ID}/subscribed_apps"
+    ]
     assert state.status == "ready"
     assert state.ready_for_dm is True
     assert state.ready_for_comments is True
@@ -320,7 +312,7 @@ async def test_verify_rate_limit_stops_after_one_post_and_one_get(
             client=client,
         )
 
-    assert methods == ["POST", "GET"]
+    assert methods == ["GET"]
     assert sleeps == []
     assert state.status == "failed"
     assert state.error == INSTAGRAM_LOGIN_SUBSCRIPTION_RATE_LIMITED_ERROR
@@ -364,8 +356,8 @@ async def test_verify_eventual_consistency_retries_reads_without_second_post(
             client=client,
         )
 
-    assert methods == ["POST", "GET", "GET", "GET"]
-    assert sleeps == [2.0, 5.0]
+    assert methods == ["GET", "POST", "GET", "GET"]
+    assert sleeps == [2.0]
     assert state.status == "ready"
 
 
@@ -376,11 +368,16 @@ async def test_uncertain_post_can_be_proved_by_get_without_second_write(
     binding = _binding(registry, auth_flow="instagram_login", scopes=FULL_SCOPES)
     credential = registry.get_credential(binding)
     methods: list[str] = []
+    write_started = False
 
     async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal write_started
         methods.append(request.method)
         if request.method == "POST":
+            write_started = True
             raise httpx.ReadTimeout("write acknowledgement lost", request=request)
+        if not write_started:
+            return httpx.Response(200, json={"data": []})
         return httpx.Response(
             200,
             json={"data": [{"id": INSTAGRAM_APP_ID, "subscribed_fields": EXPECTED_FIELDS}]},
@@ -395,7 +392,7 @@ async def test_uncertain_post_can_be_proved_by_get_without_second_write(
             client=client,
         )
 
-    assert methods == ["POST", "GET"]
+    assert methods == ["GET", "POST", "GET"]
     assert state.status == "ready"
 
 
@@ -412,11 +409,16 @@ async def test_missing_success_ack_is_verified_without_second_write(
     )
     credential = registry.get_credential(binding)
     methods: list[str] = []
+    write_started = False
 
     async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal write_started
         methods.append(request.method)
         if request.method == "POST":
+            write_started = True
             return httpx.Response(200, json={})
+        if not write_started:
+            return httpx.Response(200, json={"data": []})
         return httpx.Response(
             200,
             json={"data": [{"id": INSTAGRAM_APP_ID, "subscribed_fields": EXPECTED_FIELDS}]},
@@ -431,7 +433,7 @@ async def test_missing_success_ack_is_verified_without_second_write(
             client=client,
         )
 
-    assert methods == ["POST", "GET"]
+    assert methods == ["GET", "POST", "GET"]
     assert state.status == "ready"
 
 
@@ -462,7 +464,7 @@ async def test_deterministic_post_rejection_never_reposts_or_verifies(
             client=client,
         )
 
-    assert methods == ["POST"]
+    assert methods == ["GET"]
     assert state.status == "failed"
     assert state.error == INSTAGRAM_LOGIN_SUBSCRIPTION_WRITE_REJECTED_ERROR
 
@@ -494,7 +496,7 @@ async def test_explicit_false_ack_is_a_deterministic_write_rejection(
             client=client,
         )
 
-    assert methods == ["POST"]
+    assert methods == ["GET", "POST"]
     assert state.status == "failed"
     assert state.error == INSTAGRAM_LOGIN_SUBSCRIPTION_WRITE_REJECTED_ERROR
 
@@ -533,7 +535,7 @@ async def test_unresolved_accepted_write_is_deferred_without_repost(
             client=client,
         )
 
-    assert methods == ["POST", "GET", "GET", "GET"]
+    assert methods == ["GET", "POST", "GET", "GET", "GET"]
     assert state.error == INSTAGRAM_LOGIN_SUBSCRIPTION_DEFERRED_ERROR
     refreshed = next(item for item in registry.list_bindings() if item.binding_id == binding.binding_id)
     assert refreshed.webhook_subscribed_fields == ()
@@ -579,7 +581,7 @@ async def test_deferred_comments_verification_preserves_verified_dm_fields(
             client=client,
         )
 
-    assert methods == ["POST", "GET", "GET", "GET"]
+    assert methods == ["GET", "POST", "GET", "GET", "GET"]
     assert state.status == "partial"
     assert state.ready_for_dm is True
     assert state.ready_for_comments is False
