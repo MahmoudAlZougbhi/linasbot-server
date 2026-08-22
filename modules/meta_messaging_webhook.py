@@ -147,7 +147,9 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
 
     payload_object = str(payload.get("object") or "").strip().lower()
     entry_rows = [row for row in (payload.get("entry") or []) if isinstance(row, dict)]
-    messaging_batches = sum(len(row.get("messaging") or []) for row in entry_rows if isinstance(row.get("messaging"), list))
+    messaging_batches = sum(
+        len(row.get("messaging") or []) for row in entry_rows if isinstance(row.get("messaging"), list)
+    )
     feed_field_changes = 0
     for row in entry_rows:
         for change in row.get("changes") or []:

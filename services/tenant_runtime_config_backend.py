@@ -33,6 +33,4 @@ def require_tenant_runtime_config_postgres() -> None:
 
     health = ping_whatsapp_db()
     if not health.get("reachable"):
-        raise TenantRuntimeConfigBackendError(
-            "Tenant runtime config requires Postgres but database is unreachable."
-        )
+        raise TenantRuntimeConfigBackendError("Tenant runtime config requires Postgres but database is unreachable.")

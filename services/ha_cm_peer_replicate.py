@@ -95,7 +95,7 @@ def _remote_pointer_checksum(tenant_id: str) -> str:
         "ssh",
         *_SSH_OPTIONS,
         _ssh_target(),
-        f"python3 -c \"import json,hashlib; p=json.load(open({remote_path!r})); "
+        f'python3 -c "import json,hashlib; p=json.load(open({remote_path!r})); '
         f"print(hashlib.sha256(json.dumps(p,sort_keys=True,separators=(',',':')).encode()).hexdigest())\"",
     ]
     try:
