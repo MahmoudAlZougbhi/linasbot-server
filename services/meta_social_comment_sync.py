@@ -190,8 +190,8 @@ async def _enqueue_comment_ai(*, binding: MetaAssetBinding, settings: Any, event
     comment_id = str(event.get("comment_id") or "").strip()
     if not comment_id:
         return False
-    from services.meta_cross_flow_dedup import global_comment_claim_key
     from services.durable_event_claim import try_claim_event_handle
+    from services.meta_cross_flow_dedup import global_comment_claim_key
 
     global_key = global_comment_claim_key(event)
     claim_handle = await try_claim_event_handle(
