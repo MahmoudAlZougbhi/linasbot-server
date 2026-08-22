@@ -210,6 +210,18 @@ jobs:
             for name in sorted(patterns):
                 print(f"[meta-runtime] {name}={counts[name]}")
 
+            ig_diag = 0
+            for line in lines:
+                if not re.search(
+                    r"instagram_login_callback |\[instagram-login\] (?:subscribed_apps|subscribe_|lifecycle_)",
+                    line,
+                ):
+                    continue
+                ig_diag += 1
+                safe = re.sub(r"\d{7,}", "[REDACTED_ID]", line)
+                print(f"[meta-runtime] ig_diag={safe[:500]}")
+            print(f"[meta-runtime] instagram_login_diag_lines={ig_diag}")
+
             webhook_metric_counts = Counter()
             for line in lines:
                 match = re.search(
