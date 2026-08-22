@@ -16,7 +16,6 @@ import {
 import {
   IntegrationChannelCard,
   channelSubtitle,
-  commentsBlocker,
   type IntegrationRow,
 } from './IntegrationChannelCard';
 import { IntegrationRefreshButton } from './IntegrationRefreshButton';
@@ -181,47 +180,13 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
         await connectTikTok();
         return;
       }
-      if (key === 'dm' && value === true) {
-        const dmBlocker = row.dm_state?.blocker_code || row.dm_state?.blocker;
-        if (dmBlocker === 'tiktok_messaging_pending') {
-          setError(tr('tiktokMessagingPending'));
-          return;
-        }
-      }
     } else {
-    const platform = row.platform === 'facebook' ? 'facebook' : 'instagram';
-
-    if (value === true && !row.connected) {
-      setError(tr('commentsBlockerConnectFirst'));
-      await connectPlatform(platform);
-      return;
-    }
-
-    if (key === 'comments' && value === true) {
-      const blocker = commentsBlocker(row as IntegrationRow);
-      if (blocker === 'missing_comment_permissions' || blocker === 'reauthorization_required') {
-        const missing = row.comments_state?.missing_scopes?.filter(Boolean) ?? [];
-        setError(
-          missing.length
-            ? `${tr('commentsBlockerMissingPermissions')} Missing: ${missing.join(', ')}. ${tr('disconnectThenConnectHint')}`
-            : `${tr('commentsBlockerMissingPermissions')} ${tr('disconnectThenConnectHint')}`,
-        );
-        return;
-      }
-      if (blocker === 'meta_approval_required') {
-        setError(tr('commentsBlockerMetaApproval'));
-        return;
-      }
-      if (blocker === 'missing_comment_webhook') {
-        await reconcileComments(row);
-        return;
-      }
-      if (blocker === 'connect_channel_first') {
+      const platform = row.platform === 'facebook' ? 'facebook' : 'instagram';
+      if (value === true && !row.connected) {
         setError(tr('commentsBlockerConnectFirst'));
         await connectPlatform(platform);
         return;
       }
-    }
     }
 
     await applyIntegrationToggle({

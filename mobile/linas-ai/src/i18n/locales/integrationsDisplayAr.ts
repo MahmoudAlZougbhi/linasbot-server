@@ -28,7 +28,9 @@ export const integrationsDisplayAr = {
   metaOAuthFailedDeletionFailed:
     'تفويض Instagram محظور لأن طلب حذف بيانات Meta فشل. اطلب من المسؤول حلّ الطلب، ثم اربطه من جديد.',
   metaOAuthFailedProvider:
-    'تعذّر على Meta إكمال إعداد Instagram الآن. انتظر خمس دقائق، ثم اضغط Connect مرة واحدة.',
+    'إنستغرام لم يؤكد إعداد الـ webhook بعد محاولتين. لا تضغط Connect من جديد. أرسل هذه الرسالة.',
+  metaOAuthFailedRateLimit:
+    'إنستغرام حدّ إعداد الـ webhook (خطأ Graph 613). لا تضغط Connect من جديد. أرسل هذه الرسالة.',
   integrationStatusConnected: 'الاتصال سليم',
   integrationStatusNeedsReconnect: 'يحتاج إعادة ربط',
   integrationStatusError: 'مشكلة في الاتصال',

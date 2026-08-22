@@ -45,7 +45,7 @@ def _without_comment_capabilities(integrations: list[dict[str, Any]]) -> list[di
 @app.get("/api/mobile/integrations")
 async def mobile_integrations(request: Request) -> Any:
     session = require_session(request)
-    # Best-effort: clear stale DM/Comments when disconnected or permissions fail.
+    # Best-effort: clear leftover DM/Comments only when the channel is disconnected.
     actor = session.user_id or session.email or "channel_state_reconcile"
     for platform in supported_platforms():
         try:

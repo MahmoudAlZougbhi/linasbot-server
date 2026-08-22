@@ -28,7 +28,7 @@ from services.social_image_quota import (
 from utils.utils import get_user_state_from_firestore, save_user_name_to_firestore
 
 SendFunc = Callable[..., Awaitable[Any]]
-_TERMINAL_META_DELIVERIES = frozenset({"delivered", "blocked_quota", "no_text", "permanent_block"})
+_TERMINAL_META_DELIVERIES = frozenset({"delivered", "blocked_quota", "no_text", "permanent_block", "skipped"})
 
 
 def meta_social_outcome_requires_retry(outcome: dict[str, Any] | None) -> bool:
@@ -123,6 +123,17 @@ async def process_meta_social_event(
     resolved_tenant_id = str(tenant_id or settings.tenant_id or "").strip()
     if not resolved_tenant_id:
         raise ValueError("tenant_id required for social messaging")
+    from services.channel_capability_runtime import meta_dm_replies_enabled
+
+    if not meta_dm_replies_enabled(tenant_id=resolved_tenant_id, platform=channel):
+        return {
+            "ok": True,
+            "delivery": "skipped",
+            "skipped": True,
+            "reason": "dm_disabled",
+            "retryable": False,
+            "terminal": True,
+        }
     account_id = resolve_meta_send_account_id(channel, event, settings)
     resolved_binding_id = str(binding_id or settings.binding_id or "").strip()
     asset_id = settings.instagram_account_id if channel == "instagram" else settings.page_id

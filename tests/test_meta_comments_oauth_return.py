@@ -103,12 +103,15 @@ def test_mobile_oauth_failure_reason_distinguishes_no_page_and_provider() -> Non
     no_page = MetaOAuthError("No eligible Facebook Page was authorized in Meta Business Login")
     missing_page_tasks = MetaOAuthError("Authorized Facebook Page is missing required tasks (MESSAGING, MODERATE)")
     provider = MetaOAuthError(
-        "Instagram provider is temporarily limiting webhook subscription verification. "
-        "Wait a few minutes, then tap Connect once."
+        "Instagram did not confirm webhook fields after two checks. Do not tap Connect again."
+    )
+    rate_limit = MetaOAuthError(
+        "Instagram rate-limited webhook setup (Graph error 613). Do not tap Connect again."
     )
     assert mobile_oauth_failure_reason(no_page) == "no_page"
     assert mobile_oauth_failure_reason(missing_page_tasks) == "no_page"
     assert mobile_oauth_failure_reason(provider) == "provider"
+    assert mobile_oauth_failure_reason(rate_limit) == "rate_limit"
 
     no_page_url = oauth_completion_redirect_url(
         return_surface="mobile",
@@ -120,11 +123,17 @@ def test_mobile_oauth_failure_reason_distinguishes_no_page_and_provider() -> Non
         meta_connection="failed",
         extra_query={"meta_reason": "provider", "channel": "instagram", "state": "secret"},
     )
+    rate_limit_url = oauth_completion_redirect_url(
+        return_surface="mobile",
+        meta_connection="failed",
+        extra_query={"meta_reason": "rate_limit", "channel": "instagram", "state": "secret"},
+    )
     assert "meta_reason=no_page" in no_page_url
     assert "channel=facebook" in no_page_url
     assert "meta_reason=provider" in provider_url
+    assert "meta_reason=rate_limit" in rate_limit_url
     assert "channel=instagram" in provider_url
-    assert "secret" not in no_page_url + provider_url
+    assert "secret" not in no_page_url + provider_url + rate_limit_url
 
 
 def test_invalid_tampered_return_surface_rejected_to_web() -> None:
@@ -305,8 +314,8 @@ async def test_facebook_callback_preserves_mobile_surface_after_failure(monkeypa
 
 
 @pytest.mark.asyncio
-async def test_duplicate_enable_comments_does_not_duplicate_webhook_calls(monkeypatch) -> None:
-    """Case 10: duplicate Enable requests do not duplicate webhook subscriptions."""
+async def test_duplicate_enable_comments_does_not_call_meta_webhooks(monkeypatch) -> None:
+    """Comments ON/OFF is local AI intent; Connect owns Meta webhook subscription."""
 
     calls: list[str] = []
     binding = _ig_binding(
@@ -330,24 +339,6 @@ async def test_duplicate_enable_comments_does_not_duplicate_webhook_calls(monkey
     monkeypatch.setattr(
         "services.channel_capability_toggles.canonical_channel_bindings",
         lambda *_a, **_k: [binding],
-    )
-    monkeypatch.setattr(
-        "services.channel_capability_toggles.get_meta_app_registry",
-        lambda: _MapRegistry(
-            {
-                "ig-legacy": _Cred(
-                    (
-                        "instagram_business_basic",
-                        "instagram_business_manage_messages",
-                        "instagram_business_manage_comments",
-                    )
-                )
-            }
-        ),
-    )
-    monkeypatch.setattr(
-        "services.channel_capability_toggles.credential_has_comment_scopes",
-        lambda *_a, **_k: True,
     )
     monkeypatch.setattr(
         "services.channel_capability_toggles.get_comment_reply_setting",
@@ -410,8 +401,8 @@ async def test_duplicate_enable_comments_does_not_duplicate_webhook_calls(monkey
         enabled=True,
         actor="test",
     )
-    # Idempotent re-verify is allowed; must not explode or invent duplicate field lists.
-    assert calls == ["subscribe", "subscribe"]
+    # App Comments ON must not subscribe Meta webhooks; Connect already did that.
+    assert calls == []
 
 
 def test_mobile_integrations_oauth_and_deeplink_source_contract() -> None:

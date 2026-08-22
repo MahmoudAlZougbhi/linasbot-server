@@ -220,7 +220,7 @@ async def test_meta_worker_routes_to_deliver_meta_dm(sfu_db, sfu_credit_entitlem
         ),
         patch(
             "services.channel_capability_state.dm_capability_state",
-            return_value={"effective_enabled": True},
+            return_value={"requested_enabled": True},
         ),
         patch(
             "services.smart_followup.adapters.meta_dm._load_firestore_conversation",

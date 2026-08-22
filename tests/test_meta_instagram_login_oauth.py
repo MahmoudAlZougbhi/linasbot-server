@@ -437,7 +437,7 @@ async def test_complete_instagram_login_rejects_fields_from_another_app(
             )
         return response
 
-    with pytest.raises(MetaOAuthError, match="verification is still pending") as captured:
+    with pytest.raises(MetaOAuthError, match="after two checks") as captured:
         await complete_instagram_login(
             code="auth-code",
             state=state,
@@ -452,7 +452,7 @@ async def test_complete_instagram_login_rejects_fields_from_another_app(
     assert binding.status == "testing"
     assert binding.webhook_subscription_status == INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS
     assert registry.binding_credential_is_available(binding.binding_id)
-    assert provider_methods == ["GET", "GET", "POST", "GET", "GET", "GET"]
+    assert provider_methods == ["GET", "GET", "POST", "GET", "GET"]
     assert "DELETE" not in provider_methods
 
 
@@ -496,7 +496,7 @@ async def test_complete_instagram_login_fails_when_granted_comments_are_not_veri
             provider_methods.append(request.method)
         return await transport.handle_async_request(request)
 
-    with pytest.raises(MetaOAuthError, match="verification is still pending") as captured:
+    with pytest.raises(MetaOAuthError, match="after two checks") as captured:
         await complete_instagram_login(
             code="auth-code",
             state=state,
@@ -512,7 +512,7 @@ async def test_complete_instagram_login_fails_when_granted_comments_are_not_veri
     assert binding.status == "testing"
     assert binding.webhook_subscription_status == INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS
     assert registry.binding_credential_is_available(binding.binding_id)
-    assert provider_methods == ["GET", "GET", "POST", "GET", "GET", "GET"]
+    assert provider_methods == ["GET", "GET", "POST", "GET", "GET"]
     assert "DELETE" not in provider_methods
 
 
@@ -538,7 +538,7 @@ async def test_verify_rate_limit_persists_cleanup_without_hot_compensation(
                     )
         return await base_transport.handle_async_request(request)
 
-    with pytest.raises(MetaOAuthError, match="temporarily limiting") as captured:
+    with pytest.raises(MetaOAuthError, match="Graph error 613") as captured:
         await complete_instagram_login(
             code="rate-limited-auth-code",
             state=state,
@@ -549,7 +549,7 @@ async def test_verify_rate_limit_persists_cleanup_without_hot_compensation(
             ),
         )
 
-    assert mobile_oauth_failure_reason(captured.value) == "provider"
+    assert mobile_oauth_failure_reason(captured.value) == "rate_limit"
     binding = next(item for item in registry.list_bindings() if item.auth_flow == "instagram_login")
     assert binding.status == "testing"
     assert binding.webhook_subscription_status == INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS
@@ -575,7 +575,7 @@ async def test_preflight_rate_limit_returns_provider_guidance_without_write(
             )
         return await base_transport.handle_async_request(request)
 
-    with pytest.raises(MetaOAuthError, match="temporarily limiting") as captured:
+    with pytest.raises(MetaOAuthError, match="Graph error 613") as captured:
         await complete_instagram_login(
             code="preflight-rate-limited-auth-code",
             state=state,
@@ -586,7 +586,7 @@ async def test_preflight_rate_limit_returns_provider_guidance_without_write(
             ),
         )
 
-    assert mobile_oauth_failure_reason(captured.value) == "provider"
+    assert mobile_oauth_failure_reason(captured.value) == "rate_limit"
     assert provider_methods == ["GET"]
     assert all(
         item.status != "active"
@@ -616,7 +616,7 @@ async def test_uncertain_post_acknowledgement_stays_durable_until_lifecycle(
             return httpx.Response(200, json={"data": []})
         return await base_transport.handle_async_request(request)
 
-    with pytest.raises(MetaOAuthError, match="verification is still pending"):
+    with pytest.raises(MetaOAuthError, match="after two checks"):
         await complete_instagram_login(
             code="uncertain-write-auth-code",
             state=state,
@@ -631,7 +631,7 @@ async def test_uncertain_post_acknowledgement_stays_durable_until_lifecycle(
     assert binding.status == "testing"
     assert binding.webhook_subscription_status == INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS
     assert registry.binding_credential_is_available(binding.binding_id)
-    assert provider_methods == ["GET", "GET", "POST", "GET", "GET", "GET"]
+    assert provider_methods == ["GET", "GET", "POST", "GET", "GET"]
     assert "DELETE" not in provider_methods
 
 

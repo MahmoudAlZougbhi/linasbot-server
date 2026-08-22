@@ -28,7 +28,9 @@ export const integrationsDisplayEn = {
   metaOAuthFailedDeletionFailed:
     'Instagram authorization is blocked because a Meta data-deletion request failed. Ask an administrator to resolve it, then Connect again.',
   metaOAuthFailedProvider:
-    'Meta could not finish the Instagram setup right now. Wait five minutes, then tap Connect once.',
+    'Instagram did not confirm webhook setup after two checks. Do not tap Connect again. Send this message.',
+  metaOAuthFailedRateLimit:
+    'Instagram rate-limited webhook setup (Graph error 613). Do not tap Connect again. Send this message.',
   integrationStatusConnected: 'Connection healthy',
   integrationStatusNeedsReconnect: 'Needs reconnect',
   integrationStatusError: 'Connection issue',

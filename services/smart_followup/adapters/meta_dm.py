@@ -161,9 +161,8 @@ class MetaDmFollowUpAdapter:
         from services.channel_capability_state import dm_capability_state
 
         dm_state = dm_capability_state(job.tenant_id, platform)
-        if not dm_state.get("effective_enabled"):
-            blocker = str(dm_state.get("blocker_code") or dm_state.get("blocker") or "dm_disabled")
-            return False, blocker
+        if not dm_state.get("requested_enabled"):
+            return False, "dm_disabled"
 
         ok_window, window_reason = window_allows_send(conv=conv, now=now_dt)
         if not ok_window:

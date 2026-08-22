@@ -42,7 +42,8 @@ INSTAGRAM_LOGIN_CLEANUP_RESTORE_ERROR = "cleanup_restore_preimage"
 INSTAGRAM_LOGIN_SUBSCRIPTION_RATE_LIMITED_ERROR = "verification_rate_limited"
 INSTAGRAM_LOGIN_SUBSCRIPTION_DEFERRED_ERROR = "verification_deferred"
 INSTAGRAM_LOGIN_SUBSCRIPTION_WRITE_REJECTED_ERROR = "subscription_write_rejected"
-_VERIFY_BACKOFF_SECONDS = (0.0, 2.0, 5.0)
+# One immediate verify, then one retry after 10s. Never a third Graph verify.
+_VERIFY_BACKOFF_SECONDS = (0.0, 10.0)
 
 __all__ = [
     "COMMENTS_SUBSCRIPTION_FIELD",

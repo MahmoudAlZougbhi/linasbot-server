@@ -22,6 +22,7 @@ const META_REASONS = new Set([
   'config',
   'no_page',
   'provider',
+  'rate_limit',
 ]);
 
 export function parseMetaOAuthFailureReason(value: unknown): string | null {
@@ -152,6 +153,8 @@ export function metaOAuthFailureMessage(
       return tr('metaOAuthFailedConflict');
     case 'provider':
       return tr('metaOAuthFailedProvider');
+    case 'rate_limit':
+      return tr('metaOAuthFailedRateLimit');
     default:
       return tr('metaOAuthFailed');
   }

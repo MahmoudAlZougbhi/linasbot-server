@@ -9,14 +9,6 @@ from services.meta_app_registry import get_meta_app_registry
 
 ConnectionDisplayStatus = Literal["disconnected", "connected", "needs_reconnect", "error"]
 
-_RECONNECT_BLOCKERS = frozenset(
-    {
-        "reauthorization_required",
-        "connection_unhealthy",
-        "missing_dm_permissions",
-    }
-)
-
 _MOBILE_STRIP_KEYS = frozenset(
     {
         "binding_ids",
@@ -65,37 +57,20 @@ def _overall_connection_status(
     *,
     connected: bool,
     accounts: list[dict[str, Any]],
-    dm_state: dict[str, Any] | None,
-    comments_state: dict[str, Any] | None,
 ) -> ConnectionDisplayStatus:
+    """Connected vs reconnect from the Meta binding, not from AI toggle/scope hints."""
+
     if not connected:
         return "disconnected"
 
     statuses = {str(item.get("connection_status") or "") for item in accounts}
-    if statuses and statuses == {"connected"}:
-        base: ConnectionDisplayStatus = "connected"
-    elif any(s == "needs_reconnect" for s in statuses):
-        base = "needs_reconnect"
-    else:
-        base = "error"
-
-    for state in (dm_state, comments_state):
-        if not isinstance(state, dict):
-            continue
-        blocker = str(state.get("blocker_code") or state.get("blocker") or "")
-        if blocker in _RECONNECT_BLOCKERS:
-            return "needs_reconnect"
-        if not bool(state.get("connection_healthy", True)) and blocker:
-            return "needs_reconnect"
-        if blocker and blocker not in {"connect_channel_first", "meta_approval_required", "plan_comments_disabled"}:
-            if blocker in {"missing_comment_webhook", "asset_action_off"}:
-                continue
-            if base == "connected":
-                base = "error"
-
-    if not bool(dm_state.get("connection_healthy", True)) if isinstance(dm_state, dict) else False:
+    if not statuses:
+        return "connected"
+    if statuses == {"connected"}:
+        return "connected"
+    if "needs_reconnect" in statuses:
         return "needs_reconnect"
-    return base
+    return "error"
 
 
 def enrich_mobile_integration_row(row: dict[str, Any], *, tenant_id: str) -> dict[str, Any]:
@@ -114,8 +89,6 @@ def enrich_mobile_integration_row(row: dict[str, Any], *, tenant_id: str) -> dic
         registry = get_meta_app_registry()
         accounts = [_binding_account_display(binding, platform, registry=registry) for binding in canonical]
 
-    dm_state = row.get("dm_state") if isinstance(row.get("dm_state"), dict) else None
-    comments_state = row.get("comments_state") if isinstance(row.get("comments_state"), dict) else None
     toggles_raw = row.get("toggles")
     toggles: dict[str, Any] = toggles_raw if isinstance(toggles_raw, dict) else {}
     connected = bool(row.get("connected"))
@@ -123,8 +96,6 @@ def enrich_mobile_integration_row(row: dict[str, Any], *, tenant_id: str) -> dic
     connection_status = _overall_connection_status(
         connected=connected,
         accounts=accounts,
-        dm_state=dm_state,
-        comments_state=comments_state,
     )
     last_synced_at: float | None = None
     for account in accounts:
