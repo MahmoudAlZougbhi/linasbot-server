@@ -407,10 +407,20 @@ async def test_subject_guard_failures_are_not_reported_as_data_deletion(
 
 
 @pytest.mark.asyncio
-async def test_complete_instagram_login_rejects_fields_from_another_app(registry: MetaAppRegistry) -> None:
+async def test_complete_instagram_login_rejects_fields_from_another_app(
+    registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def no_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
     state = _start_state(registry)
+    provider_methods: list[str] = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/subscribed_apps"):
+            provider_methods.append(request.method)
         response = await _transport().handle_async_request(request)
         if request.method == "GET" and request.url.path.endswith("/subscribed_apps"):
             return httpx.Response(
@@ -426,7 +436,7 @@ async def test_complete_instagram_login_rejects_fields_from_another_app(registry
             )
         return response
 
-    with pytest.raises(MetaOAuthError, match="webhook subscription could not be confirmed"):
+    with pytest.raises(MetaOAuthError, match="verification is still pending") as captured:
         await complete_instagram_login(
             code="auth-code",
             state=state,
@@ -436,6 +446,13 @@ async def test_complete_instagram_login_rejects_fields_from_another_app(registry
                 base_url="https://graph.instagram.com",
             ),
         )
+    assert mobile_oauth_failure_reason(captured.value) == "provider"
+    binding = next(item for item in registry.list_bindings() if item.auth_flow == "instagram_login")
+    assert binding.status == "testing"
+    assert binding.webhook_subscription_status == INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS
+    assert registry.binding_credential_is_available(binding.binding_id)
+    assert provider_methods == ["GET", "POST", "GET", "GET", "GET"]
+    assert "DELETE" not in provider_methods
 
 
 @pytest.mark.asyncio
@@ -463,7 +480,12 @@ async def test_complete_instagram_login_fails_closed_when_subscription_missing(r
 @pytest.mark.asyncio
 async def test_complete_instagram_login_fails_when_granted_comments_are_not_verified(
     registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    async def no_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
     state = _start_state(registry)
     provider_methods: list[str] = []
     transport = _transport(comments_verified=False)
@@ -473,7 +495,7 @@ async def test_complete_instagram_login_fails_when_granted_comments_are_not_veri
             provider_methods.append(request.method)
         return await transport.handle_async_request(request)
 
-    with pytest.raises(MetaOAuthError, match="webhook subscription could not be confirmed"):
+    with pytest.raises(MetaOAuthError, match="verification is still pending") as captured:
         await complete_instagram_login(
             code="auth-code",
             state=state,
@@ -485,11 +507,131 @@ async def test_complete_instagram_login_fails_when_granted_comments_are_not_veri
         )
 
     binding = next(item for item in registry.list_bindings() if item.auth_flow == "instagram_login")
-    assert binding.status == "disconnected"
-    with pytest.raises(MetaCredentialError):
-        registry.get_credential(binding)
-    assert "DELETE" in provider_methods
-    assert provider_methods[-1] == "GET"
+    assert mobile_oauth_failure_reason(captured.value) == "provider"
+    assert binding.status == "testing"
+    assert binding.webhook_subscription_status == INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS
+    assert registry.binding_credential_is_available(binding.binding_id)
+    assert provider_methods == ["GET", "POST", "GET", "GET", "GET"]
+    assert "DELETE" not in provider_methods
+
+
+@pytest.mark.asyncio
+async def test_verify_rate_limit_persists_cleanup_without_hot_compensation(
+    registry: MetaAppRegistry,
+) -> None:
+    state = _start_state(registry)
+    provider_methods: list[str] = []
+    base_transport = _transport()
+    reads = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal reads
+        if request.url.path.endswith("/subscribed_apps"):
+            provider_methods.append(request.method)
+            if request.method == "GET":
+                reads += 1
+                if reads == 2:
+                    return httpx.Response(
+                        500,
+                        json={"error": {"type": "IGApiException", "code": 613, "is_transient": False}},
+                    )
+        return await base_transport.handle_async_request(request)
+
+    with pytest.raises(MetaOAuthError, match="temporarily limiting") as captured:
+        await complete_instagram_login(
+            code="rate-limited-auth-code",
+            state=state,
+            registry=registry,
+            client=httpx.AsyncClient(
+                transport=httpx.MockTransport(handler),
+                base_url="https://graph.instagram.com",
+            ),
+        )
+
+    assert mobile_oauth_failure_reason(captured.value) == "provider"
+    binding = next(item for item in registry.list_bindings() if item.auth_flow == "instagram_login")
+    assert binding.status == "testing"
+    assert binding.webhook_subscription_status == INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS
+    assert registry.binding_credential_is_available(binding.binding_id)
+    assert provider_methods == ["GET", "POST", "GET"]
+    assert "DELETE" not in provider_methods
+
+
+@pytest.mark.asyncio
+async def test_preflight_rate_limit_returns_provider_guidance_without_write(
+    registry: MetaAppRegistry,
+) -> None:
+    state = _start_state(registry)
+    provider_methods: list[str] = []
+    base_transport = _transport()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/subscribed_apps"):
+            provider_methods.append(request.method)
+            return httpx.Response(
+                500,
+                json={"error": {"type": "IGApiException", "code": 613, "is_transient": False}},
+            )
+        return await base_transport.handle_async_request(request)
+
+    with pytest.raises(MetaOAuthError, match="temporarily limiting") as captured:
+        await complete_instagram_login(
+            code="preflight-rate-limited-auth-code",
+            state=state,
+            registry=registry,
+            client=httpx.AsyncClient(
+                transport=httpx.MockTransport(handler),
+                base_url="https://graph.instagram.com",
+            ),
+        )
+
+    assert mobile_oauth_failure_reason(captured.value) == "provider"
+    assert provider_methods == ["GET"]
+    assert all(
+        item.status != "active"
+        for item in registry.list_bindings(include_inactive=True, include_superseded=True)
+        if item.auth_flow == "instagram_login"
+    )
+
+
+@pytest.mark.asyncio
+async def test_uncertain_post_acknowledgement_stays_durable_until_lifecycle(
+    registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def no_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
+    state = _start_state(registry)
+    provider_methods: list[str] = []
+    base_transport = _transport()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/subscribed_apps"):
+            provider_methods.append(request.method)
+            if request.method == "POST":
+                return httpx.Response(204)
+            return httpx.Response(200, json={"data": []})
+        return await base_transport.handle_async_request(request)
+
+    with pytest.raises(MetaOAuthError, match="verification is still pending"):
+        await complete_instagram_login(
+            code="uncertain-write-auth-code",
+            state=state,
+            registry=registry,
+            client=httpx.AsyncClient(
+                transport=httpx.MockTransport(handler),
+                base_url="https://graph.instagram.com",
+            ),
+        )
+
+    binding = next(item for item in registry.list_bindings() if item.auth_flow == "instagram_login")
+    assert binding.status == "testing"
+    assert binding.webhook_subscription_status == INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS
+    assert registry.binding_credential_is_available(binding.binding_id)
+    assert provider_methods == ["GET", "POST", "GET", "GET", "GET"]
+    assert "DELETE" not in provider_methods
 
 
 @pytest.mark.asyncio
@@ -1126,9 +1268,10 @@ async def test_stale_marker_transient_inspection_failure_does_not_downgrade_read
 @pytest.mark.asyncio
 async def test_fresh_reconnect_is_not_blocked_by_revoked_cleanup_marker_token(
     registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     old = _stage_direct_binding(registry, token="revoked-old-token")
-    registry.update_instagram_login_webhook_subscription(
+    marked = registry.update_instagram_login_webhook_subscription(
         old.binding_id,
         state=InstagramLoginSubscriptionState(
             status=INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS,
@@ -1137,6 +1280,10 @@ async def test_fresh_reconnect_is_not_blocked_by_revoked_cleanup_marker_token(
             error=INSTAGRAM_LOGIN_CLEANUP_DELETE_ERROR,
         ),
         actor_id="cleanup-marker",
+    )
+    monkeypatch.setattr(
+        "services.meta_instagram_login_oauth.time.time",
+        lambda: marked.created_at + 301.0,
     )
     seen_authorizations: list[str] = []
     transport = _transport()
@@ -1162,6 +1309,88 @@ async def test_fresh_reconnect_is_not_blocked_by_revoked_cleanup_marker_token(
     old_after = next(item for item in registry.list_bindings() if item.binding_id == old.binding_id)
     assert old_after.status == "disconnected"
     assert registry.binding_credential_is_available(old.binding_id) is False
+
+
+def test_recent_cleanup_marker_blocks_repeat_tap_before_storing_oauth_state(
+    registry: MetaAppRegistry,
+) -> None:
+    old = _stage_direct_binding(registry, token="cleanup-owned-token")
+    registry.update_instagram_login_webhook_subscription(
+        old.binding_id,
+        state=InstagramLoginSubscriptionState(
+            status=INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS,
+            subscribed_fields=(),
+            verified_fields=(),
+            error=INSTAGRAM_LOGIN_CLEANUP_DELETE_ERROR,
+        ),
+        actor_id="cleanup-marker",
+    )
+
+    with pytest.raises(MetaOAuthError, match="cleanup is in progress") as captured:
+        begin_instagram_login(tenant_id="tenant-a", actor_id="owner-a", registry=registry)
+
+    assert mobile_oauth_failure_reason(captured.value) == "provider"
+    payload = json.loads(registry.store_path.read_text(encoding="utf-8"))
+    assert payload.get("oauth_states") in (None, {})
+
+
+def test_cleanup_marker_does_not_block_another_tenant(
+    registry: MetaAppRegistry,
+) -> None:
+    old = _stage_direct_binding(registry, token="cleanup-owned-token", tenant_id="tenant-a")
+    registry.update_instagram_login_webhook_subscription(
+        old.binding_id,
+        state=InstagramLoginSubscriptionState(
+            status=INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS,
+            subscribed_fields=(),
+            verified_fields=(),
+            error=INSTAGRAM_LOGIN_CLEANUP_DELETE_ERROR,
+        ),
+        actor_id="cleanup-marker",
+    )
+
+    url = begin_instagram_login(tenant_id="tenant-b", actor_id="owner-b", registry=registry)
+    assert parse_qs(urlparse(url).query)["state"]
+
+
+@pytest.mark.asyncio
+async def test_cleanup_marker_created_after_start_blocks_callback_before_provider_write(
+    registry: MetaAppRegistry,
+) -> None:
+    state = _start_state(registry)
+    old = _stage_direct_binding(registry, token="cleanup-owned-token")
+    registry.update_instagram_login_webhook_subscription(
+        old.binding_id,
+        state=InstagramLoginSubscriptionState(
+            status=INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS,
+            subscribed_fields=(),
+            verified_fields=(),
+            error=INSTAGRAM_LOGIN_CLEANUP_DELETE_ERROR,
+        ),
+        actor_id="cleanup-marker",
+    )
+    observed_requests: list[httpx.Request] = []
+    transport = _transport()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        observed_requests.append(request)
+        return await transport.handle_async_request(request)
+
+    with pytest.raises(MetaOAuthError, match="cleanup is in progress") as captured:
+        await complete_instagram_login(
+            code="racing-cleanup-auth-code",
+            state=state,
+            registry=registry,
+            client=httpx.AsyncClient(
+                transport=httpx.MockTransport(handler),
+                base_url="https://graph.instagram.com",
+            ),
+        )
+
+    assert mobile_oauth_failure_reason(captured.value) == "provider"
+    assert not any(
+        request.method == "POST" and request.url.path.endswith("/subscribed_apps") for request in observed_requests
+    )
 
 
 @pytest.mark.asyncio

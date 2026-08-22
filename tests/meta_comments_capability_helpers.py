@@ -32,6 +32,7 @@ def _ig_binding(**kwargs):
         status="active",
         app_key=APP_A_KEY,
         auth_flow="facebook_login",
+        webhook_subscription_status="ready",
         webhook_subscribed_fields=("messages", "messaging_postbacks"),
         asset_id="ig1",
         binding_id="ig-legacy",

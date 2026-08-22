@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
@@ -36,8 +37,8 @@ PAGE_SCOPES = [
     "pages_read_user_content",
     "pages_messaging",
 ]
-INTEGRATION_SCOPES = ["business_management"]
-SCOPES = INTEGRATION_SCOPES + PAGE_SCOPES
+INTEGRATION_SCOPES = ["business_management", *PAGE_SCOPES]
+SCOPES = INTEGRATION_SCOPES
 
 
 @pytest.fixture
@@ -97,6 +98,8 @@ def _transport(
     second_page_id: str = "",
     second_page_scopes: tuple[str, ...] | None = None,
     second_page_tasks: tuple[str, ...] | None = None,
+    include_page: bool = True,
+    page_access_token: str = "page-token-private",
     subscription_state: dict[str, tuple[str, ...]] | None = None,
     observed_requests: list[httpx.Request] | None = None,
     subscription_hook: Callable[[httpx.Request, str], Awaitable[None]] | None = None,
@@ -144,18 +147,20 @@ def _transport(
                     ]
             return httpx.Response(200, json={"data": data})
         if path.endswith("/me/accounts"):
-            pages = [
-                {
-                    "id": page_id,
-                    "name": "Authorized Clinic",
-                    "access_token": "page-token-private",
-                    "tasks": list(page_tasks),
-                    "instagram_business_account": {
-                        "id": instagram_id,
-                        "username": "authorized_clinic",
-                    },
-                }
-            ]
+            pages = []
+            if include_page:
+                pages.append(
+                    {
+                        "id": page_id,
+                        "name": "Authorized Clinic",
+                        "access_token": page_access_token,
+                        "tasks": list(page_tasks),
+                        "instagram_business_account": {
+                            "id": instagram_id,
+                            "username": "authorized_clinic",
+                        },
+                    }
+                )
             if second_page_id:
                 pages.append(
                     {
@@ -215,7 +220,7 @@ def test_oauth_flow_channel_keeps_facebook_and_instagram_separate() -> None:
     assert normalize_oauth_flow_channel("") == "unified"
 
 
-def test_business_login_url_uses_config_id_rerequests_comment_scopes(registry: MetaAppRegistry) -> None:
+def test_business_login_url_uses_config_id_without_duplicate_scope_parameter(registry: MetaAppRegistry) -> None:
     url = begin_meta_business_login(
         tenant_id="tenant-a",
         channel="facebook",
@@ -232,15 +237,9 @@ def test_business_login_url_uses_config_id_rerequests_comment_scopes(registry: M
     assert query["override_default_response_type"] == ["true"]
     assert query["auth_type"] == ["rerequest"]
     assert query["state"]
-    scopes = set((query.get("scope") or [""])[0].split(","))
-    assert "pages_messaging" in scopes
-    assert "pages_read_user_content" in scopes
-    assert "pages_manage_engagement" in scopes
-    assert "business_management" in scopes
-    # Facebook Manage Meta Access must not bundle Instagram scopes.
-    assert "instagram_manage_comments" not in scopes
-    assert "instagram_basic" not in scopes
-    assert "instagram_manage_messages" not in scopes
+    # The reviewed User-token Login Configuration owns its exact permission
+    # set; duplicating scope= can make Meta ignore the configuration contract.
+    assert "scope" not in query
     assert "app-b-secret-tests" not in url
     assert "owner-a" not in registry.store_path.read_text(encoding="utf-8")
 
@@ -264,12 +263,7 @@ def test_unified_business_login_uses_facebook_only_config(registry: MetaAppRegis
     )
     query = parse_qs(urlparse(url).query)
     assert query["config_id"] == ["facebook-only-config-tests"]
-    scopes = set((query.get("scope") or [""])[0].split(","))
-    assert "pages_messaging" in scopes
-    assert "business_management" in scopes
-    assert "instagram_manage_comments" not in scopes
-    assert "instagram_basic" not in scopes
-    assert "instagram_manage_messages" not in scopes
+    assert "scope" not in query
 
 
 def test_facebook_and_instagram_connect_use_separate_auth_paths(
@@ -329,7 +323,11 @@ def test_facebook_default_config_id_is_pages_only_when_env_unset(
         actor_id="owner-a",
         registry=registry,
     )
-    assert parse_qs(urlparse(url).query)["config_id"] == ["1369663304545819"]
+    assert parse_qs(urlparse(url).query)["config_id"] == ["1021840664011530"]
+    assert "META_APP_A_FACEBOOK_LOGIN_CONFIG_ID=1021840664011530" in Path(".env.example").read_text(encoding="utf-8")
+    assert "Facebook Login for Business configuration: `1021840664011530`" in Path(
+        "docs/META_APP_REVIEW_SOCIAL_PACKAGE.md"
+    ).read_text(encoding="utf-8")
 
 
 @pytest.mark.asyncio
@@ -375,6 +373,51 @@ async def test_external_page_login_inspects_encrypts_and_activates_with_subscrip
     assert any(request.url.path.endswith("/subscribed_apps") for request in observed_requests)
     token_exchange = next(request for request in observed_requests if request.url.path.endswith("/oauth/access_token"))
     assert token_exchange.method == "POST"
+    page_discovery = next(request for request in observed_requests if request.url.path.endswith("/me/accounts"))
+    assert page_discovery.url.params["fields"] == "id,name,access_token,tasks"
+    assert "instagram" not in page_discovery.url.params["fields"]
+    assert not any("assigned_pages" in request.url.path for request in observed_requests)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("include_page", "page_access_token"),
+    [(False, "page-token-private"), (True, "")],
+)
+async def test_facebook_page_discovery_without_page_token_is_safe_no_page_failure(
+    registry: MetaAppRegistry,
+    caplog: pytest.LogCaptureFixture,
+    include_page: bool,
+    page_access_token: str,
+) -> None:
+    state = _start_state(registry)
+    observed_requests: list[httpx.Request] = []
+    caplog.set_level(logging.INFO, logger="uvicorn.error")
+    async with httpx.AsyncClient(
+        base_url="https://graph.facebook.com/v24.0/",
+        transport=_transport(
+            include_page=include_page,
+            page_access_token=page_access_token,
+            observed_requests=observed_requests,
+        ),
+    ) as client:
+        with pytest.raises(MetaOAuthError, match="No eligible Facebook Page") as captured:
+            await complete_meta_business_login(
+                code="no-page-token-code",
+                state=state,
+                registry=registry,
+                client=client,
+            )
+
+    assert mobile_oauth_failure_reason(captured.value) == "no_page"
+    assert registry.list_bindings() == []
+    assert not any(request.url.path.endswith("/subscribed_apps") for request in observed_requests)
+    rendered = "\n".join(record.getMessage() for record in caplog.records)
+    assert "page_discovery edge=accounts" in rendered
+    assert "eligible=0" in rendered
+    assert "Authorized Clinic" not in rendered
+    assert "page-token-private" not in rendered
+    assert "445566778899" not in rendered
 
 
 @pytest.mark.asyncio
@@ -431,22 +474,30 @@ async def test_deletion_blocks_facebook_before_subscription_or_staging(
 
 
 @pytest.mark.asyncio
-async def test_facebook_login_requires_business_management_on_integration_token(
+@pytest.mark.parametrize("missing_scope", INTEGRATION_SCOPES)
+async def test_facebook_login_requires_every_config_scope_on_integration_token(
     registry: MetaAppRegistry,
+    missing_scope: str,
 ) -> None:
     state = _start_state(registry)
+    observed_requests: list[httpx.Request] = []
     async with httpx.AsyncClient(
         base_url="https://graph.facebook.com/v24.0/",
-        transport=_transport(integration_scopes=()),
+        transport=_transport(
+            integration_scopes=tuple(scope for scope in INTEGRATION_SCOPES if scope != missing_scope),
+            observed_requests=observed_requests,
+        ),
     ) as client:
-        with pytest.raises(MetaOAuthError, match="integration token.*business_management"):
+        with pytest.raises(MetaOAuthError, match=rf"integration token.*{missing_scope}") as captured:
             await complete_meta_business_login(
                 code="missing-integration-grant-code",
                 state=state,
                 registry=registry,
                 client=client,
             )
+    assert mobile_oauth_failure_reason(captured.value) == "scopes"
     assert registry.list_bindings() == []
+    assert not any(request.url.path.endswith("/me/accounts") for request in observed_requests)
 
 
 @pytest.mark.asyncio
@@ -501,6 +552,42 @@ async def test_facebook_page_requires_messaging_and_moderate_tasks(
                 client=client,
             )
     assert registry.list_bindings() == []
+
+
+@pytest.mark.asyncio
+async def test_facebook_page_accepts_new_pages_experience_task_names(
+    registry: MetaAppRegistry,
+) -> None:
+    state = _start_state(registry)
+    async with httpx.AsyncClient(
+        base_url="https://graph.facebook.com/v24.0/",
+        transport=_transport(page_tasks=("PROFILE_PLUS_MESSAGING", "PROFILE_PLUS_MODERATE")),
+    ) as client:
+        result = await complete_meta_business_login(
+            code="profile-plus-page-task-code",
+            state=state,
+            registry=registry,
+            client=client,
+        )
+    assert result.binding.active
+
+
+@pytest.mark.asyncio
+async def test_facebook_page_full_control_label_does_not_infer_specific_tasks(
+    registry: MetaAppRegistry,
+) -> None:
+    state = _start_state(registry)
+    async with httpx.AsyncClient(
+        base_url="https://graph.facebook.com/v24.0/",
+        transport=_transport(page_tasks=("PROFILE_PLUS_FULL_CONTROL",)),
+    ) as client:
+        with pytest.raises(MetaOAuthError, match="MESSAGING"):
+            await complete_meta_business_login(
+                code="full-control-label-only-code",
+                state=state,
+                registry=registry,
+                client=client,
+            )
 
 
 @pytest.mark.asyncio

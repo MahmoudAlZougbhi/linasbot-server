@@ -19,7 +19,7 @@ APP_B_KEY = "saas_tech_provider"
 APP_A_EXPECTED_ID = "2963733803971681"
 RETIRED_APP_ID = "1784792718776344"
 # Facebook Connect / Manage Meta Access — Pages-only Login Configuration.
-FACEBOOK_ONLY_LOGIN_CONFIG_ID_DEFAULT = "1369663304545819"
+FACEBOOK_ONLY_LOGIN_CONFIG_ID_DEFAULT = "1021840664011530"
 LINAS_PAGE_ID = "378696005334409"
 LINAS_INSTAGRAM_ACCOUNT_ID = "17841413184256533"
 REGISTRY_SCHEMA_VERSION = 1
@@ -371,6 +371,17 @@ class MetaAssetBinding:
         return self.active and required_fields.issubset(self.webhook_subscribed_fields)
 
     @property
+    def instagram_login_comments_ready(self) -> bool:
+        """Whether direct Instagram comments have provider-verified authority."""
+
+        return (
+            self.auth_flow == "instagram_login"
+            and self.active
+            and self.webhook_subscription_status in {"ready", "partial"}
+            and "comments" in self.webhook_subscribed_fields
+        )
+
+    @property
     def visible_in_dashboard(self) -> bool:
         return not self.superseded_by_binding_id
 
@@ -406,7 +417,7 @@ class MetaAssetBinding:
                         "error": self.webhook_subscription_error,
                         "checked_at": self.webhook_subscription_checked_at,
                         "ready_for_dm": self.instagram_login_ready,
-                        "ready_for_comments": "comments" in self.webhook_subscribed_fields,
+                        "ready_for_comments": self.instagram_login_comments_ready,
                     }
                 }
                 if self.auth_flow == "instagram_login"

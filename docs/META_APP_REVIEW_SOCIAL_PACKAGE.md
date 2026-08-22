@@ -32,7 +32,8 @@ approval flags stay product-specific even though the owner performs one final
 
 Related production assets:
 
-- Facebook Login for Business configuration: `1369663304545819`
+- Facebook Login for Business configuration: `1021840664011530` (General,
+  User access token, Assets skipped; mobile-compatible)
 - Facebook Page: `378696005334409`
 - Instagram professional account: `17841413184256533`
 - WhatsApp Embedded Signup configuration: `1430599348520127` (unchanged)
@@ -78,7 +79,7 @@ a controlled runtime migration before `v24.0` expires.
 
 ### Facebook product domain — Page and Messenger
 
-In Facebook Login for Business configuration `1369663304545819`, request only:
+In Facebook Login for Business configuration `1021840664011530`, request only:
 
 - `business_management`
 - `pages_show_list`
@@ -230,7 +231,7 @@ message.
 | `META_APP_ID` / `META_APP_A_ID` | Linas AI top-level app `2963733803971681` |
 | `META_APP_SECRET` / `META_APP_A_SECRET` | Facebook product signature/OAuth secret |
 | `META_WEBHOOK_VERIFY_TOKEN` / `META_APP_A_WEBHOOK_VERIFY_TOKEN` | Facebook webhook challenge token |
-| `META_APP_A_FACEBOOK_LOGIN_CONFIG_ID` | `1369663304545819` |
+| `META_APP_A_FACEBOOK_LOGIN_CONFIG_ID` | `1021840664011530` |
 | `META_OAUTH_REDIRECT_URI` | `https://www.linasaibot.com/oauth/meta/callback` |
 | `META_APP_A_ADVANCED_ACCESS_APPROVED` | Facebook permission-family review gate |
 | `META_INSTAGRAM_LOGIN_APP_ID` | Instagram product app ID `1035856539045307` inside Linas AI |

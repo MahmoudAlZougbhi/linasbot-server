@@ -69,8 +69,17 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     onAuthGate: () => setAuthGate(true),
     onError: (message) => setError(message),
   });
-  const { loading, hasLoadedOnce, webChatReady, notice, setNotice, rows, setRows, load } =
-    useIntegrationsLoad({
+  const {
+    loading,
+    hasLoadedOnce,
+    webChatReady,
+    notice,
+    setNotice,
+    rows,
+    setRows,
+    load,
+    metaResultSequence,
+  } = useIntegrationsLoad({
     tr,
     refreshWhatsApp: wa.refreshWhatsApp,
     activeArea: nav.activeArea,
@@ -85,6 +94,7 @@ export function IntegrationsScreen({ onRequestLogin, onRequestRegister }: Props)
     setError,
     setNotice,
     setAuthGate,
+    metaResultSequence,
   });
   const headerRefreshing = loading && hasLoadedOnce;
   const showInitialLoader = !hasLoadedOnce || !webChatReady;

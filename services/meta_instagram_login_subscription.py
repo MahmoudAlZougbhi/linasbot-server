@@ -17,7 +17,10 @@ from services.meta_app_registry import (
     get_meta_app_registry,
 )
 from services.meta_instagram_login_config import META_INSTAGRAM_GRAPH_BASE_URL, instagram_login_app_id
-from services.meta_instagram_login_subscription_telemetry import log_instagram_subscribed_apps_telemetry
+from services.meta_instagram_login_subscription_telemetry import (
+    extract_instagram_subscribed_apps_telemetry,
+    log_instagram_subscribed_apps_telemetry,
+)
 from services.meta_oauth_graph_http import MetaOAuthError, _safe_json
 from services.meta_oauth_page_lock import lock_facebook_page_oauth_operation
 
@@ -29,8 +32,45 @@ InstagramLoginWebhookSubscriptionSnapshot = tuple[str, ...] | None
 INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS = "cleanup_pending"
 INSTAGRAM_LOGIN_CLEANUP_DELETE_ERROR = "cleanup_delete_subscription"
 INSTAGRAM_LOGIN_CLEANUP_RESTORE_ERROR = "cleanup_restore_preimage"
-_SUBSCRIBE_MAX_ATTEMPTS = 3
-_SUBSCRIBE_BACKOFF_SECONDS = (0.5, 1.5, 3.0)
+INSTAGRAM_LOGIN_SUBSCRIPTION_RATE_LIMITED_ERROR = "verification_rate_limited"
+INSTAGRAM_LOGIN_SUBSCRIPTION_DEFERRED_ERROR = "verification_deferred"
+INSTAGRAM_LOGIN_SUBSCRIPTION_WRITE_REJECTED_ERROR = "subscription_write_rejected"
+_VERIFY_BACKOFF_SECONDS = (0.0, 2.0, 5.0)
+
+
+class _InstagramSubscribedAppsProviderError(MetaOAuthError):
+    """Secret-safe provider response classification for one subscribed_apps call."""
+
+    def __init__(self, message: str, *, rate_limited: bool, retryable: bool) -> None:
+        super().__init__(message)
+        self.rate_limited = rate_limited
+        self.retryable = retryable
+
+
+def _raise_classified_provider_error(response: httpx.Response, *, step: str) -> None:
+    """Raise a fixed-message error for a non-success provider response."""
+
+    safe = extract_instagram_subscribed_apps_telemetry(response)
+    rate_limited = response.status_code == 429 or safe["error_code"] == "613"
+    provider_error = bool(safe["error_type"] or safe["error_code"])
+    if 200 <= response.status_code < 300 and not provider_error:
+        return
+    if rate_limited:
+        message = (
+            "Instagram provider is temporarily limiting webhook subscription verification. "
+            "Wait a few minutes, then tap Connect once."
+        )
+    else:
+        message = (
+            f"Meta {step} returned an OAuth error"
+            if 200 <= response.status_code < 300
+            else f"Meta {step} failed with HTTP {response.status_code}"
+        )
+    raise _InstagramSubscribedAppsProviderError(
+        message,
+        rate_limited=rate_limited,
+        retryable=rate_limited or response.status_code >= 500 or safe["is_transient"] == "true",
+    )
 
 
 def instagram_login_subscription_lock_asset(ig_user_id: str) -> str:
@@ -173,6 +213,7 @@ async def _read_instagram_login_subscription(
     )
     if telemetry_stage is not None:
         log_instagram_subscribed_apps_telemetry(response, stage=telemetry_stage)
+    _raise_classified_provider_error(response, step=step)
     payload = _safe_json(response, step=step)
     return _parse_subscription_snapshot(payload, expected_app_id=expected_app_id)
 
@@ -299,9 +340,29 @@ async def _subscribe_once(
         headers={"Authorization": f"Bearer {access_token}"},
     )
     log_instagram_subscribed_apps_telemetry(response, stage="subscribe", require_success_flag=True)
-    payload = _safe_json(response, step="instagram subscribed_apps subscribe")
-    if payload.get("success") is not True:
+    _raise_classified_provider_error(response, step="instagram subscribed_apps subscribe")
+    try:
+        payload = _safe_json(response, step="instagram subscribed_apps subscribe")
+    except MetaOAuthError as exc:
+        # A 2xx response with a missing/malformed acknowledgement can still
+        # have committed. Classify it as uncertain so the caller verifies with
+        # reads instead of issuing a second mutation or discarding authority.
+        raise _InstagramSubscribedAppsProviderError(
+            "Meta instagram subscribed_apps subscribe returned an invalid acknowledgement",
+            rate_limited=False,
+            retryable=True,
+        ) from exc
+    success = payload.get("success")
+    if success is False:
         raise MetaOAuthError("Instagram webhook subscription did not return success")
+    if success is not True:
+        # Meta can commit the write while omitting or mistyping its success
+        # acknowledgement. Preserve authority and verify with GET-only reads.
+        raise _InstagramSubscribedAppsProviderError(
+            "Meta instagram subscribed_apps subscribe returned an incomplete acknowledgement",
+            rate_limited=False,
+            retryable=True,
+        )
 
 
 async def _fetch_subscription_state(
@@ -402,16 +463,69 @@ async def _ensure_instagram_login_webhook_subscription_locked(
         timeout=20.0,
     )
     last_error = ""
+
+    latest_verified = (
+        frozenset(binding.webhook_subscribed_fields)
+        if binding.active and binding.webhook_subscription_status in {"ready", "partial"}
+        else frozenset[str]()
+    )
+
+    def persist_unresolved(error: str) -> InstagramLoginSubscriptionState:
+        status = (
+            _subscription_status_for_verified(
+                verified=latest_verified,
+                subscribed_fields=subscribed_fields,
+            )
+            if REQUIRED_DM_SUBSCRIPTION_FIELDS.issubset(latest_verified)
+            else "failed"
+        )
+        unresolved = InstagramLoginSubscriptionState(
+            status=status,
+            subscribed_fields=subscribed_fields,
+            verified_fields=tuple(sorted(latest_verified)),
+            error=error or "subscription_verify_failed",
+        )
+        registry.update_instagram_login_webhook_subscription(
+            binding.binding_id,
+            state=unresolved,
+            actor_id="instagram-login-subscribe",
+        )
+        return unresolved
+
     try:
-        for attempt, delay in enumerate(_SUBSCRIBE_BACKOFF_SECONDS, start=1):
+        try:
+            # One OAuth completion performs at most one provider mutation. A
+            # write timeout/5xx can still have committed, so verification below
+            # is GET-only and may prove that uncertain outcome successful.
+            await _subscribe_once(
+                ig_user_id=ig_user_id,
+                access_token=credential.access_token,
+                subscribed_fields=subscribed_fields,
+                graph_api_version=graph_api_version,
+                client=http_client,
+            )
+        except _InstagramSubscribedAppsProviderError as exc:
+            last_error = "subscription_write_rate_limited" if exc.rate_limited else "subscription_write_failed"
+            _runtime_logger.warning(
+                "[instagram-login] subscribe_write_failed binding=%s reason=%s",
+                binding.binding_id[-8:],
+                last_error,
+            )
+            if exc.rate_limited:
+                return persist_unresolved(INSTAGRAM_LOGIN_SUBSCRIPTION_RATE_LIMITED_ERROR)
+            if not exc.retryable:
+                return persist_unresolved(INSTAGRAM_LOGIN_SUBSCRIPTION_WRITE_REJECTED_ERROR)
+        except httpx.HTTPError:
+            # Transport loss leaves the POST outcome unknown; verify without
+            # issuing another write.
+            last_error = "subscription_write_outcome_unknown"
+        except MetaOAuthError:
+            return persist_unresolved(INSTAGRAM_LOGIN_SUBSCRIPTION_WRITE_REJECTED_ERROR)
+
+        for attempt, delay in enumerate(_VERIFY_BACKOFF_SECONDS, start=1):
+            if delay:
+                await asyncio.sleep(delay)
             try:
-                await _subscribe_once(
-                    ig_user_id=ig_user_id,
-                    access_token=credential.access_token,
-                    subscribed_fields=subscribed_fields,
-                    graph_api_version=graph_api_version,
-                    client=http_client,
-                )
                 verified = await _fetch_subscription_state(
                     ig_user_id=ig_user_id,
                     access_token=credential.access_token,
@@ -419,7 +533,8 @@ async def _ensure_instagram_login_webhook_subscription_locked(
                     expected_app_id=expected_app_id,
                     client=http_client,
                 )
-                if REQUIRED_DM_SUBSCRIPTION_FIELDS.issubset(verified):
+                latest_verified = verified
+                if set(subscribed_fields).issubset(verified):
                     status = _subscription_status_for_verified(
                         verified=verified,
                         subscribed_fields=subscribed_fields,
@@ -436,29 +551,33 @@ async def _ensure_instagram_login_webhook_subscription_locked(
                     )
                     return state
                 last_error = "required_dm_fields_missing_after_verify"
-            except (MetaOAuthError, httpx.HTTPError) as exc:
-                last_error = type(exc).__name__
+            except _InstagramSubscribedAppsProviderError as exc:
+                last_error = (
+                    INSTAGRAM_LOGIN_SUBSCRIPTION_RATE_LIMITED_ERROR
+                    if exc.rate_limited
+                    else "subscription_verify_provider_error"
+                )
                 _runtime_logger.warning(
-                    "[instagram-login] subscribe_attempt_failed binding=%s attempt=%d reason=%s",
+                    "[instagram-login] subscribe_verify_failed binding=%s attempt=%d reason=%s",
                     binding.binding_id[-8:],
                     attempt,
                     last_error,
                 )
-            if attempt < _SUBSCRIBE_MAX_ATTEMPTS:
-                await asyncio.sleep(delay)
+                if exc.rate_limited:
+                    return persist_unresolved(INSTAGRAM_LOGIN_SUBSCRIPTION_RATE_LIMITED_ERROR)
+                if not exc.retryable:
+                    break
+            except httpx.HTTPError:
+                last_error = "subscription_verify_transport_error"
+            except MetaOAuthError:
+                # A successful response that is incomplete or not yet valid may
+                # converge; retry only the read within the fixed callback budget.
+                last_error = "subscription_verify_invalid_response"
 
-        failed = InstagramLoginSubscriptionState(
-            status="failed",
-            subscribed_fields=subscribed_fields,
-            verified_fields=(),
-            error=last_error or "subscription_verify_failed",
-        )
-        registry.update_instagram_login_webhook_subscription(
-            binding.binding_id,
-            state=failed,
-            actor_id="instagram-login-subscribe",
-        )
-        return failed
+        # The single POST was accepted or its result was ambiguous. Retain the
+        # staged credential so the distributed lifecycle can inspect and
+        # restore/delete the provider state without issuing hot repeated writes.
+        return persist_unresolved(INSTAGRAM_LOGIN_SUBSCRIPTION_DEFERRED_ERROR)
     finally:
         if owns_client:
             await http_client.aclose()

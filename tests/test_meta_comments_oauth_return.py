@@ -99,6 +99,34 @@ def test_facebook_page_and_integration_scope_failures_share_scopes_reason() -> N
     assert mobile_oauth_failure_reason(messaging) == "scopes"
 
 
+def test_mobile_oauth_failure_reason_distinguishes_no_page_and_provider() -> None:
+    no_page = MetaOAuthError("No eligible Facebook Page was authorized in Meta Business Login")
+    missing_page_tasks = MetaOAuthError("Authorized Facebook Page is missing required tasks (MESSAGING, MODERATE)")
+    provider = MetaOAuthError(
+        "Instagram provider is temporarily limiting webhook subscription verification. "
+        "Wait a few minutes, then tap Connect once."
+    )
+    assert mobile_oauth_failure_reason(no_page) == "no_page"
+    assert mobile_oauth_failure_reason(missing_page_tasks) == "no_page"
+    assert mobile_oauth_failure_reason(provider) == "provider"
+
+    no_page_url = oauth_completion_redirect_url(
+        return_surface="mobile",
+        meta_connection="failed",
+        extra_query={"meta_reason": "no_page", "channel": "facebook", "token": "secret"},
+    )
+    provider_url = oauth_completion_redirect_url(
+        return_surface="mobile",
+        meta_connection="failed",
+        extra_query={"meta_reason": "provider", "channel": "instagram", "state": "secret"},
+    )
+    assert "meta_reason=no_page" in no_page_url
+    assert "channel=facebook" in no_page_url
+    assert "meta_reason=provider" in provider_url
+    assert "channel=instagram" in provider_url
+    assert "secret" not in no_page_url + provider_url
+
+
 def test_invalid_tampered_return_surface_rejected_to_web() -> None:
     """Case 8: invalid/tampered OAuth return surface is rejected to public landing."""
 

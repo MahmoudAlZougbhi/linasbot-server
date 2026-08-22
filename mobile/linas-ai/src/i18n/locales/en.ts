@@ -162,7 +162,7 @@ export const en = {
   serviceDiagnosticExpiredToken: 'This connection token expired. Disconnect, then Connect again.',
   serviceDiagnosticCredentialUnavailable: 'Connection credentials are unavailable. Disconnect, then Connect again.',
   serviceDiagnosticTokenMismatch: 'This connection no longer matches Meta. Disconnect, then Connect again.',
-  metaOAuthFailed: 'Meta authorization failed. Disconnect the channel, then Connect again.',
+  metaOAuthFailed: 'Meta authorization failed. Tap Connect to try again.',
   metaOAuthFailedScopes:
     'Instagram did not grant all required permissions. Tap Connect again and allow every permission.',
   metaOAuthFailedToken:

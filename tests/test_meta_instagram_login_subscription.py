@@ -11,7 +11,11 @@ import httpx
 import pytest
 
 from services.meta_app_registry import MetaAppRegistry
+from services.meta_instagram_login_capabilities import binding_ready_for_comments, binding_ready_for_dm
 from services.meta_instagram_login_subscription import (
+    INSTAGRAM_LOGIN_SUBSCRIPTION_DEFERRED_ERROR,
+    INSTAGRAM_LOGIN_SUBSCRIPTION_RATE_LIMITED_ERROR,
+    INSTAGRAM_LOGIN_SUBSCRIPTION_WRITE_REJECTED_ERROR,
     _subscribe_once,
     ensure_instagram_login_webhook_subscription,
 )
@@ -61,6 +65,25 @@ def _assert_no_secret_leakage(rendered: str) -> None:
     assert "graph.instagram.com" not in rendered
 
 
+def test_failed_status_never_treats_stale_fields_as_verified_authority(
+    registry: MetaAppRegistry,
+) -> None:
+    binding = _binding(
+        registry,
+        auth_flow="instagram_login",
+        scopes=FULL_SCOPES,
+        webhook_status="failed",
+        webhook_fields=tuple(EXPECTED_FIELDS),
+    )
+    credential = registry.get_credential(binding)
+
+    assert binding_ready_for_dm(binding, credential) is False
+    assert binding_ready_for_comments(binding, credential) is False
+    public = binding.public_dict()["webhook_subscription"]
+    assert public["ready_for_dm"] is False
+    assert public["ready_for_comments"] is False
+
+
 @pytest.mark.asyncio
 async def test_subscribe_once_posts_json_array_not_form() -> None:
     captured: dict[str, Any] = {}
@@ -95,7 +118,13 @@ async def test_subscribe_once_posts_json_array_not_form() -> None:
 async def test_ensure_posts_json_then_get_verifies_instagram_product_row(
     registry: MetaAppRegistry,
 ) -> None:
-    binding = _binding(registry, auth_flow="instagram_login", scopes=FULL_SCOPES)
+    binding = _binding(
+        registry,
+        auth_flow="instagram_login",
+        scopes=FULL_SCOPES,
+        webhook_status="pending",
+        webhook_fields=(),
+    )
     credential = registry.get_credential(binding)
     observed: list[tuple[str, str, dict[str, Any] | None]] = []
 
@@ -198,7 +227,13 @@ async def test_verify_failure_telemetry_omits_secrets(
         return None
 
     monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
-    binding = _binding(registry, auth_flow="instagram_login", scopes=FULL_SCOPES)
+    binding = _binding(
+        registry,
+        auth_flow="instagram_login",
+        scopes=FULL_SCOPES,
+        webhook_status="pending",
+        webhook_fields=(),
+    )
     credential = registry.get_credential(binding)
 
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -242,3 +277,391 @@ async def test_verify_failure_telemetry_omits_secrets(
     assert SECRET_TOKEN not in state.error
     assert INSTAGRAM_ID not in state.error
     assert credential.access_token not in state.error
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [200, 500])
+async def test_verify_rate_limit_stops_after_one_post_and_one_get(
+    registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+    status_code: int,
+) -> None:
+    sleeps: list[float] = []
+
+    async def record_sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", record_sleep)
+    binding = _binding(
+        registry,
+        auth_flow="instagram_login",
+        scopes=FULL_SCOPES,
+        webhook_status="pending",
+        webhook_fields=(),
+    )
+    credential = registry.get_credential(binding)
+    methods: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        methods.append(request.method)
+        if request.method == "POST":
+            return httpx.Response(200, json={"success": True})
+        return httpx.Response(
+            status_code,
+            json={"error": {"type": "IGApiException", "code": 613, "is_transient": False}},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        state = await ensure_instagram_login_webhook_subscription(
+            binding,
+            credential,
+            registry=registry,
+            graph_api_version="v24.0",
+            client=client,
+        )
+
+    assert methods == ["POST", "GET"]
+    assert sleeps == []
+    assert state.status == "failed"
+    assert state.error == INSTAGRAM_LOGIN_SUBSCRIPTION_RATE_LIMITED_ERROR
+    refreshed = next(item for item in registry.list_bindings() if item.binding_id == binding.binding_id)
+    assert refreshed.webhook_subscribed_fields == ()
+    assert binding_ready_for_dm(refreshed, credential) is False
+    assert binding_ready_for_comments(refreshed, credential) is False
+
+
+@pytest.mark.asyncio
+async def test_verify_eventual_consistency_retries_reads_without_second_post(
+    registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sleeps: list[float] = []
+
+    async def record_sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", record_sleep)
+    binding = _binding(registry, auth_flow="instagram_login", scopes=FULL_SCOPES)
+    credential = registry.get_credential(binding)
+    methods: list[str] = []
+    reads = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal reads
+        methods.append(request.method)
+        if request.method == "POST":
+            return httpx.Response(200, json={"success": True})
+        reads += 1
+        fields = ["messages", "messaging_postbacks"] if reads < 3 else EXPECTED_FIELDS
+        return httpx.Response(200, json={"data": [{"id": INSTAGRAM_APP_ID, "subscribed_fields": fields}]})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        state = await ensure_instagram_login_webhook_subscription(
+            binding,
+            credential,
+            registry=registry,
+            graph_api_version="v24.0",
+            client=client,
+        )
+
+    assert methods == ["POST", "GET", "GET", "GET"]
+    assert sleeps == [2.0, 5.0]
+    assert state.status == "ready"
+
+
+@pytest.mark.asyncio
+async def test_uncertain_post_can_be_proved_by_get_without_second_write(
+    registry: MetaAppRegistry,
+) -> None:
+    binding = _binding(registry, auth_flow="instagram_login", scopes=FULL_SCOPES)
+    credential = registry.get_credential(binding)
+    methods: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        methods.append(request.method)
+        if request.method == "POST":
+            raise httpx.ReadTimeout("write acknowledgement lost", request=request)
+        return httpx.Response(
+            200,
+            json={"data": [{"id": INSTAGRAM_APP_ID, "subscribed_fields": EXPECTED_FIELDS}]},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        state = await ensure_instagram_login_webhook_subscription(
+            binding,
+            credential,
+            registry=registry,
+            graph_api_version="v24.0",
+            client=client,
+        )
+
+    assert methods == ["POST", "GET"]
+    assert state.status == "ready"
+
+
+@pytest.mark.asyncio
+async def test_missing_success_ack_is_verified_without_second_write(
+    registry: MetaAppRegistry,
+) -> None:
+    binding = _binding(
+        registry,
+        auth_flow="instagram_login",
+        scopes=FULL_SCOPES,
+        webhook_status="pending",
+        webhook_fields=(),
+    )
+    credential = registry.get_credential(binding)
+    methods: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        methods.append(request.method)
+        if request.method == "POST":
+            return httpx.Response(200, json={})
+        return httpx.Response(
+            200,
+            json={"data": [{"id": INSTAGRAM_APP_ID, "subscribed_fields": EXPECTED_FIELDS}]},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        state = await ensure_instagram_login_webhook_subscription(
+            binding,
+            credential,
+            registry=registry,
+            graph_api_version="v24.0",
+            client=client,
+        )
+
+    assert methods == ["POST", "GET"]
+    assert state.status == "ready"
+
+
+@pytest.mark.asyncio
+async def test_deterministic_post_rejection_never_reposts_or_verifies(
+    registry: MetaAppRegistry,
+) -> None:
+    binding = _binding(
+        registry,
+        auth_flow="instagram_login",
+        scopes=FULL_SCOPES,
+        webhook_status="pending",
+        webhook_fields=(),
+    )
+    credential = registry.get_credential(binding)
+    methods: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        methods.append(request.method)
+        return httpx.Response(400, json={"error": {"type": "OAuthException", "code": 10}})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        state = await ensure_instagram_login_webhook_subscription(
+            binding,
+            credential,
+            registry=registry,
+            graph_api_version="v24.0",
+            client=client,
+        )
+
+    assert methods == ["POST"]
+    assert state.status == "failed"
+    assert state.error == INSTAGRAM_LOGIN_SUBSCRIPTION_WRITE_REJECTED_ERROR
+
+
+@pytest.mark.asyncio
+async def test_explicit_false_ack_is_a_deterministic_write_rejection(
+    registry: MetaAppRegistry,
+) -> None:
+    binding = _binding(
+        registry,
+        auth_flow="instagram_login",
+        scopes=FULL_SCOPES,
+        webhook_status="pending",
+        webhook_fields=(),
+    )
+    credential = registry.get_credential(binding)
+    methods: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        methods.append(request.method)
+        return httpx.Response(200, json={"success": False})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        state = await ensure_instagram_login_webhook_subscription(
+            binding,
+            credential,
+            registry=registry,
+            graph_api_version="v24.0",
+            client=client,
+        )
+
+    assert methods == ["POST"]
+    assert state.status == "failed"
+    assert state.error == INSTAGRAM_LOGIN_SUBSCRIPTION_WRITE_REJECTED_ERROR
+
+
+@pytest.mark.asyncio
+async def test_unresolved_accepted_write_is_deferred_without_repost(
+    registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def no_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
+    binding = _binding(
+        registry,
+        auth_flow="instagram_login",
+        scopes=FULL_SCOPES,
+        webhook_status="pending",
+        webhook_fields=(),
+    )
+    credential = registry.get_credential(binding)
+    methods: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        methods.append(request.method)
+        if request.method == "POST":
+            return httpx.Response(200, json={"success": True})
+        return httpx.Response(200, json={"data": []})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        state = await ensure_instagram_login_webhook_subscription(
+            binding,
+            credential,
+            registry=registry,
+            graph_api_version="v24.0",
+            client=client,
+        )
+
+    assert methods == ["POST", "GET", "GET", "GET"]
+    assert state.error == INSTAGRAM_LOGIN_SUBSCRIPTION_DEFERRED_ERROR
+    refreshed = next(item for item in registry.list_bindings() if item.binding_id == binding.binding_id)
+    assert refreshed.webhook_subscribed_fields == ()
+    assert binding_ready_for_dm(refreshed, credential) is False
+    assert binding_ready_for_comments(refreshed, credential) is False
+
+
+@pytest.mark.asyncio
+async def test_deferred_comments_verification_preserves_verified_dm_fields(
+    registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def no_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
+    binding = _binding(registry, auth_flow="instagram_login", scopes=FULL_SCOPES)
+    credential = registry.get_credential(binding)
+    methods: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        methods.append(request.method)
+        if request.method == "POST":
+            return httpx.Response(200, json={"success": True})
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "id": INSTAGRAM_APP_ID,
+                        "subscribed_fields": ["messages", "messaging_postbacks"],
+                    }
+                ]
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        state = await ensure_instagram_login_webhook_subscription(
+            binding,
+            credential,
+            registry=registry,
+            graph_api_version="v24.0",
+            client=client,
+        )
+
+    assert methods == ["POST", "GET", "GET", "GET"]
+    assert state.status == "partial"
+    assert state.ready_for_dm is True
+    assert state.ready_for_comments is False
+    assert set(state.verified_fields) == {"messages", "messaging_postbacks"}
+    assert state.error == INSTAGRAM_LOGIN_SUBSCRIPTION_DEFERRED_ERROR
+
+
+@pytest.mark.asyncio
+async def test_transient_verify_failure_preserves_prior_partial_dm_proof(
+    registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def no_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
+    binding = _binding(
+        registry,
+        auth_flow="instagram_login",
+        scopes=FULL_SCOPES,
+        webhook_status="partial",
+        webhook_fields=("messages", "messaging_postbacks"),
+    )
+    credential = registry.get_credential(binding)
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(200, json={"success": True})
+        return httpx.Response(500, json={"error": {"type": "IGApiException", "code": 2}})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        state = await ensure_instagram_login_webhook_subscription(
+            binding,
+            credential,
+            registry=registry,
+            graph_api_version="v24.0",
+            client=client,
+        )
+
+    assert state.status == "partial"
+    assert state.error == INSTAGRAM_LOGIN_SUBSCRIPTION_DEFERRED_ERROR
+    assert set(state.verified_fields) == {"messages", "messaging_postbacks"}
+    refreshed = next(item for item in registry.list_bindings() if item.binding_id == binding.binding_id)
+    assert binding_ready_for_dm(refreshed, credential) is True
+    assert binding_ready_for_comments(refreshed, credential) is False
+
+
+@pytest.mark.asyncio
+async def test_successful_empty_verify_clears_prior_partial_proof(
+    registry: MetaAppRegistry,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def no_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr("services.meta_instagram_login_subscription.asyncio.sleep", no_sleep)
+    binding = _binding(
+        registry,
+        auth_flow="instagram_login",
+        scopes=FULL_SCOPES,
+        webhook_status="partial",
+        webhook_fields=("messages", "messaging_postbacks"),
+    )
+    credential = registry.get_credential(binding)
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(200, json={"success": True})
+        return httpx.Response(200, json={"data": []})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        state = await ensure_instagram_login_webhook_subscription(
+            binding,
+            credential,
+            registry=registry,
+            graph_api_version="v24.0",
+            client=client,
+        )
+
+    assert state.status == "failed"
+    assert state.verified_fields == ()
+    refreshed = next(item for item in registry.list_bindings() if item.binding_id == binding.binding_id)
+    assert refreshed.webhook_subscribed_fields == ()
+    assert binding_ready_for_dm(refreshed, credential) is False
+    assert binding_ready_for_comments(refreshed, credential) is False

@@ -8,6 +8,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 from services.channel_capability_state import (
+    _comment_webhook_subscribed,
+    _dm_webhook_subscribed,
     comment_capability_state,
     dm_capability_state,
 )
@@ -144,6 +146,7 @@ def _ig_binding(**kwargs):
         status="active",
         app_key=APP_A_KEY,
         auth_flow="facebook_login",
+        webhook_subscription_status="ready",
         webhook_subscribed_fields=("messages", "messaging_postbacks", "comments"),
         asset_id="ig1",
         binding_id="b1",
@@ -151,6 +154,24 @@ def _ig_binding(**kwargs):
     )
     base.update(kwargs)
     return SimpleNamespace(**base)
+
+
+def test_direct_instagram_webhook_status_is_part_of_capability_authority() -> None:
+    stale_fields = _ig_binding(
+        auth_flow="instagram_login",
+        webhook_subscription_status="failed",
+        webhook_subscribed_fields=("messages", "messaging_postbacks", "comments"),
+    )
+    assert _dm_webhook_subscribed(stale_fields) is False
+    assert _comment_webhook_subscribed(stale_fields) is False
+
+    verified = _ig_binding(
+        auth_flow="instagram_login",
+        webhook_subscription_status="ready",
+        webhook_subscribed_fields=("messages", "messaging_postbacks", "comments"),
+    )
+    assert _dm_webhook_subscribed(verified) is True
+    assert _comment_webhook_subscribed(verified) is True
 
 
 class _Cred:

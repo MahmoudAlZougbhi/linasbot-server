@@ -130,7 +130,7 @@ export const ar = {
   serviceDiagnosticExpiredToken: 'انتهت صلاحية التوكن. Disconnect ثم Connect.',
   serviceDiagnosticCredentialUnavailable: 'بيانات الاعتماد غير متاحة. Disconnect ثم Connect.',
   serviceDiagnosticTokenMismatch: 'الربط لم يعد يطابق Meta. Disconnect ثم Connect.',
-  metaOAuthFailed: 'فشل تفويض Meta. حاول إدارة وصول Meta مجدداً.',
+  metaOAuthFailed: 'فشل تفويض Meta. اضغط Connect للمحاولة من جديد.',
   metaOAuthFailedScopes:
     'Instagram لم يمنح كل الصلاحيات المطلوبة. اضغط Connect مجدداً واسمح بكل الصلاحيات.',
   metaOAuthFailedToken:

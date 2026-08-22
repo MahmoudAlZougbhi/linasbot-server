@@ -21,6 +21,7 @@ from services.meta_app_registry import (
     MetaCredentialError,
     MetaRegistryError,
 )
+from services.meta_oauth import MetaOAuthError
 
 SCOPES = (
     "pages_show_list",
@@ -142,6 +143,70 @@ async def test_connect_start_defaults_to_facebook_flow(
     assert response["success"] is True
     assert captured["channel"] == "facebook"
     assert captured["tenant_id"] == "tenant-a"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("start_name", "begin_name", "body", "message", "expected_reason"),
+    [
+        (
+            "start_meta_connection",
+            "begin_meta_business_login",
+            {"channel": "facebook", "return_surface": "mobile"},
+            "No eligible Facebook Page was authorized in Meta Business Login",
+            "no_page",
+        ),
+        (
+            "start_instagram_login_connection",
+            "begin_instagram_login",
+            {"return_surface": "mobile"},
+            "Instagram webhook subscription cleanup is in progress; try again shortly",
+            "provider",
+        ),
+    ],
+)
+async def test_mobile_connect_start_exposes_only_allowlisted_failure_reason(
+    monkeypatch: pytest.MonkeyPatch,
+    start_name: str,
+    begin_name: str,
+    body: dict[str, str],
+    message: str,
+    expected_reason: str,
+) -> None:
+    from fastapi import HTTPException
+
+    def fail(**kwargs: Any) -> str:
+        raise MetaOAuthError(message)
+
+    monkeypatch.setattr(meta_connections_api, begin_name, fail)
+    with pytest.raises(HTTPException) as captured:
+        await getattr(meta_connections_api, start_name)(_request("tenant-a"), body)
+
+    assert captured.value.status_code == 503
+    assert captured.value.detail == {"meta_reason": expected_reason}
+    assert message not in str(captured.value.detail)
+
+
+@pytest.mark.asyncio
+async def test_web_connect_start_preserves_existing_failure_detail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from fastapi import HTTPException
+
+    message = "Meta authorization is already in progress. Try again shortly."
+
+    def fail(**kwargs: Any) -> str:
+        raise MetaOAuthError(message)
+
+    monkeypatch.setattr(meta_connections_api, "begin_meta_business_login", fail)
+    with pytest.raises(HTTPException) as captured:
+        await meta_connections_api.start_meta_connection(
+            _request("tenant-a"),
+            {"channel": "facebook", "return_surface": "web"},
+        )
+
+    assert captured.value.status_code == 503
+    assert captured.value.detail == message
 
 
 @pytest.mark.asyncio

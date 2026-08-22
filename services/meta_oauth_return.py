@@ -35,6 +35,8 @@ _MOBILE_OAUTH_FAILURE_REASONS = frozenset(
         "token",
         "profile",
         "webhook",
+        "no_page",
+        "provider",
         "deletion",
         "deletion_failed",
         "busy",
@@ -68,6 +70,19 @@ def mobile_oauth_failure_reason(exc: BaseException) -> str:
         return "token"
     if "professional account" in message or "profile discovery" in message:
         return "profile"
+    if (
+        "no eligible facebook page" in message
+        or "no facebook page binding" in message
+        or "authorized facebook page is missing required tasks" in message
+    ):
+        return "no_page"
+    if (
+        "provider is temporarily limiting" in message
+        or "provider webhook subscription verification is still pending" in message
+        or "provider subscription cleanup failed" in message
+        or "webhook subscription cleanup is in progress" in message
+    ):
+        return "provider"
     if "webhook subscription" in message:
         return "webhook"
     if "failed data deletion request" in message:
