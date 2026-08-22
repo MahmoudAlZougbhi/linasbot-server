@@ -281,11 +281,13 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
             delivery = str((outcome or {}).get("delivery") or "unknown")
             retryable = meta_social_outcome_requires_retry(outcome)
             if not retryable:
+                skip_reason = str((outcome or {}).get("reason") or "").strip() if delivery == "skipped" else ""
                 mark_inbound_state(
                     event_id,
                     state="completed",
                     ai_output_persisted=bool((outcome or {}).get("logical_reply_id")),
                     outbound_status=delivery,
+                    last_error=skip_reason or None,
                 )
                 await complete_event_claim(
                     GLOBAL_DM_CLAIM_NAMESPACE,

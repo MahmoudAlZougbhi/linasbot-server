@@ -60,6 +60,14 @@ def registry(tmp_path: Path, oauth_env: None, monkeypatch: pytest.MonkeyPatch) -
 
     db = _FakeFirestore()
     monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+
+    async def _enable_channel_defaults(**_kwargs: Any) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "services.channel_capability_toggles.enable_channel_defaults_after_connect",
+        _enable_channel_defaults,
+    )
     return MetaAppRegistry(
         store_path=tmp_path / "registry.json",
         audit_path=tmp_path / "audit.jsonl",

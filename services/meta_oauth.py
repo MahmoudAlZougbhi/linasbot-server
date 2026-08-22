@@ -410,6 +410,7 @@ async def complete_meta_business_login(
         if not authorized_bindings:
             raise MetaOAuthError("No Facebook Page binding was authorized")
         from services.channel_capability_toggles import (
+            ChannelToggleError,
             enable_channel_defaults_after_connect,
             sync_published_comment_assets_if_enabled,
         )
@@ -421,8 +422,8 @@ async def complete_meta_business_login(
                     platform=channel,
                     actor=actor_id,
                 )
-            except Exception:
-                pass
+            except ChannelToggleError as exc:
+                raise MetaOAuthError("Facebook Messages could not be enabled after Connect") from exc
             try:
                 await sync_published_comment_assets_if_enabled(
                     tenant_id=tenant_id,

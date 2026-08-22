@@ -126,6 +126,10 @@ async def process_meta_social_event(
     from services.channel_capability_runtime import meta_dm_replies_enabled
 
     if not meta_dm_replies_enabled(tenant_id=resolved_tenant_id, platform=channel):
+        print(
+            f"[meta-social] dm_replies_disabled channel={channel} tenant={resolved_tenant_id}",
+            flush=True,
+        )
         return {
             "ok": True,
             "delivery": "skipped",

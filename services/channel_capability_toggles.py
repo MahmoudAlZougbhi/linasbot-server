@@ -24,7 +24,7 @@ from services.cm.publish_gate import PublishDisabledError, ensure_publish_enable
 from services.cm.schemas import ActionCapability, ActionsSection, SectionDraftEnvelope
 from services.cm.storage import ConflictError, draft_section_path, get_draft, put_draft
 from services.cm.version_store import read_published_pointer
-from services.meta_app_registry import get_meta_app_configs, get_meta_app_registry
+from services.meta_app_registry import APP_A_KEY, get_meta_app_configs, get_meta_app_registry
 from services.meta_comment_reply_settings import get_comment_reply_setting, set_comment_reply_setting
 from services.meta_comment_webhooks import (
     ensure_instagram_comment_app_webhook,
@@ -351,28 +351,45 @@ async def _publish_actions(*, tenant_id: str, actor: str) -> None:
         ) from exc
 
 
+def _has_testing_binding(tenant_id: str, platform: str) -> bool:
+    """True when this tenant/platform has a staged OAuth binding that is not active yet."""
+
+    tenant = str(tenant_id or "").strip().lower()
+    platform_key = (platform or "").strip().lower()
+    for binding in get_meta_app_registry().list_bindings(include_inactive=True, include_superseded=False):
+        if str(getattr(binding, "tenant_id", "") or "").strip().lower() != tenant:
+            continue
+        if str(getattr(binding, "channel", "") or "") != platform_key:
+            continue
+        if str(getattr(binding, "app_key", "") or "") != APP_A_KEY:
+            continue
+        if str(getattr(binding, "status", "") or "") == "testing":
+            return True
+    return False
+
+
 async def enable_channel_defaults_after_connect(
     *,
     tenant_id: str,
     platform: str,
     actor: str,
+    include_comments: bool = True,
 ) -> None:
     """After Meta connect, turn app DM + Comments ON. Meta webhooks stay as Connect left them."""
 
     platform_key = (platform or "").strip().lower()
     if platform_key not in supported_platforms():
         return
-    for toggle in ("dm", "comments"):
-        try:
-            await set_channel_toggle(
-                tenant_id=tenant_id,
-                platform=platform_key,
-                toggle=toggle,  # type: ignore[arg-type]
-                enabled=True,
-                actor=actor,
-            )
-        except ChannelToggleError:
-            continue
+    toggles: tuple[ToggleKey, ...] = ("dm", "comments") if include_comments else ("dm",)
+    for toggle in toggles:
+        await set_channel_toggle(
+            tenant_id=tenant_id,
+            platform=platform_key,
+            toggle=toggle,
+            enabled=True,
+            actor=actor,
+            allow_testing_binding=toggle == "dm",
+        )
 
 
 async def set_channel_toggle(
@@ -382,6 +399,7 @@ async def set_channel_toggle(
     toggle: ToggleKey,
     enabled: bool,
     actor: str,
+    allow_testing_binding: bool = False,
 ) -> dict[str, Any]:
     """Persist one channel capability toggle via CM Actions (+ comment assets when needed)."""
 
@@ -393,11 +411,12 @@ async def set_channel_toggle(
         raise ChannelToggleError("Unsupported toggle", status_code=400, code="UNKNOWN_TOGGLE")
 
     if enabled and not canonical_channel_bindings(tenant_id, platform_key):
-        raise ChannelToggleError(
-            "Connect this channel before enabling messaging.",
-            status_code=409,
-            code="CONNECT_REQUIRED",
-        )
+        if not (allow_testing_binding and _has_testing_binding(tenant_id, platform_key)):
+            raise ChannelToggleError(
+                "Connect this channel before enabling messaging.",
+                status_code=409,
+                code="CONNECT_REQUIRED",
+            )
 
     if toggle == "comments" and enabled:
         from services.membership.comment_gate import CommentAutomationDenied, assert_comment_automation_allowed
