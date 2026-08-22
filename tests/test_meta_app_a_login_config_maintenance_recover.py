@@ -347,7 +347,9 @@ def test_public_span_loop_and_s2_receipt_order() -> None:
     assert "DRAIN_SECONDS" in span
     assert 'peer_hp probe "$R" 200 ready-ok' in span
     assert 'hp probe "$R" "$code" "$mode"' in span
-    assert 'hp probe "$PUB" 200 ready-ok' in span
+    assert 'hp public "$PUB"' in span
+    assert "span-tick" in span
+    assert "sleep 5" in span
     s0 = script.index('if [ "$PHASE" = "S0" ]; then')
     s1 = script.index('if [ "$PHASE" = "S1" ]; then', s0)
     complete = script.index("RECOVERY_COMPLETE=true")
@@ -467,8 +469,11 @@ def test_bound_partial_present_markers_use_recent_not_drain_age() -> None:
             "PHASE=S0"
         )
     ]
-    assert 'hp marker "$VOL" drain "' in all_present
-    assert " recent " not in all_present
+    assert 'hp marker "$VOL" "$MODE"' in all_present
+    assert "MODE=exact" in all_present
+    assert "MODE=drain" in all_present
+    assert "MODE=recent" not in all_present
+    assert "ADOPT-S1" in _script()
 
 
 def test_source_audit_parses_nul_paths_without_joining_adjacent_records(tmp_path: Path) -> None:
