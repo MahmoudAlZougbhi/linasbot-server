@@ -43,13 +43,16 @@ def test_stage_and_stage_evidence_are_deferred_until_trusted_remat() -> None:
     assert "stage|stage-evidence|" in deferred
     assert "apply-cpython-runtime-immutability|" in deferred
     assert "env-evidence-deferred" in deferred
+    assert "assert-drained-deferred" in deferred
     assert "|env-evidence|" not in deferred
+    assert "|assert-drained|" not in deferred
     assert "verify-staged-qg-payloads" not in deferred
     assert "rollback)" in required_arm
     assert "activate)" in required_arm
     assert "verify-staged-qg-payloads)" in required_arm
     assert "retry-stage)" in required_arm
     assert "env-evidence)" in required_arm
+    assert "assert-drained)" in required_arm
 
 
 def test_outer_dispatch_defers_preflight_without_changing_required_proofs() -> None:

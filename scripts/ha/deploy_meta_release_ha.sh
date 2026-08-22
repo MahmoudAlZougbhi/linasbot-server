@@ -9876,7 +9876,7 @@ node_dispatch() {
     return 0
   fi
   case "$phase" in
-    preflight|ensure-maintenance|mark-maintenance|apply-cpython-runtime-immutability|stage|stage-evidence|lb-attestation|release-bundle|worker-template-probe|install-worker-template-decision|install-trusted-worker-template|env-evidence-deferred)
+    preflight|ensure-maintenance|mark-maintenance|apply-cpython-runtime-immutability|stage|stage-evidence|lb-attestation|release-bundle|worker-template-probe|install-worker-template-decision|install-trusted-worker-template|assert-drained-deferred|env-evidence-deferred)
       assert_python_runtime_contract "$runtime_expected_node" deferred-until-restore >/dev/null
       ;;
     *)
@@ -9978,6 +9978,11 @@ node_dispatch() {
       rollback_impl "$1" "$2"
       ;;
     assert-drained)
+      validate_sha "${1:-}"
+      validate_tx_dir "${2:-}"
+      node_assert_release_drained "$1" "$2"
+      ;;
+    assert-drained-deferred)
       validate_sha "${1:-}"
       validate_tx_dir "${2:-}"
       node_assert_release_drained "$1" "$2"
@@ -11842,7 +11847,7 @@ orchestrate() {
   update_deploy_journal "peer-marked"
   node_assert_release_ready "$previous_sha"
   sleep "$drain_seconds"
-  remote_node "$peer_host" assert-drained "$peer_previous_sha" "$tx_dir"
+  remote_node "$peer_host" assert-drained-deferred "$peer_previous_sha" "$tx_dir"
   node_assert_release_ready "$previous_sha"
   assert_public_ready_for_sha "$previous_sha"
   log "staging peer first with recoverable mode-600 backup archives"

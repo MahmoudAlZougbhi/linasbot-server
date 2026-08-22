@@ -31,7 +31,7 @@ DEFERRED_DISPATCH_PHASES = (
     "stage|stage-evidence|"
     "lb-attestation|release-bundle|worker-template-probe|"
     "install-worker-template-decision|install-trusted-worker-template|"
-    "env-evidence-deferred"
+    "assert-drained-deferred|env-evidence-deferred"
 )
 PRE_DRAIN_IDENTITY_PHASES = frozenset(
     {
