@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC
 from typing import Any
 
 from db.session import whatsapp_session
@@ -114,14 +115,14 @@ def load_draft_envelope(tenant_id: str, section: str) -> SectionDraftEnvelope | 
         row = get_draft_row(session, tenant_id=tenant_id, section=section)
         if row is None:
             return None
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         return SectionDraftEnvelope(
             tenant_id=row.tenant_id,
             section=row.section,
             revision=row.revision,
             etag=row.etag,
-            updated_at=datetime.fromtimestamp(row.updated_at, tz=timezone.utc),
+            updated_at=datetime.fromtimestamp(row.updated_at, tz=UTC),
             updated_by=row.updated_by,
             payload=row.payload,
         )
