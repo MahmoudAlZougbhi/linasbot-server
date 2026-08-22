@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import time
@@ -15,6 +16,7 @@ from storage.persistent_storage import _DATA_ROOT
 
 _SETTINGS_ROOT = Path(_DATA_ROOT) / "meta_comment_settings"
 _LOCK = threading.Lock()
+_runtime_logger = logging.getLogger("uvicorn.error")
 
 
 @dataclass(frozen=True)
@@ -73,6 +75,16 @@ def _save_tenant_file(tenant_id: str, settings: dict[str, Any]) -> None:
     os.chmod(tmp, 0o600)
     tmp.replace(path)
     os.chmod(path, 0o600)
+    try:
+        from services.ha_peer_file_replicate import replicate_file_to_ha_peer
+
+        replicate_file_to_ha_peer(
+            local_path=path,
+            remote_path=str(path),
+            stage="meta_comment_settings",
+        )
+    except Exception:
+        _runtime_logger.error("[meta-comment-settings] ha_peer_replicate_failed tenant=%s", tenant_id)
 
 
 def get_comment_reply_setting(

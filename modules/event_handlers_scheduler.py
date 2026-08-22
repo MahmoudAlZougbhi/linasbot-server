@@ -203,6 +203,16 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
         name="Meta Social Comment Sync Tick",
         replace_existing=True,
     )
+    from modules.ha_peer_drift_guard_job import run_ha_peer_drift_guard_job
+
+    scheduler.add_job(
+        run_ha_peer_drift_guard_job,
+        "interval",
+        minutes=5,
+        id="ha_peer_drift_guard_tick",
+        name="HA Peer Drift Guard Tick",
+        replace_existing=True,
+    )
 
     scheduler.start()
 
@@ -216,6 +226,7 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
     asyncio.create_task(run_web_chat_release_pending_reconcile_job())
     asyncio.create_task(run_tiktok_comment_sync_job())
     asyncio.create_task(run_meta_social_comment_sync_job())
+    asyncio.create_task(run_ha_peer_drift_guard_job())
 
     print("✅ Smart Messaging Scheduler started successfully")
     print("📅 Scheduled jobs:")

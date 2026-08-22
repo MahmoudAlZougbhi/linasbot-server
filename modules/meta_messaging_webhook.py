@@ -146,6 +146,20 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
         raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
 
     payload_object = str(payload.get("object") or "").strip().lower()
+    entry_rows = [row for row in (payload.get("entry") or []) if isinstance(row, dict)]
+    messaging_batches = sum(len(row.get("messaging") or []) for row in entry_rows if isinstance(row.get("messaging"), list))
+    feed_field_changes = 0
+    for row in entry_rows:
+        for change in row.get("changes") or []:
+            if isinstance(change, dict) and str(change.get("field") or "").strip().lower() == "feed":
+                feed_field_changes += 1
+    _runtime_logger.info(
+        "[meta-webhook] ingress object=%s entries=%d feed_fields=%d messaging_events=%d",
+        payload_object or "unknown",
+        len(entry_rows),
+        feed_field_changes,
+        messaging_batches,
+    )
     # Meta WhatsApp Cloud events must never enter the social AI pipeline.
     if payload_object == "whatsapp_business_account" or payload_object == "whatsapp":
         return JSONResponse(
