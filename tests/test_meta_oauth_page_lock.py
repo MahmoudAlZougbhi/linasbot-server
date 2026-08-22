@@ -199,7 +199,8 @@ def _registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MetaAppRegistr
     monkeypatch.setenv("META_REGISTRY_BACKEND", "file")
     monkeypatch.setenv("META_APP_A_ID", "2963733803971681")
     monkeypatch.setenv("META_APP_A_SECRET", "app-a-secret-tests")
-    monkeypatch.setenv("META_APP_A_WEBHOOK_VERIFY_TOKEN", "verify-a-tests")
+    monkeypatch.setenv("META_APP_A_WEBHOOK_VERIFY_TOKEN", "verify-a-tests-thirty-two-characters-long")
+    monkeypatch.setenv("META_WEBHOOK_VERIFY_TOKEN", "verify-a-tests-thirty-two-characters-long")
     monkeypatch.setenv("META_GRAPH_API_VERSION", "v24.0")
     db = _FakeFirestore()
     monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
@@ -210,6 +211,14 @@ def _registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MetaAppRegistr
     monkeypatch.setattr(
         "services.channel_capability_toggles.enable_channel_defaults_after_connect",
         _enable_channel_defaults,
+    )
+
+    async def _noop_app_subscription(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "services.meta_app_webhook_subscription.ensure_app_page_webhook_subscription",
+        _noop_app_subscription,
     )
     return MetaAppRegistry(
         store_path=tmp_path / "registry.json",

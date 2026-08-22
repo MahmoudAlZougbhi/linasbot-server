@@ -25,6 +25,7 @@ def _postgres_backend(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_backend_defaults_to_postgres_when_db_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LINAS_TENANT_RUNTIME_CONFIG_BACKEND", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
     monkeypatch.setenv("DATABASE_URL", "postgresql://example/db")
     assert tenant_runtime_config_backend() == "postgres"
 
