@@ -673,9 +673,7 @@ async def complete_instagram_login(
                             if subscription.error == INSTAGRAM_LOGIN_SUBSCRIPTION_RATE_LIMITED_ERROR
                             else "Instagram did not confirm webhook fields after two checks. "
                         )
-                        raise _InstagramProviderVerificationDeferred(
-                            f"{detail}Do not tap Connect again."
-                        )
+                        raise _InstagramProviderVerificationDeferred(f"{detail}Do not tap Connect again.")
                     if not subscription.ready_for_dm or not subscription.ready_for_comments:
                         raise MetaOAuthError(
                             "Instagram webhook subscription could not be confirmed. Reconnect Instagram and try again."

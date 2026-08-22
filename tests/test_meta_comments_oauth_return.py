@@ -102,12 +102,8 @@ def test_facebook_page_and_integration_scope_failures_share_scopes_reason() -> N
 def test_mobile_oauth_failure_reason_distinguishes_no_page_and_provider() -> None:
     no_page = MetaOAuthError("No eligible Facebook Page was authorized in Meta Business Login")
     missing_page_tasks = MetaOAuthError("Authorized Facebook Page is missing required tasks (MESSAGING, MODERATE)")
-    provider = MetaOAuthError(
-        "Instagram did not confirm webhook fields after two checks. Do not tap Connect again."
-    )
-    rate_limit = MetaOAuthError(
-        "Instagram rate-limited webhook setup (Graph error 613). Do not tap Connect again."
-    )
+    provider = MetaOAuthError("Instagram did not confirm webhook fields after two checks. Do not tap Connect again.")
+    rate_limit = MetaOAuthError("Instagram rate-limited webhook setup (Graph error 613). Do not tap Connect again.")
     assert mobile_oauth_failure_reason(no_page) == "no_page"
     assert mobile_oauth_failure_reason(missing_page_tasks) == "no_page"
     assert mobile_oauth_failure_reason(provider) == "provider"
