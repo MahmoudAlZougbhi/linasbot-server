@@ -44,6 +44,35 @@ def _payload(
     }
 
 
+def test_social_reconcile_preserves_auxiliary_user_and_whatsapp_subscriptions() -> None:
+    payload = _payload(
+        page_fields=["feed", "messages", "messaging_postbacks", "standby"],
+        instagram_fields=["comments", "messages", "messaging_postbacks"],
+    )
+    data = payload["data"]
+    assert isinstance(data, list)
+    data.extend(
+        [
+            {
+                "object": "user",
+                "callback_url": "https://www.linasaibot.com/webhook/instagram-login",
+                "active": True,
+            },
+            {
+                "object": "whatsapp_business_account",
+                "callback_url": "https://www.linasaibot.com/webhook/whatsapp-cloud",
+                "active": True,
+                "fields": [{"name": "messages"}],
+            },
+        ]
+    )
+
+    fields = validate_webhook_state(payload, require_expected_fields=True)
+
+    assert fields["page"] == {"feed", "messages", "messaging_postbacks", "standby"}
+    assert fields["instagram"] == {"comments", "messages", "messaging_postbacks"}
+
+
 def test_social_reconcile_preserves_whatsapp_business_subscription() -> None:
     payload = _payload(
         page_fields=["feed", "messages", "messaging_postbacks", "standby"],
@@ -110,7 +139,7 @@ def test_reconcile_precondition_rejects_unsafe_state(failure: str) -> None:
     if failure == "duplicate":
         data.append(dict(data[0]))
     elif failure == "unknown_object":
-        data.append({"object": "user", "fields": []})
+        data.append({"object": "permissions", "fields": []})
     else:
         page = data[0]
         assert isinstance(page, dict)
@@ -194,6 +223,7 @@ def test_main_posts_merged_fields_without_removing_comments(monkeypatch: pytest.
     assert posted_forms["page"]["fields"] == "feed,messages,messaging_postbacks,standby"
     assert posted_forms["page"]["callback_url"] == "https://www.linasaibot.com/webhook/meta-messaging"
     assert posted_forms["page"]["verify_token"] == "v" * 32
+    assert posted_forms["page"]["include_values"] == "true"
     assert "instagram" not in posted_forms
 
 

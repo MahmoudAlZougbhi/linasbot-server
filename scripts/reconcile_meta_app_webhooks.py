@@ -26,7 +26,7 @@ EXPECTED_INSTAGRAM_CALLBACK_URL = "https://www.linasaibot.com/webhook/instagram-
 EXPECTED_CALLBACK_URL = EXPECTED_PAGE_CALLBACK_URL
 EXPECTED_OBJECTS = (INSTAGRAM_OBJECT, PAGE_OBJECT)
 MUTABLE_OBJECTS = (PAGE_OBJECT,)
-PRESERVED_AUXILIARY_OBJECTS = frozenset({"whatsapp_business_account"})
+PRESERVED_AUXILIARY_OBJECTS = frozenset({"user", "whatsapp_business_account"})
 ALLOWED_FIELDS_BY_OBJECT = {
     INSTAGRAM_OBJECT: APP_INSTAGRAM_WEBHOOK_FIELDS,
     PAGE_OBJECT: APP_PAGE_WEBHOOK_FIELDS,
@@ -280,6 +280,7 @@ def main() -> None:
                 "callback_url": EXPECTED_CALLBACKS_BY_OBJECT[object_name],
                 "verify_token": verify_token,
                 "fields": ",".join(sorted(target_fields[object_name])),
+                "include_values": "true",
             },
             stage=f"reconcile_{object_name}",
         )

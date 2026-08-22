@@ -22,6 +22,35 @@ def test_facebook_comment_events_skip_page_self_replies() -> None:
     assert events[0]["comment_id"] == "c1"
 
 
+def test_facebook_comment_events_include_nested_thread_replies() -> None:
+    events = _facebook_comment_events(
+        "post_1",
+        [
+            {
+                "id": "c1",
+                "message": "nice",
+                "from": {"id": "user_1", "name": "User"},
+                "comments": {
+                    "data": [
+                        {
+                            "id": "c2",
+                            "message": "Thank you!",
+                            "from": {"id": "page_1", "name": "Page"},
+                        },
+                        {
+                            "id": "c3",
+                            "message": "follow up",
+                            "from": {"id": "user_1", "name": "User"},
+                        },
+                    ]
+                },
+            }
+        ],
+        page_id="page_1",
+    )
+    assert [event["comment_id"] for event in events] == ["c1", "c3"]
+
+
 @pytest.mark.asyncio
 async def test_sync_facebook_binding_comments_enqueues_new_comment(monkeypatch: pytest.MonkeyPatch) -> None:
     binding = type(

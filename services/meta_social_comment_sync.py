@@ -15,6 +15,12 @@ from services.meta_graph_routing import build_messaging_settings_for_binding, gr
 _runtime_logger = logging.getLogger("uvicorn.error")
 _MAX_POSTS_PER_SYNC = 8
 _MAX_COMMENTS_PER_POST = 25
+_MAX_COMMENT_NEST_DEPTH = 4
+_FACEBOOK_POST_COMMENT_FIELDS = (
+    "comments.limit(25){id,message,from,created_time,"
+    "comments.limit(20){id,message,from,created_time,"
+    "comments.limit(15){id,message,from,created_time}}}"
+)
 
 
 def _binding_by_id(registry: Any, binding_id: str) -> MetaAssetBinding | None:
@@ -43,11 +49,25 @@ def _comment_reply_enabled(binding: MetaAssetBinding) -> bool:
     return bool(setting.enabled)
 
 
-def _facebook_comment_events(post_id: str, comments: list[dict[str, Any]], *, page_id: str) -> list[dict[str, Any]]:
-    events: list[dict[str, Any]] = []
+def _iter_facebook_comment_nodes(comments: list[dict[str, Any]], *, depth: int = 0) -> list[dict[str, Any]]:
+    """Flatten top-level and nested thread replies from one post's comment tree."""
+
+    nodes: list[dict[str, Any]] = []
     for raw in comments[:_MAX_COMMENTS_PER_POST]:
         if not isinstance(raw, dict):
             continue
+        nodes.append(raw)
+        if depth >= _MAX_COMMENT_NEST_DEPTH:
+            continue
+        nested = (raw.get("comments") or {}).get("data") if isinstance(raw.get("comments"), dict) else []
+        if isinstance(nested, list) and nested:
+            nodes.extend(_iter_facebook_comment_nodes(nested, depth=depth + 1))
+    return nodes
+
+
+def _facebook_comment_events(post_id: str, comments: list[dict[str, Any]], *, page_id: str) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    for raw in _iter_facebook_comment_nodes(comments):
         comment_id = str(raw.get("id") or "").strip()
         from_raw = raw.get("from") if isinstance(raw.get("from"), dict) else {}
         author_id = str(from_raw.get("id") or "").strip()
@@ -114,7 +134,7 @@ async def sync_facebook_binding_comments(binding_id: str) -> dict[str, Any]:
             token=token,
             path=f"{page_id}/posts",
             params={
-                "fields": "id,comments.limit(25){id,message,from,created_time}",
+                "fields": f"id,{_FACEBOOK_POST_COMMENT_FIELDS}",
                 "limit": str(_MAX_POSTS_PER_SYNC),
             },
         )
