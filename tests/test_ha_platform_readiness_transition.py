@@ -396,6 +396,55 @@ def test_helper_uses_sha_aware_serving_and_later_helper_rollback_phase() -> None
     assert 'assert_public_ready_for_sha "$previous_sha"' in recover
 
 
+def test_run_preflight_cleanup_accepts_tempfile_underscore_suffix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts.ha import target_platform_readiness_preflight as mod
+
+    state_root = tmp_path / "meta-ha"
+    run_dir = tmp_path / "run"
+    state_root.mkdir()
+    run_dir.mkdir()
+    monkeypatch.setattr(mod, "CANONICAL_STATE_ROOT", state_root)
+    monkeypatch.setattr(mod, "CANONICAL_RUN_DIR", run_dir)
+    monkeypatch.setattr(mod.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(mod, "fetch_live_ready", lambda: (200, {"ok": True, "role": "readiness", "checks": {}}))
+    monkeypatch.setattr(mod, "live_ready_is_platform_admissible", lambda *_a: (True, {}))
+    monkeypatch.setattr(mod, "materialize_target_archive", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        mod,
+        "evaluate_target_platform_ready",
+        lambda _source: {"ok": True, "status_code": 200, "failing": {}},
+    )
+    real_rmtree = mod._rmtree_validated
+    monkeypatch.setattr(
+        mod,
+        "_rmtree_validated",
+        lambda path, *, parent, require_root: real_rmtree(path, parent=parent, require_root=False),
+    )
+
+    def fake_mkdtemp(prefix: str, dir: str | None = None) -> str:
+        path = Path(dir or ".") / f"{prefix}abc_defg"
+        path.mkdir()
+        return str(path)
+
+    monkeypatch.setattr(mod.tempfile, "mkdtemp", fake_mkdtemp)
+    generated = state_root / "linasbot-target-ready.abc_defg"
+    assert mod.TARGET_READY_DIR_RE.pattern == r"^linasbot-target-ready\.[a-z0-9_]{8}$"
+    assert mod.TARGET_READY_DIR_RE.fullmatch(generated.name)
+    report = mod.run_preflight(
+        repo=tmp_path / "repo",
+        target_sha="0" * 40,
+        state_root=state_root,
+        env_file="",
+        chdir="",
+    )
+    assert report["ok"] is True
+    assert generated.exists() is False
+    assert list(state_root.iterdir()) == []
+
+
 def test_transition_helper_stays_under_500_lines() -> None:
     assert (
         len((ROOT / "scripts/ha/target_platform_readiness_preflight.py").read_text(encoding="utf-8").splitlines()) < 500

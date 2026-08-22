@@ -49,6 +49,44 @@ def test_stage_and_stage_evidence_are_deferred_until_trusted_remat() -> None:
     assert "retry-stage)" in required_arm
 
 
+def test_outer_dispatch_defers_preflight_without_changing_required_proofs() -> None:
+    dispatch = _dispatch()
+    proof_end = dispatch.index('esac\n  case "$phase" in')
+    proof = dispatch[dispatch.index('case "$phase" in') : proof_end + 4]
+    work = dispatch[proof_end:]
+    deferred_patterns = proof.split(")", 1)[0]
+    assert "preflight|" in deferred_patterns
+    assert "verify-staged-qg-payloads" not in deferred_patterns
+    assert "activate" not in deferred_patterns
+    assert "rollback" not in deferred_patterns
+    preflight_work = work[work.index("preflight)") : work.index("lb-attestation)")]
+    assert 'node_preflight "$1"' in preflight_work
+    script = (
+        "set -euo pipefail\n"
+        'phase="$1"\n'
+        'runtime_expected_node=""\n'
+        'assert_python_runtime_contract() { printf "%s\\n" "${2:-required}" >&2; }\n'
+        f"{proof}\n"
+    )
+
+    def mode(phase: str) -> str:
+        ran = subprocess.run(
+            ["bash", "-s", "--", phase],
+            input=script,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        assert ran.stdout == ""
+        return ran.stderr.strip()
+
+    assert mode("preflight") == "deferred-until-restore"
+    assert mode("stage") == "deferred-until-restore"
+    assert mode("activate") == "required"
+    assert mode("rollback") == "required"
+    assert mode("verify-staged-qg-payloads") == "required"
+
+
 def test_peer_backup_precedes_any_remat_mutation() -> None:
     source = _helper()
     orchestrate = source[source.index("orchestrate() {") : source.index('case "${1:-}" in')]
