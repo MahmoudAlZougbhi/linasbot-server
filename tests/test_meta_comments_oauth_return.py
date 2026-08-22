@@ -19,7 +19,7 @@ from services.meta_oauth_return import (
     normalize_return_surface,
     oauth_completion_redirect_url,
 )
-from tests.meta_comments_capability_helpers import _Cred, _ig_binding, _MapRegistry
+from tests.meta_comments_capability_helpers import _ig_binding
 
 
 def test_mobile_oauth_success_redirects_to_deep_link_not_login() -> None:
