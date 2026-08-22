@@ -76,13 +76,9 @@ def _save_tenant_file(tenant_id: str, settings: dict[str, Any]) -> None:
     tmp.replace(path)
     os.chmod(path, 0o600)
     try:
-        from services.ha_peer_file_replicate import replicate_file_to_ha_peer
+        from services.ha_tenant_config_peer_sync import replicate_comment_settings_to_peer
 
-        replicate_file_to_ha_peer(
-            local_path=path,
-            remote_path=str(path),
-            stage="meta_comment_settings",
-        )
+        replicate_comment_settings_to_peer(tenant)
     except Exception:
         _runtime_logger.error("[meta-comment-settings] ha_peer_replicate_failed tenant=%s", tenant_id)
 

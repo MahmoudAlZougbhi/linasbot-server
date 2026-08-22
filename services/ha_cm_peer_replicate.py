@@ -28,6 +28,10 @@ class HaCmPeerReplicateError(RuntimeError):
     """Raised when the peer could not be brought to the same published CM state."""
 
 
+def rsync_local_dir_to_peer(*, local_dir: Path, remote_dir: str, stage: str) -> None:
+    _rsync_dir(local_dir=local_dir, remote_dir=remote_dir, stage=stage)
+
+
 def _peer_host() -> str:
     return str(os.getenv("LINAS_HA_PEER_HOST") or "").strip()
 

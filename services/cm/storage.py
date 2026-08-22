@@ -199,6 +199,19 @@ def put_draft(
             payload=safe_payload,
         )
         _write_envelope(path, envelope)
+        try:
+            from services.ha_tenant_config_peer_sync import replicate_cm_draft_to_peer
+
+            replicate_cm_draft_to_peer(tid)
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "cm_draft_ha_peer_sync_failed tenant=%s section=%s",
+                tid,
+                name,
+                exc_info=True,
+            )
         return envelope
 
 
