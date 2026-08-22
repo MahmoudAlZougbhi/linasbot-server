@@ -45,8 +45,8 @@ SCOPES = INTEGRATION_SCOPES
 def oauth_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("META_APP_A_ID", "2963733803971681")
     monkeypatch.setenv("META_APP_A_SECRET", "app-a-secret-tests")
-    monkeypatch.setenv("META_APP_A_WEBHOOK_VERIFY_TOKEN", "verify-a-tests")
-    monkeypatch.setenv("META_WEBHOOK_VERIFY_TOKEN", "verify-a-tests")
+    monkeypatch.setenv("META_APP_A_WEBHOOK_VERIFY_TOKEN", "verify-a-tests-thirty-two-characters-long")
+    monkeypatch.setenv("META_WEBHOOK_VERIFY_TOKEN", "verify-a-tests-thirty-two-characters-long")
     monkeypatch.setenv("META_APP_B_ID", "998877665544")
     monkeypatch.setenv("META_APP_B_SECRET", "app-b-secret-tests")
     monkeypatch.setenv("META_APP_B_WEBHOOK_VERIFY_TOKEN", "verify-b-tests")
