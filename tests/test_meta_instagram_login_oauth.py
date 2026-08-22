@@ -23,6 +23,7 @@ from services.meta_app_registry import (
     MetaOAuthStateError,
 )
 from services.meta_instagram_login_config import (
+    INSTAGRAM_LOGIN_GRAPH_API_VERSION,
     META_INSTAGRAM_LOGIN_REQUEST_SCOPES,
     META_INSTAGRAM_LOGIN_REQUIRED_SCOPES,
     instagram_login_config_status,
@@ -294,7 +295,7 @@ async def test_complete_instagram_login_subscribes_and_marks_ready(registry: Met
     stored = registry.store_path.read_text(encoding="utf-8")
     assert "long-lived-token" not in stored
     assert seen_subscription_paths
-    assert all(path.startswith("/v24.0/") for path in seen_subscription_paths)
+    assert all(path.startswith(f"/{INSTAGRAM_LOGIN_GRAPH_API_VERSION}/") for path in seen_subscription_paths)
 
 
 @pytest.mark.asyncio
@@ -451,7 +452,7 @@ async def test_complete_instagram_login_rejects_fields_from_another_app(
     assert binding.status == "testing"
     assert binding.webhook_subscription_status == INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS
     assert registry.binding_credential_is_available(binding.binding_id)
-    assert provider_methods == ["GET", "POST", "GET", "GET", "GET"]
+    assert provider_methods == ["GET", "GET", "POST", "GET", "GET", "GET"]
     assert "DELETE" not in provider_methods
 
 
@@ -511,7 +512,7 @@ async def test_complete_instagram_login_fails_when_granted_comments_are_not_veri
     assert binding.status == "testing"
     assert binding.webhook_subscription_status == INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS
     assert registry.binding_credential_is_available(binding.binding_id)
-    assert provider_methods == ["GET", "POST", "GET", "GET", "GET"]
+    assert provider_methods == ["GET", "GET", "POST", "GET", "GET", "GET"]
     assert "DELETE" not in provider_methods
 
 
@@ -553,7 +554,7 @@ async def test_verify_rate_limit_persists_cleanup_without_hot_compensation(
     assert binding.status == "testing"
     assert binding.webhook_subscription_status == INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS
     assert registry.binding_credential_is_available(binding.binding_id)
-    assert provider_methods == ["GET", "POST", "GET"]
+    assert provider_methods == ["GET", "GET"]
     assert "DELETE" not in provider_methods
 
 
@@ -630,7 +631,7 @@ async def test_uncertain_post_acknowledgement_stays_durable_until_lifecycle(
     assert binding.status == "testing"
     assert binding.webhook_subscription_status == INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS
     assert registry.binding_credential_is_available(binding.binding_id)
-    assert provider_methods == ["GET", "POST", "GET", "GET", "GET"]
+    assert provider_methods == ["GET", "GET", "POST", "GET", "GET", "GET"]
     assert "DELETE" not in provider_methods
 
 

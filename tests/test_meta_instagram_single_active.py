@@ -528,7 +528,7 @@ async def test_direct_instagram_disconnect_uses_exact_provider_endpoint(
         nonlocal present
         calls.append((request.method, str(request.url), request.headers.get("authorization", "")))
         assert request.url.host == "graph.instagram.com"
-        assert request.url.path == f"/v24.0/{INSTAGRAM_ID}/subscribed_apps"
+        assert request.url.path == f"/v26.0/{INSTAGRAM_ID}/subscribed_apps"
         if request.method == "GET":
             data = (
                 [

@@ -24,6 +24,9 @@ EXPECTED_INSTAGRAM_LOGIN_WEBHOOK_URL = "https://www.linasaibot.com/webhook/insta
 META_INSTAGRAM_GRAPH_BASE_URL = "https://graph.instagram.com"
 META_INSTAGRAM_OAUTH_AUTHORIZE_URL = "https://www.instagram.com/oauth/authorize"
 META_INSTAGRAM_OAUTH_TOKEN_URL = "https://api.instagram.com/oauth/access_token"
+# Live Instagram Login webhook fields are subscribed at this Graph version in
+# App Dashboard. Do not reuse App A Facebook Graph (v24.0) for graph.instagram.com.
+INSTAGRAM_LOGIN_GRAPH_API_VERSION = "v26.0"
 
 AuthFlow = Literal["facebook_login", "instagram_login"]
 
@@ -56,6 +59,12 @@ class InstagramLoginConfigStatus:
 
 def instagram_login_app_id() -> str:
     return (os.getenv("META_INSTAGRAM_LOGIN_APP_ID") or DEFAULT_INSTAGRAM_LOGIN_APP_ID).strip()
+
+
+def instagram_login_graph_api_version() -> str:
+    """Return the Instagram Graph version for per-account subscribed_apps."""
+
+    return INSTAGRAM_LOGIN_GRAPH_API_VERSION
 
 
 def instagram_login_redirect_uri() -> str:
