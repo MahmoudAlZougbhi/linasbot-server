@@ -30,7 +30,8 @@ DEFERRED_DISPATCH_PHASES = (
     "preflight|ensure-maintenance|mark-maintenance|apply-cpython-runtime-immutability|"
     "stage|stage-evidence|"
     "lb-attestation|release-bundle|worker-template-probe|"
-    "install-worker-template-decision|install-trusted-worker-template"
+    "install-worker-template-decision|install-trusted-worker-template|"
+    "env-evidence-deferred"
 )
 PRE_DRAIN_IDENTITY_PHASES = frozenset(
     {

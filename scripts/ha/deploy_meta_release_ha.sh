@@ -3731,10 +3731,22 @@ assert_cluster_runtime_env_parity() {
   local peer_host="$1"
   local expected_release_sha="$2"
   local helper_source_sha="$3"
-  local local_evidence peer_evidence
+  local tree_proof="${4:-required}"
+  local local_evidence peer_evidence peer_phase
+  case "$tree_proof" in
+    required)
+      peer_phase=env-evidence
+      ;;
+    deferred-until-restore)
+      peer_phase=env-evidence-deferred
+      ;;
+    *)
+      die "cluster runtime env parity proof mode is invalid"
+      ;;
+  esac
   local_evidence="$(cluster_runtime_env_evidence \
     "$helper_source_sha" "$expected_release_sha" node01)"
-  peer_evidence="$(remote_node "$peer_host" env-evidence \
+  peer_evidence="$(remote_node "$peer_host" "$peer_phase" \
     "$expected_release_sha" "$helper_source_sha" node02)"
   compare_cluster_runtime_env_evidence \
     "$helper_source_sha" "$expected_release_sha" "$local_evidence" "$peer_evidence" >/dev/null || \
@@ -9864,7 +9876,7 @@ node_dispatch() {
     return 0
   fi
   case "$phase" in
-    preflight|ensure-maintenance|mark-maintenance|apply-cpython-runtime-immutability|stage|stage-evidence|lb-attestation|release-bundle|worker-template-probe|install-worker-template-decision|install-trusted-worker-template)
+    preflight|ensure-maintenance|mark-maintenance|apply-cpython-runtime-immutability|stage|stage-evidence|lb-attestation|release-bundle|worker-template-probe|install-worker-template-decision|install-trusted-worker-template|env-evidence-deferred)
       assert_python_runtime_contract "$runtime_expected_node" deferred-until-restore >/dev/null
       ;;
     *)
@@ -9885,6 +9897,11 @@ node_dispatch() {
       assert_release_bundle "$1" "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}"
       ;;
     env-evidence)
+      validate_sha "${1:-}"
+      validate_sha "${2:-}"
+      cluster_runtime_env_evidence "$2" "$1" "${3:-}"
+      ;;
+    env-evidence-deferred)
       validate_sha "${1:-}"
       validate_sha "${2:-}"
       cluster_runtime_env_evidence "$2" "$1" "${3:-}"
@@ -11590,7 +11607,7 @@ orchestrate() {
   )"
   test -n "$local_baseline_artifacts" && test -n "$peer_baseline_artifacts" || \
     die "both-node baseline artifact preflight evidence is missing"
-  assert_cluster_runtime_env_parity "$peer_host" "$target_sha" "$target_sha"
+  assert_cluster_runtime_env_parity "$peer_host" "$target_sha" "$target_sha" deferred-until-restore
   assert_worker_template_cluster_agreement "$peer_host" "$target_sha"
   if [ "$deploy_mode" = "steady-confirmed" ]; then
     test "$previous_sha" = "$peer_previous_sha" || die "nodes do not share one previous SHA"

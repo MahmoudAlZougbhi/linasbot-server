@@ -1484,7 +1484,7 @@ def test_deploy_proves_full_cluster_runtime_env_and_never_derives_node_local_val
     assert "NODE_LOCAL_KEYS" in projection
     assert "OPENAI" not in projection and "RESEND" not in projection and "CM_" not in projection
     assert 'FORMAT = "linas-cluster-runtime-env-v1"' in projection
-    assert 'remote_node "$peer_host" env-evidence' in helper_runner
+    assert 'remote_node "$peer_host" "$peer_phase"' in helper_runner
     assert "compare_cluster_runtime_env_evidence" in helper_runner
     assert "mktemp -d -p /run linasbot-cluster-env.XXXXXXXX" in helper_runner
     assert 'git -C "$REPO_DIR" rev-parse "$source_sha:$path"' in helper_runner

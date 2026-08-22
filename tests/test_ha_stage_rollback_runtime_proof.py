@@ -42,11 +42,14 @@ def test_stage_and_stage_evidence_are_deferred_until_trusted_remat() -> None:
     required_arm = dispatch[dispatch.index("*)\n      assert_python_runtime_contract") :]
     assert "stage|stage-evidence|" in deferred
     assert "apply-cpython-runtime-immutability|" in deferred
+    assert "env-evidence-deferred" in deferred
+    assert "|env-evidence|" not in deferred
     assert "verify-staged-qg-payloads" not in deferred
     assert "rollback)" in required_arm
     assert "activate)" in required_arm
     assert "verify-staged-qg-payloads)" in required_arm
     assert "retry-stage)" in required_arm
+    assert "env-evidence)" in required_arm
 
 
 def test_outer_dispatch_defers_preflight_without_changing_required_proofs() -> None:
@@ -56,6 +59,8 @@ def test_outer_dispatch_defers_preflight_without_changing_required_proofs() -> N
     work = dispatch[proof_end:]
     deferred_patterns = proof.split(")", 1)[0]
     assert "preflight|" in deferred_patterns
+    assert "env-evidence-deferred" in deferred_patterns
+    assert "|env-evidence|" not in deferred_patterns
     assert "verify-staged-qg-payloads" not in deferred_patterns
     assert "activate" not in deferred_patterns
     assert "rollback" not in deferred_patterns
@@ -82,9 +87,11 @@ def test_outer_dispatch_defers_preflight_without_changing_required_proofs() -> N
 
     assert mode("preflight") == "deferred-until-restore"
     assert mode("stage") == "deferred-until-restore"
+    assert mode("env-evidence-deferred") == "deferred-until-restore"
     assert mode("activate") == "required"
     assert mode("rollback") == "required"
     assert mode("verify-staged-qg-payloads") == "required"
+    assert mode("env-evidence") == "required"
 
 
 def test_peer_backup_precedes_any_remat_mutation() -> None:
