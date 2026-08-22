@@ -15,6 +15,7 @@ from services.credit_ledger_pg_store import (
     get_balance_row,
     read_balance,
     reservation_state,
+    sum_positive_grant_credits,
     upsert_balance,
 )
 from services.entitlements_service import entitlements_store
@@ -35,22 +36,61 @@ def pg_get_reserved(tenant_id: str) -> int:
     return int(bal[1]) if bal is not None else 0
 
 
-def ensure_period_grant_on_session(session: Any, tenant_id: str, *, plan_id: str, total: int) -> None:
-    if get_balance_row(session, tenant_id, for_update=True) is not None:
+def _append_period_grant(
+    session: Any,
+    *,
+    tenant_id: str,
+    plan_id: str,
+    credits: int,
+    balance_after: int,
+    operation_type: str,
+) -> None:
+    if credits <= 0:
         return
-    upsert_balance(session, tenant_id, total, 0)
     append_entry(
         session,
         {
             "id": uuid.uuid4().hex,
             "tenant_id": tenant_id,
             "op": "grant_included",
-            "credits": total,
-            "balance_after": total,
-            "operation_type": "period_grant",
+            "credits": credits,
+            "balance_after": balance_after,
+            "operation_type": operation_type,
             "created_at": time.time(),
             "meta": {"plan_id": plan_id},
         },
+    )
+
+
+def ensure_period_grant_on_session(session: Any, tenant_id: str, *, plan_id: str, total: int) -> None:
+    row = get_balance_row(session, tenant_id, for_update=True)
+    if row is None:
+        upsert_balance(session, tenant_id, total, 0)
+        _append_period_grant(
+            session,
+            tenant_id=tenant_id,
+            plan_id=plan_id,
+            credits=total,
+            balance_after=total,
+            operation_type="period_grant",
+        )
+        return
+    if total <= 0:
+        return
+    available = int(row.available or 0)
+    reserved = int(row.reserved or 0)
+    if available + reserved > 0:
+        return
+    if sum_positive_grant_credits(session, tenant_id) > 0:
+        return
+    upsert_balance(session, tenant_id, total, reserved)
+    _append_period_grant(
+        session,
+        tenant_id=tenant_id,
+        plan_id=plan_id,
+        credits=total,
+        balance_after=total,
+        operation_type="period_grant_reconcile",
     )
 
 

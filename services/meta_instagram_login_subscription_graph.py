@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import httpx
@@ -25,6 +26,8 @@ from services.meta_instagram_login_subscription_telemetry import (
 from services.meta_oauth_graph_http import MetaOAuthError, _safe_json
 
 InstagramLoginWebhookSubscriptionSnapshot = tuple[str, ...] | None
+INSTAGRAM_SUBSCRIBED_APPS_READ_FIELDS = "id,subscribed_fields"
+_runtime_logger = logging.getLogger("uvicorn.error")
 
 
 class InstagramSubscribedAppsProviderError(MetaOAuthError):
@@ -84,13 +87,45 @@ def _row_app_ids(row: dict[str, Any]) -> set[str]:
     return ids
 
 
+def _normalize_subscribed_field(item: Any) -> str:
+    if isinstance(item, dict):
+        raw = item.get("name")
+        if raw is None:
+            raw = item.get("id")
+        return str(raw or "").strip().lower()
+    return str(item).strip().lower()
+
+
 def _fields_from_row(row: dict[str, Any]) -> set[str] | None:
     raw_fields = row.get("subscribed_fields")
     if isinstance(raw_fields, list):
-        return {str(item).strip() for item in raw_fields if str(item).strip()}
+        names = {_normalize_subscribed_field(item) for item in raw_fields}
+        return {name for name in names if name}
     if isinstance(raw_fields, str):
-        return {item.strip() for item in raw_fields.split(",") if item.strip()}
+        return {item.strip().lower() for item in raw_fields.split(",") if item.strip()}
     return None
+
+
+def _select_matching_subscription_row(matching: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Prefer the Instagram Login app row when the parent Facebook app is also listed."""
+
+    if not matching:
+        return None
+    ig_id = instagram_login_app_id()
+    ig_rows = [row for row in matching if ig_id in _row_app_ids(row)]
+    if len(ig_rows) > 1:
+        raise MetaOAuthError("Instagram webhook subscription rows are ambiguous")
+    if len(ig_rows) == 1:
+        return ig_rows[0]
+    if len(matching) == 1:
+        return matching[0]
+    raise MetaOAuthError("Instagram webhook subscription rows are ambiguous")
+
+
+def _selected_app_kind(row: dict[str, Any]) -> str:
+    if instagram_login_app_id() in _row_app_ids(row):
+        return "ig_app"
+    return "fb_app"
 
 
 def parse_subscription_snapshot(
@@ -101,11 +136,21 @@ def parse_subscription_snapshot(
         raise MetaOAuthError("Instagram webhook subscription rows could not be verified")
     expected_ids = expected_instagram_login_subscription_app_ids()
     matching = [row for row in rows if isinstance(row, dict) and (_row_app_ids(row) & expected_ids)]
-    if len(matching) > 1:
-        raise MetaOAuthError("Instagram webhook subscription rows are ambiguous")
-    if not matching:
+    selected = _select_matching_subscription_row(matching)
+    if selected is None:
+        _runtime_logger.info(
+            "instagram subscribed_apps parse row_count=%s matched_count=0 selected=none field_count=-",
+            len(rows),
+        )
         return None
-    fields = _fields_from_row(matching[0])
+    fields = _fields_from_row(selected)
+    _runtime_logger.info(
+        "instagram subscribed_apps parse row_count=%s matched_count=%s selected=%s field_count=%s",
+        len(rows),
+        len(matching),
+        _selected_app_kind(selected),
+        "-" if fields is None else len(fields),
+    )
     if fields is None:
         raise MetaOAuthError("Instagram webhook subscription fields could not be verified")
     return tuple(sorted(fields))
@@ -147,6 +192,7 @@ async def read_instagram_login_subscription(
 ) -> InstagramLoginWebhookSubscriptionSnapshot:
     response = await client.get(
         subscribed_apps_url(ig_user_id=ig_user_id, graph_api_version=graph_api_version),
+        params={"fields": INSTAGRAM_SUBSCRIBED_APPS_READ_FIELDS},
         headers={"Authorization": f"Bearer {access_token}"},
     )
     if telemetry_stage is not None:

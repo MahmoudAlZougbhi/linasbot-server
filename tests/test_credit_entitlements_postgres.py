@@ -75,6 +75,40 @@ def test_pg_grant_pack_idempotent_and_entitlement(pg_billing: Path) -> None:
     assert ent.extra_credits >= 100
 
 
+def test_pg_period_grant_reconciles_stale_zero_bootstrap(pg_billing: Path) -> None:
+    ledger = CreditLedgerService(root=pg_billing / "file_unused")
+    from services.entitlements_service import entitlements_store
+
+    entitlements_store.set_plan(tenant_id="t_boot", plan_id="none", status="active", source="admin")
+    ledger.ensure_period_grant("t_boot")
+    assert ledger.get_balance("t_boot") == 0
+
+    entitlements_store.set_plan(tenant_id="t_boot", plan_id="max", status="active", source="admin")
+    ledger.ensure_period_grant("t_boot")
+    assert ledger.get_balance("t_boot") == entitlements_store.get("t_boot").included_credits
+
+
+def test_pg_period_grant_does_not_regrant_after_spend_down(pg_billing: Path) -> None:
+    ledger = CreditLedgerService(root=pg_billing / "file_unused")
+    from services.entitlements_service import entitlements_store
+
+    entitlements_store.set_plan(tenant_id="t_spent", plan_id="starter", status="active", source="admin")
+    ledger.ensure_period_grant("t_spent")
+    start = ledger.get_balance("t_spent")
+    assert start > 0
+    rid = ledger.reserve(
+        tenant_id="t_spent",
+        user_id="u1",
+        credits=start,
+        operation_type="ai",
+        request_id="spend-all",
+    )
+    ledger.capture(tenant_id="t_spent", reservation_id=rid, provider_cost_usd=0.01, model_provider="x")
+    assert ledger.get_balance("t_spent") == 0
+    ledger.ensure_period_grant("t_spent")
+    assert ledger.get_balance("t_spent") == 0
+
+
 def test_pg_entitlement_notification_idempotent(pg_billing: Path) -> None:
     r1 = apply_store_notification(
         tenant_id="t3",

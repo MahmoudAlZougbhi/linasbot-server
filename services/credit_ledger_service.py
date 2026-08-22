@@ -124,6 +124,27 @@ class CreditLedgerService:
         with self._log_path(entry.tenant_id).open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(asdict(entry)) + "\n")
 
+    def _positive_grant_credits(self, tenant_id: str) -> int:
+        path = self._log_path(tenant_id)
+        if not path.is_file():
+            return 0
+        total = 0
+        with path.open(encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if str(row.get("op") or "") not in {"grant_included", "grant_pack"}:
+                    continue
+                credits = int(row.get("credits") or 0)
+                if credits > 0:
+                    total += credits
+        return total
+
     def ensure_period_grant(self, tenant_id: str) -> None:
         if billing_uses_postgres():
             from services.credit_ledger_pg_ops import pg_ensure_period_grant
@@ -131,11 +152,35 @@ class CreditLedgerService:
             pg_ensure_period_grant(tenant_id)
             return
         ent = entitlements_store.get(tenant_id)
+        total = int(ent.included_credits + ent.extra_credits)
         path = self._balance_path(tenant_id)
         with self._lock:
             if path.is_file():
+                if total <= 0:
+                    return
+                data = json.loads(path.read_text(encoding="utf-8"))
+                available = int(data.get("available") or 0)
+                reserved = int(data.get("reserved") or 0)
+                if available + reserved > 0 or self._positive_grant_credits(tenant_id) > 0:
+                    return
+                self._set_balance(tenant_id, total, reserved)
+                self._append(
+                    LedgerEntry(
+                        id=uuid.uuid4().hex,
+                        tenant_id=tenant_id,
+                        user_id=None,
+                        op="grant_included",
+                        credits=total,
+                        balance_after=total,
+                        operation_type="period_grant_reconcile",
+                        model_provider=None,
+                        provider_cost_usd=None,
+                        request_id=None,
+                        created_at=time.time(),
+                        meta={"plan_id": ent.plan_id},
+                    )
+                )
                 return
-            total = int(ent.included_credits + ent.extra_credits)
             self._set_balance(tenant_id, total, 0)
             self._append(
                 LedgerEntry(

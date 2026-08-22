@@ -109,7 +109,7 @@ def active_channel_bindings(tenant_id: str, platform: str) -> list[Any]:
     return [
         b
         for b in registry.list_bindings(include_inactive=False, include_superseded=False)
-        if getattr(b, "tenant_id", None) == tenant_id
+        if str(getattr(b, "tenant_id", "") or "").strip().lower() == str(tenant_id or "").strip().lower()
         and str(getattr(b, "channel", "") or "") == platform
         and str(getattr(b, "status", "") or "") == "active"
         and str(getattr(b, "app_key", "") or "") == APP_A_KEY
@@ -137,12 +137,12 @@ def canonical_channel_bindings(tenant_id: str, platform: str) -> list[Any]:
     """
 
     platform_key = (platform or "").strip().lower()
-    tenant = str(tenant_id or "").strip()
+    tenant = str(tenant_id or "").strip().lower()
     bindings = active_channel_bindings(tenant, platform_key)
     by_asset: dict[str, list[Any]] = {}
     for binding in bindings:
         # Defense in depth — never mix tenants/apps even if a caller bypasses filters.
-        if str(getattr(binding, "tenant_id", "") or "") != tenant:
+        if str(getattr(binding, "tenant_id", "") or "").strip().lower() != tenant:
             continue
         if str(getattr(binding, "app_key", "") or "") != APP_A_KEY:
             continue

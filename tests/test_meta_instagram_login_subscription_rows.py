@@ -70,6 +70,117 @@ def test_parse_accepts_parent_facebook_app_id(instagram_env: None) -> None:
     assert snapshot == tuple(sorted(EXPECTED_FIELDS))
 
 
+def test_parse_prefers_instagram_app_when_parent_facebook_app_also_listed(instagram_env: None) -> None:
+    snapshot = parse_subscription_snapshot(
+        {
+            "data": [
+                {
+                    "id": FACEBOOK_APP_ID,
+                    "subscribed_fields": ["messages"],
+                },
+                {
+                    "id": INSTAGRAM_APP_ID,
+                    "subscribed_fields": EXPECTED_FIELDS,
+                },
+            ]
+        }
+    )
+    assert snapshot == tuple(sorted(EXPECTED_FIELDS))
+
+
+def test_parse_accepts_subscribed_fields_as_name_objects(instagram_env: None) -> None:
+    snapshot = parse_subscription_snapshot(
+        {
+            "data": [
+                {
+                    "id": INSTAGRAM_APP_ID,
+                    "subscribed_fields": [
+                        {"name": "messages"},
+                        {"name": "messaging_postbacks"},
+                        {"name": "comments"},
+                    ],
+                }
+            ]
+        }
+    )
+    assert snapshot == tuple(sorted(EXPECTED_FIELDS))
+
+
+def test_parse_id_only_row_fails_closed(instagram_env: None) -> None:
+    from services.meta_oauth_graph_http import MetaOAuthError
+
+    with pytest.raises(MetaOAuthError, match="fields could not be verified"):
+        parse_subscription_snapshot({"data": [{"id": INSTAGRAM_APP_ID}]})
+
+
+@pytest.mark.asyncio
+async def test_read_requests_subscribed_fields_on_get(instagram_env: None) -> None:
+    from services.meta_instagram_login_subscription_graph import (
+        INSTAGRAM_SUBSCRIBED_APPS_READ_FIELDS,
+        read_instagram_login_subscription,
+    )
+
+    seen: dict[str, str] = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["fields"] = request.url.params.get("fields") or ""
+        seen["authorization"] = request.headers.get("authorization") or ""
+        return httpx.Response(
+            200,
+            json={"data": [{"id": INSTAGRAM_APP_ID, "subscribed_fields": EXPECTED_FIELDS}]},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        snapshot = await read_instagram_login_subscription(
+            ig_user_id=INSTAGRAM_ID,
+            access_token="test-token",
+            graph_api_version=INSTAGRAM_LOGIN_GRAPH_API_VERSION,
+            client=client,
+            step="instagram subscribed_apps verify",
+        )
+
+    assert seen["fields"] == INSTAGRAM_SUBSCRIBED_APPS_READ_FIELDS
+    assert seen["authorization"] == "Bearer test-token"
+    assert snapshot == tuple(sorted(EXPECTED_FIELDS))
+
+
+@pytest.mark.asyncio
+async def test_ensure_ready_when_get_lists_instagram_and_facebook_apps(
+    registry: MetaAppRegistry,
+) -> None:
+    binding = _binding(registry, auth_flow="instagram_login", scopes=FULL_SCOPES)
+    credential = registry.get_credential(binding)
+    posts = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal posts
+        if request.method == "POST":
+            posts += 1
+            return httpx.Response(200, json={"success": True})
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"id": FACEBOOK_APP_ID, "subscribed_fields": ["messages"]},
+                    {"id": INSTAGRAM_APP_ID, "subscribed_fields": EXPECTED_FIELDS},
+                ]
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        state = await ensure_instagram_login_webhook_subscription(
+            binding,
+            credential,
+            registry=registry,
+            graph_api_version="v24.0",
+            client=client,
+        )
+
+    assert posts == 0
+    assert state.status == "ready"
+    assert set(state.verified_fields) == set(EXPECTED_FIELDS)
+
+
 @pytest.mark.asyncio
 async def test_ensure_uses_instagram_graph_v26_not_facebook_v24(
     registry: MetaAppRegistry,
@@ -104,4 +215,5 @@ async def test_ensure_uses_instagram_graph_v26_not_facebook_v24(
     assert state.status == "ready"
     assert seen
     assert all(f"/{INSTAGRAM_LOGIN_GRAPH_API_VERSION}/{INSTAGRAM_ID}/subscribed_apps" in url for url in seen)
+    assert all("fields=id%2Csubscribed_fields" in url or "fields=id,subscribed_fields" in url for url in seen)
     assert all("/v24.0/" not in url for url in seen)

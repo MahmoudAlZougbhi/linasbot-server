@@ -190,6 +190,10 @@ async def publish_draft_sections(
         previous_pointer = read_published_pointer(tid)
         write_published_pointer(tid, pointer_out)
 
+    from services.ha_cm_peer_replicate import replicate_published_cm_to_peer
+
+    replicate_published_cm_to_peer(tenant_id=tid, pointer=pointer_out)
+
     from services.customer_reply_v2.manifest import clear_manifest_cache
 
     clear_manifest_cache(tid)
@@ -258,6 +262,10 @@ def rollback_to_version(
             updated_at=utc_now(),
         )
         write_published_pointer(tid, pointer)
+
+    from services.ha_cm_peer_replicate import replicate_published_cm_to_peer
+
+    replicate_published_cm_to_peer(tenant_id=tid, pointer=pointer)
 
     from services.customer_reply_v2.manifest import clear_manifest_cache
 

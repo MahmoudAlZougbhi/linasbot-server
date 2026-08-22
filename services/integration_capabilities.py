@@ -161,7 +161,7 @@ def _tenant_meta_bindings(tenant_id: str) -> tuple[list[Any], dict[str, set[str]
         bindings = [
             b
             for b in registry.list_bindings(include_inactive=False, include_superseded=False)
-            if getattr(b, "tenant_id", None) == tenant_id
+            if str(getattr(b, "tenant_id", "") or "").strip().lower() == str(tenant_id or "").strip().lower()
         ]
         for b in bindings:
             channel = str(getattr(b, "channel", "") or "")

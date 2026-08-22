@@ -66,6 +66,18 @@ def append_entry(session: Session, entry: dict[str, Any]) -> CreditLedgerEntryRo
     return row
 
 
+def sum_positive_grant_credits(session: Session, tenant_id: str) -> int:
+    """Credits ever granted via included-period or pack grants (excludes reserve/capture)."""
+    rows = session.scalars(
+        select(CreditLedgerEntryRow).where(
+            CreditLedgerEntryRow.tenant_id == tenant_id,
+            CreditLedgerEntryRow.op.in_(("grant_included", "grant_pack")),
+            CreditLedgerEntryRow.credits > 0,
+        )
+    ).all()
+    return sum(int(row.credits or 0) for row in rows)
+
+
 def find_ops_by_request_id(session: Session, tenant_id: str, request_id: str) -> list[dict[str, Any]]:
     rows = session.scalars(
         select(CreditLedgerEntryRow).where(
