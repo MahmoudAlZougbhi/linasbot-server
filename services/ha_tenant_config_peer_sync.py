@@ -17,8 +17,8 @@ from services.cm.version_store import read_published_pointer
 from services.ha_cm_peer_replicate import (
     HaCmPeerReplicateError,
     _peer_host,
-    _run_checked,
     _rsync_dir,
+    _run_checked,
     _ssh_target,
     ha_cm_peer_replicate_enabled,
     replicate_published_cm_to_peer,

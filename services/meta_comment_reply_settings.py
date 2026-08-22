@@ -78,7 +78,7 @@ def _save_tenant_file(tenant_id: str, settings: dict[str, Any]) -> None:
     try:
         from services.ha_tenant_config_peer_sync import replicate_comment_settings_to_peer
 
-        replicate_comment_settings_to_peer(tenant)
+        replicate_comment_settings_to_peer(tenant_id)
     except Exception:
         _runtime_logger.error("[meta-comment-settings] ha_peer_replicate_failed tenant=%s", tenant_id)
 
