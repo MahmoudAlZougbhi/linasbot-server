@@ -232,7 +232,7 @@ def test_fresh_and_older_head_postgres_can_stamp_the_long_revision(postgres_url:
 
     _alembic_ok(postgres_url, "downgrade", "-1")
     maxlen, current = _version_meta(postgres_url)
-    assert current == {"20260823_tiktok_biz"}
+    assert current == {"20260824_prod_search_meta"}
 
     _alembic_ok(postgres_url, "downgrade", "-1")
     maxlen, current = _version_meta(postgres_url)

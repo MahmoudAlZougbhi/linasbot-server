@@ -15,6 +15,8 @@ def tenant_runtime_config_backend() -> str:
     explicit = (os.getenv("LINAS_TENANT_RUNTIME_CONFIG_BACKEND") or "").strip().lower()
     if explicit in {"postgres", "file"}:
         return explicit
+    if (os.getenv("ENVIRONMENT") or "").strip().lower() == "test":
+        return "file"
     from db.session import whatsapp_db_configured
 
     if whatsapp_db_configured():

@@ -25,6 +25,7 @@ def _registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MetaAppRegistr
     monkeypatch.setenv("META_APP_A_ID", "2963733803971681")
     monkeypatch.setenv("META_APP_A_SECRET", "app-a-secret-tests")
     monkeypatch.setenv("META_APP_A_WEBHOOK_VERIFY_TOKEN", "verify-a-tests")
+    monkeypatch.setenv("META_WEBHOOK_VERIFY_TOKEN", "verify-a-tests")
     monkeypatch.setenv("META_GRAPH_API_VERSION", "v24.0")
     db = _FakeFirestore()
     monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)

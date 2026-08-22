@@ -65,6 +65,7 @@ def registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> MetaAppRegistry
     monkeypatch.setenv("META_APP_A_ID", "2963733803971681")
     monkeypatch.setenv("META_APP_A_SECRET", "app-a-secret-tests")
     monkeypatch.setenv("META_APP_A_WEBHOOK_VERIFY_TOKEN", "verify-a-tests")
+    monkeypatch.setenv("META_WEBHOOK_VERIFY_TOKEN", "verify-a-tests")
     monkeypatch.setenv("META_APP_B_ID", "998877665544")
     monkeypatch.setenv("META_APP_B_SECRET", "app-b-secret-tests")
     monkeypatch.setenv("META_APP_A_FACEBOOK_LOGIN_CONFIG_ID", "facebook-only-config-tests")
@@ -226,6 +227,8 @@ async def test_disconnect_then_oauth_connect_uses_new_credential(
                     ]
                 },
             )
+        if path.endswith("/subscriptions") and request.method == "POST":
+            return httpx.Response(200, json={"success": True})
         return httpx.Response(404, json={"error": {"message": "not found"}})
 
     url = begin_meta_business_login(tenant_id="tenant-a", channel="facebook", actor_id="owner", registry=registry)
