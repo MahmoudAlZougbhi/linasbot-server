@@ -185,8 +185,9 @@ def parse_meta_messaging_events(
 
     Only Facebook Page (`object=page`) and Instagram (`object=instagram`) events are
     accepted. WhatsApp Cloud / other Meta objects yield an empty list so they cannot
-    invoke the social AI pipeline. When page_id / instagram_account_id are provided,
-    events for any other account are dropped.
+    invoke the social AI pipeline. Page Inbox handover delivers user DMs on
+    ``entry.standby``; those are parsed the same as ``entry.messaging``. When
+    page_id / instagram_account_id are provided, events for any other account are dropped.
     """
     payload_object = str(payload.get("object") or "").strip().lower()
     if payload_object in {"whatsapp_business_account", "whatsapp"}:
@@ -199,7 +200,8 @@ def parse_meta_messaging_events(
         if not isinstance(entry, dict):
             continue
         entry_id = str(entry.get("id") or "")
-        for item in entry.get("messaging") or []:
+        inbound = list(entry.get("messaging") or []) + list(entry.get("standby") or [])
+        for item in inbound:
             if not isinstance(item, dict):
                 continue
             message = item.get("message")

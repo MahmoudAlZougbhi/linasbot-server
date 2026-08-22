@@ -9,6 +9,7 @@ from scripts.meta_webhook_contract import (
     APP_PAGE_WEBHOOK_FIELDS,
     DM_WEBHOOK_FIELDS,
     PAGE_SUBSCRIPTION_COMMENT_DELIVERY,
+    PAGE_SUBSCRIPTION_DM_ONLY,
     assert_page_subscription_baseline,
     assert_page_subscription_configuration,
     evaluate_feature_readiness,
@@ -38,7 +39,7 @@ def test_page_dm_only_baseline_true_comments_delivery_false() -> None:
         error_type=ContractError,
     )
     config = assert_page_subscription_configuration(
-        _page_payload(fields=DM_WEBHOOK_FIELDS),
+        _page_payload(fields=PAGE_SUBSCRIPTION_DM_ONLY),
         expected_app_id="999000111222333",
         expect_facebook_comment_delivery=False,
         error_type=ContractError,
@@ -190,4 +191,5 @@ def test_plan_page_subscription_reconcile_idempotent() -> None:
 
     assert DM_WEBHOOK_FIELDS.issubset(first)
     assert "feed" in first
+    assert "standby" in first
     assert first == second

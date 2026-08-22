@@ -174,6 +174,34 @@ class MetaParseTests(unittest.TestCase):
         self.assertEqual(events[0]["sender_id"], "PSID1")
         self.assertEqual(events[0]["text"], "Hello")
 
+    def test_page_standby_text_event(self):
+        payload = {
+            "object": "page",
+            "entry": [
+                {
+                    "id": "378696005334409",
+                    "standby": [
+                        {
+                            "sender": {"id": "PSID1"},
+                            "recipient": {"id": "378696005334409"},
+                            "timestamp": 1,
+                            "message": {"mid": "m-standby", "text": "from page inbox"},
+                        }
+                    ],
+                }
+            ],
+        }
+        events = parse_meta_messaging_events(
+            payload,
+            page_id="378696005334409",
+            instagram_account_id="17841413184256533",
+        )
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["channel"], "facebook")
+        self.assertEqual(events[0]["sender_id"], "PSID1")
+        self.assertEqual(events[0]["text"], "from page inbox")
+        self.assertEqual(events[0]["message_id"], "m-standby")
+
     def test_instagram_text_event(self):
         payload = {
             "object": "instagram",

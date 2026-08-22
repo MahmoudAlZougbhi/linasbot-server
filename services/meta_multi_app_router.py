@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -26,6 +27,8 @@ from services.meta_instagram_login_oauth import credential_needs_refresh
 from services.meta_instagram_login_tokens import refresh_binding_instagram_login_token
 from services.meta_messaging import MetaMessagingSettings, parse_meta_messaging_events
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class ResolvedMetaEvent:
@@ -34,12 +37,39 @@ class ResolvedMetaEvent:
     binding: MetaAssetBinding
 
 
+def _instagram_account_id_for_parse(binding: MetaAssetBinding) -> str:
+    """Never treat a Facebook Page id as an Instagram account id."""
+
+    instagram_account_id = str(binding.instagram_account_id or "").strip()
+    if binding.channel == "instagram" and not instagram_account_id:
+        return str(binding.asset_id or "").strip()
+    return instagram_account_id
+
+
+def _count_inbound_buckets(payload: dict[str, Any]) -> dict[str, int]:
+    messaging = standby = echoes = 0
+    for entry in payload.get("entry") or []:
+        if not isinstance(entry, dict):
+            continue
+        for item in entry.get("messaging") or []:
+            if not isinstance(item, dict):
+                continue
+            messaging += 1
+            message = item.get("message")
+            if isinstance(message, dict) and message.get("is_echo"):
+                echoes += 1
+        for item in entry.get("standby") or []:
+            if isinstance(item, dict):
+                standby += 1
+    return {"messaging": messaging, "standby": standby, "echoes": echoes}
+
+
 async def _prepare_binding(
     binding: MetaAssetBinding,
     *,
     app_config: MetaAppConfig,
     registry: MetaAppRegistry,
-) -> tuple[MetaAssetBinding, MetaBindingCredential] | None:
+) -> tuple[tuple[MetaAssetBinding, MetaBindingCredential] | None, str]:
     from services.channel_capability_state import (
         binding_advanced_access_approved,
         comments_policy_allows,
@@ -49,12 +79,12 @@ async def _prepare_binding(
         binding.tenant_id,
         advanced_access=binding_advanced_access_approved(binding),
     ):
-        return None
+        return None, "comments_policy"
     credential = registry.get_credential(binding)
     if binding.auth_flow == "facebook_login" and credential.token_app_id != app_config.app_id:
-        return None
+        return None, "token_app_mismatch"
     if binding.auth_flow == "instagram_login" and credential.token_app_id != instagram_login_app_id():
-        return None
+        return None, "token_app_mismatch"
     if credential.expires_at and credential.expires_at <= int(time.time()):
         registry.set_binding_status(
             binding.binding_id,
@@ -62,7 +92,7 @@ async def _prepare_binding(
             actor_id="webhook-token-expiry",
             expected_generation=binding.generation,
         )
-        return None
+        return None, "token_expired"
     if binding.auth_flow == "instagram_login" and credential_needs_refresh(credential):
         try:
             credential = await refresh_binding_instagram_login_token(binding, registry=registry)
@@ -77,12 +107,13 @@ async def _prepare_binding(
                     actor_id="webhook-token-expiry",
                     expected_generation=binding.generation,
                 )
-            return None
+                return None, "token_expired"
+            return None, "token_refresh_failed"
     if facebook_login_binding_superseded_for_capability(binding, "dm", registry=registry):
-        return None
+        return None, "facebook_login_superseded"
     if not binding_ready_for_dm(binding, credential):
-        return None
-    return binding, credential
+        return None, "dm_not_ready"
+    return (binding, credential), ""
 
 
 def registry_auth_flow_for_webhook_object(payload_object: str) -> AuthFlow:
@@ -111,18 +142,24 @@ async def resolve_registry_events(
         if auth_flow is None or binding.auth_flow == auth_flow
     ]
     by_message_id: dict[str, list[tuple[MetaAssetBinding, MetaBindingCredential, dict[str, Any]]]] = {}
+    skip_counts: dict[str, int] = {}
+    parsed_total = 0
+    channel_mismatch = 0
     for binding in bindings:
-        prepared = await _prepare_binding(binding, app_config=resolved_app, registry=current_registry)
+        prepared, skip_reason = await _prepare_binding(binding, app_config=resolved_app, registry=current_registry)
         if prepared is None:
+            skip_counts[skip_reason] = skip_counts.get(skip_reason, 0) + 1
             continue
         active_binding, credential = prepared
         events = parse_meta_messaging_events(
             payload,
-            instagram_account_id=active_binding.instagram_account_id or active_binding.asset_id,
+            instagram_account_id=_instagram_account_id_for_parse(active_binding),
             page_id=active_binding.page_id,
         )
+        parsed_total += len(events)
         for event in events:
             if str(event.get("channel") or "") != active_binding.channel:
+                channel_mismatch += 1
                 continue
             event_account = str(event.get("account_id") or event.get("recipient_id") or "").strip()
             allowed_accounts = {active_binding.asset_id}
@@ -173,4 +210,19 @@ async def resolve_registry_events(
             }
         )
         resolved.append(ResolvedMetaEvent(event=tagged, settings=settings, binding=binding))
+    if not resolved:
+        inbound = _count_inbound_buckets(payload)
+        if inbound["messaging"] or inbound["standby"] or inbound["echoes"] or skip_counts:
+            logger.info(
+                "[meta-router] dm_resolve_empty object=%s messaging=%d standby=%d echoes=%d "
+                "parsed=%d channel_mismatch=%d bindings=%d skip=%s",
+                str(payload.get("object") or ""),
+                inbound["messaging"],
+                inbound["standby"],
+                inbound["echoes"],
+                parsed_total,
+                channel_mismatch,
+                len(bindings),
+                skip_counts or "none",
+            )
     return resolved

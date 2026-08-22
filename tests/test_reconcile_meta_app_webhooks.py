@@ -46,7 +46,7 @@ def _payload(
 
 def test_social_reconcile_preserves_whatsapp_business_subscription() -> None:
     payload = _payload(
-        page_fields=["feed", "messages", "messaging_postbacks"],
+        page_fields=["feed", "messages", "messaging_postbacks", "standby"],
         instagram_fields=["comments", "messages", "messaging_postbacks"],
     )
     data = payload["data"]
@@ -62,7 +62,7 @@ def test_social_reconcile_preserves_whatsapp_business_subscription() -> None:
 
     fields = validate_webhook_state(payload, require_expected_fields=True)
 
-    assert fields["page"] == {"feed", "messages", "messaging_postbacks"}
+    assert fields["page"] == {"feed", "messages", "messaging_postbacks", "standby"}
     assert fields["instagram"] == {"comments", "messages", "messaging_postbacks"}
 
 
@@ -140,7 +140,7 @@ def test_dm_reconcile_preserves_page_feed_and_instagram_comments() -> None:
     targets = plan_webhook_reconcile(before)
 
     assert targets == {
-        "page": {"feed", "messages", "messaging_postbacks"},
+        "page": {"feed", "messages", "messaging_postbacks", "standby"},
         "instagram": {"comments", "messages", "messaging_postbacks"},
     }
     assert (
@@ -168,7 +168,7 @@ def test_main_posts_merged_fields_without_removing_comments(monkeypatch: pytest.
             ),
             {"success": True},
             _payload(
-                page_fields=["feed", "messages", "messaging_postbacks"],
+                page_fields=["feed", "messages", "messaging_postbacks", "standby"],
                 instagram_fields=["comments", "messages", "messaging_postbacks"],
             ),
         ]
@@ -191,7 +191,7 @@ def test_main_posts_merged_fields_without_removing_comments(monkeypatch: pytest.
     with patch("scripts.reconcile_meta_app_webhooks._request_json", side_effect=fake_request):
         main()
 
-    assert posted_forms["page"]["fields"] == "feed,messages,messaging_postbacks"
+    assert posted_forms["page"]["fields"] == "feed,messages,messaging_postbacks,standby"
     assert posted_forms["page"]["callback_url"] == "https://www.linasaibot.com/webhook/meta-messaging"
     assert posted_forms["page"]["verify_token"] == "v" * 32
     assert "instagram" not in posted_forms
@@ -202,7 +202,7 @@ def test_main_rejects_main_instagram_callback_without_post(monkeypatch: pytest.M
     monkeypatch.setenv("META_APP_SECRET", "app-secret")
     monkeypatch.setenv("META_WEBHOOK_VERIFY_TOKEN", "v" * 32)
     monkeypatch.setenv("META_GRAPH_API_VERSION", "v24.0")
-    payload = _payload(page_fields=["feed", "messages", "messaging_postbacks"])
+    payload = _payload(page_fields=["feed", "messages", "messaging_postbacks", "standby"])
     rows = payload["data"]
     assert isinstance(rows, list)
     instagram = rows[1]
