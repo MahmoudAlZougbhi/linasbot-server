@@ -5,6 +5,10 @@ import { ApiError, apiFetch } from '../../api/client';
 import { parseIntegrationsDeepLink, metaOAuthFailureMessage } from '../../app/navigation';
 import { tokenStore } from '../../auth/tokenStore';
 import type { StringKey } from '../../i18n/locales/en';
+import {
+  errorAfterIntegrationLoadFailure,
+  errorAfterIntegrationLoadSuccess,
+} from './integrationsFeedback';
 import { ListSchema, type IntegrationListRow } from './integrationsSchemas';
 import { hasWebChatCardSnapshot, prefetchWebChatCardSnapshot } from './webChatCardLoader';
 
@@ -33,6 +37,7 @@ export function useIntegrationsLoad({
   const [rows, setRows] = useState<IntegrationListRow[]>([]);
   const [webChatReady, setWebChatReady] = useState(hasWebChatCardSnapshot);
   const skipNextAreaFocusLoad = useRef(false);
+  const metaResultSequence = useRef(0);
 
   const load = useCallback(async (): Promise<IntegrationsLoadResult> => {
     setLoading(true);
@@ -42,13 +47,17 @@ export function useIntegrationsLoad({
         setAuthGate(true);
         setRows([]);
         setWebChatReady(true);
-        setError(null);
+        setError((current) =>
+          errorAfterIntegrationLoadSuccess(current, tr('integrationsLoadError')),
+        );
         return { ok: false, rows: [] };
       }
       const data = await apiFetch('/api/mobile/integrations', { schema: ListSchema });
       setRows(data.integrations);
       // List succeeded — never keep a stale "could not load" while channels render.
-      setError(null);
+      setError((current) =>
+        errorAfterIntegrationLoadSuccess(current, tr('integrationsLoadError')),
+      );
       // WhatsApp / Website chat are separate cards; their failures must not fail the list.
       await Promise.all([refreshWhatsApp(), prefetchWebChatCardSnapshot()]);
       setWebChatReady(true);
@@ -56,9 +65,13 @@ export function useIntegrationsLoad({
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setAuthGate(true);
-        setError(null);
+        setError((current) =>
+          errorAfterIntegrationLoadSuccess(current, tr('integrationsLoadError')),
+        );
       } else {
-        setError(tr('integrationsLoadError'));
+        setError((current) =>
+          errorAfterIntegrationLoadFailure(current, tr('integrationsLoadError')),
+        );
       }
       setWebChatReady(true);
       return { ok: false, rows: [] };
@@ -93,6 +106,7 @@ export function useIntegrationsLoad({
     const applyMetaResult = (url: string | null) => {
       const parsed = parseIntegrationsDeepLink(url);
       if (!parsed) return;
+      if (parsed.metaConnection !== null) metaResultSequence.current += 1;
       if (parsed.waConnection === 'success' || parsed.metaConnection === 'success') {
         setNotice(parsed.waConnection === 'success' ? tr('waOAuthSuccess') : tr('metaOAuthSuccess'));
         setError(null);
@@ -111,5 +125,15 @@ export function useIntegrationsLoad({
     return () => sub.remove();
   }, [load, tr, setError]);
 
-  return { loading, hasLoadedOnce, webChatReady, notice, setNotice, rows, setRows, load };
+  return {
+    loading,
+    hasLoadedOnce,
+    webChatReady,
+    notice,
+    setNotice,
+    rows,
+    setRows,
+    load,
+    metaResultSequence,
+  };
 }

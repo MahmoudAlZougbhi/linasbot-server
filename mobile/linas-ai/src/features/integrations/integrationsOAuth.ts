@@ -2,7 +2,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Linking } from 'react-native';
 import { z } from 'zod';
 
-import { ApiError, apiFetch } from '../../api/client';
+import { apiFetch } from '../../api/client';
 import {
   metaAuthSessionOutcome,
   type MetaAuthSessionResult,
@@ -65,17 +65,6 @@ export function withInstagramMobileReauth(url: string): string {
     parsed.searchParams.set('force_reauth', 'true');
   }
   return parsed.toString();
-}
-
-export function apiErrorDetail(err: ApiError): string | null {
-  const body = err.body;
-  if (!body || typeof body !== 'object') return null;
-  const rec = body as Record<string, unknown>;
-  for (const key of ['detail', 'message', 'error'] as const) {
-    const value = rec[key];
-    if (typeof value === 'string' && value.trim()) return value.trim();
-  }
-  return null;
 }
 
 export type MetaOAuthSessionResult = MetaAuthSessionResult;

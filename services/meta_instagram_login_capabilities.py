@@ -37,8 +37,10 @@ def binding_ready_for_dm(binding: MetaAssetBinding, credential: MetaBindingCrede
     if binding.channel != "instagram":
         return False
     if binding.auth_flow == "instagram_login":
-        return _INSTAGRAM_LOGIN_DM_SCOPE in credential.scopes and REQUIRED_DM_SUBSCRIPTION_FIELDS.issubset(
-            _verified_fields(binding)
+        return (
+            binding.webhook_subscription_status in {"ready", "partial"}
+            and _INSTAGRAM_LOGIN_DM_SCOPE in credential.scopes
+            and REQUIRED_DM_SUBSCRIPTION_FIELDS.issubset(_verified_fields(binding))
         )
     return "instagram_manage_messages" in credential.scopes
 
@@ -51,7 +53,10 @@ def binding_ready_for_comments(binding: MetaAssetBinding, credential: MetaBindin
     if binding.channel != "instagram":
         return False
     if binding.auth_flow == "instagram_login":
-        if _INSTAGRAM_LOGIN_COMMENTS_SCOPE not in credential.scopes:
+        if (
+            binding.webhook_subscription_status not in {"ready", "partial"}
+            or _INSTAGRAM_LOGIN_COMMENTS_SCOPE not in credential.scopes
+        ):
             return False
         return COMMENTS_SUBSCRIPTION_FIELD in _verified_fields(binding)
     return "instagram_manage_comments" in credential.scopes

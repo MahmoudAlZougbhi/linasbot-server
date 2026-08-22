@@ -178,7 +178,7 @@ async def test_disconnect_then_oauth_connect_uses_new_credential(
             data: dict[str, Any] = {
                 "is_valid": True,
                 "app_id": "2963733803971681",
-                "scopes": ["business_management"],
+                "scopes": list(SCOPES),
                 "expires_at": 4102444800,
                 "user_id": "112233445566",
             }

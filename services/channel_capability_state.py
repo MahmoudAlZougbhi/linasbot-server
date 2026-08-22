@@ -264,12 +264,18 @@ def _comment_webhook_subscribed(binding: Any) -> bool:
     if channel == "facebook":
         return "feed" in fields
     if channel == "instagram" and auth_flow == "instagram_login":
-        return COMMENTS_SUBSCRIPTION_FIELD in fields
+        status = str(getattr(binding, "webhook_subscription_status", "") or "")
+        return status in {"ready", "partial"} and COMMENTS_SUBSCRIPTION_FIELD in fields
     return COMMENTS_SUBSCRIPTION_FIELD in fields
 
 
 def _dm_webhook_subscribed(binding: Any) -> bool:
     fields = {str(item).strip().lower() for item in (getattr(binding, "webhook_subscribed_fields", ()) or ())}
+    channel = str(getattr(binding, "channel", "") or "")
+    auth_flow = str(getattr(binding, "auth_flow", "") or "")
+    if channel == "instagram" and auth_flow == "instagram_login":
+        status = str(getattr(binding, "webhook_subscription_status", "") or "")
+        return status in {"ready", "partial"} and _DM_WEBHOOK_FIELDS.issubset(fields)
     # Production DM path may have empty recorded fields while Meta subscription still works.
     # Prefer explicit record when present; otherwise treat active App A messaging binding as subscribed.
     if fields:

@@ -11,6 +11,17 @@ MetaOAuthFlowMode = Literal["facebook", "instagram", "unified"]
 _REQUIRED_PAGE_TASKS = frozenset({"MESSAGING", "MODERATE"})
 
 
+def _normalized_page_tasks(raw_tasks: object) -> set[str]:
+    """Normalize classic and New Pages Experience task names."""
+
+    tasks = {str(task).strip().upper() for task in raw_tasks} if isinstance(raw_tasks, list) else set()
+    if "PROFILE_PLUS_MESSAGING" in tasks:
+        tasks.add("MESSAGING")
+    if "PROFILE_PLUS_MODERATE" in tasks:
+        tasks.add("MODERATE")
+    return tasks
+
+
 def _scope_tuple(debug_data: dict[str, Any]) -> tuple[str, ...]:
     scopes = debug_data.get("scopes")
     if not isinstance(scopes, list):
@@ -38,8 +49,7 @@ def _eligible_pages(pages: list[dict[str, Any]], *, flow_mode: MetaOAuthFlowMode
         instagram = page.get("instagram_business_account")
         if not page_id or not page_token:
             continue
-        raw_tasks = page.get("tasks")
-        tasks = {str(task).strip().upper() for task in raw_tasks} if isinstance(raw_tasks, list) else set()
+        tasks = _normalized_page_tasks(page.get("tasks"))
         missing_tasks = sorted(_REQUIRED_PAGE_TASKS - tasks)
         if missing_tasks:
             raise MetaOAuthError(f"Authorized Facebook Page is missing required tasks ({','.join(missing_tasks)})")

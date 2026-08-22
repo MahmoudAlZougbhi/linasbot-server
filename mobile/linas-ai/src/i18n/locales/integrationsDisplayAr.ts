@@ -1,8 +1,8 @@
 /** Integrations account display + app version gate copy (ar). */
 export const integrationsDisplayAr = {
-  metaOAuthFailedFacebook: 'فشل تفويض Facebook. افصل Facebook ثم اربطه من جديد.',
+  metaOAuthFailedFacebook: 'فشل تفويض Facebook. اضغط Connect للمحاولة من جديد.',
   metaOAuthFailedFacebookScopes:
-    'Facebook لم يمنح كل الصلاحيات المطلوبة، بما فيها business_management. اربطه مجدداً، واختر الـ Business والـ Page، واسمح بكل الصلاحيات.',
+    'Facebook لم يمنح كل الصلاحيات المطلوبة، بما فيها business_management. امنح هذا الحساب وصولاً إلى الـ Page واسمح بكل الصلاحيات المطلوبة، ثم اضغط Connect من جديد.',
   metaOAuthFailedFacebookToken:
     'Meta رفض رمز تفويض Facebook. اربط Facebook من جديد.',
   metaOAuthFailedFacebookWebhook:
@@ -19,12 +19,16 @@ export const integrationsDisplayAr = {
     'Facebook Login غير جاهز على السيرفر بعد. جرّب بعد آخر تحديث.',
   metaOAuthFailedFacebookConflict:
     'صفحة Facebook هذه مربوطة بمساحة عمل أخرى.',
+  metaOAuthFailedFacebookNoPage:
+    'لا توجد Page مؤهلة على Facebook. امنح الحساب وصولاً إلى رسائل الـ Page ونشاط المجتمع (أو تحكماً كاملاً)، ثم اضغط Connect من جديد.',
   metaOAuthFailedBusy:
     'عملية ربط Instagram أخرى لم تنتهِ بعد. انتظر قليلاً ثم اضغط Connect مرة واحدة.',
   metaOAuthFailedGuard:
     'تعذّر التحقق من حالة أمان ربط Instagram. انتظر قليلاً ثم حاول مجدداً.',
   metaOAuthFailedDeletionFailed:
     'تفويض Instagram محظور لأن طلب حذف بيانات Meta فشل. اطلب من المسؤول حلّ الطلب، ثم اربطه من جديد.',
+  metaOAuthFailedProvider:
+    'تعذّر على Meta إكمال إعداد Instagram الآن. انتظر خمس دقائق، ثم اضغط Connect مرة واحدة.',
   integrationStatusConnected: 'الاتصال سليم',
   integrationStatusNeedsReconnect: 'يحتاج إعادة ربط',
   integrationStatusError: 'مشكلة في الاتصال',

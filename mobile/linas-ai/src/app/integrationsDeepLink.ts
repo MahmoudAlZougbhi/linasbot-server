@@ -20,7 +20,23 @@ const META_REASONS = new Set([
   'guard',
   'conflict',
   'config',
+  'no_page',
+  'provider',
 ]);
+
+export function parseMetaOAuthFailureReason(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  return META_REASONS.has(normalized) ? normalized : null;
+}
+
+/** Read only the server's allowlisted enum; never surface arbitrary API text. */
+export function metaOAuthFailureReasonFromApiBody(body: unknown): string | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  const detail = (body as { detail?: unknown }).detail;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+  return parseMetaOAuthFailureReason((detail as { meta_reason?: unknown }).meta_reason);
+}
 
 export function parseIntegrationsDeepLink(url: string | null): IntegrationsDeepLink | null {
   if (!url) return null;
@@ -44,7 +60,7 @@ export function parseIntegrationsDeepLink(url: string | null): IntegrationsDeepL
     if (rawWa === 'success' || rawWa === 'connected') waConnection = 'success';
     else if (rawWa === 'cancelled' || rawWa === 'canceled') waConnection = 'cancelled';
     else if (rawWa === 'failed') waConnection = 'failed';
-    const metaReason = META_REASONS.has(rawReason) ? rawReason : null;
+    const metaReason = parseMetaOAuthFailureReason(rawReason);
     const metaChannel = rawChannel === 'facebook' || rawChannel === 'instagram' ? rawChannel : null;
     return { metaConnection, waConnection, metaReason, metaChannel };
   } catch {
@@ -104,6 +120,8 @@ export function metaOAuthFailureMessage(
         return tr('metaOAuthFailedFacebookConfig');
       case 'conflict':
         return tr('metaOAuthFailedFacebookConflict');
+      case 'no_page':
+        return tr('metaOAuthFailedFacebookNoPage');
       default:
         return tr('metaOAuthFailedFacebook');
     }
@@ -132,6 +150,8 @@ export function metaOAuthFailureMessage(
       return tr('metaOAuthFailedConfig');
     case 'conflict':
       return tr('metaOAuthFailedConflict');
+    case 'provider':
+      return tr('metaOAuthFailedProvider');
     default:
       return tr('metaOAuthFailed');
   }

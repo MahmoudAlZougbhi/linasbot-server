@@ -7,8 +7,17 @@ import { describe, it } from 'node:test';
 import {
   metaAuthSessionOutcome,
   metaOAuthFailureMessage,
+  metaOAuthFailureReasonFromApiBody,
   parseIntegrationsDeepLink,
 } from '../src/app/integrationsDeepLink.ts';
+import {
+  errorAfterIntegrationLoadFailure,
+  errorAfterIntegrationLoadSuccess,
+  shouldApplyMetaSessionFeedback,
+} from '../src/features/integrations/integrationsFeedback.ts';
+import { ar } from '../src/i18n/locales/ar.ts';
+import { en } from '../src/i18n/locales/en.ts';
+import { fr } from '../src/i18n/locales/fr.ts';
 import { integrationsDisplayAr } from '../src/i18n/locales/integrationsDisplayAr.ts';
 import { integrationsDisplayEn } from '../src/i18n/locales/integrationsDisplayEn.ts';
 import { integrationsDisplayFr } from '../src/i18n/locales/integrationsDisplayFr.ts';
@@ -36,7 +45,7 @@ describe('meta oauth mobile return surface', () => {
     assert.match(connect, /MetaOAuthConnectError/);
     assert.match(connect, /metaOAuthCancelled/);
     assert.match(connect, /metaOAuthIncomplete/);
-    assert.match(connect, /apiErrorDetail/);
+    assert.doesNotMatch(connect, /apiErrorDetail/);
   });
 
   it('does not treat Facebook HTTPS session success as connected', () => {
@@ -133,6 +142,14 @@ describe('meta oauth mobile return surface', () => {
       metaOAuthFailureMessage(tr, 'deletion_failed', 'instagram'),
       'metaOAuthFailedDeletionFailed',
     );
+    assert.equal(
+      metaOAuthFailureMessage(tr, 'no_page', 'facebook'),
+      'metaOAuthFailedFacebookNoPage',
+    );
+    assert.equal(
+      metaOAuthFailureMessage(tr, 'provider', 'instagram'),
+      'metaOAuthFailedProvider',
+    );
     const invalidChannel = parseIntegrationsDeepLink(
       'linasai://integrations?meta_connection=failed&meta_reason=scopes&channel=whatsapp',
     );
@@ -146,6 +163,27 @@ describe('meta oauth mobile return surface', () => {
       'metaOAuthFailed',
     );
     assert.equal(metaOAuthFailureMessage(tr, 'scopes', null), 'metaOAuthFailed');
+  });
+
+  it('allowlists only safe no-page/provider reason codes', () => {
+    assert.equal(
+      parseIntegrationsDeepLink(
+        'linasai://integrations?meta_connection=failed&meta_reason=no_page&channel=facebook',
+      )?.metaReason,
+      'no_page',
+    );
+    assert.equal(
+      parseIntegrationsDeepLink(
+        'linasai://integrations?meta_connection=failed&meta_reason=provider&channel=instagram',
+      )?.metaReason,
+      'provider',
+    );
+    assert.equal(
+      parseIntegrationsDeepLink(
+        'linasai://integrations?meta_connection=failed&meta_reason=raw_provider_exception&channel=instagram',
+      )?.metaReason,
+      null,
+    );
   });
 
   it('Facebook scopes message covers all required permissions, including business_management', () => {
@@ -164,7 +202,95 @@ describe('meta oauth mobile return surface', () => {
       assert.doesNotMatch(message, /the required business_management permission/);
       assert.doesNotMatch(message, /صلاحية business_management المطلوبة/);
       assert.doesNotMatch(message, /l’autorisation business_management requise/);
+      assert.doesNotMatch(message, /select the Business|اختر الـ Business|sélectionnez l’entreprise/i);
     }
+  });
+
+  it('gives actionable no-page/provider copy in every supported locale', () => {
+    const localeCases = [
+      {
+        locale: integrationsDisplayEn,
+        noPage: /full control/i,
+        provider: /wait five minutes/i,
+      },
+      {
+        locale: integrationsDisplayAr,
+        noPage: /تحكماً كاملاً/,
+        provider: /انتظر خمس دقائق/,
+      },
+      {
+        locale: integrationsDisplayFr,
+        noPage: /contrôle total/i,
+        provider: /attendez cinq minutes/i,
+      },
+    ];
+    for (const { locale, noPage, provider } of localeCases) {
+      assert.match(locale.metaOAuthFailedFacebookNoPage, noPage);
+      assert.match(locale.metaOAuthFailedProvider, provider);
+    }
+  });
+
+  it('never tells a disconnected channel to Disconnect after a generic OAuth failure', () => {
+    for (const message of [
+      integrationsDisplayEn.metaOAuthFailedFacebook,
+      integrationsDisplayAr.metaOAuthFailedFacebook,
+      integrationsDisplayFr.metaOAuthFailedFacebook,
+      en.metaOAuthFailed,
+      ar.metaOAuthFailed,
+      fr.metaOAuthFailed,
+    ]) {
+      assert.doesNotMatch(message, /disconnect|افصل|déconnect/i);
+    }
+  });
+
+  it('does not expose raw API error detail in Meta Connect feedback', () => {
+    const oauth = read('features/integrations/integrationsOAuth.ts');
+    const connect = read('features/integrations/useMetaPlatformConnect.ts');
+    assert.doesNotMatch(oauth, /apiErrorDetail/);
+    assert.doesNotMatch(connect, /apiErrorDetail|err\.message|String\(err\.body\)/);
+    assert.match(connect, /metaOAuthFailureReasonFromApiBody\(err\.body\)/);
+    assert.match(connect, /err instanceof ApiError[\s\S]*tr\('integrationsActionError'\)/);
+    assert.equal(
+      metaOAuthFailureReasonFromApiBody({ detail: { meta_reason: 'provider' } }),
+      'provider',
+    );
+    assert.equal(
+      metaOAuthFailureReasonFromApiBody({ detail: { meta_reason: 'no_page' } }),
+      'no_page',
+    );
+    assert.equal(
+      metaOAuthFailureReasonFromApiBody({ detail: { meta_reason: 'raw_provider_exception' } }),
+      null,
+    );
+    assert.equal(
+      metaOAuthFailureReasonFromApiBody({ detail: 'Instagram provider token=secret' }),
+      null,
+    );
+  });
+
+  it('keeps specific OAuth feedback across refresh and rejects a stale session fallback', () => {
+    assert.equal(
+      errorAfterIntegrationLoadSuccess('facebook-no-page', 'integrations-load-error'),
+      'facebook-no-page',
+    );
+    assert.equal(
+      errorAfterIntegrationLoadSuccess('integrations-load-error', 'integrations-load-error'),
+      null,
+    );
+    assert.equal(
+      errorAfterIntegrationLoadFailure('instagram-provider', 'integrations-load-error'),
+      'instagram-provider',
+    );
+    assert.equal(errorAfterIntegrationLoadFailure(null, 'integrations-load-error'), 'integrations-load-error');
+    assert.equal(shouldApplyMetaSessionFeedback(4, 4), true);
+    assert.equal(shouldApplyMetaSessionFeedback(4, 5), false);
+
+    const load = read('features/integrations/useIntegrationsLoad.ts');
+    const connect = read('features/integrations/useMetaPlatformConnect.ts');
+    assert.match(load, /metaResultSequence\.current \+= 1/);
+    assert.match(load, /errorAfterIntegrationLoadSuccess/);
+    assert.match(load, /errorAfterIntegrationLoadFailure/);
+    assert.match(connect, /shouldApplyMetaSessionFeedback/);
   });
 
   it('AppShell routes integrations deep link and IntegrationsScreen refetches', () => {

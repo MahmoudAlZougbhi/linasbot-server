@@ -2,8 +2,12 @@ import { useCallback } from 'react';
 
 import { ApiError } from '../../api/client';
 import type { StringKey } from '../../i18n/locales/en';
-import { apiErrorDetail, MetaOAuthConnectError, startMetaOAuth } from './integrationsOAuth';
-import { metaOAuthFailureMessage } from '../../app/integrationsDeepLink';
+import { MetaOAuthConnectError, startMetaOAuth } from './integrationsOAuth';
+import {
+  metaOAuthFailureMessage,
+  metaOAuthFailureReasonFromApiBody,
+} from '../../app/integrationsDeepLink';
+import { shouldApplyMetaSessionFeedback } from './integrationsFeedback';
 import type { IntegrationsLoadResult } from './useIntegrationsLoad';
 import type { IntegrationListRow } from './integrationsSchemas';
 
@@ -14,6 +18,7 @@ type Args = {
   setError: (message: string | null) => void;
   setNotice: (message: string | null) => void;
   setAuthGate: (open: boolean) => void;
+  metaResultSequence: { current: number };
 };
 
 export function useMetaPlatformConnect({
@@ -23,9 +28,11 @@ export function useMetaPlatformConnect({
   setError,
   setNotice,
   setAuthGate,
+  metaResultSequence,
 }: Args) {
   const connectPlatform = useCallback(
     async (platform: 'instagram' | 'facebook') => {
+      const deepLinkSequenceAtStart = metaResultSequence.current;
       setBusyPlatform(platform);
       setError(null);
       setNotice(null);
@@ -45,6 +52,14 @@ export function useMetaPlatformConnect({
           setError(null);
           return;
         }
+        if (
+          !shouldApplyMetaSessionFeedback(
+            deepLinkSequenceAtStart,
+            metaResultSequence.current,
+          )
+        ) {
+          return;
+        }
         if (session.outcome === 'cancelled') setError(tr('metaOAuthCancelled'));
         else if (session.outcome === 'failed') {
           setError(metaOAuthFailureMessage(tr, session.reason, platform));
@@ -54,13 +69,18 @@ export function useMetaPlatformConnect({
         else if (err instanceof MetaOAuthConnectError) {
           setError(tr('integrationsActionError'));
         } else if (err instanceof ApiError) {
-          setError(apiErrorDetail(err) || tr('integrationsActionError'));
+          const reason = metaOAuthFailureReasonFromApiBody(err.body);
+          setError(
+            reason
+              ? metaOAuthFailureMessage(tr, reason, platform)
+              : tr('integrationsActionError'),
+          );
         } else setError(tr('integrationsActionError'));
       } finally {
         setBusyPlatform(null);
       }
     },
-    [load, setAuthGate, setBusyPlatform, setError, setNotice, tr],
+    [load, metaResultSequence, setAuthGate, setBusyPlatform, setError, setNotice, tr],
   );
 
   return { connectPlatform };

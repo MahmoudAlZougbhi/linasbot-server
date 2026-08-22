@@ -453,7 +453,10 @@ class MetaAppRegistryOAuthMixin:
                 raise MetaBindingConflictError("subscription state applies only to Instagram Login bindings")
             changed = dict(raw)
             changed["webhook_subscription_status"] = state.status
-            changed["webhook_subscribed_fields"] = list(state.verified_fields or state.subscribed_fields)
+            # This field is routing authority, not the requested field set.
+            # Persist only fields proven by the provider; cleanup markers pass
+            # their restoration preimage explicitly as verified fields.
+            changed["webhook_subscribed_fields"] = list(state.verified_fields)
             changed["webhook_subscription_error"] = state.error
             changed["webhook_subscription_checked_at"] = time.time()
             changed["updated_at"] = time.time()

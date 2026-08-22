@@ -50,6 +50,7 @@ from services.meta_oauth import (  # noqa: F401 — re-exports patched by tests 
 )
 from services.meta_oauth_return import (
     consume_return_surface_from_state,
+    mobile_oauth_failure_reason,
     normalize_return_surface,
     oauth_completion_response,
     peek_return_surface_from_state,
@@ -178,7 +179,10 @@ async def start_meta_connection(
             return_surface=return_surface,
         )
     except (MetaOAuthError, MetaRegistryError) as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        detail: str | dict[str, str] = str(exc)
+        if return_surface == "mobile":
+            detail = {"meta_reason": mobile_oauth_failure_reason(exc)}
+        raise HTTPException(status_code=503, detail=detail) from exc
     return {"success": True, "authorization_url": login_url}
 
 
@@ -196,7 +200,10 @@ async def start_instagram_login_connection(
             return_surface=return_surface,
         )
     except (MetaOAuthError, MetaRegistryError) as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        detail: str | dict[str, str] = str(exc)
+        if return_surface == "mobile":
+            detail = {"meta_reason": mobile_oauth_failure_reason(exc)}
+        raise HTTPException(status_code=503, detail=detail) from exc
     return {"success": True, "authorization_url": login_url}
 
 

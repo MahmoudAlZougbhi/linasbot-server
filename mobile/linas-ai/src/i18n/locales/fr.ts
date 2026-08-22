@@ -132,7 +132,7 @@ export const fr = {
   serviceDiagnosticExpiredToken: 'Le jeton a expiré. Déconnectez, puis Connecter.',
   serviceDiagnosticCredentialUnavailable: 'Identifiants indisponibles. Déconnectez, puis Connecter.',
   serviceDiagnosticTokenMismatch: 'La connexion ne correspond plus à Meta. Déconnectez, puis Connecter.',
-  metaOAuthFailed: 'Échec de l’autorisation Meta. Réessayez via Gérer l’accès Meta.',
+  metaOAuthFailed: 'Échec de l’autorisation Meta. Appuyez sur Connecter pour réessayer.',
   metaOAuthFailedScopes:
     'Instagram n’a pas accordé toutes les autorisations requises. Appuyez sur Connecter et acceptez chaque permission.',
   metaOAuthFailedToken:

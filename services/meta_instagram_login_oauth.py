@@ -40,6 +40,9 @@ from services.meta_instagram_login_subscription import (
     INSTAGRAM_LOGIN_CLEANUP_DELETE_ERROR,
     INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS,
     INSTAGRAM_LOGIN_CLEANUP_RESTORE_ERROR,
+    INSTAGRAM_LOGIN_SUBSCRIPTION_DEFERRED_ERROR,
+    INSTAGRAM_LOGIN_SUBSCRIPTION_RATE_LIMITED_ERROR,
+    INSTAGRAM_LOGIN_SUBSCRIPTION_WRITE_REJECTED_ERROR,
     InstagramLoginSubscriptionState,
     ensure_instagram_login_webhook_subscription,
     inspect_instagram_login_webhook_subscription,
@@ -60,6 +63,30 @@ from services.meta_subject_deletion_guard import (
 )
 
 INSTAGRAM_LOGIN_OAUTH_FLOW = "instagram_login"
+_CLEANUP_RECONNECT_BLOCK_SECONDS = 300.0
+
+
+class _InstagramProviderVerificationDeferred(MetaOAuthError):
+    """Keep the staged credential for the distributed cleanup lifecycle."""
+
+
+def _tenant_has_recent_instagram_cleanup(
+    registry: MetaAppRegistry,
+    *,
+    tenant_id: str,
+    now: float,
+) -> bool:
+    """Block tap churn while lifecycle recovery owns a fresh cleanup marker."""
+
+    return any(
+        binding.tenant_id == tenant_id
+        and binding.channel == "instagram"
+        and binding.auth_flow == INSTAGRAM_LOGIN_OAUTH_FLOW
+        and binding.webhook_subscription_status == INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS
+        and registry.binding_credential_is_available(binding.binding_id)
+        and (binding.created_at <= 0.0 or now - binding.created_at < _CLEANUP_RECONNECT_BLOCK_SECONDS)
+        for binding in registry.list_bindings(include_inactive=True, include_superseded=True)
+    )
 
 
 @dataclass(frozen=True)
@@ -94,6 +121,8 @@ def begin_instagram_login(
     actor_reference = hashlib.sha256(str(actor_id or "oauth").encode("utf-8")).hexdigest()[:16]
     surface = normalize_return_surface(return_surface)
     current_registry = registry or get_meta_app_registry()
+    if _tenant_has_recent_instagram_cleanup(current_registry, tenant_id=tenant, now=time.time()):
+        raise MetaOAuthError("Instagram webhook subscription cleanup is in progress. Try again shortly.")
     oauth_started_at = time.time()
     current_registry.store_oauth_state(
         nonce_hash,
@@ -592,6 +621,12 @@ async def complete_instagram_login(
                     ),
                     None,
                 )
+                if _tenant_has_recent_instagram_cleanup(
+                    current_registry,
+                    tenant_id=tenant_id,
+                    now=time.time(),
+                ):
+                    raise MetaOAuthError("Instagram webhook subscription cleanup is in progress. Try again shortly.")
                 binding = _authorize_staged_instagram_binding_reconciled(
                     registry=current_registry,
                     tenant_id=tenant_id,
@@ -622,11 +657,25 @@ async def complete_instagram_login(
                         graph_api_version=app.graph_api_version,
                         client=http_client,
                     )
+                    if subscription.error == INSTAGRAM_LOGIN_SUBSCRIPTION_WRITE_REJECTED_ERROR:
+                        provider_write_started = False
                     staged = next(
                         item
                         for item in current_registry.list_bindings(include_inactive=True, include_superseded=True)
                         if item.binding_id == binding.binding_id
                     )
+                    if subscription.error in {
+                        INSTAGRAM_LOGIN_SUBSCRIPTION_RATE_LIMITED_ERROR,
+                        INSTAGRAM_LOGIN_SUBSCRIPTION_DEFERRED_ERROR,
+                    }:
+                        detail = (
+                            "Instagram provider is temporarily limiting webhook subscription verification. "
+                            if subscription.error == INSTAGRAM_LOGIN_SUBSCRIPTION_RATE_LIMITED_ERROR
+                            else "Instagram provider webhook subscription verification is still pending. "
+                        )
+                        raise _InstagramProviderVerificationDeferred(
+                            f"{detail}Wait a few minutes, then tap Connect once."
+                        )
                     if not subscription.ready_for_dm or not subscription.ready_for_comments:
                         raise MetaOAuthError(
                             "Instagram webhook subscription could not be confirmed. Reconnect Instagram and try again."
@@ -663,6 +712,23 @@ async def complete_instagram_login(
                         if isinstance(operation_error, asyncio.CancelledError):
                             raise
                     else:
+                        if isinstance(operation_error, _InstagramProviderVerificationDeferred):
+                            restore_target = (
+                                provider_preimage
+                                if previous_active is not None and previous_active.auth_flow == "instagram_login"
+                                else None
+                            )
+                            try:
+                                _mark_instagram_cleanup_pending(
+                                    binding,
+                                    restore_target=restore_target,
+                                    registry=current_registry,
+                                )
+                            except Exception as marker_error:
+                                raise MetaOAuthError(
+                                    "Instagram cleanup state could not be persisted; operator recovery required"
+                                ) from marker_error
+                            raise
                         cleanup_task = asyncio.create_task(
                             _compensate_failed_instagram_activation(
                                 binding,

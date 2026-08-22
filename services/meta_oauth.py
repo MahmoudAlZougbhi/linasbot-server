@@ -11,6 +11,7 @@ Graph helpers / webhooks: meta_oauth_graph (LOC split).
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import secrets
 import time
@@ -59,6 +60,7 @@ from services.meta_oauth_graph import (  # noqa: F401 — re-export Graph helper
 MetaOAuthFlowMode = Literal["facebook", "instagram", "unified"]
 
 META_OAUTH_STATE_TTL_SECONDS = 10 * 60
+_runtime_logger = logging.getLogger("uvicorn.error")
 
 
 @dataclass(frozen=True)
@@ -154,11 +156,11 @@ def _channels_for_authorization(
 
 
 def _business_login_request_scopes(flow_mode: MetaOAuthFlowMode) -> str:
-    """Scopes requested alongside Login Config (rerequest).
+    """Return the exact permissions owned by the Facebook Login configuration.
 
-    Facebook Connect / Manage Meta Access must request only Page/DM + FB comment
-    scopes (+ ``business_management``). Do not bundle any ``instagram_*``
-    permissions — Instagram Connect uses the independent Instagram Login flow.
+    The User-token Business Login configuration defines these permissions. They
+    are verified on the inspected token after callback and are intentionally not
+    duplicated in the authorization URL.
     """
 
     scopes: set[str] = set()
@@ -221,9 +223,8 @@ def begin_meta_business_login(
             "response_type": "code",
             "config_id": config_id,
             "override_default_response_type": "true",
-            # Ask Meta to re-present permissions (including comments) for the same assets.
+            # Re-present the Login Configuration's permissions for this person.
             "auth_type": "rerequest",
-            "scope": _business_login_request_scopes(flow_mode),
         }
     )
     return f"https://www.facebook.com/{app.graph_api_version}/dialog/oauth?{query}"
@@ -291,7 +292,8 @@ async def complete_meta_business_login(
             app_id=app.app_id,
             app_secret=app.app_secret,
         )
-        missing_integration = sorted(META_FACEBOOK_LOGIN_EXTRA_SCOPES - set(_scope_tuple(integration_debug)))
+        required_integration_scopes = set(_business_login_request_scopes(flow_mode).split(","))
+        missing_integration = sorted(required_integration_scopes - set(_scope_tuple(integration_debug)))
         if missing_integration:
             raise MetaOAuthError(
                 f"Meta integration token is missing required review permissions ({','.join(missing_integration)})"
@@ -305,7 +307,7 @@ async def complete_meta_business_login(
             "me/accounts",
             step="Page discovery",
             params={
-                "fields": "id,name,access_token,tasks,instagram_business_account{id,username}",
+                "fields": "id,name,access_token,tasks",
                 "limit": "100",
             },
             bearer_token=integration_token,
@@ -314,15 +316,32 @@ async def complete_meta_business_login(
         if not isinstance(raw_pages, list):
             raise MetaOAuthError("Meta Page discovery response is incomplete")
         pages = [cast(dict[str, Any], page) for page in raw_pages if isinstance(page, dict)]
-        selected_pages = _eligible_pages(pages, flow_mode=flow_mode)
+        rows_with_id = sum(bool(str(page.get("id") or "").strip()) for page in pages)
+        rows_with_token = sum(bool(str(page.get("access_token") or "").strip()) for page in pages)
+        try:
+            selected_pages = _eligible_pages(pages, flow_mode=flow_mode)
+        except MetaOAuthError:
+            _runtime_logger.warning(
+                "[meta-oauth] page_discovery edge=accounts rows=%d with_id=%d with_token=%d eligible=0",
+                len(pages),
+                rows_with_id,
+                rows_with_token,
+            )
+            raise
+        _runtime_logger.info(
+            "[meta-oauth] page_discovery edge=accounts rows=%d with_id=%d with_token=%d eligible=%d",
+            len(pages),
+            rows_with_id,
+            rows_with_token,
+            len(selected_pages),
+        )
         validated_pages: list[ValidatedFacebookPage] = []
         for selected in selected_pages:
             page_id = str(selected.get("id") or "")
             page_name = str(selected.get("name") or "Facebook Page")
             page_token = str(selected.get("access_token") or "")
-            instagram = selected.get("instagram_business_account")
-            instagram_id = str(instagram.get("id") or "") if isinstance(instagram, dict) else ""
-            instagram_username = str(instagram.get("username") or "") if isinstance(instagram, dict) else ""
+            instagram_id = ""
+            instagram_username = ""
 
             page_debug = await _debug_token(
                 http_client,
