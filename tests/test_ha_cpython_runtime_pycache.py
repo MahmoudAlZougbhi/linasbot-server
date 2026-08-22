@@ -27,7 +27,7 @@ GUARD = ROOT / "scripts" / "ha" / "production_mutation_guard.py"
 CLUSTER_ENV = ROOT / "scripts" / "ha" / "cluster_runtime_env_contract.py"
 ALEMBIC = ROOT / "alembic" / "versions" / "20260824_product_search_metadata.py"
 DEFERRED_DISPATCH_PHASES = (
-    "ensure-maintenance|mark-maintenance|apply-cpython-runtime-immutability|"
+    "preflight|ensure-maintenance|mark-maintenance|apply-cpython-runtime-immutability|"
     "stage|stage-evidence|"
     "lb-attestation|release-bundle|worker-template-probe|"
     "install-worker-template-decision|install-trusted-worker-template"

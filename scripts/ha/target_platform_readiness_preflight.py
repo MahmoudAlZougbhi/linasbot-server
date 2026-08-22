@@ -48,7 +48,7 @@ COMPACT_ARCHIVE_PATHS: tuple[str, ...] = (
 CANONICAL_STATE_ROOT = Path("/var/lib/linasbot/meta-ha")
 CANONICAL_RUN_DIR = Path("/run")
 MAX_ARCHIVE_BYTES = 64 << 20
-TARGET_READY_DIR_RE = re.compile(r"^linasbot-target-ready\.[A-Za-z0-9]{6,10}$")
+TARGET_READY_DIR_RE = re.compile(r"^linasbot-target-ready\.[a-z0-9_]{8}$")
 TARGET_READY_SCRIPT_RE = re.compile(r"^linasbot-target-platform-ready(\.py|\.[A-Za-z0-9]{6,10})$")
 GIT_ISOLATED_ENV = {
     "HOME": "/nonexistent",
