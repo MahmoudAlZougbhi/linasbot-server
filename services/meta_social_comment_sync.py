@@ -34,7 +34,12 @@ def _binding_by_id(registry: Any, binding_id: str) -> MetaAssetBinding | None:
 
 
 def _comment_reply_enabled(binding: MetaAssetBinding) -> bool:
-    from services.cm.actions import ACTION_FACEBOOK_COMMENTS, ACTION_INSTAGRAM_COMMENTS, action_enabled, load_actions_section
+    from services.cm.actions import (
+        ACTION_FACEBOOK_COMMENTS,
+        ACTION_INSTAGRAM_COMMENTS,
+        action_enabled,
+        load_actions_section,
+    )
 
     action_id = ACTION_FACEBOOK_COMMENTS if binding.channel == "facebook" else ACTION_INSTAGRAM_COMMENTS
     actions = load_actions_section(binding.tenant_id)

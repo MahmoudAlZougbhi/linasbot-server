@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 
 from services.cm.atomic_io import compute_checksum, read_json_object
-from services.cm.paths import indexes_dir, published_pointer_path, tenant_cm_root, versions_dir
+from services.cm.paths import indexes_dir, published_pointer_path, versions_dir
 from services.cm.schemas import PublishedPointer
 
 _runtime_logger = logging.getLogger("uvicorn.error")
@@ -132,7 +132,6 @@ def replicate_published_cm_to_peer(
     if not content_version_id or not index_version_id:
         raise HaCmPeerReplicateError("HA CM peer replicate requires content and index version ids")
 
-    local_root = tenant_cm_root(tid)
     local_content = versions_dir(tid) / content_version_id
     local_index = indexes_dir(tid) / index_version_id
     local_pointer = published_pointer_path(tid)
