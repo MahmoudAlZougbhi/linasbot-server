@@ -26,6 +26,7 @@ os.environ.setdefault("META_REGISTRY_BACKEND", "file")
 # outside ENVIRONMENT=test). Published-mode tests override to openai + a mocked transport.
 os.environ.setdefault("CM_EMBEDDING_PROVIDER", "hash")
 os.environ.setdefault("DISABLE_API_DOCS", "true")
+os.environ.setdefault("META_WEBHOOK_VERIFY_TOKEN", "pytest-meta-webhook-verify-token-32chars")
 os.environ.pop("ALLOW_DEBUG_SIMULATE_WEBHOOK", None)
 
 

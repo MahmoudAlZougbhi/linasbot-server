@@ -215,6 +215,8 @@ def _transport(
             if subscription_hook is not None:
                 await subscription_hook(request, request_page_id)
             return httpx.Response(200, json={"success": True})
+        if path.endswith("/subscriptions") and request.method == "POST":
+            return httpx.Response(200, json={"success": True})
         return httpx.Response(404, json={"error": {"message": "not found"}})
 
     return httpx.MockTransport(handler)
