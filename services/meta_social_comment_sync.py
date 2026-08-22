@@ -31,7 +31,7 @@ def _binding_by_id(registry: Any, binding_id: str) -> MetaAssetBinding | None:
         return None
     for binding in registry.list_bindings(include_inactive=True, include_superseded=True):
         if binding.binding_id == target:
-            return binding
+            return binding if isinstance(binding, MetaAssetBinding) else None
     return None
 
 
@@ -76,8 +76,9 @@ def _facebook_comment_events(post_id: str, comments: list[dict[str, Any]], *, pa
     events: list[dict[str, Any]] = []
     for raw in _iter_facebook_comment_nodes(comments):
         comment_id = str(raw.get("id") or "").strip()
-        from_raw = raw.get("from") if isinstance(raw.get("from"), dict) else {}
-        author_id = str(from_raw.get("id") or "").strip()
+        from_raw = raw.get("from")
+        from_dict = from_raw if isinstance(from_raw, dict) else {}
+        author_id = str(from_dict.get("id") or "").strip()
         text = str(raw.get("message") or "").strip()
         if not comment_id or not author_id or not text:
             continue
@@ -90,7 +91,7 @@ def _facebook_comment_events(post_id: str, comments: list[dict[str, Any]], *, pa
                 "post_id": post_id,
                 "media_id": post_id,
                 "author_id": author_id,
-                "author_name": str(from_raw.get("name") or "").strip(),
+                "author_name": str(from_dict.get("name") or "").strip(),
                 "text": text,
                 "message_id": comment_id,
                 "account_id": page_id,
@@ -160,7 +161,8 @@ async def sync_facebook_binding_comments(binding_id: str) -> dict[str, Any]:
             },
             absolute_url=posts_url,
         )
-        posts = posts_payload.get("data") if isinstance(posts_payload.get("data"), list) else []
+        posts_raw = posts_payload.get("data")
+        posts: list[Any] = posts_raw if isinstance(posts_raw, list) else []
         next_posts = extract_next_cursor(posts_payload)
         save_posts_cursor(binding.binding_id, next_posts)
         for post in posts:
@@ -288,7 +290,8 @@ async def sync_instagram_binding_comments(binding_id: str) -> dict[str, Any]:
                 "limit": str(_MAX_POSTS_PER_SYNC),
             },
         )
-        rows = media_payload.get("data") if isinstance(media_payload.get("data"), list) else []
+        rows_raw = media_payload.get("data")
+        rows: list[Any] = rows_raw if isinstance(rows_raw, list) else []
         for media in rows:
             if not isinstance(media, dict):
                 continue
