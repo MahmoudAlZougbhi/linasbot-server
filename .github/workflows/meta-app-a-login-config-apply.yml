@@ -32,7 +32,10 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
-          script_stop: true
+          # The remote script already fails closed via set -euo pipefail and its
+          # EXIT trap. drone-ssh's line-by-line rewrite corrupts shell control
+          # flow (notably the successful cleanup `else` branch).
+          script_stop: false
           command_timeout: 14m
           envs: EXPECTED_RELEASE_SHA,META_APP_A_FACEBOOK_LOGIN_CONFIG_ID,META_OAUTH_REDIRECT_URI,META_HA_STAGE_ONLY
           script: |

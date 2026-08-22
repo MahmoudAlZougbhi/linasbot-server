@@ -1,4 +1,4 @@
-"""Prove App A apply remote script survives drone-ssh 1.8.0 script_stop rewrite."""
+"""Prove the App A apply script runs intact and keeps fail-closed cleanup."""
 
 from __future__ import annotations
 
@@ -12,16 +12,20 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "meta-app-a-login-config-apply.yml"
-DRONE_STOP = (
-    "DRONE_SSH_PREV_COMMAND_EXIT_CODE=$? ; "
-    "if [ $DRONE_SSH_PREV_COMMAND_EXIT_CODE -ne 0 ]; then "
-    "exit $DRONE_SSH_PREV_COMMAND_EXIT_CODE; fi;"
-)
+
+
+def _apply_step() -> dict[str, object]:
+    payload = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    step = payload["jobs"]["apply"]["steps"][0]
+    assert isinstance(step, dict)
+    return step
 
 
 def _apply_script() -> str:
-    payload = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
-    script = payload["jobs"]["apply"]["steps"][0]["with"]["script"]
+    step = _apply_step()
+    with_config = step["with"]
+    assert isinstance(with_config, dict)
+    script = with_config["script"]
     assert isinstance(script, str)
     return script
 
@@ -44,16 +48,13 @@ def _drain_python_c() -> str:
     return code
 
 
-def _drone_ssh_script_stop(script: str) -> str:
-    commands: list[str] = []
-    for raw in script.split("\n"):
-        cmd = raw.strip()
-        if not cmd:
-            continue
-        commands.append(cmd)
-        if not cmd.endswith("\\"):
-            commands.append(DRONE_STOP)
-    return "\n".join(commands) + "\n"
+def _cleanup_function() -> str:
+    script = _apply_script()
+    start = script.index("fail_closed_cleanup() {")
+    end = script.index("trap fail_closed_cleanup EXIT", start)
+    cleanup = script[start:end]
+    assert cleanup.rstrip().endswith("}")
+    return cleanup
 
 
 def _run_drain_code(env_path: Path) -> subprocess.CompletedProcess[str]:
@@ -65,13 +66,66 @@ def _run_drain_code(env_path: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_apply_workflow_keeps_script_stop_and_single_line_drain() -> None:
+def _run_cleanup_harness(
+    tmp_path: Path, *, transaction_complete: bool
+) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
+    backup = tmp_path / "env.before"
+    maintenance = tmp_path / "runtime-maintenance"
+    state_root = tmp_path / "meta-ha"
+    backup.write_text("exact pre-stage backup\n", encoding="utf-8")
+
+    stub_bin = tmp_path / "bin"
+    stub_bin.mkdir()
+    sudo = stub_bin / "sudo"
+    sudo.write_text(
+        '#!/bin/sh\nif [ "$1" = "rm" ]; then\n  shift\n  exec /bin/rm "$@"\nfi\nexit 0\n',
+        encoding="utf-8",
+    )
+    sudo.chmod(0o755)
+    ssh = stub_bin / "ssh"
+    ssh.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    ssh.chmod(0o755)
+
+    trigger = "true" if transaction_complete else "false"
+    harness = "\n".join(
+        (
+            "set -euo pipefail",
+            f"ENV_BACKUP={shlex.quote(str(backup))}",
+            f"META_HA_STATE_ROOT={shlex.quote(str(state_root))}",
+            f"PERSISTENT_MAINTENANCE_FILE={shlex.quote(str(state_root / 'maintenance'))}",
+            f"MAINTENANCE_FILE={shlex.quote(str(maintenance))}",
+            "PEER_HOST=peer.invalid",
+            f"MAINTENANCE_ARMED={'false' if transaction_complete else 'true'}",
+            f"TRANSACTION_COMPLETE={'true' if transaction_complete else 'false'}",
+            _cleanup_function(),
+            "trap fail_closed_cleanup EXIT",
+            trigger,
+        )
+    )
+    completed = subprocess.run(
+        ["/bin/bash", "-c", harness],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PATH": f"{stub_bin}{os.pathsep}{os.environ['PATH']}"},
+    )
+    return completed, backup, maintenance
+
+
+def test_apply_workflow_disables_script_stop_and_has_no_heredoc() -> None:
     source = WORKFLOW.read_text(encoding="utf-8")
+    step = _apply_step()
+    with_config = step["with"]
+    assert isinstance(with_config, dict)
     script = _apply_script()
     drain = _drain_assignment()
-    assert "script_stop: true" in source
+    assert with_config["script_stop"] is False
+    assert "script_stop: false" in source
+    assert "script_stop: true" not in source
     assert "appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17" in source
-    assert "<<'PY'" not in script
+    assert script.startswith("set -euo pipefail\n")
+    assert "trap fail_closed_cleanup EXIT" in script
+    assert "<<" not in script
     assert "python" in drain and " -c " in drain
     assert drain.count("\n") == 0
     _drain_python_c()
@@ -101,15 +155,11 @@ def test_extracted_drain_command_accepts_valid_and_rejects_invalid_intervals(
             assert "invalid HA drain interval" in rejected.stderr
 
 
-def test_script_stop_rewrite_executes_drain_assignment(tmp_path: Path) -> None:
-    remote = _drone_ssh_script_stop(_apply_script())
-    lines = remote.splitlines()
-    drain_idx = next(i for i, line in enumerate(lines) if line.startswith("DRAIN_SECONDS="))
-    fragment = "\n".join(lines[drain_idx : drain_idx + 2]) + "\n"
+def test_intact_drain_assignment_executes_without_heredoc(tmp_path: Path) -> None:
+    fragment = _drain_assignment() + "\n"
     assert fragment.startswith("DRAIN_SECONDS=")
-    assert DRONE_STOP in fragment
     assert "sleep " not in fragment
-    assert "<<'PY'" not in fragment
+    assert "<<" not in fragment
 
     repo = tmp_path / "repo"
     python = repo / "venv" / "bin" / "python"
@@ -131,3 +181,20 @@ def test_script_stop_rewrite_executes_drain_assignment(tmp_path: Path) -> None:
     assert "syntax error near unexpected token `then'" not in completed.stderr
     assert completed.returncode == 0, (completed.stdout, completed.stderr)
     assert completed.stdout.strip() == "45"
+
+
+def test_intact_cleanup_success_path_returns_zero(tmp_path: Path) -> None:
+    completed, backup, maintenance = _run_cleanup_harness(tmp_path, transaction_complete=True)
+    assert completed.returncode == 0, (completed.stdout, completed.stderr)
+    assert not backup.exists()
+    assert not maintenance.exists()
+    assert "retained after uncertain transaction" not in completed.stderr
+
+
+def test_intact_cleanup_failure_path_remains_fail_closed(tmp_path: Path) -> None:
+    completed, backup, maintenance = _run_cleanup_harness(tmp_path, transaction_complete=False)
+    assert completed.returncode == 1, (completed.stdout, completed.stderr)
+    assert backup.is_file()
+    assert maintenance.is_file()
+    assert "HA maintenance retained after uncertain transaction" in completed.stderr
+    assert "exact pre-stage backup retained" in completed.stderr
