@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -410,11 +411,9 @@ async def test_permission_upgrade_adds_comments_without_removing_dm_subscription
 
     async def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "POST":
-            from urllib.parse import unquote_plus
-
-            body = request.content.decode()
-            raw_fields = body.split("subscribed_fields=", 1)[-1].split("&", 1)[0]
-            subscribed.extend(unquote_plus(raw_fields).split(","))
+            assert request.headers.get("content-type", "").startswith("application/json")
+            body = json.loads(request.content)
+            subscribed.extend(body["subscribed_fields"])
             return httpx.Response(200, json={"success": True})
         return httpx.Response(
             200,
