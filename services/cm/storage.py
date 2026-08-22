@@ -137,6 +137,12 @@ def get_draft(
     """Load a draft section envelope. Optionally materialize defaults."""
     tid = _normalize_tenant(tenant_id)
     name = _validate_section(section)
+    from services.tenant_runtime_config_service import load_draft_envelope, postgres_enabled
+
+    if postgres_enabled():
+        envelope = load_draft_envelope(tid, name)
+        if envelope is not None:
+            return envelope
     ensure_cm_dirs(tid)
     path = draft_section_path(tid, name)
 
@@ -166,8 +172,14 @@ def put_draft(
     expected = (if_match or "").strip()
 
     with tenant_server_lock(tid):
-        if path.exists():
+        from services.tenant_runtime_config_service import load_draft_envelope, postgres_enabled
+
+        current: SectionDraftEnvelope | None = None
+        if postgres_enabled():
+            current = load_draft_envelope(tid, name)
+        if current is None and path.exists():
             current = _envelope_from_dict(read_json_object(path))
+        if current is not None:
             if not expected or expected != current.etag:
                 raise ConflictError(
                     "Draft section has changed; reload and retry.",
@@ -175,16 +187,15 @@ def put_draft(
                     expected_etag=expected or None,
                 )
             revision = current.revision + 1
+            previous_payload = dict(current.payload or {})
         else:
-            # Create only with explicit allow_create or If-Match: *
             if not (allow_create or expected in {"", "*"}):
                 raise ConflictError(
                     "Draft section does not exist for If-Match precondition.",
                     expected_etag=expected or None,
                 )
             revision = 0
-
-        previous_payload = dict(current.payload) if path.exists() else {}
+            previous_payload = {}
         safe_payload = _sanitize_section_payload(name, payload)
         from services.search_metadata.cm_apply import enrich_section_payload
 
@@ -198,20 +209,13 @@ def put_draft(
             updated_by=updated_by,
             payload=safe_payload,
         )
-        _write_envelope(path, envelope)
-        try:
-            from services.ha_tenant_config_peer_sync import replicate_cm_draft_to_peer
+        from services.tenant_runtime_config_service import save_draft_envelope
 
-            replicate_cm_draft_to_peer(tid)
-        except Exception:
-            import logging
-
-            logging.getLogger(__name__).warning(
-                "cm_draft_ha_peer_sync_failed tenant=%s section=%s",
-                tid,
-                name,
-                exc_info=True,
-            )
+        if postgres_enabled():
+            expected_rev = current.revision if current is not None else -1
+            save_draft_envelope(envelope=envelope, expected_revision=expected_rev)
+        else:
+            _write_envelope(path, envelope)
         return envelope
 
 

@@ -16,6 +16,7 @@ async def test_ensure_app_page_webhook_subscription_posts_include_values(
 ) -> None:
     monkeypatch.setenv("META_WEBHOOK_VERIFY_TOKEN", "v" * 32)
     response = MagicMock()
+    response.status_code = 200
     response.json.return_value = {"success": True}
     client = AsyncMock()
     client.post = AsyncMock(return_value=response)

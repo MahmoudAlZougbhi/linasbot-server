@@ -47,6 +47,13 @@ from db.models.requests_support import (
     CustomerRequestNote,
     CustomerRequestOutbox,
 )
+from db.models.tenant_runtime_config import (
+    MetaCommentSyncCursorRow,
+    TenantCmDraftSectionRow,
+    TenantCmPublishedStateRow,
+    TenantMetaCommentAssetSettingRow,
+    TenantRuntimeConfigMigrationRow,
+)
 from db.models.tenant_services import ServiceOption, TenantService
 from db.models.tiktok_business import (
     TikTokAuditEvent,
@@ -114,6 +121,11 @@ __all__ = [
     "RequestDefinitionGraph",
     "RequestDefinitionLink",
     "ServiceOption",
+    "MetaCommentSyncCursorRow",
+    "TenantCmDraftSectionRow",
+    "TenantCmPublishedStateRow",
+    "TenantMetaCommentAssetSettingRow",
+    "TenantRuntimeConfigMigrationRow",
     "TenantService",
     "TikTokAuditEvent",
     "TikTokComment",

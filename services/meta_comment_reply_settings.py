@@ -75,12 +75,6 @@ def _save_tenant_file(tenant_id: str, settings: dict[str, Any]) -> None:
     os.chmod(tmp, 0o600)
     tmp.replace(path)
     os.chmod(path, 0o600)
-    try:
-        from services.ha_tenant_config_peer_sync import replicate_comment_settings_to_peer
-
-        replicate_comment_settings_to_peer(tenant_id)
-    except Exception:
-        _runtime_logger.error("[meta-comment-settings] ha_peer_replicate_failed tenant=%s", tenant_id)
 
 
 def get_comment_reply_setting(
@@ -92,6 +86,20 @@ def get_comment_reply_setting(
 ) -> MetaCommentReplySetting:
     tenant = normalize_meta_tenant_id(tenant_id)
     key = binding_asset_key(tenant, app_key, channel, asset_id)
+    from services.tenant_runtime_config_service import load_comment_asset_setting, postgres_enabled
+
+    if postgres_enabled():
+        raw = load_comment_asset_setting(tenant_id=tenant, asset_key=key)
+        if raw is not None:
+            return MetaCommentReplySetting(
+                tenant_id=tenant,
+                app_key=app_key,
+                channel=channel,
+                asset_id=asset_id,
+                enabled=bool(raw.get("enabled")),
+                instructions=str(raw.get("instructions") or "").strip(),
+                updated_at=float(raw.get("updated_at") or 0.0),
+            )
     with _LOCK:
         raw = _load_tenant_file(tenant).get("settings", {}).get(key, {})
     if not isinstance(raw, dict):
@@ -159,6 +167,20 @@ def set_comment_reply_setting(
         instructions=str(instructions or "").strip()[:2000],
         updated_at=time.time(),
     )
+    from services.tenant_runtime_config_service import postgres_enabled, save_comment_asset_setting
+
+    if postgres_enabled():
+        save_comment_asset_setting(
+            tenant_id=tenant,
+            asset_key=key,
+            app_key=app_key,
+            channel=channel,
+            asset_id=asset_id,
+            enabled=record.enabled,
+            instructions=record.instructions,
+            expected_revision=None,
+        )
+        return record
     with _LOCK:
         payload = _load_tenant_file(tenant)
         settings = payload.setdefault("settings", {})

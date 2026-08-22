@@ -10,12 +10,14 @@ import httpx
 from services.meta_app_registry import APP_A_KEY, MetaAssetBinding, get_meta_app_configs, get_meta_app_registry
 from services.meta_comment_events import ResolvedMetaCommentEvent
 from services.meta_comment_reply_settings import get_comment_reply_setting
+from services.meta_comment_sync_cursors import extract_next_cursor, load_posts_cursor, save_posts_cursor
 from services.meta_graph_routing import build_messaging_settings_for_binding, graph_api_url
 
 _runtime_logger = logging.getLogger("uvicorn.error")
-_MAX_POSTS_PER_SYNC = 8
+_MAX_POSTS_PER_SYNC = 25
 _MAX_COMMENTS_PER_POST = 25
 _MAX_COMMENT_NEST_DEPTH = 4
+_GRAPH_RATE_LIMIT_BACKOFF_SECONDS = 2.0
 _FACEBOOK_POST_COMMENT_FIELDS = (
     "comments.limit(25){id,message,from,created_time,"
     "comments.limit(20){id,message,from,created_time,"
@@ -104,10 +106,23 @@ async def _graph_get_json(
     token: str,
     path: str,
     params: dict[str, str] | None = None,
+    absolute_url: str | None = None,
 ) -> dict[str, Any]:
     app = get_meta_app_configs()[binding.app_key]
-    url = graph_api_url(binding, graph_api_version=app.graph_api_version, path=path)
-    response = await client.get(url, params={"access_token": token, **(params or {})})
+    if absolute_url:
+        response = await client.get(absolute_url, params={"access_token": token})
+    else:
+        url = graph_api_url(binding, graph_api_version=app.graph_api_version, path=path)
+        response = await client.get(url, params={"access_token": token, **(params or {})})
+    if response.status_code == 429:
+        import asyncio
+
+        await asyncio.sleep(_GRAPH_RATE_LIMIT_BACKOFF_SECONDS)
+        if absolute_url:
+            response = await client.get(absolute_url, params={"access_token": token})
+        else:
+            url = graph_api_url(binding, graph_api_version=app.graph_api_version, path=path)
+            response = await client.get(url, params={"access_token": token, **(params or {})})
     response.raise_for_status()
     payload = response.json()
     if not isinstance(payload, dict):
@@ -133,6 +148,7 @@ async def sync_facebook_binding_comments(binding_id: str) -> dict[str, Any]:
     enqueued = 0
 
     async with httpx.AsyncClient(timeout=25.0) as client:
+        posts_url = load_posts_cursor(binding.binding_id)
         posts_payload = await _graph_get_json(
             client,
             binding=binding,
@@ -142,8 +158,11 @@ async def sync_facebook_binding_comments(binding_id: str) -> dict[str, Any]:
                 "fields": f"id,{_FACEBOOK_POST_COMMENT_FIELDS}",
                 "limit": str(_MAX_POSTS_PER_SYNC),
             },
+            absolute_url=posts_url,
         )
         posts = posts_payload.get("data") if isinstance(posts_payload.get("data"), list) else []
+        next_posts = extract_next_cursor(posts_payload)
+        save_posts_cursor(binding.binding_id, next_posts)
         for post in posts:
             if not isinstance(post, dict):
                 continue
@@ -171,6 +190,19 @@ async def _enqueue_comment_ai(*, binding: MetaAssetBinding, settings: Any, event
     comment_id = str(event.get("comment_id") or "").strip()
     if not comment_id:
         return False
+    from services.meta_cross_flow_dedup import global_comment_claim_key
+    from services.durable_event_claim import try_claim_event_handle
+
+    global_key = global_comment_claim_key(event)
+    claim_handle = await try_claim_event_handle(
+        "meta_social_comment_global",
+        global_key,
+        ttl_seconds=600.0,
+        firestore_collection="meta_social_comment_global_claims",
+        meta_binding_id=binding.binding_id,
+    )
+    if claim_handle is None:
+        return False
     tagged = dict(event)
     tagged.update(
         {
@@ -184,12 +216,38 @@ async def _enqueue_comment_ai(*, binding: MetaAssetBinding, settings: Any, event
     from services.meta_comment_replies import process_meta_comment_event
 
     result = await process_meta_comment_event(resolved, simulation=False)
+    from services.durable_event_claim import complete_event_claim, release_event_claim
+
     if result.status in {"sent", "sent_dm"}:
+        await complete_event_claim(
+            "meta_social_comment_global",
+            global_key,
+            firestore_collection="meta_social_comment_global_claims",
+            claim_handle=claim_handle,
+        )
         return True
     if result.status == "ignored" and result.reason in {"already_replied", "human_replied"}:
+        await complete_event_claim(
+            "meta_social_comment_global",
+            global_key,
+            firestore_collection="meta_social_comment_global_claims",
+            claim_handle=claim_handle,
+        )
         return False
     if result.status == "ignored":
+        await complete_event_claim(
+            "meta_social_comment_global",
+            global_key,
+            firestore_collection="meta_social_comment_global_claims",
+            claim_handle=claim_handle,
+        )
         return False
+    await release_event_claim(
+        "meta_social_comment_global",
+        global_key,
+        firestore_collection="meta_social_comment_global_claims",
+        claim_handle=claim_handle,
+    )
     _runtime_logger.warning(
         "[meta-comment-sync] process_skipped channel=%s comment=%s status=%s reason=%s",
         binding.channel,

@@ -1,55 +1,35 @@
-"""Tests for HA tenant configuration peer sync."""
+"""Tests for HA tenant configuration cache rebuild."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
 import pytest
 
-from services.cm.schemas import PublishedPointer
-from services.ha_tenant_config_peer_sync import _reconcile_published_cm
+from services.ha_tenant_config_peer_sync import run_tenant_config_cache_rebuild
 
 
-def test_reconcile_published_cm_pushes_when_local_is_newer(monkeypatch: pytest.MonkeyPatch) -> None:
-    newer = PublishedPointer(
-        content_version_id="content_v2",
-        index_version_id="index_v2",
-        checksums={},
-        embedding_provider="openai",
-        embedding_model="text-embedding-3-small",
-        embedding_version="1",
-        embedding_dimensions=1536,
-        updated_at=datetime(2026, 8, 23, 12, 0, tzinfo=UTC),
+def test_cache_rebuild_skips_file_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "services.ha_tenant_config_peer_sync.tenant_runtime_config_postgres_required",
+        lambda: False,
     )
-    older_payload = {
-        "content_version_id": "content_v1",
-        "index_version_id": "index_v1",
-        "checksums": {},
-        "embedding_provider": "openai",
-        "embedding_model": "text-embedding-3-small",
-        "embedding_version": "1",
-        "embedding_dimensions": 1536,
-        "updated_at": "2026-08-23T11:00:00+00:00",
-    }
-    pushed: list[str] = []
+    result = run_tenant_config_cache_rebuild(tenant_id="linas")
+    assert result["skipped"] is True
 
+
+def test_cache_rebuild_calls_rebuild(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "services.ha_tenant_config_peer_sync.tenant_runtime_config_postgres_required",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        "services.ha_tenant_config_peer_sync.rebuild_tenant_cache",
+        lambda tenant_id: {"drafts": 2, "tenant": tenant_id},
+    )
     monkeypatch.setattr(
         "services.ha_tenant_config_peer_sync.read_published_pointer",
-        lambda _tenant: newer,
+        lambda _tenant: None,
     )
-    monkeypatch.setattr(
-        "services.ha_tenant_config_peer_sync._remote_json",
-        lambda _path: older_payload,
-    )
-    monkeypatch.setattr(
-        "services.ha_tenant_config_peer_sync._pointer_digest",
-        lambda _tenant: "local",
-    )
-    monkeypatch.setattr(
-        "services.ha_tenant_config_peer_sync.replicate_published_cm_to_peer",
-        lambda **kwargs: pushed.append("push"),
-    )
-
-    result = _reconcile_published_cm("linas")
-    assert result == "cm_published=pushed"
-    assert pushed == ["push"]
+    result = run_tenant_config_cache_rebuild(tenant_id="linas")
+    assert result["drafts"] == 2

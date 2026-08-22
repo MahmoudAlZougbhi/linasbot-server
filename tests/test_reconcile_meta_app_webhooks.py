@@ -272,7 +272,7 @@ def test_unapproved_webhook_state_fails_closed(failure: str) -> None:
     if failure == "extra_object":
         data.append(
             {
-                "object": "user",
+                "object": "permissions",
                 "callback_url": "https://www.linasaibot.com/webhook/meta-messaging",
                 "active": True,
                 "fields": [],

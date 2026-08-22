@@ -93,6 +93,35 @@ async def publish_draft(
     )
 
 
+def _sync_published_state_to_postgres(
+    *,
+    tenant_id: str,
+    pointer: PublishedPointer,
+    sections: dict[str, dict[str, Any]],
+) -> None:
+    from services.tenant_runtime_config_service import postgres_enabled, save_actions_payload
+
+    if not postgres_enabled():
+        return
+    actions_payload = dict(sections.get("actions") or {})
+    save_actions_payload(
+        tenant_id=tenant_id,
+        actions_payload=actions_payload,
+        expected_published_revision=None,
+        published_meta={
+            "content_version_id": pointer.content_version_id,
+            "index_version_id": pointer.index_version_id or "",
+            "checksums": dict(pointer.checksums or {}),
+            "embedding_provider": pointer.embedding_provider,
+            "embedding_model": pointer.embedding_model,
+            "embedding_dimensions": pointer.embedding_dimensions,
+            "embedding_version": pointer.embedding_version,
+            "schema_version": pointer.schema_version,
+            "published_at": pointer.updated_at.timestamp() if pointer.updated_at else 0,
+        },
+    )
+
+
 async def publish_draft_sections(
     *,
     tenant_id: str | None = None,
@@ -190,6 +219,8 @@ async def publish_draft_sections(
         previous_pointer = read_published_pointer(tid)
         write_published_pointer(tid, pointer_out)
 
+    _sync_published_state_to_postgres(tenant_id=tid, pointer=pointer_out, sections=sections)
+
     from services.ha_cm_peer_replicate import replicate_published_cm_to_peer
 
     replicate_published_cm_to_peer(tenant_id=tid, pointer=pointer_out)
@@ -262,6 +293,9 @@ def rollback_to_version(
             updated_at=utc_now(),
         )
         write_published_pointer(tid, pointer)
+
+    sections = read_version_content(tid, pointer.content_version_id) or {}
+    _sync_published_state_to_postgres(tenant_id=tid, pointer=pointer, sections=sections)
 
     from services.ha_cm_peer_replicate import replicate_published_cm_to_peer
 

@@ -28,8 +28,13 @@ from db.models import (  # noqa: E402, F401 — register models on metadata
     Base,  # noqa: E402
     MetaAssetBindingRow,
     MetaBindingCredentialRow,
+    MetaCommentSyncCursorRow,
     MetaOAuthStateRow,
     MetaRegistryAuditEvent,
+    TenantCmDraftSectionRow,
+    TenantCmPublishedStateRow,
+    TenantMetaCommentAssetSettingRow,
+    TenantRuntimeConfigMigrationRow,
     TikTokConnection,
     TikTokCredential,
     TikTokOAuthAttempt,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -86,8 +86,16 @@ async def test_sync_facebook_binding_comments_enqueues_new_comment(monkeypatch: 
         lambda: type(
             "R2",
             (),
-            {"get_credential": lambda _b: credential, "list_bindings": lambda *a, **k: []},
+            {"get_credential": lambda _self, _b: credential, "list_bindings": lambda *a, **k: []},
         )(),
+    )
+    monkeypatch.setattr(
+        "services.durable_event_claim.try_claim_event_handle",
+        AsyncMock(return_value=MagicMock()),
+    )
+    monkeypatch.setattr(
+        "services.durable_event_claim.complete_event_claim",
+        AsyncMock(),
     )
     monkeypatch.setattr(
         "services.meta_social_comment_sync.build_messaging_settings_for_binding",
