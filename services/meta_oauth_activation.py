@@ -207,6 +207,21 @@ async def _activate_validated_facebook_pages_locked(
                     registry=registry,
                     client=client,
                 )
+            from services.channel_capability_toggles import (
+                ChannelToggleError,
+                enable_channel_defaults_after_connect,
+            )
+
+            for channel in sorted({binding.channel for binding in staged}):
+                try:
+                    await enable_channel_defaults_after_connect(
+                        tenant_id=tenant_id,
+                        platform=channel,
+                        actor=actor_id,
+                        include_comments=False,
+                    )
+                except ChannelToggleError as exc:
+                    raise MetaOAuthError("Facebook Messages could not be enabled after Connect") from exc
             for binding in staged:
                 active_binding = replace(binding, status="active")
                 expected_after_write[binding.binding_id] = desired_binding_webhook_subscription(
