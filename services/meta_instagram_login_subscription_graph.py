@@ -133,14 +133,36 @@ def _selected_app_kind(row: dict[str, Any]) -> str:
     return "fb_app"
 
 
+def _row_matches_expected(
+    row: dict[str, Any],
+    *,
+    expected_ids: frozenset[str],
+    ig_user_id: str | None,
+) -> bool:
+    if _row_app_ids(row) & expected_ids:
+        return True
+    if not ig_user_id:
+        return False
+    top_level_id = str(row.get("id") or "").strip()
+    if top_level_id != ig_user_id:
+        return False
+    return _fields_from_row(row) is not None
+
+
 def parse_subscription_snapshot(
     payload: dict[str, Any],
+    *,
+    ig_user_id: str | None = None,
 ) -> InstagramLoginWebhookSubscriptionSnapshot:
     rows = payload.get("data")
     if not isinstance(rows, list):
         raise MetaOAuthError("Instagram webhook subscription rows could not be verified")
     expected_ids = expected_instagram_login_subscription_app_ids()
-    matching = [row for row in rows if isinstance(row, dict) and (_row_app_ids(row) & expected_ids)]
+    matching = [
+        row
+        for row in rows
+        if isinstance(row, dict) and _row_matches_expected(row, expected_ids=expected_ids, ig_user_id=ig_user_id)
+    ]
     selected = _select_matching_subscription_row(matching)
     if selected is None:
         _runtime_logger.info(
@@ -204,7 +226,7 @@ async def read_instagram_login_subscription(
         log_instagram_subscribed_apps_telemetry(response, stage=telemetry_stage)
     raise_classified_provider_error(response, step=step)
     payload = _safe_json(response, step=step)
-    return parse_subscription_snapshot(payload)
+    return parse_subscription_snapshot(payload, ig_user_id=ig_user_id)
 
 
 async def inspect_instagram_login_webhook_subscription(
