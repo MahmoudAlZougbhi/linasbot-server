@@ -367,6 +367,16 @@ def main() -> None:
             f"post-migration alembic stamp mismatch: expected={expected_head} actual={sorted(stamped_after)}"
         )
 
+    from services.tenant_runtime_config_backend import tenant_runtime_config_postgres_required
+
+    if tenant_runtime_config_postgres_required():
+        from services.cm.constants import DEFAULT_TENANT_ID
+
+        from scripts.ha.migrate_tenant_runtime_config_to_postgres import migrate_tenant
+
+        tenant_id = (env_snapshot.mapping.get("DEFAULT_TENANT_ID") or DEFAULT_TENANT_ID).strip() or DEFAULT_TENANT_ID
+        migrate_tenant(tenant_id=tenant_id, dry_run=False)
+
     from services.web_chat.flags import get_web_chat_ha_readiness
 
     ok, checks = get_web_chat_ha_readiness()

@@ -9101,7 +9101,7 @@ if (
     raise SystemExit("nginx configuration directory is unsafe")
 payload, source_info = read_regular(source, expected_modes={0o600, 0o644})
 if destination.exists() or destination.is_symlink():
-    read_regular(destination, expected_modes={0o644})
+    read_regular(destination, expected_modes={0o600, 0o644})
 
 descriptor, temporary_name = tempfile.mkstemp(prefix=".linasbot-ha-nginx.", dir=parent)
 temporary = Path(temporary_name)
