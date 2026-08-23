@@ -164,7 +164,9 @@ async def test_sync_facebook_binding_comments_always_scans_recent_posts_with_sta
             {"get_credential": lambda _self, _b: credential, "list_bindings": lambda *a, **k: []},
         )(),
     )
-    monkeypatch.setattr("services.meta_social_comment_sync.load_posts_cursor", lambda _id: "https://graph.facebook.com/old-page")
+    monkeypatch.setattr(
+        "services.meta_social_comment_sync.load_posts_cursor", lambda _id: "https://graph.facebook.com/old-page"
+    )
     saved_cursor: list[str | None] = []
     monkeypatch.setattr(
         "services.meta_social_comment_sync.save_posts_cursor",
