@@ -109,6 +109,17 @@ def instagram_login_app_secret() -> str:
     return (os.getenv("META_INSTAGRAM_LOGIN_APP_SECRET") or "").strip()
 
 
+def instagram_login_webhook_signing_secret() -> str:
+    """Return the App Secret Meta uses to sign instagram object webhooks.
+
+    App-level ``instagram`` webhooks are registered on Linas AI (App A). Meta
+    signs those deliveries with App A's primary app secret. The Instagram Login
+    OAuth client secret is separate and must not be used for webhook HMAC.
+    """
+
+    return get_meta_app_configs()[APP_A_KEY].app_secret
+
+
 def instagram_login_config_status() -> InstagramLoginConfigStatus:
     """Fail-closed readiness for Instagram Login; never falls back to App A/Facebook secrets."""
 
@@ -182,7 +193,7 @@ def verify_instagram_login_challenge_token(candidate: str | None) -> bool:
 
 
 def verify_instagram_login_webhook_signature(raw_body: bytes, signature_header: str | None) -> bool:
-    secret = instagram_login_app_secret()
+    secret = instagram_login_webhook_signing_secret()
     if not secret or not raw_body or not signature_header or not signature_header.startswith("sha256="):
         return False
     received = signature_header[len("sha256=") :].strip().lower()

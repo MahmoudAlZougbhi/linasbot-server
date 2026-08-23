@@ -17,6 +17,7 @@ from services.meta_instagram_login_config import (
     META_INSTAGRAM_GRAPH_BASE_URL,
     instagram_login_app_id,
     instagram_login_app_secret,
+    instagram_login_graph_api_version,
     instagram_login_webhook_verify_token,
 )
 from services.meta_messaging import MetaMessagingSettings
@@ -74,8 +75,8 @@ def build_messaging_settings_for_binding(
     app_config: MetaAppConfig | None = None,
 ) -> MetaMessagingSettings:
     resolved_app = app_config or get_meta_app_configs()[binding.app_key]
-    graph_api_version = resolved_app.graph_api_version or get_meta_graph_api_version()
     if binding.auth_flow == "instagram_login":
+        graph_api_version = instagram_login_graph_api_version()
         return MetaMessagingSettings(
             enabled=True,
             app_secret=instagram_login_app_secret(),
@@ -91,6 +92,7 @@ def build_messaging_settings_for_binding(
             auth_flow=binding.auth_flow,
             graph_base_url=META_INSTAGRAM_GRAPH_BASE_URL,
         )
+    graph_api_version = resolved_app.graph_api_version or get_meta_graph_api_version()
     return MetaMessagingSettings(
         enabled=True,
         app_secret=resolved_app.app_secret,
