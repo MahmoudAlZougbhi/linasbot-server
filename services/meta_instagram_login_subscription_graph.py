@@ -76,6 +76,21 @@ def expected_instagram_login_subscription_app_ids() -> frozenset[str]:
     return frozenset(id_value for id_value in ids if id_value)
 
 
+def _row_identity_ids(row: dict[str, Any]) -> set[str]:
+    """Collect every non-secret id Meta may place on one subscribed_apps row."""
+
+    ids: set[str] = set()
+    application = row.get("application")
+    if isinstance(application, dict):
+        nested_id = str(application.get("id") or "").strip()
+        if nested_id:
+            ids.add(nested_id)
+    top_level_id = str(row.get("id") or "").strip()
+    if top_level_id:
+        ids.add(top_level_id)
+    return ids
+
+
 def _row_app_ids(row: dict[str, Any]) -> set[str]:
     """Return Meta app ids for one subscribed_apps row.
 
@@ -139,14 +154,22 @@ def _row_matches_expected(
     expected_ids: frozenset[str],
     ig_user_id: str | None,
 ) -> bool:
-    if _row_app_ids(row) & expected_ids:
+    fields = _fields_from_row(row)
+    if fields is None:
+        return False
+    identity_ids = _row_identity_ids(row)
+    if identity_ids & expected_ids:
         return True
-    if not ig_user_id:
-        return False
-    top_level_id = str(row.get("id") or "").strip()
-    if top_level_id != ig_user_id:
-        return False
-    return _fields_from_row(row) is not None
+    return bool(ig_user_id and ig_user_id in identity_ids)
+
+
+def _row_parse_diag(row: dict[str, Any]) -> str:
+    fields = _fields_from_row(row)
+    return (
+        f"app_dict={int(isinstance(row.get('application'), dict))} "
+        f"has_fields={int(fields is not None)} "
+        f"field_count={0 if fields is None else len(fields)}"
+    )
 
 
 def parse_subscription_snapshot(
@@ -165,9 +188,11 @@ def parse_subscription_snapshot(
     ]
     selected = _select_matching_subscription_row(matching)
     if selected is None:
+        diag = _row_parse_diag(rows[0]) if len(rows) == 1 and isinstance(rows[0], dict) else "row_shape=multi"
         _runtime_logger.info(
-            "instagram subscribed_apps parse row_count=%s matched_count=0 selected=none field_count=-",
+            "instagram subscribed_apps parse row_count=%s matched_count=0 selected=none field_count=- %s",
             len(rows),
+            diag,
         )
         return None
     fields = _fields_from_row(selected)
