@@ -430,7 +430,7 @@ async def test_complete_instagram_login_rejects_fields_from_another_app(
                     "data": [
                         {
                             "id": "9999999999999999",
-                            "subscribed_fields": ["messages", "messaging_postbacks", "comments"],
+                            "subscribed_fields": ["messages"],
                         }
                     ]
                 },
