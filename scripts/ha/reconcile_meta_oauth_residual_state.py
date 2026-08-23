@@ -7,6 +7,7 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 REPO_DIR = Path(__file__).resolve().parents[2]
 if str(REPO_DIR) not in sys.path:
@@ -39,7 +40,7 @@ def _published_actions(tenant_id: str) -> dict[str, bool]:
     actions_path = versions_dir(tenant_id) / pointer.content_version_id / "content" / "actions.json"
     if not actions_path.is_file():
         return {}
-    payload = read_json_object(actions_path)
+    payload = cast(dict[str, Any], read_json_object(actions_path))
     out: dict[str, bool] = {}
     for item in payload.get("items") or []:
         if not isinstance(item, dict):
@@ -52,8 +53,9 @@ def _published_actions(tenant_id: str) -> dict[str, bool]:
 
 def _draft_actions(tenant_id: str) -> dict[str, bool]:
     envelope = get_draft("actions", tenant_id=tenant_id)
+    draft_payload = cast(dict[str, Any], envelope.payload or {})
     out: dict[str, bool] = {}
-    for item in (envelope.payload or {}).get("items") or []:
+    for item in draft_payload.get("items") or []:
         if not isinstance(item, dict):
             continue
         action_id = str(item.get("id") or item.get("action_id") or "").strip()
