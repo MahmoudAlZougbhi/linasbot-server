@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from services.meta_comment_sync_cursors import (
     LEGACY_POSTS_CURSOR_KEY,
     POSTS_BACKFILL_CURSOR_KEY,
