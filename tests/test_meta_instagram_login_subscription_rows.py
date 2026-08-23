@@ -184,6 +184,35 @@ def test_parse_ig_user_id_row_without_fields_still_fails_closed(instagram_env: N
     )
 
 
+def test_parse_accepts_fields_only_row_on_account_scoped_read(instagram_env: None) -> None:
+    ig_user_id = "17841413184256533"
+    snapshot = parse_subscription_snapshot(
+        {"data": [{"subscribed_fields": EXPECTED_FIELDS}]},
+        ig_user_id=ig_user_id,
+    )
+    assert snapshot == tuple(sorted(EXPECTED_FIELDS))
+
+
+def test_parse_accepts_unknown_id_when_sole_field_row_on_account_scoped_read(instagram_env: None) -> None:
+    ig_user_id = "17841413184256533"
+    snapshot = parse_subscription_snapshot(
+        {
+            "data": [
+                {
+                    "id": "99999999999999999",
+                    "subscribed_fields": EXPECTED_FIELDS,
+                }
+            ]
+        },
+        ig_user_id=ig_user_id,
+    )
+    assert snapshot == tuple(sorted(EXPECTED_FIELDS))
+
+
+def test_parse_fields_only_row_without_ig_user_id_still_fails_closed(instagram_env: None) -> None:
+    assert parse_subscription_snapshot({"data": [{"subscribed_fields": EXPECTED_FIELDS}]}) is None
+
+
 @pytest.mark.asyncio
 async def test_read_requests_subscribed_fields_on_get(instagram_env: None) -> None:
     from services.meta_instagram_login_subscription_graph import (
