@@ -26,7 +26,9 @@ from services.meta_instagram_login_subscription_telemetry import (
 from services.meta_oauth_graph_http import MetaOAuthError, _safe_json
 
 InstagramLoginWebhookSubscriptionSnapshot = tuple[str, ...] | None
-INSTAGRAM_SUBSCRIBED_APPS_READ_FIELDS = "id,subscribed_fields"
+# graph.instagram.com may return the IG professional account id in top-level `id`
+# when `application` is omitted from `fields`. Always request `application{id}`.
+INSTAGRAM_SUBSCRIBED_APPS_READ_FIELDS = "application{id},subscribed_fields"
 _runtime_logger = logging.getLogger("uvicorn.error")
 
 
@@ -75,16 +77,19 @@ def expected_instagram_login_subscription_app_ids() -> frozenset[str]:
 
 
 def _row_app_ids(row: dict[str, Any]) -> set[str]:
-    ids: set[str] = set()
-    raw_id = str(row.get("id") or "").strip()
-    if raw_id:
-        ids.add(raw_id)
+    """Return Meta app ids for one subscribed_apps row.
+
+    Prefer nested ``application.id`` when present. Top-level ``id`` is only used
+    when Meta omits ``application`` (legacy rows).
+    """
+
     application = row.get("application")
     if isinstance(application, dict):
         nested_id = str(application.get("id") or "").strip()
         if nested_id:
-            ids.add(nested_id)
-    return ids
+            return {nested_id}
+    raw_id = str(row.get("id") or "").strip()
+    return {raw_id} if raw_id else set()
 
 
 def _normalize_subscribed_field(item: Any) -> str:

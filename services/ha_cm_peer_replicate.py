@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 import logging
 import os
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -90,13 +92,17 @@ def _rsync_dir(*, local_dir: Path, remote_dir: str, stage: str) -> None:
 
 
 def _remote_pointer_checksum(tenant_id: str) -> str:
-    remote_path = published_pointer_path(tenant_id)
+    remote_path = str(published_pointer_path(tenant_id))
+    remote_script = (
+        "import json,hashlib; "
+        f"p=json.load(open({json.dumps(remote_path)})); "
+        'print(hashlib.sha256(json.dumps(p,sort_keys=True,separators=(",",":")).encode()).hexdigest())'
+    )
     command = [
         "ssh",
         *_SSH_OPTIONS,
         _ssh_target(),
-        f'python3 -c "import json,hashlib; p=json.load(open({remote_path!r})); '
-        f"print(hashlib.sha256(json.dumps(p,sort_keys=True,separators=(',',':')).encode()).hexdigest())\"",
+        f"python3 -c {shlex.quote(remote_script)}",
     ]
     try:
         completed = subprocess.run(
@@ -172,3 +178,25 @@ def replicate_published_cm_to_peer(
         index_version_id,
         _peer_host(),
     )
+
+
+def warm_published_cm_peer_cache(
+    *,
+    tenant_id: str,
+    pointer: PublishedPointer | dict[str, object],
+) -> None:
+    """Copy published CM to the HA peer, or warm cache best-effort on Postgres SoT."""
+
+    from services.tenant_runtime_config_backend import tenant_runtime_config_postgres_required
+
+    try:
+        replicate_published_cm_to_peer(tenant_id=tenant_id, pointer=pointer)
+    except HaCmPeerReplicateError:
+        if tenant_runtime_config_postgres_required():
+            _runtime_logger.warning(
+                "[ha-cm] peer_cache_warm_failed tenant=%s",
+                str(tenant_id or "").strip(),
+                exc_info=True,
+            )
+            return
+        raise
