@@ -100,6 +100,35 @@ def _facebook_comment_events(post_id: str, comments: list[dict[str, Any]], *, pa
     return events
 
 
+async def _process_facebook_posts_payload(
+    posts_payload: dict[str, Any],
+    *,
+    binding: MetaAssetBinding,
+    settings: Any,
+    page_id: str,
+    seen_post_ids: set[str],
+) -> tuple[int, int]:
+    discovered = 0
+    enqueued = 0
+    posts_raw = posts_payload.get("data")
+    posts: list[Any] = posts_raw if isinstance(posts_raw, list) else []
+    for post in posts:
+        if not isinstance(post, dict):
+            continue
+        post_id = str(post.get("id") or "").strip()
+        if not post_id or post_id in seen_post_ids:
+            continue
+        seen_post_ids.add(post_id)
+        comments = (post.get("comments") or {}).get("data") if isinstance(post.get("comments"), dict) else []
+        if not isinstance(comments, list):
+            comments = []
+        for event in _facebook_comment_events(post_id, comments, page_id=page_id):
+            discovered += 1
+            if await _enqueue_comment_ai(binding=binding, settings=settings, event=event):
+                enqueued += 1
+    return discovered, enqueued
+
+
 async def _graph_get_json(
     client: httpx.AsyncClient,
     *,
@@ -147,37 +176,53 @@ async def sync_facebook_binding_comments(binding_id: str) -> dict[str, Any]:
     page_id = binding.page_id
     discovered = 0
     enqueued = 0
+    posts_params = {
+        "fields": f"id,{_FACEBOOK_POST_COMMENT_FIELDS}",
+        "limit": str(_MAX_POSTS_PER_SYNC),
+    }
 
     async with httpx.AsyncClient(timeout=25.0) as client:
-        posts_url = load_posts_cursor(binding.binding_id)
-        posts_payload = await _graph_get_json(
+        seen_post_ids: set[str] = set()
+        recent_payload = await _graph_get_json(
             client,
             binding=binding,
             token=token,
             path=f"{page_id}/posts",
-            params={
-                "fields": f"id,{_FACEBOOK_POST_COMMENT_FIELDS}",
-                "limit": str(_MAX_POSTS_PER_SYNC),
-            },
-            absolute_url=posts_url,
+            params=posts_params,
         )
-        posts_raw = posts_payload.get("data")
-        posts: list[Any] = posts_raw if isinstance(posts_raw, list) else []
-        next_posts = extract_next_cursor(posts_payload)
+        recent_discovered, recent_enqueued = await _process_facebook_posts_payload(
+            recent_payload,
+            binding=binding,
+            settings=settings,
+            page_id=page_id,
+            seen_post_ids=seen_post_ids,
+        )
+        discovered += recent_discovered
+        enqueued += recent_enqueued
+
+        posts_url = load_posts_cursor(binding.binding_id)
+        if posts_url:
+            backfill_payload = await _graph_get_json(
+                client,
+                binding=binding,
+                token=token,
+                path=f"{page_id}/posts",
+                params=posts_params,
+                absolute_url=posts_url,
+            )
+            backfill_discovered, backfill_enqueued = await _process_facebook_posts_payload(
+                backfill_payload,
+                binding=binding,
+                settings=settings,
+                page_id=page_id,
+                seen_post_ids=seen_post_ids,
+            )
+            discovered += backfill_discovered
+            enqueued += backfill_enqueued
+            next_posts = extract_next_cursor(backfill_payload)
+        else:
+            next_posts = extract_next_cursor(recent_payload)
         save_posts_cursor(binding.binding_id, next_posts)
-        for post in posts:
-            if not isinstance(post, dict):
-                continue
-            post_id = str(post.get("id") or "").strip()
-            if not post_id:
-                continue
-            comments = (post.get("comments") or {}).get("data") if isinstance(post.get("comments"), dict) else []
-            if not isinstance(comments, list):
-                comments = []
-            for event in _facebook_comment_events(post_id, comments, page_id=page_id):
-                discovered += 1
-                if await _enqueue_comment_ai(binding=binding, settings=settings, event=event):
-                    enqueued += 1
 
     _runtime_logger.info(
         "[meta-comment-sync] facebook binding=%s discovered=%d enqueued=%d",

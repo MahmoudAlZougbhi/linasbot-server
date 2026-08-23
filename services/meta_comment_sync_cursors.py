@@ -15,12 +15,12 @@ def load_posts_cursor(binding_id: str) -> str | None:
 
 
 def save_posts_cursor(binding_id: str, cursor: str | None) -> None:
-    if not postgres_enabled() or not cursor:
+    if not postgres_enabled():
         return
     save_sync_cursor(
         binding_id=binding_id,
         cursor_key="posts",
-        cursor_value=cursor,
+        cursor_value=cursor or "",
         expected_revision=None,
     )
 
