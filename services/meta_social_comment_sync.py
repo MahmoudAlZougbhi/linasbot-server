@@ -10,7 +10,11 @@ import httpx
 from services.meta_app_registry import APP_A_KEY, MetaAssetBinding, get_meta_app_configs, get_meta_app_registry
 from services.meta_comment_events import ResolvedMetaCommentEvent
 from services.meta_comment_reply_settings import get_comment_reply_setting
-from services.meta_comment_sync_cursors import extract_next_cursor, load_posts_cursor, save_posts_cursor
+from services.meta_comment_sync_cursors import (
+    extract_next_cursor,
+    load_posts_backfill_cursor,
+    save_posts_backfill_cursor,
+)
 from services.meta_graph_routing import build_messaging_settings_for_binding, graph_api_url
 
 _runtime_logger = logging.getLogger("uvicorn.error")
@@ -200,7 +204,7 @@ async def sync_facebook_binding_comments(binding_id: str) -> dict[str, Any]:
         discovered += recent_discovered
         enqueued += recent_enqueued
 
-        posts_url = load_posts_cursor(binding.binding_id)
+        posts_url = load_posts_backfill_cursor(binding.binding_id)
         if posts_url:
             backfill_payload = await _graph_get_json(
                 client,
@@ -222,7 +226,7 @@ async def sync_facebook_binding_comments(binding_id: str) -> dict[str, Any]:
             next_posts = extract_next_cursor(backfill_payload)
         else:
             next_posts = extract_next_cursor(recent_payload)
-        save_posts_cursor(binding.binding_id, next_posts)
+        save_posts_backfill_cursor(binding.binding_id, next_posts or "")
 
     _runtime_logger.info(
         "[meta-comment-sync] facebook binding=%s discovered=%d enqueued=%d",
