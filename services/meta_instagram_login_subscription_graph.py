@@ -29,6 +29,7 @@ InstagramLoginWebhookSubscriptionSnapshot = tuple[str, ...] | None
 # graph.instagram.com may return the IG professional account id in top-level `id`
 # when `application` is omitted from `fields`. Always request `application{id}`.
 INSTAGRAM_SUBSCRIBED_APPS_READ_FIELDS = "application{id},subscribed_fields"
+_MIN_ACCOUNT_SCOPED_DM_FIELDS = frozenset({"messages", "messaging_postbacks"})
 _runtime_logger = logging.getLogger("uvicorn.error")
 
 
@@ -163,12 +164,9 @@ def _row_matches_expected(
     return bool(ig_user_id and ig_user_id in identity_ids)
 
 
-def _row_is_identityless_with_fields(row: dict[str, Any]) -> bool:
-    """True when Meta returned webhook fields but omitted every recognizable id."""
-
-    if _fields_from_row(row) is None:
-        return False
-    return not _row_identity_ids(row)
+def _row_has_min_dm_subscription_fields(row: dict[str, Any]) -> bool:
+    fields = _fields_from_row(row)
+    return bool(fields and _MIN_ACCOUNT_SCOPED_DM_FIELDS.issubset(fields))
 
 
 def _account_scoped_subscription_rows(
@@ -179,10 +177,10 @@ def _account_scoped_subscription_rows(
 ) -> list[dict[str, Any]]:
     """Match rows for GET /{ig_user_id}/subscribed_apps.
 
-    Meta sometimes returns one row with ``subscribed_fields`` but omits both
-    ``application`` and top-level ``id``. The endpoint is already scoped to one
-    professional account, so a sole identityless field-bearing row is trusted.
-    Rows that carry an unrecognized id still fail closed.
+    Meta may return one row with ``subscribed_fields`` but omit ``application``
+    or use a top-level ``id`` that is not the app id or IG professional id.
+    The endpoint is already scoped to one professional account, so trust a sole
+    row once DM webhook fields are present. Incomplete rows still fail closed.
     """
 
     matching = [
@@ -192,7 +190,7 @@ def _account_scoped_subscription_rows(
     ]
     if matching or not ig_user_id:
         return matching
-    field_rows = [row for row in rows if isinstance(row, dict) and _row_is_identityless_with_fields(row)]
+    field_rows = [row for row in rows if isinstance(row, dict) and _row_has_min_dm_subscription_fields(row)]
     if len(field_rows) == 1:
         return field_rows
     return []
@@ -200,10 +198,14 @@ def _account_scoped_subscription_rows(
 
 def _row_parse_diag(row: dict[str, Any]) -> str:
     fields = _fields_from_row(row)
+    top_id = str(row.get("id") or "").strip()
+    top_suffix = top_id[-6:] if top_id.isdigit() and len(top_id) >= 6 else "-"
     return (
         f"app_dict={int(isinstance(row.get('application'), dict))} "
         f"has_fields={int(fields is not None)} "
-        f"field_count={0 if fields is None else len(fields)}"
+        f"field_count={0 if fields is None else len(fields)} "
+        f"has_top_level_id={int(bool(top_id))} "
+        f"top_id_suffix={top_suffix}"
     )
 
 
