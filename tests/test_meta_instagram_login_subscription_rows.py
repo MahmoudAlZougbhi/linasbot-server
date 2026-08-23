@@ -107,10 +107,7 @@ def test_parse_accepts_subscribed_fields_as_name_objects(instagram_env: None) ->
 
 
 def test_parse_id_only_row_fails_closed(instagram_env: None) -> None:
-    from services.meta_oauth_graph_http import MetaOAuthError
-
-    with pytest.raises(MetaOAuthError, match="fields could not be verified"):
-        parse_subscription_snapshot({"data": [{"id": INSTAGRAM_APP_ID}]})
+    assert parse_subscription_snapshot({"data": [{"id": INSTAGRAM_APP_ID}]}) is None
 
 
 def test_parse_ignores_top_level_ig_user_id_when_application_present(instagram_env: None) -> None:
@@ -135,6 +132,39 @@ def test_parse_accepts_ig_user_id_row_when_application_block_missing(instagram_e
             "data": [
                 {
                     "id": ig_user_id,
+                    "subscribed_fields": EXPECTED_FIELDS,
+                }
+            ]
+        },
+        ig_user_id=ig_user_id,
+    )
+    assert snapshot == tuple(sorted(EXPECTED_FIELDS))
+
+
+def test_parse_accepts_ig_user_id_in_application_id(instagram_env: None) -> None:
+    ig_user_id = "17841413184256533"
+    snapshot = parse_subscription_snapshot(
+        {
+            "data": [
+                {
+                    "application": {"id": ig_user_id, "name": "Linas AI - IG"},
+                    "subscribed_fields": EXPECTED_FIELDS,
+                }
+            ]
+        },
+        ig_user_id=ig_user_id,
+    )
+    assert snapshot == tuple(sorted(EXPECTED_FIELDS))
+
+
+def test_parse_accepts_ig_user_application_id_when_top_level_is_parent_app(instagram_env: None) -> None:
+    ig_user_id = "17841413184256533"
+    snapshot = parse_subscription_snapshot(
+        {
+            "data": [
+                {
+                    "id": FACEBOOK_APP_ID,
+                    "application": {"id": ig_user_id, "name": "Linas AI - IG"},
                     "subscribed_fields": EXPECTED_FIELDS,
                 }
             ]
