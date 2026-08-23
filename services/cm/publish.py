@@ -221,9 +221,9 @@ async def publish_draft_sections(
 
     _sync_published_state_to_postgres(tenant_id=tid, pointer=pointer_out, sections=sections)
 
-    from services.ha_cm_peer_replicate import replicate_published_cm_to_peer
+    from services.ha_cm_peer_replicate import warm_published_cm_peer_cache
 
-    replicate_published_cm_to_peer(tenant_id=tid, pointer=pointer_out)
+    warm_published_cm_peer_cache(tenant_id=tid, pointer=pointer_out)
 
     from services.customer_reply_v2.manifest import clear_manifest_cache
 
@@ -297,9 +297,9 @@ def rollback_to_version(
     sections = read_version_content(tid, pointer.content_version_id) or {}
     _sync_published_state_to_postgres(tenant_id=tid, pointer=pointer, sections=sections)
 
-    from services.ha_cm_peer_replicate import replicate_published_cm_to_peer
+    from services.ha_cm_peer_replicate import warm_published_cm_peer_cache
 
-    replicate_published_cm_to_peer(tenant_id=tid, pointer=pointer)
+    warm_published_cm_peer_cache(tenant_id=tid, pointer=pointer)
 
     from services.customer_reply_v2.manifest import clear_manifest_cache
 

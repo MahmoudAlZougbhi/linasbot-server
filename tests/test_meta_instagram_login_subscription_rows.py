@@ -113,6 +113,21 @@ def test_parse_id_only_row_fails_closed(instagram_env: None) -> None:
         parse_subscription_snapshot({"data": [{"id": INSTAGRAM_APP_ID}]})
 
 
+def test_parse_ignores_top_level_ig_user_id_when_application_present(instagram_env: None) -> None:
+    snapshot = parse_subscription_snapshot(
+        {
+            "data": [
+                {
+                    "id": "17841413184256533",
+                    "application": {"id": INSTAGRAM_APP_ID, "name": "Linas AI - IG"},
+                    "subscribed_fields": EXPECTED_FIELDS,
+                }
+            ]
+        }
+    )
+    assert snapshot == tuple(sorted(EXPECTED_FIELDS))
+
+
 @pytest.mark.asyncio
 async def test_read_requests_subscribed_fields_on_get(instagram_env: None) -> None:
     from services.meta_instagram_login_subscription_graph import (
@@ -215,5 +230,5 @@ async def test_ensure_uses_instagram_graph_v26_not_facebook_v24(
     assert state.status == "ready"
     assert seen
     assert all(f"/{INSTAGRAM_LOGIN_GRAPH_API_VERSION}/{INSTAGRAM_ID}/subscribed_apps" in url for url in seen)
-    assert all("fields=id%2Csubscribed_fields" in url or "fields=id,subscribed_fields" in url for url in seen)
+    assert all("fields=application%7Bid%7D%2Csubscribed_fields" in url or "fields=application{id},subscribed_fields" in url for url in seen)
     assert all("/v24.0/" not in url for url in seen)

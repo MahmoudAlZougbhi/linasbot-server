@@ -355,6 +355,16 @@ async def _publish_actions(*, tenant_id: str, actor: str) -> None:
             status_code=422,
             code="PUBLISH_BLOCKED",
         ) from exc
+    except Exception as exc:
+        from services.ha_cm_peer_replicate import HaCmPeerReplicateError
+
+        if isinstance(exc, HaCmPeerReplicateError):
+            raise ChannelToggleError(
+                "Channel settings could not be replicated to the standby node",
+                status_code=503,
+                code="HA_PEER_REPLICATE_FAILED",
+            ) from exc
+        raise
 
 
 def _has_testing_binding(tenant_id: str, platform: str) -> bool:
