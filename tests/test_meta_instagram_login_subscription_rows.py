@@ -193,20 +193,22 @@ def test_parse_accepts_fields_only_row_on_account_scoped_read(instagram_env: Non
     assert snapshot == tuple(sorted(EXPECTED_FIELDS))
 
 
-def test_parse_accepts_unknown_id_when_sole_field_row_on_account_scoped_read(instagram_env: None) -> None:
+def test_parse_rejects_unknown_id_even_when_sole_row_on_account_scoped_read(instagram_env: None) -> None:
     ig_user_id = "17841413184256533"
-    snapshot = parse_subscription_snapshot(
-        {
-            "data": [
-                {
-                    "id": "99999999999999999",
-                    "subscribed_fields": EXPECTED_FIELDS,
-                }
-            ]
-        },
-        ig_user_id=ig_user_id,
+    assert (
+        parse_subscription_snapshot(
+            {
+                "data": [
+                    {
+                        "id": "99999999999999999",
+                        "subscribed_fields": EXPECTED_FIELDS,
+                    }
+                ]
+            },
+            ig_user_id=ig_user_id,
+        )
+        is None
     )
-    assert snapshot == tuple(sorted(EXPECTED_FIELDS))
 
 
 def test_parse_fields_only_row_without_ig_user_id_still_fails_closed(instagram_env: None) -> None:

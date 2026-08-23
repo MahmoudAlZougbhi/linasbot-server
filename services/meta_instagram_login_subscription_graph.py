@@ -163,6 +163,14 @@ def _row_matches_expected(
     return bool(ig_user_id and ig_user_id in identity_ids)
 
 
+def _row_is_identityless_with_fields(row: dict[str, Any]) -> bool:
+    """True when Meta returned webhook fields but omitted every recognizable id."""
+
+    if _fields_from_row(row) is None:
+        return False
+    return not _row_identity_ids(row)
+
+
 def _account_scoped_subscription_rows(
     rows: list[Any],
     *,
@@ -172,8 +180,9 @@ def _account_scoped_subscription_rows(
     """Match rows for GET /{ig_user_id}/subscribed_apps.
 
     Meta sometimes returns one row with ``subscribed_fields`` but omits both
-    ``application`` and a recognizable top-level ``id``. The endpoint is already
-    scoped to one professional account, so a sole field-bearing row is trusted.
+    ``application`` and top-level ``id``. The endpoint is already scoped to one
+    professional account, so a sole identityless field-bearing row is trusted.
+    Rows that carry an unrecognized id still fail closed.
     """
 
     matching = [
@@ -183,7 +192,7 @@ def _account_scoped_subscription_rows(
     ]
     if matching or not ig_user_id:
         return matching
-    field_rows = [row for row in rows if isinstance(row, dict) and _fields_from_row(row) is not None]
+    field_rows = [row for row in rows if isinstance(row, dict) and _row_is_identityless_with_fields(row)]
     if len(field_rows) == 1:
         return field_rows
     return []
