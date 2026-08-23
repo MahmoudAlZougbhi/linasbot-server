@@ -12,7 +12,11 @@ REPO_DIR = Path(__file__).resolve().parents[2]
 if str(REPO_DIR) not in sys.path:
     sys.path.insert(0, str(REPO_DIR))
 
-from services.channel_capability_toggles import action_id_for, canonical_channel_bindings, supported_platforms  # noqa: E402
+from services.channel_capability_toggles import (  # noqa: E402
+    action_id_for,
+    canonical_channel_bindings,
+    supported_platforms,
+)
 from services.cm.atomic_io import read_json_object  # noqa: E402
 from services.cm.paths import versions_dir  # noqa: E402
 from services.cm.storage import get_draft  # noqa: E402
