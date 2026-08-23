@@ -896,10 +896,10 @@ async def test_resolve_registry_events_requires_ready_subscription(registry: Met
     assert "ig-login-token" not in json.dumps(routed_ready[0].event)
 
 
-def test_webhook_signature_uses_instagram_secret_only(instagram_env: None) -> None:
+def test_webhook_signature_uses_app_a_signing_secret(instagram_env: None) -> None:
     body = b'{"object":"instagram"}'
-    good = hmac.new(b"instagram-app-secret-tests", body, hashlib.sha256).hexdigest()
-    bad = hmac.new(b"app-a-secret-tests", body, hashlib.sha256).hexdigest()
+    good = hmac.new(b"app-a-secret-tests", body, hashlib.sha256).hexdigest()
+    bad = hmac.new(b"instagram-app-secret-tests", body, hashlib.sha256).hexdigest()
     assert verify_instagram_login_webhook_signature(body, f"sha256={good}")
     assert not verify_instagram_login_webhook_signature(body, f"sha256={bad}")
 

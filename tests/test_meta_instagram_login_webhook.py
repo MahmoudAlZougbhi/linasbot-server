@@ -82,12 +82,12 @@ def test_instagram_login_webhook_verify_token_requires_dedicated_secret(instagra
     assert not verify_instagram_login_challenge_token("verify-a-tests")
 
 
-def test_instagram_login_webhook_signature_uses_instagram_secret_only(instagram_env: None) -> None:
+def test_instagram_login_webhook_signature_uses_app_a_signing_secret(instagram_env: None) -> None:
     body = b'{"object":"instagram"}'
-    instagram_digest = hmac.new(b"instagram-app-secret-tests", body, hashlib.sha256).hexdigest()
     app_a_digest = hmac.new(b"app-a-secret-tests", body, hashlib.sha256).hexdigest()
-    assert verify_instagram_login_webhook_signature(body, f"sha256={instagram_digest}")
-    assert not verify_instagram_login_webhook_signature(body, f"sha256={app_a_digest}")
+    instagram_digest = hmac.new(b"instagram-app-secret-tests", body, hashlib.sha256).hexdigest()
+    assert verify_instagram_login_webhook_signature(body, f"sha256={app_a_digest}")
+    assert not verify_instagram_login_webhook_signature(body, f"sha256={instagram_digest}")
     assert not verify_instagram_login_webhook_signature(body, None)
 
 
