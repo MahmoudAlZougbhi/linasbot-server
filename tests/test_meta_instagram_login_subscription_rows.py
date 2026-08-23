@@ -128,6 +128,32 @@ def test_parse_ignores_top_level_ig_user_id_when_application_present(instagram_e
     assert snapshot == tuple(sorted(EXPECTED_FIELDS))
 
 
+def test_parse_accepts_ig_user_id_row_when_application_block_missing(instagram_env: None) -> None:
+    ig_user_id = "17841413184256533"
+    snapshot = parse_subscription_snapshot(
+        {
+            "data": [
+                {
+                    "id": ig_user_id,
+                    "subscribed_fields": EXPECTED_FIELDS,
+                }
+            ]
+        },
+        ig_user_id=ig_user_id,
+    )
+    assert snapshot == tuple(sorted(EXPECTED_FIELDS))
+
+
+def test_parse_ig_user_id_row_without_fields_still_fails_closed(instagram_env: None) -> None:
+    assert (
+        parse_subscription_snapshot(
+            {"data": [{"id": "17841413184256533"}]},
+            ig_user_id="17841413184256533",
+        )
+        is None
+    )
+
+
 @pytest.mark.asyncio
 async def test_read_requests_subscribed_fields_on_get(instagram_env: None) -> None:
     from services.meta_instagram_login_subscription_graph import (
