@@ -7,22 +7,48 @@ from typing import Any
 
 from services.tenant_runtime_config_service import load_sync_cursor, postgres_enabled, save_sync_cursor
 
+POSTS_BACKFILL_CURSOR_KEY = "posts_backfill"
+LEGACY_POSTS_CURSOR_KEY = "posts"
 
-def load_posts_cursor(binding_id: str) -> str | None:
+
+def load_posts_backfill_cursor(binding_id: str) -> str | None:
+    """Load the historical backfill cursor; recent posts are always fetched without a cursor."""
+
     if not postgres_enabled():
         return None
-    return load_sync_cursor(binding_id=binding_id, cursor_key="posts")
+    current = load_sync_cursor(binding_id=binding_id, cursor_key=POSTS_BACKFILL_CURSOR_KEY)
+    if current:
+        return current
+    legacy = load_sync_cursor(binding_id=binding_id, cursor_key=LEGACY_POSTS_CURSOR_KEY)
+    return legacy or None
+
+
+def save_posts_backfill_cursor(binding_id: str, cursor: str | None) -> None:
+    if not postgres_enabled():
+        return
+    value = cursor or ""
+    save_sync_cursor(
+        binding_id=binding_id,
+        cursor_key=POSTS_BACKFILL_CURSOR_KEY,
+        cursor_value=value,
+        expected_revision=None,
+    )
+    legacy = load_sync_cursor(binding_id=binding_id, cursor_key=LEGACY_POSTS_CURSOR_KEY)
+    if legacy:
+        save_sync_cursor(
+            binding_id=binding_id,
+            cursor_key=LEGACY_POSTS_CURSOR_KEY,
+            cursor_value="",
+            expected_revision=None,
+        )
+
+
+def load_posts_cursor(binding_id: str) -> str | None:
+    return load_posts_backfill_cursor(binding_id)
 
 
 def save_posts_cursor(binding_id: str, cursor: str | None) -> None:
-    if not postgres_enabled() or not cursor:
-        return
-    save_sync_cursor(
-        binding_id=binding_id,
-        cursor_key="posts",
-        cursor_value=cursor,
-        expected_revision=None,
-    )
+    save_posts_backfill_cursor(binding_id, cursor)
 
 
 def load_seen_comment_ids(binding_id: str, post_id: str) -> set[str]:
