@@ -163,6 +163,41 @@ def _row_matches_expected(
     return bool(ig_user_id and ig_user_id in identity_ids)
 
 
+def _row_is_identityless_with_fields(row: dict[str, Any]) -> bool:
+    """True when Meta returned webhook fields but omitted every recognizable id."""
+
+    if _fields_from_row(row) is None:
+        return False
+    return not _row_identity_ids(row)
+
+
+def _account_scoped_subscription_rows(
+    rows: list[Any],
+    *,
+    expected_ids: frozenset[str],
+    ig_user_id: str | None,
+) -> list[dict[str, Any]]:
+    """Match rows for GET /{ig_user_id}/subscribed_apps.
+
+    Meta sometimes returns one row with ``subscribed_fields`` but omits both
+    ``application`` and top-level ``id``. The endpoint is already scoped to one
+    professional account, so a sole identityless field-bearing row is trusted.
+    Rows that carry an unrecognized id still fail closed.
+    """
+
+    matching = [
+        row
+        for row in rows
+        if isinstance(row, dict) and _row_matches_expected(row, expected_ids=expected_ids, ig_user_id=ig_user_id)
+    ]
+    if matching or not ig_user_id:
+        return matching
+    field_rows = [row for row in rows if isinstance(row, dict) and _row_is_identityless_with_fields(row)]
+    if len(field_rows) == 1:
+        return field_rows
+    return []
+
+
 def _row_parse_diag(row: dict[str, Any]) -> str:
     fields = _fields_from_row(row)
     return (
@@ -181,11 +216,11 @@ def parse_subscription_snapshot(
     if not isinstance(rows, list):
         raise MetaOAuthError("Instagram webhook subscription rows could not be verified")
     expected_ids = expected_instagram_login_subscription_app_ids()
-    matching = [
-        row
-        for row in rows
-        if isinstance(row, dict) and _row_matches_expected(row, expected_ids=expected_ids, ig_user_id=ig_user_id)
-    ]
+    matching = _account_scoped_subscription_rows(
+        rows,
+        expected_ids=expected_ids,
+        ig_user_id=ig_user_id,
+    )
     selected = _select_matching_subscription_row(matching)
     if selected is None:
         diag = _row_parse_diag(rows[0]) if len(rows) == 1 and isinstance(rows[0], dict) else "row_shape=multi"
