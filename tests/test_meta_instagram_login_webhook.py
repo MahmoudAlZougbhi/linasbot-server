@@ -29,7 +29,7 @@ from services.meta_multi_app_router import resolve_registry_events
 INSTAGRAM_SCOPES = tuple(sorted(META_INSTAGRAM_LOGIN_REQUEST_SCOPES))
 
 
-def _signed_instagram_request(body: bytes, *, secret: str = "instagram-app-secret-tests") -> Request:
+def _signed_instagram_request(body: bytes, *, secret: str = "app-a-secret-tests") -> Request:
     sent = False
 
     async def receive() -> dict[str, Any]:
