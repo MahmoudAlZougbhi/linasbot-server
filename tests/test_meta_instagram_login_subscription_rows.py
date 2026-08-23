@@ -230,5 +230,8 @@ async def test_ensure_uses_instagram_graph_v26_not_facebook_v24(
     assert state.status == "ready"
     assert seen
     assert all(f"/{INSTAGRAM_LOGIN_GRAPH_API_VERSION}/{INSTAGRAM_ID}/subscribed_apps" in url for url in seen)
-    assert all("fields=application%7Bid%7D%2Csubscribed_fields" in url or "fields=application{id},subscribed_fields" in url for url in seen)
+    assert all(
+        "fields=application%7Bid%7D%2Csubscribed_fields" in url or "fields=application{id},subscribed_fields" in url
+        for url in seen
+    )
     assert all("/v24.0/" not in url for url in seen)
