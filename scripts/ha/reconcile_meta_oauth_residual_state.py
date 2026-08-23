@@ -72,9 +72,7 @@ def audit_tenant(tenant_id: str) -> dict[str, object]:
     active = [item for item in bindings if item.active]
     testing = [item for item in bindings if item.status == "testing"]
     cleanup_pending = [
-        item
-        for item in bindings
-        if item.webhook_subscription_status == INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS
+        item for item in bindings if item.webhook_subscription_status == INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS
     ]
     orphans = [item for item in bindings if instagram_login_orphan_cleanup_eligible(item)]
     live_creds = [item for item in bindings if registry.binding_credential_is_available(item.binding_id)]
