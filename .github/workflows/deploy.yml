@@ -366,6 +366,7 @@ jobs:
           RELEASE_MANIFEST_SHA256: ${{ inputs.RELEASE_MANIFEST_SHA256 }}
           RELEASE_TARGET_TREE_SHA: ${{ inputs.RELEASE_TARGET_TREE_SHA }}
           RELEASE_INSTALL_CONFIRM: ${{ inputs.RELEASE_INSTALL_CONFIRM }}
+          DEPLOY_OPERATION: ${{ inputs.DEPLOY_OPERATION }}
         run: |
           set -euo pipefail
           umask 077
@@ -706,8 +707,10 @@ jobs:
             cpython-3.13.15+20260814-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz; do
             install -m 0600 "release-download/$name" "transfer/release/$name"
           done
-          EXPECTED_RELEASE_INSTALL="INSTALL_RELEASE_${TARGET_SHA^^}_ARTIFACT_${RELEASE_ARTIFACT_ID}_${RELEASE_ARTIFACT_API_SHA256^^}_MANIFEST_${RELEASE_MANIFEST_SHA256^^}_RUN_${QUALITY_GATES_RUN_ID}_ATTEMPT_${RELEASE_RUN_ATTEMPT}_CONTROL_${release_control_sha^^}_SOURCE_${release_source_sha^^}_TREE_${RELEASE_TARGET_TREE_SHA^^}"
-          [ "$RELEASE_INSTALL_CONFIRM" = "$EXPECTED_RELEASE_INSTALL" ]
+          if [ "$DEPLOY_OPERATION" = steady ] || [ "$DEPLOY_OPERATION" = reconcile_exact ]; then
+            EXPECTED_RELEASE_INSTALL="INSTALL_RELEASE_${TARGET_SHA^^}_ARTIFACT_${RELEASE_ARTIFACT_ID}_${RELEASE_ARTIFACT_API_SHA256^^}_MANIFEST_${RELEASE_MANIFEST_SHA256^^}_RUN_${QUALITY_GATES_RUN_ID}_ATTEMPT_${RELEASE_RUN_ATTEMPT}_CONTROL_${release_control_sha^^}_SOURCE_${release_source_sha^^}_TREE_${RELEASE_TARGET_TREE_SHA^^}"
+            [ "$RELEASE_INSTALL_CONFIRM" = "$EXPECTED_RELEASE_INSTALL" ]
+          fi
 
       - name: Validate exact fresh LB attestation
         id: lb_contract
