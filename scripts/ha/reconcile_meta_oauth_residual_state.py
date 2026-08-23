@@ -12,20 +12,20 @@ REPO_DIR = Path(__file__).resolve().parents[2]
 if str(REPO_DIR) not in sys.path:
     sys.path.insert(0, str(REPO_DIR))
 
-from services.channel_capability_toggles import action_id_for, canonical_channel_bindings, supported_platforms
-from services.cm.storage import get_draft
-from services.cm.version_store import read_published_pointer
-from services.cm.atomic_io import read_json_object
-from services.cm.paths import versions_dir
-from services.meta_app_registry import get_meta_app_registry
-from services.meta_connection_disconnect import disconnect_meta_binding_set
-from services.meta_instagram_login_lifecycle import get_instagram_login_lifecycle
-from services.meta_instagram_login_subscription_recovery import (
+from services.channel_capability_toggles import action_id_for, canonical_channel_bindings, supported_platforms  # noqa: E402
+from services.cm.atomic_io import read_json_object  # noqa: E402
+from services.cm.paths import versions_dir  # noqa: E402
+from services.cm.storage import get_draft  # noqa: E402
+from services.cm.version_store import read_published_pointer  # noqa: E402
+from services.meta_app_registry import get_meta_app_registry  # noqa: E402
+from services.meta_connection_disconnect import disconnect_meta_binding_set  # noqa: E402
+from services.meta_instagram_login_lifecycle import get_instagram_login_lifecycle  # noqa: E402
+from services.meta_instagram_login_subscription import INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS  # noqa: E402
+from services.meta_instagram_login_subscription_recovery import (  # noqa: E402
     instagram_login_orphan_cleanup_eligible,
     retry_instagram_login_cleanup,
     retry_instagram_login_orphan_cleanup,
 )
-from services.meta_instagram_login_subscription import INSTAGRAM_LOGIN_CLEANUP_PENDING_STATUS
 
 
 def _published_actions(tenant_id: str) -> dict[str, bool]:
