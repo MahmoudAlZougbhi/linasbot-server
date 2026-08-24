@@ -376,10 +376,10 @@ jobs:
             print(f"[wa-phase1-ha] workers_restored=true node={node_id}")
             PY
               rm -f "$MAINTENANCE_FILE" "$PERSISTENT_MAINTENANCE_FILE"
-              rm -f "$META_HA_STATE_ROOT/prestage.authority.json" "$META_HA_STATE_ROOT/workers.before.json"
+              rm -f "$META_HA_STATE_ROOT/env.before" "$META_HA_STATE_ROOT/prestage.authority.json" "$META_HA_STATE_ROOT/workers.before.json"
               ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
                 "root@${PEER_HOST}" \
-                "rm -f /run/linasbot-maintenance '$META_HA_STATE_ROOT/maintenance' '$META_HA_STATE_ROOT/prestage.authority.json' '$META_HA_STATE_ROOT/workers.before.json'"
+                "rm -f /run/linasbot-maintenance '$META_HA_STATE_ROOT/maintenance' '$META_HA_STATE_ROOT/env.before' '$META_HA_STATE_ROOT/prestage.authority.json' '$META_HA_STATE_ROOT/workers.before.json'"
               bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
                 "$EXPECTED_RELEASE_SHA" cluster-release-only
               echo "${log_prefix} commit_via_restart COMPLETE_OK"
@@ -521,7 +521,8 @@ jobs:
               commit_staged_non_meta_env_via_restart "[wa-phase1-ha]"
               TRANSACTION_COMPLETE=true
               MAINTENANCE_ARMED=false
-              bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
+              bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
+                "$EXPECTED_RELEASE_SHA" cluster-release-only
               grant_linas_pilot_if_requested || true
               ready_ok=false
               for attempt in $(seq 1 24); do
@@ -546,6 +547,98 @@ jobs:
             PY
               echo "[wa-phase1-ha] COMPLETE_OK"
             }
+            phase1_flags_already_live() {
+              "$REPO_DIR/venv/bin/python" -I - <<'PY'
+            import sys
+            from pathlib import Path
+
+            sys.path.insert(0, "/opt/linasbot")
+            import scripts.ha.sync_meta_env_to_peer as sync
+
+            expected = {
+                "WHATSAPP_CLOUD_CONNECTION_UI_ENABLED": "true",
+                "WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED": "true",
+                "WHATSAPP_CLOUD_OUTBOUND_SENDS_ENABLED": "true",
+                "WHATSAPP_CLOUD_AI_REPLIES_ENABLED": "true",
+                "WHATSAPP_CLOUD_HISTORY_SYNC_ENABLED": "false",
+                "WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT": "true",
+                "WHATSAPP_CLOUD_PUBLIC_AVAILABILITY": "false",
+            }
+            state_root = Path("/var/lib/linasbot/meta-ha")
+            if sync._load_journal(state_root) is not None:
+                raise SystemExit(1)
+            worker_state = sync._load_worker_state(state_root)
+            if worker_state is not None and worker_state.get("status") == "quiesced":
+                raise SystemExit(1)
+            values = sync._read_meta_values(sync.ENV_PATH)
+            for key, want in expected.items():
+                if values.get(key) != want:
+                    raise SystemExit(1)
+            print("[wa-phase1-ha] coordinator_flags_live=true")
+            PY
+              ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                "root@${PEER_HOST}" \
+                "$REPO_DIR/venv/bin/python -I -" <<'PY'
+            import sys
+            from pathlib import Path
+
+            sys.path.insert(0, "/opt/linasbot")
+            import scripts.ha.sync_meta_env_to_peer as sync
+
+            expected = {
+                "WHATSAPP_CLOUD_CONNECTION_UI_ENABLED": "true",
+                "WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED": "true",
+                "WHATSAPP_CLOUD_OUTBOUND_SENDS_ENABLED": "true",
+                "WHATSAPP_CLOUD_AI_REPLIES_ENABLED": "true",
+                "WHATSAPP_CLOUD_HISTORY_SYNC_ENABLED": "false",
+                "WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT": "true",
+                "WHATSAPP_CLOUD_PUBLIC_AVAILABILITY": "false",
+            }
+            state_root = Path("/var/lib/linasbot/meta-ha")
+            if sync._load_journal(state_root) is not None:
+                raise SystemExit(1)
+            worker_state = sync._load_worker_state(state_root)
+            if worker_state is not None and worker_state.get("status") == "quiesced":
+                raise SystemExit(1)
+            values = sync._read_meta_values(sync.ENV_PATH)
+            for key, want in expected.items():
+                if values.get(key) != want:
+                    raise SystemExit(1)
+            print("[wa-phase1-ha] peer_flags_live=true")
+            PY
+            }
+            if phase1_flags_already_live; then
+              echo "[wa-phase1-ha] flags_already_live=true"
+              rm -f "$META_HA_STATE_ROOT/env.before"
+              ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                "root@${PEER_HOST}" \
+                "rm -f '$META_HA_STATE_ROOT/env.before'" || true
+              TRANSACTION_COMPLETE=true
+              MAINTENANCE_ARMED=false
+              grant_linas_pilot_if_requested || true
+              ready_ok=false
+              for attempt in $(seq 1 24); do
+                if curl -fsS http://127.0.0.1:8003/api/ready >/tmp/wa-ready.json; then
+                  ready_ok=true
+                  break
+                fi
+                sleep 5
+              done
+              if [ "$ready_ok" != "true" ]; then
+                echo "[wa-phase1-ha] public_ready_timeout=true" >&2
+                exit 1
+              fi
+              "$REPO_DIR/venv/bin/python" - <<'PY'
+            import json
+            data = json.load(open("/tmp/wa-ready.json"))
+            assert data.get("ok") is True, data
+            checks = data.get("checks") or {}
+            wa_db = ((checks.get("tiktok_business") or {}).get("config_keys_present") or {}).get("LINAS_WHATSAPP_DATABASE_URL")
+            assert wa_db is True, checks
+            print("[wa-phase1-ha] ready_ok=true whatsapp_db_present=true")
+            PY
+              echo "[wa-phase1-ha] COMPLETE_OK"
+            else
             MAINTENANCE_ARMED=true
             sudo install -d -m 0700 -o root -g root "$META_HA_STATE_ROOT"
             sudo install -m 0600 -o root -g root /dev/null "$PERSISTENT_MAINTENANCE_FILE"
@@ -723,6 +816,7 @@ jobs:
             PEERSTAGEEOF
             fi
             finalize_staged_phase1_transaction
+            fi
             if [ "${ENABLE_WEB_CHAT:-true}" = "true" ]; then
               export META_HA_STAGE_ONLY=true SKIP_MUTATION_LOCK=true
               if [ -f "$REPO_DIR/scripts/prod_apply_web_chat_public_ha.sh" ]; then
