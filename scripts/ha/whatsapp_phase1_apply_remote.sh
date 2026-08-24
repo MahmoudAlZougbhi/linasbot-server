@@ -3,9 +3,15 @@
 
 set -euo pipefail
 test "$(id -u)" -eq 0 && test "$(id -g)" -eq 0
-exec 9>/run/lock/linasbot-meta-live.lock
-flock -x 9
-export LINAS_PRODUCTION_MUTATION_LOCK_FD=9
+if [ "${SKIP_MUTATION_LOCK:-}" = "true" ]; then
+  :
+elif [ -n "${LINAS_PRODUCTION_MUTATION_LOCK_FD:-}" ]; then
+  :
+else
+  exec 9>/run/lock/linasbot-meta-live.lock
+  flock -x 9
+  export LINAS_PRODUCTION_MUTATION_LOCK_FD=9
+fi
 REPO_DIR=/opt/linasbot
 PEER_HOST="${LINAS_HA_PEER_HOST:-10.106.0.4}"
 DEPLOYED_RELEASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
@@ -117,15 +123,21 @@ if [ -z "${WORKFLOW_SCRIPT_SHA:-}" ]; then
   echo "[wa-phase1-ha] WORKFLOW_SCRIPT_SHA is required" >&2
   exit 1
 fi
-SCRIPT_BASE="https://raw.githubusercontent.com/MahmoudAlZougbhi/linasbot-server/${WORKFLOW_SCRIPT_SHA}"
-LIB_TMP="$(mktemp)"
-WEB_TMP="$(mktemp)"
-trap 'rm -f "$LIB_TMP" "$WEB_TMP"' EXIT
-curl -fsSL "$SCRIPT_BASE/scripts/ha/whatsapp_phase1_apply_lib.sh" -o "$LIB_TMP"
-curl -fsSL "$SCRIPT_BASE/scripts/ha/whatsapp_phase1_web_chat_apply.sh" -o "$WEB_TMP"
-# shellcheck source=/dev/null
-source "$LIB_TMP"
-export WHATSAPP_PHASE1_WEB_CHAT_LIB="$WEB_TMP"
+if [ -n "${WORKFLOW_SCRIPT_DIR:-}" ]; then
+  # shellcheck source=/dev/null
+  source "$WORKFLOW_SCRIPT_DIR/whatsapp_phase1_apply_lib.sh"
+  export WHATSAPP_PHASE1_WEB_CHAT_LIB="$WORKFLOW_SCRIPT_DIR/whatsapp_phase1_web_chat_apply.sh"
+else
+  SCRIPT_BASE="https://raw.githubusercontent.com/MahmoudAlZougbhi/linasbot-server/${WORKFLOW_SCRIPT_SHA}"
+  LIB_TMP="$(mktemp)"
+  WEB_TMP="$(mktemp)"
+  trap 'rm -f "$LIB_TMP" "$WEB_TMP"' EXIT
+  curl --connect-timeout 15 --max-time 120 -fsSL "$SCRIPT_BASE/scripts/ha/whatsapp_phase1_apply_lib.sh" -o "$LIB_TMP"
+  curl --connect-timeout 15 --max-time 120 -fsSL "$SCRIPT_BASE/scripts/ha/whatsapp_phase1_web_chat_apply.sh" -o "$WEB_TMP"
+  # shellcheck source=/dev/null
+  source "$LIB_TMP"
+  export WHATSAPP_PHASE1_WEB_CHAT_LIB="$WEB_TMP"
+fi
 stage_whatsapp_phase1_flags() {
   export EXPECTED_RELEASE_SHA META_HA_STAGE_ONLY
   /opt/linasbot/venv/bin/python -I /opt/linasbot/scripts/ha/sync_meta_env_to_peer.py \
