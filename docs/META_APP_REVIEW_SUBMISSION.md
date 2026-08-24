@@ -190,9 +190,14 @@ prove those live facts.
 - OAuth redirect: `https://www.linasaibot.com/oauth/instagram/callback`
 - Webhook callback: `https://www.linasaibot.com/webhook/instagram-login`
 - Data deletion: `https://www.linasaibot.com/oauth/instagram/data-deletion`
-  (**currently empty in Instagram Business Login settings**)
+  (**populate before submit —** `docs/META_DASHBOARD_COMPLIANCE_AND_DRAFT_CHECKLIST.md`)
 - Deauthorization: `https://www.linasaibot.com/oauth/instagram/deauthorize`
-  (**currently empty in Instagram Business Login settings**)
+  (**populate before submit —** same checklist)
+
+If Instagram/Facebook comment Graph reads return HTTP 200 with `"data": []` and no
+comment webhooks arrive for tester accounts, file Meta Support using
+`docs/META_SUPPORT_TICKET_COMMENTS_NOT_DELIVERED.md` before attempting comment
+App Review recordings.
 
 The live Dashboard confirms the Instagram OAuth redirect and dedicated webhook
 callback. `comments`, `messages`, and `messaging_postbacks` are subscribed at
@@ -250,7 +255,7 @@ Shared public URLs in the one form:
 Live draft `2964793000532428` currently mixes the ten desired social permissions
 with legacy `instagram_basic`, `instagram_manage_messages`,
 `instagram_manage_comments`, and unrelated WhatsApp requests. Do not submit it in
-that state.
+that state. **Cleanup steps:** `docs/META_DASHBOARD_COMPLIANCE_AND_DRAFT_CHECKLIST.md` § Part 2.
 
 Facebook evidence section:
 

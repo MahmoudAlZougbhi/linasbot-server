@@ -105,6 +105,15 @@ Facebook compliance callbacks, confirmed present in the live Dashboard:
 - Data deletion: `https://www.linasaibot.com/oauth/meta/data-deletion`
 - Deauthorization: `https://www.linasaibot.com/oauth/meta/deauthorize`
 
+**Owner checklist (Dashboard paste + draft cleanup):**
+`docs/META_DASHBOARD_COMPLIANCE_AND_DRAFT_CHECKLIST.md`
+
+**Comments delivery support ticket (no tokens):**
+`docs/META_SUPPORT_TICKET_COMMENTS_NOT_DELIVERED.md`
+
+**Verify live URLs before review:**
+`python scripts/verify_meta_compliance_urls.py`
+
 ### Instagram product domain — Instagram Login
 
 The Instagram connection starts at
@@ -130,15 +139,19 @@ Direct IG contract:
 - Professional-account `subscribed_apps` row: app ID `1035856539045307`
   with exactly `messages,messaging_postbacks,comments`
 - Data deletion: `https://www.linasaibot.com/oauth/instagram/data-deletion`
-  (**currently empty in Instagram Business Login settings**)
+  (**populate in Instagram Business Login settings — see checklist**)
 - Deauthorization: `https://www.linasaibot.com/oauth/instagram/deauthorize`
-  (**currently empty in Instagram Business Login settings**)
+  (**populate in Instagram Business Login settings — see checklist**)
+
+Dashboard steps: `docs/META_DASHBOARD_COMPLIANCE_AND_DRAFT_CHECKLIST.md` § Part 1C
 
 The Direct IG callback must not be configured as `/webhook/meta-messaging`.
 That route deliberately trusts App A/App B Facebook signatures, not the Direct
 IG secret.
 
 ### One App Review draft — cleanup required
+
+**Step-by-step:** `docs/META_DASHBOARD_COMPLIANCE_AND_DRAFT_CHECKLIST.md` § Part 2
 
 Live draft `2964793000532428` currently mixes the desired Facebook and Instagram
 permission families with legacy `instagram_basic`, `instagram_manage_messages`,
