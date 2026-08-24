@@ -2419,6 +2419,8 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
         detail = str(exc).strip()
+        if isinstance(exc, OSError) and not detail:
+            detail = f"errno={exc.errno} {exc.strerror or 'unknown'} path={exc.filename or '-'}"
         if detail:
             print(f"[meta-ha-env] failed={type(exc).__name__}: {detail}", file=sys.stderr)
         else:
