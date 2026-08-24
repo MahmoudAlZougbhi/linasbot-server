@@ -53,7 +53,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
-          script_stop: false
+          script_stop: true
           command_timeout: 22m
           envs: META_HA_STAGE_ONLY,GRANT_PILOT,ENABLE_WEB_CHAT
           script: |
@@ -819,10 +819,7 @@ jobs:
             fi
             if [ "${ENABLE_WEB_CHAT:-true}" = "true" ]; then
               export META_HA_STAGE_ONLY=true SKIP_MUTATION_LOCK=true
-              if [ -f "$REPO_DIR/scripts/prod_apply_web_chat_public_ha.sh" ]; then
-                bash "$REPO_DIR/scripts/prod_apply_web_chat_public_ha.sh"
-              else
-                bash -s <<'WEBINLINE'
+              bash -s <<'WEBINLINE'
             set -euo pipefail
             REPO_DIR=/opt/linasbot
             PEER_HOST="${LINAS_HA_PEER_HOST:-10.106.0.4}"
@@ -902,9 +899,9 @@ jobs:
             PY
             WEBPEERSTAGEEOF
             commit_staged_non_meta_env_via_restart "[web-chat-ha]"
-            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
+              "$EXPECTED_RELEASE_SHA" cluster-release-only
             echo "[web-chat-ha] COMPLETE_OK"
             WEBINLINE
-              fi
             fi
             echo "[prod-social-enable] COMPLETE_OK"
