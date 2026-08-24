@@ -63,6 +63,7 @@ jobs:
             flock -x 9
             export LINAS_PRODUCTION_MUTATION_LOCK_FD=9
             REPO_DIR=/opt/linasbot
+            PEER_HOST="${LINAS_HA_PEER_HOST:-10.106.0.4}"
             DEPLOYED_RELEASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
             export EXPECTED_RELEASE_SHA="$DEPLOYED_RELEASE_SHA"
             echo "[wa-phase1-ha] deployed_release_sha=${DEPLOYED_RELEASE_SHA}"
@@ -115,6 +116,58 @@ jobs:
                 print("[wa-phase1-ha] Meta HA script pin failed", file=sys.stderr)
                 raise SystemExit(1)
             print("[wa-phase1-ha] release_script_pin_ok=true")
+            PY
+            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+              "root@${PEER_HOST}" \
+              "$REPO_DIR/venv/bin/python -I -" <<'PY'
+            import subprocess
+            import sys
+            from pathlib import Path
+
+            repo = Path("/opt/linasbot")
+            sha = subprocess.check_output(
+                ["git", "-C", str(repo), "rev-parse", "HEAD"],
+                text=True,
+            ).strip()
+            changed = subprocess.check_output(
+                ["git", "-C", str(repo), "diff", "--name-only", sha],
+                text=True,
+            ).splitlines()
+            if changed:
+                print(
+                    f"[wa-phase1-ha] peer_deployed_tree_drift=true restoring={len(changed)} paths",
+                    flush=True,
+                )
+                for relative in changed:
+                    blob = subprocess.check_output(
+                        ["git", "-C", str(repo), "cat-file", "-p", f"{sha}:{relative}"],
+                    )
+                    destination = repo.joinpath(*Path(relative).parts)
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_bytes(blob)
+                subprocess.run(["git", "-C", str(repo), "add", "-u"], check=True)
+            if subprocess.run(
+                ["git", "-C", str(repo), "diff", "--quiet", sha],
+                check=False,
+            ).returncode or subprocess.run(
+                ["git", "-C", str(repo), "diff", "--cached", "--quiet", sha],
+                check=False,
+            ).returncode:
+                dirty = subprocess.check_output(
+                    ["git", "-C", str(repo), "diff", "--name-only", sha],
+                    text=True,
+                )
+                print(f"[wa-phase1-ha] peer_deployed_tree_still_dirty={dirty!r}", file=sys.stderr)
+                raise SystemExit(1)
+            script = "scripts/ha/sync_meta_env_to_peer.py"
+            live = (repo / script).read_bytes()
+            blob = subprocess.check_output(
+                ["git", "-C", str(repo), "cat-file", "-p", f"{sha}:{script}"],
+            )
+            if live != blob:
+                print("[wa-phase1-ha] peer Meta HA script pin failed", file=sys.stderr)
+                raise SystemExit(1)
+            print("[wa-phase1-ha] peer_release_script_pin_ok=true")
             PY
             stage_whatsapp_phase1_flags() {
               export EXPECTED_RELEASE_SHA META_HA_STAGE_ONLY
