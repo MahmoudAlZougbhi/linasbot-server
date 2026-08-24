@@ -122,6 +122,11 @@ def _normalize_file_state_for_postgres(state: dict[str, Any]) -> dict[str, Any]:
             "webhook_subscribed_fields": list(raw.get("webhook_subscribed_fields") or []),
             "webhook_subscription_error": str(raw.get("webhook_subscription_error") or ""),
             "webhook_subscription_checked_at": float(raw.get("webhook_subscription_checked_at") or 0),
+            "comment_permission_status": str(raw.get("comment_permission_status") or "unknown"),
+            "comment_permission_verified_at": float(raw.get("comment_permission_verified_at") or 0),
+            "comment_permission_source": str(raw.get("comment_permission_source") or ""),
+            "comment_permission_credential_id": str(raw.get("comment_permission_credential_id") or ""),
+            "comment_permission_token_fingerprint": str(raw.get("comment_permission_token_fingerprint") or ""),
         }
     for credential_key, raw in state["credentials"].items():
         if not isinstance(raw, dict):

@@ -327,6 +327,11 @@ class MetaAssetBinding:
     webhook_subscribed_fields: tuple[str, ...] = ()
     webhook_subscription_error: str = ""
     webhook_subscription_checked_at: float = 0.0
+    comment_permission_status: str = "unknown"
+    comment_permission_verified_at: float = 0.0
+    comment_permission_source: str = ""
+    comment_permission_credential_id: str = ""
+    comment_permission_token_fingerprint: str = ""
 
     @property
     def active(self) -> bool:
@@ -423,6 +428,13 @@ class MetaAssetBinding:
                 if self.auth_flow == "instagram_login"
                 else {}
             ),
+            "comment_permission": {
+                "status": self.comment_permission_status or "unknown",
+                "verified_at": self.comment_permission_verified_at,
+                "source": self.comment_permission_source,
+                "credential_id": self.comment_permission_credential_id,
+                "token_bound": bool(self.comment_permission_token_fingerprint),
+            },
             "asset_key": self.asset_key,
         }
 

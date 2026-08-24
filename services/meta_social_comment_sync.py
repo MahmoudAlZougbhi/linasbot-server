@@ -40,24 +40,29 @@ def _binding_by_id(registry: Any, binding_id: str) -> MetaAssetBinding | None:
 
 
 def _comment_reply_enabled(binding: MetaAssetBinding) -> bool:
-    from services.cm.actions import (
-        ACTION_FACEBOOK_COMMENTS,
-        ACTION_INSTAGRAM_COMMENTS,
-        action_enabled,
-        load_actions_section,
-    )
+    from services.cm.actions import comments_enforcement_decision
 
-    action_id = ACTION_FACEBOOK_COMMENTS if binding.channel == "facebook" else ACTION_INSTAGRAM_COMMENTS
-    actions = load_actions_section(binding.tenant_id)
-    if actions is not None and not action_enabled(actions, action_id):
-        return False
+    registry = get_meta_app_registry()
+    fresh = _binding_by_id(registry, binding.binding_id) or binding
     setting = get_comment_reply_setting(
-        tenant_id=binding.tenant_id,
-        app_key=binding.app_key,
-        channel=binding.channel,
-        asset_id=binding.asset_id,
+        tenant_id=fresh.tenant_id,
+        app_key=fresh.app_key,
+        channel=fresh.channel,
+        asset_id=fresh.asset_id,
     )
-    return bool(setting.enabled)
+    try:
+        credential = registry.get_credential(fresh)
+    except Exception:
+        return False
+    decision = comments_enforcement_decision(
+        tenant_id=fresh.tenant_id,
+        channel=fresh.channel,
+        per_asset_enabled=bool(setting.enabled),
+        binding=fresh,
+        credential=credential,
+        registry=registry,
+    )
+    return bool(decision["allow"])
 
 
 def _iter_facebook_comment_nodes(comments: list[dict[str, Any]], *, depth: int = 0) -> list[dict[str, Any]]:

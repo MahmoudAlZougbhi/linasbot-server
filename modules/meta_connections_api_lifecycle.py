@@ -447,16 +447,20 @@ async def update_meta_comment_replies(
     public = binding.public_dict()
     from services.cm.actions import comments_enforcement_decision
 
+    credential = registry.get_credential(binding)
     comment_decision = comments_enforcement_decision(
         tenant_id=binding.tenant_id,
         channel=binding.channel,
         per_asset_enabled=bool(updated_setting.enabled),
-        granted_scopes=None,
+        binding=binding,
+        credential=credential,
+        registry=registry,
     )
     public["comment_replies"] = {
         **updated_setting.public_dict(),
         "scopes_required": sorted(required_comment_scopes_for_binding(binding)),
-        "scopes_ready": credential_has_comment_scopes(binding, registry),
+        "scopes_ready": bool(comment_decision.get("permission", {}).get("status") == "verified_granted"),
+        "permission": comment_decision.get("permission") or {},
         "cm_action_enabled": bool(comment_decision["readiness"].get("cm_action_enabled")),
         "cm_enforcement_allow": bool(comment_decision["allow"]),
         "cm_enforcement_reason": comment_decision["reason"],

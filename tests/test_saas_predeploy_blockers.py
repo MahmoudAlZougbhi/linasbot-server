@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -137,7 +138,6 @@ async def test_handoff_url_reply_in_pipeline() -> None:
 def test_comments_action_gate_and_readiness() -> None:
     readiness = evaluate_comments_meta_readiness(
         channel="facebook",
-        granted_scopes={"pages_messaging"},
         cm_action_enabled=True,
         per_asset_switch_enabled=True,
     )
@@ -145,11 +145,43 @@ def test_comments_action_gate_and_readiness() -> None:
     assert readiness["live_verified"] is False
     assert "pages_manage_engagement" in readiness["scopes_missing"]
 
+    from services.meta_app_registry import MetaAssetBinding, MetaBindingCredential
+
+    binding = MetaAssetBinding(
+        binding_id="fb-test",
+        tenant_id="tenant-x",
+        channel="facebook",
+        asset_id="page-1",
+        page_id="page-1",
+        instagram_account_id="",
+        app_key="linas_first_party",
+        credential_id="cred-1",
+        status="active",
+        generation=1,
+        created_at=0.0,
+        updated_at=0.0,
+        auth_flow="facebook_login",
+        comment_permission_status="verified_granted",
+        comment_permission_verified_at=1.0,
+        comment_permission_source="oauth_stored_scopes",
+        comment_permission_credential_id="cred-1",
+        comment_permission_token_fingerprint="abc",
+    )
+    credential = MetaBindingCredential(
+        access_token="page-token",
+        token_app_id="2963733803971681",
+        token_profile_id="page-1",
+        scopes=("pages_read_user_content", "pages_manage_engagement", "pages_messaging"),
+        expires_at=int(time.time()) + 3600,
+        authorized_meta_user_id="user-1",
+        auth_flow="facebook_login",
+    )
     decision = comments_enforcement_decision(
         tenant_id="no_such_tenant_actions",
         channel="facebook",
         per_asset_enabled=True,
-        granted_scopes={"pages_read_user_content", "pages_manage_engagement"},
+        binding=binding,
+        credential=credential,
     )
     assert decision["allow"] is False
     assert decision["reason"] == "cm_action_disabled"

@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LONG_ID = "20260814_meta_credential_archived_at"
 WIDEN_ID = "20260814_widen_ver_num"
 MERGE_ID = "20260815_merge_sfu_meta_cred"
-HEAD_ID = "20260825_tenant_runtime_cfg"
+HEAD_ID = "20260826_meta_comment_perm"
 OLDER_HEAD = "20260812_meta_app_registry"
 SFU_HEAD = "20260813_sfu_channels_enabled"
 DEFAULT_ALEMBIC_PYTHON = Path("/tmp/linas-alembic-114/bin/python")
@@ -229,6 +229,10 @@ def test_fresh_and_older_head_postgres_can_stamp_the_long_revision(postgres_url:
     maxlen, current = _version_meta(postgres_url)
     assert maxlen == 64
     assert current == {HEAD_ID}
+
+    _alembic_ok(postgres_url, "downgrade", "-1")
+    maxlen, current = _version_meta(postgres_url)
+    assert current == {"20260825_tenant_runtime_cfg"}
 
     _alembic_ok(postgres_url, "downgrade", "-1")
     maxlen, current = _version_meta(postgres_url)

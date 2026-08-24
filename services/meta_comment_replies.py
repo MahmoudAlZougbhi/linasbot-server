@@ -323,14 +323,19 @@ async def process_meta_comment_event(
     )
 
     from services.cm.actions import comments_enforcement_decision
+    from services.meta_app_registry import get_meta_app_registry
 
-    # Scope readiness is reported via Meta connections API / evaluate_comments_meta_readiness.
-    # Webhook enforcement gates on published CM actions + per-asset switch (scopes enforced at enable-time).
+    try:
+        credential = get_meta_app_registry().get_credential(binding)
+    except Exception:
+        return CommentReplyResult(status="ignored", reason="credential_unavailable")
+
     decision = comments_enforcement_decision(
         tenant_id=binding.tenant_id,
         channel=binding.channel,
         per_asset_enabled=bool(reply_setting.enabled),
-        granted_scopes=None,
+        binding=binding,
+        credential=credential,
     )
     if not decision["allow"]:
         return CommentReplyResult(status="ignored", reason=str(decision["reason"]))

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -301,10 +302,45 @@ class MetaCommentProcessorTests(unittest.IsolatedAsyncioTestCase):
 
         replies_module._SENT_REPLY_IDS.clear()
         replies_module._RATE_BUCKETS.clear()
+        self._registry_patch = mock.patch("services.meta_app_registry.get_meta_app_registry")
+        self.mock_registry = self._registry_patch.start()
+        registry = mock.MagicMock()
+        registry.get_credential.return_value = MetaBindingCredential(
+            access_token="page-token",
+            token_app_id="2963733803971681",
+            token_profile_id="111",
+            scopes=(
+                "pages_messaging",
+                "pages_read_user_content",
+                "pages_manage_engagement",
+                "instagram_manage_comments",
+            ),
+            expires_at=int(time.time()) + 3600,
+            authorized_meta_user_id="meta-user",
+            auth_flow="facebook_login",
+        )
+        self.mock_registry.return_value = registry
 
     def tearDown(self):
+        self._registry_patch.stop()
         self._settings_patch.stop()
         self.tmp.cleanup()
+
+    def _verified_binding(self, **kwargs: object) -> MetaAssetBinding:
+        from services.meta_comment_permission_verification import comment_permission_token_fingerprint
+
+        binding = _binding(**kwargs)
+        token = "page-token"
+        return MetaAssetBinding(
+            **{
+                **binding.__dict__,
+                "comment_permission_status": "verified_granted",
+                "comment_permission_verified_at": time.time(),
+                "comment_permission_source": "oauth_stored_scopes",
+                "comment_permission_credential_id": binding.credential_id,
+                "comment_permission_token_fingerprint": comment_permission_token_fingerprint(token),
+            }
+        )
 
     async def test_toggle_off_skips_openai_and_reply(self):
         binding = _binding()
@@ -320,7 +356,7 @@ class MetaCommentProcessorTests(unittest.IsolatedAsyncioTestCase):
     )
     async def test_toggle_on_sends_one_public_reply(self, _manual_mock, generate_mock):
         generate_mock.return_value = "Thanks for your question."
-        binding = _binding()
+        binding = self._verified_binding()
         set_comment_reply_setting(
             tenant_id=binding.tenant_id,
             app_key=binding.app_key,
@@ -371,7 +407,7 @@ class MetaCommentProcessorTests(unittest.IsolatedAsyncioTestCase):
         "services.meta_comment_replies._comment_has_page_reply", new_callable=mock.AsyncMock, return_value=False
     )
     async def test_duplicate_comment_not_replied_twice(self, _manual_mock, _generate_mock):
-        binding = _binding()
+        binding = self._verified_binding()
         set_comment_reply_setting(
             tenant_id=binding.tenant_id,
             app_key=binding.app_key,
@@ -387,7 +423,7 @@ class MetaCommentProcessorTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second.reason, "already_replied")
 
     async def test_transient_reply_list_failure_never_generates_or_posts_duplicate(self):
-        binding = _binding()
+        binding = self._verified_binding()
         set_comment_reply_setting(
             tenant_id=binding.tenant_id,
             app_key=binding.app_key,
