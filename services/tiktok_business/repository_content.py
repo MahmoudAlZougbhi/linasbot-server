@@ -121,7 +121,11 @@ class TikTokContentRepository:
             or ""
         )[:128]
         row.author_username = str(
-            payload.get("username") or payload.get("display_name") or user.get("username") or user.get("display_name") or ""
+            payload.get("username")
+            or payload.get("display_name")
+            or user.get("username")
+            or user.get("display_name")
+            or ""
         )[:255]
         row.author_avatar_url = str(payload.get("profile_image") or user.get("profile_image") or "")[:1024]
         row.text = str(payload.get("text") or payload.get("comment") or "")[:8000]
