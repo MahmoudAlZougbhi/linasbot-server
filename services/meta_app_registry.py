@@ -20,7 +20,6 @@ import time
 
 from services.meta_app_registry_bindings import MetaAppRegistryBindingsMixin
 from services.meta_app_registry_comment_permissions import MetaAppRegistryCommentPermissionsMixin
-from services.meta_app_registry_oauth_authorize import MetaAppRegistryOAuthAuthorizeMixin
 from services.meta_app_registry_common import (
     APP_A_EXPECTED_ID,
     APP_A_KEY,
@@ -67,6 +66,7 @@ from services.meta_app_registry_common import (
 from services.meta_app_registry_deletion import MetaAppRegistryDeletionMixin
 from services.meta_app_registry_lifecycle import MetaAppRegistryLifecycleMixin
 from services.meta_app_registry_oauth import MetaAppRegistryOAuthMixin
+from services.meta_app_registry_oauth_authorize import MetaAppRegistryOAuthAuthorizeMixin
 from services.meta_app_registry_recovery import MetaAppRegistryRecoveryMixin
 
 __all__ = [
