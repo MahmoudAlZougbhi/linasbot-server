@@ -44,7 +44,13 @@ def main() -> int:
         _die("repo HEAD does not match LINAS_HA_VERIFY_RELEASE_SHA")
 
     blob = subprocess.run(
-        ["git", "-C", str(REPO), "rev-parse", f"{expected_sha}:scripts/backfill_meta_comment_permission_verification.py"],
+        [
+            "git",
+            "-C",
+            str(REPO),
+            "rev-parse",
+            f"{expected_sha}:scripts/backfill_meta_comment_permission_verification.py",
+        ],
         check=False,
         capture_output=True,
         text=True,
