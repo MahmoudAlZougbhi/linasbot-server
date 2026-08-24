@@ -27,13 +27,13 @@ def test_phase1_flags_script_keeps_public_off_and_does_not_enable_history() -> N
     assert '"WHATSAPP_CLOUD_PUBLIC_AVAILABILITY": "true"' not in source
 
 
-def test_phase1_github_workflow_stays_blocked_for_single_node_env() -> None:
-    """Repo HA guard contract only; does not apply or inspect production flags."""
+def test_phase1_github_workflow_uses_two_node_ha_transaction() -> None:
+    """WhatsApp Phase 1 apply uses the Meta HA env transaction pattern."""
 
     workflow = (ROOT / ".github/workflows/whatsapp-cloud-phase1-apply.yml").read_text(encoding="utf-8")
-    assert "BLOCKED" in workflow
-    assert "two-node" in workflow
-    assert "exit 1" in workflow
+    assert "BLOCKED" not in workflow
+    assert "two-node" in workflow.lower() or "Two-node" in workflow
+    assert "prod_stage_whatsapp_cloud_phase1_flags.sh" in workflow
     assert "scripts/prod_whatsapp_cloud_phase1_ops.sh" in guard.TWO_NODE_ENV_TRANSACTION_REQUIRED
 
 
@@ -71,3 +71,11 @@ def test_phase1_ops_script_rejects_unknown_mode() -> None:
     assert "exit 2" in source
     assert "APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY" in source
     assert "APPLY_WHATSAPP_CLOUD_PHASE1" in source
+
+
+def test_stage_script_requires_ha_transaction() -> None:
+    source = (ROOT / "scripts/prod_stage_whatsapp_cloud_phase1_flags.sh").read_text(encoding="utf-8")
+    assert 'META_HA_STAGE_ONLY:-}" != "true"' in source
+    assert "WHATSAPP_CLOUD_PUBLIC_AVAILABILITY" in source
+    assert "atomic_update_env" in source
+    assert "systemctl restart" not in source

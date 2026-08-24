@@ -34,6 +34,7 @@ META_ENV_LIVE_WORKFLOWS = (
     "meta-multi-app-secrets-apply.yml",
     "meta-social-secrets-apply.yml",
     "meta-webhook-nginx-setup.yml",
+    "whatsapp-cloud-phase1-apply.yml",
 )
 DISABLED_ENV_WORKFLOWS = (
     "copilot-v2-flags-apply.yml",
@@ -41,7 +42,6 @@ DISABLED_ENV_WORKFLOWS = (
     "model-routing-policy-apply.yml",
     "openai-api-key-apply.yml",
     "resend-secrets-apply.yml",
-    "whatsapp-cloud-phase1-apply.yml",
 )
 DISABLED_PRIVILEGED_WORKFLOWS = ("ha-infra-ssh-bootstrap.yml",)
 READ_ONLY_SSH_WORKFLOWS = (
