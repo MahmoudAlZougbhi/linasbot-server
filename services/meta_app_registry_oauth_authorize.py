@@ -21,6 +21,14 @@ from services.meta_app_registry_common import (
 
 
 class MetaAppRegistryOAuthAuthorizeMixin:
+    _append_audit: Any
+    _binding_from_dict: Any
+    _cipher: Any
+    _comment_permission_fields_for_binding: Any
+    _locked: Any
+    _read_unlocked: Any
+    _write_unlocked: Any
+
     def _write_credential_unlocked(
         self,
         state: dict[str, Any],

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, cast
 
 from services.meta_app_registry_common import (
     MetaAssetBinding,
@@ -14,6 +14,12 @@ from services.meta_app_registry_common import (
 
 class MetaAppRegistryCommentPermissionsMixin:
     """Persist token-bound comment permission verification on binding rows."""
+
+    _append_audit: Any
+    _binding_from_dict: Any
+    _locked: Any
+    _read_unlocked: Any
+    _write_unlocked: Any
 
     @staticmethod
     def _comment_permission_fields_for_binding(
@@ -67,7 +73,7 @@ class MetaAppRegistryCommentPermissionsMixin:
             changed["updated_at"] = now
             state["bindings"][target] = changed
             self._write_unlocked(state)
-            binding = self._binding_from_dict(changed)
+            binding = cast(MetaAssetBinding, self._binding_from_dict(changed))
             self._append_audit(
                 {
                     "event": "comment_permission_verified",
