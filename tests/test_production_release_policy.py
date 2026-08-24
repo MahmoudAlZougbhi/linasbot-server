@@ -93,6 +93,7 @@ REMOTE_WORKFLOWS = frozenset(
         "subscription-exempt-probe.yml",
         "wa-app-review-connection-source-migrate.yml",
         "wa-cloud-webhook-readonly-probe.yml",
+        "whatsapp-cloud-phase1-apply.yml",
     }
 )
 REMOTE_ACCESS = re.compile(

@@ -1,12 +1,21 @@
-name: BLOCKED - WhatsApp Cloud Phase 1 Apply Requires Two-Node HA
+# Two-node HA transaction: WhatsApp Cloud Phase 1 flags + optional pilot grant for linas.
+name: WhatsApp Cloud Phase 1 Apply
 
 on:
   workflow_dispatch:
     inputs:
       CONFIRM:
-        description: "Type APPLY_WHATSAPP_CLOUD_PHASE1 or APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY"
+        description: "Type APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY"
         required: true
         type: string
+      GRANT_PILOT:
+        description: "Grant pilot to tenant linas after flags (true/false)"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
 
 concurrency:
   group: meta-social-cutover
@@ -16,15 +25,125 @@ permissions:
   contents: read
 
 jobs:
-  blocked:
+  apply:
+    name: Apply WhatsApp Cloud Phase 1 flags (two-node)
     if: >-
-      github.event.inputs.CONFIRM == 'APPLY_WHATSAPP_CLOUD_PHASE1' ||
+      github.ref == 'refs/heads/main' &&
       github.event.inputs.CONFIRM == 'APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     environment: meta-social-cutover
     steps:
-      - name: Refuse node01-only environment mutation
-        run: |
-          echo "BLOCKED: WhatsApp phase-1 flags need an exact two-node env backup, sync, restart, worker proof, and rollback transaction." >&2
-          echo "Use the separately serialized connection_source migration workflow for its DB-only migration." >&2
-          exit 1
+      - name: Two-node WhatsApp Phase 1 flags (+ optional pilot)
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        env:
+          EXPECTED_RELEASE_SHA: ${{ github.sha }}
+          META_HA_STAGE_ONLY: "true"
+          GRANT_PILOT: ${{ github.event.inputs.GRANT_PILOT }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: false
+          command_timeout: 22m
+          envs: EXPECTED_RELEASE_SHA,META_HA_STAGE_ONLY,GRANT_PILOT
+          script: |
+            set -euo pipefail
+            test "$(id -u)" -eq 0 && test "$(id -g)" -eq 0
+            exec 9>/run/lock/linasbot-meta-live.lock
+            flock -x 9
+            export LINAS_PRODUCTION_MUTATION_LOCK_FD=9
+            REPO_DIR=/opt/linasbot
+            DEPLOYED_RELEASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
+            if [ "$DEPLOYED_RELEASE_SHA" != "$EXPECTED_RELEASE_SHA" ]; then
+              echo "[wa-phase1-ha] workflow SHA does not match deployed release" >&2
+              exit 1
+            fi
+            if ! git -C "$REPO_DIR" diff --quiet "$DEPLOYED_RELEASE_SHA" -- || \
+               ! git -C "$REPO_DIR" diff --cached --quiet "$DEPLOYED_RELEASE_SHA" --; then
+              echo "[wa-phase1-ha] deployed tracked files differ from release SHA" >&2
+              exit 1
+            fi
+            STAGE_SCRIPT="$REPO_DIR/scripts/prod_stage_whatsapp_cloud_phase1_flags.sh"
+            test -x "$STAGE_SCRIPT" || test -f "$STAGE_SCRIPT"
+            PEER_HOST="${LINAS_HA_PEER_HOST:-10.106.0.4}"
+            MAINTENANCE_FILE=/run/linasbot-maintenance
+            META_HA_STATE_ROOT=/var/lib/linasbot/meta-ha
+            PERSISTENT_MAINTENANCE_FILE="$META_HA_STATE_ROOT/maintenance"
+            ENV_BACKUP=""
+            MAINTENANCE_ARMED=false
+            TRANSACTION_COMPLETE=false
+            fail_closed_cleanup() {
+              status=$?
+              trap - EXIT
+              if [ "$TRANSACTION_COMPLETE" != "true" ]; then
+                status=1
+                if [ "$MAINTENANCE_ARMED" = "true" ]; then
+                  sudo install -d -m 0700 -o root -g root "$META_HA_STATE_ROOT" || true
+                  sudo install -m 0600 -o root -g root /dev/null "$PERSISTENT_MAINTENANCE_FILE" || true
+                  install -m 0600 /dev/null "$MAINTENANCE_FILE" || true
+                  ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                    "root@${PEER_HOST}" \
+                    "install -d -m 0700 -o root -g root '$META_HA_STATE_ROOT' && install -m 0600 -o root -g root /dev/null '$PERSISTENT_MAINTENANCE_FILE' && install -m 0600 -o root -g root /dev/null '$MAINTENANCE_FILE'" || true
+                  echo "[wa-phase1-ha] HA maintenance retained after uncertain transaction" >&2
+                fi
+                if [ -n "$ENV_BACKUP" ]; then
+                  echo "[wa-phase1-ha] exact pre-stage backup retained at $ENV_BACKUP" >&2
+                fi
+              else
+                sudo rm -f "$ENV_BACKUP"
+              fi
+              exit "$status"
+            }
+            trap fail_closed_cleanup EXIT
+            MAINTENANCE_ARMED=true
+            sudo install -d -m 0700 -o root -g root "$META_HA_STATE_ROOT"
+            sudo install -m 0600 -o root -g root /dev/null "$PERSISTENT_MAINTENANCE_FILE"
+            sudo install -m 0600 -o root -g root /dev/null "$MAINTENANCE_FILE"
+            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+              "root@${PEER_HOST}" \
+              "install -d -m 0700 -o root -g root '$META_HA_STATE_ROOT' && install -m 0600 -o root -g root /dev/null '$PERSISTENT_MAINTENANCE_FILE' && install -m 0600 -o root -g root /dev/null '$MAINTENANCE_FILE'"
+            test "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 \
+              http://127.0.0.1:8003/api/ready || true)" = "503"
+            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+              "root@${PEER_HOST}" \
+              "test \"\$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8003/api/ready || true)\" = \"503\""
+            DRAIN_SECONDS="$("$REPO_DIR/venv/bin/python" -c 'import sys; from dotenv import dotenv_values; value = int(str(dotenv_values(sys.argv[1], interpolate=False).get("META_HA_LB_DRAIN_SECONDS") or "")); sys.exit("invalid HA drain interval") if not 30 <= value <= 300 else print(value)' "$REPO_DIR/.env")"
+            sleep "$DRAIN_SECONDS"
+            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+              --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --recover-only
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
+              "$EXPECTED_RELEASE_SHA" cluster-release-only
+            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+              --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --register-prestage-backup
+            ENV_BACKUP="$META_HA_STATE_ROOT/env.before"
+            bash "$STAGE_SCRIPT"
+            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+              "root@${PEER_HOST}" \
+              "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true LINAS_PRODUCTION_MUTATION_LOCK_FD=9; bash '$STAGE_SCRIPT'"
+            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+              --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active \
+              --local-prestage-backup "$ENV_BACKUP"
+            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+              --expected-sha "$EXPECTED_RELEASE_SHA" --finalize
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
+            if [ "${GRANT_PILOT:-true}" = "true" ]; then
+              "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/prod_grant_whatsapp_pilot.py" \
+                --tenant-id linas \
+                --reason "Internal WhatsApp coexistence pilot after Phase 1 flags" \
+                --granted-by production_ops
+            fi
+            curl -fsS https://linasaibot.com/api/ready >/tmp/wa-ready.json
+            "$REPO_DIR/venv/bin/python" - <<'PY'
+            import json
+            data = json.load(open("/tmp/wa-ready.json"))
+            assert data.get("ok") is True, data
+            checks = data.get("checks") or {}
+            wa_db = ((checks.get("tiktok_business") or {}).get("config_keys_present") or {}).get("LINAS_WHATSAPP_DATABASE_URL")
+            assert wa_db is True, checks
+            print("[wa-phase1-ha] ready_ok=true whatsapp_db_present=true")
+            PY
+            TRANSACTION_COMPLETE=true
+            MAINTENANCE_ARMED=false
+            echo "[wa-phase1-ha] COMPLETE_OK"
