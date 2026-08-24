@@ -259,6 +259,48 @@ jobs:
             PY
             STAGEEOF
             fi
+            "$REPO_DIR/venv/bin/python" -I - <<'PY'
+            import os
+            import traceback
+            from pathlib import Path
+
+            import sys
+
+            sys.path.insert(0, "/opt/linasbot")
+            import scripts.ha.sync_meta_env_to_peer as sync
+
+            state_root = Path("/var/lib/linasbot/meta-ha")
+            backup = state_root / "env.before"
+            expected_sha = os.environ["EXPECTED_RELEASE_SHA"]
+            checks = {
+                "backup_exists": lambda: backup.exists(),
+                "backup_read": lambda: backup.read_bytes(),
+                "runtime_meta": lambda: sync._read_runtime_meta_values(sync.LOCAL_NODE_ID),
+                "backup_meta": lambda: sync._read_meta_values(backup),
+                "samefile_self": lambda: backup.samefile(backup),
+                "journal_absent": lambda: sync._load_journal(state_root),
+                "stage_authority": lambda: sync._require_stage_authority(
+                    state_root,
+                    expected_sha=expected_sha,
+                    require_preimage=False,
+                ),
+            }
+            for name, fn in checks.items():
+                try:
+                    result = fn()
+                    if name == "journal_absent":
+                        print(f"[wa-phase1-commit-preflight] {name}={result is None}")
+                    else:
+                        print(f"[wa-phase1-commit-preflight] {name}=ok")
+                except Exception as exc:
+                    print(
+                        f"[wa-phase1-commit-preflight] {name}={type(exc).__name__}:{exc}",
+                        file=sys.stderr,
+                    )
+                    traceback.print_exc()
+                    raise SystemExit(1) from exc
+            print("[wa-phase1-commit-preflight] COMPLETE_OK")
+            PY
             "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
               --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active \
               --local-prestage-backup "$ENV_BACKUP"

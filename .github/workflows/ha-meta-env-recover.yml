@@ -73,7 +73,18 @@ jobs:
             fi
             bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
               "$EXPECTED_RELEASE_SHA" cluster-release-only
-            curl -fsS https://www.linasaibot.com/api/ready >/tmp/meta-ha-recover-ready.json
+            ready_ok=false
+            for attempt in $(seq 1 24); do
+              if curl -fsS https://www.linasaibot.com/api/ready >/tmp/meta-ha-recover-ready.json; then
+                ready_ok=true
+                break
+              fi
+              sleep 5
+            done
+            if [ "$ready_ok" != "true" ]; then
+              echo "[meta-ha-recover] public_ready_timeout=true" >&2
+              exit 1
+            fi
             "$REPO_DIR/venv/bin/python" - <<'PY'
             import json
 
