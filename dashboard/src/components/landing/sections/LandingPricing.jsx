@@ -128,9 +128,10 @@ export default function LandingPricing() {
         <div className="mt-8 flex items-start gap-3 rounded-2xl bg-[#E8F4F8] px-5 py-4 text-sm text-[#171A19]">
           <LinasStar className="mt-0.5 h-5 w-5" />
           <p>
-            <span className="font-semibold">Smart Answers save credits. </span>
-            Reusable saved Q&A can answer similar customer questions without generating a new AI reply. They are not a
-            limit on AI conversations.
+            <span className="font-semibold">Smart Answers are free replies. </span>
+            When a saved Q&amp;A matches, the reply uses 0 credits. Write it once and it applies in every language you
+            select. The more Q&amp;As you save, the more customer replies stay free. They are not a limit on AI
+            conversations.
           </p>
         </div>
 

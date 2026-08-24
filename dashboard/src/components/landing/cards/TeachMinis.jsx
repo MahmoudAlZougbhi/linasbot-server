@@ -14,9 +14,9 @@ export function TeachAiSetup({ play }) {
       </div>
       <ul className="mt-3 space-y-2 text-sm text-[#171A19]">
         {[
-          { label: 'Languages', delay: '0ms', on: true },
+          { label: 'Style', delay: '0ms', on: true },
           { label: 'Opening Hours', delay: '180ms', on: true },
-          { label: 'Off Days', delay: '360ms', on: false },
+          { label: 'AI Basic', delay: '360ms', on: false },
         ].map((row) => (
           <li key={row.label} className="flex items-center justify-between">
             <span>{row.label}</span>
@@ -114,9 +114,12 @@ export function TeachServices({ play }) {
 export function TeachProducts({ play }) {
   return (
     <MiniFrame play={play}>
-      <div className="lp-fade-up mx-auto h-16 w-12 rounded-xl bg-gradient-to-b from-[#54C7AC] to-[#06715F]" />
-      <p className="mt-2 text-center text-xs font-semibold text-[#171A19]">Hydra Calm Serum</p>
-      <p className="text-center text-xs text-[#06715F]">$59</p>
+      <img
+        src="/brand/landing/product-serum.jpg"
+        alt=""
+        className="lp-fade-up mx-auto h-20 w-16 rounded-xl object-cover"
+      />
+      <p className="mt-2 text-center text-xs text-[#06715F]">$59</p>
       <div className="mt-2 flex justify-center gap-1.5">
         {['#06715F', '#C5CDCA', '#E4E8E6', '#8A938F'].map((c, i) => (
           <span

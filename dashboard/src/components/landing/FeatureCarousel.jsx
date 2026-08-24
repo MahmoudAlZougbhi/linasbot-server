@@ -1,11 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { useFeatureCarousel } from '../../hooks/useFeatureCarousel';
-import { useMediaQuery } from '../../hooks/usePrefersReducedMotion';
 import LinasStar from './LinasStar';
 import { CardHead } from './cards/MiniFrame';
 
 const CARD_PX = 280;
 const GAP_PX = 16;
+
+/**
+ * @param {number} from
+ * @param {number} to
+ * @param {number} n
+ */
+function shortestDelta(from, to, n) {
+  let delta = to - from;
+  if (delta > n / 2) delta -= n;
+  if (delta < -n / 2) delta += n;
+  return delta;
+}
 
 /**
  * @param {{
@@ -18,17 +29,25 @@ const GAP_PX = 16;
  * }} props
  */
 export default function FeatureCarousel({ id, kicker, title, accent, subtitle, cards }) {
-  const { index, go, next, prev, pause, resume, reduced } = useFeatureCarousel(cards.length, 2);
-  const mobile = useMediaQuery('(max-width: 767px)');
+  const n = cards.length;
+  const { index, go, next, prev, pause, resume, reduced } = useFeatureCarousel(n, 2);
   const outerRef = useRef(/** @type {HTMLDivElement | null} */ (null));
-  const trackRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const startX = useRef(0);
+  const lastIndex = useRef(index);
   const [width, setWidth] = useState(0);
+  const [cardW, setCardW] = useState(CARD_PX);
+  const [loopIndex, setLoopIndex] = useState(n + index);
+  const [snap, setSnap] = useState(false);
+  const slides = [...cards, ...cards, ...cards];
 
   useEffect(() => {
     const el = outerRef.current;
     if (!el) return undefined;
-    const sync = () => setWidth(el.clientWidth);
+    const sync = () => {
+      setWidth(el.clientWidth);
+      const first = el.querySelector('[data-lp-card]');
+      if (first instanceof HTMLElement) setCardW(first.offsetWidth);
+    };
     sync();
     const ro = new ResizeObserver(sync);
     ro.observe(el);
@@ -36,37 +55,38 @@ export default function FeatureCarousel({ id, kicker, title, accent, subtitle, c
   }, []);
 
   useEffect(() => {
-    if (!mobile) return;
-    const node = trackRef.current?.children[index];
-    if (node instanceof HTMLElement) {
-      node.scrollIntoView({ inline: 'center', block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
-    }
-  }, [index, mobile, reduced]);
+    if (index === lastIndex.current) return;
+    const delta = shortestDelta(lastIndex.current, index, n);
+    lastIndex.current = index;
+    setLoopIndex((current) => current + delta);
+  }, [index, n]);
 
-  const onScroll = () => {
-    if (!mobile || !trackRef.current || !outerRef.current) return;
-    const kids = [...trackRef.current.children];
-    const mid = outerRef.current.scrollLeft + outerRef.current.clientWidth / 2;
-    let best = 0;
-    let dist = Infinity;
-    kids.forEach((child, i) => {
-      if (!(child instanceof HTMLElement)) return;
-      const c = child.offsetLeft + child.offsetWidth / 2;
-      const d = Math.abs(c - mid);
-      if (d < dist) {
-        dist = d;
-        best = i;
-      }
+  useEffect(() => {
+    if (!snap) return undefined;
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setSnap(false));
     });
-    if (best !== index) go(best, true);
-  };
+    return () => cancelAnimationFrame(id);
+  }, [snap]);
 
-  const x = width / 2 - CARD_PX / 2 - index * (CARD_PX + GAP_PX);
+  useEffect(() => {
+    if (n <= 0) return undefined;
+    if (loopIndex < n || loopIndex >= n * 2) {
+      const id = window.setTimeout(() => {
+        setSnap(true);
+        setLoopIndex(((loopIndex % n) + n) % n + n);
+      }, reduced ? 0 : 420);
+      return () => window.clearTimeout(id);
+    }
+    return undefined;
+  }, [loopIndex, n, reduced]);
+
+  const x = width / 2 - cardW / 2 - loopIndex * (cardW + GAP_PX);
 
   return (
     <section
       id={id}
-      className="scroll-mt-24 overflow-hidden py-16 sm:py-20"
+      className="scroll-mt-24 py-16 sm:py-20"
       tabIndex={0}
       onKeyDown={(event) => {
         if (event.key === 'ArrowRight') {
@@ -78,12 +98,6 @@ export default function FeatureCarousel({ id, kicker, title, accent, subtitle, c
           prev();
         }
       }}
-      onMouseEnter={pause}
-      onMouseLeave={resume}
-      onFocusCapture={pause}
-      onBlurCapture={resume}
-      onTouchStart={pause}
-      onTouchEnd={resume}
     >
       <div className="mx-auto max-w-6xl px-4 text-center sm:px-6">
         <p className="flex items-center justify-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[#06715F]">
@@ -96,61 +110,67 @@ export default function FeatureCarousel({ id, kicker, title, accent, subtitle, c
         <p className="mx-auto mt-3 max-w-2xl text-base text-[#6B746F]">{subtitle}</p>
       </div>
 
-      <div className="relative mx-auto mt-10">
-        <button type="button" onClick={prev} className="absolute left-3 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-[#E4E8E6] bg-white text-xl text-[#06715F] shadow-sm md:flex" aria-label="Previous capability">
+      <div className="relative mx-auto mt-4">
+        <button
+          type="button"
+          onClick={prev}
+          className="absolute left-3 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-[#E4E8E6] bg-white text-xl text-[#06715F] shadow-sm md:flex"
+          aria-label="Previous capability"
+        >
           ‹
         </button>
-        <button type="button" onClick={next} className="absolute right-3 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-[#E4E8E6] bg-white text-xl text-[#06715F] shadow-sm md:flex" aria-label="Next capability">
+        <button
+          type="button"
+          onClick={next}
+          className="absolute right-3 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-[#E4E8E6] bg-white text-xl text-[#06715F] shadow-sm md:flex"
+          aria-label="Next capability"
+        >
           ›
         </button>
 
         <div
           ref={outerRef}
-          className={`lp-hide-scroll ${mobile ? 'snap-x snap-mandatory overflow-x-auto px-4 pb-3' : 'overflow-hidden px-4 md:px-16'}`}
-          onScroll={mobile ? onScroll : undefined}
-          onPointerDown={(e) => {
-            startX.current = e.clientX;
+          className="overflow-x-hidden px-4 py-12 md:px-16"
+          onMouseEnter={pause}
+          onMouseLeave={resume}
+          onFocusCapture={pause}
+          onBlurCapture={resume}
+          onPointerDown={(event) => {
+            startX.current = event.clientX;
             pause();
           }}
-          onPointerUp={(e) => {
-            const dx = e.clientX - startX.current;
-            if (!mobile) {
-              if (dx > 50) prev();
-              else if (dx < -50) next();
-            }
+          onPointerUp={(event) => {
+            const dx = event.clientX - startX.current;
+            if (dx > 50) prev();
+            else if (dx < -50) next();
             resume();
           }}
         >
           <div
-            ref={trackRef}
-            className="flex items-stretch gap-4"
-            style={
-              mobile
-                ? undefined
-                : {
-                    transform: `translateX(${x}px)`,
-                    transition: reduced ? 'none' : 'transform 420ms cubic-bezier(.22,1,.36,1)',
-                  }
-            }
+            className="flex items-center gap-4"
+            style={{
+              transform: `translateX(${x}px)`,
+              transition: snap || reduced ? 'none' : 'transform 420ms cubic-bezier(.22,1,.36,1)',
+            }}
           >
-            {cards.map((card, i) => {
-              const active = i === index;
+            {slides.map((card, i) => {
+              const active = i === loopIndex;
               const Mini = card.Mini;
               return (
                 <article
-                  key={card.id}
+                  key={`${card.id}-${i}`}
+                  data-lp-card=""
                   className={`w-[84vw] max-w-[20rem] shrink-0 rounded-[1.6rem] border bg-white p-5 md:w-[280px] md:max-w-none ${
-                    mobile ? 'snap-center' : ''
-                  } ${active ? 'border-[#06715F]/30 shadow-xl shadow-[#06715F]/10' : 'border-[#E6EBE8] shadow-sm'}`}
-                  style={
-                    mobile
-                      ? undefined
-                      : {
-                          transform: `scale(${active ? 1.16 : 0.94})`,
-                          opacity: active ? 1 : 0.78,
-                          transition: reduced ? 'opacity 120ms linear' : 'transform 420ms cubic-bezier(.22,1,.36,1), opacity 420ms cubic-bezier(.22,1,.36,1)',
-                        }
-                  }
+                    active ? 'z-10 border-[#06715F]/30 shadow-xl shadow-[#06715F]/10' : 'border-[#E6EBE8] shadow-sm'
+                  }`}
+                  style={{
+                    transform: `scale(${active ? 1.18 : 0.94})`,
+                    opacity: active ? 1 : 0.78,
+                    transition:
+                      snap || reduced
+                        ? 'none'
+                        : 'transform 420ms cubic-bezier(.22,1,.36,1), opacity 420ms cubic-bezier(.22,1,.36,1)',
+                  }}
                   aria-hidden={!active}
                   aria-current={active ? 'true' : undefined}
                 >
@@ -163,7 +183,7 @@ export default function FeatureCarousel({ id, kicker, title, accent, subtitle, c
         </div>
       </div>
 
-      <div className="mt-8 flex flex-col items-center gap-3">
+      <div className="mt-2 flex flex-col items-center gap-3">
         <div className="flex items-center gap-2">
           {cards.map((card, i) => (
             <button

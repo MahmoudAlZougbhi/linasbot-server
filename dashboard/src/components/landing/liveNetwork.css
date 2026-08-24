@@ -1,0 +1,83 @@
+.lp-net {
+  --lp-mint: #54c7ac;
+  --lp-neon: #3dffc2;
+  --lp-ink: #06715f;
+  position: relative;
+  min-height: 15.5rem;
+  min-width: 0;
+}
+
+.lp-net-svg {
+  display: block;
+  height: 15.5rem;
+  width: 100%;
+  overflow: visible;
+}
+
+.lp-net-line {
+  fill: none;
+  stroke: var(--lp-mint);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-dasharray: 3.2 5.2;
+  opacity: 0.88;
+}
+
+.lp-net-chip {
+  fill: #fff;
+  stroke: var(--lp-mint);
+  stroke-width: 0.9;
+  filter: drop-shadow(0 1px 2px rgba(6, 113, 95, 0.12));
+}
+
+.lp-net-glow {
+  fill: var(--lp-neon);
+  filter: drop-shadow(0 0 3px var(--lp-neon));
+}
+
+.lp-net-num {
+  background-color: var(--lp-ink);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Crect width='12' height='12' fill='%2306715F'/%3E%3Cpath d='M2.2 3.1h5.2a1.5 1.5 0 0 1 1.5 1.5v2.2a1.5 1.5 0 0 1-1.5 1.5H5.1L3 9.7V8.3H2.2A1.5 1.5 0 0 1 .7 6.8V4.6A1.5 1.5 0 0 1 2.2 3.1z' fill='%23c9f8e8' opacity='.72'/%3E%3C/svg%3E");
+  background-size: 11px 11px;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.lp-net-orb {
+  animation: lp-net-breathe 2.5s ease-in-out infinite;
+}
+
+.lp-net-orb-glow {
+  animation: lp-net-halo 2.5s ease-in-out infinite;
+}
+
+@keyframes lp-net-breathe {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.07);
+  }
+}
+
+@keyframes lp-net-halo {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-net-orb,
+  .lp-net-orb-glow {
+    animation: none !important;
+  }
+}

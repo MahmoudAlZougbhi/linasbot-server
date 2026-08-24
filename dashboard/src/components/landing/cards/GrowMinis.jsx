@@ -50,23 +50,27 @@ export function GrowRequests({ play }) {
 export function GrowSmartAnswers({ play }) {
   return (
     <MiniFrame play={play}>
-      <p className="text-[0.65rem] text-[#8A938F]">Question</p>
-      <p className="text-xs text-[#171A19]">How much is a full body session?</p>
-      <p className="mt-2 text-[0.65rem] text-[#8A938F]">Answer</p>
-      <p className="text-xs font-semibold text-[#171A19]">Full body is $299.</p>
-      <div className="mt-2 flex gap-1">
+      <p className="text-[0.6rem] font-semibold uppercase tracking-wide text-[#06715F]">Write once</p>
+      <p className="mt-1 text-xs leading-snug text-[#171A19]">
+        I tanned yesterday — can I still do full-body laser? How much is it?
+      </p>
+      <p className="mt-2 text-xs font-semibold leading-snug text-[#171A19]">
+        Full body is $299. Wait until the tan fades — then I can book you.
+      </p>
+      <p className="mt-2 text-[0.6rem] text-[#5C6663]">Auto in every language you select</p>
+      <div className="mt-1 flex flex-wrap gap-1">
         {['EN', 'AR', 'FR', 'Arabizi'].map((code, i) => (
           <span
             key={code}
-            className={`lp-fade-up rounded-full px-2 py-0.5 text-[0.6rem] font-semibold ${code === 'EN' ? 'bg-[#06715F] text-white' : 'bg-white text-[#5C6663]'}`}
-            style={{ animationDelay: `${800 + i * 120}ms` }}
+            className="lp-fade-up rounded-full bg-[#06715F] px-2 py-0.5 text-[0.6rem] font-semibold text-white"
+            style={{ animationDelay: `${700 + i * 100}ms` }}
           >
             {code}
           </span>
         ))}
       </div>
-      <p className="lp-fade-up mt-2 text-[0.65rem] font-semibold text-[#06715F]" style={{ animationDelay: '1400ms' }}>
-        92% similar · Saved answer used
+      <p className="lp-fade-up mt-2 text-[0.65rem] font-semibold text-[#06715F]" style={{ animationDelay: '1300ms' }}>
+        0 credits · Free reply · More Q&amp;As, more free replies
       </p>
     </MiniFrame>
   );

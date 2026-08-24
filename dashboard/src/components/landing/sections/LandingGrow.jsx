@@ -23,7 +23,8 @@ export default function LandingGrow({ stats }) {
       {
         id: 'smart-answers',
         title: 'Smart Answers',
-        description: 'Reuse trusted answers for similar questions and spend fewer credits.',
+        description:
+          'Matched replies cost 0 credits — they are free. Write a Q&A once for every language you select. The more Q&As you save, the more replies stay free.',
         core: true,
         Mini: GrowSmartAnswers,
       },
