@@ -31,12 +31,15 @@ def test_phase1_github_workflow_uses_two_node_ha_transaction() -> None:
     """WhatsApp Phase 1 apply uses the Meta HA env transaction pattern."""
 
     workflow = (ROOT / ".github/workflows/whatsapp-cloud-phase1-apply.yml").read_text(encoding="utf-8")
+    remote = (ROOT / "scripts/ha/whatsapp_phase1_apply_remote.sh").read_text(encoding="utf-8")
+    lib = (ROOT / "scripts/ha/whatsapp_phase1_apply_lib.sh").read_text(encoding="utf-8")
+    combined = workflow + remote + lib
     assert "BLOCKED" not in workflow
     assert "two-node" in workflow.lower() or "Two-node" in workflow
-    assert "prod_stage_whatsapp_cloud_phase1_flags.sh" in workflow
+    assert "prod_stage_whatsapp_cloud_phase1_flags.sh" in combined
     assert "scripts/prod_whatsapp_cloud_phase1_ops.sh" in guard.TWO_NODE_ENV_TRANSACTION_REQUIRED
-    recovery = workflow.index("--recover-only")
-    registration = workflow.index("--register-prestage-backup")
+    recovery = combined.index("--recover-only")
+    registration = combined.index("--register-prestage-backup")
     assert recovery < registration
     assert "clearing_orphan_maintenance_before_apply" not in workflow
 
