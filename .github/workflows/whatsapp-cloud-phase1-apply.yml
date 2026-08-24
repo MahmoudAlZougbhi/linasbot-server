@@ -521,7 +521,8 @@ jobs:
               commit_staged_non_meta_env_via_restart "[wa-phase1-ha]"
               TRANSACTION_COMPLETE=true
               MAINTENANCE_ARMED=false
-              bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
+              bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
+                "$EXPECTED_RELEASE_SHA" cluster-release-only
               grant_linas_pilot_if_requested || true
               ready_ok=false
               for attempt in $(seq 1 24); do
