@@ -1,57 +1,102 @@
+import { useId } from 'react';
+
+/**
+ * @param {{ className?: string }} props
+ */
 export function IgIcon({ className = 'h-5 w-5' }) {
+  const uid = useId().replace(/:/g, '');
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <rect width="24" height="24" rx="7" fill="url(#lp-ig)" />
-      <rect x="6" y="6" width="12" height="12" rx="4" fill="none" stroke="#fff" strokeWidth="1.6" />
-      <circle cx="12" cy="12" r="3.1" fill="none" stroke="#fff" strokeWidth="1.6" />
-      <circle cx="16.4" cy="7.6" r="1" fill="#fff" />
+      <rect width="24" height="24" rx="6.5" fill={`url(#${uid}-ig)`} />
+      <rect x="5.6" y="5.6" width="12.8" height="12.8" rx="4.2" fill="none" stroke="#fff" strokeWidth="1.7" />
+      <circle cx="12" cy="12" r="3.35" fill="none" stroke="#fff" strokeWidth="1.7" />
+      <circle cx="16.55" cy="7.45" r="1.05" fill="#fff" />
       <defs>
-        <linearGradient id="lp-ig" x1="4" y1="2" x2="20" y2="22">
+        <linearGradient id={`${uid}-ig`} x1="3" y1="1" x2="21" y2="23">
           <stop stopColor="#F58529" />
-          <stop offset="0.5" stopColor="#DD2A7B" />
-          <stop offset="1" stopColor="#8134AF" />
+          <stop offset="0.35" stopColor="#DD2A7B" />
+          <stop offset="0.7" stopColor="#8134AF" />
+          <stop offset="1" stopColor="#515BD4" />
         </linearGradient>
       </defs>
     </svg>
   );
 }
 
+/**
+ * @param {{ className?: string }} props
+ */
 export function FbIcon({ className = 'h-5 w-5' }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <rect width="24" height="24" rx="7" fill="#1877F2" />
-      <path d="M13.4 19v-6.1h2.05l.3-2.35H13.4V9.05c0-.68.19-1.15 1.17-1.15h1.25V5.8c-.22-.03-.96-.09-1.83-.09-1.81 0-3.05 1.1-3.05 3.13v1.75H8.7v2.35h2.24V19h2.46z" fill="#fff" />
-    </svg>
-  );
-}
-
-export function WaIcon({ className = 'h-5 w-5' }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <rect width="24" height="24" rx="7" fill="#25D366" />
+      <rect width="24" height="24" rx="6.5" fill="#1877F2" />
       <path
-        d="M12 6.3a5.6 5.6 0 0 0-4.76 8.45L6.4 17.6l3.02-.79A5.6 5.6 0 1 0 12 6.3zm2.7 7.7c-.2.55-.8.7-1.1.73-.28.04-.62.06-1.01-.16-.27-.14-.62-.3-1.07-.58-1.5-.97-2.48-2.44-2.55-2.55-.08-.12-.62-.82-.62-1.57 0-.75.39-1.12.53-1.27.13-.14.29-.18.39-.18h.28c.09 0 .22 0 .33.25.13.27.42 1.03.46 1.1.04.08.06.18 0 .28-.06.11-.09.18-.18.27l-.28.33c-.09.1-.19.21-.08.36.12.16.55.9 1.18 1.46.74.66 1.36.87 1.55.96.11.05.21.04.29-.05.08-.08.33-.39.42-.53.09-.13.18-.11.3-.07.13.05.82.39.96.46.14.07.23.1.27.16.03.07.03.4-.1.75z"
+        d="M13.55 19.2v-6.35h2.14l.32-2.48h-2.46V8.8c0-.72.2-1.2 1.22-1.2h1.3V5.4c-.22-.03-1-.1-1.9-.1-1.88 0-3.17 1.15-3.17 3.26v1.81H8.55v2.48h2.45V19.2h2.55z"
         fill="#fff"
       />
     </svg>
   );
 }
 
-export function TtIcon({ className = 'h-5 w-5' }) {
+/**
+ * @param {{ className?: string }} props
+ */
+export function WaIcon({ className = 'h-5 w-5' }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <rect width="24" height="24" rx="7" fill="#111" />
-      <path d="M14.2 7.2c.55.53 1.22.93 2 .1.04 0 .08 1.18.08 1.18-.73.07-1.4-.12-2.08-.5v4.55a3.35 3.35 0 1 1-3.35-3.35c.17 0 .34.02.5.05v1.46a1.9 1.9 0 1 0 1.33 1.81V7.2h1.52z" fill="#fff" />
+      <rect width="24" height="24" rx="6.5" fill="#25D366" />
+      <path
+        d="M12 6.15a5.75 5.75 0 0 0-4.95 8.62L6.2 17.85l3.15-.82A5.75 5.75 0 1 0 12 6.15zm3.05 8.15c-.28.72-1.12.95-1.52.99-.38.05-.82.07-1.32-.2-.32-.16-.72-.35-1.24-.67-1.62-1.05-2.68-2.65-2.76-2.77-.1-.14-.72-.95-.72-1.8 0-.86.45-1.28.6-1.45.15-.16.33-.2.44-.2h.32c.1 0 .24 0 .37.28.14.3.46 1.12.5 1.2.05.09.07.2 0 .32-.08.12-.1.2-.2.3l-.32.38c-.1.12-.22.24-.1.42.14.18.62 1.02 1.32 1.65.82.74 1.5.98 1.72 1.08.12.06.24.05.33-.06.1-.1.38-.45.48-.6.1-.15.2-.13.34-.08.14.05.9.42 1.06.5.16.08.26.12.3.18.04.08.04.46-.12.86z"
+        fill="#fff"
+      />
     </svg>
   );
 }
 
+/** @param {{ fill: string, className?: string }} props */
+function TikTokNote({ fill, className }) {
+  return (
+    <path
+      className={className}
+      fill={fill}
+      d="M14.35 6.15c.72.7 1.6 1.2 2.6 1.42v1.72c-.92-.08-1.78-.38-2.6-.88v5.55a3.52 3.52 0 1 1-2.42-3.35v1.68a1.9 1.9 0 1 0 1.32 1.8V6.15h1.1z"
+    />
+  );
+}
+
+/**
+ * @param {{ className?: string }} props
+ */
+export function TtIcon({ className = 'h-5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <rect width="24" height="24" rx="6.5" fill="#111" />
+      <g transform="translate(1.15 0.35)">
+        <TikTokNote fill="#FE2C55" />
+      </g>
+      <g transform="translate(-1.15 -0.35)">
+        <TikTokNote fill="#25F4EE" />
+      </g>
+      <TikTokNote fill="#fff" />
+    </svg>
+  );
+}
+
+/**
+ * @param {{ className?: string }} props
+ */
 export function WebIcon({ className = 'h-5 w-5' }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <rect width="24" height="24" rx="7" fill="#06715F" />
-      <circle cx="12" cy="12" r="5.2" fill="none" stroke="#fff" strokeWidth="1.5" />
-      <path d="M7 12h10M12 7c1.6 1.5 2.4 3.2 2.4 5s-.8 3.5-2.4 5c-1.6-1.5-2.4-3.2-2.4-5s.8-3.5 2.4-5z" fill="none" stroke="#fff" strokeWidth="1.4" />
+      <rect width="24" height="24" rx="6.5" fill="#06715F" />
+      <path
+        d="M6.4 8.2c0-.9.74-1.65 1.65-1.65h6.1c.9 0 1.65.74 1.65 1.65v4.15c0 .9-.74 1.65-1.65 1.65H10.2L7.7 15.9V13.7c-.8-.2-1.3-.9-1.3-1.7V8.2z"
+        fill="#fff"
+      />
+      <path
+        d="M10.3 12.55h5.55c.85 0 1.55.7 1.55 1.55v3.05c0 .7-.45 1.3-1.1 1.5v1.85l-2.2-1.85H12c-.85 0-1.55-.7-1.55-1.55v-.4"
+        fill="#D7EFE8"
+      />
     </svg>
   );
 }
@@ -63,3 +108,4 @@ export const CHANNELS = [
   { id: 'tiktok', label: 'TikTok', Icon: TtIcon },
   { id: 'web', label: 'Web Chat', Icon: WebIcon },
 ];
+

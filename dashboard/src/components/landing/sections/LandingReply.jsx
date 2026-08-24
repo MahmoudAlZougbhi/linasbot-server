@@ -5,19 +5,19 @@ const CARDS = [
   {
     id: 'replies',
     title: 'AI Customer Replies',
-    description: 'Answers messages using your saved business knowledge.',
+    description: 'Handles hard questions from your knowledge — not just simple ones.',
     Mini: ReplyCustomer,
   },
   {
     id: 'language',
     title: 'Any Language',
-    description: "Understands and replies in the customer's language.",
+    description: 'Understands and replies in every language customers actually write in.',
     Mini: ReplyLanguage,
   },
   {
     id: 'comments',
     title: 'Comments + Private DM',
-    description: 'Replies publicly, then continues privately when details are needed.',
+    description: 'Teach how Linas should handle each comment — public reply, private DM, or both.',
     core: true,
     Mini: ReplyComments,
   },

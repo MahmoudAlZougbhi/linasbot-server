@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePrefersReducedMotion } from './usePrefersReducedMotion';
 
-const AUTOPLAY_MS = 5500;
-const MANUAL_PAUSE_MS = 8000;
+const AUTOPLAY_MS = 4500;
 
 /**
- * Feature carousel state: one-step moves, autoplay, pause on hover/focus/touch/hidden.
+ * Feature carousel: autoplay continues, and the user can still step/drag at any time.
+ * Hover, focus, touch, and a hidden tab pause autoplay; the next move restarts the timer.
  * @param {number} count
  * @param {number} [initialIndex]
  */
@@ -13,19 +13,16 @@ export function useFeatureCarousel(count, initialIndex = 2) {
   const reduced = usePrefersReducedMotion();
   const [index, setIndex] = useState(Math.min(initialIndex, Math.max(0, count - 1)));
   const [paused, setPaused] = useState(false);
-  const lastManual = useRef(0);
   const interacting = useRef(false);
 
   const go = useCallback(
     /**
      * @param {number} next
-     * @param {boolean} [manual]
+     * @param {boolean} [_manual]
      */
-    (next, manual = false) => {
+    (next, _manual = false) => {
       if (count <= 0) return;
-      const wrapped = ((next % count) + count) % count;
-      setIndex(wrapped);
-      if (manual) lastManual.current = Date.now();
+      setIndex(((next % count) + count) % count);
     },
     [count],
   );
@@ -43,15 +40,14 @@ export function useFeatureCarousel(count, initialIndex = 2) {
   }, []);
 
   useEffect(() => {
-    if (reduced || count <= 1) return undefined;
+    if (reduced || count <= 1 || paused) return undefined;
     const id = setInterval(() => {
       if (document.visibilityState === 'hidden') return;
-      if (interacting.current || paused) return;
-      if (Date.now() - lastManual.current < MANUAL_PAUSE_MS) return;
+      if (interacting.current) return;
       setIndex((current) => (current + 1) % count);
     }, AUTOPLAY_MS);
     return () => clearInterval(id);
-  }, [count, paused, reduced]);
+  }, [count, index, paused, reduced]);
 
   return { index, go, next, prev, pause, resume, reduced };
 }

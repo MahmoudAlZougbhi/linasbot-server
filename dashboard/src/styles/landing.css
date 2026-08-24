@@ -85,6 +85,28 @@
   animation: lp-fade-up 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+.landing-page .lp-orbit {
+  pointer-events: none;
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  border: 1px solid rgba(6, 113, 95, 0.16);
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+}
+.landing-page .lp-orbit-a {
+  width: 22.5rem;
+  height: 22.5rem;
+}
+.landing-page .lp-orbit-b {
+  width: 28.5rem;
+  height: 28.5rem;
+}
+.landing-page .lp-orbit-c {
+  width: 34.5rem;
+  height: 34.5rem;
+}
+
 .landing-page .lp-typing span {
   display: inline-block;
   width: 6px;
