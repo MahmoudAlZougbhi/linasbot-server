@@ -313,6 +313,21 @@ jobs:
             expected_sha = sys.argv[1]
             node_id = sys.argv[2]
             state_root = Path("/var/lib/linasbot/meta-ha")
+            values = sync._read_meta_values(sync.ENV_PATH)
+            worker_state = sync._load_worker_state(state_root)
+            authority = sync._load_stage_authority(state_root)
+            if worker_state is not None and authority is not None:
+                try:
+                    sync._verify_runtime_values(values, expected_node_id=node_id)
+                    sync._verify_worker_units_restored(
+                        worker_state,
+                        values,
+                        expected_node_id=node_id,
+                    )
+                    print(f"[wa-phase1-ha] workers_restored=true node={node_id} resume_skip=true")
+                    raise SystemExit(0)
+                except RuntimeError:
+                    pass
             authority, worker_state = sync._require_stage_authority(
                 state_root,
                 expected_sha=expected_sha,
@@ -369,6 +384,153 @@ jobs:
                 "$EXPECTED_RELEASE_SHA" cluster-release-only
               echo "${log_prefix} commit_via_restart COMPLETE_OK"
             }
+            staged_phase1_commit_ready() {
+              "$REPO_DIR/venv/bin/python" -I - <<'PY'
+            import sys
+            from pathlib import Path
+
+            sys.path.insert(0, "/opt/linasbot")
+            import scripts.ha.sync_meta_env_to_peer as sync
+
+            expected = {
+                "WHATSAPP_CLOUD_CONNECTION_UI_ENABLED": "true",
+                "WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED": "true",
+                "WHATSAPP_CLOUD_OUTBOUND_SENDS_ENABLED": "true",
+                "WHATSAPP_CLOUD_AI_REPLIES_ENABLED": "true",
+                "WHATSAPP_CLOUD_HISTORY_SYNC_ENABLED": "false",
+                "WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT": "true",
+                "WHATSAPP_CLOUD_PUBLIC_AVAILABILITY": "false",
+            }
+            state_root = Path("/var/lib/linasbot/meta-ha")
+            backup = state_root / "env.before"
+            authority = sync._load_stage_authority(state_root)
+            if authority is None or not backup.exists():
+                raise SystemExit(1)
+            if sync.ENV_PATH.read_bytes() == backup.read_bytes():
+                raise SystemExit(1)
+            values = sync._read_meta_values(sync.ENV_PATH)
+            for key, want in expected.items():
+                if values.get(key) != want:
+                    raise SystemExit(1)
+            print("[wa-phase1-ha] staged_phase1_commit_ready=true")
+            PY
+              ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                "root@${PEER_HOST}" \
+                "$REPO_DIR/venv/bin/python -I -" <<'PY'
+            import sys
+            from pathlib import Path
+
+            sys.path.insert(0, "/opt/linasbot")
+            import scripts.ha.sync_meta_env_to_peer as sync
+
+            expected = {
+                "WHATSAPP_CLOUD_CONNECTION_UI_ENABLED": "true",
+                "WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED": "true",
+                "WHATSAPP_CLOUD_OUTBOUND_SENDS_ENABLED": "true",
+                "WHATSAPP_CLOUD_AI_REPLIES_ENABLED": "true",
+                "WHATSAPP_CLOUD_HISTORY_SYNC_ENABLED": "false",
+                "WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT": "true",
+                "WHATSAPP_CLOUD_PUBLIC_AVAILABILITY": "false",
+            }
+            values = sync._read_meta_values(sync.ENV_PATH)
+            for key, want in expected.items():
+                if values.get(key) != want:
+                    raise SystemExit(1)
+            print("[wa-phase1-ha] peer_staged_phase1_commit_ready=true")
+            PY
+            }
+            finalize_staged_phase1_transaction() {
+              ENV_BACKUP="$META_HA_STATE_ROOT/env.before"
+              "$REPO_DIR/venv/bin/python" -I - <<'PY'
+            import os
+            import traceback
+            from pathlib import Path
+
+            import sys
+
+            sys.path.insert(0, "/opt/linasbot")
+            import scripts.ha.sync_meta_env_to_peer as sync
+
+            state_root = Path("/var/lib/linasbot/meta-ha")
+            backup = state_root / "env.before"
+            expected_sha = os.environ["EXPECTED_RELEASE_SHA"]
+            probe = state_root / ".commit_probe"
+
+            def _preflight_stage_authority(
+                state_root: Path,
+                *,
+                expected_sha: str,
+            ) -> tuple[dict[str, object], dict[str, object]]:
+                try:
+                    return sync._require_stage_authority(
+                        state_root,
+                        expected_sha=expected_sha,
+                        require_preimage=False,
+                    )
+                except RuntimeError as exc:
+                    if "must remain disabled" not in str(exc):
+                        raise
+                    authority = sync._load_stage_authority(state_root)
+                    worker_state = sync._load_worker_state(state_root)
+                    if authority is None or worker_state is None:
+                        raise
+                    values = sync._read_meta_values(sync.ENV_PATH)
+                    sync._verify_runtime_values(values, expected_node_id=sync.LOCAL_NODE_ID)
+                    sync._verify_worker_units_restored(
+                        worker_state,
+                        values,
+                        expected_node_id=sync.LOCAL_NODE_ID,
+                    )
+                    return authority, worker_state
+
+            checks = {
+                "backup_exists": lambda: backup.exists(),
+                "backup_read": lambda: backup.read_bytes(),
+                "runtime_meta": lambda: sync._read_runtime_meta_values(sync.LOCAL_NODE_ID),
+                "backup_meta": lambda: sync._read_meta_values(backup),
+                "samefile_self": lambda: backup.samefile(backup),
+                "journal_absent": lambda: sync._load_journal(state_root),
+                "atomic_write_probe": lambda: sync._atomic_write_bytes(probe, b"ok\n"),
+                "stage_authority": lambda: _preflight_stage_authority(
+                    state_root,
+                    expected_sha=expected_sha,
+                ),
+            }
+            for name, fn in checks.items():
+                try:
+                    result = fn()
+                    if name == "journal_absent":
+                        print(f"[wa-phase1-commit-preflight] {name}={result is None}", flush=True)
+                    else:
+                        print(f"[wa-phase1-commit-preflight] {name}=ok", flush=True)
+                except Exception as exc:
+                    print(
+                        f"[wa-phase1-commit-preflight] {name}={type(exc).__name__}:{exc}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    traceback.print_exc()
+                    raise SystemExit(1) from exc
+            probe.unlink(missing_ok=True)
+            print("[wa-phase1-commit-preflight] COMPLETE_OK", flush=True)
+            PY
+              commit_staged_non_meta_env_via_restart "[wa-phase1-ha]"
+              bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
+              grant_linas_pilot_if_requested
+              curl -fsS https://linasaibot.com/api/ready >/tmp/wa-ready.json
+              "$REPO_DIR/venv/bin/python" - <<'PY'
+            import json
+            data = json.load(open("/tmp/wa-ready.json"))
+            assert data.get("ok") is True, data
+            checks = data.get("checks") or {}
+            wa_db = ((checks.get("tiktok_business") or {}).get("config_keys_present") or {}).get("LINAS_WHATSAPP_DATABASE_URL")
+            assert wa_db is True, checks
+            print("[wa-phase1-ha] ready_ok=true whatsapp_db_present=true")
+            PY
+              TRANSACTION_COMPLETE=true
+              MAINTENANCE_ARMED=false
+              echo "[wa-phase1-ha] COMPLETE_OK"
+            }
             MAINTENANCE_ARMED=true
             sudo install -d -m 0700 -o root -g root "$META_HA_STATE_ROOT"
             sudo install -m 0600 -o root -g root /dev/null "$PERSISTENT_MAINTENANCE_FILE"
@@ -383,21 +545,26 @@ jobs:
               "test \"\$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8003/api/ready || true)\" = \"503\""
             DRAIN_SECONDS="$("$REPO_DIR/venv/bin/python" -c 'import sys; from dotenv import dotenv_values; value = int(str(dotenv_values(sys.argv[1], interpolate=False).get("META_HA_LB_DRAIN_SECONDS") or "")); sys.exit("invalid HA drain interval") if not 30 <= value <= 300 else print(value)' "$REPO_DIR/.env")"
             sleep "$DRAIN_SECONDS"
-            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
-              --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --recover-only
-            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
-              "$EXPECTED_RELEASE_SHA" cluster-release-only
-            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
-              --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --register-prestage-backup
-            ENV_BACKUP="$META_HA_STATE_ROOT/env.before"
-            if [ -f "$REPO_DIR/scripts/prod_stage_whatsapp_cloud_phase1_flags.sh" ]; then
-              bash "$REPO_DIR/scripts/prod_stage_whatsapp_cloud_phase1_flags.sh"
+            if staged_phase1_commit_ready; then
+              echo "[wa-phase1-ha] resume_staged_commit=true"
             else
-              stage_whatsapp_phase1_flags
-            fi
-            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
-              "root@${PEER_HOST}" \
-              "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true; bash -s" <<'PEERSTAGEEOF'
+              "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+                --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --recover-only || true
+              if staged_phase1_commit_ready; then
+                echo "[wa-phase1-ha] resume_staged_commit_after_recover=true"
+              else
+                bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
+                  "$EXPECTED_RELEASE_SHA" cluster-release-only
+                "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+                  --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --register-prestage-backup
+                if [ -f "$REPO_DIR/scripts/prod_stage_whatsapp_cloud_phase1_flags.sh" ]; then
+                  bash "$REPO_DIR/scripts/prod_stage_whatsapp_cloud_phase1_flags.sh"
+                else
+                  stage_whatsapp_phase1_flags
+                fi
+                ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                  "root@${PEER_HOST}" \
+                  "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true; bash -s" <<'PEERSTAGEEOF'
             set -euo pipefail
             /opt/linasbot/venv/bin/python -I - <<'PY'
             import os
@@ -468,68 +635,9 @@ jobs:
             print("[wa-phase1-stage] COMPLETE_OK")
             PY
             PEERSTAGEEOF
-            "$REPO_DIR/venv/bin/python" -I - <<'PY'
-            import os
-            import traceback
-            from pathlib import Path
-
-            import sys
-
-            sys.path.insert(0, "/opt/linasbot")
-            import scripts.ha.sync_meta_env_to_peer as sync
-
-            state_root = Path("/var/lib/linasbot/meta-ha")
-            backup = state_root / "env.before"
-            expected_sha = os.environ["EXPECTED_RELEASE_SHA"]
-            probe = state_root / ".commit_probe"
-            checks = {
-                "backup_exists": lambda: backup.exists(),
-                "backup_read": lambda: backup.read_bytes(),
-                "runtime_meta": lambda: sync._read_runtime_meta_values(sync.LOCAL_NODE_ID),
-                "backup_meta": lambda: sync._read_meta_values(backup),
-                "samefile_self": lambda: backup.samefile(backup),
-                "journal_absent": lambda: sync._load_journal(state_root),
-                "atomic_write_probe": lambda: sync._atomic_write_bytes(probe, b"ok\n"),
-                "stage_authority": lambda: sync._require_stage_authority(
-                    state_root,
-                    expected_sha=expected_sha,
-                    require_preimage=False,
-                ),
-            }
-            for name, fn in checks.items():
-                try:
-                    result = fn()
-                    if name == "journal_absent":
-                        print(f"[wa-phase1-commit-preflight] {name}={result is None}", flush=True)
-                    else:
-                        print(f"[wa-phase1-commit-preflight] {name}=ok", flush=True)
-                except Exception as exc:
-                    print(
-                        f"[wa-phase1-commit-preflight] {name}={type(exc).__name__}:{exc}",
-                        file=sys.stderr,
-                        flush=True,
-                    )
-                    traceback.print_exc()
-                    raise SystemExit(1) from exc
-            probe.unlink(missing_ok=True)
-            print("[wa-phase1-commit-preflight] COMPLETE_OK", flush=True)
-            PY
-            commit_staged_non_meta_env_via_restart "[wa-phase1-ha]"
-            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
-            grant_linas_pilot_if_requested
-            curl -fsS https://linasaibot.com/api/ready >/tmp/wa-ready.json
-            "$REPO_DIR/venv/bin/python" - <<'PY'
-            import json
-            data = json.load(open("/tmp/wa-ready.json"))
-            assert data.get("ok") is True, data
-            checks = data.get("checks") or {}
-            wa_db = ((checks.get("tiktok_business") or {}).get("config_keys_present") or {}).get("LINAS_WHATSAPP_DATABASE_URL")
-            assert wa_db is True, checks
-            print("[wa-phase1-ha] ready_ok=true whatsapp_db_present=true")
-            PY
-            TRANSACTION_COMPLETE=true
-            MAINTENANCE_ARMED=false
-            echo "[wa-phase1-ha] COMPLETE_OK"
+              fi
+            fi
+            finalize_staged_phase1_transaction
             if [ "${ENABLE_WEB_CHAT:-true}" = "true" ]; then
               export META_HA_STAGE_ONLY=true SKIP_MUTATION_LOCK=true
               if [ -f "$REPO_DIR/scripts/prod_apply_web_chat_public_ha.sh" ]; then
