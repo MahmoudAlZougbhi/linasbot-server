@@ -468,7 +468,11 @@ jobs:
                         require_preimage=False,
                     )
                 except RuntimeError as exc:
-                    if "must remain disabled" not in str(exc):
+                    message = str(exc)
+                    if (
+                        "must remain disabled" not in message
+                        and "does not match durable state" not in message
+                    ):
                         raise
                     authority = sync._load_stage_authority(state_root)
                     worker_state = sync._load_worker_state(state_root)
