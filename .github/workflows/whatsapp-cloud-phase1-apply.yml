@@ -389,9 +389,12 @@ jobs:
             ENV_BACKUP="$META_HA_STATE_ROOT/env.before"
             if [ -f "$REPO_DIR/scripts/prod_stage_whatsapp_cloud_phase1_flags.sh" ]; then
               bash "$REPO_DIR/scripts/prod_stage_whatsapp_cloud_phase1_flags.sh"
-              ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
-                "root@${PEER_HOST}" \
-                "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true LINAS_PRODUCTION_MUTATION_LOCK_FD=9; bash -s" <<'PEERSTAGEEOF'
+            else
+              stage_whatsapp_phase1_flags
+            fi
+            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+              "root@${PEER_HOST}" \
+              "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true; bash -s" <<'PEERSTAGEEOF'
             set -euo pipefail
             /opt/linasbot/venv/bin/python -I - <<'PY'
             import os
@@ -402,11 +405,27 @@ jobs:
             import scripts.ha.sync_meta_env_to_peer as sync
 
             expected_sha = os.environ["EXPECTED_RELEASE_SHA"]
-            sync._require_stage_authority(
-                Path("/var/lib/linasbot/meta-ha"),
-                expected_sha=expected_sha,
-                require_preimage=False,
+            state_root = Path("/var/lib/linasbot/meta-ha")
+            sync._refuse_conflicting_ha_transaction(state_root)
+            sync._require_node_identity(sync.ENV_PATH, sync.PEER_NODE_ID)
+            if sync._load_journal(state_root) is not None:
+                raise SystemExit("[wa-phase1-stage] peer journal present")
+            sync._ensure_maintenance_armed(state_root)
+            worker_state = sync._load_worker_state(state_root)
+            if (
+                worker_state is None
+                or worker_state["role"] != "peer"
+                or worker_state["expected_sha"] != expected_sha
+                or worker_state["status"] != "quiesced"
+            ):
+                raise SystemExit("[wa-phase1-stage] peer worker state invalid")
+            current_fingerprint = sync._meta_fingerprint(
+                sync._read_meta_values(sync.ENV_PATH),
+                expected_sha,
             )
+            if current_fingerprint != worker_state["old_fingerprint"]:
+                raise SystemExit("[wa-phase1-stage] peer env fingerprint drift")
+            sync._verify_worker_units_quiesced()
             print("[wa-phase1-stage] peer_stage_authority_verified=true")
             PY
             /opt/linasbot/venv/bin/python -I - <<'PY'
@@ -446,52 +465,6 @@ jobs:
             print("[wa-phase1-stage] COMPLETE_OK")
             PY
             PEERSTAGEEOF
-            else
-              stage_whatsapp_phase1_flags
-              ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
-                "root@${PEER_HOST}" \
-                "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true LINAS_PRODUCTION_MUTATION_LOCK_FD=9; bash -s" <<'STAGEEOF'
-            set -euo pipefail
-            /opt/linasbot/venv/bin/python -I /opt/linasbot/scripts/ha/sync_meta_env_to_peer.py \
-              --expected-sha "$EXPECTED_RELEASE_SHA" --verify-stage-authority
-            /opt/linasbot/venv/bin/python -I - <<'PY'
-            import hmac
-            import sys
-            from pathlib import Path
-
-            sys.path.insert(0, "/opt/linasbot")
-            from scripts.ha.meta_env_file import atomic_update_env
-
-            env_path = Path("/opt/linasbot/.env")
-            updates = {
-                "WHATSAPP_CLOUD_CONNECTION_UI_ENABLED": "true",
-                "WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED": "true",
-                "WHATSAPP_CLOUD_OUTBOUND_SENDS_ENABLED": "true",
-                "WHATSAPP_CLOUD_AI_REPLIES_ENABLED": "true",
-                "WHATSAPP_CLOUD_HISTORY_SYNC_ENABLED": "false",
-                "WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT": "true",
-                "WHATSAPP_CLOUD_PUBLIC_AVAILABILITY": "false",
-            }
-            atomic_update_env(env_path, updates)
-
-            def read_values(key: str) -> list[str]:
-                return [
-                    line.split("=", 1)[1]
-                    for line in env_path.read_text(encoding="utf-8", errors="strict").splitlines()
-                    if "=" in line
-                    and not line.lstrip().startswith("#")
-                    and line.split("=", 1)[0].strip() == key
-                ]
-
-            for key, expected in updates.items():
-                values = read_values(key)
-                if len(values) != 1 or not hmac.compare_digest(values[0], expected):
-                    raise SystemExit(f"[wa-phase1-stage] staged value mismatch: {key}")
-                print(f"[wa-phase1-stage] {key}:match=true")
-            print("[wa-phase1-stage] COMPLETE_OK")
-            PY
-            STAGEEOF
-            fi
             "$REPO_DIR/venv/bin/python" -I - <<'PY'
             import os
             import traceback
@@ -591,9 +564,37 @@ jobs:
                 print(f"[web-chat-stage] {key}:match=true")
             print("[web-chat-stage] COMPLETE_OK")
             PY
-            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes "root@${PEER_HOST}" "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true; bash -s" <<'STAGEEOF'
+            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes "root@${PEER_HOST}" "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true; bash -s" <<'WEBPEERSTAGEEOF'
             set -euo pipefail
-            /opt/linasbot/venv/bin/python -I /opt/linasbot/scripts/ha/sync_meta_env_to_peer.py --expected-sha "$EXPECTED_RELEASE_SHA" --verify-stage-authority
+            /opt/linasbot/venv/bin/python -I - <<'PY'
+            import os, sys
+            from pathlib import Path
+            sys.path.insert(0, "/opt/linasbot")
+            import scripts.ha.sync_meta_env_to_peer as sync
+            expected_sha = os.environ["EXPECTED_RELEASE_SHA"]
+            state_root = Path("/var/lib/linasbot/meta-ha")
+            sync._refuse_conflicting_ha_transaction(state_root)
+            sync._require_node_identity(sync.ENV_PATH, sync.PEER_NODE_ID)
+            if sync._load_journal(state_root) is not None:
+                raise SystemExit("[web-chat-stage] peer journal present")
+            sync._ensure_maintenance_armed(state_root)
+            worker_state = sync._load_worker_state(state_root)
+            if (
+                worker_state is None
+                or worker_state["role"] != "peer"
+                or worker_state["expected_sha"] != expected_sha
+                or worker_state["status"] != "quiesced"
+            ):
+                raise SystemExit("[web-chat-stage] peer worker state invalid")
+            current_fingerprint = sync._meta_fingerprint(
+                sync._read_meta_values(sync.ENV_PATH),
+                expected_sha,
+            )
+            if current_fingerprint != worker_state["old_fingerprint"]:
+                raise SystemExit("[web-chat-stage] peer env fingerprint drift")
+            sync._verify_worker_units_quiesced()
+            print("[web-chat-stage] peer_stage_authority_verified=true")
+            PY
             /opt/linasbot/venv/bin/python -I - <<'PY'
             import hmac, sys
             from pathlib import Path
@@ -609,7 +610,7 @@ jobs:
                 print(f"[web-chat-stage] {key}:match=true")
             print("[web-chat-stage] COMPLETE_OK")
             PY
-            STAGEEOF
+            WEBPEERSTAGEEOF
             commit_staged_non_meta_env_via_restart "[web-chat-ha]"
             bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
             echo "[web-chat-ha] COMPLETE_OK"
