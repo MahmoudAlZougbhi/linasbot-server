@@ -187,6 +187,87 @@ jobs:
               exit "$status"
             }
             trap fail_closed_cleanup EXIT
+            commit_staged_non_meta_env_via_restart() {
+              local log_prefix="${1:-[wa-phase1-ha]}"
+              echo "${log_prefix} commit_via_restart=true"
+              "$REPO_DIR/venv/bin/python" -I - <<'PY'
+            import subprocess
+
+            subprocess.run(["systemctl", "restart", "linasbot"], check=True)
+            PY
+              for attempt in $(seq 1 30); do
+                code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8003/api/ready || true)"
+                if [ "$code" = "200" ] || [ "$code" = "503" ]; then
+                  break
+                fi
+                sleep 2
+              done
+              ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                "root@${PEER_HOST}" \
+                "$REPO_DIR/venv/bin/python -I -c \"import subprocess; subprocess.run(['systemctl','restart','linasbot'], check=True)\""
+              "$REPO_DIR/venv/bin/python" -I - "$EXPECTED_RELEASE_SHA" node01 <<'PY'
+            import sys
+            from pathlib import Path
+
+            sys.path.insert(0, "/opt/linasbot")
+            import scripts.ha.sync_meta_env_to_peer as sync
+
+            expected_sha = sys.argv[1]
+            node_id = sys.argv[2]
+            state_root = Path("/var/lib/linasbot/meta-ha")
+            authority, worker_state = sync._require_stage_authority(
+                state_root,
+                expected_sha=expected_sha,
+                require_preimage=False,
+            )
+            values = sync._read_meta_values(sync.ENV_PATH)
+            sync._restore_worker_units(
+                state_root,
+                worker_state,
+                terminal_fingerprint=str(authority["old_fingerprint"]),
+                expected_values=values,
+                expected_node_id=node_id,
+            )
+            sync._verify_runtime_values(values, expected_node_id=node_id)
+            print(f"[wa-phase1-ha] workers_restored=true node={node_id}")
+            PY
+              ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                "root@${PEER_HOST}" \
+                "$REPO_DIR/venv/bin/python -I - '$EXPECTED_RELEASE_SHA' node02" <<'PY'
+            import sys
+            from pathlib import Path
+
+            sys.path.insert(0, "/opt/linasbot")
+            import scripts.ha.sync_meta_env_to_peer as sync
+
+            expected_sha = sys.argv[1]
+            node_id = sys.argv[2]
+            state_root = Path("/var/lib/linasbot/meta-ha")
+            authority, worker_state = sync._require_stage_authority(
+                state_root,
+                expected_sha=expected_sha,
+                require_preimage=False,
+            )
+            values = sync._read_meta_values(sync.ENV_PATH)
+            sync._restore_worker_units(
+                state_root,
+                worker_state,
+                terminal_fingerprint=str(authority["old_fingerprint"]),
+                expected_values=values,
+                expected_node_id=node_id,
+            )
+            sync._verify_runtime_values(values, expected_node_id=node_id)
+            print(f"[wa-phase1-ha] workers_restored=true node={node_id}")
+            PY
+              rm -f "$MAINTENANCE_FILE" "$PERSISTENT_MAINTENANCE_FILE"
+              rm -f "$META_HA_STATE_ROOT/prestage.authority.json" "$META_HA_STATE_ROOT/workers.before.json"
+              ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                "root@${PEER_HOST}" \
+                "rm -f /run/linasbot-maintenance '$META_HA_STATE_ROOT/maintenance' '$META_HA_STATE_ROOT/prestage.authority.json' '$META_HA_STATE_ROOT/workers.before.json'"
+              bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
+                "$EXPECTED_RELEASE_SHA" cluster-release-only
+              echo "${log_prefix} commit_via_restart COMPLETE_OK"
+            }
             MAINTENANCE_ARMED=true
             sudo install -d -m 0700 -o root -g root "$META_HA_STATE_ROOT"
             sudo install -m 0600 -o root -g root /dev/null "$PERSISTENT_MAINTENANCE_FILE"
@@ -305,11 +386,7 @@ jobs:
             probe.unlink(missing_ok=True)
             print("[wa-phase1-commit-preflight] COMPLETE_OK", flush=True)
             PY
-            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
-              --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active \
-              --local-prestage-backup "$ENV_BACKUP"
-            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
-              --expected-sha "$EXPECTED_RELEASE_SHA" --finalize
+            commit_staged_non_meta_env_via_restart "[wa-phase1-ha]"
             bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
             grant_linas_pilot_if_requested
             curl -fsS https://linasaibot.com/api/ready >/tmp/wa-ready.json
@@ -381,8 +458,7 @@ jobs:
             print("[web-chat-stage] COMPLETE_OK")
             PY
             STAGEEOF
-            "$PY" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --local-prestage-backup "$ENV_BACKUP"
-            "$PY" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" --expected-sha "$EXPECTED_RELEASE_SHA" --finalize
+            commit_staged_non_meta_env_via_restart "[web-chat-ha]"
             bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
             echo "[web-chat-ha] COMPLETE_OK"
             WEBINLINE

@@ -86,7 +86,10 @@ def test_meta_env_writers_require_main_ref_inherited_lock_and_tx_bound_stage_aut
         assert parsed["concurrency"] == {"group": "meta-social-cutover", "cancel-in-progress": False}, name
         assert "export LINAS_PRODUCTION_MUTATION_LOCK_FD=9" in source, name
         assert "--register-prestage-backup" in source, name
-        assert "--local-prestage-backup" in source, name
+        if name == "whatsapp-cloud-phase1-apply.yml":
+            assert "commit_via_restart=true" in source, name
+        else:
+            assert "--local-prestage-backup" in source, name
         assert 'sudo -E "$REPO_DIR/venv/bin/python" "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py"' not in source
 
 
