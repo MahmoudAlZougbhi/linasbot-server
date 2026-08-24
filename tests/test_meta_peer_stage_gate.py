@@ -12,7 +12,7 @@ SHA = "a" * 40
 
 def _state_root(tmp_path: Path) -> Path:
     root = tmp_path / "meta-ha"
-    root.mkdir(mode=0o700)
+    root.mkdir(mode=0o700, parents=True)
     return root
 
 
