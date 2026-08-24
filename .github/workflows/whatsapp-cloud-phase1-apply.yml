@@ -341,16 +341,19 @@ jobs:
             expected_sha = sys.argv[1]
             node_id = sys.argv[2]
             state_root = Path("/var/lib/linasbot/meta-ha")
-            authority, worker_state = sync._require_stage_authority(
-                state_root,
-                expected_sha=expected_sha,
-                require_preimage=False,
-            )
+            worker_state = sync._load_worker_state(state_root)
+            if (
+                worker_state is None
+                or worker_state["role"] != "peer"
+                or worker_state["expected_sha"] != expected_sha
+                or worker_state["status"] != "quiesced"
+            ):
+                raise SystemExit("[wa-phase1-ha] peer worker state invalid for commit")
             values = sync._read_meta_values(sync.ENV_PATH)
             sync._restore_worker_units(
                 state_root,
                 worker_state,
-                terminal_fingerprint=str(authority["old_fingerprint"]),
+                terminal_fingerprint=str(worker_state["old_fingerprint"]),
                 expected_values=values,
                 expected_node_id=node_id,
             )
