@@ -550,11 +550,42 @@ jobs:
                 echo "[wa-phase1-ha] resume_staged_commit=true"
               else
                 echo "[wa-phase1-ha] restage_existing_prestage=true"
-                if [ -f "$REPO_DIR/scripts/prod_stage_whatsapp_cloud_phase1_flags.sh" ]; then
-                  bash "$REPO_DIR/scripts/prod_stage_whatsapp_cloud_phase1_flags.sh"
-                else
-                  stage_whatsapp_phase1_flags
-                fi
+                "$REPO_DIR/venv/bin/python" -I - <<'PY'
+            import hmac
+            import sys
+            from pathlib import Path
+
+            sys.path.insert(0, "/opt/linasbot")
+            from scripts.ha.meta_env_file import atomic_update_env
+
+            env_path = Path("/opt/linasbot/.env")
+            updates = {
+                "WHATSAPP_CLOUD_CONNECTION_UI_ENABLED": "true",
+                "WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED": "true",
+                "WHATSAPP_CLOUD_OUTBOUND_SENDS_ENABLED": "true",
+                "WHATSAPP_CLOUD_AI_REPLIES_ENABLED": "true",
+                "WHATSAPP_CLOUD_HISTORY_SYNC_ENABLED": "false",
+                "WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT": "true",
+                "WHATSAPP_CLOUD_PUBLIC_AVAILABILITY": "false",
+            }
+            atomic_update_env(env_path, updates)
+
+            def read_values(key: str) -> list[str]:
+                return [
+                    line.split("=", 1)[1]
+                    for line in env_path.read_text(encoding="utf-8", errors="strict").splitlines()
+                    if "=" in line
+                    and not line.lstrip().startswith("#")
+                    and line.split("=", 1)[0].strip() == key
+                ]
+
+            for key, expected in updates.items():
+                values = read_values(key)
+                if len(values) != 1 or not hmac.compare_digest(values[0], expected):
+                    raise SystemExit(f"[wa-phase1-stage] staged value mismatch: {key}")
+                print(f"[wa-phase1-stage] {key}:match=true")
+            print("[wa-phase1-stage] COMPLETE_OK")
+            PY
                 ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
                   "root@${PEER_HOST}" \
                   "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true; bash -s" <<'PEERRESTAGEEOF'
