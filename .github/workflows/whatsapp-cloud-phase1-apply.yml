@@ -272,6 +272,7 @@ jobs:
             state_root = Path("/var/lib/linasbot/meta-ha")
             backup = state_root / "env.before"
             expected_sha = os.environ["EXPECTED_RELEASE_SHA"]
+            probe = state_root / ".commit_probe"
             checks = {
                 "backup_exists": lambda: backup.exists(),
                 "backup_read": lambda: backup.read_bytes(),
@@ -279,6 +280,7 @@ jobs:
                 "backup_meta": lambda: sync._read_meta_values(backup),
                 "samefile_self": lambda: backup.samefile(backup),
                 "journal_absent": lambda: sync._load_journal(state_root),
+                "atomic_write_probe": lambda: sync._atomic_write_bytes(probe, b"ok\n"),
                 "stage_authority": lambda: sync._require_stage_authority(
                     state_root,
                     expected_sha=expected_sha,
@@ -289,17 +291,19 @@ jobs:
                 try:
                     result = fn()
                     if name == "journal_absent":
-                        print(f"[wa-phase1-commit-preflight] {name}={result is None}")
+                        print(f"[wa-phase1-commit-preflight] {name}={result is None}", flush=True)
                     else:
-                        print(f"[wa-phase1-commit-preflight] {name}=ok")
+                        print(f"[wa-phase1-commit-preflight] {name}=ok", flush=True)
                 except Exception as exc:
                     print(
                         f"[wa-phase1-commit-preflight] {name}={type(exc).__name__}:{exc}",
                         file=sys.stderr,
+                        flush=True,
                     )
                     traceback.print_exc()
                     raise SystemExit(1) from exc
-            print("[wa-phase1-commit-preflight] COMPLETE_OK")
+            probe.unlink(missing_ok=True)
+            print("[wa-phase1-commit-preflight] COMPLETE_OK", flush=True)
             PY
             "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
               --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active \
