@@ -369,8 +369,10 @@ def _status_and_blocker(
         code = "meta_approval_required"
         return "meta_approval_required", code, BLOCKER_MESSAGES[code]
     if not permission_present:
-        if capability == "comments" and comment_permission_statuses and any(
-            status == "unknown" for status in comment_permission_statuses
+        if (
+            capability == "comments"
+            and comment_permission_statuses
+            and any(status == "unknown" for status in comment_permission_statuses)
         ):
             code = "comment_permissions_could_not_be_verified"
             return "configuring", code, BLOCKER_MESSAGES[code]

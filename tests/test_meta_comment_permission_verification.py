@@ -83,7 +83,9 @@ def test_granted_allows_reply(registry: MetaAppRegistry, monkeypatch: pytest.Mon
     assert decision["reason"] == "ok"
 
 
-def test_explicitly_missing_denies_with_clear_reason(registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_explicitly_missing_denies_with_clear_reason(
+    registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _enable_cm_comments(monkeypatch)
     binding = _binding(
         registry,
@@ -105,7 +107,9 @@ def test_explicitly_missing_denies_with_clear_reason(registry: MetaAppRegistry, 
     assert decision["reason"] == "comment_scopes_missing"
 
 
-def test_unknown_with_stored_scopes_is_verified_at_runtime(registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_unknown_with_stored_scopes_is_verified_at_runtime(
+    registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _enable_cm_comments(monkeypatch)
     binding = _binding(
         registry,
@@ -134,7 +138,9 @@ def test_unknown_with_stored_scopes_is_verified_at_runtime(registry: MetaAppRegi
     assert decision["permission"]["status"] == "verified_granted"
 
 
-def test_unknown_without_stored_scopes_and_no_verification_blocks(registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_unknown_without_stored_scopes_and_no_verification_blocks(
+    registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _enable_cm_comments(monkeypatch)
     binding = _binding(
         registry,
@@ -272,7 +278,9 @@ def test_facebook_login_instagram_readiness_uses_manage_comments(registry: MetaA
     assert readiness["scopes_ready"] is True
 
 
-def test_webhook_and_polling_share_enforcement_decision(registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_webhook_and_polling_share_enforcement_decision(
+    registry: MetaAppRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from services.meta_social_comment_sync import _comment_reply_enabled
 
     _enable_cm_comments(monkeypatch)

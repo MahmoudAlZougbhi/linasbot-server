@@ -59,9 +59,7 @@ class MetaAppRegistryCommentPermissionsMixin:
             changed = dict(raw)
             changed["comment_permission_status"] = str(comment_permission_status or "unknown")
             changed["comment_permission_verified_at"] = (
-                float(comment_permission_verified_at)
-                if comment_permission_verified_at is not None
-                else now
+                float(comment_permission_verified_at) if comment_permission_verified_at is not None else now
             )
             changed["comment_permission_source"] = str(comment_permission_source or "")
             changed["comment_permission_credential_id"] = str(comment_permission_credential_id or "")
