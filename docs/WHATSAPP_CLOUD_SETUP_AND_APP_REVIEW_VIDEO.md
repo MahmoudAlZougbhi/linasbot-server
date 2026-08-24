@@ -6,6 +6,27 @@
 
 ---
 
+## Code audit summary (2026-08-24)
+
+| Path | Module | Guard |
+|------|--------|-------|
+| Embedded Signup start | `services/whatsapp_cloud/embedded_signup.py` | pilot or `PUBLIC_AVAILABILITY`; `whatsapp_business_app_onboarding` only |
+| OAuth callback | `modules/whatsapp_cloud_api.py` `/oauth/whatsapp/callback` | server-side token exchange; AES-GCM seal |
+| Webhook | `modules/whatsapp_cloud_webhook.py` | App A `X-Hub-Signature-256`; side-effects flag |
+| Outbound (ops + AI) | `graph_client.py`, `ai_bridge.py`, ops API | tenant token from PG; outbound flag |
+| Inbound AI | `webhook_processor.py` → `ai_bridge.py` | eligibility + epoch + pause state |
+| Business App manual reply | `smb_message_echoes` | `pause_conversation` → `HUMAN_PAUSED` |
+| Pause / Resume | ops API + repository | control epoch bump on resume |
+| Test Message | ops API | owner/admin + connected binding |
+| Pilot entitlement | `entitlement.py` + `whatsapp_pilot_entitlements` | required when `PUBLIC_AVAILABILITY=false` |
+| Public gate | `WHATSAPP_CLOUD_PUBLIC_AVAILABILITY` | Phase 2 only; pilot bypasses connect block |
+| Monty isolation | `legacy_isolation.py` + startup | dual-bind fail-closed; Monty send blocked |
+| Credentials | `crypto.py` | AES-GCM AAD `whatsapp:{tenant}:{connection}` |
+
+Public probe (`verify_whatsapp_cloud_readiness.py`) **cannot** prove Phase 1 flags or pilot rows — only routing, DB presence, and bridge copy.
+
+---
+
 ## 1) شو جاهز على Production (read-only — 2026-08-24)
 
 | Asset | Value |
@@ -57,7 +78,9 @@ MODE=APPLY_WHATSAPP_CLOUD_PHASE1 \
 | `WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT` | `true` |
 | `WHATSAPP_CLOUD_PUBLIC_AVAILABILITY` | **`false`** |
 
-After restart: re-run `python scripts/verify_whatsapp_cloud_readiness.py`.
+After restart: re-run `python scripts/verify_whatsapp_cloud_readiness.py` (public signals only).
+
+**Two-node note:** `prod_apply_whatsapp_cloud_phase1_flags.sh` calls `systemctl restart linasbot` on the executing node. The entrypoint is listed in `TWO_NODE_ENV_TRANSACTION_REQUIRED` — run only through the guarded HA mutation path so both nodes receive the same canonical env before restart.
 
 ---
 

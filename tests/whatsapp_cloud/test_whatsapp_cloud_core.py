@@ -477,3 +477,31 @@ def test_grant_pilot_enables_connect(monkeypatch, wa_db, tmp_path):
     wa_db.commit()
     assert_whatsapp_connection_allowed(wa_db, "pilot_t")
     assert repo.list_pilots(status="active")[0].tenant_id == "pilot_t"
+
+
+def test_linas_pilot_connect_public_off_without_paid_plan(monkeypatch, wa_db, tmp_path):
+    """Subscription-exempt linas + pilot row must connect while PUBLIC_AVAILABILITY=false."""
+    monkeypatch.setenv("WHATSAPP_CLOUD_PUBLIC_AVAILABILITY", "false")
+    monkeypatch.setenv("WHATSAPP_CLOUD_CONNECTION_UI_ENABLED", "true")
+    monkeypatch.setenv("WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT", "true")
+    monkeypatch.setenv("SUBSCRIPTION_EXEMPT_TENANT_IDS", "linas")
+    from services.whatsapp_cloud.config import get_whatsapp_cloud_flags
+    from services.whatsapp_cloud.entitlement import assert_whatsapp_connection_allowed
+    from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+
+    repo = WhatsAppCloudRepository(wa_db)
+    repo.grant_pilot(tenant_id="linas", granted_by_user_id="owner", reason="internal pilot")
+    wa_db.commit()
+    flags = get_whatsapp_cloud_flags()
+    assert flags.public_availability is False
+    assert flags.require_pilot_entitlement is True
+    assert_whatsapp_connection_allowed(wa_db, "linas")
+    ui_open = bool(flags.connection_ui_enabled or flags.public_availability)
+    assert ui_open is True
+
+
+def test_linas_has_no_prefilled_whatsapp_connection(wa_db):
+    """Phone numbers are persisted only after Embedded Signup — never seeded for linas."""
+    repo = WhatsAppCloudRepository(wa_db)
+    assert repo.list_tenant_connections("linas") == []
+    assert repo.get_active_pilot("linas") is None

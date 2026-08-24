@@ -33,7 +33,7 @@ def _get(url: str, *, timeout: float) -> tuple[int, dict[str, object] | None, st
                         parsed = loaded
                 except json.JSONDecodeError:
                     pass
-            return int(response.status), parsed, raw[:200]
+            return int(response.status), parsed, raw
     except urllib.error.HTTPError as exc:
         body = exc.read(4096).decode("utf-8", "replace")
         return int(exc.code), None, body[:200]
@@ -85,16 +85,18 @@ def main() -> int:
                 else:
                     failures.append("LINAS_WHATSAPP_DATABASE_URL not reported present")
 
-    bridge_status, _, bridge_snip = _get(
+    bridge_status, _, bridge_body = _get(
         f"{base}{BRIDGE_PATH}?state=readiness-probe",
         timeout=args.timeout,
     )
     if bridge_status != 200:
         failures.append(f"embedded-signup bridge HTTP {bridge_status}")
-    elif "whatsapp" not in bridge_snip.lower() and "meta" not in bridge_snip.lower():
-        notes.append(f"bridge=200 (snippet={bridge_snip[:80]!r})")
     else:
-        notes.append("embedded-signup bridge=200")
+        bridge_lower = bridge_body.lower()
+        if "coexistence" not in bridge_lower and "whatsapp business app" not in bridge_lower:
+            failures.append("embedded-signup bridge missing coexistence copy")
+        else:
+            notes.append("embedded-signup bridge=200 (coexistence copy present)")
 
     print(f"base={base}")
     for line in notes:
