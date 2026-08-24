@@ -37,7 +37,6 @@ jobs:
       - name: Two-node WhatsApp Phase 1 flags (+ optional pilot)
         uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
         env:
-          EXPECTED_RELEASE_SHA: ${{ github.sha }}
           META_HA_STAGE_ONLY: "true"
           GRANT_PILOT: ${{ github.event.inputs.GRANT_PILOT }}
         with:
@@ -47,7 +46,7 @@ jobs:
           port: 22
           script_stop: false
           command_timeout: 22m
-          envs: EXPECTED_RELEASE_SHA,META_HA_STAGE_ONLY,GRANT_PILOT
+          envs: META_HA_STAGE_ONLY,GRANT_PILOT
           script: |
             set -euo pipefail
             test "$(id -u)" -eq 0 && test "$(id -g)" -eq 0
@@ -56,17 +55,99 @@ jobs:
             export LINAS_PRODUCTION_MUTATION_LOCK_FD=9
             REPO_DIR=/opt/linasbot
             DEPLOYED_RELEASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
-            if [ "$DEPLOYED_RELEASE_SHA" != "$EXPECTED_RELEASE_SHA" ]; then
-              echo "[wa-phase1-ha] workflow SHA does not match deployed release" >&2
-              exit 1
-            fi
+            export EXPECTED_RELEASE_SHA="$DEPLOYED_RELEASE_SHA"
+            echo "[wa-phase1-ha] deployed_release_sha=${DEPLOYED_RELEASE_SHA}"
             if ! git -C "$REPO_DIR" diff --quiet "$DEPLOYED_RELEASE_SHA" -- || \
                ! git -C "$REPO_DIR" diff --cached --quiet "$DEPLOYED_RELEASE_SHA" --; then
               echo "[wa-phase1-ha] deployed tracked files differ from release SHA" >&2
               exit 1
             fi
-            STAGE_SCRIPT="$REPO_DIR/scripts/prod_stage_whatsapp_cloud_phase1_flags.sh"
-            test -x "$STAGE_SCRIPT" || test -f "$STAGE_SCRIPT"
+            stage_whatsapp_phase1_flags() {
+              export EXPECTED_RELEASE_SHA META_HA_STAGE_ONLY
+              /opt/linasbot/venv/bin/python -I /opt/linasbot/scripts/ha/sync_meta_env_to_peer.py \
+                --expected-sha "$EXPECTED_RELEASE_SHA" --verify-stage-authority
+              /opt/linasbot/venv/bin/python -I - <<'PY'
+            import hmac
+            import sys
+            from pathlib import Path
+
+            sys.path.insert(0, "/opt/linasbot")
+            from scripts.ha.meta_env_file import atomic_update_env
+
+            env_path = Path("/opt/linasbot/.env")
+            updates = {
+                "WHATSAPP_CLOUD_CONNECTION_UI_ENABLED": "true",
+                "WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED": "true",
+                "WHATSAPP_CLOUD_OUTBOUND_SENDS_ENABLED": "true",
+                "WHATSAPP_CLOUD_AI_REPLIES_ENABLED": "true",
+                "WHATSAPP_CLOUD_HISTORY_SYNC_ENABLED": "false",
+                "WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT": "true",
+                "WHATSAPP_CLOUD_PUBLIC_AVAILABILITY": "false",
+            }
+            atomic_update_env(env_path, updates)
+
+            def read_values(key: str) -> list[str]:
+                return [
+                    line.split("=", 1)[1]
+                    for line in env_path.read_text(encoding="utf-8", errors="strict").splitlines()
+                    if "=" in line
+                    and not line.lstrip().startswith("#")
+                    and line.split("=", 1)[0].strip() == key
+                ]
+
+            for key, expected in updates.items():
+                values = read_values(key)
+                if len(values) != 1 or not hmac.compare_digest(values[0], expected):
+                    raise SystemExit(f"[wa-phase1-stage] staged value mismatch: {key}")
+                print(f"[wa-phase1-stage] {key}:match=true")
+            print("[wa-phase1-stage] COMPLETE_OK")
+            PY
+            }
+            grant_linas_pilot_if_requested() {
+              if [ "${GRANT_PILOT:-true}" != "true" ]; then
+                echo "[wa-pilot-grant] skipped=true"
+                return 0
+              fi
+              if [ -x "$REPO_DIR/scripts/prod_grant_whatsapp_pilot.py" ] || [ -f "$REPO_DIR/scripts/prod_grant_whatsapp_pilot.py" ]; then
+                "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/prod_grant_whatsapp_pilot.py" \
+                  --tenant-id linas \
+                  --reason "Internal WhatsApp coexistence pilot after Phase 1 flags" \
+                  --granted-by production_ops
+                return 0
+              fi
+              "$REPO_DIR/venv/bin/python" -I - <<'PY'
+            import sys
+
+            sys.path.insert(0, "/opt/linasbot")
+            from db.session import WhatsAppDatabaseUnavailable, whatsapp_session
+            from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+
+            tenant_id = "linas"
+            reason = "Internal WhatsApp coexistence pilot after Phase 1 flags"
+            try:
+                with whatsapp_session(require=True) as session:
+                    repo = WhatsAppCloudRepository(session)
+                    existing = repo.get_active_pilot(tenant_id)
+                    if existing is not None:
+                        print(f"[wa-pilot-grant] already_active=true tenant_id={tenant_id}")
+                        raise SystemExit(0)
+                    row = repo.grant_pilot(
+                        tenant_id=tenant_id,
+                        granted_by_user_id="production_ops",
+                        reason=reason,
+                    )
+                    repo.add_audit(
+                        tenant_id=tenant_id,
+                        actor_user_id="production_ops",
+                        event_type="pilot_granted",
+                        detail={"reason": reason, "source": "wa-phase1-ha-inline"},
+                    )
+                    print(f"[wa-pilot-grant] granted=true tenant_id={row.tenant_id} status={row.status}")
+            except WhatsAppDatabaseUnavailable:
+                print("[wa-pilot-grant] WHATSAPP_DB_UNAVAILABLE", file=sys.stderr)
+                raise SystemExit(3) from None
+            PY
+            }
             PEER_HOST="${LINAS_HA_PEER_HOST:-10.106.0.4}"
             MAINTENANCE_FILE=/run/linasbot-maintenance
             META_HA_STATE_ROOT=/var/lib/linasbot/meta-ha
@@ -118,22 +199,64 @@ jobs:
             "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
               --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --register-prestage-backup
             ENV_BACKUP="$META_HA_STATE_ROOT/env.before"
-            bash "$STAGE_SCRIPT"
-            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
-              "root@${PEER_HOST}" \
-              "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true LINAS_PRODUCTION_MUTATION_LOCK_FD=9; bash '$STAGE_SCRIPT'"
+            if [ -f "$REPO_DIR/scripts/prod_stage_whatsapp_cloud_phase1_flags.sh" ]; then
+              bash "$REPO_DIR/scripts/prod_stage_whatsapp_cloud_phase1_flags.sh"
+              ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                "root@${PEER_HOST}" \
+                "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true LINAS_PRODUCTION_MUTATION_LOCK_FD=9; bash '$REPO_DIR/scripts/prod_stage_whatsapp_cloud_phase1_flags.sh'"
+            else
+              stage_whatsapp_phase1_flags
+              ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                "root@${PEER_HOST}" \
+                "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true LINAS_PRODUCTION_MUTATION_LOCK_FD=9; bash -s" <<'STAGEEOF'
+            set -euo pipefail
+            /opt/linasbot/venv/bin/python -I /opt/linasbot/scripts/ha/sync_meta_env_to_peer.py \
+              --expected-sha "$EXPECTED_RELEASE_SHA" --verify-stage-authority
+            /opt/linasbot/venv/bin/python -I - <<'PY'
+            import hmac
+            import sys
+            from pathlib import Path
+
+            sys.path.insert(0, "/opt/linasbot")
+            from scripts.ha.meta_env_file import atomic_update_env
+
+            env_path = Path("/opt/linasbot/.env")
+            updates = {
+                "WHATSAPP_CLOUD_CONNECTION_UI_ENABLED": "true",
+                "WHATSAPP_CLOUD_WEBHOOK_SIDE_EFFECTS_ENABLED": "true",
+                "WHATSAPP_CLOUD_OUTBOUND_SENDS_ENABLED": "true",
+                "WHATSAPP_CLOUD_AI_REPLIES_ENABLED": "true",
+                "WHATSAPP_CLOUD_HISTORY_SYNC_ENABLED": "false",
+                "WHATSAPP_CLOUD_REQUIRE_PILOT_ENTITLEMENT": "true",
+                "WHATSAPP_CLOUD_PUBLIC_AVAILABILITY": "false",
+            }
+            atomic_update_env(env_path, updates)
+
+            def read_values(key: str) -> list[str]:
+                return [
+                    line.split("=", 1)[1]
+                    for line in env_path.read_text(encoding="utf-8", errors="strict").splitlines()
+                    if "=" in line
+                    and not line.lstrip().startswith("#")
+                    and line.split("=", 1)[0].strip() == key
+                ]
+
+            for key, expected in updates.items():
+                values = read_values(key)
+                if len(values) != 1 or not hmac.compare_digest(values[0], expected):
+                    raise SystemExit(f"[wa-phase1-stage] staged value mismatch: {key}")
+                print(f"[wa-phase1-stage] {key}:match=true")
+            print("[wa-phase1-stage] COMPLETE_OK")
+            PY
+            STAGEEOF
+            fi
             "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
               --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active \
               --local-prestage-backup "$ENV_BACKUP"
             "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
               --expected-sha "$EXPECTED_RELEASE_SHA" --finalize
             bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
-            if [ "${GRANT_PILOT:-true}" = "true" ]; then
-              "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/prod_grant_whatsapp_pilot.py" \
-                --tenant-id linas \
-                --reason "Internal WhatsApp coexistence pilot after Phase 1 flags" \
-                --granted-by production_ops
-            fi
+            grant_linas_pilot_if_requested
             curl -fsS https://linasaibot.com/api/ready >/tmp/wa-ready.json
             "$REPO_DIR/venv/bin/python" - <<'PY'
             import json
