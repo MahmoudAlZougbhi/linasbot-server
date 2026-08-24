@@ -47,7 +47,6 @@ jobs:
             PEER_HOST="${LINAS_HA_PEER_HOST:-10.106.0.4}"
             META_HA_STATE_ROOT=/var/lib/linasbot/meta-ha
             echo "[meta-ha-recover] deployed_release_sha=${DEPLOYED_RELEASE_SHA}"
-            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA" cluster-release-only
             "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
               --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --recover-only
             if [ -f "$META_HA_STATE_ROOT/transaction.json" ]; then
@@ -72,7 +71,8 @@ jobs:
                   "rm -f /run/linasbot-maintenance '$META_HA_STATE_ROOT/maintenance'"
               fi
             fi
-            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
+              "$EXPECTED_RELEASE_SHA" cluster-release-only
             curl -fsS https://www.linasaibot.com/api/ready >/tmp/meta-ha-recover-ready.json
             "$REPO_DIR/venv/bin/python" - <<'PY'
             import json

@@ -328,10 +328,8 @@ verify_node() {
     durable_queues_on=1
   fi
   for queue in "${WORKER_QUEUES[@]}"; do
-    if [ "$durable_queues_on" = "1" ] || systemctl is-enabled --quiet "linasbot-worker@${queue}.service"; then
-      verify_unit_runtime \
-        "linasbot-worker@${queue}.service" "$repo_dir" worker "$queue" "$verify_runtime_state"
-    elif systemctl is-active --quiet "linasbot-worker@${queue}.service"; then
+    if systemctl is-enabled --quiet "linasbot-worker@${queue}.service" || \
+       systemctl is-active --quiet "linasbot-worker@${queue}.service"; then
       verify_unit_runtime \
         "linasbot-worker@${queue}.service" "$repo_dir" worker "$queue" "$verify_runtime_state"
     fi

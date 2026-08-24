@@ -16,6 +16,14 @@ on:
         options:
           - "true"
           - "false"
+      ENABLE_WEB_CHAT:
+        description: "Also enable WEB_CHAT_PUBLIC_AVAILABILITY in the same approval"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
 
 concurrency:
   group: meta-social-cutover
@@ -39,6 +47,7 @@ jobs:
         env:
           META_HA_STAGE_ONLY: "true"
           GRANT_PILOT: ${{ github.event.inputs.GRANT_PILOT }}
+          ENABLE_WEB_CHAT: ${{ github.event.inputs.ENABLE_WEB_CHAT }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -46,7 +55,7 @@ jobs:
           port: 22
           script_stop: false
           command_timeout: 22m
-          envs: META_HA_STAGE_ONLY,GRANT_PILOT
+          envs: META_HA_STAGE_ONLY,GRANT_PILOT,ENABLE_WEB_CHAT
           script: |
             set -euo pipefail
             test "$(id -u)" -eq 0 && test "$(id -g)" -eq 0
@@ -194,6 +203,23 @@ jobs:
             sleep "$DRAIN_SECONDS"
             "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
               --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --recover-only
+            ARTIFACTS="transaction.json workers.before.json prestage.authority.json env.before"
+            orphan_maintenance=1
+            for item in $ARTIFACTS; do
+              if [ -e "$META_HA_STATE_ROOT/$item" ] || [ -L "$META_HA_STATE_ROOT/$item" ]; then
+                orphan_maintenance=0
+                break
+              fi
+            done
+            if [ "$orphan_maintenance" = "1" ]; then
+              if [ -e "$MAINTENANCE_FILE" ] || [ -e "$PERSISTENT_MAINTENANCE_FILE" ]; then
+                echo "[wa-phase1-ha] clearing_orphan_maintenance_before_apply=true"
+                rm -f "$MAINTENANCE_FILE" "$PERSISTENT_MAINTENANCE_FILE"
+                ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                  "root@${PEER_HOST}" \
+                  "rm -f /run/linasbot-maintenance '$META_HA_STATE_ROOT/maintenance'"
+              fi
+            fi
             bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
               "$EXPECTED_RELEASE_SHA" cluster-release-only
             "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
@@ -270,3 +296,67 @@ jobs:
             TRANSACTION_COMPLETE=true
             MAINTENANCE_ARMED=false
             echo "[wa-phase1-ha] COMPLETE_OK"
+            if [ "${ENABLE_WEB_CHAT:-true}" = "true" ]; then
+              export META_HA_STAGE_ONLY=true SKIP_MUTATION_LOCK=true
+              if [ -f "$REPO_DIR/scripts/prod_apply_web_chat_public_ha.sh" ]; then
+                bash "$REPO_DIR/scripts/prod_apply_web_chat_public_ha.sh"
+              else
+                bash -s <<'WEBINLINE'
+            set -euo pipefail
+            REPO_DIR=/opt/linasbot
+            PEER_HOST="${LINAS_HA_PEER_HOST:-10.106.0.4}"
+            META_HA_STATE_ROOT=/var/lib/linasbot/meta-ha
+            ENV_BACKUP="$META_HA_STATE_ROOT/env.before"
+            PY="$REPO_DIR/venv/bin/python"
+            install -d -m 0700 -o root -g root "$META_HA_STATE_ROOT"
+            install -m 0600 -o root -g root /dev/null "$META_HA_STATE_ROOT/maintenance"
+            install -m 0600 -o root -g root /dev/null /run/linasbot-maintenance
+            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes "root@${PEER_HOST}" \
+              "install -d -m 0700 -o root -g root '$META_HA_STATE_ROOT' && install -m 0600 -o root -g root /dev/null '$META_HA_STATE_ROOT/maintenance' && install -m 0600 -o root -g root /dev/null '/run/linasbot-maintenance'"
+            DRAIN_SECONDS="$("$PY" -c 'import sys; from dotenv import dotenv_values; value = int(str(dotenv_values(sys.argv[1], interpolate=False).get("META_HA_LB_DRAIN_SECONDS") or "")); sys.exit("invalid HA drain interval") if not 30 <= value <= 300 else print(value)' "$REPO_DIR/.env")"
+            sleep "$DRAIN_SECONDS"
+            "$PY" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --recover-only
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA" cluster-release-only
+            "$PY" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --register-prestage-backup
+            "$PY" -I - <<'PY'
+            import hmac, sys
+            from pathlib import Path
+            sys.path.insert(0, "/opt/linasbot")
+            from scripts.ha.meta_env_file import atomic_update_env
+            env_path = Path("/opt/linasbot/.env")
+            updates = {"WEB_CHAT_PUBLIC_AVAILABILITY": "true"}
+            atomic_update_env(env_path, updates)
+            for key, expected in updates.items():
+                values = [line.split("=", 1)[1] for line in env_path.read_text(encoding="utf-8").splitlines() if "=" in line and line.split("=",1)[0].strip()==key]
+                if len(values)!=1 or not hmac.compare_digest(values[0], expected):
+                    raise SystemExit(f"[web-chat-stage] staged value mismatch: {key}")
+                print(f"[web-chat-stage] {key}:match=true")
+            print("[web-chat-stage] COMPLETE_OK")
+            PY
+            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes "root@${PEER_HOST}" "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true; bash -s" <<'STAGEEOF'
+            set -euo pipefail
+            /opt/linasbot/venv/bin/python -I /opt/linasbot/scripts/ha/sync_meta_env_to_peer.py --expected-sha "$EXPECTED_RELEASE_SHA" --verify-stage-authority
+            /opt/linasbot/venv/bin/python -I - <<'PY'
+            import hmac, sys
+            from pathlib import Path
+            sys.path.insert(0, "/opt/linasbot")
+            from scripts.ha.meta_env_file import atomic_update_env
+            env_path = Path("/opt/linasbot/.env")
+            updates = {"WEB_CHAT_PUBLIC_AVAILABILITY": "true"}
+            atomic_update_env(env_path, updates)
+            for key, expected in updates.items():
+                values = [line.split("=", 1)[1] for line in env_path.read_text(encoding="utf-8").splitlines() if "=" in line and line.split("=",1)[0].strip()==key]
+                if len(values)!=1 or not hmac.compare_digest(values[0], expected):
+                    raise SystemExit(f"[web-chat-stage] staged value mismatch: {key}")
+                print(f"[web-chat-stage] {key}:match=true")
+            print("[web-chat-stage] COMPLETE_OK")
+            PY
+            STAGEEOF
+            "$PY" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --local-prestage-backup "$ENV_BACKUP"
+            "$PY" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" --expected-sha "$EXPECTED_RELEASE_SHA" --finalize
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
+            echo "[web-chat-ha] COMPLETE_OK"
+            WEBINLINE
+              fi
+            fi
+            echo "[prod-social-enable] COMPLETE_OK"
