@@ -152,7 +152,10 @@ async def test_comment_ai_credits_and_success(tt_db, monkeypatch) -> None:
 
     async def _reply(**_k):
         return SimpleNamespace(
-            stop=False, reply="thanks", reason="ok", metadata={"model": "m", "tokens": 3, "cost_usd": 0.0}
+            stop=True,
+            reply="thanks",
+            reason="v2_comment_generated",
+            metadata={"model": "m", "tokens": 3, "cost_usd": 0.0},
         )
 
     async def _publish(**_k):
@@ -189,7 +192,7 @@ async def test_comment_ai_publish_failure(tt_db, monkeypatch) -> None:
     monkeypatch.setattr("services.tiktok_business.comment_ai.ai_generation_blocked", lambda *_a, **_k: False)
 
     async def _reply(**_k):
-        return SimpleNamespace(stop=False, reply="thanks", reason="ok", metadata={})
+        return SimpleNamespace(stop=True, reply="thanks", reason="v2_comment_generated", metadata={})
 
     async def _publish(**_k):
         raise TikTokApiError("denied", tiktok_code=40001, request_id="req-fail", retryable=False)
@@ -207,3 +210,40 @@ async def test_comment_ai_publish_failure(tt_db, monkeypatch) -> None:
     )
     assert result["ok"] is False
     assert result["request_id"] == "req-fail"
+
+
+@pytest.mark.asyncio
+async def test_comment_ai_skips_when_v2_has_no_reply(tt_db, monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    connection = seed_connection(tt_db)
+    content = TikTokContentRepository(tt_db)
+    media = content.upsert_media(tenant_id="linas", connection_id=connection.id, item_id="v3")
+    content.upsert_comment(
+        tenant_id="linas",
+        connection_id=connection.id,
+        media=media,
+        payload={"comment_id": "c-empty", "text": "hi"},
+    )
+    tt_db.commit()
+    monkeypatch.setattr("services.tiktok_business.comment_ai.comments_action_enabled", lambda *_a, **_k: True)
+    monkeypatch.setattr("services.tiktok_business.comment_ai.ai_generation_blocked", lambda *_a, **_k: False)
+    published = {"called": False}
+
+    async def _reply(**_k):
+        return SimpleNamespace(stop=True, reply=None, reason="comments_toggle_off", metadata={})
+
+    async def _publish(**_k):
+        published["called"] = True
+        return {"request_id": "should-not-publish"}
+
+    monkeypatch.setattr("services.tiktok_business.comment_ai.run_customer_reply_v2_comment", _reply)
+    monkeypatch.setattr("services.tiktok_business.comment_ai.create_comment_reply", _publish)
+    from services.tiktok_business.comment_ai import process_tiktok_comment_ai
+
+    result = await process_tiktok_comment_ai(
+        tenant_id="linas", connection_id=connection.id, comment_id="c-empty", item_id="v3"
+    )
+    assert result["skipped"] is True
+    assert result["reason"] == "comments_toggle_off"
+    assert published["called"] is False

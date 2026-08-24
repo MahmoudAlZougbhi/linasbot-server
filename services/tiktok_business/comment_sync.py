@@ -22,7 +22,7 @@ def _utcnow() -> datetime:
 async def _list_videos(*, access_token: str, open_id: str, cursor: str) -> dict[str, Any]:
     params: dict[str, Any] = {
         "business_id": open_id,
-        "fields": '["item_id","caption","thumbnail_url","share_url","create_time","status"]',
+        "fields": '["item_id","caption","thumbnail_url","share_url","create_time"]',
         "max_count": MAX_VIDEOS_PER_SYNC,
     }
     if cursor:

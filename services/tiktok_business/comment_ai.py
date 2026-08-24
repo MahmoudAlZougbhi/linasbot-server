@@ -98,7 +98,8 @@ async def process_tiktok_comment_ai(
     tokens = int((getattr(outcome, "metadata", None) or {}).get("tokens") or 0)
     cost = float((getattr(outcome, "metadata", None) or {}).get("cost_usd") or 0)
     reason = str(getattr(outcome, "reason", None) or "")
-    if getattr(outcome, "stop", False) or not reply_text:
+    # V2 sets stop=True when a reply is final (same as Meta comments). Skip only if empty.
+    if not reply_text:
         with whatsapp_session() as session:
             content = TikTokContentRepository(session)
             job, _ = content.get_or_create_reply_job(
