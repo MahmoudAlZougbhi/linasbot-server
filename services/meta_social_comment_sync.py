@@ -41,25 +41,26 @@ def _binding_by_id(registry: Any, binding_id: str) -> MetaAssetBinding | None:
 
 def _comment_reply_enabled(binding: MetaAssetBinding) -> bool:
     from services.cm.actions import comments_enforcement_decision
-    from services.meta_app_registry import get_meta_app_registry
-    from services.meta_comment_reply_settings import get_comment_reply_setting
 
+    registry = get_meta_app_registry()
+    fresh = _binding_by_id(registry, binding.binding_id) or binding
     setting = get_comment_reply_setting(
-        tenant_id=binding.tenant_id,
-        app_key=binding.app_key,
-        channel=binding.channel,
-        asset_id=binding.asset_id,
+        tenant_id=fresh.tenant_id,
+        app_key=fresh.app_key,
+        channel=fresh.channel,
+        asset_id=fresh.asset_id,
     )
     try:
-        credential = get_meta_app_registry().get_credential(binding)
+        credential = registry.get_credential(fresh)
     except Exception:
         return False
     decision = comments_enforcement_decision(
-        tenant_id=binding.tenant_id,
-        channel=binding.channel,
+        tenant_id=fresh.tenant_id,
+        channel=fresh.channel,
         per_asset_enabled=bool(setting.enabled),
-        binding=binding,
+        binding=fresh,
         credential=credential,
+        registry=registry,
     )
     return bool(decision["allow"])
 

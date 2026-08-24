@@ -325,6 +325,11 @@ def test_readonly_verifier_normalizes_legacy_file_defaults_before_parity(
         "webhook_subscribed_fields",
         "webhook_subscription_error",
         "webhook_subscription_checked_at",
+        "comment_permission_status",
+        "comment_permission_verified_at",
+        "comment_permission_source",
+        "comment_permission_credential_id",
+        "comment_permission_token_fingerprint",
     ):
         binding.pop(field, None)
     store.write_text(json.dumps(legacy), encoding="utf-8")

@@ -275,7 +275,12 @@ def _comment_permission_status_for_binding(binding: Any, *, registry: Any) -> st
         return "verified_granted" if required.issubset(granted) else "verified_missing"
 
     status = effective_comment_permission_status(binding, credential)
-    return status
+    if status != "unknown":
+        return status
+    from services.meta_comment_permission_verification import verify_comment_permission_from_stored_scopes
+
+    inferred, _source = verify_comment_permission_from_stored_scopes(binding, credential)
+    return inferred
 
 
 def _comment_permission_statuses(bindings: list[Any], *, registry: Any) -> list[str]:

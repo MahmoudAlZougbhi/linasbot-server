@@ -55,12 +55,23 @@ On OAuth reconnect and on comment sync/reconcile ticks:
 
 ### Deploy order (requires approval)
 
-1. Apply Alembic migration on managed Postgres (node01/node02 share the same DB).
-2. Deploy application build containing this PR.
-3. Verify `/api/mobile/integrations` comments state for Instagram shows `verified_granted` after first reconcile tick (~60s) or reconnect.
-4. Confirm DM paths unchanged (Facebook DM + Instagram DM regression tests).
+1. Apply Alembic migration on managed Postgres (node01/node02 share the same DB):
+   `alembic upgrade 20260826_meta_comment_perm`
+2. **Before any node receives the new build on the load balancer**, run backfill once:
+   `python scripts/backfill_meta_comment_permission_verification.py`
+   Optional dry-run first: `--dry-run`
+3. Deploy the same clean SHA to **both** node01 and node02; verify identical revision:
+   `alembic current` → `20260826_meta_comment_perm`
+4. Verify `/api/mobile/integrations` comments state for Facebook still shows granted scopes.
+5. Confirm DM paths unchanged (Facebook DM + Instagram DM regression on device).
 
 **Do not deploy to production without explicit approval.**
+
+### Why backfill before LB
+
+The migration adds columns defaulting to `unknown`. Old code ignores them. New code reads them.
+Running backfill **after migration, before LB traffic hits new code** keeps working Facebook
+Comments on `verified_granted` instead of briefly appearing as unknown.
 
 ## Rollback
 

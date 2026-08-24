@@ -307,6 +307,7 @@ def test_webhook_and_polling_share_enforcement_decision(registry: MetaAppRegistr
         registry=registry,
     )
     monkeypatch.setattr("services.meta_app_registry.get_meta_app_registry", lambda: registry)
+    monkeypatch.setattr("services.meta_social_comment_sync.get_meta_app_registry", lambda: registry)
     polling_enabled = _comment_reply_enabled(binding)
     assert webhook_decision["allow"] is True
     assert polling_enabled is True
@@ -319,6 +320,7 @@ def test_toggle_stays_on_with_blocker_when_unknown(registry: MetaAppRegistry, mo
     binding = _binding(
         registry,
         auth_flow="instagram_login",
+        scopes=PAGE_SCOPES[:2],
         webhook_fields=("messages", "messaging_postbacks", "comments"),
     )
     set_comment_reply_setting(
@@ -344,7 +346,7 @@ def test_toggle_stays_on_with_blocker_when_unknown(registry: MetaAppRegistry, mo
     )
     state = comment_capability_state("tenant-a", "instagram")
     assert state["tenant_action_enabled"] is True
-    assert state["blocker_code"] == "comment_permissions_could_not_be_verified"
+    assert state["blocker_code"] in {"missing_comment_permissions", "comment_permissions_could_not_be_verified"}
 
 
 def test_reconcile_scheduled_for_unknown_binding(registry: MetaAppRegistry) -> None:

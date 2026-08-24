@@ -222,7 +222,11 @@ async def test_legacy_comment_enable_uses_direct_instagram_subscription(monkeypa
         webhook_subscribed_fields=("messages", "messaging_postbacks"),
     )
     binding.public_dict = lambda: {"binding_id": binding.binding_id}
-    registry = SimpleNamespace(_append_audit=lambda _event: None)
+    credential = SimpleNamespace(scopes=("instagram_business_manage_comments",))
+    registry = SimpleNamespace(
+        _append_audit=lambda _event: None,
+        get_credential=lambda _binding: credential,
+    )
     calls: list[tuple[object, object]] = []
 
     async def _ensure(candidate, *, registry):
@@ -261,6 +265,7 @@ async def test_legacy_comment_enable_uses_direct_instagram_subscription(monkeypa
             "allow": True,
             "reason": "enabled",
             "readiness": {"cm_action_enabled": True},
+            "permission": {"status": "verified_granted"},
         },
     )
 

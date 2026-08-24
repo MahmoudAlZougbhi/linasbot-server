@@ -291,23 +291,27 @@ def maybe_reconcile_binding_comment_permission(
     return current - checked_at >= _RECONCILE_BACKOFF_SECONDS
 
 
-async def bootstrap_unknown_comment_permissions(
+def bootstrap_unknown_comment_permissions(
     *,
     registry: MetaAppRegistry | None = None,
     actor_id: str = "migration_stored_scopes",
-) -> int:
+) -> dict[str, int]:
     """One-shot migration helper: derive verification from stored credential scopes."""
 
     current_registry = registry or get_meta_app_registry()
     updated = 0
+    skipped = 0
     for binding in current_registry.list_bindings(include_inactive=False, include_superseded=False):
         if binding.status != "active":
+            skipped += 1
             continue
         try:
             credential = current_registry.get_credential(binding)
         except Exception:
+            skipped += 1
             continue
         if effective_comment_permission_status(binding, credential) != "unknown":
+            skipped += 1
             continue
         persist_comment_permission_from_credential(
             binding,
@@ -317,4 +321,4 @@ async def bootstrap_unknown_comment_permissions(
             actor_id=actor_id,
         )
         updated += 1
-    return updated
+    return {"updated": updated, "skipped": skipped}

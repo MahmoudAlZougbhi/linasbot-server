@@ -169,8 +169,21 @@ def comments_enforcement_decision(
 
     resolved_binding = binding
     resolved_credential = credential
+    current_registry = registry
+    if resolved_binding is not None and current_registry is not None:
+        fresh = next(
+            (
+                item
+                for item in current_registry.list_bindings(include_inactive=True, include_superseded=True)
+                if item.binding_id == resolved_binding.binding_id
+            ),
+            None,
+        )
+        if fresh is not None:
+            resolved_binding = fresh
     if resolved_binding is not None and resolved_credential is None:
-        current_registry = registry or get_meta_app_registry()
+        if current_registry is None:
+            current_registry = get_meta_app_registry()
         resolved_credential = current_registry.get_credential(resolved_binding)
 
     readiness = evaluate_comments_meta_readiness(
@@ -193,7 +206,8 @@ def comments_enforcement_decision(
 
     permission_status = effective_comment_permission_status(resolved_binding, resolved_credential)
     if permission_status == "unknown":
-        current_registry = registry or get_meta_app_registry()
+        if current_registry is None:
+            current_registry = get_meta_app_registry()
         try:
             resolved_binding = persist_comment_permission_from_credential(
                 resolved_binding,
