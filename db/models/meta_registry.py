@@ -63,6 +63,21 @@ class MetaAssetBindingRow(Base):
     webhook_subscription_checked_at: Mapped[float] = mapped_column(
         Float, nullable=False, server_default=text("0")
     )
+    comment_permission_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default=text("'unknown'")
+    )
+    comment_permission_verified_at: Mapped[float] = mapped_column(
+        Float, nullable=False, server_default=text("0")
+    )
+    comment_permission_source: Mapped[str] = mapped_column(
+        String(64), nullable=False, server_default=text("''")
+    )
+    comment_permission_credential_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, server_default=text("''")
+    )
+    comment_permission_token_fingerprint: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default=text("''")
+    )
 
 
 class MetaBindingCredentialRow(Base):

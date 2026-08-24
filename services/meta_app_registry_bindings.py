@@ -248,6 +248,11 @@ class MetaAppRegistryBindingsMixin:
             webhook_subscribed_fields=tuple(str(item) for item in raw.get("webhook_subscribed_fields") or ()),
             webhook_subscription_error=str(raw.get("webhook_subscription_error") or ""),
             webhook_subscription_checked_at=float(raw.get("webhook_subscription_checked_at") or 0),
+            comment_permission_status=str(raw.get("comment_permission_status") or "unknown"),
+            comment_permission_verified_at=float(raw.get("comment_permission_verified_at") or 0),
+            comment_permission_source=str(raw.get("comment_permission_source") or ""),
+            comment_permission_credential_id=str(raw.get("comment_permission_credential_id") or ""),
+            comment_permission_token_fingerprint=str(raw.get("comment_permission_token_fingerprint") or ""),
         )
 
     def list_bindings(
@@ -261,6 +266,54 @@ class MetaAppRegistryBindingsMixin:
         if not include_inactive:
             bindings = [binding for binding in bindings if binding.active]
         return sorted(bindings, key=lambda item: (item.tenant_id, item.channel, item.asset_id, item.created_at))
+
+    def update_comment_permission_verification(
+        self,
+        binding_id: str,
+        *,
+        comment_permission_status: str,
+        comment_permission_verified_at: float,
+        comment_permission_source: str,
+        comment_permission_credential_id: str,
+        comment_permission_token_fingerprint: str,
+        actor_id: str = "system",
+    ) -> MetaAssetBinding:
+        target = str(binding_id or "").strip()
+        if not target:
+            raise MetaRegistryError("binding_id is required")
+        now = time.time()
+        with self._locked():
+            state = self._read_unlocked()
+            raw = state["bindings"].get(target)
+            if not isinstance(raw, dict):
+                raise MetaRegistryError("binding was not found")
+            changed = dict(raw)
+            changed["comment_permission_status"] = str(comment_permission_status or "unknown")
+            changed["comment_permission_verified_at"] = (
+                float(comment_permission_verified_at)
+                if comment_permission_verified_at is not None
+                else now
+            )
+            changed["comment_permission_source"] = str(comment_permission_source or "")
+            changed["comment_permission_credential_id"] = str(comment_permission_credential_id or "")
+            changed["comment_permission_token_fingerprint"] = str(comment_permission_token_fingerprint or "")
+            changed["updated_at"] = now
+            state["bindings"][target] = changed
+            self._write_unlocked(state)
+            binding = self._binding_from_dict(changed)
+            self._append_audit(
+                {
+                    "event": "comment_permission_verified",
+                    "actor_id": actor_id,
+                    "tenant_id": binding.tenant_id,
+                    "channel": binding.channel,
+                    "asset_id": binding.asset_id,
+                    "app_key": binding.app_key,
+                    "binding_id": binding.binding_id,
+                    "result": binding.comment_permission_status,
+                }
+            )
+            return binding
 
     def find_bindings_for_asset_key(
         self,
@@ -300,6 +353,27 @@ class MetaAppRegistryBindingsMixin:
             "archived_at": 0.0,
         }
         return resolved_id
+
+    @staticmethod
+    def _comment_permission_fields_for_binding(
+        binding: MetaAssetBinding,
+        credential: MetaBindingCredential,
+        *,
+        now: float,
+    ) -> dict[str, Any]:
+        from services.meta_comment_permission_verification import (
+            comment_permission_token_fingerprint,
+            verify_comment_permission_from_stored_scopes,
+        )
+
+        status, source = verify_comment_permission_from_stored_scopes(binding, credential)
+        return {
+            "comment_permission_status": status,
+            "comment_permission_verified_at": now,
+            "comment_permission_source": source,
+            "comment_permission_credential_id": binding.credential_id,
+            "comment_permission_token_fingerprint": comment_permission_token_fingerprint(credential.access_token),
+        }
 
     def authorize_oauth_asset(
         self,
@@ -424,6 +498,25 @@ class MetaAppRegistryBindingsMixin:
                     webhook_subscribed_fields=tuple(preserved_fields),
                     webhook_subscription_error=preserved_error,
                     webhook_subscription_checked_at=preserved_checked_at,
+                    **self._comment_permission_fields_for_binding(
+                        MetaAssetBinding(
+                            binding_id=binding_id,
+                            tenant_id=tenant,
+                            channel=channel,
+                            asset_id=asset,
+                            page_id=page_id.strip(),
+                            instagram_account_id=instagram_account_id.strip(),
+                            app_key=app_key,
+                            credential_id=credential_id,
+                            status=status,
+                            generation=generation,
+                            created_at=created_at,
+                            updated_at=now,
+                            auth_flow=resolved_auth_flow,
+                        ),
+                        credential,
+                        now=now,
+                    ),
                 )
                 state["bindings"][binding_id] = asdict(updated)
                 for duplicate in same_key:
@@ -481,6 +574,25 @@ class MetaAppRegistryBindingsMixin:
                 webhook_subscribed_fields=webhook_subscribed_fields,
                 webhook_subscription_error=webhook_subscription_error,
                 webhook_subscription_checked_at=webhook_subscription_checked_at,
+                **self._comment_permission_fields_for_binding(
+                    MetaAssetBinding(
+                        binding_id=binding_id,
+                        tenant_id=tenant,
+                        channel=channel,
+                        asset_id=asset,
+                        page_id=page_id.strip(),
+                        instagram_account_id=instagram_account_id.strip(),
+                        app_key=app_key,
+                        credential_id=credential_id,
+                        status=status,
+                        generation=1,
+                        created_at=now,
+                        updated_at=now,
+                        auth_flow=resolved_auth_flow,
+                    ),
+                    credential,
+                    now=now,
+                ),
             )
             state["bindings"][binding_id] = asdict(binding)
             self._write_unlocked(state)

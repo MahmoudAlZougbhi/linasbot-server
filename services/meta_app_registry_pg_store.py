@@ -81,6 +81,11 @@ def _binding_row_to_dict(row: MetaAssetBindingRow) -> dict[str, Any]:
         "webhook_subscribed_fields": list(fields),
         "webhook_subscription_error": row.webhook_subscription_error or "",
         "webhook_subscription_checked_at": float(row.webhook_subscription_checked_at or 0),
+        "comment_permission_status": row.comment_permission_status or "unknown",
+        "comment_permission_verified_at": float(row.comment_permission_verified_at or 0),
+        "comment_permission_source": row.comment_permission_source or "",
+        "comment_permission_credential_id": row.comment_permission_credential_id or "",
+        "comment_permission_token_fingerprint": row.comment_permission_token_fingerprint or "",
     }
 
 
@@ -153,6 +158,11 @@ def save_state(session: Session, state: dict[str, Any]) -> None:
                     webhook_subscribed_fields=list(fields),
                     webhook_subscription_error=str(raw.get("webhook_subscription_error") or ""),
                     webhook_subscription_checked_at=float(raw.get("webhook_subscription_checked_at") or 0),
+                    comment_permission_status=str(raw.get("comment_permission_status") or "unknown"),
+                    comment_permission_verified_at=float(raw.get("comment_permission_verified_at") or 0),
+                    comment_permission_source=str(raw.get("comment_permission_source") or ""),
+                    comment_permission_credential_id=str(raw.get("comment_permission_credential_id") or ""),
+                    comment_permission_token_fingerprint=str(raw.get("comment_permission_token_fingerprint") or ""),
                 )
             )
         session.flush()

@@ -77,6 +77,10 @@ BLOCKER_MESSAGES: dict[str, str] = {
     "plan_comments_disabled": (
         "Comment automation is not included on your current plan. Upgrade from Lite to Starter or higher."
     ),
+    "comment_permissions_could_not_be_verified": (
+        "Comment permissions could not be verified for the current token. "
+        "The connection stays enabled, but AI comment replies are paused until verification succeeds."
+    ),
 }
 
 
@@ -257,6 +261,27 @@ def _missing_scopes_for_capability(
     return sorted(missing)
 
 
+def _comment_permission_status_for_binding(binding: Any, *, registry: Any) -> str:
+    from services.meta_comment_permission_verification import effective_comment_permission_status
+
+    try:
+        credential = registry.get_credential(binding)
+    except Exception:
+        return "unknown"
+
+    if not hasattr(binding, "credential_id"):
+        required = set(required_comment_scopes_for_binding(binding))
+        granted = set(getattr(credential, "scopes", ()) or ())
+        return "verified_granted" if required.issubset(granted) else "verified_missing"
+
+    status = effective_comment_permission_status(binding, credential)
+    return status
+
+
+def _comment_permission_statuses(bindings: list[Any], *, registry: Any) -> list[str]:
+    return [_comment_permission_status_for_binding(binding, registry=registry) for binding in bindings]
+
+
 def _comment_webhook_subscribed(binding: Any) -> bool:
     fields = {str(item).strip().lower() for item in (getattr(binding, "webhook_subscribed_fields", ()) or ())}
     channel = str(getattr(binding, "channel", "") or "")
@@ -320,6 +345,7 @@ def _status_and_blocker(
     live_verified: bool,
     comments_policy_ok: bool,
     missing_scopes: list[str],
+    comment_permission_statuses: list[str] | None = None,
 ) -> tuple[str, str | None, str | None]:
     """Return (status, blocker_code, blocker_message)."""
 
@@ -338,8 +364,11 @@ def _status_and_blocker(
         code = "meta_approval_required"
         return "meta_approval_required", code, BLOCKER_MESSAGES[code]
     if not permission_present:
-        # Internal Standard Access (linas) with real missing scopes — never pretend Meta approval
-        # is the issue, and never fabricate permissions.
+        if capability == "comments" and comment_permission_statuses and any(
+            status == "unknown" for status in comment_permission_statuses
+        ):
+            code = "comment_permissions_could_not_be_verified"
+            return "configuring", code, BLOCKER_MESSAGES[code]
         code = "missing_comment_permissions" if capability == "comments" else "missing_dm_permissions"
         status = "permission_required" if capability == "comments" else "reauthorization_required"
         message = _missing_comment_permissions_message(platform) if capability == "comments" else BLOCKER_MESSAGES[code]
@@ -394,10 +423,18 @@ def capability_state(tenant_id: str, platform: str, capability: CapabilityKey) -
     bindings = canonical_channel_bindings(tenant_id, platform_key)
     registry = get_meta_app_registry()
     requested_enabled = _action_requested(tenant_id, platform_key, capability)
-    missing_scopes = (
-        _missing_scopes_for_capability(bindings, registry=registry, capability=capability) if bindings else []
-    )
-    permission_present = bool(bindings) and not missing_scopes
+    comment_permission_statuses: list[str] = []
+    if capability == "comments" and bindings:
+        comment_permission_statuses = _comment_permission_statuses(bindings, registry=registry)
+        permission_present = bool(comment_permission_statuses) and all(
+            status == "verified_granted" for status in comment_permission_statuses
+        )
+        missing_scopes = _missing_scopes_for_capability(bindings, registry=registry, capability=capability)
+    else:
+        missing_scopes = (
+            _missing_scopes_for_capability(bindings, registry=registry, capability=capability) if bindings else []
+        )
+        permission_present = bool(bindings) and not missing_scopes
     connection_healthy = bool(bindings) and all(_binding_connection_healthy(b, registry=registry) for b in bindings)
     advanced_access, approval_domain = _advanced_access_for_bindings(bindings)
     comments_policy_ok = comments_policy_allows(tenant_id, advanced_access=advanced_access)
@@ -456,6 +493,7 @@ def capability_state(tenant_id: str, platform: str, capability: CapabilityKey) -
         live_verified=live_verified,
         comments_policy_ok=comments_policy_ok,
         missing_scopes=missing_scopes,
+        comment_permission_statuses=comment_permission_statuses if capability == "comments" else None,
     )
 
     return {
@@ -474,6 +512,7 @@ def capability_state(tenant_id: str, platform: str, capability: CapabilityKey) -
         "blocker": blocker_code,
         "status": status,
         "missing_scopes": missing_scopes,
+        "comment_permission_statuses": comment_permission_statuses if capability == "comments" else [],
         "last_checked_at": checked_at,
         "app_review": {
             "advanced_access_approved": advanced_access,
