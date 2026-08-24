@@ -24,19 +24,27 @@ jobs:
             set -euo pipefail
             echo "[wa-probe] start"
             ENV_FILE=/opt/linasbot/.env
-            set -a; . "$ENV_FILE"; set +a
-            echo "[wa-probe] dsn_scheme=$(python3 - <<'P'
-            import os
+            echo "[wa-probe] dsn_scheme=$(/opt/linasbot/venv/bin/python - <<'P'
+            from pathlib import Path
             from urllib.parse import urlparse
-            u=os.environ.get('LINAS_WHATSAPP_DATABASE_URL','')
-            print(urlparse(u).scheme or 'empty')
+
+            from dotenv import dotenv_values
+
+            values = dotenv_values(Path("/opt/linasbot/.env"), interpolate=False)
+            u = str(values.get("LINAS_WHATSAPP_DATABASE_URL") or "")
+            print(urlparse(u).scheme or "empty")
             P
             )"
             echo "[wa-probe] which_psql=$(command -v psql || echo missing)"
             /opt/linasbot/venv/bin/python - <<'PY'
-            import os, sys
+            import sys
+            from pathlib import Path
             from urllib.parse import urlparse
-            raw = os.environ.get("LINAS_WHATSAPP_DATABASE_URL") or ""
+
+            from dotenv import dotenv_values
+
+            values = dotenv_values(Path("/opt/linasbot/.env"), interpolate=False)
+            raw = str(values.get("LINAS_WHATSAPP_DATABASE_URL") or "")
             if not raw.strip():
                 print("[wa-probe] missing LINAS_WHATSAPP_DATABASE_URL")
                 sys.exit(1)

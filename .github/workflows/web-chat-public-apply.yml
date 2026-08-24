@@ -1,0 +1,218 @@
+# Two-node HA transaction: enable visitor-facing Website Chat (WEB_CHAT_PUBLIC_AVAILABILITY=true).
+name: Web Chat Public Availability Apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      CONFIRM:
+        description: "Type APPLY_WEB_CHAT_PUBLIC_AVAILABILITY"
+        required: true
+        type: string
+
+concurrency:
+  group: meta-social-cutover
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    name: Apply Web Chat public availability (two-node)
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event.inputs.CONFIRM == 'APPLY_WEB_CHAT_PUBLIC_AVAILABILITY'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: meta-social-cutover
+    steps:
+      - name: Two-node Web Chat public flag
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        env:
+          META_HA_STAGE_ONLY: "true"
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: false
+          command_timeout: 22m
+          envs: META_HA_STAGE_ONLY
+          script: |
+            set -euo pipefail
+            test "$(id -u)" -eq 0 && test "$(id -g)" -eq 0
+            exec 9>/run/lock/linasbot-meta-live.lock
+            flock -x 9
+            export LINAS_PRODUCTION_MUTATION_LOCK_FD=9
+            REPO_DIR=/opt/linasbot
+            DEPLOYED_RELEASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
+            export EXPECTED_RELEASE_SHA="$DEPLOYED_RELEASE_SHA"
+            echo "[web-chat-ha] deployed_release_sha=${DEPLOYED_RELEASE_SHA}"
+            if ! git -C "$REPO_DIR" diff --quiet "$DEPLOYED_RELEASE_SHA" -- || \
+               ! git -C "$REPO_DIR" diff --cached --quiet "$DEPLOYED_RELEASE_SHA" --; then
+              echo "[web-chat-ha] deployed tracked files differ from release SHA" >&2
+              exit 1
+            fi
+            stage_web_chat_public_flag() {
+              export EXPECTED_RELEASE_SHA META_HA_STAGE_ONLY
+              /opt/linasbot/venv/bin/python -I /opt/linasbot/scripts/ha/sync_meta_env_to_peer.py \
+                --expected-sha "$EXPECTED_RELEASE_SHA" --verify-stage-authority
+              /opt/linasbot/venv/bin/python -I - <<'PY'
+            import hmac
+            import sys
+            from pathlib import Path
+
+            sys.path.insert(0, "/opt/linasbot")
+            from scripts.ha.meta_env_file import atomic_update_env
+
+            env_path = Path("/opt/linasbot/.env")
+            updates = {"WEB_CHAT_PUBLIC_AVAILABILITY": "true"}
+            atomic_update_env(env_path, updates)
+
+            def read_values(key: str) -> list[str]:
+                return [
+                    line.split("=", 1)[1]
+                    for line in env_path.read_text(encoding="utf-8", errors="strict").splitlines()
+                    if "=" in line
+                    and not line.lstrip().startswith("#")
+                    and line.split("=", 1)[0].strip() == key
+                ]
+
+            for key, expected in updates.items():
+                values = read_values(key)
+                if len(values) != 1 or not hmac.compare_digest(values[0], expected):
+                    raise SystemExit(f"[web-chat-stage] staged value mismatch: {key}")
+                print(f"[web-chat-stage] {key}:match=true")
+            print("[web-chat-stage] COMPLETE_OK")
+            PY
+            }
+            PEER_HOST="${LINAS_HA_PEER_HOST:-10.106.0.4}"
+            MAINTENANCE_FILE=/run/linasbot-maintenance
+            META_HA_STATE_ROOT=/var/lib/linasbot/meta-ha
+            PERSISTENT_MAINTENANCE_FILE="$META_HA_STATE_ROOT/maintenance"
+            ENV_BACKUP=""
+            MAINTENANCE_ARMED=false
+            TRANSACTION_COMPLETE=false
+            fail_closed_cleanup() {
+              status=$?
+              trap - EXIT
+              if [ "$TRANSACTION_COMPLETE" != "true" ]; then
+                status=1
+                if [ "$MAINTENANCE_ARMED" = "true" ]; then
+                  sudo install -d -m 0700 -o root -g root "$META_HA_STATE_ROOT" || true
+                  sudo install -m 0600 -o root -g root /dev/null "$PERSISTENT_MAINTENANCE_FILE" || true
+                  install -m 0600 /dev/null "$MAINTENANCE_FILE" || true
+                  ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                    "root@${PEER_HOST}" \
+                    "install -d -m 0700 -o root -g root '$META_HA_STATE_ROOT' && install -m 0600 -o root -g root /dev/null '$PERSISTENT_MAINTENANCE_FILE' && install -m 0600 -o root -g root /dev/null '$MAINTENANCE_FILE'" || true
+                  echo "[web-chat-ha] HA maintenance retained after uncertain transaction" >&2
+                fi
+                if [ -n "$ENV_BACKUP" ]; then
+                  echo "[web-chat-ha] exact pre-stage backup retained at $ENV_BACKUP" >&2
+                fi
+              else
+                sudo rm -f "$ENV_BACKUP"
+              fi
+              exit "$status"
+            }
+            trap fail_closed_cleanup EXIT
+            MAINTENANCE_ARMED=true
+            sudo install -d -m 0700 -o root -g root "$META_HA_STATE_ROOT"
+            sudo install -m 0600 -o root -g root /dev/null "$PERSISTENT_MAINTENANCE_FILE"
+            sudo install -m 0600 -o root -g root /dev/null "$MAINTENANCE_FILE"
+            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+              "root@${PEER_HOST}" \
+              "install -d -m 0700 -o root -g root '$META_HA_STATE_ROOT' && install -m 0600 -o root -g root /dev/null '$PERSISTENT_MAINTENANCE_FILE' && install -m 0600 -o root -g root /dev/null '$MAINTENANCE_FILE'"
+            test "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 \
+              http://127.0.0.1:8003/api/ready || true)" = "503"
+            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+              "root@${PEER_HOST}" \
+              "test \"\$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8003/api/ready || true)\" = \"503\""
+            DRAIN_SECONDS="$("$REPO_DIR/venv/bin/python" -c 'import sys; from dotenv import dotenv_values; value = int(str(dotenv_values(sys.argv[1], interpolate=False).get("META_HA_LB_DRAIN_SECONDS") or "")); sys.exit("invalid HA drain interval") if not 30 <= value <= 300 else print(value)' "$REPO_DIR/.env")"
+            sleep "$DRAIN_SECONDS"
+            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+              --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --recover-only
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
+              "$EXPECTED_RELEASE_SHA" cluster-release-only
+            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+              --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --register-prestage-backup
+            ENV_BACKUP="$META_HA_STATE_ROOT/env.before"
+            if [ -f "$REPO_DIR/scripts/prod_stage_web_chat_public_availability.sh" ]; then
+              bash "$REPO_DIR/scripts/prod_stage_web_chat_public_availability.sh"
+              ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                "root@${PEER_HOST}" \
+                "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true LINAS_PRODUCTION_MUTATION_LOCK_FD=9; bash '$REPO_DIR/scripts/prod_stage_web_chat_public_availability.sh'"
+            else
+              stage_web_chat_public_flag
+              ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                "root@${PEER_HOST}" \
+                "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true LINAS_PRODUCTION_MUTATION_LOCK_FD=9; bash -s" <<'STAGEEOF'
+            set -euo pipefail
+            /opt/linasbot/venv/bin/python -I /opt/linasbot/scripts/ha/sync_meta_env_to_peer.py \
+              --expected-sha "$EXPECTED_RELEASE_SHA" --verify-stage-authority
+            /opt/linasbot/venv/bin/python -I - <<'PY'
+            import hmac
+            import sys
+            from pathlib import Path
+
+            sys.path.insert(0, "/opt/linasbot")
+            from scripts.ha.meta_env_file import atomic_update_env
+
+            env_path = Path("/opt/linasbot/.env")
+            updates = {"WEB_CHAT_PUBLIC_AVAILABILITY": "true"}
+            atomic_update_env(env_path, updates)
+
+            def read_values(key: str) -> list[str]:
+                return [
+                    line.split("=", 1)[1]
+                    for line in env_path.read_text(encoding="utf-8", errors="strict").splitlines()
+                    if "=" in line
+                    and not line.lstrip().startswith("#")
+                    and line.split("=", 1)[0].strip() == key
+                ]
+
+            for key, expected in updates.items():
+                values = read_values(key)
+                if len(values) != 1 or not hmac.compare_digest(values[0], expected):
+                    raise SystemExit(f"[web-chat-stage] staged value mismatch: {key}")
+                print(f"[web-chat-stage] {key}:match=true")
+            print("[web-chat-stage] COMPLETE_OK")
+            PY
+            STAGEEOF
+            fi
+            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+              --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active \
+              --local-prestage-backup "$ENV_BACKUP"
+            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+              --expected-sha "$EXPECTED_RELEASE_SHA" --finalize
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
+            curl -fsS https://linasaibot.com/api/ready >/tmp/web-chat-ready.json
+            "$REPO_DIR/venv/bin/python" - <<'PY'
+            import json
+
+            data = json.load(open("/tmp/web-chat-ready.json"))
+            assert data.get("ok") is True, data
+            checks = data.get("checks") or {}
+            web_ha = checks.get("web_chat_ha") or {}
+            assert web_ha.get("ok") is True, checks
+            print("[web-chat-ha] ready_ok=true web_chat_ha_ok=true")
+            PY
+            curl -fsS -X POST "https://www.linasaibot.com/api/web-chat/session" \
+              -H "Content-Type: application/json" \
+              -d '{"widget_key":"probe0000000001"}' >/tmp/web-chat-session-probe.json || true
+            "$REPO_DIR/venv/bin/python" - <<'PY'
+            import json
+            from pathlib import Path
+
+            raw = Path("/tmp/web-chat-session-probe.json")
+            if not raw.exists():
+                raise SystemExit("[web-chat-ha] session probe missing")
+            body = json.loads(raw.read_text(encoding="utf-8"))
+            detail = body.get("detail")
+            if isinstance(detail, dict) and detail.get("error") == "WEB_CHAT_UNAVAILABLE":
+                raise SystemExit("[web-chat-ha] containment still active after apply")
+            print("[web-chat-ha] containment_probe=not_unavailable")
+            PY
+            TRANSACTION_COMPLETE=true
+            MAINTENANCE_ARMED=false
+            echo "[web-chat-ha] COMPLETE_OK"

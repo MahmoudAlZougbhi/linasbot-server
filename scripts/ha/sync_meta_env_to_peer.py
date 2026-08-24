@@ -933,15 +933,22 @@ def _restart_api(*, maintenance_active: bool) -> None:
 
 
 def _read_unit_runtime_meta_values(unit: str, expected_node_id: str) -> dict[str, str]:
-    raw_pid = subprocess.check_output(
-        ["systemctl", "show", unit, "--property=MainPID", "--value"],
-        text=True,
-        stderr=subprocess.DEVNULL,
-        timeout=PROCESS_TIMEOUT_SECONDS,
-    ).strip()
+    try:
+        raw_pid = subprocess.check_output(
+            ["systemctl", "show", unit, "--property=MainPID", "--value"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=PROCESS_TIMEOUT_SECONDS,
+        ).strip()
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError(f"Current runtime process lookup failed for {unit}") from exc
     if not raw_pid.isdigit() or int(raw_pid) <= 0:
         raise RuntimeError("Current runtime process is unavailable")
-    raw_environment = (Path("/proc") / raw_pid / "environ").read_bytes()
+    environ_path = Path("/proc") / raw_pid / "environ"
+    try:
+        raw_environment = environ_path.read_bytes()
+    except OSError as exc:
+        raise RuntimeError(f"Current runtime environment is unavailable for {unit}") from exc
     values: dict[str, str] = {}
     for entry in raw_environment.split(b"\0"):
         if b"=" not in entry:
@@ -2411,5 +2418,9 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
-        print(f"[meta-ha-env] failed={type(exc).__name__}", file=sys.stderr)
+        detail = str(exc).strip()
+        if detail:
+            print(f"[meta-ha-env] failed={type(exc).__name__}: {detail}", file=sys.stderr)
+        else:
+            print(f"[meta-ha-env] failed={type(exc).__name__}", file=sys.stderr)
         raise SystemExit(1) from None
