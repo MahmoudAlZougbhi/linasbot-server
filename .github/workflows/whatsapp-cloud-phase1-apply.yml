@@ -545,26 +545,24 @@ jobs:
               "test \"\$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8003/api/ready || true)\" = \"503\""
             DRAIN_SECONDS="$("$REPO_DIR/venv/bin/python" -c 'import sys; from dotenv import dotenv_values; value = int(str(dotenv_values(sys.argv[1], interpolate=False).get("META_HA_LB_DRAIN_SECONDS") or "")); sys.exit("invalid HA drain interval") if not 30 <= value <= 300 else print(value)' "$REPO_DIR/.env")"
             sleep "$DRAIN_SECONDS"
-            if staged_phase1_commit_ready; then
+            if [ -f "$META_HA_STATE_ROOT/env.before" ] && [ -f "$META_HA_STATE_ROOT/prestage.authority.json" ]; then
+              staged_phase1_commit_ready
               echo "[wa-phase1-ha] resume_staged_commit=true"
             else
               "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
-                --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --recover-only || true
-              if staged_phase1_commit_ready; then
-                echo "[wa-phase1-ha] resume_staged_commit_after_recover=true"
+                --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --recover-only
+              bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
+                "$EXPECTED_RELEASE_SHA" cluster-release-only
+              "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+                --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --register-prestage-backup
+              if [ -f "$REPO_DIR/scripts/prod_stage_whatsapp_cloud_phase1_flags.sh" ]; then
+                bash "$REPO_DIR/scripts/prod_stage_whatsapp_cloud_phase1_flags.sh"
               else
-                bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
-                  "$EXPECTED_RELEASE_SHA" cluster-release-only
-                "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
-                  --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --register-prestage-backup
-                if [ -f "$REPO_DIR/scripts/prod_stage_whatsapp_cloud_phase1_flags.sh" ]; then
-                  bash "$REPO_DIR/scripts/prod_stage_whatsapp_cloud_phase1_flags.sh"
-                else
-                  stage_whatsapp_phase1_flags
-                fi
-                ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
-                  "root@${PEER_HOST}" \
-                  "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true; bash -s" <<'PEERSTAGEEOF'
+                stage_whatsapp_phase1_flags
+              fi
+              ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                "root@${PEER_HOST}" \
+                "export EXPECTED_RELEASE_SHA='$EXPECTED_RELEASE_SHA' META_HA_STAGE_ONLY=true; bash -s" <<'PEERSTAGEEOF'
             set -euo pipefail
             /opt/linasbot/venv/bin/python -I - <<'PY'
             import os
@@ -635,7 +633,6 @@ jobs:
             print("[wa-phase1-stage] COMPLETE_OK")
             PY
             PEERSTAGEEOF
-              fi
             fi
             finalize_staged_phase1_transaction
             if [ "${ENABLE_WEB_CHAT:-true}" = "true" ]; then
