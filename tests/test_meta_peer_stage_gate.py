@@ -16,6 +16,11 @@ def _state_root(tmp_path: Path) -> Path:
     return root
 
 
+def _arm_maintenance(state_root: Path, volatile: Path) -> None:
+    sync._arm_marker(state_root / sync.PERSISTENT_MAINTENANCE_NAME)
+    sync._arm_marker(volatile)
+
+
 def test_require_peer_stage_authority_accepts_quiesced_peer_state(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -23,17 +28,12 @@ def test_require_peer_stage_authority_accepts_quiesced_peer_state(
     env_path = tmp_path / ".env"
     env_path.write_text("LINAS_NODE_ID=node02\nMETA_APP_ID=app\n", encoding="utf-8")
     state_root = _state_root(tmp_path / "state")
+    volatile = tmp_path / "run-maintenance"
+    _arm_maintenance(state_root, volatile)
     monkeypatch.setattr(sync, "ENV_PATH", env_path)
-    monkeypatch.setattr(sync, "LOCAL_NODE_ID", "node02")
     monkeypatch.setattr(sync, "PEER_NODE_ID", "node02")
-    monkeypatch.setattr(sync, "VOLATILE_MAINTENANCE_PATH", state_root / "volatile-maintenance")
-    monkeypatch.setattr(
-        sync,
-        "_persistent_maintenance_path",
-        lambda root=state_root: root / "maintenance",
-    )
-    (state_root / "maintenance").write_text("", encoding="utf-8")
-    (state_root / "volatile-maintenance").write_text("", encoding="utf-8")
+    monkeypatch.setattr(sync, "VOLATILE_MAINTENANCE_PATH", volatile)
+    monkeypatch.setattr(sync, "_verify_release", lambda _sha: None)
     worker_state = sync._worker_state_payload(
         tx_id="b" * 32,
         role="peer",
@@ -57,16 +57,12 @@ def test_require_peer_stage_authority_rejects_coordinator_role(
     env_path = tmp_path / ".env"
     env_path.write_text("LINAS_NODE_ID=node02\n", encoding="utf-8")
     state_root = _state_root(tmp_path / "state")
+    volatile = tmp_path / "run-maintenance"
+    _arm_maintenance(state_root, volatile)
     monkeypatch.setattr(sync, "ENV_PATH", env_path)
     monkeypatch.setattr(sync, "PEER_NODE_ID", "node02")
-    monkeypatch.setattr(sync, "VOLATILE_MAINTENANCE_PATH", state_root / "volatile-maintenance")
-    monkeypatch.setattr(
-        sync,
-        "_persistent_maintenance_path",
-        lambda root=state_root: root / "maintenance",
-    )
-    (state_root / "maintenance").write_text("", encoding="utf-8")
-    (state_root / "volatile-maintenance").write_text("", encoding="utf-8")
+    monkeypatch.setattr(sync, "VOLATILE_MAINTENANCE_PATH", volatile)
+    monkeypatch.setattr(sync, "_verify_release", lambda _sha: None)
     worker_state = sync._worker_state_payload(
         tx_id="c" * 32,
         role="coordinator",
