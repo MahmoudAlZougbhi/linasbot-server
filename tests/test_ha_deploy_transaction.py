@@ -604,6 +604,7 @@ def test_every_target_activation_coordinator_has_a_durable_all_node_barrier() ->
     retry = source[source.index("retry_distinct_reconciliation() {") : source.index("deployment_recovery_status() {")]
 
     assert "run_target_alembic_migrate" in verify_start
+    assert "run_target_comment_permission_backfill" in verify_start
     assert activation.index('assert_secure_maintenance_marker "$MAINTENANCE_FILE"') < activation.index(
         'start_target_runtime "$tx_dir"'
     )
@@ -1068,6 +1069,12 @@ def test_precommit_alembic_migrate_is_bounded_collectable_and_before_readiness()
     assert "--property=RuntimeMaxSec=120s" in migrate
     assert "LINAS_HA_VERIFY_ONLY=true" in migrate
     assert verify_start.index("run_target_alembic_migrate") < verify_start.index("run_target_readiness_probe")
+    assert verify_start.index("run_target_comment_permission_backfill") < verify_start.index(
+        "run_target_readiness_probe"
+    )
+    assert verify_start.index("run_target_alembic_migrate") < verify_start.index(
+        "run_target_comment_permission_backfill"
+    )
 
 
 def test_precommit_readiness_probe_is_bounded_collectable_and_non_routable() -> None:

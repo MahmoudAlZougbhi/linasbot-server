@@ -68,6 +68,7 @@ RELEASE_READINESS_REPO_PATH=scripts/ha/release_readiness_probe.py
 DEPLOY_PREFLIGHT_REPO_PATH=scripts/ha/integration_capability_preflight.py
 TARGET_PLATFORM_READY_REPO_PATH=scripts/ha/target_platform_readiness_preflight.py
 RELEASE_ALEMBIC_MIGRATE_REPO_PATH=scripts/ha/release_alembic_migrate.py
+RELEASE_COMMENT_BACKFILL_REPO_PATH=scripts/ha/run_meta_comment_permission_backfill.py
 META_IG_SINGLE_MIGRATION_REPO_PATH=alembic/versions/20260820_meta_ig_single.py
 META_IG_SINGLE_COMPAT_MARKER_REPO_PATH=scripts/ha/compat/20260820_meta_ig_single_baseline_v1
 META_IG_SINGLE_COMPAT_MARKER_SHA256=5f0d85c013d155811a95e731a4895f4218d6719720a7378796717631079090c8
@@ -4612,6 +4613,45 @@ run_target_alembic_migrate() {
     die "target alembic migration failed before readiness"
 }
 
+run_target_comment_permission_backfill() {
+  local target_sha="$1"
+  local rc=0
+  validate_sha "$target_sha"
+  if ! git -C "$REPO_DIR" cat-file -e "$target_sha:scripts/backfill_meta_comment_permission_verification.py" 2>/dev/null; then
+    log "comment permission backfill skipped: authorized release has no backfill script"
+    return 0
+  fi
+  test "$(git -C "$REPO_DIR" hash-object "$REPO_DIR/$RELEASE_COMMENT_BACKFILL_REPO_PATH")" = \
+    "$(git -C "$REPO_DIR" rev-parse "$target_sha:$RELEASE_COMMENT_BACKFILL_REPO_PATH")" || \
+    die "target comment permission backfill helper differs from the authorized target blob"
+  systemd-run \
+    --unit=linasbot-ha-comment-backfill.service \
+    --collect \
+    --wait \
+    --service-type=oneshot \
+    --property=User=root \
+    --property=RuntimeMaxSec=120s \
+    --property=TimeoutStartSec=120s \
+    --property=TimeoutStopSec=5s \
+    --property=KillMode=control-group \
+    --property=SendSIGKILL=yes \
+    --property="WorkingDirectory=$REPO_DIR" \
+    --property="EnvironmentFile=-$REPO_DIR/.env" \
+    --property=Environment=PYTHONUNBUFFERED=1 \
+    --property=Environment=PYTHONDONTWRITEBYTECODE=1 \
+    --property=Environment=LINAS_HA_VERIFY_ONLY=true \
+    --property="Environment=LINAS_HA_VERIFY_RELEASE_SHA=$target_sha" \
+    --property=Environment=DISABLE_API_DOCS=1 \
+    --property="Environment=PATH=$REPO_DIR/venv/bin:/usr/local/bin:/usr/bin:/bin" \
+    "$REPO_DIR/venv/bin/python" -B -I "$REPO_DIR/$RELEASE_COMMENT_BACKFILL_REPO_PATH" || rc=$?
+  if [ "$rc" -eq 2 ]; then
+    die "comment permission backfill blocked: unknown active bindings remain"
+  fi
+  if [ "$rc" -ne 0 ]; then
+    die "comment permission backfill failed before readiness"
+  fi
+}
+
 run_target_readiness_probe() {
   local target_sha="$1"
   local load_state
@@ -8573,6 +8613,7 @@ start_target_runtime() {
   # A separate non-routable target process executes the real Redis/Firestore/
   # Meta/etc readiness evaluator. Public /api/ready remains marker-gated 503.
   run_target_alembic_migrate "$target_sha"
+  run_target_comment_permission_backfill "$target_sha"
   run_target_readiness_probe "$target_sha"
   for queue in "${WORKER_QUEUES[@]}"; do
     ! systemctl is-active --quiet "linasbot-worker@${queue}.service" || \
@@ -11867,8 +11908,9 @@ orchestrate() {
 
   # Staging is byte preparation only, so node01 may continue serving the exact
   # baseline while both recoverable backups are built. Target activation calls
-  # start_target_runtime(), which runs Alembic before readiness; withdraw and
-  # durably prove both fixed nodes drained before either activation can begin.
+  # start_target_runtime(), which runs Alembic and comment-permission backfill before
+  # readiness; withdraw and durably prove both fixed nodes drained before either
+  # activation can begin.
   log "withdrawing node01 before any target activation or database migration"
   update_deploy_journal "node01-mark-started"
   node_mark_maintenance "$tx_dir"
