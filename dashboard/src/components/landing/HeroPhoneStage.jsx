@@ -66,6 +66,9 @@ function StatusIcons() {
   );
 }
 
+/**
+ * @param {{ label: string, icon: import('react').ReactNode, className: string }} props
+ */
 function FloatCard({ label, icon, className }) {
   return (
     <div

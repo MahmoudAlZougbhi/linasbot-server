@@ -28,6 +28,15 @@ function PlayMark({ className = 'h-5 w-5' }) {
   );
 }
 
+/**
+ * @param {{
+ *   store: { status: string, url?: string | null, blocker?: string },
+ *   title: string,
+ *   subtitle: string,
+ *   icon: import('react').ReactNode,
+ *   iconWrapClass: string,
+ * }} props
+ */
 function StoreRow({ store, title, subtitle, icon, iconWrapClass }) {
   const live = store.status === 'live' && store.url;
   const inner = (
@@ -46,7 +55,7 @@ function StoreRow({ store, title, subtitle, icon, iconWrapClass }) {
   );
   const className =
     'flex w-full items-center gap-3 rounded-xl px-1 py-2.5 text-left hover:bg-[#F7F8F5] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#06715F]';
-  if (live) {
+  if (live && store.url) {
     return (
       <a href={store.url} className={className} target="_blank" rel="noopener noreferrer">
         {inner}
@@ -62,14 +71,16 @@ function StoreRow({ store, title, subtitle, icon, iconWrapClass }) {
 
 export default function HeaderDownloadMenu() {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef(null);
+  const rootRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const menuId = useId();
 
   useEffect(() => {
     if (!open) return undefined;
+    /** @param {MouseEvent} event */
     const onPointer = (event) => {
-      if (rootRef.current && !rootRef.current.contains(event.target)) setOpen(false);
+      if (rootRef.current && event.target instanceof Node && !rootRef.current.contains(event.target)) setOpen(false);
     };
+    /** @param {KeyboardEvent} event */
     const onKey = (event) => {
       if (event.key === 'Escape') setOpen(false);
     };

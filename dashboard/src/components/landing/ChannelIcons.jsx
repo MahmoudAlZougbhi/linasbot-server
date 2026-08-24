@@ -53,6 +53,7 @@ export function WaIcon({ className = 'h-5 w-5' }) {
   );
 }
 
+/** @param {{ fill: string, className?: string }} props */
 function TikTokNote({ fill, className }) {
   return (
     <path

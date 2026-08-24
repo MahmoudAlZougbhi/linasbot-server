@@ -29,7 +29,8 @@ export default function HowItWorksCopy({ step }) {
       <p className="mt-3 max-w-md text-[0.95rem] leading-relaxed text-[#6B746F]">{step.body}</p>
       <div className="mt-8 grid max-w-lg grid-cols-1 gap-5 sm:grid-cols-3">
         {step.points.map((point, i) => {
-          const Icon = POINT_ICONS[i] || POINT_ICONS[0];
+          const Icon = POINT_ICONS[i] ?? POINT_ICONS[0];
+          if (!Icon) return null;
           return (
             <div key={point.title}>
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#E7F8F1] text-[#06715F]">

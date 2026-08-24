@@ -61,6 +61,7 @@ export default function HowItWorksStage({ step, prev, next }) {
 
 /** @param {string} value */
 function titleCase(value) {
-  const short = value.split('/')[0].trim().toLowerCase();
+  const head = value.split('/')[0] ?? value;
+  const short = head.trim().toLowerCase();
   return short.replace(/\b\w/g, (ch) => ch.toUpperCase());
 }
