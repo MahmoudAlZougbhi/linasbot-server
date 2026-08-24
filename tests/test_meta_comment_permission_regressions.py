@@ -89,6 +89,17 @@ def test_pre_lb_backfill_keeps_facebook_comments_granted(registry: MetaAppRegist
     assert refreshed.comment_permission_source == "migration_stored_scopes"
 
 
+def test_backfill_leaves_no_unknown_active_bindings_when_scopes_present(registry: MetaAppRegistry) -> None:
+    from services.meta_comment_permission_verification import (
+        bootstrap_unknown_comment_permissions,
+        count_active_bindings_with_unknown_comment_permission,
+    )
+
+    _facebook_page_binding(registry)
+    bootstrap_unknown_comment_permissions(registry=registry, actor_id="pre_lb_backfill")
+    assert count_active_bindings_with_unknown_comment_permission(registry=registry) == 0
+
+
 def test_facebook_comments_enforcement_still_allows_after_backfill(
     registry: MetaAppRegistry,
     monkeypatch: pytest.MonkeyPatch,

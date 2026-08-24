@@ -55,15 +55,17 @@ On OAuth reconnect and on comment sync/reconcile ticks:
 
 ### Deploy order (requires approval)
 
-1. Apply Alembic migration on managed Postgres (node01/node02 share the same DB):
-   `alembic upgrade 20260826_meta_comment_perm`
-2. **Before any node receives the new build on the load balancer**, run backfill once:
-   `python scripts/backfill_meta_comment_permission_verification.py`
-   Optional dry-run first: `--dry-run`
-3. Deploy the same clean SHA to **both** node01 and node02; verify identical revision:
-   `alembic current` → `20260826_meta_comment_perm`
-4. Verify `/api/mobile/integrations` comments state for Facebook still shows granted scopes.
-5. Confirm DM paths unchanged (Facebook DM + Instagram DM regression on device).
+See **`docs/META_PERMISSION_HARDENING_ROLLOUT.md`** for the full owner gate checklist.
+
+Summary:
+
+1. **Merge PR #542** → wait for **CI green on `main`** → deploy **`main` merge SHA** (not PR tip).
+2. Protected HA deploy runs **`scripts/ha/release_alembic_migrate.py`** (already wired in
+   `deploy_meta_release_ha.sh`).
+3. **Before LB admission**, protected HA runs **`scripts/ha/run_meta_comment_permission_backfill.py`**
+   → `scripts/backfill_meta_comment_permission_verification.py`.
+4. **Hard stop:** backfill exit **2** if any active binding remains `unknown` — do not attach nodes to LB.
+5. Verify identical `alembic current` + git SHA on node01/node02; smoke FB Comments capability + DMs.
 
 **Do not deploy to production without explicit approval.**
 

@@ -322,3 +322,24 @@ def bootstrap_unknown_comment_permissions(
         )
         updated += 1
     return {"updated": updated, "skipped": skipped}
+
+
+def count_active_bindings_with_unknown_comment_permission(
+    *,
+    registry: MetaAppRegistry | None = None,
+) -> int:
+    """Count active bindings whose effective comment permission is still unknown."""
+
+    current_registry = registry or get_meta_app_registry()
+    pending = 0
+    for binding in current_registry.list_bindings(include_inactive=False, include_superseded=False):
+        if binding.status != "active":
+            continue
+        try:
+            credential = current_registry.get_credential(binding)
+        except Exception:
+            pending += 1
+            continue
+        if effective_comment_permission_status(binding, credential) == "unknown":
+            pending += 1
+    return pending
