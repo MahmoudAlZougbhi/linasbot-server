@@ -19,14 +19,39 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
-async def _list_videos(*, access_token: str, open_id: str, cursor: str) -> dict[str, Any]:
+def _aware(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def is_video_owner_comment(payload: dict[str, Any]) -> bool:
+    return payload.get("owner") is True
+
+
+def should_enqueue_comment_ai(
+    *,
+    created: bool,
+    is_reply: bool,
+    payload: dict[str, Any],
+    create_time: datetime | None,
+    connected_at: datetime | None,
+) -> bool:
+    if not created or is_reply or is_video_owner_comment(payload):
+        return False
+    comment_at = _aware(create_time)
+    connected = _aware(connected_at)
+    if comment_at is None or connected is None:
+        return False
+    return comment_at >= connected
+
+
+async def _list_videos(*, access_token: str, open_id: str) -> dict[str, Any]:
     params: dict[str, Any] = {
         "business_id": open_id,
         "fields": '["item_id","caption","thumbnail_url","share_url","create_time"]',
         "max_count": MAX_VIDEOS_PER_SYNC,
     }
-    if cursor:
-        params["cursor"] = cursor
     return await tiktok_request(method="GET", path="/business/video/list/", access_token=access_token, params=params)
 
 
@@ -34,7 +59,11 @@ async def _list_comments(*, access_token: str, open_id: str, video_id: str, curs
     params: dict[str, Any] = {
         "business_id": open_id,
         "video_id": video_id,
-        "include_replies": "true",
+        "include_replies": "false",
+        "status": "PUBLIC",
+        "sort_field": "create_time",
+        "sort_order": "desc",
+        "max_count": 30,
     }
     if cursor:
         params["cursor"] = cursor
@@ -45,18 +74,7 @@ def _comment_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     comments = payload.get("comments") or payload.get("comment_list") or payload.get("list") or []
     if not isinstance(comments, list):
         return []
-    out: list[dict[str, Any]] = []
-    for raw in comments:
-        if not isinstance(raw, dict):
-            continue
-        out.append(raw)
-        replies = raw.get("reply_list") or raw.get("replies") or []
-        if isinstance(replies, list):
-            for reply in replies:
-                if isinstance(reply, dict):
-                    parent = str(raw.get("comment_id") or raw.get("id") or "")
-                    out.append({**reply, "parent_comment_id": reply.get("parent_comment_id") or parent})
-    return out
+    return [raw for raw in comments if isinstance(raw, dict)]
 
 
 async def sync_connection_comments(*, tenant_id: str, connection_id: str, owner: str = "sync") -> dict[str, Any]:
@@ -74,14 +92,12 @@ async def sync_connection_comments(*, tenant_id: str, connection_id: str, owner:
             return {"skipped": True, "reason": "missing_comment_scopes"}
         token = await ensure_fresh_token(repo, claimed)
         open_id = claimed.open_id
-        cursor = claimed.sync_cursor
         session.commit()
 
-    videos = await _list_videos(access_token=token, open_id=open_id, cursor=cursor)
+    videos = await _list_videos(access_token=token, open_id=open_id)
     video_rows = videos.get("videos") or videos.get("list") or videos.get("video_list") or []
     if not isinstance(video_rows, list):
         video_rows = []
-    next_cursor = str(videos.get("cursor") or videos.get("next_cursor") or "")
 
     with whatsapp_session() as session:
         repo = TikTokRepository(session)
@@ -89,6 +105,7 @@ async def sync_connection_comments(*, tenant_id: str, connection_id: str, owner:
         connection = repo.get_connection(connection_id, tenant_id=tenant_id)
         if connection is None:
             return {"skipped": True, "reason": "missing_connection"}
+        connected_at = connection.created_at
         processed_videos = 0
         for raw in video_rows[:MAX_VIDEOS_PER_SYNC]:
             if not isinstance(raw, dict):
@@ -106,7 +123,7 @@ async def sync_connection_comments(*, tenant_id: str, connection_id: str, owner:
                 create_time=raw.get("create_time"),
                 status=str(raw.get("status") or ""),
             )
-            comment_cursor = media.comment_cursor
+            comment_cursor = ""
             for _page in range(MAX_COMMENT_PAGES_PER_VIDEO):
                 try:
                     comments_payload = await _list_comments(
@@ -123,17 +140,23 @@ async def sync_connection_comments(*, tenant_id: str, connection_id: str, owner:
                         media=media,
                         payload=comment,
                     )
-                    if created and not row.is_reply:
+                    if should_enqueue_comment_ai(
+                        created=created,
+                        is_reply=row.is_reply,
+                        payload=comment,
+                        create_time=row.create_time,
+                        connected_at=connected_at,
+                    ):
                         new_comments.append((row.comment_id, item_id))
                 comment_cursor = str(comments_payload.get("cursor") or comments_payload.get("next_cursor") or "")
                 has_more = bool(comments_payload.get("has_more") or comments_payload.get("has_more_comments"))
-                media.comment_cursor = comment_cursor
                 media.last_comment_sync_at = _utcnow()
                 if not has_more or not comment_cursor:
                     break
+            media.comment_cursor = ""
             processed_videos += 1
         connection.last_sync_at = _utcnow()
-        connection.sync_cursor = next_cursor
+        connection.sync_cursor = ""
         session.commit()
 
     for comment_id, item_id in new_comments:

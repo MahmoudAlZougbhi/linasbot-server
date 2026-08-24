@@ -113,11 +113,21 @@ class TikTokContentRepository:
         raw_user = payload.get("user")
         user: dict[str, Any] = raw_user if isinstance(raw_user, dict) else {}
         row.parent_comment_id = str(payload.get("parent_comment_id") or "")[:64]
-        row.author_user_id = str(user.get("unique_identifier") or user.get("open_id") or payload.get("user_id") or "")[
-            :128
-        ]
-        row.author_username = str(user.get("display_name") or user.get("username") or "")[:255]
-        row.author_avatar_url = str(user.get("profile_image") or "")[:1024]
+        row.author_user_id = str(
+            payload.get("unique_identifier")
+            or user.get("unique_identifier")
+            or payload.get("user_id")
+            or user.get("open_id")
+            or ""
+        )[:128]
+        row.author_username = str(
+            payload.get("username")
+            or payload.get("display_name")
+            or user.get("username")
+            or user.get("display_name")
+            or ""
+        )[:255]
+        row.author_avatar_url = str(payload.get("profile_image") or user.get("profile_image") or "")[:1024]
         row.text = str(payload.get("text") or payload.get("comment") or "")[:8000]
         status = str(payload.get("status") or "PUBLIC").strip().lower()
         row.status = status if status in {"public", "hidden", "deleted"} else "unknown"
