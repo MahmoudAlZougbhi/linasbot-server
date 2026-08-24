@@ -35,6 +35,10 @@ def test_phase1_github_workflow_uses_two_node_ha_transaction() -> None:
     assert "two-node" in workflow.lower() or "Two-node" in workflow
     assert "prod_stage_whatsapp_cloud_phase1_flags.sh" in workflow
     assert "scripts/prod_whatsapp_cloud_phase1_ops.sh" in guard.TWO_NODE_ENV_TRANSACTION_REQUIRED
+    recovery = workflow.index("--recover-only")
+    registration = workflow.index("--register-prestage-backup")
+    assert recovery < registration
+    assert "clearing_orphan_maintenance_before_apply" not in workflow
 
 
 def test_require_pilot_defaults_true_while_public_availability_is_off(monkeypatch) -> None:

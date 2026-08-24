@@ -203,23 +203,6 @@ jobs:
             sleep "$DRAIN_SECONDS"
             "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
               --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --recover-only
-            ARTIFACTS="transaction.json workers.before.json prestage.authority.json env.before"
-            orphan_maintenance=1
-            for item in $ARTIFACTS; do
-              if [ -e "$META_HA_STATE_ROOT/$item" ] || [ -L "$META_HA_STATE_ROOT/$item" ]; then
-                orphan_maintenance=0
-                break
-              fi
-            done
-            if [ "$orphan_maintenance" = "1" ]; then
-              if [ -e "$MAINTENANCE_FILE" ] || [ -e "$PERSISTENT_MAINTENANCE_FILE" ]; then
-                echo "[wa-phase1-ha] clearing_orphan_maintenance_before_apply=true"
-                rm -f "$MAINTENANCE_FILE" "$PERSISTENT_MAINTENANCE_FILE"
-                ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
-                  "root@${PEER_HOST}" \
-                  "rm -f /run/linasbot-maintenance '$META_HA_STATE_ROOT/maintenance'"
-              fi
-            fi
             bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" \
               "$EXPECTED_RELEASE_SHA" cluster-release-only
             "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
