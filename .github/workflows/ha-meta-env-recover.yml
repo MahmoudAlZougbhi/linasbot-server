@@ -1,0 +1,84 @@
+# Recover a failed meta-ha-env transaction and restore public readiness when safe.
+name: Meta HA Env Transaction Recover
+
+on:
+  workflow_dispatch:
+    inputs:
+      CONFIRM:
+        description: "Type RECOVER_META_HA_ENV_TRANSACTION"
+        required: true
+        type: string
+
+concurrency:
+  group: meta-social-cutover
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    name: Recover Meta HA env transaction state
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event.inputs.CONFIRM == 'RECOVER_META_HA_ENV_TRANSACTION'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: meta-social-cutover
+    steps:
+      - name: Recover coordinator transaction and restore readiness
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: false
+          command_timeout: 18m
+          script: |
+            set -euo pipefail
+            test "$(id -u)" -eq 0 && test "$(id -g)" -eq 0
+            exec 9>/run/lock/linasbot-meta-live.lock
+            flock -x 9
+            export LINAS_PRODUCTION_MUTATION_LOCK_FD=9
+            REPO_DIR=/opt/linasbot
+            DEPLOYED_RELEASE_SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
+            export EXPECTED_RELEASE_SHA="$DEPLOYED_RELEASE_SHA"
+            PEER_HOST="${LINAS_HA_PEER_HOST:-10.106.0.4}"
+            META_HA_STATE_ROOT=/var/lib/linasbot/meta-ha
+            echo "[meta-ha-recover] deployed_release_sha=${DEPLOYED_RELEASE_SHA}"
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA" cluster-release-only
+            "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+              --expected-sha "$EXPECTED_RELEASE_SHA" --maintenance-active --recover-only
+            if [ -f "$META_HA_STATE_ROOT/transaction.json" ]; then
+              echo "[meta-ha-recover] journal_present=true attempting_finalize"
+              "$REPO_DIR/venv/bin/python" -I "$REPO_DIR/scripts/ha/sync_meta_env_to_peer.py" \
+                --expected-sha "$EXPECTED_RELEASE_SHA" --finalize
+            fi
+            ARTIFACTS="transaction.json workers.before.json prestage.authority.json env.before"
+            orphan_maintenance=1
+            for item in $ARTIFACTS; do
+              if [ -e "$META_HA_STATE_ROOT/$item" ] || [ -L "$META_HA_STATE_ROOT/$item" ]; then
+                orphan_maintenance=0
+                break
+              fi
+            done
+            if [ "$orphan_maintenance" = "1" ]; then
+              if [ -e /run/linasbot-maintenance ] || [ -e "$META_HA_STATE_ROOT/maintenance" ]; then
+                echo "[meta-ha-recover] clearing_orphan_maintenance=true"
+                rm -f /run/linasbot-maintenance "$META_HA_STATE_ROOT/maintenance"
+                ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                  "root@${PEER_HOST}" \
+                  "rm -f /run/linasbot-maintenance '$META_HA_STATE_ROOT/maintenance'"
+              fi
+            fi
+            bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
+            curl -fsS https://www.linasaibot.com/api/ready >/tmp/meta-ha-recover-ready.json
+            "$REPO_DIR/venv/bin/python" - <<'PY'
+            import json
+
+            data = json.load(open("/tmp/meta-ha-recover-ready.json"))
+            assert data.get("ok") is True, data
+            print("[meta-ha-recover] public_ready_ok=true")
+            PY
+            echo "[meta-ha-recover] COMPLETE_OK"

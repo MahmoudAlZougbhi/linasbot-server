@@ -42,6 +42,7 @@ ALL_WORKFLOWS = frozenset(
         "meta-app-webhooks-reconcile.yml",
         "meta-comment-runtime-probe.yml",
         "meta-comment-webhooks-reconcile.yml",
+        "ha-meta-env-recover.yml",
         "meta-inbound-payload-retention.yml",
         "meta-multi-app-secrets-apply.yml",
         "meta-page-subscription-subscribe.yml",
@@ -61,6 +62,7 @@ ALL_WORKFLOWS = frozenset(
         "subscription-exempt-probe.yml",
         "wa-app-review-connection-source-migrate.yml",
         "wa-cloud-webhook-readonly-probe.yml",
+        "web-chat-public-apply.yml",
         "whatsapp-cloud-phase1-apply.yml",
     }
 )
@@ -81,6 +83,7 @@ REMOTE_WORKFLOWS = frozenset(
         "meta-app-webhooks-reconcile.yml",
         "meta-comment-runtime-probe.yml",
         "meta-comment-webhooks-reconcile.yml",
+        "ha-meta-env-recover.yml",
         "meta-inbound-payload-retention.yml",
         "meta-multi-app-secrets-apply.yml",
         "meta-page-subscription-subscribe.yml",
@@ -93,6 +96,7 @@ REMOTE_WORKFLOWS = frozenset(
         "subscription-exempt-probe.yml",
         "wa-app-review-connection-source-migrate.yml",
         "wa-cloud-webhook-readonly-probe.yml",
+        "web-chat-public-apply.yml",
         "whatsapp-cloud-phase1-apply.yml",
     }
 )
