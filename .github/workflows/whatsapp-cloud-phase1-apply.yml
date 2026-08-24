@@ -521,7 +521,20 @@ jobs:
               commit_staged_non_meta_env_via_restart "[wa-phase1-ha]"
               bash "$REPO_DIR/scripts/ha/verify_meta_release_ha.sh" "$EXPECTED_RELEASE_SHA"
               grant_linas_pilot_if_requested
-              curl -fsS https://linasaibot.com/api/ready >/tmp/wa-ready.json
+              TRANSACTION_COMPLETE=true
+              MAINTENANCE_ARMED=false
+              ready_ok=false
+              for attempt in $(seq 1 24); do
+                if curl -fsS https://www.linasaibot.com/api/ready >/tmp/wa-ready.json; then
+                  ready_ok=true
+                  break
+                fi
+                sleep 5
+              done
+              if [ "$ready_ok" != "true" ]; then
+                echo "[wa-phase1-ha] public_ready_timeout=true" >&2
+                exit 1
+              fi
               "$REPO_DIR/venv/bin/python" - <<'PY'
             import json
             data = json.load(open("/tmp/wa-ready.json"))
@@ -531,8 +544,6 @@ jobs:
             assert wa_db is True, checks
             print("[wa-phase1-ha] ready_ok=true whatsapp_db_present=true")
             PY
-              TRANSACTION_COMPLETE=true
-              MAINTENANCE_ARMED=false
               echo "[wa-phase1-ha] COMPLETE_OK"
             }
             MAINTENANCE_ARMED=true
