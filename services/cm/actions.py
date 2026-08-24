@@ -6,7 +6,13 @@ from typing import Any
 
 from services.cm.schemas import ActionsSection
 from services.cm.version_store import PublishedVersionError, load_published_content, read_published_pointer
-from services.meta_app_registry import META_COMMENT_SCOPES, MetaAppRegistry, MetaAssetBinding, MetaBindingCredential, MetaChannel
+from services.meta_app_registry import (
+    META_COMMENT_SCOPES,
+    MetaAppRegistry,
+    MetaAssetBinding,
+    MetaBindingCredential,
+    MetaChannel,
+)
 from services.meta_graph_routing import required_comment_scopes_for_binding
 
 ACTION_FACEBOOK_COMMENTS = "respond_facebook_comments"

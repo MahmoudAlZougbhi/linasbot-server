@@ -10,8 +10,11 @@ import httpx
 import pytest
 
 from services.cm.actions import comments_enforcement_decision, evaluate_comments_meta_readiness
-from services.meta_app_registry import APP_A_KEY, MetaAppRegistry, MetaAssetBinding, MetaBindingCredential
-from services.meta_comment_events import resolve_registry_comment_events
+from services.meta_app_registry import (
+    APP_A_KEY,
+    MetaAppRegistry,
+    MetaBindingCredential,
+)
 from services.meta_comment_permission_verification import (
     comment_permission_token_fingerprint,
     effective_comment_permission_status,
@@ -20,7 +23,6 @@ from services.meta_comment_permission_verification import (
     reconcile_binding_comment_permission,
     verification_matches_current_credential,
 )
-from services.meta_app_registry import get_meta_app_configs
 from services.meta_comment_reply_settings import set_comment_reply_setting
 from tests.meta_instagram_login_lifecycle_helpers import FULL_SCOPES, INSTAGRAM_ID, PAGE_SCOPES, _binding
 
