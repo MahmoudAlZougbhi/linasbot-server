@@ -196,11 +196,41 @@ def _entry_exists(path: Path) -> bool:
 
 
 def _fsync_directory(directory: Path) -> None:
-    fd = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
     try:
-        os.fsync(fd)
+        fd = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    except OSError as exc:
+        raise RuntimeError(
+            f"Meta HA directory fsync open failed: errno={exc.errno} {exc.strerror or 'unknown'} path={directory}"
+        ) from exc
+    try:
+        try:
+            os.fsync(fd)
+        except OSError as exc:
+            raise RuntimeError(
+                f"Meta HA directory fsync failed: errno={exc.errno} {exc.strerror or 'unknown'} path={directory}"
+            ) from exc
     finally:
         os.close(fd)
+
+
+def _authorize_registered_prestage_backup(
+    local_prestage_backup: Path,
+    durable_backup: Path,
+) -> None:
+    require_secure_env_file(durable_backup)
+    require_secure_env_file(local_prestage_backup)
+    try:
+        authorized = local_prestage_backup.samefile(durable_backup)
+    except OSError:
+        try:
+            authorized = local_prestage_backup.resolve() == durable_backup.resolve()
+        except OSError as exc:
+            raise RuntimeError(
+                "Meta HA pre-stage backup authorization failed: "
+                f"errno={exc.errno} {exc.strerror or 'unknown'} path={exc.filename or '-'}"
+            ) from exc
+    if not authorized:
+        raise RuntimeError("Only the registered durable Meta HA backup may authorize activation")
 
 
 def _ensure_state_root(state_root: Path = STATE_ROOT) -> None:
@@ -1927,9 +1957,7 @@ def _create_coordinator_transaction(
     )
     _ensure_state_root(state_root)
     durable_backup = _backup_path(state_root)
-    require_secure_env_file(durable_backup)
-    if not local_prestage_backup.samefile(durable_backup):
-        raise RuntimeError("Only the registered durable Meta HA backup may authorize activation")
+    _authorize_registered_prestage_backup(local_prestage_backup, durable_backup)
     journal = _write_journal(state_root, journal)
     _durable_unlink(_stage_authority_path(state_root))
     _ensure_workers_quiesced(state_root, journal, role="coordinator")
