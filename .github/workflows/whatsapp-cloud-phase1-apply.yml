@@ -92,6 +92,20 @@ jobs:
                     destination = repo.joinpath(*Path(relative).parts)
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     destination.write_bytes(blob)
+                subprocess.run(["git", "-C", str(repo), "add", "-u"], check=True)
+            if subprocess.run(
+                ["git", "-C", str(repo), "diff", "--quiet", sha],
+                check=False,
+            ).returncode or subprocess.run(
+                ["git", "-C", str(repo), "diff", "--cached", "--quiet", sha],
+                check=False,
+            ).returncode:
+                dirty = subprocess.check_output(
+                    ["git", "-C", str(repo), "diff", "--name-only", sha],
+                    text=True,
+                )
+                print(f"[wa-phase1-ha] deployed_tree_still_dirty={dirty!r}", file=sys.stderr)
+                raise SystemExit(1)
             script = "scripts/ha/sync_meta_env_to_peer.py"
             live = (repo / script).read_bytes()
             blob = subprocess.check_output(
