@@ -200,16 +200,14 @@ def _fsync_directory(directory: Path) -> None:
         fd = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
     except OSError as exc:
         raise RuntimeError(
-            "Meta HA directory fsync open failed: "
-            f"errno={exc.errno} {exc.strerror or 'unknown'} path={directory}"
+            f"Meta HA directory fsync open failed: errno={exc.errno} {exc.strerror or 'unknown'} path={directory}"
         ) from exc
     try:
         try:
             os.fsync(fd)
         except OSError as exc:
             raise RuntimeError(
-                "Meta HA directory fsync failed: "
-                f"errno={exc.errno} {exc.strerror or 'unknown'} path={directory}"
+                f"Meta HA directory fsync failed: errno={exc.errno} {exc.strerror or 'unknown'} path={directory}"
             ) from exc
     finally:
         os.close(fd)
@@ -229,8 +227,7 @@ def _authorize_registered_prestage_backup(
         except OSError as exc:
             raise RuntimeError(
                 "Meta HA pre-stage backup authorization failed: "
-                f"errno={exc.errno} {exc.strerror or 'unknown'} "
-                f"path={exc.filename or '-'}"
+                f"errno={exc.errno} {exc.strerror or 'unknown'} path={exc.filename or '-'}"
             ) from exc
     if not authorized:
         raise RuntimeError("Only the registered durable Meta HA backup may authorize activation")
