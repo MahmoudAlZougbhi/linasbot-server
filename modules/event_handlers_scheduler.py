@@ -259,10 +259,7 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
     print("   - TikTok comment sync: Every 1 minute")
     print("   - TikTok comment webhook register: Every 60 minutes")
     if meta_comment_poll_enabled():
-        print(
-            f"   - Meta social comment sync (temporary poll): Every "
-            f"{meta_comment_poll_interval_seconds()} seconds"
-        )
+        print(f"   - Meta social comment sync (temporary poll): Every {meta_comment_poll_interval_seconds()} seconds")
     else:
         print("   - Meta social comment sync: disabled (webhook-only)")
     print("=" * 60)
