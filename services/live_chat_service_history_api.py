@@ -355,42 +355,16 @@ class LiveChatHistoryApiMixin:
                 return []
 
             index_coll = self._index_collection(db)
-            # Prefer human_takeover_active==True so released chats never match (stale conversation_state).
-            docs = []
-            try:
-                docs = await asyncio.to_thread(
-                    lambda: list(
-                        index_coll.where("human_takeover_active", "==", True)
-                        .order_by("last_message_at", direction=firestore.Query.DESCENDING)
-                        .limit(300)
-                        .stream(
-                            timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
-                            retry=None,
-                        )
+            docs = await asyncio.to_thread(
+                lambda: list(
+                    self._index_recency_query(index_coll)
+                    .limit(300)
+                    .stream(
+                        timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
+                        retry=None,
                     )
                 )
-            except Exception as hta_err:
-                print(
-                    f"⚠️ waiting_queue index query (human_takeover_active) failed, trying conversation_state: {hta_err}"
-                )
-                try:
-                    docs = await asyncio.to_thread(
-                        lambda: list(
-                            index_coll.where("conversation_state", "==", self.STATE_WAITING_OPERATOR)
-                            .order_by("last_message_at", direction=firestore.Query.DESCENDING)
-                            .limit(300)
-                            .stream(
-                                timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS,
-                                retry=None,
-                            )
-                        )
-                    )
-                except Exception as idx_err:
-                    print(
-                        f"⚠️ waiting_queue index query failed — refusing source full-scan "
-                        f"(run index backfill): {idx_err}"
-                    )
-                    docs = []
+            )
 
             if not docs:
                 print(

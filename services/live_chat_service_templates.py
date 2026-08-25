@@ -124,8 +124,7 @@ class LiveChatTemplatesMixin:
 
         def _stream() -> Any:
             return list(
-                index_coll.order_by("last_message_at", direction=firestore.Query.DESCENDING)
-                .order_by("conversation_id")
+                self._index_recency_query(index_coll)
                 .limit(max_scan)
                 .stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS, retry=None)
             )

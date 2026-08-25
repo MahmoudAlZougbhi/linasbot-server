@@ -47,6 +47,10 @@ async def test_enqueue_comment_ai_skips_when_global_claim_already_held(
         "services.durable_event_claim.try_claim_event_handle",
         AsyncMock(return_value=None),
     )
+    monkeypatch.setattr(
+        "services.scale.meta_ingress.persist_meta_comment_accepted",
+        lambda resolved, global_key: ("ibe_test", True),
+    )
     monkeypatch.setattr("services.meta_comment_replies.process_meta_comment_event", process)
 
     claimed = await _enqueue_comment_ai(binding=binding, settings=settings, event=event)
@@ -140,6 +144,11 @@ async def test_poll_and_webhook_overlap_only_first_path_processes(
         AsyncMock(side_effect=claim_side_effect),
     )
     monkeypatch.setattr("services.durable_event_claim.complete_event_claim", AsyncMock())
+    monkeypatch.setattr(
+        "services.scale.meta_ingress.persist_meta_comment_accepted",
+        lambda resolved, global_key: ("ibe_test", True),
+    )
+    monkeypatch.setattr("services.scale.meta_ingress.enqueue_meta_inbound_event", lambda *_a, **_k: "inline")
     monkeypatch.setattr("services.meta_comment_replies.process_meta_comment_event", process)
     monkeypatch.setattr(
         "services.meta_social_comment_sync.build_messaging_settings_for_binding",
@@ -164,6 +173,6 @@ async def test_poll_and_webhook_overlap_only_first_path_processes(
     with patch("services.meta_social_comment_sync._graph_get_json", new=AsyncMock(side_effect=fake_graph)):
         result = await sync_facebook_binding_comments("bind_1")
 
-    assert result["discovered"] == 2
+    assert result["discovered"] == 1
     assert result["enqueued"] == 1
     process.assert_awaited_once()

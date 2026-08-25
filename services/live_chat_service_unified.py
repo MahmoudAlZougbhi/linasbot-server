@@ -235,16 +235,9 @@ class LiveChatUnifiedMixin:
 
             index_coll = self._index_collection(db)
 
-            # Build base query (ordered for pagination)
-            query = index_coll.order_by("last_message_at", direction=firestore.Query.DESCENDING).order_by(
-                "conversation_id"
-            )
-
-            if state_values:
-                if len(state_values) == 1:
-                    query = query.where("conversation_state", "==", state_values[0])
-                else:
-                    query = query.where("conversation_state", "in", state_values)
+            # Single-field order_by only — composite indexes in firestore.indexes.json are not
+            # deployed on linas-ai-bot yet; state/channel filters run in-memory below.
+            query = self._index_recency_query(index_coll)
 
             start_after_doc = None
             if cursor:

@@ -13,7 +13,9 @@ from services.meta_comment_reply_settings import get_comment_reply_setting
 from services.meta_comment_sync_cursors import (
     extract_next_cursor,
     load_posts_backfill_cursor,
+    load_seen_comment_ids,
     save_posts_backfill_cursor,
+    save_seen_comment_ids,
 )
 from services.meta_graph_routing import build_messaging_settings_for_binding, graph_api_url
 
@@ -109,6 +111,16 @@ def _facebook_comment_events(post_id: str, comments: list[dict[str, Any]], *, pa
     return events
 
 
+def _mark_comment_seen(*, binding_id: str, post_id: str, comment_id: str) -> None:
+    post_key = str(post_id or "").strip()
+    comment_key = str(comment_id or "").strip()
+    if not post_key or not comment_key:
+        return
+    seen = load_seen_comment_ids(binding_id, post_key)
+    seen.add(comment_key)
+    save_seen_comment_ids(binding_id, post_key, seen)
+
+
 async def _process_facebook_posts_payload(
     posts_payload: dict[str, Any],
     *,
@@ -131,7 +143,13 @@ async def _process_facebook_posts_payload(
         comments = (post.get("comments") or {}).get("data") if isinstance(post.get("comments"), dict) else []
         if not isinstance(comments, list):
             comments = []
+        seen_comment_ids = load_seen_comment_ids(binding.binding_id, post_id)
+        handled_this_pass: set[str] = set()
         for event in _facebook_comment_events(post_id, comments, page_id=page_id):
+            comment_id = str(event.get("comment_id") or "").strip()
+            if comment_id in seen_comment_ids or comment_id in handled_this_pass:
+                continue
+            handled_this_pass.add(comment_id)
             discovered += 1
             if await _enqueue_comment_ai(binding=binding, settings=settings, event=event):
                 enqueued += 1
@@ -244,21 +262,20 @@ async def sync_facebook_binding_comments(binding_id: str) -> dict[str, Any]:
 
 async def _enqueue_comment_ai(*, binding: MetaAssetBinding, settings: Any, event: dict[str, Any]) -> bool:
     comment_id = str(event.get("comment_id") or "").strip()
+    post_id = str(event.get("post_id") or event.get("media_id") or "").strip()
     if not comment_id:
         return False
-    from services.durable_event_claim import try_claim_event_handle
+    from services.durable_event_claim import (
+        complete_event_claim,
+        meta_claim_binding_digest,
+        release_event_claim,
+        try_claim_event_handle,
+    )
     from services.meta_cross_flow_dedup import global_comment_claim_key
+    from services.meta_comment_replies import process_meta_comment_event
+    from services.scale.meta_ingress import enqueue_meta_inbound_event, persist_meta_comment_accepted
 
     global_key = global_comment_claim_key(event)
-    claim_handle = await try_claim_event_handle(
-        "meta_social_comment_global",
-        global_key,
-        ttl_seconds=600.0,
-        firestore_collection="meta_social_comment_global_claims",
-        meta_binding_id=binding.binding_id,
-    )
-    if claim_handle is None:
-        return False
     tagged = dict(event)
     tagged.update(
         {
@@ -269,11 +286,35 @@ async def _enqueue_comment_ai(*, binding: MetaAssetBinding, settings: Any, event
         }
     )
     resolved = ResolvedMetaCommentEvent(event=tagged, settings=settings, binding=binding)
-    from services.meta_comment_replies import process_meta_comment_event
+    event_id, _created = persist_meta_comment_accepted(resolved, global_key=global_key)
+    claim_handle = await try_claim_event_handle(
+        "meta_social_comment_global",
+        global_key,
+        ttl_seconds=600.0,
+        firestore_collection="meta_social_comment_global_claims",
+        firestore_claim_metadata={
+            "binding_id_sha256": meta_claim_binding_digest(binding.binding_id),
+            "inbound_event_id": event_id,
+        },
+        meta_binding_id=binding.binding_id,
+    )
+    if claim_handle is None:
+        return False
 
-    result = await process_meta_comment_event(resolved, simulation=False)
-    from services.durable_event_claim import complete_event_claim, release_event_claim
+    dispatch = enqueue_meta_inbound_event(event_id, claim_handle=claim_handle)
+    if dispatch == "queued":
+        _mark_comment_seen(binding_id=binding.binding_id, post_id=post_id, comment_id=comment_id)
+        return True
+    if dispatch == "ambiguous":
+        await release_event_claim(
+            "meta_social_comment_global",
+            global_key,
+            firestore_collection="meta_social_comment_global_claims",
+            claim_handle=claim_handle,
+        )
+        return False
 
+    result = await process_meta_comment_event(resolved, inbound_event_id=event_id, simulation=False)
     if result.status in {"sent", "sent_dm"}:
         await complete_event_claim(
             "meta_social_comment_global",
@@ -281,6 +322,7 @@ async def _enqueue_comment_ai(*, binding: MetaAssetBinding, settings: Any, event
             firestore_collection="meta_social_comment_global_claims",
             claim_handle=claim_handle,
         )
+        _mark_comment_seen(binding_id=binding.binding_id, post_id=post_id, comment_id=comment_id)
         return True
     if result.status == "ignored" and result.reason in {"already_replied", "human_replied"}:
         await complete_event_claim(
@@ -289,6 +331,7 @@ async def _enqueue_comment_ai(*, binding: MetaAssetBinding, settings: Any, event
             firestore_collection="meta_social_comment_global_claims",
             claim_handle=claim_handle,
         )
+        _mark_comment_seen(binding_id=binding.binding_id, post_id=post_id, comment_id=comment_id)
         return False
     if result.status == "ignored":
         await complete_event_claim(
@@ -297,6 +340,7 @@ async def _enqueue_comment_ai(*, binding: MetaAssetBinding, settings: Any, event
             firestore_collection="meta_social_comment_global_claims",
             claim_handle=claim_handle,
         )
+        _mark_comment_seen(binding_id=binding.binding_id, post_id=post_id, comment_id=comment_id)
         return False
     await release_event_claim(
         "meta_social_comment_global",
