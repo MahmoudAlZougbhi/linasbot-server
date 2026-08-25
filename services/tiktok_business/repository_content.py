@@ -65,11 +65,17 @@ class TikTokContentRepository:
                 item_id=item_id,
             )
             self.session.add(row)
-        row.caption = (caption or "")[:8000]
-        row.thumbnail_url = (thumbnail_url or "")[:1024]
-        row.share_url = (share_url or "")[:1024]
-        row.create_time = _epoch(create_time)
-        row.status = (status or "")[:32]
+        if caption:
+            row.caption = caption[:8000]
+        if thumbnail_url:
+            row.thumbnail_url = thumbnail_url[:1024]
+        if share_url:
+            row.share_url = share_url[:1024]
+        parsed_time = _epoch(create_time)
+        if parsed_time is not None:
+            row.create_time = parsed_time
+        if status:
+            row.status = status[:32]
         self.session.flush()
         return row
 
