@@ -149,6 +149,31 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     }
   }
 
+  function appendOptimisticOperatorMessage(partial: LiveChatMessage) {
+    setMessages((prev) => [...prev, partial]);
+  }
+
+  function dispatchOperatorSend(
+    payload: string,
+    messageType: 'text' | 'voice' | 'image',
+    optimistic: LiveChatMessage,
+  ) {
+    if (!chat || !payload) return false;
+    setError(null);
+    appendOptimisticOperatorMessage(optimistic);
+    void (async () => {
+      try {
+        const result = await sendOperatorMessage(chat, payload, messageType);
+        if (!result.success) throw new Error(result.error || 'Send failed');
+        await load('poll');
+        onChatUpdated?.();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Send failed.');
+      }
+    })();
+    return true;
+  }
+
   return {
     messages,
     loading,
@@ -167,37 +192,30 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     end: () => runAction(() => endConversation(chat!)),
     sendText: async (text: string) => {
       if (!chat || !text.trim()) return false;
-      setBusy(true);
-      setError(null);
-      try {
-        const result = await sendOperatorMessage(chat, text.trim(), 'text');
-        if (!result.success) throw new Error(result.error || 'Send failed');
-        await load('initial');
-        onChatUpdated?.();
-        return true;
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Send failed.');
-        return false;
-      } finally {
-        setBusy(false);
-      }
+      const trimmed = text.trim();
+      return dispatchOperatorSend(trimmed, 'text', {
+        timestamp: new Date().toISOString(),
+        is_user: false,
+        content: trimmed,
+        text: trimmed,
+        role: 'operator',
+        handled_by: 'human',
+        message_id: `local-${Date.now()}`,
+      });
     },
     sendMedia: async (base64: string, type: 'voice' | 'image') => {
       if (!chat || !base64) return false;
-      setBusy(true);
-      setError(null);
-      try {
-        const result = await sendOperatorMessage(chat, base64, type);
-        if (!result.success) throw new Error(result.error || 'Send failed');
-        await load('initial');
-        onChatUpdated?.();
-        return true;
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Send failed.');
-        return false;
-      } finally {
-        setBusy(false);
-      }
+      const label = type === 'voice' ? '[Voice Message from Operator]' : '[Image Message from Operator]';
+      return dispatchOperatorSend(base64, type, {
+        timestamp: new Date().toISOString(),
+        is_user: false,
+        content: label,
+        text: label,
+        type,
+        role: 'operator',
+        handled_by: 'human',
+        message_id: `local-${Date.now()}`,
+      });
     },
   };
 }

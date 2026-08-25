@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-from services.live_chat_meta_operator import parse_meta_live_chat_user_id
+from services.live_chat_meta_operator import parse_meta_live_chat_user_id, resolve_meta_live_chat_tenant
 from services.meta_attachment_send import attachment_type_for_mime, send_stored_meta_attachment
 
 
@@ -28,8 +28,8 @@ async def _build_meta_adapter_for_live_chat_user(
     from services.meta_messaging import MetaMessagingAdapter, resolve_meta_send_account_id
     from services.requests.delivery import _meta_bindings_for_account
 
-    channel, sender_id, asset_id, embedded_tenant = parse_meta_live_chat_user_id(user_id)
-    tenant = str(tenant_id or embedded_tenant or "linas").strip()
+    channel, sender_id, asset_id, _embedded_tenant = parse_meta_live_chat_user_id(user_id)
+    tenant = resolve_meta_live_chat_tenant(tenant_id, user_id)
     if not tenant:
         raise ValueError("tenant_required_for_meta_send")
 

@@ -45,14 +45,37 @@ def _source_channel_for_meta(channel: str) -> str:
     return SOURCE_CHANNEL_INSTAGRAM_DM
 
 
+def resolve_meta_live_chat_tenant(tenant_id: str | None, user_id: str) -> str:
+    """Map Live Chat social user_id formats to the Meta binding tenant."""
+    from services.meta_app_registry import normalize_meta_tenant_id
+
+    _, _, _, embedded_tenant = parse_meta_live_chat_user_id(user_id)
+    if embedded_tenant:
+        try:
+            return normalize_meta_tenant_id(embedded_tenant)
+        except Exception:
+            return str(embedded_tenant).strip().lower()
+
+    parts = [p.strip() for p in str(user_id or "").split(":") if p.strip()]
+    if len(parts) in {2, 3} and parts[0].lower() in _META_CHANNELS:
+        # compose_social_user_id omits tenant prefix for linas-branded threads.
+        return "linas"
+
+    fallback = str(tenant_id or "linas").strip()
+    try:
+        return normalize_meta_tenant_id(fallback)
+    except Exception:
+        return fallback.lower()
+
+
 async def deliver_live_chat_meta_operator_text(
     *,
     tenant_id: str | None,
     user_id: str,
     text: str,
 ) -> dict[str, Any]:
-    channel, sender_id, asset_id, embedded_tenant = parse_meta_live_chat_user_id(user_id)
-    tenant = str(tenant_id or embedded_tenant or "linas").strip()
+    channel, sender_id, asset_id, _embedded_tenant = parse_meta_live_chat_user_id(user_id)
+    tenant = resolve_meta_live_chat_tenant(tenant_id, user_id)
     if not tenant:
         return {"success": False, "error": "tenant_required_for_meta_send", "delivered": False}
 
