@@ -25,18 +25,27 @@ def payload_hash(payload: dict[str, Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def persist_inbound(session: Session, event: NormalizedInbound) -> tuple[OmnichannelInboundEvent, bool]:
-    existing = session.scalar(
-        select(OmnichannelInboundEvent).where(
-            OmnichannelInboundEvent.channel == event.channel,
-            OmnichannelInboundEvent.surface == event.surface,
-            OmnichannelInboundEvent.provider_event_id == event.provider_event_id,
-        )
+def _inbound_identity(event: NormalizedInbound):
+    return (
+        OmnichannelInboundEvent.tenant_id == event.tenant_id,
+        OmnichannelInboundEvent.channel == event.channel,
+        OmnichannelInboundEvent.surface == event.surface,
+        OmnichannelInboundEvent.provider_event_id == event.provider_event_id,
     )
+
+
+def persist_inbound(session: Session, event: NormalizedInbound) -> tuple[OmnichannelInboundEvent, bool]:
+    existing = session.scalar(select(OmnichannelInboundEvent).where(*_inbound_identity(event)))
     if existing is not None:
         return existing, False
+    identity = {
+        "id": event.provider_event_id,
+        "c": event.channel,
+        "s": event.surface,
+        "t": event.tenant_id,
+    }
     row = OmnichannelInboundEvent(
-        id=f"ocb_{payload_hash({'id': event.provider_event_id, 'c': event.channel, 's': event.surface})[:40]}",
+        id=f"ocb_{payload_hash(identity)[:40]}",
         provider_event_id=event.provider_event_id[:128],
         tenant_id=event.tenant_id,
         account_id=event.account_id[:128],
@@ -53,13 +62,7 @@ def persist_inbound(session: Session, event: NormalizedInbound) -> tuple[Omnicha
             session.add(row)
             session.flush()
     except IntegrityError:
-        existing = session.scalar(
-            select(OmnichannelInboundEvent).where(
-                OmnichannelInboundEvent.channel == event.channel,
-                OmnichannelInboundEvent.surface == event.surface,
-                OmnichannelInboundEvent.provider_event_id == event.provider_event_id,
-            )
-        )
+        existing = session.scalar(select(OmnichannelInboundEvent).where(*_inbound_identity(event)))
         if existing is None:
             raise
         return existing, False
@@ -121,18 +124,40 @@ def list_unfinished_inbound(session: Session, *, older_than_seconds: float = 30.
     ).all()
     out: list[OmnichannelInboundEvent] = []
     for row in rows:
-        updated = row.updated_at.timestamp() if row.updated_at else 0.0
-        if updated > cutoff_ts:
+        if dict(row.payload or {}).get("_mirror_only"):
             continue
+        if older_than_seconds > 0:
+            raw = row.updated_at
+            if raw is not None and raw.tzinfo is None:
+                raw = raw.replace(tzinfo=UTC)
+            updated = raw.timestamp() if raw else 0.0
+            if updated > cutoff_ts:
+                continue
         out.append(row)
     return out
+
+
+def conversation_has_earlier_unfinished(
+    session: Session, *, conversation_key: str, provider_timestamp: float, inbound_id: str
+) -> bool:
+    found = session.scalar(
+        select(OmnichannelInboundEvent.id)
+        .where(
+            OmnichannelInboundEvent.conversation_key == conversation_key,
+            OmnichannelInboundEvent.id != inbound_id,
+            OmnichannelInboundEvent.provider_timestamp < float(provider_timestamp),
+            OmnichannelInboundEvent.state.notin_(tuple(INBOUND_TERMINAL)),
+        )
+        .limit(1)
+    )
+    return found is not None
 
 
 def list_retryable_outbound(session: Session) -> list[OmnichannelOutboundOutbox]:
     now = _now()
     rows = session.scalars(
         select(OmnichannelOutboundOutbox).where(
-            OmnichannelOutboundOutbox.state.in_(("queued", "rate_limited", "failed", "reconciliation_required"))
+            OmnichannelOutboundOutbox.state.in_(("queued", "rate_limited", "failed"))
         )
     ).all()
     ready: list[OmnichannelOutboundOutbox] = []
@@ -154,7 +179,10 @@ def backlog_snapshot(session: Session) -> dict[str, Any]:
             select(OmnichannelOutboundOutbox.state, func.count()).group_by(OmnichannelOutboundOutbox.state)
         ).all()
     )
-    return {"inbound": {str(k): int(v) for k, v in inbound.items()}, "outbound": {str(k): int(v) for k, v in outbound.items()}}
+    return {
+        "inbound": {str(k): int(v) for k, v in inbound.items()},
+        "outbound": {str(k): int(v) for k, v in outbound.items()},
+    }
 
 
 accept_inbound = persist_inbound

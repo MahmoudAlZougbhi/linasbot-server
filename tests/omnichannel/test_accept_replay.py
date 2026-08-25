@@ -77,7 +77,6 @@ def test_enqueue_fail_closed_when_redis_required_but_not_ready(monkeypatch):
 
 def test_enqueue_ambiguous_when_ack_lost(monkeypatch):
     monkeypatch.setenv("LINAS_REQUIRE_REDIS", "true")
-    from types import SimpleNamespace
 
     class Boom:
         backend = "redis"

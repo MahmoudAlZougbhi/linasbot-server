@@ -124,3 +124,86 @@ def test_meta_comment_enqueue_queue_is_background(monkeypatch):
     )
     assert dm == "job-1"
     assert captured["queue"] == "high_priority"
+
+
+def _inbound(**overrides):
+    base = dict(
+        provider_event_id="mid-shared",
+        tenant_id="linas",
+        account_id="page-1",
+        channel="instagram",
+        surface="dm",
+        conversation_key="linas:instagram:u1",
+        provider_timestamp=1.0,
+        payload_hash="abc",
+        payload={"text": "hi"},
+    )
+    base.update(overrides)
+    return NormalizedInbound(**base)
+
+
+def test_same_provider_event_id_is_tenant_isolated(db_session: Session):
+    first, created = persist_inbound(db_session, _inbound(tenant_id="tenant-a"))
+    second, created2 = persist_inbound(db_session, _inbound(tenant_id="tenant-b"))
+    db_session.commit()
+    assert created is True
+    assert created2 is True
+    assert first.id != second.id
+    assert first.tenant_id == "tenant-a"
+    assert second.tenant_id == "tenant-b"
+
+
+def test_conversation_order_blocks_newer_event(db_session: Session):
+    from services.omnichannel.store import conversation_has_earlier_unfinished
+
+    older, _ = persist_inbound(
+        db_session, _inbound(provider_event_id="old", provider_timestamp=1.0, payload_hash="old")
+    )
+    newer, _ = persist_inbound(
+        db_session, _inbound(provider_event_id="new", provider_timestamp=2.0, payload_hash="new")
+    )
+    db_session.commit()
+    assert conversation_has_earlier_unfinished(
+        db_session,
+        conversation_key="linas:instagram:u1",
+        provider_timestamp=2.0,
+        inbound_id=newer.id,
+    )
+    assert not conversation_has_earlier_unfinished(
+        db_session,
+        conversation_key="linas:instagram:u1",
+        provider_timestamp=1.0,
+        inbound_id=older.id,
+    )
+
+
+def test_mirror_only_inbound_is_not_requeued(db_session: Session):
+    from services.omnichannel.store import list_unfinished_inbound
+
+    persist_inbound(
+        db_session,
+        _inbound(provider_event_id="mirror", payload={"_mirror_only": True}, payload_hash="m"),
+    )
+    persist_inbound(db_session, _inbound(provider_event_id="real", payload={"text": "x"}, payload_hash="r"))
+    db_session.commit()
+    rows = list_unfinished_inbound(db_session, older_than_seconds=-1.0)
+    assert [row.provider_event_id for row in rows] == ["real"]
+
+
+def test_ambiguous_outbound_is_not_auto_retried(db_session: Session):
+    from services.omnichannel.store import list_retryable_outbound
+
+    row, _ = persist_outbound(
+        db_session,
+        tenant_id="linas",
+        channel="instagram",
+        surface="dm",
+        account_id="page-1",
+        conversation_key="linas:instagram:u1",
+        inbound_event_id="ocb-amb",
+        canonical_body="hello",
+        idempotency_key="ig:u1:amb",
+    )
+    row.state = "reconciliation_required"
+    db_session.commit()
+    assert list_retryable_outbound(db_session) == []

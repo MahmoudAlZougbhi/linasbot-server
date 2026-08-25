@@ -56,6 +56,7 @@ async def _process_one_event(event: ParsedCloudEvent, *, body_fp: str) -> str:
     ai_snapshot: dict[str, Any] | None = None
     ai_eligible = False
     ai_reason: str | None = None
+    claim_id: str | None = None
 
     with whatsapp_session() as session:
         repo = WhatsAppCloudRepository(session)
@@ -69,7 +70,13 @@ async def _process_one_event(event: ParsedCloudEvent, *, body_fp: str) -> str:
         )
         if claim is None:
             return "error"
-        if not is_new:
+        unfinished = (
+            (not is_new)
+            and claim.processing_state == "claimed"
+            and event.event_kind == "inbound_message"
+            and conn is not None
+        )
+        if not is_new and not unfinished:
             emit_wa_event("duplicate_suppressed", event_kind=event.event_kind)
             return "duplicate"
         if conn is None:
@@ -77,7 +84,18 @@ async def _process_one_event(event: ParsedCloudEvent, *, body_fp: str) -> str:
             emit_wa_event("unknown_asset", phone_prefix=(event.phone_number_id or "")[:4])
             return "ignored"
 
-        if event.event_kind in {
+        if unfinished:
+            conv = repo.get_or_create_conversation(
+                tenant_id=conn.tenant_id,
+                connection_id=conn.id,
+                customer_wa_id=event.customer_wa_id,
+                profile_name=event.profile_name,
+            )
+            ai_eligible, ai_reason = evaluate_ai_eligibility(session, conn)
+            ai_snapshot = _ai_snapshot(conn=conn, conv=conv, event=event, message_id=None)
+            claim_id = claim.id
+            emit_wa_event("claimed_unfinished_retry", conversation_id=conv.id)
+        elif event.event_kind in {
             "history",
             "smb_app_state_sync",
             "status",
@@ -175,21 +193,8 @@ async def _process_one_event(event: ParsedCloudEvent, *, body_fp: str) -> str:
             except Exception as exc:
                 emit_wa_event("smart_followup_cancel_failed", error=type(exc).__name__)
             ai_eligible, ai_reason = evaluate_ai_eligibility(session, conn)
-            ai_snapshot = {
-                "tenant_id": conn.tenant_id,
-                "connection_id": conn.id,
-                "conversation_id": conv.id,
-                "customer_wa_id": conv.customer_wa_id,
-                "control_state": conv.control_state,
-                "control_epoch": int(conv.control_epoch),
-                "message_id": msg.id if msg else None,
-                "provider_message_id": event.provider_message_id,
-                "message_type": event.message_type,
-                "text_body": event.text_body,
-                "media_id": event.media_id,
-                "profile_name": event.profile_name,
-            }
-            repo.complete_webhook_event(claim, state="processed")
+            ai_snapshot = _ai_snapshot(conn=conn, conv=conv, event=event, message_id=msg.id if msg else None)
+            claim_id = claim.id
         else:
             repo.complete_webhook_event(claim, state="ignored")
             return "ignored"
@@ -198,6 +203,7 @@ async def _process_one_event(event: ParsedCloudEvent, *, body_fp: str) -> str:
         return "accepted"
     if ai_snapshot["control_state"] != "AI_ACTIVE":
         emit_wa_event("ai_suppressed_paused", conversation_id=ai_snapshot["conversation_id"])
+        _finish_claim_without_ai(claim_id)
         return "accepted"
     if not ai_eligible:
         emit_wa_event(
@@ -205,9 +211,11 @@ async def _process_one_event(event: ParsedCloudEvent, *, body_fp: str) -> str:
             reason=ai_reason,
             conversation_id=ai_snapshot["conversation_id"],
         )
+        _finish_claim_without_ai(claim_id)
         return "accepted"
     if event.message_type in {"unsupported", "reaction", "sticker"} and not event.text_body:
         emit_wa_event("unsupported_no_ai", message_type=event.message_type)
+        _finish_claim_without_ai(claim_id)
         return "accepted"
     from services.job_queue import job_queue
     from services.omnichannel.enqueue import AMBIGUOUS_ENQUEUE, enqueue_job, should_defer_to_worker
@@ -228,6 +236,7 @@ async def _process_one_event(event: ParsedCloudEvent, *, body_fp: str) -> str:
             raise RuntimeError("whatsapp_generate_enqueue_failed")
     else:
         await maybe_generate_and_send_ai_reply(ai_snapshot)
+    _complete_claimed_webhook(claim_id)
     record_analytics_channel_usage(
         tenant_id=ai_snapshot["tenant_id"],
         connection_id=ai_snapshot["connection_id"],
@@ -236,3 +245,36 @@ async def _process_one_event(event: ParsedCloudEvent, *, body_fp: str) -> str:
         source="customer_inbound",
     )
     return "accepted"
+
+
+def _ai_snapshot(*, conn: Any, conv: Any, event: ParsedCloudEvent, message_id: str | None) -> dict[str, Any]:
+    return {
+        "tenant_id": conn.tenant_id,
+        "connection_id": conn.id,
+        "conversation_id": conv.id,
+        "customer_wa_id": conv.customer_wa_id,
+        "control_state": conv.control_state,
+        "control_epoch": int(conv.control_epoch),
+        "message_id": message_id,
+        "provider_message_id": event.provider_message_id,
+        "message_type": event.message_type,
+        "text_body": event.text_body,
+        "media_id": event.media_id,
+        "profile_name": event.profile_name,
+    }
+
+
+def _finish_claim_without_ai(claim_id: str | None) -> None:
+    _complete_claimed_webhook(claim_id)
+
+
+def _complete_claimed_webhook(claim_id: str | None) -> None:
+    if not claim_id:
+        return
+    from db.models.whatsapp_cloud import WhatsAppWebhookEvent
+
+    with whatsapp_session() as session:
+        row = session.get(WhatsAppWebhookEvent, claim_id)
+        if row is not None and row.processing_state == "claimed":
+            WhatsAppCloudRepository(session).complete_webhook_event(row, state="processed")
+            session.commit()
