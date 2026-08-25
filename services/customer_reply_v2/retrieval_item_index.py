@@ -170,6 +170,14 @@ def record_content(section_id: str, raw: dict[str, Any]) -> str:
             ensure_ascii=False,
         )
     if section_id == "branches":
+        from services.cm.branch_schedule import normalize_weekly_schedule
+        from services.cm.resource_attachment import customer_resource_descriptors
+
+        branch_id = str(raw.get("id") or "").strip()
+        attachments = customer_resource_descriptors(
+            list(raw.get("attachments") or []),
+            source_item_id=f"branches:{branch_id}" if branch_id else "branches:unknown",
+        )
         return json.dumps(
             {
                 "id": raw.get("id"),
@@ -181,9 +189,10 @@ def record_content(section_id: str, raw: dict[str, Any]) -> str:
                 "country": raw.get("country"),
                 "maps_url": raw.get("maps_url"),
                 "hours": raw.get("hours"),
-                "weekly_schedule": raw.get("weekly_schedule"),
+                "weekly_schedule": normalize_weekly_schedule(raw.get("weekly_schedule")),
                 "notes": raw.get("notes") or "",
                 "available": raw.get("available", True),
+                "attachments": attachments,
                 "resource_summary": resource_summary(list(raw.get("attachments") or [])),
             },
             ensure_ascii=False,

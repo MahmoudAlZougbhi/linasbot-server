@@ -39,11 +39,17 @@ def _as_dict(value: Any) -> dict[str, Any]:
 
 def normalize_branch_day(raw: Any) -> dict[str, Any]:
     row = _as_dict(raw)
+    open_t = str(row.get("open") or "").strip()
+    close_t = str(row.get("close") or "").strip()
+    off_day = bool(row.get("off_day"))
+    enabled = bool(row.get("enabled"))
+    if not enabled and (off_day or (open_t and close_t)):
+        enabled = True
     return {
-        "enabled": bool(row.get("enabled")),
-        "open": str(row.get("open") or "").strip(),
-        "close": str(row.get("close") or "").strip(),
-        "off_day": bool(row.get("off_day")),
+        "enabled": enabled,
+        "open": open_t,
+        "close": close_t,
+        "off_day": off_day,
         "note": row.get("note"),
     }
 

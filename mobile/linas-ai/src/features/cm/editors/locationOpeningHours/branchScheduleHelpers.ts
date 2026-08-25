@@ -35,11 +35,18 @@ export function normalizeWeeklySchedule(raw: unknown): WeeklySchedule {
   const out = emptyWeeklySchedule();
   for (const day of WEEKDAY_KEYS) {
     const row = asRecord(src[day]);
+    const open = String(row.open || '');
+    const close = String(row.close || '');
+    const offDay = Boolean(row.off_day);
+    let enabled = Boolean(row.enabled);
+    if (!enabled && (offDay || (open.trim() && close.trim()))) {
+      enabled = true;
+    }
     out[day] = {
-      enabled: Boolean(row.enabled),
-      open: String(row.open || ''),
-      close: String(row.close || ''),
-      off_day: Boolean(row.off_day),
+      enabled,
+      open,
+      close,
+      off_day: offDay,
       note: row.note == null ? null : String(row.note),
     };
   }
