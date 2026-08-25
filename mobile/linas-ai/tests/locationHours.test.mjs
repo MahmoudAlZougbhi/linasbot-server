@@ -12,6 +12,7 @@ import {
   formatClock12,
   hoursAreSet,
   matchesBranchQuery,
+  normalizeWeeklySchedule,
   parseClock12,
   todayStatus,
 } from '../src/features/cm/editors/locationOpeningHours/branchScheduleHelpers.ts';
@@ -32,6 +33,13 @@ describe('today status and draft', () => {
     const empty = emptyWeeklySchedule();
     assert.equal(hoursAreSet(empty), false);
     assert.equal(todayStatus(empty).kind, 'none');
+  });
+
+  it('coalesces enabled when open/close exist without enabled flag', () => {
+    const schedule = normalizeWeeklySchedule({
+      monday: { enabled: false, open: '09:00', close: '18:00', off_day: false },
+    });
+    assert.equal(hoursAreSet(schedule), true);
   });
 
   it('reports open or closed from the weekday row', () => {

@@ -100,6 +100,31 @@ def test_branch_weekly_schedule_reaches_terra() -> None:
     assert "not a fact" not in content
 
 
+def test_branch_attachments_reach_terra_without_urls() -> None:
+    content = record_content(
+        "branches",
+        {
+            "id": "b2",
+            "labels": {"en": "Hamra"},
+            "weekly_schedule": {"tuesday": {"enabled": True, "open": "09:00", "close": "18:00", "off_day": False}},
+            "attachments": [
+                {
+                    "id": "att1",
+                    "kind": "image",
+                    "title": "Parking map",
+                    "description": "Back entrance parking",
+                    "url": "https://secret.example/map.jpg",
+                    "status": "active",
+                }
+            ],
+        },
+    )
+    assert "Parking map" in content
+    assert "Back entrance parking" in content
+    assert "secret.example" not in content
+    assert '"type": "image"' in content or '"type":"image"' in content.replace(" ", "")
+
+
 def test_request_rules_only_selected_reach_terra() -> None:
     payload = {
         "rules": [

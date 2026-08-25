@@ -8,6 +8,7 @@ from services.cm.branch_schedule import (
     derive_opening_hours_section,
     empty_weekly_schedule,
     merge_opening_hours_into_branches,
+    normalize_branch_day,
     normalize_branches_payload,
 )
 from services.cm.off_days import resolve_off_day_facts
@@ -91,6 +92,12 @@ def test_resolve_branch_facts_uses_weekly_schedule() -> None:
     kinds = {f.kind: f.value for f in facts}
     assert kinds["branch_maps_url"] == "https://maps.example/j"
     assert "Fri: 09:00-15:00" in kinds["branch_hours"]
+
+
+def test_normalize_branch_day_coalesces_enabled_from_times() -> None:
+    row = normalize_branch_day({"enabled": False, "open": "09:00", "close": "18:00", "off_day": False})
+    assert row["enabled"] is True
+    assert row["open"] == "09:00"
 
 
 def test_branches_section_has_unified_schedule() -> None:

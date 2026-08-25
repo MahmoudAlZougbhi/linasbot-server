@@ -31,7 +31,29 @@ def _service_ok(item: dict[str, Any]) -> bool:
     return _nonempty(item.get("id")) and _nonempty(_label_text(item.get("labels")))
 
 
+def _legacy_branch_hours_ok(item: dict[str, Any]) -> bool:
+    hours = item.get("hours")
+    if not isinstance(hours, dict):
+        return False
+    if _nonempty(hours.get("summary")):
+        return True
+    for day in (
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+    ):
+        if _nonempty(hours.get(day)):
+            return True
+    return False
+
+
 def _branch_schedule_ok(item: dict[str, Any]) -> bool:
+    if _legacy_branch_hours_ok(item):
+        return True
     ws = item.get("weekly_schedule")
     if not isinstance(ws, dict):
         return False

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.cm.branch_schedule import enrich_branches_from_legacy_drafts
 from services.cm.constants import CM_SECTIONS, tenant_has_published_cm
 from services.cm.progress_quality import assess_section_fill
 from services.cm.schemas import default_section_payload
@@ -35,12 +36,14 @@ def list_section_fill_status(
         draft_present = draft_section_path(tenant_id, section).exists()
         env = get_draft(section, tenant_id=tenant_id, create_default=create_missing)
         payload = env.payload if isinstance(env.payload, dict) else None
+        assess_payload = payload
         if section == "branches" and isinstance(payload, dict):
-            branches_payload = payload
+            branches_payload = enrich_branches_from_legacy_drafts(tenant_id, payload)
+            assess_payload = branches_payload
         is_default = (not draft_present and not create_missing) or section_is_default(payload, section)
         quality = assess_section_fill(
             section,
-            payload,
+            assess_payload,
             is_default=is_default,
             branches_payload=branches_payload,
         )
