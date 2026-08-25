@@ -49,6 +49,7 @@ class LiveChatTemplatesMixin:
     STATE_WAITING_OPERATOR: Any
     _empty_counters: Any
     _index_collection: Any
+    _index_recency_query: Any
     _is_cache_fresh: Any
     _normalize_conversation_state: Any
     _parse_timestamp: Any
