@@ -217,7 +217,11 @@ class LiveChatOperatorMixin:
                 try:
                     result = await adapter.send_text_message(canonical_user_id, message)
                     if not isinstance(result, dict) or not result.get("success"):
-                        err: str = str((result or {}).get("error") or "send failed") if isinstance(result, dict) else "send failed"
+                        err: str = (
+                            str((result or {}).get("error") or "send failed")
+                            if isinstance(result, dict)
+                            else "send failed"
+                        )
                         print(f"⚠️ WhatsApp send failed after save: {err}")
                         return {
                             "success": False,
