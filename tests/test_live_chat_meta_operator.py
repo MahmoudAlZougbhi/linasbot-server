@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from services.live_chat_meta_operator import (
     is_meta_dm_live_chat_user,
     parse_meta_live_chat_user_id,
