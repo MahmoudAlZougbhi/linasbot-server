@@ -84,9 +84,7 @@ async def deliver_live_chat_tiktok_operator_text(
         except Exception as exc:
             return {"success": False, "error": str(exc)[:180], "delivered": False}
         message_id = str(
-            (published or {}).get("message_id")
-            or (published or {}).get("data", {}).get("message_id")
-            or ""
+            (published or {}).get("message_id") or (published or {}).get("data", {}).get("message_id") or ""
         ).strip()
         return {
             "success": True,

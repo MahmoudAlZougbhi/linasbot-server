@@ -192,9 +192,7 @@ async def send_operator_image_message(
             }
 
         if storage_url:
-            send_result = await adapter.send_image_message(
-                canonical_user_id, storage_url, caption="صورة من المشغل"
-            )
+            send_result = await adapter.send_image_message(canonical_user_id, storage_url, caption="صورة من المشغل")
             if isinstance(send_result, dict) and not send_result.get("success", True):
                 err = send_result.get("error", "Unknown error")
                 return {"success": False, "error": f"WhatsApp image send failed: {err}"}

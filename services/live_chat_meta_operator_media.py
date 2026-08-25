@@ -48,9 +48,7 @@ async def _build_meta_adapter_for_live_chat_user(
         raise ValueError("meta_account_or_recipient_missing")
 
     registry = get_meta_app_registry()
-    candidates = _meta_bindings_for_account(
-        registry, tenant_id=tenant, account=account, meta_channels=(channel,)
-    )
+    candidates = _meta_bindings_for_account(registry, tenant_id=tenant, account=account, meta_channels=(channel,))
     if not candidates:
         raise ValueError("meta_binding_not_found")
     binding = candidates[0]
