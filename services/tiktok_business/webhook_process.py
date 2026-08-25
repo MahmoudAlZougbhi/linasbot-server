@@ -1,4 +1,4 @@
-"""TikTok webhook dispatch. Comments have no official Accounts webhook — DMs are capability-gated."""
+"""TikTok webhook dispatch. Comment events cover every public video; DMs stay capability-gated."""
 
 from __future__ import annotations
 
@@ -47,6 +47,10 @@ async def process_tiktok_webhook_payload(*, raw_body: bytes, payload: dict[str, 
         return await handle_messaging_webhook(
             payload=payload, content=content, event_name=event_name, event_id=event_id
         )
+    if event_name.startswith("comment."):
+        from services.tiktok_business.comment_webhook import handle_comment_webhook
+
+        return await handle_comment_webhook(payload=payload, content=content, event_name=event_name)
 
     # Unknown event types are acknowledged after signature + idempotency — no fake success side effects.
     return {"accepted": 1, "event": event_name or "unknown", "ignored": True}

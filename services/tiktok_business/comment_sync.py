@@ -1,4 +1,4 @@
-"""Incremental TikTok media + comment sync (no comment webhook in Accounts API)."""
+"""Catch-up TikTok comment poll for recent videos. All-video coverage is COMMENT webhooks."""
 
 from __future__ import annotations
 
@@ -44,6 +44,21 @@ def should_enqueue_comment_ai(
     if comment_at is None or connected is None:
         return False
     return comment_at >= connected
+
+
+def enqueue_tiktok_comment_ai(*, tenant_id: str, connection_id: str, comment_id: str, item_id: str) -> None:
+    try:
+        from services.job_queue import job_queue
+
+        job_queue.enqueue(
+            queue="interactive",
+            job_type="tiktok_comment_ai",
+            tenant_id=tenant_id,
+            payload={"connection_id": connection_id, "comment_id": comment_id, "item_id": item_id},
+            idempotency_key=f"tiktok_ai:{tenant_id}:{comment_id}",
+        )
+    except Exception:
+        pass
 
 
 async def _list_videos(*, access_token: str, open_id: str) -> dict[str, Any]:
@@ -160,16 +175,7 @@ async def sync_connection_comments(*, tenant_id: str, connection_id: str, owner:
         session.commit()
 
     for comment_id, item_id in new_comments:
-        try:
-            from services.job_queue import job_queue
-
-            job_queue.enqueue(
-                queue="interactive",
-                job_type="tiktok_comment_ai",
-                tenant_id=tenant_id,
-                payload={"connection_id": connection_id, "comment_id": comment_id, "item_id": item_id},
-                idempotency_key=f"tiktok_ai:{tenant_id}:{comment_id}",
-            )
-        except Exception:
-            pass
+        enqueue_tiktok_comment_ai(
+            tenant_id=tenant_id, connection_id=connection_id, comment_id=comment_id, item_id=item_id
+        )
     return {"ok": True, "videos": processed_videos, "new_comments": len(new_comments)}

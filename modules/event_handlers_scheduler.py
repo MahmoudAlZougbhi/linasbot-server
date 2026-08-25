@@ -193,6 +193,16 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
         name="TikTok Comment Sync Tick",
         replace_existing=True,
     )
+    from modules.tiktok_webhook_register_job import run_tiktok_comment_webhook_register_job
+
+    scheduler.add_job(
+        run_tiktok_comment_webhook_register_job,
+        "interval",
+        minutes=60,
+        id="tiktok_comment_webhook_register",
+        name="TikTok Comment Webhook Register",
+        replace_existing=True,
+    )
     from modules.meta_social_comment_sync_job import run_meta_social_comment_sync_job
 
     scheduler.add_job(
@@ -225,6 +235,7 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
     asyncio.create_task(run_customer_reply_reconcile_job())
     asyncio.create_task(run_web_chat_release_pending_reconcile_job())
     asyncio.create_task(run_tiktok_comment_sync_job())
+    asyncio.create_task(run_tiktok_comment_webhook_register_job())
     asyncio.create_task(run_meta_social_comment_sync_job())
     asyncio.create_task(run_ha_tenant_config_peer_sync_job())
 
@@ -239,6 +250,7 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
     print("   - Customer reply reconcile: Every 1 minute")
     print("   - Web Chat release pending reconcile: Every 1 minute")
     print("   - TikTok comment sync: Every 1 minute")
+    print("   - TikTok comment webhook register: Every 60 minutes")
     print("   - Meta social comment sync: Every 1 minute")
     print("=" * 60)
 
