@@ -188,19 +188,6 @@ async def complete_tiktok_oauth(
         session.commit()
         connection_id = connection.id
 
-    try:
-        from services.job_queue import job_queue
-
-        job_queue.enqueue(
-            queue="background",
-            job_type="tiktok_comment_sync",
-            tenant_id=tenant_id,
-            payload={"connection_id": connection_id},
-            idempotency_key=f"tiktok_sync:{connection_id}:connect",
-        )
-    except Exception:
-        pass
-
     status = "success" if lifecycle in {"connected", "permission_required"} else "failed"
     try:
         from services.tiktok_business.toggles import enable_tiktok_comments_after_connect

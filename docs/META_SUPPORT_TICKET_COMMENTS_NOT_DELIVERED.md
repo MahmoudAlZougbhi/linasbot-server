@@ -5,7 +5,8 @@
 > Attach redacted server log excerpts if requested. **Never attach access tokens,
 > app secrets, or webhook verify tokens.**
 
-Last updated: **2026-08-24 (UTC+3)**
+Last updated: **2026-08-26 (UTC+3)** — includes live production repro the same night,
+official webhook docs (Advanced Access / Live mode), and filing-path notes.
 
 ---
 
@@ -47,6 +48,34 @@ obtain comment delivery for App Review evidence.
 | Permission status (all desired social scopes) | **Ready for testing** (not Advanced Access) |
 | Runtime Graph API version (server) | `v24.0` |
 | Dashboard webhook subscription version | `v26.0` |
+| Server Instagram Login Graph version | `v26.0` (`INSTAGRAM_LOGIN_GRAPH_API_VERSION`) |
+| `subscribed_apps` fields (live GET, Aug 2026) | `comments`, `messages`, `messaging_postbacks` |
+| Comment-related stored scopes | include `instagram_business_manage_comments` |
+| Comments enforcement (our side) | `allow=True` for tenant `linas` |
+
+### Live production repro — 2026-08-25 ~21:00 UTC / 2026-08-26 ~00:00 Asia/Beirut
+
+A visitor/tester comment was posted on an **older** `@linaslaser` IMAGE (not the newest media; newest Graph media is several days old).
+
+Observed on both production nodes (no tokens attached):
+
+1. Graph `GET graph.instagram.com/{ig-user-id}/media` showed that IMAGE’s **`comments_count` increased** (example: `0` → `1`).
+2. Immediate `GET graph.instagram.com/{media-id}/comments` still returned **HTTP 200** with **`"data": []`**. Nested `comments` expansion on media was also empty.
+3. **Zero** inbound durable `meta_comment` + `instagram` events in `/opt/linasbot_data/logs/inbound_events` in the following ~20 minutes on **both** nodes.
+4. Instagram **DM** webhooks continued: `[instagram-login] webhook_authenticated object=instagram ... comments=0`.
+5. Facebook Page comments exist in our ledger (some `sent`, some failed for unrelated reply/AI reasons). Instagram comments remain absent.
+
+**Tester identity:** connected username is `@linaslaser`. Comments from `@linaslaser` on `@linaslaser` media are **self-comments** and our product skips them even if Meta delivered. Correct tester for comments is **`@boc_system` (or another Roles tester) commenting on `@linaslaser` posts**. The Graph `comments_count` bump + empty comments edge still happens **before** our skip logic: Meta is not returning the comment object.
+
+### Official Meta docs vs what we see (cite in ticket)
+
+From [Setup Webhooks Subscriptions](https://developers.facebook.com/docs/instagram-platform/webhooks/) (updated Mar 3, 2026):
+
+- “Your app must be set to **Live** in the App Dashboard for Meta to send webhook notifications.”
+- Access-level table: **Advanced Access** for Business Login for Instagram; **Advanced Access for `comments` and `live_comments`** for Facebook Login for Business; **Advanced Access** for Instagram Messaging via Messenger Platform.
+- Explicit: “**Advanced Access is required to receive `comments` and `live_comments` webhook notifications.**”
+
+**Contradiction we need Meta to resolve for App Review:** the same Unpublished app, same Instagram Login callback, same tester Webhook Subscription **On**, **does receive `messages` webhooks** (DMs verified). If Live mode + Advanced Access are strictly required for *all* Instagram webhooks, DMs should also be absent. They are not. Comments are absent, and Graph `{media-id}/comments` is empty even when `comments_count` increments.
 
 ### Webhook configuration (confirmed in Dashboard snapshot 2026-08-14)
 
@@ -126,7 +155,8 @@ During controlled tests (August 2026, Asia/Beirut timezone windows):
 |----------------------|--------|----------|----------|
 | 2026-08-20 – 2026-08-24 | Tester posts IG media comment | `comments` webhook to `/webhook/instagram-login` | **No** comment payload; DM webhooks still arrive |
 | 2026-08-20 – 2026-08-24 | Tester posts FB Page feed comment | `feed` webhook to `/webhook/meta-messaging` | **No** comment/feed change payload for the new comment |
-| Same window | Server polling fallback sync | Ingest new comments via Graph | **No rows** because Graph `comments` edge is `data:[]` |
+| 2026-08-25 ~21:00 UTC | Comment on older `@linaslaser` IMAGE | `comments` webhook + Graph comment list | `comments_count` +1; `{media-id}/comments` = `[]`; no inbound 20m; DMs still arrive |
+| Same windows | Server poll of Graph comments | Ingest new comments via Graph | **No rows** because Graph `comments` edge is `data:[]` |
 
 Redacted nginx/journal patterns from production probe (`scripts/prod_meta_comment_runtime_probe.py`):
 
@@ -162,6 +192,13 @@ server subscription fields.
 4. Please inspect app `2963733803971681` / Instagram product `1035856539045307`
    for misconfiguration blocking comment delivery while DMs work on the same
    callback and subscriptions.
+5. Official docs (Mar 2026) say Live mode + Advanced Access are required for
+   `comments` / `live_comments` webhooks. **Messages already arrive** on this
+   Unpublished app with permissions **Ready for testing**. Please confirm:
+   - whether testers should still get `comments` webhooks / Graph comment lists
+     for App Review evidence without Advanced Access, and
+   - why `{media-id}/comments` is `data:[]` while `comments_count` on that media
+     increments after a real comment.
 
 ### Compliance / privacy (for context)
 
@@ -185,15 +222,25 @@ Thank you.
 
 ---
 
-## Where to file
+## Where to file (2026-08-26 attempt)
 
-1. [Meta for Developers](https://developers.facebook.com/) → **Linas AI**
-   (`2963733803971681`)
-2. **Help** → **Contact Support**
-3. Category suggestion: **Webhooks** or **Instagram API** → **Other**
-4. Paste Subject + Description above
-5. Optional attachments: redacted journal/nginx excerpts showing DM webhooks but
-   `comments=0`; screenshot of Dashboard webhook fields (no secrets)
+Private **Report a Bug** (`https://developers.facebook.com/support/bugs/report/`)
+logged in as app admin, app **Linas AI** (`2963733803971681`):
+
+- **Messenger Platform → Instagram Messaging → Webhooks:** “We regret that
+  support is unavailable for this product” — Meta redirects to the
+  [Developer Community Forum](https://developers.facebook.com/community/).
+- **Developer Tools → App Dashboard → App Review → general question:** Meta
+  says they will **not** answer App Review process questions or look into
+  individual cases via the bug tool.
+
+**Remaining official channel:** Community Forum → **Ask a Question**, category
+**Instagram Graph API** or **Webhooks**. Paste Subject + Description above.
+Optional attachments: redacted journal/nginx excerpts showing DM webhooks but
+`comments=0`; screenshot of Dashboard webhook fields (no secrets).
+
+App Dashboard **Help** → “Need more help?” only opens
+`https://developers.facebook.com/support/` (AI assistant), not a private case.
 
 ---
 

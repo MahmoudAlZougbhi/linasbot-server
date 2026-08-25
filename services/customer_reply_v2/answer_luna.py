@@ -380,6 +380,12 @@ async def run_answer_luna(
                 channel=channel,
             )
     except Exception as exc:
+        from services.llm_core_service import sanitize_llm_error
+
+        print(
+            f"[answer_tera] model_unavailable channel={channel} err={sanitize_llm_error(exc)}",
+            flush=True,
+        )
         return AnswerLunaResult(
             reply_text="",
             grounding_status="insufficient",
@@ -390,7 +396,7 @@ async def run_answer_luna(
             requested_reasoning_effort=tera_effort,
             effective_reasoning_effort=tera_effort,
             stage="repair" if repair_failures else "answer",
-            raw_structured={"error": str(exc), "blocker": "answer_model_unavailable"},
+            raw_structured={"error": sanitize_llm_error(exc), "blocker": "answer_model_unavailable"},
         )
 
     returned = getattr(response, "model", None) or model

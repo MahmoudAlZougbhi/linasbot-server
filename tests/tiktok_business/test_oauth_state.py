@@ -73,6 +73,12 @@ def test_oauth_callback_module_never_reads_query_tenant() -> None:
     assert "Never read tenant_id" in source
 
 
+def test_oauth_complete_does_not_enqueue_comment_poll() -> None:
+    source = Path("services/tiktok_business/oauth.py").read_text(encoding="utf-8")
+    assert "tiktok_comment_sync" not in source
+    assert "tiktok_sync:" not in source
+
+
 def test_two_node_oauth_consume(tt_db) -> None:
     """HA nodes share Postgres CAS: only one consume succeeds (replay is the second node)."""
 

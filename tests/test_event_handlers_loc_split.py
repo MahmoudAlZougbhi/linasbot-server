@@ -64,3 +64,13 @@ def test_meta_deletion_reconcile_runs_per_node_without_cluster_singleton_lock() 
     scheduler_source = Path("modules/event_handlers_scheduler.py").read_text(encoding="utf-8")
     assert "try_acquire_job_lock" not in source
     assert 'id="meta_data_deletion_reconcile"' in scheduler_source
+
+
+def test_scheduler_does_not_register_channel_comment_polls() -> None:
+    scheduler_source = Path("modules/event_handlers_scheduler.py").read_text(encoding="utf-8")
+    assert "tiktok_comment_sync_tick" not in scheduler_source
+    assert "meta_social_comment_sync_tick" not in scheduler_source
+    assert "run_tiktok_comment_sync_job" not in scheduler_source
+    assert "run_meta_social_comment_sync_job" not in scheduler_source
+    assert 'id="tiktok_comment_webhook_register"' in scheduler_source
+    assert "webhook-only" in scheduler_source

@@ -247,7 +247,7 @@ async def run_customer_reply_v2_comment(
     except Exception as exc:
         return CustomerReplyOutcome(
             stop=True,
-            reply=safe_failure_reply(response_language, kind="model"),
+            reply=None,
             reason="model_misconfigured",
             error=str(exc),
             evidence_status="insufficient_final",
@@ -304,10 +304,10 @@ async def run_customer_reply_v2_comment(
     completion_tokens = int(answer.completion_tokens or 0)
 
     if answer.safe_failure_category == "model_unavailable" and not reply_text:
-        reply_text = safe_failure_reply(response_language, kind="model")[:900]
+        # Do not post the internal model-failure sentence on a public comment.
         failed_rules = ["answer_model_unavailable"]
-
-    if retrieval.evidence_status == "insufficient_final" and not reply_text:
+        reply_text = ""
+    elif retrieval.evidence_status == "insufficient_final" and not reply_text:
         reply_text = safe_failure_reply(response_language, kind="insufficient")[:900]
 
     if reply_text and retrieval.evidence and "answer_model_unavailable" not in failed_rules:

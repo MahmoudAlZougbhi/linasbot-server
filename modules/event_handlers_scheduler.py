@@ -183,16 +183,6 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
         name="Web Chat Release Pending Reconcile",
         replace_existing=True,
     )
-    from modules.tiktok_sync_job import run_tiktok_comment_sync_job
-
-    scheduler.add_job(
-        run_tiktok_comment_sync_job,
-        "interval",
-        minutes=1,
-        id="tiktok_comment_sync_tick",
-        name="TikTok Comment Sync Tick",
-        replace_existing=True,
-    )
     from modules.tiktok_webhook_register_job import run_tiktok_comment_webhook_register_job
 
     scheduler.add_job(
@@ -203,22 +193,6 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
         name="TikTok Comment Webhook Register",
         replace_existing=True,
     )
-    from modules.meta_social_comment_sync_job import (
-        meta_comment_poll_enabled,
-        meta_comment_poll_interval_seconds,
-        run_meta_social_comment_sync_job,
-    )
-
-    if meta_comment_poll_enabled():
-        poll_seconds = meta_comment_poll_interval_seconds()
-        scheduler.add_job(
-            run_meta_social_comment_sync_job,
-            "interval",
-            seconds=poll_seconds,
-            id="meta_social_comment_sync_tick",
-            name="Meta Social Comment Sync Tick",
-            replace_existing=True,
-        )
     from modules.ha_tenant_config_peer_sync_job import run_ha_tenant_config_peer_sync_job
 
     scheduler.add_job(
@@ -240,10 +214,7 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
     asyncio.create_task(run_meta_data_deletion_reconcile_job())
     asyncio.create_task(run_customer_reply_reconcile_job())
     asyncio.create_task(run_web_chat_release_pending_reconcile_job())
-    asyncio.create_task(run_tiktok_comment_sync_job())
     asyncio.create_task(run_tiktok_comment_webhook_register_job())
-    if meta_comment_poll_enabled():
-        asyncio.create_task(run_meta_social_comment_sync_job())
     asyncio.create_task(run_ha_tenant_config_peer_sync_job())
 
     print("✅ Smart Messaging Scheduler started successfully")
@@ -256,12 +227,8 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
     print("   - Meta data deletion reconcile: Every 1 minute per node")
     print("   - Customer reply reconcile: Every 1 minute")
     print("   - Web Chat release pending reconcile: Every 1 minute")
-    print("   - TikTok comment sync: Every 1 minute")
     print("   - TikTok comment webhook register: Every 60 minutes")
-    if meta_comment_poll_enabled():
-        print(f"   - Meta social comment sync (temporary poll): Every {meta_comment_poll_interval_seconds()} seconds")
-    else:
-        print("   - Meta social comment sync: disabled (webhook-only)")
+    print("   - Channel inbound: webhook-only (no Graph/API comment poll)")
     print("=" * 60)
 
     app_state.scheduler = scheduler
