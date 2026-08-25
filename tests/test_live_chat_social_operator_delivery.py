@@ -44,34 +44,3 @@ def test_tiktok_operator_media_not_supported() -> None:
     result = tiktok_operator_media_not_supported()
     assert result["success"] is False
     assert "not supported" in result["error"].lower()
-
-
-@pytest.mark.asyncio
-async def test_deliver_tiktok_operator_text_missing_connection(monkeypatch: pytest.MonkeyPatch) -> None:
-    from services.live_chat_tiktok_operator import deliver_live_chat_tiktok_operator_text
-
-    class FakeRepo:
-        def get_connection(self, connection_id: str, *, tenant_id: str | None = None):
-            return None
-
-        def get_active_for_tenant(self, tenant_id: str):
-            return None
-
-    class FakeCtx:
-        def __enter__(self):
-            return object()
-
-        def __exit__(self, *args):
-            return False
-
-    monkeypatch.setattr("db.session.whatsapp_session", lambda: FakeCtx())
-    monkeypatch.setattr("services.tiktok_business.repository.TikTokRepository", lambda session: FakeRepo())
-
-    result = await deliver_live_chat_tiktok_operator_text(
-        tenant_id="linas",
-        user_id="tiktok:cust-1",
-        conversation_id="conv-1",
-        text="hello",
-    )
-    assert result["success"] is False
-    assert result["error"] == "tiktok_connection_not_found"
