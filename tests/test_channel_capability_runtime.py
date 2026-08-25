@@ -1,4 +1,4 @@
-"""App DM/Comments switches are local; they do not subscribe Meta."""
+"""App DM/Comments switches persist locally; Comments ON also re-ensures Meta comment webhooks."""
 
 from __future__ import annotations
 
