@@ -3,11 +3,11 @@ from __future__ import annotations
 import pytest
 
 from services.live_chat_meta_operator_media import decode_operator_media_payload
+from services.live_chat_operator_social_delivery import is_social_live_chat_user
 from services.live_chat_tiktok_operator import (
     parse_tiktok_live_chat_user_id,
     tiktok_operator_media_not_supported,
 )
-from services.live_chat_operator_social_delivery import is_social_live_chat_user
 
 
 def test_decode_operator_media_payload() -> None:
