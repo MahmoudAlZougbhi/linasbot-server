@@ -27,8 +27,8 @@ def test_published_dm_off_stops_replies(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_enable_comments_does_not_call_meta_webhooks(monkeypatch) -> None:
-    webhook = AsyncMock()
+async def test_enable_comments_ensures_comment_webhooks(monkeypatch) -> None:
+    ensure_webhooks = AsyncMock()
     settings: list[bool] = []
 
     monkeypatch.setattr(
@@ -43,7 +43,10 @@ async def test_enable_comments_does_not_call_meta_webhooks(monkeypatch) -> None:
         "services.channel_capability_toggles.set_comment_reply_setting",
         lambda **kwargs: settings.append(bool(kwargs["enabled"])),
     )
-    monkeypatch.setattr("services.channel_capability_toggles.ensure_comment_webhook_for_binding", webhook)
+    monkeypatch.setattr(
+        "services.channel_capability_toggles._ensure_comment_webhooks_for_platform",
+        ensure_webhooks,
+    )
     monkeypatch.setattr(
         "services.channel_capability_toggles._set_action_in_draft",
         lambda **_k: SimpleNamespace(),
@@ -75,6 +78,6 @@ async def test_enable_comments_does_not_call_meta_webhooks(monkeypatch) -> None:
         enabled=True,
         actor="test",
     )
-    webhook.assert_not_called()
+    ensure_webhooks.assert_awaited_once_with(tenant_id="linas", platform="facebook")
     assert settings == [True]
     assert result["toggles"]["comments"] is True
