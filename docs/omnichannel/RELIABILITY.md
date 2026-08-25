@@ -15,6 +15,8 @@ Physical HA workers stay `high_priority`, `interactive`, `background`, `expensiv
 
 PostgreSQL is source of truth. Redis/Valkey is queues, leases, and rate limits only.
 
+Alembic head: `20260826_omnichannel_rel`.
+
 ## Gates that stay fail-closed
 
 - TikTok DMs: pending TikTok Business Messaging permission. Code may enqueue; send is gated.

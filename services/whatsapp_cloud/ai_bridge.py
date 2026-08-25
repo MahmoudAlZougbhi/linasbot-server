@@ -262,14 +262,15 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
 
         if redis_required():
             repo.update_outbound_intent(
-                intent, dispatch_state="pending", canonical_text=reply_text, control_epoch_at_send=int(conv.control_epoch)
+                intent,
+                dispatch_state="pending",
+                canonical_text=reply_text,
+                control_epoch_at_send=int(conv.control_epoch),
             )
             session.commit()
             if not getattr(job_queue, "production_ready", False):
                 raise RuntimeError("whatsapp_queue_unavailable")
-            _enqueue_whatsapp_intent_deliver(
-                tenant_id=tenant_id, intent_id=intent.id, conversation_id=conversation_id
-            )
+            _enqueue_whatsapp_intent_deliver(tenant_id=tenant_id, intent_id=intent.id, conversation_id=conversation_id)
             emit_wa_event("ai_reply_queued", conversation_id=conversation_id)
             return
 

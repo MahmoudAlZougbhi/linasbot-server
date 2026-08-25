@@ -35,7 +35,7 @@ def _uuid() -> str:
 class OmnichannelInboundEvent(Base):
     __tablename__ = "omnichannel_inbound_events"
     __table_args__ = (
-        UniqueConstraint("channel", "surface", "provider_event_id", name="uq_omni_inbound_provider_event"),
+        UniqueConstraint("tenant_id", "channel", "surface", "provider_event_id", name="uq_omni_inbound_provider_event"),
         Index("ix_omni_inbound_tenant_state", "tenant_id", "state"),
         Index("ix_omni_inbound_conversation", "conversation_key"),
         Index("ix_omni_inbound_next_retry", "next_retry_at"),

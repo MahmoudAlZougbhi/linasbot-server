@@ -32,7 +32,7 @@ async def handle_omnichannel_deliver(job: QueueJob) -> dict[str, Any]:
         row.state = "sending"
         row.attempt_count = int(row.attempt_count or 0) + 1
         session.commit()
-        snapshot = {
+        snapshot: dict[str, Any] = {
             "id": row.id,
             "tenant_id": row.tenant_id,
             "channel": row.channel,
@@ -47,20 +47,11 @@ async def handle_omnichannel_deliver(job: QueueJob) -> dict[str, Any]:
         }
 
     limiter = DistributedProviderLimiter()
-    entered = limiter.try_enter(
-        provider=snapshot["channel"],
-        tenant_id=snapshot["tenant_id"],
-        account_id=snapshot["account_id"],
-        endpoint=snapshot["surface"],
-    )
-    if not entered.allowed:
-        _defer(outbox_id, delay=entered.retry_after_seconds, state="rate_limited", reason=entered.reason)
-        incr("rate_limited")
-        raise RuntimeError(f"rate_limited:{entered.reason}")
-    try:
-        result = await _send(snapshot)
-    finally:
-        limiter.exit(provider=snapshot["channel"], tenant_id=snapshot["tenant_id"])
+    result = await _send(snapshot)
+    channel = str(snapshot["channel"])
+    account_id = str(snapshot["account_id"])
+    surface = str(snapshot["surface"])
+    attempt_count = int(snapshot["attempt_count"] or 0)
 
     decision = classify_http_delivery(
         http_status=result.get("http_status"),
@@ -70,7 +61,7 @@ async def handle_omnichannel_deliver(job: QueueJob) -> dict[str, Any]:
         headers=result.get("headers") if isinstance(result.get("headers"), dict) else None,
         submitted=bool(result.get("submitted")),
         local_update_failed=bool(result.get("local_update_failed")),
-        attempt=int(snapshot["attempt_count"]),
+        attempt=attempt_count,
         token_expired=bool(result.get("token_expired")),
         malformed_response=bool(result.get("malformed")),
         connection_reset_before_submit=bool(result.get("reset_before_submit")),
@@ -81,12 +72,12 @@ async def handle_omnichannel_deliver(job: QueueJob) -> dict[str, Any]:
         return {"ok": True, "provider_message_id": result.get("message_id")}
     if decision.kind == "transient":
         limiter.record_throttle(
-            provider=snapshot["channel"],
-            account_id=snapshot["account_id"],
-            endpoint=snapshot["surface"],
+            provider=channel,
+            account_id=account_id,
+            endpoint=surface,
             headers=result.get("headers") if isinstance(result.get("headers"), dict) else None,
             retry_after_seconds=decision.retry_after_seconds,
-            attempt=int(snapshot["attempt_count"]),
+            attempt=attempt_count,
         )
         _defer(outbox_id, delay=decision.retry_after_seconds, state="rate_limited", reason=decision.reason)
         incr("retry_transient")
@@ -96,7 +87,7 @@ async def handle_omnichannel_deliver(job: QueueJob) -> dict[str, Any]:
         mark_needs_owner_action(event_id=outbox_id, kind="deliver", reason=decision.reason)
         return {"ok": False, "reason": "reconciliation_required"}
     if decision.kind in {"permission_blocked", "permanent"}:
-        if int(snapshot["attempt_count"]) >= MAX_ATTEMPTS or decision.kind == "permanent":
+        if attempt_count >= MAX_ATTEMPTS or decision.kind == "permanent":
             _mark(outbox_id, state="dead_letter", reason=decision.reason)
             mark_dead_letter(event_id=outbox_id, kind="deliver", reason=decision.reason)
             _release_credits_if_never_submitted(snapshot, submitted=bool(result.get("submitted")))
@@ -148,6 +139,7 @@ def _finish_success(outbox_id: str, result: dict[str, Any]) -> None:
         reservation = row.credit_reservation_id
         inbound_id = row.inbound_event_id
         tenant_id = row.tenant_id
+        channel = row.channel
         if inbound_id:
             inbound = session.get(OmnichannelInboundEvent, inbound_id)
             if inbound is not None:
@@ -156,7 +148,12 @@ def _finish_success(outbox_id: str, result: dict[str, Any]) -> None:
     if reservation:
         from services.credit_ledger_service import credit_ledger_service
 
-        credit_ledger_service.capture(tenant_id=tenant_id, reservation_id=reservation)
+        credit_ledger_service.capture(
+            tenant_id=tenant_id,
+            reservation_id=reservation,
+            provider_cost_usd=None,
+            model_provider=channel,
+        )
 
 
 def _release_credits_if_never_submitted(snapshot: dict[str, Any], *, submitted: bool) -> None:

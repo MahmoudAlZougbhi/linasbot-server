@@ -31,7 +31,7 @@ from tests.web_chat_acceptance_support import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-HEAD_ID = "20260826_meta_comment_perm"
+HEAD_ID = "20260826_omnichannel_rel"
 
 
 @pytest.fixture()

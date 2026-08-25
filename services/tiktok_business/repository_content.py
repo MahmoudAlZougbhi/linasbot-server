@@ -142,7 +142,9 @@ class TikTokContentRepository:
         self.session.flush()
         return row, created
 
-    def claim_comment_for_ai(self, *, tenant_id: str, comment_id: str, lease_seconds: int = 300) -> TikTokComment | None:
+    def claim_comment_for_ai(
+        self, *, tenant_id: str, comment_id: str, lease_seconds: int = 300
+    ) -> TikTokComment | None:
         now = datetime.now(UTC)
         cutoff = now - timedelta(seconds=max(1, int(lease_seconds)))
         stmt = (

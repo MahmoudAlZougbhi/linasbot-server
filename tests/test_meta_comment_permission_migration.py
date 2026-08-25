@@ -18,7 +18,7 @@ from tests.web_chat_acceptance_support import (
 
 ROOT = Path(__file__).resolve().parents[1]
 PREV_HEAD = "20260825_tenant_runtime_cfg"
-HEAD_ID = "20260826_meta_comment_perm"
+HEAD_ID = "20260826_omnichannel_rel"
 DEFAULT_ALEMBIC_PYTHON = Path("/tmp/linas-alembic-114/bin/python")
 COMMENT_PERM_COLUMNS = (
     "comment_permission_status",

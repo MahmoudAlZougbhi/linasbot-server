@@ -70,9 +70,7 @@ async def send_canonical_intent(intent_id: str) -> dict[str, Any]:
 async def retry_pending_outbound_intents(*, tenant_id: str | None = None) -> dict[str, Any]:
     now = datetime.now(UTC)
     with whatsapp_session(require=True) as session:
-        stmt = select(WhatsAppOutboundIntent).where(
-            WhatsAppOutboundIntent.dispatch_state.in_(("failed", "pending", "reconciliation_required"))
-        )
+        stmt = select(WhatsAppOutboundIntent).where(WhatsAppOutboundIntent.dispatch_state.in_(("failed", "pending")))
         if tenant_id:
             stmt = stmt.where(WhatsAppOutboundIntent.tenant_id == tenant_id)
         rows = list(session.scalars(stmt).all())

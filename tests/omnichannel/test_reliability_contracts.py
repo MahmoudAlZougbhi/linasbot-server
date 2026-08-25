@@ -197,6 +197,25 @@ def test_omnichannel_job_types_are_registered():
     assert get_handler("whatsapp_intent_deliver") is not None
 
 
+def test_whatsapp_retry_skips_reconciliation_required():
+    import inspect
+
+    from services.whatsapp_cloud import delivery_retry
+
+    src = inspect.getsource(delivery_retry.retry_pending_outbound_intents)
+    assert '"reconciliation_required"' not in src
+    assert '("failed", "pending")' in src
+
+
+def test_whatsapp_webhook_marks_processed_after_enqueue():
+    import inspect
+
+    from services.whatsapp_cloud import webhook_processor
+
+    src = inspect.getsource(webhook_processor._process_one_event)
+    assert src.rindex("enqueue_job") < src.rindex("_complete_claimed_webhook(claim_id)")
+
+
 def test_load_cert_smoke_zero_loss():
     from scripts.loadtest.run_omnichannel_cert import run_cert
 

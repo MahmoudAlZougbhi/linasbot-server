@@ -36,7 +36,7 @@ Deploy **only** the final **`main` merge SHA** via the existing protected workfl
 4. Readiness probe
 5. LB admission only after parity
 
-**Expected DB revision after migrate:** `20260826_meta_comment_perm`  
+**Expected DB revision after migrate:** `20260826_omnichannel_rel`  
 Verify on both nodes after deploy: `alembic current`
 
 ### What must run in the same protected window (before LB)
@@ -74,7 +74,7 @@ On **node01** and **node02** (same merge SHA):
 
 ```bash
 git -C /opt/linasbot rev-parse HEAD          # identical merge SHA
-alembic current                               # 20260826_meta_comment_perm
+alembic current                               # 20260826_omnichannel_rel
 ```
 
 Functional smoke (device + dashboard):

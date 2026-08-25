@@ -24,13 +24,13 @@ from db.models.credit_entitlements import (
     EntitlementProcessedEventRow,
     TenantEntitlementRow,
 )
-from db.models.omnichannel import OmnichannelInboundEvent, OmnichannelOutboundOutbox
 from db.models.meta_registry import (
     MetaAssetBindingRow,
     MetaBindingCredentialRow,
     MetaOAuthStateRow,
     MetaRegistryAuditEvent,
 )
+from db.models.omnichannel import OmnichannelInboundEvent, OmnichannelOutboundOutbox
 from db.models.products import (
     Product,
     ProductConversationContext,
@@ -108,13 +108,13 @@ __all__ = [
     "CustomerRequestNote",
     "CustomerRequestOutbox",
     "EntitlementProcessedEventRow",
-    "OmnichannelInboundEvent",
-    "OmnichannelOutboundOutbox",
     "MetaAssetBindingRow",
     "MetaBindingCredentialRow",
     "MetaOAuthStateRow",
     "MetaRegistryAuditEvent",
     "MobileRefreshTokenRow",
+    "OmnichannelInboundEvent",
+    "OmnichannelOutboundOutbox",
     "Product",
     "ProductConversationContext",
     "ProductImage",

@@ -41,6 +41,6 @@ def mirror_meta_inbound(record: Any) -> None:
             conversation_key=str(getattr(record, "conversation_key", "") or "")[:255],
             provider_timestamp=float(getattr(record, "created_at", 0) or time.time()),
             payload_hash=payload_hash(payload) if payload else str(getattr(record, "event_id", "") or ""),
-            payload=payload,
+            payload={**payload, "_mirror_only": True},
         )
     )

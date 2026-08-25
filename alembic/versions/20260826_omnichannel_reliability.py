@@ -41,7 +41,9 @@ def upgrade() -> None:
         sa.Column("payload", JsonType, nullable=False, server_default=sa.text("'{}'")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.UniqueConstraint("channel", "surface", "provider_event_id", name="uq_omni_inbound_provider_event"),
+        sa.UniqueConstraint(
+            "tenant_id", "channel", "surface", "provider_event_id", name="uq_omni_inbound_provider_event"
+        ),
         sa.CheckConstraint(
             "state IN ('accepted','queued','generating','reply_ready','rate_limited',"
             "'sending','delivered','reconciliation_required','failed','dead_letter')",

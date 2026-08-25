@@ -49,9 +49,7 @@ async def deliver_social_operator_text(
     return None
 
 
-def _enqueue_operator_text(
-    *, tenant_id: str | None, user_id: str, conversation_id: str, text: str
-) -> dict[str, Any]:
+def _enqueue_operator_text(*, tenant_id: str | None, user_id: str, conversation_id: str, text: str) -> dict[str, Any]:
     from services.omnichannel.operator_enqueue import enqueue_operator_reply
 
     if is_meta_dm_live_chat_user(user_id):

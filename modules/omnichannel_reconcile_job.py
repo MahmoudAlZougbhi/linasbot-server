@@ -14,10 +14,7 @@ async def run_omnichannel_reconcile_job() -> None:
         result = reconcile_omnichannel(older_than_seconds=45.0)
         examined = int(result.get("examined") or 0)
         if examined:
-            print(
-                f"[omnichannel-reconcile] examined={examined} "
-                f"actions={len(result.get('actions') or [])}"
-            )
+            print(f"[omnichannel-reconcile] examined={examined} actions={len(result.get('actions') or [])}")
     except Exception as exc:
         print(f"[omnichannel-reconcile] failed type={type(exc).__name__}")
     finally:

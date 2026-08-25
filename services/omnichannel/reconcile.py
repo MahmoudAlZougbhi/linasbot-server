@@ -16,7 +16,9 @@ def reconcile_omnichannel(*, older_than_seconds: float = 45.0) -> dict[str, Any]
         with whatsapp_session(require=True) as session:
             inbound = list_unfinished_inbound(session, older_than_seconds=older_than_seconds)
             outbound = list_retryable_outbound(session)
-            inbound_ids = [(row.id, row.tenant_id, row.channel, row.surface, row.conversation_key, row.state) for row in inbound]
+            inbound_ids = [
+                (row.id, row.tenant_id, row.channel, row.surface, row.conversation_key, row.state) for row in inbound
+            ]
             outbound_ids = [
                 (row.id, row.tenant_id, row.channel, row.surface, row.conversation_key, row.state) for row in outbound
             ]

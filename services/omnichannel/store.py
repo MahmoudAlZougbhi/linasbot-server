@@ -25,7 +25,7 @@ def payload_hash(payload: dict[str, Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def _inbound_identity(event: NormalizedInbound):
+def _inbound_identity(event: NormalizedInbound) -> tuple[Any, Any, Any, Any]:
     return (
         OmnichannelInboundEvent.tenant_id == event.tenant_id,
         OmnichannelInboundEvent.channel == event.channel,
@@ -169,20 +169,15 @@ def list_retryable_outbound(session: Session) -> list[OmnichannelOutboundOutbox]
 
 
 def backlog_snapshot(session: Session) -> dict[str, Any]:
-    inbound = dict(
-        session.execute(
-            select(OmnichannelInboundEvent.state, func.count()).group_by(OmnichannelInboundEvent.state)
-        ).all()
-    )
-    outbound = dict(
-        session.execute(
-            select(OmnichannelOutboundOutbox.state, func.count()).group_by(OmnichannelOutboundOutbox.state)
-        ).all()
-    )
-    return {
-        "inbound": {str(k): int(v) for k, v in inbound.items()},
-        "outbound": {str(k): int(v) for k, v in outbound.items()},
-    }
+    inbound_rows = session.execute(
+        select(OmnichannelInboundEvent.state, func.count()).group_by(OmnichannelInboundEvent.state)
+    ).all()
+    outbound_rows = session.execute(
+        select(OmnichannelOutboundOutbox.state, func.count()).group_by(OmnichannelOutboundOutbox.state)
+    ).all()
+    inbound: dict[str, int] = {str(k): int(v) for k, v in inbound_rows}
+    outbound: dict[str, int] = {str(k): int(v) for k, v in outbound_rows}
+    return {"inbound": inbound, "outbound": outbound}
 
 
 accept_inbound = persist_inbound

@@ -187,9 +187,7 @@ async def send_text_message(
         err = data.get("error") if isinstance(data, dict) else None
         code = str((err or {}).get("code") or "send_failed")
         retryable = (
-            resp.status_code >= 500
-            or resp.status_code in {408, 429}
-            or code in {"1", "2", "4", "17", "613", "80007"}
+            resp.status_code >= 500 or resp.status_code in {408, 429} or code in {"1", "2", "4", "17", "613", "80007"}
         )
         from services.omnichannel.headers import parse_retry_after_seconds
 

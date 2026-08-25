@@ -13,9 +13,7 @@ async def process_claimed_webhook(payload: dict[str, Any]) -> dict[str, Any]:
     if event_name in {"im_receive_msg", "im_send_msg", "direct_message", "im_mark_read_msg"}:
         from services.tiktok_business.messaging import handle_messaging_webhook
 
-        return await handle_messaging_webhook(
-            payload=body, content=content, event_name=event_name, event_id=event_id
-        )
+        return await handle_messaging_webhook(payload=body, content=content, event_name=event_name, event_id=event_id)
     if event_name.startswith("comment."):
         from services.tiktok_business.comment_webhook import handle_comment_webhook
 
