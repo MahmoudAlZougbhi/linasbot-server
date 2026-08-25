@@ -608,6 +608,10 @@ async def test_toggle_comments_on_preserves_dm_when_only_published_exists(monkey
         AsyncMock(return_value=None),
     )
     monkeypatch.setattr(
+        "services.channel_capability_toggles._ensure_comment_webhooks_for_platform",
+        AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(
         "services.channel_capability_toggles.comments_enable_blocker",
         lambda *_a, **_k: None,
     )

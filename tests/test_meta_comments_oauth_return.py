@@ -12,7 +12,6 @@ from modules import meta_connections_api, meta_connections_api_lifecycle
 from services.channel_capability_toggles import set_channel_toggle
 from services.dashboard_session_service import SessionRecord
 from services.meta_app_registry import APP_A_KEY
-from services.meta_instagram_login_subscription import InstagramLoginSubscriptionState
 from services.meta_oauth import MetaOAuthError
 from services.meta_oauth_return import (
     mobile_oauth_failure_reason,
@@ -315,28 +314,23 @@ async def test_facebook_callback_preserves_mobile_surface_after_failure(monkeypa
 
 
 @pytest.mark.asyncio
-async def test_duplicate_enable_comments_does_not_call_meta_webhooks(monkeypatch) -> None:
-    """Comments ON/OFF is local AI intent; Connect owns Meta webhook subscription."""
+async def test_duplicate_enable_comments_re_ensures_comment_webhooks(monkeypatch) -> None:
+    """Comments ON re-runs best-effort webhook ensure so feed/comments fields stay subscribed."""
 
-    calls: list[str] = []
+    calls: list[tuple[str, str]] = []
+
+    async def _ensure_platform(*, tenant_id: str, platform: str) -> None:
+        calls.append((tenant_id, platform))
+
     binding = _ig_binding(
         auth_flow="instagram_login",
         webhook_subscribed_fields=("messages", "messaging_postbacks", "comments"),
     )
 
-    async def _ensure(b, *, registry):
-        calls.append(b.binding_id)
-
-    ready = InstagramLoginSubscriptionState(
-        status="ready",
-        subscribed_fields=("messages", "messaging_postbacks", "comments"),
-        verified_fields=("messages", "messaging_postbacks", "comments"),
+    monkeypatch.setattr(
+        "services.channel_capability_toggles._ensure_comment_webhooks_for_platform",
+        _ensure_platform,
     )
-
-    async def _ig_sub(*_a, **_k):
-        calls.append("subscribe")
-        return ready
-
     monkeypatch.setattr(
         "services.channel_capability_toggles.canonical_channel_bindings",
         lambda *_a, **_k: [binding],
@@ -348,10 +342,6 @@ async def test_duplicate_enable_comments_does_not_call_meta_webhooks(monkeypatch
     monkeypatch.setattr(
         "services.channel_capability_toggles.set_comment_reply_setting",
         lambda **_k: None,
-    )
-    monkeypatch.setattr(
-        "services.channel_capability_toggles.ensure_instagram_login_webhook_subscription",
-        _ig_sub,
     )
     monkeypatch.setattr(
         "services.channel_capability_toggles.get_meta_app_configs",
@@ -402,8 +392,7 @@ async def test_duplicate_enable_comments_does_not_call_meta_webhooks(monkeypatch
         enabled=True,
         actor="test",
     )
-    # App Comments ON must not subscribe Meta webhooks; Connect already did that.
-    assert calls == []
+    assert calls == [("linas", "instagram"), ("linas", "instagram")]
 
 
 def test_mobile_integrations_oauth_and_deeplink_source_contract() -> None:

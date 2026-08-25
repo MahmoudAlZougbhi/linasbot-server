@@ -6,6 +6,8 @@ import json
 import os
 from typing import Any
 
+from google.cloud import firestore
+
 import config
 from services.live_chat_channel import coerce_live_chat_user_id, resolve_live_chat_channel
 from services.live_chat_contracts import (
@@ -119,6 +121,10 @@ class LiveChatIndexMixin:
 
     def _is_live_window(self, ts: datetime.datetime) -> Any:
         return bool(ts) and (utc_now() - ts).total_seconds() <= self.ACTIVE_TIME_WINDOW
+
+    def _index_recency_query(self, index_coll: Any) -> Any:
+        """Order inbox rows by recency using Firestore's automatic single-field index."""
+        return index_coll.order_by("last_message_at", direction=firestore.Query.DESCENDING)
 
     def _state_filter_values(self, filter_key: str) -> Any:
         key = (filter_key or "").lower()

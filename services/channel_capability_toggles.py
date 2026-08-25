@@ -236,6 +236,17 @@ async def _sync_comment_assets(*, tenant_id: str, platform: str, enabled: bool) 
         )
 
 
+async def _ensure_comment_webhooks_for_platform(*, tenant_id: str, platform: str) -> None:
+    """Page/app comment webhook fields must be live before we accept Comments ON."""
+
+    platform_key = (platform or "").strip().lower()
+    registry = get_meta_app_registry()
+    for binding in canonical_channel_bindings(tenant_id, platform_key):
+        await ensure_comment_webhook_for_binding(binding, registry=registry)
+    if platform_key == "facebook":
+        await ensure_app_page_webhook_subscription()
+
+
 async def reconcile_comment_webhooks_for_platform(*, tenant_id: str, platform: str) -> dict[str, Any]:
     """Best-effort comment webhook reconcile without disconnecting or revoking tokens."""
 
@@ -249,21 +260,12 @@ async def reconcile_comment_webhooks_for_platform(*, tenant_id: str, platform: s
             status_code=409,
             code="COMMENT_SCOPES_MISSING",
         )
+    try:
+        await _ensure_comment_webhooks_for_platform(tenant_id=tenant_id, platform=platform_key)
+    except MetaOAuthError as exc:
+        raise ChannelToggleError(str(exc), status_code=409, code="COMMENT_WEBHOOK_FAILED") from exc
     if state["requested_enabled"]:
         await _sync_comment_assets(tenant_id=tenant_id, platform=platform_key, enabled=True)
-    else:
-        # Permissions present but Comments off — still ensure Meta fields when ops/UI asks.
-        registry = get_meta_app_registry()
-        for binding in canonical_channel_bindings(tenant_id, platform_key):
-            try:
-                await ensure_comment_webhook_for_binding(binding, registry=registry)
-            except MetaOAuthError as exc:
-                raise ChannelToggleError(str(exc), status_code=409, code="COMMENT_WEBHOOK_FAILED") from exc
-    if platform_key == "facebook":
-        try:
-            await ensure_app_page_webhook_subscription()
-        except MetaOAuthError as exc:
-            raise ChannelToggleError(str(exc), status_code=409, code="APP_WEBHOOK_FAILED") from exc
     return {
         "toggles": channel_toggle_states(tenant_id, platform_key),
         "comments_state": comment_capability_state(tenant_id, platform_key),
@@ -281,6 +283,10 @@ async def sync_published_comment_assets_if_enabled(*, tenant_id: str, platform: 
     if not state["requested_enabled"]:
         return
     await _sync_comment_assets(tenant_id=tenant_id, platform=platform_key, enabled=True)
+    try:
+        await _ensure_comment_webhooks_for_platform(tenant_id=tenant_id, platform=platform_key)
+    except MetaOAuthError:
+        return
 
 
 def _actions_draft_envelope(*, tenant_id: str, actor: str) -> SectionDraftEnvelope:
@@ -445,6 +451,10 @@ async def set_channel_toggle(
     try:
         if toggle == "comments" and enabled:
             await _sync_comment_assets(tenant_id=tenant_id, platform=platform_key, enabled=True)
+            try:
+                await _ensure_comment_webhooks_for_platform(tenant_id=tenant_id, platform=platform_key)
+            except MetaOAuthError as exc:
+                raise ChannelToggleError(str(exc), status_code=409, code="COMMENT_WEBHOOK_FAILED") from exc
             _set_action_in_draft(tenant_id=tenant_id, action_id=action_id, enabled=True, actor=actor)
             await _publish_actions(tenant_id=tenant_id, actor=actor)
         elif toggle == "comments" and not enabled:

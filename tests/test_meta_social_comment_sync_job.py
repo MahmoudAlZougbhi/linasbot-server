@@ -10,6 +10,19 @@ from modules.meta_social_comment_sync_job import run_meta_social_comment_sync_jo
 
 
 @pytest.mark.asyncio
+async def test_meta_social_comment_sync_tick_skips_when_poll_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    enqueue = MagicMock()
+    monkeypatch.setattr("modules.meta_social_comment_sync_job.meta_comment_poll_enabled", lambda: False)
+    monkeypatch.setattr("modules.meta_social_comment_sync_job.job_queue", type("JQ", (), {"enqueue": enqueue})())
+
+    await run_meta_social_comment_sync_job()
+
+    enqueue.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_meta_social_comment_sync_tick_skips_when_ha_lock_held(monkeypatch: pytest.MonkeyPatch) -> None:
     enqueue = MagicMock()
     monkeypatch.setattr("modules.meta_social_comment_sync_job.try_acquire_job_lock", lambda *_a, **_k: False)
@@ -37,6 +50,9 @@ async def test_meta_social_comment_sync_tick_enqueues_once_per_binding(monkeypat
         },
     )()
 
+    monkeypatch.setattr("modules.meta_social_comment_sync_job.meta_comment_poll_enabled", lambda: True)
+    monkeypatch.setattr("modules.meta_social_comment_sync_job.meta_comment_poll_interval_seconds", lambda: 60)
+    monkeypatch.setattr("modules.meta_social_comment_sync_job.meta_comment_poll_lock_ttl_seconds", lambda: 55)
     monkeypatch.setattr("modules.meta_social_comment_sync_job.try_acquire_job_lock", lambda *_a, **_k: True)
     monkeypatch.setattr(
         "modules.meta_social_comment_sync_job.release_job_lock",
@@ -54,6 +70,7 @@ async def test_meta_social_comment_sync_tick_enqueues_once_per_binding(monkeypat
 
     enqueue.assert_called_once()
     assert enqueue.call_args.kwargs["job_type"] == "meta_social_comment_sync"
+    assert enqueue.call_args.kwargs["queue"] == "high_priority"
     assert enqueue.call_args.kwargs["payload"] == {"binding_id": "bind_fb", "channel": "facebook"}
     assert enqueue.call_args.kwargs["idempotency_key"] == "meta_comment_sync:bind_fb:2"
     assert released == ["meta_social_comment_sync_tick"]

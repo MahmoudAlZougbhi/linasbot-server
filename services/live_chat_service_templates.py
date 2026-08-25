@@ -49,6 +49,7 @@ class LiveChatTemplatesMixin:
     STATE_WAITING_OPERATOR: Any
     _empty_counters: Any
     _index_collection: Any
+    _index_recency_query: Any
     _is_cache_fresh: Any
     _normalize_conversation_state: Any
     _parse_timestamp: Any
@@ -124,8 +125,7 @@ class LiveChatTemplatesMixin:
 
         def _stream() -> Any:
             return list(
-                index_coll.order_by("last_message_at", direction=firestore.Query.DESCENDING)
-                .order_by("conversation_id")
+                self._index_recency_query(index_coll)
                 .limit(max_scan)
                 .stream(timeout=self.FIRESTORE_QUERY_TIMEOUT_SECONDS, retry=None)
             )
