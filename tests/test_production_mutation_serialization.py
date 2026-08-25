@@ -96,9 +96,10 @@ def test_meta_env_writers_require_main_ref_inherited_lock_and_tx_bound_stage_aut
             combined = source + remote + lib
             assert "--register-prestage-backup" in combined, name
             assert "commit_via_restart=true" in combined, name
-            assert "base64 -d <<'WA_PHASE1_BUNDLE' | tar -xzf - -C \"$BUNDLE_DIR\"" in source, name
-            assert "\nH4sI" in source, name
-            assert "\nWA_PHASE1_BUNDLE\n" in source, name
+            assert "base64 -d <<'WA_PHASE1_BUNDLE'" not in source, name
+            assert "WA_PHASE1_BUNDLE_B64:" in source, name
+            assert "printf '%s' \"$WA_PHASE1_BUNDLE_B64\" | base64 -d" in source, name
+            assert "\nH4sI" not in source, name
             assert "fuser -k" not in source, name
             assert "_self_pid=$BASHPID" in source, name
             assert '"$$"' not in source, name
