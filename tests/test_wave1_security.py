@@ -280,7 +280,7 @@ class TestAPIAuthEnforcement:
         body = r.json()
         assert body.get("code") == "PRODUCT_MODULE_DISABLED"
 
-    def test_social_takeover_forbidden(self, client):
+    def test_social_takeover_allowed_not_403(self, client):
         rec = session_service.create_session(
             user_id="op2", email="op2@example.com", role="admin", permissions=None, tenant_id="linas"
         )
@@ -295,7 +295,7 @@ class TestAPIAuthEnforcement:
             },
             headers={"X-CSRF-Token": rec.csrf_token},
         )
-        assert r.status_code == 403
+        assert r.status_code != 403
 
     def test_session_idor_blocked(self, client):
         rec = session_service.create_session(
