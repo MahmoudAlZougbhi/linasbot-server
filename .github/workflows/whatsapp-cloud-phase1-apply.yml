@@ -68,20 +68,19 @@ jobs:
               if command -v fuser >/dev/null 2>&1; then
                 stale="$(fuser "$LOCK_FILE" 2>/dev/null || true)"
                 echo "[wa-phase1-ha] lock_holders=${stale:-none}" >&2
+                _self_pid=$BASHPID
                 for pid in $stale; do
-                  case "$pid" in
-                    ''|' ') continue ;;
-                    "$$"|"$PPID") continue ;;
-                  esac
+                  [ -z "$pid" ] && continue
+                  [ "$pid" = "$_self_pid" ] && continue
+                  [ "$pid" = "$PPID" ] && continue
                   kill -TERM "$pid" 2>/dev/null || true
                 done
                 sleep 2
                 stale="$(fuser "$LOCK_FILE" 2>/dev/null || true)"
                 for pid in $stale; do
-                  case "$pid" in
-                    ''|' ') continue ;;
-                    "$$"|"$PPID") continue ;;
-                  esac
+                  [ -z "$pid" ] && continue
+                  [ "$pid" = "$_self_pid" ] && continue
+                  [ "$pid" = "$PPID" ] && continue
                   kill -KILL "$pid" 2>/dev/null || true
                 done
                 sleep 1

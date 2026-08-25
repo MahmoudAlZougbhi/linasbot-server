@@ -96,6 +96,8 @@ def test_meta_env_writers_require_main_ref_inherited_lock_and_tx_bound_stage_aut
             assert "printf '%s' \"$BUNDLE_B64\" | base64 -d" in script, name
             assert any(line.startswith("H4sI") for line in script.splitlines()), name
             assert "fuser -k" not in script, name
+            assert "_self_pid=$BASHPID" in script, name
+            assert '"$$"' not in script, name
         else:
             assert "--register-prestage-backup" in source, name
             assert "--local-prestage-backup" in source, name
