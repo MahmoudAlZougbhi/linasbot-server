@@ -48,11 +48,17 @@ test('row layout is icon / name+preview / time+badge+assignee', () => {
 
 test('thread restores WhatsApp handoff, assign, and composer', () => {
   const thread = read('features/livechat/LiveChatThread.tsx');
+  const composer = read('features/livechat/LiveChatComposer.tsx');
   const api = read('features/livechat/liveChatApi.ts');
   const hook = read('features/livechat/useLiveChatThread.ts');
   assert.match(thread, /LiveChatComposer/);
+  assert.match(thread, /onSendMedia/);
+  assert.match(composer, /onSendMedia/);
+  assert.match(composer, /feather\('image'\)/);
+  assert.match(composer, /feather\('mic'\)/);
   assert.match(thread, /LiveChatAssignSheet/);
   assert.match(thread, /thread\.takeover\(staff\.id\)/);
   assert.match(api, /assignToUserId/);
   assert.match(hook, /takeoverConversation\(chat!, assignToUserId\)/);
+  assert.doesNotMatch(hook, /WhatsApp-only for now/);
 });

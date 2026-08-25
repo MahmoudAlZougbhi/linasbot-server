@@ -135,6 +135,7 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
 
       <LiveChatComposer
         onSend={(text) => thread.sendText(text)}
+        onSendMedia={(base64, type) => thread.sendMedia(base64, type)}
         busy={thread.busy}
       />
 

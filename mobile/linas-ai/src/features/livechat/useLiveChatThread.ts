@@ -184,10 +184,6 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     },
     sendMedia: async (base64: string, type: 'voice' | 'image') => {
       if (!chat || !base64) return false;
-      if (social) {
-        setError('Voice and image replies are WhatsApp-only for now.');
-        return false;
-      }
       setBusy(true);
       setError(null);
       try {
