@@ -39,7 +39,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       github.event.inputs.CONFIRM == 'APPLY_WHATSAPP_CLOUD_PHASE1_FLAGS_ONLY'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 50
     environment: meta-social-cutover
     steps:
       - name: Two-node WhatsApp Phase 1 flags (+ optional pilot)
@@ -55,13 +55,30 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script_stop: true
-          command_timeout: 22m
+          command_timeout: 45m
           envs: META_HA_STAGE_ONLY,GRANT_PILOT,ENABLE_WEB_CHAT,WORKFLOW_SCRIPT_SHA
           script: |
             set -euo pipefail
             test "$(id -u)" -eq 0 && test "$(id -g)" -eq 0
+            echo "[wa-phase1-ha] bootstrap_start=true"
+            install -d -m 1755 /run/lock
             exec 9>/run/lock/linasbot-meta-live.lock
-            flock -x 9
+            if ! flock -x -w 120 9; then
+              echo "[wa-phase1-ha] mutation_lock_wait_timeout=true" >&2
+              if command -v fuser >/dev/null 2>&1; then
+                stale="$(fuser /run/lock/linasbot-meta-live.lock 2>/dev/null || true)"
+                echo "[wa-phase1-ha] lock_holders=${stale:-none}" >&2
+                if [ -n "$stale" ]; then
+                  fuser -k /run/lock/linasbot-meta-live.lock 2>/dev/null || true
+                  sleep 2
+                fi
+              fi
+              flock -x -w 30 9 || {
+                echo "[wa-phase1-ha] mutation_lock_unavailable=true" >&2
+                exit 1
+              }
+            fi
+            echo "[wa-phase1-ha] mutation_lock_acquired=true"
             export LINAS_PRODUCTION_MUTATION_LOCK_FD=9
             BUNDLE_DIR="$(mktemp -d)"
             trap 'rm -rf "$BUNDLE_DIR"' EXIT
