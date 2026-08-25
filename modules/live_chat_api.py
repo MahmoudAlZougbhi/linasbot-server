@@ -215,10 +215,9 @@ async def takeover_conversation(request: TakeoverRequest, http_request: Request)
     """Operator takes over a conversation"""
 
     async def _handler() -> Any:
-        from modules.api_security import reject_social_operator_mutation, require_session
+        from modules.api_security import require_session
 
         session = require_session(http_request)
-        reject_social_operator_mutation(request.user_id)
         operator_id, operator_name = resolve_takeover_assignee(session, request.operator_id)
         result = await live_chat_service.takeover_conversation(
             conversation_id=request.conversation_id,
@@ -240,10 +239,9 @@ async def release_conversation(request: ReleaseRequest, http_request: Request) -
     """Release conversation back to bot (explicit Resume AI — clears server pause)."""
 
     async def _handler() -> Any:
-        from modules.api_security import reject_social_operator_mutation, require_session
+        from modules.api_security import require_session
 
         session = require_session(http_request)
-        reject_social_operator_mutation(request.user_id)
         # Same server-authoritative clear as /resume-ai so WA Cloud epoch cannot stay HUMAN_PAUSED.
         result = await live_chat_service.resume_ai_conversation(
             conversation_id=request.conversation_id,
@@ -263,10 +261,9 @@ async def resume_ai_conversation(request: ResumeAiRequest, http_request: Request
     """Explicit Resume AI — clears server-authoritative manual pause."""
 
     async def _handler() -> Any:
-        from modules.api_security import reject_social_operator_mutation, require_session
+        from modules.api_security import require_session
 
         session = require_session(http_request)
-        reject_social_operator_mutation(request.user_id)
         result = await live_chat_service.resume_ai_conversation(
             conversation_id=request.conversation_id,
             user_id=request.user_id,
@@ -303,10 +300,9 @@ async def send_operator_message(request: SendOperatorMessageRequest, http_reques
     """Send message from operator to customer"""
 
     async def _handler() -> Any:
-        from modules.api_security import reject_social_operator_mutation, require_session
+        from modules.api_security import require_session
 
         session = require_session(http_request)
-        reject_social_operator_mutation(request.user_id)
         adapter = WhatsAppFactory.get_adapter(WhatsAppFactory.get_current_provider())
         return await live_chat_service.send_operator_message(
             conversation_id=request.conversation_id,
@@ -422,10 +418,9 @@ async def edit_message(request: EditMessageRequest, http_request: Request) -> An
     """Edit a bot message's content (e.g. after operator dislike). Updates Firestore and broadcasts."""
 
     async def _handler() -> Any:
-        from modules.api_security import reject_social_operator_mutation, require_session
+        from modules.api_security import require_session
 
         require_session(http_request)
-        reject_social_operator_mutation(request.user_id)
         return await live_chat_service.update_message_content(
             user_id=request.user_id,
             conversation_id=request.conversation_id,
@@ -439,7 +434,7 @@ async def edit_message(request: EditMessageRequest, http_request: Request) -> An
 @app.post("/api/live-chat/end-conversation")
 async def end_conversation(request: dict, http_request: Request) -> Any:
     """Mark conversation as resolved/ended"""
-    from modules.api_security import reject_social_operator_mutation, require_session
+    from modules.api_security import require_session
 
     session = require_session(http_request)
     conversation_id = request.get("conversation_id")
@@ -450,8 +445,6 @@ async def end_conversation(request: dict, http_request: Request) -> Any:
             "success": False,
             "error": "Missing required fields: conversation_id, user_id",
         }
-
-    reject_social_operator_mutation(user_id)
 
     async def _handler() -> Any:
         # Clear server pause (Firestore + WA Cloud epoch) before resolving so AI is not stuck paused.

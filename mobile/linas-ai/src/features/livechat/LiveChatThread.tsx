@@ -77,7 +77,6 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
         chat={chat}
         localStatus={thread.localStatus}
         busy={thread.busy}
-        social={thread.social}
         onTakeover={() => void thread.takeover()}
         onRelease={() => void thread.release()}
         onAssign={() => setAssignOpen(true)}
@@ -134,12 +133,11 @@ export function LiveChatThread({ chat, onChatUpdated }: Props) {
         />
       )}
 
-      {!thread.social ? (
-        <LiveChatComposer
-          onSend={(text) => thread.sendText(text)}
-          busy={thread.busy}
-        />
-      ) : null}
+      <LiveChatComposer
+        onSend={(text) => thread.sendText(text)}
+        onSendMedia={(base64, type) => thread.sendMedia(base64, type)}
+        busy={thread.busy}
+      />
 
       <LiveChatAssignSheet
         visible={assignOpen}
