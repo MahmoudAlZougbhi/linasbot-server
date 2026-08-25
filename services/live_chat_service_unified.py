@@ -53,6 +53,7 @@ class LiveChatUnifiedMixin:
     _filter_conversations: Any
     _get_users_collection: Any
     _index_collection: Any
+    _index_recency_query: Any
     _index_counters_cache: Any
     _is_cache_fresh: Any
     _is_live_window: Any
