@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from google.cloud import firestore
-
 import config
 from services.live_chat_channel import (
     coerce_live_chat_user_id,

@@ -271,8 +271,8 @@ async def _enqueue_comment_ai(*, binding: MetaAssetBinding, settings: Any, event
         release_event_claim,
         try_claim_event_handle,
     )
-    from services.meta_cross_flow_dedup import global_comment_claim_key
     from services.meta_comment_replies import process_meta_comment_event
+    from services.meta_cross_flow_dedup import global_comment_claim_key
     from services.scale.meta_ingress import enqueue_meta_inbound_event, persist_meta_comment_accepted
 
     global_key = global_comment_claim_key(event)

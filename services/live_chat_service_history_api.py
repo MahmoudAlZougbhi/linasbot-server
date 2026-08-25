@@ -3,8 +3,6 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from google.cloud import firestore
-
 import config
 from services.live_chat_contracts import (
     normalize_conversation_document,
