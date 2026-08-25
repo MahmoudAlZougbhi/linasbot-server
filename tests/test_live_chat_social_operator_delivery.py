@@ -64,7 +64,7 @@ async def test_deliver_tiktok_operator_text_missing_connection(monkeypatch: pyte
         def __exit__(self, *args):
             return False
 
-    monkeypatch.setattr("services.live_chat_tiktok_operator.whatsapp_session", lambda: FakeCtx())
+    monkeypatch.setattr("db.session.whatsapp_session", lambda: FakeCtx())
     monkeypatch.setattr("services.live_chat_tiktok_operator.TikTokRepository", lambda session: FakeRepo())
 
     result = await deliver_live_chat_tiktok_operator_text(
