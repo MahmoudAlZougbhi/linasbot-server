@@ -8,7 +8,6 @@ type Props = {
   chat: LiveChatItem;
   localStatus: string;
   busy: boolean;
-  social: boolean;
   onTakeover: () => void;
   onRelease: () => void;
   onAssign: () => void;
@@ -18,7 +17,6 @@ export function LiveChatThreadActions({
   chat,
   localStatus,
   busy,
-  social,
   onTakeover,
   onRelease,
   onAssign,
@@ -30,13 +28,8 @@ export function LiveChatThreadActions({
   return (
     <View style={[styles.bar, { borderBottomColor: colors.border }]}>
       <StatusChip label={statusLabel(status)} tone={statusTone(status)} />
-      {social ? (
-        <Text style={[styles.note, { color: colors.textMuted }]}>
-          Instagram and Messenger replies are not enabled on the server.
-        </Text>
-      ) : (
-        <View style={styles.actions}>
-          {!human ? (
+      <View style={styles.actions}>
+        {!human ? (
             <Pressable
               onPress={onTakeover}
               disabled={busy}
@@ -67,7 +60,6 @@ export function LiveChatThreadActions({
             <Text style={[styles.ghost, { color: colors.text }]}>Assign</Text>
           </Pressable>
         </View>
-      )}
     </View>
   );
 }
@@ -92,5 +84,4 @@ const styles = StyleSheet.create({
   },
   primary: { fontFamily: fonts.bodyMedium, fontSize: 13 },
   ghost: { fontFamily: fonts.bodyMedium, fontSize: 13 },
-  note: { flex: 1, fontFamily: fonts.body, fontSize: 12 },
 });

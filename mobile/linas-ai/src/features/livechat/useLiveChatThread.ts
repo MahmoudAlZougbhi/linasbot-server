@@ -134,10 +134,6 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
 
   async function runAction(fn: () => Promise<{ success: boolean; error?: string; message?: string; status?: string }>) {
     if (!chat) return;
-    if (social) {
-      setError('Operator mutations are not allowed for Instagram/Facebook conversations');
-      return;
-    }
     setBusy(true);
     setError(null);
     try {
@@ -171,10 +167,6 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
     end: () => runAction(() => endConversation(chat!)),
     sendText: async (text: string) => {
       if (!chat || !text.trim()) return false;
-      if (social) {
-        setError('Operator mutations are not allowed for Instagram/Facebook conversations');
-        return false;
-      }
       setBusy(true);
       setError(null);
       try {
@@ -191,7 +183,11 @@ export function useLiveChatThread(chat: LiveChatItem | null, onChatUpdated?: () 
       }
     },
     sendMedia: async (base64: string, type: 'voice' | 'image') => {
-      if (!chat || social || !base64) return false;
+      if (!chat || !base64) return false;
+      if (social) {
+        setError('Voice and image replies are WhatsApp-only for now.');
+        return false;
+      }
       setBusy(true);
       setError(null);
       try {

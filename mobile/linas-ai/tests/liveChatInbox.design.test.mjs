@@ -55,5 +55,4 @@ test('thread restores WhatsApp handoff, assign, and composer', () => {
   assert.match(thread, /thread\.takeover\(staff\.id\)/);
   assert.match(api, /assignToUserId/);
   assert.match(hook, /takeoverConversation\(chat!, assignToUserId\)/);
-  assert.match(hook, /Operator mutations are not allowed for Instagram\/Facebook/);
 });

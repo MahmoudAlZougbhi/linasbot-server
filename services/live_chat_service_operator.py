@@ -70,6 +70,14 @@ class LiveChatOperatorMixin:
                     "deduplicated": True,
                 }
 
+            from services.live_chat_meta_operator import is_meta_dm_live_chat_user
+
+            if is_meta_dm_live_chat_user(user_id) and message_type != "text":
+                return {
+                    "success": False,
+                    "error": "Only text replies are supported for Instagram/Messenger in Live Chat",
+                }
+
             # Server-authoritative: pause AI before outbound so in-flight AI cannot win the race.
             manual_meta: dict[str, Any] = {}
             try:
@@ -314,6 +322,32 @@ class LiveChatOperatorMixin:
                     metadata={"operator_id": operator_id, "handled_by": "human"},
                 )
                 print("✅ Saved operator message to Firestore")
+
+                if is_meta_dm_live_chat_user(user_id):
+                    from services.live_chat_meta_operator import deliver_live_chat_meta_operator_text
+
+                    delivery = await deliver_live_chat_meta_operator_text(
+                        tenant_id=tenant_id,
+                        user_id=user_id,
+                        text=message,
+                    )
+                    if not delivery.get("success"):
+                        err = str(delivery.get("error") or "meta_delivery_failed")
+                        print(f"⚠️ Meta operator send failed after save: {err}")
+                        return {
+                            "success": False,
+                            "error": f"Message saved locally but delivery failed: {err}",
+                            "delivered": False,
+                            **manual_meta,
+                        }
+                    completed_ok = True
+                    return {
+                        "success": True,
+                        "message": "Message sent successfully",
+                        "delivered": True,
+                        **manual_meta,
+                        **delivery,
+                    }
 
                 # Await WhatsApp send (single delivery; avoids duplicate background tasks)
                 try:
