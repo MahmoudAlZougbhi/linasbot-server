@@ -44,10 +44,17 @@ async def send_operator_voice_message(
 
     storage_url = None
     try:
+        import base64
+
         from utils.utils import upload_base64_to_firebase_storage
 
+        upload_payload = (
+            audio_data_to_upload
+            if isinstance(audio_data_to_upload, str)
+            else base64.b64encode(audio_data_to_upload).decode()
+        )
         storage_url = await upload_base64_to_firebase_storage(
-            base64_data=audio_data_to_upload, file_name=upload_file_name, file_type=upload_file_type
+            base64_data=upload_payload, file_name=upload_file_name, file_type=upload_file_type
         )
         print(f"✅ Voice uploaded to Storage: {storage_url}")
     except Exception as e:
