@@ -101,6 +101,102 @@ async def test_luna_default_llm_uses_responses_keeps_low_effort(v2_env, monkeypa
     assert response.usage.completion_tokens == 7
 
 
+def test_chat_multimodal_maps_to_responses_input_image() -> None:
+    items = chat_messages_to_responses_input(
+        [
+            {"role": "system", "content": "sys"},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": '{"comment":"🔥"}'},
+                    {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,aaa"}},
+                ],
+            },
+        ]
+    )
+    assert items[0] == {"role": "system", "content": "sys"}
+    assert items[1]["role"] == "user"
+    assert items[1]["content"][0] == {"type": "input_text", "text": '{"comment":"🔥"}'}
+    assert items[1]["content"][1] == {
+        "type": "input_image",
+        "image_url": "data:image/jpeg;base64,aaa",
+    }
+
+
+@pytest.mark.asyncio
+async def test_tera_comment_without_tools_uses_responses(v2_env, monkeypatch: pytest.MonkeyPatch):
+    from services.customer_reply_v2.tera_llm import create_tera_completion
+    from services.model_policy import MODEL_CUSTOMER_TERRA
+
+    captured: dict = {}
+
+    async def _responses_create(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            output_text='{"reply_text":"ok","grounding_status":"grounded"}',
+            output=[],
+            model=MODEL_CUSTOMER_TERRA,
+            usage=SimpleNamespace(input_tokens=9, output_tokens=4, total_tokens=13),
+        )
+
+    async def _chat_create(**kwargs):
+        raise AssertionError("V10 Tera comments must use /v1/responses, not chat.completions")
+
+    fake = SimpleNamespace(
+        responses=SimpleNamespace(create=_responses_create),
+        chat=SimpleNamespace(completions=SimpleNamespace(create=_chat_create)),
+    )
+    monkeypatch.setattr("services.llm_core_service.client", fake)
+
+    response = await create_tera_completion(
+        messages=[
+            {"role": "system", "content": "sys"},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "hi"},
+                    {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,aaa"}},
+                ],
+            },
+        ],
+        tools=None,
+        channel="instagram_comment",
+        regeneration=False,
+        reasoning_effort="low",
+    )
+    assert captured["model"] == MODEL_CUSTOMER_TERRA
+    assert captured["reasoning"]["effort"] == "low"
+    assert "tools" not in captured
+    assert captured["input"][1]["content"][1]["type"] == "input_image"
+    assert response._linas_transport == "responses"
+    assert response.choices[0].message.content.startswith("{")
+
+
+@pytest.mark.asyncio
+async def test_public_comment_does_not_post_model_unavailable_sentence(v2_env) -> None:
+    from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
+    from tests.cm_test_helpers import publish_test_content
+    from tests.customer_reply_ai_v2_helpers import _rich_sections
+
+    await publish_test_content("t_no_canned", _rich_sections())
+    out = await run_customer_reply_v2_comment(
+        tenant_id="t_no_canned",
+        comment_text="🔥",
+        detected_language="en",
+        response_language="en",
+        channel="instagram_comment",
+        scripted_retrieval=[{"final_plan": {"evidence_status": "sufficient", "selected_source_ids": []}}],
+        fixture_answer={
+            "reply_text": "",
+            "grounding_status": "insufficient",
+            "safe_failure_category": "model_unavailable",
+        },
+    )
+    assert out.reply is None
+    assert "temporarily unavailable" not in str(out.reply or "")
+    assert "answer_model_unavailable" in (out.metadata.get("failed_rules") or [])
+
+
 @pytest.mark.asyncio
 async def test_luna_fail_closed_without_responses_api(v2_env, monkeypatch: pytest.MonkeyPatch):
     from services.customer_reply_v2.retrieval_luna import _default_llm

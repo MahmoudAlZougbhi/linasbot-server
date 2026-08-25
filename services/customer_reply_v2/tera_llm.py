@@ -43,12 +43,15 @@ async def create_tera_completion(
         raise RuntimeError(f"customer_answer_model_misconfigured: answer model {model!r} != policy {policy.model!r}")
 
     v10 = customer_ai_v10_runtime_enabled()
-    if v10 and tools:
+    if v10:
+        # Comments have no capture tools, so the old path used chat.completions.
+        # gpt-5.6-terra + comment images + reasoning_effort fails there; DMs already
+        # use /v1/responses. Same transport for Tera, with or without tools.
         response = await create_via_responses(
             client=client,
             model=model,
             messages=messages,
-            tools=tools,
+            tools=tools or [],
             effort=effort,
         )
         extra = {
@@ -57,6 +60,7 @@ async def create_tera_completion(
             "requested_reasoning_effort": effort,
             "effective_reasoning_effort": effort,
             "transport": "responses",
+            "has_tools": bool(tools),
         }
         emit_model_policy_trace(policy, extra=extra)
         response._linas_requested_reasoning_effort = effort

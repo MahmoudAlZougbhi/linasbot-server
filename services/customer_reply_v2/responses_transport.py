@@ -23,6 +23,34 @@ def chat_tools_to_responses(tools: list[dict[str, Any]]) -> list[dict[str, Any]]
     return out
 
 
+def _content_to_responses(content: Any) -> str | list[dict[str, Any]]:
+    """Keep strings; map chat multimodal parts to Responses input_text/input_image."""
+    if not isinstance(content, list):
+        return str(content or "")
+    parts: list[dict[str, Any]] = []
+    for raw in content:
+        if not isinstance(raw, dict):
+            continue
+        kind = str(raw.get("type") or "").strip()
+        if kind in {"text", "input_text"}:
+            text = str(raw.get("text") or "")
+            if text:
+                parts.append({"type": "input_text", "text": text})
+            continue
+        if kind in {"image_url", "input_image"}:
+            image = raw.get("image_url")
+            url = ""
+            if isinstance(image, dict):
+                url = str(image.get("url") or "").strip()
+            elif isinstance(image, str):
+                url = image.strip()
+            if not url:
+                url = str(raw.get("url") or "").strip()
+            if url:
+                parts.append({"type": "input_image", "image_url": url})
+    return parts
+
+
 def chat_messages_to_responses_input(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Map chat.completions messages (including tool rounds) to Responses input items."""
     items: list[dict[str, Any]] = []
@@ -31,7 +59,7 @@ def chat_messages_to_responses_input(messages: list[dict[str, Any]]) -> list[dic
             continue
         role = str(raw.get("role") or "").strip()
         if role in {"system", "user"}:
-            items.append({"role": role, "content": str(raw.get("content") or "")})
+            items.append({"role": role, "content": _content_to_responses(raw.get("content"))})
             continue
         if role == "assistant":
             tool_calls = raw.get("tool_calls") or []
@@ -129,7 +157,7 @@ async def create_via_responses(
     client: Any,
     model: str,
     messages: list[dict[str, Any]],
-    tools: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None,
     effort: str,
     max_output_tokens: int = 2048,
 ) -> Any:
@@ -139,10 +167,12 @@ async def create_via_responses(
     payload: dict[str, Any] = {
         "model": model,
         "input": chat_messages_to_responses_input(messages),
-        "tools": chat_tools_to_responses(tools),
         "reasoning": {"effort": effort},
         "max_output_tokens": int(max_output_tokens),
     }
+    mapped_tools = chat_tools_to_responses(tools or [])
+    if mapped_tools:
+        payload["tools"] = mapped_tools
     raw = await responses.create(**payload)
     content = output_text_from_responses(raw)
     wrapped = wrap_chat_like(
