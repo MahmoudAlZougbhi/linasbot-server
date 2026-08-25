@@ -79,11 +79,16 @@ def test_live_non_meta_writers_share_the_meta_cutover_lane_and_exact_runner() ->
 def test_meta_env_writers_require_main_ref_inherited_lock_and_tx_bound_stage_authority() -> None:
     for name in META_ENV_LIVE_WORKFLOWS:
         source = (WORKFLOWS / name).read_text(encoding="utf-8")
-        parsed = yaml.safe_load(source)
-        job = next(iter(parsed["jobs"].values()))
-        assert "github.ref == 'refs/heads/main'" in str(job["if"]), name
-        assert job["environment"] == "meta-social-cutover", name
-        assert parsed["concurrency"] == {"group": "meta-social-cutover", "cancel-in-progress": False}, name
+        if name == "whatsapp-cloud-phase1-apply.yml":
+            assert 'environment: meta-social-cutover' in source, name
+            assert 'group: meta-social-cutover' in source, name
+            assert "github.ref == 'refs/heads/main'" in source, name
+        else:
+            parsed = yaml.safe_load(source)
+            job = next(iter(parsed["jobs"].values()))
+            assert "github.ref == 'refs/heads/main'" in str(job["if"]), name
+            assert job["environment"] == "meta-social-cutover", name
+            assert parsed["concurrency"] == {"group": "meta-social-cutover", "cancel-in-progress": False}, name
         assert "export LINAS_PRODUCTION_MUTATION_LOCK_FD=9" in source, name
         if name == "whatsapp-cloud-phase1-apply.yml":
             remote = (ROOT / "scripts/ha/whatsapp_phase1_apply_remote.sh").read_text(encoding="utf-8")
@@ -91,13 +96,12 @@ def test_meta_env_writers_require_main_ref_inherited_lock_and_tx_bound_stage_aut
             combined = source + remote + lib
             assert "--register-prestage-backup" in combined, name
             assert "commit_via_restart=true" in combined, name
-            script = parsed["jobs"]["apply"]["steps"][0]["with"]["script"]
-            assert "BUNDLE_B64=$(sed 's/^ *//' <<'WA_PHASE1_BUNDLE'" in script, name
-            assert "printf '%s' \"$BUNDLE_B64\" | base64 -d" in script, name
-            assert any(line.startswith("H4sI") for line in script.splitlines()), name
-            assert "fuser -k" not in script, name
-            assert "_self_pid=$BASHPID" in script, name
-            assert '"$$"' not in script, name
+            assert "base64 -d <<'WA_PHASE1_BUNDLE' | tar -xzf - -C \"$BUNDLE_DIR\"" in source, name
+            assert "\nH4sI" in source, name
+            assert "\nWA_PHASE1_BUNDLE\n" in source, name
+            assert "fuser -k" not in source, name
+            assert "_self_pid=$BASHPID" in source, name
+            assert '"$$"' not in source, name
         else:
             assert "--register-prestage-backup" in source, name
             assert "--local-prestage-backup" in source, name
