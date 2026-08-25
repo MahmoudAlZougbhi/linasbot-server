@@ -47,18 +47,21 @@ def should_enqueue_comment_ai(
 
 
 def enqueue_tiktok_comment_ai(*, tenant_id: str, connection_id: str, comment_id: str, item_id: str) -> None:
-    try:
-        from services.job_queue import job_queue
+    from services.job_queue import job_queue
+    from services.omnichannel.queues import physical_queue_for
 
-        job_queue.enqueue(
-            queue="interactive",
-            job_type="tiktok_comment_ai",
-            tenant_id=tenant_id,
-            payload={"connection_id": connection_id, "comment_id": comment_id, "item_id": item_id},
-            idempotency_key=f"tiktok_ai:{tenant_id}:{comment_id}",
-        )
-    except Exception:
-        pass
+    job_queue.enqueue(
+        queue=physical_queue_for("comments"),  # type: ignore[arg-type]
+        job_type="tiktok_comment_ai",
+        tenant_id=tenant_id,
+        payload={
+            "connection_id": connection_id,
+            "comment_id": comment_id,
+            "item_id": item_id,
+            "_conversation_key": f"{tenant_id}:tiktok:{comment_id}",
+        },
+        idempotency_key=f"tiktok_ai:{tenant_id}:{comment_id}",
+    )
 
 
 async def _list_videos(*, access_token: str, open_id: str) -> dict[str, Any]:

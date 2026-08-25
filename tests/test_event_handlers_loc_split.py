@@ -73,4 +73,5 @@ def test_scheduler_does_not_register_channel_comment_polls() -> None:
     assert "run_tiktok_comment_sync_job" not in scheduler_source
     assert "run_meta_social_comment_sync_job" not in scheduler_source
     assert 'id="tiktok_comment_webhook_register"' in scheduler_source
+    assert 'id="whatsapp_outbound_retry"' in scheduler_source
     assert "webhook-only" in scheduler_source

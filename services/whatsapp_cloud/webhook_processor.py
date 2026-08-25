@@ -209,7 +209,25 @@ async def _process_one_event(event: ParsedCloudEvent, *, body_fp: str) -> str:
     if event.message_type in {"unsupported", "reaction", "sticker"} and not event.text_body:
         emit_wa_event("unsupported_no_ai", message_type=event.message_type)
         return "accepted"
-    await maybe_generate_and_send_ai_reply(ai_snapshot)
+    from services.job_queue import job_queue
+    from services.omnichannel.enqueue import AMBIGUOUS_ENQUEUE, enqueue_job, should_defer_to_worker
+
+    if should_defer_to_worker():
+        if not getattr(job_queue, "production_ready", False):
+            raise RuntimeError("whatsapp_queue_unavailable")
+        job_id = enqueue_job(
+            logical_queue="dm_urgent",
+            job_type="whatsapp_generate",
+            tenant_id=str(ai_snapshot["tenant_id"]),
+            payload=ai_snapshot,
+            idempotency_key=f"wa_ai:{ai_snapshot['provider_message_id']}",
+            conversation_key=str(ai_snapshot["conversation_id"]),
+            provider="whatsapp",
+        )
+        if job_id is None or job_id == AMBIGUOUS_ENQUEUE:
+            raise RuntimeError("whatsapp_generate_enqueue_failed")
+    else:
+        await maybe_generate_and_send_ai_reply(ai_snapshot)
     record_analytics_channel_usage(
         tenant_id=ai_snapshot["tenant_id"],
         connection_id=ai_snapshot["connection_id"],

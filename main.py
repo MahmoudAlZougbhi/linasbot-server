@@ -75,6 +75,7 @@ import modules.mobile_integrations_api  # noqa: E402, F401
 import modules.mobile_products_api  # noqa: E402, F401
 import modules.mobile_services_api  # noqa: E402, F401
 import modules.mobile_stt_api  # noqa: E402, F401
+import modules.omnichannel_api  # noqa: E402, F401
 import modules.owner_ai_api  # noqa: E402, F401
 import modules.owner_ai_v2_api  # noqa: E402, F401
 import modules.owner_notifications_api  # noqa: E402, F401

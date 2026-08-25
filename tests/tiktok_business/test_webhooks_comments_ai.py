@@ -6,7 +6,7 @@ import hashlib
 import hmac
 import json
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -76,6 +76,11 @@ def test_duplicate_comments_and_ai_claim(tt_db) -> None:
     assert claimed is not None
     again = content.claim_comment_for_ai(tenant_id="linas", comment_id="cmt-1")
     assert again is None
+    claimed.ai_claimed_at = datetime.now(UTC) - timedelta(seconds=400)
+    claimed.ai_processed = False
+    tt_db.commit()
+    reclaimed = content.claim_comment_for_ai(tenant_id="linas", comment_id="cmt-1", lease_seconds=300)
+    assert reclaimed is not None
 
 
 def test_duplicate_messages(tt_db) -> None:

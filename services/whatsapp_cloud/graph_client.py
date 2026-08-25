@@ -13,12 +13,21 @@ ALLOWED_GRAPH_HOSTS = frozenset({GRAPH_API_HOST, f"www.{GRAPH_API_HOST}"})
 
 
 class WhatsAppGraphError(RuntimeError):
-    def __init__(self, code: str, message: str, *, http_status: int | None = None, retryable: bool = False) -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        http_status: int | None = None,
+        retryable: bool = False,
+        retry_after_seconds: float | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
         self.http_status = http_status
         self.retryable = retryable
+        self.retry_after_seconds = retry_after_seconds
 
 
 def _graph_base() -> str:
@@ -177,12 +186,19 @@ async def send_text_message(
     if resp.status_code >= 400:
         err = data.get("error") if isinstance(data, dict) else None
         code = str((err or {}).get("code") or "send_failed")
-        retryable = resp.status_code >= 500 or code in {"1", "2", "4", "17", "80007"}
+        retryable = (
+            resp.status_code >= 500
+            or resp.status_code in {408, 429}
+            or code in {"1", "2", "4", "17", "613", "80007"}
+        )
+        from services.omnichannel.headers import parse_retry_after_seconds
+
         raise WhatsAppGraphError(
             f"meta_{code}",
             "WhatsApp Cloud send rejected",
             http_status=resp.status_code,
             retryable=retryable,
+            retry_after_seconds=parse_retry_after_seconds(resp.headers),
         )
     return data if isinstance(data, dict) else {}
 

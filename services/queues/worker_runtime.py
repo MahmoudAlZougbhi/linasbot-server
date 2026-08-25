@@ -1,14 +1,14 @@
-"""Worker process loop for one queue name."""
+"""Worker process loop for one queue name with real bounded concurrency."""
 
 from __future__ import annotations
 
 import asyncio
 import os
 import signal
-import time
 import uuid
 from typing import Any
 
+from services.omnichannel.worker_pool import run_bounded_pool
 from services.queues.config import DEFAULT_TENANT_INFLIGHT, redis_url
 from services.queues.handlers import PermanentJobError, get_handler
 from services.queues.redis_backend import RedisQueueBackend
@@ -41,83 +41,102 @@ class WorkerRuntime:
         key = str(payload.get("_conversation_key") or "").strip()
         return key or None
 
-    def _provider_gate(self, job: Any) -> float | None:
-        """Return soft delay seconds when provider/tenant backpressure says wait."""
-        try:
-            from services.scale.provider_limiter import ProviderLimiter
+    def _provider_name(self, job: Any) -> str:
+        return str((job.payload or {}).get("_provider") or "openai").strip().lower() or "openai"
 
-            limiter = ProviderLimiter()
-            provider = str((job.payload or {}).get("_provider") or "openai").strip().lower()
+    def _provider_gate(self, job: Any) -> float | None:
+        try:
+            from services.omnichannel.limiter import DistributedProviderLimiter
+
+            limiter = DistributedProviderLimiter()
             priority = str((job.payload or {}).get("_priority") or "customer_conversation")
-            decision = limiter.check(provider=provider, tenant_id=job.tenant_id, priority=priority)
+            decision = limiter.try_enter(
+                provider=self._provider_name(job),
+                tenant_id=job.tenant_id,
+                priority=priority,
+            )
             if decision.allowed:
                 return None
             return max(0.05, float(decision.retry_after_seconds))
         except Exception:
             return None
 
+    def _release_provider(self, job: Any) -> None:
+        try:
+            from services.omnichannel.limiter import DistributedProviderLimiter
+
+            DistributedProviderLimiter().exit(provider=self._provider_name(job), tenant_id=job.tenant_id)
+        except Exception:
+            pass
+
+    async def _process_one(self) -> None:
+        if self._stopping or not shutdown_coordinator.accept_queue_work:
+            await asyncio.sleep(0.05)
+            return
+        self._backend.heartbeat(worker_id=self.worker_id, queue=self.queue)
+        job = self._backend.claim(self.queue, worker_id=self.worker_id, timeout=3)
+        if job is None:
+            return
+        if not shutdown_coordinator.track_job_enter():
+            self._backend.requeue_soft(job, delay_seconds=0.2)
+            return
+        conv_lease = None
+        held_inflight = False
+        try:
+            if self._backend.tenant_inflight(job.tenant_id) >= DEFAULT_TENANT_INFLIGHT:
+                self._backend.requeue_soft(job, delay_seconds=1.0)
+                return
+            delay = self._provider_gate(job)
+            if delay is not None:
+                self._backend.requeue_soft(job, delay_seconds=delay)
+                return
+            held_inflight = True
+            conv_key = self._conversation_key(job)
+            if conv_key:
+                from services.scale.conversation_lock import ConversationLock
+
+                conv_lease = ConversationLock().try_acquire(conv_key, ttl_seconds=max(30, int(job.timeout_seconds)))
+                if conv_lease is None:
+                    self._backend.requeue_soft(job, delay_seconds=0.5)
+                    return
+            self._backend.incr_tenant_inflight(job.tenant_id)
+            try:
+                handler = get_handler(job.job_type)
+                if handler is None:
+                    self._backend.fail(job, error=f"unknown_job_type:{job.job_type}", retry=False)
+                    self._refund_if_needed(job)
+                    return
+                await asyncio.wait_for(handler(job), timeout=job.timeout_seconds)
+                self._backend.complete(job)
+            except PermanentJobError as exc:
+                self._backend.fail(job, error=f"PermanentJobError:{exc}", retry=False)
+                self._refund_if_needed(job)
+            except Exception as exc:
+                went_dead = self._backend.fail(job, error=f"{type(exc).__name__}:{exc}", retry=True)
+                if went_dead:
+                    self._refund_if_needed(job)
+            finally:
+                self._backend.decr_tenant_inflight(job.tenant_id)
+        finally:
+            if held_inflight:
+                self._release_provider(job)
+            if conv_lease is not None:
+                try:
+                    from services.scale.conversation_lock import ConversationLock
+
+                    ConversationLock().release(conv_lease)
+                except Exception:
+                    pass
+            shutdown_coordinator.track_job_exit()
+
     async def run_forever(self) -> None:
         signal.signal(signal.SIGTERM, self.request_stop)
         signal.signal(signal.SIGINT, self.request_stop)
-        while not self._stopping:
-            if not shutdown_coordinator.accept_queue_work:
-                break
-            self._backend.heartbeat(worker_id=self.worker_id, queue=self.queue)
-            job = self._backend.claim(self.queue, worker_id=self.worker_id, timeout=3)
-            if job is None:
-                continue
-            if not shutdown_coordinator.track_job_enter():
-                self._backend.requeue_soft(job, delay_seconds=0.2)
-                break
-            conv_lease = None
-            try:
-                if self._backend.tenant_inflight(job.tenant_id) >= DEFAULT_TENANT_INFLIGHT:
-                    self._backend.requeue_soft(job, delay_seconds=1.0)
-                    continue
-                delay = self._provider_gate(job)
-                if delay is not None:
-                    self._backend.requeue_soft(job, delay_seconds=delay)
-                    continue
-                conv_key = self._conversation_key(job)
-                if conv_key:
-                    from services.scale.conversation_lock import ConversationLock
-
-                    conv_lease = ConversationLock().try_acquire(conv_key, ttl_seconds=max(30, int(job.timeout_seconds)))
-                    if conv_lease is None:
-                        self._backend.requeue_soft(job, delay_seconds=0.5)
-                        continue
-                self._backend.incr_tenant_inflight(job.tenant_id)
-                try:
-                    handler = get_handler(job.job_type)
-                    if handler is None:
-                        self._backend.fail(job, error=f"unknown_job_type:{job.job_type}", retry=False)
-                        self._refund_if_needed(job)
-                        continue
-                    await asyncio.wait_for(handler(job), timeout=job.timeout_seconds)
-                    self._backend.complete(job)
-                except PermanentJobError as exc:
-                    self._backend.fail(job, error=f"PermanentJobError:{exc}", retry=False)
-                    self._refund_if_needed(job)
-                except Exception as exc:
-                    went_dead = self._backend.fail(
-                        job,
-                        error=f"{type(exc).__name__}:{exc}",
-                        retry=True,
-                    )
-                    if went_dead:
-                        self._refund_if_needed(job)
-                finally:
-                    self._backend.decr_tenant_inflight(job.tenant_id)
-            finally:
-                if conv_lease is not None:
-                    try:
-                        from services.scale.conversation_lock import ConversationLock
-
-                        ConversationLock().release(conv_lease)
-                    except Exception:
-                        pass
-                shutdown_coordinator.track_job_exit()
-            time.sleep(0.01)
+        await run_bounded_pool(
+            queue=self.queue,
+            one_cycle=self._process_one,
+            stopping=lambda: self._stopping or not shutdown_coordinator.accept_queue_work,
+        )
         shutdown_coordinator.wait_for_idle(timeout_seconds=50)
 
 

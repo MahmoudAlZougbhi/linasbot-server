@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.web_chat.config_models import WebChatWidgetConfig
+from services.web_chat.config_models import WebChatWidgetConfig, config_to_raw
 from services.web_chat.delivery_outbox import ack_pending_messages, poll_pending_messages
 from services.web_chat.flags import assert_widget_operational, web_chat_containment_active
 from services.web_chat.processor import (
@@ -85,6 +85,39 @@ async def send_visitor_message(
         raise SessionAuthorityError("LEGACY_SESSION_REJECTED", "Legacy session must be re-bootstrapped.")
 
     try:
+        from services.job_queue import job_queue
+        from services.omnichannel.enqueue import AMBIGUOUS_ENQUEUE, enqueue_job, should_defer_to_worker
+
+        if should_defer_to_worker():
+            if not getattr(job_queue, "production_ready", False):
+                raise WebChatError("queue_unavailable", "Website chat is temporarily unavailable.", status_code=503)
+            job_id = enqueue_job(
+                logical_queue="web_chat",
+                job_type="web_chat_generate",
+                tenant_id=widget.tenant_id,
+                payload={
+                    "session_id": session_id,
+                    "content": content,
+                    "idempotency_key": idempotency_key,
+                    "widget_dict": config_to_raw(widget),
+                },
+                idempotency_key=f"web:{session_id}:{idempotency_key or content[:40]}",
+                conversation_key=session_id,
+                provider="openai",
+            )
+            if job_id is None or job_id == AMBIGUOUS_ENQUEUE:
+                raise WebChatError("queue_unavailable", "Website chat is temporarily unavailable.", status_code=503)
+            refreshed = active_store.get_visitor(session_id)
+            return {
+                "success": True,
+                "channel": "web",
+                "status": "generating",
+                "reply": "",
+                "messages": [
+                    {"id": m.id, "role": m.role, "content": m.content, "created_at": m.created_at}
+                    for m in (refreshed.messages if refreshed else [])
+                ],
+            }
         reply = await process_web_chat_message(
             widget=widget,
             visitor_session=visitor,

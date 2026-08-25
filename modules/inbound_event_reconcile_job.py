@@ -20,6 +20,11 @@ async def run_inbound_event_reconcile_job() -> None:
                 f"actions={len(result.get('actions') or [])} "
                 f"unexplained_missing={missing}"
             )
+        from services.omnichannel.reconcile import reconcile_omnichannel
+
+        omni = reconcile_omnichannel(older_than_seconds=45.0)
+        if int(omni.get("examined") or 0):
+            print(f"[omnichannel-reconcile] examined={omni.get('examined')} actions={len(omni.get('actions') or [])}")
     except Exception as exc:
         print(f"[inbound-reconcile] failed type={type(exc).__name__}")
     finally:

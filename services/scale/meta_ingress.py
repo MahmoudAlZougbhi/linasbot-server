@@ -72,8 +72,12 @@ def _try_enqueue(
             or not redis_required()
         ):
             return None
+        from services.omnichannel.queues import logical_for_channel, physical_queue_for
+
+        surface = "comment" if kind == "meta_comment" else "dm"
+        logical = logical_for_channel(channel="meta", surface=surface)
         job = job_queue.enqueue(
-            queue="high_priority",
+            queue=physical_queue_for(logical),  # type: ignore[arg-type]
             job_type="meta_inbound_process",
             tenant_id=tenant_id or "unknown",
             payload={
@@ -81,7 +85,8 @@ def _try_enqueue(
                 "kind": kind,
                 "_conversation_key": conversation_key,
                 "_provider": "openai",
-                "_priority": "customer_conversation",
+                "_priority": "background" if surface == "comment" else "customer_conversation",
+                "_logical_queue": logical,
                 "_claim_token": claim_token,
                 "_claim_generation": claim_generation,
             },
@@ -125,6 +130,9 @@ def persist_meta_dm_accepted(resolved: ResolvedMetaEvent, *, global_key: str) ->
         attempts=0,
     )
     _, created = create_inbound_event(record, enforce_binding_deletion_fence=True)
+    from services.omnichannel.dual_write import mirror_meta_inbound
+
+    mirror_meta_inbound(record)
     return event_id, created
 
 
@@ -191,6 +199,9 @@ def persist_meta_comment_accepted(resolved: ResolvedMetaCommentEvent, *, global_
         attempts=0,
     )
     _, created = create_inbound_event(record, enforce_binding_deletion_fence=True)
+    from services.omnichannel.dual_write import mirror_meta_inbound
+
+    mirror_meta_inbound(record)
     return event_id, created
 
 

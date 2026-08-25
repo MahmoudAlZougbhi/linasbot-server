@@ -83,6 +83,7 @@ async def handle_messaging_webhook(
             "tenant_id": connection.tenant_id,
             "connection_id": connection.id,
             "conversation_id": conversation_id,
+            "provider_message_id": provider_mid,
             "customer_open_id": from_user,
             "text": text,
             "created": created,
@@ -101,6 +102,26 @@ async def _maybe_ai_dm(snapshot: dict[str, Any]) -> None:
     if not action_enabled(actions, ACTION_TIKTOK_DM):
         return
     if ai_generation_blocked(tenant_id):
+        return
+    from services.job_queue import job_queue
+    from services.omnichannel.accept import accept_and_enqueue
+    from services.omnichannel.contract import NormalizedInbound
+    from services.omnichannel.store import payload_hash
+    from services.queues.config import redis_required
+
+    if redis_required() and getattr(job_queue, "production_ready", False):
+        event = NormalizedInbound(
+            provider_event_id=str(snapshot.get("provider_message_id") or snapshot.get("conversation_id") or "")[:128],
+            tenant_id=tenant_id,
+            account_id=str(snapshot.get("connection_id") or ""),
+            channel="tiktok",
+            surface="dm",
+            conversation_key=f"{tenant_id}:tiktok:{snapshot.get('conversation_id')}",
+            provider_timestamp=datetime.now(UTC).timestamp(),
+            payload_hash=payload_hash(snapshot),
+            payload=dict(snapshot),
+        )
+        accept_and_enqueue(event)
         return
     with whatsapp_session() as session:
         repo = TikTokRepository(session)

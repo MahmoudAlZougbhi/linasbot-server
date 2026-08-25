@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -142,7 +142,9 @@ class TikTokContentRepository:
         self.session.flush()
         return row, created
 
-    def claim_comment_for_ai(self, *, tenant_id: str, comment_id: str) -> TikTokComment | None:
+    def claim_comment_for_ai(self, *, tenant_id: str, comment_id: str, lease_seconds: int = 300) -> TikTokComment | None:
+        now = datetime.now(UTC)
+        cutoff = now - timedelta(seconds=max(1, int(lease_seconds)))
         stmt = (
             update(TikTokComment)
             .where(
@@ -150,8 +152,9 @@ class TikTokContentRepository:
                 TikTokComment.comment_id == comment_id,
                 TikTokComment.ai_processed.is_(False),
                 TikTokComment.is_reply.is_(False),
+                or_(TikTokComment.ai_claimed_at.is_(None), TikTokComment.ai_claimed_at < cutoff),
             )
-            .values(ai_processed=True)
+            .values(ai_claimed_at=now)
         )
         result = self.session.execute(stmt)
         if int(result.rowcount or 0) != 1:
@@ -159,6 +162,20 @@ class TikTokContentRepository:
         return self.session.scalar(
             select(TikTokComment).where(TikTokComment.tenant_id == tenant_id, TikTokComment.comment_id == comment_id)
         )
+
+    def release_comment_ai_claim(self, *, tenant_id: str, comment_id: str) -> None:
+        row = self.session.scalar(
+            select(TikTokComment).where(TikTokComment.tenant_id == tenant_id, TikTokComment.comment_id == comment_id)
+        )
+        if row is not None and not row.ai_processed:
+            row.ai_claimed_at = None
+
+    def mark_comment_ai_processed(self, *, tenant_id: str, comment_id: str) -> None:
+        row = self.session.scalar(
+            select(TikTokComment).where(TikTokComment.tenant_id == tenant_id, TikTokComment.comment_id == comment_id)
+        )
+        if row is not None:
+            row.ai_processed = True
 
     def get_or_create_reply_job(
         self, *, tenant_id: str, connection_id: str, comment_id: str

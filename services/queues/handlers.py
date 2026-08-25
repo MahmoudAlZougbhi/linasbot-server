@@ -151,6 +151,54 @@ async def handle_meta_social_comment_sync(job: QueueJob) -> dict[str, Any]:
     return await _impl(job)
 
 
+async def handle_omni_generate(job: QueueJob) -> dict[str, Any]:
+    from services.omnichannel.jobs import handle_omni_generate as _impl
+
+    return await _impl(job)
+
+
+async def handle_omni_deliver(job: QueueJob) -> dict[str, Any]:
+    from services.omnichannel.jobs import handle_omni_deliver as _impl
+
+    return await _impl(job)
+
+
+async def handle_whatsapp_generate(job: QueueJob) -> dict[str, Any]:
+    from services.omnichannel.jobs import handle_whatsapp_generate as _impl
+
+    return await _impl(job)
+
+
+async def handle_whatsapp_deliver_retry(job: QueueJob) -> dict[str, Any]:
+    from services.omnichannel.jobs import handle_whatsapp_deliver_retry as _impl
+
+    return await _impl(job)
+
+
+async def handle_whatsapp_intent_deliver(job: QueueJob) -> dict[str, Any]:
+    from services.omnichannel.jobs import handle_whatsapp_intent_deliver as _impl
+
+    return await _impl(job)
+
+
+async def handle_web_chat_generate(job: QueueJob) -> dict[str, Any]:
+    from services.omnichannel.jobs import handle_web_chat_generate as _impl
+
+    return await _impl(job)
+
+
+async def handle_tiktok_webhook_event(job: QueueJob) -> dict[str, Any]:
+    from services.omnichannel.jobs import handle_tiktok_webhook_event as _impl
+
+    return await _impl(job)
+
+
+async def handle_operator_deliver(job: QueueJob) -> dict[str, Any]:
+    from services.omnichannel.jobs import handle_operator_deliver as _impl
+
+    return await _impl(job)
+
+
 HANDLERS: dict[str, Handler] = {
     "publish_scheduled": handle_publish_scheduled,
     "creative_image": handle_creative_expensive,
@@ -159,6 +207,16 @@ HANDLERS: dict[str, Handler] = {
     "tiktok_comment_sync": handle_tiktok_comment_sync,
     "tiktok_comment_ai": handle_tiktok_comment_ai,
     "meta_social_comment_sync": handle_meta_social_comment_sync,
+    "omni_generate": handle_omni_generate,
+    "omnichannel_generate": handle_omni_generate,
+    "omni_deliver": handle_omni_deliver,
+    "omnichannel_deliver": handle_omni_deliver,
+    "whatsapp_generate": handle_whatsapp_generate,
+    "whatsapp_deliver_retry": handle_whatsapp_deliver_retry,
+    "whatsapp_intent_deliver": handle_whatsapp_intent_deliver,
+    "web_chat_generate": handle_web_chat_generate,
+    "tiktok_webhook_event": handle_tiktok_webhook_event,
+    "operator_deliver": handle_operator_deliver,
 }
 
 

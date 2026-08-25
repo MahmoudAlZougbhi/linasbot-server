@@ -39,6 +39,8 @@ from db.models import (  # noqa: E402, F401 — register models on metadata
     TikTokCredential,
     TikTokOAuthAttempt,
     TikTokWebhookEvent,
+    OmnichannelInboundEvent,
+    OmnichannelOutboundOutbox,
     WhatsAppAuditEvent,
     WhatsAppConnection,
     WhatsAppConnectionAttempt,
