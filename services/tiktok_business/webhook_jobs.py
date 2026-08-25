@@ -8,8 +8,10 @@ from typing import Any
 async def process_claimed_webhook(payload: dict[str, Any]) -> dict[str, Any]:
     event_name = str(payload.get("event_name") or "").strip().lower()
     event_id = str(payload.get("event_id") or "")
-    body = payload.get("payload") if isinstance(payload.get("payload"), dict) else {}
-    content = payload.get("content") if isinstance(payload.get("content"), dict) else {}
+    raw_body = payload.get("payload")
+    raw_content = payload.get("content")
+    body: dict[str, Any] = raw_body if isinstance(raw_body, dict) else {}
+    content: dict[str, Any] = raw_content if isinstance(raw_content, dict) else {}
     if event_name in {"im_receive_msg", "im_send_msg", "direct_message", "im_mark_read_msg"}:
         from services.tiktok_business.messaging import handle_messaging_webhook
 

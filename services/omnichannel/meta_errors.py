@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Literal
 
 from services.omnichannel.headers import parse_meta_usage, parse_retry_after_seconds
+
+OutboundFinishStatus = Literal["accepted", "definitive_failure", "needs_owner_action"]
 
 
 class MetaProviderError(RuntimeError):
@@ -61,7 +63,7 @@ def raise_from_meta_response(response: Any) -> None:
     )
 
 
-def finish_status_for_send_exception(exc: BaseException) -> tuple[str, str]:
+def finish_status_for_send_exception(exc: BaseException) -> tuple[OutboundFinishStatus, str]:
     """Map a provider exception to outbound-attempt status. 429/613 retry; unknown stays owner-action."""
 
     if isinstance(exc, MetaProviderError) and exc.retryable:

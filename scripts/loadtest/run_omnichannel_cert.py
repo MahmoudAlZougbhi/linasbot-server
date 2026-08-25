@@ -71,7 +71,13 @@ def run_cert(*, minutes: float, burst_scale: float, duplicate_ratio: float) -> d
     from db.models.omnichannel import OmnichannelInboundEvent, OmnichannelOutboundOutbox
 
     engine = create_engine("sqlite:///:memory:", future=True)
-    Base.metadata.create_all(engine, tables=[OmnichannelInboundEvent.__table__, OmnichannelOutboundOutbox.__table__])
+    inbound_tbl = OmnichannelInboundEvent.__table__
+    outbound_tbl = OmnichannelOutboundOutbox.__table__
+    from sqlalchemy.sql.schema import Table
+
+    if not isinstance(inbound_tbl, Table) or not isinstance(outbound_tbl, Table):
+        raise TypeError("omnichannel tables missing")
+    Base.metadata.create_all(engine, tables=[inbound_tbl, outbound_tbl])
     session = sessionmaker(bind=engine, future=True)()
     events = _build_events(scale=1.0, minutes=minutes)
     burst = _build_events(scale=burst_scale, minutes=max(0.1, minutes / 6.0))
