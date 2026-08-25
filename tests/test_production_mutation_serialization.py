@@ -80,8 +80,8 @@ def test_meta_env_writers_require_main_ref_inherited_lock_and_tx_bound_stage_aut
     for name in META_ENV_LIVE_WORKFLOWS:
         source = (WORKFLOWS / name).read_text(encoding="utf-8")
         if name == "whatsapp-cloud-phase1-apply.yml":
-            assert 'environment: meta-social-cutover' in source, name
-            assert 'group: meta-social-cutover' in source, name
+            assert "environment: meta-social-cutover" in source, name
+            assert "group: meta-social-cutover" in source, name
             assert "github.ref == 'refs/heads/main'" in source, name
         else:
             parsed = yaml.safe_load(source)
