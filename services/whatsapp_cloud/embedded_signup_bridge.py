@@ -14,7 +14,6 @@ from services.whatsapp_cloud.embedded_signup_session import (
     coexistence_launch_extras,
 )
 
-
 WAIT_BOTH_MS = 20000
 
 

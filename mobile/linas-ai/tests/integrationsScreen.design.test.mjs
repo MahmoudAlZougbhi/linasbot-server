@@ -62,7 +62,7 @@ test('channel Messages/Comments toggles are app-owned and do not intercept provi
 test('disconnected WhatsApp shows outlined Connect and no toggles', () => {
   const wa = read('features/integrations/WhatsAppCloudCard.tsx');
   const shell = read('features/integrations/IntegrationCardShell.tsx');
-  assert.match(wa, /showConnect=\{!connected && connectable\}/);
+  assert.match(wa, /showConnect=\{!connected && connectable(?: && !confirmOpen)?\}/);
   assert.match(wa, /showComments=\{false\}/);
   assert.match(wa, /integrationWhatsAppHandle/);
   assert.match(shell, /connectBtn/);
