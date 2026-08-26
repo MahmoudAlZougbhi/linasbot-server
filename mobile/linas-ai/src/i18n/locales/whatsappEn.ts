@@ -7,8 +7,17 @@ export const whatsappEn = {
     'WhatsApp Embedded Signup is not configured on the server. Try again later or contact support.',
   waConnectBrowserUnavailable: 'Could not open Meta WhatsApp signup. Check your connection and try again.',
   waConnectInProgress: 'WhatsApp connect is already in progress.',
-  waCoexistenceHint: 'Link your existing WhatsApp Business app number. Linas AI uses your published knowledge only.',
-  waDoNotAddNewNumber: 'In Meta, choose your existing WhatsApp Business app number. Do not choose Add a new number.',
+  waCoexistenceHint: 'Your WhatsApp Business App and existing chats stay on your phone.',
+  waDoNotAddNewNumber:
+    'Inside Meta, select “Connect a WhatsApp Business app”. Do not select “Create a WhatsApp Business account” or an existing WABA. Never disconnect or migrate your current number.',
+  waKeepUsingTitle: 'Keep using WhatsApp Business App',
+  waConfirmContinue: 'Continue to Meta',
+  waConfirmCancel: 'Cancel',
+  waWrongFlow:
+    'Meta did not complete WhatsApp Business App connect. Nothing was changed. Try again and choose Connect a WhatsApp Business app.',
+  waAdvancedAccess:
+    'Meta still needs to approve this permission. Your WhatsApp number was not changed.',
+  waSessionTimeout: 'Meta signup timed out before it finished. Your WhatsApp number was not changed.',
   waCoexistenceOn: 'Business App coexistence enabled',
   waNumberLabel: 'Number',
   waAiLabel: 'AI replies',

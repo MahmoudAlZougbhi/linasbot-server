@@ -8,10 +8,16 @@ export const whatsappFr = {
   waConnectBrowserUnavailable:
     'Impossible d’ouvrir l’inscription Meta WhatsApp. Vérifiez votre connexion et réessayez.',
   waConnectInProgress: 'La connexion WhatsApp est déjà en cours.',
-  waCoexistenceHint:
-    'Liez le numéro existant de l’application WhatsApp Business. Linas AI n’utilise que vos connaissances publiées.',
+  waCoexistenceHint: 'Votre application WhatsApp Business et vos discussions restent sur votre téléphone.',
   waDoNotAddNewNumber:
-    'Dans Meta, choisissez le numéro existant de l’application WhatsApp Business. Ne choisissez pas Ajouter un nouveau numéro.',
+    'Dans Meta, sélectionnez « Connect a WhatsApp Business app ». Ne sélectionnez pas « Create a WhatsApp Business account » ni un WABA existant. Ne déconnectez jamais et ne migrez jamais.',
+  waKeepUsingTitle: 'Continuer à utiliser WhatsApp Business App',
+  waConfirmContinue: 'Continuer vers Meta',
+  waConfirmCancel: 'Annuler',
+  waWrongFlow:
+    'Meta n’a pas terminé la connexion WhatsApp Business App. Rien n’a changé. Réessayez et choisissez Connect a WhatsApp Business app.',
+  waAdvancedAccess: 'Meta doit encore approuver cette autorisation. Votre numéro WhatsApp n’a pas changé.',
+  waSessionTimeout: 'L’inscription Meta a expiré avant la fin. Votre numéro WhatsApp n’a pas changé.',
   waCoexistenceOn: 'Coexistence Business App activée',
   waNumberLabel: 'Numéro',
   waAiLabel: 'Réponses IA',

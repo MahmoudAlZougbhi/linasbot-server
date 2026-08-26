@@ -140,6 +140,36 @@ async def fetch_waba_phone_numbers(*, access_token: str, waba_id: str) -> list[d
     return out
 
 
+_PHONE_COEXISTENCE_FIELDS = "id,display_phone_number,verified_name,quality_rating,is_on_biz_app,platform_type"
+
+
+async def fetch_business_phone_number(*, access_token: str, phone_number_id: str) -> dict[str, Any]:
+    """Typed Graph read of one business phone number's coexistence fields."""
+
+    pnid = str(phone_number_id or "").strip()
+    if not pnid.isdigit():
+        raise WhatsAppGraphError("invalid_phone_number_id", "phone_number_id must be numeric")
+    url = f"{_graph_base()}/{pnid}"
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        resp = await client.get(
+            url,
+            params={"fields": _PHONE_COEXISTENCE_FIELDS, "access_token": access_token},
+        )
+    data = resp.json() if resp.content else {}
+    if resp.status_code >= 400 or not isinstance(data, dict) or str(data.get("id") or "") != pnid:
+        raise WhatsAppGraphError(
+            "phone_lookup_failed",
+            "unable to read business phone coexistence fields",
+            http_status=resp.status_code,
+            retryable=resp.status_code >= 500,
+        )
+    return data
+
+
+async def fetch_phone_coexistence_fields(*, access_token: str, phone_number_id: str) -> dict[str, Any]:
+    return await fetch_business_phone_number(access_token=access_token, phone_number_id=phone_number_id)
+
+
 async def subscribe_waba_webhooks(*, access_token: str, waba_id: str) -> dict[str, Any]:
     waba = str(waba_id or "").strip()
     if not waba.isdigit():

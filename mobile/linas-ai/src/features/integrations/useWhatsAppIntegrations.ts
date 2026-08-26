@@ -46,6 +46,9 @@ export function useWhatsAppIntegrations({ onAuthGate, onError }: Opts) {
         if (err.code === 'cancelled') onError(tr('waOAuthCancelled'));
         else if (err.code === 'connect_in_progress') onError(tr('waConnectInProgress'));
         else if (err.code === 'invalid_authorization_url') onError(tr('waConnectConfigMissing'));
+        else if (err.code === 'coexistence_flow_required') onError(tr('waWrongFlow'));
+        else if (err.code === 'meta_advanced_access_required') onError(tr('waAdvancedAccess'));
+        else if (err.code === 'session_timeout') onError(tr('waSessionTimeout'));
         else if (err.code === 'failed') onError(tr('waOAuthFailed'));
         else onError(tr('waConnectBrowserUnavailable'));
       } else if (err instanceof ApiError && err.body && typeof err.body === 'object') {

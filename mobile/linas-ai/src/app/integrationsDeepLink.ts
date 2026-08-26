@@ -3,9 +3,20 @@ import type { StringKey } from '../i18n/locales/en';
 export type IntegrationsDeepLink = {
   metaConnection: 'success' | 'cancelled' | 'failed' | null;
   waConnection: 'success' | 'cancelled' | 'failed' | null;
+  waError: string | null;
   metaReason: string | null;
   metaChannel: 'facebook' | 'instagram' | null;
 };
+
+const WA_ERRORS = new Set([
+  'coexistence_flow_required',
+  'meta_advanced_access_required',
+  'session_timeout',
+  'embedded_signup_timeout',
+  'session_version_invalid',
+  'coexistence_not_proven',
+  'coexistence_phone_ambiguous',
+]);
 
 const META_REASONS = new Set([
   'generic',
@@ -52,6 +63,7 @@ export function parseIntegrationsDeepLink(url: string | null): IntegrationsDeepL
     const rawMeta = (parsed.searchParams.get('meta_connection') || '').trim().toLowerCase();
     const rawWa = (parsed.searchParams.get('wa_connection') || '').trim().toLowerCase();
     const rawReason = (parsed.searchParams.get('meta_reason') || '').trim().toLowerCase();
+    const rawWaError = (parsed.searchParams.get('wa_error') || '').trim().toLowerCase();
     const rawChannel = (parsed.searchParams.get('channel') || '').trim().toLowerCase();
     let metaConnection: IntegrationsDeepLink['metaConnection'] = null;
     if (rawMeta === 'success' || rawMeta === 'connected') metaConnection = 'success';
@@ -62,8 +74,9 @@ export function parseIntegrationsDeepLink(url: string | null): IntegrationsDeepL
     else if (rawWa === 'cancelled' || rawWa === 'canceled') waConnection = 'cancelled';
     else if (rawWa === 'failed') waConnection = 'failed';
     const metaReason = parseMetaOAuthFailureReason(rawReason);
+    const waError = WA_ERRORS.has(rawWaError) ? rawWaError : null;
     const metaChannel = rawChannel === 'facebook' || rawChannel === 'instagram' ? rawChannel : null;
-    return { metaConnection, waConnection, metaReason, metaChannel };
+    return { metaConnection, waConnection, waError, metaReason, metaChannel };
   } catch {
     return null;
   }

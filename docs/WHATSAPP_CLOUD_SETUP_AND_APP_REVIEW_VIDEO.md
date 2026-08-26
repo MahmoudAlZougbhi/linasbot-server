@@ -128,16 +128,23 @@ Confirm: Integrations → WhatsApp shows **Connect** (not “Awaiting Meta App R
 **الرقم:** WhatsApp Business **coexistence** — التطبيق فاتح عالتلفون (مش API-only migration).  
 Pilot line للعيادة — **مش** رقم Monty. رقم تاني لمحاكاة العميل.
 
+Meta’s hosted selector **intentionally shows all choices** (Create a WhatsApp Business account, Connect a WhatsApp Business app, existing WABAs). Linas cannot hide those rows. The customer must pick **Connect a WhatsApp Business app**. Linas **rejects** generic `FINISH`, new-WABA, new-number, and existing-WABA Cloud API paths.
+
+`#2655122` happens inside Meta when the **new-number** path is used with a number already on WhatsApp. That is not a Linas overlay. Do **not** disconnect or migrate a live number to work around it.
+
+Advanced Access on coexistence is a **Meta gate**. Real coexistence = official finish event **plus** Graph `is_on_biz_app=true` and `platform_type=CLOUD_API`.
+
 **Steps:**
 
 1. Linas AI mobile → tenant **linas** → **Integrations** → **Connect WhatsApp**.
-2. Embedded Signup → اختار **WhatsApp Business App** (coexistence).
-3. بعد **Connected**:
+2. Confirm **Keep using WhatsApp Business App**, then continue to Meta.
+3. Inside Meta choose **Connect a WhatsApp Business app** only.
+4. بعد **Connected**:
    - **Test Message** → wa_id المستلم (أرقام فقط).
    - رسالة عميل من تلفون تاني → **AI reply** (CM منشور + credits).
    - رد يدوي من WhatsApp Business App → AI **paused** (`smb_message_echoes`).
    - **Resume AI** → inbound جديد يرد AI.
-4. Return path: `linasai://integrations` — **مش** Operator Login.
+5. Return path: `linasai://integrations` — **مش** Operator Login.
 
 **Optional — App Review bind API** (platform_owner, token in env only):
 
@@ -156,6 +163,7 @@ Record **both screens** where noted. No secrets on camera.
 - Integrations → Connect WhatsApp → Meta flow → **Connected**.
 - Show coexistence hint + verified name / last-4.
 - Narration: business keeps WhatsApp Business App open; Linas AI uses published CM only.
+- Meta may still show Create account / existing WABA rows. The film must pick **Connect a WhatsApp Business app**.
 
 ### Scene 2 — `whatsapp_business_messaging` (Test Message)
 
