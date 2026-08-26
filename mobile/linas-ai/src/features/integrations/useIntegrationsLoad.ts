@@ -115,8 +115,13 @@ export function useIntegrationsLoad({
         setError(parsed.waConnection === 'cancelled' ? tr('waOAuthCancelled') : tr('metaOAuthCancelled'));
       } else if (parsed.waConnection === 'failed' || parsed.metaConnection === 'failed') {
         setNotice(null);
-        if (parsed.waConnection === 'failed') setError(tr('waOAuthFailed'));
-        else setError(metaOAuthFailureMessage(tr, parsed.metaReason, parsed.metaChannel));
+        if (parsed.waConnection === 'failed') {
+          if (parsed.waError === 'coexistence_flow_required') setError(tr('waWrongFlow'));
+          else if (parsed.waError === 'meta_advanced_access_required') setError(tr('waAdvancedAccess'));
+          else if (parsed.waError === 'session_timeout' || parsed.waError === 'embedded_signup_timeout') {
+            setError(tr('waSessionTimeout'));
+          } else setError(tr('waOAuthFailed'));
+        } else setError(metaOAuthFailureMessage(tr, parsed.metaReason, parsed.metaChannel));
       }
       void load();
     };

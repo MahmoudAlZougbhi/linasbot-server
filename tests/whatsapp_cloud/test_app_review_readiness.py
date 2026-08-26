@@ -162,7 +162,8 @@ def test_readiness_and_webhook_http_auth(tmp_path, monkeypatch):
         bridge = client.get("/integrations/whatsapp/embedded-signup?state=x&config_id=cfg")
         assert bridge.status_code == 200
         assert "whatsapp_business_app_onboarding" in bridge.text
-        assert "Do not choose Add a new number" in bridge.text
+        assert "Connect a WhatsApp Business app" in bridge.text
+        assert "Add a new number" in bridge.text
     reset_engine_for_tests()
 
 

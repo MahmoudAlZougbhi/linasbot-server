@@ -142,6 +142,9 @@ async def whatsapp_oauth_callback(request: Request) -> Any:
     waba_id = params.get("waba_id") or params.get("wa_waba_id")
     phone_number_id = params.get("phone_number_id") or params.get("wa_phone_number_id")
     session_event = params.get("session_event")
+    session_type = params.get("session_type")
+    session_version = params.get("session_version")
+    business_id = params.get("business_id")
     try:
         result = await complete_embedded_signup(
             state=state,
@@ -151,6 +154,9 @@ async def whatsapp_oauth_callback(request: Request) -> Any:
             error=error,
             error_reason=error_reason,
             session_event=session_event,
+            session_type=session_type,
+            session_version=session_version,
+            business_id=business_id,
         )
         redirect = str(result.get("redirect_url") or "linasai://integrations?wa_connection=failed")
         return RedirectResponse(url=redirect, status_code=303)
@@ -183,6 +189,9 @@ async def whatsapp_cloud_connect_complete(request: Request, body: dict[str, Any]
             error=body.get("error"),
             error_reason=body.get("error_reason"),
             session_event=body.get("session_event"),
+            session_type=body.get("session_type"),
+            session_version=body.get("session_version"),
+            business_id=body.get("business_id"),
         )
         return result
     except WhatsAppSignupError as exc:

@@ -16,7 +16,10 @@ export type WhatsAppConnectErrorCode =
   | 'invalid_authorization_url'
   | 'browser_unavailable'
   | 'cancelled'
-  | 'failed';
+  | 'failed'
+  | 'coexistence_flow_required'
+  | 'meta_advanced_access_required'
+  | 'session_timeout';
 
 export class WhatsAppConnectError extends Error {
   readonly code: WhatsAppConnectErrorCode;
@@ -103,6 +106,21 @@ export async function startWhatsAppCloudConnect(): Promise<void> {
     }
     if (result.type === 'success') {
       const returned = result.url || '';
+      if (/wa_error=meta_advanced_access_required/i.test(returned)) {
+        throw new WhatsAppConnectError(
+          'meta_advanced_access_required',
+          'Meta still needs to approve this permission',
+        );
+      }
+      if (/wa_error=coexistence_flow_required/i.test(returned)) {
+        throw new WhatsAppConnectError(
+          'coexistence_flow_required',
+          'WhatsApp Business App connect was not completed',
+        );
+      }
+      if (/wa_error=(session_timeout|embedded_signup_timeout)/i.test(returned)) {
+        throw new WhatsAppConnectError('session_timeout', 'Meta signup timed out');
+      }
       if (/wa_connection=(failed|cancelled|canceled)/i.test(returned)) {
         throw new WhatsAppConnectError(
           /cancelled|canceled/i.test(returned) ? 'cancelled' : 'failed',

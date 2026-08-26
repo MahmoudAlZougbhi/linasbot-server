@@ -12,25 +12,45 @@ from services.meta_app_registry import APP_A_EXPECTED_ID, APP_A_KEY, get_meta_ap
 from services.meta_oauth_return import oauth_completion_redirect_url
 from services.whatsapp_cloud.config import (
     WHATSAPP_COEXISTENCE_FEATURE,
+    WHATSAPP_OPTIONAL_SCOPES,
     WHATSAPP_REQUIRED_SCOPES,
     get_whatsapp_cloud_flags,
 )
+from services.whatsapp_cloud.embedded_signup_proof import prove_coexistence_phone
 from services.whatsapp_cloud.embedded_signup_session import (
     SignupAssetError,
-    resolve_signup_phone,
+    assert_coexistence_session,
+    assert_not_placeholder_id,
     session_event_is_cancel,
 )
+from services.whatsapp_cloud.embedded_signup_token import validate_embedded_signup_token
 from services.whatsapp_cloud.entitlement import WhatsAppEntitlementError, assert_whatsapp_connection_allowed
 from services.whatsapp_cloud.graph_client import (
     WhatsAppGraphError,
     debug_token,
     exchange_embedded_signup_code,
-    fetch_waba_phone_numbers,
     initiate_smb_app_data_sync,
     subscribe_waba_webhooks,
 )
 from services.whatsapp_cloud.observability import emit_wa_event
 from services.whatsapp_cloud.repository import WhatsAppCloudRepository, connection_public_view
+
+_CANCEL_ERRORS = frozenset({"access_denied", "user_cancelled", "cancelled", "canceled"})
+_FRIENDLY_FAIL_ERRORS = frozenset(
+    {
+        "coexistence_flow_required",
+        "meta_advanced_access_required",
+        "advanced_access_required",
+        "session_timeout",
+        "embedded_signup_timeout",
+        "embedded_signup_error",
+        "meta_embedded_signup_error",
+        "session_version_invalid",
+        "login_failed",
+        "missing_code",
+        "session_error",
+    }
+)
 
 
 class WhatsAppSignupError(RuntimeError):
@@ -47,6 +67,26 @@ def _app_a_secrets() -> tuple[str, str]:
     if app is None or not app.enabled or app.app_id != APP_A_EXPECTED_ID:
         raise WhatsAppSignupError("app_a_unavailable", "Meta App A is not configured", http_status=503)
     return app.app_id, app.app_secret
+
+
+def _wa_redirect(
+    return_surface: str,
+    *,
+    status: str,
+    correlation_id: str,
+    error_code: str | None = None,
+) -> str:
+    extra: dict[str, str] = {"wa_connection": status, "correlation_id": correlation_id}
+    if error_code:
+        extra["wa_error"] = error_code
+    if return_surface == "mobile":
+        return f"linasai://integrations?{urlencode(extra)}"
+    meta_status = "success" if status == "success" else ("cancelled" if status == "cancelled" else "failed")
+    return oauth_completion_redirect_url(
+        return_surface="web",
+        meta_connection=meta_status,
+        extra_query=extra,
+    )
 
 
 def start_embedded_signup(
@@ -110,8 +150,21 @@ def start_embedded_signup(
             "correlation_id": attempt.correlation_id,
             "feature_type": WHATSAPP_COEXISTENCE_FEATURE,
             "expires_at": attempt.expires_at.isoformat(),
-            # Never return secrets/tokens.
         }
+
+
+def _fail_attempt(
+    repo: WhatsAppCloudRepository,
+    attempt: Any,
+    *,
+    code: str,
+    detail: str | None,
+    status: str,
+) -> None:
+    try:
+        repo.consume_attempt(attempt, outcome_code=code, outcome_detail=(detail or "")[:255] or None, status=status)
+    except ValueError as exc:
+        raise WhatsAppSignupError(str(exc), "state not consumable") from exc
 
 
 async def complete_embedded_signup(
@@ -123,14 +176,19 @@ async def complete_embedded_signup(
     error: str | None = None,
     error_reason: str | None = None,
     session_event: str | None = None,
+    session_type: str | None = None,
+    session_version: str | None = None,
+    business_id: str | None = None,
 ) -> dict[str, Any]:
-    """Exchange code, verify assets, persist connection, subscribe WABA. No credentials to client."""
+    """Exchange code only after coexistence finish + Graph proof. Never register."""
 
     nonce = str(state or "").strip()
     if not nonce:
         raise WhatsAppSignupError("missing_state", "state is required")
-    if session_event_is_cancel(session_event or ""):
+    reported_event = str(session_event or "").strip()
+    if session_event_is_cancel(reported_event):
         error = error or "user_cancelled"
+    inbound_error = str(error or "").strip()
     state_hash = hashlib.sha256(nonce.encode("utf-8")).hexdigest()
 
     with whatsapp_session() as session:
@@ -142,46 +200,54 @@ async def complete_embedded_signup(
         tenant_id = attempt.tenant_id
         actor = attempt.actor_user_id
         correlation_id = attempt.correlation_id
+        event_detail = reported_event or inbound_error or None
 
-        if error or not code:
-            try:
-                repo.consume_attempt(
-                    attempt,
-                    outcome_code=str(error or "cancelled"),
-                    outcome_detail=(error_reason or "")[:255] or None,
-                    status="cancelled"
-                    if (error or "").lower() in {"access_denied", "user_cancelled", "cancelled"}
-                    else "failed",
-                )
-            except ValueError as exc:
-                raise WhatsAppSignupError(str(exc), "state not consumable") from exc
-            emit_wa_event(
-                "connection_failure",
-                tenant_id=tenant_id,
-                correlation_id=correlation_id,
-                reason=str(error or "cancelled"),
-            )
-            redirect = oauth_completion_redirect_url(
-                return_surface="mobile" if return_surface == "mobile" else "web",
-                meta_connection="cancelled"
-                if (error or "").lower() in {"access_denied", "user_cancelled", "cancelled"}
-                else "failed",
-                extra_query={"wa_connection": "cancelled" if error else "failed", "correlation_id": correlation_id},
-            )
-            # Mobile deep-link uses meta_connection; also include wa_connection for WA card.
-            if return_surface == "mobile":
-                from urllib.parse import urlencode as _ue
-
-                status = (
-                    "cancelled"
-                    if (error or "").lower() in {"access_denied", "user_cancelled", "cancelled"}
-                    else "failed"
-                )
-                redirect = f"linasai://integrations?{_ue({'wa_connection': status, 'correlation_id': correlation_id})}"
-            return {"success": False, "redirect_url": redirect, "correlation_id": correlation_id}
+        if inbound_error in _FRIENDLY_FAIL_ERRORS or inbound_error.lower() in _CANCEL_ERRORS or not code:
+            status = "cancelled" if inbound_error.lower() in _CANCEL_ERRORS else "failed"
+            outcome = inbound_error or "cancelled"
+            _fail_attempt(repo, attempt, code=outcome, detail=event_detail, status=status)
+            emit_wa_event("connection_failure", tenant_id=tenant_id, correlation_id=correlation_id, reason=outcome)
+            redirect_status = "cancelled" if status == "cancelled" else "failed"
+            return {
+                "success": False,
+                "redirect_url": _wa_redirect(
+                    return_surface,
+                    status=redirect_status,
+                    correlation_id=correlation_id,
+                    error_code=outcome if outcome in _FRIENDLY_FAIL_ERRORS else None,
+                ),
+                "correlation_id": correlation_id,
+                "error": outcome,
+            }
 
         try:
-            repo.consume_attempt(attempt, outcome_code="code_received", status="consumed")
+            assert_coexistence_session(
+                session_type=session_type,
+                session_event=reported_event,
+                session_version=session_version,
+            )
+        except SignupAssetError as exc:
+            _fail_attempt(repo, attempt, code=exc.code, detail=reported_event, status="failed")
+            emit_wa_event("connection_failure", tenant_id=tenant_id, correlation_id=correlation_id, reason=exc.code)
+            return {
+                "success": False,
+                "redirect_url": _wa_redirect(
+                    return_surface,
+                    status="failed",
+                    correlation_id=correlation_id,
+                    error_code=exc.code,
+                ),
+                "correlation_id": correlation_id,
+                "error": exc.code,
+            }
+
+        try:
+            repo.consume_attempt(
+                attempt,
+                outcome_code="code_received",
+                outcome_detail=f"event={reported_event}"[:255],
+                status="consumed",
+            )
         except ValueError as exc:
             raise WhatsAppSignupError(str(exc), "state not consumable") from exc
 
@@ -199,38 +265,14 @@ async def complete_embedded_signup(
             if not access_token:
                 raise WhatsAppGraphError("missing_token", "token exchange returned no access_token")
             dbg = await debug_token(input_token=access_token, app_id=app_id, app_secret=app_secret)
-            scopes_raw = dbg.get("scopes") if isinstance(dbg, dict) else None
-            scopes = [str(s) for s in scopes_raw] if isinstance(scopes_raw, list) else []
-            granted = set(scopes)
-            if not WHATSAPP_REQUIRED_SCOPES.issubset(granted):
-                raise WhatsAppSignupError(
-                    "scopes_missing",
-                    "Embedded Signup did not grant required WhatsApp permissions",
-                    http_status=403,
-                )
-            # Asset IDs come from sessionInfo. Coexistence FINISH often omits phone_number_id.
-            waba = str(waba_id or "").strip()
-            try:
-                from services.whatsapp_cloud.embedded_signup_session import assert_not_placeholder_id
-
-                assert_not_placeholder_id(waba, field="waba_id")
-            except SignupAssetError as exc:
-                raise WhatsAppSignupError(exc.code, exc.message) from exc
-            phones = await fetch_waba_phone_numbers(access_token=access_token, waba_id=waba)
-            try:
-                matched = resolve_signup_phone(
-                    waba_id=waba,
-                    phone_number_id=phone_number_id,
-                    phones=phones,
-                )
-            except SignupAssetError as exc:
-                http_status = 403 if exc.code == "phone_not_in_waba" else 400
-                raise WhatsAppSignupError(exc.code, exc.message, http_status=http_status) from exc
+            waba = assert_not_placeholder_id(str(waba_id or "").strip(), field="waba_id")
+            granted = validate_embedded_signup_token(dbg, waba_id=waba)
+            matched = await prove_coexistence_phone(
+                access_token=access_token,
+                waba_id=waba,
+                phone_number_id=str(phone_number_id or "").strip() or None,
+            )
             phone = str(matched.get("id") or "").strip()
-            # Fail closed: never allow ordinary API Setup path — coexistence feature only.
-            if attempt.feature_type != WHATSAPP_COEXISTENCE_FEATURE:
-                raise WhatsAppSignupError("coexistence_required", "only coexistence onboarding is permitted")
-
             display = str(matched.get("display_phone_number") or "")
             verified_name = str(matched.get("verified_name") or "")
             conn = repo.create_connection_with_credential(
@@ -243,7 +285,7 @@ async def complete_embedded_signup(
                 display_phone_number=display,
                 verified_name=verified_name,
                 access_token=access_token,
-                scopes=sorted(granted & (WHATSAPP_REQUIRED_SCOPES | {"business_management"})),
+                scopes=sorted(set(granted) & (WHATSAPP_REQUIRED_SCOPES | WHATSAPP_OPTIONAL_SCOPES)),
             )
             sub = await subscribe_waba_webhooks(access_token=access_token, waba_id=waba)
             fields = [
@@ -256,7 +298,6 @@ async def complete_embedded_signup(
                 "phone_number_quality_update",
             ]
             repo.mark_connection_connected(conn, webhook_fields=fields)
-            # Same as Facebook/Instagram: Connect turns Messages ON. The switch only controls AI.
             conn.ai_default_enabled = True
             sync_started = False
             try:
@@ -281,6 +322,7 @@ async def complete_embedded_signup(
             conn.history_sync_status = "pending" if sync_started else "skipped"
             attempt.status = "completed"
             attempt.outcome_code = "connected"
+            attempt.outcome_detail = f"event={reported_event}"[:255]
             repo.add_audit(
                 tenant_id=tenant_id,
                 connection_id=conn.id,
@@ -288,61 +330,58 @@ async def complete_embedded_signup(
                 event_type="connection_completed",
                 detail={
                     "correlation_id": correlation_id,
-                    "session_event": (session_event or "")[:80],
-                    "waba_masked": waba[:3] + "…" + waba[-3:],
-                    "phone_masked": phone[:3] + "…" + phone[-3:],
+                    "session_event": reported_event[:80],
+                    "session_version": str(session_version or "")[:16],
+                    "waba_masked": "***" + waba[-3:] if len(waba) >= 3 else "***",
+                    "phone_masked": "***" + phone[-3:] if len(phone) >= 3 else "***",
                     "subscribe_ok": bool(sub.get("success", True)),
                     "is_on_biz_app": matched.get("is_on_biz_app"),
                     "platform_type": matched.get("platform_type"),
+                    "quality_rating": str(matched.get("quality_rating") or ""),
                     "history_sync_started": sync_started,
+                    "coexistence_mode": conn.coexistence_mode,
+                    "business_id_present": bool(str(business_id or "").strip()),
                 },
             )
             emit_wa_event("connection_completed", tenant_id=tenant_id, connection_id=conn.id)
             view = connection_public_view(conn, ai_eligible=True, rollout_blocked_reason=None)
-            if return_surface == "mobile":
-                from urllib.parse import urlencode as _ue
-
-                redirect = (
-                    f"linasai://integrations?{_ue({'wa_connection': 'success', 'correlation_id': correlation_id})}"
-                )
-            else:
-                redirect = oauth_completion_redirect_url(
-                    return_surface="web",
-                    meta_connection="success",
-                    extra_query={"wa_connection": "success", "correlation_id": correlation_id},
-                )
             return {
                 "success": True,
-                "redirect_url": redirect,
+                "redirect_url": _wa_redirect(return_surface, status="success", correlation_id=correlation_id),
                 "correlation_id": correlation_id,
                 "connection": view,
             }
-        except (WhatsAppGraphError, WhatsAppEntitlementError, WhatsAppSignupError, PermissionError) as exc:
-            code_name = getattr(exc, "code", type(exc).__name__)
+        except (
+            SignupAssetError,
+            WhatsAppGraphError,
+            WhatsAppEntitlementError,
+            WhatsAppSignupError,
+            PermissionError,
+        ) as exc:
+            code_name = str(getattr(exc, "code", type(exc).__name__))[:80]
+            attempt.status = "failed"
+            attempt.outcome_code = code_name
+            attempt.outcome_detail = reported_event[:255] or None
             repo.add_audit(
                 tenant_id=tenant_id,
                 actor_user_id=actor,
                 event_type="connection_failure",
-                detail={"correlation_id": correlation_id, "error_code": str(code_name)},
+                detail={"correlation_id": correlation_id, "error_code": code_name},
             )
             emit_wa_event(
                 "connection_failure",
                 tenant_id=tenant_id,
                 correlation_id=correlation_id,
-                reason=str(code_name),
+                reason=code_name,
             )
-            if return_surface == "mobile":
-                from urllib.parse import urlencode as _ue
-
-                redirect = (
-                    f"linasai://integrations?{_ue({'wa_connection': 'failed', 'correlation_id': correlation_id})}"
-                )
-            else:
-                redirect = oauth_completion_redirect_url(
-                    return_surface="web",
-                    meta_connection="failed",
-                    extra_query={"wa_connection": "failed", "correlation_id": correlation_id},
-                )
-            if isinstance(exc, WhatsAppSignupError):
-                raise
-            raise WhatsAppSignupError(str(code_name), "WhatsApp connection failed", http_status=400) from exc
+            return {
+                "success": False,
+                "redirect_url": _wa_redirect(
+                    return_surface,
+                    status="failed",
+                    correlation_id=correlation_id,
+                    error_code=code_name,
+                ),
+                "correlation_id": correlation_id,
+                "error": code_name,
+            }

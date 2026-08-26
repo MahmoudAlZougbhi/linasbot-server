@@ -15,6 +15,8 @@ describe('whatsapp cloud mobile return + card', () => {
     const link = read('app/integrationsDeepLink.ts');
     assert.match(link, /wa_connection/);
     assert.match(link, /waConnection/);
+    assert.match(link, /wa_error/);
+    assert.match(link, /coexistence_flow_required/);
     assert.doesNotMatch(link, /access_token/);
   });
 
@@ -34,10 +36,14 @@ describe('whatsapp cloud mobile return + card', () => {
 
   it('WhatsApp card never asks for pasted tokens', () => {
     const card = read('features/integrations/WhatsAppCloudCard.tsx');
+    const confirm = read('features/integrations/WhatsAppCoexistenceConfirm.tsx');
     assert.match(card, /startWhatsAppCloudConnect|fetchWhatsAppCloudStatus/);
     assert.match(card, /waStateAwaitingMetaApproval|awaitingMeta/);
     assert.match(card, /waDoNotAddNewNumber/);
     assert.match(card, /waCoexistenceHint/);
+    assert.match(card, /WhatsAppCoexistenceConfirm/);
+    assert.match(confirm, /waKeepUsingTitle/);
+    assert.match(confirm, /waConfirmContinue/);
     assert.doesNotMatch(card, /paste.*(token|waba|phone)/i);
   });
 
@@ -56,6 +62,7 @@ describe('whatsapp cloud mobile return + card', () => {
     assert.match(hook, /if \(waBusy\) return/);
     assert.match(hook, /WhatsAppConnectError/);
     assert.match(hook, /waOAuthCancelled/);
+    assert.match(hook, /waWrongFlow|waAdvancedAccess/);
     assert.match(hook, /waConnectBrowserUnavailable|waConnectConfigMissing/);
   });
 

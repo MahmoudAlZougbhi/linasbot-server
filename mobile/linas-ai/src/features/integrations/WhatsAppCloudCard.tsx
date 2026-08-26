@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ApiError } from '../../api/client';
@@ -6,6 +7,7 @@ import { colors, fonts } from '../../theme';
 import { ChannelCapabilityToggles } from './ChannelCapabilityToggles';
 import { IntegrationCardShell } from './IntegrationCardShell';
 import { WhatsAppCloudOpsPanel } from './WhatsAppCloudOpsPanel';
+import { WhatsAppCoexistenceConfirm } from './WhatsAppCoexistenceConfirm';
 import {
   fetchWhatsAppCloudStatus,
   startWhatsAppCloudConnect,
@@ -50,6 +52,7 @@ export function WhatsAppCloudCard({
   onNotice,
 }: Props) {
   const { tr } = useI18n();
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const lifecycle = status?.lifecycle_status || 'disconnected';
   const connected = lifecycle === 'connected';
@@ -79,14 +82,30 @@ export function WhatsAppCloudCard({
         showConnect={!connected && connectable}
         showMenu={connected}
         showHealth={healthy}
-        onConnect={onConnect}
+        onConnect={() => {
+          if (busy) return;
+          setConfirmOpen(true);
+        }}
         onMenu={onOpenMenu}
       >
-        {!connected && connectable ? (
+        {!connected && connectable && confirmOpen ? (
+          <WhatsAppCoexistenceConfirm
+            busy={busy}
+            onConfirm={() => {
+              setConfirmOpen(false);
+              onConnect();
+            }}
+            onCancel={() => setConfirmOpen(false)}
+          />
+        ) : null}
+        {!connected && connectable && !confirmOpen ? (
           <>
             <Text style={styles.hint}>{tr('waCoexistenceHint')}</Text>
             <Text style={styles.hint}>{tr('waDoNotAddNewNumber')}</Text>
           </>
+        ) : null}
+        {connected && conn?.coexistence_mode ? (
+          <Text style={styles.hint}>{tr('waCoexistenceOn')}</Text>
         ) : null}
         {awaitingMeta && !connected ? (
           <Text style={styles.warn}>
