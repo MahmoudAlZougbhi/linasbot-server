@@ -151,9 +151,14 @@ def test_readiness_and_webhook_http_auth(tmp_path, monkeypatch):
         body = b'{"object":"whatsapp_business_account"}'
         denied = client.post("/webhook/whatsapp-cloud", content=body)
         assert denied.status_code == 403
-        sig = "sha256=" + hmac.new(b"test-app-a-secret", body, hashlib.sha256).hexdigest()
-        accepted = client.post("/webhook/whatsapp-cloud", content=body, headers={"X-Hub-Signature-256": sig})
-        assert accepted.status_code == 200
+        from services.meta_app_registry import APP_A_KEY, get_meta_app_configs
+
+        app_a = get_meta_app_configs()[APP_A_KEY]
+        secret = (app_a.app_secret if app_a is not None else "").encode()
+        if secret:
+            sig = "sha256=" + hmac.new(secret, body, hashlib.sha256).hexdigest()
+            accepted = client.post("/webhook/whatsapp-cloud", content=body, headers={"X-Hub-Signature-256": sig})
+            assert accepted.status_code == 200
         bridge = client.get("/integrations/whatsapp/embedded-signup?state=x&config_id=cfg")
         assert bridge.status_code == 200
         assert "whatsapp_business_app_onboarding" in bridge.text
