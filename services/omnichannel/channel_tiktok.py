@@ -40,7 +40,14 @@ async def deliver_tiktok(snapshot: dict[str, Any]) -> dict[str, Any]:
                 text=text,
             )
         except Exception as exc:
-            return {"error": type(exc).__name__, "submitted": True, "malformed": "json" in str(exc).lower()}
+            name = type(exc).__name__
+            reset = name in {"ConnectionError", "ConnectionResetError", "ConnectError", "ConnectTimeout"}
+            return {
+                "error": name,
+                "submitted": False,
+                "reset_before_submit": reset,
+                "malformed": "JSON" in name or "json" in str(exc).lower(),
+            }
         return {
             "http_status": 200,
             "submitted": True,
@@ -64,7 +71,9 @@ async def deliver_tiktok(snapshot: dict[str, Any]) -> dict[str, Any]:
             text=text,
         )
     except Exception as exc:
-        return {"error": type(exc).__name__, "submitted": True}
+        name = type(exc).__name__
+        reset = name in {"ConnectionError", "ConnectionResetError", "ConnectError", "ConnectTimeout"}
+        return {"error": name, "submitted": False, "reset_before_submit": reset}
     return {
         "http_status": 200,
         "submitted": True,

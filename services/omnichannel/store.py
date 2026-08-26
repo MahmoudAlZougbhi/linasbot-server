@@ -153,6 +153,17 @@ def conversation_has_earlier_unfinished(
     return found is not None
 
 
+def operator_takeover_blocks_ai(session: Session, *, conversation_key: str, control_epoch: int) -> bool:
+    epoch = session.scalar(
+        select(func.max(OmnichannelOutboundOutbox.control_epoch)).where(
+            OmnichannelOutboundOutbox.conversation_key == conversation_key,
+            OmnichannelOutboundOutbox.source == "operator",
+            OmnichannelOutboundOutbox.state != "dead_letter",
+        )
+    )
+    return int(epoch or 0) > int(control_epoch)
+
+
 def list_retryable_outbound(session: Session) -> list[OmnichannelOutboundOutbox]:
     now = _now()
     rows = session.scalars(

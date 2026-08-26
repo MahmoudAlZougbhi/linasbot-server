@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from db.session import whatsapp_session
+from services.omnichannel.metrics import incr
 from services.tiktok_business.config import MAX_COMMENT_PAGES_PER_VIDEO, MAX_VIDEOS_PER_SYNC
 from services.tiktok_business.errors import TikTokApiError
 from services.tiktok_business.http_client import tiktok_request
@@ -44,6 +45,16 @@ def should_enqueue_comment_ai(
     if comment_at is None or connected is None:
         return False
     return comment_at >= connected
+
+
+def persist_comment_page_cursor(*, page_number: int, page_limit: int, has_more: bool, cursor: str) -> tuple[str, bool]:
+    """Return (cursor_to_store, truncated). Empty cursor means this video is complete."""
+    token = str(cursor or "").strip()
+    if not has_more or not token:
+        return "", False
+    if int(page_number) >= int(page_limit):
+        return token, True
+    return token, False
 
 
 def enqueue_tiktok_comment_ai(*, tenant_id: str, connection_id: str, comment_id: str, item_id: str) -> None:
@@ -141,8 +152,8 @@ async def sync_connection_comments(*, tenant_id: str, connection_id: str, owner:
                 create_time=raw.get("create_time"),
                 status=str(raw.get("status") or ""),
             )
-            comment_cursor = ""
-            for _page in range(MAX_COMMENT_PAGES_PER_VIDEO):
+            comment_cursor = str(getattr(media, "comment_cursor", "") or "")
+            for page_number in range(1, MAX_COMMENT_PAGES_PER_VIDEO + 1):
                 try:
                     comments_payload = await _list_comments(
                         access_token=token, open_id=open_id, video_id=item_id, cursor=comment_cursor
@@ -168,10 +179,19 @@ async def sync_connection_comments(*, tenant_id: str, connection_id: str, owner:
                         new_comments.append((row.comment_id, item_id))
                 comment_cursor = str(comments_payload.get("cursor") or comments_payload.get("next_cursor") or "")
                 has_more = bool(comments_payload.get("has_more") or comments_payload.get("has_more_comments"))
+                stored, truncated = persist_comment_page_cursor(
+                    page_number=page_number,
+                    page_limit=MAX_COMMENT_PAGES_PER_VIDEO,
+                    has_more=has_more,
+                    cursor=comment_cursor,
+                )
+                media.comment_cursor = stored
                 media.last_comment_sync_at = _utcnow()
-                if not has_more or not comment_cursor:
+                if truncated:
+                    incr("tiktok_comment_pagination_truncated")
                     break
-            media.comment_cursor = ""
+                if not stored:
+                    break
             processed_videos += 1
         connection.last_sync_at = _utcnow()
         connection.sync_cursor = ""

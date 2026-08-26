@@ -61,7 +61,12 @@ def accept_and_enqueue(event: NormalizedInbound) -> tuple[str, bool]:
                 conversation_key=event.conversation_key,
             )
         except Exception as exc:
-            session.rollback()
+            from db.models.omnichannel import OmnichannelInboundEvent
+
+            stuck = session.get(OmnichannelInboundEvent, inbound_id)
+            if stuck is not None and stuck.state == "accepted":
+                session.delete(stuck)
+            session.commit()
             incr("inbound_enqueue_failed")
             raise InboundAcceptError("durable_enqueue_failed") from exc
         row.state = "queued"

@@ -7,6 +7,7 @@ import time
 from typing import Any
 
 from services.omnichannel.contract import NormalizedInbound
+from services.omnichannel.metrics import incr
 from services.omnichannel.store import payload_hash, persist_inbound
 
 _log = logging.getLogger("uvicorn.error")
@@ -19,8 +20,14 @@ def dual_write_inbound(event: NormalizedInbound) -> None:
         with whatsapp_session() as session:
             persist_inbound(session, event)
             session.commit()
-    except Exception:
-        _log.warning("[omnichannel] dual_write_failed channel=%s surface=%s", event.channel, event.surface)
+    except Exception as exc:
+        incr("dual_write_failed")
+        _log.warning(
+            "[omnichannel] dual_write_failed channel=%s surface=%s error_type=%s",
+            event.channel,
+            event.surface,
+            type(exc).__name__,
+        )
 
 
 def mirror_meta_inbound(record: Any) -> None:

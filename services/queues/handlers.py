@@ -14,6 +14,10 @@ class PermanentJobError(Exception):
     """Non-retryable failure — worker should DLQ and refund reservation."""
 
 
+class JobNotReady(Exception):
+    """Retry without consuming a hard attempt (conversation order wait)."""
+
+
 async def handle_publish_scheduled(job: QueueJob) -> dict[str, Any]:
     from services.schedule_service import schedule_service
 

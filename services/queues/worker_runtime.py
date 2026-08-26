@@ -10,7 +10,7 @@ from typing import Any
 
 from services.omnichannel.worker_pool import run_bounded_pool
 from services.queues.config import DEFAULT_TENANT_INFLIGHT, redis_url
-from services.queues.handlers import PermanentJobError, get_handler
+from services.queues.handlers import JobNotReady, PermanentJobError, get_handler
 from services.queues.redis_backend import RedisQueueBackend
 from services.scale.shutdown import shutdown_coordinator
 
@@ -59,7 +59,7 @@ class WorkerRuntime:
                 return None
             return max(0.05, float(decision.retry_after_seconds))
         except Exception:
-            return None
+            return 5.0
 
     def _release_provider(self, job: Any) -> None:
         try:
@@ -69,54 +69,103 @@ class WorkerRuntime:
         except Exception:
             pass
 
+    def _requeue(self, job: Any, delay_seconds: float) -> None:
+        try:
+            self._backend.requeue_soft(job, delay_seconds=delay_seconds)
+        except Exception:
+            pass
+
+    def _fail(self, job: Any, *, error: str, retry: bool) -> bool:
+        try:
+            return bool(self._backend.fail(job, error=error, retry=retry))
+        except Exception:
+            return False
+
     async def _process_one(self) -> None:
+        try:
+            await self._process_one_inner()
+        except Exception:
+            await asyncio.sleep(0.5)
+
+    async def _process_one_inner(self) -> None:
         if self._stopping or not shutdown_coordinator.accept_queue_work:
             await asyncio.sleep(0.05)
             return
-        self._backend.heartbeat(worker_id=self.worker_id, queue=self.queue)
-        job = self._backend.claim(self.queue, worker_id=self.worker_id, timeout=3)
+        try:
+            self._backend.heartbeat(worker_id=self.worker_id, queue=self.queue)
+            job = self._backend.claim(self.queue, worker_id=self.worker_id, timeout=3)
+        except Exception:
+            await asyncio.sleep(0.5)
+            return
         if job is None:
             return
         if not shutdown_coordinator.track_job_enter():
-            self._backend.requeue_soft(job, delay_seconds=0.2)
+            self._requeue(job, 0.2)
             return
         conv_lease = None
         held_inflight = False
+        counted_inflight = False
         try:
-            if self._backend.tenant_inflight(job.tenant_id) >= DEFAULT_TENANT_INFLIGHT:
-                self._backend.requeue_soft(job, delay_seconds=1.0)
+            try:
+                busy = self._backend.tenant_inflight(job.tenant_id) >= DEFAULT_TENANT_INFLIGHT
+            except Exception:
+                self._requeue(job, 0.5)
+                await asyncio.sleep(0.5)
+                return
+            if busy:
+                self._requeue(job, 1.0)
                 return
             delay = self._provider_gate(job)
             if delay is not None:
-                self._backend.requeue_soft(job, delay_seconds=delay)
+                self._requeue(job, delay)
                 return
             held_inflight = True
             conv_key = self._conversation_key(job)
             if conv_key:
                 from services.scale.conversation_lock import ConversationLock
 
-                conv_lease = ConversationLock().try_acquire(conv_key, ttl_seconds=max(30, int(job.timeout_seconds)))
-                if conv_lease is None:
-                    self._backend.requeue_soft(job, delay_seconds=0.5)
+                try:
+                    conv_lease = ConversationLock().try_acquire(conv_key, ttl_seconds=max(30, int(job.timeout_seconds)))
+                except Exception:
+                    self._requeue(job, 0.5)
+                    await asyncio.sleep(0.5)
                     return
-            self._backend.incr_tenant_inflight(job.tenant_id)
+                if conv_lease is None:
+                    self._requeue(job, 0.5)
+                    return
+            try:
+                self._backend.incr_tenant_inflight(job.tenant_id)
+                counted_inflight = True
+            except Exception:
+                self._requeue(job, 0.5)
+                await asyncio.sleep(0.5)
+                return
             try:
                 handler = get_handler(job.job_type)
                 if handler is None:
-                    self._backend.fail(job, error=f"unknown_job_type:{job.job_type}", retry=False)
+                    self._fail(job, error=f"unknown_job_type:{job.job_type}", retry=False)
                     self._refund_if_needed(job)
                     return
                 await asyncio.wait_for(handler(job), timeout=job.timeout_seconds)
-                self._backend.complete(job)
+                try:
+                    self._backend.complete(job)
+                except Exception:
+                    await asyncio.sleep(0.5)
+            except JobNotReady:
+                self._requeue(job, 0.2)
             except PermanentJobError as exc:
-                self._backend.fail(job, error=f"PermanentJobError:{exc}", retry=False)
+                self._fail(job, error=f"PermanentJobError:{exc}", retry=False)
                 self._refund_if_needed(job)
             except Exception as exc:
-                went_dead = self._backend.fail(job, error=f"{type(exc).__name__}:{exc}", retry=True)
+                went_dead = self._fail(job, error=f"{type(exc).__name__}:{exc}", retry=True)
                 if went_dead:
                     self._refund_if_needed(job)
             finally:
-                self._backend.decr_tenant_inflight(job.tenant_id)
+                if counted_inflight:
+                    try:
+                        self._backend.decr_tenant_inflight(job.tenant_id)
+                    except Exception:
+                        pass
         finally:
             if held_inflight:
                 self._release_provider(job)
