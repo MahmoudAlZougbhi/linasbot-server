@@ -7,7 +7,7 @@ export const PUBLIC_SITE = {
   heroHeadline: 'Talk to Linas. Linas talks to your customers.',
   heroKicker: 'AI customer care, trained by you',
   heroSupport:
-    'Teach Linas about your business once. It replies across every connected channel, collects order and appointment details, and sends each request to your app—ready for you or your team to review.',
+    'Teach Linas about your business once. It replies across every connected channel—while you stay in control.',
   heroConnect: 'Connect once. Reply everywhere.',
   metaPlatformDataUse:
     'Linas AI is a business customer-support platform that helps companies answer customers using knowledge each business approves. With each client’s permission, we may process inquiries on Facebook, Instagram, WhatsApp, and TikTok when that client connects those accounts through official platform integrations. We use account details and customer messages from those platforms only to receive inquiries, send automated replies from approved business knowledge, support Owner chat and AI Setup for that client, and direct customers to the client’s chosen contact channel when booking or human assistance is needed. Each client connects only business accounts it owns or is authorized to manage.',

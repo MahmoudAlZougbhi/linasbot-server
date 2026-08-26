@@ -1,67 +1,52 @@
-import LinasStar from './LinasStar';
+import HowItWorksPath from './HowItWorksPath';
 import HowItWorksPhone from './HowItWorksPhone';
+import HowItWorksStand from './HowItWorksStand';
+import LinasStar from './LinasStar';
 import { ChatGlyph, CoinGlyph, DocGlyph } from './HowItWorksIcons';
 
 const FLOATS = [
-  { Icon: CoinGlyph, title: 'Credits', value: '12,480 remaining', className: 'left-0 top-[18%] lg:-left-6' },
-  { Icon: ChatGlyph, title: 'Replies', value: '88 total replies', className: 'right-0 top-[38%] lg:-right-10' },
-  { Icon: DocGlyph, title: 'Requests', value: '12 total requests', className: 'right-[4%] bottom-[22%] lg:-right-4' },
+  { Icon: CoinGlyph, title: 'Credits', value: '12,480', hint: 'remaining', className: 'hiw-float-credits' },
+  { Icon: ChatGlyph, title: 'Replies', value: '88', hint: 'total replies', className: 'hiw-float-replies' },
+  { Icon: DocGlyph, title: 'Requests', value: '12', hint: 'total requests', className: 'hiw-float-requests' },
 ];
 
 /**
  * @param {{
  *   step: { n: string, kicker: string, image: string, alt: string, builtScreen?: string },
- *   prev?: { n: string, kicker: string } | null,
- *   next?: { n: string, kicker: string } | null,
+ *   prev?: { n: string, kicker: string, image: string } | null,
+ *   next?: { n: string, kicker: string, image: string } | null,
  * }} props
  */
 export default function HowItWorksStage({ step, prev, next }) {
   return (
-    <div className="hiw-stage mx-auto flex min-h-[40rem] w-full max-w-[34rem] items-center justify-center">
-      <svg className="hiw-path" viewBox="0 0 400 720" preserveAspectRatio="none" aria-hidden="true">
-        <path
-          className="hiw-path-line"
-          d="M210 8 C 70 90, 340 150, 188 248 C 40 340, 360 410, 200 510 C 70 590, 310 650, 188 712"
-        />
-        <circle className="hiw-node" cx="188" cy="248" r="6" />
-        <circle className="hiw-node hiw-node-active" cx="200" cy="510" r="7" />
-        <circle className="hiw-node" cx="188" cy="712" r="5.5" />
-        {prev ? (
-          <text className="hiw-path-label" x="214" y="244">
-            {prev.n} {titleCase(prev.kicker)}
-          </text>
-        ) : null}
-        <text className="hiw-path-label hiw-path-label-active" x="226" y="506">
-          {step.n} {titleCase(step.kicker)}
-        </text>
-        {next ? (
-          <text className="hiw-path-label" x="214" y="708">
-            {next.n} {titleCase(next.kicker)}
-          </text>
-        ) : null}
-      </svg>
-      <span className="absolute left-[46%] top-[66%] z-[3] text-[#3dffc2]" aria-hidden="true">
-        <LinasStar className="h-7 w-7 drop-shadow-[0_0_10px_rgba(61,255,194,0.9)]" color="#3dffc2" />
+    <div className="hiw-stage relative mx-auto flex min-h-[48rem] w-full max-w-[52rem] items-center justify-center overflow-visible pb-10">
+      <span className="hiw-mark-star" aria-hidden="true">
+        <span className="hiw-mark-star-glow" />
+        <LinasStar className="hiw-mark-star-icon" color="#3dffc2" showMark={false} />
       </span>
+      <HowItWorksPath step={step} prev={prev} next={next} />
       {FLOATS.map((item) => (
         <div key={item.title} className={`hiw-float ${item.className}`}>
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#E8F7F1] text-[#06715F]">
+          <span className="flex h-10 w-10 items-center justify-center rounded-[0.9rem] bg-[#E8FBF4] text-[#00C9A0]">
             <item.Icon className="h-4 w-4" />
           </span>
           <span>
             <p className="text-[11px] font-semibold text-[#171A19]">{item.title}</p>
-            <p className="text-[10px] text-[#6B746F]">{item.value}</p>
+            <p className="hiw-float-num">{item.value}</p>
+            <p className="text-[10px] text-[#8A938F]">{item.hint}</p>
           </span>
         </div>
       ))}
-      <HowItWorksPhone step={step} />
+      <div className="hiw-device">
+        <div className="hiw-ghost hiw-ghost-a" aria-hidden="true">
+          <img src={next?.image || step.image} alt="" />
+        </div>
+        <div className="hiw-ghost hiw-ghost-b" aria-hidden="true">
+          <img src={prev?.image || step.image} alt="" />
+        </div>
+        <HowItWorksPhone step={step} />
+        <HowItWorksStand />
+      </div>
     </div>
   );
-}
-
-/** @param {string} value */
-function titleCase(value) {
-  const head = value.split('/')[0] ?? value;
-  const short = head.trim().toLowerCase();
-  return short.replace(/\b\w/g, (ch) => ch.toUpperCase());
 }

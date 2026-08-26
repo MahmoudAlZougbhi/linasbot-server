@@ -28,6 +28,20 @@ export function DecideGlyph({ className = 'h-4 w-4' }) {
 }
 
 /** @param {{ className?: string }} props */
+export function CommentGlyph({ className = 'h-4 w-4' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">
+      <path
+        d="M12 19.2c4.6 0 8.3-3.1 8.3-7S16.6 5.2 12 5.2 3.7 8.3 3.7 12.2c0 1.6.6 3.1 1.7 4.3L4.4 19.5 7.6 18c1.3.8 2.8 1.2 4.4 1.2Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** @param {{ className?: string }} props */
 export function CoinGlyph({ className = 'h-4 w-4' }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">

@@ -6,23 +6,25 @@ import HowItWorksDashboardScreen from './HowItWorksDashboardScreen';
  * }} props
  */
 export default function HowItWorksPhone({ step }) {
+  const useBuiltDashboard = step.builtScreen === 'dashboard';
+
   return (
     <div className="hiw-phone-wrap mx-auto">
-      <div className="hiw-ghost" aria-hidden="true" />
-      <div className="hiw-ghost hiw-ghost-b" aria-hidden="true" />
+      <div className="hiw-phone-aura" aria-hidden="true" />
       <div className="hiw-phone">
         <div className="hiw-phone-screen">
-          <span className="hiw-island" />
-          {step.builtScreen === 'dashboard' ? (
+          {useBuiltDashboard ? (
             <HowItWorksDashboardScreen />
           ) : (
-            <img src={step.image} alt={step.alt} className="h-full w-full object-cover object-top" />
+            <img
+              src={step.image}
+              alt={step.alt}
+              className="hiw-phone-screen-shot"
+              loading="eager"
+              decoding="async"
+            />
           )}
         </div>
-      </div>
-      <div className="hiw-stand" aria-hidden="true">
-        <div className="hiw-stand-top" />
-        <div className="hiw-stand-glow" />
       </div>
     </div>
   );
