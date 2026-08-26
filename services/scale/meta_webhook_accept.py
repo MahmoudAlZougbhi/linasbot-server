@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from typing import Any
 
@@ -26,8 +26,8 @@ from services.meta_multi_app_router import ResolvedMetaEvent
 _runtime_logger = logging.getLogger("uvicorn.error")
 
 TrackTask = Callable[[asyncio.Task[None]], None]
-ProcessDm = Callable[..., Awaitable[dict[str, Any]]]
-ProcessComment = Callable[..., Awaitable[Any]]
+ProcessDm = Callable[..., Coroutine[Any, Any, dict[str, Any]]]
+ProcessComment = Callable[..., Coroutine[Any, Any, Any]]
 
 
 @dataclass(frozen=True)
@@ -85,7 +85,7 @@ async def process_inline_meta_dm(
     )
     mark_dm_processing(event_id)
     try:
-        outcome = await run_under_event_claim(
+        outcome: dict[str, Any] | None = await run_under_event_claim(
             claim_handle,
             ttl_seconds=300.0,
             operation=lambda: process_dm(
@@ -209,7 +209,7 @@ async def process_inline_meta_comment(
     )
     mark_dm_processing(event_id)
     try:
-        result = await run_under_event_claim(
+        result: Any = await run_under_event_claim(
             claim_handle,
             ttl_seconds=300.0,
             operation=lambda: process_comment(resolved, inbound_event_id=event_id),
