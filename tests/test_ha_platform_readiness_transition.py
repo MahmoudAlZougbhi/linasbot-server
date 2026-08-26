@@ -382,6 +382,8 @@ def test_admit_live_ready_requires_200_on_platform_sha(
 
 def test_helper_uses_sha_aware_serving_and_later_helper_rollback_phase() -> None:
     source = HELPER.read_text(encoding="utf-8")
+    live_admission = source[source.index("_live_ready_admission() {") : source.index("assert_public_ready() {")]
+    ready_assertion = source[source.index("assert_serving_ready_for_sha() {") : source.index("assert_public_ready() {")]
     serving = source[source.index("node_assert_serving_contract() {") : source.index("node_assert_release_ready() {")]
     clear = source[source.index("node_clear_maintenance() {") : source.index("node_assert_release_drained() {")]
     later = source[source.index("assert_later_dispatch_helper() {") : source.index("assert_public_ready() {")]
@@ -389,6 +391,13 @@ def test_helper_uses_sha_aware_serving_and_later_helper_rollback_phase() -> None
     orchestrate = source[source.index("orchestrate() {") :]
     assert "assert_serving_ready_for_sha" in serving
     assert "probe_serving_ready_for_sha" in clear
+    assert live_admission.index("except urllib.error.HTTPError as exc:") < live_admission.index(
+        "except (urllib.error.URLError, TimeoutError, OSError) as exc:"
+    )
+    assert "for attempt in 1 2 3; do" in ready_assertion
+    assert 'if probe_serving_ready_for_sha "$expected_sha"; then' in ready_assertion
+    assert 'test "$attempt" = 3 || sleep 1' in ready_assertion
+    assert "after bounded retry" in ready_assertion
     assert "grep -q '\"ok\"[[:space:]]*:[[:space:]]*true'" not in clear
     assert "automatic-rollback-both-nodes-drained" in later
     assert "linas_instagram_app_a_active" in later

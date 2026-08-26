@@ -4880,7 +4880,7 @@ except urllib.error.HTTPError as exc:
     except (json.JSONDecodeError, TypeError, ValueError) as decode_exc:
         raise SystemExit("live /api/ready is not JSON") from decode_exc
     status = int(exc.code)
-except urllib.error.URLError as exc:
+except (urllib.error.URLError, TimeoutError, OSError) as exc:
     raise SystemExit("live /api/ready could not be reached") from exc
 if not isinstance(payload, dict):
     raise SystemExit("live /api/ready is not JSON")
@@ -4919,8 +4919,18 @@ probe_serving_ready_for_sha() {
 
 assert_serving_ready_for_sha() {
   local expected_sha="$1"
-  probe_serving_ready_for_sha "$expected_sha" || \
-    die "canonical /api/ready is not healthy for $expected_sha"
+  local attempt
+  # Admission performs an immediate second readiness proof after the node's
+  # fail-closed sentinel and boot guards are removed. A single socket timeout
+  # at that boundary must not turn an otherwise healthy commit into an
+  # interrupted durable decision, but every failed probe still stays closed.
+  for attempt in 1 2 3; do
+    if probe_serving_ready_for_sha "$expected_sha"; then
+      return 0
+    fi
+    test "$attempt" = 3 || sleep 1
+  done
+  die "canonical /api/ready is not healthy for $expected_sha after bounded retry"
 }
 
 assert_public_ready() {

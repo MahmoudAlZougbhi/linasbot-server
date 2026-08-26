@@ -969,6 +969,16 @@ def test_per_node_deploy_sentinel_is_transaction_bound_and_last_to_leave() -> No
     assert clear.index('write_admission_proof "$tx_dir" "$admission_sha"') < clear.index(
         'clear_deploy_node_sentinel "$tx_dir"'
     )
+    assert clear.index('probe_serving_ready_for_sha "$admission_sha"') < clear.index(
+        'write_admission_proof "$tx_dir" "$admission_sha"'
+    )
+    assert clear.index('clear_deploy_node_sentinel "$tx_dir"') < clear.rindex('remove_maintenance_boot_guard "$tx_dir"')
+    assert clear.rindex('remove_maintenance_boot_guard "$tx_dir"') < clear.index(
+        'node_assert_serving_contract "$admission_sha"'
+    )
+    assert clear.index('node_assert_serving_contract "$admission_sha"') < clear.index(
+        'log "node admitted by /api/ready"'
+    )
     assert 'assert_path_absent "$DEPLOY_NODE_ACTIVE_FILE"' in ready
     assert 'validate_tx_dir "${2:-}"' in dispatch
     assert 'node_assert_release_drained "$1" "$2"' in dispatch

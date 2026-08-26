@@ -135,7 +135,7 @@ def fetch_live_ready(url: str = LIVE_READY_URL) -> tuple[int, dict[str, Any]]:
         except (json.JSONDecodeError, TypeError, ValueError) as decode_exc:
             raise RuntimeError("live /api/ready is not JSON") from decode_exc
         return int(exc.code), payload if isinstance(payload, dict) else {}
-    except urllib.error.URLError as exc:
+    except OSError as exc:
         raise RuntimeError("live /api/ready could not be reached") from exc
 
 
