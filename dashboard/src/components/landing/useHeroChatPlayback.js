@@ -33,6 +33,7 @@ export default function useHeroChatPlayback() {
         for (let index = 0; index < HERO_CHAT_LINES.length; index += 1) {
           if (ctrl.cancelled) return;
           const line = HERO_CHAT_LINES[index];
+          if (!line) return;
           if (line.role === 'linas') {
             setTyping(true);
             await wait(TYPING_MS);

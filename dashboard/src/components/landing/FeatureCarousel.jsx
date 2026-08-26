@@ -40,6 +40,7 @@ export default function FeatureCarousel({ id, kicker, title, accent, subtitle, c
   const [snap, setSnap] = useState(false);
   const stepPx = cardW + GAP_PX;
   const wheel = useCarouselWheel({ index, go, pause, resume, stepPx });
+  const { resetOffset } = wheel;
   const slides = [...cards, ...cards, ...cards];
 
   useEffect(() => {
@@ -61,8 +62,8 @@ export default function FeatureCarousel({ id, kicker, title, accent, subtitle, c
     const delta = shortestDelta(lastIndex.current, index, n);
     lastIndex.current = index;
     setLoopIndex((current) => current + delta);
-    wheel.resetOffset();
-  }, [index, n, wheel.resetOffset]);
+    resetOffset();
+  }, [index, n, resetOffset]);
 
   useEffect(() => {
     if (!snap) return undefined;

@@ -26,6 +26,8 @@ export function useCarouselWheel({ index, go, pause, resume, stepPx }) {
   const stepRef = useRef(stepPx);
   const goRef = useRef(go);
   const resumeRef = useRef(resume);
+  const onMoveRef = useRef(/** @type {(event: PointerEvent) => void} */ (() => {}));
+  const onUpRef = useRef(/** @type {(event: PointerEvent) => void} */ (() => {}));
   indexRef.current = index;
   stepRef.current = stepPx;
   goRef.current = go;
@@ -34,53 +36,64 @@ export function useCarouselWheel({ index, go, pause, resume, stepPx }) {
   const resetOffset = useCallback(() => setOffset(0), []);
 
   const stopListening = useCallback(() => {
-    window.removeEventListener('pointermove', onMove);
-    window.removeEventListener('pointerup', onUp);
-    window.removeEventListener('pointercancel', onUp);
+    window.removeEventListener('pointermove', onMoveRef.current);
+    window.removeEventListener('pointerup', onUpRef.current);
+    window.removeEventListener('pointercancel', onUpRef.current);
   }, []);
 
-  const onMove = useCallback((event) => {
-    if (pointerId.current !== event.pointerId) return;
-    const dx = event.clientX - startX.current;
-    lastX.current = dx;
-    if (!armed.current) {
-      if (Math.abs(dx) < ARM_PX) return;
-      armed.current = true;
-      setDragging(true);
-    }
-    event.preventDefault();
-    setOffset(dx);
-  }, []);
+  const onMove = useCallback(
+    /** @param {PointerEvent} event */
+    (event) => {
+      if (pointerId.current !== event.pointerId) return;
+      const dx = event.clientX - startX.current;
+      lastX.current = dx;
+      if (!armed.current) {
+        if (Math.abs(dx) < ARM_PX) return;
+        armed.current = true;
+        setDragging(true);
+      }
+      event.preventDefault();
+      setOffset(dx);
+    },
+    [],
+  );
 
-  const onUp = useCallback((event) => {
-    if (pointerId.current == null || event.pointerId !== pointerId.current) return;
-    const dx = lastX.current;
-    const didDrag = armed.current;
-    const node = nodeRef.current;
-    pointerId.current = null;
-    held.current = false;
-    armed.current = false;
-    nodeRef.current = null;
-    if (node && typeof node.releasePointerCapture === 'function') {
-      try {
-        if (node.hasPointerCapture?.(event.pointerId)) node.releasePointerCapture(event.pointerId);
-      } catch {
-        /* ignore */
+  const onUp = useCallback(
+    /** @param {PointerEvent} event */
+    (event) => {
+      if (pointerId.current == null || event.pointerId !== pointerId.current) return;
+      const dx = lastX.current;
+      const didDrag = armed.current;
+      const node = nodeRef.current;
+      pointerId.current = null;
+      held.current = false;
+      armed.current = false;
+      nodeRef.current = null;
+      if (node && typeof node.releasePointerCapture === 'function') {
+        try {
+          if (node.hasPointerCapture?.(event.pointerId)) node.releasePointerCapture(event.pointerId);
+        } catch {
+          /* ignore */
+        }
       }
-    }
-    stopListening();
-    setDragging(false);
-    if (didDrag) {
-      const width = Math.max(1, stepRef.current);
-      if (Math.abs(dx) < FLICK_PX) setOffset(0);
-      else {
-        let steps = Math.round(-dx / width);
-        if (steps === 0) steps = dx > 0 ? -1 : 1;
-        goRef.current(indexRef.current + steps);
+      stopListening();
+      setDragging(false);
+      if (didDrag) {
+        const width = Math.max(1, stepRef.current);
+        if (Math.abs(dx) < FLICK_PX) setOffset(0);
+        else {
+          let steps = Math.round(-dx / width);
+          if (steps === 0) steps = dx > 0 ? -1 : 1;
+          goRef.current(indexRef.current + steps);
+        }
       }
-    }
-    resumeRef.current();
-  }, [stopListening]);
+      resumeRef.current();
+    },
+    [stopListening],
+  );
+
+  onMoveRef.current = onMove;
+  onUpRef.current = onUp;
 
   useEffect(() => () => stopListening(), [stopListening]);
 
