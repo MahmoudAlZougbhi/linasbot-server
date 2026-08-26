@@ -44,9 +44,7 @@ def test_parse_official_coexistence_finish_omits_phone() -> None:
 
 
 def test_parse_ignores_non_embedded_signup_type() -> None:
-    parsed = parse_embedded_signup_session_payload(
-        {"type": "OTHER", "event": "FINISH", "waba_id": "111222333"}
-    )
+    parsed = parse_embedded_signup_session_payload({"type": "OTHER", "event": "FINISH", "waba_id": "111222333"})
     assert parsed["event"] == ""
     assert parsed["waba_id"] == ""
 
