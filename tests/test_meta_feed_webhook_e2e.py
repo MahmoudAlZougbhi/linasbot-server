@@ -7,7 +7,7 @@ import hmac
 import json
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from starlette.requests import Request
@@ -93,9 +93,13 @@ def _install_feed_mocks(
     monkeypatch.setattr(meta_messaging_webhook, "count_raw_comment_changes", lambda _p: 1)
     monkeypatch.setattr(meta_messaging_webhook, "registry_auth_flow_for_webhook_object", lambda _obj: "facebook_login")
     monkeypatch.setattr(meta_messaging_webhook, "resolve_registry_events", AsyncMock(return_value=[]))
-    monkeypatch.setattr(
-        "services.scale.meta_ingress.persist_meta_comment_accepted", lambda *a, **k: ("evt_feed_1", True)
-    )
+    persist_created = {"n": 0}
+
+    def fake_persist(*_a: object, **_k: object) -> tuple[str, bool]:
+        persist_created["n"] += 1
+        return ("evt_feed_1", persist_created["n"] == 1)
+
+    monkeypatch.setattr("services.scale.meta_ingress.persist_meta_comment_accepted", fake_persist)
     monkeypatch.setattr("services.scale.meta_ingress.enqueue_meta_inbound_event", lambda *a, **k: "queued")
     monkeypatch.setattr("services.durable_event_claim.meta_claim_binding_digest", lambda _v: "digest")
 
@@ -130,12 +134,9 @@ async def test_signed_feed_comment_accepted_once(monkeypatch: pytest.MonkeyPatch
         binding=binding,
     )
     _install_feed_mocks(monkeypatch, binding=binding, settings=settings, resolved=resolved)
-    claim_calls = 0
 
-    async def fake_claim(*_args: object, **_kwargs: object) -> MagicMock | None:
-        nonlocal claim_calls
-        claim_calls += 1
-        return MagicMock() if claim_calls == 1 else None
+    async def fake_claim(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("queued webhook must not await Firestore claim")
 
     monkeypatch.setattr("services.durable_event_claim.try_claim_event_handle", fake_claim)
     first = await meta_messaging_webhook.receive_meta_messaging_webhook(_request(body, signature))
@@ -145,6 +146,8 @@ async def test_signed_feed_comment_accepted_once(monkeypatch: pytest.MonkeyPatch
     first_payload = json.loads(first.body)
     second_payload = json.loads(second.body)
     assert first_payload["comments_accepted"] == 1
+    assert first_payload["comments_duplicates"] == 0
+    assert second_payload["comments_accepted"] == 0
     assert second_payload["comments_duplicates"] == 1
 
 

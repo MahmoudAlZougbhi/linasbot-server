@@ -12,6 +12,11 @@ import httpx
 
 from services.meta_app_registry import APP_A_KEY, MetaAssetBinding
 from services.meta_comment_events import ResolvedMetaCommentEvent
+from services.meta_comment_reply_generate import generate_comment_reply_text as _generate_comment_reply_text
+from services.meta_comment_reply_inspect import (
+    MetaCommentReplyInspectionError,
+    _comment_has_page_reply,
+)
 from services.meta_comment_reply_settings import get_comment_reply_setting
 from services.meta_graph_routing import graph_api_url
 from services.omnichannel.comment_limit import comment_send_allowed
@@ -21,8 +26,6 @@ _runtime_logger = logging.getLogger("uvicorn.error")
 _RATE_BUCKETS: dict[str, list[float]] = {}
 _SENT_REPLY_IDS: dict[str, float] = {}
 _SENT_REPLY_TTL_SECONDS = 86400.0
-_COMMENT_REPLY_PAGE_SIZE = 100
-_COMMENT_REPLY_MAX_PAGES = 100
 
 
 @dataclass(frozen=True)
@@ -30,14 +33,6 @@ class CommentReplyResult:
     status: str
     reason: str = ""
     reply_id: str = ""
-
-
-class MetaCommentReplyGenerationError(RuntimeError):
-    """Transient AI generation failure that should remain eligible for retry."""
-
-
-class MetaCommentReplyInspectionError(RuntimeError):
-    """The provider reply list could not be proven complete and trustworthy."""
 
 
 def _provider_rejection_is_definitive(reason: str) -> bool:
@@ -109,28 +104,6 @@ def _is_self_comment(event: dict[str, Any], binding: MetaAssetBinding) -> bool:
     return bool(author_username and binding_username and author_username == binding_username)
 
 
-async def _graph_get_json(
-    client: httpx.AsyncClient,
-    path: str,
-    *,
-    token: str,
-    params: dict[str, str] | None = None,
-) -> dict[str, Any]:
-    try:
-        response = await client.get(path, params=params or {}, headers={"Authorization": f"Bearer {token}"})
-    except httpx.HTTPError as exc:
-        raise MetaCommentReplyInspectionError("request_failed") from exc
-    if response.status_code < 200 or response.status_code >= 300:
-        raise MetaCommentReplyInspectionError(f"http_{response.status_code}")
-    try:
-        payload = response.json()
-    except ValueError as exc:
-        raise MetaCommentReplyInspectionError("invalid_json") from exc
-    if not isinstance(payload, dict) or payload.get("error"):
-        raise MetaCommentReplyInspectionError("invalid_response")
-    return payload
-
-
 async def _graph_post_form(
     client: httpx.AsyncClient,
     path: str,
@@ -153,130 +126,6 @@ async def _graph_post_form(
     if not reply_id:
         return False, "missing_reply_id", payload
     return True, "ok", payload
-
-
-async def _comment_has_page_reply(
-    client: httpx.AsyncClient,
-    *,
-    comment_id: str,
-    owner_id: str,
-    token: str,
-    graph_url: str,
-) -> bool:
-    if not owner_id:
-        raise MetaCommentReplyInspectionError("missing_owner_id")
-
-    params = {"fields": "from{id}", "limit": str(_COMMENT_REPLY_PAGE_SIZE)}
-    seen_cursors: set[str] = set()
-    for _page_number in range(_COMMENT_REPLY_MAX_PAGES):
-        payload = await _graph_get_json(
-            client,
-            graph_url,
-            token=token,
-            params=params,
-        )
-        rows = payload.get("data")
-        if not isinstance(rows, list):
-            raise MetaCommentReplyInspectionError("invalid_rows")
-        for row in rows:
-            if not isinstance(row, dict):
-                raise MetaCommentReplyInspectionError("invalid_row")
-            from_raw = row.get("from")
-            if not isinstance(from_raw, dict) or not str(from_raw.get("id") or "").strip():
-                raise MetaCommentReplyInspectionError("missing_reply_owner")
-            if str(from_raw.get("id") or "").strip() == owner_id:
-                return True
-
-        paging_raw = payload.get("paging")
-        if paging_raw is None:
-            return False
-        if not isinstance(paging_raw, dict):
-            raise MetaCommentReplyInspectionError("invalid_paging")
-        if not str(paging_raw.get("next") or "").strip():
-            return False
-        cursors_raw = paging_raw.get("cursors")
-        cursors = cursors_raw if isinstance(cursors_raw, dict) else {}
-        after = str(cursors.get("after") or "").strip()
-        if not after or after in seen_cursors:
-            raise MetaCommentReplyInspectionError("invalid_paging_cursor")
-        seen_cursors.add(after)
-        # Reuse the already-validated Graph endpoint and only carry Meta's opaque
-        # cursor forward. Never follow an arbitrary paging URL or embedded token.
-        params = {
-            "fields": "from{id}",
-            "limit": str(_COMMENT_REPLY_PAGE_SIZE),
-            "after": after,
-        }
-
-    raise MetaCommentReplyInspectionError("pagination_limit_exceeded")
-
-
-async def _generate_comment_reply_text(
-    *,
-    tenant_id: str,
-    comment_text: str,
-    instructions: str,
-    channel: str,
-    policy_text: str = "",
-    comment_context: dict[str, Any] | None = None,
-    asset_id: str = "",
-    provider_sender_id: str = "",
-    provider_display_name: str = "",
-) -> str | None:
-    """Generate a public comment reply via Customer Reply AI V2 only (CM tenants).
-
-    Never falls back to Classic ``generate_answer_with_usage``. Non-CM tenants keep
-    the pre-existing local FAQ matcher (not Classic CM generative).
-    """
-    from services.cm.constants import tenant_uses_cm_runtime
-    from services.cm.language_policy import detect_and_resolve_customer_languages
-
-    _lang = detect_and_resolve_customer_languages(
-        tenant_id=tenant_id,
-        message=comment_text,
-        conversation_id=f"comment:{tenant_id}:{channel}",
-    )
-    detected_language = _lang["detected_language"]
-    response_language = _lang["response_language"]
-
-    if tenant_uses_cm_runtime(tenant_id):
-        from services.customer_reply_v2.comment_runtime import run_customer_reply_v2_comment
-
-        social_channel = "facebook_comment" if channel == "facebook" else "instagram_comment"
-        enriched = dict(comment_context or {})
-        if instructions and "asset_instructions" not in enriched:
-            enriched["asset_instructions"] = instructions.strip()[:800]
-        if policy_text and "comments_policy" not in enriched:
-            enriched["comments_policy"] = {"policy_text": policy_text.strip()[:1200]}
-        try:
-            v2_outcome = await run_customer_reply_v2_comment(
-                tenant_id=tenant_id,
-                comment_text=comment_text,
-                detected_language=detected_language,
-                response_language=response_language,
-                channel=social_channel,
-                asset_id=asset_id,
-                provider_sender_id=provider_sender_id,
-                provider_display_name=provider_display_name,
-                comments_enabled=True,
-                comment_context=enriched or None,
-            )
-        except Exception as v2_exc:
-            _runtime_logger.warning(
-                "customer_reply_v2 comment path failed closed: %s",
-                type(v2_exc).__name__,
-            )
-            raise MetaCommentReplyGenerationError("customer reply generation failed") from v2_exc
-        if v2_outcome.reply:
-            return str(v2_outcome.reply).strip()[:900]
-        return None
-
-    from services.local_qa_service import local_qa_service
-
-    tiered_match = await local_qa_service.find_match_with_tier(comment_text, "ar")
-    if tiered_match and tiered_match.get("answer"):
-        return str(tiered_match["answer"]).strip()[:900]
-    return None
 
 
 async def process_meta_comment_event(

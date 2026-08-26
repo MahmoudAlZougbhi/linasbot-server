@@ -136,19 +136,28 @@ def persist_meta_dm_accepted(resolved: ResolvedMetaEvent, *, global_key: str) ->
     return event_id, created
 
 
-def enqueue_meta_inbound_event(event_id: str, *, claim_handle: Any) -> str:
-    """Return ``queued``, ``ambiguous``, or ``inline`` without double dispatch."""
+def enqueue_meta_inbound_event(event_id: str, *, claim_handle: Any = None) -> str:
+    """Return ``queued``, ``ambiguous``, or ``inline`` without double dispatch.
+
+    Webhook ACK paths pass ``claim_handle=None`` so Redis workers adopt the
+    lease themselves. Inline (Redis-down) callers attach a handle after claim.
+    """
 
     record = get_inbound_event(event_id)
     if record is None:
         return "ambiguous"
+    claim_token = str(getattr(claim_handle, "owner_token", "") or "") if claim_handle is not None else ""
+    try:
+        claim_generation = int(getattr(claim_handle, "generation", 1) or 1) if claim_handle is not None else 1
+    except (TypeError, ValueError):
+        claim_generation = 1
     job_id = _try_enqueue(
         event_id=event_id,
         kind=record.kind,
         tenant_id=record.tenant_id,
         conversation_key=record.conversation_key,
-        claim_token=str(claim_handle.owner_token),
-        claim_generation=int(claim_handle.generation),
+        claim_token=claim_token,
+        claim_generation=claim_generation,
     )
     if job_id and job_id != _AMBIGUOUS_ENQUEUE:
         mark_inbound_state(event_id, state="queued", queue_job_id=job_id)
