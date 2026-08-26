@@ -141,6 +141,7 @@ async def whatsapp_oauth_callback(request: Request) -> Any:
     error_reason = params.get("error_reason") or params.get("error_description")
     waba_id = params.get("waba_id") or params.get("wa_waba_id")
     phone_number_id = params.get("phone_number_id") or params.get("wa_phone_number_id")
+    session_event = params.get("session_event")
     try:
         result = await complete_embedded_signup(
             state=state,
@@ -149,6 +150,7 @@ async def whatsapp_oauth_callback(request: Request) -> Any:
             phone_number_id=phone_number_id,
             error=error,
             error_reason=error_reason,
+            session_event=session_event,
         )
         redirect = str(result.get("redirect_url") or "linasai://integrations?wa_connection=failed")
         return RedirectResponse(url=redirect, status_code=303)
@@ -180,6 +182,7 @@ async def whatsapp_cloud_connect_complete(request: Request, body: dict[str, Any]
             phone_number_id=body.get("phone_number_id"),
             error=body.get("error"),
             error_reason=body.get("error_reason"),
+            session_event=body.get("session_event"),
         )
         return result
     except WhatsAppSignupError as exc:
@@ -192,106 +195,13 @@ async def whatsapp_cloud_connect_complete(request: Request, body: dict[str, Any]
 async def whatsapp_embedded_signup_bridge(request: Request) -> HTMLResponse:
     """Purpose-built noindex bridge for Meta Embedded Signup v4 coexistence."""
 
+    from services.whatsapp_cloud.embedded_signup_bridge import render_embedded_signup_bridge_html
+
     flags = get_whatsapp_cloud_flags()
-    state = request.query_params.get("state") or ""
-    config_id = request.query_params.get("config_id") or ""
-    app_id = request.query_params.get("app_id") or flags.meta_app_id
-    feature = "whatsapp_business_app_onboarding"
-    redirect_uri = flags.oauth_redirect_uri
-    # Use replace tokens so JavaScript braces do not conflict with Python formatting.
-    html = """<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="robots" content="noindex,nofollow"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Connect WhatsApp — Linas AI</title>
-  <style>
-    body { font-family: system-ui, sans-serif; margin: 2rem; background: #0b1220; color: #f5f7fb; }
-    .card { max-width: 28rem; margin: 0 auto; }
-    button { background: #25D366; color: #04210f; border: 0; padding: .85rem 1.2rem; border-radius: 10px; font-weight: 700; width: 100%; }
-    p { opacity: .85; line-height: 1.45; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>Connect WhatsApp</h1>
-    <p>Continue to Meta to link your existing WhatsApp Business app number (coexistence). You will return to Linas AI.</p>
-    <button id="start" type="button">Continue with Meta</button>
-    <p id="status"></p>
-  </div>
-  <script>
-    window.fbAsyncInit = function() {
-      FB.init({ appId: __APP_ID__, autoLogAppEvents: true, xfbml: true, version: 'v24.0' });
-    };
-    (function(d, s, id){
-      var js, fjs = d.getElementsByTagName(s)[0];
-      if (d.getElementById(id)) return;
-      js = d.createElement(s); js.id = id;
-      js.src = "https://connect.facebook.net/en_US/sdk.js";
-      fjs.parentNode.insertBefore(js, fjs);
-    }(document, 'script', 'facebook-jssdk'));
-
-    const state = __STATE__;
-    const configId = __CONFIG_ID__;
-    const featureType = __FEATURE__;
-    const redirectUri = __REDIRECT__;
-    const statusEl = document.getElementById('status');
-
-    function finish(payload) {
-      const q = new URLSearchParams(Object.assign({ state: state }, payload));
-      window.location = redirectUri + (redirectUri.includes('?') ? '&' : '?') + q.toString();
-    }
-
-    document.getElementById('start').addEventListener('click', function() {
-      statusEl.textContent = 'Opening Meta…';
-      if (!configId) { statusEl.textContent = 'Embedded Signup config is missing. Return to Linas AI and try again later.'; return; }
-      if (!window.FB) { statusEl.textContent = 'Meta SDK failed to load.'; return; }
-      FB.login(function(response) {
-        if (!response || response.error) {
-          finish({ error: 'login_failed' });
-          return;
-        }
-        const auth = response.authResponse || {};
-        const code = auth.code || '';
-        finish({
-          code: code,
-          waba_id: (window.__WA_WABA_ID || ''),
-          phone_number_id: (window.__WA_PHONE_NUMBER_ID || '')
-        });
-      }, {
-        config_id: configId,
-        response_type: 'code',
-        override_default_response_type: true,
-        extras: {
-          setup: {},
-          featureType: featureType,
-          sessionInfoVersion: '3'
-        }
-      });
-    });
-
-    window.addEventListener('message', function(event) {
-      if (!event.origin.includes('facebook.com') && !event.origin.includes('fb.com')) return;
-      try {
-        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        if (!data) return;
-        if (data.type === 'WA_EMBEDDED_SIGNUP' || data.event === 'FINISH' || data.waba_id) {
-          window.__WA_WABA_ID = data.waba_id || (data.data && data.data.waba_id) || '';
-          window.__WA_PHONE_NUMBER_ID = data.phone_number_id || (data.data && data.data.phone_number_id) || '';
-        }
-      } catch (e) {}
-    });
-  </script>
-</body>
-</html>"""
-    import json as _json
-
-    html = (
-        html.replace("__APP_ID__", _json.dumps(str(app_id)))
-        .replace("__STATE__", _json.dumps(str(state)))
-        .replace("__CONFIG_ID__", _json.dumps(str(config_id)))
-        .replace("__FEATURE__", _json.dumps(str(feature)))
-        .replace("__REDIRECT__", _json.dumps(str(redirect_uri)))
+    html = render_embedded_signup_bridge_html(
+        app_id=str(request.query_params.get("app_id") or flags.meta_app_id),
+        state=str(request.query_params.get("state") or ""),
+        config_id=str(request.query_params.get("config_id") or ""),
+        redirect_uri=flags.oauth_redirect_uri,
     )
     return HTMLResponse(content=html, headers={"X-Robots-Tag": "noindex, nofollow"})

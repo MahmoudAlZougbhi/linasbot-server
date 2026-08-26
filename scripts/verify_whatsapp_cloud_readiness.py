@@ -95,8 +95,16 @@ def main() -> int:
         bridge_lower = bridge_body.lower()
         if "coexistence" not in bridge_lower and "whatsapp business app" not in bridge_lower:
             failures.append("embedded-signup bridge missing coexistence copy")
+        elif "whatsapp_business_app_onboarding" not in bridge_body:
+            failures.append("embedded-signup bridge missing coexistence featureType")
+        elif "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING" not in bridge_body:
+            failures.append("embedded-signup bridge missing coexistence finish event")
+        elif "Add a new number" not in bridge_body:
+            failures.append("embedded-signup bridge missing do-not-add-new-number warning")
+        elif "sessionInfoVersion" not in bridge_body:
+            failures.append("embedded-signup bridge missing sessionInfoVersion")
         else:
-            notes.append("embedded-signup bridge=200 (coexistence copy present)")
+            notes.append("embedded-signup bridge=200 (coexistence extras + warning present)")
 
     print(f"base={base}")
     for line in notes:

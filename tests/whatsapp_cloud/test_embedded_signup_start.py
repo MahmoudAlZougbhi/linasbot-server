@@ -66,6 +66,8 @@ def test_start_embedded_signup_returns_https_bridge_url(wa_db, monkeypatch, tmp_
     assert result["success"] is True
     assert result["authorization_url"].startswith("https://example.test/integrations/whatsapp/embedded-signup?")
     assert "config_id=es-config-test" in result["authorization_url"]
+    assert "feature_type=whatsapp_business_app_onboarding" in result["authorization_url"]
+    assert result["feature_type"] == "whatsapp_business_app_onboarding"
     assert "state=" in result["authorization_url"]
 
 

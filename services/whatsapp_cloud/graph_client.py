@@ -118,7 +118,7 @@ async def fetch_waba_phone_numbers(*, access_token: str, waba_id: str) -> list[d
         resp = await client.get(
             url,
             params={
-                "fields": "id,display_phone_number,verified_name,quality_rating",
+                "fields": "id,display_phone_number,verified_name,quality_rating,is_on_biz_app,platform_type",
                 "access_token": access_token,
             },
         )
@@ -156,6 +156,38 @@ async def subscribe_waba_webhooks(*, access_token: str, waba_id: str) -> dict[st
             retryable=resp.status_code >= 500,
         )
     return data if isinstance(data, dict) else {"success": True}
+
+
+async def initiate_smb_app_data_sync(
+    *,
+    access_token: str,
+    phone_number_id: str,
+    sync_type: str,
+) -> dict[str, Any]:
+    """Official coexistence contacts/history sync. Never deregisters the number."""
+
+    pnid = str(phone_number_id or "").strip()
+    if not pnid.isdigit():
+        raise WhatsAppGraphError("invalid_phone_number_id", "phone_number_id must be numeric")
+    kind = str(sync_type or "").strip()
+    if kind not in {"smb_app_state_sync", "history"}:
+        raise WhatsAppGraphError("invalid_sync_type", "sync_type must be smb_app_state_sync or history")
+    url = f"{_graph_base()}/{pnid}/smb_app_data"
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        resp = await client.post(
+            url,
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+            json={"messaging_product": "whatsapp", "sync_type": kind},
+        )
+    data = resp.json() if resp.content else {}
+    if resp.status_code >= 400:
+        raise WhatsAppGraphError(
+            "smb_app_data_failed",
+            "WhatsApp Business app data sync failed",
+            http_status=resp.status_code,
+            retryable=resp.status_code >= 500,
+        )
+    return data if isinstance(data, dict) else {}
 
 
 async def send_text_message(
