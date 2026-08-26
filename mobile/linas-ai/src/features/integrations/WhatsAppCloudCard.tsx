@@ -82,6 +82,12 @@ export function WhatsAppCloudCard({
         onConnect={onConnect}
         onMenu={onOpenMenu}
       >
+        {!connected && connectable ? (
+          <>
+            <Text style={styles.hint}>{tr('waCoexistenceHint')}</Text>
+            <Text style={styles.hint}>{tr('waDoNotAddNewNumber')}</Text>
+          </>
+        ) : null}
         {awaitingMeta && !connected ? (
           <Text style={styles.warn}>
             {status?.blocker_message?.trim() || tr('waAwaitingMetaApprovalBody')}
@@ -122,5 +128,6 @@ export function isWhatsAppApiError(err: unknown): err is ApiError {
 
 const styles = StyleSheet.create({
   wrap: { gap: 14 },
+  hint: { color: colors.textMuted, fontSize: 12, lineHeight: 17, fontFamily: fonts.body },
   warn: { color: colors.danger, fontSize: 12, lineHeight: 17, fontFamily: fonts.body },
 });

@@ -6,9 +6,17 @@ import json
 import time
 from typing import Any
 
+from services.whatsapp_cloud.redaction import redact_whatsapp_text
+
+_SECRET_KEYS = frozenset({"access_token", "token", "code", "text", "body", "secret", "app_secret"})
+
 
 def emit_wa_event(event: str, **fields: Any) -> None:
-    safe = {k: v for k, v in fields.items() if k not in {"access_token", "token", "code", "text", "body", "secret"}}
+    safe: dict[str, Any] = {}
+    for key, value in fields.items():
+        if key in _SECRET_KEYS:
+            continue
+        safe[key] = redact_whatsapp_text(value) if isinstance(value, str) else value
     payload = {"ts": time.time(), "domain": "whatsapp_cloud", "event": event, **safe}
     print(f"[whatsapp_cloud] {json.dumps(payload, default=str, separators=(',', ':'))}", flush=True)
 

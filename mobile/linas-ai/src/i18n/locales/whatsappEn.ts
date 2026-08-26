@@ -8,6 +8,7 @@ export const whatsappEn = {
   waConnectBrowserUnavailable: 'Could not open Meta WhatsApp signup. Check your connection and try again.',
   waConnectInProgress: 'WhatsApp connect is already in progress.',
   waCoexistenceHint: 'Link your existing WhatsApp Business app number. Linas AI uses your published knowledge only.',
+  waDoNotAddNewNumber: 'In Meta, choose your existing WhatsApp Business app number. Do not choose Add a new number.',
   waCoexistenceOn: 'Business App coexistence enabled',
   waNumberLabel: 'Number',
   waAiLabel: 'AI replies',

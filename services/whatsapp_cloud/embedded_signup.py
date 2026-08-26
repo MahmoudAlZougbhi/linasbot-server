@@ -15,12 +15,18 @@ from services.whatsapp_cloud.config import (
     WHATSAPP_REQUIRED_SCOPES,
     get_whatsapp_cloud_flags,
 )
+from services.whatsapp_cloud.embedded_signup_session import (
+    SignupAssetError,
+    resolve_signup_phone,
+    session_event_is_cancel,
+)
 from services.whatsapp_cloud.entitlement import WhatsAppEntitlementError, assert_whatsapp_connection_allowed
 from services.whatsapp_cloud.graph_client import (
     WhatsAppGraphError,
     debug_token,
     exchange_embedded_signup_code,
     fetch_waba_phone_numbers,
+    initiate_smb_app_data_sync,
     subscribe_waba_webhooks,
 )
 from services.whatsapp_cloud.observability import emit_wa_event
@@ -116,12 +122,15 @@ async def complete_embedded_signup(
     phone_number_id: str | None,
     error: str | None = None,
     error_reason: str | None = None,
+    session_event: str | None = None,
 ) -> dict[str, Any]:
     """Exchange code, verify assets, persist connection, subscribe WABA. No credentials to client."""
 
     nonce = str(state or "").strip()
     if not nonce:
         raise WhatsAppSignupError("missing_state", "state is required")
+    if session_event_is_cancel(session_event or ""):
+        error = error or "user_cancelled"
     state_hash = hashlib.sha256(nonce.encode("utf-8")).hexdigest()
 
     with whatsapp_session() as session:
@@ -199,22 +208,25 @@ async def complete_embedded_signup(
                     "Embedded Signup did not grant required WhatsApp permissions",
                     http_status=403,
                 )
-            # Asset IDs come from Embedded Signup sessionInfo — never trust alone; verify ownership.
+            # Asset IDs come from sessionInfo. Coexistence FINISH often omits phone_number_id.
             waba = str(waba_id or "").strip()
-            phone = str(phone_number_id or "").strip()
-            if not waba.isdigit() or not phone.isdigit():
-                raise WhatsAppSignupError(
-                    "asset_ids_required",
-                    "WABA id and phone_number_id from Embedded Signup session are required",
-                )
+            try:
+                from services.whatsapp_cloud.embedded_signup_session import assert_not_placeholder_id
+
+                assert_not_placeholder_id(waba, field="waba_id")
+            except SignupAssetError as exc:
+                raise WhatsAppSignupError(exc.code, exc.message) from exc
             phones = await fetch_waba_phone_numbers(access_token=access_token, waba_id=waba)
-            matched = next((p for p in phones if str(p.get("id")) == phone), None)
-            if matched is None:
-                raise WhatsAppSignupError(
-                    "phone_not_in_waba",
-                    "phone_number_id is not part of the shared WABA",
-                    http_status=403,
+            try:
+                matched = resolve_signup_phone(
+                    waba_id=waba,
+                    phone_number_id=phone_number_id,
+                    phones=phones,
                 )
+            except SignupAssetError as exc:
+                http_status = 403 if exc.code == "phone_not_in_waba" else 400
+                raise WhatsAppSignupError(exc.code, exc.message, http_status=http_status) from exc
+            phone = str(matched.get("id") or "").strip()
             # Fail closed: never allow ordinary API Setup path — coexistence feature only.
             if attempt.feature_type != WHATSAPP_COEXISTENCE_FEATURE:
                 raise WhatsAppSignupError("coexistence_required", "only coexistence onboarding is permitted")
@@ -246,7 +258,27 @@ async def complete_embedded_signup(
             repo.mark_connection_connected(conn, webhook_fields=fields)
             # Same as Facebook/Instagram: Connect turns Messages ON. The switch only controls AI.
             conn.ai_default_enabled = True
-            conn.history_sync_status = "skipped" if not flags.history_sync_enabled else "pending"
+            sync_started = False
+            try:
+                await initiate_smb_app_data_sync(
+                    access_token=access_token,
+                    phone_number_id=phone,
+                    sync_type="smb_app_state_sync",
+                )
+                await initiate_smb_app_data_sync(
+                    access_token=access_token,
+                    phone_number_id=phone,
+                    sync_type="history",
+                )
+                sync_started = True
+            except WhatsAppGraphError as sync_exc:
+                emit_wa_event(
+                    "history_sync_start_failed",
+                    tenant_id=tenant_id,
+                    correlation_id=correlation_id,
+                    reason=str(sync_exc.code),
+                )
+            conn.history_sync_status = "pending" if sync_started else "skipped"
             attempt.status = "completed"
             attempt.outcome_code = "connected"
             repo.add_audit(
@@ -256,9 +288,13 @@ async def complete_embedded_signup(
                 event_type="connection_completed",
                 detail={
                     "correlation_id": correlation_id,
+                    "session_event": (session_event or "")[:80],
                     "waba_masked": waba[:3] + "…" + waba[-3:],
                     "phone_masked": phone[:3] + "…" + phone[-3:],
                     "subscribe_ok": bool(sub.get("success", True)),
+                    "is_on_biz_app": matched.get("is_on_biz_app"),
+                    "platform_type": matched.get("platform_type"),
+                    "history_sync_started": sync_started,
                 },
             )
             emit_wa_event("connection_completed", tenant_id=tenant_id, connection_id=conn.id)

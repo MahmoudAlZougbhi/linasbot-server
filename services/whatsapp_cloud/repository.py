@@ -20,6 +20,7 @@ from db.models.whatsapp_cloud import (
     WhatsAppCredential,
     WhatsAppOutboundIntent,
 )
+from services.whatsapp_cloud.config import WHATSAPP_COEXISTENCE_FEATURE
 from services.whatsapp_cloud.crypto import open_whatsapp_token, seal_whatsapp_token
 from services.whatsapp_cloud.repository_helpers import (
     ACTIVE_LIFECYCLES,
@@ -62,6 +63,7 @@ class WhatsAppCloudRepository(WhatsAppCloudRepositoryRuntimeMixin):
             meta_app_key=meta_app_key,
             return_surface=return_surface,
             correlation_id=correlation_id,
+            feature_type=WHATSAPP_COEXISTENCE_FEATURE,
             status="pending",
             expires_at=_utcnow() + timedelta(seconds=ttl_seconds),
         )
