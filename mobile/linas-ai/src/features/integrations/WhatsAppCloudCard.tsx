@@ -79,7 +79,7 @@ export function WhatsAppCloudCard({
         comingSoonLabel={tr('comingSoon')}
         healthLabel={tr('integrationStatusConnected')}
         menuLabel={tr('disconnectAccount')}
-        showConnect={!connected && connectable && !confirmOpen}
+        showConnect={!connected && connectable}
         showMenu={connected}
         showHealth={healthy}
         onConnect={() => {
