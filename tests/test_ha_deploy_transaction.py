@@ -1434,6 +1434,70 @@ def test_release_import_fsync_is_absolute_from_any_working_directory(tmp_path: P
     assert result.returncode == 0, result.stderr
 
 
+def test_release_source_bundle_verification_uses_disk_backed_scratch() -> None:
+    source = _helper()
+    verifier = source[
+        source.index("assert_release_bundle() {") : source.index("release_bundle_install_confirmation() {")
+    ]
+    assert "RELEASE_VERIFY_TMP_ROOT=$META_HA_STATE_ROOT/release-verification-tmp" in source
+    assert 'mktemp -d -p "$RELEASE_VERIFY_TMP_ROOT" source-bundle.XXXXXXXX' in verifier
+    assert "reap_stale_release_verify_tmp" in verifier
+    assert "path.parent != root" in source
+    assert "stat.S_IMODE(root_info.st_mode) != 0o700" in source
+    assert "mktemp -d -p /run linasbot-source-bundle.XXXXXXXX" not in verifier
+
+
+def test_release_source_verification_reaper_is_closed_and_fail_closed(tmp_path: Path) -> None:
+    script = _embedded_python("reap_stale_release_verify_tmp")
+    script = script.replace("root_info.st_uid != 0", "root_info.st_uid != os.getuid()")
+    script = script.replace("root_info.st_gid != 0", "root_info.st_gid != os.getgid()")
+    script = script.replace("info.st_uid != 0", "info.st_uid != os.getuid()")
+    script = script.replace("info.st_gid != 0", "info.st_gid != os.getgid()")
+
+    root = tmp_path.resolve() / "release-verification-tmp"
+    root.mkdir(mode=0o700)
+    stale = root / "source-bundle.Ab12Cd34"
+    stale.mkdir(mode=0o700)
+    (stale / "objects").mkdir()
+    accepted = subprocess.run(
+        [sys.executable, "-B", "-I", "-S", "-", str(root)],
+        input=script,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert accepted.returncode == 0, accepted.stderr
+    assert list(root.iterdir()) == []
+
+    stale.mkdir(mode=0o700)
+    unknown = root / "unknown"
+    unknown.mkdir(mode=0o700)
+    rejected = subprocess.run(
+        [sys.executable, "-B", "-I", "-S", "-", str(root)],
+        input=script,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert rejected.returncode != 0
+    assert "unsafe object" in rejected.stderr
+    assert stale.is_dir()
+    assert unknown.is_dir()
+
+
+def test_release_bundle_local_install_preserves_fail_fast_cleanup() -> None:
+    source = _helper()
+    cluster = source[
+        source.index("install_release_bundle_cluster() {") : source.index("install_lb_ready_attestation_cluster() {")
+    ]
+    assert "local_install_rc=0" in cluster
+    assert "set +e\n    (\n      set -e\n      install_release_bundle node01" in cluster
+    assert "local_install_rc=$?\n    set -e" in cluster
+    assert "install_release_bundle node01" in cluster
+    assert '"$confirmation" || rc=$?' not in cluster
+    assert cluster.index("local_install_rc=$?") < cluster.index("cleanup_remote_exact_helper")
+
+
 def test_forward_and_rollback_admission_prove_exact_process_queue_and_live_env() -> None:
     source = _helper()
     proof = source[source.index("assert_exact_runtime_process_contract() {") : source.index("assert_ready() {")]
