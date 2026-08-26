@@ -1,0 +1,64 @@
+# Bind the fixed Meta test number to tenant linas for permission-review filming.
+name: WA App Review Test Number Bind
+
+on:
+  workflow_dispatch:
+    inputs:
+      PHASE:
+        description: "Validate the fixed Meta asset or bind it to tenant linas"
+        required: true
+        type: choice
+        options:
+          - DRY_RUN
+          - BIND
+      CONFIRM:
+        description: "DRY_RUN_WA_APP_REVIEW_BIND or BIND_LINAS_WABA_1409769574350248_PHONE_1322897994230591"
+        required: true
+        type: string
+
+concurrency:
+  group: meta-social-cutover
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    name: Validate or bind the fixed App Review test number
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: meta-social-cutover
+    steps:
+      - name: Run the exact guarded bind from the deployed release
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        env:
+          EXPECTED_RELEASE_SHA: ${{ github.sha }}
+          PHASE: ${{ inputs.PHASE }}
+          CONFIRM: ${{ inputs.CONFIRM }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 12m
+          envs: EXPECTED_RELEASE_SHA,PHASE,CONFIRM
+          script: |
+            set -euo pipefail
+            if [ "$PHASE" = DRY_RUN ] && [ "$CONFIRM" = DRY_RUN_WA_APP_REVIEW_BIND ]; then
+              MODE=dry-run
+            elif [ "$PHASE" = BIND ] && \
+                 [ "$CONFIRM" = BIND_LINAS_WABA_1409769574350248_PHONE_1322897994230591 ]; then
+              MODE=bind
+            else
+              echo "[wa-app-review-bind] confirmation mismatch" >&2
+              exit 2
+            fi
+            REPO_DIR=/opt/linasbot
+            sudo -E "$REPO_DIR/venv/bin/python" \
+              "$REPO_DIR/scripts/ha/production_mutation_guard.py" run \
+              --expected-sha "$EXPECTED_RELEASE_SHA" \
+              --script scripts/prod_wa_app_review_bind.sh \
+              -- "$MODE"
