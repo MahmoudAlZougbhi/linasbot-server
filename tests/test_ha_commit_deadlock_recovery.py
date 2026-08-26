@@ -208,9 +208,7 @@ def test_public_readiness_gate_remains_mandatory() -> None:
         in recover
     )
     for_sha = source[
-        source.index("assert_public_ready_for_sha() {") : source.index(
-            "assert_public_ready_after_peer_admission() {"
-        )
+        source.index("assert_public_ready_for_sha() {") : source.index("assert_public_ready_after_peer_admission() {")
     ]
     assert 'assert_public_ready_after_peer_admission "$expected_sha"' in for_sha
     assert "I_UNDERSTAND_SKIPPING_GATES" not in source
