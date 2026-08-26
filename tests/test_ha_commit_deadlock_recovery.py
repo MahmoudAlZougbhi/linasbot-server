@@ -207,6 +207,12 @@ def test_public_readiness_gate_remains_mandatory() -> None:
         '    assert_public_ready_for_sha "$previous_sha"\n    update_recovery_journal "rollback-node01-admit"'
         in recover
     )
+    for_sha = source[
+        source.index("assert_public_ready_for_sha() {") : source.index(
+            "assert_public_ready_after_peer_admission() {"
+        )
+    ]
+    assert 'assert_public_ready_after_peer_admission "$expected_sha"' in for_sha
     assert "I_UNDERSTAND_SKIPPING_GATES" not in source
     assert "I_UNDERSTAND_SKIPPING_GATES" not in workflow
     assert "member.mode != 0o755" in workflow
