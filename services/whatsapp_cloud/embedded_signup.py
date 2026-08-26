@@ -224,8 +224,8 @@ async def complete_embedded_signup(
                     phones=phones,
                 )
             except SignupAssetError as exc:
-                status = 403 if exc.code == "phone_not_in_waba" else 400
-                raise WhatsAppSignupError(exc.code, exc.message, http_status=status) from exc
+                http_status = 403 if exc.code == "phone_not_in_waba" else 400
+                raise WhatsAppSignupError(exc.code, exc.message, http_status=http_status) from exc
             phone = str(matched.get("id") or "").strip()
             # Fail closed: never allow ordinary API Setup path — coexistence feature only.
             if attempt.feature_type != WHATSAPP_COEXISTENCE_FEATURE:
