@@ -1,10 +1,10 @@
-"""TikTok comment poll: newest-first, skip owner comments, no resume cursor."""
+"""TikTok comment poll: newest-first, skip owner comments, persist cursor when paged out."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from services.tiktok_business.comment_sync import should_enqueue_comment_ai
+from services.tiktok_business.comment_sync import persist_comment_page_cursor, should_enqueue_comment_ai
 from services.tiktok_business.repository_content import TikTokContentRepository
 from tests.tiktok_business.conftest import seed_connection
 
@@ -105,3 +105,11 @@ def test_upsert_reads_top_level_tiktok_comment_identity(tt_db) -> None:
     assert row.author_user_id == "uid-visitor"
     assert row.author_username == "visitor_tt"
     assert row.is_reply is False
+
+
+def test_comment_page_cursor_is_retained_when_limit_hit() -> None:
+    stored, truncated = persist_comment_page_cursor(
+        page_number=3, page_limit=3, has_more=True, cursor="keep-me"
+    )
+    assert truncated is True
+    assert stored == "keep-me"

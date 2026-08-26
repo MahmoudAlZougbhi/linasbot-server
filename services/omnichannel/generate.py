@@ -49,6 +49,10 @@ async def handle_omnichannel_generate(job: QueueJob) -> dict[str, Any]:
         payload=payload,
     )
     if skip_reason:
+        if reservation_id:
+            from services.credit_ledger_service import credit_ledger_service
+
+            credit_ledger_service.release(tenant_id=tenant_id, reservation_id=reservation_id)
         with whatsapp_session(require=True) as session:
             row = session.get(OmnichannelInboundEvent, inbound_id)
             if row is not None:
@@ -66,6 +70,19 @@ async def handle_omnichannel_generate(job: QueueJob) -> dict[str, Any]:
         raise RuntimeError("empty_canonical_reply")
 
     with whatsapp_session(require=True) as session:
+        from services.omnichannel.store import operator_takeover_blocks_ai
+
+        if operator_takeover_blocks_ai(session, conversation_key=conversation_key, control_epoch=control_epoch):
+            row = session.get(OmnichannelInboundEvent, inbound_id)
+            if row is not None:
+                row.state = "failed"
+                row.last_error = "operator_takeover"
+                session.commit()
+            if reservation_id:
+                from services.credit_ledger_service import credit_ledger_service
+
+                credit_ledger_service.release(tenant_id=tenant_id, reservation_id=reservation_id)
+            return {"skipped": True, "reason": "operator_takeover"}
         outbox, created = persist_outbound(
             session,
             tenant_id=tenant_id,

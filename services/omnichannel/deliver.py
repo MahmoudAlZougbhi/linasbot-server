@@ -17,6 +17,15 @@ from services.queues.models import QueueJob
 MAX_ATTEMPTS = 8
 
 
+def _limiter_provider(channel: str) -> str:
+    ch = (channel or "").strip().lower()
+    if ch in {"instagram", "facebook", "whatsapp"}:
+        return "meta"
+    if ch == "tiktok":
+        return "tiktok"
+    return "openai"
+
+
 async def handle_omnichannel_deliver(job: QueueJob) -> dict[str, Any]:
     outbox_id = str((job.payload or {}).get("outbox_id") or "").strip()
     if not outbox_id:
@@ -25,7 +34,7 @@ async def handle_omnichannel_deliver(job: QueueJob) -> dict[str, Any]:
         row = session.get(OmnichannelOutboundOutbox, outbox_id)
         if row is None:
             raise PermanentJobError("outbox_missing")
-        if row.state in {"delivered", "dead_letter", "needs_owner_action"}:
+        if row.state in {"delivered", "dead_letter", "needs_owner_action", "reconciliation_required"}:
             return {"skipped": True, "reason": row.state}
         if row.regenerated:
             raise PermanentJobError("canonical_body_must_not_regenerate")
@@ -44,14 +53,51 @@ async def handle_omnichannel_deliver(job: QueueJob) -> dict[str, Any]:
             "credit_reservation_id": row.credit_reservation_id,
             "attempt_count": row.attempt_count,
             "source": row.source,
+            "control_epoch": int(row.control_epoch or 0),
         }
 
-    limiter = DistributedProviderLimiter()
-    result = await _send(snapshot)
     channel = str(snapshot["channel"])
     account_id = str(snapshot["account_id"])
     surface = str(snapshot["surface"])
     attempt_count = int(snapshot["attempt_count"] or 0)
+    tenant_id = str(snapshot["tenant_id"])
+    if snapshot.get("source") == "ai":
+        from services.omnichannel.store import operator_takeover_blocks_ai
+
+        with whatsapp_session(require=True) as session:
+            if operator_takeover_blocks_ai(
+                session,
+                conversation_key=str(snapshot["conversation_key"]),
+                control_epoch=int(snapshot.get("control_epoch") or 0),
+            ):
+                _mark(outbox_id, state="needs_owner_action", reason="operator_takeover")
+                _release_credits_if_never_submitted(snapshot, submitted=False)
+                return {"ok": False, "reason": "operator_takeover"}
+
+    limiter = DistributedProviderLimiter()
+    provider = _limiter_provider(channel)
+    entered = False
+    try:
+        gate = limiter.try_enter(
+            provider=provider,
+            tenant_id=tenant_id,
+            account_id=account_id,
+            endpoint=surface,
+        )
+        if not gate.allowed:
+            _defer(
+                outbox_id,
+                delay=gate.retry_after_seconds,
+                state="rate_limited",
+                reason=gate.reason,
+            )
+            incr("retry_transient")
+            raise RuntimeError(f"limiter:{gate.reason}")
+        entered = True
+        result = await _send(snapshot)
+    finally:
+        if entered:
+            limiter.exit(provider=provider, tenant_id=tenant_id)
 
     decision = classify_http_delivery(
         http_status=result.get("http_status"),
@@ -67,12 +113,17 @@ async def handle_omnichannel_deliver(job: QueueJob) -> dict[str, Any]:
         connection_reset_before_submit=bool(result.get("reset_before_submit")),
     )
     if decision.kind == "success":
-        _finish_success(outbox_id, result)
+        try:
+            _finish_success(outbox_id, result)
+        except Exception:
+            _mark(outbox_id, state="reconciliation_required", reason="accepted_local_state_update_failed")
+            mark_needs_owner_action(event_id=outbox_id, kind="deliver", reason="accepted_local_state_update_failed")
+            return {"ok": False, "reason": "reconciliation_required"}
         incr("delivered")
         return {"ok": True, "provider_message_id": result.get("message_id")}
     if decision.kind == "transient":
         limiter.record_throttle(
-            provider=channel,
+            provider=provider,
             account_id=account_id,
             endpoint=surface,
             headers=result.get("headers") if isinstance(result.get("headers"), dict) else None,

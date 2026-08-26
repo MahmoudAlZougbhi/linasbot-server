@@ -59,7 +59,7 @@ class WorkerRuntime:
                 return None
             return max(0.05, float(decision.retry_after_seconds))
         except Exception:
-            return None
+            return 5.0
 
     def _release_provider(self, job: Any) -> None:
         try:
@@ -73,8 +73,12 @@ class WorkerRuntime:
         if self._stopping or not shutdown_coordinator.accept_queue_work:
             await asyncio.sleep(0.05)
             return
-        self._backend.heartbeat(worker_id=self.worker_id, queue=self.queue)
-        job = self._backend.claim(self.queue, worker_id=self.worker_id, timeout=3)
+        try:
+            self._backend.heartbeat(worker_id=self.worker_id, queue=self.queue)
+            job = self._backend.claim(self.queue, worker_id=self.worker_id, timeout=3)
+        except Exception:
+            await asyncio.sleep(0.5)
+            return
         if job is None:
             return
         if not shutdown_coordinator.track_job_enter():
@@ -83,7 +87,16 @@ class WorkerRuntime:
         conv_lease = None
         held_inflight = False
         try:
-            if self._backend.tenant_inflight(job.tenant_id) >= DEFAULT_TENANT_INFLIGHT:
+            try:
+                busy = self._backend.tenant_inflight(job.tenant_id) >= DEFAULT_TENANT_INFLIGHT
+            except Exception:
+                try:
+                    self._backend.requeue_soft(job, delay_seconds=0.5)
+                except Exception:
+                    pass
+                await asyncio.sleep(0.5)
+                return
+            if busy:
                 self._backend.requeue_soft(job, delay_seconds=1.0)
                 return
             delay = self._provider_gate(job)
