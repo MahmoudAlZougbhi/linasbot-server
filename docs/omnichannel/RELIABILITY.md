@@ -30,7 +30,7 @@ CI persist smoke (SQLite, no workers):
 
 `python scripts/loadtest/run_omnichannel_cert.py --ci-smoke`
 
-Isolated local stack (Docker Postgres `:55432` + Redis `:56379`, loopback HTTP ingress, stub AI/provider in the cert worker process only):
+Isolated local stack (Docker Postgres `:55432` + Redis `:56379`, loopback HTTP ingress, stub AI/provider in the cert worker process only). Cert Postgres disables `fsync` because Docker Desktop disk latency is not production Managed PG; never copy that setting to production.
 
 ```
 LINAS_OMNI_CERT_STAGING=1 python scripts/loadtest/omnichannel_live_cert.py --compressed

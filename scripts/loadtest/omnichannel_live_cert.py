@@ -63,6 +63,8 @@ def _prepare_env() -> dict[str, str]:
     env["LINAS_QUEUE_TENANT_INFLIGHT"] = "64"
     env["LINAS_QUEUE_CONCURRENCY_HIGH"] = "16"
     env["LINAS_QUEUE_CONCURRENCY_BACKGROUND"] = "8"
+    env["LINAS_WHATSAPP_DB_POOL_SIZE"] = "32"
+    env["LINAS_WHATSAPP_DB_MAX_OVERFLOW"] = "32"
     env["PYTHONPATH"] = str(ROOT)
     env["PYTHONUNBUFFERED"] = "1"
     return env
