@@ -383,9 +383,7 @@ def test_admit_live_ready_requires_200_on_platform_sha(
 def test_helper_uses_sha_aware_serving_and_later_helper_rollback_phase() -> None:
     source = HELPER.read_text(encoding="utf-8")
     live_admission = source[source.index("_live_ready_admission() {") : source.index("assert_public_ready() {")]
-    ready_assertion = source[
-        source.index("assert_serving_ready_for_sha() {") : source.index("assert_public_ready() {")
-    ]
+    ready_assertion = source[source.index("assert_serving_ready_for_sha() {") : source.index("assert_public_ready() {")]
     serving = source[source.index("node_assert_serving_contract() {") : source.index("node_assert_release_ready() {")]
     clear = source[source.index("node_clear_maintenance() {") : source.index("node_assert_release_drained() {")]
     later = source[source.index("assert_later_dispatch_helper() {") : source.index("assert_public_ready() {")]

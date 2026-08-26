@@ -14,9 +14,7 @@ HELPER = ROOT / "scripts" / "ha" / "deploy_meta_release_ha.sh"
 
 def _ready_assertion_source() -> str:
     source = HELPER.read_text(encoding="utf-8")
-    return source[
-        source.index("assert_serving_ready_for_sha() {") : source.index("assert_public_ready() {")
-    ]
+    return source[source.index("assert_serving_ready_for_sha() {") : source.index("assert_public_ready() {")]
 
 
 def test_live_ready_fetch_normalizes_socket_timeout(
@@ -33,6 +31,7 @@ def test_live_ready_fetch_normalizes_socket_timeout(
 
 
 def test_serving_ready_assertion_retries_transient_probe_failure() -> None:
+    expected_sha = "a" * 40
     script = f"""
 probe_count=0
 probe_serving_ready_for_sha() {{
@@ -42,13 +41,14 @@ probe_serving_ready_for_sha() {{
 sleep() {{ :; }}
 die() {{ return 1; }}
 {_ready_assertion_source()}
-assert_serving_ready_for_sha "{'a' * 40}"
+assert_serving_ready_for_sha "{expected_sha}"
 test "$probe_count" = 2
 """
     subprocess.run(["bash", "-c", script], check=True)
 
 
 def test_serving_ready_assertion_stays_bounded_when_probe_never_recovers() -> None:
+    expected_sha = "a" * 40
     script = f"""
 probe_count=0
 sleep_count=0
@@ -59,7 +59,7 @@ probe_serving_ready_for_sha() {{
 sleep() {{ sleep_count=$((sleep_count + 1)); }}
 die() {{ return 1; }}
 {_ready_assertion_source()}
-if assert_serving_ready_for_sha "{'a' * 40}"; then
+if assert_serving_ready_for_sha "{expected_sha}"; then
   exit 1
 fi
 test "$probe_count" = 3

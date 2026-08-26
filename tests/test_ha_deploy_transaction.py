@@ -972,9 +972,7 @@ def test_per_node_deploy_sentinel_is_transaction_bound_and_last_to_leave() -> No
     assert clear.index('probe_serving_ready_for_sha "$admission_sha"') < clear.index(
         'write_admission_proof "$tx_dir" "$admission_sha"'
     )
-    assert clear.index('clear_deploy_node_sentinel "$tx_dir"') < clear.rindex(
-        'remove_maintenance_boot_guard "$tx_dir"'
-    )
+    assert clear.index('clear_deploy_node_sentinel "$tx_dir"') < clear.rindex('remove_maintenance_boot_guard "$tx_dir"')
     assert clear.rindex('remove_maintenance_boot_guard "$tx_dir"') < clear.index(
         'node_assert_serving_contract "$admission_sha"'
     )
