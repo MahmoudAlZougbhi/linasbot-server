@@ -48,12 +48,20 @@ def _require_token(access_token: str | None) -> str:
     return token
 
 
-def _allowed_waba_ids() -> frozenset[str] | None:
+def _allowed_waba_ids() -> frozenset[str]:
     raw = (os.getenv(ALLOWED_WABA_ENV) or "").strip()
     if not raw:
-        return None
+        raise AppReviewBindError(
+            "waba_allowlist_required",
+            f"{ALLOWED_WABA_ENV} must explicitly allow the App Review test WABA",
+        )
     values = {part.strip() for part in raw.split(",") if part.strip().isdigit()}
-    return frozenset(values) if values else None
+    if not values:
+        raise AppReviewBindError(
+            "waba_allowlist_invalid",
+            f"{ALLOWED_WABA_ENV} contains no numeric WABA IDs",
+        )
+    return frozenset(values)
 
 
 def _assert_tenant(tenant_id: str) -> str:
@@ -77,7 +85,7 @@ def _assert_numeric_ids(*, waba_id: str, phone_number_id: str) -> tuple[str, str
             "Meta sample phone_number_id 123456123 is not a real asset",
         )
     allowed = _allowed_waba_ids()
-    if allowed is not None and waba not in allowed:
+    if waba not in allowed:
         raise AppReviewBindError("waba_not_allowlisted", f"WABA is not in {ALLOWED_WABA_ENV}")
     return waba, phone
 
@@ -111,6 +119,12 @@ async def _validate_meta_assets(
         raise AppReviewBindError("token_debug_failed", exc.message) from exc
     if not dbg.get("is_valid", True):
         raise AppReviewBindError("token_invalid", "Meta debug_token reports token is not valid")
+    token_app_id = str(dbg.get("app_id") or "").strip()
+    if token_app_id != app.app_id:
+        raise AppReviewBindError(
+            "token_app_mismatch",
+            "Meta token belongs to a different app",
+        )
     scopes_raw = dbg.get("scopes") if isinstance(dbg, dict) else None
     scopes = [str(s) for s in scopes_raw] if isinstance(scopes_raw, list) else []
     granted = set(scopes)

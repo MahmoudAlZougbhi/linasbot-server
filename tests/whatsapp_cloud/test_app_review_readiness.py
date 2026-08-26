@@ -48,6 +48,7 @@ def wa_db(tmp_path, monkeypatch):
     monkeypatch.setenv("LINAS_WHATSAPP_DATABASE_URL", url)
     monkeypatch.setenv("LINAS_WHATSAPP_ALLOW_SQLITE", "true")
     monkeypatch.setenv("META_WHATSAPP_APP_REVIEW_BIND_TOKEN", TEST_TOKEN)
+    monkeypatch.setenv("META_WHATSAPP_APP_REVIEW_ALLOWED_WABA_IDS", TEST_WABA)
     monkeypatch.setenv("WHATSAPP_CLOUD_PUBLIC_AVAILABILITY", "false")
     reset_engine_for_tests()
     engine = create_engine(url, future=True)

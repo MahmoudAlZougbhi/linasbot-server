@@ -245,6 +245,7 @@ def test_meta_environment_mutations_sync_the_peer_then_require_parity() -> None:
         "meta-app-a-login-config-apply.yml",
         "meta-multi-app-secrets-apply.yml",
         "meta-social-secrets-apply.yml",
+        "meta-whatsapp-app-review-token-apply.yml",
         "meta-webhook-nginx-setup.yml",
     ):
         source = (WORKFLOW_DIR / name).read_text(encoding="utf-8")
@@ -291,6 +292,7 @@ def test_release_only_preflight_enables_recovery_but_mutations_end_with_strict_p
         "meta-app-a-login-config-apply.yml",
         "meta-multi-app-secrets-apply.yml",
         "meta-social-secrets-apply.yml",
+        "meta-whatsapp-app-review-token-apply.yml",
         "meta-webhook-nginx-setup.yml",
     ):
         source = (WORKFLOW_DIR / name).read_text(encoding="utf-8")
@@ -309,6 +311,7 @@ def test_meta_apply_scripts_are_static_stage_only_writers() -> None:
         "prod_apply_meta_app_a_login_config.sh",
         "prod_apply_meta_multi_app.sh",
         "prod_apply_meta_social_secrets.sh",
+        "prod_apply_meta_whatsapp_app_review_token.sh",
         "prod_set_meta_verify_token.sh",
     )
     forbidden_runtime_commands = (
@@ -336,6 +339,7 @@ def test_meta_apply_scripts_reject_direct_non_transactional_invocation() -> None
         "prod_apply_meta_app_a_login_config.sh",
         "prod_apply_meta_multi_app.sh",
         "prod_apply_meta_social_secrets.sh",
+        "prod_apply_meta_whatsapp_app_review_token.sh",
         "prod_set_meta_verify_token.sh",
     ):
         result = subprocess.run(
@@ -380,6 +384,7 @@ def test_production_meta_ops_never_select_the_legacy_nested_runtime() -> None:
         ROOT / "scripts" / "prod_apply_meta_app_a_login_config.sh",
         ROOT / "scripts" / "prod_apply_meta_multi_app.sh",
         ROOT / "scripts" / "prod_apply_meta_social_secrets.sh",
+        ROOT / "scripts" / "prod_apply_meta_whatsapp_app_review_token.sh",
         ROOT / "scripts" / "prod_restore_meta_social_rollback.sh",
         ROOT / "scripts" / "prod_set_meta_verify_token.sh",
         ROOT / "scripts" / "prod_snapshot_meta_social_rollback.sh",

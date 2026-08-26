@@ -33,6 +33,7 @@ META_ENV_LIVE_WORKFLOWS = (
     "meta-app-a-login-config-apply.yml",
     "meta-multi-app-secrets-apply.yml",
     "meta-social-secrets-apply.yml",
+    "meta-whatsapp-app-review-token-apply.yml",
     "meta-webhook-nginx-setup.yml",
     "whatsapp-cloud-phase1-apply.yml",
 )

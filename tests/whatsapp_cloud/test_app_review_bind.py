@@ -47,7 +47,7 @@ def wa_db(tmp_path, monkeypatch):
     monkeypatch.setenv("LINAS_WHATSAPP_DATABASE_URL", url)
     monkeypatch.setenv("LINAS_WHATSAPP_ALLOW_SQLITE", "true")
     monkeypatch.setenv("META_WHATSAPP_APP_REVIEW_BIND_TOKEN", TEST_TOKEN)
-    monkeypatch.delenv("META_WHATSAPP_APP_REVIEW_ALLOWED_WABA_IDS", raising=False)
+    monkeypatch.setenv("META_WHATSAPP_APP_REVIEW_ALLOWED_WABA_IDS", TEST_WABA)
     reset_engine_for_tests()
     engine = create_engine(url, future=True)
     Base.metadata.create_all(engine)
@@ -145,6 +145,20 @@ async def test_reject_wrong_tenant(wa_db, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_reject_missing_waba_allowlist(wa_db, monkeypatch):
+    monkeypatch.delenv("META_WHATSAPP_APP_REVIEW_ALLOWED_WABA_IDS", raising=False)
+    with pytest.raises(AppReviewBindError) as exc:
+        await bind_app_review_test_number(
+            tenant_id="linas",
+            waba_id=TEST_WABA,
+            phone_number_id=TEST_PHONE,
+            access_token=None,
+            actor_user_id="po1",
+        )
+    assert exc.value.code == "waba_allowlist_required"
+
+
+@pytest.mark.asyncio
 async def test_reject_sample_phone_and_invalid_token(wa_db, monkeypatch):
     with pytest.raises(AppReviewBindError) as exc:
         await bind_app_review_test_number(
@@ -183,6 +197,27 @@ async def test_reject_expired_token_fail_closed(wa_db, monkeypatch):
             actor_user_id="po1",
         )
     assert exc.value.code == "token_invalid"
+
+
+@pytest.mark.asyncio
+async def test_reject_token_issued_for_different_meta_app(wa_db, monkeypatch):
+    async def _wrong_app(**kwargs: Any) -> dict[str, Any]:
+        return {
+            "is_valid": True,
+            "app_id": "9999999999999999",
+            "scopes": ["whatsapp_business_management", "whatsapp_business_messaging"],
+        }
+
+    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.debug_token", _wrong_app)
+    with pytest.raises(AppReviewBindError) as exc:
+        await bind_app_review_test_number(
+            tenant_id="linas",
+            waba_id=TEST_WABA,
+            phone_number_id=TEST_PHONE,
+            access_token=None,
+            actor_user_id="po1",
+        )
+    assert exc.value.code == "token_app_mismatch"
 
 
 @pytest.mark.asyncio
