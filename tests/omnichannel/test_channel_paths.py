@@ -122,7 +122,9 @@ async def test_out_of_order_conversation_waits(omni_db, durable_jobs, monkeypatc
         return "canonical", None, None
 
     monkeypatch.setattr("services.omnichannel.generate._generate_canonical", ok)
-    with pytest.raises(RuntimeError, match="conversation_order_wait"):
+    from services.queues.handlers import JobNotReady
+
+    with pytest.raises(JobNotReady, match="conversation_order_wait"):
         await handle_omnichannel_generate(
             make_job(
                 job_type="omni_generate",

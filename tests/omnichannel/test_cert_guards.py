@@ -112,3 +112,10 @@ def test_comment_pagination_persists_cursor_when_capped():
     )
     assert done == ""
     assert truncated_done is False
+
+
+def test_mix_event_does_not_serialize_all_traffic_on_forty_conversations():
+    from scripts.loadtest.omnichannel_cert_runtime import mix_event
+
+    keys = {mix_event(seq=i, tenant_id="omni-cert-local", nonce="t").conversation_key for i in range(200)}
+    assert len(keys) > 40

@@ -40,7 +40,9 @@ LINAS_OMNI_CERT_STAGING=1 python scripts/loadtest/omnichannel_live_cert.py --soa
 
 Guards: `LINAS_OMNI_CERT_STAGING=1`, loopback/allowlisted hosts, `omni-cert-` tenant prefix, rate/duration/OpenAI cost caps, reject `www.linasaibot.com` and production provider hostnames.
 
-24-hour soak must be checkpointed segments writing `artifacts/omnichannel-cert/` (gitignored). Do not run a 24-hour GitHub Actions job without an explicit cost approval.
+Conversation order wait (`JobNotReady`) soft-requeues and must not consume DLQ attempts. The cert mix uses unique conversation keys for 90% of events so 1,900/min is not serialized onto 40 keys; 10% share a small pool to exercise ordering.
+
+24-hour soak must be checkpointed segments writing `artifacts/omnichannel-cert/` (gitignored). `LINAS_OMNI_CERT_STAGING=1 python scripts/loadtest/omnichannel_cert_soak.py --segments 24 --segment-seconds 3600 --start-at 0`. Do not run a 24-hour GitHub Actions job without an explicit cost approval.
 
 ## Provider capacity (official docs, retrieved 2026-08-26)
 

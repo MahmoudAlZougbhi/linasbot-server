@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from sqlalchemy import func, select
 
 from db.models.omnichannel import OmnichannelInboundEvent, OmnichannelOutboundOutbox

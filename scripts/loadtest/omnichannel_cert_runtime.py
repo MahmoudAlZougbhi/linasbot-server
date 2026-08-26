@@ -64,7 +64,9 @@ def mix_event(*, seq: int, tenant_id: str, scale: float = 1.0, nonce: str = "") 
         account_id=f"acct-{seq % 7}",
         channel=channel,  # type: ignore[arg-type]
         surface=surface,  # type: ignore[arg-type]
-        conversation_key=f"{tenant_id}:{channel}:{seq % 40}",
+        conversation_key=(
+            f"{tenant_id}:{channel}:shared-{seq % 25}" if seq % 10 == 3 else f"{tenant_id}:{channel}:c-{seq}"
+        ),
         provider_timestamp=time.time() - (seq % 7) * 0.05,
         payload_hash=pid,
         payload={"text": "cert", "i": seq, "control_epoch": 0},

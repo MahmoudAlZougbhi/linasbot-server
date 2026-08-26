@@ -22,7 +22,6 @@ PRODUCTION_HOSTS = frozenset(
         "graph.instagram.com",
         "business-api.tiktok.com",
         "api.openai.com",
-        "graph.facebook.com",
         "graph.whatsapp.com",
     }
 )

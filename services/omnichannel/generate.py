@@ -8,7 +8,7 @@ from db.session import whatsapp_session
 from services.omnichannel.accept import enqueue_deliver_job
 from services.omnichannel.metrics import incr
 from services.omnichannel.store import conversation_has_earlier_unfinished, persist_outbound
-from services.queues.handlers import PermanentJobError
+from services.queues.handlers import JobNotReady, PermanentJobError
 from services.queues.models import QueueJob
 
 
@@ -32,7 +32,7 @@ async def handle_omnichannel_generate(job: QueueJob) -> dict[str, Any]:
             provider_timestamp=float(row.provider_timestamp or 0),
             inbound_id=inbound_id,
         ):
-            raise RuntimeError("conversation_order_wait")
+            raise JobNotReady("conversation_order_wait")
         row.state = "generating"
         row.attempt_count = int(row.attempt_count or 0) + 1
         session.commit()

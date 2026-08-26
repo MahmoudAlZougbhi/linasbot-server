@@ -28,5 +28,8 @@ async def run_bounded_pool(*, queue: str, one_cycle: JobWorker, stopping: Callab
 
 async def _loop(one_cycle: JobWorker, stopping: Callable[[], bool]) -> None:
     while not stopping():
-        await one_cycle()
+        try:
+            await one_cycle()
+        except Exception:
+            await asyncio.sleep(0.5)
         await asyncio.sleep(0)
