@@ -66,12 +66,14 @@ async def process_tiktok_comment_ai(
         if not automation:
             job.delivery_status = "skipped"
             job.last_error = "tenant_comment_automation_off"
+            content.mark_comment_ai_processed(tenant_id=tenant_id, comment_id=comment_id)
             session.commit()
             _log_usage(tenant_id=tenant_id, comment_id=comment_id, outcome="skipped")
             return {"skipped": True, "reason": "automation_off"}
         if not comments_manage_ready(connection.granted_scopes):
             job.delivery_status = "skipped"
             job.last_error = "missing_manage_comment_scope"
+            content.mark_comment_ai_processed(tenant_id=tenant_id, comment_id=comment_id)
             session.commit()
             return {"skipped": True, "reason": "permission_required"}
         if ai_generation_blocked(tenant_id):
@@ -108,6 +110,7 @@ async def process_tiktok_comment_ai(
             job.delivery_status = "skipped"
             job.last_error = (reason or "ai_no_reply")[:255]
             job.model = model[:64]
+            content.mark_comment_ai_processed(tenant_id=tenant_id, comment_id=comment_id)
             session.commit()
         _log_usage(
             tenant_id=tenant_id,
@@ -157,6 +160,7 @@ async def process_tiktok_comment_ai(
             if exc.retryable and int(job.attempt_count or 0) < MAX_ATTEMPTS:
                 job.delivery_status = "retrying"
                 job.next_retry_at = datetime.now(UTC) + timedelta(seconds=min(300, 8 * (2 ** int(job.attempt_count))))
+                content.release_comment_ai_claim(tenant_id=tenant_id, comment_id=comment_id)
             else:
                 job.delivery_status = "failed"
             session.commit()
@@ -180,6 +184,7 @@ async def process_tiktok_comment_ai(
         job.delivery_status = "sent"
         job.tiktok_request_id = str(published.get("request_id") or "")[:128]
         job.tiktok_reply_id = str(published.get("comment_id") or published.get("reply_id") or "")[:64]
+        content.mark_comment_ai_processed(tenant_id=tenant_id, comment_id=comment_id)
         session.commit()
     _log_usage(tenant_id=tenant_id, comment_id=comment_id, outcome="ok", model=model, tokens=tokens, cost=cost)
     return {"ok": True, "request_id": str(published.get("request_id") or "")}

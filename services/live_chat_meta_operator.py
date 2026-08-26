@@ -95,6 +95,20 @@ async def deliver_live_chat_meta_operator_text(
     if not account:
         return {"success": False, "error": "meta_account_not_found", "delivered": False}
 
+    from services.job_queue import job_queue
+    from services.omnichannel.operator_enqueue import enqueue_operator_reply
+    from services.queues.config import redis_required
+
+    if redis_required() and getattr(job_queue, "production_ready", False):
+        return enqueue_operator_reply(
+            tenant_id=tenant,
+            channel=channel,
+            surface="operator",
+            account_id=account,
+            conversation_key=f"{tenant}:{channel}:{sender_id}",
+            text=text,
+        )
+
     result = await deliver_meta_dm(
         tenant_id=tenant,
         source_channel=_source_channel_for_meta(channel),

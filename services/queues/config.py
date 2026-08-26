@@ -6,9 +6,9 @@ import os
 from typing import Final
 
 QUEUE_NAMES: Final[tuple[str, ...]] = (
-    "high_priority",  # customer/social Meta DMs/comments
+    "high_priority",  # DMs, WhatsApp, Web Chat, operator outbound
     "interactive",  # owner async work
-    "background",  # scheduled publishing
+    "background",  # public comments, polling, reconcile, TikTok outbound
     "expensive",  # creative image/video
 )
 

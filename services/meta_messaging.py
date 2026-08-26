@@ -398,25 +398,10 @@ class MetaMessagingAdapter:
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            error_code: int | str = "unknown"
-            error_subcode: int | str = "unknown"
-            try:
-                error_payload = response.json()
-                error = error_payload.get("error") if isinstance(error_payload, dict) else None
-                if isinstance(error, dict):
-                    raw_code = error.get("code")
-                    raw_subcode = error.get("error_subcode")
-                    if isinstance(raw_code, int):
-                        error_code = raw_code
-                    if isinstance(raw_subcode, int):
-                        error_subcode = raw_subcode
-            except (TypeError, ValueError):
-                pass
-            # Never propagate Meta's raw response body into application logs: it
-            # may contain identifiers or request-specific diagnostic material.
-            raise RuntimeError(
-                f"Meta Send API returned HTTP {response.status_code} code={error_code} subcode={error_subcode}"
-            ) from exc
+            from services.omnichannel.meta_errors import raise_from_meta_response
+
+            raise_from_meta_response(response)
+            raise RuntimeError("meta_send_failed") from exc
         return cast(dict[str, Any], response.json())
 
     async def send_text_message(self, recipient_id: str, text: str) -> dict[str, Any]:

@@ -31,6 +31,8 @@ from db.models import (  # noqa: E402, F401 — register models on metadata
     MetaCommentSyncCursorRow,
     MetaOAuthStateRow,
     MetaRegistryAuditEvent,
+    OmnichannelInboundEvent,
+    OmnichannelOutboundOutbox,
     TenantCmDraftSectionRow,
     TenantCmPublishedStateRow,
     TenantMetaCommentAssetSettingRow,

@@ -30,6 +30,7 @@ from db.models.meta_registry import (
     MetaOAuthStateRow,
     MetaRegistryAuditEvent,
 )
+from db.models.omnichannel import OmnichannelInboundEvent, OmnichannelOutboundOutbox
 from db.models.products import (
     Product,
     ProductConversationContext,
@@ -112,6 +113,8 @@ __all__ = [
     "MetaOAuthStateRow",
     "MetaRegistryAuditEvent",
     "MobileRefreshTokenRow",
+    "OmnichannelInboundEvent",
+    "OmnichannelOutboundOutbox",
     "Product",
     "ProductConversationContext",
     "ProductImage",

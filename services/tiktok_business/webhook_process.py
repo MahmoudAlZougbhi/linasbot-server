@@ -33,12 +33,38 @@ async def process_tiktok_webhook_payload(*, raw_body: bytes, payload: dict[str, 
         if isinstance(parsed, dict):
             content = parsed
 
+    from services.omnichannel.enqueue import AMBIGUOUS_ENQUEUE, enqueue_job, queue_is_durable, should_defer_to_worker
+
+    job_payload = {
+        "event_id": event_id,
+        "event_name": event_name or "unknown",
+        "payload": payload,
+        "content": content,
+    }
     with whatsapp_session() as session:
         content_repo = TikTokContentRepository(session)
         claimed = content_repo.claim_webhook_event(event_id=event_id, event_name=event_name or "unknown")
         if not claimed:
             session.commit()
             return {"accepted": 0, "duplicate": True}
+        if should_defer_to_worker():
+            if not queue_is_durable():
+                session.rollback()
+                raise RuntimeError("tiktok_webhook_queue_unavailable")
+            job_id = enqueue_job(
+                logical_queue="comments" if (event_name or "").startswith("comment.") else "dm_urgent",
+                job_type="tiktok_webhook_event",
+                tenant_id="tiktok",
+                payload=job_payload,
+                idempotency_key=f"tiktok_wh:{event_id}",
+                conversation_key=event_id,
+                provider="tiktok",
+            )
+            if job_id is None or job_id == AMBIGUOUS_ENQUEUE:
+                session.rollback()
+                raise RuntimeError("tiktok_webhook_enqueue_failed")
+            session.commit()
+            return {"accepted": 1, "queued": True, "event": event_name or "unknown"}
         session.commit()
 
     if event_name in {"im_receive_msg", "im_send_msg", "direct_message", "im_mark_read_msg"}:
@@ -52,5 +78,4 @@ async def process_tiktok_webhook_payload(*, raw_body: bytes, payload: dict[str, 
 
         return await handle_comment_webhook(payload=payload, content=content, event_name=event_name)
 
-    # Unknown event types are acknowledged after signature + idempotency — no fake success side effects.
     return {"accepted": 1, "event": event_name or "unknown", "ignored": True}

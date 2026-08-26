@@ -1280,31 +1280,13 @@ def needs_owner_action_result() -> dict[str, Any]:
 def _returned_rejection_is_definitive(result: Any) -> bool:
     """Return whether a result proves that Meta did not accept the send.
 
-    Only an explicit HTTP 4xx response is safe to retry automatically.  A
-    returned 5xx, timeout-like value, or an unclassified failure may describe
-    a request that Meta accepted before the response was lost.
+    HTTP 429/408/5xx are retryable, not owner-action. Only a non-throttle 4xx
+    proves the provider rejected the request.
     """
 
-    if not isinstance(result, dict):
-        return False
-    candidates = (
-        result.get("error"),
-        result.get("error_message"),
-        result.get("reason"),
-        result.get("status_code"),
-        result.get("http_status"),
-    )
-    for candidate in candidates:
-        if isinstance(candidate, int):
-            if 400 <= candidate < 500:
-                return True
-            continue
-        safe_value = str(candidate or "").strip().lower()
-        for pattern in (r"(?:^|_)http_(4\d\d)(?:_|$)", r"(?:^|_)graph_http_(4\d\d)(?:_|$)"):
-            match = re.search(pattern, safe_value)
-            if match is not None and 400 <= int(match.group(1)) < 500:
-                return True
-    return False
+    from services.omnichannel.classify import returned_rejection_is_definitive
+
+    return returned_rejection_is_definitive(result)
 
 
 async def execute_guarded_meta_send(
@@ -1345,14 +1327,17 @@ async def execute_guarded_meta_send(
         return needs_owner_action_result()
     try:
         result = await send()
-    except BaseException:
+    except BaseException as exc:
         if decision.kind == "send":
+            from services.omnichannel.meta_errors import finish_status_for_send_exception
+
+            status, safe_reason = finish_status_for_send_exception(exc)
             try:
                 await asyncio.shield(
                     finish_meta_outbound_attempt(
                         decision,
-                        status="needs_owner_action",
-                        safe_reason="provider_call_ambiguous",
+                        status=status,
+                        safe_reason=safe_reason,
                     )
                 )
             except BaseException:

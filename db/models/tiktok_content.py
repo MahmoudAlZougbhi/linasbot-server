@@ -84,6 +84,7 @@ class TikTokComment(Base):
     create_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_reply: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sql_text("false"))
     ai_processed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sql_text("false"))
+    ai_claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

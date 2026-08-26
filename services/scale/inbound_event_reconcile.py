@@ -39,8 +39,12 @@ def _enqueue_or_mark(rec: InboundEventRecord, claim_handle: Any) -> dict[str, An
             and redis_required()
         )
         if queue_available:
+            from services.omnichannel.queues import logical_for_channel, physical_queue_for
+
+            surface = "comment" if rec.kind == "meta_comment" else "dm"
+            logical = logical_for_channel(channel="meta", surface=surface)
             job = job_queue.enqueue(
-                queue="high_priority",
+                queue=physical_queue_for(logical),  # type: ignore[arg-type]
                 job_type="meta_inbound_process",
                 tenant_id=rec.tenant_id or "unknown",
                 payload={
@@ -48,7 +52,8 @@ def _enqueue_or_mark(rec: InboundEventRecord, claim_handle: Any) -> dict[str, An
                     "kind": rec.kind,
                     "_conversation_key": rec.conversation_key,
                     "_provider": "openai",
-                    "_priority": "customer_conversation",
+                    "_priority": "background" if surface == "comment" else "customer_conversation",
+                    "_logical_queue": logical,
                     "_claim_token": claim_handle.owner_token,
                     "_claim_generation": claim_handle.generation,
                 },

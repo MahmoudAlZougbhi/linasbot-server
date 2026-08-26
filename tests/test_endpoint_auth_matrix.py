@@ -46,6 +46,7 @@ _ROUTE_MODULES = (
     "modules.apple_store_webhook_api",
     "modules.apple_iap_client_api",
     "modules.queue_api",
+    "modules.omnichannel_api",
     "modules.dashboard_api",
     "modules.live_chat_api",
     "modules.media_api",

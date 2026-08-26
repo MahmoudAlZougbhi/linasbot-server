@@ -225,15 +225,19 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
         if intent is None:
             _release_reservation(tenant_id, reservation_id)
             return
-        if not created and intent.dispatch_state in {"sent", "sending", "suppressed", "reconciliation_required"}:
+        if not created and intent.dispatch_state in {"sent", "sending", "suppressed"}:
             _release_reservation(tenant_id, reservation_id)
+            return
+        if not created and str(getattr(intent, "canonical_text", "") or "").strip():
+            _release_reservation(tenant_id, reservation_id)
+            _enqueue_whatsapp_intent_deliver(tenant_id=tenant_id, intent_id=intent.id, conversation_id=conversation_id)
             return
 
         repo.update_outbound_intent(
             intent,
-            dispatch_state="reply_persisted",
+            dispatch_state="pending",
+            canonical_text=reply_text,
             control_epoch_at_send=int(conv.control_epoch),
-            error_detail=reply_text[:500],
         )
 
         # Capture credits once after valid reply is persisted — delivery retry must not re-charge.
@@ -252,6 +256,23 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
                 emit_wa_event("credit_capture_failed", error=type(exc).__name__)
                 _release_reservation(tenant_id, reservation_id)
                 return
+
+        from services.job_queue import job_queue
+        from services.queues.config import redis_required
+
+        if redis_required():
+            repo.update_outbound_intent(
+                intent,
+                dispatch_state="pending",
+                canonical_text=reply_text,
+                control_epoch_at_send=int(conv.control_epoch),
+            )
+            session.commit()
+            if not getattr(job_queue, "production_ready", False):
+                raise RuntimeError("whatsapp_queue_unavailable")
+            _enqueue_whatsapp_intent_deliver(tenant_id=tenant_id, intent_id=intent.id, conversation_id=conversation_id)
+            emit_wa_event("ai_reply_queued", conversation_id=conversation_id)
+            return
 
         repo.update_outbound_intent(intent, dispatch_state="sending", control_epoch_at_send=int(conv.control_epoch))
         try:
@@ -345,6 +366,22 @@ def _release_reservation(tenant_id: str, reservation_id: str | None) -> None:
         credit_ledger_service.release(tenant_id=tenant_id, reservation_id=reservation_id)
     except Exception:
         emit_wa_event("credit_release_failed", tenant_id=tenant_id)
+
+
+def _enqueue_whatsapp_intent_deliver(*, tenant_id: str, intent_id: str, conversation_id: str) -> None:
+    from services.omnichannel.enqueue import AMBIGUOUS_ENQUEUE, enqueue_job
+
+    job_id = enqueue_job(
+        logical_queue="outbound_whatsapp",
+        job_type="whatsapp_intent_deliver",
+        tenant_id=tenant_id,
+        payload={"intent_id": intent_id},
+        idempotency_key=f"wa_del:{intent_id}",
+        conversation_key=conversation_id,
+        provider="whatsapp",
+    )
+    if not job_id or job_id == AMBIGUOUS_ENQUEUE:
+        raise RuntimeError("whatsapp_intent_deliver_enqueue_failed")
 
 
 async def _send_quota_notice(

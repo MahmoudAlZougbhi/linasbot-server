@@ -203,6 +203,26 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
         name="HA Tenant Config Peer Sync Tick",
         replace_existing=True,
     )
+    from modules.whatsapp_outbound_retry_job import run_whatsapp_outbound_retry_job
+
+    scheduler.add_job(
+        run_whatsapp_outbound_retry_job,
+        "interval",
+        minutes=1,
+        id="whatsapp_outbound_retry",
+        name="WhatsApp Outbound Retry",
+        replace_existing=True,
+    )
+    from modules.omnichannel_reconcile_job import run_omnichannel_reconcile_job
+
+    scheduler.add_job(
+        run_omnichannel_reconcile_job,
+        "interval",
+        minutes=1,
+        id="omnichannel_reconcile",
+        name="Omnichannel Inbound/Outbound Reconcile",
+        replace_existing=True,
+    )
 
     scheduler.start()
 
@@ -216,6 +236,8 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
     asyncio.create_task(run_web_chat_release_pending_reconcile_job())
     asyncio.create_task(run_tiktok_comment_webhook_register_job())
     asyncio.create_task(run_ha_tenant_config_peer_sync_job())
+    asyncio.create_task(run_whatsapp_outbound_retry_job())
+    asyncio.create_task(run_omnichannel_reconcile_job())
 
     print("✅ Smart Messaging Scheduler started successfully")
     print("📅 Scheduled jobs:")
@@ -228,6 +250,9 @@ async def start_smart_messaging_scheduler(app_state: Any) -> Any:
     print("   - Customer reply reconcile: Every 1 minute")
     print("   - Web Chat release pending reconcile: Every 1 minute")
     print("   - TikTok comment webhook register: Every 60 minutes")
+    print("   - WhatsApp outbound retry: Every 1 minute")
+    print("   - HA tenant config peer sync: Every 2 minutes")
+    print("   - Omnichannel inbound/outbound reconcile: Every 1 minute")
     print("   - Channel inbound: webhook-only (no Graph/API comment poll)")
     print("=" * 60)
 

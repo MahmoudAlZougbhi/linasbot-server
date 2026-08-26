@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
@@ -15,12 +14,11 @@ from services.meta_app_registry import APP_A_KEY, MetaAssetBinding
 from services.meta_comment_events import ResolvedMetaCommentEvent
 from services.meta_comment_reply_settings import get_comment_reply_setting
 from services.meta_graph_routing import graph_api_url
+from services.omnichannel.comment_limit import comment_send_allowed
 
 _runtime_logger = logging.getLogger("uvicorn.error")
 
-_COMMENT_RATE_WINDOW_SECONDS = 60.0
-_COMMENT_RATE_LIMIT_PER_ASSET = 30
-_RATE_BUCKETS: dict[str, deque[float]] = {}
+_RATE_BUCKETS: dict[str, list[float]] = {}
 _SENT_REPLY_IDS: dict[str, float] = {}
 _SENT_REPLY_TTL_SECONDS = 86400.0
 _COMMENT_REPLY_PAGE_SIZE = 100
@@ -52,8 +50,10 @@ def _provider_rejection_is_definitive(reason: str) -> bool:
         if not safe_reason.startswith(prefix):
             continue
         status_text = safe_reason[len(prefix) :].split("_", 1)[0]
-        if status_text.isdigit() and 400 <= int(status_text) < 500:
-            return True
+        if status_text.isdigit():
+            status = int(status_text)
+            if 400 <= status < 500 and status not in {408, 425, 429}:
+                return True
     return False
 
 
@@ -68,14 +68,8 @@ def _rate_limit_key(binding: MetaAssetBinding) -> str:
 
 
 def _rate_limit_allow(key: str) -> bool:
-    now = time.time()
-    bucket = _RATE_BUCKETS.setdefault(key, deque())
-    while bucket and now - bucket[0] > _COMMENT_RATE_WINDOW_SECONDS:
-        bucket.popleft()
-    if len(bucket) >= _COMMENT_RATE_LIMIT_PER_ASSET:
-        return False
-    bucket.append(now)
-    return True
+    tenant_id, app_key, channel, asset_id = (key.split(":", 3) + ["", "", "", ""])[:4]
+    return comment_send_allowed(tenant_id=tenant_id, app_key=app_key, channel=channel, asset_id=asset_id)
 
 
 def _sent_reply_cache_key(binding: MetaAssetBinding, comment_id: str) -> str:
