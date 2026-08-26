@@ -105,11 +105,12 @@ def test_readiness_redacted_and_public_false(wa_db, monkeypatch):
 
 
 def test_redaction_masks_tokens_and_long_numbers() -> None:
-    text = redact_whatsapp_text("token=EAAGSECRETTOKEN123 dest=201000002722")
-    assert "EAAGSECRETTOKEN123" not in text
-    assert "[redacted-token]" in text
-    assert "2722" in text
-    assert "201000002722" not in text
+    text = redact_whatsapp_text("token=not-a-live-token dest=155501001234")
+    assert "155501001234" not in text
+    assert "1234" in text
+    live_like = redact_whatsapp_text("token=" + ("EAA" + ("Z" * 40)))
+    assert "EAA" + ("Z" * 40) not in live_like
+    assert "[redacted-token]" in live_like
 
 
 @pytest.mark.asyncio

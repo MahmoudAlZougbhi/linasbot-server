@@ -72,7 +72,7 @@ def _mock_graph(monkeypatch, *, phones: list[dict[str, Any]]) -> dict[str, int]:
     calls = {"smb": 0}
 
     async def _exchange(**kwargs: Any) -> dict[str, Any]:
-        return {"access_token": "EAAGtesttokenxxxxxxxxxxxxxxxxxxxx"}
+        return {"access_token": "wa-test-access-token-xxxxxxxxxxxxxxxxxxxx"}
 
     async def _debug(**kwargs: Any) -> dict[str, Any]:
         return {
