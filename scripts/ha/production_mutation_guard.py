@@ -58,6 +58,7 @@ ALLOWED_SCRIPTS = frozenset(
         "scripts/prod_cm_sot_audit.sh",
         "scripts/prod_cm_verify_durable_bridge.sh",
         "scripts/prod_wa_connection_source_migrate.sh",
+        "scripts/prod_wa_app_review_bind.sh",
         "scripts/prod_whatsapp_cloud_phase1_ops.sh",
     }
 )

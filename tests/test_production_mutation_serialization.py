@@ -26,6 +26,7 @@ PINNED_SSH = "appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17"
 
 SERIALIZED_LIVE_WORKFLOWS = (
     "cm-production-cutover.yml",
+    "wa-app-review-bind.yml",
     "wa-app-review-connection-source-migrate.yml",
 )
 META_ENV_LIVE_WORKFLOWS = (
@@ -260,6 +261,8 @@ def test_guard_inventory_blocks_every_unsafe_single_node_env_entrypoint() -> Non
     }
     assert guard.TWO_NODE_ENV_TRANSACTION_REQUIRED == expected
     assert expected <= guard.ALLOWED_SCRIPTS
+    assert "scripts/prod_wa_app_review_bind.sh" in guard.ALLOWED_SCRIPTS
+    assert "scripts/prod_wa_app_review_bind.sh" not in guard.TWO_NODE_ENV_TRANSACTION_REQUIRED
 
 
 def test_guarded_child_environment_uses_canonical_values_not_stale_ambient(tmp_path: Path) -> None:
@@ -841,6 +844,7 @@ def test_mutating_entrypoints_require_the_guard_and_use_only_the_canonical_env()
 
 def test_shared_database_and_cm_data_entrypoints_reject_direct_unguarded_invocation() -> None:
     for name in (
+        "prod_wa_app_review_bind.sh",
         "prod_wa_connection_source_migrate.sh",
         "prod_whatsapp_cloud_phase1_ops.sh",
         "prod_whatsapp_cloud_migrate.sh",

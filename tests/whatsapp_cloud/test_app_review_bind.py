@@ -34,6 +34,7 @@ from services.whatsapp_cloud.app_review_bind import (  # noqa: E402
     unbind_app_review_test_number,
 )
 from services.whatsapp_cloud.config import get_whatsapp_cloud_flags  # noqa: E402
+from services.whatsapp_cloud.graph_client import WhatsAppGraphError  # noqa: E402
 from services.whatsapp_cloud.repository import WhatsAppCloudRepository  # noqa: E402
 
 TEST_WABA = "900100200300"
@@ -56,8 +57,12 @@ def wa_db(tmp_path, monkeypatch):
 
     @contextmanager
     def _sess(*, require: bool = True):
-        yield session
-        session.commit()
+        try:
+            yield session
+            session.commit()
+        except BaseException:
+            session.rollback()
+            raise
 
     monkeypatch.setattr("services.whatsapp_cloud.app_review_bind.whatsapp_session", _sess)
     yield session
@@ -128,6 +133,31 @@ async def test_bind_once_idempotent_replay(wa_db, monkeypatch):
     assert active[0].connection_source == APP_REVIEW_SOURCE
     assert active[0].ai_default_enabled is True
     assert get_whatsapp_cloud_flags().public_availability is False
+
+
+@pytest.mark.asyncio
+async def test_subscribe_failure_rolls_back_active_bind(wa_db, monkeypatch):
+    _mock_meta_ok(monkeypatch)
+
+    async def _fail_subscribe(**kwargs: Any) -> dict[str, Any]:
+        raise WhatsAppGraphError("subscribe_failed", "Meta rejected subscription", http_status=400)
+
+    monkeypatch.setattr(
+        "services.whatsapp_cloud.app_review_bind.subscribe_waba_webhooks",
+        _fail_subscribe,
+    )
+    with pytest.raises(AppReviewBindError) as exc:
+        await bind_app_review_test_number(
+            tenant_id="linas",
+            waba_id=TEST_WABA,
+            phone_number_id=TEST_PHONE,
+            access_token=None,
+            actor_user_id="po1",
+        )
+    assert exc.value.code == "waba_subscribe_failed"
+    repo = WhatsAppCloudRepository(wa_db)
+    assert repo.find_active_by_phone_number_id(TEST_PHONE) is None
+    assert repo.list_tenant_connections("linas", include_revoked=True) == []
 
 
 @pytest.mark.asyncio
