@@ -4946,7 +4946,9 @@ assert_public_ready_for_sha() {
     log "public /api/ready is not required while $expected_sha still gates on tenant Meta bindings"
     return 0
   fi
-  assert_public_ready
+  # Rollback admits node02 first. DigitalOcean still needs
+  # interval*healthy_threshold before the public URL stops returning 503.
+  assert_public_ready_after_peer_admission "$expected_sha"
 }
 
 assert_public_ready_after_peer_admission() {
