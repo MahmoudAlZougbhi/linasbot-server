@@ -205,4 +205,3 @@ def test_enqueue_without_claim_handle_leaves_worker_to_adopt_lease(monkeypatch: 
     assert enqueue_meta_inbound_event("evt-ack", claim_handle=None) == "queued"
     assert captured["claim_token"] == ""
     assert captured["claim_generation"] == 1
-

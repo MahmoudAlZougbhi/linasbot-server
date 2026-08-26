@@ -398,9 +398,7 @@ async def accept_meta_comment_events(
                 log_meta_controlled_evidence(
                     _runtime_logger,
                     event_id=event_id,
-                    surface=meta_evidence_surface(
-                        kind="meta_comment", channel=resolved_comment.binding.channel
-                    ),
+                    surface=meta_evidence_surface(kind="meta_comment", channel=resolved_comment.binding.channel),
                     outcome="duplicate_suppressed",
                 )
                 continue
