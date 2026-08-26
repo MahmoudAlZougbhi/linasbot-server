@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -14,15 +15,17 @@ from scripts.loadtest.omnichannel_cert_guards import assert_staging_cert_allowed
 
 
 async def _stub_generate(
-    *, channel: str, surface: str, tenant_id: str, payload: dict
-) -> tuple[str, object | None, str | None]:
+    *, channel: str, surface: str, tenant_id: str, payload: dict[str, Any]
+) -> tuple[str, str | None, str | None]:
     if channel == "tiktok" and surface == "dm":
         from services.omnichannel.gates import TIKTOK_DM_GATE_REASON, tiktok_dm_live_allowed
 
         allowed, reason = tiktok_dm_live_allowed(None)
         if not allowed:
             return "", None, reason or TIKTOK_DM_GATE_REASON
-    return "canonical-cert-reply", payload.get("credit_reservation_id"), None
+    reservation = payload.get("credit_reservation_id")
+    reservation_id = str(reservation) if reservation is not None else None
+    return "canonical-cert-reply", reservation_id, None
 
 
 async def _stub_send(snapshot: dict) -> dict:
