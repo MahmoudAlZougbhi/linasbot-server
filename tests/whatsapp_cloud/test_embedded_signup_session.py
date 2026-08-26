@@ -154,4 +154,5 @@ def test_launch_extras_are_official_coexistence_v4() -> None:
     assert "sessionInfo" in html
     assert "session_timeout" in html
     assert "allowedOrigins.has" in html
-    assert "parsed.type !== SESSION_TYPE" in html or "parsed.type !== SESSION_TYPE" in html.replace(" ", "")
+    assert "parsed.type !== SESSION_TYPE" in html
+    assert "/register" not in html
