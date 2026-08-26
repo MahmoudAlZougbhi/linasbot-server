@@ -351,7 +351,13 @@ async def complete_embedded_signup(
                 "correlation_id": correlation_id,
                 "connection": view,
             }
-        except (SignupAssetError, WhatsAppGraphError, WhatsAppEntitlementError, WhatsAppSignupError, PermissionError) as exc:
+        except (
+            SignupAssetError,
+            WhatsAppGraphError,
+            WhatsAppEntitlementError,
+            WhatsAppSignupError,
+            PermissionError,
+        ) as exc:
             code_name = str(getattr(exc, "code", type(exc).__name__))[:80]
             attempt.status = "failed"
             attempt.outcome_code = code_name

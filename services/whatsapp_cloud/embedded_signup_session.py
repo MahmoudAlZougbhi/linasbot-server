@@ -115,9 +115,7 @@ def parse_embedded_signup_session_payload(raw: Any) -> dict[str, str]:
     phone = str(
         payload.get("phone_number_id") or nested.get("phone_number_id") or inner.get("phone_number_id") or ""
     ).strip()
-    business_id = str(
-        payload.get("business_id") or nested.get("business_id") or inner.get("business_id") or ""
-    ).strip()
+    business_id = str(payload.get("business_id") or nested.get("business_id") or inner.get("business_id") or "").strip()
     error_code = str(nested.get("error_code") or payload.get("error_code") or inner.get("error_code") or "").strip()
     return {
         "event": event,

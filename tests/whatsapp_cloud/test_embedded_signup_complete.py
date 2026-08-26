@@ -182,9 +182,7 @@ async def test_generic_finish_does_not_create_connection(wa_db, monkeypatch, tmp
     _grant_linas(monkeypatch, tmp_path, wa_db)
     nonce = _nonce()
     calls = _mock_graph(monkeypatch, phones=[_proven()])
-    result = await complete_embedded_signup(
-        **_ok_kwargs(nonce, session_event="FINISH", phone_number_id=PHONE)
-    )
+    result = await complete_embedded_signup(**_ok_kwargs(nonce, session_event="FINISH", phone_number_id=PHONE))
     assert result["success"] is False
     assert result["error"] == "coexistence_flow_required"
     assert "wa_error=coexistence_flow_required" in result["redirect_url"]
@@ -197,7 +195,9 @@ async def test_generic_finish_does_not_create_connection(wa_db, monkeypatch, tmp
 async def test_code_only_and_wrong_session_type_rejected(wa_db, monkeypatch, tmp_path):
     _grant_linas(monkeypatch, tmp_path, wa_db)
     calls = _mock_graph(monkeypatch, phones=[_proven()])
-    first = await complete_embedded_signup(**_ok_kwargs(_nonce(), session_event="", session_type="", session_version=""))
+    first = await complete_embedded_signup(
+        **_ok_kwargs(_nonce(), session_event="", session_type="", session_version="")
+    )
     assert first["error"] == "coexistence_flow_required"
     second = await complete_embedded_signup(
         **_ok_kwargs(_nonce(), session_type="OTHER", session_event=FINISH, session_version="3")
@@ -289,9 +289,7 @@ async def test_other_finish_events_and_timeout_do_not_connect(wa_db, monkeypatch
         result = await complete_embedded_signup(**_ok_kwargs(_nonce(), session_event=event))
         assert result["success"] is False
         assert result["error"] == "coexistence_flow_required"
-    timeout = await complete_embedded_signup(
-        **_ok_kwargs(_nonce(), code="", error="session_timeout", session_event="")
-    )
+    timeout = await complete_embedded_signup(**_ok_kwargs(_nonce(), code="", error="session_timeout", session_event=""))
     assert timeout["error"] == "session_timeout"
     advanced = await complete_embedded_signup(
         **_ok_kwargs(_nonce(), code="", error="meta_advanced_access_required", session_event="ERROR")
