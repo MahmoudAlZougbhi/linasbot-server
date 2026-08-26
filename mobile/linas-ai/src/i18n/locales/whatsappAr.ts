@@ -9,6 +9,8 @@ export const whatsappAr = {
   waConnectInProgress: 'عملية ربط واتساب قيد التنفيذ بالفعل.',
   waCoexistenceHint:
     'اربط رقم تطبيق واتساب للأعمال الحالي. يستخدم ليناس AI المعرفة المنشورة فقط.',
+  waDoNotAddNewNumber:
+    'في ميتا، اختر رقم تطبيق واتساب للأعمال الحالي. لا تختر إضافة رقم جديد.',
   waCoexistenceOn: 'تم تفعيل التعايش مع تطبيق الأعمال',
   waNumberLabel: 'الرقم',
   waAiLabel: 'ردود الذكاء الاصطناعي',

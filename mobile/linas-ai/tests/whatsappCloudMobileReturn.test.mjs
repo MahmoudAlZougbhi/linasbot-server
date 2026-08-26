@@ -36,6 +36,8 @@ describe('whatsapp cloud mobile return + card', () => {
     const card = read('features/integrations/WhatsAppCloudCard.tsx');
     assert.match(card, /startWhatsAppCloudConnect|fetchWhatsAppCloudStatus/);
     assert.match(card, /waStateAwaitingMetaApproval|awaitingMeta/);
+    assert.match(card, /waDoNotAddNewNumber/);
+    assert.match(card, /waCoexistenceHint/);
     assert.doesNotMatch(card, /paste.*(token|waba|phone)/i);
   });
 

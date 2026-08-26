@@ -10,6 +10,8 @@ export const whatsappFr = {
   waConnectInProgress: 'La connexion WhatsApp est déjà en cours.',
   waCoexistenceHint:
     'Liez le numéro existant de l’application WhatsApp Business. Linas AI n’utilise que vos connaissances publiées.',
+  waDoNotAddNewNumber:
+    'Dans Meta, choisissez le numéro existant de l’application WhatsApp Business. Ne choisissez pas Ajouter un nouveau numéro.',
   waCoexistenceOn: 'Coexistence Business App activée',
   waNumberLabel: 'Numéro',
   waAiLabel: 'Réponses IA',

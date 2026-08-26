@@ -351,6 +351,19 @@ async def whatsapp_pilot_revoke(request: Request, body: dict[str, Any] = Body(de
         return {"success": True, "tenant_id": row.tenant_id, "status": row.status}
 
 
+@app.get("/api/whatsapp/cloud/app-review/readiness")
+async def whatsapp_app_review_readiness(request: Request) -> Any:
+    session = require_session(request)
+    if not is_platform_owner(session):
+        raise HTTPException(status_code=403, detail="platform_owner_required")
+    from services.whatsapp_cloud.app_review_readiness import build_app_review_readiness
+
+    try:
+        return build_app_review_readiness(tenant_id="linas")
+    except WhatsAppDatabaseUnavailable:
+        return JSONResponse(status_code=503, content={"success": False, "error": "WHATSAPP_DB_UNAVAILABLE"})
+
+
 @app.get("/api/whatsapp/cloud/app-review/status")
 async def whatsapp_app_review_status(request: Request) -> Any:
     session = require_session(request)
