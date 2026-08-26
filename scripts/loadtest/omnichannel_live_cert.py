@@ -125,8 +125,8 @@ def _start_gateway(env: dict[str, str]) -> subprocess.Popen:
 
 def _start_stack(env: dict[str, str]) -> dict:
     workers: list[tuple[str, subprocess.Popen]] = []
-    for queue in ("high_priority", "background"):
-        for _ in range(2):
+    for queue, count in (("high_priority", 4), ("background", 2)):
+        for _ in range(count):
             workers.append((queue, _start_worker(env, queue)))
     return {"gateway": _start_gateway(env), "workers": workers}
 
@@ -284,7 +284,9 @@ def _replace_workers(stack: dict, env: dict[str, str], *, fault: str = "") -> No
         if proc.poll() is None:
             proc.send_signal(signal.SIGTERM)
     stack["workers"] = [
-        (queue, _start_worker(wenv, queue)) for queue in ("high_priority", "background") for _ in range(2)
+        (queue, _start_worker(wenv, queue))
+        for queue, count in (("high_priority", 4), ("background", 2))
+        for _ in range(count)
     ]
 
 
