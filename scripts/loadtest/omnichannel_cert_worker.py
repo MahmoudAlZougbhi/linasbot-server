@@ -28,7 +28,7 @@ async def _stub_generate(
     return "canonical-cert-reply", reservation_id, None
 
 
-async def _stub_send(snapshot: dict) -> dict:
+async def _stub_send(snapshot: dict[str, Any]) -> dict[str, Any]:
     fault = (os.getenv("LINAS_OMNI_CERT_FAULT") or "").strip()
     if fault == "429":
         return {
