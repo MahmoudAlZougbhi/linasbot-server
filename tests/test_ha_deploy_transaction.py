@@ -13,6 +13,7 @@ import tarfile
 import textwrap
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1496,6 +1497,49 @@ def test_release_bundle_local_install_preserves_fail_fast_cleanup() -> None:
     assert "install_release_bundle node01" in cluster
     assert '"$confirmation" || rc=$?' not in cluster
     assert cluster.index("local_install_rc=$?") < cluster.index("cleanup_remote_exact_helper")
+
+
+def test_meta_live_lock_uses_inherited_fd_inside_local_install_subshell(
+    tmp_path: Path,
+) -> None:
+    source = _helper()
+    start = source.index("acquire_meta_live_lock() {")
+    end = source.index("\nread_bootstrap_commit_proof() {", start)
+    acquire = source[start:end]
+    assert "stat -Lc '%d:%i' /proc/self/fd/9" in acquire
+    assert '"/proc/$$/fd/9"' not in acquire
+    assert "BASHPID" not in acquire
+
+    if not Path("/proc/self/fd").is_dir():
+        pytest.skip("the host does not expose Linux /proc file descriptors")
+
+    lock = tmp_path / "meta-ha.lock"
+    script = textwrap.dedent(
+        f"""\
+        set -euo pipefail
+        LOCK_FILE="$1"
+        assert_python_runtime_binary_anchor() {{ :; }}
+        run_os_python_receipt_verifier() {{
+          local path="$2"
+          cat >/dev/null
+          : >"$path"
+          chmod 0600 "$path"
+        }}
+        die() {{ printf '%s\\n' "$*" >&2; exit 1; }}
+        {acquire}
+        (
+          acquire_meta_live_lock
+          test -e /proc/self/fd/9
+        )
+        """
+    )
+    result = subprocess.run(
+        ["/bin/bash", "-c", script, "test", str(lock)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_forward_and_rollback_admission_prove_exact_process_queue_and_live_env() -> None:
