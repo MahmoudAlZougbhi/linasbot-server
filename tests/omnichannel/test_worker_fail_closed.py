@@ -142,3 +142,31 @@ async def test_worker_pool_survives_raising_cycle(monkeypatch):
 
     await pool.run_bounded_pool(queue="high_priority", one_cycle=cycle, stopping=lambda: stop["v"])
     assert seen["n"] >= 6
+
+
+@pytest.mark.asyncio
+async def test_worker_pool_overlapping_blocking_cycles(monkeypatch):
+    import threading
+    from importlib import reload
+
+    monkeypatch.setenv("LINAS_QUEUE_CONCURRENCY_HIGH", "2")
+    import services.omnichannel.worker_pool as pool
+    import services.queues.config as config
+
+    reload(config)
+    reload(pool)
+    assert pool.concurrency_for("high_priority") == 2
+    barrier = threading.Barrier(2, timeout=2.0)
+    lock = threading.Lock()
+    seen = {"n": 0}
+    stop = {"v": False}
+
+    async def cycle():
+        barrier.wait()
+        with lock:
+            seen["n"] += 1
+            if seen["n"] >= 2:
+                stop["v"] = True
+
+    await pool.run_bounded_pool(queue="high_priority", one_cycle=cycle, stopping=lambda: stop["v"])
+    assert seen["n"] >= 2

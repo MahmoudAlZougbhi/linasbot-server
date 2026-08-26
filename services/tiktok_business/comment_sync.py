@@ -47,9 +47,7 @@ def should_enqueue_comment_ai(
     return comment_at >= connected
 
 
-def persist_comment_page_cursor(
-    *, page_number: int, page_limit: int, has_more: bool, cursor: str
-) -> tuple[str, bool]:
+def persist_comment_page_cursor(*, page_number: int, page_limit: int, has_more: bool, cursor: str) -> tuple[str, bool]:
     """Return (cursor_to_store, truncated). Empty cursor means this video is complete."""
     token = str(cursor or "").strip()
     if not has_more or not token:

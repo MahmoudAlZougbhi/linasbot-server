@@ -126,4 +126,3 @@ async def test_worker_claim_connection_error_is_fail_closed(monkeypatch):
 
     runtime = WorkerRuntime("high_priority")
     await runtime._process_one()
-

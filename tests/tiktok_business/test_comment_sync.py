@@ -108,8 +108,6 @@ def test_upsert_reads_top_level_tiktok_comment_identity(tt_db) -> None:
 
 
 def test_comment_page_cursor_is_retained_when_limit_hit() -> None:
-    stored, truncated = persist_comment_page_cursor(
-        page_number=3, page_limit=3, has_more=True, cursor="keep-me"
-    )
+    stored, truncated = persist_comment_page_cursor(page_number=3, page_limit=3, has_more=True, cursor="keep-me")
     assert truncated is True
     assert stored == "keep-me"

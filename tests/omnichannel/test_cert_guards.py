@@ -107,9 +107,7 @@ def test_comment_pagination_persists_cursor_when_capped():
     )
     assert truncated is True
     assert stored == "next-page"
-    done, truncated_done = persist_comment_page_cursor(
-        page_number=1, page_limit=3, has_more=False, cursor="x"
-    )
+    done, truncated_done = persist_comment_page_cursor(page_number=1, page_limit=3, has_more=False, cursor="x")
     assert done == ""
     assert truncated_done is False
 

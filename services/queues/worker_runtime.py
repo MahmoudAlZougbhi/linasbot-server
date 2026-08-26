@@ -125,9 +125,7 @@ class WorkerRuntime:
                 from services.scale.conversation_lock import ConversationLock
 
                 try:
-                    conv_lease = ConversationLock().try_acquire(
-                        conv_key, ttl_seconds=max(30, int(job.timeout_seconds))
-                    )
+                    conv_lease = ConversationLock().try_acquire(conv_key, ttl_seconds=max(30, int(job.timeout_seconds)))
                 except Exception:
                     self._requeue(job, 0.5)
                     await asyncio.sleep(0.5)
