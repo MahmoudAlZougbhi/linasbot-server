@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import { useCarouselWheel } from '../../hooks/useCarouselWheel';
 import { useFeatureCarousel } from '../../hooks/useFeatureCarousel';
 import LinasStar from './LinasStar';
 import { CardHead } from './cards/MiniFrame';
 
 const CARD_PX = 280;
-const GAP_PX = 16;
+const GAP_PX = 12;
 
 /**
  * @param {number} from
@@ -32,12 +33,13 @@ export default function FeatureCarousel({ id, kicker, title, accent, subtitle, c
   const n = cards.length;
   const { index, go, next, prev, pause, resume, reduced } = useFeatureCarousel(n, 2);
   const outerRef = useRef(/** @type {HTMLDivElement | null} */ (null));
-  const startX = useRef(0);
   const lastIndex = useRef(index);
   const [width, setWidth] = useState(0);
   const [cardW, setCardW] = useState(CARD_PX);
   const [loopIndex, setLoopIndex] = useState(n + index);
   const [snap, setSnap] = useState(false);
+  const stepPx = cardW + GAP_PX;
+  const wheel = useCarouselWheel({ index, go, pause, resume, stepPx });
   const slides = [...cards, ...cards, ...cards];
 
   useEffect(() => {
@@ -59,7 +61,8 @@ export default function FeatureCarousel({ id, kicker, title, accent, subtitle, c
     const delta = shortestDelta(lastIndex.current, index, n);
     lastIndex.current = index;
     setLoopIndex((current) => current + delta);
-  }, [index, n]);
+    wheel.resetOffset();
+  }, [index, n, wheel.resetOffset]);
 
   useEffect(() => {
     if (!snap) return undefined;
@@ -81,7 +84,8 @@ export default function FeatureCarousel({ id, kicker, title, accent, subtitle, c
     return undefined;
   }, [loopIndex, n, reduced]);
 
-  const x = width / 2 - cardW / 2 - loopIndex * (cardW + GAP_PX);
+  const x = width / 2 - cardW / 2 - loopIndex * stepPx + wheel.offset;
+  const moving = wheel.dragging || snap || reduced;
 
   return (
     <section
@@ -110,11 +114,17 @@ export default function FeatureCarousel({ id, kicker, title, accent, subtitle, c
         <p className="mx-auto mt-3 max-w-2xl text-base text-[#6B746F]">{subtitle}</p>
       </div>
 
-      <div className="relative mx-auto mt-4">
+      <div
+        className="relative mx-auto mt-4"
+        onMouseEnter={pause}
+        onMouseLeave={() => {
+          if (!wheel.held.current) resume();
+        }}
+      >
         <button
           type="button"
           onClick={prev}
-          className="absolute left-3 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-[#E4E8E6] bg-white text-xl text-[#06715F] shadow-sm md:flex"
+          className="absolute left-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-[#E4E8E6] bg-white text-xl text-[#06715F] shadow-sm"
           aria-label="Previous capability"
         >
           ‹
@@ -122,7 +132,7 @@ export default function FeatureCarousel({ id, kicker, title, accent, subtitle, c
         <button
           type="button"
           onClick={next}
-          className="absolute right-3 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-[#E4E8E6] bg-white text-xl text-[#06715F] shadow-sm md:flex"
+          className="absolute right-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-[#E4E8E6] bg-white text-xl text-[#06715F] shadow-sm"
           aria-label="Next capability"
         >
           ›
@@ -130,27 +140,17 @@ export default function FeatureCarousel({ id, kicker, title, accent, subtitle, c
 
         <div
           ref={outerRef}
-          className="overflow-x-hidden px-4 py-12 md:px-16"
-          onMouseEnter={pause}
-          onMouseLeave={resume}
-          onFocusCapture={pause}
-          onBlurCapture={resume}
-          onPointerDown={(event) => {
-            startX.current = event.clientX;
-            pause();
-          }}
-          onPointerUp={(event) => {
-            const dx = event.clientX - startX.current;
-            if (dx > 50) prev();
-            else if (dx < -50) next();
-            resume();
-          }}
+          className={`overflow-x-hidden py-16 ${wheel.dragging ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
+          style={{ touchAction: 'none' }}
+          onPointerDown={wheel.onPointerDown}
+          onDragStart={(event) => event.preventDefault()}
         >
           <div
-            className="flex items-center gap-4"
+            className="flex items-center"
             style={{
+              gap: GAP_PX,
               transform: `translateX(${x}px)`,
-              transition: snap || reduced ? 'none' : 'transform 420ms cubic-bezier(.22,1,.36,1)',
+              transition: moving ? 'none' : 'transform 420ms cubic-bezier(.22,1,.36,1)',
             }}
           >
             {slides.map((card, i) => {
@@ -160,16 +160,16 @@ export default function FeatureCarousel({ id, kicker, title, accent, subtitle, c
                 <article
                   key={`${card.id}-${i}`}
                   data-lp-card=""
+                  draggable={false}
                   className={`w-[84vw] max-w-[20rem] shrink-0 rounded-[1.6rem] border bg-white p-5 md:w-[280px] md:max-w-none ${
                     active ? 'z-10 border-[#06715F]/30 shadow-xl shadow-[#06715F]/10' : 'border-[#E6EBE8] shadow-sm'
                   }`}
                   style={{
-                    transform: `scale(${active ? 1.18 : 0.94})`,
-                    opacity: active ? 1 : 0.78,
-                    transition:
-                      snap || reduced
-                        ? 'none'
-                        : 'transform 420ms cubic-bezier(.22,1,.36,1), opacity 420ms cubic-bezier(.22,1,.36,1)',
+                    transform: `scale(${active ? 1.22 : 0.94})`,
+                    opacity: active ? 1 : 0.82,
+                    transition: moving
+                      ? 'none'
+                      : 'transform 420ms cubic-bezier(.22,1,.36,1), opacity 420ms cubic-bezier(.22,1,.36,1)',
                   }}
                   aria-hidden={!active}
                   aria-current={active ? 'true' : undefined}

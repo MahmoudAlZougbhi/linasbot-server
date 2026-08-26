@@ -1,29 +1,40 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { STORE_LINKS } from '../../constants/publicSite';
 
-function AppleGlyph({ className = 'h-3.5 w-3.5' }) {
+function AppleGlyph({ className = 'h-4 w-4' }) {
   return (
-    <svg viewBox="0 0 16 16" className={className} aria-hidden="true" fill="currentColor">
-      <path d="M12.5 10.4c-.03-.9.37-1.58.94-2.08-.52-.76-1.34-1.18-2.28-1.2-1-.1-1.9.58-2.38.58s-1.24-.56-2.08-.54c-1.07.03-2.06.62-2.6 1.58-1.12 1.94-.28 4.8.8 6.37.53.77 1.15 1.63 1.97 1.6.8-.03 1.1-.5 2.06-.5s1.23.5 2.08.48c.86-.01 1.4-.77 1.92-1.54.6-.88.85-1.74.86-1.78-.02 0-1.66-.64-1.7-2.47zM10.7 5.9c.44-.54.74-1.28.66-2.03-.64.04-1.4.43-1.86.96-.4.47-.76 1.23-.66 1.96.7.05 1.42-.36 1.86-.89z" />
+    <svg viewBox="0 0 512 512" className={className} aria-hidden="true" fill="currentColor">
+      <path d="M349.13 136.86c-40.32 0-57.36 19.24-85.44 19.24-28.79 0-50.75-19.1-85.69-19.1-34.2 0-70.67 20.88-93.83 56.45-32.52 50.16-27 144.63 25.67 225.11 18.84 28.81 44 61.12 77 61.47h.6c28.68 0 37.2-18.78 76.67-19h.6c38.88 0 46.68 18.89 75.24 18.89h.6c33-.35 59.51-36.15 78.35-64.85 13.56-20.64 18.6-31 29-54.35-76.19-28.92-88.43-136.93-13.08-178.34-23-28.8-55.32-45.48-85.79-45.48z" />
+      <path d="M340.25 32c-24 1.63-52 16.91-68.4 36.86-14.88 18.08-27.12 44.9-22.32 70.91h1.92c25.56 0 51.72-15.39 67-35.11 14.72-18.77 25.88-45.37 21.8-72.66z" />
     </svg>
   );
 }
 
-function PlayGlyph({ className = 'h-3.5 w-3.5' }) {
+/** White Play mark for the green header button. */
+function PlayStoreGlyph({ className = 'h-4 w-4' }) {
   return (
-    <svg viewBox="0 0 16 16" className={className} aria-hidden="true" fill="currentColor">
-      <path d="M2.2 1.6c-.13.22-.2.5-.2.84v11.12c0 .34.07.62.2.84l.06.04 6.3-6.44v-.16L2.26 1.56l-.06.04zm7.02 7.16 1.46-1.48-6.3-3.66 4.84 5.14zm1.46-1.48 1.7-1.74c.5-.5.5-.8.02-1.1L6.38 1.4l4.3 5.88zm0 1.8-4.3 5.88 6.02-3.5c.48-.28.48-.6-.02-1.1l-1.7-1.28z" />
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true" fill="currentColor">
+      <path d="M3.6 2.05v19.9c0 .7.76 1.14 1.36.78L20.7 13.4c.58-.34.58-1.22 0-1.56L4.96 1.27C4.36.91 3.6 1.35 3.6 2.05z" />
     </svg>
   );
 }
 
-function PlayMark({ className = 'h-5 w-5' }) {
+/** Official Google Play logo (Ionicons paths + Google brand colors). */
+function PlayStoreColor({ className = 'h-6 w-6' }) {
   return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <path fill="#00A0FF" d="M3.2 2.4v19.2L12.8 12z" />
-      <path fill="#FFCE00" d="M12.8 12 3.2 21.6 18.4 14.4z" />
-      <path fill="#00DC5A" d="M18.4 9.6 12.8 12l5.6 2.4c1.2.5 1.2 1.4 0 1.9L3.2 21.6 20.2 13c1.2-.6 1.2-1.6 0-2.2L3.2 2.4 18.4 9.6z" />
-      <path fill="#FF3A44" d="M3.2 2.4 12.8 12 18.4 9.6z" />
+    <svg viewBox="0 0 512 512" className={className} aria-hidden="true">
+      <path fill="#4285F4" d="M48 59.49v393a4.33 4.33 0 007.37 3.07L260 256 55.37 56.42A4.33 4.33 0 0048 59.49z" />
+      <path fill="#EA4335" d="M345.8 174 89.22 32.64l-.16-.09c-4.42-2.4-8.62 3.58-5 7.06l201.13 192.32z" />
+      <path fill="#34A853" d="M84.08 472.39c-3.64 3.48.56 9.46 5 7.06l.16-.09L345.8 338l-60.61-57.95z" />
+      <path fill="#FBBC04" d="M449.38 231l-71.65-39.46L310.36 256l67.37 64.43L449.38 281c19.49-10.77 19.49-39.23 0-50z" />
+    </svg>
+  );
+}
+
+function ChevronRight() {
+  return (
+    <svg viewBox="0 0 12 12" className="h-3.5 w-3.5 text-[#9AA39F]" aria-hidden="true" fill="none">
+      <path d="M4.2 2.2 8 6l-3.8 3.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -34,36 +45,31 @@ function PlayMark({ className = 'h-5 w-5' }) {
  *   title: string,
  *   subtitle: string,
  *   icon: import('react').ReactNode,
- *   iconWrapClass: string,
  * }} props
  */
-function StoreRow({ store, title, subtitle, icon, iconWrapClass }) {
+function StoreRow({ store, title, subtitle, icon }) {
   const live = store.status === 'live' && store.url;
   const inner = (
     <>
-      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconWrapClass}`}>
-        {icon}
-      </span>
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.85rem] bg-[#F3F5F2]">{icon}</span>
       <span className="min-w-0 flex-1 text-left">
-        <span className="block text-sm font-semibold text-[#171A19]">{title}</span>
-        <span className="block text-xs text-[#6B746F]">{subtitle}</span>
+        <span className="block text-[0.92rem] font-semibold leading-tight text-[#171A19]">{title}</span>
+        <span className="mt-0.5 block text-[0.78rem] text-[#6B746F]">{subtitle}</span>
       </span>
-      <span className="text-[#9AA39F]" aria-hidden="true">
-        ›
-      </span>
+      <ChevronRight />
     </>
   );
   const className =
-    'flex w-full items-center gap-3 rounded-xl px-1 py-2.5 text-left hover:bg-[#F7F8F5] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#06715F]';
+    'flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-[#F7F8F5] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#06715F]';
   if (live && store.url) {
     return (
-      <a href={store.url} className={className} target="_blank" rel="noopener noreferrer">
+      <a href={store.url} className={className} target="_blank" rel="noopener noreferrer" role="menuitem">
         {inner}
       </a>
     );
   }
   return (
-    <div className={`${className} cursor-default`} title={store.blocker} aria-disabled="true">
+    <div className={`${className} cursor-default`} title={store.blocker} aria-disabled="true" role="menuitem">
       {inner}
     </div>
   );
@@ -96,41 +102,46 @@ export default function HeaderDownloadMenu() {
     <div id="get-app" className="relative" ref={rootRef}>
       <button
         type="button"
-        className="inline-flex items-center gap-2 rounded-full bg-[#06715F] px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#056655] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#06715F] focus-visible:ring-offset-2"
+        className="inline-flex h-10 items-center rounded-full bg-[#06715F] pl-3.5 pr-3.5 text-[0.9rem] font-semibold text-white shadow-[0_8px_18px_rgba(6,113,95,0.28)] hover:bg-[#056655] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#06715F] focus-visible:ring-offset-2"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
         onClick={() => setOpen((value) => !value)}
       >
-        <AppleGlyph className="h-3.5 w-3.5 text-white" />
-        <PlayGlyph className="h-3 w-3 text-white" />
-        Download app
-        <span className="text-[0.65rem] opacity-90" aria-hidden="true">
-          ▾
+        <span className="inline-flex items-center gap-2">
+          <AppleGlyph className="h-4 w-4 text-white" />
+          <PlayStoreGlyph className="h-3.5 w-3.5 text-white" />
         </span>
+        <span className="ml-2">Download app</span>
+        <svg
+          viewBox="0 0 12 12"
+          className={`ml-1.5 h-3 w-3 opacity-90 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          aria-hidden="true"
+          fill="none"
+        >
+          <path d="M2.2 4.2 6 8l3.8-3.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
       {open ? (
         <div
           id={menuId}
           role="menu"
           aria-label="Download Linas AI"
-          className="absolute right-0 z-50 mt-3 w-[20.5rem] rounded-2xl bg-white p-4 shadow-[0_18px_50px_rgba(23,26,25,0.14)] ring-1 ring-black/[0.06]"
+          className="absolute right-0 z-50 mt-2.5 w-[21.5rem] rounded-[1.25rem] bg-white p-3.5 shadow-[0_22px_55px_rgba(23,26,25,0.16)] ring-1 ring-black/[0.06]"
         >
-          <p className="px-1 pb-2 text-[0.8rem] font-semibold text-[#3A4240]">Download Linas AI</p>
+          <p className="px-2 pb-2.5 text-[0.82rem] font-semibold text-[#171A19]">Download Linas AI</p>
           <StoreRow
             store={STORE_LINKS.appStore}
             title="Download on the App Store"
             subtitle="For iPhone and iPad"
-            icon={<AppleGlyph className="h-5 w-5 text-white" />}
-            iconWrapClass="bg-[#171A19] text-white"
+            icon={<AppleGlyph className="h-6 w-6 text-[#171A19]" />}
           />
-          <div className="mx-1 border-t border-[#EEEFEA]" />
+          <div className="mx-2 my-0.5 border-t border-[#EEEFEA]" />
           <StoreRow
             store={STORE_LINKS.playStore}
             title="Get it on Google Play"
             subtitle="For Android devices"
-            icon={<PlayMark className="h-5 w-5" />}
-            iconWrapClass="bg-[#F3F5F2]"
+            icon={<PlayStoreColor className="h-6 w-6" />}
           />
         </div>
       ) : null}

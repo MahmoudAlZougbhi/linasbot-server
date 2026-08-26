@@ -26,6 +26,25 @@ export const LANDING_ASSETS = {
     aiLimits: '/brand/landing/app-screens/tour/12-ai-limits.png',
     settings: '/brand/landing/app-screens/tour/13-settings.png',
   },
+  /**
+   * In-phone How it works screens — real app UI only.
+   * 780×1688 handoff exports where available; tour screen crops for the rest.
+   */
+  howItWorksScreens: {
+    ownerCopilot: '/brand/landing/app-screens/owner-copilot.png',
+    sideMenu: '/brand/landing/app-screens/navigation.png',
+    dashboard: '/brand/landing/app-screens/screens/03-dashboard-screen.png',
+    aiSetup: '/brand/landing/app-screens/screens/04-ai-setup-screen.png',
+    smartAnswers: '/brand/landing/app-screens/screens/05-smart-answers-screen.png',
+    smartFollowUp: '/brand/landing/app-screens/screens/06-smart-follow-up-screen.png',
+    integrations: '/brand/landing/app-screens/screens/07-integrations-screen.png',
+    liveChat: '/brand/landing/app-screens/live-chat.png',
+    requests: '/brand/landing/app-screens/screens/09-requests-screen.png',
+    users: '/brand/landing/app-screens/screens/10-users-screen.png',
+    subscription: '/brand/landing/app-screens/screens/11-subscription-screen.png',
+    aiLimits: '/brand/landing/app-screens/screens/12-ai-limits-screen.png',
+    settings: '/brand/landing/app-screens/settings.png',
+  },
   designScreenshots: {
     hero: '/brand/landing/screenshots/linas-landing-01-hero.jpg',
     features: '/brand/landing/screenshots/linas-landing-02-features.jpg',

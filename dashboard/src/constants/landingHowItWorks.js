@@ -13,7 +13,7 @@ export const HOW_IT_WORKS_STEPS = [
       { title: 'Confirm', body: 'See exactly what Linas understood.' },
       { title: 'Saved', body: 'Knowledge updates without a form.' },
     ],
-    image: LANDING_ASSETS.tourScreens.ownerCopilot,
+    image: LANDING_ASSETS.howItWorksScreens.ownerCopilot,
     alt: 'Owner Copilot chat in Linas AI',
   },
   {
@@ -26,7 +26,7 @@ export const HOW_IT_WORKS_STEPS = [
       { title: 'Choose', body: 'Pick a section or a recent chat.' },
       { title: 'Continue', body: 'Pick up exactly where you left off.' },
     ],
-    image: LANDING_ASSETS.tourScreens.sideMenu,
+    image: LANDING_ASSETS.howItWorksScreens.sideMenu,
     alt: 'Linas AI side menu',
   },
   {
@@ -39,7 +39,7 @@ export const HOW_IT_WORKS_STEPS = [
       { title: 'Compare', body: 'Spot trends and measure progress.' },
       { title: 'Decide', body: 'Make confident decisions with a full picture.' },
     ],
-    image: LANDING_ASSETS.tourScreens.dashboard,
+    image: LANDING_ASSETS.howItWorksScreens.dashboard,
     alt: 'Linas AI activity dashboard',
     builtScreen: 'dashboard',
   },
@@ -53,7 +53,7 @@ export const HOW_IT_WORKS_STEPS = [
       { title: 'Review', body: 'Check what Linas will use.' },
       { title: 'Publish', body: 'Make the knowledge live.' },
     ],
-    image: LANDING_ASSETS.tourScreens.aiSetup,
+    image: LANDING_ASSETS.howItWorksScreens.aiSetup,
     alt: 'AI Setup progress in Linas AI',
   },
   {
@@ -66,7 +66,7 @@ export const HOW_IT_WORKS_STEPS = [
       { title: 'Translate', body: 'It applies in every language you select.' },
       { title: 'Reuse', body: 'Matched replies cost 0 credits.' },
     ],
-    image: LANDING_ASSETS.tourScreens.smartAnswers,
+    image: LANDING_ASSETS.howItWorksScreens.smartAnswers,
     alt: 'Smart Answers in Linas AI',
   },
   {
@@ -79,7 +79,7 @@ export const HOW_IT_WORKS_STEPS = [
       { title: 'Wait', body: 'Follow up on your timing.' },
       { title: 'Follow up', body: 'The conversation starts again.' },
     ],
-    image: LANDING_ASSETS.tourScreens.smartFollowUp,
+    image: LANDING_ASSETS.howItWorksScreens.smartFollowUp,
     alt: 'Smart Follow-Up settings',
   },
   {
@@ -92,7 +92,7 @@ export const HOW_IT_WORKS_STEPS = [
       { title: 'Verify', body: 'Confirm the account is ready.' },
       { title: 'Reply', body: 'Linas answers in that channel.' },
     ],
-    image: LANDING_ASSETS.tourScreens.integrations,
+    image: LANDING_ASSETS.howItWorksScreens.integrations,
     alt: 'Channel integrations in Linas AI',
   },
   {
@@ -105,7 +105,7 @@ export const HOW_IT_WORKS_STEPS = [
       { title: 'Take over', body: 'Step in whenever you need.' },
       { title: 'Assign', body: 'Hand it to a teammate cleanly.' },
     ],
-    image: LANDING_ASSETS.tourScreens.liveChat,
+    image: LANDING_ASSETS.howItWorksScreens.liveChat,
     alt: 'Live Chat takeover in Linas AI',
   },
   {
@@ -118,7 +118,7 @@ export const HOW_IT_WORKS_STEPS = [
       { title: 'Assign', body: 'Send it to the right person.' },
       { title: 'Complete', body: 'Move it from New to Done.' },
     ],
-    image: LANDING_ASSETS.tourScreens.requests,
+    image: LANDING_ASSETS.howItWorksScreens.requests,
     alt: 'Requests board in Linas AI',
   },
   {
@@ -131,7 +131,7 @@ export const HOW_IT_WORKS_STEPS = [
       { title: 'Set access', body: 'Choose what each role can do.' },
       { title: 'Assign', body: 'Work stays in the right hands.' },
     ],
-    image: LANDING_ASSETS.tourScreens.users,
+    image: LANDING_ASSETS.howItWorksScreens.users,
     alt: 'Users and permissions in Linas AI',
   },
   {
@@ -144,7 +144,7 @@ export const HOW_IT_WORKS_STEPS = [
       { title: 'Compare', body: 'Look at the next plan clearly.' },
       { title: 'Upgrade', body: 'Add capacity when you need it.' },
     ],
-    image: LANDING_ASSETS.tourScreens.subscription,
+    image: LANDING_ASSETS.howItWorksScreens.subscription,
     alt: 'Subscription and credits in Linas AI',
   },
   {
@@ -157,7 +157,7 @@ export const HOW_IT_WORKS_STEPS = [
       { title: 'Monitor', body: 'See how customers use Linas.' },
       { title: 'Protect', body: 'Credits stay under your control.' },
     ],
-    image: LANDING_ASSETS.tourScreens.aiLimits,
+    image: LANDING_ASSETS.howItWorksScreens.aiLimits,
     alt: 'Customer AI Limits in Linas AI',
   },
   {
@@ -170,7 +170,7 @@ export const HOW_IT_WORKS_STEPS = [
       { title: 'Save', body: 'Keep the choices you made.' },
       { title: 'Sync', body: 'The app follows you everywhere.' },
     ],
-    image: LANDING_ASSETS.tourScreens.settings,
+    image: LANDING_ASSETS.howItWorksScreens.settings,
     alt: 'Settings in Linas AI',
   },
 ];

@@ -139,6 +139,11 @@ describe("public marketing landing", () => {
     expect(screen.getByText("Off day saved")).toBeInTheDocument();
     expect(screen.getByText("5 channels connected")).toBeInTheDocument();
     expect(screen.getByText("What would you like to teach me about your business?")).toBeInTheDocument();
+    expect(screen.getByText("Every new client gets a free skin consultation.")).toBeInTheDocument();
+    expect(screen.getByText(/hydrating serum/i)).toBeInTheDocument();
+    expect(screen.getByText(/Saved to Products/i)).toBeInTheDocument();
+    expect(screen.getByText(/book an appointment/i)).toBeInTheDocument();
+    expect(screen.getByText(/Appointment requests go to your team/i)).toBeInTheDocument();
     expect(screen.getByText("Work with Linas")).toBeInTheDocument();
     expect(screen.getAllByText("Style").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Opening Hours").length).toBeGreaterThan(0);

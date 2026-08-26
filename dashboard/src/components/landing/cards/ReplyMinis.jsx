@@ -1,5 +1,5 @@
 import MiniFrame from './MiniFrame';
-import { CHANNELS } from '../ChannelIcons';
+import { HERO_CHANNELS } from '../HeroChannelRow';
 
 /** @typedef {{ play?: boolean }} MiniPlay */
 
@@ -81,9 +81,9 @@ export function ReplyVoiceVision({ play }) {
         <span className="text-[0.65rem] text-[#5C6663]">0:12</span>
       </div>
       <img
-        src="/brand/landing/customer-vision.jpg"
-        alt=""
-        className="lp-fade-up mt-2.5 h-28 w-full rounded-xl object-cover object-[center_20%] ring-1 ring-[#06715F]/20"
+        src="/brand/landing/customer-vision.png"
+        alt="Customer photo"
+        className="lp-fade-up mt-2.5 h-28 w-full rounded-xl object-cover object-[center_18%] ring-1 ring-[#E6EBE8]"
         style={{ animationDelay: '400ms' }}
       />
       <p className="mt-2 text-center text-[0.65rem] text-[#5C6663]">Can you treat this?</p>
@@ -99,9 +99,11 @@ export function ReplyChannels({ play }) {
   return (
     <MiniFrame play={play}>
       <div className="flex flex-wrap justify-center gap-x-3 gap-y-2.5">
-        {CHANNELS.map((ch, i) => (
+        {HERO_CHANNELS.map((ch, i) => (
           <div key={ch.id} className="lp-fade-up w-[3.15rem] text-center" style={{ animationDelay: `${i * 160}ms` }}>
-            <ch.Icon className="mx-auto h-11 w-11 rounded-[0.85rem] shadow-[0_6px_14px_rgba(23,26,25,0.16)]" />
+            <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-[0.9rem] bg-white shadow-[0_6px_14px_rgba(23,26,25,0.1)] ring-1 ring-black/[0.04]">
+              <ch.Mark className="h-6 w-6" />
+            </span>
             <p className="mt-1 text-[0.58rem] font-medium leading-tight text-[#171A19]">{ch.label}</p>
           </div>
         ))}

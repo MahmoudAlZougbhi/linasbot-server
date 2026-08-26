@@ -43,7 +43,7 @@ export default function LandingHowItWorks() {
   const next = HOW_IT_WORKS_STEPS[index + 1] || null;
 
   const frame = (
-    <div className="mx-auto grid w-full max-w-6xl items-center gap-6 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:gap-4">
+    <div className="relative mx-auto grid w-full max-w-[92rem] items-center gap-6 overflow-visible px-4 py-4 sm:px-8 md:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] md:gap-3 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:gap-4 lg:px-10 xl:px-14">
       <HowItWorksCopy step={step} />
       <HowItWorksStage step={step} prev={prev} next={next} />
     </div>
@@ -53,7 +53,7 @@ export default function LandingHowItWorks() {
     return (
       <section
         id="how-it-works"
-        className="scroll-mt-24 bg-[#F4F6F3] py-16"
+        className="scroll-mt-24 bg-[#F7F8F5] py-16"
         onPointerDown={(event) => {
           event.currentTarget.dataset.startX = String(event.clientX);
         }}
@@ -82,8 +82,8 @@ export default function LandingHowItWorks() {
   }
 
   return (
-    <section id="how-it-works" ref={ref} className="relative bg-[#F4F6F3]" style={{ height: `${SEGMENTS * 85}vh` }}>
-      <div className="sticky top-0 flex min-h-screen items-center overflow-visible">{frame}</div>
+    <section id="how-it-works" ref={ref} className="relative bg-[#F7F8F5]" style={{ height: `${SEGMENTS * 85}vh` }}>
+      <div className="sticky top-[5.25rem] flex min-h-[calc(100svh-5.25rem)] items-center overflow-visible bg-[#F7F8F5]">{frame}</div>
     </section>
   );
 }

@@ -14,9 +14,9 @@ const NAV = [
  */
 const PublicSiteHeader = ({ compact = false }) => {
   return (
-    <header className="sticky top-0 z-40 bg-[#F7F8F5]/85 backdrop-blur-md">
+    <header className="sticky top-0 z-50 bg-[#F7F8F5]/85 backdrop-blur-md">
       <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6">
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-full bg-white px-3 py-2 shadow-[0_10px_32px_rgba(23,26,25,0.07)] ring-1 ring-black/[0.04] sm:px-5 sm:py-2.5">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-full bg-white px-3 py-1.5 shadow-[0_10px_32px_rgba(23,26,25,0.07)] ring-1 ring-black/[0.04] sm:px-5 sm:py-2">
           <Link
             to={PUBLIC_PATHS.home}
             className="flex items-center gap-2.5 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#06715F]"
