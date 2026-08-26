@@ -2038,7 +2038,7 @@ if (
 PY
   path_identity="$(stat -Lc '%d:%i' "$LOCK_FILE")"
   exec 9<>"$LOCK_FILE"
-  fd_identity="$(stat -Lc '%d:%i' "/proc/$$/fd/9")"
+  fd_identity="$(stat -Lc '%d:%i' /proc/self/fd/9)"
   test "$fd_identity" = "$path_identity" || die "Meta HA transaction lock changed while opening"
   flock -x 9
 }
