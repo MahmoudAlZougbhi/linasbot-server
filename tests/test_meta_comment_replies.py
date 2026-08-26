@@ -550,7 +550,83 @@ class MetaCommentResultPolicyTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(found)
         self.assertEqual(len(requests), 2)
+        self.assertEqual(requests[0].url.params.get("fields"), "id,from")
         self.assertEqual(requests[1].url.params.get("after"), "cursor-1")
+        self.assertEqual(requests[1].url.params.get("fields"), "id,from")
+
+    async def test_reply_dedupe_graph_400_is_treated_as_unreplied(self):
+        async def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(400, json={"error": {"message": "unsupported get request"}})
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            found = await _comment_has_page_reply(
+                client,
+                comment_id="comment-1",
+                owner_id="page-1",
+                token="token",
+                graph_url="https://graph.facebook.com/v24.0/comment-1/comments",
+            )
+
+        self.assertFalse(found)
+
+    async def test_reply_dedupe_falls_back_when_from_field_is_rejected(self):
+        fields: list[str] = []
+
+        async def handler(request: httpx.Request) -> httpx.Response:
+            fields.append(str(request.url.params.get("fields") or ""))
+            if request.url.params.get("fields") == "id,from":
+                return httpx.Response(400, json={"error": {"code": 100}})
+            return httpx.Response(200, json={"data": [{"id": "reply-1"}]})
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            found = await _comment_has_page_reply(
+                client,
+                comment_id="comment-1",
+                owner_id="page-1",
+                token="token",
+                graph_url="https://graph.facebook.com/v24.0/comment-1/comments",
+            )
+
+        self.assertFalse(found)
+        self.assertEqual(fields, ["id,from", "id"])
+
+    async def test_reply_dedupe_skips_rows_missing_from_instead_of_fail_closing(self):
+        async def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {"id": "reply-hidden"},
+                        {"id": "reply-page", "from": {"id": "page-1"}},
+                    ]
+                },
+            )
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            found = await _comment_has_page_reply(
+                client,
+                comment_id="comment-1",
+                owner_id="page-1",
+                token="token",
+                graph_url="https://graph.facebook.com/v24.0/comment-1/comments",
+            )
+
+        self.assertTrue(found)
+
+    async def test_reply_dedupe_graph_403_is_treated_as_unreplied(self):
+        async def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(403, json={"error": {"message": "permission"}})
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            found = await _comment_has_page_reply(
+                client,
+                comment_id="comment-1",
+                owner_id="page-1",
+                token="token",
+                graph_url="https://graph.facebook.com/v24.0/comment-1/comments",
+            )
+
+        self.assertFalse(found)
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ from services.scale.inbound_event_reconcile import _enqueue_or_mark
 from services.scale.meta_ingress import (
     _settings_snapshot,
     _try_enqueue,
+    enqueue_meta_inbound_event,
     persist_meta_comment_accepted,
     persist_meta_dm_accepted,
 )
@@ -182,3 +183,26 @@ def test_terminal_meta_event_is_never_reopened_on_provider_redelivery(
     )
 
     assert result[1] is False
+
+
+def test_enqueue_without_claim_handle_leaves_worker_to_adopt_lease(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        "services.scale.meta_ingress.get_inbound_event",
+        lambda _event_id: SimpleNamespace(kind="meta_dm", tenant_id="linas", conversation_key="k"),
+    )
+    monkeypatch.setattr(
+        "services.scale.meta_ingress.mark_inbound_state",
+        lambda *_args, **_kwargs: None,
+    )
+
+    def fake_try_enqueue(**kwargs: object) -> str:
+        captured.update(kwargs)
+        return "job-queued"
+
+    monkeypatch.setattr("services.scale.meta_ingress._try_enqueue", fake_try_enqueue)
+
+    assert enqueue_meta_inbound_event("evt-ack", claim_handle=None) == "queued"
+    assert captured["claim_token"] == ""
+    assert captured["claim_generation"] == 1
+

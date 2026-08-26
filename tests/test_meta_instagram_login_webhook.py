@@ -372,7 +372,7 @@ async def test_dedicated_instagram_webhook_tracks_real_dm_delivery_outcome(
     monkeypatch.setattr("services.durable_event_claim.release_event_claim", release)
     monkeypatch.setattr(
         "services.scale.meta_ingress.persist_meta_dm_accepted",
-        lambda *_args, **_kwargs: ("event-dedicated-1", False),
+        lambda *_args, **_kwargs: ("event-dedicated-1", True),
     )
     monkeypatch.setattr("services.scale.meta_ingress.enqueue_meta_inbound_event", lambda *_args, **_kwargs: "inline")
     monkeypatch.setattr("services.scale.meta_ingress.mark_dm_processing", lambda *_args, **_kwargs: None)
@@ -472,7 +472,7 @@ async def test_dedicated_instagram_webhook_accepts_official_direct_comment_shape
     monkeypatch.setattr("services.durable_event_claim.release_event_claim", release)
     monkeypatch.setattr(
         "services.scale.meta_ingress.persist_meta_comment_accepted",
-        lambda *_args, **_kwargs: ("event-comment-1", False),
+        lambda *_args, **_kwargs: ("event-comment-1", True),
     )
     monkeypatch.setattr("services.scale.meta_ingress.enqueue_meta_inbound_event", lambda *_args, **_kwargs: "inline")
     monkeypatch.setattr("services.scale.meta_ingress.mark_dm_processing", lambda *_args, **_kwargs: None)
