@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlparse
 class _Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
-    def log_message(self, _format: str, *_args) -> None:  # noqa: A003
+    def log_message(self, _format: str, *_args: object) -> None:  # noqa: A003
         return
 
     def _read_body(self) -> bytes:

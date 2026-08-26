@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
+from typing import Any, cast
 
 from services.queues.config import DEFAULT_CONCURRENCY
 
@@ -17,8 +18,8 @@ def concurrency_for(queue: str) -> int:
 
 def _run_cycle(one_cycle: JobWorker) -> None:
     awaitable = one_cycle()
-    if isinstance(awaitable, Awaitable):
-        asyncio.run(awaitable)
+    if asyncio.iscoroutine(awaitable):
+        asyncio.run(cast(Coroutine[Any, Any, None], awaitable))
 
 
 async def run_bounded_pool(*, queue: str, one_cycle: JobWorker, stopping: Callable[[], bool]) -> None:
