@@ -186,6 +186,27 @@ async def test_reject_expired_token_fail_closed(wa_db, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_reject_token_issued_for_different_meta_app(wa_db, monkeypatch):
+    async def _wrong_app(**kwargs: Any) -> dict[str, Any]:
+        return {
+            "is_valid": True,
+            "app_id": "9999999999999999",
+            "scopes": ["whatsapp_business_management", "whatsapp_business_messaging"],
+        }
+
+    monkeypatch.setattr("services.whatsapp_cloud.app_review_bind_helpers.debug_token", _wrong_app)
+    with pytest.raises(AppReviewBindError) as exc:
+        await bind_app_review_test_number(
+            tenant_id="linas",
+            waba_id=TEST_WABA,
+            phone_number_id=TEST_PHONE,
+            access_token=None,
+            actor_user_id="po1",
+        )
+    assert exc.value.code == "token_app_mismatch"
+
+
+@pytest.mark.asyncio
 async def test_reject_phone_owned_by_other_tenant(wa_db, monkeypatch):
     _mock_meta_ok(monkeypatch)
     repo = WhatsAppCloudRepository(wa_db)

@@ -111,6 +111,12 @@ async def _validate_meta_assets(
         raise AppReviewBindError("token_debug_failed", exc.message) from exc
     if not dbg.get("is_valid", True):
         raise AppReviewBindError("token_invalid", "Meta debug_token reports token is not valid")
+    token_app_id = str(dbg.get("app_id") or "").strip()
+    if token_app_id != app.app_id:
+        raise AppReviewBindError(
+            "token_app_mismatch",
+            "Meta token belongs to a different app",
+        )
     scopes_raw = dbg.get("scopes") if isinstance(dbg, dict) else None
     scopes = [str(s) for s in scopes_raw] if isinstance(scopes_raw, list) else []
     granted = set(scopes)
