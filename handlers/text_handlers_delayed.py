@@ -98,7 +98,9 @@ async def _delayed_process_messages(
                 )
                 config.user_pending_messages[user_id].clear()
                 extra_mids = [str(item.get("mid") or "") for item in redis_chunks if str(item.get("mid") or "")]
-                extra_events = [str(item.get("event_id") or "") for item in redis_chunks if str(item.get("event_id") or "")]
+                extra_events = [
+                    str(item.get("event_id") or "") for item in redis_chunks if str(item.get("event_id") or "")
+                ]
                 if extra_events:
                     user_data["_combine_event_ids"] = extra_events
                 if extra_mids:
@@ -223,9 +225,10 @@ async def _delayed_process_messages(
                         f"combined_len={len(combined_message or '')} — distributed dedupe inactive for this turn"
                     )
                 try:
-                    from services.scale.trace_span import mark
-                    from services.scale.latency_histogram import observe
                     import time as _time
+
+                    from services.scale.latency_histogram import observe
+                    from services.scale.trace_span import mark
 
                     mark(str(trace), "ai_started")
                     _ai_t0 = _time.time()
