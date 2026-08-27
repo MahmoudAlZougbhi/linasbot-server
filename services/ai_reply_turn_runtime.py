@@ -94,6 +94,12 @@ def try_reserve_for_ai(user_data: dict[str, Any]) -> bool:
         return False
     try:
         reserve_before_ai(turn)
+        from services.ai_reply_lifecycle import mark_state
+
+        mark_state(lid, "AI_PROCESSING")
+        from services.scale.turn_pipeline import set_pipeline_stage
+
+        set_pipeline_stage(lid, "ai_started")
         return True
     except PermissionError:
         user_data["_ai_credit_blocked"] = True
@@ -119,6 +125,9 @@ def on_ai_generated(ctx: dict[str, Any]) -> None:
         completion_tokens=flow_meta.get("completion_tokens"),
         cost_usd=flow_meta.get("cost_usd"),
     )
+    from services.scale.turn_pipeline import set_pipeline_stage
+
+    set_pipeline_stage(str(lid), "ai_generated")
     capture_after_reply_persisted(
         str(lid),
         prompt_tokens=flow_meta.get("prompt_tokens"),

@@ -191,6 +191,10 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
     if rec.state in TERMINAL_STATES:
         return {"skipped": True, "reason": f"already_{rec.state}", "event_id": event_id}
 
+    from services.scale.soak_arm import job_requests_soak_simulation
+
+    soak_simulation = job_requests_soak_simulation(job)
+
     from services.durable_event_claim import (
         event_claim_handle_from_token,
         meta_claim_binding_digest,
@@ -276,19 +280,39 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
                     inbound_event_id=event_id,
                     tenant_id=outbound_tenant_id,
                     binding_id=outbound_binding_id,
+                    simulation=soak_simulation,
                 ),
             )
             delivery = str((outcome or {}).get("delivery") or "unknown")
             retryable = meta_social_outcome_requires_retry(outcome)
-            if not retryable:
-                skip_reason = str((outcome or {}).get("reason") or "").strip() if delivery == "skipped" else ""
-                mark_inbound_state(
-                    event_id,
-                    state="completed",
-                    ai_output_persisted=bool((outcome or {}).get("logical_reply_id")),
-                    outbound_status=delivery,
-                    last_error=skip_reason or None,
+            if delivery in {"combine_scheduled", "combine_superseded"}:
+                mark_inbound_state(event_id, state="queued", outbound_status=delivery)
+                await complete_event_claim(
+                    GLOBAL_DM_CLAIM_NAMESPACE,
+                    rec.claim_key,
+                    firestore_collection="meta_social_dm_global_claims",
+                    claim_handle=claim_handle,
                 )
+                return {
+                    "ok": True,
+                    "kind": "meta_dm",
+                    "event_id": event_id,
+                    "outcome": outcome,
+                    "deferred": True,
+                }
+            if not retryable:
+                extra_ids = [
+                    str(item) for item in list((outcome or {}).get("combined_event_ids") or []) if str(item).strip()
+                ]
+                skip_reason = str((outcome or {}).get("reason") or "").strip() if delivery == "skipped" else ""
+                for eid in [event_id, *[item for item in extra_ids if item != event_id]]:
+                    mark_inbound_state(
+                        eid,
+                        state="completed",
+                        ai_output_persisted=bool((outcome or {}).get("logical_reply_id")),
+                        outbound_status=delivery,
+                        last_error=skip_reason or None,
+                    )
                 await complete_event_claim(
                     GLOBAL_DM_CLAIM_NAMESPACE,
                     rec.claim_key,
@@ -353,7 +377,9 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
             result = await run_under_event_claim(
                 claim_handle,
                 ttl_seconds=300.0,
-                operation=lambda: process_meta_comment_event(resolved, inbound_event_id=event_id),
+                operation=lambda: process_meta_comment_event(
+                    resolved, inbound_event_id=event_id, simulation=soak_simulation
+                ),
             )
             if comment_reply_requires_retry(result):
                 mark_inbound_state(

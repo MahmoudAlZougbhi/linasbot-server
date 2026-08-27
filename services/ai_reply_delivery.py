@@ -79,14 +79,54 @@ def wrap_tracked_send(raw_send: SendFunc, user_data: dict[str, Any]) -> SendFunc
         image_url: str | None = None,
         audio_url: str | None = None,
     ) -> Any:
-        result = await raw_send(
-            to_number,
-            message_text=message_text,
-            image_url=image_url,
-            audio_url=audio_url,
-        )
+        delivery_key = str(user_data.get("_logical_reply_id") or user_data.get("_inbound_event_id") or "")
+        action = "send"
+        if delivery_key:
+            from services.scale.delivery_ledger import begin_send
+
+            action = begin_send(delivery_key)
+        if action == "skip_sent":
+            from services.scale.delivery_ledger import snapshot as delivery_snapshot
+
+            snap = delivery_snapshot(delivery_key)
+            result: Any = {
+                "success": True,
+                "message_id": str(snap.get("provider_message_id") or "ledger-sent"),
+            }
+        elif action == "skip_unknown":
+            result = {"success": False, "needs_owner_action": True, "error": "delivery_unknown"}
+        else:
+            try:
+                if delivery_key:
+                    from services.scale.trace_span import mark as trace_mark
+
+                    trace_mark(str(user_data.get("_linas_trace_id") or ""), "send_started")
+                result = await raw_send(
+                    to_number,
+                    message_text=message_text,
+                    image_url=image_url,
+                    audio_url=audio_url,
+                )
+            except BaseException:
+                if delivery_key:
+                    from services.scale.delivery_ledger import mark_unknown
+
+                    mark_unknown(delivery_key)
+                raise
         evidence = classify_send_result(result)
         user_data["_last_outbound_delivery"] = evidence
+        if delivery_key:
+            from services.scale.delivery_ledger import confirm_failed, confirm_sent, mark_unknown
+
+            if evidence.get("success") and not evidence.get("duplicate_suppressed"):
+                confirm_sent(delivery_key, provider_message_id=str(evidence.get("provider_message_id") or ""))
+                from services.scale.trace_span import mark as trace_mark
+
+                trace_mark(str(user_data.get("_linas_trace_id") or ""), "send_ok")
+            elif evidence.get("needs_owner_action"):
+                mark_unknown(delivery_key)
+            else:
+                confirm_failed(delivery_key, retryable=bool(evidence.get("retryable", True)))
         if evidence.get("success"):
             user_data["_delivery_succeeded"] = True
             maybe_record_product_outbound(

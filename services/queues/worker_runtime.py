@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+import time
 import uuid
 from typing import Any
 
@@ -12,7 +13,9 @@ from services.omnichannel.worker_pool import run_bounded_pool
 from services.queues.config import DEFAULT_TENANT_INFLIGHT, redis_url
 from services.queues.handlers import JobNotReady, PermanentJobError, get_handler
 from services.queues.redis_backend import RedisQueueBackend
+from services.scale.autoscale_tick import run_autoscale_tick
 from services.scale.shutdown import shutdown_coordinator
+from services.scale.worker_slots import slot_count_for
 
 
 class WorkerRuntime:
@@ -23,6 +26,24 @@ class WorkerRuntime:
         self.worker_id = f"{queue}-{uuid.uuid4().hex[:8]}"
         self._backend = RedisQueueBackend()
         self._stopping = False
+        self.started_at = time.time()
+        self.node_id = (os.getenv("LINAS_NODE_ID") or "").strip()
+
+    def _registry_beat(self, status: str, *, inflight: int = 0, last_exit: str = "") -> None:
+        try:
+            from services.scale.worker_registry import heartbeat as registry_beat
+
+            registry_beat(
+                self.worker_id,
+                status=status,
+                node_id=self.node_id,
+                pid=os.getpid(),
+                inflight=inflight,
+                started_at=self.started_at,
+                last_exit=last_exit,
+            )
+        except Exception:
+            return
 
     def request_stop(self, *_args: Any) -> None:
         self._stopping = True
@@ -92,13 +113,45 @@ class WorkerRuntime:
             await asyncio.sleep(0.05)
             return
         try:
+            from services.scale.replica_controller import worker_is_draining
+
+            if worker_is_draining(self.worker_id):
+                await asyncio.sleep(0.05)
+                return
+        except Exception:
+            pass
+        try:
             self._backend.heartbeat(worker_id=self.worker_id, queue=self.queue)
+            self._registry_beat("draining" if self._stopping else "ready")
+        except Exception:
+            pass
+        try:
+            reclaim = getattr(self._backend, "reclaim_expired_leases", None)
+            if callable(reclaim):
+                reclaim(self.queue)
+        except Exception:
+            pass
+        try:
             job = self._backend.claim(self.queue, worker_id=self.worker_id, timeout=3)
         except Exception:
             await asyncio.sleep(0.5)
             return
         if job is None:
             return
+        try:
+            wait_ms = max(0.0, (time.time() - float(job.created_at)) * 1000.0)
+            from services.scale.latency_histogram import observe
+
+            observe("job_wait_ms", wait_ms)
+            trace_id = str((job.payload or {}).get("trace_id") or (job.payload or {}).get("_trace_id") or "")
+            if trace_id:
+                from services.scale.trace_context import set_trace_id
+                from services.scale.trace_span import mark
+
+                set_trace_id(trace_id)
+                mark(trace_id, "worker_started")
+        except Exception:
+            pass
         if not shutdown_coordinator.track_job_enter():
             self._requeue(job, 0.2)
             return
@@ -122,17 +175,22 @@ class WorkerRuntime:
             held_inflight = True
             conv_key = self._conversation_key(job)
             if conv_key:
-                from services.scale.conversation_lock import ConversationLock
+                from services.scale.worker_lock_policy import job_requires_conversation_lock
 
-                try:
-                    conv_lease = ConversationLock().try_acquire(conv_key, ttl_seconds=max(30, int(job.timeout_seconds)))
-                except Exception:
-                    self._requeue(job, 0.5)
-                    await asyncio.sleep(0.5)
-                    return
-                if conv_lease is None:
-                    self._requeue(job, 0.5)
-                    return
+                if job_requires_conversation_lock(str(job.job_type or "")):
+                    from services.scale.conversation_lock import ConversationLock
+
+                    try:
+                        conv_lease = ConversationLock().try_acquire(
+                            conv_key, ttl_seconds=max(30, int(job.timeout_seconds))
+                        )
+                    except Exception:
+                        self._requeue(job, 0.5)
+                        await asyncio.sleep(0.5)
+                        return
+                    if conv_lease is None:
+                        self._requeue(job, 0.5)
+                        return
             try:
                 self._backend.incr_tenant_inflight(job.tenant_id)
                 counted_inflight = True
@@ -146,11 +204,27 @@ class WorkerRuntime:
                     self._fail(job, error=f"unknown_job_type:{job.job_type}", retry=False)
                     self._refund_if_needed(job)
                     return
-                await asyncio.wait_for(handler(job), timeout=job.timeout_seconds)
+
+                async def _refresh_lease() -> None:
+                    while True:
+                        await asyncio.sleep(8)
+                        if not self._backend.refresh_lease(job.id, self.worker_id):
+                            return
+
+                refresh_task = asyncio.create_task(_refresh_lease())
+                self._registry_beat("busy", inflight=1)
                 try:
-                    self._backend.complete(job)
-                except Exception:
-                    await asyncio.sleep(0.5)
+                    await asyncio.wait_for(handler(job), timeout=job.timeout_seconds)
+                    try:
+                        self._backend.complete(job)
+                        from services.scale.rate_window import bump as bump_rate
+
+                        bump_rate("complete")
+                    except Exception:
+                        await asyncio.sleep(0.5)
+                finally:
+                    refresh_task.cancel()
+                    await asyncio.gather(refresh_task, return_exceptions=True)
             except JobNotReady:
                 self._requeue(job, 0.2)
             except PermanentJobError as exc:
@@ -181,11 +255,20 @@ class WorkerRuntime:
     async def run_forever(self) -> None:
         signal.signal(signal.SIGTERM, self.request_stop)
         signal.signal(signal.SIGINT, self.request_stop)
-        await run_bounded_pool(
-            queue=self.queue,
-            one_cycle=self._process_one,
-            stopping=lambda: self._stopping or not shutdown_coordinator.accept_queue_work,
-        )
+        tick = None
+        if self.queue == "high_priority":
+            tick = asyncio.create_task(run_autoscale_tick(lambda: self._stopping))
+        try:
+            await run_bounded_pool(
+                queue=self.queue,
+                one_cycle=self._process_one,
+                stopping=lambda: self._stopping or not shutdown_coordinator.accept_queue_work,
+                slot_count=lambda: slot_count_for(self.queue),
+            )
+        finally:
+            if tick is not None:
+                tick.cancel()
+                await asyncio.gather(tick, return_exceptions=True)
         shutdown_coordinator.wait_for_idle(timeout_seconds=50)
 
 

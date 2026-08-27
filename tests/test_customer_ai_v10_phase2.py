@@ -67,8 +67,8 @@ async def test_exact_faq_dm_direct_no_luna_tera(v2_env, monkeypatch: pytest.Monk
     async def _boom(**_k):
         raise AssertionError("Luna/Tera must not run on FAQ direct")
 
-    monkeypatch.setattr("services.customer_reply_v2.orchestrator.run_retrieval_luna", _boom)
-    monkeypatch.setattr("services.customer_reply_v2.orchestrator.run_answer_luna", _boom)
+    monkeypatch.setattr("services.customer_reply_v2.orchestrator_llm.run_retrieval_luna", _boom)
+    monkeypatch.setattr("services.customer_reply_v2.orchestrator_llm.run_answer_luna", _boom)
 
     from services.customer_reply_v2.orchestrator import run_customer_reply_v2_dm
 
@@ -151,8 +151,8 @@ async def test_faq_miss_goes_to_luna(v2_env, monkeypatch: pytest.MonkeyPatch):
     async def _tera(**_k):
         return AnswerLunaResult(reply_text="ok", grounding_status="grounded")
 
-    monkeypatch.setattr("services.customer_reply_v2.orchestrator.run_retrieval_luna", _luna)
-    monkeypatch.setattr("services.customer_reply_v2.orchestrator.run_answer_luna", _tera)
+    monkeypatch.setattr("services.customer_reply_v2.orchestrator_llm.run_retrieval_luna", _luna)
+    monkeypatch.setattr("services.customer_reply_v2.orchestrator_llm.run_answer_luna", _tera)
     monkeypatch.setattr("services.customer_reply_v2.orchestrator_answer.run_answer_luna", _tera)
 
     out = await run_customer_reply_v2_dm(

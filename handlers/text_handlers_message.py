@@ -9,8 +9,7 @@ from collections import deque
 from typing import Any
 
 import config
-from handlers.text_handlers_delayed import _delayed_process_messages
-from handlers.text_handlers_firestore import _delayed_processing_tasks
+from handlers.text_handlers_delayed import _delayed_process_messages  # noqa: F401 — patched by tests
 from handlers.text_handlers_message_greeting import (
     GREETING_INACTIVITY_SECONDS,
     _combine_schedule_lock,
@@ -130,6 +129,7 @@ async def handle_message(
         phone_for_save = user_data.get("phone_number")
 
         source_message_id = user_data.pop("_source_message_id", None)
+        user_data["_combine_mid"] = str(source_message_id or "")
         message_metadata = {"type": "text"}
         channel = str(user_data.get("channel") or "").strip().lower()
         if channel:
@@ -328,60 +328,13 @@ async def handle_message(
     )
 
     async with _combine_schedule_lock(user_id):
-        # Message combining logic
-        config.user_pending_messages[user_id].append(raw_msg)
-        try:
-            from services.scale.conversation_state_redis import set_pending_messages
-            from services.scale.redis_claims import redis_claims_fail_closed
+        from handlers.text_handlers_combine import schedule_combined_turn
 
-            if not set_pending_messages(user_id, list(config.user_pending_messages[user_id])):
-                if redis_claims_fail_closed():
-                    print(
-                        f"[handle_message] WARN: pending combine not published to shared Redis "
-                        f"(fail-closed) user=...{str(user_id)[-4:]}"
-                    )
-        except Exception:
-            pass
-        # Dashboard /api/test-*: if a webhook-delayed task for this user was just cancelled, it may have
-        # left the pending deque empty; keep a copy so _delayed_process_messages can still run GPT.
-        if user_data.get("_dashboard_test_simulation"):
-            user_data["_dashboard_last_message_for_fallback"] = raw_msg
-            # Survives pending-queue races (e.g. cancelled delayed task cleared deque); cleared in delayed after GPT turn.
-            user_data["_dashboard_test_turn_sticky"] = raw_msg
-
-        # Cancel any previously scheduled processing task
-        if user_id in _delayed_processing_tasks and not _delayed_processing_tasks[user_id].done():
-            _delayed_processing_tasks[user_id].cancel()
-
-        # New epoch for this combine/GPT wave. A previously cancelled task may still finish GPT and
-        # try to send; outbound uses this so stale turns skip WhatsApp delivery (duplicate bubble fix).
-        user_data["_text_turn_epoch"] = user_data.get("_text_turn_epoch", 0) + 1
-        text_turn_epoch = user_data["_text_turn_epoch"]
-
-        # Dashboard /api/test-* sets _dashboard_test_simulation: run GPT path inline so the HTTP handler
-        # sees captured replies before returning (background create_task was still racing / missing awaits).
-        if user_data.get("_dashboard_test_simulation"):
-            print(f"[handle_message] Dashboard test simulation: inline delayed processing for ...{str(user_id)[-4:]}")
-            try:
-                await _delayed_process_messages(
-                    user_id,
-                    user_data,
-                    send_message_func,
-                    send_action_func,
-                    combine_delay_seconds=message_combine_delay,
-                    text_turn_epoch=text_turn_epoch,
-                )
-            finally:
-                _delayed_processing_tasks.pop(user_id, None)
-            return
-
-        _delayed_processing_tasks[user_id] = asyncio.create_task(
-            _delayed_process_messages(
-                user_id,
-                user_data,
-                send_message_func,
-                send_action_func,
-                combine_delay_seconds=message_combine_delay,
-                text_turn_epoch=text_turn_epoch,
-            )
+        await schedule_combined_turn(
+            user_id=user_id,
+            raw_msg=raw_msg,
+            user_data=user_data,
+            send_message_func=send_message_func,
+            send_action_func=send_action_func,
+            message_combine_delay=message_combine_delay,
         )

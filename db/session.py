@@ -98,6 +98,8 @@ def get_engine(*, require: bool = True) -> Engine:
                 pool_pre_ping=True,
                 pool_size=int(os.getenv("LINAS_WHATSAPP_DB_POOL_SIZE") or "5"),
                 max_overflow=int(os.getenv("LINAS_WHATSAPP_DB_MAX_OVERFLOW") or "10"),
+                pool_timeout=int(os.getenv("LINAS_WHATSAPP_DB_POOL_TIMEOUT") or "30"),
+                pool_recycle=int(os.getenv("LINAS_WHATSAPP_DB_POOL_RECYCLE") or "1800"),
                 future=True,
             )
         _SESSION_FACTORY = sessionmaker(bind=_ENGINE, autoflush=False, autocommit=False, future=True)

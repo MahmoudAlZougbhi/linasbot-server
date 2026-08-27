@@ -23,21 +23,9 @@ _TTL_SEC = max(60, int(os.getenv("LINAS_CONV_STATE_TTL_SEC") or "86400"))
 
 def _client() -> Any | None:
     try:
-        from services.queues.config import redis_url
+        from services.scale.redis_pool import redis_client
 
-        url = redis_url()
-        if not url:
-            return None
-        import redis
-
-        client = redis.Redis.from_url(
-            url,
-            decode_responses=True,
-            socket_connect_timeout=1.5,
-            socket_timeout=1.5,
-        )
-        client.ping()
-        return client
+        return redis_client()
     except Exception:
         return None
 

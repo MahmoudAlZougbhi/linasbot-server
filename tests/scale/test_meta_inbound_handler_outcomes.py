@@ -365,6 +365,7 @@ async def test_legacy_queue_passes_record_tenant_and_synthetic_binding(
             "inbound_event_id": record.event_id,
             "tenant_id": "linas",
             "binding_id": "legacy-single-app",
+            "simulation": False,
         }
     ]
 

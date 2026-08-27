@@ -124,6 +124,11 @@ def stable_logical_reply_id(*, tenant_id: str, channel: str, external_inbound_id
 
 def put_turn(record: AiReplyTurnRecord) -> AiReplyTurnRecord:
     record.updated_at = time.time()
+    from services.scale.turn_store import save_turn, store_enabled
+
+    if store_enabled():
+        save_turn(record.to_dict())
+        return record
     path = _path_for(record.logical_reply_id)
     tmp = path.with_suffix(".tmp")
     payload = json.dumps(record.to_dict(), separators=(",", ":"), sort_keys=True)
@@ -135,6 +140,13 @@ def put_turn(record: AiReplyTurnRecord) -> AiReplyTurnRecord:
 
 
 def get_turn(logical_reply_id: str) -> AiReplyTurnRecord | None:
+    from services.scale.turn_store import load_turn, store_enabled
+
+    if store_enabled():
+        data = load_turn(logical_reply_id)
+        if data is None:
+            return None
+        return AiReplyTurnRecord.from_dict(data)
     path = _path_for(logical_reply_id)
     if not path.is_file():
         return None
@@ -211,6 +223,16 @@ def persist_generated_reply(
 
 def find_pending_delivery_turn(*, claim_key_basis: str) -> AiReplyTurnRecord | None:
     """Return a turn with saved reply awaiting delivery (retry without regeneration)."""
+    from services.scale.turn_store import load_turn_by_claim, store_enabled
+
+    if store_enabled():
+        data = load_turn_by_claim(claim_key_basis)
+        if data is None:
+            return None
+        rec = AiReplyTurnRecord.from_dict(data)
+        if rec.generated_reply and rec.state not in TERMINAL_DELIVERED | TERMINAL_BLOCKED:
+            return rec
+        return None
     root = _store_dir()
     for path in root.glob("lr_*.json"):
         try:
@@ -280,6 +302,13 @@ def find_turn_for_inbound_event(inbound_event_id: str) -> AiReplyTurnRecord | No
     """Lookup turn by durable inbound event id."""
     target = (inbound_event_id or "").strip()
     if not target:
+        return None
+    from services.scale.turn_store import load_turn_by_event, store_enabled
+
+    if store_enabled():
+        data = load_turn_by_event(target)
+        if data is not None:
+            return AiReplyTurnRecord.from_dict(data)
         return None
     for rec in list_all_turns():
         if rec.inbound_event_id == target:

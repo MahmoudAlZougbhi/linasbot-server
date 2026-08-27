@@ -168,10 +168,17 @@ async def process_meta_social_event(
                 "current_conversation_id": None,
                 **config.DEFAULT_CONVERSATION_STATE,
             }
-        user_data = config.user_data_whatsapp[user_id]
+        from services.scale.conversation_session import hydrate_into_process
+
+        user_data = hydrate_into_process(user_id)
         from services.ai_reply_turn_runtime import reset_turn_runtime_state
 
         reset_turn_runtime_state(user_data)
+        from services.scale.trace_span import new_trace_id
+
+        user_data["_linas_trace_id"] = str(
+            event.get("_linas_trace_id") or user_data.get("_linas_trace_id") or new_trace_id()
+        )
         user_data.update(
             {
                 "channel": channel,
@@ -475,19 +482,16 @@ async def process_meta_social_event(
             skip_firestore_save=skip_firestore_save,
             message_combine_delay=message_combine_delay,
         )
-        await _await_delayed_processing(user_id)
-        from services.ai_reply_turn_runtime import finalize_delivery
+        from services.scale.conversation_session import persist_from_process
 
-        delivery_summary = finalize_delivery({"user_data": user_data})
-        return {
-            "ok": True,
-            "delivery": delivery_summary.get("delivery", "unknown"),
-            "logical_reply_id": delivery_summary.get("logical_reply_id"),
-            "credit_captured": delivery_summary.get("credit_captured"),
-            "retryable": delivery_summary.get("retryable", True),
-            "terminal": delivery_summary.get("terminal", False),
-            "provider_message_id_present": delivery_summary.get("provider_message_id_present", False),
-        }
+        persist_from_process(user_id)
+        from services.social_turn_outcome import deferred_combine_outcome, finalize_social_turn
+
+        deferred = deferred_combine_outcome(user_data)
+        if deferred is not None:
+            return deferred
+        await _await_delayed_processing(user_id)
+        return finalize_social_turn(user_data)
     finally:
         if adapter is not None:
             await adapter.close()
