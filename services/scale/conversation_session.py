@@ -221,8 +221,9 @@ def hydrate_into_process(user_id: str) -> dict[str, Any]:
     if not blob:
         return config.user_data_whatsapp[user_id]
     user_data = config.user_data_whatsapp[user_id]
-    incoming = blob.get("user_data") if isinstance(blob.get("user_data"), dict) else {}
-    user_data.update(incoming)
+    raw_ud = blob.get("user_data")
+    if isinstance(raw_ud, dict):
+        user_data.update({str(k): v for k, v in raw_ud.items()})
     name = str(blob.get("user_name") or "").strip()
     if name:
         config.user_names[user_id] = name

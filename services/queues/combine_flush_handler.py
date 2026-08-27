@@ -118,7 +118,7 @@ async def _send_pair(
         return await _meta_send_pair(user_key, user_data, context, channel)
     if channel == "whatsapp":
         from modules.whatsapp_adapters import send_whatsapp_typing_indicator
-        from services.whatsapp_adapters import WhatsAppFactory
+        from services.whatsapp_adapters.whatsapp_factory import WhatsAppFactory
 
         adapter = WhatsAppFactory.get_adapter(WhatsAppFactory.get_current_provider())
 
