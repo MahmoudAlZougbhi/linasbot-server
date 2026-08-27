@@ -138,6 +138,7 @@ def persist_meta_dm_accepted(resolved: ResolvedMetaEvent, *, global_key: str) ->
         attempts=0,
     )
     _, created = create_inbound_event(record, enforce_binding_deletion_fence=True)
+    mark(trace_id, "persisted")
     from services.omnichannel.dual_write import mirror_meta_inbound
 
     mirror_meta_inbound(record)

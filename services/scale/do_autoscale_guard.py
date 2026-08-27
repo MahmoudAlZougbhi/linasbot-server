@@ -6,6 +6,7 @@ import os
 
 # Pinned production app droplets behind linas-http-lb-lon1. Never autoscale these.
 PRODUCTION_DROPLET_IDS = frozenset({510629908, 591901417})
+ALLOWED_SCALE_ENVS = frozenset({"staging", "isolated", "omni-cert"})
 
 
 class DigitalOceanAutoscaleForbidden(PermissionError):
@@ -21,6 +22,24 @@ def assert_droplet_autoscale_allowed(target_droplet_ids: list[int] | None = None
     for droplet_id in target_droplet_ids or []:
         if int(droplet_id) in PRODUCTION_DROPLET_IDS:
             raise DigitalOceanAutoscaleForbidden("production_droplet_id_forbidden")
+    env = (os.getenv("LINAS_SCALE_ENV") or "").strip().lower()
+    if env and env not in ALLOWED_SCALE_ENVS:
+        raise DigitalOceanAutoscaleForbidden("scale_env_not_allowed")
+    allowed_project = (os.getenv("LINAS_DO_PROJECT_ID_ALLOWED") or "").strip()
+    project = (os.getenv("LINAS_DO_PROJECT_ID") or "").strip()
+    if allowed_project and project != allowed_project:
+        raise DigitalOceanAutoscaleForbidden("project_id_mismatch")
+    required_tag = (os.getenv("LINAS_DO_SCALE_TAG") or "").strip()
+    present_tag = (os.getenv("LINAS_DO_SCALE_TAG_PRESENT") or "").strip()
+    if required_tag and present_tag != required_tag:
+        raise DigitalOceanAutoscaleForbidden("scale_tag_mismatch")
+    try:
+        max_nodes = int(os.getenv("LINAS_SCALE_MAX_NODES") or "0")
+        current_nodes = int(os.getenv("LINAS_SCALE_CURRENT_NODES") or "0")
+    except ValueError:
+        max_nodes, current_nodes = 0, 0
+    if max_nodes > 0 and current_nodes >= max_nodes:
+        raise DigitalOceanAutoscaleForbidden("max_nodes")
 
 
 def create_staging_worker_droplet() -> None:

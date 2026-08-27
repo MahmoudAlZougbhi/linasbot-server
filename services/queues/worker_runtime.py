@@ -24,6 +24,24 @@ class WorkerRuntime:
         self.worker_id = f"{queue}-{uuid.uuid4().hex[:8]}"
         self._backend = RedisQueueBackend()
         self._stopping = False
+        self.started_at = time.time()
+        self.node_id = (os.getenv("LINAS_NODE_ID") or "").strip()
+
+    def _registry_beat(self, status: str, *, inflight: int = 0, last_exit: str = "") -> None:
+        try:
+            from services.scale.worker_registry import heartbeat as registry_beat
+
+            registry_beat(
+                self.worker_id,
+                status=status,
+                node_id=self.node_id,
+                pid=os.getpid(),
+                inflight=inflight,
+                started_at=self.started_at,
+                last_exit=last_exit,
+            )
+        except Exception:
+            return
 
     def request_stop(self, *_args: Any) -> None:
         self._stopping = True
@@ -102,6 +120,7 @@ class WorkerRuntime:
             pass
         try:
             self._backend.heartbeat(worker_id=self.worker_id, queue=self.queue)
+            self._registry_beat("draining" if self._stopping else "ready")
             self._backend.reclaim_expired_leases(self.queue)
             job = self._backend.claim(self.queue, worker_id=self.worker_id, timeout=3)
         except Exception:
@@ -181,6 +200,7 @@ class WorkerRuntime:
                             return
 
                 refresh_task = asyncio.create_task(_refresh_lease())
+                self._registry_beat("busy", inflight=1)
                 try:
                     await asyncio.wait_for(handler(job), timeout=job.timeout_seconds)
                     try:

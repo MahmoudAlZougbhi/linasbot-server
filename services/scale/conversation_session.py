@@ -4,6 +4,11 @@ Process-local config.user_* dicts remain a per-request working copy.
 Anything required for the next node to continue the same conversation
 is loaded at turn start and saved at turn end.
 
+`config.user_context` (the in-memory history deque) is an optional cache only.
+Customer Reply V2 rebuilds history from Firestore via conversation_id.
+A cache miss must never change language, name, booking, handover, or the
+current conversation id — those live in this Redis session blob.
+
 TTL: 24h sliding. Writes are last-write-wins on the blob; combine text
 chunks stay in the atomic combine list, not here.
 """

@@ -19,6 +19,7 @@ from services.scale.do_autoscale_guard import (
 from services.scale.isolated_replica_pool import IsolatedReplicaPool
 from services.scale.replica_controller import maybe_apply, set_controller_redis_for_tests
 from services.scale.autoscale_signal import recommend
+from services.scale.worker_registry import set_registry_redis_for_tests
 
 
 def _backend(monkeypatch) -> RedisQueueBackend:
@@ -30,6 +31,7 @@ def _backend(monkeypatch) -> RedisQueueBackend:
 
     monkeypatch.setattr(rb, "_client", lambda: fake)
     set_controller_redis_for_tests(fake)
+    set_registry_redis_for_tests(fake)
     return RedisQueueBackend()
 
 

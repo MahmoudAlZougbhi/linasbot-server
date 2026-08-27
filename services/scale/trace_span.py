@@ -14,16 +14,21 @@ _TEST_CLIENT: Any | None = None
 STAGES = (
     "webhook_received",
     "webhook_acked",
+    "persisted",
     "queued",
+    "processing",
     "worker_started",
     "ai_started",
     "ai_luna_started",
     "ai_luna_finished",
     "ai_tera_started",
     "ai_tera_finished",
+    "ai_generated",
     "ai_finished",
+    "delivery_pending",
     "send_started",
     "send_ok",
+    "completed",
 )
 
 
