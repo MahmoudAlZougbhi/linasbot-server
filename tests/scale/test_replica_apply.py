@@ -80,9 +80,7 @@ async def test_workers_scale_2_4_8_and_take_jobs(monkeypatch) -> None:
     assert pool.live_count >= 8
 
     for i in range(24):
-        backend.enqueue(
-            QueueJob.new(queue="high_priority", job_type="combine_flush", tenant_id="t1", payload={"i": i})
-        )
+        backend.enqueue(QueueJob.new(queue="high_priority", job_type="combine_flush", tenant_id="t1", payload={"i": i}))
     deadline = time.time() + 8
     while len(started) < 24 and time.time() < deadline:
         await asyncio.sleep(0.02)

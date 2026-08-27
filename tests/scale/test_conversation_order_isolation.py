@@ -23,8 +23,7 @@ def test_lock_is_per_conversation_not_global() -> None:
 
 def test_thousands_of_conversations_use_distinct_keys() -> None:
     keys = {
-        conversation_partition_key(tenant_id="t1", channel="ig", external_conversation_id=f"c{i}")
-        for i in range(3000)
+        conversation_partition_key(tenant_id="t1", channel="ig", external_conversation_id=f"c{i}") for i in range(3000)
     }
     assert len(keys) == 3000
     other_tenant = conversation_partition_key(tenant_id="t2", channel="ig", external_conversation_id="c0")

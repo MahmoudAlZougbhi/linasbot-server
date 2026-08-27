@@ -55,9 +55,7 @@ async def _run_round(
     await pool.scale_to(workers)
     t0 = time.time()
     for i in range(jobs):
-        backend.enqueue(
-            QueueJob.new(queue="high_priority", job_type="combine_flush", tenant_id="t1", payload={"i": i})
-        )
+        backend.enqueue(QueueJob.new(queue="high_priority", job_type="combine_flush", tenant_id="t1", payload={"i": i}))
     deadline = time.time() + 15
     while completed < jobs and time.time() < deadline:
         await asyncio.sleep(0.01)

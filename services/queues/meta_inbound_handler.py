@@ -297,9 +297,7 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
                 }
             if not retryable:
                 extra_ids = [
-                    str(item)
-                    for item in list((outcome or {}).get("combined_event_ids") or [])
-                    if str(item).strip()
+                    str(item) for item in list((outcome or {}).get("combined_event_ids") or []) if str(item).strip()
                 ]
                 skip_reason = str((outcome or {}).get("reason") or "").strip() if delivery == "skipped" else ""
                 for eid in [event_id, *[item for item in extra_ids if item != event_id]]:

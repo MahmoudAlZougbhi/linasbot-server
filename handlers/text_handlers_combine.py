@@ -90,8 +90,7 @@ async def schedule_combined_turn(
         due_at = float(append_result.get("due_at") or 0.0)
         tenant_id = str(user_data.get("tenant_id") or "")
         conversation_key = str(
-            user_data.get("_conversation_key")
-            or f"{tenant_id}:{user_data.get('channel') or 'unknown'}:{user_id}"
+            user_data.get("_conversation_key") or f"{tenant_id}:{user_data.get('channel') or 'unknown'}:{user_id}"
         )
         schedule_combine_flush(
             user_key=user_id,

@@ -83,7 +83,9 @@ def test_leader_lock_is_exclusive() -> None:
 def test_node_budget_and_drain_gates() -> None:
     from services.scale.node_scaler import can_remove_node, node_create_budget_ok, node_ready_for_capacity
 
-    ok, reason = node_create_budget_ok(creates_in_window=0, max_creates=1, estimated_monthly_usd=18.0, cost_cap_usd=40.0)
+    ok, reason = node_create_budget_ok(
+        creates_in_window=0, max_creates=1, estimated_monthly_usd=18.0, cost_cap_usd=40.0
+    )
     assert ok is True
     blocked, why = node_create_budget_ok(creates_in_window=1, max_creates=1)
     assert blocked is False

@@ -184,11 +184,7 @@ def save_context(user_key: str, context: dict[str, Any]) -> bool:
     if client is None:
         return False
     try:
-        safe = {
-            str(k): v
-            for k, v in context.items()
-            if isinstance(v, (str, int, float, bool)) or v is None
-        }
+        safe = {str(k): v for k, v in context.items() if isinstance(v, (str, int, float, bool)) or v is None}
         client.set(_keys(user_key)[4], json.dumps(safe, separators=(",", ":")), ex=_TTL_SEC)
         return True
     except Exception:

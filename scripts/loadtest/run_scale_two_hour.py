@@ -162,7 +162,9 @@ async def _run(*, duration_s: int, artifact: Path) -> dict:
     await asyncio.sleep(1.0)
     await pool.maintain(target_workers)
     await pool.close()
-    remaining = int(backend.depth().get("high_priority") or 0) + int(backend.depth().get("high_priority_processing") or 0)
+    remaining = int(backend.depth().get("high_priority") or 0) + int(
+        backend.depth().get("high_priority_processing") or 0
+    )
     lost = max(0, enqueued - completed - remaining)
     summary = {
         "duration_s": duration_s,

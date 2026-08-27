@@ -125,12 +125,16 @@ async def run_dm_luna_then_tera(
             success=bool(reply_text),
         )
     )
-    return retrieval, answer, {
-        "stages_ms": stages,
-        "reply_text": reply_text,
-        "prompt_tokens": prompt_tokens,
-        "completion_tokens": completion_tokens,
-        "repair_attempts": repair_attempts,
-        "validation_ok": validation_ok,
-        "failed_rules": failed_rules,
-    }
+    return (
+        retrieval,
+        answer,
+        {
+            "stages_ms": stages,
+            "reply_text": reply_text,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "repair_attempts": repair_attempts,
+            "validation_ok": validation_ok,
+            "failed_rules": failed_rules,
+        },
+    )

@@ -120,9 +120,7 @@ def recommend(
         or mem_pct >= 85.0
         or (request_per_sec > 0 and api_inflight >= max(8.0, request_per_sec * 2))
     )
-    strong = wait_p95_ms >= p95_strong or oldest_age_seconds >= oldest_up * 3 or (
-        backlog_growing and queue_depth >= 20
-    )
+    strong = wait_p95_ms >= p95_strong or oldest_age_seconds >= oldest_up * 3 or (backlog_growing and queue_depth >= 20)
     mild = (
         wait_p95_ms >= p95_up
         or oldest_age_seconds >= oldest_up
