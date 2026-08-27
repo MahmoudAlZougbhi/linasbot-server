@@ -120,3 +120,53 @@ def test_temporary_heartbeat_lag_within_ttl_is_not_reclaimed(monkeypatch) -> Non
     time.sleep(0.4)
     assert backend.reclaim_expired_leases("high_priority") == 0
     assert backend.complete(claimed).startswith("ok")
+
+
+def test_refresh_restores_missing_lease_while_same_owner(monkeypatch) -> None:
+    backend = _backend(monkeypatch, ttl="2")
+    claimed = _claim(backend)
+    backend._r.delete(backend._k("lease", claimed.id))
+    assert backend.refresh_lease(claimed.id, "w1", claimed.lease_token) is True
+    assert backend._r.get(backend._k("lease", claimed.id)) == claimed.lease_wire()
+    assert backend.reclaim_expired_leases("high_priority") == 0
+    assert backend.complete(claimed).startswith("ok")
+
+
+def test_refresh_does_not_restore_after_new_owner_claims(monkeypatch) -> None:
+    backend = _backend(monkeypatch, ttl="1")
+    worker_a = _claim(backend, worker_id="w-a")
+    backend._r.delete(backend._k("lease", worker_a.id))
+    assert backend.reclaim_expired_leases("high_priority") == 1
+    worker_b = backend.claim("high_priority", worker_id="w-b", timeout=1)
+    assert worker_b is not None
+    assert backend.refresh_lease(worker_a.id, "w-a", worker_a.lease_token) is False
+    assert backend._r.get(backend._k("lease", worker_a.id)) == worker_b.lease_wire()
+    assert backend.complete(worker_b).startswith("ok")
+
+
+def test_heartbeat_retries_after_temporary_refresh_failure(monkeypatch) -> None:
+    backend = _backend(monkeypatch, ttl="1")
+    claimed = _claim(backend)
+    calls = {"n": 0}
+    real = backend.refresh_lease
+
+    def flaky(job_id: str, worker_id: str, lease_token: str = "") -> bool:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return False
+        return real(job_id, worker_id, lease_token)
+
+    monkeypatch.setattr(backend, "refresh_lease", flaky)
+    beat = bind_claimed_heartbeat(
+        backend=backend,
+        job=claimed,
+        worker_id="w1",
+        interval_seconds=0.15,
+    )
+    try:
+        time.sleep(2.3)
+        assert backend.reclaim_expired_leases("high_priority") == 0
+        assert backend.complete(claimed).startswith("ok")
+        assert calls["n"] >= 2
+    finally:
+        beat.stop()

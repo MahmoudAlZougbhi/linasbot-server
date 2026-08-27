@@ -20,6 +20,17 @@ def test_payload_alone_does_not_enable_simulation() -> None:
         set_soak_redis_for_tests(None)
 
 
+def test_arm_ttl_covers_four_hour_soak() -> None:
+    fake = fakeredis.FakeRedis(decode_responses=True)
+    set_soak_redis_for_tests(fake)
+    try:
+        arm(ttl_seconds=4 * 60 * 60 + 900)
+        ttl = int(fake.ttl("linas:scale:soak_simulation") or 0)
+        assert ttl >= 4 * 60 * 60 + 800
+    finally:
+        set_soak_redis_for_tests(None)
+
+
 def test_armed_payload_enables_simulation() -> None:
     fake = fakeredis.FakeRedis(decode_responses=True)
     set_soak_redis_for_tests(fake)

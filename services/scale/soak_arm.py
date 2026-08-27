@@ -21,11 +21,14 @@ def _client() -> Any | None:
     return redis_client()
 
 
+_MAX_ARM_TTL_SECONDS = 4 * 60 * 60 + 900
+
+
 def arm(*, ttl_seconds: int) -> None:
     client = _client()
     if client is None:
         raise RuntimeError("soak_arm_redis_unavailable")
-    ttl = max(30, min(int(ttl_seconds), 3 * 60 * 60))
+    ttl = max(30, min(int(ttl_seconds), _MAX_ARM_TTL_SECONDS))
     client.setex(_KEY, ttl, "1")
 
 
