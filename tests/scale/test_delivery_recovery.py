@@ -7,7 +7,13 @@ import pytest
 
 from services.ai_reply_delivery import wrap_tracked_send
 from services.ai_reply_lifecycle import begin_turn, find_pending_delivery_turn, persist_generated_reply
-from services.scale.delivery_ledger import begin_send, confirm_sent, mark_unknown, set_delivery_redis_for_tests, snapshot
+from services.scale.delivery_ledger import (
+    begin_send,
+    confirm_sent,
+    mark_unknown,
+    set_delivery_redis_for_tests,
+    snapshot,
+)
 from services.scale.turn_store import set_turn_redis_for_tests
 
 

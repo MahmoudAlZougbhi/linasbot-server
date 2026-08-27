@@ -5,6 +5,7 @@ simulated with realistic Luna/Tera latency distributions unless
 LINAS_SOAK_REAL_OPENAI=1 is set with an explicit cost cap.
 """
 
+# ruff: noqa: E402
 from __future__ import annotations
 
 import argparse

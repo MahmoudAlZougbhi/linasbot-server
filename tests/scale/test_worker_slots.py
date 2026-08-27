@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from services.scale.replica_controller import set_controller_redis_for_tests
-from services.scale.worker_slots import slot_count_for
 
 
 def test_slots_stay_at_base_when_apply_off(monkeypatch) -> None:
@@ -11,8 +10,8 @@ def test_slots_stay_at_base_when_apply_off(monkeypatch) -> None:
     monkeypatch.setenv("LINAS_QUEUE_CONCURRENCY_HIGH", "8")
     from importlib import reload
 
-    import services.queues.config as config
     import services.omnichannel.worker_pool as pool
+    import services.queues.config as config
     import services.scale.worker_slots as slots
 
     reload(config)
@@ -32,8 +31,8 @@ def test_slots_split_desired_across_nodes(monkeypatch) -> None:
     fake.set("linas:scale:desired:workers", "8")
     from importlib import reload
 
-    import services.queues.config as config
     import services.omnichannel.worker_pool as pool
+    import services.queues.config as config
     import services.scale.worker_slots as slots
 
     reload(config)

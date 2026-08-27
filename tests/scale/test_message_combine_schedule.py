@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import fakeredis
 import time
+
+import fakeredis
 
 from services.queues.models import QueueJob
 from services.scale.message_combine_schedule import schedule_combine_flush
