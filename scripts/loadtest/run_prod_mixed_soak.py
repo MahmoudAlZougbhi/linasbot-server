@@ -125,10 +125,10 @@ def main() -> int:
     if (os.getenv("ENVIRONMENT") or "").strip().lower() != "production":
         raise SystemExit("ENVIRONMENT=production is required")
 
-    from services.scale.soak_arm import arm, disarm
+    from services.scale.soak_arm import arm
 
     duration = max(60, min(int(args.duration_sec), 4 * 60 * 60))
-    arm(ttl_seconds=duration + 300)
+    arm(ttl_seconds=duration + 900)
     dm_binding, comment_binding = _pick_bindings()
     dm_settings = _settings(dm_binding)
     comment_settings = _settings(comment_binding)
@@ -151,31 +151,28 @@ def main() -> int:
     next_dm = started
     next_comment = started
     next_sample = started
-    try:
-        while time.time() - started < duration:
-            now = time.time()
-            try:
-                if now >= next_dm:
-                    _enqueue_dm(dm_binding, dm_settings, "شو ساعاتكن اليوم؟")
-                    sent["dm"] += 1
-                    next_dm = now + dm_interval
-                if now >= next_comment:
-                    _enqueue_comment(comment_binding, comment_settings, "السعر؟")
-                    sent["comment"] += 1
-                    next_comment = now + comment_interval
-            except Exception as exc:
-                sent["errors"] += 1
-                print(json.dumps({"error": type(exc).__name__}))
-                time.sleep(1.0)
-            if now >= next_sample:
-                snap = _snapshot()
-                snap["sent"] = dict(sent)
-                samples.append(snap)
-                print(json.dumps({"elapsed_s": int(now - started), "sent": sent, "depth": snap["queue_depth"]}))
-                next_sample = now + 30.0
-            time.sleep(0.05)
-    finally:
-        disarm()
+    while time.time() - started < duration:
+        now = time.time()
+        try:
+            if now >= next_dm:
+                _enqueue_dm(dm_binding, dm_settings, "شو ساعاتكن اليوم؟")
+                sent["dm"] += 1
+                next_dm = now + dm_interval
+            if now >= next_comment:
+                _enqueue_comment(comment_binding, comment_settings, "السعر؟")
+                sent["comment"] += 1
+                next_comment = now + comment_interval
+        except Exception as exc:
+            sent["errors"] += 1
+            print(json.dumps({"error": type(exc).__name__}))
+            time.sleep(1.0)
+        if now >= next_sample:
+            snap = _snapshot()
+            snap["sent"] = dict(sent)
+            samples.append(snap)
+            print(json.dumps({"elapsed_s": int(now - started), "sent": sent, "depth": snap["queue_depth"]}))
+            next_sample = now + 30.0
+        time.sleep(0.05)
     args.artifact.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "duration_sec": duration,

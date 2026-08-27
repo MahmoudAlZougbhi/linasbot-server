@@ -18,7 +18,23 @@ _OPS_LOCK = threading.RLock()
 
 
 def lease_log(event: str, *, job_id: str, trace_id: str = "", extra: str = "") -> None:
-    _log.info("[lease] %s job_id=%s trace_id=%s %s", event, job_id, trace_id or "-", extra)
+    line = f"[lease] {event} job_id={job_id} trace_id={trace_id or '-'} {extra}"
+    _log.info("%s", line)
+    if event.startswith("heartbeat_") or event in {
+        "reclaimed",
+        "lease_expired_dlq",
+        "stale_owner_complete",
+        "stale_owner_fail",
+    }:
+        print(line, flush=True)
+
+
+def _as_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (bytes, bytearray)):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
 
 
 def parse_removed(code: str) -> int:
@@ -72,17 +88,30 @@ class JobLease:
         if not wire:
             return False
         lease_key = self._k("lease", job_id)
+        job_key = self._k("job", job_id)
+        ttl = int(ttl_seconds)
 
         def body(pipe: Any) -> str:
-            cur = pipe.get(lease_key)
-            if (not cur) or str(cur) != wire:
+            cur = _as_text(pipe.get(lease_key))
+            if cur == wire:
+                pipe.multi()
+                pipe.expire(lease_key, ttl)
+                pipe.execute()
+                return "1"
+            if cur:
+                return "0"
+            status = _as_text(pipe.hget(job_key, "status"))
+            owner = _as_text(pipe.hget(job_key, "lease_owner")).strip()
+            token = _as_text(pipe.hget(job_key, "lease_token")).strip()
+            expected = f"{owner}::{token}" if owner and token else ""
+            if status != "processing" or expected != wire:
                 return "0"
             pipe.multi()
-            pipe.expire(lease_key, int(ttl_seconds))
+            pipe.set(lease_key, wire, ex=ttl)
             pipe.execute()
             return "1"
 
-        return self._txn([lease_key], body) == "1"
+        return self._txn([lease_key, job_key], body) == "1"
 
     def complete(self, *, queue: str, job_id: str, token: str, wire: str, data_json: str) -> str:
         keys = self._job_keys(queue, job_id)
