@@ -5,7 +5,9 @@ import LinasStar from '../LinasStar';
  */
 export default function MiniFrame({ play = false, children, className = '' }) {
   return (
-    <div className={`mt-4 rounded-[1.15rem] border border-[#E6EBE8] bg-[#F7F9F7] p-3 ${play ? 'lp-play' : ''} ${className}`}>
+    <div
+      className={`mt-4 flex min-h-0 flex-1 flex-col rounded-[1.15rem] border border-[#E6EBE8] bg-[#F7F9F7] p-3 ${play ? 'lp-play' : ''} ${className}`}
+    >
       {children}
     </div>
   );
