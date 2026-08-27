@@ -1,56 +1,266 @@
-.lp-net {
-  --lp-mint: #54c7ac;
-  --lp-neon: #3dffc2;
-  --lp-ink: #06715f;
-  position: relative;
-  min-height: 15.5rem;
-  min-width: 0;
-}
-
-.lp-net-svg {
-  display: block;
-  height: 15.5rem;
-  width: 100%;
+#live-impact,
+#live-impact .lp-live-card,
+#live-impact .lp-net {
   overflow: visible;
 }
 
+/* ── Live network card (Karen 5-part layout) ── */
+
+.lp-live-card {
+  overflow: visible;
+}
+
+.lp-live-card-grid {
+  display: grid;
+  gap: 2rem;
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .lp-live-card-grid {
+    grid-template-columns: minmax(15rem, 17.5rem) minmax(0, 1fr);
+    gap: 1.75rem;
+  }
+}
+
+.lp-live-copy {
+  min-width: 0;
+}
+
+/* ── Flow canvas — all nodes pinned to SVG coords ── */
+
+.lp-net {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  /* Lock to diagram viewBox so HTML % and SVG coords stay aligned on resize */
+  aspect-ratio: 640 / 220;
+  container-type: size;
+  overflow: visible;
+}
+
+.lp-net-diagram {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.lp-net-stage {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.lp-net-channels {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* Faint vertical rail — SVG under channels (see .lp-net-channel-spine-svg) */
+
+.lp-net-channel-spine-svg {
+  stroke: #cfd8d4;
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+
+.lp-net-channel {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  aspect-ratio: 1;
+  align-items: center;
+  justify-content: center;
+  /* Bare brand marks — no white circle / shadow pad */
+  background: none;
+  box-shadow: none;
+  transform: translate(-50%, -50%);
+}
+
+.lp-net-channel-mark {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Part 3 — replies count (above lines so strokes emerge from behind digits) */
+
+.lp-net-replies {
+  position: absolute;
+  z-index: 6;
+  /* Anchor on the digit center; caption hangs below (Karen) */
+  transform: translate(-50%, -50%);
+  text-align: center;
+  min-width: max-content;
+  pointer-events: none;
+  isolation: isolate;
+}
+
+.lp-net-num-html {
+  display: inline-block;
+  font-size: clamp(2.85rem, 4.5vw, 4.75rem);
+  font-weight: 800;
+  line-height: 0.88;
+  letter-spacing: -0.04em;
+  color: #06715f;
+}
+
+.lp-net-bubble-num {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  justify-content: center;
+  line-height: 0.78;
+  /* Keep multi-char / 1.1k / 5.5m from colliding with orb or channels */
+  max-width: min(42cqw, 12.5rem);
+}
+
+/* Cover only the open counter (hole) — do not pad past the outer stroke or lines look short */
+.lp-net-bubble-num__plate {
+  position: absolute;
+  z-index: 0;
+  left: 26%;
+  right: 26%;
+  top: 16%;
+  bottom: 16%;
+  border-radius: 50%;
+  background: #fff;
+  pointer-events: none;
+}
+
+.lp-net-replies-digit {
+  display: inline-flex;
+  justify-content: center;
+}
+
+.lp-net-bubble-num__svg {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 82.7cqh;
+  overflow: visible;
+}
+
+.lp-net-bubble-num__svg-ink,
+.lp-net-bubble-num__svg-fill {
+  font-size: 92px;
+  font-weight: 800;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.07em;
+}
+
+.lp-net-bubble-num__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.lp-net-business-num-html {
+  display: inline-block;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(3.15rem, 5.1vw, 5.35rem);
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: 0.02em;
+  color: #0a5348;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Part 4 — app logo orb (Karen asset) */
+
+.lp-net-orb-shell {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  height: 5.75rem;
+  width: 5.75rem;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+  animation: lp-net-breathe 2.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.lp-net-orb-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+}
+
+/* Part 5 — business count */
+
+.lp-net-business {
+  position: absolute;
+  z-index: 6;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  min-width: max-content;
+  pointer-events: none;
+  isolation: isolate;
+}
+
+/* Karen labels — shared baseline under both digits */
+.lp-net-caption {
+  position: absolute;
+  z-index: 6;
+  transform: translate(-50%, 0);
+  margin: 0;
+  white-space: nowrap;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  color: #171a19;
+  -webkit-font-smoothing: antialiased;
+  pointer-events: none;
+}
+
+/* Shared diagram strokes — solid continuous lines */
+
 .lp-net-line {
   fill: none;
-  stroke: var(--lp-mint);
-  stroke-width: 1.2;
+  stroke: #54c7ac;
+  stroke-width: 1.15;
   stroke-linecap: round;
-  stroke-dasharray: 3.2 5.2;
-  opacity: 0.88;
+  stroke-linejoin: round;
+  opacity: 0.72;
 }
 
 .lp-net-chip {
   fill: #fff;
-  stroke: var(--lp-mint);
+  stroke: #54c7ac;
   stroke-width: 0.9;
   filter: drop-shadow(0 1px 2px rgba(6, 113, 95, 0.12));
 }
 
+.lp-net-packet {
+  opacity: 0.98;
+}
+
 .lp-net-glow {
-  fill: var(--lp-neon);
-  filter: drop-shadow(0 0 3px var(--lp-neon));
-}
-
-.lp-net-num {
-  background-color: var(--lp-ink);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Crect width='12' height='12' fill='%2306715F'/%3E%3Cpath d='M2.2 3.1h5.2a1.5 1.5 0 0 1 1.5 1.5v2.2a1.5 1.5 0 0 1-1.5 1.5H5.1L3 9.7V8.3H2.2A1.5 1.5 0 0 1 .7 6.8V4.6A1.5 1.5 0 0 1 2.2 3.1z' fill='%23c9f8e8' opacity='.72'/%3E%3C/svg%3E");
-  background-size: 11px 11px;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-}
-
-.lp-net-orb {
-  animation: lp-net-breathe 2.5s ease-in-out infinite;
-}
-
-.lp-net-orb-glow {
-  animation: lp-net-halo 2.5s ease-in-out infinite;
+  fill: #3dffc2;
+  filter: drop-shadow(0 0 3px #3dffc2);
 }
 
 @keyframes lp-net-breathe {
@@ -59,25 +269,32 @@
     transform: translate(-50%, -50%) scale(1);
   }
   50% {
-    transform: translate(-50%, -50%) scale(1.07);
+    transform: translate(-50%, -50%) scale(1.06);
   }
 }
 
-@keyframes lp-net-halo {
-  0%,
-  100% {
-    opacity: 0.45;
-    transform: scale(1);
+@media (max-width: 1023px) {
+  .lp-net-num-html,
+  .lp-net-business-num-html {
+    font-size: 3.1rem;
   }
-  50% {
-    opacity: 0.9;
-    transform: scale(1.12);
+
+  .lp-net-bubble-num__svg {
+    max-height: 82.7cqh;
+  }
+
+  .lp-net-orb-shell {
+    height: 4.75rem;
+    width: 4.75rem;
+  }
+
+  .lp-net-caption {
+    font-size: 0.75rem;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .lp-net-orb,
-  .lp-net-orb-glow {
+  .lp-net-orb-shell {
     animation: none !important;
   }
 }

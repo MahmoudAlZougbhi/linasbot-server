@@ -1,4 +1,5 @@
 import MiniFrame from './MiniFrame';
+import PigmentationSpotPreview from './PigmentationSpotPreview';
 import { HERO_CHANNELS } from '../HeroChannelRow';
 
 /** @typedef {{ play?: boolean }} MiniPlay */
@@ -80,15 +81,53 @@ export function ReplyVoiceVision({ play }) {
         <span className="h-5 flex-1 rounded-sm bg-gradient-to-r from-[#06715F] via-[#54C7AC] to-[#06715F] opacity-80" />
         <span className="text-[0.65rem] text-[#5C6663]">0:12</span>
       </div>
-      <img
-        src="/brand/landing/customer-vision.png"
-        alt="Customer photo"
-        className="lp-fade-up mt-2.5 h-28 w-full rounded-xl object-cover object-[center_18%] ring-1 ring-[#E6EBE8]"
-        style={{ animationDelay: '400ms' }}
-      />
-      <p className="mt-2 text-center text-[0.65rem] text-[#5C6663]">Can you treat this?</p>
+      <PigmentationSpotPreview />
+      <p className="mt-2 text-center text-[0.65rem] text-[#5C6663]">Can you treat this pigmentation?</p>
       <p className="lp-fade-up mt-1 text-center text-xs text-[#06715F]" style={{ animationDelay: '1100ms' }}>
-        Yes — pigmentation laser can help.
+        Yes — pigmentation laser can help. Patch test first.
+      </p>
+    </MiniFrame>
+  );
+}
+
+/** @param {MiniPlay} props */
+export function ReplyOneInbox({ play }) {
+  const rows = [
+    { channel: 'Instagram', name: 'Sara K.', preview: 'Do you have a slot Friday?', unread: 2, delay: '0ms' },
+    { channel: 'WhatsApp', name: 'Omar', preview: 'Full-body laser — still $299?', unread: 0, delay: '180ms' },
+    { channel: 'Facebook', name: 'Maya', preview: 'Can you treat pigmentation?', unread: 1, delay: '360ms' },
+  ];
+  return (
+    <MiniFrame play={play}>
+      <div className="space-y-1.5">
+        {rows.map((row, i) => (
+          <div
+            key={row.name}
+            className={`lp-fade-up flex items-center gap-2 rounded-xl px-2 py-1.5 ${
+              i === 0 ? 'bg-white shadow-sm' : 'bg-transparent'
+            }`}
+            style={{ animationDelay: row.delay }}
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#E8F5F1] text-[0.58rem] font-bold text-[#06715F]">
+              {row.name.slice(0, 1)}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center justify-between gap-1">
+                <span className="truncate text-[0.7rem] font-semibold text-[#171A19]">{row.name}</span>
+                <span className="shrink-0 text-[0.55rem] text-[#8A938F]">{row.channel}</span>
+              </span>
+              <span className="mt-0.5 block truncate text-[0.62rem] text-[#6B746F]">{row.preview}</span>
+            </span>
+            {row.unread > 0 ? (
+              <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-[#06715F] px-1 text-[0.55rem] font-bold text-white">
+                {row.unread}
+              </span>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      <p className="lp-fade-up mt-2.5 text-center text-[0.65rem] font-semibold text-[#06715F]" style={{ animationDelay: '650ms' }}>
+        All channels · one inbox
       </p>
     </MiniFrame>
   );

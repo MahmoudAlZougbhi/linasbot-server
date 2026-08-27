@@ -26,6 +26,28 @@ export function IgIcon({ className = 'h-5 w-5' }) {
 /**
  * @param {{ className?: string }} props
  */
+export function MsIcon({ className = 'h-5 w-5' }) {
+  const uid = useId().replace(/:/g, '');
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <defs>
+        <linearGradient id={`${uid}-ms`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#00B2FF" />
+          <stop offset="50%" stopColor="#006AFF" />
+          <stop offset="100%" stopColor="#A033FF" />
+        </linearGradient>
+      </defs>
+      <path
+        fill={`url(#${uid}-ms)`}
+        d="M12 0C5.373 0 0 4.974 0 11.111c0 3.498 1.744 6.614 4.469 8.65V24l4.088-2.242c1.09.301 2.246.464 3.443.464 6.627 0 12-4.974 12-11.111C24 4.974 18.627 0 12 0zm1.191 14.963l-3.055-3.26-5.963 3.26L10.733 8.1l3.13 3.26L19.754 8.1l-6.563 6.863z"
+      />
+    </svg>
+  );
+}
+
+/**
+ * @param {{ className?: string }} props
+ */
 export function FbIcon({ className = 'h-5 w-5' }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden="true">

@@ -1,5 +1,12 @@
 import FeatureCarousel from '../FeatureCarousel';
-import { ReplyChannels, ReplyComments, ReplyCustomer, ReplyLanguage, ReplyVoiceVision } from '../cards/ReplyMinis';
+import {
+  ReplyChannels,
+  ReplyComments,
+  ReplyCustomer,
+  ReplyLanguage,
+  ReplyOneInbox,
+  ReplyVoiceVision,
+} from '../cards/ReplyMinis';
 
 const CARDS = [
   {
@@ -15,10 +22,16 @@ const CARDS = [
     Mini: ReplyLanguage,
   },
   {
+    id: 'one-inbox',
+    title: 'One place for every chat',
+    description: 'Manage all customer chats from one inbox — every channel, one view.',
+    core: true,
+    Mini: ReplyOneInbox,
+  },
+  {
     id: 'comments',
     title: 'Comments + Private DM',
     description: 'Teach how Linas should handle each comment — public reply, private DM, or both.',
-    core: true,
     Mini: ReplyComments,
   },
   {
