@@ -85,6 +85,13 @@ def wrap_tracked_send(raw_send: SendFunc, user_data: dict[str, Any]) -> SendFunc
             from services.scale.delivery_ledger import begin_send
 
             action = begin_send(delivery_key)
+        if action == "send":
+            try:
+                from services.scale.job_progress import mark_stage
+
+                mark_stage("delivery_started")
+            except Exception:
+                pass
         if action == "skip_sent":
             from services.scale.delivery_ledger import snapshot as delivery_snapshot
 
@@ -123,8 +130,20 @@ def wrap_tracked_send(raw_send: SendFunc, user_data: dict[str, Any]) -> SendFunc
                 from services.scale.trace_span import mark as trace_mark
 
                 trace_mark(str(user_data.get("_linas_trace_id") or ""), "send_ok")
+                try:
+                    from services.scale.job_progress import mark_stage
+
+                    mark_stage("delivery_confirmed")
+                except Exception:
+                    pass
             elif evidence.get("needs_owner_action"):
                 mark_unknown(delivery_key)
+                try:
+                    from services.scale.job_progress import mark_stage
+
+                    mark_stage("delivery_unknown")
+                except Exception:
+                    pass
             else:
                 confirm_failed(delivery_key, retryable=bool(evidence.get("retryable", True)))
         if evidence.get("success"):

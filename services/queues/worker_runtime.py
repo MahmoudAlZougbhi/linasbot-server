@@ -10,7 +10,7 @@ import uuid
 from typing import Any
 
 from services.omnichannel.worker_pool import run_bounded_pool
-from services.queues.config import DEFAULT_TENANT_INFLIGHT, redis_url
+from services.queues.config import DEFAULT_TENANT_INFLIGHT, lease_heartbeat_seconds, redis_url
 from services.queues.handlers import JobNotReady, PermanentJobError, get_handler
 from services.queues.redis_backend import RedisQueueBackend
 from services.scale.autoscale_tick import run_autoscale_tick
@@ -129,6 +129,9 @@ class WorkerRuntime:
             reclaim = getattr(self._backend, "reclaim_expired_leases", None)
             if callable(reclaim):
                 reclaim(self.queue)
+            from services.scale.job_progress_watchdog import scan_queue
+
+            scan_queue(self._backend, self.queue)
         except Exception:
             pass
         try:
@@ -204,27 +207,54 @@ class WorkerRuntime:
                     self._fail(job, error=f"unknown_job_type:{job.job_type}", retry=False)
                     self._refund_if_needed(job)
                     return
+                from services.queues.lease_heartbeat import bind_claimed_heartbeat
+                from services.scale.job_progress import bind_job, mark_stage, unbind_job
 
-                async def _refresh_lease() -> None:
-                    while True:
-                        await asyncio.sleep(8)
-                        if not self._backend.refresh_lease(job.id, self.worker_id):
-                            return
+                def _refresh_conv() -> None:
+                    if conv_lease is None:
+                        return
+                    try:
+                        from services.scale.conversation_lock import ConversationLock
 
-                refresh_task = asyncio.create_task(_refresh_lease())
+                        ConversationLock().refresh(
+                            conv_lease,
+                            ttl_seconds=max(60, int(job.timeout_seconds)),
+                        )
+                    except Exception:
+                        return
+
+                heartbeat = None
+                try:
+                    bind_job(job, redis=getattr(self._backend, "_r", None), worker_id=self.worker_id)
+                    mark_stage("processing")
+                except Exception:
+                    pass
+                try:
+                    heartbeat = bind_claimed_heartbeat(
+                        backend=self._backend,
+                        job=job,
+                        worker_id=self.worker_id,
+                        interval_seconds=lease_heartbeat_seconds(),
+                        extra=_refresh_conv,
+                    )
+                except Exception:
+                    heartbeat = None
                 self._registry_beat("busy", inflight=1)
                 try:
-                    await asyncio.wait_for(handler(job), timeout=job.timeout_seconds)
-                    try:
-                        self._backend.complete(job)
+                    await handler(job)
+                    result = str(self._backend.complete(job) or "")
+                    if result.startswith("ok") or result.startswith("already_completed"):
                         from services.scale.rate_window import bump as bump_rate
 
                         bump_rate("complete")
-                    except Exception:
-                        await asyncio.sleep(0.5)
+                        try:
+                            mark_stage("completed")
+                        except Exception:
+                            pass
                 finally:
-                    refresh_task.cancel()
-                    await asyncio.gather(refresh_task, return_exceptions=True)
+                    if heartbeat is not None:
+                        heartbeat.stop()
+                    unbind_job()
             except JobNotReady:
                 self._requeue(job, 0.2)
             except PermanentJobError as exc:
