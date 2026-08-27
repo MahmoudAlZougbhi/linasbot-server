@@ -20,6 +20,8 @@ export const WhatsAppStatusSchema = z.object({
     .object({
       connection_id: z.string(),
       lifecycle_status: z.string(),
+      connection_source: z.enum(['embedded_signup', 'meta_app_review_test']).optional(),
+      display_phone_number: z.string().optional(),
       display_phone_last4: z.string().optional(),
       verified_name: z.string().optional(),
       ai_eligible: z.boolean().optional(),

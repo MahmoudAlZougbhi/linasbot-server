@@ -33,6 +33,7 @@ def client(tmp_path, monkeypatch):
     Base.metadata.create_all(engine)
 
     # Import app after env is set.
+    import modules.whatsapp_cloud_api  # noqa: F401
     from modules.core import app
 
     with TestClient(app) as c:
@@ -43,6 +44,58 @@ def client(tmp_path, monkeypatch):
 def test_anonymous_status_requires_auth(client):
     res = client.get("/api/whatsapp/cloud/status")
     assert res.status_code in {401, 403}
+
+
+def test_status_full_number_is_scoped_to_authenticated_tenant(client):
+    from db.session import whatsapp_session
+    from services.dashboard_session_service import session_service
+    from services.whatsapp_cloud.repository import WhatsAppCloudRepository
+
+    with whatsapp_session() as db:
+        repo = WhatsAppCloudRepository(db)
+        repo.create_connection_with_credential(
+            tenant_id="linas",
+            created_by_user_id="u-a",
+            meta_app_key="linas_first_party",
+            meta_app_id="2963733803971681",
+            waba_id="waba-a",
+            phone_number_id="phone-a",
+            display_phone_number="+961 70 000 001",
+            verified_name="Tenant A",
+            access_token="token-a",
+            scopes=["whatsapp_business_management", "whatsapp_business_messaging"],
+        )
+        repo.create_connection_with_credential(
+            tenant_id="tenant_b",
+            created_by_user_id="u-b",
+            meta_app_key="linas_first_party",
+            meta_app_id="2963733803971681",
+            waba_id="waba-b",
+            phone_number_id="phone-b",
+            display_phone_number="+961 70 000 002",
+            verified_name="Tenant B",
+            access_token="token-b",
+            scopes=["whatsapp_business_management", "whatsapp_business_messaging"],
+        )
+
+    session_a = session_service.create_session(
+        user_id="u-a",
+        email="a@example.com",
+        role="admin",
+        permissions=None,
+        tenant_id="linas",
+    )
+    response_a = client.get(
+        "/api/whatsapp/cloud/status",
+        headers={"Authorization": f"Bearer {session_service.cookie_value_for(session_a)}"},
+    )
+
+    assert response_a.status_code == 200, response_a.text
+    connections_a = response_a.json()["connections"]
+    assert len(connections_a) == 1
+    assert connections_a[0]["tenant_id"] == "linas"
+    assert connections_a[0]["display_phone_number"] == "+961 70 000 001"
+    assert "+961 70 000 002" not in response_a.text
 
 
 def test_cross_tenant_conversation_idor(tmp_path, monkeypatch):
