@@ -1,4 +1,4 @@
-import { POINT_ICON_BY_KEY } from './HowItWorksIcons';
+import { DecideGlyph, POINT_ICON_BY_KEY } from './HowItWorksIcons';
 
 /**
  * Left column — step copy + compact point cards (Karen explore layout).
@@ -25,7 +25,7 @@ export default function HowItWorksCopy({ step, total }) {
       <p className="hiw-copy-body">{step.body}</p>
       <div className="hiw-copy-points">
         {step.points.map((point) => {
-          const Icon = POINT_ICON_BY_KEY[point.icon || ''] || POINT_ICON_BY_KEY.check;
+          const Icon = (point.icon && POINT_ICON_BY_KEY[point.icon]) || DecideGlyph;
           return (
             <div key={point.title} className="hiw-point-card">
               <span className="hiw-point-icon">

@@ -22,7 +22,8 @@ export const LP_NET_CHANNELS = [
 ];
 
 /** Right edge of a channel mark in viewBox units. */
-export function lpNetLineStartX(channelX = LP_NET_CHANNELS[0].x) {
+/** @param {number} [channelX] */
+export function lpNetLineStartX(channelX = 28) {
   return channelX + LP_NET_CHANNEL_R;
 }
 

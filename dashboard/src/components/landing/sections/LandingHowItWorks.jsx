@@ -36,6 +36,7 @@ export default function LandingHowItWorks() {
     const panel = panelRef.current;
     if (!panel) return undefined;
 
+    /** @param {WheelEvent} event */
     const onWheel = (event) => {
       const dy = event.deltaY;
       if (dy === 0) return;

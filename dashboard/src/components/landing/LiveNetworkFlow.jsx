@@ -18,10 +18,12 @@ export default function LiveNetworkFlow({ replies, businesses }) {
   const [netEl, setNetEl] = useState(/** @type {HTMLElement | null} */ (null));
   const [digitEl, setDigitEl] = useState(/** @type {HTMLElement | null} */ (null));
 
+  /** @type {(node: HTMLElement | null) => void} */
   const netRef = useCallback((node) => {
     setNetEl(node);
   }, []);
 
+  /** @type {(node: HTMLElement | null) => void} */
   const onDigitNode = useCallback((node) => {
     setDigitEl(node);
   }, []);

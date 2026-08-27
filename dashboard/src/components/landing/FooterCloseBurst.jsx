@@ -29,9 +29,9 @@ const STORE_YS = [APP_Y - 12, APP_Y, APP_Y + 12, PLAY_Y - 9, PLAY_Y + 9];
  * @param {number} i
  */
 function pathThrough(i) {
-  const y0 = CH_YS[i];
-  const yMid = STAR.y + BUNDLE_Y[i];
-  const y1 = STORE_YS[i];
+  const y0 = CH_YS[i] ?? CH_YS[0] ?? 140;
+  const yMid = STAR.y + (BUNDLE_Y[i] ?? 0);
+  const y1 = STORE_YS[i] ?? STORE_YS[0] ?? 140;
   const startX = CH_X + CH_R;
   const pinchL = STAR.x - 22;
   const pinchR = STAR.x + 22;
@@ -44,26 +44,28 @@ function pathThrough(i) {
 }
 
 /** Hub → store pill — pulses leave the center toward the app icons. */
+/** @param {number} i */
 function pathHubToStore(i) {
-  const yMid = STAR.y + BUNDLE_Y[i];
-  const y1 = STORE_YS[i];
+  const yMid = STAR.y + (BUNDLE_Y[i] ?? 0);
+  const y1 = STORE_YS[i] ?? STORE_YS[0] ?? 140;
   const pinchR = STAR.x + 22;
   return `M${pinchR} ${yMid} C ${pinchR + 78} ${yMid}, ${STORE_END_X - 48} ${y1}, ${STORE_END_X} ${y1}`;
 }
 
 /** Hub → channel mark — pulses leave the center toward the channel icons. */
+/** @param {number} i */
 function pathHubToChannel(i) {
-  const y0 = CH_YS[i];
-  const yMid = STAR.y + BUNDLE_Y[i];
+  const y0 = CH_YS[i] ?? CH_YS[0] ?? 140;
+  const yMid = STAR.y + (BUNDLE_Y[i] ?? 0);
   const endX = CH_X + CH_R;
   const pinchL = STAR.x - 22;
   // Reverse of the inbound curve: start at hub, end at channel
   return `M${pinchL} ${yMid} C ${pinchL - 80} ${y0 * 0.22 + yMid * 0.78}, ${endX + 70} ${y0}, ${endX} ${y0}`;
 }
 
-const FLOW_PATHS = CH_YS.map((_, i) => pathThrough(i));
-const PULSE_TO_STORE = CH_YS.map((_, i) => pathHubToStore(i));
-const PULSE_TO_CHANNEL = CH_YS.map((_, i) => pathHubToChannel(i));
+const FLOW_PATHS = CH_YS.map((_, /** @type {number} */ i) => pathThrough(i));
+const PULSE_TO_STORE = CH_YS.map((_, /** @type {number} */ i) => pathHubToStore(i));
+const PULSE_TO_CHANNEL = CH_YS.map((_, /** @type {number} */ i) => pathHubToChannel(i));
 
 /** Channels → tall dual star → App Store / Play (Karen clean reference). */
 export default function FooterCloseBurst() {
@@ -157,7 +159,7 @@ export default function FooterCloseBurst() {
             className="lp-close-ch"
             style={{
               left: `${(CH_X / VB.w) * 100}%`,
-              top: `${(CH_YS[i] / VB.h) * 100}%`,
+              top: `${((CH_YS[i] ?? CH_YS[0] ?? 140) / VB.h) * 100}%`,
             }}
             title={ch.label}
           >

@@ -17,8 +17,13 @@ const OY = LP_NET_ORB.y;
 const BX = LP_NET_BUSINESS.x;
 const BY = LP_NET_BUSINESS.y;
 
-const FIRST_CH = LP_NET_CHANNELS[0];
-const LAST_CH = LP_NET_CHANNELS[LP_NET_CHANNELS.length - 1];
+const firstChannel = LP_NET_CHANNELS[0];
+const lastChannel = LP_NET_CHANNELS[LP_NET_CHANNELS.length - 1];
+if (!firstChannel || !lastChannel) {
+  throw new Error('Live network channels are required');
+}
+const FIRST_CH = firstChannel;
+const LAST_CH = lastChannel;
 /** Vertical rail sits left of the channel pads — not through their centers. */
 const SPINE_X = FIRST_CH.x - LP_NET_CHANNEL_R - 6;
 

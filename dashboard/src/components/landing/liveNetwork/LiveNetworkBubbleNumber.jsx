@@ -8,6 +8,7 @@ import {
 } from './liveNetworkBubblePattern';
 
 /** ViewBox width budget so 63 / 1.1k / 5.5m stay compact in the flow. */
+/** @param {string} label */
 function labelViewBoxWidth(label) {
   const len = Math.max(1, label.length);
   // Slightly tighter than full Inter advance so lines can tuck under the glyph.
