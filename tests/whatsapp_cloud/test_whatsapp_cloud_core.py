@@ -31,7 +31,8 @@ from datetime import UTC
 from db.models import Base  # noqa: E402
 from db.session import reset_engine_for_tests  # noqa: E402
 from services.meta_messaging import verify_meta_signature  # noqa: E402
-from services.whatsapp_cloud.repository import WhatsAppCloudRepository  # noqa: E402
+from services.whatsapp_cloud.entitlement import tenant_connection_status_payload  # noqa: E402
+from services.whatsapp_cloud.repository import WhatsAppCloudRepository, connection_public_view  # noqa: E402
 from services.whatsapp_cloud.webhook_parser import parse_whatsapp_cloud_payload  # noqa: E402
 
 
@@ -102,6 +103,34 @@ def test_credential_encrypted_not_plaintext(wa_db):
     assert "super-secret-token" not in cred.ciphertext
     assert cred.ciphertext.startswith("v1.")
     assert repo.load_access_token(conn) == "super-secret-token"
+
+
+def test_full_business_number_is_tenant_status_only(wa_db):
+    repo = WhatsAppCloudRepository(wa_db)
+    conn = repo.create_connection_with_credential(
+        tenant_id="tenant_a",
+        created_by_user_id="u1",
+        meta_app_key="linas_first_party",
+        meta_app_id="2963733803971681",
+        waba_id="111",
+        phone_number_id="999003",
+        display_phone_number="+961 71 111 113",
+        verified_name="Clinic",
+        access_token="secret-token",
+        scopes=["whatsapp_business_management", "whatsapp_business_messaging"],
+    )
+
+    public = connection_public_view(conn, ai_eligible=True)
+
+    assert "display_phone_number" not in public
+    assert public["display_phone_last4"] == "1113"
+    assert public["connection_source"] == "embedded_signup"
+    assert "secret-token" not in json.dumps(public)
+
+    tenant_status = tenant_connection_status_payload(wa_db, conn, tenant_id="tenant_a")
+    assert tenant_status["display_phone_number"] == "+961 71 111 113"
+    with pytest.raises(PermissionError, match="whatsapp_connection_tenant_mismatch"):
+        tenant_connection_status_payload(wa_db, conn, tenant_id="tenant_b")
 
 
 def test_webhook_signature_valid_invalid_missing():

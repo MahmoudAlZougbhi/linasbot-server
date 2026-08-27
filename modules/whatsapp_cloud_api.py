@@ -15,7 +15,7 @@ from services.whatsapp_cloud.embedded_signup import WhatsAppSignupError, complet
 from services.whatsapp_cloud.entitlement import (
     WhatsAppEntitlementError,
     assert_whatsapp_connection_allowed,
-    connection_status_payload,
+    tenant_connection_status_payload,
 )
 from services.whatsapp_cloud.repository import WhatsAppCloudRepository
 
@@ -50,7 +50,7 @@ async def whatsapp_cloud_status(request: Request) -> Any:
                 connectable = False
                 blocker = exc.code
             connections = [
-                connection_status_payload(db, c)
+                tenant_connection_status_payload(db, c, tenant_id=session.tenant_id)
                 for c in repo.list_tenant_connections(session.tenant_id)
                 if c.lifecycle_status != "revoked"
             ]

@@ -166,6 +166,7 @@ async def test_complete_discovers_omitted_phone(wa_db, monkeypatch, tmp_path):
     result = await complete_embedded_signup(**_ok_kwargs(nonce))
     assert result["success"] is True
     assert "access_token" not in str(result)
+    assert "display_phone_number" not in result["connection"]
     repo = WhatsAppCloudRepository(wa_db)
     conns = repo.list_tenant_connections("linas", include_revoked=False)
     assert len(conns) == 1

@@ -9,6 +9,10 @@ import { IntegrationCardShell } from './IntegrationCardShell';
 import { WhatsAppCloudOpsPanel } from './WhatsAppCloudOpsPanel';
 import { WhatsAppCoexistenceConfirm } from './WhatsAppCoexistenceConfirm';
 import {
+  isWhatsAppAppReviewTest,
+  whatsappConnectionSubtitle,
+} from './whatsappCloudPresentation';
+import {
   fetchWhatsAppCloudStatus,
   startWhatsAppCloudConnect,
   WhatsAppConnectError,
@@ -27,17 +31,15 @@ type Props = {
   onEnableAi?: (connectionId: string) => void;
   onDisableAi?: (connectionId: string) => void;
   onBusyChange?: (busy: boolean) => void;
-  onError?: (message: string) => void;
+  onError?: (message: string | null) => void;
   onNotice?: (message: string) => void;
 };
 
 export function whatsappCardSubtitle(status: WhatsAppCloudStatus | null, fallback: string): string {
   const conn = status?.connection;
-  if (status?.lifecycle_status === 'connected' && conn) {
-    if (conn.verified_name?.trim()) return conn.verified_name.trim();
-    if (conn.display_phone_last4) return `••••${conn.display_phone_last4}`;
-  }
-  return fallback;
+  return status?.lifecycle_status === 'connected'
+    ? whatsappConnectionSubtitle(conn, fallback)
+    : fallback;
 }
 
 export function WhatsAppCloudCard({
@@ -61,6 +63,7 @@ export function WhatsAppCloudCard({
     status?.awaiting_meta_approval === true ||
     (!connectable && !connected && !status?.pilot_entitled && status?.public_availability !== true);
   const conn = status?.connection;
+  const appReviewTest = isWhatsAppAppReviewTest(conn);
   const subtitle = whatsappCardSubtitle(status, tr('integrationWhatsAppHandle'));
   const healthy = connected;
   const aiOn = Boolean(conn?.ai_default_enabled);
@@ -104,7 +107,7 @@ export function WhatsAppCloudCard({
             <Text style={styles.hint}>{tr('waDoNotAddNewNumber')}</Text>
           </>
         ) : null}
-        {connected && conn?.coexistence_mode ? (
+        {connected && conn?.coexistence_mode && !appReviewTest ? (
           <Text style={styles.hint}>{tr('waCoexistenceOn')}</Text>
         ) : null}
         {awaitingMeta && !connected ? (
@@ -131,6 +134,7 @@ export function WhatsAppCloudCard({
       {connected && conn?.connection_id ? (
         <WhatsAppCloudOpsPanel
           connectionId={conn.connection_id}
+          connectionSource={conn.connection_source}
           busy={busy}
           onBusyChange={onBusyChange}
           onError={onError}

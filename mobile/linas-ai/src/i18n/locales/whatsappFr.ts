@@ -40,6 +40,10 @@ export const whatsappFr = {
     'Envoie un vrai message WhatsApp Cloud pour le tournage App Review. Utilisez un WA id destinataire de test.',
   waTestToPlaceholder: 'WA id destinataire (chiffres)',
   waTestTextPlaceholder: 'Texte du message',
+  waTestRecipientInvalid: 'Saisissez le destinataire au format international, chiffres uniquement.',
+  waTestTextInvalid: 'Saisissez un message avant l’envoi.',
+  waTestReplyHint:
+    'Après réception, répondez depuis ce téléphone avec une question clinique pour montrer la vraie réponse de l’IA.',
   waSendTestMessage: 'Envoyer le message de test',
   waTestMessageSent: 'Message de test accepté par Meta',
   waTemplateTitle: 'Modèle de message',

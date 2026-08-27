@@ -9,7 +9,8 @@ from db.session import whatsapp_session
 from services.whatsapp_cloud.config import get_whatsapp_cloud_flags
 from services.whatsapp_cloud.entitlement import evaluate_ai_eligibility
 from services.whatsapp_cloud.graph_client import WhatsAppGraphError, send_text_message
-from services.whatsapp_cloud.observability import emit_wa_event, record_analytics_channel_usage
+from services.whatsapp_cloud.observability import emit_wa_event
+from services.whatsapp_cloud.outbound_finalization import finalize_ai_outbound_sent
 from services.whatsapp_cloud.repository import WhatsAppCloudRepository
 
 CUSTOMER_SERVICE_WINDOW = timedelta(hours=24)
@@ -317,44 +318,15 @@ async def maybe_generate_and_send_ai_reply(snapshot: dict[str, Any]) -> None:
         wamid = ""
         if isinstance(messages, list) and messages:
             wamid = str((messages[0] or {}).get("id") or "")
-        repo.update_outbound_intent(intent, dispatch_state="sent", provider_wamid=wamid or None)
-        repo.insert_message(
-            tenant_id=tenant_id,
-            connection_id=connection_id,
-            conversation_id=conversation_id,
-            provider_message_id=wamid or f"local:{intent.id}",
-            origin="CLOUD_API",
-            direction="outbound",
-            message_type="text",
-            content_preview=reply_text[:80],
-            status="sent",
-            meta={"source": "AI"},
+        finalize_ai_outbound_sent(
+            session,
+            repo=repo,
+            intent=intent,
+            conversation=conv,
+            canonical_text=reply_text,
+            provider_wamid=wamid,
+            analytics_provider_message_id=provider_mid,
         )
-        conv.last_ai_outbound_at = datetime.now(UTC)
-        record_analytics_channel_usage(
-            tenant_id=tenant_id,
-            connection_id=connection_id,
-            conversation_id=conversation_id,
-            provider_message_id=provider_mid,
-            source="ai_reply",
-        )
-        emit_wa_event("ai_reply_sent", connection_id=connection_id, conversation_id=conversation_id)
-        # Smart Follow-Up: absolute-delay sequence after qualifying AI customer-support reply.
-        try:
-            from services.whatsapp_cloud.smart_followup.hooks import schedule_after_ai_reply
-
-            schedule_after_ai_reply(
-                session,
-                tenant_id=tenant_id,
-                connection_id=connection_id,
-                conversation_id=conversation_id,
-                trigger_outbound_intent_id=intent.id,
-                control_epoch=int(conv.control_epoch),
-                trigger_ai_sent_at=conv.last_ai_outbound_at,
-                conversation=conv,
-            )
-        except Exception as exc:
-            emit_wa_event("smart_followup_schedule_failed", error=type(exc).__name__)
 
 
 def _release_reservation(tenant_id: str, reservation_id: str | None) -> None:
