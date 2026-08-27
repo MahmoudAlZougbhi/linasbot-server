@@ -1,7 +1,7 @@
 import { LANDING_ASSETS } from './landingDesignAssets';
 
 export const HOW_IT_WORKS_EYEBROW = 'Explore the app';
-export const HOW_IT_WORKS_HEADLINE = 'One AI app. Every channel. Every customer answered.';
+export const HOW_IT_WORKS_HEADLINE = 'Run every customer conversation from one AI app.';
 
 export const HOW_IT_WORKS_STEPS = [
   {

@@ -158,7 +158,7 @@ describe("public marketing landing", () => {
     expect(screen.getAllByText("Write once").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/0 credits/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Auto in every language you select/i).length).toBeGreaterThan(0);
-    expect(screen.getByText("One AI app. Every channel. Every customer answered.")).toBeInTheDocument();
+    expect(screen.getByText("Run every customer conversation from one AI app.")).toBeInTheDocument();
     expect(screen.getByText("See what matters. Act faster.")).toBeInTheDocument();
     expect(screen.getByText("Scroll the card to explore")).toBeInTheDocument();
     expect(screen.getAllByText("12,480 remaining").length).toBeGreaterThan(0);
