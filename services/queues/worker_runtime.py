@@ -13,7 +13,9 @@ from services.omnichannel.worker_pool import run_bounded_pool
 from services.queues.config import DEFAULT_TENANT_INFLIGHT, redis_url
 from services.queues.handlers import JobNotReady, PermanentJobError, get_handler
 from services.queues.redis_backend import RedisQueueBackend
+from services.scale.autoscale_tick import run_autoscale_tick
 from services.scale.shutdown import shutdown_coordinator
+from services.scale.worker_slots import slot_count_for
 
 
 class WorkerRuntime:
@@ -121,7 +123,15 @@ class WorkerRuntime:
         try:
             self._backend.heartbeat(worker_id=self.worker_id, queue=self.queue)
             self._registry_beat("draining" if self._stopping else "ready")
-            self._backend.reclaim_expired_leases(self.queue)
+        except Exception:
+            pass
+        try:
+            reclaim = getattr(self._backend, "reclaim_expired_leases", None)
+            if callable(reclaim):
+                reclaim(self.queue)
+        except Exception:
+            pass
+        try:
             job = self._backend.claim(self.queue, worker_id=self.worker_id, timeout=3)
         except Exception:
             await asyncio.sleep(0.5)
@@ -240,11 +250,20 @@ class WorkerRuntime:
     async def run_forever(self) -> None:
         signal.signal(signal.SIGTERM, self.request_stop)
         signal.signal(signal.SIGINT, self.request_stop)
-        await run_bounded_pool(
-            queue=self.queue,
-            one_cycle=self._process_one,
-            stopping=lambda: self._stopping or not shutdown_coordinator.accept_queue_work,
-        )
+        tick = None
+        if self.queue == "high_priority":
+            tick = asyncio.create_task(run_autoscale_tick(lambda: self._stopping))
+        try:
+            await run_bounded_pool(
+                queue=self.queue,
+                one_cycle=self._process_one,
+                stopping=lambda: self._stopping or not shutdown_coordinator.accept_queue_work,
+                slot_count=lambda: slot_count_for(self.queue),
+            )
+        finally:
+            if tick is not None:
+                tick.cancel()
+                await asyncio.gather(tick, return_exceptions=True)
         shutdown_coordinator.wait_for_idle(timeout_seconds=50)
 
 
