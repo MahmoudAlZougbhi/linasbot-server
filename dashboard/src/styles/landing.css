@@ -34,6 +34,50 @@ html:has(.landing-page) {
   display: none;
 }
 
+/* Landing: no pink/fuchsia dashboard scrollbars — mint brand only, no horizontal bar.
+ * Use overflow-x: clip (not hidden) so position:sticky How-it-works pin keeps working. */
+html:has(.landing-page),
+body:has(.landing-page) {
+  overflow-x: clip;
+  scrollbar-width: thin;
+  scrollbar-color: #06715f #e8f0ed;
+}
+
+html:has(.landing-page)::-webkit-scrollbar,
+body:has(.landing-page)::-webkit-scrollbar,
+.landing-page::-webkit-scrollbar {
+  width: 8px;
+  height: 0;
+}
+
+html:has(.landing-page)::-webkit-scrollbar-track,
+body:has(.landing-page)::-webkit-scrollbar-track,
+.landing-page::-webkit-scrollbar-track {
+  background: #e8f0ed;
+  border-radius: 999px;
+}
+
+html:has(.landing-page)::-webkit-scrollbar-thumb,
+body:has(.landing-page)::-webkit-scrollbar-thumb,
+.landing-page::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #54c7ac, #06715f);
+  border-radius: 999px;
+}
+
+html:has(.landing-page)::-webkit-scrollbar-thumb:hover,
+body:has(.landing-page)::-webkit-scrollbar-thumb:hover,
+.landing-page::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #3bb896, #055a4c);
+}
+
+.landing-page *::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+.landing-page * {
+  scrollbar-width: none;
+}
+
 .landing-page .lp-ease {
   transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
