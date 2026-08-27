@@ -111,3 +111,19 @@ def connection_status_payload(session: Session, conn: WhatsAppConnection) -> dic
 
     eligible, reason = evaluate_ai_eligibility(session, conn)
     return connection_public_view(conn, ai_eligible=eligible, rollout_blocked_reason=None if eligible else reason)
+
+
+def tenant_connection_status_payload(
+    session: Session,
+    conn: WhatsAppConnection,
+    *,
+    tenant_id: str,
+) -> dict[str, Any]:
+    """Return the tenant-authenticated status view, including its business number."""
+
+    expected_tenant = str(tenant_id or "").strip()
+    if not expected_tenant or conn.tenant_id != expected_tenant:
+        raise PermissionError("whatsapp_connection_tenant_mismatch")
+    return connection_status_payload(session, conn) | {
+        "display_phone_number": conn.display_phone_number,
+    }

@@ -80,6 +80,7 @@ LB_ATTESTATION_PREFIX=$META_HA_STATE_ROOT/lb-ready-deploy-
 RELEASE_BUNDLE_ROOT=$META_HA_STATE_ROOT/release-bundles
 RELEASE_BUNDLE_RECEIPT_ROOT=$META_HA_STATE_ROOT/release-bundle-receipts
 RELEASE_IMPORT_INTENT_ROOT=$META_HA_STATE_ROOT/release-import-intents
+RELEASE_VERIFY_TMP_ROOT=$META_HA_STATE_ROOT/release-verification-tmp
 RELEASE_INCOMING_PREFIX=/run/linasbot-release-import.
 EXPECTED_GITHUB_REPOSITORY=MahmoudAlZougbhi/linasbot-server
 EXPECTED_QG_WORKFLOW_REF=$EXPECTED_GITHUB_REPOSITORY/.github/workflows/quality-gates.yml@refs/heads/main
@@ -903,6 +904,106 @@ ensure_private_deploy_dir() {
   fi
   test "$(stat -c '%u:%g:%a' "$PRIVATE_DEPLOY_DIR")" = "0:0:700" || \
     die "HA private deploy directory ownership or mode is unsafe"
+}
+
+ensure_release_verify_tmp_root() {
+  ensure_meta_ha_state_root
+  if [ -e "$RELEASE_VERIFY_TMP_ROOT" ] || [ -L "$RELEASE_VERIFY_TMP_ROOT" ]; then
+    test -d "$RELEASE_VERIFY_TMP_ROOT" && test ! -L "$RELEASE_VERIFY_TMP_ROOT" || \
+      die "release verification root is not a safe directory"
+  else
+    install -d -o root -g root -m 0700 "$RELEASE_VERIFY_TMP_ROOT"
+  fi
+  test "$(stat -c '%F:%u:%g:%a' "$RELEASE_VERIFY_TMP_ROOT")" = \
+    "directory:0:0:700" || die "release verification root security is invalid"
+  test "$(realpath -e "$RELEASE_VERIFY_TMP_ROOT")" = "$RELEASE_VERIFY_TMP_ROOT" || \
+    die "release verification root path is aliased"
+}
+
+reap_stale_release_verify_tmp() {
+  ensure_release_verify_tmp_root
+  run_system_python_control - "$RELEASE_VERIFY_TMP_ROOT" <<'PY'
+import os
+import re
+import shutil
+import stat
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+root_info = root.lstat()
+if (
+    not stat.S_ISDIR(root_info.st_mode)
+    or stat.S_ISLNK(root_info.st_mode)
+    or root_info.st_uid != 0
+    or root_info.st_gid != 0
+    or stat.S_IMODE(root_info.st_mode) != 0o700
+    or root.resolve(strict=True) != root
+):
+    raise SystemExit("release verification root is unsafe")
+entries = list(root.iterdir())
+for path in entries:
+    info = path.lstat()
+    if (
+        re.fullmatch(r"source-bundle[.][A-Za-z0-9]{8}", path.name) is None
+        or not stat.S_ISDIR(info.st_mode)
+        or stat.S_ISLNK(info.st_mode)
+        or info.st_uid != 0
+        or info.st_gid != 0
+        or stat.S_IMODE(info.st_mode) != 0o700
+        or path.resolve(strict=True).parent != root
+    ):
+        raise SystemExit("release verification root contains an unsafe object")
+for path in entries:
+    shutil.rmtree(path)
+descriptor = os.open(root, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+try:
+    os.fsync(descriptor)
+finally:
+    os.close(descriptor)
+PY
+}
+
+cleanup_release_verify_tmp() {
+  local path="$1"
+  run_system_python_control - "$RELEASE_VERIFY_TMP_ROOT" "$path" <<'PY'
+import os
+import re
+import shutil
+import stat
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+path = Path(sys.argv[2])
+root_info = root.lstat()
+info = path.lstat()
+if (
+    not stat.S_ISDIR(root_info.st_mode)
+    or stat.S_ISLNK(root_info.st_mode)
+    or root_info.st_uid != 0
+    or root_info.st_gid != 0
+    or stat.S_IMODE(root_info.st_mode) != 0o700
+    or root.resolve(strict=True) != root
+    or path.parent != root
+    or re.fullmatch(r"source-bundle[.][A-Za-z0-9]{8}", path.name) is None
+):
+    raise SystemExit("source verification cleanup path is invalid")
+if (
+    not stat.S_ISDIR(info.st_mode)
+    or stat.S_ISLNK(info.st_mode)
+    or info.st_uid != 0
+    or info.st_gid != 0
+    or stat.S_IMODE(info.st_mode) != 0o700
+):
+    raise SystemExit("source verification cleanup root is unsafe")
+shutil.rmtree(path)
+descriptor = os.open(root, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+try:
+    os.fsync(descriptor)
+finally:
+    os.close(descriptor)
+PY
 }
 
 assert_path_absent() {
@@ -1937,7 +2038,7 @@ if (
 PY
   path_identity="$(stat -Lc '%d:%i' "$LOCK_FILE")"
   exec 9<>"$LOCK_FILE"
-  fd_identity="$(stat -Lc '%d:%i' "/proc/$$/fd/9")"
+  fd_identity="$(stat -Lc '%d:%i' /proc/self/fd/9)"
   test "$fd_identity" = "$path_identity" || die "Meta HA transaction lock changed while opening"
   flock -x 9
 }
@@ -2695,7 +2796,11 @@ PY
   advertised="$(git -C "$REPO_DIR" bundle list-heads "$source_bundle")"
   test "$advertised" = "$target_sha HEAD" || \
     die "release source bundle does not advertise exactly the target HEAD"
-  temp_git="$(mktemp -d -p /run linasbot-source-bundle.XXXXXXXX)"
+  # The immutable release payload itself is staged under /run and can consume
+  # most of a small node's tmpfs. Reap only exact stale roots while holding the
+  # canonical HA lock, then unpack Git objects in protected disk-backed state.
+  reap_stale_release_verify_tmp
+  temp_git="$(mktemp -d -p "$RELEASE_VERIFY_TMP_ROOT" source-bundle.XXXXXXXX)"
   test "$(stat -c '%u:%g:%a' "$temp_git")" = "0:0:700" || \
     die "source bundle verification root is unsafe"
   git -C "$temp_git" init --bare --quiet
@@ -2708,30 +2813,10 @@ PY
      [ -n "$(git -C "$temp_git" ls-tree -r --name-only FETCH_HEAD | \
        awk '$0 == ".gitattributes" || $0 ~ /\/\.gitattributes$/ || \
             $0 == ".gitmodules" || $0 ~ /\/\.gitmodules$/ {print; exit}')" ]; then
-    run_system_python_control - "$temp_git" <<'PY'
-import shutil, stat, sys
-from pathlib import Path
-path = Path(sys.argv[1])
-info = path.lstat()
-if not path.name.startswith("linasbot-source-bundle.") or path.parent != Path("/run"):
-    raise SystemExit("source verification cleanup path is invalid")
-if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode) or info.st_uid != 0:
-    raise SystemExit("source verification cleanup root is unsafe")
-shutil.rmtree(path)
-PY
+    cleanup_release_verify_tmp "$temp_git"
     die "release source bundle commit/tree contract is invalid"
   fi
-  run_system_python_control - "$temp_git" <<'PY'
-import shutil, stat, sys
-from pathlib import Path
-path = Path(sys.argv[1])
-info = path.lstat()
-if not path.name.startswith("linasbot-source-bundle.") or path.parent != Path("/run"):
-    raise SystemExit("source verification cleanup path is invalid")
-if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode) or info.st_uid != 0:
-    raise SystemExit("source verification cleanup root is unsafe")
-shutil.rmtree(path)
-PY
+  cleanup_release_verify_tmp "$temp_git"
   printf '%s\n' "$summary"
 }
 
@@ -4880,7 +4965,7 @@ except urllib.error.HTTPError as exc:
     except (json.JSONDecodeError, TypeError, ValueError) as decode_exc:
         raise SystemExit("live /api/ready is not JSON") from decode_exc
     status = int(exc.code)
-except urllib.error.URLError as exc:
+except (urllib.error.URLError, TimeoutError, OSError) as exc:
     raise SystemExit("live /api/ready could not be reached") from exc
 if not isinstance(payload, dict):
     raise SystemExit("live /api/ready is not JSON")
@@ -4919,8 +5004,18 @@ probe_serving_ready_for_sha() {
 
 assert_serving_ready_for_sha() {
   local expected_sha="$1"
-  probe_serving_ready_for_sha "$expected_sha" || \
-    die "canonical /api/ready is not healthy for $expected_sha"
+  local attempt
+  # Admission performs an immediate second readiness proof after the node's
+  # fail-closed sentinel and boot guards are removed. A single socket timeout
+  # at that boundary must not turn an otherwise healthy commit into an
+  # interrupted durable decision, but every failed probe still stays closed.
+  for attempt in 1 2 3; do
+    if probe_serving_ready_for_sha "$expected_sha"; then
+      return 0
+    fi
+    test "$attempt" = 3 || sleep 1
+  done
+  die "canonical /api/ready is not healthy for $expected_sha after bounded retry"
 }
 
 assert_public_ready() {
@@ -10373,7 +10468,7 @@ install_release_bundle_cluster() {
   local confirmation="${11}"
   local peer_host="$DEFAULT_PEER_HOST"
   local remote_helper_root="" remote_helper remote_incoming=""
-  local path cleanup_rc=0 rc=0
+  local path cleanup_rc=0 rc=0 local_install_rc=0
   local expected_files=(
     release-manifest.json wheelhouse.tar dashboard-build.tar control-plane.tar
     source.bundle "$PYTHON_RUNTIME_ARTIFACT"
@@ -10411,9 +10506,18 @@ install_release_bundle_cluster() {
   rc=$?
   set -e
   if [ "$rc" = 0 ]; then
-    install_release_bundle node01 "$incoming_dir" "$target_sha" "$artifact_id" \
-      "$artifact_api_sha" "$manifest_sha" "$run_id" "$run_attempt" \
-      "$control_sha" "$source_sha" "$target_tree_sha" "$confirmation" || rc=$?
+    set +e
+    (
+      set -e
+      install_release_bundle node01 "$incoming_dir" "$target_sha" "$artifact_id" \
+        "$artifact_api_sha" "$manifest_sha" "$run_id" "$run_attempt" \
+        "$control_sha" "$source_sha" "$target_tree_sha" "$confirmation"
+    )
+    local_install_rc=$?
+    set -e
+    if [ "$local_install_rc" -ne 0 ]; then
+      rc="$local_install_rc"
+    fi
   fi
   if [ -n "$remote_incoming" ]; then
     peer_root_bash_s "$peer_host" "$remote_incoming" "${expected_files[@]}" <<'EOF' || cleanup_rc=$?

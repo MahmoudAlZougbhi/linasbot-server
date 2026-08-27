@@ -154,13 +154,13 @@ describe("public marketing landing", () => {
     expect(screen.getAllByText("العربية").length).toBeGreaterThan(0);
     expect(screen.getAllByText("You taught").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Price questions → Private DM").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Can you treat this?").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Can you treat this pigmentation/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Write once").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/0 credits/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Auto in every language you select/i).length).toBeGreaterThan(0);
-    expect(screen.getByText("One app. Every step clear.")).toBeInTheDocument();
+    expect(screen.getByText("Run every customer conversation from one AI app.")).toBeInTheDocument();
     expect(screen.getByText("See what matters. Act faster.")).toBeInTheDocument();
-    expect(screen.getByText("Scroll to continue")).toBeInTheDocument();
+    expect(screen.getByText("Scroll the card to explore")).toBeInTheDocument();
     expect(screen.getAllByText("12,480 remaining").length).toBeGreaterThan(0);
     expect(screen.getAllByText(PUBLIC_SITE.heroTitle).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Download app" }));
@@ -172,10 +172,12 @@ describe("public marketing landing", () => {
     expect(screen.queryByText("login-page")).not.toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Page language" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("group", { name: "Download Linas AI" }).length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("button", { name: "Ask Linas" }));
-    await waitFor(() => {
-      expect(screen.getByText(/reply assistant/i)).toBeInTheDocument();
-    });
+    expect(screen.getByRole("link", { name: "Contact us" })).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Explore the app" }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: "Web Chat" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "How it works" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Help & support" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ask Linas" })).not.toBeInTheDocument();
   });
 
   it("keeps privacy/terms/data-deletion footer targets", () => {
@@ -195,10 +197,10 @@ describe("public marketing landing", () => {
     renderLanding("/");
     expect(screen.getByRole("heading", { name: /Every reply/i })).toBeInTheDocument();
     expect(screen.getByText(/Messages answered by Linas/i)).toBeInTheDocument();
-    expect(screen.getByText(/Businesses using Linas/i)).toBeInTheDocument();
+    expect(screen.getByText(/Business using Linas/i)).toBeInTheDocument();
     await waitFor(() => {
       const replies = screen.getByText(/Messages answered by Linas/i).closest("div");
-      const businesses = screen.getByText(/Businesses using Linas/i).closest("div");
+      const businesses = screen.getByText(/Business using Linas/i).closest("div");
       expect(replies).toHaveTextContent("12");
       expect(businesses).toHaveTextContent("4");
     });

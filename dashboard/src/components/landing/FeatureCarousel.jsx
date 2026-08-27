@@ -5,7 +5,8 @@ import LinasStar from './LinasStar';
 import { CardHead } from './cards/MiniFrame';
 
 const CARD_PX = 280;
-const GAP_PX = 12;
+/** Visible peek per stacked card — moderate overlap, not glued. */
+const OVERLAP_PX = 88;
 
 /**
  * @param {number} from
@@ -38,7 +39,7 @@ export default function FeatureCarousel({ id, kicker, title, accent, subtitle, c
   const [cardW, setCardW] = useState(CARD_PX);
   const [loopIndex, setLoopIndex] = useState(n + index);
   const [snap, setSnap] = useState(false);
-  const stepPx = cardW + GAP_PX;
+  const stepPx = cardW - OVERLAP_PX;
   const wheel = useCarouselWheel({ index, go, pause, resume, stepPx });
   const { resetOffset } = wheel;
   const slides = [...cards, ...cards, ...cards];
@@ -149,28 +150,32 @@ export default function FeatureCarousel({ id, kicker, title, accent, subtitle, c
           <div
             className="flex items-center"
             style={{
-              gap: GAP_PX,
               transform: `translateX(${x}px)`,
               transition: moving ? 'none' : 'transform 420ms cubic-bezier(.22,1,.36,1)',
             }}
           >
             {slides.map((card, i) => {
               const active = i === loopIndex;
+              const dist = Math.abs(i - loopIndex);
               const Mini = card.Mini;
               return (
                 <article
                   key={`${card.id}-${i}`}
                   data-lp-card=""
                   draggable={false}
-                  className={`w-[84vw] max-w-[20rem] shrink-0 rounded-[1.6rem] border bg-white p-5 md:w-[280px] md:max-w-none ${
-                    active ? 'z-10 border-[#06715F]/30 shadow-xl shadow-[#06715F]/10' : 'border-[#E6EBE8] shadow-sm'
+                  className={`relative isolate w-[84vw] max-w-[20rem] shrink-0 rounded-[1.6rem] border bg-white p-5 md:w-[280px] md:max-w-none ${
+                    active ? 'border-[#06715F]/35 shadow-[0_22px_44px_rgba(6,113,95,0.14)]' : 'border-[#E6EBE8] shadow-none'
                   }`}
                   style={{
-                    transform: `scale(${active ? 1.22 : 0.94})`,
-                    opacity: active ? 1 : 0.82,
+                    marginRight: i === slides.length - 1 ? 0 : -OVERLAP_PX,
+                    zIndex: active ? 30 : Math.max(1, 20 - dist),
+                    transform: `scale(${active ? 1.2 : dist === 1 ? 0.97 : 0.94})`,
+                    transformOrigin: 'center center',
+                    opacity: 1,
+                    filter: active ? 'none' : 'saturate(0.52) brightness(1.04) contrast(0.94)',
                     transition: moving
                       ? 'none'
-                      : 'transform 420ms cubic-bezier(.22,1,.36,1), opacity 420ms cubic-bezier(.22,1,.36,1)',
+                      : 'transform 420ms cubic-bezier(.22,1,.36,1), filter 420ms cubic-bezier(.22,1,.36,1), box-shadow 420ms cubic-bezier(.22,1,.36,1), border-color 420ms cubic-bezier(.22,1,.36,1)',
                   }}
                   aria-hidden={!active}
                   aria-current={active ? 'true' : undefined}

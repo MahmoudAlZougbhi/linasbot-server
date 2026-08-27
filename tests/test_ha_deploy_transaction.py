@@ -13,6 +13,7 @@ import tarfile
 import textwrap
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -969,6 +970,16 @@ def test_per_node_deploy_sentinel_is_transaction_bound_and_last_to_leave() -> No
     assert clear.index('write_admission_proof "$tx_dir" "$admission_sha"') < clear.index(
         'clear_deploy_node_sentinel "$tx_dir"'
     )
+    assert clear.index('probe_serving_ready_for_sha "$admission_sha"') < clear.index(
+        'write_admission_proof "$tx_dir" "$admission_sha"'
+    )
+    assert clear.index('clear_deploy_node_sentinel "$tx_dir"') < clear.rindex('remove_maintenance_boot_guard "$tx_dir"')
+    assert clear.rindex('remove_maintenance_boot_guard "$tx_dir"') < clear.index(
+        'node_assert_serving_contract "$admission_sha"'
+    )
+    assert clear.index('node_assert_serving_contract "$admission_sha"') < clear.index(
+        'log "node admitted by /api/ready"'
+    )
     assert 'assert_path_absent "$DEPLOY_NODE_ACTIVE_FILE"' in ready
     assert 'validate_tx_dir "${2:-}"' in dispatch
     assert 'node_assert_release_drained "$1" "$2"' in dispatch
@@ -1417,6 +1428,113 @@ def test_release_import_fsync_is_absolute_from_any_working_directory(tmp_path: P
     unrelated.mkdir()
     result = subprocess.run(
         ["/bin/bash", "-c", 'cd "$1" && test "$(dirname /opt/linasbot/.git)" = /opt/linasbot', "test", str(unrelated)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_release_source_bundle_verification_uses_disk_backed_scratch() -> None:
+    source = _helper()
+    verifier = source[
+        source.index("assert_release_bundle() {") : source.index("release_bundle_install_confirmation() {")
+    ]
+    assert "RELEASE_VERIFY_TMP_ROOT=$META_HA_STATE_ROOT/release-verification-tmp" in source
+    assert 'mktemp -d -p "$RELEASE_VERIFY_TMP_ROOT" source-bundle.XXXXXXXX' in verifier
+    assert "reap_stale_release_verify_tmp" in verifier
+    assert "path.parent != root" in source
+    assert "stat.S_IMODE(root_info.st_mode) != 0o700" in source
+    assert "mktemp -d -p /run linasbot-source-bundle.XXXXXXXX" not in verifier
+
+
+def test_release_source_verification_reaper_is_closed_and_fail_closed(tmp_path: Path) -> None:
+    script = _embedded_python("reap_stale_release_verify_tmp")
+    script = script.replace("root_info.st_uid != 0", "root_info.st_uid != os.getuid()")
+    script = script.replace("root_info.st_gid != 0", "root_info.st_gid != os.getgid()")
+    script = script.replace("info.st_uid != 0", "info.st_uid != os.getuid()")
+    script = script.replace("info.st_gid != 0", "info.st_gid != os.getgid()")
+
+    root = tmp_path.resolve() / "release-verification-tmp"
+    root.mkdir(mode=0o700)
+    stale = root / "source-bundle.Ab12Cd34"
+    stale.mkdir(mode=0o700)
+    (stale / "objects").mkdir()
+    accepted = subprocess.run(
+        [sys.executable, "-B", "-I", "-S", "-", str(root)],
+        input=script,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert accepted.returncode == 0, accepted.stderr
+    assert list(root.iterdir()) == []
+
+    stale.mkdir(mode=0o700)
+    unknown = root / "unknown"
+    unknown.mkdir(mode=0o700)
+    rejected = subprocess.run(
+        [sys.executable, "-B", "-I", "-S", "-", str(root)],
+        input=script,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert rejected.returncode != 0
+    assert "unsafe object" in rejected.stderr
+    assert stale.is_dir()
+    assert unknown.is_dir()
+
+
+def test_release_bundle_local_install_preserves_fail_fast_cleanup() -> None:
+    source = _helper()
+    cluster = source[
+        source.index("install_release_bundle_cluster() {") : source.index("install_lb_ready_attestation_cluster() {")
+    ]
+    assert "local_install_rc=0" in cluster
+    assert "set +e\n    (\n      set -e\n      install_release_bundle node01" in cluster
+    assert "local_install_rc=$?\n    set -e" in cluster
+    assert "install_release_bundle node01" in cluster
+    assert '"$confirmation" || rc=$?' not in cluster
+    assert cluster.index("local_install_rc=$?") < cluster.index("cleanup_remote_exact_helper")
+
+
+def test_meta_live_lock_uses_inherited_fd_inside_local_install_subshell(
+    tmp_path: Path,
+) -> None:
+    source = _helper()
+    start = source.index("acquire_meta_live_lock() {")
+    end = source.index("\nread_bootstrap_commit_proof() {", start)
+    acquire = source[start:end]
+    assert "stat -Lc '%d:%i' /proc/self/fd/9" in acquire
+    assert '"/proc/$$/fd/9"' not in acquire
+    assert "BASHPID" not in acquire
+
+    if not Path("/proc/self/fd").is_dir():
+        pytest.skip("the host does not expose Linux /proc file descriptors")
+
+    lock = tmp_path / "meta-ha.lock"
+    script = textwrap.dedent(
+        f"""\
+        set -euo pipefail
+        LOCK_FILE="$1"
+        assert_python_runtime_binary_anchor() {{ :; }}
+        run_os_python_receipt_verifier() {{
+          local path="$2"
+          cat >/dev/null
+          : >"$path"
+          chmod 0600 "$path"
+        }}
+        die() {{ printf '%s\\n' "$*" >&2; exit 1; }}
+        {acquire}
+        (
+          acquire_meta_live_lock
+          test -e /proc/self/fd/9
+        )
+        """
+    )
+    result = subprocess.run(
+        ["/bin/bash", "-c", script, "test", str(lock)],
         text=True,
         capture_output=True,
         check=False,

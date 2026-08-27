@@ -50,6 +50,7 @@ def connection_public_view(
         tenant_id=conn.tenant_id,
         lifecycle_status=conn.lifecycle_status,  # type: ignore[arg-type]
         coexistence_mode=conn.coexistence_mode,
+        connection_source=conn.connection_source,
         display_phone_last4=conn.display_phone_last4,
         verified_name=conn.verified_name,
         waba_id_masked=_mask_id(conn.waba_id),

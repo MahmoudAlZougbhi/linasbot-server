@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from fastapi import Body, HTTPException, Request
@@ -19,6 +20,19 @@ from services.whatsapp_cloud.graph_client import (
     send_text_message,
 )
 from services.whatsapp_cloud.repository import WhatsAppCloudRepository, conversation_public_view
+
+_SAFE_RECIPIENT_FORMAT_RE = re.compile(r"^[+\d\s()-]+$")
+_INTERNATIONAL_RECIPIENT_RE = re.compile(r"^[1-9]\d{7,14}$")
+
+
+def _normalize_whatsapp_recipient(value: Any) -> str | None:
+    raw = str(value or "").strip()
+    if not raw or _SAFE_RECIPIENT_FORMAT_RE.fullmatch(raw) is None:
+        return None
+    if raw.count("+") > 1 or ("+" in raw and not raw.startswith("+")):
+        return None
+    digits = re.sub(r"[+\s()-]", "", raw)
+    return digits if _INTERNATIONAL_RECIPIENT_RE.fullmatch(digits) is not None else None
 
 
 def _actor_id(session: Any) -> str:
@@ -132,9 +146,9 @@ async def whatsapp_send_test_message(
             status_code=403,
             content={"success": False, "error": "WHATSAPP_OUTBOUND_DISABLED", "message": "Outbound sends are disabled"},
         )
-    to_wa_id = str(body.get("to_wa_id") or body.get("to") or "").strip().lstrip("+")
+    to_wa_id = _normalize_whatsapp_recipient(body.get("to_wa_id") or body.get("to"))
     text = str(body.get("text") or body.get("message") or "").strip()
-    if not to_wa_id or not to_wa_id.replace(" ", "").isdigit():
+    if to_wa_id is None:
         raise HTTPException(status_code=400, detail="to_wa_id_required")
     if not text or len(text) > 1000:
         raise HTTPException(status_code=400, detail="text_required_max_1000")
@@ -158,7 +172,7 @@ async def whatsapp_send_test_message(
         result = await send_text_message(
             access_token=token,
             phone_number_id=phone_number_id,
-            to_wa_id=to_wa_id.replace(" ", ""),
+            to_wa_id=to_wa_id,
             text=text,
         )
     except WhatsAppGraphError as exc:

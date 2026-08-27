@@ -38,8 +38,19 @@ export default function CountUp({ value, duration = 2000, className = '' }) {
 }
 
 /** @param {number} n */
+function trimOneDecimal(n) {
+  const t = n.toFixed(1);
+  return t.endsWith('.0') ? t.slice(0, -2) : t;
+}
+
+/**
+ * Compact impact labels so the live-network digit stays layout-stable.
+ * <1000 → plain digits; ≥1000 → 1.1k; ≥1M → 5.5m
+ * @param {number} n
+ */
 export function formatImpact(n) {
-  if (n >= 1_000_000) return `${Math.floor(n / 1_000_000)}M+`;
-  if (n >= 10_000) return `${Math.floor(n / 1000)}K+`;
-  return n.toLocaleString('en-US');
+  const v = Math.max(0, Math.floor(Number(n) || 0));
+  if (v >= 1_000_000) return `${trimOneDecimal(v / 1_000_000)}m`;
+  if (v >= 1_000) return `${trimOneDecimal(v / 1_000)}k`;
+  return String(v);
 }

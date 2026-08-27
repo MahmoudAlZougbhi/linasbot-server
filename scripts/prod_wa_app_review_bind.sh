@@ -112,12 +112,15 @@ def assert_dry_run(payload: dict[str, Any], token: str) -> None:
         fail("dry_run_collision")
     if int(detail.get("scopes_count") or 0) < 2 or detail.get("subscribe_webhooks") is not True:
         fail("dry_run_scope_or_webhook_mismatch")
+    planned_action = str(detail.get("planned_action") or "")
     with whatsapp_session() as session:
         repo = WhatsAppCloudRepository(session)
         existing = repo.find_active_by_phone_number_id(PHONE_NUMBER_ID)
         if collision is None:
             if existing is not None:
                 fail("dry_run_collision_state_mismatch")
+            if planned_action != "bind":
+                fail("dry_run_planned_action_mismatch")
             return
         if existing is None or existing.id != str(collision.get("connection_id") or ""):
             fail("dry_run_collision_row_mismatch")
@@ -129,14 +132,21 @@ def assert_dry_run(payload: dict[str, Any], token: str) -> None:
             or existing.lifecycle_status not in ACTIVE_LIFECYCLES
         ):
             fail("dry_run_existing_asset_mismatch")
-        if existing.lifecycle_status == "connected" and not hmac.compare_digest(
-            repo.load_access_token(existing), token
-        ):
-            fail("dry_run_existing_credential_mismatch")
+        if existing.lifecycle_status == "connected":
+            credential_matches = hmac.compare_digest(repo.load_access_token(existing), token)
+            expected_action = "bind_idempotent" if credential_matches else "credential_rotate"
+            if planned_action != expected_action:
+                fail("dry_run_existing_credential_mismatch")
+        elif planned_action != "rebind_incomplete":
+            fail("dry_run_planned_action_mismatch")
 
 
 def assert_bound(payload: dict[str, Any], token: str) -> None:
-    if not payload.get("success") or payload.get("action") not in {"bind", "bind_idempotent"}:
+    if not payload.get("success") or payload.get("action") not in {
+        "bind",
+        "bind_idempotent",
+        "credential_rotated",
+    }:
         fail("bind_failed")
     if payload.get("lifecycle_status") != "connected" or payload.get("display_phone_last4") != EXPECTED_LAST4:
         fail("bind_connection_mismatch")

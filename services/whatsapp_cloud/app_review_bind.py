@@ -8,6 +8,7 @@ Helpers: app_review_bind_helpers (LOC split).
 
 from __future__ import annotations
 
+import hmac
 import secrets
 from dataclasses import dataclass
 from typing import Any
@@ -128,6 +129,8 @@ async def dry_run_app_review_bind(
         repo = WhatsAppCloudRepository(session)
         existing = repo.find_active_by_phone_number_id(phone)
         collision = None
+        planned_action = "bind"
+        credential_matches: bool | None = None
         if existing is not None:
             collision = {
                 "tenant_id": existing.tenant_id,
@@ -136,9 +139,22 @@ async def dry_run_app_review_bind(
                 "same_tenant": existing.tenant_id == tid,
                 "is_app_review": _is_app_review_connection(existing),
             }
+            if existing.tenant_id == tid and _is_app_review_connection(existing):
+                if existing.waba_id != waba:
+                    planned_action = "blocked_asset_mismatch"
+                elif existing.lifecycle_status == "connected":
+                    try:
+                        credential_matches = hmac.compare_digest(repo.load_access_token(existing), token)
+                    except PermissionError:
+                        credential_matches = False
+                    planned_action = "bind_idempotent" if credential_matches else "credential_rotate"
+                else:
+                    planned_action = "rebind_incomplete"
         would_succeed = collision is None or (
             bool(collision.get("same_tenant")) and bool(collision.get("is_app_review"))
         )
+        if planned_action == "blocked_asset_mismatch":
+            would_succeed = False
     flags = get_whatsapp_cloud_flags()
     return AppReviewBindResult(
         success=would_succeed,
@@ -158,6 +174,8 @@ async def dry_run_app_review_bind(
             "scopes_count": len(scopes),
             "token_app_id": str(dbg.get("app_id") or ""),
             "collision": collision,
+            "planned_action": planned_action,
+            "credential_change_required": planned_action == "credential_rotate",
             "public_availability": flags.public_availability,
             "would_enable_ai_default": True,
             "would_grant_pilot_if_missing": True,
@@ -202,6 +220,61 @@ async def bind_app_review_test_number(
             raise AppReviewBindError("phone_owned_elsewhere", "phone_number_id is already bound to another tenant")
         if existing is not None and existing.tenant_id == tid:
             if _is_app_review_connection(existing) and existing.lifecycle_status == "connected":
+                if existing.waba_id != waba or existing.meta_app_id != app.app_id:
+                    raise AppReviewBindError(
+                        "existing_asset_mismatch",
+                        "connected app-review asset does not match the validated WABA/app",
+                    )
+                try:
+                    same_token = hmac.compare_digest(repo.load_access_token(existing), token)
+                except PermissionError:
+                    same_token = False
+                if not same_token:
+                    previous_generation = int(existing.credential_generation)
+                    try:
+                        repo.rotate_connection_credential(
+                            existing,
+                            access_token=token,
+                            scopes=scopes,
+                            expected_generation=previous_generation,
+                        )
+                    except PermissionError as exc:
+                        raise AppReviewBindError(
+                            "credential_rotation_conflict",
+                            "connected App Review credential changed concurrently; retry with fresh state",
+                        ) from exc
+                    repo.add_audit(
+                        tenant_id=tid,
+                        connection_id=existing.id,
+                        actor_user_id=actor_user_id,
+                        event_type="app_review_credential_rotated",
+                        detail={
+                            "correlation_id": correlation_id,
+                            "source": APP_REVIEW_SOURCE,
+                            "previous_generation": previous_generation,
+                            "credential_generation": int(existing.credential_generation),
+                            "waba_masked": _mask_id(waba),
+                            "phone_masked": _mask_id(phone),
+                        },
+                    )
+                    emit_wa_event("app_review_credential_rotated", tenant_id=tid, connection_id=existing.id)
+                    view = connection_public_view(existing, ai_eligible=True)
+                    return AppReviewBindResult(
+                        success=True,
+                        action="credential_rotated",
+                        correlation_id=correlation_id,
+                        connection_id=existing.id,
+                        tenant_id=tid,
+                        lifecycle_status=existing.lifecycle_status,
+                        display_phone_last4=existing.display_phone_last4,
+                        waba_id_masked=_mask_id(existing.waba_id),
+                        phone_number_id_masked=_mask_id(existing.phone_number_id),
+                        dry_run=False,
+                        detail={
+                            "connection": view,
+                            "credential_generation": int(existing.credential_generation),
+                        },
+                    )
                 view = connection_public_view(existing, ai_eligible=bool(existing.ai_default_enabled))
                 repo.add_audit(
                     tenant_id=tid,

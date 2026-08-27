@@ -69,6 +69,8 @@ describe('whatsapp cloud mobile return + card', () => {
   it('ops panel exposes App Review surfaces', () => {
     const ops = read('features/integrations/WhatsAppCloudOpsPanel.tsx');
     assert.match(ops, /sendWhatsAppTestMessage/);
+    assert.match(ops, /appReviewTest/);
+    assert.match(ops, /!appReviewTest/);
     assert.match(ops, /createWhatsAppTemplate/);
     assert.match(ops, /resumeWhatsAppConversation/);
     assert.match(ops, /pauseWhatsAppConversation/);

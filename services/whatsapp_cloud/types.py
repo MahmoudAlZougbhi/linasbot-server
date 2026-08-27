@@ -39,6 +39,7 @@ class ConnectionPublicView:
     tenant_id: str
     lifecycle_status: LifecycleStatus
     coexistence_mode: str
+    connection_source: str
     display_phone_last4: str
     verified_name: str
     waba_id_masked: str
@@ -58,6 +59,7 @@ class ConnectionPublicView:
             "tenant_id": self.tenant_id,
             "lifecycle_status": self.lifecycle_status,
             "coexistence_mode": self.coexistence_mode,
+            "connection_source": self.connection_source,
             "display_phone_last4": self.display_phone_last4,
             "verified_name": self.verified_name,
             "waba_id_masked": self.waba_id_masked,

@@ -1,34 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
-import { HOW_IT_WORKS_STEPS } from '../../../constants/landingHowItWorks';
-import { useMediaQuery, usePrefersReducedMotion } from '../../../hooks/usePrefersReducedMotion';
+import { HOW_IT_WORKS_EYEBROW, HOW_IT_WORKS_HEADLINE, HOW_IT_WORKS_STEPS } from '../../../constants/landingHowItWorks';
+import { usePrefersReducedMotion } from '../../../hooks/usePrefersReducedMotion';
 import HowItWorksCopy from '../HowItWorksCopy';
+import HowItWorksNav from '../HowItWorksNav';
 import HowItWorksStage from '../HowItWorksStage';
 import '../howItWorks.css';
 
 const SEGMENTS = HOW_IT_WORKS_STEPS.length;
+const WHEEL_STEP = 55;
 
+/**
+ * Page scroll moves the section normally.
+ * Wheel / swipe on the white card flips through the 13 screens.
+ */
 export default function LandingHowItWorks() {
   const reduced = usePrefersReducedMotion();
-  const mobile = useMediaQuery('(max-width: 767px)');
-  const pin = !reduced && !mobile;
-  const ref = useRef(/** @type {HTMLElement | null} */ (null));
+  const panelRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const indexRef = useRef(2);
+  const wheelAcc = useRef(0);
   const [index, setIndex] = useState(2);
 
   useEffect(() => {
-    if (!pin) return undefined;
-    const onScroll = () => {
-      const el = ref.current;
-      if (!el) return;
-      const scrolled = -el.getBoundingClientRect().top;
-      const total = el.offsetHeight - window.innerHeight;
-      if (total <= 0) return;
-      const p = Math.min(1, Math.max(0, scrolled / total));
-      setIndex(Math.min(SEGMENTS - 1, Math.floor(p * SEGMENTS + 1e-4)));
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener('scroll', onScroll);
-  }, [pin]);
+    indexRef.current = index;
+  }, [index]);
 
   useEffect(() => {
     HOW_IT_WORKS_STEPS.slice(index + 1, index + 3).forEach((item) => {
@@ -37,53 +31,83 @@ export default function LandingHowItWorks() {
     });
   }, [index]);
 
+  useEffect(() => {
+    if (reduced) return undefined;
+    const panel = panelRef.current;
+    if (!panel) return undefined;
+
+    /** @param {WheelEvent} event */
+    const onWheel = (event) => {
+      const dy = event.deltaY;
+      if (dy === 0) return;
+      const current = indexRef.current;
+      const atStart = current <= 0 && dy < 0;
+      const atEnd = current >= SEGMENTS - 1 && dy > 0;
+      // At the edges, let the page keep scrolling past the section.
+      if (atStart || atEnd) {
+        wheelAcc.current = 0;
+        return;
+      }
+
+      event.preventDefault();
+      wheelAcc.current += dy;
+      if (wheelAcc.current >= WHEEL_STEP) {
+        wheelAcc.current = 0;
+        setIndex((i) => Math.min(SEGMENTS - 1, i + 1));
+      } else if (wheelAcc.current <= -WHEEL_STEP) {
+        wheelAcc.current = 0;
+        setIndex((i) => Math.max(0, i - 1));
+      }
+    };
+
+    panel.addEventListener('wheel', onWheel, { passive: false });
+    return () => panel.removeEventListener('wheel', onWheel);
+  }, [reduced]);
+
   const step = HOW_IT_WORKS_STEPS[index];
   if (!step) return null;
-  const prev = HOW_IT_WORKS_STEPS[index - 1] || null;
-  const next = HOW_IT_WORKS_STEPS[index + 1] || null;
-
-  const frame = (
-    <div className="relative mx-auto grid w-full max-w-[92rem] items-center gap-6 overflow-visible px-4 py-4 sm:px-8 md:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] md:gap-3 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:gap-4 lg:px-10 xl:px-14">
-      <HowItWorksCopy step={step} />
-      <HowItWorksStage step={step} prev={prev} next={next} />
-    </div>
-  );
-
-  if (!pin) {
-    return (
-      <section
-        id="how-it-works"
-        className="scroll-mt-24 bg-[#F7F8F5] py-16"
-        onPointerDown={(event) => {
-          event.currentTarget.dataset.startX = String(event.clientX);
-        }}
-        onPointerUp={(event) => {
-          const start = Number(event.currentTarget.dataset.startX || 0);
-          const dx = event.clientX - start;
-          if (dx > 40) setIndex((i) => Math.max(0, i - 1));
-          if (dx < -40) setIndex((i) => Math.min(SEGMENTS - 1, i + 1));
-        }}
-      >
-        {frame}
-        <div className="mx-auto mt-4 flex max-w-6xl items-center justify-center gap-2 px-4">
-          {HOW_IT_WORKS_STEPS.map((row, i) => (
-            <button
-              key={row.n}
-              type="button"
-              aria-label={`Screen ${row.n}`}
-              aria-current={i === index ? 'true' : undefined}
-              className={`h-2 rounded-full ${i === index ? 'w-5 bg-[#06715F]' : 'w-2 bg-[#D5DCD8]'}`}
-              onClick={() => setIndex(i)}
-            />
-          ))}
-        </div>
-      </section>
-    );
-  }
 
   return (
-    <section id="how-it-works" ref={ref} className="relative bg-[#F7F8F5]" style={{ height: `${SEGMENTS * 85}vh` }}>
-      <div className="sticky top-[5.25rem] flex min-h-[calc(100svh-5.25rem)] items-center overflow-visible bg-[#F7F8F5]">{frame}</div>
+    <section id="how-it-works" className="hiw-section scroll-mt-24">
+      <div className="hiw-shell">
+        <header className="hiw-header">
+          <p className="hiw-eyebrow">{HOW_IT_WORKS_EYEBROW}</p>
+          <h2 className="hiw-headline">{HOW_IT_WORKS_HEADLINE}</h2>
+        </header>
+
+        <div
+          ref={panelRef}
+          className="hiw-panel"
+          onPointerDown={(event) => {
+            event.currentTarget.dataset.startX = String(event.clientX);
+            event.currentTarget.dataset.startY = String(event.clientY);
+          }}
+          onPointerUp={(event) => {
+            const startX = Number(event.currentTarget.dataset.startX || 0);
+            const startY = Number(event.currentTarget.dataset.startY || 0);
+            const dx = event.clientX - startX;
+            const dy = event.clientY - startY;
+            if (Math.abs(dx) < 40 && Math.abs(dy) < 40) return;
+            // Prefer vertical swipe inside the card for screen flips.
+            if (Math.abs(dy) >= Math.abs(dx)) {
+              if (dy < -40) setIndex((i) => Math.min(SEGMENTS - 1, i + 1));
+              if (dy > 40) setIndex((i) => Math.max(0, i - 1));
+              return;
+            }
+            if (dx > 40) setIndex((i) => Math.max(0, i - 1));
+            if (dx < -40) setIndex((i) => Math.min(SEGMENTS - 1, i + 1));
+          }}
+        >
+          <HowItWorksCopy step={step} total={SEGMENTS} />
+          <HowItWorksStage step={step} />
+          <HowItWorksNav index={index} onSelect={setIndex} />
+        </div>
+
+        <p className="hiw-scroll-hint">
+          <span className="hiw-scroll-mouse" aria-hidden="true" />
+          Scroll the card to explore
+        </p>
+      </div>
     </section>
   );
 }

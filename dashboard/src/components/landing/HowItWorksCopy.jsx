@@ -1,54 +1,40 @@
-import { HOW_IT_WORKS_HEADLINE } from '../../constants/landingHowItWorks';
-import { POINT_ICONS } from './HowItWorksIcons';
+import { DecideGlyph, POINT_ICON_BY_KEY } from './HowItWorksIcons';
 
 /**
+ * Left column — step copy + compact point cards (Karen explore layout).
  * @param {{
  *   step: {
  *     n: string,
- *     kicker: string,
+ *     navLabel: string,
  *     title: string,
  *     body: string,
- *     points: Array<{ title: string, body: string }>,
+ *     points: Array<{ icon?: string, title: string }>,
  *   },
+ *   total: number,
  * }} props
  */
-export default function HowItWorksCopy({ step }) {
+export default function HowItWorksCopy({ step, total }) {
   return (
-    <div className="relative z-[1] max-w-lg">
-      <p className="flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-[#00C9A0]">
-        <span>+</span> How it works
+    <div className="hiw-copy">
+      <p className="hiw-copy-index">
+        <span>{step.n}</span>
+        <span className="hiw-copy-index-sep"> / {String(total).padStart(2, '0')}</span>
       </p>
-      <h2 className="mt-5 max-w-[11.2em] text-[2.55rem] font-bold leading-[1.08] tracking-tight text-[#171A19] sm:text-[3.1rem]">
-        {HOW_IT_WORKS_HEADLINE}
-      </h2>
-      <p className="mt-10 flex items-baseline gap-2 font-semibold uppercase tracking-[0.18em] text-[#00C9A0]">
-        <span className="text-[1.05rem] tracking-[0.12em]">{step.n}</span>
-        <span className="text-[0.78rem]">{step.kicker}</span>
-      </p>
-      <h3 className="mt-3 text-[1.75rem] font-bold leading-snug tracking-tight text-[#171A19]">{step.title}</h3>
-      <p className="mt-3 max-w-[28rem] text-[0.95rem] leading-relaxed text-[#6B746F]">{step.body}</p>
-      <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-6">
-        {step.points.map((point, i) => {
-          const Icon = POINT_ICONS[i];
-          if (!Icon) return null;
+      <p className="hiw-copy-nav">{step.navLabel}</p>
+      <h3 className="hiw-copy-title">{step.title}</h3>
+      <p className="hiw-copy-body">{step.body}</p>
+      <div className="hiw-copy-points">
+        {step.points.map((point) => {
+          const Icon = (point.icon && POINT_ICON_BY_KEY[point.icon]) || DecideGlyph;
           return (
-            <div key={point.title}>
-              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-[#00C9A0] text-[#00C9A0]">
-                <Icon />
+            <div key={point.title} className="hiw-point-card">
+              <span className="hiw-point-icon">
+                <Icon className="h-4 w-4" />
               </span>
-              <p className="mt-3 text-sm font-semibold text-[#171A19]">{point.title}</p>
-              <p className="mt-1 text-[0.78rem] leading-snug text-[#6B746F]">{point.body}</p>
+              <p className="hiw-point-label">{point.title}</p>
             </div>
           );
         })}
-      </div>
-      <div className="mt-16 flex items-end gap-3 text-[0.82rem] text-[#8A938F]">
-        <span className="hiw-scroll-stack" aria-hidden="true">
-          <span className="hiw-scroll-dot" />
-          <span className="hiw-scroll-stem" />
-          <span className="hiw-scroll-mouse" />
-        </span>
-        Scroll to continue
       </div>
     </div>
   );

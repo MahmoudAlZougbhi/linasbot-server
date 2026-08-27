@@ -5,7 +5,7 @@ import LinasStar from './LinasStar';
 
 const NAV = [
   { href: '/#features', label: 'Features' },
-  { href: '/#how-it-works', label: 'How it works' },
+  { href: '/#how-it-works', label: 'Explore the app' },
   { href: '/#pricing', label: 'Pricing' },
 ];
 
