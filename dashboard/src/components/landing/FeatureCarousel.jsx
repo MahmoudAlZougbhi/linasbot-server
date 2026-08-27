@@ -148,7 +148,7 @@ export default function FeatureCarousel({ id, kicker, title, accent, subtitle, c
           onDragStart={(event) => event.preventDefault()}
         >
           <div
-            className="flex items-center"
+            className="flex items-stretch"
             style={{
               transform: `translateX(${x}px)`,
               transition: moving ? 'none' : 'transform 420ms cubic-bezier(.22,1,.36,1)',
@@ -163,7 +163,7 @@ export default function FeatureCarousel({ id, kicker, title, accent, subtitle, c
                   key={`${card.id}-${i}`}
                   data-lp-card=""
                   draggable={false}
-                  className={`relative isolate w-[84vw] max-w-[20rem] shrink-0 rounded-[1.6rem] border bg-white p-5 md:w-[280px] md:max-w-none ${
+                  className={`relative isolate flex w-[84vw] max-w-[20rem] shrink-0 flex-col rounded-[1.6rem] border bg-white p-5 md:w-[280px] md:max-w-none ${
                     active ? 'border-[#06715F]/35 shadow-[0_22px_44px_rgba(6,113,95,0.14)]' : 'border-[#E6EBE8] shadow-none'
                   }`}
                   style={{
