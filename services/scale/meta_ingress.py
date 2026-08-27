@@ -63,6 +63,7 @@ def _try_enqueue(
     claim_token: str = "",
     claim_generation: int = 1,
     trace_id: str = "",
+    soak_simulation: bool = False,
 ) -> str | None:
     try:
         from services.job_queue import job_queue
@@ -91,6 +92,7 @@ def _try_enqueue(
                 "_claim_token": claim_token,
                 "_claim_generation": claim_generation,
                 "_trace_id": trace_id,
+                "_linas_soak_simulation": bool(soak_simulation),
             },
             idempotency_key=f"meta_inbound:{event_id}",
         )
@@ -170,8 +172,12 @@ def enqueue_meta_inbound_event(event_id: str, *, claim_handle: Any = None) -> st
         claim_token=claim_token,
         claim_generation=claim_generation,
         trace_id=str(payload_map.get("_linas_trace_id") or ""),
+        soak_simulation=bool(payload_map.get("_linas_soak_simulation")),
     )
     if job_id and job_id != _AMBIGUOUS_ENQUEUE:
+        from services.scale.rate_window import bump as bump_rate
+
+        bump_rate("ingress")
         mark_inbound_state(event_id, state="queued", queue_job_id=job_id)
         trace_id = str(payload_map.get("_linas_trace_id") or "")
         if trace_id:

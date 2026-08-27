@@ -213,21 +213,23 @@ async def process_meta_comment_event(
     owner_id = binding.page_id if binding.channel == "facebook" else (binding.instagram_account_id or binding.asset_id)
     reply_list_path = f"{comment_id}/comments" if binding.channel == "facebook" else f"{comment_id}/replies"
     async with httpx.AsyncClient(timeout=20.0) as client:
-        try:
-            already_replied = await _comment_has_page_reply(
-                client,
-                comment_id=comment_id,
-                owner_id=owner_id,
-                token=token,
-                graph_url=graph_api_url(binding, graph_api_version=graph_version, path=reply_list_path),
-            )
-        except MetaCommentReplyInspectionError as exc:
-            _runtime_logger.warning(
-                "[meta-comment] reply_dedupe_check_failed channel=%s reason=%s",
-                binding.channel,
-                str(exc),
-            )
-            return CommentReplyResult(status="failed", reason="reply_dedupe_check_failed")
+        already_replied = False
+        if not simulation:
+            try:
+                already_replied = await _comment_has_page_reply(
+                    client,
+                    comment_id=comment_id,
+                    owner_id=owner_id,
+                    token=token,
+                    graph_url=graph_api_url(binding, graph_api_version=graph_version, path=reply_list_path),
+                )
+            except MetaCommentReplyInspectionError as exc:
+                _runtime_logger.warning(
+                    "[meta-comment] reply_dedupe_check_failed channel=%s reason=%s",
+                    binding.channel,
+                    str(exc),
+                )
+                return CommentReplyResult(status="failed", reason="reply_dedupe_check_failed")
         from services.meta_comment_rule_both import is_deterministic_comment_and_dm, maybe_handle_comment_and_dm
 
         if already_replied and not is_deterministic_comment_and_dm(rule_decision):
@@ -352,7 +354,7 @@ async def process_meta_comment_event(
             from services.customer_reply_v2.comment_context_builder import build_production_comment_context
 
             comment_ctx: dict[str, Any] | None = None
-            if tenant_uses_cm_runtime(binding.tenant_id):
+            if tenant_uses_cm_runtime(binding.tenant_id) and not simulation:
                 comment_ctx = await build_production_comment_context(
                     client=client,
                     binding=binding,

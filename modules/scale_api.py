@@ -47,6 +47,9 @@ async def scale_metrics() -> Any:
         depths = payload.get("queue_depth") or {}
         oldest = payload.get("oldest_age_seconds") or {}
         wait = (payload.get("latency") or {}).get("job_wait_ms") or {}
+        from services.scale.rate_window import snapshot_rates
+
+        ingress, complete = snapshot_rates()
         payload["autoscale"] = recommendation_dict(
             current_api=int(replica_state.api),
             current_workers=int(replica_state.workers),
@@ -57,8 +60,8 @@ async def scale_metrics() -> Any:
             ),
             wait_p95_ms=float(wait.get("p95") or 0.0),
             wait_p99_ms=float(wait.get("p99") or 0.0),
-            ingress_per_sec=0.0,
-            complete_per_sec=0.0,
+            ingress_per_sec=ingress,
+            complete_per_sec=complete,
             cooldown_ok=True,
         )
         payload["replicas"] = {

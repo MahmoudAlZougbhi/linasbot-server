@@ -40,3 +40,24 @@ def test_slots_split_desired_across_nodes(monkeypatch) -> None:
     reload(slots)
     assert slots.slot_count_for("high_priority") == 4
     set_controller_redis_for_tests(None)
+
+
+def test_empty_desired_keeps_live_node_cap(monkeypatch) -> None:
+    import fakeredis
+
+    fake = fakeredis.FakeRedis(decode_responses=True)
+    set_controller_redis_for_tests(fake)
+    monkeypatch.setenv("LINAS_AUTOSCALE_APPLY", "true")
+    monkeypatch.setenv("LINAS_CLUSTER_NODES", "2")
+    monkeypatch.setenv("LINAS_QUEUE_CONCURRENCY_HIGH", "8")
+    from importlib import reload
+
+    import services.omnichannel.worker_pool as pool
+    import services.queues.config as config
+    import services.scale.worker_slots as slots
+
+    reload(config)
+    reload(pool)
+    reload(slots)
+    assert slots.slot_count_for("high_priority") == 8
+    set_controller_redis_for_tests(None)

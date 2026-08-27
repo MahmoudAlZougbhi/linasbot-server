@@ -49,7 +49,7 @@ class ReplicaState:
     last_action_at: float
 
 
-def current_replicas(*, default_api: int = 2, default_workers: int = 2) -> ReplicaState:
+def current_replicas(*, default_api: int = 2, default_workers: int = 16) -> ReplicaState:
     client = _client()
     if client is None:
         return ReplicaState(

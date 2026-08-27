@@ -217,6 +217,9 @@ class WorkerRuntime:
                     await asyncio.wait_for(handler(job), timeout=job.timeout_seconds)
                     try:
                         self._backend.complete(job)
+                        from services.scale.rate_window import bump as bump_rate
+
+                        bump_rate("complete")
                     except Exception:
                         await asyncio.sleep(0.5)
                 finally:

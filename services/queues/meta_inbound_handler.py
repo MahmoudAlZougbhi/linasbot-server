@@ -191,6 +191,10 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
     if rec.state in TERMINAL_STATES:
         return {"skipped": True, "reason": f"already_{rec.state}", "event_id": event_id}
 
+    from services.scale.soak_arm import job_requests_soak_simulation
+
+    soak_simulation = job_requests_soak_simulation(job)
+
     from services.durable_event_claim import (
         event_claim_handle_from_token,
         meta_claim_binding_digest,
@@ -276,6 +280,7 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
                     inbound_event_id=event_id,
                     tenant_id=outbound_tenant_id,
                     binding_id=outbound_binding_id,
+                    simulation=soak_simulation,
                 ),
             )
             delivery = str((outcome or {}).get("delivery") or "unknown")
@@ -372,7 +377,9 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
             result = await run_under_event_claim(
                 claim_handle,
                 ttl_seconds=300.0,
-                operation=lambda: process_meta_comment_event(resolved, inbound_event_id=event_id),
+                operation=lambda: process_meta_comment_event(
+                    resolved, inbound_event_id=event_id, simulation=soak_simulation
+                ),
             )
             if comment_reply_requires_retry(result):
                 mark_inbound_state(

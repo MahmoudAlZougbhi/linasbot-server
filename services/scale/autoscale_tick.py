@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 from collections.abc import Callable
 
 
@@ -42,6 +43,9 @@ def _tick_once() -> None:
         return
     wait = (hist_snapshot() or {}).get("job_wait_ms") or {}
     state = current_replicas()
+    from services.scale.rate_window import snapshot_rates
+
+    ingress, complete = snapshot_rates()
     tick(
         current_api=int(state.api),
         current_workers=int(state.workers),
@@ -49,8 +53,8 @@ def _tick_once() -> None:
         oldest_age_seconds=max([float(oldest.get(name) or 0.0) for name in oldest] or [0.0]),
         wait_p95_ms=float(wait.get("p95") or 0.0),
         wait_p99_ms=float(wait.get("p99") or 0.0),
-        ingress_per_sec=0.0,
-        complete_per_sec=0.0,
-        cooldown_ok=True,
+        ingress_per_sec=ingress,
+        complete_per_sec=complete,
+        cooldown_ok=time.time() >= float(state.cooldown_until),
         in_node_worker_cap=int(os.getenv("LINAS_QUEUE_CONCURRENCY_CAP_HIGH") or "8") * 2,
     )
