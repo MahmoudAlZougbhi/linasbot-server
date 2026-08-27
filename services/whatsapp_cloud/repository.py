@@ -9,7 +9,7 @@ import hashlib
 import secrets
 import uuid
 from datetime import UTC, timedelta
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -279,5 +279,64 @@ class WhatsAppCloudRepository(WhatsAppCloudRepositoryRuntimeMixin):
             connection_id=conn.id,
         )
         return str(opened["access_token"])
+
+    def rotate_connection_credential(
+        self,
+        conn: WhatsAppConnection,
+        *,
+        access_token: str,
+        scopes: list[str],
+        expected_generation: int,
+    ) -> WhatsAppCredential:
+        """Atomically switch a connected row to a new sealed credential generation."""
+
+        expected_connection_id = conn.id
+        expected_credential_id = conn.credential_id
+        expected_tenant_id = conn.tenant_id
+        expected_waba_id = conn.waba_id
+        expected_phone_number_id = conn.phone_number_id
+        expected_meta_app_id = conn.meta_app_id
+        self.session.refresh(conn, with_for_update=True)
+        credential = cast(
+            WhatsAppCredential | None,
+            self.session.get(WhatsAppCredential, conn.credential_id, with_for_update=True)
+            if conn.credential_id
+            else None,
+        )
+        if credential is None:
+            raise PermissionError("credential_missing")
+        if (
+            conn.id != expected_connection_id
+            or conn.credential_id != expected_credential_id
+            or conn.tenant_id != expected_tenant_id
+            or conn.waba_id != expected_waba_id
+            or conn.phone_number_id != expected_phone_number_id
+            or conn.meta_app_id != expected_meta_app_id
+            or conn.connection_source != "meta_app_review_test"
+            or conn.lifecycle_status != "connected"
+            or credential.id != conn.credential_id
+            or credential.tenant_id != conn.tenant_id
+            or credential.connection_id != conn.id
+            or credential.revoked_at is not None
+        ):
+            raise PermissionError("credential_rotation_state_conflict")
+        if (
+            int(conn.credential_generation or 0) != expected_generation
+            or int(credential.generation or 0) != expected_generation
+        ):
+            raise PermissionError("credential_generation_conflict")
+        generation = expected_generation + 1
+        credential.ciphertext = seal_whatsapp_token(
+            access_token=access_token,
+            tenant_id=conn.tenant_id,
+            connection_id=conn.id,
+            scopes=scopes,
+        )
+        credential.generation = generation
+        credential.scopes = list(scopes)
+        conn.credential_generation = generation
+        conn.granted_scopes = list(scopes)
+        self.session.flush()
+        return credential
 
     # --- conversations / control ---
