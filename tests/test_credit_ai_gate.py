@@ -95,7 +95,7 @@ async def test_channel_orchestrator_does_not_generate_at_zero(
         raise AssertionError("Answer Luna must not run at 0 credits")
 
     monkeypatch.setattr("services.customer_reply_v2.faq_fast_path.try_faq_fast_path", _must_not_faq)
-    monkeypatch.setattr("services.customer_reply_v2.orchestrator.run_answer_luna", _must_not_answer)
+    monkeypatch.setattr("services.customer_reply_v2.orchestrator_llm.run_answer_luna", _must_not_answer)
 
     out = await run_customer_reply_v2_dm(
         tenant_id="clinic",

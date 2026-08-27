@@ -62,6 +62,7 @@ def _try_enqueue(
     conversation_key: str,
     claim_token: str = "",
     claim_generation: int = 1,
+    trace_id: str = "",
 ) -> str | None:
     try:
         from services.job_queue import job_queue
@@ -89,6 +90,7 @@ def _try_enqueue(
                 "_logical_queue": logical,
                 "_claim_token": claim_token,
                 "_claim_generation": claim_generation,
+                "_trace_id": trace_id,
             },
             idempotency_key=f"meta_inbound:{event_id}",
         )
@@ -107,6 +109,12 @@ def persist_meta_dm_accepted(resolved: ResolvedMetaEvent, *, global_key: str) ->
     tenant_id = str(getattr(resolved.settings, "tenant_id", "") or resolved.binding.tenant_id or "")
     event_id = stable_event_id("meta_dm", global_key)
     now = time.time()
+    event_payload = dict(resolved.event)
+    from services.scale.trace_span import mark, new_trace_id
+
+    trace_id = new_trace_id()
+    event_payload["_linas_trace_id"] = trace_id
+    mark(trace_id, "webhook_received")
     record = InboundEventRecord(
         event_id=event_id,
         kind="meta_dm",
@@ -116,7 +124,7 @@ def persist_meta_dm_accepted(resolved: ResolvedMetaEvent, *, global_key: str) ->
         state="accepted",
         created_at=now,
         updated_at=now,
-        payload=dict(resolved.event),
+        payload=event_payload,
         settings_snapshot=_settings_snapshot(resolved.settings),
         binding_snapshot={
             "binding_id": resolved.binding.binding_id,
@@ -151,6 +159,8 @@ def enqueue_meta_inbound_event(event_id: str, *, claim_handle: Any = None) -> st
         claim_generation = int(getattr(claim_handle, "generation", 1) or 1) if claim_handle is not None else 1
     except (TypeError, ValueError):
         claim_generation = 1
+    payload = getattr(record, "payload", None)
+    payload_map = payload if isinstance(payload, dict) else {}
     job_id = _try_enqueue(
         event_id=event_id,
         kind=record.kind,
@@ -158,9 +168,15 @@ def enqueue_meta_inbound_event(event_id: str, *, claim_handle: Any = None) -> st
         conversation_key=record.conversation_key,
         claim_token=claim_token,
         claim_generation=claim_generation,
+        trace_id=str(payload_map.get("_linas_trace_id") or ""),
     )
     if job_id and job_id != _AMBIGUOUS_ENQUEUE:
         mark_inbound_state(event_id, state="queued", queue_job_id=job_id)
+        trace_id = str(payload_map.get("_linas_trace_id") or "")
+        if trace_id:
+            from services.scale.trace_span import mark
+
+            mark(trace_id, "queued")
         return "queued"
     if job_id == _AMBIGUOUS_ENQUEUE:
         # The queue may have accepted the deterministic job before its ACK was

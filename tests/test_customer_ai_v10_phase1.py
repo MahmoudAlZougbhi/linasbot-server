@@ -96,7 +96,7 @@ async def test_safety_gate_blocks_before_luna(v2_env, monkeypatch):
         called["luna"] = True
         raise AssertionError("Luna must not run after safety block")
 
-    monkeypatch.setattr("services.customer_reply_v2.orchestrator.run_retrieval_luna", _boom)
+    monkeypatch.setattr("services.customer_reply_v2.orchestrator_llm.run_retrieval_luna", _boom)
     out = await run_customer_reply_v2_dm(
         tenant_id="t_safe",
         message="child sexual content",

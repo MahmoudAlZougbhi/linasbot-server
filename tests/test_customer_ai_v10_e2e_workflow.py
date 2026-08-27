@@ -70,8 +70,8 @@ async def test_s03_faq_direct(v2_env, monkeypatch: pytest.MonkeyPatch) -> None:
     async def _boom(**_k):
         raise AssertionError("Luna/Tera must not run on FAQ direct")
 
-    monkeypatch.setattr("services.customer_reply_v2.orchestrator.run_retrieval_luna", _boom)
-    monkeypatch.setattr("services.customer_reply_v2.orchestrator.run_answer_luna", _boom)
+    monkeypatch.setattr("services.customer_reply_v2.orchestrator_llm.run_retrieval_luna", _boom)
+    monkeypatch.setattr("services.customer_reply_v2.orchestrator_llm.run_answer_luna", _boom)
     out = await run_customer_reply_v2_dm(
         tenant_id="t_e2e_s03",
         message="شو أوقات الدوام؟",

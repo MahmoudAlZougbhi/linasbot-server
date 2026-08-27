@@ -6,6 +6,7 @@ import asyncio
 import hmac
 import json
 import logging
+import time
 from typing import Any
 
 from fastapi import HTTPException, Request
@@ -107,6 +108,7 @@ async def verify_meta_messaging_webhook(request: Request) -> Any:
 
 @app.post("/webhook/meta-messaging")
 async def receive_meta_messaging_webhook(request: Request) -> Any:
+    ack_started = time.perf_counter()
     settings = get_meta_messaging_settings()
     raw_body = await request.body()
 
@@ -267,6 +269,12 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
             comment_duplicates,
             ",".join(auth_flows) or "none",
         )
+    try:
+        from services.scale.latency_histogram import observe
+
+        observe("webhook_ack_ms", max(0.0, (time.perf_counter() - ack_started) * 1000.0))
+    except Exception:
+        pass
     return JSONResponse(
         {
             "status": "received",

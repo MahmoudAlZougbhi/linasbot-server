@@ -203,6 +203,12 @@ async def handle_operator_deliver(job: QueueJob) -> dict[str, Any]:
     return await _impl(job)
 
 
+async def handle_combine_flush(job: QueueJob) -> dict[str, Any]:
+    from services.queues.combine_flush_handler import handle_combine_flush as _impl
+
+    return await _impl(job)
+
+
 HANDLERS: dict[str, Handler] = {
     "publish_scheduled": handle_publish_scheduled,
     "creative_image": handle_creative_expensive,
@@ -221,6 +227,7 @@ HANDLERS: dict[str, Handler] = {
     "web_chat_generate": handle_web_chat_generate,
     "tiktok_webhook_event": handle_tiktok_webhook_event,
     "operator_deliver": handle_operator_deliver,
+    "combine_flush": handle_combine_flush,
 }
 
 

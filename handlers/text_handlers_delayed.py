@@ -32,7 +32,7 @@ async def _delayed_process_messages(
     text_turn_epoch: incremented in handle_message per schedule wave; stale tasks must not send.
     """
     try:
-        user_data["_ai_turn_trace_id"] = str(uuid.uuid4())
+        user_data["_ai_turn_trace_id"] = str(user_data.get("_linas_trace_id") or uuid.uuid4())
         trace = user_data["_ai_turn_trace_id"]
 
         _raw_send = send_message_func
@@ -76,38 +76,70 @@ async def _delayed_process_messages(
             await asyncio.sleep(delay)
 
         combined_message = None
-        if not config.user_pending_messages[user_id]:
-            try:
-                from services.scale.conversation_state_redis import get_pending_messages
-                from services.scale.redis_claims import redis_claims_fail_closed
+        from services.scale.message_combine_store import (
+            combine_redis_available,
+            drain_if_due,
+            generation_is_current,
+        )
 
-                remote_pending = get_pending_messages(user_id)
-                if remote_pending:
-                    config.user_pending_messages[user_id].extend(remote_pending)
-                elif redis_claims_fail_closed() and remote_pending is None:
-                    # Do not assume another node has no pending chunks when Redis is down.
-                    pass
-            except Exception:
-                pass
-        if config.user_pending_messages[user_id]:
-            combined_message = " ".join(config.user_pending_messages[user_id])
-            config.user_pending_messages[user_id].clear()
-            try:
-                from services.scale.conversation_state_redis import set_pending_messages
-
-                set_pending_messages(user_id, [])
-            except Exception:
-                pass
-            user_data.pop("_dashboard_last_message_for_fallback", None)
-            user_data.pop("_dashboard_test_turn_sticky", None)
-        elif user_data.get("_dashboard_test_simulation"):
-            fb = user_data.pop("_dashboard_last_message_for_fallback", None)
-            if fb and str(fb).strip():
-                combined_message = str(fb).strip()
-                print(
-                    f"[_delayed_process_messages] INFO: dashboard test fallback (pending queue was empty) "
-                    f"user={user_id!r} len={len(combined_message)}"
+        redis_chunks = None
+        if combine_redis_available():
+            gen = int(user_data.get("_combine_generation") or 0)
+            if gen and not generation_is_current(user_id, gen):
+                user_data["_combine_outcome"] = "superseded"
+                return
+            redis_chunks = drain_if_due(user_id)
+            if redis_chunks is None:
+                user_data["_combine_outcome"] = "superseded"
+                return
+            if redis_chunks:
+                combined_message = " ".join(
+                    str(item.get("text") or "") for item in redis_chunks if str(item.get("text") or "").strip()
                 )
+                config.user_pending_messages[user_id].clear()
+                extra_mids = [str(item.get("mid") or "") for item in redis_chunks if str(item.get("mid") or "")]
+                extra_events = [str(item.get("event_id") or "") for item in redis_chunks if str(item.get("event_id") or "")]
+                if extra_events:
+                    user_data["_combine_event_ids"] = extra_events
+                if extra_mids:
+                    batch = list(user_data.get("_batch_inbound_mids") or [])
+                    for mid in extra_mids:
+                        if mid not in batch:
+                            batch.append(mid)
+                    user_data["_batch_inbound_mids"] = batch
+
+        if combined_message is None:
+            if not config.user_pending_messages[user_id]:
+                try:
+                    from services.scale.conversation_state_redis import get_pending_messages
+                    from services.scale.redis_claims import redis_claims_fail_closed
+
+                    remote_pending = get_pending_messages(user_id)
+                    if remote_pending:
+                        config.user_pending_messages[user_id].extend(remote_pending)
+                    elif redis_claims_fail_closed() and remote_pending is None:
+                        pass
+                except Exception:
+                    pass
+            if config.user_pending_messages[user_id]:
+                combined_message = " ".join(config.user_pending_messages[user_id])
+                config.user_pending_messages[user_id].clear()
+                try:
+                    from services.scale.conversation_state_redis import set_pending_messages
+
+                    set_pending_messages(user_id, [])
+                except Exception:
+                    pass
+                user_data.pop("_dashboard_last_message_for_fallback", None)
+                user_data.pop("_dashboard_test_turn_sticky", None)
+            elif user_data.get("_dashboard_test_simulation"):
+                fb = user_data.pop("_dashboard_last_message_for_fallback", None)
+                if fb and str(fb).strip():
+                    combined_message = str(fb).strip()
+                    print(
+                        f"[_delayed_process_messages] INFO: dashboard test fallback (pending queue was empty) "
+                        f"user={user_id!r} len={len(combined_message)}"
+                    )
 
         if not combined_message and user_data.get("_dashboard_test_simulation"):
             sticky = user_data.pop("_dashboard_test_turn_sticky", None)
@@ -190,6 +222,15 @@ async def _delayed_process_messages(
                         f"[ai-turn] trace_id={trace} claim=SKIPPED(no_mids_no_bodyfp) "
                         f"combined_len={len(combined_message or '')} — distributed dedupe inactive for this turn"
                     )
+                try:
+                    from services.scale.trace_span import mark
+                    from services.scale.latency_histogram import observe
+                    import time as _time
+
+                    mark(str(trace), "ai_started")
+                    _ai_t0 = _time.time()
+                except Exception:
+                    _ai_t0 = None
                 await _process_and_respond(
                     user_id,
                     user_name=config.user_names.get(user_id, "عميل"),
@@ -198,6 +239,12 @@ async def _delayed_process_messages(
                     send_message_func=outbound_send,
                     send_action_func=send_action_func,
                 )
+                if _ai_t0 is not None:
+                    try:
+                        mark(str(trace), "ai_finished")
+                        observe("ai_ms", max(0.0, (_time.time() - _ai_t0) * 1000.0))
+                    except Exception:
+                        pass
                 delivery_summary = finalize_delivery({"user_data": user_data})
                 if delivery_summary.get("delivery") != "delivered" and key_basis:
                     from services.outbound_turn_idempotency import release_ai_turn_claim
@@ -236,6 +283,10 @@ async def _delayed_process_messages(
                     await outbound_send(user_id, empty_q_msg)
                 except Exception as eq_err:
                     print(f"[_delayed_process_messages] Dashboard empty-queue notify failed: {eq_err}")
+
+        from services.scale.conversation_session import persist_from_process
+
+        persist_from_process(user_id)
 
     except asyncio.CancelledError:
         raise

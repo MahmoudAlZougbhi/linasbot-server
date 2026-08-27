@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+import time
 import uuid
 from typing import Any
 
@@ -92,13 +93,36 @@ class WorkerRuntime:
             await asyncio.sleep(0.05)
             return
         try:
+            from services.scale.replica_controller import worker_is_draining
+
+            if worker_is_draining(self.worker_id):
+                await asyncio.sleep(0.05)
+                return
+        except Exception:
+            pass
+        try:
             self._backend.heartbeat(worker_id=self.worker_id, queue=self.queue)
+            self._backend.reclaim_expired_leases(self.queue)
             job = self._backend.claim(self.queue, worker_id=self.worker_id, timeout=3)
         except Exception:
             await asyncio.sleep(0.5)
             return
         if job is None:
             return
+        try:
+            wait_ms = max(0.0, (time.time() - float(job.created_at)) * 1000.0)
+            from services.scale.latency_histogram import observe
+
+            observe("job_wait_ms", wait_ms)
+            trace_id = str((job.payload or {}).get("trace_id") or (job.payload or {}).get("_trace_id") or "")
+            if trace_id:
+                from services.scale.trace_context import set_trace_id
+                from services.scale.trace_span import mark
+
+                set_trace_id(trace_id)
+                mark(trace_id, "worker_started")
+        except Exception:
+            pass
         if not shutdown_coordinator.track_job_enter():
             self._requeue(job, 0.2)
             return
@@ -122,17 +146,20 @@ class WorkerRuntime:
             held_inflight = True
             conv_key = self._conversation_key(job)
             if conv_key:
-                from services.scale.conversation_lock import ConversationLock
+                from services.scale.worker_lock_policy import job_requires_conversation_lock
 
-                try:
-                    conv_lease = ConversationLock().try_acquire(conv_key, ttl_seconds=max(30, int(job.timeout_seconds)))
-                except Exception:
-                    self._requeue(job, 0.5)
-                    await asyncio.sleep(0.5)
-                    return
-                if conv_lease is None:
-                    self._requeue(job, 0.5)
-                    return
+                if job_requires_conversation_lock(str(job.job_type or "")):
+                    from services.scale.conversation_lock import ConversationLock
+
+                    try:
+                        conv_lease = ConversationLock().try_acquire(conv_key, ttl_seconds=max(30, int(job.timeout_seconds)))
+                    except Exception:
+                        self._requeue(job, 0.5)
+                        await asyncio.sleep(0.5)
+                        return
+                    if conv_lease is None:
+                        self._requeue(job, 0.5)
+                        return
             try:
                 self._backend.incr_tenant_inflight(job.tenant_id)
                 counted_inflight = True
@@ -146,11 +173,23 @@ class WorkerRuntime:
                     self._fail(job, error=f"unknown_job_type:{job.job_type}", retry=False)
                     self._refund_if_needed(job)
                     return
-                await asyncio.wait_for(handler(job), timeout=job.timeout_seconds)
+
+                async def _refresh_lease() -> None:
+                    while True:
+                        await asyncio.sleep(8)
+                        if not self._backend.refresh_lease(job.id, self.worker_id):
+                            return
+
+                refresh_task = asyncio.create_task(_refresh_lease())
                 try:
-                    self._backend.complete(job)
-                except Exception:
-                    await asyncio.sleep(0.5)
+                    await asyncio.wait_for(handler(job), timeout=job.timeout_seconds)
+                    try:
+                        self._backend.complete(job)
+                    except Exception:
+                        await asyncio.sleep(0.5)
+                finally:
+                    refresh_task.cancel()
+                    await asyncio.gather(refresh_task, return_exceptions=True)
             except JobNotReady:
                 self._requeue(job, 0.2)
             except PermanentJobError as exc:

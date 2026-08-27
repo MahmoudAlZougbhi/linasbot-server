@@ -61,6 +61,7 @@ class QueueJob:
         reservation_id: str | None = None,
         max_attempts: int = 5,
         timeout_seconds: int = 300,
+        available_at: float | None = None,
     ) -> QueueJob:
         now = time.time()
         return cls(
@@ -77,5 +78,5 @@ class QueueJob:
             idempotency_key=idempotency_key,
             reservation_id=reservation_id,
             timeout_seconds=timeout_seconds,
-            available_at=now,
+            available_at=now if available_at is None else float(available_at),
         )

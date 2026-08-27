@@ -95,9 +95,11 @@ async def ready() -> Any:
         overall_ok = False
 
     openai_ok = bool((os.getenv("OPENAI_API_KEY") or "").strip())
-    checks["openai_api_key"] = {"ok": openai_ok}
-    if not openai_ok:
-        overall_ok = False
+    checks["openai_api_key"] = {
+        "ok": openai_ok,
+        "required_for_new_ai": True,
+        "readiness_dependency": False,
+    }
 
     from services.meta_surface_secret_separation import runtime_meta_surface_secret_separation
 

@@ -6,11 +6,9 @@ import time
 from typing import Any
 
 from services.cm.version_store import PublishedVersionError
-from services.customer_reply_v2.answer_luna import run_answer_luna
 from services.customer_reply_v2.channel_metadata import build_channel_metadata
 from services.customer_reply_v2.conversation_window import load_dm_conversation_window
 from services.customer_reply_v2.customer_facts import apply_message_fact_updates, load_customer_facts
-from services.customer_reply_v2.faq_evidence import merge_faq_evidence
 from services.customer_reply_v2.flags import (
     customer_ai_v10_runtime_enabled,
     customer_answer_model_name,
@@ -24,12 +22,11 @@ from services.customer_reply_v2.invocation_meter import CustomerTurnMeter, Invoc
 from services.customer_reply_v2.manifest import get_cached_manifest, load_fixed_answer_context
 from services.customer_reply_v2.models import CustomerReplyOutcome
 from services.customer_reply_v2.observability import build_safe_trace
-from services.customer_reply_v2.orchestrator_answer import finalize_answer_with_repair
 from services.customer_reply_v2.orchestrator_faq import evaluate_faq_turn, faq_direct_outcome_kwargs, faq_trace_fields
+from services.customer_reply_v2.orchestrator_llm import run_dm_luna_then_tera
 from services.customer_reply_v2.orchestrator_side_effects import plan_turn_side_effects
 from services.customer_reply_v2.orchestrator_validate import safe_failure_reply
 from services.customer_reply_v2.policy import enforce_restricted_and_handoff
-from services.customer_reply_v2.retrieval_luna import run_retrieval_luna
 from services.customer_reply_v2.safety_gate import evaluate_customer_safety
 
 
@@ -287,8 +284,8 @@ async def run_customer_reply_v2_dm(
         )
 
     try:
-        retrieval_model = customer_retrieval_model_name()
-        answer_model = customer_answer_model_name()
+        customer_retrieval_model_name()
+        customer_answer_model_name()
     except Exception as exc:
         return _out(
             stop=True,
@@ -298,96 +295,43 @@ async def run_customer_reply_v2_dm(
             evidence_status="insufficient_final",
             metadata={"flags": flags_snapshot(), "blocker": str(exc)},
         )
-
-    retrieval = await run_retrieval_luna(
-        tenant_id=tenant_id,
-        message=message,
-        customer_profile=profile,
-        dm_window=luna_history,
-        scripted_tool_calls=scripted_retrieval,
-        conversation_id=conversation_id or None,
-        channel=channel,
-        reply_to_message_id=reply_to_message_id or None,
-        channel_metadata=channel_meta,
-        faq_candidates=faq.evidence_candidates,
-        customer_id=provider_sender_id or user_id,
-    )
-    retrieval = merge_faq_evidence(retrieval, faq.evidence_candidates)
-    meter.record(
-        InvocationRecord(
-            operation="luna_retrieval",
-            model=retrieval.requested_model or retrieval_model,
-            requested_reasoning_effort=retrieval.requested_reasoning_effort,
-            effective_reasoning_effort=retrieval.effective_reasoning_effort,
-            input_tokens=retrieval.prompt_tokens,
-            output_tokens=retrieval.completion_tokens,
-            tool_rounds=retrieval.rounds_used,
-            success=not bool(retrieval.error),
-            failure_stage=retrieval.error,
+    retrieval, answer, llm_extra = await run_dm_luna_then_tera(
+            tenant_id=tenant_id,
+            message=message,
+            profile=profile,
+            luna_history=luna_history,
+            tera_history=tera_history,
+            scripted_retrieval=scripted_retrieval,
+            conversation_id=conversation_id,
+            channel=channel,
+            reply_to_message_id=reply_to_message_id,
+            channel_meta=channel_meta,
+            faq_candidates=faq.evidence_candidates,
+            provider_sender_id=provider_sender_id,
+            user_id=user_id,
+            asset_id=asset_id,
+            response_language=response_language,
+            detected_language=detected_language,
+            fixture_answer=fixture_answer,
+            meter=meter,
         )
-    )
-    if retrieval.error and retrieval.error.startswith("retrieval_model_blocker:"):
+    if llm_extra.get("blocker"):
         return _out(
             stop=True,
             reply=safe_failure_reply(response_language, kind="model"),
             reason="retrieval_model_blocker",
-            error=retrieval.error,
+            error=str(llm_extra["blocker"]),
             evidence_status="insufficient_final",
-            metadata={"flags": flags_snapshot(), "blocker": retrieval.error},
+            metadata={"flags": flags_snapshot(), "blocker": llm_extra["blocker"]},
         )
-
-    answer = await run_answer_luna(
-        tenant_id=tenant_id,
-        message=message,
-        retrieval=retrieval,
-        customer_profile=profile,
-        history_messages=tera_history,
-        channel=channel,
-        conversation_id=conversation_id or None,
-        asset_id=asset_id or None,
-        provider_sender_id=provider_sender_id or user_id or None,
-        response_language=response_language,
-        detected_language=detected_language,
-        fixture_reply=fixture_answer,
-        channel_metadata=channel_meta,
-    )
-    (
-        answer,
-        reply_text,
-        prompt_tokens,
-        completion_tokens,
-        repair_attempts,
-        validation_ok,
-        failed_rules,
-    ) = await finalize_answer_with_repair(
-        tenant_id=tenant_id,
-        message=message,
-        retrieval=retrieval,
-        customer_profile=profile,
-        tera_history=tera_history,
-        channel=channel,
-        conversation_id=conversation_id or None,
-        asset_id=asset_id or None,
-        provider_sender_id=provider_sender_id or user_id or None,
-        response_language=response_language,
-        detected_language=detected_language,
-        fixture_answer=fixture_answer,
-        channel_meta=channel_meta,
-        answer=answer,
-    )
-
-    meter.record(
-        InvocationRecord(
-            operation="tera_repair" if repair_attempts else "tera_answer",
-            model=answer.returned_model or answer_model,
-            requested_reasoning_effort=answer.requested_reasoning_effort,
-            effective_reasoning_effort=answer.effective_reasoning_effort,
-            input_tokens=answer.prompt_tokens,
-            output_tokens=answer.completion_tokens,
-            repair=bool(repair_attempts),
-            success=bool(reply_text),
-        )
-    )
+    assert retrieval is not None and answer is not None
+    reply_text = str(llm_extra.get("reply_text") or "")
+    prompt_tokens = int(llm_extra.get("prompt_tokens") or 0)
+    completion_tokens = int(llm_extra.get("completion_tokens") or 0)
+    repair_attempts = int(llm_extra.get("repair_attempts") or 0)
+    validation_ok = bool(llm_extra.get("validation_ok", True))
+    failed_rules = list(llm_extra.get("failed_rules") or [])
+    stages_ms = dict(llm_extra.get("stages_ms") or {})
 
     # Prove fixed answer context was loaded for generated path
     fixed = load_fixed_answer_context(tenant_id)
@@ -416,8 +360,8 @@ async def run_customer_reply_v2_dm(
         validation_ok=validation_ok,
         repair_attempts=repair_attempts,
         requested_models={
-            "retrieval": retrieval.requested_model or retrieval_model,
-            "answer": answer.requested_model or answer_model,
+            "retrieval": retrieval.requested_model or "",
+            "answer": answer.requested_model or "",
         },
         returned_models={
             "retrieval": retrieval.returned_model,
@@ -461,7 +405,7 @@ async def run_customer_reply_v2_dm(
             "name_source": facts.name_source,
             "gender": facts.gender,
             "ai_called": True,
-            "model": answer.returned_model or answer_model,
+            "model": answer.returned_model or answer.requested_model,
             "requested_model_retrieval": retrieval.requested_model,
             "requested_model_answer": answer.requested_model,
             "reasoning_effort_answer": getattr(answer, "effective_reasoning_effort", None) or answer.reasoning_effort,
@@ -485,6 +429,7 @@ async def run_customer_reply_v2_dm(
             "authoritative_selector": "retrieval_luna",
             "classic_fallback": False,
             "active_product_id": retrieval.active_product_id,
+            "ai_stage_ms": stages_ms,
             **side_meta,
         },
         error=retrieval.error,
