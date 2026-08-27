@@ -87,6 +87,15 @@ class IsolatedReplica:
                 if self.first_job_at is None:
                     self.first_job_at = time.time()
                 self._beat("busy")
+                from services.queues.config import lease_heartbeat_seconds
+                from services.queues.lease_heartbeat import bind_claimed_heartbeat
+
+                heartbeat = bind_claimed_heartbeat(
+                    backend=self.backend,
+                    job=job,
+                    worker_id=self.worker_id,
+                    interval_seconds=lease_heartbeat_seconds(),
+                )
                 try:
                     await self.handler(job)
                     self.backend.complete(job)
@@ -99,6 +108,7 @@ class IsolatedReplica:
                     self.last_exit = type(exc).__name__
                     self.backend.fail(job, error=f"{type(exc).__name__}:{exc}", retry=True)
                 finally:
+                    heartbeat.stop()
                     self.current_job_id = ""
                     self.inflight = max(0, self.inflight - 1)
         finally:

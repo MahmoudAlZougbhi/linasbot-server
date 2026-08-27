@@ -25,9 +25,22 @@ class QueueJob:
     timeout_seconds: int = 300
     available_at: float = 0.0
     updated_at: float = field(default_factory=time.time)
+    lease_owner: str = field(default="", compare=False, repr=False)
+    lease_token: str = field(default="", compare=False, repr=False)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    @staticmethod
+    def wire_for(owner: str, token: str) -> str:
+        own = str(owner or "").strip()
+        tok = str(token or "").strip()
+        if not own or not tok:
+            return ""
+        return f"{own}::{tok}"
+
+    def lease_wire(self) -> str:
+        return self.wire_for(self.lease_owner, self.lease_token)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> QueueJob:
@@ -47,6 +60,8 @@ class QueueJob:
             timeout_seconds=int(data.get("timeout_seconds") or 300),
             available_at=float(data.get("available_at") or 0.0),
             updated_at=float(data.get("updated_at") or time.time()),
+            lease_owner=str(data.get("lease_owner") or ""),
+            lease_token=str(data.get("lease_token") or ""),
         )
 
     @classmethod

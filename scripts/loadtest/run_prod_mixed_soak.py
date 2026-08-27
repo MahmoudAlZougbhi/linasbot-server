@@ -127,7 +127,7 @@ def main() -> int:
 
     from services.scale.soak_arm import arm, disarm
 
-    duration = max(60, min(int(args.duration_sec), 3 * 60 * 60))
+    duration = max(60, min(int(args.duration_sec), 4 * 60 * 60))
     arm(ttl_seconds=duration + 300)
     dm_binding, comment_binding = _pick_bindings()
     dm_settings = _settings(dm_binding)

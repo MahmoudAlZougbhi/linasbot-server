@@ -42,6 +42,17 @@ def test_complete_removes_requeued_copy(monkeypatch) -> None:
     assert leftover is None
 
 
+def test_refresh_requires_matching_token(monkeypatch) -> None:
+    backend = _backend(monkeypatch)
+    job = QueueJob.new(queue="high_priority", job_type="combine_flush", tenant_id="t1", payload={})
+    backend.enqueue(job)
+    claimed = backend.claim("high_priority", worker_id="w1", timeout=1)
+    assert claimed is not None
+    assert backend.refresh_lease(claimed.id, "w1") is False
+    assert backend.refresh_lease(claimed.id, "w1", claimed.lease_token) is True
+    assert backend.refresh_lease(claimed.id, "w-other", claimed.lease_token) is False
+
+
 def test_persist_then_kill_before_job_does_not_lose_work(monkeypatch) -> None:
     backend = _backend(monkeypatch)
     job = QueueJob.new(queue="high_priority", job_type="meta_inbound_process", tenant_id="t1", payload={"n": 1})

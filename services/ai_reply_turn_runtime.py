@@ -128,6 +128,12 @@ def on_ai_generated(ctx: dict[str, Any]) -> None:
     from services.scale.turn_pipeline import set_pipeline_stage
 
     set_pipeline_stage(str(lid), "ai_generated")
+    try:
+        from services.scale.job_progress import mark_stage
+
+        mark_stage("ai_generated")
+    except Exception:
+        pass
     capture_after_reply_persisted(
         str(lid),
         prompt_tokens=flow_meta.get("prompt_tokens"),

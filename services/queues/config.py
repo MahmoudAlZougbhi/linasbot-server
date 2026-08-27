@@ -25,6 +25,27 @@ DEFAULT_TENANT_INFLIGHT: Final[int] = int(os.getenv("LINAS_QUEUE_TENANT_INFLIGHT
 HEARTBEAT_TTL_SECONDS: Final[int] = int(os.getenv("LINAS_QUEUE_HEARTBEAT_TTL_SECONDS", "30"))
 
 
+def lease_ttl_seconds() -> int:
+    """Worker-liveness window only. Not a maximum job duration.
+
+    Default 20s covers several 3s heartbeats plus event-loop lag. Luna/Tera may
+    run for minutes while the dedicated heartbeat thread keeps this key alive.
+    """
+    raw = (os.getenv("LINAS_QUEUE_LEASE_TTL_SECONDS") or "20").strip()
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 20
+
+
+def lease_heartbeat_seconds() -> float:
+    raw = (os.getenv("LINAS_QUEUE_LEASE_HEARTBEAT_SECONDS") or "3").strip()
+    try:
+        return max(0.05, float(raw))
+    except ValueError:
+        return 3.0
+
+
 def redis_url() -> str | None:
     raw = (os.getenv("REDIS_URL") or os.getenv("LINAS_REDIS_URL") or "").strip()
     return raw or None

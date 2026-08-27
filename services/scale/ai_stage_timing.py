@@ -20,6 +20,12 @@ async def time_stage(name: str) -> AsyncIterator[dict[str, float]]:
     stage_end = f"ai_{name}_finished"
     if tid:
         mark(tid, stage_start)
+    try:
+        from services.scale.job_progress import mark_stage
+
+        mark_stage(f"{name}_started")
+    except Exception:
+        pass
     payload: dict[str, float] = {}
     try:
         yield payload
@@ -29,6 +35,12 @@ async def time_stage(name: str) -> AsyncIterator[dict[str, float]]:
         observe(f"ai_{name}_ms", elapsed_ms)
         if tid:
             mark(tid, stage_end)
+        try:
+            from services.scale.job_progress import mark_stage
+
+            mark_stage(f"{name}_completed")
+        except Exception:
+            pass
 
 
 def record_gap_ms(from_stage: str, to_stage: str, gap_ms: float) -> None:

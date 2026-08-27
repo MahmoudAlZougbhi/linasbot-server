@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
 from typing import Any
 
 from services.queues.config import (
@@ -11,9 +12,12 @@ from services.queues.config import (
     HEARTBEAT_TTL_SECONDS,
     QUEUE_NAMES,
     key_prefix,
+    lease_ttl_seconds,
     redis_url,
 )
+from services.queues.job_lease import JobLease, lease_log, parse_removed
 from services.queues.models import QueueJob
+from services.scale.metrics import incr
 
 
 class RedisUnavailableError(RuntimeError):
@@ -39,9 +43,25 @@ class RedisQueueBackend:
         self._r = _client()
         self.backend = "redis"
         self.production_ready = True
+        self._lease_ops = JobLease(self._r, key_prefix())
+
+    def _lease(self) -> JobLease:
+        return self._lease_ops
 
     def _k(self, *parts: str) -> str:
         return ":".join((key_prefix(), *parts))
+
+    def _job_fields(self, job: QueueJob) -> dict[str, str]:
+        return {
+            "data": json.dumps(job.to_dict()),
+            "status": str(job.status),
+            "lease_token": str(job.lease_token or ""),
+            "lease_owner": str(job.lease_owner or ""),
+        }
+
+    def _trace_id(self, job: QueueJob) -> str:
+        payload = job.payload or {}
+        return str(payload.get("trace_id") or payload.get("_trace_id") or "")
 
     def _idem_key(self, queue: str, tenant_id: str, idempotency_key: str) -> str:
         return self._k("idem", queue, tenant_id, idempotency_key)
@@ -87,7 +107,7 @@ class RedisQueueBackend:
                 return found
         now = time.time()
         pipe = self._r.pipeline()
-        pipe.hset(self._k("job", job.id), mapping={"data": json.dumps(job.to_dict())})
+        pipe.hset(self._k("job", job.id), mapping=self._job_fields(job))
         if job.available_at > now:
             pipe.zadd(self._k("delayed", job.queue), {job.id: job.available_at})
         else:
@@ -106,7 +126,7 @@ class RedisQueueBackend:
 
     def _save(self, job: QueueJob) -> None:
         job.updated_at = time.time()
-        self._r.hset(self._k("job", job.id), mapping={"data": json.dumps(job.to_dict())})
+        self._r.hset(self._k("job", job.id), mapping=self._job_fields(job))
         delayed = self._k("delayed", job.queue)
         if self._r.zscore(delayed, job.id) is not None:
             self._r.zadd(delayed, {job.id: job.available_at})
@@ -163,68 +183,148 @@ class RedisQueueBackend:
             return None
         job.status = "processing"
         job.attempts += 1
+        job.lease_owner = str(worker_id)
+        job.lease_token = uuid.uuid4().hex
         self._save(job)
         self._unmark_waiting(job)
-        self._r.set(self._k("lease", job.id), worker_id, ex=self._lease_ttl())
+        self._r.set(self._k("lease", job.id), job.lease_wire(), ex=self._lease_ttl())
         return job
 
     def _lease_ttl(self) -> int:
-        return max(15, HEARTBEAT_TTL_SECONDS * 2)
+        return int(lease_ttl_seconds())
 
-    def refresh_lease(self, job_id: str, worker_id: str) -> bool:
-        key = self._k("lease", job_id)
-        current = self._r.get(key)
-        if str(current or "") != str(worker_id):
+    def refresh_lease(self, job_id: str, worker_id: str, lease_token: str = "") -> bool:
+        token = str(lease_token or "").strip()
+        owner = str(worker_id or "").strip()
+        if not token or not owner:
             return False
-        self._r.expire(key, self._lease_ttl())
-        return True
+        return self._lease().refresh(
+            job_id=str(job_id),
+            wire=QueueJob.wire_for(owner, token),
+            ttl_seconds=self._lease_ttl(),
+        )
 
     def reclaim_expired_leases(self, queue: str, *, limit: int = 50) -> int:
-        """Requeue jobs whose worker died (lease key gone) so work is not lost."""
+        """Requeue jobs whose worker died (lease key gone). Long jobs with a live heartbeat stay owned."""
+
         processing = self._k("processing", queue)
         job_ids = self._r.lrange(processing, 0, max(0, limit - 1)) or []
         reclaimed = 0
+        now = time.time()
         for job_id in job_ids:
             if self._r.exists(self._k("lease", str(job_id))):
                 continue
             job = self.get(str(job_id))
-            if job is None or job.status in {"completed", "dead"}:
+            if job is None:
                 self._r.lrem(processing, 1, job_id)
                 continue
-            if job.attempts >= (job.max_attempts or DEFAULT_MAX_ATTEMPTS):
-                self.fail(job, error="lease_expired", retry=False)
-                reclaimed += 1
+            expected_token = str(job.lease_token or "")
+            if job.status not in {"completed", "dead"}:
+                incr("lease_expired")
+            next_status = "dead" if job.attempts >= (job.max_attempts or DEFAULT_MAX_ATTEMPTS) else "queued"
+            if job.status in {"completed", "dead"}:
+                next_status = str(job.status)
+            payload = dict(job.to_dict())
+            payload["lease_token"] = ""
+            payload["lease_owner"] = ""
+            if next_status == "queued":
+                payload["status"] = "queued"
+                payload["last_error"] = "lease_expired"
+                payload["available_at"] = now
+            elif next_status == "dead":
+                payload["status"] = "dead"
+                payload["last_error"] = "lease_expired"
+            result = self._lease().reclaim(
+                queue=queue,
+                job_id=str(job_id),
+                expected_token=expected_token,
+                data_json=json.dumps(payload),
+                next_status=next_status if next_status in {"queued", "dead"} else str(job.status),
+                available_at=float(payload.get("available_at") or now),
+                now=now,
+                waiting_score=float(job.created_at),
+            )
+            if result == "lost_race":
+                incr("duplicate_reclaim_prevented")
                 continue
-            self._r.lrem(processing, 1, job_id)
-            self._r.delete(self._k("lease", str(job_id)))
-            job.status = "queued"
-            job.available_at = time.time()
-            job.last_error = "lease_expired"
-            self._save(job)
-            self._mark_waiting(job)
-            self._park(job)
-            reclaimed += 1
+            if result.startswith("terminal_completed"):
+                removed = parse_removed(result)
+                if removed:
+                    incr("completed_removed_from_dlq", float(removed))
+                continue
+            if result == "alive":
+                continue
+            if result in {"reclaimed", "dead", "terminal_dead"}:
+                incr("lease_reclaimed")
+                reclaimed += 1
+                lease_log(
+                    "reclaimed" if result != "dead" else "lease_expired_dlq",
+                    job_id=str(job_id),
+                    trace_id=self._trace_id(job),
+                    extra=f"result={result}",
+                )
+                if result == "dead":
+                    self._record_dead(job, error="lease_expired")
         return reclaimed
 
-    def complete(self, job: QueueJob) -> None:
-        job.status = "completed"
-        self._save(job)
-        self._r.lrem(self._k("processing", job.queue), 1, job.id)
-        self._r.lrem(self._k("queue", job.queue), 0, job.id)
-        self._r.zrem(self._k("delayed", job.queue), job.id)
-        self._r.delete(self._k("lease", job.id))
-        self._unmark_waiting(job)
+    def complete(self, job: QueueJob) -> str:
+
+        payload = dict(job.to_dict())
+        payload["status"] = "completed"
+        payload["lease_token"] = ""
+        payload["lease_owner"] = ""
+        payload["updated_at"] = time.time()
+        result = self._lease().complete(
+            queue=job.queue,
+            job_id=job.id,
+            token=str(job.lease_token or ""),
+            wire=job.lease_wire(),
+            data_json=json.dumps(payload),
+        )
+        trace_id = self._trace_id(job)
+        if result.startswith("already_completed") or result.startswith("ok"):
+            removed = parse_removed(result)
+            if removed:
+                incr("completed_removed_from_dlq", float(removed))
+            job.status = "completed"
+            job.lease_token = ""
+            job.lease_owner = ""
+            try:
+                from services.scale.job_progress import clear_progress
+
+                clear_progress(job.id, redis_client=self._r)
+            except Exception:
+                pass
+            lease_log("complete", job_id=job.id, trace_id=trace_id, extra=result)
+            return result
+        if result == "stale_owner":
+            incr("stale_owner_complete_attempt")
+            lease_log("stale_owner_complete", job_id=job.id, trace_id=trace_id)
+        else:
+            lease_log("complete_rejected", job_id=job.id, trace_id=trace_id, extra=result)
+        return result
 
     def requeue_soft(self, job: QueueJob, *, delay_seconds: float = 1.0) -> None:
-        processing = self._k("processing", job.queue)
-        self._r.lrem(processing, 1, job.id)
-        self._r.delete(self._k("lease", job.id))
+        now = time.time()
         job.attempts = max(0, job.attempts - 1)
         job.status = "queued"
-        job.available_at = time.time() + max(0.05, delay_seconds)
-        self._save(job)
-        self._mark_waiting(job)
-        self._park(job)
+        job.available_at = now + max(0.05, delay_seconds)
+        payload = dict(job.to_dict())
+        payload["lease_token"] = ""
+        payload["lease_owner"] = ""
+        result = self._lease().requeue_soft(
+            queue=job.queue,
+            job_id=job.id,
+            token=str(job.lease_token or ""),
+            wire=job.lease_wire(),
+            data_json=json.dumps(payload),
+            available_at=float(job.available_at),
+            now=now,
+            waiting_score=float(job.created_at),
+        )
+        if result == "ok":
+            job.lease_token = ""
+            job.lease_owner = ""
 
     def fail(self, job: QueueJob, *, error: str, retry: bool) -> bool:
         stored = self.get(job.id)
@@ -232,24 +332,58 @@ class RedisQueueBackend:
             return stored.status == "dead"
         if job.status in {"completed", "dead"}:
             return job.status == "dead"
-        job.last_error = error[:1000]
-        processing = self._k("processing", job.queue)
-        self._r.lrem(processing, 1, job.id)
-        self._r.delete(self._k("lease", job.id))
-        if retry and job.attempts < (job.max_attempts or DEFAULT_MAX_ATTEMPTS):
+        now = time.time()
+        go_dead = not (retry and job.attempts < (job.max_attempts or DEFAULT_MAX_ATTEMPTS))
+        payload = dict(job.to_dict())
+        payload["last_error"] = error[:1000]
+        payload["lease_token"] = ""
+        payload["lease_owner"] = ""
+        if go_dead:
+            payload["status"] = "dead"
+            available_at = now
+        else:
             from services.scale.retry_backoff import retry_delay_seconds
 
             delay = retry_delay_seconds(attempts=job.attempts, error=error)
-            job.status = "queued"
-            job.available_at = time.time() + delay
-            self._save(job)
-            self._mark_waiting(job)
-            self._park(job)
+            payload["status"] = "queued"
+            payload["available_at"] = now + delay
+            available_at = float(payload["available_at"])
+        result = self._lease().fail(
+            queue=job.queue,
+            job_id=job.id,
+            token=str(job.lease_token or ""),
+            wire=job.lease_wire(),
+            data_json=json.dumps(payload),
+            terminal_status="dead" if go_dead else "queued",
+            available_at=available_at,
+            now=now,
+            waiting_score=float(job.created_at),
+        )
+        if result == "stale_owner":
+            from services.scale.metrics import incr
+
+            incr("stale_owner_complete_attempt")
+            lease_log("stale_owner_fail", job_id=job.id, trace_id=self._trace_id(job))
             return False
-        job.status = "dead"
-        self._save(job)
-        self._r.lpush(self._k("dlq", job.queue), job.id)
-        self._unmark_waiting(job)
+        if result in {"already_completed", "already_dead", "not_processing"}:
+            return result == "already_dead"
+        if result == "dead":
+            job.status = "dead"
+            job.last_error = error[:1000]
+            job.lease_token = ""
+            job.lease_owner = ""
+            self._record_dead(job, error=error)
+            return True
+        if result == "retried":
+            job.status = "queued"
+            job.last_error = error[:1000]
+            job.available_at = available_at
+            job.lease_token = ""
+            job.lease_owner = ""
+            return False
+        return False
+
+    def _record_dead(self, job: QueueJob, *, error: str) -> None:
         try:
             from services.scale.dlq_record import record_dead
 
@@ -265,7 +399,6 @@ class RedisQueueBackend:
             )
         except Exception:
             pass
-        return True
 
     def throttle_provider(self, *, provider: str, limit_per_minute: int) -> bool:
         if limit_per_minute <= 0:
