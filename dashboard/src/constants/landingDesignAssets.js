@@ -2,6 +2,8 @@
 export const LANDING_ASSETS = {
   logo: '/brand/landing/linas-logo.svg',
   appIcon: '/brand/landing/linas-app-icon.svg',
+  howItWorksPodium: '/brand/landing/hiw-phone-podium.png',
+  howItWorksPath: '/brand/landing/hiw-scroll-path.png',
   appScreens: {
     ownerCopilot: '/brand/landing/app-screens/owner-copilot.png',
     navigation: '/brand/landing/app-screens/navigation.png',

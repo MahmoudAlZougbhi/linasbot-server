@@ -55,3 +55,22 @@ export const PUBLIC_PATHS = {
   getApp: '/#get-app',
   guestChat: '/#talk-to-linas',
 };
+
+/**
+ * Linas AI public social channels (footer). No Web Chat.
+ * Set `url` to the live profile when available — until then links open a mailto to support.
+ * Do not invent handles.
+ */
+export const PUBLIC_CHANNEL_LINKS = [
+  { id: 'instagram', label: 'Instagram', url: null },
+  { id: 'facebook', label: 'Facebook', url: null },
+  { id: 'whatsapp', label: 'WhatsApp', url: null },
+  { id: 'tiktok', label: 'TikTok', url: null },
+];
+
+/** @param {{ label: string, url?: string | null }} channel */
+export function publicChannelHref(channel) {
+  if (channel.url) return channel.url;
+  const subject = encodeURIComponent(`Linas AI — ${channel.label}`);
+  return `mailto:${PUBLIC_SITE.contactEmail}?subject=${subject}`;
+}

@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { PLAN_LANDING_COPY } from '../../../constants/landingPlansCopy';
-import { PUBLIC_PATHS } from '../../../constants/publicSite';
 import LinasStar from '../LinasStar';
+import PricingEnterpriseModal from '../PricingEnterpriseModal';
 
 /** @param {unknown} value */
 function formatPrice(value) {
@@ -11,10 +10,12 @@ function formatPrice(value) {
   return n % 1 === 0 ? `$${n}` : `$${n.toFixed(2)}`;
 }
 
+/** Public pricing — catalog is view-only; only Enterprise opens a request form. */
 export default function LandingPricing() {
   const [plans, setPlans] = useState(/** @type {Array<any>} */ ([]));
   const [error, setError] = useState(/** @type {string | null} */ (null));
   const [period, setPeriod] = useState('monthly');
+  const [enterpriseOpen, setEnterpriseOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,11 +44,15 @@ export default function LandingPricing() {
     <section id="pricing" className="scroll-mt-24 bg-[#F7F8F5] py-16 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <p className="text-center text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[#06715F]">Simple, flexible plans</p>
-        <h2 className="mt-3 text-center text-3xl font-semibold tracking-tight text-[#171A19] sm:text-4xl">Choose the plan that fits your business</h2>
-        <p className="mx-auto mt-3 max-w-xl text-center text-[#6B746F]">Start with what you need today. Upgrade whenever your business grows.</p>
+        <h2 className="mt-3 text-center text-3xl font-semibold tracking-tight text-[#171A19] sm:text-4xl">
+          Choose the plan that fits your business
+        </h2>
+        <p className="mx-auto mt-3 max-w-xl text-center text-[#6B746F]">
+          Start with what you need today. Upgrade whenever your business grows.
+        </p>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <div className="inline-flex rounded-full border border-[#E4E8E6] bg-white p-1">
+          <div className="inline-flex rounded-full border border-[#E4E8E6] bg-white p-1" role="group" aria-label="Billing period">
             {['monthly', 'yearly'].map((key) => (
               <button
                 key={key}
@@ -92,7 +97,7 @@ export default function LandingPricing() {
                 <h3 className="mt-1 text-xl font-semibold text-[#171A19]">{plan.display_name}</h3>
                 <p className="mt-2 text-2xl font-semibold text-[#171A19]">
                   {price || '—'}
-                  <span className="text-sm font-normal text-[#6B746F]"> / month</span>
+                  <span className="text-sm font-normal text-[#6B746F]"> / {period === 'yearly' ? 'year' : 'month'}</span>
                 </p>
                 <p className="mt-2 text-sm text-[#6B746F]">{copy.blurb}</p>
                 <p className="mt-4 rounded-xl bg-[#E8F5F1] px-3 py-2 text-sm font-semibold text-[#06715F]">
@@ -112,18 +117,14 @@ export default function LandingPricing() {
                     </li>
                   ) : null}
                 </ul>
-                <a
-                  href="/#get-app"
-                  className={`mt-5 rounded-full px-4 py-2.5 text-center text-sm font-semibold ${
-                    recommended ? 'bg-[#06715F] text-white' : 'border border-[#06715F] text-[#06715F]'
-                  }`}
-                >
-                  Choose {plan.display_name}
-                </a>
               </article>
             );
           })}
         </div>
+
+        {!error && plans.length === 0 ? (
+          <p className="mt-10 text-center text-sm text-[#6B746F]">Loading plans…</p>
+        ) : null}
 
         <div className="mt-8 flex items-start gap-3 rounded-2xl bg-[#E8F4F8] px-5 py-4 text-sm text-[#171A19]">
           <LinasStar className="mt-0.5 h-5 w-5" />
@@ -142,13 +143,19 @@ export default function LandingPricing() {
             <p className="mt-1 text-sm text-white/70">Custom capacity, onboarding and team access for high-volume organizations.</p>
           </div>
           <div className="text-right">
-            <Link to={PUBLIC_PATHS.contact} className="inline-flex rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#171A19]">
+            <button
+              type="button"
+              onClick={() => setEnterpriseOpen(true)}
+              className="inline-flex rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-[#171A19] hover:bg-[#F4F7F5]"
+            >
               Contact Sales
-            </Link>
+            </button>
             <p className="mt-2 text-xs text-white/55">Available through a business agreement.</p>
           </div>
         </div>
       </div>
+
+      <PricingEnterpriseModal open={enterpriseOpen} onClose={() => setEnterpriseOpen(false)} />
     </section>
   );
 }

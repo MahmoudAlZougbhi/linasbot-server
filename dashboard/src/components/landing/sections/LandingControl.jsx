@@ -17,7 +17,7 @@ const CARDS = [
   {
     id: 'live-chat',
     title: 'Unified Live Chat',
-    description: 'See every channel and customer conversation in one inbox.',
+    description: 'Manage all chats from one place — take over, assign, and keep full context.',
     core: true,
     Mini: ControlLiveChat,
   },

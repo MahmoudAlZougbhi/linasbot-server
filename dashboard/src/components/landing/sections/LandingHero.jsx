@@ -10,7 +10,7 @@ export default function LandingHero() {
         <div className="absolute -right-16 top-0 h-[40rem] w-[40rem] rounded-full bg-[#D8F0E8]/50 blur-3xl" />
       </div>
 
-      <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-8 sm:px-6 md:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] md:gap-2 md:pb-10 md:pt-4">
+      <div className="relative mx-auto grid max-w-6xl items-start gap-10 px-4 pb-16 pt-8 sm:px-6 md:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] md:gap-2 md:pb-10 md:pt-8">
         <div>
           <p className="inline-flex items-center gap-2 rounded-full bg-[#E7F2EE] px-3.5 py-1.5 text-sm font-medium text-[#06715F]">
             <LinasStar className="h-3.5 w-3.5" />
