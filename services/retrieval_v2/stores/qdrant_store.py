@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
+from uuid import UUID
 
 from services.retrieval_v2.config import (
     qdrant_api_key,
@@ -172,7 +174,7 @@ class QdrantSearchStore:
         timer = TraceTimer()
         points = []
         point_ids: list[str] = []
-        for doc, vec in zip(documents, vectors):
+        for doc, vec in zip(documents, vectors, strict=True):
             if len(vec) != dims:
                 raise RetrievalV2ValidationError("inconsistent vector dimensions in batch")
             pid = doc.point_id
@@ -198,7 +200,11 @@ class QdrantSearchStore:
 
     async def delete_documents(self, *, tenant_id: str, point_ids: list[str]) -> int:
         tid = _require_tenant(tenant_id)
-        ids = [p for p in point_ids if (p or "").strip()]
+        ids: list[int | str | UUID] = []
+        for raw in point_ids:
+            cleaned = (raw or "").strip()
+            if cleaned:
+                ids.append(cleaned)
         if not ids:
             return 0
         client = self._get_client()
@@ -223,7 +229,11 @@ class QdrantSearchStore:
 
     async def deactivate_documents(self, *, tenant_id: str, point_ids: list[str]) -> int:
         tid = _require_tenant(tenant_id)
-        ids = [p for p in point_ids if (p or "").strip()]
+        ids: list[int | str | UUID] = []
+        for raw in point_ids:
+            cleaned = (raw or "").strip()
+            if cleaned:
+                ids.append(cleaned)
         if not ids:
             return 0
         client = self._get_client()

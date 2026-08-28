@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 from services.retrieval_v2.errors import RetrievalV2ValidationError, SearchTenantRequiredError
 from services.retrieval_v2.schemas import SourceType
 
 
-class IndexOperation(str, Enum):
+class IndexOperation(StrEnum):
     UPSERT = "UPSERT"
     DEACTIVATE = "DEACTIVATE"
     DELETE = "DELETE"

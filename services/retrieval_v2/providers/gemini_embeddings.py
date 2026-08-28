@@ -11,7 +11,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from services.retrieval_v2.config import (
     gemini_api_key,
@@ -241,6 +242,4 @@ class GeminiEmbeddingProvider:
             raise EmbeddingInvalidResponseError(f"expected {expected} vectors, got {len(vectors)}")
         for vec in vectors:
             if len(vec) != self._dimensions:
-                raise EmbeddingInvalidResponseError(
-                    f"expected dimension {self._dimensions}, got {len(vec)}"
-                )
+                raise EmbeddingInvalidResponseError(f"expected dimension {self._dimensions}, got {len(vec)}")

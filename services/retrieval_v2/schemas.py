@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 from services.retrieval_v2.config import INDEX_SCHEMA_VERSION
 from services.retrieval_v2.errors import RetrievalV2ValidationError
 
 
-class SourceType(str, Enum):
+class SourceType(StrEnum):
     KNOWLEDGE = "knowledge"
     CARE = "care"
     FAQ = "faq"
@@ -26,7 +26,7 @@ class SourceType(str, Enum):
 
 
 def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def content_sha256(text: str) -> str:
@@ -56,6 +56,7 @@ def document_point_id(
     # Qdrant accepts UUID or unsigned int — format first 32 hex chars as UUID.
     h = digest[:32]
     return f"{h[0:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
+
 
 def _require_non_empty(name: str, value: str) -> str:
     text = (value or "").strip()

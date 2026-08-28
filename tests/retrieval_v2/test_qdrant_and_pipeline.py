@@ -133,9 +133,7 @@ async def test_smoke_two_tenants_same_title(store: QdrantSearchStore) -> None:
     """Integration smoke: index → embed → search tenant A, zero B leakage."""
     emb = FakeEmbeddingProvider(dimensions=32)
     pipeline = IndexPipeline(embeddings=emb, store=store)
-    await pipeline.run_upsert(
-        _doc("tenant-a", "knowledge-1", "Premium laser package includes six sessions.")
-    )
+    await pipeline.run_upsert(_doc("tenant-a", "knowledge-1", "Premium laser package includes six sessions."))
     await pipeline.run_upsert(
         _doc("tenant-b", "knowledge-1", "Premium laser package includes six sessions. Tenant B secret price 777.")
     )

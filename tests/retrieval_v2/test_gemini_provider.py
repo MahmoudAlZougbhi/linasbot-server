@@ -92,9 +92,7 @@ async def test_embed_documents_batch() -> None:
 
 @pytest.mark.asyncio
 async def test_empty_input_rejected() -> None:
-    provider = GeminiEmbeddingProvider(
-        api_key="k", dimensions=128, client_factory=lambda: _FakeClient(lambda _: None)
-    )
+    provider = GeminiEmbeddingProvider(api_key="k", dimensions=128, client_factory=lambda: _FakeClient(lambda _: None))
     with pytest.raises(RetrievalV2ValidationError):
         await provider.embed_query(" ")
     with pytest.raises(RetrievalV2ValidationError):

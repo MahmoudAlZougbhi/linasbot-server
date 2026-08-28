@@ -51,7 +51,9 @@ def gemini_api_key() -> str:
 
 
 def gemini_embedding_model() -> str:
-    return (os.getenv("GEMINI_EMBEDDING_MODEL") or DEFAULT_GEMINI_EMBEDDING_MODEL).strip() or DEFAULT_GEMINI_EMBEDDING_MODEL
+    return (
+        os.getenv("GEMINI_EMBEDDING_MODEL") or DEFAULT_GEMINI_EMBEDDING_MODEL
+    ).strip() or DEFAULT_GEMINI_EMBEDDING_MODEL
 
 
 def gemini_embedding_dimensions() -> int:
