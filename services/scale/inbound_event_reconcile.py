@@ -47,6 +47,7 @@ def _enqueue_or_mark(rec: InboundEventRecord, claim_handle: Any) -> dict[str, An
 
             surface = "comment" if rec.kind == "meta_comment" else "dm"
             logical = logical_for_channel(channel="meta", surface=surface)
+            inbound_payload = rec.payload if isinstance(getattr(rec, "payload", None), dict) else {}
             job = job_queue.enqueue(
                 queue=physical_queue_for(logical),  # type: ignore[arg-type]
                 job_type="meta_inbound_process",
@@ -60,7 +61,7 @@ def _enqueue_or_mark(rec: InboundEventRecord, claim_handle: Any) -> dict[str, An
                     "_logical_queue": logical,
                     "_claim_token": claim_handle.owner_token,
                     "_claim_generation": claim_handle.generation,
-                    "_linas_soak_simulation": bool((rec.payload or {}).get("_linas_soak_simulation")),
+                    "_linas_soak_simulation": bool(inbound_payload.get("_linas_soak_simulation")),
                 },
                 idempotency_key=f"meta_inbound:{rec.event_id}:r{rec.attempts}",
             )
