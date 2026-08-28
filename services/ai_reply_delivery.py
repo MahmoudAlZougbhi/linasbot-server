@@ -8,6 +8,7 @@ from typing import Any
 from services.products.outbound_hook import maybe_record_product_outbound
 
 SendFunc = Callable[..., Awaitable[Any]]
+_TRACKED_SEND_MARK = "_linas_delivery_tracked"
 
 PERMANENT_ERROR_MARKERS = (
     "policy",
@@ -71,7 +72,13 @@ def classify_send_result(result: Any) -> dict[str, Any]:
 
 
 def wrap_tracked_send(raw_send: SendFunc, user_data: dict[str, Any]) -> SendFunc:
-    """Wrap send_message_func to record last outbound delivery evidence on user_data."""
+    """Wrap send_message_func to record last outbound delivery evidence on user_data.
+
+    Meta DM wraps at the Graph adapter and again in delayed combine. A second
+    wrap would see ledger state ``started`` and skip the provider send.
+    """
+    if getattr(raw_send, _TRACKED_SEND_MARK, False):
+        return raw_send
 
     async def _tracked(
         to_number: str,
@@ -156,6 +163,7 @@ def wrap_tracked_send(raw_send: SendFunc, user_data: dict[str, Any]) -> SendFunc
             user_data["_delivery_succeeded"] = False
         return result
 
+    setattr(_tracked, _TRACKED_SEND_MARK, True)
     return _tracked
 
 
