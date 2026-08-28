@@ -314,8 +314,6 @@ def summarize_candidates(candidates: list[ReconcileCandidate]) -> dict[str, Any]
         "by_action": by_action,
         "stale_claims_count": stale_claims,
         "charged_without_delivery_count": charged_without_delivery,
-        "stuck_events_count": sum(
-            1 for item in candidates if item.action not in {"none", "complete_inbound"}
-        ),
+        "stuck_events_count": sum(1 for item in candidates if item.action not in {"none", "complete_inbound"}),
         "generated_at": time.time(),
     }

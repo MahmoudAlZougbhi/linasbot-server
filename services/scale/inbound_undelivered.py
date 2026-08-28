@@ -155,8 +155,6 @@ def list_completed_undelivered_meta_dms(*, older_than_seconds: float = 60.0) -> 
                 rec.event_id,
                 type(exc).__name__,
             )
-        if is_completed_undelivered(current) and _age_ok(
-            current, older_than_seconds=older_than_seconds, now=now
-        ):
+        if is_completed_undelivered(current) and _age_ok(current, older_than_seconds=older_than_seconds, now=now):
             live.append(current)
     return sorted(live, key=lambda item: (item.updated_at, item.event_id))

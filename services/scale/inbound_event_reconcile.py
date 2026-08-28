@@ -176,9 +176,7 @@ def requeue_inbound_event_ids(event_ids: list[str]) -> list[dict[str, Any]]:
                 event_id,
                 type(exc).__name__,
             )
-            actions.append(
-                {"event_id": event_id, "action": "requeue_failed", "reason": type(exc).__name__}
-            )
+            actions.append({"event_id": event_id, "action": "requeue_failed", "reason": type(exc).__name__})
     return actions
 
 

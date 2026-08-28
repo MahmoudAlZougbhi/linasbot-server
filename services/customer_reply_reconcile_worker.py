@@ -269,9 +269,7 @@ async def reconcile_customer_replies(
 
     # Re-enqueue durable inbound jobs after local state fixes.
     retry_ids = [
-        str(item.get("event_id") or "")
-        for item in actions
-        if item.get("action") in {"requeue_ai", "retry_delivery"}
+        str(item.get("event_id") or "") for item in actions if item.get("action") in {"requeue_ai", "retry_delivery"}
     ]
     try:
         queue_result = reconcile_stuck_inbound_events(older_than_seconds=0.0)
