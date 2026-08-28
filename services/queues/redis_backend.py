@@ -7,7 +7,7 @@ import time
 import uuid
 from typing import Any
 
-from services.queues.claim_activate import job_id_text, set_claim_lease
+from services.queues.claim_activate import job_id_text, pop_and_set_lease
 from services.queues.config import (
     DEFAULT_MAX_ATTEMPTS,
     HEARTBEAT_TTL_SECONDS,
@@ -154,29 +154,37 @@ class RedisQueueBackend:
     def claim(self, queue: str, *, worker_id: str, timeout: int = 5) -> QueueJob | None:
         """Move one ready job from queue → processing. Delayed jobs stay in a ZSET."""
         self._promote_ready(queue)
-        job_id = self._r.brpoplpush(self._k("queue", queue), self._k("processing", queue), timeout=timeout)
-        return self._bind_claimed(queue, job_id, worker_id=worker_id)
+        deadline = time.monotonic() + max(0.0, float(timeout))
+        while True:
+            job = self._try_pop_activate(queue, worker_id=worker_id)
+            if job is not None:
+                return job
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
 
     def try_claim(self, queue: str, *, worker_id: str) -> QueueJob | None:
         """Non-blocking claim for isolated replica pools and tests."""
         self._promote_ready(queue)
-        job_id = self._r.rpoplpush(self._k("queue", queue), self._k("processing", queue))
-        return self._bind_claimed(queue, job_id, worker_id=worker_id)
+        return self._try_pop_activate(queue, worker_id=worker_id)
 
-    def _bind_claimed(self, queue: str, job_id: Any, *, worker_id: str) -> QueueJob | None:
-        jid = job_id_text(job_id)
-        if not jid:
-            return None
+    def _try_pop_activate(self, queue: str, *, worker_id: str) -> QueueJob | None:
         owner = str(worker_id)
         token = uuid.uuid4().hex
         wire = QueueJob.wire_for(owner, token)
-        set_claim_lease(
+        if not wire:
+            return None
+        job_id = pop_and_set_lease(
             self._r,
-            job_id=jid,
+            queue_key=self._k("queue", queue),
+            processing_key=self._k("processing", queue),
             lease_prefix=f"{key_prefix()}:lease:",
             wire=wire,
             ttl_seconds=self._lease_ttl(),
         )
+        jid = job_id_text(job_id)
+        if not jid:
+            return None
         try:
             return self._activate_claimed(queue, jid, owner=owner, token=token)
         except Exception:

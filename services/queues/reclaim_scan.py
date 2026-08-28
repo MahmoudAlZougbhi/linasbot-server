@@ -26,6 +26,18 @@ def reclaim_expired_leases(backend: Any, queue: str, *, limit: int = 50) -> int:
             backend._r.lrem(processing, 1, job_id)
             continue
         if str(job.status) not in {"completed", "dead", "processing"}:
+            result = backend._lease().reclaim(
+                queue=queue,
+                job_id=str(job_id),
+                expected_token=str(job.lease_token or ""),
+                data_json=json.dumps(job.to_dict()),
+                next_status="queued",
+                available_at=now,
+                now=now,
+                waiting_score=float(job.created_at),
+            )
+            if result == "pending_activate":
+                lease_log("pending_activate", job_id=str(job_id), extra="returned_to_queue")
             continue
         expected_token = str(job.lease_token or "")
         if job.status not in {"completed", "dead"}:

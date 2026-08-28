@@ -248,6 +248,10 @@ class JobLease:
                 pipe.execute()
                 return "terminal_dead"
             if status != "processing":
+                pipe.multi()
+                pipe.lrem(processing, 0, job_id)
+                pipe.lpush(queued, job_id)
+                pipe.execute()
                 return "pending_activate"
             stored = _as_text(pipe.hget(job_key, "lease_token"))
             if stored != expected_token:
