@@ -283,3 +283,36 @@ def test_stale_state_writer_cannot_restore_payload_after_fence_and_redaction(
                 "retention_redacted_at",
             }
         )
+
+
+def test_create_does_not_read_fence_inside_event_transaction(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import services.meta_inbound_deletion_fence as fence_service
+
+    db = _FakeFirestore()
+    _patch_stores(monkeypatch, tmp_path, db)
+    txn_gets: list[object] = []
+    original_fence_ref = fence_service._firestore_fence_ref
+
+    def wrapped_fence_ref(db_arg: Any, binding_id: str) -> Any:
+        inner = original_fence_ref(db_arg, binding_id)
+
+        class _FenceProxy:
+            def get(self, transaction: Any = None) -> Any:
+                if transaction is not None:
+                    txn_gets.append(transaction)
+                    return inner.get(transaction=transaction)
+                return inner.get()
+
+        return _FenceProxy()
+
+    monkeypatch.setattr(fence_service, "_firestore_fence_ref", wrapped_fence_ref)
+    created, is_new = event_store.create_inbound_event(
+        _record("ibe_no_fence_txn"),
+        enforce_binding_deletion_fence=True,
+    )
+    assert is_new is True
+    assert created.event_id == "ibe_no_fence_txn"
+    assert txn_gets == []
