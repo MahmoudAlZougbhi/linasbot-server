@@ -8801,7 +8801,7 @@ activate_impl() {
 start_saved_runtime_disabled() {
   local state_file="$1"
   local tx_dir="$2"
-  local unit enabled active queue api_active="" expected_sha helper_source_sha node_id
+  local unit enabled active queue api_active="" expected_sha helper_source_sha node_id health_ok=0
   validate_tx_dir "$tx_dir"
   expected_sha="$(current_head)"
   helper_source_sha="$(target_sha_from_tx "$tx_dir")"
@@ -8818,13 +8818,16 @@ start_saved_runtime_disabled() {
   done <"$state_file"
   test "$api_active" = "active" || die "saved canonical API was not active before drain"
   systemctl start linasbot.service
-  for _ in $(seq 1 45); do
+  for _ in $(seq 1 90); do
     if curl -fsS http://127.0.0.1:8003/api/health 2>/dev/null | \
       grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
+      health_ok=1
       break
     fi
     sleep 1
   done
+  test "$health_ok" = 1 || \
+    die "saved canonical API did not publish /api/health on :8003 after start"
   assert_unit_contract linasbot
   assert_health_while_drained
   for queue in "${WORKER_QUEUES[@]}"; do
@@ -9692,7 +9695,7 @@ node_assert_runtime_drained() {
 
 start_admitted_target_runtime() {
   local tx_dir="$1"
-  local queue target_sha node_id
+  local queue target_sha node_id health_ok=0
   target_sha="$(<"$tx_dir/target.sha")"
   validate_sha "$target_sha"
   node_id="$(configured_node_id)"
@@ -9713,13 +9716,18 @@ start_admitted_target_runtime() {
     assert_unit_file_contract "linasbot-worker@${queue}.service"
   done
   systemctl start linasbot.service
-  for _ in $(seq 1 45); do
+  # Cold start after CPython rematerialize can exceed 45s. Do not fall through
+  # to a single-shot health probe that Connection-refuses and fail-closes.
+  for _ in $(seq 1 90); do
     if curl -fsS http://127.0.0.1:8003/api/health 2>/dev/null | \
       grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
+      health_ok=1
       break
     fi
     sleep 1
   done
+  test "$health_ok" = 1 || \
+    die "canonical target API did not publish /api/health on :8003 after start"
   systemctl is-active --quiet linasbot.service || die "canonical target API failed final start"
   assert_unit_contract linasbot
   assert_health_while_drained
@@ -9844,7 +9852,7 @@ node_clear_maintenance() {
     restore_nginx_maintenance_override "$tx_dir"
     assert_release_bound_nginx "$tx_dir"
   fi
-  for _ in $(seq 1 45); do
+  for _ in $(seq 1 90); do
     if probe_serving_ready_for_sha "$admission_sha"; then
       assert_legacy_retirement_contract "$(configured_node_id)"
       write_admission_proof "$tx_dir" "$admission_sha"
