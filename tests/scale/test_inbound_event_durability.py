@@ -120,3 +120,29 @@ def test_max_attempts_dead_letters(inbound_root: Path) -> None:
     rec = get_inbound_event(event_id)
     assert rec is not None
     assert rec.state == "dead_letter"
+
+
+def test_disarmed_soak_event_is_completed_not_requeued(inbound_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("services.scale.soak_arm.is_armed", lambda: False)
+    claim_key = "soak:dm:linas:soak_user:mid-soak-1"
+    event_id = stable_event_id("meta_dm", claim_key)
+    now = time.time()
+    put_inbound_event(
+        InboundEventRecord(
+            event_id=event_id,
+            kind="meta_dm",
+            tenant_id="linas",
+            claim_namespace="meta_social_dm_global",
+            claim_key=claim_key,
+            state="accepted",
+            created_at=now - 120,
+            updated_at=now - 120,
+            payload={"message_id": "mid-soak-1", "_linas_soak_simulation": True, "sender_id": "soak_abc"},
+        )
+    )
+    result = reconcile_stuck_inbound_events(older_than_seconds=0.0)
+    assert any(a.get("action") == "soak_aborted_disarmed" and a.get("event_id") == event_id for a in result["actions"])
+    rec = get_inbound_event(event_id)
+    assert rec is not None
+    assert rec.state == "completed"
+    assert rec.outbound_status == "simulated"

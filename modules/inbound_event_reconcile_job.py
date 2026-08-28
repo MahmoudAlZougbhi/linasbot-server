@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from services.durable_event_claim import release_job_lock, try_acquire_job_lock
 
 
-async def run_inbound_event_reconcile_job() -> None:
+def _run_inbound_event_reconcile_job_sync() -> None:
     if not try_acquire_job_lock("inbound_event_reconcile", ttl_seconds=55):
         return
     try:
@@ -29,3 +31,7 @@ async def run_inbound_event_reconcile_job() -> None:
         print(f"[inbound-reconcile] failed type={type(exc).__name__}")
     finally:
         release_job_lock("inbound_event_reconcile")
+
+
+async def run_inbound_event_reconcile_job() -> None:
+    await asyncio.to_thread(_run_inbound_event_reconcile_job_sync)

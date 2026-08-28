@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from functools import partial
 from typing import Any
@@ -46,6 +47,7 @@ def _enqueue_or_mark(rec: InboundEventRecord, claim_handle: Any) -> dict[str, An
 
             surface = "comment" if rec.kind == "meta_comment" else "dm"
             logical = logical_for_channel(channel="meta", surface=surface)
+            inbound_payload = rec.payload if isinstance(getattr(rec, "payload", None), dict) else {}
             job = job_queue.enqueue(
                 queue=physical_queue_for(logical),  # type: ignore[arg-type]
                 job_type="meta_inbound_process",
@@ -59,6 +61,7 @@ def _enqueue_or_mark(rec: InboundEventRecord, claim_handle: Any) -> dict[str, An
                     "_logical_queue": logical,
                     "_claim_token": claim_handle.owner_token,
                     "_claim_generation": claim_handle.generation,
+                    "_linas_soak_simulation": bool(inbound_payload.get("_linas_soak_simulation")),
                 },
                 idempotency_key=f"meta_inbound:{rec.event_id}:r{rec.attempts}",
             )
@@ -103,7 +106,26 @@ def _enqueue_or_mark(rec: InboundEventRecord, claim_handle: Any) -> dict[str, An
     return {"event_id": rec.event_id, "action": "marked_accepted_for_retry"}
 
 
+def _disarmed_soak_action(rec: InboundEventRecord) -> dict[str, Any] | None:
+    if not bool((rec.payload or {}).get("_linas_soak_simulation")):
+        return None
+    from services.scale.soak_arm import is_armed
+
+    if is_armed():
+        return None
+    mark_inbound_state(
+        rec.event_id,
+        state="completed",
+        outbound_status="simulated",
+        last_error="soak_disarmed",
+    )
+    return {"event_id": rec.event_id, "action": "soak_aborted_disarmed"}
+
+
 def _requeue_one_stuck(rec: InboundEventRecord) -> dict[str, Any]:
+    soak = _disarmed_soak_action(rec)
+    if soak is not None:
+        return soak
     from services.durable_event_claim import (
         complete_event_claim,
         meta_claim_binding_digest,
@@ -183,6 +205,12 @@ def requeue_inbound_event_ids(event_ids: list[str]) -> list[dict[str, Any]]:
 def reconcile_stuck_inbound_events(*, older_than_seconds: float = 45.0) -> dict[str, Any]:
     """Re-enqueue unfinished durable events. Never drops accepted records."""
     stuck = list_active_inbound_events(older_than_seconds=older_than_seconds)
+    raw_limit = (os.getenv("LINAS_INBOUND_RECONCILE_BATCH") or "32").strip()
+    try:
+        limit = max(1, min(200, int(raw_limit)))
+    except ValueError:
+        limit = 32
+    stuck = stuck[:limit]
     actions: list[dict[str, Any]] = []
     for rec in stuck:
         try:
