@@ -139,7 +139,6 @@ def create_firestore_event_unless_fenced(
     last_error: Exception | None = None
     for _attempt in range(5):
         try:
-
             if _shared_fence_exists(fence_ref):
                 raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
 
@@ -156,11 +155,14 @@ def create_firestore_event_unless_fenced(
                 return persisted, True
 
             persisted_document, created = run_firestore_transaction(db, _create)
-            if _tombstone_shared_event_if_fenced(
-                fence_ref=fence_ref,
-                event_ref=event_ref,
-                document=persisted_document,
-            ) is not None:
+            if (
+                _tombstone_shared_event_if_fenced(
+                    fence_ref=fence_ref,
+                    event_ref=event_ref,
+                    document=persisted_document,
+                )
+                is not None
+            ):
                 raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
             return persisted_document, created
         except (InboundBindingDeletionFencedError, InboundDeletionFenceStoreError):
@@ -172,11 +174,14 @@ def create_firestore_event_unless_fenced(
                 if committed.exists:
                     current = committed.to_dict()
                     if isinstance(current, dict):
-                        if _tombstone_shared_event_if_fenced(
-                            fence_ref=fence_ref,
-                            event_ref=event_ref,
-                            document=current,
-                        ) is not None:
+                        if (
+                            _tombstone_shared_event_if_fenced(
+                                fence_ref=fence_ref,
+                                event_ref=event_ref,
+                                document=current,
+                            )
+                            is not None
+                        ):
                             raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
                         return current, False
                 if fence_ref.get().exists:
@@ -237,7 +242,6 @@ def persist_firestore_event_respecting_fence(
     for _attempt in range(5):
         persisted = document
         try:
-
             if _shared_fence_exists(fence_ref):
                 if reject_if_fenced:
                     raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
