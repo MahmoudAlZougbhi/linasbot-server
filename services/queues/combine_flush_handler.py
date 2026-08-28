@@ -38,10 +38,32 @@ async def handle_combine_flush(job: QueueJob) -> dict[str, Any]:
         set_trace_id(trace_id)
         mark(trace_id, "worker_started")
         mark(trace_id, "ai_started")
-    outcome = await _run_ai_turn(user_key, texts, context, event_ids, trace_id=trace_id)
+    outcome = await _run_ai_turn(user_key, texts, context, event_ids, chunks, trace_id=trace_id)
     if event_ids:
         _mark_inbound_batch(event_ids, outcome)
     return {"ok": True, "chunks": len(chunks), "event_ids": event_ids, "outcome": outcome}
+
+
+def apply_drained_chunk_identity(user_data: dict[str, Any], chunks: list[dict[str, Any]]) -> None:
+    """Copy Meta mids/event ids off the drained buffer so the AI turn can start.
+
+    Delayed combine also drains Redis. After this job drains first, that second
+    drain is empty, so mids never get merged unless they are copied here.
+    """
+    mids = [str(item.get("mid") or "").strip() for item in chunks]
+    mids = [mid for mid in mids if mid]
+    event_ids = [str(item.get("event_id") or "").strip() for item in chunks]
+    event_ids = [eid for eid in event_ids if eid]
+    if mids:
+        batch = list(user_data.get("_batch_inbound_mids") or [])
+        for mid in mids:
+            if mid not in batch:
+                batch.append(mid)
+        user_data["_batch_inbound_mids"] = batch
+        user_data["_combine_mid"] = mids[-1]
+    if event_ids:
+        user_data["_inbound_event_id"] = event_ids[-1]
+        user_data["_combine_event_ids"] = event_ids
 
 
 async def _run_ai_turn(
@@ -49,6 +71,7 @@ async def _run_ai_turn(
     texts: list[str],
     context: dict[str, Any],
     event_ids: list[str],
+    chunks: list[dict[str, Any]],
     *,
     trace_id: str,
 ) -> dict[str, Any]:
@@ -57,6 +80,7 @@ async def _run_ai_turn(
 
     channel = str(context.get("channel") or "").strip().lower()
     user_data = _user_data_for(user_key, context, event_ids, trace_id)
+    apply_drained_chunk_identity(user_data, chunks)
     config.user_pending_messages[user_key] = deque(texts)
     send_message, send_action = await _send_pair(user_key, user_data, context, channel)
     try:
@@ -197,18 +221,42 @@ async def _meta_send_pair(
     return wrap_tracked_send(send_message, user_data), send_action
 
 
+_COMBINE_COMPLETE_DELIVERIES = frozenset(
+    {
+        "delivered",
+        "sent",
+        "simulated",
+        "skipped",
+        "duplicate_suppressed",
+        "blocked_quota",
+        "no_text",
+        "permanent_block",
+    }
+)
+
+
 def _mark_inbound_batch(event_ids: list[str], outcome: dict[str, Any]) -> None:
     from services.scale.inbound_event_store import mark_inbound_state
 
     delivery = str(outcome.get("delivery") or "unknown")
     persisted = bool(outcome.get("logical_reply_id"))
+    done = delivery in _COMBINE_COMPLETE_DELIVERIES or bool(outcome.get("provider_message_id_present"))
     for event_id in event_ids:
         try:
-            mark_inbound_state(
-                event_id,
-                state="completed",
-                outbound_status=delivery,
-                ai_output_persisted=persisted,
-            )
+            if done:
+                mark_inbound_state(
+                    event_id,
+                    state="completed",
+                    outbound_status=delivery,
+                    ai_output_persisted=persisted,
+                )
+            else:
+                mark_inbound_state(
+                    event_id,
+                    state="failed",
+                    outbound_status=delivery,
+                    ai_output_persisted=persisted,
+                    last_error=f"combine_flush:{delivery}",
+                )
         except Exception:
             continue

@@ -13,6 +13,7 @@ from services.ai_reply_lifecycle import (
     find_turn_by_external_inbound,
     find_turn_for_inbound_event,
     list_all_turns,
+    turn_provider_accepted,
 )
 from services.durable_event_claim import is_stale_file_claim
 from services.scale.inbound_event_store import (
@@ -122,10 +123,14 @@ def _is_ambiguous(event: InboundEventRecord, turn: AiReplyTurnRecord | None) -> 
         return None
     if turn.credit_captured and not turn.generated_reply:
         return "credit_captured_without_saved_reply"
-    if turn.generated_reply and turn.state in TERMINAL_BLOCKED:
+    if turn.generated_reply and turn.state == "PERMANENT_DELIVERY_BLOCK":
         return f"blocked_turn_state:{turn.state}"
+    if turn.generated_reply and turn.state == "NEEDS_OWNER_ACTION" and turn_provider_accepted(turn):
+        return "blocked_turn_state:NEEDS_OWNER_ACTION"
     if event.state == "completed" and turn.state not in TERMINAL_DELIVERED | TERMINAL_BLOCKED:
         if not _has_delivery_proof(event, turn):
+            if turn.generated_reply:
+                return None
             return "inbound_completed_without_delivery_proof"
     if turn.retry_count >= 8 and turn.state not in TERMINAL_DELIVERED | TERMINAL_BLOCKED:
         return "max_delivery_retries_exceeded"
@@ -175,10 +180,17 @@ def classify_event_turn(
         base.expected_outcome = "no_customer_reply_or_credit_change"
         return base
 
-    if turn and turn.generated_reply and turn.state in _DELIVERY_PENDING_STATES | {"AI_GENERATED"}:
+    never_sent_owner = bool(
+        turn and turn.generated_reply and turn.state == "NEEDS_OWNER_ACTION" and not turn_provider_accepted(turn)
+    )
+    if (
+        turn
+        and turn.generated_reply
+        and (turn.state in _DELIVERY_PENDING_STATES | {"AI_GENERATED"} or never_sent_owner)
+    ):
         base.classification = "B"
         base.action = "retry_delivery"
-        base.reason = "reply_persisted_delivery_pending"
+        base.reason = "never_sent_owner_action_retry" if never_sent_owner else "reply_persisted_delivery_pending"
         base.expected_outcome = "delivery_retry_without_ai_or_credit"
         return base
 
@@ -207,6 +219,8 @@ def scan_reconcile_candidates(
     claim_ttl_seconds: float = 120.0,
 ) -> list[ReconcileCandidate]:
     """Collect stuck inbound events and classify each without mutating state."""
+    from services.scale.inbound_undelivered import list_completed_undelivered_meta_dms
+
     events = list_active_inbound_events(older_than_seconds=older_than_seconds)
     candidates: list[ReconcileCandidate] = []
     seen_event_ids: set[str] = set()
@@ -217,9 +231,20 @@ def scan_reconcile_candidates(
         candidates.append(candidate)
         seen_event_ids.add(event.event_id)
 
+    for event in list_completed_undelivered_meta_dms(older_than_seconds=older_than_seconds):
+        if event.event_id in seen_event_ids:
+            continue
+        turn = _resolve_turn(event)
+        candidates.append(classify_event_turn(event, turn, claim_ttl_seconds=claim_ttl_seconds))
+        seen_event_ids.add(event.event_id)
+
     # Orphan turns: saved reply but no active inbound event linkage.
     for turn in list_all_turns():
-        if turn.state in TERMINAL_DELIVERED | TERMINAL_BLOCKED:
+        if turn.state in TERMINAL_DELIVERED:
+            continue
+        if turn.state == "PERMANENT_DELIVERY_BLOCK":
+            continue
+        if turn.state == "NEEDS_OWNER_ACTION" and turn_provider_accepted(turn):
             continue
         if turn.inbound_event_id and turn.inbound_event_id in seen_event_ids:
             continue

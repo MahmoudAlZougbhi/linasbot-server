@@ -156,6 +156,14 @@ async def _delayed_process_messages(
             try:
                 mids = user_data.pop("_batch_inbound_mids", []) or []
                 bfps = user_data.pop("_batch_turn_body_fps", []) or []
+                if not isinstance(mids, list):
+                    mids = []
+                if not mids:
+                    extra_events = [
+                        str(item).strip() for item in (user_data.get("_combine_event_ids") or []) if str(item).strip()
+                    ]
+                    inbound_one = str(user_data.get("_inbound_event_id") or "").strip()
+                    mids = extra_events or ([inbound_one] if inbound_one else [])
                 claim_id = stable_ai_claim_identity(user_id, user_data.get("phone_number"))
                 from services.ai_reply_turn_runtime import (
                     ensure_turn_started,

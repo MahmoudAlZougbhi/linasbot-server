@@ -199,6 +199,28 @@ def mark_state(logical_reply_id: str, state: LifecycleState, **fields: Any) -> A
     return put_turn(rec)
 
 
+def turn_provider_accepted(rec: AiReplyTurnRecord) -> bool:
+    """True when Graph (or another provider) already accepted this outbound."""
+    if rec.state in TERMINAL_DELIVERED:
+        return True
+    if str(rec.provider_reply_id or "").strip():
+        return True
+    evidence = rec.delivery_evidence or {}
+    if evidence.get("success"):
+        return True
+    return bool(str(evidence.get("provider_message_id") or "").strip())
+
+
+def _pending_saved_reply(rec: AiReplyTurnRecord) -> bool:
+    if not rec.generated_reply:
+        return False
+    if rec.state in TERMINAL_DELIVERED or rec.state == "PERMANENT_DELIVERY_BLOCK":
+        return False
+    if rec.state == "NEEDS_OWNER_ACTION":
+        return not turn_provider_accepted(rec)
+    return True
+
+
 def persist_generated_reply(
     logical_reply_id: str,
     *,
@@ -230,9 +252,7 @@ def find_pending_delivery_turn(*, claim_key_basis: str) -> AiReplyTurnRecord | N
         if data is None:
             return None
         rec = AiReplyTurnRecord.from_dict(data)
-        if rec.generated_reply and rec.state not in TERMINAL_DELIVERED | TERMINAL_BLOCKED:
-            return rec
-        return None
+        return rec if _pending_saved_reply(rec) else None
     root = _store_dir()
     for path in root.glob("lr_*.json"):
         try:
@@ -241,12 +261,13 @@ def find_pending_delivery_turn(*, claim_key_basis: str) -> AiReplyTurnRecord | N
             continue
         if rec.claim_key_basis != claim_key_basis:
             continue
-        if not rec.generated_reply:
-            continue
         if rec.state in {"OUTBOUND_RETRY", "DELIVERY_RETRY_WITHOUT_REGENERATION", "REPLY_SAVED"}:
+            if rec.generated_reply:
+                return rec
+        if rec.state == "NEEDS_OWNER_ACTION" and _pending_saved_reply(rec):
             return rec
         if rec.credit_captured and rec.state not in TERMINAL_DELIVERED | TERMINAL_BLOCKED:
-            if rec.outbound_state in {None, "failed", "retry"}:
+            if rec.outbound_state in {None, "failed", "retry"} and rec.generated_reply:
                 return rec
     return None
 

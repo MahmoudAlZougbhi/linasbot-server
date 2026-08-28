@@ -13,7 +13,11 @@ from services.customer_reply_reconcile_classify import (
     summarize_candidates,
 )
 from services.scale.inbound_event_reconcile import reconcile_stuck_inbound_events
-from services.scale.inbound_event_store import get_inbound_event, mark_inbound_state
+from services.scale.inbound_event_store import (
+    InboundEventStateTransitionError,
+    get_inbound_event,
+    mark_inbound_state,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -41,6 +45,32 @@ def _record_metrics(summary: dict[str, Any], *, executed: int) -> None:
     _METRICS["charged_without_delivery_count"] = int(summary.get("charged_without_delivery_count") or 0)
     if executed:
         _METRICS["retry_success_count"] = _METRICS.get("retry_success_count", 0) + executed
+
+
+def _prepare_undelivered_retry(candidate: ReconcileCandidate) -> str | None:
+    event_id = candidate.inbound_event_id
+    if not event_id or event_id.startswith("orphan:"):
+        return None
+    event = get_inbound_event(event_id)
+    if event is None:
+        return None
+    from services.scale.delivery_ledger import release_unknown_for_retry
+    from services.scale.inbound_undelivered import (
+        forget_combine_seen_for_event,
+        is_completed_undelivered,
+        reopen_completed_undelivered,
+    )
+
+    forget_combine_seen_for_event(event)
+    if candidate.logical_reply_id:
+        release_unknown_for_retry(str(candidate.logical_reply_id))
+        release_unknown_for_retry(event_id)
+    if is_completed_undelivered(event):
+        try:
+            reopen_completed_undelivered(event_id)
+        except InboundEventStateTransitionError:
+            return "reopen_failed"
+    return None
 
 
 async def _release_stale_claim(claim_key_basis: str | None) -> bool:
@@ -72,6 +102,15 @@ def _mark_ambiguous(candidate: ReconcileCandidate) -> dict[str, Any]:
 async def _execute_candidate(candidate: ReconcileCandidate) -> dict[str, Any]:
     if candidate.reconcile_attempts >= _MAX_RECONCILE_ATTEMPTS:
         return _mark_ambiguous(candidate)
+
+    if candidate.action in {"requeue_ai", "retry_delivery"}:
+        prep = _prepare_undelivered_retry(candidate)
+        if prep:
+            return {
+                "event_id": candidate.inbound_event_id,
+                "action": "prepare_failed",
+                "reason": prep,
+            }
 
     if candidate.action == "none":
         return {"event_id": candidate.inbound_event_id, "action": "none", "reason": candidate.reason}

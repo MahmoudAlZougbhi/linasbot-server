@@ -57,6 +57,19 @@ def test_drain_waits_until_due() -> None:
     assert drain_if_due("t:ig:u1", now=105.0) == []
 
 
+def test_forget_seen_allows_same_event_to_append_again() -> None:
+    from services.scale.message_combine_store import forget_seen
+
+    first = append_chunk("t:ig:u1", text="hello", event_id="e-retry", mid="mid-retry", delay_seconds=3)
+    replay = append_chunk("t:ig:u1", text="hello", event_id="e-retry", mid="mid-retry", delay_seconds=3)
+    assert first["duplicate"] is False
+    assert replay["duplicate"] is True
+    forget_seen("t:ig:u1", event_id="e-retry", mid="mid-retry")
+    again = append_chunk("t:ig:u1", text="hello", event_id="e-retry", mid="mid-retry", delay_seconds=3)
+    assert again["duplicate"] is False
+    assert len(peek_pending("t:ig:u1")) == 2
+
+
 def test_tenants_do_not_share_buffers() -> None:
     append_chunk("clinic:ig:u1", text="a", event_id="a", delay_seconds=0, now=1.0)
     append_chunk("linas:ig:u1", text="b", event_id="b", delay_seconds=0, now=1.0)

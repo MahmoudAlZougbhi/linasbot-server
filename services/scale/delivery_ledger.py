@@ -100,5 +100,26 @@ def mark_unknown(delivery_key: str) -> None:
     _save(data)
 
 
+def release_unknown_for_retry(delivery_key: str) -> bool:
+    """Allow begin_send after a skip_unknown when Graph never stored a message id.
+
+    Unknown normally forbids resend because the provider call may have succeeded.
+    This release is only for the never-accepted case: no sent state and no id.
+    """
+    key = str(delivery_key or "").strip()
+    if not key:
+        return False
+    data = _load(key)
+    state = str(data.get("state") or "not_started")
+    if state == "sent" or str(data.get("provider_message_id") or "").strip():
+        return False
+    if state not in {"unknown", "started"}:
+        return False
+    data["key"] = key
+    data["state"] = "failed"
+    _save(data)
+    return True
+
+
 def snapshot(delivery_key: str) -> dict[str, Any]:
     return _load(delivery_key)

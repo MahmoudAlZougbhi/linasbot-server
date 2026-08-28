@@ -6,11 +6,17 @@ import fakeredis
 import pytest
 
 from services.ai_reply_delivery import wrap_tracked_send
-from services.ai_reply_lifecycle import begin_turn, find_pending_delivery_turn, persist_generated_reply
+from services.ai_reply_lifecycle import (
+    begin_turn,
+    find_pending_delivery_turn,
+    persist_generated_reply,
+    turn_provider_accepted,
+)
 from services.scale.delivery_ledger import (
     begin_send,
     confirm_sent,
     mark_unknown,
+    release_unknown_for_retry,
     set_delivery_redis_for_tests,
     snapshot,
 )
@@ -104,3 +110,64 @@ async def test_nested_wrap_still_calls_provider_once() -> None:
     assert result.get("success") is True
     assert result.get("message_id") == "mid_nested"
     assert snapshot("lr_wrap_nested")["state"] == "sent"
+
+
+def test_never_sent_owner_action_is_pending_retry() -> None:
+    turn = begin_turn(
+        tenant_id="t1",
+        channel="facebook",
+        external_inbound_id="mid-owner",
+        claim_key_basis="claim-owner",
+    )
+    persist_generated_reply(turn.logical_reply_id, reply_text="saved facebook reply")
+    from services.ai_reply_lifecycle import get_turn, mark_state
+
+    mark_state(turn.logical_reply_id, "NEEDS_OWNER_ACTION")
+    stored = get_turn(turn.logical_reply_id)
+    assert stored is not None
+    assert turn_provider_accepted(stored) is False
+    pending = find_pending_delivery_turn(claim_key_basis="claim-owner")
+    assert pending is not None
+    assert pending.generated_reply == "saved facebook reply"
+
+
+def test_owner_action_with_provider_id_is_not_pending() -> None:
+    turn = begin_turn(
+        tenant_id="t1",
+        channel="facebook",
+        external_inbound_id="mid-sent-unknown",
+        claim_key_basis="claim-sent-unknown",
+    )
+    persist_generated_reply(turn.logical_reply_id, reply_text="already on graph")
+    from services.ai_reply_lifecycle import get_turn, mark_state
+
+    mark_state(
+        turn.logical_reply_id,
+        "NEEDS_OWNER_ACTION",
+        provider_reply_id="graph-mid-1",
+        delivery_evidence={"needs_owner_action": True, "provider_message_id": "graph-mid-1"},
+    )
+    stored = get_turn(turn.logical_reply_id)
+    assert stored is not None
+    assert turn_provider_accepted(stored) is True
+    assert find_pending_delivery_turn(claim_key_basis="claim-sent-unknown") is None
+
+
+@pytest.mark.asyncio
+async def test_release_unknown_then_wrap_sends() -> None:
+    calls: list[str] = []
+
+    async def raw(_to: str, message_text: str | None = None, **_k: object) -> dict:
+        calls.append(str(message_text))
+        return {"success": True, "provider": "meta", "message_id": "mid_retry"}
+
+    user_data = {"_logical_reply_id": "lr_release_unknown"}
+    begin_send("lr_release_unknown")
+    mark_unknown("lr_release_unknown")
+    assert begin_send("lr_release_unknown") == "skip_unknown"
+    assert release_unknown_for_retry("lr_release_unknown") is True
+    tracked = wrap_tracked_send(raw, user_data)
+    result = await tracked("user", message_text="late reply")
+    assert calls == ["late reply"]
+    assert result.get("success") is True
+    assert snapshot("lr_release_unknown")["state"] == "sent"
