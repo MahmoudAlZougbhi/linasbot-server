@@ -1026,6 +1026,9 @@ def test_target_verification_keeps_boot_guard_and_workers_offline_until_parity()
     assert "seq 1 45" not in final_start
     assert "canonical target API did not publish /api/health on :8003 after start" in final_start
     assert final_start.index("health_ok=1") < final_start.index("assert_health_while_drained")
+    assert "queue_ok=1" in final_start
+    assert "target queue readiness failed" in final_start
+    assert final_start.index("queue_ok=1") < final_start.index("assert_exact_runtime_process_contract disabled")
     parity = orchestrate.index('update_deploy_journal "target-parity-awaiting-fresh-lb"')
     assert 'remote_node "$peer_host" clear-maintenance' not in orchestrate[parity:]
     assert clear.index("remove_maintenance_boot_guard") < clear.index("start_admitted_target_runtime")
@@ -1568,6 +1571,8 @@ def test_forward_and_rollback_admission_prove_exact_process_queue_and_live_env()
     assert "stable_pid != main_pid" in proof
     assert 'need_reload != "no"' in proof
     assert "payload != {" in proof and '"role": "queue_readiness"' in proof
+    assert "durable queue readiness could not be reached" in proof
+    assert "monotonic() + 90" in proof
     assert "assert_exact_runtime_process_contract enabled" in preflight
     assert "assert_exact_runtime_process_contract disabled" in rollback_start
     assert "assert_exact_runtime_process_contract disabled" in target_start
