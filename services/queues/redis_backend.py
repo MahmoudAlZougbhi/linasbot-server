@@ -7,6 +7,7 @@ import time
 import uuid
 from typing import Any
 
+from services.queues.claim_activate import job_id_text, set_claim_lease
 from services.queues.config import (
     DEFAULT_MAX_ATTEMPTS,
     HEARTBEAT_TTL_SECONDS,
@@ -15,7 +16,6 @@ from services.queues.config import (
     lease_ttl_seconds,
     redis_url,
 )
-from services.queues.claim_activate import job_id_text, set_claim_lease
 from services.queues.job_lease import JobLease, lease_log, parse_removed
 from services.queues.models import QueueJob
 from services.queues.reclaim_scan import reclaim_expired_leases as scan_expired_leases
