@@ -23,3 +23,12 @@ def test_percentiles_track_injected_samples() -> None:
     assert stats["p50"] == 50
     assert stats["max"] == 100
     assert stats["p99"] >= stats["p95"]
+
+
+def test_stale_samples_outside_window_do_not_keep_p95_hot() -> None:
+    observe("job_wait_ms", 9000.0, now=1.0)
+    observe("job_wait_ms", 20.0, now=200.0)
+    stats = percentiles("job_wait_ms", now=200.0)
+    assert stats["count"] == 1
+    assert stats["p95"] == 20.0
+    assert stats["max"] == 20.0

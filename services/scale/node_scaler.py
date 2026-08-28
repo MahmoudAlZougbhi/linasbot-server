@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 
 from services.scale.do_autoscale_guard import DigitalOceanAutoscaleForbidden, assert_droplet_autoscale_allowed
@@ -110,3 +110,48 @@ def try_create_droplet_locked() -> str:
 
     create_staging_worker_droplet()
     return "unreachable"
+
+
+def apply_node_decision(
+    decision: NodeScaleDecision,
+    *,
+    wait_p95_ms: float,
+    backlog_growing: bool,
+    pressure_seconds: float,
+) -> dict[str, Any]:
+    """Record node-layer intent. Production droplet create stays fail-closed."""
+    from services.scale.autoscale_clocks import mark_node_attempt, node_attempt_cooled, store_node_need
+    from services.scale.replica_controller import record_event
+
+    payload: dict[str, Any] = {
+        **asdict(decision),
+        "kind": "node_layer",
+        "wait_p95_ms": float(wait_p95_ms),
+        "backlog_growing": bool(backlog_growing),
+        "pressure_seconds": float(pressure_seconds),
+        "droplet_create": "not_attempted",
+        "applied": False,
+    }
+    if decision.action != "add_node":
+        store_node_need(payload)
+        record_event(payload)
+        return payload
+    if not node_attempt_cooled():
+        payload["droplet_create"] = "cooldown"
+        store_node_need(payload)
+        record_event(payload)
+        return payload
+    mark_node_attempt()
+    try:
+        try_create_droplet_locked()
+    except DigitalOceanAutoscaleForbidden as exc:
+        payload["droplet_create"] = "refused"
+        payload["refused"] = str(exc)
+        store_node_need(payload)
+        record_event(payload)
+        return payload
+    payload["droplet_create"] = "created"
+    payload["applied"] = True
+    store_node_need(payload)
+    record_event(payload)
+    return payload

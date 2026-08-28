@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from services.durable_event_claim import release_job_lock, try_acquire_job_lock
 
 
-async def run_customer_reply_reconcile_job() -> None:
+def _run_customer_reply_reconcile_job_sync() -> None:
     if not try_acquire_job_lock("customer_reply_reconcile", ttl_seconds=55):
         return
     try:
-        from services.customer_reply_reconcile_worker import reconcile_customer_replies
 
-        result = await reconcile_customer_replies(dry_run=False, older_than_seconds=60.0)
+        async def _run() -> dict:
+            from services.customer_reply_reconcile_worker import reconcile_customer_replies
+
+            return await reconcile_customer_replies(dry_run=False, older_than_seconds=60.0)
+
+        result = asyncio.run(_run())
         summary = result.get("summary") or {}
         metrics = result.get("metrics") or {}
         stuck = int(summary.get("stuck_events_count") or 0)
@@ -26,3 +32,7 @@ async def run_customer_reply_reconcile_job() -> None:
         print(f"[customer-reply-reconcile] failed type={type(exc).__name__} detail={str(exc)[:160]}")
     finally:
         release_job_lock("customer_reply_reconcile")
+
+
+async def run_customer_reply_reconcile_job() -> None:
+    await asyncio.to_thread(_run_customer_reply_reconcile_job_sync)
