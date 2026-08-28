@@ -163,6 +163,21 @@ def drain_if_due(user_key: str, *, now: float | None = None) -> list[dict[str, A
     return out
 
 
+def forget_seen(user_key: str, *, event_id: str = "", mid: str = "") -> None:
+    """Drop combine dedupe tokens so an undelivered inbound can be flushed again."""
+    client = _client()
+    if client is None:
+        return
+    tokens = {str(event_id or "").strip(), str(mid or "").strip()}
+    tokens.discard("")
+    if not tokens:
+        return
+    try:
+        client.srem(_keys(user_key)[1], *tokens)
+    except Exception:
+        return
+
+
 def peek_pending(user_key: str) -> list[dict[str, Any]]:
     client = _client()
     if client is None:

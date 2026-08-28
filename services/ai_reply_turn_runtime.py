@@ -60,6 +60,8 @@ def ensure_turn_started(
         return str(existing)
     tenant_id, channel, discovered_external_id, inbound_event_id = _tenant_channel_inbound(user_data)
     external_id = str(external_inbound_id or discovered_external_id or "").strip()
+    if not external_id and inbound_event_id:
+        external_id = str(inbound_event_id).strip()
     if not tenant_id or not external_id:
         return None
     turn = begin_turn(
@@ -210,6 +212,14 @@ async def retry_saved_reply_delivery(
     """Send persisted reply without calling OpenAI. Returns True if delivered."""
     from services.ai_reply_delivery import classify_send_result, wrap_tracked_send
     from services.outbound_turn_idempotency import complete_ai_turn_claim
+    from services.scale.delivery_ledger import release_unknown_for_retry
+
+    lid = str(pending.get("logical_reply_id") or "")
+    if lid:
+        release_unknown_for_retry(lid)
+    inbound = str(user_data.get("_inbound_event_id") or "").strip()
+    if inbound:
+        release_unknown_for_retry(inbound)
 
     tracked = wrap_tracked_send(send_message_func, user_data)
     result = await tracked(user_id, pending["reply_text"])

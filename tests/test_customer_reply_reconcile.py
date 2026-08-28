@@ -308,3 +308,59 @@ def test_dry_run_report_format(stores: Path) -> None:
     assert "stuck_events_count" in summary
     assert "by_classification" in summary
     assert summary["examined"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_never_sent_owner_action_retries_delivery(stores: Path, ledger_env: CreditLedgerService) -> None:
+    ledger_env.ensure_period_grant("t1")
+    event = _seed_inbound(
+        message_id="mid-never-sent",
+        state="completed",
+        outbound_status="needs_owner_action",
+    )
+    turn = begin_turn(
+        tenant_id="t1",
+        channel="instagram",
+        external_inbound_id="mid-never-sent",
+        inbound_event_id=event.event_id,
+        claim_key_basis="basis-never-sent",
+    )
+    reserve_before_ai(turn)
+    turn = get_turn(turn.logical_reply_id)
+    assert turn is not None
+    turn.generated_reply = "Reply never reached Graph"
+    turn.state = "NEEDS_OWNER_ACTION"
+    put_turn(turn)
+    capture_after_reply_persisted(turn.logical_reply_id)
+    after_capture = ledger_env.get_balance("t1")
+    turn = get_turn(turn.logical_reply_id)
+    assert turn is not None
+    turn.state = "NEEDS_OWNER_ACTION"
+    put_turn(turn)
+
+    candidate = classify_event_turn(event, get_turn(turn.logical_reply_id))
+    assert candidate.classification == "B"
+    assert candidate.action == "retry_delivery"
+    result = await reconcile_customer_replies(dry_run=False, older_than_seconds=0.0)
+    assert any(a.get("action") == "retry_delivery" for a in result["actions"])
+    assert ledger_env.get_balance("t1") == after_capture
+    refreshed = get_inbound_event(event.event_id)
+    assert refreshed is not None
+    assert refreshed.state in {"accepted", "queued"}
+
+
+@pytest.mark.asyncio
+async def test_completed_unknown_without_ai_requeues(stores: Path) -> None:
+    event = _seed_inbound(
+        message_id="mid-credit-block",
+        state="completed",
+        outbound_status="unknown",
+    )
+    candidate = classify_event_turn(event, None)
+    assert candidate.classification == "A"
+    assert candidate.action == "requeue_ai"
+    result = await reconcile_customer_replies(dry_run=False, older_than_seconds=0.0)
+    assert any(a.get("action") == "requeue_ai" for a in result["actions"])
+    refreshed = get_inbound_event(event.event_id)
+    assert refreshed is not None
+    assert refreshed.state in {"accepted", "queued"}
