@@ -12,9 +12,13 @@ from services.customer_reply_reconcile_classify import (
     scan_reconcile_candidates,
     summarize_candidates,
 )
-from services.scale.inbound_event_reconcile import reconcile_stuck_inbound_events
+from services.scale.inbound_event_reconcile import (
+    reconcile_stuck_inbound_events,
+    requeue_inbound_event_ids,
+)
 from services.scale.inbound_event_store import (
     InboundEventStateTransitionError,
+    InboundEventStoreUnavailableError,
     get_inbound_event,
     mark_inbound_state,
 )
@@ -51,7 +55,11 @@ def _prepare_undelivered_retry(candidate: ReconcileCandidate) -> str | None:
     event_id = candidate.inbound_event_id
     if not event_id or event_id.startswith("orphan:"):
         return None
-    event = get_inbound_event(event_id)
+    try:
+        event = get_inbound_event(event_id)
+    except InboundEventStoreUnavailableError:
+        _logger.warning("[reconcile] event_unavailable event_id=%s", event_id)
+        return "event_unavailable"
     if event is None:
         return None
     from services.scale.delivery_ledger import release_unknown_for_retry
@@ -62,9 +70,9 @@ def _prepare_undelivered_retry(candidate: ReconcileCandidate) -> str | None:
     )
 
     forget_combine_seen_for_event(event)
+    release_unknown_for_retry(event_id)
     if candidate.logical_reply_id:
         release_unknown_for_retry(str(candidate.logical_reply_id))
-        release_unknown_for_retry(event_id)
     if is_completed_undelivered(event):
         try:
             reopen_completed_undelivered(event_id)
@@ -89,17 +97,31 @@ def _mark_ambiguous(candidate: ReconcileCandidate) -> dict[str, Any]:
             "NEEDS_OWNER_ACTION",
             last_error=f"reconcile_ambiguous:{candidate.reason}",
         )
-    event = get_inbound_event(candidate.inbound_event_id)
-    if event is not None and not candidate.inbound_event_id.startswith("orphan:"):
-        mark_inbound_state(
-            candidate.inbound_event_id,
-            state="failed",
-            last_error=f"reconcile_ambiguous:{candidate.reason}",
-        )
+    event = None
+    if not candidate.inbound_event_id.startswith("orphan:"):
+        try:
+            event = get_inbound_event(candidate.inbound_event_id)
+        except InboundEventStoreUnavailableError:
+            event = None
+    if event is not None:
+        try:
+            mark_inbound_state(
+                candidate.inbound_event_id,
+                state="failed",
+                last_error=f"reconcile_ambiguous:{candidate.reason}",
+            )
+        except InboundEventStateTransitionError:
+            _logger.warning(
+                "[reconcile] ambiguous_mark_skipped event_id=%s",
+                candidate.inbound_event_id,
+            )
     return {"event_id": candidate.inbound_event_id, "action": "mark_ambiguous", "reason": candidate.reason}
 
 
 async def _execute_candidate(candidate: ReconcileCandidate) -> dict[str, Any]:
+    if candidate.action == "none":
+        return {"event_id": candidate.inbound_event_id, "action": "none", "reason": candidate.reason}
+
     if candidate.reconcile_attempts >= _MAX_RECONCILE_ATTEMPTS:
         return _mark_ambiguous(candidate)
 
@@ -111,9 +133,6 @@ async def _execute_candidate(candidate: ReconcileCandidate) -> dict[str, Any]:
                 "action": "prepare_failed",
                 "reason": prep,
             }
-
-    if candidate.action == "none":
-        return {"event_id": candidate.inbound_event_id, "action": "none", "reason": candidate.reason}
 
     if candidate.action == "complete_inbound":
         if not candidate.inbound_event_id.startswith("orphan:"):
@@ -225,17 +244,44 @@ async def reconcile_customer_replies(
 
     actions: list[dict[str, Any]] = []
     for candidate in candidates:
+        should_run = False
         if candidate.action in {"none", "complete_inbound"} and candidate.classification == "C":
-            actions.append(await _execute_candidate(candidate))
+            should_run = True
+        elif candidate.classification in {"A", "B", "D"}:
+            should_run = True
+        if not should_run:
             continue
-        if candidate.classification == "D":
+        try:
             actions.append(await _execute_candidate(candidate))
-            continue
-        if candidate.classification in {"A", "B"}:
-            actions.append(await _execute_candidate(candidate))
+        except (InboundEventStateTransitionError, InboundEventStoreUnavailableError) as exc:
+            _logger.warning(
+                "[reconcile] candidate_failed event_id=%s type=%s",
+                candidate.inbound_event_id,
+                type(exc).__name__,
+            )
+            actions.append(
+                {
+                    "event_id": candidate.inbound_event_id,
+                    "action": "execute_failed",
+                    "reason": type(exc).__name__,
+                }
+            )
 
     # Re-enqueue durable inbound jobs after local state fixes.
-    queue_result = reconcile_stuck_inbound_events(older_than_seconds=0.0)
+    retry_ids = [
+        str(item.get("event_id") or "")
+        for item in actions
+        if item.get("action") in {"requeue_ai", "retry_delivery"}
+    ]
+    try:
+        queue_result = reconcile_stuck_inbound_events(older_than_seconds=0.0)
+    except InboundEventStoreUnavailableError:
+        _logger.warning("[reconcile] active_requeue_scan_failed targeted=%s", len(retry_ids))
+        queue_result = {
+            "examined": len(retry_ids),
+            "actions": requeue_inbound_event_ids(retry_ids),
+            "targeted_requeue": True,
+        }
     executed = sum(1 for a in actions if a.get("action") not in {"none"})
     _record_metrics(summary, executed=executed)
 
@@ -248,5 +294,6 @@ async def reconcile_customer_replies(
         "inbound_requeue": {
             "examined": queue_result.get("examined"),
             "actions": queue_result.get("actions"),
+            "targeted_requeue": bool(queue_result.get("targeted_requeue")),
         },
     }

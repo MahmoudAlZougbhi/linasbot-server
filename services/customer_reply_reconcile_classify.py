@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -21,6 +22,8 @@ from services.scale.inbound_event_store import (
     InboundEventRecord,
     list_active_inbound_events,
 )
+
+_logger = logging.getLogger(__name__)
 
 ReconcileClass = Literal["A", "B", "C", "D"]
 ReconcileAction = Literal[
@@ -165,6 +168,15 @@ def classify_event_turn(
         reconcile_attempts=int(event.attempts or 0),
     )
 
+    if str(event.last_error or "").startswith("reconcile_ambiguous:"):
+        from services.scale.inbound_undelivered import is_completed_undelivered
+
+        if not is_completed_undelivered(event):
+            base.action = "none"
+            base.reason = "already_marked_ambiguous"
+            base.expected_outcome = "no_customer_reply_or_credit_change"
+            return base
+
     ambiguous = _is_ambiguous(event, turn)
     if ambiguous:
         base.classification = "D"
@@ -221,7 +233,11 @@ def scan_reconcile_candidates(
     """Collect stuck inbound events and classify each without mutating state."""
     from services.scale.inbound_undelivered import list_completed_undelivered_meta_dms
 
-    events = list_active_inbound_events(older_than_seconds=older_than_seconds)
+    try:
+        events = list_active_inbound_events(older_than_seconds=older_than_seconds)
+    except Exception as exc:
+        _logger.warning("[reconcile-scan] active_list_failed type=%s", type(exc).__name__)
+        events = []
     candidates: list[ReconcileCandidate] = []
     seen_event_ids: set[str] = set()
 
@@ -231,7 +247,12 @@ def scan_reconcile_candidates(
         candidates.append(candidate)
         seen_event_ids.add(event.event_id)
 
-    for event in list_completed_undelivered_meta_dms(older_than_seconds=older_than_seconds):
+    try:
+        undelivered = list_completed_undelivered_meta_dms(older_than_seconds=older_than_seconds)
+    except Exception as exc:
+        _logger.warning("[reconcile-scan] undelivered_list_failed type=%s", type(exc).__name__)
+        undelivered = []
+    for event in undelivered:
         if event.event_id in seen_event_ids:
             continue
         turn = _resolve_turn(event)
@@ -239,7 +260,12 @@ def scan_reconcile_candidates(
         seen_event_ids.add(event.event_id)
 
     # Orphan turns: saved reply but no active inbound event linkage.
-    for turn in list_all_turns():
+    try:
+        turns = list_all_turns()
+    except Exception as exc:
+        _logger.warning("[reconcile-scan] turn_list_failed type=%s", type(exc).__name__)
+        turns = []
+    for turn in turns:
         if turn.state in TERMINAL_DELIVERED:
             continue
         if turn.state == "PERMANENT_DELIVERY_BLOCK":
@@ -288,6 +314,8 @@ def summarize_candidates(candidates: list[ReconcileCandidate]) -> dict[str, Any]
         "by_action": by_action,
         "stale_claims_count": stale_claims,
         "charged_without_delivery_count": charged_without_delivery,
-        "stuck_events_count": by_class.get("A", 0) + by_class.get("B", 0) + by_class.get("D", 0),
+        "stuck_events_count": sum(
+            1 for item in candidates if item.action not in {"none", "complete_inbound"}
+        ),
         "generated_at": time.time(),
     }

@@ -364,3 +364,124 @@ async def test_completed_unknown_without_ai_requeues(stores: Path) -> None:
     refreshed = get_inbound_event(event.event_id)
     assert refreshed is not None
     assert refreshed.state in {"accepted", "queued"}
+
+
+def test_scan_finds_undelivered_when_active_list_fails(stores: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.scale.inbound_event_store import InboundEventStoreUnavailableError
+
+    event = _seed_inbound(
+        message_id="mid-scan-undelivered",
+        state="completed",
+        outbound_status="unknown",
+    )
+
+    def _boom(*, older_than_seconds: float = 0.0) -> list:
+        raise InboundEventStoreUnavailableError("Unable to query the shared inbound-event ledger")
+
+    monkeypatch.setattr(
+        "services.customer_reply_reconcile_classify.list_active_inbound_events",
+        _boom,
+    )
+    candidates = scan_reconcile_candidates(older_than_seconds=0.0)
+    match = next(item for item in candidates if item.inbound_event_id == event.event_id)
+    assert match.action == "requeue_ai"
+
+
+def test_already_ambiguous_failed_event_is_noop(stores: Path) -> None:
+    event = _seed_inbound(message_id="mid-amb-loop", state="failed", attempts=8)
+    event.last_error = "reconcile_ambiguous:ai_never_generated_reply"
+    put_inbound_event(event)
+    live = get_inbound_event(event.event_id)
+    assert live is not None
+    candidate = classify_event_turn(live, None)
+    assert candidate.action == "none"
+    assert candidate.reason == "already_marked_ambiguous"
+
+
+@pytest.mark.asyncio
+async def test_completed_unknown_releases_event_ledger_without_turn(stores: Path) -> None:
+    import fakeredis
+
+    from services.scale.delivery_ledger import (
+        begin_send,
+        mark_unknown,
+        set_delivery_redis_for_tests,
+        snapshot,
+    )
+
+    fake = fakeredis.FakeRedis(decode_responses=True)
+    set_delivery_redis_for_tests(fake)
+    try:
+        event = _seed_inbound(
+            message_id="mid-ledger-release",
+            state="completed",
+            outbound_status="unknown",
+        )
+        begin_send(event.event_id)
+        mark_unknown(event.event_id)
+        assert snapshot(event.event_id)["state"] == "unknown"
+        result = await reconcile_customer_replies(dry_run=False, older_than_seconds=0.0)
+        assert any(a.get("action") == "requeue_ai" for a in result["actions"])
+        assert snapshot(event.event_id)["state"] == "failed"
+        assert begin_send(event.event_id) == "send"
+    finally:
+        set_delivery_redis_for_tests(None)
+
+
+@pytest.mark.asyncio
+async def test_one_transition_failure_does_not_abort_others(
+    stores: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import services.customer_reply_reconcile_worker as worker
+    from services.customer_reply_reconcile_worker import mark_inbound_state as worker_mark
+    from services.scale.inbound_event_store import InboundEventStateTransitionError
+
+    good = _seed_inbound(message_id="mid-good-iso", state="completed", outbound_status="unknown")
+    bad = _seed_inbound(message_id="mid-bad-iso", state="completed", outbound_status="unknown")
+
+    def _flaky(event_id: str, *args: object, **kwargs: object):
+        if event_id == bad.event_id:
+            raise InboundEventStateTransitionError("Inbound event is already terminal")
+        return worker_mark(event_id, *args, **kwargs)
+
+    monkeypatch.setattr(worker, "mark_inbound_state", _flaky)
+    result = await reconcile_customer_replies(dry_run=False, older_than_seconds=0.0)
+    by_id = {a["event_id"]: a for a in result["actions"]}
+    assert by_id[good.event_id]["action"] == "requeue_ai"
+    assert by_id[bad.event_id]["action"] == "execute_failed"
+    refreshed = get_inbound_event(good.event_id)
+    assert refreshed is not None
+    assert refreshed.state in {"accepted", "queued"}
+
+
+@pytest.mark.asyncio
+async def test_undelivered_retries_when_active_scan_unavailable(
+    stores: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from services.scale.inbound_event_store import InboundEventStoreUnavailableError
+
+    event = _seed_inbound(
+        message_id="mid-scan-unavailable",
+        state="completed",
+        outbound_status="unknown",
+    )
+
+    def _boom(*_args: object, **_kwargs: object) -> list:
+        raise InboundEventStoreUnavailableError("Unable to query the shared inbound-event ledger")
+
+    monkeypatch.setattr(
+        "services.customer_reply_reconcile_classify.list_active_inbound_events",
+        _boom,
+    )
+    monkeypatch.setattr(
+        "services.scale.inbound_event_reconcile.list_active_inbound_events",
+        _boom,
+    )
+    result = await reconcile_customer_replies(dry_run=False, older_than_seconds=0.0)
+    assert any(a.get("action") == "requeue_ai" and a.get("event_id") == event.event_id for a in result["actions"])
+    assert result["inbound_requeue"].get("targeted_requeue") is True
+    refreshed = get_inbound_event(event.event_id)
+    assert refreshed is not None
+    assert refreshed.state in {"accepted", "queued"}

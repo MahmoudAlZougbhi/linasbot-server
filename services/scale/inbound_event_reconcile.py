@@ -9,8 +9,11 @@ from typing import Any
 
 from services.queues.config import redis_required
 from services.scale.inbound_event_store import (
+    ACTIVE_STATES,
     InboundEventRecord,
+    InboundEventStoreUnavailableError,
     accountability_stats,
+    get_inbound_event,
     list_active_inbound_events,
     mark_inbound_state,
     put_inbound_event,
@@ -100,59 +103,115 @@ def _enqueue_or_mark(rec: InboundEventRecord, claim_handle: Any) -> dict[str, An
     return {"event_id": rec.event_id, "action": "marked_accepted_for_retry"}
 
 
+def _requeue_one_stuck(rec: InboundEventRecord) -> dict[str, Any]:
+    from services.durable_event_claim import (
+        complete_event_claim,
+        meta_claim_binding_digest,
+        run_claim_coroutine_blocking,
+        try_claim_event_handle,
+    )
+
+    namespace, collection = _claim_contract(rec)
+    claim_handle = run_claim_coroutine_blocking(
+        partial(
+            try_claim_event_handle,
+            namespace,
+            rec.claim_key,
+            ttl_seconds=300.0,
+            firestore_collection=collection,
+            firestore_claim_metadata={
+                "binding_id_sha256": meta_claim_binding_digest(
+                    str(rec.binding_snapshot.get("binding_id") or rec.settings_snapshot.get("binding_id") or "")
+                ),
+                "inbound_event_id": rec.event_id,
+            },
+            meta_binding_id=str(
+                rec.binding_snapshot.get("binding_id") or rec.settings_snapshot.get("binding_id") or ""
+            ),
+        )
+    )
+    if claim_handle is None:
+        return {"event_id": rec.event_id, "action": "live_claim_skipped"}
+    if rec.attempts >= _MAX_ATTEMPTS:
+        mark_inbound_state(
+            rec.event_id,
+            state="dead_letter",
+            last_error=rec.last_error or "max_reconcile_attempts",
+        )
+        run_claim_coroutine_blocking(
+            partial(
+                complete_event_claim,
+                namespace,
+                rec.claim_key,
+                firestore_collection=collection,
+                claim_handle=claim_handle,
+            )
+        )
+        return {"event_id": rec.event_id, "action": "dead_letter"}
+    return _enqueue_or_mark(rec, claim_handle)
+
+
+def requeue_inbound_event_ids(event_ids: list[str]) -> list[dict[str, Any]]:
+    """Enqueue specific reopened events when the active Firestore scan cannot run."""
+    actions: list[dict[str, Any]] = []
+    for event_id in event_ids:
+        if not event_id or event_id.startswith("orphan:"):
+            continue
+        try:
+            rec = get_inbound_event(event_id)
+        except Exception as exc:
+            _runtime_logger.warning(
+                "[inbound-reconcile] targeted_get_failed event_id=%s type=%s",
+                event_id,
+                type(exc).__name__,
+            )
+            continue
+        if rec is None or rec.state not in ACTIVE_STATES:
+            continue
+        try:
+            actions.append(_requeue_one_stuck(rec))
+        except Exception as exc:
+            _runtime_logger.warning(
+                "[inbound-reconcile] targeted_requeue_failed event_id=%s type=%s",
+                event_id,
+                type(exc).__name__,
+            )
+            actions.append(
+                {"event_id": event_id, "action": "requeue_failed", "reason": type(exc).__name__}
+            )
+    return actions
+
+
 def reconcile_stuck_inbound_events(*, older_than_seconds: float = 45.0) -> dict[str, Any]:
     """Re-enqueue unfinished durable events. Never drops accepted records."""
     stuck = list_active_inbound_events(older_than_seconds=older_than_seconds)
     actions: list[dict[str, Any]] = []
     for rec in stuck:
-        from services.durable_event_claim import (
-            complete_event_claim,
-            meta_claim_binding_digest,
-            run_claim_coroutine_blocking,
-            try_claim_event_handle,
-        )
-
-        namespace, collection = _claim_contract(rec)
-        claim_handle = run_claim_coroutine_blocking(
-            partial(
-                try_claim_event_handle,
-                namespace,
-                rec.claim_key,
-                ttl_seconds=300.0,
-                firestore_collection=collection,
-                firestore_claim_metadata={
-                    "binding_id_sha256": meta_claim_binding_digest(
-                        str(rec.binding_snapshot.get("binding_id") or rec.settings_snapshot.get("binding_id") or "")
-                    ),
-                    "inbound_event_id": rec.event_id,
-                },
-                meta_binding_id=str(
-                    rec.binding_snapshot.get("binding_id") or rec.settings_snapshot.get("binding_id") or ""
-                ),
-            )
-        )
-        if claim_handle is None:
-            actions.append({"event_id": rec.event_id, "action": "live_claim_skipped"})
-            continue
-        if rec.attempts >= _MAX_ATTEMPTS:
-            mark_inbound_state(
+        try:
+            actions.append(_requeue_one_stuck(rec))
+        except Exception as exc:
+            _runtime_logger.warning(
+                "[inbound-reconcile] requeue_one_failed event_id=%s type=%s",
                 rec.event_id,
-                state="dead_letter",
-                last_error=rec.last_error or "max_reconcile_attempts",
+                type(exc).__name__,
             )
-            run_claim_coroutine_blocking(
-                partial(
-                    complete_event_claim,
-                    namespace,
-                    rec.claim_key,
-                    firestore_collection=collection,
-                    claim_handle=claim_handle,
-                )
+            actions.append(
+                {
+                    "event_id": rec.event_id,
+                    "action": "requeue_failed",
+                    "reason": type(exc).__name__,
+                }
             )
-            actions.append({"event_id": rec.event_id, "action": "dead_letter"})
-            continue
-        actions.append(_enqueue_or_mark(rec, claim_handle))
-    stats = accountability_stats()
+    try:
+        stats = accountability_stats()
+    except InboundEventStoreUnavailableError:
+        _runtime_logger.warning("[inbound-reconcile] accountability_audit_failed")
+        stats = {
+            "accepted_total": len(stuck),
+            "terminal_accounted": 0,
+            "active_non_terminal": len(stuck),
+            "unexplained_missing_events": 0,
+        }
     return {
         "reconciled_at": time.time(),
         "examined": len(stuck),
