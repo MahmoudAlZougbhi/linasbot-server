@@ -85,3 +85,22 @@ async def test_wrap_skips_already_sent() -> None:
     assert calls == []
     assert result.get("success") is True
     assert result.get("message_id") == "mid_old"
+
+
+@pytest.mark.asyncio
+async def test_nested_wrap_still_calls_provider_once() -> None:
+    calls: list[str] = []
+
+    async def raw(_to: str, message_text: str | None = None, **_k: object) -> dict:
+        calls.append(str(message_text))
+        return {"success": True, "provider": "meta", "message_id": "mid_nested"}
+
+    user_data = {"_logical_reply_id": "lr_wrap_nested"}
+    inner = wrap_tracked_send(raw, user_data)
+    outer = wrap_tracked_send(inner, user_data)
+    result = await outer("user", message_text="hello")
+    assert outer is inner
+    assert calls == ["hello"]
+    assert result.get("success") is True
+    assert result.get("message_id") == "mid_nested"
+    assert snapshot("lr_wrap_nested")["state"] == "sent"
