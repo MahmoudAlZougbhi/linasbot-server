@@ -39,7 +39,7 @@ def test_reclaim_during_save_does_not_steal_live_claim(monkeypatch) -> None:
     assert backend.complete(claimed).startswith("ok")
 
 
-def test_incomplete_activate_is_not_treated_as_dead_worker(monkeypatch) -> None:
+def test_incomplete_activate_without_lease_returns_to_queue(monkeypatch) -> None:
     backend = _backend(monkeypatch)
     job = QueueJob.new(queue="high_priority", job_type="combine_flush", tenant_id="t1", payload={})
     backend.enqueue(job)
@@ -52,7 +52,10 @@ def test_incomplete_activate_is_not_treated_as_dead_worker(monkeypatch) -> None:
     assert stored.status == "queued"
     assert stored.last_error is None
     assert stored.attempts == 0
-    assert job.id in backend._r.lrange(backend._k("processing", "high_priority"), 0, -1)
+    again = backend.claim("high_priority", worker_id="w-live", timeout=1)
+    assert again is not None
+    assert again.id == job.id
+    assert again.attempts == 1
 
 
 def test_peer_reclaim_loop_cannot_expire_a_live_claim(monkeypatch) -> None:
