@@ -85,7 +85,10 @@ def reopen_completed_undelivered(event_id: str) -> InboundEventRecord:
     rec.outbound_status = "undelivered_retry"
     rec.last_error = None
     rec.attempts += 1
-    return put_inbound_event(rec, require_shared_existing=require_shared)
+    saved = put_inbound_event(rec, require_shared_existing=require_shared)
+    if saved.state != "accepted":
+        raise InboundEventStateTransitionError("Inbound event reopen did not leave completed")
+    return saved
 
 
 def _age_ok(rec: InboundEventRecord, *, older_than_seconds: float, now: float) -> bool:
