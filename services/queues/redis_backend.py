@@ -7,6 +7,7 @@ import time
 import uuid
 from typing import Any
 
+from services.queues.claim_activate import job_id_text, set_claim_lease
 from services.queues.config import (
     DEFAULT_MAX_ATTEMPTS,
     HEARTBEAT_TTL_SECONDS,
@@ -17,6 +18,7 @@ from services.queues.config import (
 )
 from services.queues.job_lease import JobLease, lease_log, parse_removed
 from services.queues.models import QueueJob
+from services.queues.reclaim_scan import reclaim_expired_leases as scan_expired_leases
 from services.scale.metrics import incr
 
 
@@ -152,42 +154,68 @@ class RedisQueueBackend:
     def claim(self, queue: str, *, worker_id: str, timeout: int = 5) -> QueueJob | None:
         """Move one ready job from queue → processing. Delayed jobs stay in a ZSET."""
         self._promote_ready(queue)
-        src = self._k("queue", queue)
-        dst = self._k("processing", queue)
-        job_id = self._r.brpoplpush(src, dst, timeout=timeout)
-        return self._activate_claimed(queue, job_id, worker_id=worker_id)
+        job_id = self._r.brpoplpush(self._k("queue", queue), self._k("processing", queue), timeout=timeout)
+        return self._bind_claimed(queue, job_id, worker_id=worker_id)
 
     def try_claim(self, queue: str, *, worker_id: str) -> QueueJob | None:
         """Non-blocking claim for isolated replica pools and tests."""
         self._promote_ready(queue)
-        src = self._k("queue", queue)
-        dst = self._k("processing", queue)
-        job_id = self._r.rpoplpush(src, dst)
-        return self._activate_claimed(queue, job_id, worker_id=worker_id)
+        job_id = self._r.rpoplpush(self._k("queue", queue), self._k("processing", queue))
+        return self._bind_claimed(queue, job_id, worker_id=worker_id)
 
-    def _activate_claimed(self, queue: str, job_id: Any, *, worker_id: str) -> QueueJob | None:
-        if not job_id:
+    def _bind_claimed(self, queue: str, job_id: Any, *, worker_id: str) -> QueueJob | None:
+        jid = job_id_text(job_id)
+        if not jid:
+            return None
+        owner = str(worker_id)
+        token = uuid.uuid4().hex
+        wire = QueueJob.wire_for(owner, token)
+        set_claim_lease(
+            self._r,
+            job_id=jid,
+            lease_prefix=f"{key_prefix()}:lease:",
+            wire=wire,
+            ttl_seconds=self._lease_ttl(),
+        )
+        try:
+            return self._activate_claimed(queue, jid, owner=owner, token=token)
+        except Exception:
+            self._r.delete(self._k("lease", jid))
+            self._r.lrem(self._k("processing", queue), 1, jid)
+            self._r.lpush(self._k("queue", queue), jid)
+            raise
+
+    def _activate_claimed(self, queue: str, job_id: Any, *, owner: str, token: str) -> QueueJob | None:
+        jid = str(job_id or "")
+        if not jid:
             return None
         dst = self._k("processing", queue)
-        job = self.get(str(job_id))
+        lease_key = self._k("lease", jid)
+
+        def _abort() -> None:
+            self._r.delete(lease_key)
+            self._r.lrem(dst, 1, jid)
+
+        job = self.get(jid)
         if job is None:
-            self._r.lrem(dst, 1, job_id)
+            _abort()
             return None
         if job.status in {"completed", "dead"}:
-            self._r.lrem(dst, 1, job_id)
+            _abort()
             return None
         now = time.time()
         if job.available_at > now:
-            self._r.lrem(dst, 1, job_id)
+            _abort()
             self._r.zadd(self._k("delayed", queue), {job.id: job.available_at})
             return None
         job.status = "processing"
         job.attempts += 1
-        job.lease_owner = str(worker_id)
-        job.lease_token = uuid.uuid4().hex
+        job.lease_owner = owner
+        job.lease_token = token
+        job.updated_at = now
         self._save(job)
         self._unmark_waiting(job)
-        self._r.set(self._k("lease", job.id), job.lease_wire(), ex=self._lease_ttl())
+        self._r.expire(lease_key, self._lease_ttl())
         return job
 
     def _lease_ttl(self) -> int:
@@ -206,66 +234,7 @@ class RedisQueueBackend:
 
     def reclaim_expired_leases(self, queue: str, *, limit: int = 50) -> int:
         """Requeue jobs whose worker died (lease key gone). Long jobs with a live heartbeat stay owned."""
-
-        processing = self._k("processing", queue)
-        job_ids = self._r.lrange(processing, 0, max(0, limit - 1)) or []
-        reclaimed = 0
-        now = time.time()
-        for job_id in job_ids:
-            if self._r.exists(self._k("lease", str(job_id))):
-                continue
-            job = self.get(str(job_id))
-            if job is None:
-                self._r.lrem(processing, 1, job_id)
-                continue
-            expected_token = str(job.lease_token or "")
-            if job.status not in {"completed", "dead"}:
-                incr("lease_expired")
-            next_status = "dead" if job.attempts >= (job.max_attempts or DEFAULT_MAX_ATTEMPTS) else "queued"
-            if job.status in {"completed", "dead"}:
-                next_status = str(job.status)
-            payload = dict(job.to_dict())
-            payload["lease_token"] = ""
-            payload["lease_owner"] = ""
-            if next_status == "queued":
-                payload["status"] = "queued"
-                payload["last_error"] = "lease_expired"
-                payload["available_at"] = now
-            elif next_status == "dead":
-                payload["status"] = "dead"
-                payload["last_error"] = "lease_expired"
-            result = self._lease().reclaim(
-                queue=queue,
-                job_id=str(job_id),
-                expected_token=expected_token,
-                data_json=json.dumps(payload),
-                next_status=next_status if next_status in {"queued", "dead"} else str(job.status),
-                available_at=float(payload.get("available_at") or now),
-                now=now,
-                waiting_score=float(job.created_at),
-            )
-            if result == "lost_race":
-                incr("duplicate_reclaim_prevented")
-                continue
-            if result.startswith("terminal_completed"):
-                removed = parse_removed(result)
-                if removed:
-                    incr("completed_removed_from_dlq", float(removed))
-                continue
-            if result == "alive":
-                continue
-            if result in {"reclaimed", "dead", "terminal_dead"}:
-                incr("lease_reclaimed")
-                reclaimed += 1
-                lease_log(
-                    "reclaimed" if result != "dead" else "lease_expired_dlq",
-                    job_id=str(job_id),
-                    trace_id=self._trace_id(job),
-                    extra=f"result={result}",
-                )
-                if result == "dead":
-                    self._record_dead(job, error="lease_expired")
-        return reclaimed
+        return scan_expired_leases(self, queue, limit=limit)
 
     def complete(self, job: QueueJob) -> str:
 

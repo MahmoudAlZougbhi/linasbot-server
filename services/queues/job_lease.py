@@ -23,6 +23,7 @@ def lease_log(event: str, *, job_id: str, trace_id: str = "", extra: str = "") -
     if event.startswith("heartbeat_") or event in {
         "reclaimed",
         "lease_expired_dlq",
+        "pending_activate",
         "stale_owner_complete",
         "stale_owner_fail",
     }:
@@ -230,7 +231,7 @@ class JobLease:
         def body(pipe: Any) -> str:
             if pipe.exists(lease_key):
                 return "alive"
-            status = str(pipe.hget(job_key, "status") or "")
+            status = _as_text(pipe.hget(job_key, "status"))
             if status == "completed":
                 pipe.multi()
                 pipe.lrem(processing, 0, job_id)
@@ -246,14 +247,11 @@ class JobLease:
                 pipe.lrem(processing, 0, job_id)
                 pipe.execute()
                 return "terminal_dead"
-            stored = str(pipe.hget(job_key, "lease_token") or "")
+            if status != "processing":
+                return "pending_activate"
+            stored = _as_text(pipe.hget(job_key, "lease_token"))
             if stored != expected_token:
                 return "lost_race"
-            if status != "processing":
-                pipe.multi()
-                pipe.lrem(processing, 0, job_id)
-                pipe.execute()
-                return "not_processing"
             pipe.multi()
             pipe.hset(job_key, mapping={"data": data_json, "status": next_status, "lease_token": "", "lease_owner": ""})
             pipe.lrem(processing, 0, job_id)
