@@ -28,14 +28,16 @@ HEARTBEAT_TTL_SECONDS: Final[int] = int(os.getenv("LINAS_QUEUE_HEARTBEAT_TTL_SEC
 def lease_ttl_seconds() -> int:
     """Worker-liveness window only. Not a maximum job duration.
 
-    Default 20s covers several 3s heartbeats plus event-loop lag. Luna/Tera may
-    run for minutes while the dedicated heartbeat thread keeps this key alive.
+    Default 90s: several 3s heartbeats plus scheduling stalls on the 2-vCPU
+    production nodes. Luna/Tera may run for minutes while the dedicated
+    heartbeat thread keeps this key alive. Missing the key still means the
+    worker is dead or its token was stolen.
     """
-    raw = (os.getenv("LINAS_QUEUE_LEASE_TTL_SECONDS") or "20").strip()
+    raw = (os.getenv("LINAS_QUEUE_LEASE_TTL_SECONDS") or "90").strip()
     try:
         return max(1, int(raw))
     except ValueError:
-        return 20
+        return 90
 
 
 def lease_heartbeat_seconds() -> float:

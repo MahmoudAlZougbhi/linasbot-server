@@ -170,3 +170,10 @@ def test_heartbeat_retries_after_temporary_refresh_failure(monkeypatch) -> None:
         assert calls["n"] >= 2
     finally:
         beat.stop()
+
+
+def test_default_lease_ttl_is_wide_enough_for_two_vcpu_stalls(monkeypatch) -> None:
+    monkeypatch.delenv("LINAS_QUEUE_LEASE_TTL_SECONDS", raising=False)
+    from services.queues.config import lease_ttl_seconds
+
+    assert lease_ttl_seconds() >= 90
