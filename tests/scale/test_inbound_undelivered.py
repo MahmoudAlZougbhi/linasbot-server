@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from services.scale.inbound_event_store import InboundEventRecord, get_inbound_event, put_inbound_event
+from services.scale.inbound_event_store import (
+    InboundEventRecord,
+    get_inbound_event,
+    mark_inbound_state,
+    put_inbound_event,
+)
 from services.scale.inbound_undelivered import (
     is_completed_undelivered,
     list_completed_undelivered_meta_dms,
@@ -41,6 +46,8 @@ def _record(*, event_id: str, state: str, outbound: str | None, age: float = 120
         payload={"message_id": "mid-1", "channel": "facebook", "sender_id": "psid-1", "text": "hi"},
         conversation_key="facebook:psid-1",
         outbound_status=outbound,
+        settings_snapshot={"binding_id": "binding-undelivered", "tenant_id": "linas"},
+        binding_snapshot={"binding_id": "binding-undelivered", "tenant_id": "linas", "channel": "facebook"},
     )
 
 
@@ -76,3 +83,56 @@ def test_list_keeps_local_when_shared_get_fails(inbound_logs: Path, monkeypatch:
     monkeypatch.setattr("services.scale.inbound_undelivered.get_inbound_event", _boom)
     found = list_completed_undelivered_meta_dms(older_than_seconds=0.0)
     assert [item.event_id for item in found] == ["ibe_local"]
+
+
+def test_shared_completed_unknown_reopens_in_firestore(
+    inbound_logs: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import utils.utils
+    from tests.meta_compliance_helpers import _FakeFirestore
+
+    db = _FakeFirestore()
+    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr("config.is_production_runtime", lambda: True)
+
+    rec = put_inbound_event(_record(event_id="ibe_shared_unknown", state="accepted", outbound=None))
+    completed = mark_inbound_state(
+        rec.event_id,
+        state="completed",
+        outbound_status="unknown",
+    )
+    assert completed.state == "completed"
+    opened = reopen_completed_undelivered(rec.event_id)
+    assert opened.state == "accepted"
+    assert opened.outbound_status == "undelivered_retry"
+    live = get_inbound_event(rec.event_id)
+    assert live is not None
+    assert live.state == "accepted"
+    shared = (
+        db.collection("artifacts").document("linas-ai-bot-backend").collection("inbound_events").document(rec.event_id)
+    )
+    assert shared.data["state"] == "accepted"
+    assert shared.data["outbound_status"] == "undelivered_retry"
+
+
+def test_shared_completed_sent_stays_terminal(
+    inbound_logs: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import utils.utils
+    from services.scale.inbound_event_store import InboundEventStateTransitionError
+    from tests.meta_compliance_helpers import _FakeFirestore
+
+    db = _FakeFirestore()
+    monkeypatch.setattr(utils.utils, "get_firestore_db", lambda: db)
+    monkeypatch.setattr("config.is_production_runtime", lambda: True)
+
+    rec = put_inbound_event(_record(event_id="ibe_shared_sent", state="accepted", outbound=None))
+    mark_inbound_state(rec.event_id, state="completed", outbound_status="sent")
+    with pytest.raises(InboundEventStateTransitionError):
+        reopen_completed_undelivered(rec.event_id)
+    live = get_inbound_event(rec.event_id)
+    assert live is not None
+    assert live.state == "completed"
+    assert live.outbound_status == "sent"

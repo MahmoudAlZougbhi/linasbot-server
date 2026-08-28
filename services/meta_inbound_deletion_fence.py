@@ -146,6 +146,25 @@ def create_firestore_event_unless_fenced(
     raise InboundDeletionFenceStoreError("Firestore inbound create transaction failed") from last_error
 
 
+_UNDELIVERED_REOPEN_OUTBOUND = frozenset({"unknown", "needs_owner_action", "undelivered_retry"})
+
+
+def _allow_completed_undelivered_reopen(current: dict[str, Any], incoming: dict[str, Any]) -> bool:
+    """Allow one explicit Meta DM reopen after Graph never accepted a send."""
+    if str(current.get("kind") or "") != "meta_dm":
+        return False
+    raw_payload = current.get("payload")
+    payload = raw_payload if isinstance(raw_payload, dict) else {}
+    if bool(payload.get("_linas_soak_simulation")):
+        return False
+    outbound = str(current.get("outbound_status") or "").strip().lower()
+    if outbound not in _UNDELIVERED_REOPEN_OUTBOUND:
+        return False
+    if str(incoming.get("state") or "") != "accepted":
+        return False
+    return str(incoming.get("outbound_status") or "").strip().lower() == "undelivered_retry"
+
+
 def persist_firestore_event_respecting_fence(
     *,
     binding_id: str,
@@ -198,8 +217,11 @@ def persist_firestore_event_respecting_fence(
                     current_state = str(current.get("state") or "")
                     incoming_revision = int(document.get("revision") or 0)
                     current_revision = int(current.get("revision") or 0)
-                    if current_state in {"completed", "dead_letter"} or incoming_revision != current_revision:
+                    if incoming_revision != current_revision:
                         return current
+                    if current_state in {"completed", "dead_letter"}:
+                        if current_state == "dead_letter" or not _allow_completed_undelivered_reopen(current, document):
+                            return current
                     persisted = dict(document)
                     persisted["revision"] = current_revision + 1
                 else:
