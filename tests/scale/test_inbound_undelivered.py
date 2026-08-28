@@ -65,3 +65,14 @@ def test_reopen_completed_unknown_becomes_accepted(inbound_logs: Path) -> None:
     live = get_inbound_event("ibe_reopen")
     assert live is not None
     assert live.state == "accepted"
+
+
+def test_list_keeps_local_when_shared_get_fails(inbound_logs: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    put_inbound_event(_record(event_id="ibe_local", state="completed", outbound="unknown"))
+
+    def _boom(event_id: str, **_kwargs: object) -> None:
+        raise RuntimeError("firestore down")
+
+    monkeypatch.setattr("services.scale.inbound_undelivered.get_inbound_event", _boom)
+    found = list_completed_undelivered_meta_dms(older_than_seconds=0.0)
+    assert [item.event_id for item in found] == ["ibe_local"]

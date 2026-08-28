@@ -144,9 +144,17 @@ def list_completed_undelivered_meta_dms(*, older_than_seconds: float = 60.0) -> 
         _logger.warning("[undelivered] shared_scan_failed type=%s", type(exc).__name__)
     live: list[InboundEventRecord] = []
     for rec in by_id.values():
-        current = get_inbound_event(rec.event_id)
-        if current is None:
-            continue
+        current = rec
+        try:
+            loaded = get_inbound_event(rec.event_id)
+            if loaded is not None:
+                current = loaded
+        except Exception as exc:
+            _logger.warning(
+                "[undelivered] shared_get_failed event_id=%s type=%s",
+                rec.event_id,
+                type(exc).__name__,
+            )
         if is_completed_undelivered(current) and _age_ok(current, older_than_seconds=older_than_seconds, now=now):
             live.append(current)
     return sorted(live, key=lambda item: (item.updated_at, item.event_id))

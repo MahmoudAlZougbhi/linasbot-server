@@ -23,6 +23,6 @@ async def run_customer_reply_reconcile_job() -> None:
                 f"charged_undelivered={metrics.get('charged_without_delivery_count', 0)}"
             )
     except Exception as exc:
-        print(f"[customer-reply-reconcile] failed type={type(exc).__name__}")
+        print(f"[customer-reply-reconcile] failed type={type(exc).__name__} detail={str(exc)[:160]}")
     finally:
         release_job_lock("customer_reply_reconcile")
