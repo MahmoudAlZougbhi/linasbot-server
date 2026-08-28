@@ -4271,6 +4271,8 @@ import os
 import re
 import subprocess
 import sys
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -4477,9 +4479,20 @@ for unit, (expected_argv, queue, should_run) in specs.items():
         raise SystemExit("canonical runtime PID changed during exact verification")
 
 if durable:
-    with urllib.request.urlopen("http://127.0.0.1:8003/api/queue/ready", timeout=5) as response:
-        payload = json.load(response)
-    if response.status != 200 or payload != {
+    deadline = time.monotonic() + 90
+    payload = None
+    status = None
+    while True:
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:8003/api/queue/ready", timeout=5) as response:
+                payload = json.load(response)
+                status = int(response.status)
+            break
+        except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            if time.monotonic() + 1 >= deadline:
+                raise SystemExit("durable queue readiness could not be reached") from exc
+            time.sleep(1)
+    if status != 200 or payload != {
         "ok": True,
         "role": "queue_readiness",
         "backend": "redis",
@@ -9695,7 +9708,7 @@ node_assert_runtime_drained() {
 
 start_admitted_target_runtime() {
   local tx_dir="$1"
-  local queue target_sha node_id health_ok=0
+  local queue target_sha node_id health_ok=0 queue_ok=0
   target_sha="$(<"$tx_dir/target.sha")"
   validate_sha "$target_sha"
   node_id="$(configured_node_id)"
@@ -9739,8 +9752,15 @@ start_admitted_target_runtime() {
         die "target worker failed final start: $queue"
       assert_unit_contract "linasbot-worker@${queue}.service"
     done
-    curl -fsS http://127.0.0.1:8003/api/queue/ready | \
-      grep -q '"ok"[[:space:]]*:[[:space:]]*true' || die "target queue readiness failed"
+    for _ in $(seq 1 90); do
+      if curl -fsS --max-time 5 http://127.0.0.1:8003/api/queue/ready 2>/dev/null | \
+        grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
+        queue_ok=1
+        break
+      fi
+      sleep 1
+    done
+    test "$queue_ok" = 1 || die "target queue readiness failed"
   else
     for queue in "${WORKER_QUEUES[@]}"; do
       systemctl disable --now "linasbot-worker@${queue}.service" 2>/dev/null || true
