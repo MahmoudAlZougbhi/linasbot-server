@@ -941,6 +941,8 @@ def test_guard_publication_and_rollback_admission_are_reboot_safe() -> None:
     sentinel_clear = rollback.index('clear_deploy_node_sentinel "$tx_dir"')
     saved_start = source[source.index("start_saved_runtime_disabled() {") : source.index("rollback_impl() {")]
     assert 'install_maintenance_boot_guard "$tx_dir"' in saved_start
+    assert "seq 1 90" in saved_start
+    assert "saved canonical API did not publish /api/health on :8003 after start" in saved_start
     assert disable < remove_guard < start_disabled < restore_enable < clear_marker
     assert clear_marker < proof < sentinel_clear
     recover = source[source.index("node_recover_admit() {") : source.index("node_recover_rollback() {")]
@@ -1020,6 +1022,10 @@ def test_target_verification_keeps_boot_guard_and_workers_offline_until_parity()
     )
     assert 'systemctl enable "linasbot-worker@${queue}.service"' not in final_start
     assert 'systemctl enable "linasbot-worker@${queue}.service"' in enable_last
+    assert "seq 1 90" in final_start
+    assert "seq 1 45" not in final_start
+    assert "canonical target API did not publish /api/health on :8003 after start" in final_start
+    assert final_start.index("health_ok=1") < final_start.index("assert_health_while_drained")
     parity = orchestrate.index('update_deploy_journal "target-parity-awaiting-fresh-lb"')
     assert 'remote_node "$peer_host" clear-maintenance' not in orchestrate[parity:]
     assert clear.index("remove_maintenance_boot_guard") < clear.index("start_admitted_target_runtime")
@@ -1033,6 +1039,8 @@ def test_target_verification_keeps_boot_guard_and_workers_offline_until_parity()
     assert target.index('write_pre_admission_proof "$tx_dir" "$admission_sha"') < target.index(
         "clear_maintenance_markers_durable"
     )
+    assert "seq 1 90" in clear
+    assert 'probe_serving_ready_for_sha "$admission_sha"' in clear
     assert clear.index("clear_maintenance_markers_durable") < clear.index(
         'write_admission_proof "$tx_dir" "$admission_sha"'
     )
