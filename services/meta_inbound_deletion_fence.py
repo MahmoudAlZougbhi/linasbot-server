@@ -153,7 +153,8 @@ def _allow_completed_undelivered_reopen(current: dict[str, Any], incoming: dict[
     """Allow one explicit Meta DM reopen after Graph never accepted a send."""
     if str(current.get("kind") or "") != "meta_dm":
         return False
-    payload = current.get("payload") if isinstance(current.get("payload"), dict) else {}
+    raw_payload = current.get("payload")
+    payload = raw_payload if isinstance(raw_payload, dict) else {}
     if bool(payload.get("_linas_soak_simulation")):
         return False
     outbound = str(current.get("outbound_status") or "").strip().lower()
