@@ -63,17 +63,44 @@ def _firestore_event_ref(db: Any, event_id: str) -> Any:
     return db.collection("artifacts").document(_FIRESTORE_APP_ID).collection("inbound_events").document(event_id)
 
 
+def _shared_fence_exists(fence_ref: Any) -> bool:
+    snapshot = fence_ref.get()
+    return bool(getattr(snapshot, "exists", False))
+
+
+def _tombstone_shared_event_if_fenced(
+    *,
+    fence_ref: Any,
+    event_ref: Any,
+    document: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Overwrite a just-committed row if deletion fenced the binding in flight."""
+
+    if not _shared_fence_exists(fence_ref):
+        return None
+    from services.meta_inbound_retention import redacted_inbound_event_tombstone
+
+    tombstone = redacted_inbound_event_tombstone(
+        document,
+        reason="authorization_data_deletion",
+        now=time.time(),
+    )
+    event_ref.set(tombstone)
+    return tombstone
+
+
 def persist_firestore_event_unless_fenced(
     *,
     binding_id: str,
     event_id: str,
     document: dict[str, Any],
 ) -> None:
-    """Atomically reject a new event when its binding fence exists.
+    """Reject a new event when its binding fence exists.
 
-    The transaction and fence document close the cross-node race: either the event
-    commits before the fence (and deletion's later scan sees it), or the fence wins
-    and the event is not accepted.
+    The fence is checked around the event-row transaction, not inside it, so
+    inbound creates for one binding are not serialized on the fence document.
+    Either the event commits before the fence (deletion's later scan sees it),
+    or the fence wins and the row is not accepted / is tombstoned.
     """
 
     persist_firestore_event_respecting_fence(
@@ -90,9 +117,11 @@ def create_firestore_event_unless_fenced(
     event_id: str,
     document: dict[str, Any],
 ) -> tuple[dict[str, Any], bool]:
-    """Atomically create the inbound ledger row after checking its deletion fence.
+    """Create the inbound ledger row after checking its deletion fence.
 
-    A provider redelivery returns the already-authoritative row instead of
+    The fence document is read outside the event-row transaction so concurrent
+    inbound creates for one binding are not serialized on that fence.  A
+    provider redelivery returns the already-authoritative row instead of
     resetting its state.  This lets webhook code persist before acquiring the
     processing claim without creating a claim-without-ledger loss window.
     """
@@ -111,10 +140,10 @@ def create_firestore_event_unless_fenced(
     for _attempt in range(5):
         try:
 
+            if _shared_fence_exists(fence_ref):
+                raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
+
             def _create(transaction: Any) -> tuple[dict[str, Any], bool]:
-                fence_snapshot = fence_ref.get(transaction=transaction)
-                if fence_snapshot.exists:
-                    raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
                 current_snapshot = event_ref.get(transaction=transaction)
                 if current_snapshot.exists:
                     current = current_snapshot.to_dict()
@@ -126,7 +155,14 @@ def create_firestore_event_unless_fenced(
                 transaction.set(event_ref, persisted)
                 return persisted, True
 
-            return run_firestore_transaction(db, _create)
+            persisted_document, created = run_firestore_transaction(db, _create)
+            if _tombstone_shared_event_if_fenced(
+                fence_ref=fence_ref,
+                event_ref=event_ref,
+                document=persisted_document,
+            ) is not None:
+                raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
+            return persisted_document, created
         except (InboundBindingDeletionFencedError, InboundDeletionFenceStoreError):
             raise
         except Exception as exc:
@@ -136,6 +172,12 @@ def create_firestore_event_unless_fenced(
                 if committed.exists:
                     current = committed.to_dict()
                     if isinstance(current, dict):
+                        if _tombstone_shared_event_if_fenced(
+                            fence_ref=fence_ref,
+                            event_ref=event_ref,
+                            document=current,
+                        ) is not None:
+                            raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
                         return current, False
                 if fence_ref.get().exists:
                     raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
@@ -196,24 +238,28 @@ def persist_firestore_event_respecting_fence(
         persisted = document
         try:
 
+            if _shared_fence_exists(fence_ref):
+                if reject_if_fenced:
+                    raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
+                current_snapshot = event_ref.get()
+                current = current_snapshot.to_dict() if getattr(current_snapshot, "exists", False) else None
+                source = current if isinstance(current, dict) else document
+                persisted = redacted_inbound_event_tombstone(
+                    source,
+                    reason="authorization_data_deletion",
+                    now=time.time(),
+                )
+                event_ref.set(persisted)
+                return persisted
+
             def _persist(transaction: Any) -> dict[str, Any]:
                 nonlocal persisted
-                fence_snapshot = fence_ref.get(transaction=transaction)
                 current_snapshot = event_ref.get(transaction=transaction)
                 current = current_snapshot.to_dict() if current_snapshot.exists else None
                 current = current if isinstance(current, dict) else None
                 if current is None and require_existing:
                     raise InboundDeletionFenceStoreError("Firestore inbound event is unavailable for transition")
-                if fence_snapshot.exists:
-                    if reject_if_fenced:
-                        raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
-                    source = current if current is not None else document
-                    persisted = redacted_inbound_event_tombstone(
-                        source,
-                        reason="authorization_data_deletion",
-                        now=time.time(),
-                    )
-                elif current is not None:
+                if current is not None:
                     current_state = str(current.get("state") or "")
                     incoming_revision = int(document.get("revision") or 0)
                     current_revision = int(current.get("revision") or 0)
@@ -230,7 +276,17 @@ def persist_firestore_event_respecting_fence(
                 transaction.set(event_ref, persisted)
                 return persisted
 
-            return run_firestore_transaction(db, _persist)
+            persisted = run_firestore_transaction(db, _persist)
+            tombstoned = _tombstone_shared_event_if_fenced(
+                fence_ref=fence_ref,
+                event_ref=event_ref,
+                document=persisted,
+            )
+            if tombstoned is not None:
+                if reject_if_fenced:
+                    raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
+                return tombstoned
+            return persisted
         except (InboundBindingDeletionFencedError, InboundDeletionFenceStoreError):
             raise
         except Exception as exc:
@@ -238,6 +294,15 @@ def persist_firestore_event_respecting_fence(
             try:
                 committed = event_ref.get()
                 if committed.exists and committed.to_dict() == persisted:
+                    tombstoned = _tombstone_shared_event_if_fenced(
+                        fence_ref=fence_ref,
+                        event_ref=event_ref,
+                        document=persisted,
+                    )
+                    if tombstoned is not None:
+                        if reject_if_fenced:
+                            raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
+                        return tombstoned
                     return persisted
                 if reject_if_fenced and fence_ref.get().exists:
                     raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
