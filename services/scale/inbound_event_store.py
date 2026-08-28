@@ -329,53 +329,18 @@ def put_inbound_event(
         raise InboundDeletionFenceStoreError("Inbound binding identity is unavailable")
 
     if binding_id:
-        from services.meta_inbound_deletion_fence import (
-            InboundBindingDeletionFencedError,
-            InboundDeletionFenceStoreError,
-            local_binding_deletion_is_fenced,
-            persist_firestore_event_respecting_fence,
-            persist_firestore_event_unless_fenced,
-        )
-        from services.meta_inbound_retention import redacted_inbound_event_tombstone
+        from services.scale.inbound_event_persist import persist_updated_inbound
 
-        # Share one local critical section with deletion-fence installation. This
-        # prevents an ingress that committed Firestore first from pausing while a
-        # deletion scans, then persisting its plaintext local copy afterward.
-        with local_inbound_event_ledger_lock():
-            local_fenced = local_binding_deletion_is_fenced(binding_id)
-            if enforce_binding_deletion_fence and local_fenced:
-                raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
-            document = record.to_dict()
-            if local_fenced:
-                document = redacted_inbound_event_tombstone(
-                    document,
-                    reason="authorization_data_deletion",
-                    now=record.updated_at,
-                )
-            try:
-                if enforce_binding_deletion_fence:
-                    persist_firestore_event_unless_fenced(
-                        binding_id=binding_id,
-                        event_id=record.event_id,
-                        document=document,
-                    )
-                    persisted = document
-                else:
-                    persisted = persist_firestore_event_respecting_fence(
-                        binding_id=binding_id,
-                        event_id=record.event_id,
-                        document=document,
-                        require_existing=require_shared_existing,
-                    )
-            except InboundDeletionFenceStoreError:
-                if enforce_binding_deletion_fence or require_shared_existing:
-                    raise
-                # The local fence is authoritative for this node.  If the shared
-                # store is temporarily unavailable, never trade its tombstone for
-                # a stale plaintext state transition.
-                persisted = document
-            _atomic_json_put(_path_for(record.event_id), persisted)
-        return InboundEventRecord.from_dict(persisted)
+        # Firestore is the HA fence authority. Local flock is only for the
+        # fence check and cache write so ingress cannot serialize the node.
+        return InboundEventRecord.from_dict(
+            persist_updated_inbound(
+                record,
+                binding_id=binding_id,
+                enforce_binding_deletion_fence=enforce_binding_deletion_fence,
+                require_shared_existing=require_shared_existing,
+            )
+        )
 
     _file_put(record)
     try:
@@ -417,21 +382,13 @@ def create_inbound_event(
         persisted = put_inbound_event(record)
         return persisted, True
 
-    from services.meta_inbound_deletion_fence import (
-        InboundBindingDeletionFencedError,
-        create_firestore_event_unless_fenced,
-        local_binding_deletion_is_fenced,
-    )
+    from services.scale.inbound_event_persist import persist_created_inbound
 
-    with local_inbound_event_ledger_lock():
-        if enforce_binding_deletion_fence and local_binding_deletion_is_fenced(binding_id):
-            raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
-        persisted_document, created = create_firestore_event_unless_fenced(
-            binding_id=binding_id,
-            event_id=record.event_id,
-            document=record.to_dict(),
-        )
-        _atomic_json_put(_path_for(record.event_id), persisted_document)
+    persisted_document, created = persist_created_inbound(
+        record,
+        binding_id=binding_id,
+        enforce_binding_deletion_fence=enforce_binding_deletion_fence,
+    )
     return InboundEventRecord.from_dict(persisted_document), created
 
 

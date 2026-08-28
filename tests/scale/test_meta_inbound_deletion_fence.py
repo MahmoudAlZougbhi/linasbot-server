@@ -150,7 +150,7 @@ def test_fenced_ingress_requires_firestore_before_writing_local_payload(
     assert (root / "ibe_store_unavailable.json").exists() is False
 
 
-def test_ingress_local_write_finishes_before_concurrent_fence_scan(
+def test_ingress_tombs_local_copy_if_fence_lands_before_cache(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -182,19 +182,21 @@ def test_ingress_local_write_finishes_before_concurrent_fence_scan(
         assert firestore_committed.wait(timeout=5)
         fencing = pool.submit(install_fence)
         assert fence_started.wait(timeout=5)
-        assert fencing.done() is False
+        fencing.result(timeout=5)
         assert (root / "ibe_interleaved.json").exists() is False
         release_ingress.set()
         ingress.result(timeout=5)
-        fencing.result(timeout=5)
 
+    local = json.loads((root / "ibe_interleaved.json").read_text(encoding="utf-8"))
     stats = redact_inbound_events_for_bindings(
         {"binding-target"},
         apply=False,
         include_firestore=True,
     )
-    assert (root / "ibe_interleaved.json").is_file()
-    assert stats["local_active_matches"] == 1
+    assert local.get("retention_status") == "redacted"
+    assert local.get("payload") == {}
+    assert "private message" not in json.dumps(local)
+    assert stats["local_active_matches"] == 0
     assert stats["firestore_active_matches"] == 1
 
 
