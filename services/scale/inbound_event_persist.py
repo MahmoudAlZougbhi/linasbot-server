@@ -110,6 +110,40 @@ def persist_updated_inbound(
     )
 
 
+def _create_soak_firestore_event(record: Any) -> tuple[dict[str, Any], bool]:
+    """Write a unique soak inbound row with one Firestore create, not a txn get+set.
+
+    Soak event IDs are unique. Production Meta still uses the transactional
+    create so provider redelivery cannot reset an existing row. Firestore
+    remains the authoritative copy; the local JSON cache is skipped because
+    soak workers do not read it.
+    """
+
+    from google.api_core.exceptions import AlreadyExists
+
+    from services.meta_inbound_deletion_fence import (
+        InboundDeletionFenceStoreError,
+        _firestore_event_ref,
+    )
+    from utils.utils import get_firestore_db
+
+    db = get_firestore_db()
+    if db is None:
+        raise InboundDeletionFenceStoreError("Firestore inbound fence store is unavailable")
+    persisted = dict(record.to_dict())
+    persisted["revision"] = max(1, int(persisted.get("revision") or 0))
+    event_ref = _firestore_event_ref(db, str(record.event_id))
+    try:
+        event_ref.create(persisted)
+        return persisted, True
+    except AlreadyExists:
+        snapshot = event_ref.get()
+        current = snapshot.to_dict() if snapshot.exists else None
+        if isinstance(current, dict):
+            return current, False
+        raise InboundDeletionFenceStoreError("Firestore inbound event is invalid") from None
+
+
 def persist_created_inbound(
     record: Any,
     *,
@@ -121,13 +155,14 @@ def persist_created_inbound(
     from services.meta_inbound_deletion_fence import create_firestore_event_unless_fenced
 
     payload = getattr(record, "payload", None)
-    skip_shared_fence = isinstance(payload, dict) and bool(payload.get("_linas_soak_simulation"))
+    soak = isinstance(payload, dict) and bool(payload.get("_linas_soak_simulation"))
+    if soak:
+        return _create_soak_firestore_event(record)
     reject_if_locally_fenced(binding_id, enforce=enforce_binding_deletion_fence)
     persisted_document, created = create_firestore_event_unless_fenced(
         binding_id=binding_id,
         event_id=record.event_id,
         document=record.to_dict(),
-        skip_shared_fence_reads=skip_shared_fence,
     )
     persisted_document = cache_local_inbound_document(
         event_id=record.event_id,
