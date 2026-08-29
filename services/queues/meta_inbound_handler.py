@@ -186,8 +186,8 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
     if not event_id:
         raise PermanentJobError("missing event_id")
 
-    from services.scale.soak_arm import job_requests_soak_simulation
     from services.queues.meta_inbound_soak_gate import maybe_finish_soak_at_openai_gate
+    from services.scale.soak_arm import job_requests_soak_simulation
 
     soak_simulation = job_requests_soak_simulation(job)
     soak_done = maybe_finish_soak_at_openai_gate(
