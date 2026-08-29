@@ -62,9 +62,7 @@ def test_soak_create_uses_direct_firestore_create(monkeypatch: pytest.MonkeyPatc
         payload={"_linas_soak_simulation": True},
         to_dict=lambda: {"event_id": "ibe_soak", "payload": {"_linas_soak_simulation": True}},
     )
-    document, created = persist_created_inbound(
-        record, binding_id="b1", enforce_binding_deletion_fence=True
-    )
+    document, created = persist_created_inbound(record, binding_id="b1", enforce_binding_deletion_fence=True)
     assert created is True
     assert document["event_id"] == "ibe_soak"
     assert document["revision"] == 1
@@ -88,9 +86,7 @@ def test_soak_create_returns_existing_row_on_already_exists(monkeypatch: pytest.
         payload={"_linas_soak_simulation": True},
         to_dict=lambda: {"event_id": "ibe_soak"},
     )
-    document, created = persist_created_inbound(
-        record, binding_id="b1", enforce_binding_deletion_fence=True
-    )
+    document, created = persist_created_inbound(record, binding_id="b1", enforce_binding_deletion_fence=True)
     assert created is False
     assert document["state"] == "queued"
 
