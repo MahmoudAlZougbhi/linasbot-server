@@ -126,6 +126,17 @@ def _requeue_one_stuck(rec: InboundEventRecord) -> dict[str, Any]:
     soak = _disarmed_soak_action(rec)
     if soak is not None:
         return soak
+    from services.scale.inbound_event_reconcile_live import (
+        IngressJobLookupError,
+        action_if_ingress_job_already_owns,
+    )
+
+    try:
+        owned = action_if_ingress_job_already_owns(rec)
+    except IngressJobLookupError:
+        return {"event_id": rec.event_id, "action": "ingress_job_lookup_failed"}
+    if owned is not None:
+        return owned
     from services.durable_event_claim import (
         complete_event_claim,
         meta_claim_binding_digest,
@@ -204,6 +215,24 @@ def requeue_inbound_event_ids(event_ids: list[str]) -> list[dict[str, Any]]:
 
 def reconcile_stuck_inbound_events(*, older_than_seconds: float = 45.0) -> dict[str, Any]:
     """Re-enqueue unfinished durable events. Never drops accepted records."""
+    from services.scale.soak_arm import is_armed
+
+    if is_armed():
+        # Soak leaves Firestore rows queued on purpose. A full active scan would
+        # compete with persist writes and must not mint :r{n} duplicate jobs.
+        return {
+            "reconciled_at": time.time(),
+            "examined": 0,
+            "actions": [],
+            "soak_armed_skip": True,
+            "accountability": {
+                "accepted_total": 0,
+                "terminal_accounted": 0,
+                "active_non_terminal": 0,
+                "unexplained_missing_events": 0,
+            },
+            "unexplained_missing_events": 0,
+        }
     stuck = list_active_inbound_events(older_than_seconds=older_than_seconds)
     raw_limit = (os.getenv("LINAS_INBOUND_RECONCILE_BATCH") or "32").strip()
     try:

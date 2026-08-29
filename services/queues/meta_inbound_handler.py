@@ -185,20 +185,24 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
     event_id = str((job.payload or {}).get("event_id") or "").strip()
     if not event_id:
         raise PermanentJobError("missing event_id")
+
+    from services.scale.soak_arm import job_requests_soak_simulation
+    from services.queues.meta_inbound_soak_gate import maybe_finish_soak_at_openai_gate
+
+    soak_simulation = job_requests_soak_simulation(job)
+    soak_done = maybe_finish_soak_at_openai_gate(
+        soak=soak_simulation,
+        kind=str((job.payload or {}).get("kind") or ""),
+        event_id=event_id,
+    )
+    if soak_done is not None:
+        return soak_done
+
     rec = get_inbound_event(event_id)
     if rec is None:
         raise PermanentJobError(f"inbound_event_missing:{event_id}")
     if rec.state in TERMINAL_STATES:
         return {"skipped": True, "reason": f"already_{rec.state}", "event_id": event_id}
-
-    from services.scale.soak_arm import job_requests_soak_simulation
-
-    soak_simulation = job_requests_soak_simulation(job)
-    from services.queues.meta_inbound_soak_gate import maybe_finish_soak_at_openai_gate
-
-    soak_done = maybe_finish_soak_at_openai_gate(soak=soak_simulation, rec=rec, event_id=event_id)
-    if soak_done is not None:
-        return soak_done
 
     from services.durable_event_claim import (
         event_claim_handle_from_token,
