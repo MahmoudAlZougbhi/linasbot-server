@@ -79,6 +79,14 @@ class JobQueue:
     def _path(self, job_id: str) -> Path:
         return self._root / f"{job_id}.json"
 
+    def get_by_idempotency(self, queue: QueueName, tenant_id: str, idempotency_key: str) -> QueueJob | None:
+        key = str(idempotency_key or "").strip()
+        if not key:
+            return None
+        if self._redis is not None:
+            return self._redis.get_by_idempotency(queue, tenant_id, key)
+        return None
+
     def get(self, job_id: str) -> QueueJob | None:
         if self._redis is not None:
             return self._redis.get(job_id)
