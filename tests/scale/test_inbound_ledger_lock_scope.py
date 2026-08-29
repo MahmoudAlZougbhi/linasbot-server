@@ -41,7 +41,13 @@ def test_create_releases_flock_before_firestore(monkeypatch, tmp_path: Path) -> 
     release = threading.Event()
     lock_acquired = threading.Event()
 
-    def slow_create(*, binding_id: str, event_id: str, document: dict) -> tuple[dict, bool]:
+    def slow_create(
+        *,
+        binding_id: str,
+        event_id: str,
+        document: dict,
+        skip_shared_fence_reads: bool = False,
+    ) -> tuple[dict, bool]:
         started.set()
         assert release.wait(2.0)
         return dict(document), True

@@ -152,9 +152,7 @@ def recommend(
         )
     if mild:
         next_workers = min(worker_max, workers + 1)
-        next_api = api
-        if wait_p95_ms >= p95_up * 2 or api_hot:
-            next_api = min(api_max, api + 1)
+        next_api = min(api_max, api + 1) if api_hot else api
         action = "scale_up" if next_workers > workers or next_api > api else "hold"
         return ScaleRecommendation(
             action=action,
