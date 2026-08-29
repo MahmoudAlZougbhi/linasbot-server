@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+import threading
 import time
 import uuid
 from typing import Any
@@ -28,6 +29,8 @@ class WorkerRuntime:
         self._stopping = False
         self.started_at = time.time()
         self.node_id = (os.getenv("LINAS_NODE_ID") or "").strip()
+        self._housekeep_lock = threading.Lock()
+        self._last_housekeep = 0.0
 
     def _registry_beat(self, status: str, *, inflight: int = 0, last_exit: str = "") -> None:
         try:
@@ -48,6 +51,30 @@ class WorkerRuntime:
     def request_stop(self, *_args: Any) -> None:
         self._stopping = True
         shutdown_coordinator.begin_drain()
+
+    def _is_soak_pipeline(self, job: Any) -> bool:
+        from services.scale.soak_arm import job_requests_soak_simulation
+
+        return bool(job_requests_soak_simulation(job))
+
+    def _housekeep_if_due(self) -> None:
+        now = time.monotonic()
+        if now - self._last_housekeep < 1.0:
+            return
+        if not self._housekeep_lock.acquire(blocking=False):
+            return
+        try:
+            if time.monotonic() - self._last_housekeep < 1.0:
+                return
+            self._last_housekeep = time.monotonic()
+            reclaim = getattr(self._backend, "reclaim_expired_leases", None)
+            if callable(reclaim):
+                reclaim(self.queue)
+            from services.scale.job_progress_watchdog import scan_queue
+
+            scan_queue(self._backend, self.queue)
+        finally:
+            self._housekeep_lock.release()
 
     def _refund_if_needed(self, job: Any) -> None:
         reservation_id = job.reservation_id or str((job.payload or {}).get("reservation_id") or "")
@@ -126,12 +153,7 @@ class WorkerRuntime:
         except Exception:
             pass
         try:
-            reclaim = getattr(self._backend, "reclaim_expired_leases", None)
-            if callable(reclaim):
-                reclaim(self.queue)
-            from services.scale.job_progress_watchdog import scan_queue
-
-            scan_queue(self._backend, self.queue)
+            self._housekeep_if_due()
         except Exception:
             pass
         try:
@@ -161,21 +183,23 @@ class WorkerRuntime:
         conv_lease = None
         held_inflight = False
         counted_inflight = False
+        soak_pipeline = self._is_soak_pipeline(job)
         try:
-            try:
-                busy = self._backend.tenant_inflight(job.tenant_id) >= DEFAULT_TENANT_INFLIGHT
-            except Exception:
-                self._requeue(job, 0.5)
-                await asyncio.sleep(0.5)
-                return
-            if busy:
-                self._requeue(job, 1.0)
-                return
-            delay = self._provider_gate(job)
-            if delay is not None:
-                self._requeue(job, delay)
-                return
-            held_inflight = True
+            if not soak_pipeline:
+                try:
+                    busy = self._backend.tenant_inflight(job.tenant_id) >= DEFAULT_TENANT_INFLIGHT
+                except Exception:
+                    self._requeue(job, 0.5)
+                    await asyncio.sleep(0.5)
+                    return
+                if busy:
+                    self._requeue(job, 1.0)
+                    return
+                delay = self._provider_gate(job)
+                if delay is not None:
+                    self._requeue(job, delay)
+                    return
+                held_inflight = True
             conv_key = self._conversation_key(job)
             if conv_key:
                 from services.scale.worker_lock_policy import job_requires_conversation_lock
@@ -194,13 +218,14 @@ class WorkerRuntime:
                     if conv_lease is None:
                         self._requeue(job, 0.5)
                         return
-            try:
-                self._backend.incr_tenant_inflight(job.tenant_id)
-                counted_inflight = True
-            except Exception:
-                self._requeue(job, 0.5)
-                await asyncio.sleep(0.5)
-                return
+            if not soak_pipeline:
+                try:
+                    self._backend.incr_tenant_inflight(job.tenant_id)
+                    counted_inflight = True
+                except Exception:
+                    self._requeue(job, 0.5)
+                    await asyncio.sleep(0.5)
+                    return
             try:
                 handler = get_handler(job.job_type)
                 if handler is None:
