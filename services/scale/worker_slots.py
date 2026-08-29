@@ -7,11 +7,38 @@ import os
 from services.omnichannel.worker_pool import concurrency_for
 
 
+def cluster_node_count() -> int:
+    """HA API pair by default. Extra worker nodes must not join the HTTP LB."""
+    try:
+        return max(1, int(os.getenv("LINAS_CLUSTER_NODES") or "2"))
+    except ValueError:
+        return 2
+
+
+def per_node_high_cap() -> int:
+    return _cap("high_priority", 16)
+
+
+def cluster_in_node_worker_cap() -> int:
+    """Software slot ceiling across this cluster. Not a DigitalOcean droplet cap.
+
+    Raise ``LINAS_IN_NODE_WORKER_CAP`` or ``LINAS_QUEUE_CONCURRENCY_CAP_HIGH``
+    to add in-process workers. Do not add API droplets to the load balancer.
+    """
+    raw = (os.getenv("LINAS_IN_NODE_WORKER_CAP") or "").strip()
+    if raw:
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            pass
+    return per_node_high_cap() * cluster_node_count()
+
+
 def slot_count_for(queue: str) -> int:
     """In-node scale first: extra claim loops in the existing systemd worker.
 
     Droplet count stays at the HA pair unless the node scaler later proves
-    sustained pressure past this cap.
+    sustained pressure past this cap. Production node-layer create is fail-closed.
     """
     base = concurrency_for(queue)
     cap = _cap(queue, base)
@@ -23,7 +50,7 @@ def slot_count_for(queue: str) -> int:
         if not apply_enabled():
             return min(cap, base)
         desired = max(1, int(current_replicas().workers))
-        nodes = max(1, int(os.getenv("LINAS_CLUSTER_NODES") or "2"))
+        nodes = cluster_node_count()
         share = max(1, (desired + nodes - 1) // nodes)
         return min(cap, share)
     except Exception:
@@ -43,6 +70,6 @@ def _cap(queue: str, base: int) -> int:
             return max(1, int(raw))
         except ValueError:
             return base
-    # 2 vCPU / 2 GiB HA nodes: do not let one queue exceed these slots.
-    defaults = {"high_priority": 8, "background": 4, "interactive": 4, "expensive": 1}
+    # In-process slots on the existing HA nodes. Not LB membership.
+    defaults = {"high_priority": 16, "background": 8, "interactive": 4, "expensive": 1}
     return int(defaults.get(queue, base))

@@ -205,3 +205,106 @@ def test_enqueue_without_claim_handle_leaves_worker_to_adopt_lease(monkeypatch: 
     assert enqueue_meta_inbound_event("evt-ack", claim_handle=None) == "queued"
     assert captured["claim_token"] == ""
     assert captured["claim_generation"] == 1
+
+
+def test_persist_dm_writes_queued_not_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    import services.scale.meta_ingress as ingress
+
+    seen: dict[str, str] = {}
+
+    def fake_create(record: object, **_kwargs: object) -> tuple[object, bool]:
+        seen["state"] = str(getattr(record, "state", ""))
+        return record, True
+
+    monkeypatch.setattr(ingress, "create_inbound_event", fake_create)
+    monkeypatch.setattr(ingress, "_mirror_unless_soak", lambda _record: None)
+    settings = MetaMessagingSettings(
+        enabled=True,
+        app_secret="runtime-secret",
+        page_id="page-1",
+        page_access_token="runtime-token",
+        instagram_account_id="ig-1",
+        verify_token="runtime-verify",
+        graph_api_version="v24.0",
+    )
+    binding = SimpleNamespace(
+        binding_id="binding-1",
+        tenant_id="linas",
+        channel="facebook",
+        asset_id="page-1",
+        app_key="linas_first_party",
+        auth_flow="facebook_login",
+    )
+    resolved = SimpleNamespace(
+        settings=settings,
+        binding=binding,
+        event={"channel": "facebook", "sender_id": "customer-1", "message_id": "m-1", "text": "hi"},
+    )
+
+    persist_meta_dm_accepted(resolved, global_key="facebook:m-1")
+    assert seen["state"] == "queued"
+
+
+def test_soak_payload_skips_postgres_mirror(monkeypatch: pytest.MonkeyPatch) -> None:
+    import services.scale.meta_ingress as ingress
+
+    called: list[object] = []
+    monkeypatch.setattr("services.omnichannel.dual_write.mirror_meta_inbound", lambda record: called.append(record))
+    soak = SimpleNamespace(payload={"_linas_soak_simulation": True})
+    live = SimpleNamespace(payload={"text": "hello"})
+    ingress._mirror_unless_soak(soak)  # type: ignore[arg-type]
+    assert called == []
+    ingress._mirror_unless_soak(live)  # type: ignore[arg-type]
+    assert called == [live]
+
+
+def test_enqueue_skips_second_firestore_write_when_already_queued(monkeypatch: pytest.MonkeyPatch) -> None:
+    marks: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        "services.scale.meta_ingress.get_inbound_event",
+        lambda _event_id: SimpleNamespace(
+            kind="meta_dm",
+            tenant_id="linas",
+            conversation_key="k",
+            state="queued",
+            payload={},
+        ),
+    )
+    monkeypatch.setattr(
+        "services.scale.meta_ingress.mark_inbound_state",
+        lambda *_args, **kwargs: marks.append(kwargs),
+    )
+    monkeypatch.setattr("services.scale.meta_ingress._try_enqueue", lambda **_kwargs: "job-queued")
+    monkeypatch.setattr("services.scale.rate_window.bump", lambda *_args, **_kwargs: None)
+
+    assert enqueue_meta_inbound_event("evt-queued") == "queued"
+    assert marks == []
+
+
+def test_enqueue_reuses_just_persisted_record_without_firestore_get(monkeypatch: pytest.MonkeyPatch) -> None:
+    import services.scale.meta_ingress as ingress
+
+    record = SimpleNamespace(
+        event_id="evt-cache",
+        kind="meta_dm",
+        tenant_id="linas",
+        conversation_key="k",
+        state="queued",
+        payload={},
+    )
+    ingress._remember_persisted(record)
+    monkeypatch.setattr(
+        "services.scale.meta_ingress.get_inbound_event",
+        lambda _event_id: pytest.fail("firestore get on persist-enqueue path"),
+    )
+    monkeypatch.setattr(
+        "services.scale.meta_ingress.mark_inbound_state",
+        lambda *_args, **_kwargs: pytest.fail("second inbound write on queued persist"),
+    )
+    monkeypatch.setattr("services.scale.meta_ingress._try_enqueue", lambda **_kwargs: "job-queued")
+    monkeypatch.setattr("services.scale.rate_window.bump", lambda *_args, **_kwargs: None)
+
+    try:
+        assert enqueue_meta_inbound_event("evt-cache") == "queued"
+    finally:
+        ingress._just_persisted.set(None)

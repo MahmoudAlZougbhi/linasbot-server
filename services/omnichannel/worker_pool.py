@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import os
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any, cast
 
@@ -18,6 +19,15 @@ SlotCount = Callable[[], int]
 
 def concurrency_for(queue: str) -> int:
     return max(1, int(DEFAULT_CONCURRENCY.get(queue, 1)))
+
+
+def executor_max_workers() -> int:
+    """Thread pool must outrun in-node slot caps. Not tied to API droplets."""
+    raw = (os.getenv("LINAS_WORKER_EXECUTOR_MAX") or "64").strip()
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 64
 
 
 def _run_cycle(one_cycle: JobWorker) -> None:
@@ -38,7 +48,7 @@ async def run_bounded_pool(
             return concurrency_for(queue)
         return max(1, int(slot_count()))
 
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=24)
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=executor_max_workers())
     live: dict[int, asyncio.Task[Any]] = {}
     next_id = 0
 

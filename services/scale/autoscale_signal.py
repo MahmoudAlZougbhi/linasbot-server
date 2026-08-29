@@ -141,7 +141,7 @@ def recommend(
     if strong:
         step = max(2, workers)
         next_workers = min(worker_max, workers + step)
-        next_api = min(api_max, api + 1)
+        next_api = min(api_max, api + 1) if api_hot else api
         action = "scale_up_strong" if next_workers > workers or next_api > api else "hold"
         return ScaleRecommendation(
             action=action,

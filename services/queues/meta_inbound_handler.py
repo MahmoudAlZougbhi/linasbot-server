@@ -194,6 +194,11 @@ async def handle_meta_inbound_process(job: QueueJob) -> dict[str, Any]:
     from services.scale.soak_arm import job_requests_soak_simulation
 
     soak_simulation = job_requests_soak_simulation(job)
+    from services.queues.meta_inbound_soak_gate import maybe_finish_soak_at_openai_gate
+
+    soak_done = maybe_finish_soak_at_openai_gate(soak=soak_simulation, rec=rec, event_id=event_id)
+    if soak_done is not None:
+        return soak_done
 
     from services.durable_event_claim import (
         event_claim_handle_from_token,

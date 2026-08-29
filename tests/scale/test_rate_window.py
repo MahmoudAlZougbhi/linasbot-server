@@ -31,3 +31,19 @@ def test_unknown_kind_is_ignored() -> None:
         assert complete == 0.0
     finally:
         set_rate_redis_for_tests(None)
+
+
+def test_openai_ready_is_tracked_apart_from_complete() -> None:
+    from services.scale.rate_window import snapshot_openai_ready
+
+    fake = fakeredis.FakeRedis(decode_responses=True)
+    set_rate_redis_for_tests(fake)
+    try:
+        bump("openai_ready", 12)
+        bump("complete", 3)
+        assert snapshot_openai_ready() > 0
+        _ingress, complete = snapshot_rates()
+        assert complete > 0
+        assert snapshot_openai_ready() > complete
+    finally:
+        set_rate_redis_for_tests(None)

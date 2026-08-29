@@ -1,7 +1,8 @@
 """Production mixed DM+comment soak. Graph send is skipped only when soak is armed.
 
-Run on a production node after the scale release is committed. Uses real OpenAI
-through the durable Meta inbound queue. Does not create DigitalOcean droplets.
+Pipeline soak (armed + `_linas_soak_simulation`) stops at the OpenAI request
+gate and does not wait on the model. Uses the durable Meta inbound queue.
+Does not create DigitalOcean droplets or add API members to the load balancer.
 """
 
 from __future__ import annotations
@@ -95,7 +96,7 @@ def _enqueue_comment(binding: Any, settings: Any, text: str) -> str:
 def _snapshot() -> dict[str, Any]:
     from services.job_queue import job_queue
     from services.scale.latency_histogram import snapshot as hist_snapshot
-    from services.scale.rate_window import snapshot_rates
+    from services.scale.rate_window import snapshot_openai_ready, snapshot_rates
     from services.scale.replica_controller import current_replicas, recent_events
 
     depths = job_queue.depth() or {}
@@ -106,6 +107,7 @@ def _snapshot() -> dict[str, Any]:
         "queue_depth": depths,
         "ingress_per_sec": ingress,
         "complete_per_sec": complete,
+        "openai_ready_per_sec": snapshot_openai_ready(),
         "replicas": {"api": state.api, "workers": state.workers, "last_action": state.last_action},
         "latency": hist_snapshot(),
         "autoscale_events": recent_events(limit=8),
@@ -170,7 +172,17 @@ def main() -> int:
             snap = _snapshot()
             snap["sent"] = dict(sent)
             samples.append(snap)
-            print(json.dumps({"elapsed_s": int(now - started), "sent": sent, "depth": snap["queue_depth"]}))
+            print(
+                json.dumps(
+                    {
+                        "elapsed_s": int(now - started),
+                        "sent": sent,
+                        "depth": snap["queue_depth"],
+                        "in": round(float(snap["ingress_per_sec"]), 2),
+                        "openai_ready": round(float(snap["openai_ready_per_sec"]), 2),
+                    }
+                )
+            )
             next_sample = now + 30.0
         time.sleep(0.05)
     args.artifact.parent.mkdir(parents=True, exist_ok=True)

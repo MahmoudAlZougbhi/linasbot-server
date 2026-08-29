@@ -10,7 +10,9 @@ from typing import Any
 
 
 def _in_node_worker_cap() -> int:
-    return int(os.getenv("LINAS_QUEUE_CONCURRENCY_CAP_HIGH") or "8") * 2
+    from services.scale.worker_slots import cluster_in_node_worker_cap
+
+    return cluster_in_node_worker_cap()
 
 
 def _quiet_signals(
@@ -27,8 +29,9 @@ def _quiet_signals(
 
 def _ha_pair(current_workers: int) -> tuple[list[Any], dict[str, int]]:
     from services.scale.placement import NodeCapacity, place_workers
+    from services.scale.worker_slots import per_node_high_cap
 
-    cap = max(1, int(os.getenv("LINAS_QUEUE_CONCURRENCY_CAP_HIGH") or "8"))
+    cap = per_node_high_cap()
     nodes = [
         NodeCapacity("ha-a", True, 0.0, 0.0, cap),
         NodeCapacity("ha-b", True, 0.0, 0.0, cap),
