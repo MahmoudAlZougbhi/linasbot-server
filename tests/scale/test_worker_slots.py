@@ -61,3 +61,17 @@ def test_empty_desired_keeps_live_node_cap(monkeypatch) -> None:
     reload(slots)
     assert slots.slot_count_for("high_priority") == 8
     set_controller_redis_for_tests(None)
+
+
+def test_cluster_in_node_cap_is_software_and_overridable(monkeypatch) -> None:
+    monkeypatch.delenv("LINAS_IN_NODE_WORKER_CAP", raising=False)
+    monkeypatch.delenv("LINAS_QUEUE_CONCURRENCY_CAP_HIGH", raising=False)
+    monkeypatch.setenv("LINAS_CLUSTER_NODES", "2")
+    from services.scale.worker_slots import cluster_in_node_worker_cap
+
+    assert cluster_in_node_worker_cap() == 32
+    monkeypatch.setenv("LINAS_IN_NODE_WORKER_CAP", "48")
+    assert cluster_in_node_worker_cap() == 48
+    monkeypatch.setenv("LINAS_CLUSTER_NODES", "4")
+    monkeypatch.delenv("LINAS_IN_NODE_WORKER_CAP", raising=False)
+    assert cluster_in_node_worker_cap() == 64

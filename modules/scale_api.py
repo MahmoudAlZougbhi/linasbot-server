@@ -47,9 +47,10 @@ async def scale_metrics() -> Any:
         depths = payload.get("queue_depth") or {}
         oldest = payload.get("oldest_age_seconds") or {}
         wait = (payload.get("latency") or {}).get("job_wait_ms") or {}
-        from services.scale.rate_window import snapshot_rates
+        from services.scale.rate_window import snapshot_openai_ready, snapshot_rates
 
         ingress, complete = snapshot_rates()
+        payload["openai_ready_per_sec"] = snapshot_openai_ready()
         payload["autoscale"] = recommendation_dict(
             current_api=int(replica_state.api),
             current_workers=int(replica_state.workers),

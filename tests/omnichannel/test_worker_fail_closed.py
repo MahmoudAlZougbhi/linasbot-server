@@ -170,3 +170,12 @@ async def test_worker_pool_overlapping_blocking_cycles(monkeypatch):
 
     await pool.run_bounded_pool(queue="high_priority", one_cycle=cycle, stopping=lambda: stop["v"])
     assert seen["n"] >= 2
+
+
+def test_executor_max_workers_is_not_a_hard_24_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.omnichannel.worker_pool import executor_max_workers
+
+    monkeypatch.delenv("LINAS_WORKER_EXECUTOR_MAX", raising=False)
+    assert executor_max_workers() == 64
+    monkeypatch.setenv("LINAS_WORKER_EXECUTOR_MAX", "96")
+    assert executor_max_workers() == 96

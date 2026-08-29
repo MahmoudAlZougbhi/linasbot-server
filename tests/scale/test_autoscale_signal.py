@@ -157,3 +157,10 @@ def test_strong_walks_2_4_8_16_then_extra_quiet_halves() -> None:
         workers = rec.worker_replicas
         down.append(workers)
     assert down == [8, 4, 2]
+
+
+def test_strong_queue_pressure_does_not_add_api_replicas() -> None:
+    rec = _strong(current_workers=4, current_api=2)
+    assert rec.action == "scale_up_strong"
+    assert rec.api_replicas == 2
+    assert rec.worker_replicas >= 6

@@ -1,4 +1,4 @@
-"""Cluster-wide ingress/complete rates from Redis time buckets."""
+"""Cluster-wide ingress/complete/openai_ready rates from Redis time buckets."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from typing import Any
 
 _PREFIX = (os.getenv("LINAS_SCALE_CTRL_PREFIX") or "linas:scale").strip() or "linas:scale"
 _WINDOW_SEC = 10
+_KINDS = frozenset({"ingress", "complete", "openai_ready"})
 _TEST_CLIENT: Any | None = None
 
 
@@ -25,7 +26,7 @@ def _client() -> Any | None:
 
 
 def bump(kind: str, n: int = 1) -> None:
-    if kind not in {"ingress", "complete"} or n < 1:
+    if kind not in _KINDS or n < 1:
         return
     client = _client()
     if client is None:
@@ -43,20 +44,28 @@ def bump(kind: str, n: int = 1) -> None:
 
 def snapshot_rates() -> tuple[float, float]:
     """Return (ingress_per_sec, complete_per_sec) over the last ~10–20 seconds."""
+    return _rate("ingress"), _rate("complete")
+
+
+def snapshot_openai_ready() -> float:
+    """Events that reached the OpenAI request gate, excluding model wait time."""
+    return _rate("openai_ready")
+
+
+def _rate(kind: str) -> float:
     client = _client()
     if client is None:
-        return 0.0, 0.0
+        return 0.0
     now = time.time()
     bucket = int(now // _WINDOW_SEC)
     elapsed = _WINDOW_SEC + (now % _WINDOW_SEC)
     if elapsed <= 0:
-        return 0.0, 0.0
+        return 0.0
     try:
-        ingress = _count(client, "ingress", bucket) + _count(client, "ingress", bucket - 1)
-        complete = _count(client, "complete", bucket) + _count(client, "complete", bucket - 1)
+        total = _count(client, kind, bucket) + _count(client, kind, bucket - 1)
     except Exception:
-        return 0.0, 0.0
-    return float(ingress) / elapsed, float(complete) / elapsed
+        return 0.0
+    return float(total) / elapsed
 
 
 def _count(client: Any, kind: str, bucket: int) -> int:

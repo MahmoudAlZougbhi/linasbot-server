@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import time
+from contextvars import ContextVar
 from typing import Any
 
 from services.meta_comment_events import ResolvedMetaCommentEvent
@@ -23,6 +24,33 @@ from services.scale.inbound_event_store import (
 
 _runtime_logger = logging.getLogger("uvicorn.error")
 _AMBIGUOUS_ENQUEUE = "__meta_enqueue_ack_unknown__"
+_just_persisted: ContextVar[Any] = ContextVar("linas_just_persisted_inbound", default=None)
+
+
+def _payload_is_soak(payload: Any) -> bool:
+    return isinstance(payload, dict) and bool(payload.get("_linas_soak_simulation"))
+
+
+def _mirror_unless_soak(record: InboundEventRecord) -> None:
+    """Postgres dual-write stays off the soak ingest path. Production still mirrors."""
+
+    if _payload_is_soak(getattr(record, "payload", None)):
+        return
+    from services.omnichannel.dual_write import mirror_meta_inbound
+
+    mirror_meta_inbound(record)
+
+
+def _remember_persisted(record: InboundEventRecord) -> None:
+    _just_persisted.set(record)
+
+
+def _take_just_persisted(event_id: str) -> Any:
+    cached = _just_persisted.get()
+    if cached is not None and str(getattr(cached, "event_id", "") or "") == event_id:
+        _just_persisted.set(None)
+        return cached
+    return None
 
 
 def _settings_snapshot(settings: MetaMessagingSettings) -> dict[str, Any]:
@@ -123,7 +151,7 @@ def persist_meta_dm_accepted(resolved: ResolvedMetaEvent, *, global_key: str) ->
         tenant_id=tenant_id,
         claim_namespace="meta_social_dm_global",
         claim_key=global_key,
-        state="accepted",
+        state="queued",
         created_at=now,
         updated_at=now,
         payload=event_payload,
@@ -139,22 +167,23 @@ def persist_meta_dm_accepted(resolved: ResolvedMetaEvent, *, global_key: str) ->
         conversation_key=_conversation_key_dm(resolved.event, tenant_id),
         attempts=0,
     )
-    _, created = create_inbound_event(record, enforce_binding_deletion_fence=True)
+    persisted, created = create_inbound_event(record, enforce_binding_deletion_fence=True)
     mark(trace_id, "persisted")
-    from services.omnichannel.dual_write import mirror_meta_inbound
-
-    mirror_meta_inbound(record)
+    _mirror_unless_soak(persisted)
+    _remember_persisted(persisted)
     return event_id, created
 
 
-def enqueue_meta_inbound_event(event_id: str, *, claim_handle: Any = None) -> str:
+def enqueue_meta_inbound_event(event_id: str, *, claim_handle: Any = None, record: Any = None) -> str:
     """Return ``queued``, ``ambiguous``, or ``inline`` without double dispatch.
 
     Webhook ACK paths pass ``claim_handle=None`` so Redis workers adopt the
     lease themselves. Inline (Redis-down) callers attach a handle after claim.
+    Pass ``record`` when the caller just persisted the row to skip a Firestore get.
     """
 
-    record = get_inbound_event(event_id)
+    if record is None:
+        record = _take_just_persisted(event_id) or get_inbound_event(event_id)
     if record is None:
         return "ambiguous"
     claim_token = str(getattr(claim_handle, "owner_token", "") or "") if claim_handle is not None else ""
@@ -178,7 +207,8 @@ def enqueue_meta_inbound_event(event_id: str, *, claim_handle: Any = None) -> st
         from services.scale.rate_window import bump as bump_rate
 
         bump_rate("ingress")
-        mark_inbound_state(event_id, state="queued", queue_job_id=job_id)
+        if str(getattr(record, "state", "") or "") != "queued":
+            mark_inbound_state(event_id, state="queued", queue_job_id=job_id)
         trace_id = str(payload_map.get("_linas_trace_id") or "")
         if trace_id:
             from services.scale.trace_span import mark
@@ -207,7 +237,7 @@ def persist_meta_comment_accepted(resolved: ResolvedMetaCommentEvent, *, global_
         tenant_id=tenant_id,
         claim_namespace="meta_social_comment_global",
         claim_key=global_key,
-        state="accepted",
+        state="queued",
         created_at=now,
         updated_at=now,
         payload=dict(resolved.event),
@@ -230,10 +260,9 @@ def persist_meta_comment_accepted(resolved: ResolvedMetaCommentEvent, *, global_
         conversation_key=(f"{tenant_id}:comment:{resolved.binding.asset_id}:{resolved.event.get('comment_id')}"),
         attempts=0,
     )
-    _, created = create_inbound_event(record, enforce_binding_deletion_fence=True)
-    from services.omnichannel.dual_write import mirror_meta_inbound
-
-    mirror_meta_inbound(record)
+    persisted, created = create_inbound_event(record, enforce_binding_deletion_fence=True)
+    _mirror_unless_soak(persisted)
+    _remember_persisted(persisted)
     return event_id, created
 
 
