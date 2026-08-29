@@ -120,11 +120,14 @@ def persist_created_inbound(
 
     from services.meta_inbound_deletion_fence import create_firestore_event_unless_fenced
 
+    payload = getattr(record, "payload", None)
+    skip_shared_fence = isinstance(payload, dict) and bool(payload.get("_linas_soak_simulation"))
     reject_if_locally_fenced(binding_id, enforce=enforce_binding_deletion_fence)
     persisted_document, created = create_firestore_event_unless_fenced(
         binding_id=binding_id,
         event_id=record.event_id,
         document=record.to_dict(),
+        skip_shared_fence_reads=skip_shared_fence,
     )
     persisted_document = cache_local_inbound_document(
         event_id=record.event_id,

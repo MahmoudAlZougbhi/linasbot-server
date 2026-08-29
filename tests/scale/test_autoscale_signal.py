@@ -164,3 +164,33 @@ def test_strong_queue_pressure_does_not_add_api_replicas() -> None:
     assert rec.action == "scale_up_strong"
     assert rec.api_replicas == 2
     assert rec.worker_replicas >= 6
+
+
+def test_mild_job_wait_does_not_add_api_replicas() -> None:
+    rec = recommend(
+        current_api=2,
+        current_workers=4,
+        queue_depth=8,
+        oldest_age_seconds=0.4,
+        wait_p95_ms=600.0,
+        wait_p99_ms=800.0,
+        ingress_per_sec=12.0,
+        complete_per_sec=11.0,
+    )
+    assert rec.action in {"scale_up", "hold"}
+    assert rec.api_replicas == 2
+
+
+def test_api_hot_latency_can_add_api_replicas() -> None:
+    rec = recommend(
+        current_api=2,
+        current_workers=4,
+        queue_depth=0,
+        oldest_age_seconds=0.0,
+        wait_p95_ms=20.0,
+        wait_p99_ms=30.0,
+        ingress_per_sec=5.0,
+        complete_per_sec=5.0,
+        api_p95_ms=400.0,
+    )
+    assert rec.api_replicas == 3

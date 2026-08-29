@@ -116,6 +116,7 @@ def create_firestore_event_unless_fenced(
     binding_id: str,
     event_id: str,
     document: dict[str, Any],
+    skip_shared_fence_reads: bool = False,
 ) -> tuple[dict[str, Any], bool]:
     """Create the inbound ledger row after checking its deletion fence.
 
@@ -132,14 +133,14 @@ def create_firestore_event_unless_fenced(
     db = get_firestore_db()
     if db is None:
         raise InboundDeletionFenceStoreError("Firestore inbound fence store is unavailable")
-    fence_ref = _firestore_fence_ref(db, target_binding)
+    fence_ref = None if skip_shared_fence_reads else _firestore_fence_ref(db, target_binding)
     event_ref = _firestore_event_ref(db, str(event_id))
     from services.firestore_transaction_compat import run_firestore_transaction
 
     last_error: Exception | None = None
     for _attempt in range(5):
         try:
-            if _shared_fence_exists(fence_ref):
+            if fence_ref is not None and _shared_fence_exists(fence_ref):
                 raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
 
             def _create(transaction: Any) -> tuple[dict[str, Any], bool]:
@@ -155,7 +156,7 @@ def create_firestore_event_unless_fenced(
                 return persisted, True
 
             persisted_document, created = run_firestore_transaction(db, _create)
-            if (
+            if fence_ref is not None and (
                 _tombstone_shared_event_if_fenced(
                     fence_ref=fence_ref,
                     event_ref=event_ref,
@@ -174,7 +175,7 @@ def create_firestore_event_unless_fenced(
                 if committed.exists:
                     current = committed.to_dict()
                     if isinstance(current, dict):
-                        if (
+                        if fence_ref is not None and (
                             _tombstone_shared_event_if_fenced(
                                 fence_ref=fence_ref,
                                 event_ref=event_ref,
@@ -184,7 +185,7 @@ def create_firestore_event_unless_fenced(
                         ):
                             raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
                         return current, False
-                if fence_ref.get().exists:
+                if fence_ref is not None and fence_ref.get().exists:
                     raise InboundBindingDeletionFencedError("Meta authorization is being deleted")
             except InboundBindingDeletionFencedError:
                 raise
