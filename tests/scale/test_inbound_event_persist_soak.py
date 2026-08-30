@@ -36,6 +36,7 @@ class _FakeRef:
 
 
 def test_soak_create_uses_direct_firestore_create(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("services.scale.soak_arm.is_armed", lambda: True)
     ref = _FakeRef()
     fence_calls: list[object] = []
     cache_calls: list[object] = []
@@ -72,6 +73,7 @@ def test_soak_create_uses_direct_firestore_create(monkeypatch: pytest.MonkeyPatc
 
 
 def test_soak_create_returns_existing_row_on_already_exists(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("services.scale.soak_arm.is_armed", lambda: True)
     ref = _FakeRef()
     ref.create_error = AlreadyExists("row exists")
     ref.existing = {"event_id": "ibe_soak", "state": "queued"}
@@ -119,3 +121,37 @@ def test_production_create_still_uses_fenced_transaction(monkeypatch: pytest.Mon
     persist_created_inbound(record, binding_id="b1", enforce_binding_deletion_fence=True)
     assert seen["event_id"] == "ibe_live"
     assert "skip_shared_fence_reads" not in seen
+
+
+def test_soak_flag_without_arm_uses_deletion_fence(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr("services.scale.soak_arm.is_armed", lambda: False)
+    monkeypatch.setattr(
+        "services.scale.inbound_event_persist.reject_if_locally_fenced",
+        lambda *_a, **_k: False,
+    )
+    monkeypatch.setattr(
+        "services.scale.inbound_event_persist.cache_local_inbound_document",
+        lambda **kwargs: kwargs["document"],
+    )
+
+    def fake_create(**kwargs: Any) -> tuple[dict[str, Any], bool]:
+        seen.update(kwargs)
+        return kwargs["document"], True
+
+    monkeypatch.setattr(
+        "services.meta_inbound_deletion_fence.create_firestore_event_unless_fenced",
+        fake_create,
+    )
+    monkeypatch.setattr(
+        "services.scale.inbound_event_persist._create_soak_firestore_event",
+        lambda _record: (_ for _ in ()).throw(AssertionError("unarmed soak must not skip fence")),
+    )
+    record = SimpleNamespace(
+        event_id="ibe_flag",
+        updated_at=1.0,
+        payload={"_linas_soak_simulation": True, "text": "hi"},
+        to_dict=lambda: {"event_id": "ibe_flag"},
+    )
+    persist_created_inbound(record, binding_id="b1", enforce_binding_deletion_fence=True)
+    assert seen["event_id"] == "ibe_flag"
