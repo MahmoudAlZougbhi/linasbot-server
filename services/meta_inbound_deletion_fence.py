@@ -1,4 +1,10 @@
-"""Durable binding fences that serialize Meta ingress with authorization deletion."""
+"""Durable binding fences that serialize Meta ingress with authorization deletion.
+
+An installed fence is an intentional drop: the webhook ACK is HTTP 200 with
+duplicates/suppressed and no inbound row or queue job. Meta must not retry that
+payload. Transient Firestore/local fence *read or write* failures stay
+fail-closed (HTTP 503) so Meta retries after the store recovers.
+"""
 
 from __future__ import annotations
 
