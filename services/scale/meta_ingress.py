@@ -186,6 +186,13 @@ def enqueue_meta_inbound_event(event_id: str, *, claim_handle: Any = None, recor
         record = _take_just_persisted(event_id) or get_inbound_event(event_id)
     if record is None:
         return "ambiguous"
+    from services.scale.inbound_event_store import TERMINAL_STATES
+
+    if str(getattr(record, "state", "") or "") in TERMINAL_STATES:
+        from services.scale.metrics import incr
+
+        incr("inbound_terminal_redelivery")
+        return "duplicate_terminal"
     claim_token = str(getattr(claim_handle, "owner_token", "") or "") if claim_handle is not None else ""
     try:
         claim_generation = int(getattr(claim_handle, "generation", 1) or 1) if claim_handle is not None else 1

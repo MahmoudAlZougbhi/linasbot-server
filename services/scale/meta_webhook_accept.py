@@ -307,7 +307,12 @@ async def accept_meta_dm_events(
     log_prefix: str = "[meta-social]",
     authenticated_outcome: str = "",
 ) -> MetaWebhookAcceptCounts:
+    from services.meta_inbound_deletion_fence import (
+        InboundBindingDeletionFencedError,
+        InboundDeletionFenceStoreError,
+    )
     from services.scale.meta_ingress import enqueue_meta_inbound_event, persist_meta_dm_accepted
+    from services.scale.metrics import incr
 
     accepted = 0
     duplicates = 0
@@ -316,7 +321,18 @@ async def accept_meta_dm_events(
         global_key = global_dm_claim_key(event)
         if global_key.endswith(":"):
             continue
-        event_id, created = persist_meta_dm_accepted(resolved, global_key=global_key)
+        try:
+            event_id, created = persist_meta_dm_accepted(resolved, global_key=global_key)
+        except InboundBindingDeletionFencedError:
+            incr("inbound_deletion_fence_suppressed")
+            duplicates += 1
+            continue
+        except InboundDeletionFenceStoreError:
+            raise
+        if not created:
+            incr("inbound_provider_redelivery")
+            duplicates += 1
+            continue
         dispatch = enqueue_meta_inbound_event(event_id, claim_handle=None)
         if authenticated_outcome:
             log_meta_controlled_evidence(
@@ -368,7 +384,12 @@ async def accept_meta_comment_events(
     process_comment: ProcessComment,
     authenticated_outcome: str = "",
 ) -> MetaWebhookAcceptCounts:
+    from services.meta_inbound_deletion_fence import (
+        InboundBindingDeletionFencedError,
+        InboundDeletionFenceStoreError,
+    )
     from services.scale.meta_ingress import enqueue_meta_inbound_event, persist_meta_comment_accepted
+    from services.scale.metrics import incr
 
     accepted = 0
     duplicates = 0
@@ -376,7 +397,18 @@ async def accept_meta_comment_events(
         global_key = global_comment_claim_key(resolved_comment.event)
         if global_key.endswith(":"):
             continue
-        event_id, created = persist_meta_comment_accepted(resolved_comment, global_key=global_key)
+        try:
+            event_id, created = persist_meta_comment_accepted(resolved_comment, global_key=global_key)
+        except InboundBindingDeletionFencedError:
+            incr("inbound_deletion_fence_suppressed")
+            duplicates += 1
+            continue
+        except InboundDeletionFenceStoreError:
+            raise
+        if not created:
+            incr("inbound_provider_redelivery")
+            duplicates += 1
+            continue
         dispatch = enqueue_meta_inbound_event(event_id, claim_handle=None)
         if authenticated_outcome:
             log_meta_controlled_evidence(

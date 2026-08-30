@@ -200,12 +200,19 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
             )
             for event in legacy_events
         ]
-    dm_counts = await accept_meta_dm_events(
-        resolved_events,
-        track_task=_track_task,
-        process_dm=process_meta_social_event,
-        log_prefix="[meta-social]",
-    )
+    try:
+        dm_counts = await accept_meta_dm_events(
+            resolved_events,
+            track_task=_track_task,
+            process_dm=process_meta_social_event,
+            log_prefix="[meta-social]",
+        )
+    except Exception as exc:
+        from services.meta_inbound_deletion_fence import InboundDeletionFenceStoreError
+
+        if isinstance(exc, InboundDeletionFenceStoreError):
+            raise HTTPException(status_code=503, detail="Inbound deletion fence store unavailable") from exc
+        raise
     accepted = dm_counts.accepted
     duplicates = dm_counts.duplicates
 
@@ -235,11 +242,18 @@ async def receive_meta_messaging_webhook(request: Request) -> Any:
                 drop["skip_reasons"],
             )
 
-    comment_counts = await accept_meta_comment_events(
-        resolved_comment_events,
-        track_task=_track_task,
-        process_comment=process_meta_comment_event,
-    )
+    try:
+        comment_counts = await accept_meta_comment_events(
+            resolved_comment_events,
+            track_task=_track_task,
+            process_comment=process_meta_comment_event,
+        )
+    except Exception as exc:
+        from services.meta_inbound_deletion_fence import InboundDeletionFenceStoreError
+
+        if isinstance(exc, InboundDeletionFenceStoreError):
+            raise HTTPException(status_code=503, detail="Inbound deletion fence store unavailable") from exc
+        raise
     comment_accepted = comment_counts.accepted
     comment_duplicates = comment_counts.duplicates
 

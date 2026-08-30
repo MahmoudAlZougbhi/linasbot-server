@@ -290,6 +290,17 @@ async def ready() -> Any:
         checks["tenant_runtime_config"] = {"ok": False, "error": type(e).__name__, "required": True}
         overall_ok = False
 
+    try:
+        from services.scale.ingress_listener_ready import probe_local_ingress_listeners
+
+        ingress = await probe_local_ingress_listeners()
+        checks["ingress_listeners"] = ingress
+        if not ingress.get("ok"):
+            overall_ok = False
+    except Exception as e:
+        checks["ingress_listeners"] = {"ok": False, "error": type(e).__name__}
+        overall_ok = False
+
     status = 200 if overall_ok else 503
     from fastapi.responses import JSONResponse
 

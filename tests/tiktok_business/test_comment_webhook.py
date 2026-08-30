@@ -122,6 +122,28 @@ async def test_comment_update_skips_owner_and_replies(tt_db, monkeypatch) -> Non
 
 
 @pytest.mark.asyncio
+async def test_duplicate_tiktok_webhook_event_does_not_reenqueue(tt_db, monkeypatch) -> None:
+    seed_connection(tt_db, open_id="biz-open")
+    enqueued: list[str] = []
+
+    def _enqueue(**kwargs):
+        enqueued.append(str(kwargs.get("idempotency_key") or ""))
+        return "job-1"
+
+    monkeypatch.setattr("services.omnichannel.enqueue.enqueue_job", _enqueue)
+    monkeypatch.setattr("services.omnichannel.enqueue.should_defer_to_worker", lambda: True)
+    monkeypatch.setattr("services.omnichannel.enqueue.queue_is_durable", lambda: True)
+    from services.tiktok_business.webhook_process import process_tiktok_webhook_payload
+
+    payload = {"event": "comment.update", "event_id": "evt-dup-wh", "user_openid": "biz-open", "content": {}}
+    first = await process_tiktok_webhook_payload(raw_body=b"{}", payload=payload)
+    second = await process_tiktok_webhook_payload(raw_body=b"{}", payload=payload)
+    assert first.get("queued") is True
+    assert second.get("duplicate") is True
+    assert enqueued == ["tiktok_wh:evt-dup-wh"]
+
+
+@pytest.mark.asyncio
 async def test_ensure_comment_webhook_skips_when_url_matches(monkeypatch) -> None:
     calls: list[str] = []
 

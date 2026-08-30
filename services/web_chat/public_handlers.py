@@ -89,6 +89,18 @@ async def send_visitor_message(
         from services.omnichannel.enqueue import AMBIGUOUS_ENQUEUE, enqueue_job, should_defer_to_worker
 
         if should_defer_to_worker():
+            if idempotency_key and active_store.has_assistant_delivery(session_id, idempotency_key):
+                refreshed = active_store.get_visitor(session_id)
+                return {
+                    "success": True,
+                    "channel": "web",
+                    "status": "duplicate",
+                    "reply": "",
+                    "messages": [
+                        {"id": m.id, "role": m.role, "content": m.content, "created_at": m.created_at}
+                        for m in (refreshed.messages if refreshed else [])
+                    ],
+                }
             if not getattr(job_queue, "production_ready", False):
                 raise WebChatError("queue_unavailable", "Website chat is temporarily unavailable.", status_code=503)
             job_id = enqueue_job(
