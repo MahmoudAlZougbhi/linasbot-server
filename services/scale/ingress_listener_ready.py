@@ -26,7 +26,8 @@ def _port_open(port: int) -> bool:
 
 
 def _probe_ok(status: int) -> bool:
-    return status in {400, 401, 403} and status not in {502, 503, 504}
+    # 401/400/403: listener accepted the route. 502/504: nginx has no upstream.
+    return status in {400, 401, 403} and status not in {502, 504}
 
 
 async def probe_local_ingress_listeners() -> dict[str, Any]:

@@ -293,10 +293,17 @@ async def ready() -> Any:
     try:
         from services.scale.ingress_listener_ready import probe_local_ingress_listeners
 
-        ingress = await probe_local_ingress_listeners()
-        checks["ingress_listeners"] = ingress
-        if not ingress.get("ok"):
-            overall_ok = False
+        if os.getenv("LINAS_HA_VERIFY_ONLY") == "true" or _HA_INTERNAL_READINESS.get():
+            checks["ingress_listeners"] = {
+                "ok": True,
+                "skipped": True,
+                "reason": "ha_internal_verify",
+            }
+        else:
+            ingress = await probe_local_ingress_listeners()
+            checks["ingress_listeners"] = ingress
+            if not ingress.get("ok"):
+                overall_ok = False
     except Exception as e:
         checks["ingress_listeners"] = {"ok": False, "error": type(e).__name__}
         overall_ok = False
