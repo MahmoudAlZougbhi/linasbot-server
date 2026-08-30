@@ -77,7 +77,9 @@ async def test_comment_public_and_private_sends_are_independent(outbound_store: 
 
 
 @pytest.mark.asyncio
-async def test_graph_accept_crash_before_sent_record_does_not_resend(outbound_store: _FakeFirestore, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_graph_accept_crash_before_sent_record_does_not_resend(
+    outbound_store: _FakeFirestore, monkeypatch: pytest.MonkeyPatch
+) -> None:
     calls = 0
     real_finish = attempts.finish_meta_outbound_attempt
 

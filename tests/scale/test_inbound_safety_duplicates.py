@@ -108,7 +108,9 @@ def test_meta_webhook_parse_cannot_inject_soak_flag() -> None:
     assert "_linas_soak_simulation" not in events[0]
 
 
-def test_two_nodes_share_one_row_via_firestore(shared_ledger: _FakeFirestore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_two_nodes_share_one_row_via_firestore(
+    shared_ledger: _FakeFirestore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     event_id = "ibe_" + "e" * 40
     node_a = tmp_path / "node-a"
     node_b = tmp_path / "node-b"
@@ -141,7 +143,9 @@ def test_stale_worker_cannot_complete_after_lease_steal(monkeypatch: pytest.Monk
 
     monkeypatch.setattr(rb, "_client", lambda: fake)
     backend = RedisQueueBackend()
-    job = QueueJob.new(queue="high_priority", job_type="meta_inbound_process", tenant_id="linas", payload={"event_id": "ibe_x"})
+    job = QueueJob.new(
+        queue="high_priority", job_type="meta_inbound_process", tenant_id="linas", payload={"event_id": "ibe_x"}
+    )
     backend.enqueue(job)
     old = backend.claim("high_priority", worker_id="w-old", timeout=1)
     assert old is not None
