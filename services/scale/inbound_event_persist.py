@@ -157,7 +157,10 @@ def persist_created_inbound(
     payload = getattr(record, "payload", None)
     soak = isinstance(payload, dict) and bool(payload.get("_linas_soak_simulation"))
     if soak:
-        return _create_soak_firestore_event(record)
+        from services.scale.soak_arm import is_armed
+
+        if is_armed():
+            return _create_soak_firestore_event(record)
     reject_if_locally_fenced(binding_id, enforce=enforce_binding_deletion_fence)
     persisted_document, created = create_firestore_event_unless_fenced(
         binding_id=binding_id,
