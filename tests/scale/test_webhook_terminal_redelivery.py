@@ -237,15 +237,15 @@ def test_ingress_probe_rejects_502(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result["ok"] is False
 
 
-def test_ingress_probe_rejects_http_redirect_and_uses_tls(
+def test_ingress_probe_lb_http_uses_forwarded_proto(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import asyncio
 
     import services.scale.ingress_listener_ready as probe_mod
 
-    monkeypatch.setattr(probe_mod, "_port_open", lambda port: port in {8003, 443})
-    seen: list[tuple[str, bool]] = []
+    monkeypatch.setattr(probe_mod, "_port_open", lambda port: port in {8003, 80, 443})
+    seen: list[tuple[str, dict[str, str], bool]] = []
 
     class _Resp:
         def __init__(self, status_code: int) -> None:
@@ -261,20 +261,20 @@ def test_ingress_probe_rejects_http_redirect_and_uses_tls(
         async def __aexit__(self, *_a: object) -> None:
             return None
 
-        async def post(self, url: str, *_a: object, **_k: object) -> _Resp:
-            seen.append((url, self.verify))
-            if ":8003/" in url or url.startswith("https://"):
-                return _Resp(401)
-            return _Resp(301)
+        async def post(self, url: str, *_a: object, headers: dict[str, str] | None = None, **_k: object) -> _Resp:
+            hdrs = dict(headers or {})
+            seen.append((url, hdrs, self.verify))
+            return _Resp(401)
 
     monkeypatch.setattr(probe_mod.httpx, "AsyncClient", lambda **kwargs: _Client(**kwargs))
     result = asyncio.run(probe_mod.probe_local_ingress_listeners())
     assert result["ok"] is True
-    urls = [item[0] for item in seen]
-    assert any(u.startswith("http://127.0.0.1:8003/") for u in urls)
-    assert any(u.startswith("https://127.0.0.1/") for u in urls)
-    assert not any(":80/" in u or u.startswith("http://127.0.0.1/webhook") for u in urls)
-    assert any(u.startswith("https://") and verify is False for u, verify in seen)
+    http_nginx = [item for item in seen if item[0].startswith("http://127.0.0.1/webhook")]
+    tls_nginx = [item for item in seen if item[0].startswith("https://127.0.0.1/")]
+    assert http_nginx
+    assert tls_nginx
+    assert all(item[1].get("X-Forwarded-Proto") == "https" for item in http_nginx)
+    assert all(item[2] is False for item in tls_nginx)
 
 
 def test_ingress_probe_rejects_nginx_301(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -282,7 +282,7 @@ def test_ingress_probe_rejects_nginx_301(monkeypatch: pytest.MonkeyPatch) -> Non
 
     import services.scale.ingress_listener_ready as probe_mod
 
-    monkeypatch.setattr(probe_mod, "_port_open", lambda port: port == 443)
+    monkeypatch.setattr(probe_mod, "_port_open", lambda port: port == 80)
 
     class _Resp:
         status_code = 301
