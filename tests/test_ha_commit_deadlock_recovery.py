@@ -218,7 +218,7 @@ def test_public_readiness_gate_remains_mandatory() -> None:
     assert "healthy_threshold" in source
     assert PUBLIC_READY_URL in source
     assert "check_interval_seconds * healthy_threshold" in source or (
-        "interval * threshold" in source and "slack = 10" in source
+        "interval * threshold" in source and "slack = 90" in source
     )
     assert "DigitalOcean" in source or "LB health" in source
     assert 'update_recovery_journal "complete"' in recover
@@ -273,7 +273,7 @@ def test_helper_embeds_lb_window_and_forward_commit_later_helper() -> None:
     assert "materialize_lb_manager" in wait
     assert "check_interval_seconds" in wait
     assert "healthy_threshold" in wait
-    assert "slack = 10" in wait
+    assert "slack = 90" in wait
     assert "consecutive = 0" in wait
     assert PUBLIC_READY_URL in wait
     assert "assert_public_ready_after_peer_admission" not in source[source.index("orchestrate() {") :]
