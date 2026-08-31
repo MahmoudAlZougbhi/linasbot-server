@@ -5082,7 +5082,7 @@ interval = health.get("check_interval_seconds")
 threshold = health.get("healthy_threshold")
 if type(interval) is not int or interval < 1 or type(threshold) is not int or threshold < 1:
     raise SystemExit("LB health window is invalid")
-slack = 10
+slack = 90
 timeout = interval * threshold + slack
 deadline = time.monotonic() + timeout
 consecutive = 0

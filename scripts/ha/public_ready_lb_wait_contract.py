@@ -12,7 +12,7 @@ from typing import Any
 
 PUBLIC_READY_URL = "https://linasaibot.com/api/ready"
 PUBLIC_READY_USER_AGENT = "linasbot-ha-deploy-readiness-proof/1"
-PUBLIC_READY_HEALTH_SLACK_SECONDS = 10
+PUBLIC_READY_HEALTH_SLACK_SECONDS = 90
 
 PRE_MUTATION_LATER_HELPER_PHASES = frozenset(
     {
