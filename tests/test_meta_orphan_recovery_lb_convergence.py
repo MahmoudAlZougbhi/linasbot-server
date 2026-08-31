@@ -114,7 +114,7 @@ def test_span_tick_allows_initial_503_then_full_stable_drain_window() -> None:
         int(LB_HEALTH_CONTRACT["check_interval_seconds"]),
         int(LB_HEALTH_CONTRACT["healthy_threshold"]),
     )
-    assert converge == 5 * 2 + 10
+    assert converge == 5 * 2 + 90
     start = 1_000_000
     assert tick(start, start, 0, False, drain) == "0"
     assert tick(start, start + 10, 0, False, drain) == "0"
@@ -141,7 +141,7 @@ def _converge() -> int:
         int(LB_HEALTH_CONTRACT["check_interval_seconds"]),
         int(LB_HEALTH_CONTRACT["healthy_threshold"]),
     )
-    assert timeout == 5 * 2 + 10
+    assert timeout == 5 * 2 + 90
     return timeout
 
 
